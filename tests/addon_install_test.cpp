@@ -1,0 +1,407 @@
+// Add-ons on disk (app/addon_install.h, docs/addons.md): what a package may hold, the Lua and library checks,
+// installed.txt, an install and an update that keep the player's own files, a removal, a cut-off install undone at
+// start, the names that are taken, the capability ceilings, and the lists of the server's and hand-installed ones.
+
+#include <doctest/doctest.h>
+
+#include "addon_test_util.h"
+#include "app/addon_install.h"
+#include "app/update_install.h"
+#include "plugin/policy.h"
+#include "scratch_dir.h"
+
+using namespace nmsc;
+using namespace nmsc::app;
+using namespace nmsc::addon_test;
+namespace fs = std::filesystem;
+
+namespace {
+
+AddonManifest manifest(const std::string& name, AddonKind kind, const std::string& version = "1.0.0") {
+    const std::string kind_word = kind == AddonKind::Script ? "script" : "plugin";
+    const std::string plat = kind == AddonKind::Script ? "any" : this_platform();
+    auto m = parse_addon_manifest(manifest_for(name, kind_word, version, "read,ui", plat, "x", "p.zip"));
+    REQUIRE(m);
+    return *m;
+}
+
+// Unpacks `files` as `m`'s package; the files, or nullopt with *error.
+std::optional<std::vector<AddonFile>> unpack(const fs::path& dir, const AddonManifest& m,
+                                             const std::map<std::string, std::string>& files, std::string* error) {
+    const fs::path zip = dir / "pkg.zip";
+    put_file(zip, zip_of(files));
+    return unpack_addon(dir, m, zip, this_platform(), error);
+}
+
+InstalledAddon record(const AddonManifest& m, std::vector<AddonFile> files) {
+    InstalledAddon a;
+    a.name = m.name;
+    a.kind = m.kind;
+    a.source = "owner/" + m.name;
+    a.version = m.version_text;
+    a.caps = plugin::kCapRead | plugin::kCapUi;
+    a.files = std::move(files);
+    return a;
+}
+
+// Installs `files` as version `version` of the script `name`.
+void install_script(const fs::path& dir, const std::string& name, const std::string& version,
+                    const std::map<std::string, std::string>& files) {
+    const AddonManifest m = manifest(name, AddonKind::Script, version);
+    std::string why;
+    auto unpacked = unpack(dir, m, files, &why);
+    REQUIRE_MESSAGE(unpacked, why);
+    REQUIRE_MESSAGE(apply_addon(dir, record(m, *unpacked), &why), why);
+}
+
+} // namespace
+
+TEST_CASE("addon_install: a script's package, checked and unpacked") {
+    test::ScratchDir dir("addon_script");
+    const AddonManifest m = manifest("autoloot", AddonKind::Script);
+    std::string why;
+    auto files = unpack(dir.path(), m,
+                        {{"init.lua", "local x = require('autoloot.rules')\nprint(x)\n"},
+                         {"rules.lua", "return {}\n"},
+                         {"README.md", "# autoloot\n"},
+                         {"data/items.txt", "Rusty Sword\n"}},
+                        &why);
+    REQUIRE_MESSAGE(files, why);
+    CHECK(files->size() == 4);
+    const fs::path out = addons_dir(dir.path()) / "new" / "autoloot";
+    CHECK(read_file(out / "rules.lua") == "return {}\n");
+    CHECK(read_file(out / "data" / "items.txt") == "Rusty Sword\n");
+    for (const auto& f : *files)
+        if (f.path == "README.md") CHECK(f.sha256 == sha256(std::string_view("# autoloot\n")));
+}
+
+TEST_CASE("addon_install: what a script's package may not hold") {
+    test::ScratchDir dir("addon_script_bad");
+    const AddonManifest m = manifest("autoloot", AddonKind::Script);
+    struct Case {
+        std::map<std::string, std::string> files;
+        const char* why;
+    };
+    const std::string init = "print('hi')\n";
+    for (const Case& c : std::vector<Case>{
+             {{{"main.lua", init}}, "init.lua"},
+             {{{"init.lua", "print('hi'"}}, "does not compile"},
+             {{{"init.lua", "\x1bLua\x54\x00 precompiled"}}, "does not compile"},
+             {{{"init.lua", init}, {"helper.exe", "MZ"}}, "may hold"},
+             {{{"init.lua", init}, {"lib/x.so", "x"}}, "may hold"},
+             {{{"init.lua", init}, {"run.sh", "rm -rf /"}}, "may hold"},
+             {{{"init.lua", init}, {".hidden", "x"}}, "may hold"},
+             // A device name is refused by the zip reader itself (core/windows_names.h).
+             {{{"init.lua", init}, {"con.txt", "x"}}, "unsafe name"},
+             {{{"init.lua", init}, {"Init.lua", init}}, "twice"},
+         }) {
+        std::string names;
+        for (const auto& [n, _] : c.files) names += n + " ";
+        CAPTURE(names);
+        std::string why;
+        CHECK_FALSE(unpack(dir.path(), m, c.files, &why));
+        CHECK_MESSAGE(why.find(c.why) != std::string::npos, why);
+    }
+    // A name that leaves the folder refuses the whole zip (core/zip_read).
+    std::string why;
+    CHECK_FALSE(unpack(dir.path(), m, {{"init.lua", init}, {"../escape.lua", init}}, &why));
+    CHECK_FALSE(fs::exists(dir.path() / "escape.lua"));
+    // Not a zip at all.
+    put_file(dir.path() / "junk.zip", "not a zip");
+    CHECK_FALSE(unpack_addon(dir.path(), m, dir.path() / "junk.zip", this_platform(), &why));
+}
+
+TEST_CASE("addon_install: a plugin's package: one library of this platform, named after it") {
+    if (this_platform().empty()) return; // a platform with no plugin builds
+    test::ScratchDir dir("addon_plugin");
+    const AddonManifest m = manifest("MQ2Hud", AddonKind::Plugin);
+    const std::string lib = library_for(this_platform());
+    std::string why;
+    auto files = unpack(dir.path(), m,
+                        {{"MQ2Hud" + lib_ext(), lib},
+                         {"ui/modern/hud.lua", "ui.window('Hud', function() end)\n"},
+                         {"MQ2Hud.ini", "[Settings]\n"}},
+                        &why);
+    REQUIRE_MESSAGE(files, why);
+    CHECK(files->size() == 3);
+
+    struct Case {
+        std::map<std::string, std::string> files;
+        const char* why;
+    };
+    const std::string other = this_platform().starts_with("linux") ? "windows-x64" : "linux-x64";
+    for (const Case& c : std::vector<Case>{
+             {{{"MQ2Hud.ini", "x"}}, "no library"},
+             {{{"Other" + lib_ext(), lib}}, "named after"},
+             {{{"bin/MQ2Hud" + lib_ext(), lib}}, "top"},
+             {{{"MQ2Hud" + lib_ext(), lib}, {"libMQ2Hud" + lib_ext(), lib}}, "more than one"},
+             {{{"MQ2Hud" + lib_ext(), "not a library at all"}}, "not a library"},
+             {{{"MQ2Hud" + lib_ext(), library_for(other)}}, "not a library"},
+             {{{"MQ2Hud" + lib_ext(), lib}, {"helper.lua", "x = 1"}}, "may hold"},
+             {{{"MQ2Hud" + lib_ext(), lib}, {"ui/modern/hud.lua", "x = "}}, "does not compile"},
+         }) {
+        std::string names;
+        for (const auto& [n, _] : c.files) names += n + " ";
+        CAPTURE(names);
+        CHECK_FALSE(unpack(dir.path(), m, c.files, &why));
+        CHECK_MESSAGE(why.find(c.why) != std::string::npos, why);
+    }
+}
+
+TEST_CASE("addon_install: install, update and remove keep the player's own files") {
+    test::ScratchDir dir("addon_apply");
+    const fs::path folder = addon_folder(dir.path(), AddonKind::Script, "autoloot");
+    install_script(dir.path(), "autoloot", "1.0.0", {{"init.lua", "-- v1\n"}, {"old.lua", "return 1\n"}});
+    CHECK(read_file(folder / "init.lua") == "-- v1\n");
+    auto all = read_installed_addons(dir.path());
+    REQUIRE(all.size() == 1);
+    CHECK(all[0].name == "autoloot");
+    CHECK(all[0].version == "1.0.0");
+    CHECK(all[0].files.size() == 2);
+    CHECK(modified_addon_files(dir.path(), all[0]).empty());
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "new" / "autoloot"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
+
+    // The player's own file in the folder, and a change to one of the add-on's.
+    put_file(folder / "my-notes.txt", "mine\n");
+    put_file(folder / "old.lua", "return 2 -- edited\n");
+    CHECK(modified_addon_files(dir.path(), read_installed_addons(dir.path())[0]) == std::vector<std::string>{"old.lua"});
+
+    // Version 2 drops old.lua and adds new.lua: old.lua goes, the player's file stays.
+    install_script(dir.path(), "autoloot", "2.0.0", {{"init.lua", "-- v2\n"}, {"sub/new.lua", "return 3\n"}});
+    CHECK(read_file(folder / "init.lua") == "-- v2\n");
+    CHECK(read_file(folder / "sub" / "new.lua") == "return 3\n");
+    CHECK_FALSE(fs::exists(folder / "old.lua"));
+    CHECK(read_file(folder / "my-notes.txt") == "mine\n");
+    all = read_installed_addons(dir.path());
+    REQUIRE(all.size() == 1);
+    CHECK(all[0].version == "2.0.0");
+
+    // Removal takes the add-on's files and its record; the player's file and the folder holding it stay.
+    std::string why;
+    REQUIRE_MESSAGE(remove_addon(dir.path(), "AUTOLOOT", &why), why);
+    CHECK(read_installed_addons(dir.path()).empty());
+    CHECK_FALSE(fs::exists(folder / "init.lua"));
+    CHECK_FALSE(fs::exists(folder / "sub"));
+    CHECK(read_file(folder / "my-notes.txt") == "mine\n");
+    CHECK_FALSE(remove_addon(dir.path(), "autoloot", &why));
+
+    // A folder left empty goes with it.
+    install_script(dir.path(), "tidy", "1.0.0", {{"init.lua", "-- x\n"}});
+    REQUIRE(remove_addon(dir.path(), "tidy", &why));
+    CHECK_FALSE(fs::exists(addon_folder(dir.path(), AddonKind::Script, "tidy")));
+}
+
+TEST_CASE("addon_install: an install cut off is undone at the next start") {
+    test::ScratchDir dir("addon_journal");
+    const fs::path folder = addon_folder(dir.path(), AddonKind::Script, "autoloot");
+    install_script(dir.path(), "autoloot", "1.0.0", {{"init.lua", "-- v1\n"}});
+    const std::string registry = read_file(addons_dir(dir.path()) / "installed.txt");
+
+    // As apply_addon would leave it if the client died between its moves: the old file in previous/, the new one in
+    // place, the journal without "done".
+    const fs::path prev = addons_dir(dir.path()) / "previous" / "autoloot";
+    put_file(prev / "init.lua", "-- v1\n");
+    put_file(folder / "init.lua", "-- v2\n");
+    put_file(addons_dir(dir.path()) / "new" / "autoloot" / "extra.lua", "-- staged\n");
+    put_file(addons_dir(dir.path()) / "journal.txt",
+             "move\tscripts/autoloot/init.lua\taddons/previous/autoloot/init.lua\n"
+             "move\taddons/new/autoloot/init.lua\tscripts/autoloot/init.lua\n");
+    addons_at_start(dir.path());
+    CHECK(read_file(folder / "init.lua") == "-- v1\n");
+    CHECK(read_file(addons_dir(dir.path()) / "installed.txt") == registry);
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "previous"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "new"));
+
+    // One that finished ("done") is left as it is.
+    put_file(folder / "init.lua", "-- v2\n");
+    put_file(prev / "init.lua", "-- v1\n");
+    put_file(addons_dir(dir.path()) / "journal.txt",
+             "move\tscripts/autoloot/init.lua\taddons/previous/autoloot/init.lua\ndone\n");
+    addons_at_start(dir.path());
+    CHECK(read_file(folder / "init.lua") == "-- v2\n");
+
+    // A damaged journal moves nothing outside the folder.
+    put_file(addons_dir(dir.path()) / "journal.txt", "move\t../outside\tscripts/autoloot/init.lua\n");
+    addons_at_start(dir.path());
+    CHECK(fs::exists(folder / "init.lua"));
+    CHECK_FALSE(fs::exists(dir.path().parent_path() / "outside"));
+}
+
+TEST_CASE("addon_install: installed.txt reads back, and a damaged record is dropped") {
+    test::ScratchDir dir("addon_registry");
+    InstalledAddon a;
+    a.name = "MQ2Hud";
+    a.kind = AddonKind::Plugin;
+    a.source = "owner/repo@v2";
+    a.version = "2.0.0-beta.1";
+    a.caps = plugin::kCapRead | plugin::kCapUi;
+    a.key = Keys().pub;
+    a.auto_update = false;
+    a.author = "Some One";
+    a.description = "Draws a hud.";
+    a.notes = "https://github.com/owner/repo/releases/tag/v2";
+    a.files = {{"MQ2Hud.so", 10, sha256(std::string_view("a"))}, {"ui/modern/my hud.lua", 3, sha256(std::string_view("b"))}};
+    InstalledAddon b;
+    b.name = "autoloot";
+    b.source = "owner/autoloot";
+    b.version = "1.0.0";
+    b.caps = plugin::kCapRead;
+    REQUIRE(write_installed_addons(dir.path(), {a, b}));
+    auto back = read_installed_addons(dir.path());
+    REQUIRE(back.size() == 2);
+    CHECK(back[0].name == "MQ2Hud");
+    CHECK(back[0].kind == AddonKind::Plugin);
+    CHECK(back[0].source == a.source);
+    CHECK(back[0].version == a.version);
+    CHECK(back[0].caps == a.caps);
+    CHECK(back[0].key == a.key);
+    CHECK_FALSE(back[0].auto_update);
+    CHECK(back[0].author == a.author);
+    CHECK(back[0].description == a.description);
+    CHECK(back[0].notes == a.notes);
+    REQUIRE(back[0].files.size() == 2);
+    CHECK(back[0].files[1].path == "ui/modern/my hud.lua");
+    CHECK(back[0].files[1].sha256 == a.files[1].sha256);
+    CHECK(back[1].auto_update);
+    CHECK(find_addon(back, "mq2hud") == &back[0]);
+
+    std::string text = read_file(addons_dir(dir.path()) / "installed.txt");
+    text.replace(text.find("ui/modern/my hud.lua"), 20, "../../escape.lua");
+    put_file(addons_dir(dir.path()) / "installed.txt", text);
+    back = read_installed_addons(dir.path());
+    REQUIRE(back.size() == 1);
+    CHECK(back[0].name == "autoloot");
+    put_file(addons_dir(dir.path()) / "installed.txt", "hailstone-addons 99\naddon x script\n");
+    CHECK(read_installed_addons(dir.path()).empty());
+}
+
+TEST_CASE("addon_install: names that are taken") {
+    test::ScratchDir dir("addon_names");
+    std::vector<InstalledAddon> none;
+    CHECK(addon_name_taken(dir.path(), none, AddonKind::Script, "autoloot").empty());
+    CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Script, "config").empty());
+    CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Script, "../x").empty());
+    put_file(dir.path() / "scripts" / "byhand" / "init.lua", "x");
+    CHECK(addon_name_taken(dir.path(), none, AddonKind::Script, "byhand").find("by hand") != std::string::npos);
+    put_file(dir.path() / "scripts" / "single.lua", "x");
+    CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Script, "Single").empty());
+    fs::create_directories(dir.path() / "scripts" / "empty");
+    CHECK(addon_name_taken(dir.path(), none, AddonKind::Script, "empty").empty());
+    put_file(dir.path() / "plugins" / "shipped" / ("shipped" + lib_ext()), "x");
+    CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Plugin, "shipped").empty());
+    // A script and a compiled plugin never share a name (plugin::UiBridge tells their windows apart, the player
+    // would not).
+    CHECK(addon_name_taken(dir.path(), none, AddonKind::Script, "shipped").find("share a name") != std::string::npos);
+    CHECK(addon_name_taken(dir.path(), none, AddonKind::Plugin, "byhand").find("share a name") != std::string::npos);
+    // Only settings left behind (an update took out a plugin an older release shipped): not taken.
+    put_file(dir.path() / "plugins" / "leftover" / "leftover.ini", "[x]\n");
+    fs::create_directories(dir.path() / "plugins" / "leftover" / "ui");
+    if (!lib_ext().empty()) {
+        CHECK(addon_name_taken(dir.path(), none, AddonKind::Plugin, "leftover").empty());
+        // The install goes in beside them and keeps them.
+        const AddonManifest m = manifest("leftover", AddonKind::Plugin);
+        std::string why;
+        auto files = unpack(dir.path(), m,
+                            {{"leftover" + lib_ext(), library_for(this_platform())}, {"ui/modern/w.lua", "x = 1\n"}},
+                            &why);
+        REQUIRE_MESSAGE(files, why);
+        REQUIRE_MESSAGE(apply_addon(dir.path(), record(m, *files), &why), why);
+        const fs::path folder = addon_folder(dir.path(), AddonKind::Plugin, "leftover");
+        CHECK(fs::exists(folder / ("leftover" + lib_ext())));
+        CHECK(read_file(folder / "leftover.ini") == "[x]\n");
+    }
+    put_file(dir.path() / "scripts" / "notes" / "notes.txt", "x"); // a script's folder is taken by any file
+    CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Script, "notes").empty());
+    if (!lib_ext().empty()) {
+        put_file(dir.path() / "plugins" / ("libLoose" + lib_ext()), "x");
+        CHECK_FALSE(addon_name_taken(dir.path(), none, AddonKind::Plugin, "Loose").empty());
+    }
+    InstalledAddon a;
+    a.name = "Mine";
+    CHECK_FALSE(addon_name_taken(dir.path(), {a}, AddonKind::Plugin, "mine").empty());
+
+    // The core updater leaves an add-on's folder alone.
+    REQUIRE(write_installed_addons(dir.path(), {a}));
+    CHECK(addon_owns_folder(dir.path(), "scripts/mine"));
+    CHECK_FALSE(addon_owns_folder(dir.path(), "plugins/mine"));
+    CHECK(is_player_path("addons/installed.txt"));
+}
+
+TEST_CASE("addon_install: the ceilings are the add-on's Lua files and its library") {
+    InstalledAddon s;
+    s.name = "autoloot";
+    s.caps = plugin::kCapRead;
+    s.files = {{"init.lua", 1, sha256(std::string_view("i"))}, {"data.txt", 1, sha256(std::string_view("d"))}};
+    InstalledAddon p;
+    p.name = "MQ2Hud";
+    p.kind = AddonKind::Plugin;
+    p.caps = plugin::kCapUi;
+    p.files = {{"MQ2Hud.so", 1, sha256(std::string_view("l"))},
+               {"MQ2Hud.ini", 1, sha256(std::string_view("n"))},
+               {"ui/modern/hud.lua", 1, sha256(std::string_view("u"))}};
+    const auto c = addon_ceilings({s, p});
+    REQUIRE(c.size() == 2);
+    CHECK(c[0].kind == plugin::FileKind::Script);
+    CHECK(c[0].sha256 == sha256(std::string_view("i")));
+    CHECK(c[0].caps == plugin::kCapRead);
+    CHECK(c[1].kind == plugin::FileKind::Plugin);
+    CHECK(c[1].sha256 == sha256(std::string_view("l")));
+    CHECK(c[1].caps == plugin::kCapUi);
+}
+
+TEST_CASE("addon_install: lua_compiles takes text only") {
+    std::string why;
+    CHECK(lua_compiles("return 1", "x", &why));
+    CHECK_FALSE(lua_compiles("return (", "x", &why));
+    CHECK(why.find("x:") != std::string::npos);
+    CHECK_FALSE(lua_compiles(std::string("\x1bLua", 4), "x", &why));
+}
+
+TEST_CASE("addon_manager: the server's own and the hand-installed, listed beside the add-ons") {
+    test::ScratchDir dir("addon_lists");
+    put_file(dir.path() / "scripts" / "hand.lua", "x");
+    put_file(dir.path() / "scripts" / "folder" / "init.lua", "x");
+    put_file(dir.path() / "scripts" / "config" / "init.lua", "x");
+    put_file(dir.path() / "scripts" / "notascript" / "readme.txt", "x");
+    put_file(dir.path() / "scripts" / "mine" / "init.lua", "x");
+    put_file(dir.path() / "plugins" / "Dev" / ("Dev" + lib_ext()), "x");
+    InstalledAddon mine;
+    mine.name = "mine";
+    const auto manual = manual_addons({dir.path()}, {mine});
+    std::vector<std::string> names;
+    for (const auto& m : manual) names.push_back(m.name + ":" + std::string(addon_kind_word(m.kind)));
+    std::vector<std::string> want = {"folder:script", "hand:script"};
+    if (!lib_ext().empty()) want.insert(want.begin(), "Dev:plugin");
+    CHECK(names == want);
+
+    // A server's files as its last login recorded them (net/server_files.h's record).
+    const fs::path profile = dir.path() / "servers" / "one";
+    CHECK(server_addons(profile).empty());
+    put_file(profile / "scripts" / "hud.lua", "x");
+    put_file(profile / "scripts" / "loot" / "init.lua", "x");
+    put_file(profile / "plugins" / "MQ2Srv" / ("MQ2Srv" + lib_ext()), "x");
+    std::string record = "# hailstone server files 2\n";
+    for (const char* p : {"scripts/hud.lua", "scripts/loot/init.lua"})
+        record += to_hex(sha256(std::string_view("x"))) + " 1 " + p + "\n";
+    record += to_hex(sha256(std::string_view("x"))) + " 1 plugins/MQ2Srv/MQ2Srv" + lib_ext() + "\n";
+    put_file(profile / "server_files.txt", record);
+    const auto server = server_addons(profile);
+    names.clear();
+    for (const auto& s : server) names.push_back(s.name + ":" + std::string(addon_kind_word(s.kind)));
+    std::vector<std::string> want_server = {"hud:script", "loot:script"};
+    if (!lib_ext().empty()) want_server.push_back("MQ2Srv:plugin");
+    CHECK(names == want_server);
+    // The player's word on the server's plugin, for the bytes it sent (plugin/consent.h).
+    if (!lib_ext().empty()) {
+        CHECK(server.back().consent == plugin::Consent::Unasked);
+        CHECK(server.back().hashes == std::vector<Sha256Digest>{sha256(std::string_view("x"))}); // its bytes now
+        REQUIRE(plugin::set_plugin_consent(profile, "MQ2Srv", sha256(std::string_view("x")), true));
+        CHECK(server_addons(profile).back().consent == plugin::Consent::Allowed);
+        REQUIRE(plugin::revoke_plugin_consent(profile, "MQ2Srv"));
+        CHECK(server_addons(profile).back().consent == plugin::Consent::Denied);
+        REQUIRE(plugin::set_plugin_consent(profile, "MQ2Srv", sha256(std::string_view("other bytes")), true));
+        CHECK(server_addons(profile).back().consent == plugin::Consent::Unasked); // a yes for other bytes
+    }
+}

@@ -1,0 +1,195 @@
+-- Extended targets (extendedtarget.lua) as a library, so a plugin's or script's window can be the pack's with its own
+-- part on each row (a window named "Extended Target" covers the pack's: dofile("lib/xtarget.lua") finds this one).
+-- xtarget.window(opts) draws the whole window; opts (all optional):
+--   width = the window's (unscaled; 210)
+--   row = {
+--     width = n: unscaled pixels kept at the right of each filled row for the plugin's part (the name, the numbers
+--       and the bars stop short of it, and so does the row's click);
+--     draw = function(r, x0, y0, x1, y1, s): draws that part (its own hit boxes take its clicks);
+--     style = function(r): nil, or { alpha = n (the row drawn faded), ring = {r, g, b, a} (its outline),
+--       strike = true (a line through the name), tag = { text, {r, g, b, a} } (a small label after the name) },
+--   }
+-- r, a filled or (in layout mode) empty slot: n (0-based slot; hailstone.xtarget(n + 1) in a script), id (the
+-- game's gauge child), name, filled, hp (0..1), con ({r, g, b, a} or nil), role (nil for an auto hater), aggro,
+-- mana, endurance.
+-- The window: replaces the game's ExtendedTargetWnd with a compact list at the right, shown while the game
+-- shows the window: a solid panel with a title strip (drag it, or any empty spot, to move the frame) with the
+-- filled and the available slots (the server's count: 5 + the Extended Target AA's, less the slots the server
+-- module hides), one row per slot that holds
+-- a spawn (every slot in layout mode), its name in its con colour over its health, and the slot's role when it is
+-- not an auto hater (the game's role button tool tip). A click targets it; a right click opens the game's menu for
+-- that slot (its type, auto-add haters, mana / endurance bars, target sets).
+local hud = dofile("lib/hud.lua")
+local T = hud.T
+local C = T.color
+local WINDOW = "ExtendedTargetWnd"
+local MAX_SLOTS = 20
+
+local M = {}
+
+-- The children's names and the rows' ids, made once (slot n is entry n + 1).
+local IDS = {}
+for n = 0, MAX_SLOTS - 1 do
+  IDS[n + 1] = { gauge = "ETW_Gauge" .. n, hpLabel = "ETW_HPLabel" .. n, mana = "ETW_ManaGauge" .. n,
+    stamina = "ETW_STAGauge" .. n, aggro = "ETW_AggroPct" .. n, role = "ETW_Role" .. n, hit = "##ETW_Gauge" .. n,
+    hp = "xt.hp" .. n, manaBar = "xt.mana" .. n, endBar = "xt.end" .. n }
+end
+
+-- This frame's window, worked out in size() (hud.Window asks for it only while the window is drawn): the rows (the
+-- first nRows of rows; each slot's row table is kept from frame to frame), the slots the game shows, how many hold
+-- a spawn, the target's name and the window's height.
+local opts, extra = nil, nil
+local rows, nRows, slots, filledCount, target, total = {}, 0, 0, 0, "", 0
+local rowOf, conOf = {}, {} -- slot -> its row table, its con colour table
+local NO_OPTS = {}
+local ROW, HEAD, PAD = 30, 24, 6
+
+local function rowH(r) return ROW + ((r.mana or r.endurance) and 5 or 0) end
+
+local function gather()
+  local unlocked = hud.Unlocked()
+  nRows, slots = 0, 0
+  for n = 0, MAX_SLOTS - 1 do
+    local ids = IDS[n + 1]
+    local id = ids.gauge
+    -- a row the game does not show: past the server's count, or a slot a server's plugin leaves out (NMS: your own
+    -- pets, which the server puts in the last slots; Options "Hide My Pets in Extended Target")
+    local shown = eq.ChildShown(WINDOW, id) ~= false
+    if shown then slots = slots + 1 end
+    local frac, name, raw = eq.Gauge(42 + n)
+    local filled = shown and eq.ChildShown(WINDOW, ids.hpLabel) == true
+    if shown and (filled or unlocked) then
+      local r, g, b = eq.ChildColor(WINDOW, id)
+      local row = rowOf[n]
+      if not row then
+        row = {}
+        rowOf[n] = row
+      end
+      local con = nil
+      if r then
+        con = conOf[n]
+        if not con then
+          con = {}
+          conOf[n] = con
+        end
+        con[1], con[2], con[3], con[4] = r, g, b, 1
+      end
+      row.n, row.id, row.hp, row.name, row.filled, row.raw, row.con = n, id, frac, filled and name or "(empty)", filled,
+        raw, con
+      row.mana, row.endurance, row.aggro, row.role = nil, nil, nil, nil
+      if eq.ChildShown(WINDOW, ids.mana) == true then row.mana = eq.Gauge(62 + n) end
+      if eq.ChildShown(WINDOW, ids.stamina) == true then row.endurance = eq.Gauge(82 + n) end
+      if eq.ChildShown(WINDOW, ids.aggro) == true then row.aggro = eq.WindowText(WINDOW, ids.aggro) end
+      local role = eq.ChildShown(WINDOW, ids.role) ~= false and eq.ChildTooltip(WINDOW, ids.role) or ""
+      if role ~= "" and role ~= "Auto Hater" then row.role = role end
+      nRows = nRows + 1
+      rows[nRows] = row
+    end
+  end
+  target = eq.Label(28) or ""
+  total = HEAD + PAD + 4
+  filledCount = 0
+  for i = 1, nRows do
+    local r = rows[i]
+    total = total + rowH(r) + 3
+    if r.filled then filledCount = filledCount + 1 end
+  end
+  if nRows == 0 then total = total + 24 end
+end
+
+local function size()
+  gather()
+  return opts.width or 210, total
+end
+
+local ring = {}    -- (a row's outline colour, filled for each row)
+local barOpts = {} -- (T.Bar's options, filled for each bar: T.Bar keeps nothing of them)
+
+local function body(x0, y, w0, h, s)
+  -- the title strip: empty, so a drag there moves the frame
+  local _, hh = T.TextSize("Ag", T.font.small)
+  T.Text(x0 + 10 * s, y + (HEAD * s - hh) / 2, "Extended Target", C.muted, T.font.small)
+  if slots > 0 then T.Text(x0 + w0 - 10 * s, y + (HEAD * s - hh) / 2, filledCount .. " / " .. slots, C.faint, T.font.small, "right") end
+  ui.DrawLine(x0 + 8 * s, y + HEAD * s, x0 + w0 - 8 * s, y + HEAD * s, C.ink[1], C.ink[2], C.ink[3], 0.07, 1)
+  local x, w = x0 + PAD * s, w0 - 2 * PAD * s
+  local cy = y + HEAD * s + 4 * s
+  if nRows == 0 then
+    T.Text(x0 + w0 / 2, cy + 4 * s, "No extended targets", C.faint, T.font.small, "center")
+  end
+  local _, th = T.TextSize("Ag", T.font.small)
+  for i = 1, nRows do
+    local r = rows[i]
+    local ids = IDS[r.n + 1]
+    local rh = rowH(r) * s
+    local look = extra and extra.style and r.filled and extra.style(r) or nil
+    local a = look and look.alpha or 1
+    local keep = (extra and extra.draw and r.filled and (extra.width or 0) or 0) * s
+    local clicked = T.Hit(ids.hit, x, cy, x + w - keep, cy + rh)
+    if hud.DragItem() then clicked = false end -- a drag moves the frame
+    local hovered = ui.IsItemHovered()
+    local isTarget = r.filled and r.name == target and target ~= ""
+    ui.DrawRectFilled(x, cy, x + w, cy + rh, C.ink[1], C.ink[2], C.ink[3], (hovered and 0.07 or 0.035) * (r.filled and 1 or 0.6), 6 * s)
+    local rc = look and look.ring
+    if not rc and isTarget then
+      ring[1], ring[2], ring[3], ring[4] = C.ink[1], C.ink[2], C.ink[3], 0.7
+      rc = ring
+    elseif not rc and hovered then
+      ring[1], ring[2], ring[3], ring[4] = C.accent[1], C.accent[2], C.accent[3], 0.6
+      rc = ring
+    end
+    if rc then ui.DrawRect(x, cy, x + w, cy + rh, rc[1], rc[2], rc[3], rc[4], 6 * s, 1.5 * s) end
+    local pad = 7 * s
+    local pct = r.filled and (math.floor((r.hp or 0) * 100 + 0.5) .. "%") or ""
+    local wr = w - keep -- the stock part of the row
+    local tag = look and look.tag
+    local tagW = tag and (T.TextSize(tag[1], T.font.tiny) + 14 * s) or 0
+    local name = T.Fit(r.name or "", wr - (r.role and 120 or 50) * s - tagW, T.font.small)
+    local nameColor = r.filled and (r.con or C.text) or C.faint
+    T.Text(x + pad, cy + 3 * s, name, nameColor, T.font.small, nil, a)
+    local nw = T.TextSize(name, T.font.small)
+    if look and look.strike then
+      ui.DrawLine(x + pad, cy + 3 * s + th / 2, x + pad + nw, cy + 3 * s + th / 2, nameColor[1], nameColor[2],
+        nameColor[3], 0.9 * a, 1.2 * s)
+    end
+    if tag then
+      local _, tt = T.TextSize("Ag", T.font.tiny)
+      local tc = tag[2] or C.accent
+      local tx = x + pad + nw + 5 * s
+      local ty = cy + 3 * s + (th - tt) / 2 - 1 * s
+      ui.DrawRectFilled(tx, ty, tx + tagW - 5 * s, ty + tt + 2 * s, tc[1], tc[2], tc[3], 0.18, (tt + 2 * s) / 2)
+      T.Text(tx + 4.5 * s, ty + 1 * s, tag[1], tc, T.font.tiny)
+    end
+    local right = r.aggro and r.aggro ~= "" and (r.aggro .. "  " .. pct) or pct
+    if r.role then right = r.role .. "  " .. right end
+    T.Text(x + wr - pad, cy + 3 * s, right, C.muted, T.font.small, "right", a)
+    local by = cy + 3 * s + th + 3 * s
+    barOpts.alpha = a
+    T.Bar(ids.hp, x + pad, by, x + wr - pad, by + 6 * s, s, r.filled and r.hp or nil, C.hp, barOpts)
+    if r.mana or r.endurance then
+      local half = (wr - 2 * pad - 4 * s) / 2
+      by = by + 8 * s
+      if r.mana then T.Bar(ids.manaBar, x + pad, by, x + pad + half, by + 3 * s, s, r.mana, C.mana, barOpts) end
+      if r.endurance then
+        T.Bar(ids.endBar, x + wr - pad - half, by, x + wr - pad, by + 3 * s, s, r.endurance, C.endurance, barOpts)
+      end
+    end
+    if keep > 0 then extra.draw(r, x + wr, cy, x + w, cy + rh, s) end
+    if clicked and r.filled then eq.ClickChild(WINDOW, r.id, "left") end
+    if hovered and ui.IsMouseClicked(ui.Mouse.Right) and not ui.GetIO().alt then
+      eq.ClickChild(WINDOW, ids.role, "rightup") -- this slot's menu
+      T.TakeRightClick()
+    end
+    cy = cy + rh + 3 * s
+  end
+end
+
+local HUD_OPTS = { size = size, panelOpts = { opaque = true } }
+
+function M.window(o)
+  opts = o or NO_OPTS
+  extra = opts.row
+  if not eq.InGame() then return end
+  hud.Window(WINDOW, "Extended Target", HUD_OPTS, body)
+end
+
+return M

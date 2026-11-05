@@ -1,0 +1,273 @@
+// GameConnection: personal tribute over EQEmu's packets (net/tribute_packets.h). The tribute list is asked for
+// while zoning in (OP_SendTributes, which EQEmu takes only then); the windows are app/lua_eq_progress.cpp's.
+
+#include <algorithm>
+#include <cctype>
+
+#include "core/log.h"
+#include "game/merchant.h"
+#include "net/game_connection.h"
+
+namespace nmsc::net {
+
+namespace {
+
+constexpr std::uint8_t kClassTributeMaster = 63, kClassGuildTributeMaster = 64;
+constexpr float kTributeRange = 20.0f; // EQEmu's USE_NPC_RANGE2 is 200 units squared; the client's own is not known
+
+bool iequals(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
+           });
+}
+
+} // namespace
+
+std::uint32_t GameConnection::Tribute::active_cost() const {
+    std::uint32_t cost = 0;
+    for (int i = 0; i < kTributeSlots; ++i) {
+        auto it = abilities.find(settings.tributes[static_cast<std::size_t>(i)]);
+        std::uint32_t tier = settings.tiers[static_cast<std::size_t>(i)];
+        if (it != abilities.end() && tier < kTributeTiers) cost += it->second.tiers[tier].cost;
+    }
+    return cost;
+}
+
+std::int64_t GameConnection::Tribute::time_left(std::int64_t now) const {
+    if (!settings.active) return timer_ms;
+    return std::max<std::int64_t>(0, static_cast<std::int64_t>(timer_ms) - (now - timer_at));
+}
+
+bool GameConnection::open_tribute_master(std::uint32_t npc_id) {
+    if (state_ != ConnectionState::InZone || pstatus_.dead) return false;
+    auto it = world_.spawns.find(npc_id);
+    const game::Spawn* me = world_.player();
+    if (it == world_.spawns.end() || !me || !it->second.is_npc ||
+        (it->second.class_id != kClassTributeMaster && it->second.class_id != kClassGuildTributeMaster))
+        return false;
+    glm::vec3 at = motion_known_ ? position_ : me->position;
+    if (glm::distance(at, it->second.position) >= kTributeRange) return false;
+    StartTribute st;
+    st.client_id = world_.player_id;
+    st.master_id = npc_id;
+    AppPacket out = encode(st); // the window opens with the server's answer
+    if (it->second.class_id == kClassGuildTributeMaster) {
+        if (!guild_.in_guild()) return false;
+        out.opcode = to_wire(Op::OpenGuildTributeMaster); // the same StartTribute_Struct
+    }
+    send_zone(std::move(out));
+    return true;
+}
+
+void GameConnection::tribute_describe(std::uint32_t tribute_id) {
+    if (state_ != ConnectionState::InZone || tribute_id == kTributeNone || tribute_.descriptions.contains(tribute_id)) return;
+    send_zone(encode_select_tribute(world_.player_id, tribute_id));
+}
+
+void GameConnection::tribute_change(const TributeSettings& settings) {
+    if (state_ != ConnectionState::InZone) return;
+    TributeSettings s = settings;
+    s.master_id = tribute_.master_id;
+    send_zone(encode(s));
+}
+
+void GameConnection::tribute_toggle(bool on) {
+    if (state_ == ConnectionState::InZone) send_zone(encode_tribute_toggle(on));
+}
+
+bool GameConnection::tribute_donate_cursor() {
+    const Item* held = inventory_.cursor();
+    if (state_ != ConnectionState::InZone || !tribute_.master_id || !held) return false;
+    TributeItem t;
+    t.slot = ItemSlot::possessions(kSlotCursor);
+    t.quantity = held->stackable() ? held->stack_count : 1;
+    t.master_id = tribute_.master_id;
+    send_zone(encode(t)); // EQEmu takes the item and answers with the favour
+    return true;
+}
+
+bool GameConnection::tribute_donate_platinum(std::uint32_t platinum) {
+    if (state_ != ConnectionState::InZone || !tribute_.master_id || platinum == 0) return false;
+    TributeMoney t;
+    t.platinum = platinum;
+    t.master_id = tribute_.master_id;
+    send_zone(encode(t));
+    return true;
+}
+
+std::uint32_t GameConnection::GuildTribute::active_cost() const {
+    std::uint32_t cost = 0;
+    for (int i = 0; i < kGuildTributeSlots; ++i) {
+        auto it = abilities.find(active.tributes[static_cast<std::size_t>(i)]);
+        std::uint32_t tier = active.tiers[static_cast<std::size_t>(i)];
+        if (it != abilities.end() && tier < kTributeTiers) cost += it->second.tiers[tier].cost;
+    }
+    return cost;
+}
+
+std::int64_t GameConnection::GuildTribute::time_left(std::int64_t now) const {
+    if (!active.enabled) return active.timer_ms;
+    return std::max<std::int64_t>(0, static_cast<std::int64_t>(active.timer_ms) - (now - timer_at));
+}
+
+void GameConnection::guild_tribute_describe(std::uint32_t tribute_id, std::uint32_t tier) {
+    if (state_ != ConnectionState::InZone || tribute_id == kTributeNone || guild_tribute_.descriptions.contains(tribute_id)) return;
+    send_zone(encode_guild_select_tribute(tribute_id, tier));
+}
+
+void GameConnection::guild_tribute_change(const GuildTributeActive& v) {
+    if (state_ != ConnectionState::InZone || !guild_tribute_.master_id) return;
+    // EQEmu's save stores the benefits (turned off, the timer reset) and tells the guild; the modify echo with
+    // command 0 asks it for the guild's active tributes again.
+    send_zone(encode_guild_save_tributes(guild_tribute_.master_id, v));
+    send_zone(encode_guild_modify_benefits(true, guild_tribute_.master_id, v));
+}
+
+void GameConnection::guild_tribute_toggle(bool on) {
+    if (state_ == ConnectionState::InZone && guild_.in_guild()) send_zone(encode_guild_tribute_toggle(on));
+}
+
+void GameConnection::guild_tribute_opt(bool in) {
+    if (state_ == ConnectionState::InZone && guild_.in_guild()) send_zone(encode_guild_tribute_opt(guild_.guild_id, in, character_));
+}
+
+void GameConnection::guild_tribute_opt_out(const std::string& member) {
+    // WndNotification on TributeOptOutButton: Send_OP_GuildOptInOut(the selected member's name, 0).
+    if (state_ == ConnectionState::InZone && guild_.in_guild() && !member.empty())
+        send_zone(encode_guild_tribute_opt(guild_.guild_id, false, member));
+}
+
+void GameConnection::guild_trophy_opt_out(const std::string& member) {
+    // TrophyTributeOptOutButton: Send_OP_GuildTrophyOptInOut(name, 0); EQEmu does not know the opcode.
+    if (state_ == ConnectionState::InZone && guild_.in_guild() && !member.empty())
+        send_zone(encode_guild_trophy_opt(guild_.guild_id, false, member));
+}
+
+bool GameConnection::guild_tribute_donate_cursor() {
+    const Item* held = inventory_.cursor();
+    if (state_ != ConnectionState::InZone || !guild_tribute_.master_id || !held) return false;
+    send_zone(encode_guild_donate_item(ItemSlot::possessions(kSlotCursor), held->stackable() ? held->stack_count : 1,
+                                       guild_tribute_.master_id, guild_.guild_id));
+    return true;
+}
+
+bool GameConnection::guild_tribute_donate_platinum(std::uint32_t platinum) {
+    if (state_ != ConnectionState::InZone || !guild_tribute_.master_id || platinum == 0) return false;
+    send_zone(encode_guild_donate_platinum(platinum, guild_tribute_.master_id, guild_.guild_id));
+    guild_platinum_pending_ = platinum;
+    return true;
+}
+
+void GameConnection::handle_tribute(Op op, const AppPacket& p) {
+    auto& g = guild_tribute_;
+    switch (op) {
+    case Op::SendGuildTributes:
+        if (auto a = decode_guild_tribute_info(p)) g.abilities[a->id] = std::move(*a);
+        break;
+    case Op::GuildSelectTribute:
+        if (auto d = decode_guild_tribute_description(p)) g.descriptions[d->tribute_id] = std::move(d->text);
+        break;
+    case Op::GuildSendActiveTributes:
+    case Op::GuildTributeToggleReply:
+        if (auto v = decode_guild_tribute_active(p)) {
+            g.active = *v;
+            g.timer_at = now_ms();
+        }
+        break;
+    case Op::GuildTributeFavorAndTimer:
+        if (auto v = decode_guild_tribute_favor(p)) {
+            g.active.favor = v->favor;
+            g.active.timer_ms = v->timer_ms;
+            g.timer_at = now_ms();
+        }
+        break;
+    case Op::GuildOptInOut:
+        // HandleWorldMessage_GuildTribute: the named member (CGuild::FindMemberByName, _strnicmp over 64; none,
+        // nothing) gets the
+        // states, donations, time and flag (FUN_00482cf0), then its tribute list row is refreshed.
+        if (auto v = decode_guild_tribute_opt(p)) {
+            if (v->member == character_) g.opted_in = v->on;
+            for (auto& m : guild_.members) {
+                if (!iequals(m.name, v->member)) continue;
+                m.tribute_on = v->on;
+                m.trophy_on = v->trophy_on;
+                m.donations = v->donations;
+                m.last_donation = v->time;
+                m.tribute_flag = (v->command & 0xff) != 0;
+                break;
+            }
+        }
+        break;
+    case Op::GuildTributeDonateItem:
+        if (auto v = decode_guild_donate_item(p)) {
+            g.last_donation = static_cast<std::int32_t>(v->favor);
+            // EQEmu deleted the donated item without telling the client, whatever favour it gave (unlike the personal
+            // tribute, Handle_OP_GuildTributeDonateItem never refuses: a worthless item gives 0 and still goes).
+            if (Item* item = inventory_.at(v->slot)) {
+                if (item->stackable() && v->quantity > 0 && v->quantity < item->stack_count) item->stack_count -= v->quantity;
+                else inventory_.take(v->slot);
+            }
+        }
+        break;
+    case Op::GuildTributeDonatePlat:
+        if (auto v = decode_guild_donate_platinum(p)) {
+            g.last_donation = static_cast<std::int32_t>(*v);
+            // EQEmu takes the platinum without a coin update (TakePlatinum(quantity, false)); TakePlatinum takes
+            // nothing when the platinum is short (and answers anyway), and take_money likewise leaves the coins.
+            if (guild_platinum_pending_) game::take_money(coins_, static_cast<std::int64_t>(guild_platinum_pending_) * 1000);
+            guild_platinum_pending_ = 0;
+        }
+        break;
+    case Op::OpenGuildTributeMaster:
+        if (auto st = decode_start_tribute(p)) g.master_id = st->response ? st->master_id : 0;
+        break;
+    case Op::GuildModifyBenefits:
+        break; // the echo of the save; the benefits come with OP_GuildSendActiveTributes
+    case Op::TributeInfo:
+        if (auto a = decode_tribute_info(p)) tribute_.abilities[a->id] = std::move(*a);
+        break;
+    case Op::TributeUpdate:
+        if (auto s = decode_tribute_settings(p)) tribute_.settings = *s;
+        break;
+    case Op::TributeTimer:
+        if (auto t = decode_tribute_timer(p)) {
+            tribute_.timer_ms = *t;
+            tribute_.timer_at = now_ms();
+        }
+        break;
+    case Op::TributePointUpdate:
+        if (auto t = decode_tribute_points(p)) {
+            tribute_.points = t->points;
+            tribute_.career = t->career;
+        }
+        break;
+    case Op::SelectTribute:
+        if (auto d = decode_tribute_description(p)) tribute_.descriptions[d->tribute_id] = std::move(d->text);
+        break;
+    case Op::OpenTributeMaster:
+        if (auto st = decode_start_tribute(p)) tribute_.master_id = st->response ? st->master_id : 0;
+        break;
+    case Op::TributeItem:
+        if (auto t = decode_tribute_item(p)) {
+            tribute_.last_donation = t->points;
+            // EQEmu's TributeItem deletes the donated item (DeleteItemInInventory, no client update) and echoes this;
+            // a refusal (an augmented or worthless item, too few charges) echoes 0 points and keeps it.
+            if (Item* item = t->points > 0 ? inventory_.at(t->slot) : nullptr) {
+                if (item->stackable() && t->quantity > 0 && t->quantity < item->stack_count) item->stack_count -= t->quantity;
+                else inventory_.take(t->slot);
+            }
+        }
+        break;
+    case Op::TributeMoney:
+        if (auto t = decode_tribute_money(p)) {
+            tribute_.last_donation = t->points;
+            // EQEmu takes the platinum without a coin update (TakeMoneyFromPP); 0 points: it could not.
+            if (t->points > 0 && !game::take_money(coins_, static_cast<std::int64_t>(t->platinum) * 1000)) coins_ = {};
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+} // namespace nmsc::net

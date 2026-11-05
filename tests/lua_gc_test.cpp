@@ -1,0 +1,124 @@
+// The UI's Lua collector runs in slices at the end of each LuaUi::frame (src/ui/lua/lua_host.cpp), not on its own.
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+
+#include <imgui.h>
+#include <lua.hpp>
+
+#include "ui/lua/lua_gc_live.h"
+#include "ui/lua/lua_host.h"
+#include "scratch_dir.h"
+
+namespace fs = std::filesystem;
+
+TEST_CASE("Lua UI: the collector runs in the frame's slices and keeps the heap bounded") {
+    nmsc::test::ScratchDir scratch("lua_gc_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    // A live table of about 2 MB, and a few hundred KB of garbage each frame, as the shipped windows make.
+    std::ofstream(dir / "garbage.lua") << "keep = {}\n"
+                                          "for i = 1, 20000 do keep[i] = { i, tostring(i) } end\n"
+                                          "ui.window('Garbage', function()\n"
+                                          "  local t = {}\n"
+                                          "  for i = 1, 3000 do t[i] = { i, 'x' .. i } end\n"
+                                          "end)\n";
+
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frame = [&] {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        };
+        frame(); // loads the script, then collects its loading's garbage
+        const int live = lua_gc(L, LUA_GCCOUNT);
+        CHECK(lua_gc(L, LUA_GCISRUNNING) == 0); // only the slices collect
+        int most = 0;
+        for (int i = 0; i < 400; ++i) {
+            frame();
+            most = std::max(most, lua_gc(L, LUA_GCCOUNT));
+        }
+        // A cycle starts at twice the live heap and is finished at once by four times: whatever the slices manage
+        // on this machine, the heap stays under that and a frame's garbage.
+        CHECK(most < live * 4 + 1024);
+        CHECK(lua_gc(L, LUA_GCISRUNNING) == 0);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Lua UI: the garbage made during a cycle spread over frames does not count as live") {
+    // A sweep in slices over many frames ends with the garbage made meanwhile still in the heap. Taken as live, it
+    // raised the next cycle's start and the heap went past the bound below (in a night's play, with more garbage each
+    // frame, to 9 GB). A fixed number of steps a frame spreads the cycles the same way on every machine.
+    nmsc::test::ScratchDir scratch("lua_gc_spread_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "garbage.lua") << "keep = {}\n"
+                                          "for i = 1, 20000 do keep[i] = { i, tostring(i) } end\n"
+                                          "ui.window('Garbage', function()\n"
+                                          "  local t = {}\n"
+                                          "  for i = 1, 3000 do t[i] = { i, 'x' .. i } end\n"
+                                          "end)\n";
+
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua.set_gc_steps_for_test(8);
+        lua_State* L = lua.state();
+        auto frame = [&] {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        };
+        frame();
+        const int live = lua_gc(L, LUA_GCCOUNT);
+        int most = 0;
+        for (int i = 0; i < 3000; ++i) {
+            frame();
+            most = std::max(most, lua_gc(L, LUA_GCCOUNT));
+        }
+        // As in the test above. Counting the sweeps' garbage as live, the heap reached 16 MB here (over 13).
+        CHECK(most < live * 4 + 1024);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Lua UI: the live heap is what the cycle found reachable, not the garbage made while it ran") {
+    lua_State* L = luaL_newstate();
+    lua_gc(L, LUA_GCINC, 0, 1, 0); // the UI's small steps (ui/lua/lua_host.cpp)
+    lua_gc(L, LUA_GCSTOP);
+    // About 2 MB kept.
+    REQUIRE(luaL_dostring(L, "keep = {} for i = 1, 20000 do keep[i] = { i, i } end") == LUA_OK);
+    lua_gc(L, LUA_GCCOLLECT);
+    const std::size_t live = static_cast<std::size_t>(lua_gc(L, LUA_GCCOUNT)) * 1024;
+    // A cycle in steps with garbage made between them, as frames make it between slices.
+    int cycles = 0;
+    for (int i = 0; i < 100000 && cycles == 0; ++i) {
+        luaL_dostring(L, "local t = {} for i = 1, 1000 do t[i] = { i } end");
+        if (lua_gc(L, LUA_GCSTEP, 0)) ++cycles;
+    }
+    REQUIRE(cycles == 1);
+    const std::size_t count = static_cast<std::size_t>(lua_gc(L, LUA_GCCOUNT)) * 1024;
+    const std::size_t found = nmsc::ui::lua::gc_live_bytes(L);
+    CHECK(count > live + live / 2); // the sweep's garbage is still there
+    CHECK(found < live + live / 4);  // and is not counted
+    CHECK(found > live / 2);
+    lua_close(L);
+}

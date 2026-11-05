@@ -1,0 +1,584 @@
+// The movement animation choice against the original's vectors
+// (rof2decomp batch 248): SelectMovementAnim.jsonl
+// (PlayerAnimation_SelectMovementAnim @0x5888a0, 3000 records at x87
+// precision 24 and 53) and OldModelAnimSpeed.jsonl (FUN_004afc90, 2000).
+// Floats must match bit for bit; the callees asked must be the ones the
+// original asked.
+#include <doctest/doctest.h>
+
+#include <bit>
+#include <string>
+
+#include "game/anim_layers.h"
+#include "game/mechanics/anim_select.h"
+#include "vector_files.h"
+
+using namespace nmsc::game::mechanics;
+using nmsc::test::Json;
+using nmsc::test::f32_bits;
+using nmsc::test::f32_of;
+
+namespace {
+
+Fpu fpu_of(const Json& r) {
+    return Fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
+}
+
+std::string hex(std::uint32_t v) {
+    char b[16];
+    std::snprintf(b, sizeof b, "%08x", v);
+    return b;
+}
+
+} // namespace
+
+TEST_CASE("SelectMovementAnim vectors") {
+    nmsc::test::each_vector("SelectMovementAnim.jsonl", [](const Json& r) -> std::string {
+        const Json& in = r["in"];
+        const Json& out = r["out"];
+        MovementAnimInput m;
+        m.mounted = in["mounted"].truthy();
+        m.speed_y = f32_of(in["velocity_y"]);
+        m.speed_x = f32_of(in["velocity_x"]);
+        m.speed_z = f32_of(in["velocity_z"]);
+        m.speed_run = f32_of(in["speed_run"]);
+        m.colliding_type = in["colliding_type"].i32();
+        m.feet_wet = static_cast<std::uint8_t>(in["feet_wet"].i64());
+        m.body_wet = static_cast<std::uint8_t>(in["body_wet"].i64());
+        m.spawn_type = static_cast<std::uint8_t>(in["spawn_type"].i64());
+        m.stand_state = static_cast<std::uint8_t>(in["stand_state"].i64());
+        m.animation = in["animation"].i32();
+        m.jump_strength = f32_of(in["jump_strength"]);
+        m.walk_speed = f32_of(in["walk_speed"]);
+        m.run_speed = f32_of(in["run_speed"]);
+        m.model_scale = f32_of(in["model_scale"]);
+        m.anim_scale = f32_of(in["anim_scale"]);
+        m.local_player = in["is_local_player"].truthy();
+        m.old_model_scale = in["old_model_scale"].truthy();
+        // The callees' answers, and which were asked.
+        int mounts = 0;
+        bool asked_book = false, asked_mount_race = false, asked_new_style = false;
+        for (const Json& c : in["calls"].items) {
+            const std::string& fn = c["fn"].text;
+            if (fn == "get_mount") {
+                ++mounts;
+            } else if (fn == "spell_book_is_active") {
+                asked_book = true;
+                m.spell_book_active = c["ret"].truthy();
+            } else if (fn == "is_mount_race") {
+                asked_mount_race = true;
+                m.mount_race = c["ret"].truthy();
+            } else if (fn == "is_new_style_model_race") {
+                asked_new_style = true;
+                m.new_style_race = c["ret"].truthy();
+                if (c["race"].i64() != in["race"].i64()) return "is_new_style_model_race asked another race";
+            }
+        }
+        if (mounts != (m.mounted ? 2 : 1)) return "GetMount asked " + std::to_string(mounts) + " times";
+        MovementAnimResult got = select_movement_anim(m, fpu_of(r));
+        if (got.asked_spell_book != asked_book) return "spell book asked differs";
+        if (got.asked_mount_race != asked_mount_race) return "IsMountRace asked differs";
+        if (got.asked_new_style_race != asked_new_style) return "IsNewStyleModelRace asked differs";
+        if (got.spell_book_slot_0x94 != out["spell_book_slot_0x94"].truthy()) return "spell book slot 0x94 differs";
+        if (out["still_since"].i64() != 0) return "still_since not cleared in the vector";
+        if (got.start.played != out["played"].truthy()) return "played differs";
+        if (!got.start.played) return "";
+        if (got.start.anim != out["anim"].i64())
+            return "anim " + std::to_string(got.start.anim) + " want " + std::to_string(out["anim"].i64());
+        if (got.start.play_once != out["play_once"].truthy()) return "play_once differs";
+        if (got.start.reverse != out["reverse"].truthy()) return "reverse differs";
+        if (got.start.replay != out["replay"].truthy()) return "replay differs";
+        std::uint32_t speed = std::bit_cast<std::uint32_t>(got.start.speed);
+        if (speed != f32_bits(out["speed"])) return "speed " + hex(speed) + " want " + hex(f32_bits(out["speed"]));
+        return "";
+    });
+}
+
+TEST_CASE("OldModelAnimSpeed vectors") {
+    nmsc::test::each_vector("OldModelAnimSpeed.jsonl", [](const Json& r) -> std::string {
+        const Json& in = r["in"];
+        double got = old_model_anim_speed(in["anim"].i32(), f32_of(in["speed"]), in["race"].i32(),
+                                          in["gender"].i32(), in["new_model"].truthy(), in["display_129"].truthy(),
+                                          fpu_of(r));
+        double want = r["out"]["value"].f64();
+        if (std::bit_cast<std::uint64_t>(got) != std::bit_cast<std::uint64_t>(want))
+            return "value " + std::to_string(got) + " want " + std::to_string(want);
+        return "";
+    });
+}
+
+TEST_CASE("Animation tables") {
+    CHECK(new_style_tag(kAnimWalk) == "WALK");
+    CHECK(new_to_old_anim(kAnimRun) == kOldRun);
+    CHECK(old_anim_clip(new_to_old_anim(kAnimSwim)) == "P06");
+    CHECK(old_anim_clip(new_to_old_anim(kAnimSit)) == "P07");
+    CHECK(new_style_blend_ms(kAnimWalk, kAnimStand) == 175.0f);
+    CHECK(new_style_blend_ms(kAnimStand, kAnimWalk) == 100.0f);
+    // The names table (0xb787a0) and the two maps (0xaaf428, 0xaaf5c8).
+    CHECK(old_anim_clip(0x47) == "P08");
+    // The animation object's vf24 (0x4afd90 / 0x588cf0): a jump.
+    CHECK(is_jump_animation(0x13, false));
+    CHECK(is_jump_animation(0x14, false));
+    CHECK_FALSE(is_jump_animation(0x7b, false));
+    CHECK(is_jump_animation(0x7b, true));
+    CHECK(is_jump_animation(0x7c, true));
+    CHECK_FALSE(is_jump_animation(0x13, true));
+    CHECK_FALSE(is_jump_animation(0x20, false));
+    CHECK(old_anim_clip(0x4a) == "P09");
+    CHECK(old_anim_clip(0x4e) == "L10");
+    CHECK(old_anim_clip(0x4d) == "S29");
+    CHECK(old_anim_clip(0x4f).empty());
+    CHECK(new_style_tag(0x50) == "SLPR");
+    CHECK(new_style_tag(0xb6) == "SATK");
+    CHECK(new_style_tag(0x4f).empty());
+    CHECK(new_to_old_anim(0x51) == 5);    // BLPR -> C05
+    CHECK(new_to_old_anim(0x5c) == 8);    // PATK -> C08
+    CHECK(new_to_old_anim(0x98) == 0x46); // NBOW -> S28
+    CHECK(old_to_new_anim(5) == 0x50);    // C05 -> SLPR
+    CHECK(old_to_new_anim(6) == 0x53);    // C06 -> SLSC
+    CHECK(old_to_new_anim(0x1a) == 0x6f); // O01 -> IDLE
+    CHECK(old_to_new_anim(0x48) == 0x6f); // O02 -> IDLE
+    CHECK(old_to_new_anim(0x49) == 0x77); // O03 -> SIDL
+    CHECK(old_to_new_anim(0x23) == 0x4f); // P04: none
+    CHECK(old_to_new_anim(0x6e) == 0x6e);
+    CHECK(new_style_fallback(0x54) == 0x53); // BLSC -> SLSC
+    CHECK(new_style_fallback(0x53) == 0x50); // SLSC -> SLPR
+    CHECK(new_style_fallback(0x50) == 0x6e); // SLPR -> STND
+    CHECK(new_style_fallback(0x6e) == 0x4f);
+    CHECK(new_style_attack_flag(0x50));
+    CHECK(new_style_attack_flag(0x70)); // STDA
+    CHECK_FALSE(new_style_attack_flag(0x6e));
+    CHECK(new_style_layer_kind(0x50) == 1);
+    CHECK(new_style_layer_kind(0x68) == 2);
+}
+
+TEST_CASE("PlayAttackAnimation: old-style models (FUN_0059f750)") {
+    auto old = [](std::uint32_t skill, std::uint32_t type, std::uint8_t slot, std::uint32_t race = 1,
+                  std::uint8_t cls = 1, std::int32_t range = 0) {
+        AttackAnimInput in;
+        in.skill = skill;
+        in.item_type = type;
+        in.slot = slot;
+        in.race = race;
+        in.class_id = cls;
+        in.range = range;
+        return attack_animation(in);
+    };
+    CHECK(old(1, 0, 13) == 5);     // 1H slashing
+    CHECK(old(0, 3, 13) == 5);     // 1H blunt
+    CHECK(old(3, 1, 13) == 3);     // 2H slashing
+    CHECK(old(2, 4, 13) == 3);     // 2H blunt
+    CHECK(old(0x24, 2, 13) == 2);  // 1H piercing
+    CHECK(old(0x24, 0x23, 13) == 4); // 2H piercing
+    CHECK(old(0x1c, 0x2d, 13) == 8); // hand to hand
+    CHECK(old(1, 0, 14) == 6);     // the secondary hand
+    CHECK(old(0x1c, 0x2d, 14) == 6);
+    CHECK(old(0x1e, 0, 7) == 1);   // kick
+    CHECK(old(0x26, 0, 7) == 0xb); // round kick
+    CHECK(old(0x1a, 0, 7) == 0x2d); // flying kick
+    CHECK(old(0x17, 0, 7) == 0x2f); // eagle strike
+    CHECK(old(0x15, 0, 7) == 0x2e); // dragon punch
+    CHECK(old(0x34, 0, 7) == 0x2e); // tiger claw
+    CHECK(old(0xa, 0, 7) == 7);     // bash
+    CHECK(old(0xa, 0, 7, 0x80) == 6); // an Iksar's bash
+    CHECK(old(0x15, 0, 7, 0x80) == 7); // an Iksar's dragon punch
+    CHECK(old(0x47, 0, 7) == 1);     // intimidation
+    CHECK(old(0x47, 0, 14, 1, 7) == 0xb); // a monk's: a round kick, even in the secondary hand
+    CHECK(old(0x4a, 0, 13) == 5);    // frenzy
+    CHECK(old(8, 2, 13) == 2);       // backstab
+    CHECK(old(7, 0x1b, 7, 1, 1, 7) == 9); // an arrow
+    CHECK(old(0, 9, 7) == 0x2c);
+}
+
+TEST_CASE("PlayAttackAnimation: new-style models (FUN_0059f8d0)") {
+    auto nu = [](std::uint32_t skill, std::uint32_t type, std::uint8_t slot, std::uint32_t race = 522,
+                 std::uint8_t cls = 1, std::uint8_t wet = 0) {
+        AttackAnimInput in;
+        in.skill = skill;
+        in.item_type = type;
+        in.slot = slot;
+        in.race = race;
+        in.class_id = cls;
+        in.body_wet = wet;
+        in.new_style = true;
+        return attack_animation(in);
+    };
+    CHECK(nu(1, 0, 13) == 0x50);    // SLPR
+    CHECK(nu(0, 3, 13) == 0x51);    // BLPR
+    CHECK(nu(1, 0, 14) == 0x53);    // SLSC
+    CHECK(nu(0, 3, 14) == 0x53);    // BLSC, then the secondary hand's SLSC
+    CHECK(nu(0, 3, 7) == 0x54);     // BLSC
+    CHECK(nu(3, 1, 13) == 0x56);    // SL2H
+    CHECK(nu(0x24, 2, 13) == 0x52); // STPR
+    CHECK(nu(0x24, 0x23, 13) == 0x58); // ST2H
+    CHECK(nu(0x1c, 0x2d, 13) == 0x5c); // PATK
+    CHECK(nu(0x1c, 0x2d, 14) == 0x53); // SATK, then SLSC
+    CHECK(nu(0x1c, 0x2d, 7) == 0xb6);  // SATK
+    CHECK(nu(0x1e, 0, 7) == 0x5f);  // KICK
+    CHECK(nu(0x26, 0, 7) == 0x60);  // RKCK
+    CHECK(nu(0xa, 0, 7) == 0x5b);   // BASH
+    CHECK(nu(0xa, 0, 7, 0x80) == 0x53);
+    CHECK(nu(0x15, 0, 7, 0x80) == 0x5b);
+    CHECK(nu(0x47, 0, 14, 522, 7) == 0x60);
+    CHECK(nu(1, 0, 13, 522, 1, 5) == 0x5e); // in water: WATK
+}
+
+TEST_CASE("ChooseIdleAnimation") {
+    IdleAnimInput in;
+    in.display_time = 10000;
+    in.still_since = 9000;
+    in.animation = 0x6e;
+    int roll = 50;
+    in.random_percent = [&] { return roll; };
+    auto r = choose_idle_animation(in);
+    CHECK(r.start.played);
+    CHECK(r.start.anim == kAnimStand);
+    CHECK_FALSE(r.start.play_once);
+    CHECK_FALSE(r.set_still_since);
+    // 5 s on: a roll; above 75 the fidget.
+    in.display_time = 14001;
+    roll = 76;
+    r = choose_idle_animation(in);
+    CHECK(r.set_still_since);
+    CHECK(r.start.anim == kAnimIdle);
+    CHECK(r.start.play_once);
+    roll = 75;
+    CHECK(choose_idle_animation(in).start.anim == kAnimStand);
+    in.attacking = true; // no fidget while attacking: nothing new
+    roll = 90;
+    CHECK_FALSE(choose_idle_animation(in).start.played);
+    in.attacking = false;
+    in.owner_38c = 5; // a pet: above 99
+    CHECK(choose_idle_animation(in).start.anim == kAnimStand);
+    in.owner_38c = 0;
+    // Sitting: NSIT / SIDL; not in first person.
+    in.stand_state = 0x6e;
+    in.animation = 0x76;
+    CHECK(choose_idle_animation(in).start.anim == kAnimSitIdle);
+    in.local_first_person = true;
+    CHECK_FALSE(choose_idle_animation(in).start.played);
+    in.local_first_person = false;
+    in.stand_state = 100;
+    // Turning.
+    in.display_time = 10000;
+    in.turning = true;
+    in.speed_heading = 2.0f;
+    CHECK(choose_idle_animation(in).start.anim == 0x6c);
+    in.speed_heading = -2.0f;
+    CHECK(choose_idle_animation(in).start.anim == 0x6b);
+    in.stand_state = 0x6f;
+    r = choose_idle_animation(in);
+    CHECK(r.start.anim == kAnimDuckWalk);
+    in.turning = false;
+    r = choose_idle_animation(in);
+    CHECK(r.start.anim == 0x7a); // CRCH at rate 2
+    CHECK(r.start.speed == 2.0f);
+    in.stand_state = 100;
+    in.body_wet = 5;
+    CHECK(choose_idle_animation(in).start.anim == kAnimTread);
+    in.body_wet = 0;
+    in.player_state = 0x20;
+    CHECK(choose_idle_animation(in).start.anim == 0x81); // STUN
+}
+
+// ---- the per-frame choice (game/spawn_animation.h)
+
+#include "game/spawn_animation.h"
+
+namespace {
+
+struct Model {
+    std::vector<std::string> clips;
+    bool has(std::string_view c) const {
+        for (const auto& k : clips)
+            if (k == c) return true;
+        return false;
+    }
+};
+
+nmsc::game::SpawnAnimChoice frame(nmsc::game::SpawnAnimState& st, const nmsc::game::SpawnAnimInput& in, const Model& m,
+                                  bool done = false, int roll = 50) {
+    return nmsc::game::choose_spawn_animation(
+        st, in, [&](std::string_view c) { return m.has(c); }, done, [roll] { return roll; });
+}
+
+} // namespace
+
+TEST_CASE("Classic models: walk, run, backward, still") {
+    Model m{{"P01", "O01", "L01", "L02", "P02", "P07", "O03", "L03", "L04", "L05"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.race = 1;
+    in.walk_speed = 0.46f;
+    in.now_ms = 1000;
+    // Walking: L01 at 0.5 * |v_h| + 1 (FUN_004afe60), unchanged by FUN_004afc90 for L01.
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "L01");
+    CHECK(c.rate == doctest::Approx(1.25f));
+    CHECK(c.loop);
+    CHECK_FALSE(c.reverse);
+    // Running: the walk speed below SpeedRun.
+    in.speed_run = 0.7f;
+    c = frame(st, in, m);
+    CHECK(c.clip == "L02");
+    CHECK(c.restart);
+    // Backward: reversed.
+    in.speed_run = -0.4f;
+    c = frame(st, in, m);
+    CHECK(c.clip == "L01");
+    CHECK(c.reverse);
+    // Stopping: P01 (the display clock is not yet 5 s past +0x360, cleared while moving).
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    in.now_ms = 2000;
+    c = frame(st, in, m);
+    CHECK(c.clip == "P01");
+    // After 5 s standing, a roll above 75 starts the idle O01 once.
+    in.now_ms = 7100;
+    c = frame(st, in, m, false, 90);
+    CHECK(c.clip == "O01");
+    CHECK_FALSE(c.loop);
+}
+
+TEST_CASE("Classic models: sitting down and standing up") {
+    Model m{{"P01", "O01", "L01", "L02", "P02", "P07", "O03"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.race = 1;
+    in.now_ms = 100;
+    CHECK(frame(st, in, m).clip == "P01");
+    in.stand_state = 110;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "P02");
+    CHECK_FALSE(c.reverse);
+    CHECK_FALSE(c.loop);
+    CHECK(frame(st, in, m).clip == "P02"); // until it ends
+    in.now_ms = 200;
+    c = frame(st, in, m, true);
+    CHECK(c.clip == "P07"); // seated: standing becomes P07
+    // The seated fidget: an idle becomes O03.
+    in.now_ms = 6000;
+    c = frame(st, in, m, false, 90);
+    CHECK(c.clip == "O03");
+    in.stand_state = 100;
+    c = frame(st, in, m);
+    CHECK(c.clip == "P02");
+    CHECK(c.reverse);
+}
+
+TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not name") {
+    using nmsc::game::classic_plain_stand_after;
+    // FUN_004b0860 @0x4b0860, read from the exe.
+    for (int a : {0x20, 1, 5, 0xb, 0x10, 0x11, 0x22, 0x2a, 0x2f, 0x4b, 0xfe})
+        CHECK(classic_plain_stand_after(static_cast<std::uint8_t>(a)));
+    for (int a : {0, 0x12, 0x13, 0x14, 0x15, 0x18, 0x19, 0x1a, 0x21, 0x26, 0x27, 0x29, 0x30, 0x46, 0x47, 0x48, 0x4a})
+        CHECK_FALSE(classic_plain_stand_after(static_cast<std::uint8_t>(a)));
+
+    Model m{{"P01", "P08", "O01", "O02", "L01", "L02"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.race = 1;
+    in.walk_speed = 0.46f;
+    in.now_ms = 1000;
+    // Nothing played yet (+0x10c0 0xfe): P01.
+    CHECK(frame(st, in, m).clip == "P01");
+    // Stopping after a walk: P01.
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    CHECK(frame(st, in, m).clip == "L01");
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    CHECK(frame(st, in, m).clip == "P01");
+    // Stopping after a run: P08, which stays (it is not named either).
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.7f;
+    CHECK(frame(st, in, m).clip == "L02");
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "P08");
+    CHECK(c.anim == 0x47);
+    CHECK(c.loop);
+    CHECK(frame(st, in, m).clip == "P08");
+    // The idle after it is O02.
+    in.now_ms = 7100;
+    c = frame(st, in, m, false, 90);
+    CHECK(c.clip == "O02");
+    // A model without P08 / O02 keeps P01 / O01.
+    Model plain{{"P01", "O01", "L01", "L02"}};
+    nmsc::game::SpawnAnimState st2;
+    in.now_ms = 1000;
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.7f;
+    CHECK(frame(st2, in, plain).clip == "L02");
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    c = frame(st2, in, plain);
+    CHECK(c.clip == "P01");
+    CHECK(c.anim == 0x20);
+    in.now_ms = 7100;
+    CHECK(frame(st2, in, plain, false, 90).clip == "O01");
+    // An action left as the animation playing decides too: after a social (S06, 0x30) P08, after a slash P01.
+    nmsc::game::SpawnAnimState st3;
+    in.now_ms = 1000;
+    st3.anim = 0x30;
+    CHECK(frame(st3, in, m).clip == "P08");
+    st3.anim = 5;
+    CHECK(frame(st3, in, m).clip == "P01");
+    // The follow-up (+0x10c4) 0x47 plays P08 whatever played, and becomes 0x20 after a named animation.
+    in.follow_up = 0x47;
+    st3.anim = 5;
+    c = frame(st3, in, m);
+    CHECK(c.clip == "P08");
+    CHECK(c.follow_up == 0x20);
+    // An action as the follow-up: the base stays P01; +0x10c4 is then 0x47 after a run.
+    in.follow_up = 2;
+    st3.anim = 0x12;
+    c = frame(st3, in, m);
+    CHECK(c.clip == "P01");
+    CHECK(c.follow_up == 0x47);
+    // No stand request: +0x10c4 is left as it is.
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    CHECK(frame(st3, in, m).follow_up == 2);
+}
+
+TEST_CASE("Climbing (CollidingType 6): L07 / CLMB up, reversed down") {
+    Model m{{"P01", "L01", "L07"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.race = 1;
+    in.now_ms = 1000;
+    in.colliding_type = 6;
+    in.velocity = {0, 0, 0.5f};
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "L07");
+    CHECK_FALSE(c.reverse);
+    in.velocity = {0, 0, -0.5f};
+    c = frame(st, in, m);
+    CHECK(c.clip == "L07");
+    CHECK(c.reverse);
+    // Off the ladder the same fall is not a climb.
+    in.colliding_type = 0;
+    CHECK(frame(st, in, m).clip != "L07");
+    // New-style: CLMB.
+    Model n{{"STND_BA_1", "CLMB_BA_1"}};
+    nmsc::game::SpawnAnimState sn;
+    in.new_style = true;
+    in.colliding_type = 6;
+    in.velocity = {0, 0, 0.5f};
+    c = frame(sn, in, n);
+    CHECK(c.clip == "CLMB_BA_1");
+    CHECK_FALSE(c.reverse);
+}
+
+TEST_CASE("New-style models: the sequences' tracks") {
+    Model m{{"STND_BA_1", "WALK_BA_1", "NRUN_BA_1", "SWIM_BA_1", "NSIT_BA_1", "STNG_BA_1"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.new_style = true;
+    in.race = 522;
+    in.walk_speed = 0.46f;
+    in.model_scale = 1.3f;
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.7f;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "NRUN_BA_1");
+    in.speed_run = -0.3f;
+    c = frame(st, in, m);
+    CHECK(c.clip == "WALK_BA_1"); // BWLK missing: its fallback WALK, reversed
+    CHECK(c.reverse);
+    in.body_wet = 5;
+    c = frame(st, in, m);
+    CHECK(c.clip == "SWIM_BA_1");
+    in.body_wet = 0;
+    in.speed_run = 0.3f;
+    CHECK(frame(st, in, m).clip == "WALK_BA_1");
+    // Still: ChooseIdleAnimation's STND (the display clock past the cleared +0x360).
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    in.now_ms = 1000;
+    CHECK(frame(st, in, m).clip == "STND_BA_1");
+    // Sitting down: STNG once, then NSIT.
+    in.stand_state = 110;
+    c = frame(st, in, m);
+    CHECK(c.clip == "STNG_BA_1");
+    CHECK_FALSE(c.loop);
+    in.now_ms = 1100;
+    CHECK(frame(st, in, m, true).clip == "NSIT_BA_1");
+}
+
+TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
+    using nmsc::game::NewStyleTrackInput;
+    Model m{{"STND_BA_1", "STND_1H_1", "STDA_BA_1", "IDLE_BA_1", "IDLE_BA_2", "IDLE_BA_3", "SLPR_BA_1",
+             "SLPR_1H_1", "SL2H_2H_1", "KICK_BA_1"}};
+    auto has = [&](std::string_view c) { return m.has(c); };
+    int r = 0;
+    auto rand = [&] { return r; };
+    auto track = [&](std::uint8_t code, NewStyleTrackInput in = {}) {
+        return nmsc::game::new_style_track(code, in, has, rand).clip;
+    };
+    CHECK(track(0x50) == "SLPR_BA_1");
+    CHECK(track(0x54) == "SLPR_BA_1"); // BLSC -> SLSC -> SLPR
+    CHECK(track(0x60) == "KICK_BA_1"); // RKCK -> KICK
+    CHECK(track(0x5b) == "SLPR_BA_1"); // BASH -> SLPR
+    CHECK(track(0x81) == "STND_BA_1"); // STUN -> STND
+    CHECK(track(0x4f).empty());
+    // A primary weapon: column 1 (1H); 2H for SL2H; column 1 then 0 when the column lacks it.
+    NewStyleTrackInput armed{0x40, 0, -1};
+    CHECK(track(0x50, armed) == "SLPR_1H_1");
+    CHECK(track(0x56, armed) == "SL2H_2H_1");
+    CHECK(track(0x5f, armed) == "KICK_BA_1");
+    CHECK(track(0x6e, armed) == "STND_1H_1");
+    // Dual wield (0x80): column 3, then 1.
+    CHECK(track(0x50, {0xc0, 0, -1}) == "SLPR_1H_1");
+    // The combat stand: aggressive, or after an attack.
+    CHECK(track(0x6e, {0x4, 0, -1}) == "STDA_BA_1");
+    CHECK(track(0x6e, {0, 0x50, -1}) == "STDA_BA_1");
+    CHECK(track(0x6e, {0, 5, -1}) == "STDA_BA_1"); // C05 playing: SLPR
+    CHECK(track(0x6e, {0, 0x6e, -1}) == "STND_BA_1");
+    // Variants: rand() % 3.
+    r = 0;
+    CHECK(track(0x6f) == "IDLE_BA_1");
+    r = 4;
+    CHECK(track(0x6f) == "IDLE_BA_2");
+    r = 5;
+    CHECK(track(0x6f) == "IDLE_BA_3");
+}
+
+TEST_CASE("OP_Animation actions: the clip, else FUN_004b1210's replacement") {
+    auto clip = [](std::uint8_t action, const Model& m) {
+        return nmsc::game::action_clip(action, [&](std::string_view c) { return m.has(c); });
+    };
+    Model rat{{"P01", "L01", "C01", "C05", "D01"}};
+    CHECK(clip(5, rat) == "C05");
+    CHECK(clip(8, rat) == "C05"); // EQEmu's NPC hand to hand
+    CHECK(clip(6, rat) == "C05"); // the off hand
+    CHECK(clip(2, rat) == "C05");
+    CHECK(clip(11, rat) == "C01"); // round kick -> kick
+    CHECK(clip(1, rat) == "C01");
+    CHECK(clip(13, rat) == "D01"); // D02 -> D01
+    CHECK(clip(14, rat).empty());  // D03 -> D02, missing too
+    Model human{{"P01", "C05", "C08", "P06"}};
+    CHECK(clip(8, human) == "C08");
+    CHECK(clip(10, human) == "P06"); // swim attack -> swimming
+    Model bare{{"P01", "L01"}};
+    CHECK(clip(8, bare).empty());  // no C05 either: the movement choice keeps playing
+    CHECK(clip(26, bare).empty()); // O01 -> P01 is the stand: not a one-shot
+    CHECK(clip(0, rat).empty());
+    CHECK(clip(0xb7, rat).empty());
+    CHECK(clip(0x50, rat) == "C05"); // a new-style code on a classic model: SLPR -> C05
+    // New-style models: the old-style number's sequence (0xaaf5c8).
+    Model eqg{{"STND_BA_1", "SLPR_BA_1", "SLSC_BA_1", "KICK_BA_1", "FLCH_BA_1"}};
+    auto nclip = [&](std::uint8_t action) {
+        return nmsc::game::action_clip(action, [&](std::string_view c) { return eqg.has(c); }, true);
+    };
+    CHECK(nclip(5) == "SLPR_BA_1");
+    CHECK(nclip(6) == "SLSC_BA_1");
+    CHECK(nclip(8) == "SLPR_BA_1"); // PATK -> SLPR
+    CHECK(nclip(11) == "KICK_BA_1"); // RKCK -> KICK
+    CHECK(nclip(13) == "FLCH_BA_1"); // MSHT -> FLCH
+    CHECK(nclip(0x23).empty());      // P04: no sequence
+}

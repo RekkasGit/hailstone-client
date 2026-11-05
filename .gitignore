@@ -1,0 +1,7 @@
+build/
+build-*/
+.claude/worktrees/
+build.log
+/plugins/nms
+/plugins/projecttriune
+__pycache__/

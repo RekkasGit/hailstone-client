@@ -1,0 +1,510 @@
+// The Lua UI's ui table (src/ui/lua/lua_imgui.cpp): the key names, ui.CaptureKeyboard, ui.GetIO().typing and
+// ui.DrawText's font size, which the server windows of the Triune plugin use.
+#include <doctest/doctest.h>
+
+#include <filesystem>
+#include <fstream>
+#include <string>
+
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <lua.hpp>
+
+#include "ui/lua/lua_host.h"
+#include "scratch_dir.h"
+
+namespace fs = std::filesystem;
+
+TEST_CASE("Lua UI: the key names, keyboard capture, typing and DrawText's size") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "keys.lua") << "ok = ui.Key.A ~= nil and ui.Key.Z ~= nil and ui.Key['0'] ~= nil and ui.Key['9'] ~= nil\n"
+                                       "  and ui.Key.UpArrow ~= nil and ui.Key.Space ~= nil and ui.Key.Escape ~= nil\n"
+                                       "ui.window('Keys', function()\n"
+                                       "  ui.Begin('Keys')\n"
+                                       "  ui.CaptureKeyboard()\n"
+                                       "  typing = ui.GetIO().typing\n"
+                                       "  local x, y = ui.GetCursorScreenPos()\n"
+                                       "  ui.DrawText(x, y, 1, 1, 1, 1, 'big', 30)\n"
+                                       "  ui.DrawText(x, y, 1, 1, 1, 1, 'plain')\n"
+                                       "  ui.End()\n"
+                                       "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "ok");
+        CHECK(lua_toboolean(L, -1));
+        lua_getglobal(L, "typing");
+        CHECK(lua_isboolean(L, -1));
+        lua_pop(L, 2);
+        // CaptureKeyboard asked for the next frame: the keyboard is the UI's.
+        ImGui::NewFrame();
+        CHECK(ImGui::GetIO().WantCaptureKeyboard);
+        ImGui::Render();
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.FindWindowRect: a window's place and size by name, before its Begin (lib/snap.lua snaps a dialog's drag from
+// it); nothing for a window never drawn, and a "###" name finds the window whatever its title.
+TEST_CASE("Lua UI: FindWindowRect finds a drawn window by name") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_rect_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "rect.lua") << "ui.window('Rect', function()\n"
+                                       "  before = { ui.FindWindowRect('###probe') }\n"
+                                       "  missing = ui.FindWindowRect('never drawn') == nil\n"
+                                       "  ui.SetNextWindowPos(40, 50, ui.Cond.Always)\n"
+                                       "  ui.SetNextWindowSize(120, 90, ui.Cond.Always)\n"
+                                       "  ui.Begin('Title ' .. ui.GetFrameCount() .. '###probe')\n"
+                                       "  ui.End()\n"
+                                       "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "missing");
+        CHECK(lua_toboolean(L, -1));
+        lua_getglobal(L, "before");
+        REQUIRE(lua_istable(L, -1));
+        CHECK(lua_rawlen(L, -1) == 4);
+        const double want[] = {40, 50, 120, 90};
+        for (int i = 0; i < 4; ++i) {
+            lua_rawgeti(L, -1, i + 1);
+            CHECK(lua_tonumber(L, -1) == want[i]);
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 2);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.GetIO: one table a frame (the HUD asks for it from every window), with the frame's values; the next frame's is
+// another, with that frame's.
+TEST_CASE("Lua UI: GetIO gives one table a frame") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_io_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "io.lua") << "frames = {}\n"
+                                     "ui.window('IO', function()\n"
+                                     "  local a, b = ui.GetIO(), ui.GetIO()\n"
+                                     "  frames[#frames + 1] = { same = rawequal(a, b), ctrl = a.ctrl, width = b.width, t = a }\n"
+                                     "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(i == 0 ? 800.0f : 1024.0f, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::GetIO().AddKeyEvent(ImGuiMod_Ctrl, i == 1);
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        REQUIRE(luaL_dostring(L, "return frames[1].same and frames[2].same, frames[1].ctrl, frames[2].ctrl, "
+                                 "frames[1].width, frames[2].width, not rawequal(frames[1].t, frames[2].t)") == LUA_OK);
+        CHECK(lua_toboolean(L, -6));
+        CHECK_FALSE(lua_toboolean(L, -5));
+        CHECK(lua_toboolean(L, -4));
+        CHECK(lua_tonumber(L, -3) == 800);
+        CHECK(lua_tonumber(L, -2) == 1024);
+        CHECK(lua_toboolean(L, -1));
+        lua_settop(L, 0);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.PushStyleColors / ui.PushStyleVars: many pushes in one call from flat lists (lib/style.lua's look for every
+// window), skipping an index out of range and returning how many were pushed; the values are the ones in force after.
+namespace {
+ImVec4 g_text{};
+float g_rounding = -1, g_pad_x = -1, g_pad_y = -1;
+int probe_style(lua_State*) {
+    g_text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    g_rounding = ImGui::GetStyle().WindowRounding;
+    g_pad_x = ImGui::GetStyle().WindowPadding.x;
+    g_pad_y = ImGui::GetStyle().WindowPadding.y;
+    return 0;
+}
+} // namespace
+
+TEST_CASE("Lua UI: PushStyleColors and PushStyleVars push a list in one call") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_style_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "style.lua")
+        << "ui.window('Style', function()\n"
+           "  nc = ui.PushStyleColors({ ui.Col.Text, 0.25, 0.5, 0.75, 1, 9999, 1, 1, 1, 1, ui.Col.Button, 0, 1, 0, 1 })\n"
+           "  nv = ui.PushStyleVars({ ui.StyleVar.WindowRounding, 3, false, -1, 0, 0, ui.StyleVar.WindowPadding, 4, 6 })\n"
+           "  probe()\n"
+           "  ui.PopStyleVar(nv)\n"
+           "  ui.PopStyleColor(nc)\n"
+           "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        lua_register(L, "probe", &probe_style);
+        ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+        ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+        const float rounding = ImGui::GetStyle().WindowRounding;
+        ImGui::NewFrame();
+        lua.frame();
+        ImGui::Render();
+        lua_getglobal(L, "nc");
+        CHECK(lua_tointeger(L, -1) == 2);
+        lua_getglobal(L, "nv");
+        CHECK(lua_tointeger(L, -1) == 2);
+        lua_pop(L, 2);
+        CHECK(g_text.x == doctest::Approx(0.25f));
+        CHECK(g_text.y == doctest::Approx(0.5f));
+        CHECK(g_text.z == doctest::Approx(0.75f));
+        CHECK(g_rounding == doctest::Approx(3.0f));
+        CHECK(g_pad_x == doctest::Approx(4.0f));
+        CHECK(g_pad_y == doctest::Approx(6.0f));
+        CHECK(ImGui::GetStyle().WindowRounding == rounding); // popped again
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The modern pack's shared pieces (ui/modern/lib) over a stand-in eq table: W.List keeps a copy of a sorted or
+// filtered list and sorts it again when a row changes (in view or not), W.ButtonRow leaves the caller's opts alone,
+// and the testing hooks read their settings once.
+TEST_CASE("Modern UI libs: W.List's sorted copy, ButtonRow's opts, the test hooks read once") {
+    nmsc::test::ScratchDir scratch("lua_ui_modern_libs_test");
+    const fs::path dir = scratch.path() / "pack";
+    const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
+    REQUIRE(fs::exists(lib / "widgets.lua"));
+    fs::create_directories(dir);
+    fs::copy(lib, dir / "lib", fs::copy_options::recursive);
+    std::ofstream(scratch.path() / "ui.txt") << "test.open.Later=1\ntest.open.LaterToo=1\n";
+    std::ofstream(dir / "libs.lua") << R"lua(
+LIST = {}
+for i = 1, 200 do LIST[i] = { tostring(1000 - i) } end -- the list's order is descending
+reads, listCalls, shown, opened = 0, 0, {}, nil
+eq = {
+  ListInfo = function() return #LIST, 1, -1, { "Value" }, { 0 } end,
+  ListRow = function(_, _, r)
+    reads = reads + 1
+    local t = LIST[r + 1]
+    if not t then return nil end
+    return { t[1] }, 1, 1, 1
+  end,
+  WindowList = function() listCalls = listCalls + 1; return {} end,
+  ChildShown = function() return true end,
+  ChildState = function() return true, nil end,
+  WindowText = function() return "" end,
+  ClickChild = function() end,
+  ListClick = function() end,
+  InGame = function() return true end,
+  ShowWindow = function(w) shown[#shown + 1] = w end,
+  HoldingButton = function() return false end,
+}
+local asked = {}
+local getSetting = ui.GetSetting
+ui.GetSetting = function(k, d) asked[k] = (asked[k] or 0) + 1; return getSetting(k, d) end
+function askedFor(k) return asked[k] or 0 end
+
+local W = dofile("lib/widgets.lua")
+local P = dofile("lib/progress.lua")
+local M = dofile("lib/markets.lua")
+FILTER, FILTER_KEY = nil, nil
+local held = { tooltip = "kept" }
+local ROW = { { "B1", "One", held } }
+frames = {}
+ui.window("Libs", function()
+  ui.SetNextWindowPos(0, 0, ui.Cond.Always)
+  ui.SetNextWindowSize(500, 560, ui.Cond.Always)
+  ui.Begin("Libs")
+  local f = { drawn = {} }
+  reads = 0
+  W.List("Wnd", "L", 0, 300, { sortable = true, filter = FILTER, filterKey = FILTER_KEY,
+    onRow = function(_, texts) f.drawn[#f.drawn + 1] = texts[1]; return true end })
+  f.reads = reads
+  W.ButtonRow("Wnd", ROW, 40)
+  local _, y0, _, y1 = ui.GetItemRect()
+  f.tall = y1 - y0
+  W.ButtonRow("Wnd", ROW)
+  _, y0, _, y1 = ui.GetItemRect()
+  f.plain = y1 - y0
+  f.heldUntouched = held.width == nil and held.height == nil and held.tooltip == "kept"
+  P.TestOpen("Never", function() error("not set: never runs") end)
+  P.TestOpen("Later", function(a, b) opened = a .. b end, "x", "y")
+  P.TestOpen("LaterToo")
+  M.TestOpen("NeverM")
+  f.forced = M.Forced("NeverD")
+  P.Rows("Wnd", "P", 0, 100, { rows = { { "r1" }, { "r2" } } })
+  ui.End()
+  frames[#frames + 1] = f
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n, float dt = 1.0f / 60.0f) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = dt;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        // Evaluates `expr` (Lua) on the last frame drawn.
+        auto last = [&](const char* expr) {
+            std::string code = std::string("local f = frames[#frames]; return ") + expr;
+            REQUIRE(luaL_dostring(L, code.c_str()) == LUA_OK);
+            std::string out = lua_isstring(L, -1) ? lua_tostring(L, -1) : (lua_toboolean(L, -1) ? "true" : "false");
+            lua_settop(L, 0);
+            return out;
+        };
+        frames(3);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        // sorted ascending on the first column (a sortable table's first sort): numbers as numbers
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "800,801");
+        // a long list is not read whole each frame: the rows in view and a few more
+        CHECK(std::stoi(last("f.reads")) < 60);
+        // a row out of view changes (the count, the first and the last row as they were): sorted in within frames
+        REQUIRE(luaL_dostring(L, "LIST[100] = { '5' }") == LUA_OK);
+        frames(40);
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "5,800");
+        // numbers as numbers, words without case
+        REQUIRE(luaL_dostring(L, "LIST = { { 'b' }, { '10' }, { 'A' }, { '9' } }") == LUA_OK);
+        frames(2);
+        CHECK(last("table.concat(f.drawn, ',')") == "9,10,A,b");
+        // the filter, kept by its key
+        REQUIRE(luaL_dostring(L, "FILTER = function(_, t) return t[1]:find('1') ~= nil or t[1] == 'b' end; "
+                                 "FILTER_KEY = '1'") == LUA_OK);
+        frames(1);
+        CHECK(last("table.concat(f.drawn, ',')") == "10,b");
+        // a row changes under a kept filter: filtered and sorted again
+        REQUIRE(luaL_dostring(L, "LIST[1] = { '1' }") == LUA_OK);
+        frames(1);
+        CHECK(last("table.concat(f.drawn, ',')") == "1,10");
+        REQUIRE(luaL_dostring(L, "FILTER, FILTER_KEY = nil, nil") == LUA_OK);
+        frames(1);
+        CHECK(last("table.concat(f.drawn, ',')") == "1,9,10,A");
+
+        // ButtonRow: the row's height, and the caller's opts unchanged so a later row without one is the default
+        CHECK(last("f.heldUntouched") == "true");
+        CHECK(std::stof(last("f.tall")) == doctest::Approx(40));
+        CHECK(std::stof(last("f.plain")) < 30);
+
+        // the test hooks: a missing setting is asked for once; a set one runs once, with its arguments
+        CHECK(last("askedFor('test.open.Never')") == "1");
+        CHECK(last("askedFor('test.open.NeverM')") == "1");
+        CHECK(last("askedFor('test.draw.NeverD')") == "1");
+        CHECK(last("askedFor('test.select.Wnd.P')") == "1");
+        CHECK(last("f.forced == nil") == "true");
+        CHECK(last("listCalls") == "0"); // P.Rows used the rows it was given
+        CHECK(last("opened == nil and #shown == 0") == "true"); // 6 s after zoning in
+        frames(3, 3.0f);
+        CHECK(last("opened") == "xy");
+        CHECK(last("table.concat(shown, ',')") == "LaterToo");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The STML libraries' kept layouts (ui/modern/lib/stml.lua, ui/gamepad/lib/stml.lua): a line's wrap is worked out
+// once and kept until the width or the font change, and is the one the per-frame wrap gave; the chat output's lines
+// drawn from their summed heights land where the line-by-line walk put them; the gamepad's block cache keeps the
+// last few texts.
+TEST_CASE("Lua UI: STML wraps are kept until the width changes, and match the per-frame wrap") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_stml_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir / "lib");
+    const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
+    if (!fs::exists(ui_src / "modern" / "lib" / "stml.lua")) return; // an installed test binary run away from the sources
+    fs::copy_file(ui_src / "modern" / "lib" / "stml.lua", dir / "lib" / "stml.lua");
+    fs::copy_file(ui_src / "gamepad" / "lib" / "stml.lua", dir / "lib" / "gpstml.lua");
+    // (both libraries' theme, the colours they read)
+    std::ofstream(dir / "lib" / "theme.lua")
+        << "local c = { link = { 0, 0, 1, 1 }, text = { 1, 1, 1, 1 } }\n"
+           "return { color = c, C = c, text = function(x, y, t) return ui.CalcTextSize(t) end }\n";
+    std::ofstream(dir / "wrap.lua") << R"lua(
+local stml = dofile("lib/stml.lua")
+local G = dofile("lib/gpstml.lua")
+out = {}
+local frame = 0
+-- the wrap as stml.DrawLine worked it out every frame before it was kept: each piece and whether it starts a row
+local function reference(segments, width)
+  local r, x, first = {}, 0, true
+  for _, seg in ipairs(segments) do
+    for word, space in seg[1]:gmatch("([^ ]*)( *)") do
+      if word ~= "" or space ~= "" then
+        local piece = word .. space
+        local w = ui.CalcTextSize(piece)
+        local row = false
+        if not first then
+          if x + ui.CalcTextSize(word) > width and x > 0 then x = 0; row = true end
+        end
+        r[#r + 1] = piece .. (row and "|row" or "")
+        x = x + w
+        first = false
+      end
+    end
+  end
+  return table.concat(r, ",")
+end
+local function kept(segments)
+  local r, p = {}, segments.wrap
+  for i = 1, #p, 4 do r[#r + 1] = p[i] .. (p[i + 3] and "|row" or "") end
+  return table.concat(r, ",")
+end
+local line = stml.Parse('<c "#ff0000">one two three  four five six seven eight nine ten</c> <a WndNotify="27,x">a link name</a> end')
+local view = { }
+refHeights = {}
+ui.window("Wrap", function()
+  frame = frame + 1
+  ui.SetNextWindowSize(700, 400, ui.Cond.Always)
+  ui.Begin("Wrap")
+  if frame == 1 then
+    local real, calls = ui.CalcTextSize, 0
+    stml.DrawLine(line, 2000, nil, "k")
+    local wide = line.wrap
+    out.wideSame = kept(line) == reference(line, 2000)
+    ui.CalcTextSize = function(...) calls = calls + 1; return real(...) end
+    stml.DrawLine(line, 2000, nil, "k")
+    ui.CalcTextSize = real
+    out.keptCalls = calls
+    out.keptTable = rawequal(line.wrap, wide)
+    stml.DrawLine(line, 60, nil, "k")
+    out.narrowSame = kept(line) == reference(line, 60)
+    out.narrowRows = select(2, kept(line):gsub("|row", ""))
+    stml.DrawLine(line, 61, nil) -- (no key: the font measured)
+    out.measuredSame = kept(line) == reference(line, 61)
+    -- gamepad: rows kept on the line until the width changes; blocks by text
+    local seg = G.parse('<c "#ff0000">one two three four five</c> six seven')
+    local a = G.rows(seg, 2000)
+    out.gpSame = rawequal(G.rows(seg, 2000), a)
+    local b = G.rows(seg, 40)
+    out.gpNew = not rawequal(a, b) and #b > #a and #a == 1
+    local first = G.blockRows("first<br>text", 300)
+    out.blockSame = rawequal(G.blockRows("first<br>text", 300), first) and #first == 2
+    out.blockWidth = not rawequal(G.blockRows("first<br>text", 299), first)
+    local again = G.blockRows("first<br>text", 299)
+    for i = 1, 8 do G.blockRows("other " .. i, 300) end
+    out.blockEvicted = not rawequal(G.blockRows("first<br>text", 299), again)
+    -- the chat output: 300 lines, some wrapping
+    local raws = {}
+    for i = 1, 300 do raws[i] = (i % 3 == 0) and ('<c "#00ff00">line ' .. i .. ' with words enough to wrap at this width, more and more words</c>') or ('<c "#ffffff">line ' .. i .. '</c> <a WndNotify="27,x">link</a>') end
+    stml.UpdateLines(view, raws)
+  end
+  ui.BeginChild("output", 300, 200, false)
+  if frame == 3 then ui.SetScrollY(1500) end
+  stml.DrawLines(view, 380, 200, "k380")
+  local _, y = ui.GetCursorPos()
+  out["end" .. frame] = y
+  out["fast" .. frame] = view.cumKey == "k380"
+  ui.EndChild()
+  -- the same lines drawn by the line-by-line walk DrawLines did before it kept their places
+  ui.SameLine() -- (beside it: a child out of the window's sight draws nothing)
+  ui.BeginChild("reference", 300, 200, false)
+  if frame == 3 then ui.SetScrollY(1500) end
+  local top = ui.GetScrollY()
+  local x0, y = ui.GetCursorPos()
+  local skipped = false
+  for i, l in ipairs(view.lines) do
+    local h = refHeights[i]
+    if h and (y + h < top - 40 or y > top + 200 + 40) then
+      y = y + h
+      skipped = true
+    else
+      if skipped then ui.SetCursorPos(x0, y); skipped = false end
+      stml.DrawLine(l, 380)
+      local _, ny = ui.GetCursorPos()
+      refHeights[i] = ny - y
+      y = ny
+    end
+  end
+  if skipped then ui.SetCursorPos(x0, y); ui.Dummy(0, 0) end
+  out["ref" .. frame] = select(2, ui.GetCursorPos())
+  ui.EndChild()
+  ui.End()
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 4; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        auto get = [&](const char* key) {
+            lua_getglobal(L, "out");
+            lua_getfield(L, -1, key);
+            std::string v = lua_isnil(L, -1) ? "nil" : luaL_tolstring(L, -1, nullptr);
+            lua_settop(L, 0);
+            return v;
+        };
+        CHECK(get("wideSame") == "true");
+        CHECK(get("keptCalls") == "0");
+        CHECK(get("keptTable") == "true");
+        CHECK(get("narrowSame") == "true");
+        CHECK(get("narrowRows") != "0");
+        CHECK(get("measuredSame") == "true");
+        CHECK(get("gpSame") == "true");
+        CHECK(get("gpNew") == "true");
+        CHECK(get("blockSame") == "true");
+        CHECK(get("blockWidth") == "true");
+        CHECK(get("blockEvicted") == "true");
+        // frame 1 walks every line (no heights yet); then the summed heights, ending where the walk ends
+        CHECK(get("fast1") == "false");
+        CHECK(get("fast2") == "true");
+        for (const char* f : {"1", "2", "3", "4"}) CHECK(get((std::string("end") + f).c_str()) == get((std::string("ref") + f).c_str()));
+        CHECK(get("fast4") == "true");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}

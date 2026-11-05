@@ -1,0 +1,135 @@
+// libFuzzer entry points (build with -DNMSC_LIBFUZZER=ON and Clang). One executable per parser family, chosen by
+// the NMSC_FUZZ_TARGET definition from CMake. Seed corpora: any file of that kind; the deterministic tests in
+// fuzz_net_test.cpp and fuzz_assets_test.cpp are the always-on version of the same checks.
+
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <span>
+#include <string_view>
+#include <vector>
+
+#include "assets/pfs.h"
+#include "assets/texture.h"
+#include "assets/wld.h"
+#include "core/addon_index.h"
+#include "core/addon_manifest.h"
+#include "core/addon_source.h"
+#include "core/binary_header.h"
+#include "core/update_manifest.h"
+#include "core/zip_read.h"
+#include "net/session_codec.h"
+#include "net/zone_packets.h"
+#if defined(NMSC_FUZZ_DECODERS)
+#include <iterator>
+
+#include "net/aa_packets.h"
+#include "net/ability_packets.h"
+#include "net/adventure_packets.h"
+#include "net/aggro_packets.h"
+#include "net/chat_server.h"
+#include "net/door_packets.h"
+#include "net/dz_packets.h"
+#include "net/group_packets.h"
+#include "net/guild_bank_packets.h"
+#include "net/item_packets.h"
+#include "net/login.h"
+#include "net/market_packets.h"
+#include "net/marketplace_packets.h"
+#include "net/merchant_packets.h"
+#include "net/movement_packets.h"
+#include "net/notice_packets.h"
+#include "net/settings_packets.h"
+#include "net/pet_packets.h"
+#include "net/real_estate_packets.h"
+#include "net/player_packets.h"
+#include "net/social_packets.h"
+#include "net/spell_packets.h"
+#include "net/task_packets.h"
+#include "net/trade_packets.h"
+#include "net/training_packets.h"
+#include "net/tribute_packets.h"
+#include "net/world_packets.h"
+#if defined(NMSC_HAS_NMS)
+#include "nms_packets.h"
+#endif
+#if defined(NMSC_HAS_TRIUNE)
+#include "triune_packets.h"
+#include "triune_windows.h"
+#endif
+#include "fuzz_game_decoders.h"
+#endif
+
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
+    std::span<const std::byte> in(reinterpret_cast<const std::byte*>(data), size);
+    try {
+#if defined(NMSC_FUZZ_PFS)
+        auto a = nmsc::assets::PfsArchive::from_memory(std::vector<std::byte>(in.begin(), in.end()));
+        for (const auto& n : a.names()) (void)a.read(n);
+#elif defined(NMSC_FUZZ_WLD)
+        auto w = nmsc::assets::wld::WldFile::parse(in);
+        for (const auto& f : w.fragments())
+            if (const auto* m = std::get_if<nmsc::assets::wld::MeshDef>(&f.data)) (void)nmsc::assets::wld::build_mesh(w, *m, f.name);
+#elif defined(NMSC_FUZZ_TEXTURE)
+        (void)nmsc::assets::decode_texture(in);
+#elif defined(NMSC_FUZZ_SOE)
+        namespace soe = nmsc::net::soe;
+        soe::SessionParams params;
+        params.crc_bytes = 2;
+        params.passes = {soe::EncodePass::Compression, soe::EncodePass::Xor};
+        std::vector<std::byte> v(in.begin(), in.end());
+        (void)soe::decode_datagram(params, v);
+        (void)soe::split_combined(v);
+        (void)soe::split_app_combined(v);
+        (void)soe::decode_app(v);
+        soe::InboundStream stream;
+        std::vector<soe::Bytes> out;
+        (void)stream.push(v, out);
+#elif defined(NMSC_FUZZ_PACKETS)
+        // First two bytes pick the decoder-agnostic opcode; the rest is the payload. Decoders must not throw.
+        if (size >= 2) {
+            nmsc::net::AppPacket p(static_cast<std::uint16_t>(data[0] | data[1] << 8), std::vector<std::byte>(in.begin() + 2, in.end()));
+            (void)nmsc::net::decode_spawn(p);
+            (void)nmsc::net::decode_player_profile(p);
+            (void)nmsc::net::decode_new_zone(p);
+            (void)nmsc::net::decode_channel_message(p);
+            (void)nmsc::net::decode_zone_points(p);
+        }
+#elif defined(NMSC_FUZZ_DECODERS)
+        // Every typed decoder of tests/fuzz_decoders.inc: byte 0 picks it, bytes 1..2 are the opcode, the rest the
+        // payload.
+        using Fn = void (*)(const nmsc::net::AppPacket&);
+        static const Fn kDecoders[] = {
+#define NMSC_FUZZ_DECODER(fn) [](const nmsc::net::AppPacket& p) { (void)nmsc::net::fn(p); },
+#define NMSC_FUZZ_PLUGIN_DECODER(ns, fn) [](const nmsc::net::AppPacket& p) { (void)::ns::fn(p.data); },
+#define NMSC_FUZZ_GAME_DECODER(fn) [](const nmsc::net::AppPacket& p) { ::nmsc::fuzz_game::feed(&::nmsc::game::fn, p.data); },
+#include "fuzz_decoders.inc"
+#undef NMSC_FUZZ_GAME_DECODER
+#undef NMSC_FUZZ_PLUGIN_DECODER
+#undef NMSC_FUZZ_DECODER
+        };
+        if (size >= 3) {
+            nmsc::net::AppPacket p(static_cast<std::uint16_t>(data[1] | data[2] << 8), std::vector<std::byte>(in.begin() + 3, in.end()));
+            kDecoders[data[0] % std::size(kDecoders)](p);
+        }
+#elif defined(NMSC_FUZZ_ZIP)
+        // The updater's inputs (docs/updater.md): a package zip read whole, and the same bytes as a manifest.
+        nmsc::ZipReader zip;
+        if (zip.open(std::vector<std::byte>(in.begin(), in.end())))
+            for (const auto& e : zip.entries()) (void)zip.extract(e, [](std::span<const std::byte>) { return true; });
+        (void)nmsc::parse_update_manifest(std::string_view(reinterpret_cast<const char*>(data), size),
+                                          nmsc::Ed25519PublicKey{});
+        // The add-on manager's (docs/addons.md): a manifest, a pasted link, a plugin library's header.
+        const std::string_view text(reinterpret_cast<const char*>(data), size);
+        (void)nmsc::parse_addon_manifest(text);
+        (void)nmsc::parse_addon_link(text);
+        (void)nmsc::read_binary_header(in);
+        (void)nmsc::parse_addon_index(text, nmsc::Ed25519PublicKey{});
+#else
+#error "define one of NMSC_FUZZ_PFS, NMSC_FUZZ_WLD, NMSC_FUZZ_TEXTURE, NMSC_FUZZ_SOE, NMSC_FUZZ_PACKETS, NMSC_FUZZ_DECODERS, NMSC_FUZZ_ZIP"
+#endif
+    } catch (const std::exception&) {
+        // A reported error is the expected outcome for malformed input; crashes and sanitizer reports are not.
+    }
+    return 0;
+}

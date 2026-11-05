@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Makes a Hailstone add-on's packages and its manifest, hailstone-addon.txt (docs/addons.md).
+
+A script is one folder (its init.lua at the top); a plugin is one folder for each platform it is built for, each
+with its library (<name>.so, <name>.dll or <name>.dylib) at the top and its windows in ui/<pack>/. Upload
+everything in --out to a GitHub release of the add-on's repository: the client finds the manifest as the newest
+release's asset and the packages beside it.
+
+usage:
+  tools/make_addon.py --name autoloot --kind script --version 1.3.0 --caps read,events,actions \\
+      --dir path/to/autoloot --out release/
+  tools/make_addon.py --name MQ2Hud --kind plugin --version 2.0.0 --caps read,ui \\
+      --platform linux-x64=build-linux/MQ2Hud --platform windows-x64=build-win/MQ2Hud --out release/
+
+Optional: --author, --description, --notes (the release's page), --min-client (the oldest Hailstone it needs).
+Then sign it, if you want players' clients to refuse versions signed by anyone else:
+  build/hailstone_sign keygen <secret-key-file>          (once; keep the file off GitHub)
+  build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
+
+Files whose name starts with '.' are left out. The zips are made the same way each time (sorted, dated
+1980-01-01), so an unchanged package keeps its hash. What a package may hold is checked again by the client.
+"""
+import argparse
+import hashlib
+import os
+import re
+import sys
+import zipfile
+
+MANIFEST = "hailstone-addon.txt"
+VERSION = re.compile(r"^v?\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z.-]+)?$")
+NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+PLATFORM = re.compile(r"^[a-z0-9_-]{1,32}$")
+CAPS = {"read", "commands", "target", "actions", "move", "chat", "events", "ui", "packets", "extend", "login", "net",
+        "web", "all"}
+PROGRAMS = (".exe", ".dll", ".so", ".dylib", ".com", ".bat", ".cmd", ".ps1", ".sh", ".asi", ".flt", ".py", ".js",
+            ".vbs", ".scr", ".msi", ".jar", ".app")
+LIBRARY = {"linux": ".so", "windows": ".dll", "macos": ".dylib"}
+
+
+def files_under(root):
+    """Every file under root, as '/'-separated names relative to it, sorted; dotfiles and dot-folders left out."""
+    out = []
+    for folder, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for f in files:
+            if f.startswith("."):
+                continue
+            full = os.path.join(folder, f)
+            if os.path.islink(full) and not os.path.isfile(full):
+                sys.exit(f"{full}: a link to no file")
+            out.append(os.path.relpath(full, root).replace(os.sep, "/"))
+    return sorted(out)
+
+
+def check(name, kind, files, platform):
+    """The client's own rules (app/addon_install.cpp unpack_addon), so a mistake shows here, not on a player's
+    machine."""
+    lowered = set()
+    for f in files:
+        if f.lower() in lowered:
+            sys.exit(f"{f}: two files differ only in case")
+        lowered.add(f.lower())
+    if kind == "script":
+        if "init.lua" not in files:
+            sys.exit("a script has init.lua at its top")
+        for f in files:
+            if f.lower().endswith(PROGRAMS):
+                sys.exit(f"{f}: a script may hold Lua and data, no programs")
+        return
+    lib = LIBRARY.get(platform.split("-", 1)[0])
+    if not lib:
+        sys.exit(f"{platform}: not a platform Hailstone has plugins for")
+    libs = [f for f in files if f.lower().endswith(lib)]
+    if libs != [f"{name}{lib}"] and libs != [f"lib{name}{lib}"]:
+        sys.exit(f"{platform}: the package has exactly one library at its top, {name}{lib} (found {libs or 'none'})")
+    for f in files:
+        low = f.lower()
+        if low.endswith(".lua") and not low.startswith("ui/"):
+            sys.exit(f"{f}: a plugin's Lua goes in ui/<pack>/")
+        if low.endswith(PROGRAMS) and f not in libs:
+            sys.exit(f"{f}: a plugin may hold its one library, its windows and data, no other programs")
+
+
+def make_zip(path, root, names):
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for name in names:
+            full = os.path.join(root, *name.split("/"))
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = (0o100000 | 0o644) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with open(full, "rb") as f:
+                z.writestr(info, f.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+    if os.path.getsize(path) >= 0xFFFFFFFF:
+        sys.exit(f"{path}: 4 GiB or more (the client reads no zip64)")
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def one_line(text, what):
+    if any(ord(c) < 32 or ord(c) == 127 for c in text) or len(text.encode("utf-8")) > 200:
+        sys.exit(f"--{what}: one line of at most 200 bytes")
+    return text
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--name", required=True)
+    ap.add_argument("--kind", required=True, choices=["script", "plugin"])
+    ap.add_argument("--version", required=True)
+    ap.add_argument("--caps", required=True, help="what it needs: read,ui,actions ... (docs/plugins.md)")
+    ap.add_argument("--dir", help="a script's folder")
+    ap.add_argument("--platform", action="append", default=[], help="a plugin's PLATFORM=FOLDER, once for each")
+    ap.add_argument("--author", default="")
+    ap.add_argument("--description", default="")
+    ap.add_argument("--notes", default="", help="the release's page")
+    ap.add_argument("--min-client", default="", help="the oldest Hailstone it works with")
+    ap.add_argument("--out", required=True)
+    a = ap.parse_args()
+    if not NAME.match(a.name):
+        sys.exit(f"{a.name}: 1 to 32 letters, digits, '-' and '_', starting with a letter or digit")
+    for v in (a.version, a.min_client or "0.0.0"):
+        if not VERSION.match(v):
+            sys.exit(f"{v}: not a version (1.2.3, 1.2.3-beta.1)")
+    caps = [c.strip().lower() for c in a.caps.replace(" ", ",").split(",") if c.strip()]
+    if not caps or any(c not in CAPS for c in caps):
+        sys.exit(f"--caps: some of {', '.join(sorted(CAPS))}")
+    if a.notes and (not a.notes.startswith(("https://", "http://")) or any(c.isspace() for c in a.notes)):
+        sys.exit("--notes: an http(s) address")
+    if a.notes:
+        one_line(a.notes, "notes")
+
+    builds = []  # (platform, folder)
+    if a.kind == "script":
+        if not a.dir or a.platform:
+            sys.exit("a script takes --dir (and no --platform)")
+        builds.append(("any", a.dir))
+    else:
+        if a.dir or not a.platform:
+            sys.exit("a plugin takes --platform PLATFORM=FOLDER, once for each platform (and no --dir)")
+        for p in a.platform:
+            plat, _, folder = p.partition("=")
+            if not PLATFORM.match(plat) or plat == "any" or not folder:
+                sys.exit(f"--platform {p}: PLATFORM=FOLDER, as linux-x64=build/MQ2Hud")
+            builds.append((plat, folder))
+    os.makedirs(a.out, exist_ok=True)
+
+    lines = ["hailstone-addon 1", f"name {a.name}", f"kind {a.kind}", f"version {a.version}"]
+    if a.min_client:
+        lines.append(f"min_client {a.min_client}")
+    if a.author:
+        lines.append(f"author {one_line(a.author, 'author')}")
+    if a.description:
+        lines.append(f"description {one_line(a.description, 'description')}")
+    lines.append(f"caps {','.join(caps)}")
+    if a.notes:
+        lines.append(f"notes {a.notes}")
+    for plat, folder in builds:
+        files = files_under(folder)
+        if not files:
+            sys.exit(f"{folder}: empty")
+        check(a.name, a.kind, files, plat)
+        file = f"{a.name}-{a.version}.zip" if plat == "any" else f"{a.name}-{a.version}-{plat}.zip"
+        path = os.path.join(a.out, file)
+        make_zip(path, folder, files)
+        lines.append(f"package {plat} {os.path.getsize(path)} {digest(path)} {file}")
+        print(f"{plat}: {path} ({len(files)} files)")
+    manifest = os.path.join(a.out, MANIFEST)
+    with open(manifest, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"{manifest}: not signed (optional: build/hailstone_sign sign <secret-key-file> {manifest})")
+
+
+if __name__ == "__main__":
+    main()

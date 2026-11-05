@@ -1,0 +1,165 @@
+// assets/zone_fires.h: which materials and particle clouds are flames, the mesh flames' boxes, the environment
+// emitters, and the zone's flames merged and lit.
+#include <doctest/doctest.h>
+
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "assets/zone.h"
+#include "assets/zone_fires.h"
+#include "game_files.h"
+
+using namespace nmsc::assets;
+
+namespace {
+
+Material named(const char* name) {
+    Material m;
+    m.name = name;
+    m.frames = {"x.bmp"};
+    return m;
+}
+
+// A crossed-quad flame (two quads, four triangles) of `w` x `h` standing at `at`.
+void add_flame(Mesh& mesh, glm::vec3 at, float w, float h, std::uint32_t material) {
+    MeshPart part{static_cast<std::uint32_t>(mesh.indices.size()), 12, material};
+    for (int q = 0; q < 2; ++q) {
+        glm::vec3 side = q ? glm::vec3(0.0f, w * 0.5f, 0.0f) : glm::vec3(w * 0.5f, 0.0f, 0.0f);
+        auto base = static_cast<std::uint32_t>(mesh.vertices.size());
+        for (glm::vec3 p : {at - side, at + side, at + side + glm::vec3(0, 0, h), at - side + glm::vec3(0, 0, h)}) {
+            Vertex v;
+            v.position = p;
+            mesh.vertices.push_back(v);
+        }
+        for (std::uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) mesh.indices.push_back(base + i);
+    }
+    mesh.parts.push_back(part);
+}
+
+} // namespace
+
+TEST_CASE("flame materials by name") {
+    CHECK(flame_material_hue(named("FIRE1_MDF")) == FlameHue::Fire);
+    CHECK(flame_material_hue(named("fire1")) == FlameHue::Fire);
+    CHECK(flame_material_hue(named("BLUEFLAME01_MDF")) == FlameHue::Blue);
+    CHECK(flame_material_hue(named("BFIRE1_MDF")) == FlameHue::Blue);
+    CHECK(flame_material_hue(named("GFIRE1_MDF")) == FlameHue::Green);
+    // Holders, fuel and the look-alikes stay.
+    for (const char* other : {"FIREWOOD_MDF", "COALS_MDF", "TORCHTOP_MDF", "TAKTORCH01_MDF", "YKFLAME01_MDF",
+                              "FIREPLACE_MDF", "SMKE1_MDF"})
+        CHECK(flame_material_hue(named(other)) == FlameHue::None);
+}
+
+TEST_CASE("flame clouds by sprite, hue and name") {
+    EmitterDefinition d;
+    d.texture = "GENG00.DDS";
+    CHECK(flame_emitter_hue(d) == FlameHue::Fire);
+    d.texture = "GENG10.DDS";
+    CHECK(flame_emitter_hue(d) == FlameHue::Blue);
+    d.texture = "CSMOKE.DDS";
+    CHECK(flame_emitter_hue(d) == FlameHue::None);
+    d.texture = "GENE01.DDS"; // the fire pots' sparkle
+    CHECK(flame_emitter_hue(d) == FlameHue::None);
+    // vald_bluetorch: the ordinary sprite in a blue colour.
+    d.name = "vald_bluetorch";
+    d.texture = "flamed.dds";
+    d.color_start = {10, 10, 255};
+    CHECK(flame_emitter_hue(d) == FlameHue::Blue);
+    d.color_start = {255, 255, 255};
+    d.name = "TorchFlame";
+    CHECK(flame_emitter_hue(d) == FlameHue::Fire);
+    // A grey sprite in grey: its name says.
+    d.name = "cob_brazier_green";
+    d.texture = "flamegray.dds";
+    d.color_start = {128, 128, 128};
+    CHECK(flame_emitter_hue(d) == FlameHue::Green);
+    d.name = "purple_brazier";
+    d.texture = "fire01_gray.dds";
+    d.color_start = {73, 50, 112};
+    CHECK(flame_emitter_hue(d) == FlameHue::Violet);
+    // Lava is not a flame.
+    d.name = "AGlava_flame";
+    d.texture = "new_fire.dds";
+    CHECK(flame_emitter_hue(d) == FlameHue::None);
+}
+
+TEST_CASE("a mesh's flames: touching triangles are one flame") {
+    Mesh mesh;
+    mesh.materials = {named("TORCHTOP_MDF"), named("FIRE1_MDF")};
+    // A holder (not a flame), and two candles a unit apart: two flames.
+    add_flame(mesh, {0, 0, -2}, 1.0f, 2.0f, 0);
+    add_flame(mesh, {0, 0, 0}, 0.3f, 0.9f, 1);
+    add_flame(mesh, {1.5f, 0, 0}, 0.3f, 0.9f, 1);
+    auto flames = mesh_flames(mesh);
+    REQUIRE(flames.size() == 2);
+    CHECK(flames[0].hue == FlameHue::Fire);
+    CHECK(flames[0].min.z == doctest::Approx(0.0f));
+    CHECK(flames[0].max.z == doctest::Approx(0.9f));
+
+    // Placed: scaled by 2 and moved, its foot at the lowest corner, the crossed quads' width taken in.
+    glm::mat4 t = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(10, 20, 30)), glm::vec3(2.0f));
+    ZoneFire f = place_flame(flames[0], t);
+    CHECK(f.base.x == doctest::Approx(10.0f));
+    CHECK(f.base.y == doctest::Approx(20.0f));
+    CHECK(f.base.z == doctest::Approx(30.0f));
+    CHECK(f.height == doctest::Approx(0.9f * 2.0f * 1.1f));
+    CHECK(f.width == doctest::Approx(0.3f * 2.0f * 0.7f));
+}
+
+TEST_CASE("merged fires: one standing in another's flame goes") {
+    std::vector<ZoneFire> meshes = {{{0, 0, 0}, 1.0f, 2.0f, FlameHue::Blue}, {{50, 0, 0}, 1.0f, 2.0f}};
+    // An emitter on the first torch's flame, and one by itself.
+    std::vector<ZoneFire> clouds = {{{0.3f, 0, 0.5f}, 0.8f, 1.5f}, {{100, 0, 0}, 0.8f, 1.5f}};
+    auto all = merge_fires(meshes, clouds);
+    CHECK(all.size() == 3);
+    bool blue = false;
+    for (const auto& f : all) blue |= f.hue == FlameHue::Blue;
+    CHECK(blue);
+}
+
+TEST_CASE("fire lights: only for flames with no light near") {
+    Zone zone;
+    zone.lights.push_back({{0, 0, 1}, {1, 1, 1}, 100.0f});
+    std::vector<ZoneFire> fires = {{{5, 0, 0}, 1.0f, 2.0f}, {{200, 0, 0}, 1.0f, 2.0f}, {{205, 0, 0}, 1.0f, 2.0f}};
+    CHECK(add_fire_lights(zone, fires) == 1); // the second lights the third
+    REQUIRE(zone.lights.size() == 2);
+    CHECK(zone.lights[1].position.x == doctest::Approx(200.0f));
+    CHECK(zone.lights[1].radius >= 30.0f);
+}
+
+TEST_CASE("environment emitter lines") {
+    auto e = parse_environment_emitters("Name^EmitterDefIdx^X^Y^Z^AlwaysVisible^Lifespan\r\n"
+                                        "torch01^106^736.5^-1180.1^-89.0^4000000^0\r\n"
+                                        "broken^x^1^2^3\n"
+                                        "short^57^1.5^2^3^0\n"
+                                        "\n");
+    REQUIRE(e.size() == 2);
+    CHECK(e[0].name == "torch01");
+    CHECK(e[0].definition == 106);
+    CHECK(e[0].position.x == doctest::Approx(736.5f));
+    CHECK(e[0].position.z == doctest::Approx(-89.0f));
+    CHECK(e[1].definition == 57);
+    // A definition index far past int's range (or below it) is clamped rather than cast out of range.
+    auto big = parse_environment_emitters("a^1e30^0^0^0\nb^-1e30^0^0^0\nc^nan^0^0^0\n");
+    REQUIRE(big.size() == 3);
+    CHECK(big[0].definition == 2147483647);
+    CHECK(big[1].definition == -2147483647 - 1);
+    CHECK(big[2].definition == 0);
+}
+
+TEST_CASE("freeportwest's torches burn from its environment emitters" * doctest::skip(!nmsc::test::game_dir())) {
+    auto z = load_zone(*nmsc::test::game_dir(), "freeportwest");
+    std::size_t flames = 0;
+    for (const auto& f : z.particle_fixtures)
+        flames += flame_emitter_hue(z.particle_definitions[f.definition]) != FlameHue::None;
+    CHECK(flames > 400);
+}
+
+TEST_CASE("qeynos2's lamps carry mesh flames" * doctest::skip(!nmsc::test::game_dir())) {
+    auto z = load_zone(*nmsc::test::game_dir(), "qeynos2");
+    auto fires = placement_fires(z);
+    CHECK(fires.size() > 50);
+    for (const auto& f : fires) {
+        CHECK(f.height > 0.1f);
+        CHECK(f.height < 30.0f);
+    }
+}

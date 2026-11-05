@@ -1,0 +1,185 @@
+// The asset-folder choice at start-up and the picker's recent folders (core/asset_folder_choice.h).
+#include <doctest/doctest.h>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include "core/asset_folder.h"
+#include "core/asset_folder_choice.h"
+#include "core/config.h"
+#include "core/game_dir.h"
+
+namespace fs = std::filesystem;
+using namespace nmsc;
+
+namespace {
+struct TempDir {
+    fs::path path;
+    explicit TempDir(const char* tag) {
+        auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        path = fs::temp_directory_path() / (std::string("nmsc_picker_") + tag + "_" + std::to_string(stamp));
+        fs::create_directories(path);
+    }
+    ~TempDir() {
+        std::error_code ec;
+        fs::remove_all(path, ec);
+    }
+};
+
+// A validator that passes only `good`, so the tests need no RoF2 files.
+AssetFolderValidator only(const fs::path& good) {
+    return [good](const fs::path& p) {
+        AssetFolderCheck c;
+        c.is_directory = true;
+        c.ok = same_folder(p, good);
+        if (!c.ok) c.missing.push_back("spells_us.txt");
+        return c;
+    };
+}
+} // namespace
+
+TEST_CASE("Asset folder: --game-dir / EQ_GAME_DIR first, then assets.path, then the picker") {
+    TempDir a("a"), b("b");
+    Config config;
+
+    SUBCASE("nothing known: the picker, with no complaint") {
+        auto r = resolve_asset_folder({}, config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Picker);
+        CHECK(r.path.empty());
+        CHECK(r.reason.empty());
+    }
+    SUBCASE("a usable assets.path") {
+        config.set("assets.path", a.path.string());
+        auto r = resolve_asset_folder({}, config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Config);
+        CHECK(r.path == a.path);
+    }
+    SUBCASE("the override wins over assets.path, even when its check fails") {
+        config.set("assets.path", a.path.string());
+        auto r = resolve_asset_folder(b.path, config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Override);
+        CHECK(r.path == b.path);
+    }
+    SUBCASE("an override that is no folder goes to the picker, starting on assets.path") {
+        config.set("assets.path", a.path.string());
+        auto r = resolve_asset_folder(a.path / "nope", config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Picker);
+        CHECK(r.path == a.path);
+        CHECK(r.reason.find("--game-dir") != std::string::npos);
+    }
+    SUBCASE("an assets.path that fails the check: the picker, saying what is missing") {
+        config.set("assets.path", b.path.string());
+        auto r = resolve_asset_folder({}, config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Picker);
+        CHECK(r.path == b.path);
+        CHECK_FALSE(r.reason.empty());
+        CHECK(r.check.missing == std::vector<std::string>{"spells_us.txt"});
+    }
+    SUBCASE("assets.pick shows the picker over a usable folder, until a folder is remembered") {
+        config.set("assets.path", a.path.string());
+        request_asset_folder_pick(config, true);
+        CHECK(asset_folder_pick_requested(config));
+        auto r = resolve_asset_folder({}, config, only(a.path));
+        CHECK(r.source == AssetFolderSource::Picker);
+        CHECK(r.path == a.path);
+        CHECK_FALSE(r.reason.empty());
+        // An override still comes first.
+        CHECK(resolve_asset_folder(b.path, config, only(a.path)).source == AssetFolderSource::Override);
+        remember_asset_folder(config, a.path);
+        CHECK_FALSE(asset_folder_pick_requested(config));
+        CHECK_FALSE(config.get("assets.pick"));
+        CHECK(resolve_asset_folder({}, config, only(a.path)).source == AssetFolderSource::Config);
+    }
+}
+
+TEST_CASE("Asset folder: the recent folders") {
+    using V = std::vector<std::string>;
+    CHECK(push_recent_folder({}, "/eq") == V{"/eq"});
+    CHECK(push_recent_folder({"/a", "/b"}, "/c") == V{"/c", "/a", "/b"});
+    // The same folder moves to the front, also when written with a trailing separator or a dot.
+    CHECK(push_recent_folder({"/a", "/b", "/c"}, "/b") == V{"/b", "/a", "/c"});
+    CHECK(push_recent_folder({"/a", "/b/", "/c"}, "/./b") == V{"/./b", "/a", "/c"});
+    CHECK(push_recent_folder({"/a"}, "") == V{"/a"});
+    // At most `max`, the oldest dropped.
+    V many;
+    for (int i = 0; i < 10; ++i) many = push_recent_folder(many, "/f" + std::to_string(i));
+    REQUIRE(many.size() == kMaxRecentAssetFolders);
+    CHECK(many.front() == "/f9");
+    CHECK(many.back() == "/f2");
+    CHECK(push_recent_folder({"/a", "/b", "/c"}, "/d", 2) == V{"/d", "/a"});
+
+    CHECK(remove_recent_folder({"/a", "/b", "/c"}, "/b/") == V{"/a", "/c"});
+    CHECK(remove_recent_folder({"/a"}, "/x") == V{"/a"});
+
+    CHECK(same_folder("/eq/rof2", "/eq/rof2/"));
+    CHECK(same_folder("/eq/x/../rof2", "/eq/rof2"));
+    CHECK_FALSE(same_folder("/eq/rof2", "/eq/rof"));
+#ifndef _WIN32
+    CHECK_FALSE(same_folder("/eq/RoF2", "/eq/rof2")); // case matters off Windows
+#endif
+
+    // assets.recent: '|'-separated, empty entries and repeats skipped on reading.
+    Config config;
+    config.set("assets.recent", "/a||/b|/a/|/c");
+    CHECK(recent_asset_folders(config) == V{"/a", "/b", "/c"});
+    CHECK(join_recent_folders({"/a", "", "/b|c", "/d"}) == "/a|/d");
+
+    // remember_asset_folder: assets.path, the folder first in assets.recent, both absolute.
+    const std::string b = fs::absolute("/b").string(), fresh = fs::absolute("/new").string();
+    config.set("assets.recent", "/a|" + b + "|/c");
+    remember_asset_folder(config, "/b/");
+    CHECK(config.get_string("assets.path") == b);
+    CHECK(config.get_string("assets.recent") == b + "|/a|/c");
+    remember_asset_folder(config, "/new");
+    CHECK(recent_asset_folders(config) == V{fresh, b, "/a", "/c"});
+    // A typed relative folder is kept as the absolute one it meant when it was chosen.
+    remember_asset_folder(config, fs::path("games") / ".." / "RoF2");
+    CHECK(config.get_string("assets.path") == (fs::current_path() / "RoF2").string());
+}
+
+TEST_CASE("Asset folder: never one Hailstone writes into") {
+    TempDir tmp("conflict");
+    const fs::path eq = tmp.path / "RoF2";
+    fs::create_directories(eq / "hailstone");
+    // The data folder is the asset folder, or inside it: refused, saying why.
+    CHECK_FALSE(data_folder_conflict(eq, eq).empty());
+    CHECK_FALSE(data_folder_conflict(eq, eq / "hailstone").empty());
+    CHECK_FALSE(data_folder_conflict(eq / "", eq / "hailstone" / ".").empty());
+    // Apart, or the asset folder inside the data folder (Hailstone never writes there): fine.
+    CHECK(data_folder_conflict(eq, tmp.path / "hailstone").empty());
+    CHECK(data_folder_conflict(eq / "hailstone", eq).empty());
+    CHECK(data_folder_conflict(tmp.path / "RoF", tmp.path / "RoF2").empty());
+    CHECK(data_folder_conflict(eq, {}).empty());
+
+    // A saved assets.path that holds the data folder goes to the picker, saying why.
+    Config config;
+    config.set("assets.path", eq.string());
+    auto r = resolve_asset_folder({}, config, only(eq), eq / "hailstone");
+    CHECK(r.source == AssetFolderSource::Picker);
+    CHECK(r.reason.find("inside this folder") != std::string::npos);
+    CHECK(resolve_asset_folder({}, config, only(eq), tmp.path / "data").source == AssetFolderSource::Config);
+}
+
+TEST_CASE("Asset folder: a live base needs the server-matched files from the server's assets folder") {
+    TempDir base("live"), overlay("overlay");
+    auto touch = [](const fs::path& p) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p) << "x";
+    };
+    touch(base.path / "spells_us.txt");
+    touch(base.path / "eqstr_us.txt");
+    GameDir rof2(base.path, overlay.path);
+    CHECK_FALSE(is_live_asset_folder(rof2));
+    CHECK(missing_server_files(rof2).empty()); // a RoF2 base has the right ones
+
+    touch(base.path / "spells_us_str.txt"); // only the live client ships it
+    touch(overlay.path / "spells_us.txt");
+    touch(overlay.path / "RESOURCES" / "skillcaps.txt");
+    GameDir live(base.path, overlay.path);
+    CHECK(is_live_asset_folder(live));
+    CHECK(missing_server_files(live) ==
+          std::vector<std::string>{"eqstr_us.txt", "dbstr_us.txt", "Resources/BaseData.txt", "Resources/GlobalLoad.txt"});
+}

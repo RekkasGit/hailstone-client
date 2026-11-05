@@ -1,0 +1,368 @@
+// server/quests/global/encounters/hailstone.lua, the server side's drop-in quest script, run in the client's Lua
+// with a stand-in for the parts of EQEmu's Lua API it uses (eq.*, Packet, the player events), os.time, io.open and
+// io.popen. What it checks is the script's own bookkeeping: its limits and the files it keeps open, not EQEmu.
+
+#include <doctest/doctest.h>
+
+#include <fstream>
+#include <string>
+
+#include <lua.hpp>
+
+namespace {
+
+std::string script_path() {
+    std::string dir = std::string(__FILE__);
+    dir = dir.substr(0, dir.rfind('/') == std::string::npos ? 0 : dir.rfind('/'));
+    return dir + "/../server/quests/global/encounters/hailstone.lua";
+}
+
+constexpr const char* kHarness = R"lua(
+package.config = "/\n;\n?\n!\n-\n" -- the script's Linux commands, whatever runs the test
+T = { now = 1000, finds = 0, stats = 0, opens = {}, open_now = 0, open_max = 0, messages = {}, data = {}, files = {},
+      mtimes = {}, handlers = {}, timers = {}, clients = {} }
+os.time = function() return T.now end
+
+local function bytes_packet(op, size)
+  local p = { op = op, size = size, b = {} }
+  for i = 0, size - 1 do p.b[i] = 0 end
+  local function put(off, v, n) v = math.floor(v) % (256 ^ n); for i = 0, n - 1 do p.b[off + i] = math.floor(v / 256 ^ i) % 256 end end
+  local function get(off, n) local v = 0; for i = n - 1, 0, -1 do v = v * 256 + (p.b[off + i] or 0) end; return v end
+  function p:WriteInt32(o, v) put(o, v, 4) end
+  function p:WriteInt16(o, v) put(o, v, 2) end
+  function p:WriteInt8(o, v) put(o, v, 1) end
+  function p:WriteString(o, s) for i = 1, #s do p.b[o + i - 1] = s:byte(i) end; p.b[o + #s] = 0 end
+  function p:WriteFixedLengthString(o, s, n) for i = 1, n do p.b[o + i - 1] = s:byte(i) or 0 end end
+  function p:ReadInt32(o) return get(o, 4) end
+  function p:ReadInt16(o) return get(o, 2) end
+  function p:ReadInt8(o) return get(o, 1) end
+  function p:ReadString(o) local t = {}; while (p.b[o] or 0) ~= 0 do t[#t + 1] = string.char(p.b[o]); o = o + 1 end; return table.concat(t) end
+  function p:GetSize() return p.size end
+  function p:GetProtocolOpcode() return p.op end
+  return p
+end
+Packet = function(op, size) return bytes_packet(op, size) end
+
+Event = { unhandled_opcode = 1, signal = 2 }
+eq = {
+  debug = function() end,
+  get_data = function(k) return T.data[k] end,
+  set_data = function(k, v) T.data[k] = v end,
+  delete_data = function(k) T.data[k] = nil end,
+  cross_zone_message_player_by_name = function(_, name, text) T.messages[#T.messages + 1] = name .. ": " .. text end,
+  get_entity_list = function()
+    return {
+      GetClientByName = function() return { valid = false } end,
+      GetClientByCharID = function(_, id) return T.clients[id] or { valid = false } end,
+    }
+  end,
+  register_player_event = function(_, ev, fn) T.handlers[ev] = fn end,
+  unregister_player_event = function() end,
+  set_timer = function(name, ms) T.timers[name] = ms end,
+  stop_timer = function(name) T.timers[name] = nil end,
+}
+
+local real_open = io.open
+io.open = function(path, mode)
+  if path == SCRIPT then return real_open(path, mode) end
+  if mode and mode:sub(1, 1) == "w" then
+    local parts = {}
+    return { write = function(_, s) parts[#parts + 1] = s end, close = function() T.files[path] = table.concat(parts) end }
+  end
+  if T.files[path] == nil or path:match("/%.hailstone") then return nil end
+  T.opens[path] = (T.opens[path] or 0) + 1
+  T.open_now = T.open_now + 1
+  T.open_max = math.max(T.open_max, T.open_now)
+  local pos = 0
+  -- An open file sees it rewritten in place (T.files changed), as a real handle would.
+  return {
+    seek = function(_, whence, off)
+      if whence == "end" then pos = #(T.files[path] or "") else pos = off end
+      return pos
+    end,
+    read = function(_, n) local s = (T.files[path] or ""):sub(pos + 1, pos + n); pos = pos + #s; return s end,
+    close = function() T.open_now = T.open_now - 1 end,
+    lines = function() return function() return nil end end,
+  }
+end
+io.popen = function(cmd)
+  local out = ""
+  local one = cmd:match("^find '(client_files/[^']+)' %-maxdepth 0")
+  if one then
+    T.stats = T.stats + 1
+    if T.files[one] then out = #T.files[one] .. "\t" .. (T.mtimes[one] or "1700000000.0") .. "\n" end
+  elseif cmd:match("^find ") then
+    T.finds = T.finds + 1
+    local names = {}
+    for path, text in pairs(T.files) do
+      local rel = path:match("^client_files/([^.].*)$")
+      if rel then names[#names + 1] = rel .. "\t" .. #text .. "\t" .. (T.mtimes[path] or "1700000000.0") end
+    end
+    out = table.concat(names, "\n") .. "\n"
+  elseif cmd:match("sha256sum") then
+    local names = {}
+    for path in pairs(T.files) do
+      local rel = path:match("^client_files/([^.].*)$")
+      if rel then names[#names + 1] = string.rep("ab", 32) .. "  " .. rel end
+    end
+    out = table.concat(names, "\n") .. "\n"
+  end
+  return { read = function() return out end, close = function() end }
+end
+
+function add_files(n, size)
+  for i = 1, n do T.files[string.format("client_files/f%02d.bin", i)] = string.rep(string.char(64 + i), size) end
+end
+
+function client(id, name)
+  local c = { id = id, name = name, sent = {}, vars = {}, valid = true }
+  T.clients[id] = c
+  function c:CharacterID() return c.id end
+  function c:GetCleanName() return c.name end
+  function c:QueuePacket(p) c.sent[#c.sent + 1] = p end
+  function c:Message() end
+  function c:SetEntityVariable(k, v) c.vars[k] = v end
+  function c:GetEntityVariable(k) return c.vars[k] end
+  return c
+end
+
+local function send(c, p) T.handlers[Event.unhandled_opcode]({ self = c, packet = p }) end
+
+function list_request(c, first)
+  local p = Packet(0x1426, 12)
+  p:WriteInt32(0, 0x4c465348); p:WriteInt16(4, 1); p:WriteInt16(6, 1); p:WriteInt32(8, first or 0)
+  send(c, p)
+  return c.sent[#c.sent]
+end
+
+function chunk_request(c, id, index, offset)
+  local before = #c.sent
+  local p = Packet(0x1426, 24)
+  p:WriteInt32(0, 0x4c465348); p:WriteInt16(4, 1); p:WriteInt16(6, 2)
+  p:WriteInt32(8, id); p:WriteInt32(12, index); p:WriteInt32(16, offset); p:WriteInt32(20, 32768)
+  send(c, p)
+  if #c.sent == before then return nil end
+  return c.sent[#c.sent]
+end
+
+function fire_timer(name)
+  assert(T.timers[name], "the timer " .. name .. " runs")
+  event_timer({ timer = name })
+end
+
+function cancel_invite(c, inviter)
+  local p = Packet(0x2a50, 152)
+  p:WriteString(0, inviter); p:WriteString(64, c.name); p:WriteInt8(148, 3)
+  send(c, p)
+end
+
+function load_script()
+  dofile(SCRIPT)
+  event_encounter_load({ encounter = {} })
+end
+)lua";
+
+// Runs the harness, then `scenario`; "" when it ran to the end, else Lua's error. "skip" without the sources.
+std::string run(const std::string& scenario) {
+    const std::string path = script_path();
+    if (!std::ifstream(path)) return "skip"; // an installed test binary run away from the sources
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    lua_pushstring(L, path.c_str());
+    lua_setglobal(L, "SCRIPT");
+    std::string err;
+    if (luaL_dostring(L, kHarness) != LUA_OK || luaL_dostring(L, scenario.c_str()) != LUA_OK)
+        err = lua_tostring(L, -1) ? lua_tostring(L, -1) : "error";
+    lua_close(L);
+    return err;
+}
+
+void check_run(const char* scenario) {
+    const std::string err = run(scenario);
+    if (err == "skip") return;
+    CHECK_MESSAGE(err.empty(), err);
+}
+
+} // namespace
+
+TEST_CASE("Server script: a client's list request makes the file list again at most every files_rescan seconds") {
+    check_run(R"lua(
+add_files(2, 40000)
+load_script()
+assert(T.finds == 1, "the zone's start lists the files")
+local c = client(1, "Alpha")
+local page = list_request(c, 0)
+assert(page:ReadInt32(12) == 2, "two files listed")
+T.now = T.now + 299
+list_request(c, 0)
+assert(T.finds == 1, "kept for 300 s: " .. T.finds)
+T.now = T.now + 1
+list_request(c, 0)
+assert(T.finds == 2, "listed again after 300 s")
+for _ = 1, 50 do list_request(c, 0) end
+assert(T.finds == 2, "asking again and again lists nothing more")
+T.data["hailstone:files_rescan"] = "0" -- never under 30 s, whatever the owner sets
+T.now = T.now + 29
+list_request(c, 0)
+assert(T.finds == 2, "under 30 s")
+T.now = T.now + 1
+list_request(c, 0)
+assert(T.finds == 3, "30 s")
+T.data["hailstone:client_files"] = "0"
+T.now = T.now + 1000
+page = list_request(c, 0)
+assert(T.finds == 3, "client_files 0: nothing listed")
+assert(page:ReadInt32(12) == 0, "and an empty list sent")
+)lua");
+}
+
+TEST_CASE("Server script: clients fetching different files keep each open, a few at a time") {
+    check_run(R"lua(
+add_files(10, 40000)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local id = list_request(a, 0):ReadInt32(8)
+for _ = 1, 10 do
+  for off = 0, 32768, 32768 do
+    local ra = chunk_request(a, id, 0, off)
+    local rb = chunk_request(b, id, 1, off)
+    assert(ra:ReadInt16(6) == 2 and rb:ReadInt16(6) == 2, "pieces sent")
+    assert(ra:ReadInt32(20) == (off == 0 and 32768 or 40000 - 32768), "a piece's length")
+  end
+end
+assert(T.opens["client_files/f01.bin"] == 1 and T.opens["client_files/f02.bin"] == 1,
+       "two clients on two files: each opened once, not again at every piece")
+T.now = T.now + 1
+for i = 0, 9 do chunk_request(a, id, i, 0) end
+assert(T.open_max == 8, "at most 8 files open: " .. T.open_max)
+chunk_request(a, id, 0, 0)
+assert(T.opens["client_files/f01.bin"] == 2, "the one used longest ago was closed")
+)lua");
+}
+
+TEST_CASE("Server script: a client asking for file pieces too fast is held to files_chunks_per_second") {
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local id = list_request(a, 0):ReadInt32(8)
+local sent = 0
+for _ = 1, 1100 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 1024, "1024 a second by default: " .. sent)
+assert(chunk_request(b, id, 0, 0) ~= nil, "another client is not held back")
+fire_timer("hailstone:files")
+assert(#a.sent == 1 + 1024, "the same second: what waits still waits")
+T.now = T.now + 1
+fire_timer("hailstone:files")
+assert(#a.sent == 1 + 1025, "the next second: the request that waited (asked again, held once)")
+assert(T.timers["hailstone:files"] == nil, "nothing waits: the timer stops")
+assert(chunk_request(a, id, 0, 0) ~= nil, "and new ones go at once")
+T.data["hailstone:files_chunks_per_second"] = "3"
+T.now = T.now + 1
+sent = 0
+for _ = 1, 10 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 3, "the owner's limit: " .. sent)
+T.data["hailstone:files_chunks_per_second"] = "0"
+T.now = T.now + 1
+fire_timer("hailstone:files")
+sent = 0
+for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 2000, "0: no limit")
+)lua");
+}
+
+TEST_CASE("Server script: piece requests over the limit wait and go in order, none dropped") {
+    check_run(R"lua(
+add_files(1, 32768 * 40)
+load_script()
+local a = client(1, "Alpha")
+local id = list_request(a, 0):ReadInt32(8)
+T.data["hailstone:files_chunks_per_second"] = "10"
+-- The client's window: 32 pieces at once.
+local now = 0
+for k = 0, 31 do if chunk_request(a, id, 0, k * 32768) then now = now + 1 end end
+assert(now == 10, "10 at once: " .. now)
+local offsets = {}
+for s = 1, 3 do
+  T.now = T.now + 1
+  fire_timer("hailstone:files")
+end
+for k = 2, #a.sent do offsets[#offsets + 1] = a.sent[k]:ReadInt32(16) end
+assert(#offsets == 32, "every piece came: " .. #offsets)
+for k = 1, 32 do assert(offsets[k] == (k - 1) * 32768, "in the order asked: " .. k) end
+-- More than FILES_WAIT_MAX waiting: the excess is dropped (the client asks again).
+T.now = T.now + 1
+for k = 0, 39 do chunk_request(a, id, 0, k * 32768) end
+for k = 0, 39 do chunk_request(a, id, 0, k * 32768 + 1) end
+for k = 0, 39 do chunk_request(a, id, 0, k * 32768 + 2) end
+local before = #a.sent
+for s = 1, 20 do
+  T.now = T.now + 1
+  if T.timers["hailstone:files"] then fire_timer("hailstone:files") end
+end
+assert(T.timers["hailstone:files"] == nil, "all served: the timer stopped")
+assert(#a.sent - before == 64, "64 waited: " .. (#a.sent - before))
+-- A client that leaves loses what waits for it.
+T.now = T.now + 1
+for k = 0, 19 do chunk_request(a, id, 0, k * 32768) end
+a.valid = false
+T.clients[1] = nil
+T.now = T.now + 1
+before = #a.sent
+fire_timer("hailstone:files")
+assert(#a.sent == before, "nothing sent to a client that left")
+assert(T.timers["hailstone:files"] == nil, "and the timer stops")
+)lua");
+}
+
+TEST_CASE("Server script: a file rewritten since it was hashed is not sent with its old hash") {
+    check_run(R"lua(
+add_files(2, 40000)
+load_script()
+local a = client(1, "Alpha")
+local id = list_request(a, 0):ReadInt32(8)
+assert(chunk_request(a, id, 0, 0):ReadInt16(6) == 2, "a piece")
+assert(T.stats == 1, "a file's first piece looks at its size and time")
+assert(chunk_request(a, id, 0, 32768):ReadInt16(6) == 2, "the next piece")
+assert(T.stats == 1, "later pieces only at the size of the open file")
+-- Rewritten in place, another size: the open file shows it.
+T.files["client_files/f01.bin"] = string.rep("Z", 50000)
+T.now = T.now + 30
+local finds = T.finds
+local r = chunk_request(a, id, 0, 32768)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "the list is stale: the client lists again")
+assert(T.finds == finds + 1, "and the zone made the list again")
+-- The same size, a new time: seen at the file's first piece.
+id = list_request(a, 0):ReadInt32(8)
+T.mtimes["client_files/f02.bin"] = "1800000000.0"
+T.now = T.now + 30
+r = chunk_request(a, id, 1, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "a new time: stale")
+assert(T.finds == finds + 2, "listed again")
+id = list_request(a, 0):ReadInt32(8)
+assert(chunk_request(a, id, 1, 0):ReadInt16(6) == 2, "the new list's file is sent")
+-- Within 30 s of the last listing it is not made again, but nothing stale is sent.
+T.files["client_files/f02.bin"] = string.rep("Q", 100)
+r = chunk_request(a, id, 1, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "stale")
+assert(T.finds == finds + 2, "not listed again within 30 s")
+)lua");
+}
+
+TEST_CASE("Server script: group declines passed on to another zone are limited per sender") {
+    check_run(R"lua(
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+for _ = 1, 8 do cancel_invite(a, "Gamma") end
+assert(#T.messages == 5, "5 in 10 s: " .. #T.messages)
+assert(T.messages[1] == "Gamma: Alpha rejects your offer to join the group.", T.messages[1])
+cancel_invite(b, "Gamma")
+assert(#T.messages == 6, "another sender is not held back")
+T.now = T.now + 9
+cancel_invite(a, "Gamma")
+assert(#T.messages == 6, "still the same 10 s")
+T.now = T.now + 1
+cancel_invite(a, "Gamma")
+assert(#T.messages == 7, "the next 10 s")
+)lua");
+}

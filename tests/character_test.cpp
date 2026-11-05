@@ -1,0 +1,349 @@
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <numbers>
+
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "assets/character.h"
+#include "assets/eqg_character.h"
+#include "assets/pfs.h"
+#include "core/game_dir.h"
+#include "game/appearance.h"
+#include "game/race_models.h"
+#include "game_files.h"
+#include "wld_fixtures.h"
+
+using namespace nmsc;
+using namespace nmsc::assets;
+
+namespace {
+
+bool near(const glm::vec3& a, const glm::vec3& b, float eps = 1e-4f) { return glm::length(a - b) < eps; }
+
+// Two bones: a root at the origin and a child one unit up +X. The root turns
+// 0 -> 90 degrees about Z over two frames.
+CharacterModel two_bone_model() {
+    CharacterModel m;
+    m.code = "TST";
+    m.bone_names = {"TST_TRACK", "TSTARM_TRACK"};
+    m.parents = {-1, 0};
+    m.order = {0, 1};
+    AnimationClip rest;
+    rest.tracks = {{BonePose{}}, {BonePose{glm::quat(1, 0, 0, 0), glm::vec3(1, 0, 0), glm::vec3(1.0f)}}};
+    m.clips.emplace("", rest);
+    AnimationClip turn;
+    turn.frame_ms = 100;
+    turn.frame_count = 2;
+    BonePose a, b;
+    b.rotation = glm::angleAxis(std::numbers::pi_v<float> / 2.0f, glm::vec3(0, 0, 1));
+    turn.tracks = {{a, b}, rest.tracks[1]};
+    m.clips.emplace("L01", turn);
+    return m;
+}
+
+} // namespace
+
+TEST_CASE("CharacterModel composes parents and interpolates between frames") {
+    auto m = two_bone_model();
+    std::vector<glm::mat4> world;
+    m.sample(*m.clip(""), 0.0f, true, world);
+    REQUIRE(world.size() == 2);
+    CHECK(near(glm::vec3(world[1] * glm::vec4(0, 0, 0, 1)), {1, 0, 0}));
+
+    // Halfway between the frames (50 ms): the root has turned 45 degrees.
+    m.sample(*m.clip("L01"), 0.05f, false, world);
+    float h = std::sqrt(0.5f);
+    CHECK(near(glm::vec3(world[1] * glm::vec4(0, 0, 0, 1)), {h, h, 0}));
+
+    // Not looping: held at the last frame.
+    m.sample(*m.clip("L01"), 5.0f, false, world);
+    CHECK(near(glm::vec3(world[1] * glm::vec4(0, 0, 0, 1)), {0, 1, 0}));
+
+    // Looping: 150 ms wraps from frame 1 back toward frame 0.
+    m.sample(*m.clip("L01"), 0.15f, true, world);
+    CHECK(near(glm::vec3(world[1] * glm::vec4(0, 0, 0, 1)), {h, h, 0}));
+
+    CHECK(&m.first_clip({"L02", "L01"}) == m.clip("L01"));
+    CHECK(&m.first_clip({"X99"}) == m.clip(""));
+}
+
+TEST_CASE("race model table") {
+    const auto* hum = game::find_race_model(1, 0);
+    REQUIRE(hum);
+    CHECK(hum->code == "HUM");
+    CHECK(game::find_race_model(1, 1)->code == "HUF");
+    CHECK(game::find_race_model(12, 1)->code == "GNF");
+    // Single-model NPC races are found whatever gender the server sends.
+    CHECK(game::find_race_model(36, 0)->code == "RAT");
+    CHECK(game::find_race_model(60, 2)->code == "SKE");
+    CHECK((game::find_race_model(566, 0)->flags & game::kNewStyleModel) != 0);
+    CHECK(game::find_race_model(35, 0) == nullptr); // not in the client's table
+    CHECK(game::race_model_race_count() == 731);
+    CHECK(game::animation_source("HUM") == "ELM");
+    CHECK(game::animation_source("TRM") == "OGF");
+    CHECK(game::animation_source("ELM").empty());
+    // The RoF2 client's GetAlternateAnimTag for codes LanternExtractor's list leaves out.
+    CHECK(game::animation_source("FRF") == "FRM");
+    CHECK(game::animation_source("GHF") == "ELF");
+}
+
+TEST_CASE("the female froglok takes the male's clips: she sits instead of holding the rest pose" *
+          doctest::skip(!nmsc::test::game_dir())) {
+    // globalpcfroglok_chr.wld has tracks for FRM only (GetAlternateAnimTag @0x406a60: FRF -> FRM).
+    const auto& game = *nmsc::test::game_dir();
+    CharacterLibrary lib(CharacterLibrary::open_archives(game, {"globalpcfroglok_chr.s3d"}));
+    auto m = lib.build("FRF");
+    CHECK(m.animation_donor == "FRM");
+    for (const char* code : {"P01", "P02", "P07", "O03", "L01"}) {
+        const auto* c = m.clip(code);
+        REQUIRE(c);
+        CHECK(c->borrowed);
+    }
+}
+
+TEST_CASE("classic human model from global_chr.s3d" * doctest::skip(!nmsc::test::game_dir())) {
+    const auto& game = *nmsc::test::game_dir();
+    auto archives = global_character_archives(game);
+    CHECK(std::find(archives.begin(), archives.end(), "global_chr.s3d") != archives.end());
+
+    CharacterLibrary lib(CharacterLibrary::open_archives(game, {"global_chr.s3d"}));
+    CHECK(lib.model_codes().size() == 30); // skeletal actors (31 actor definitions)
+    auto m = lib.build("HUM");
+    CHECK(m.source == "global_chr.s3d:global_chr.wld");
+    // Skeleton: 25 nodes, one root (HUM_TRACK), every parent before its child.
+    REQUIRE(m.bone_names.size() == 25);
+    CHECK(m.bone_names[0] == "HUM_TRACK");
+    CHECK(m.bone_names[1] == "HUMPE_TRACK");
+    CHECK(std::count(m.parents.begin(), m.parents.end(), -1) == 1);
+    REQUIRE(m.order.size() == 25);
+    for (std::size_t k = 0; k < m.order.size(); ++k) {
+        auto b = m.order[k];
+        if (m.parents[b] >= 0) {
+            auto p = std::find(m.order.begin(), m.order.end(), static_cast<std::uint32_t>(m.parents[b]));
+            CHECK(p < m.order.begin() + static_cast<std::ptrdiff_t>(k));
+        }
+    }
+    // Body and head (HUM_DMSPRITEDEF + HUMHE00_DMSPRITEDEF).
+    CHECK(m.vertices.size() == 791);
+    CHECK(m.indices.size() == 444 * 3);
+    for (const auto& v : m.vertices) CHECK(v.bones[0] < 25);
+    // Rest pose: about 6.7 units tall, feet about 3 below the origin, front along +X.
+    CHECK(m.bounds_min.z == doctest::Approx(-3.0f).epsilon(0.02));
+    CHECK(m.bounds_max.z == doctest::Approx(3.67f).epsilon(0.02));
+
+    // HUM has its own walk, run and stand tracks (24 of its 25 bones each);
+    // the other 40 clips in global_chr come from ELM.
+    CHECK(m.animation_donor == "ELM");
+    CHECK(m.clips.size() == 44); // 43 clips + the rest pose
+    for (const char* own : {"L01", "L02", "P01"}) {
+        const auto* c = m.clip(own);
+        REQUIRE(c);
+        CHECK_FALSE(c->borrowed);
+        CHECK(c->tracks.size() == 25);
+        CHECK(c->frame_ms == 100);
+    }
+    auto animated = [&](const char* code) {
+        const auto& t = m.clip(code)->tracks;
+        return std::count_if(t.begin(), t.end(), [](const auto& keys) { return keys.size() > 1; });
+    };
+    CHECK(animated("L01") == 17);
+    CHECK(animated("L02") == 17);
+    CHECK(animated("P01") == 3);
+    CHECK(m.clip("L01")->frame_count == 12);
+    CHECK(m.clip("P01")->frame_count == 9);
+    REQUIRE(m.clip("C01"));
+    CHECK(m.clip("C01")->borrowed);
+    CHECK(m.clip("T08")->frame_ms == 50);
+
+    // A sampled walk frame stays a body: every vertex within 8 units of the origin.
+    std::vector<glm::mat4> world;
+    m.sample(*m.clip("L01"), 0.37f, true, world);
+    for (const auto& v : m.vertices) CHECK(glm::length(glm::vec3(world[v.bones[0]] * glm::vec4(v.position, 1.0f))) < 8.0f);
+}
+
+TEST_CASE("every global character model builds" * doctest::skip(!nmsc::test::game_dir())) {
+    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "");
+    std::size_t built = 0;
+    for (const auto& code : lib.model_codes()) {
+        // BOAT is a static actor and IVM has no visible mesh in the shipped files.
+        if (code == "BOAT" || code == "IVM") continue;
+        CHECK_NOTHROW(lib.build(code));
+        ++built;
+    }
+    CHECK(built > 150);
+}
+
+TEST_CASE("Nektulos will-o-wisps (race 69) are the WIL actor, a glow with no light" *
+          doctest::skip(!nmsc::test::game_dir())) {
+    const auto* rm = game::find_race_model(69, 2);
+    REQUIRE(rm);
+    CHECK(rm->code == "WIL");
+    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "nektulos");
+    auto wil = lib.model("WIL");
+    REQUIRE(wil);
+    // One additive (WILHE0001_MDF, raw 0x80000017) part: the original's wisp, not a sprite or particle effect.
+    REQUIRE(wil->materials.size() == 1);
+    CHECK(wil->materials[0].blend != BlendMode::Invisible);
+    CHECK(!wil->parts.empty());
+    CHECK(wil->clip("P01") != nullptr);
+}
+
+TEST_CASE("duplicate actor definitions: first at one level, latest across levels" *
+          doctest::skip(!nmsc::test::game_dir())) {
+    // BAM is defined in both global_chr and global4_chr.
+    const auto& game = *nmsc::test::game_dir();
+    auto archives = CharacterLibrary::open_archives(game, {"global_chr.s3d", "global4_chr.s3d"});
+    REQUIRE(archives.size() == 2);
+    CharacterLibrary same(archives, {2, 2});
+    CharacterLibrary later(archives, {1, 2});
+    REQUIRE(same.has_model("BAM"));
+    CHECK(same.build("BAM").source.find("global_chr") != std::string::npos);
+    CHECK(later.build("BAM").source.find("global4_chr") != std::string::npos);
+}
+
+TEST_CASE("global archives load at resource level 0" * doctest::skip(!nmsc::test::game_dir())) {
+    // CDisplay::InitWorld: FLAGS[0] == 'T' -> level 0, else 2. Every NMS line starts with T.
+    auto levels = global_archive_levels(*nmsc::test::game_dir());
+    REQUIRE(!levels.empty());
+    for (const auto& [name, level] : levels) CHECK(level == 0);
+    CHECK(levels.contains("global_chr.s3d"));
+    CHECK(kGlobalResourceLevel < kZoneResourceLevel);
+}
+
+TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" * doctest::skip(!nmsc::test::game_dir())) {
+    // The Luclin Erudite folds a robe flap away (ERMPEBUTTR scaled to 0.02) and borrows the Wood Elf's clips, whose
+    // track for that bone has scale 1: unfolded, the flap reached out 13 units from the hip.
+    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "", true);
+    auto m = lib.model("ERM");
+    REQUIRE(m);
+    auto clip = m->clips.find("P01");
+    REQUIRE(clip != m->clips.end());
+    CHECK(clip->second.borrowed);
+    std::vector<glm::mat4> world;
+    m->sample(clip->second, 0.3f, true, world);
+    float reach = 0.0f;
+    for (const auto& v : m->vertices)
+        reach = std::max(reach, glm::length(glm::vec3(world[v.bones[0]] * glm::vec4(v.position, 1.0f))));
+    CHECK(reach < 6.0f);
+}
+
+TEST_CASE("zone_character_archives: RoF2's and the live client's _chr.txt entries") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() /
+                   ("nmsc_chr_txt_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir);
+    auto touch = [&](const char* name, const char* text = "") { std::ofstream(dir / name) << text; };
+    // RoF2: "kob,kob" is kob.eqg, "rtn,rtn" an EQG too, "skh,qeynos_chr2" an S3D. Live: "cln,cln_chr" is cln_chr.s3d.
+    touch("zone_chr.txt", "4\nkob,kob\nskh,qeynos_chr2\ncln,cln_chr\nrtn,rtn\n");
+    touch("kob.eqg");
+    touch("qeynos_chr2.s3d");
+    touch("cln_chr.s3d");
+    GameDir game(dir);
+    CHECK(zone_character_archives(game, "zone") == std::vector<std::string>{"qeynos_chr2.s3d", "cln_chr.s3d"});
+    CHECK_FALSE(chr_txt_entry_is_s3d(game, "kob", "kob"));
+    CHECK(chr_txt_entry_is_s3d(game, "CLN", "Cln_Chr"));
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("live hero's forge pieces: Resources/Layers rows name a base mesh and a texture layer") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() /
+                   ("nmsc_layers_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir / "Resources" / "Layers");
+    auto touch = [&](const char* name, const char* text) { std::ofstream(dir / name, std::ios::binary) << text; };
+    // The files read in name order, the first row for a piece winning; CRLF lines.
+    touch("Resources/Layers/B_IT.txt", "IT27104^IT11111^OTHER\r\n");
+    touch("Resources/Layers/GENERIC_CHAIN_BLUE_V1_IT.txt",
+          "IT27000^IT14400^GENERIC_CHAIN_BLUE_V1\r\nit27104^it19814^generic_chain_blue_v1\r\nbad line\r\n");
+    EqgCharacterStore store{GameDir(dir)};
+    CHECK(store.layered_part("IT27104") == std::pair<std::string, std::string>{"IT11111", "OTHER"});
+    CHECK(store.layered_part("it27000") == std::pair<std::string, std::string>{"IT14400", "GENERIC_CHAIN_BLUE_V1"});
+    CHECK_FALSE(store.layered_part("IT1"));
+    // Neither base mesh nor layer exists here.
+    CHECK(store.part_mesh("IT27104") == nullptr);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("live hero's forge pieces: IT27104 is IT19814 with GENERIC_CHAIN_BLUE_V1's textures") {
+    // Runs with a live install in EQ_LIVE_DIR; RoF2's genericchainblue.eqg has IT27104 itself.
+    const char* live_dir = std::getenv("EQ_LIVE_DIR");
+    if (!live_dir) return;
+    EqgCharacterStore store{GameDir(live_dir)};
+    auto piece = store.part_mesh("IT27104");
+    auto base = store.part_mesh("IT19814");
+    REQUIRE(piece);
+    REQUIRE(base);
+    CHECK(piece->pieces.size() == base->pieces.size());
+    REQUIRE(piece->materials.size() == 1);
+    CHECK(piece->materials[0].diffuse == "generic_chain_blue_c.dds");
+    CHECK(store.has_file("generic_chain_blue_c.dds"));
+}
+
+TEST_CASE("EQG textures: c_<code>_ names are read from <code>.eqg over another archive's copies") {
+    // Live's and RoF2's mpu.eqg (the puma mount) carry old c_pma_bd_s00_c.dds copies; pma.eqg's are the puma's.
+    auto game = nmsc::test::game_dir();
+    if (!game) return;
+    GameDir dir(*game);
+    if (!dir.exists("mpu.eqg") || !dir.exists("pma.eqg")) return;
+    EqgCharacterStore store{dir};
+    REQUIRE(store.model("MPU")); // opens mpu.eqg first
+    auto mount_copy = PfsArchive::open(*dir.find("mpu.eqg")).read("c_pma_bd_s00_c.dds");
+    auto own = PfsArchive::open(*dir.find("pma.eqg")).read("c_pma_bd_s00_c.dds");
+    REQUIRE(mount_copy);
+    REQUIRE(own);
+    REQUIRE(*mount_copy != *own);
+    CHECK(store.read_file("c_pma_bd_s00_c.dds") == own);
+}
+
+TEST_CASE("A model no loaded archive has comes from its own <code>_chr.s3d (live: PBR, the black bear)") {
+    // Runs with a live install in EQ_LIVE_DIR: its GlobalLoad.txt loads bea_chr, not RoF2's pbr_chr.
+    const char* live_dir = std::getenv("EQ_LIVE_DIR");
+    if (!live_dir) return;
+    GameDir live(live_dir);
+    CharacterLibrary bare(CharacterLibrary::open_archives(live, {"global_chr.s3d"}));
+    CHECK_FALSE(bare.has_model("PBR"));
+    auto store = std::make_shared<ModelArchiveStore>(live);
+    bare.set_model_archive_store(store);
+    REQUIRE(bare.has_model("PBR"));
+    auto model = bare.model("PBR");
+    REQUIRE(model);
+    CHECK(model->code == "PBR");
+    auto mesh = bare.dress(*model, game::Appearance{});
+    REQUIRE(mesh);
+    CHECK_FALSE(mesh->materials.empty());
+    for (const auto& m : mesh->materials)
+        if (!m.frames.empty() && !m.frames.front().starts_with("layers:")) CHECK(bare.has_file(m.frames.front()));
+    CHECK_FALSE(store->library("ZZZ")); // no zzz_chr.s3d
+}
+
+TEST_CASE("append_wld_mesh: vertex pieces must cover the vertices before their bones are expanded") {
+    auto w = wld::WldFile::parse(test::wld_fixtures::mesh_wld(false));
+    const wld::Fragment* mesh = nullptr;
+    for (const auto& f : w.fragments())
+        if (std::holds_alternative<wld::MeshDef>(f.data)) mesh = &f;
+    REQUIRE(mesh);
+    wld::Fragment f = *mesh;
+    auto& md = std::get<wld::MeshDef>(f.data);
+    REQUIRE(md.positions.size() == 4);
+    md.vertex_pieces = {{{3, 0}}, {{1, 1}}};
+    CharacterMesh out;
+    detail::append_wld_mesh(w, f, 2, -1, out);
+    REQUIRE(out.vertices.size() == 4);
+    CHECK(out.vertices[2].bones[0] == 0);
+    CHECK(out.vertices[3].bones[0] == 1);
+    // Thousands of pieces of 65535 vertices each: refused on the counts alone.
+    md.vertex_pieces.assign(4000, {{0xffff, 0}});
+    CharacterMesh refused;
+    CHECK_THROWS_WITH(detail::append_wld_mesh(w, f, 2, -1, refused), doctest::Contains("do not cover"));
+    CHECK(refused.vertices.empty());
+    md.vertex_pieces = {{{2, 0}}};
+    CHECK_THROWS_WITH(detail::append_wld_mesh(w, f, 2, -1, refused), doctest::Contains("do not cover"));
+}

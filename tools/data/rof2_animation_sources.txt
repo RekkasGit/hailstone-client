@@ -1,0 +1,29 @@
+# Models whose animation donor the RoF2 client's ActorAnimation::GetAlternateAnimTag (0x406a60) names and
+# LanternExtractor's animationsources.txt leaves out: its three-letter codes that rewrite the tag whatever its
+# `flag` argument (rof2decomp re/src/game/spawn/alternate_anim_tags.inc). The two-letter prefixes and the flag's
+# choices are not listed here.
+# Format: MODEL,DONOR - as lantern_animationsources.txt. Used by tools/gen_race_models.py.
+GHM,ELM
+GHF,ELF
+CPM,GNN
+FAN,GNN
+MTC,LIM
+SNE,SNA
+SPM,SPI
+STM,FSG
+AVM,AVI
+TEM,TEN
+WAM,WAL
+WAF,WAL
+SHN,SHM
+SHF,SHM
+GMM,GMN
+WEL,AEL
+FEL,AEL
+SDF,SDM
+KES,KEM
+VSG,KEM
+VSK,KEM
+NYD,NYM
+SPL,SPD
+FRF,FRM

@@ -1,0 +1,610 @@
+#include <doctest/doctest.h>
+
+#include <array>
+#include <chrono>
+#include <optional>
+#include <set>
+#include <string_view>
+#include <thread>
+
+#include "core/byte_io.h"
+#include "core/log.h"
+#include "manual_clock.h"
+#include "net/session.h"
+#include "net/session_codec.h"
+#include "platform/udp_socket.h"
+
+using namespace nmsc;
+using namespace nmsc::net;
+using soe::Bytes;
+using soe::ByteSpan;
+
+namespace {
+
+Bytes b(std::initializer_list<int> v) {
+    Bytes out;
+    for (int x : v) out.push_back(static_cast<std::byte>(x));
+    return out;
+}
+
+Bytes str(std::string_view s) {
+    auto sp = std::as_bytes(std::span(s.data(), s.size()));
+    return Bytes(sp.begin(), sp.end());
+}
+
+Bytes cat(Bytes a, const Bytes& c) {
+    a.insert(a.end(), c.begin(), c.end());
+    return a;
+}
+
+// Incompressible-ish bytes (a simple LCG), so fragments stay full size.
+Bytes noise(std::size_t n, std::uint32_t seed) {
+    Bytes out(n);
+    for (auto& x : out) {
+        seed = seed * 1103515245u + 12345u;
+        x = static_cast<std::byte>(seed >> 24);
+    }
+    return out;
+}
+
+std::uint8_t at(const Bytes& v, std::size_t i) { return std::to_integer<std::uint8_t>(v[i]); }
+
+} // namespace
+
+TEST_CASE("keyed CRC32 matches EQEmu's table CRC (zlib CRC of key bytes + data)") {
+    // Reference values: zlib.crc32(struct.pack('<I', key) + data).
+    CHECK(soe::crc32({}, 0) == 0x2144df1cu);
+    CHECK(soe::crc32(cat(b({0x00, 0x09, 0x00, 0x00}), str("hello")), 0x12345678u) == 0x6850357cu);
+    Bytes seq(32);
+    for (std::size_t i = 0; i < seq.size(); ++i) seq[i] = static_cast<std::byte>(i);
+    CHECK(soe::crc32(seq, 0xdeadbeefu) == 0x19ebfab4u);
+}
+
+TEST_CASE("datagram encoding appends a big-endian 16-bit CRC and drops bad packets") {
+    soe::SessionParams params;
+    params.encode_key = 0x12345678u;
+    params.crc_bytes = 2;
+    Bytes packet = cat(b({0x00, 0x09, 0x00, 0x00}), str("hello"));
+    Bytes wire = soe::encode_datagram(params, packet);
+    REQUIRE(wire.size() == packet.size() + 2);
+    CHECK(at(wire, wire.size() - 2) == 0x35);
+    CHECK(at(wire, wire.size() - 1) == 0x7c);
+    auto back = soe::decode_datagram(params, wire);
+    REQUIRE(back);
+    CHECK(*back == packet);
+    wire[5] ^= std::byte{1};
+    CHECK_FALSE(soe::decode_datagram(params, wire));
+    // Session packets are never encoded.
+    Bytes req = soe::make_session_request(7, 512);
+    CHECK(soe::encode_datagram(params, req) == req);
+}
+
+TEST_CASE("session request and response layout") {
+    Bytes req = soe::make_session_request(0x01020304u, 512);
+    CHECK(req == b({0, 1, 0, 0, 0, 3, 1, 2, 3, 4, 0, 0, 2, 0}));
+    Bytes resp = b({0, 2, 1, 2, 3, 4, 0xca, 0xfe, 0xba, 0xbe, 2, 1, 4, 0, 0, 2, 0});
+    auto r = soe::parse_session_response(resp);
+    REQUIRE(r);
+    CHECK(r->connect_code == 0x01020304u);
+    CHECK(r->params.encode_key == 0xcafebabeu);
+    CHECK(r->params.crc_bytes == 2);
+    CHECK(r->params.passes[0] == soe::EncodePass::Compression);
+    CHECK(r->params.passes[1] == soe::EncodePass::Xor);
+    CHECK(r->params.max_packet_size == 512);
+}
+
+TEST_CASE("compression pass: 0x5a zlib when smaller, 0xa5 otherwise") {
+    Bytes small = str("short body");
+    Bytes c = soe::compress_body(small);
+    CHECK(at(c, 0) == 0xa5);
+    CHECK(soe::decompress_body(c) == small);
+
+    Bytes big(2000, std::byte{'x'});
+    c = soe::compress_body(big);
+    CHECK(at(c, 0) == 0x5a);
+    CHECK(c.size() < 100);
+    CHECK(soe::decompress_body(c) == big);
+    CHECK_FALSE(soe::decompress_body(c, 1000)); // over the size cap
+
+    Bytes rnd = noise(300, 1);
+    c = soe::compress_body(rnd);
+    CHECK(at(c, 0) == 0xa5);
+    CHECK(soe::decompress_body(c) == rnd);
+    CHECK_FALSE(soe::decompress_body(b({0x11, 1, 2})));
+}
+
+TEST_CASE("XOR pass round trip and full encode/decode with both passes") {
+    Bytes data = noise(23, 9);
+    Bytes x = data;
+    soe::xor_encode(x, 0xa1b2c3d4u);
+    CHECK(x != data);
+    soe::xor_decode(x, 0xa1b2c3d4u);
+    CHECK(x == data);
+
+    soe::SessionParams params;
+    params.encode_key = 0x55aa1234u;
+    params.crc_bytes = 2;
+    params.passes = {soe::EncodePass::Compression, soe::EncodePass::Xor};
+    for (const Bytes& p : {cat(b({0, 9, 0, 1}), Bytes(400, std::byte{7})), cat(b({0x29, 0x00}), noise(40, 3)), b({0, 6})}) {
+        auto wire = soe::encode_datagram(params, p);
+        auto back = soe::decode_datagram(params, wire);
+        REQUIRE(back);
+        CHECK(*back == p);
+    }
+}
+
+TEST_CASE("combined and app-combined packets split into their parts") {
+    Bytes a = b({0, 0x15, 0, 5}), c = cat(b({0x29, 0x00}), str("abc"));
+    Bytes comb = soe::make_combined(std::vector<Bytes>{a, c});
+    CHECK(comb == cat(cat(b({0, 3, 4}), a), cat(b({5}), c)));
+    auto parts = soe::split_combined(comb);
+    REQUIRE(parts);
+    REQUIRE(parts->size() == 2);
+    CHECK(Bytes((*parts)[0].begin(), (*parts)[0].end()) == a);
+    CHECK(Bytes((*parts)[1].begin(), (*parts)[1].end()) == c);
+    comb.pop_back();
+    CHECK_FALSE(soe::split_combined(comb));
+
+    Bytes long_part = noise(300, 4);
+    Bytes app = cat(cat(b({0, 0x19, 3}), str("xyz")), cat(b({0xff, 0x01, 0x2c}), long_part));
+    auto ap = soe::split_app_combined(app);
+    REQUIRE(ap);
+    REQUIRE(ap->size() == 2);
+    CHECK((*ap)[0].size() == 3);
+    CHECK(Bytes((*ap)[1].begin(), (*ap)[1].end()) == long_part);
+    Bytes huge = cat(b({0, 0x19, 0xff, 0xff, 0xff, 0, 0, 0, 2}), str("hi"));
+    ap = soe::split_app_combined(huge);
+    REQUIRE(ap);
+    CHECK((*ap)[0].size() == 2);
+    CHECK_FALSE(soe::split_app_combined(b({0, 0x19, 0xff, 0x00})));
+}
+
+TEST_CASE("application opcodes: little-endian with a 0x00 escape when the low byte is 0") {
+    CHECK(soe::encode_app(AppPacket(0x7a09, b({1}))) == b({0x09, 0x7a, 1}));
+    CHECK(soe::encode_app(AppPacket(0x0100, b({2}))) == b({0x00, 0x00, 0x01, 2}));
+    auto p = soe::decode_app(b({0x00, 0x00, 0x01, 2}));
+    REQUIRE(p);
+    CHECK(p->opcode == 0x0100);
+    CHECK(p->data == b({2}));
+    p = soe::decode_app(b({0x22, 0x00}));
+    REQUIRE(p);
+    CHECK(p->opcode == 0x0022);
+    CHECK(p->data.empty());
+    CHECK_FALSE(soe::decode_app(b({0x00, 0x05, 1})));
+}
+
+TEST_CASE("sequence comparison wraps at 16 bits") {
+    CHECK(soe::compare_sequence(5, 5) == soe::SeqOrder::Current);
+    CHECK(soe::compare_sequence(65535, 0) == soe::SeqOrder::Future);
+    CHECK(soe::compare_sequence(0, 65535) == soe::SeqOrder::Past);
+    CHECK(soe::compare_sequence(65530, 3) == soe::SeqOrder::Future);
+    CHECK(soe::sequence_at_or_before(65534, 1));
+    CHECK_FALSE(soe::sequence_at_or_before(2, 65534));
+}
+
+TEST_CASE("fragments reassemble in order, out of order and across the sequence wrap") {
+    soe::SessionParams params;
+    params.crc_bytes = 2;
+    params.passes = {soe::EncodePass::Compression, soe::EncodePass::None};
+    Bytes payload = noise(2500, 77);
+    std::uint16_t seq = 65533;
+    auto packets = soe::make_reliable(payload, seq, params);
+    REQUIRE(packets.size() == 5);
+    CHECK(seq == 2);
+    for (const auto& p : packets) CHECK(p.size() + params.overhead() <= 512);
+    CHECK(at(packets[0], 1) == soe::op::Fragment);
+    // First fragment: sequence 65533, total length 2500 (BE).
+    CHECK(packets[0][2] == std::byte{0xff});
+    CHECK(packets[0][3] == std::byte{0xfd});
+    CHECK(at(packets[0], 6) == 0x09);
+    CHECK(at(packets[0], 7) == 0xc4);
+
+    SUBCASE("in order") {
+        soe::InboundStream in(65533);
+        std::vector<Bytes> out;
+        for (const auto& p : packets) CHECK(in.push(p, out) == soe::SeqOrder::Current);
+        REQUIRE(out.size() == 1);
+        CHECK(out[0] == payload);
+        CHECK(in.next() == 2);
+    }
+    SUBCASE("reversed, with a duplicate") {
+        soe::InboundStream in(65533);
+        std::vector<Bytes> out;
+        for (std::size_t i = packets.size(); i-- > 1;) CHECK(in.push(packets[i], out) == soe::SeqOrder::Future);
+        CHECK(out.empty());
+        CHECK(in.push(packets[3], out) == soe::SeqOrder::Future);
+        CHECK(in.push(packets[0], out) == soe::SeqOrder::Current);
+        REQUIRE(out.size() == 1);
+        CHECK(out[0] == payload);
+        CHECK(in.push(packets[2], out) == soe::SeqOrder::Past);
+        CHECK(in.buffered() == 0);
+    }
+
+    Bytes small = str("fits in one");
+    auto single = soe::make_reliable(small, seq, params);
+    REQUIRE(single.size() == 1);
+    CHECK(single[0] == cat(b({0, 9, 0, 2}), small));
+}
+
+TEST_CASE("a fragmented payload over the cap is counted and dropped; the stream goes on after it") {
+    auto frag = [](std::uint16_t seq, std::size_t n, std::optional<std::uint32_t> total) {
+        Bytes p = b({0, soe::op::Fragment, seq >> 8, seq & 0xff});
+        if (total) p = cat(p, b({int(*total >> 24), int(*total >> 16 & 0xff), int(*total >> 8 & 0xff), int(*total & 0xff)}));
+        return cat(p, Bytes(n, std::byte{0x41}));
+    };
+    const std::uint32_t total = soe::kMaxFragmentedPayload + 1;
+    const std::size_t piece = 1u << 20;
+    soe::InboundStream in(0);
+    std::vector<Bytes> out;
+    std::uint16_t seq = 0;
+    std::size_t sent = 0;
+    CHECK(in.push(frag(seq++, piece, total), out) == soe::SeqOrder::Current);
+    for (sent = piece; sent < total; sent += piece) {
+        std::size_t n = std::min<std::size_t>(piece, total - sent);
+        in.push(frag(seq++, n, std::nullopt), out);
+    }
+    CHECK(out.empty());
+    // The next payload, fragmented and whole, arrives intact.
+    Bytes small = noise(100, 3);
+    CHECK(in.push(cat(frag(seq++, 0, 100), Bytes(small.begin(), small.begin() + 40)), out) == soe::SeqOrder::Current);
+    CHECK(in.push(cat(frag(seq++, 0, std::nullopt), Bytes(small.begin() + 40, small.end())), out) ==
+          soe::SeqOrder::Current);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0] == small);
+}
+
+TEST_CASE("early packets are bounded in bytes; one without room is not held and is taken when it comes again") {
+    auto packet = [](std::uint16_t seq, std::size_t n, std::uint8_t fill) {
+        return cat(b({0, soe::op::Packet, seq >> 8, seq & 0xff}), Bytes(n, std::byte{fill}));
+    };
+    // Each early packet is a little over 1 MiB (as a reassembled payload that is itself a 00 09 can be): three fit
+    // under kMaxBufferedBytes, the fourth does not.
+    const std::size_t big = 1u << 20;
+    soe::InboundStream in(0);
+    std::vector<Bytes> out;
+    for (std::uint16_t seq = 1; seq <= 4; ++seq) CHECK(in.push(packet(seq, big, std::uint8_t(seq)), out) == soe::SeqOrder::Future);
+    CHECK(in.buffered() == 3);
+    CHECK(in.buffered_bytes() == 3 * (big + 4));
+    CHECK(in.buffered_bytes() <= soe::kMaxBufferedBytes);
+    CHECK(in.holds(1));
+    CHECK(in.holds(3));
+    CHECK_FALSE(in.holds(4)); // the session sends no OutOfOrderAck for it, so the server sends it again
+    // A duplicate of a held one is still held (and acknowledged again), and counted once.
+    CHECK(in.push(packet(2, big, 2), out) == soe::SeqOrder::Future);
+    CHECK(in.buffered_bytes() == 3 * (big + 4));
+    // The expected packet always goes through and frees the room.
+    CHECK(in.push(packet(0, 10, 0), out) == soe::SeqOrder::Current);
+    REQUIRE(out.size() == 4);
+    CHECK(in.buffered() == 0);
+    CHECK(in.buffered_bytes() == 0);
+    CHECK(in.next() == 4);
+    CHECK(in.push(packet(4, big, 4), out) == soe::SeqOrder::Current);
+    REQUIRE(out.size() == 5);
+    CHECK(out[4] == Bytes(big, std::byte{4}));
+}
+
+TEST_CASE("a first fragment too short for its total length breaks the stream: nothing more is delivered") {
+    auto frag = [](std::uint16_t seq, const Bytes& body) {
+        return cat(b({0, soe::op::Fragment, seq >> 8, seq & 0xff}), body);
+    };
+    soe::InboundStream in(0);
+    std::vector<Bytes> out;
+    std::uint16_t seq = 0;
+    Bytes before = str("before");
+    CHECK(in.push(cat(b({0, soe::op::Packet, 0, seq++}), before), out) == soe::SeqOrder::Current);
+    CHECK_FALSE(in.broken());
+    CHECK(in.push(frag(seq++, b({0, 0})), out) == soe::SeqOrder::Current); // no room for the 4-byte total
+    CHECK(in.broken());
+    // Neither the rest of that payload (its first bytes would be taken as a length) nor anything after it, whole or
+    // fragmented: which pieces belong to which payload can no longer be told, and a silent gap would desync the game.
+    CHECK(in.push(frag(seq++, b({0, 0, 0, 3, 0x41, 0x42, 0x43})), out) == soe::SeqOrder::Current);
+    CHECK(in.push(cat(b({0, soe::op::Packet, 0, seq++}), str("whole")), out) == soe::SeqOrder::Current);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0] == before);
+    CHECK(in.broken());
+}
+
+TEST_CASE("decompress_body reuses its inflater: results stay right after a failure and between sizes") {
+    Bytes big = noise(4000, 5);
+    for (auto& x : big) x = std::byte{static_cast<std::uint8_t>(std::to_integer<int>(x) & 0x0f)}; // compressible
+    Bytes c = soe::compress_body(big);
+    REQUIRE(std::to_integer<int>(c[0]) == 0x5a);
+    CHECK(soe::decompress_body(c) == big);
+    CHECK_FALSE(soe::decompress_body(cat(b({0x5a}), b({1, 2, 3, 4, 5})))); // bad zlib data
+    Bytes half(c.begin(), c.begin() + static_cast<std::ptrdiff_t>(c.size() / 2));
+    CHECK_FALSE(soe::decompress_body(half)); // cut short
+    CHECK_FALSE(soe::decompress_body(c, 1000));
+    CHECK(soe::decompress_body(c, 4000) == big); // exactly the cap
+    CHECK_FALSE(soe::decompress_body(c, 3999));
+    Bytes small = str("a short body that compresses well well well well well well well");
+    Bytes cs = soe::compress_body(small);
+    REQUIRE(std::to_integer<int>(cs[0]) == 0x5a);
+    CHECK(soe::decompress_body(cs) == small);
+    CHECK(soe::decompress_body(c) == big);
+}
+
+TEST_CASE("udp socket: a datagram larger than the buffer is dropped, not cut short") {
+    std::string err;
+    auto local = platform::Endpoint::v4(127, 0, 0, 1, 0);
+    platform::UdpSocket a, rx;
+    REQUIRE(a.open(platform::Endpoint::Family::V4, err, &local));
+    REQUIRE(rx.open(platform::Endpoint::Family::V4, err, &local));
+    auto to = *rx.local_endpoint();
+    REQUIRE(a.send_to(to, noise(200, 1)));
+    Bytes fits = noise(50, 2);
+    REQUIRE(a.send_to(to, fits));
+    std::array<std::byte, 100> buf;
+    platform::Endpoint from;
+    REQUIRE(rx.wait_readable(std::chrono::milliseconds(2000)));
+    std::optional<std::size_t> n;
+    // Loopback delivers both at once in practice; allow for a slow scheduler without sleeping on a fixed time.
+    for (int i = 0; i < 200 && !n; ++i) {
+        n = rx.recv_from(buf, from);
+        if (!n) rx.wait_readable(std::chrono::milliseconds(10));
+    }
+    REQUIRE(n);
+    CHECK(*n == fits.size());
+    CHECK(Bytes(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*n)) == fits);
+    CHECK(rx.last_error().empty());
+}
+
+// --- loopback: the real Session against a minimal fake server -------------
+
+namespace {
+
+struct FakeServer {
+    platform::UdpSocket sock;
+    platform::Endpoint client;
+    soe::SessionParams params;
+    bool have_client = false;
+    soe::InboundStream inbound;
+    std::vector<AppPacket> received;
+    std::set<std::uint16_t> acked;
+    std::uint16_t last_cumulative_ack = 0xffff;
+    int reliable_from_client = 0;
+    int datagrams = 0; // decoded datagrams from the client, handshake excluded
+
+    FakeServer() {
+        std::string err;
+        auto local = platform::Endpoint::v4(127, 0, 0, 1, 0);
+        REQUIRE(sock.open(platform::Endpoint::Family::V4, err, &local));
+        params.encode_key = 0x0badf00du;
+        params.crc_bytes = 2;
+        params.passes = {soe::EncodePass::Compression, soe::EncodePass::None};
+        params.max_packet_size = 512;
+    }
+
+    std::uint16_t port() const { return sock.local_endpoint()->port; }
+
+    void send(const Bytes& packet) { sock.send_to(client, soe::encode_datagram(params, packet)); }
+
+    // drop_first_reliable: ignore the client's first reliable packet so it must resend.
+    void poll(bool drop_first_reliable) {
+        std::array<std::byte, 4096> buf;
+        platform::Endpoint from;
+        while (auto n = sock.recv_from(buf, from)) {
+            ByteSpan d(buf.data(), *n);
+            if (std::to_integer<int>(d[0]) == 0 && std::to_integer<int>(d[1]) == soe::op::SessionRequest) {
+                client = from;
+                have_client = true;
+                ByteWriter w;
+                w.le<std::uint8_t>(0);
+                w.le<std::uint8_t>(soe::op::SessionResponse);
+                w.bytes(d.subspan(6, 4)); // connect code
+                w.be<std::uint32_t>(params.encode_key);
+                w.le<std::uint8_t>(params.crc_bytes);
+                w.le<std::uint8_t>(1);
+                w.le<std::uint8_t>(0);
+                w.be<std::uint32_t>(params.max_packet_size);
+                sock.send_to(client, w.data());
+                continue;
+            }
+            auto p = soe::decode_datagram(params, d);
+            REQUIRE(p);
+            ++datagrams;
+            handle(*p, drop_first_reliable);
+        }
+    }
+
+    void handle(ByteSpan p, bool drop_first_reliable) {
+        if (std::to_integer<int>(p[0]) != 0 || std::to_integer<int>(p[1]) == 0) {
+            received.push_back(*soe::decode_app(p));
+            return;
+        }
+        int op = std::to_integer<int>(p[1]);
+        auto seq = static_cast<std::uint16_t>(std::to_integer<int>(p[2]) << 8 | std::to_integer<int>(p[3]));
+        if (op == soe::op::Combined) {
+            auto parts = soe::split_combined(p);
+            REQUIRE(parts);
+            for (auto part : *parts) handle(part, drop_first_reliable);
+        } else if (op == soe::op::Ack) {
+            last_cumulative_ack = seq;
+        } else if (op == soe::op::OutOfOrderAck) {
+            acked.insert(seq);
+        } else if (op == soe::op::Packet) {
+            if (reliable_from_client++ == 0 && drop_first_reliable) return;
+            std::vector<Bytes> out;
+            if (inbound.push(p, out) != soe::SeqOrder::Future) send(soe::make_ack(soe::op::Ack, static_cast<std::uint16_t>(inbound.next() - 1)));
+            for (auto& o : out) received.push_back(*soe::decode_app(o));
+        }
+    }
+
+    bool is_acked(std::uint16_t seq) const {
+        return acked.count(seq) || (last_cumulative_ack != 0xffff && soe::sequence_at_or_before(seq, last_cumulative_ack));
+    }
+};
+
+} // namespace
+
+TEST_CASE("session loopback: handshake, resend in both directions, fragment reassembly") {
+    FakeServer server;
+    auto session = Session::create();
+    session->connect("127.0.0.1", server.port());
+    CHECK(session->state() == SessionState::Connecting);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    auto tick = [&](bool drop) {
+        session->update();
+        server.poll(drop);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        return std::chrono::steady_clock::now() < deadline;
+    };
+    while (session->state() == SessionState::Connecting && tick(true)) {}
+    REQUIRE(session->state() == SessionState::Connected);
+
+    // Client -> server reliable packet; the server drops the first copy.
+    session->send(AppPacket(0x0100, str("ping")));
+    session->send(AppPacket(0x4242, str("move")), false);
+    while (server.received.size() < 2 && tick(true)) {}
+    REQUIRE(server.received.size() == 2);
+    // The unreliable one arrives first; the reliable one only after the resend.
+    CHECK(server.received[0].opcode == 0x4242);
+    CHECK(server.received[1].opcode == 0x0100);
+    CHECK(server.received[1].data == str("ping"));
+    CHECK(server.reliable_from_client >= 2);
+
+    // Server -> client: a fragmented reliable packet with one datagram lost.
+    Bytes big = noise(3000, 5);
+    std::uint16_t seq = 0;
+    auto frags = soe::make_reliable(soe::encode_app(AppPacket(0x1234, big)), seq, server.params);
+    REQUIRE(frags.size() > 3);
+    for (std::size_t i = 0; i < frags.size(); ++i)
+        if (i != 2) server.send(frags[i]);
+    // Wait until everything but the lost fragment is acked out of order, then resend it.
+    while (!(server.is_acked(static_cast<std::uint16_t>(frags.size() - 1))) && tick(false)) {}
+    CHECK_FALSE(server.is_acked(2));
+    CHECK_FALSE(session->receive().has_value());
+    server.send(frags[2]);
+
+    std::optional<AppPacket> got;
+    while (!got && tick(false)) got = session->receive();
+    REQUIRE(got);
+    CHECK(got->opcode == 0x1234);
+    CHECK(got->data == big);
+    while (!server.is_acked(static_cast<std::uint16_t>(frags.size() - 1)) && tick(false)) {}
+    while (server.last_cumulative_ack != frags.size() - 1 && tick(false)) {}
+    CHECK(server.last_cumulative_ack == frags.size() - 1);
+
+    session->disconnect();
+    for (int i = 0; i < 50 && session->state() != SessionState::Disconnected; ++i) tick(false);
+    CHECK(session->state() == SessionState::Disconnected);
+}
+
+TEST_CASE("session: a server asking for a CRC size other than 0, 2 or 4 is refused at connect") {
+    FakeServer server;
+    server.params.crc_bytes = 3;
+    auto session = Session::create();
+    session->connect("127.0.0.1", server.port());
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    while (session->state() == SessionState::Connecting && std::chrono::steady_clock::now() < deadline) {
+        session->update();
+        server.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(session->state() == SessionState::Disconnected);
+    CHECK(session->error().find("3-byte CRC") != std::string::npos);
+}
+
+TEST_CASE("session times out when nobody answers") {
+    platform::UdpSocket silent;
+    std::string err;
+    auto local = platform::Endpoint::v4(127, 0, 0, 1, 0);
+    REQUIRE(silent.open(platform::Endpoint::Family::V4, err, &local));
+    SessionOptions opt;
+    opt.connect_timeout = std::chrono::milliseconds(300);
+    auto session = Session::create(opt);
+    session->connect("127.0.0.1", silent.local_endpoint()->port);
+    for (int i = 0; i < 200 && session->state() == SessionState::Connecting; ++i) {
+        session->update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(session->state() == SessionState::Disconnected);
+    CHECK_FALSE(session->error().empty());
+}
+
+TEST_CASE("session loopback: the service thread acks while the owner is busy; small packets are held") {
+    FakeServer server;
+    test::ManualClock clock;
+    SessionOptions held_opt;
+    held_opt.clock = clock.source();
+    auto session = Session::create(held_opt);
+    session->connect("127.0.0.1", server.port());
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    auto alive = [&] { return std::chrono::steady_clock::now() < deadline; };
+    while (session->state() == SessionState::Connecting && alive()) {
+        session->update();
+        server.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(session->state() == SessionState::Connected);
+
+    // The owner is stuck (a zone load) and calls nothing; the session still acknowledges what arrives
+    // (UdpManagerThread), so the server never has to resend.
+    std::uint16_t seq = 0;
+    for (int i = 0; i < 5; ++i)
+        for (auto& p : soe::make_reliable(soe::encode_app(AppPacket(0x0100, str("load"))), seq, server.params)) server.send(p);
+    while (server.last_cumulative_ack != 4 && alive()) {
+        server.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(server.last_cumulative_ack == 4);
+    int got = 0;
+    while (session->receive()) ++got;
+    CHECK(got == 5);
+
+    // Two small packets sent together wait in the multi-buffer for the 150 ms hold and leave in one datagram,
+    // without another update(). The session's clock is held, so a stall between the two sends cannot let the first
+    // go alone; the service thread's passes (every 20 ms of real time) see only the time advanced here.
+    server.poll(false);
+    clock.hold();
+    int before = server.datagrams;
+    session->send(AppPacket(0x4242, str("one")), false);
+    session->send(AppPacket(0x4243, str("two")), false);
+    std::size_t first = server.received.size();
+    clock.advance(std::chrono::milliseconds(149));
+    for (int i = 0; i < 25; ++i) { // several service passes
+        server.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(server.received.size() == first);
+    clock.advance(std::chrono::milliseconds(1));
+    while (server.received.size() < first + 2 && alive()) {
+        server.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(server.received.size() == first + 2);
+    CHECK(server.received[first].opcode == 0x4242);
+    CHECK(server.received[first + 1].opcode == 0x4243);
+    CHECK(server.datagrams == before + 1);
+
+    // With no hold (the login server's UdpManagers) the next service pass sends it.
+    SessionOptions opt;
+    opt.hold_time = std::chrono::milliseconds(0);
+    FakeServer login;
+    auto quick = Session::create(opt);
+    quick->connect("127.0.0.1", login.port());
+    while (quick->state() == SessionState::Connecting && alive()) {
+        login.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    REQUIRE(quick->state() == SessionState::Connected);
+    auto sent = std::chrono::steady_clock::now();
+    quick->send(AppPacket(0x4242, str("now")), false);
+    while (login.received.empty() && alive()) {
+        login.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(login.received.size() == 1);
+    // A loaded CI runner can stall this for over 150 ms, so the bound only separates it from a stuck send.
+    CHECK(std::chrono::steady_clock::now() - sent < std::chrono::milliseconds(2000));
+
+    session->disconnect();
+    quick->disconnect();
+    for (int i = 0; i < 100 && (session->state() != SessionState::Disconnected || quick->state() != SessionState::Disconnected); ++i) {
+        server.poll(false);
+        login.poll(false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(session->state() == SessionState::Disconnected);
+    CHECK(quick->state() == SessionState::Disconnected);
+}

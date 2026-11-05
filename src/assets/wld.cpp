@@ -1,0 +1,512 @@
+#include "assets/wld.h"
+
+#include <stdexcept>
+
+#include "core/byte_io.h"
+#include "core/log.h"
+
+namespace nmsc::assets::wld {
+
+namespace {
+
+glm::vec3 read_vec3(ByteReader& r) {
+    float x = r.f32();
+    float y = r.f32();
+    float z = r.f32();
+    return {x, y, z};
+}
+
+// Guards counts read from the file against the bytes left in the fragment, so
+// a corrupt count fails fast instead of allocating gigabytes.
+std::size_t checked_count(ByteReader& r, std::uint32_t count, std::size_t min_item_size) {
+    if (min_item_size && count > r.remaining() / min_item_size)
+        throw std::out_of_range("count exceeds fragment size");
+    return count;
+}
+
+BitmapName read_bitmap_name(ByteReader& r) {
+    BitmapName b;
+    // The stored count is one less than the number of names.
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 2) + 1;
+    for (std::size_t i = 0; i < count; ++i) {
+        auto len = r.le<std::uint16_t>();
+        auto bytes = decode_string_bytes(r.bytes(len));
+        std::size_t n = 0;
+        while (n < bytes.size() && bytes[n] != 0) ++n;
+        b.files.emplace_back(reinterpret_cast<const char*>(bytes.data()), n);
+    }
+    return b;
+}
+
+BitmapInfo read_bitmap_info(ByteReader& r) {
+    BitmapInfo b;
+    b.flags = r.le<std::uint32_t>();
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 4);
+    if (b.flags & 0x20) b.current_frame = r.le<std::uint32_t>();
+    if (b.flags & 0x08) b.frame_delay_ms = r.le<std::uint32_t>();
+    for (std::size_t i = 0; i < count; ++i) b.frames.push_back(r.le<std::int32_t>());
+    return b;
+}
+
+MaterialDef read_material(ByteReader& r) {
+    MaterialDef m;
+    m.flags = r.le<std::uint32_t>();
+    m.render_method = r.le<std::uint32_t>();
+    m.rgb_pen = r.le<std::uint32_t>();
+    m.brightness = r.f32();
+    m.scaled_ambient = r.f32();
+    // The texture reference comes before the optional pair (flag 2), not after
+    // (OpenEQ docs/ARCHITECTURE.md, libeq MaterialDef).
+    m.bitmap = r.le<std::int32_t>();
+    return m;
+}
+
+MaterialList read_material_list(ByteReader& r) {
+    MaterialList m;
+    m.flags = r.le<std::uint32_t>();
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 4);
+    for (std::size_t i = 0; i < count; ++i) m.materials.push_back(r.le<std::int32_t>());
+    return m;
+}
+
+MeshDef read_mesh(ByteReader& r, bool new_format) {
+    MeshDef m;
+    m.flags = r.le<std::uint32_t>();
+    m.material_list = r.le<std::int32_t>();
+    m.animation = r.le<std::int32_t>();
+    r.skip(8); // two more references, unused for static meshes
+    m.center = read_vec3(r);
+    r.skip(12); // unknown, usually zero
+    m.max_distance = r.f32();
+    m.bounds_min = read_vec3(r);
+    m.bounds_max = read_vec3(r);
+    auto vertex_count = r.le<std::uint16_t>();
+    auto uv_count = r.le<std::uint16_t>();
+    auto normal_count = r.le<std::uint16_t>();
+    auto color_count = r.le<std::uint16_t>();
+    auto polygon_count = r.le<std::uint16_t>();
+    auto piece_count = r.le<std::uint16_t>();
+    auto group_count = r.le<std::uint16_t>();
+    r.skip(2); // vertex material group count
+    r.skip(2); // mesh-op count
+    m.scale_shift = r.le<std::uint16_t>();
+    float scale = 1.0f / static_cast<float>(1u << (m.scale_shift & 31));
+
+    checked_count(r, vertex_count, 6);
+    m.positions.reserve(vertex_count);
+    for (std::size_t i = 0; i < vertex_count; ++i) {
+        float x = r.le<std::int16_t>();
+        float y = r.le<std::int16_t>();
+        float z = r.le<std::int16_t>();
+        m.positions.push_back(m.center + glm::vec3(x, y, z) * scale);
+    }
+    checked_count(r, uv_count, new_format ? 8 : 4);
+    m.uvs.reserve(uv_count);
+    for (std::size_t i = 0; i < uv_count; ++i) {
+        if (new_format) {
+            float u = r.f32();
+            float v = r.f32();
+            m.uvs.emplace_back(u, v);
+        } else {
+            float u = r.le<std::int16_t>();
+            float v = r.le<std::int16_t>();
+            m.uvs.emplace_back(u / 256.0f, v / 256.0f);
+        }
+    }
+    checked_count(r, normal_count, 3);
+    m.normals.reserve(normal_count);
+    for (std::size_t i = 0; i < normal_count; ++i) {
+        float x = r.le<std::int8_t>();
+        float y = r.le<std::int8_t>();
+        float z = r.le<std::int8_t>();
+        m.normals.push_back(glm::vec3(x, y, z) / 127.0f);
+    }
+    checked_count(r, color_count, 4);
+    m.colors.reserve(color_count);
+    for (std::size_t i = 0; i < color_count; ++i) m.colors.push_back(r.le<std::uint32_t>());
+    checked_count(r, polygon_count, 8);
+    m.polygons.reserve(polygon_count);
+    for (std::size_t i = 0; i < polygon_count; ++i) {
+        Polygon p;
+        p.flags = r.le<std::uint16_t>();
+        for (auto& v : p.v) v = r.le<std::uint16_t>();
+        m.polygons.push_back(p);
+    }
+    checked_count(r, piece_count, 4);
+    for (std::size_t i = 0; i < piece_count; ++i) {
+        auto n = r.le<std::uint16_t>();
+        auto bone = r.le<std::uint16_t>();
+        m.vertex_pieces.push_back({n, bone});
+    }
+    checked_count(r, group_count, 4);
+    for (std::size_t i = 0; i < group_count; ++i) {
+        auto n = r.le<std::uint16_t>();
+        auto slot = r.le<std::uint16_t>();
+        m.render_groups.push_back({n, slot});
+    }
+    // Vertex material groups and mesh ops follow; not needed for drawing.
+    return m;
+}
+
+ActorDef read_actor_def(ByteReader& r, const WldFile& wld) {
+    ActorDef a;
+    a.flags = r.le<std::uint32_t>();
+    a.callback = wld.string_at(r.le<std::int32_t>());
+    std::size_t action_count = checked_count(r, r.le<std::uint32_t>(), 4);
+    std::size_t sprite_count = checked_count(r, r.le<std::uint32_t>(), 4);
+    r.skip(4); // bounds reference
+    if (a.flags & 0x1) r.skip(4);  // current action
+    if (a.flags & 0x2) r.skip(28); // location
+    // Each action: u32 level-of-detail count, then that many {u32, f32}
+    // (OpenEQ, LanternExtractor). Shipped files only use a count of one.
+    for (std::size_t i = 0; i < action_count; ++i) {
+        std::size_t lods = checked_count(r, r.le<std::uint32_t>(), 8);
+        r.skip(lods * 8);
+    }
+    for (std::size_t i = 0; i < sprite_count; ++i) a.sprites.push_back(r.le<std::int32_t>());
+    return a;
+}
+
+ActorInstance read_actor_instance(ByteReader& r) {
+    ActorInstance a;
+    a.actor = r.le<std::int32_t>();
+    a.flags = r.le<std::uint32_t>();
+    a.sphere = r.le<std::int32_t>();
+    if (a.flags & 0x1) r.skip(4); // current action
+    if (a.flags & 0x2) {
+        a.has_location = true;
+        a.position = read_vec3(r);
+        a.rotation_zyx = read_vec3(r);
+        r.skip(4);
+    }
+    if (a.flags & 0x4) a.bounding_radius = r.f32();
+    if (a.flags & 0x8) a.scale = r.f32();
+    if (a.flags & 0x10) r.skip(4); // sound name reference
+    if (a.flags & 0x100) a.vertex_colors = r.le<std::int32_t>();
+    // A user-data string follows; unused.
+    return a;
+}
+
+VertexColors read_vertex_colors(ByteReader& r) {
+    VertexColors v;
+    r.skip(4);
+    std::size_t count = r.le<std::uint32_t>();
+    r.skip(12);
+    checked_count(r, static_cast<std::uint32_t>(count), 4);
+    v.colors.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) v.colors.push_back(r.le<std::uint32_t>());
+    return v;
+}
+
+TrackDef read_track_def(ByteReader& r) {
+    TrackDef t;
+    t.flags = r.le<std::uint32_t>();
+    bool packed = t.flags & 0x8;
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), packed ? 16 : 32);
+    t.frames.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        TrackFrame f;
+        if (packed) {
+            // s16 w, x, y, z (/16384), s16 translation (/256), u16 scale (/256);
+            // the scale is unsigned (OpenEQ docs/WLD_PACKED_SCALE.md).
+            float q[4];
+            for (float& c : q) c = static_cast<float>(r.le<std::int16_t>()) / 16384.0f;
+            f.rotation = glm::quat(q[0], q[1], q[2], q[3]);
+            for (int k = 0; k < 3; ++k) f.translation[k] = static_cast<float>(r.le<std::int16_t>()) / 256.0f;
+            f.scale = static_cast<float>(r.le<std::uint16_t>()) / 256.0f;
+        } else {
+            f.scale = r.f32();
+            f.translation = read_vec3(r);
+            float q[4];
+            for (float& c : q) c = r.f32();
+            f.rotation = glm::quat(q[0], q[1], q[2], q[3]);
+        }
+        t.frames.push_back(f);
+    }
+    return t;
+}
+
+Skeleton read_skeleton(ByteReader& r, const WldFile& wld) {
+    Skeleton s;
+    s.flags = r.le<std::uint32_t>();
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 20);
+    r.skip(4); // collision volume reference
+    if (s.flags & 0x1) r.skip(12); // centre offset
+    if (s.flags & 0x2) s.bounding_radius = r.f32();
+    s.nodes.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        SkeletonNode n;
+        n.name = wld.string_at(r.le<std::int32_t>());
+        n.flags = r.le<std::uint32_t>();
+        n.track = r.le<std::int32_t>();
+        n.sprite = r.le<std::int32_t>();
+        std::size_t children = checked_count(r, r.le<std::uint32_t>(), 4);
+        for (std::size_t c = 0; c < children; ++c) n.children.push_back(r.le<std::int32_t>());
+        s.nodes.push_back(std::move(n));
+    }
+    if (s.flags & 0x200) {
+        std::size_t meshes = checked_count(r, r.le<std::uint32_t>(), 4);
+        for (std::size_t i = 0; i < meshes; ++i) s.meshes.push_back(r.le<std::int32_t>());
+    }
+    return s;
+}
+
+// The bulk 0x34 reader's field order (it builds the converter's input record
+// from these words; see ParticleCloud).
+ParticleCloud read_particle_cloud(ByteReader& r) {
+    ParticleCloud c;
+    c.flags = r.le<std::uint32_t>();
+    c.selector = r.le<std::uint32_t>();
+    c.mode = r.le<std::uint32_t>();
+    c.bits = r.le<std::uint32_t>();
+    c.capacity = r.le<std::uint32_t>();
+    for (float& f : c.extra) f = r.f32();
+    c.duration_ms = r.le<std::uint32_t>();
+    c.radius = r.f32();
+    c.angle = r.f32();
+    c.lifetime_ms = r.le<std::uint32_t>();
+    c.speed = r.f32();
+    c.direction = read_vec3(r);
+    c.interval_ms = r.le<std::uint32_t>();
+    c.size = r.f32();
+    c.color = r.le<std::uint32_t>();
+    if (c.flags & 0x1) {
+        c.ranges[0] = read_vec3(r);
+        c.ranges[1] = read_vec3(r);
+    }
+    if (c.flags & 0x2) r.skip(24);
+    if (c.flags & 0x4) c.sprite = r.le<std::int32_t>();
+    return c;
+}
+
+LightDef read_light_def(ByteReader& r) {
+    LightDef l;
+    l.flags = r.le<std::uint32_t>();
+    std::size_t frames = checked_count(r, r.le<std::uint32_t>(), 4);
+    if (l.flags & 0x1) r.skip(4); // current frame
+    if (l.flags & 0x2) r.skip(4); // sleep
+    if (l.flags & 0x4)
+        for (std::size_t i = 0; i < frames; ++i) l.levels.push_back(r.f32());
+    if (l.flags & 0x10)
+        for (std::size_t i = 0; i < frames; ++i) l.colors.push_back(read_vec3(r));
+    return l;
+}
+
+// 0x21: u32 node count, then {f32 normal x, y, z, f32 distance, u32 region,
+// u32 front, u32 back} per node (libeq WorldTree, OpenEQ bsp_regions.rs).
+BspTree read_bsp_tree(ByteReader& r) {
+    BspTree t;
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 28);
+    t.nodes.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        BspNode n;
+        n.normal = read_vec3(r);
+        n.distance = r.f32();
+        n.region = r.le<std::uint32_t>();
+        n.front = r.le<std::uint32_t>();
+        n.back = r.le<std::uint32_t>();
+        t.nodes.push_back(n);
+    }
+    return t;
+}
+
+// 0x29: u32 flags, u32 count, count × u32 region index (0-based), u32 tag
+// length, tag bytes XOR-encoded; a zero length means the fragment name is the
+// tag (OpenEQ bsp_regions.rs, LanternExtractor BspRegionType.cs).
+RegionTag read_region_tag(ByteReader& r, std::string_view name) {
+    RegionTag t;
+    t.flags = r.le<std::uint32_t>();
+    std::size_t count = checked_count(r, r.le<std::uint32_t>(), 4);
+    t.regions.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) t.regions.push_back(r.le<std::uint32_t>());
+    std::size_t len = checked_count(r, r.le<std::uint32_t>(), 1);
+    if (len == 0) {
+        t.tag = std::string(name);
+    } else {
+        auto bytes = decode_string_bytes(r.bytes(len));
+        std::size_t n = 0;
+        while (n < bytes.size() && bytes[n] != 0) ++n;
+        t.tag.assign(reinterpret_cast<const char*>(bytes.data()), n);
+    }
+    return t;
+}
+
+} // namespace
+
+std::vector<std::uint8_t> decode_string_bytes(std::span<const std::byte> in) {
+    std::vector<std::uint8_t> out(in.size());
+    for (std::size_t i = 0; i < in.size(); ++i)
+        out[i] = static_cast<std::uint8_t>(std::to_integer<std::uint8_t>(in[i]) ^ kStringKey[i % kStringKey.size()]);
+    return out;
+}
+
+WldFile WldFile::parse(std::span<const std::byte> data, std::string label) {
+    WldFile w;
+    w.label_ = std::move(label);
+    ByteReader r(data);
+    try {
+        if (r.le<std::uint32_t>() != kMagic) throw std::runtime_error(w.label_ + ": not a WLD file");
+        auto version = r.le<std::uint32_t>();
+        if (version != kVersionOld && version != kVersionNew)
+            log::debug("{}: unusual WLD version {:#x}", w.label_, version);
+        w.new_format_ = version != kVersionOld;
+        auto count = r.le<std::uint32_t>();
+        r.skip(8); // region count, max object bytes
+        auto string_size = r.le<std::uint32_t>();
+        r.skip(4); // string count
+        w.strings_ = decode_string_bytes(r.bytes(string_size));
+        if (count > r.remaining() / 8) throw std::runtime_error(w.label_ + ": bad WLD fragment count");
+        w.fragments_.reserve(count);
+    } catch (const std::out_of_range&) {
+        throw std::runtime_error(w.label_ + ": truncated WLD header");
+    }
+
+    for (std::size_t i = 0; i < w.fragments_.capacity(); ++i) {
+        Fragment f;
+        f.offset = r.position();
+        std::size_t size = 0;
+        try {
+            size = r.le<std::uint32_t>();
+            f.type = r.le<std::uint32_t>();
+            if (size > r.remaining()) throw std::out_of_range("");
+        } catch (const std::out_of_range&) {
+            throw std::runtime_error(w.label_ + ": fragment " + std::to_string(i + 1) + " runs past the end");
+        }
+        // Each fragment is parsed with a reader bounded to its declared size
+        // (OpenEQ docs/WLD_FRAGMENT_BOUNDARIES.md).
+        ByteReader fr(r.bytes(size));
+        try {
+            if (f.type != 0x35 && fr.remaining() >= 4) f.name = w.string_at(fr.le<std::int32_t>());
+            switch (f.type) {
+            case 0x03: f.data = read_bitmap_name(fr); break;
+            case 0x04: f.data = read_bitmap_info(fr); break;
+            case 0x05: {
+                BitmapInfoRef b;
+                b.info = fr.le<std::int32_t>();
+                b.flags = fr.le<std::uint32_t>();
+                f.data = b;
+                break;
+            }
+            case 0x10: f.data = read_skeleton(fr, w); break;
+            case 0x11: {
+                SkeletonRef sr;
+                sr.skeleton = fr.le<std::int32_t>();
+                sr.flags = fr.le<std::uint32_t>();
+                f.data = sr;
+                break;
+            }
+            case 0x12: f.data = read_track_def(fr); break;
+            case 0x13: {
+                TrackRef t;
+                t.track = fr.le<std::int32_t>();
+                t.flags = fr.le<std::uint32_t>();
+                if (t.flags & 1) t.frame_ms = fr.le<std::uint32_t>();
+                f.data = t;
+                break;
+            }
+            case 0x14: f.data = read_actor_def(fr, w); break;
+            case 0x15: f.data = read_actor_instance(fr); break;
+            case 0x1b: f.data = read_light_def(fr); break;
+            case 0x1c: {
+                LightRef l;
+                l.light = fr.le<std::int32_t>();
+                l.flags = fr.le<std::uint32_t>();
+                f.data = l;
+                break;
+            }
+            case 0x21: f.data = read_bsp_tree(fr); break;
+            case 0x22: {
+                BspRegion g;
+                g.flags = fr.le<std::uint32_t>();
+                f.data = g;
+                break;
+            }
+            case 0x26: {
+                ParticleSprite s;
+                s.flags = fr.le<std::uint32_t>();
+                s.sprite = fr.le<std::int32_t>();
+                s.material = fr.le<std::uint32_t>();
+                f.data = s;
+                break;
+            }
+            case 0x29: f.data = read_region_tag(fr, f.name); break;
+            case 0x34: f.data = read_particle_cloud(fr); break;
+            case 0x28: {
+                PointLight p;
+                p.light = fr.le<std::int32_t>();
+                p.flags = fr.le<std::uint32_t>();
+                p.position = read_vec3(fr);
+                p.radius = fr.f32();
+                f.data = p;
+                break;
+            }
+            case 0x2d: {
+                MeshRef m;
+                m.mesh = fr.le<std::int32_t>();
+                m.flags = fr.le<std::uint32_t>();
+                f.data = m;
+                break;
+            }
+            case 0x30: f.data = read_material(fr); break;
+            case 0x31: f.data = read_material_list(fr); break;
+            case 0x32: f.data = read_vertex_colors(fr); break;
+            case 0x33: {
+                VertexColorsRef v;
+                v.colors = fr.le<std::int32_t>();
+                v.flags = fr.le<std::uint32_t>();
+                f.data = v;
+                break;
+            }
+            case 0x35: {
+                GlobalAmbient g;
+                g.color = fr.le<std::uint32_t>();
+                f.data = g;
+                break;
+            }
+            case 0x36: f.data = read_mesh(fr, w.new_format_); break;
+            default:
+                if (w.unknown_[f.type]++ == 0)
+                    log::debug("{}: skipping WLD fragment type {:#04x}", w.label_, f.type);
+                break;
+            }
+        } catch (const std::out_of_range& e) {
+            f.data = std::monostate{};
+            w.errors_.push_back({i, f.type, e.what()});
+        }
+        if (!f.name.empty()) w.by_name_.try_emplace(f.name, i);
+        w.fragments_.push_back(std::move(f));
+    }
+    for (const auto& e : w.errors_)
+        log::debug("{}: fragment {} (type {:#04x}) truncated: {}", w.label_, e.index + 1, e.type, e.what);
+    return w;
+}
+
+const Fragment* WldFile::at(Ref ref) const {
+    if (ref <= 0 || static_cast<std::size_t>(ref) > fragments_.size()) return nullptr;
+    return &fragments_[static_cast<std::size_t>(ref) - 1];
+}
+
+const Fragment* WldFile::resolve(Ref ref) const {
+    if (ref > 0) return at(ref);
+    if (ref == 0) return nullptr;
+    auto name = string_at(ref);
+    return name.empty() ? nullptr : find(name);
+}
+
+const Fragment* WldFile::find(std::string_view name) const {
+    auto it = by_name_.find(std::string(name));
+    return it == by_name_.end() ? nullptr : &fragments_[it->second];
+}
+
+std::string WldFile::string_at(Ref ref) const {
+    if (ref >= 0) return {};
+    // Negate in 64 bits so INT32_MIN cannot overflow.
+    auto offset = static_cast<std::uint64_t>(-static_cast<std::int64_t>(ref));
+    if (offset >= strings_.size()) return {};
+    std::size_t start = static_cast<std::size_t>(offset);
+    std::size_t end = start;
+    while (end < strings_.size() && strings_[end] != 0) ++end;
+    return std::string(reinterpret_cast<const char*>(strings_.data() + start), end - start);
+}
+
+} // namespace nmsc::assets::wld

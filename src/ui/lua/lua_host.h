@@ -1,0 +1,156 @@
+#pragma once
+
+// The Lua UI: windows written as Lua scripts over Dear ImGui (the `ui` table)
+// and the game (the `eq` table), the same API as rof2decomp's rof2ui scripts
+// (re/scripts/rof2ui). Scripts are loaded from the UI's folder (ui/<name>), reloaded
+// when they change, and each window they register with ui.window(name, draw)
+// is drawn once per frame. A script error never stops the client: it shows in
+// the "UI errors" window and the failed window stays off until it reloads.
+// Every chunk is loaded as text: no precompiled Lua (a binary chunk can corrupt memory).
+
+#include <chrono>
+#include <cstddef>
+#include <filesystem>
+#include <functional>
+#include <string_view>
+#include <memory>
+#include <string>
+#include <vector>
+
+struct lua_State;
+struct ImFont;
+
+namespace nmsc::ui {
+
+// EQ UI font 1..6 (the <Font> numbers in the stock XML); null outside that
+// range or before the ImGui layer loaded them.
+ImFont* eq_font(int index);
+// The chat windows' font list (/chatfontsize 0..10; ui/imgui_layer.cpp): null outside 0..10 or before it is loaded;
+// and each one's cell height in pixels at UI scale 1.
+inline constexpr std::size_t kChatFonts = 11;
+ImFont* chat_font(int index);
+float chat_font_size(int index);
+// The display scale the UI fonts were built for (ui/imgui_layer.cpp): the EQ fonts are their XML sizes times it.
+float ui_scale();
+void set_ui_scale(float scale); // testing: the scale without an ImGui layer
+
+namespace lua {
+
+void register_ui_api(lua_State* L); // the global `ui` table (lua_imgui.cpp)
+
+// Whether a Lua window stands in for the stock window `screen` (its XML screen name: "PlayerWindow",
+// "CastSpellWnd", ...). The temporary C++ windows ask before drawing, so each Lua window turns its C++ counterpart
+// off while it runs; the app sets the check (app/lua_eq.h EqApi::replaces).
+bool replaces(std::string_view screen);
+void set_replaced_check(std::function<bool(std::string_view)> check);
+
+// While the player is asked about a server's compiled plugins (plugin/consent.h), the windows that ask are guarded
+// (lua_imgui.cpp): no code but the pack's own (a plugin folder's, an MQ script's ImGui) may draw over every window
+// (ui.Foreground) or locate them (ui.FindWindowRect), and they are raised above every other window at the end of the
+// frame, so nothing can be drawn over the question to change what the player reads or where the answer is.
+void set_consent_guard(bool on); // the question is up (app: Automation::frame)
+bool consent_guard();
+// The ImGui window just begun shows the question (the client's own prompt, after its Begin).
+void guard_current_window();
+// The pack's window drawing now (LuaUi::drawing_window) shows the question: the ImGui windows it begins this frame
+// are guarded (eq.PluginConsent asked from the pack's own code).
+void guard_drawing_window();
+// At the end of the frame's windows: the guarded ones to the front.
+void raise_guarded_windows();
+// Whether `L` runs the pack's own code now: the UI pack's state (LuaUi; its registry holds kPackStateKey), with no
+// plugin folder's code running.
+bool pack_code(lua_State* L);
+inline constexpr const char* kPackStateKey = "nmsc.ui.pack";
+// A plugin sees the pack's shared tables through views (lua_host.cpp); a C function that reads a table raw
+// (lua_rawgeti, lua_next, lua_rawlen) calls this first on its argument: a view at idx is replaced by its table (only
+// in the pack's state; anything else stays as it is).
+void unview(lua_State* L, int idx);
+
+class LuaUi {
+public:
+    // `scripts`: the UI's folder (ui/<name>, ui/ui_packs.h) holding the *.lua windows; dofile paths are
+    // relative to it ("lib/sidl.lua"). The settings file keeps the scripts' key=value options.
+    LuaUi(std::filesystem::path scripts, std::filesystem::path settings);
+    ~LuaUi();
+    LuaUi(const LuaUi&) = delete;
+    LuaUi& operator=(const LuaUi&) = delete;
+
+    // Adds functions to the `eq` table (on the top of the stack); called once
+    // at start and again for every later registrar.
+    using Registrar = std::function<void(lua_State*)>;
+    void add_eq_api(const Registrar& r);
+
+    // Between ImGuiLayer::new_frame and render: reloads changed scripts (once
+    // a second) and draws the windows.
+    void frame();
+
+    lua_State* state() const;
+    // Tests: each frame's collector slice is `steps` LUA_GCSTEPs instead of its time (0: the time), so a cycle spreads
+    // over frames the same way on every machine.
+    void set_gc_steps_for_test(int steps);
+    // Tests: the state's memory limit and how long the pack's and a plugin's code may run at a time (lua_host.cpp
+    // kMemoryLimit, kPackBudget, kPluginBudget).
+    void set_limits_for_test(std::size_t memory, std::chrono::milliseconds pack, std::chrono::milliseconds plugin);
+    // The ui.window being drawn (its name) while its draw function runs, else "".
+    static std::string_view drawing_window();
+    // Whose code runs now: "" the pack's own (and the player's), a plugin folder's tag (set_folders) while that
+    // folder's code runs: its scripts loading, its windows drawing, and any function it took from `eq` or `ui`,
+    // whoever calls it. A pack window a plugin's draws (ui.base_window) runs as the plugin.
+    static std::string_view caller_tag();
+
+    // What a plugin folder's code runs under (the app: a plugin::CallerScope with that plugin's capabilities): made
+    // when its code starts, released when it ends. Unset: nothing.
+    using CallerScope = std::function<std::shared_ptr<void>(std::string_view tag)>;
+    void set_caller_scope(CallerScope scope);
+
+    // Whether a plugin folder's code (its tag) may use the player's clipboard (ui.GetClipboardText / SetClipboardText,
+    // which ask the state's registry function "nmsc.clipboard_allowed"): it holds whatever the player copied, a
+    // password too. The pack's own code always may; unset, no plugin's may. The app: only an owner with every
+    // capability.
+    using ClipboardCheck = std::function<bool(std::string_view tag)>;
+    void set_clipboard_check(ClipboardCheck check);
+
+    // The "Lua UI" control window (scripts on/off, reload, the ImGui demo): a developer window, off by default.
+    void set_show_control(bool show);
+
+    // More folders of windows besides the UI's own: a loaded plugin's ui/<pack>/ (app: plugin::UiBridge). Each
+    // folder's *.lua load like the UI's (named "<tag>/<file>" in errors), their dofile paths are relative to their
+    // folder, and a folder no longer listed takes its windows with it. Applied at the next frame.
+    // A folder's code is confined (docs/plugins.md "Plugin windows"): its globals are its own table (reads fall back
+    // to the pack's globals; writes stay its own), it sees `eq`, `ui` and the standard libraries read-only, every
+    // `eq` and `ui.window` function it takes runs as the folder (caller_tag, set_caller_scope), and dofile stays
+    // inside its folder or the pack's.
+    struct Folder {
+        std::string tag;
+        std::filesystem::path dir;
+    };
+    void set_folders(std::vector<Folder> folders);
+    // Tests: pushes a folder's globals table (nil before its first script loaded).
+    void push_folder_env_for_test(std::string_view tag) const;
+    // Tests: runs `code` as a chunk of the folder `tag` ("" the pack's own), with its globals and as its code runs
+    // (caller_tag, the caller scope); its first result as text, or "error: <message>".
+    std::string run_for_test(std::string_view tag, const std::string& code);
+
+    // The character's own layout: the window keys (character_setting) are read from `file` before the shared settings
+    // file, and written to it; a key it lacks comes from the shared file, so a new character starts from the shared
+    // layout. Empty: none (before a character enters the world), every key in the shared file. Saves what was pending.
+    void set_character_settings(const std::filesystem::path& file);
+    // The layout copy: the character's layout becomes the window keys of `from` (another character's file), or the
+    // shared layout when `from` is empty; the character's other keys of its own (its item marks) stay. Saved at once.
+    void copy_character_layout(const std::filesystem::path& from);
+    // Whether a settings key is the character's rather than shared (the palette, the spell book's sort and filters,
+    // ...): its window layout (layout_setting), and the item marks ("items." keys: locks, junk, bag filters). The
+    // character's file is per server, so a same-named character elsewhere has marks of its own.
+    static bool character_setting(std::string_view key);
+    // Whether a settings key is the window layout: "hud." keys (places, sizes, scales, opacity, fades, locks, the
+    // buff trays' and bars' shapes) and the task window's list width.
+    static bool layout_setting(std::string_view key);
+
+    struct Impl; // lua_host.cpp
+
+private:
+    std::unique_ptr<Impl> impl_;
+};
+
+} // namespace lua
+} // namespace nmsc::ui

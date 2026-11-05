@@ -1,0 +1,30 @@
+name: CI
+
+# Checks only. Builds and tests run on the developers' machines, Linux natively and Windows with MSVC under Wine, and
+# so do releases (docs/ci.md). The build legs that ran here (linux-gcc, windows-msvc and older ones) are in this file's
+# history.
+
+on:
+  push:
+    branches: [main, 'cloud/**', 'claude/**']
+  pull_request:
+    branches: [main]
+
+# The checks only read the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A server's client changes are a plugin (docs/plugins.md): the client's own sources must not name NMS outside
+  # comments.
+  core-names:
+    name: no server code in the client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check src/, sdk/ and ui/
+        run: python3 tools/check_core_names.py

@@ -1,0 +1,300 @@
+#include "core/server_profile.h"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <chrono>
+#include <cstdlib>
+#include <format>
+#include <system_error>
+
+#include "core/ini_file.h"
+
+namespace nmsc {
+
+namespace {
+char lower(char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
+bool alnum(char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; }
+
+std::string to_lower(std::string_view s) {
+    std::string out(s);
+    for (char& c : out) c = lower(c);
+    return out;
+}
+
+bool iequals(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return lower(x) == lower(y);
+           });
+}
+
+// server.ini's section of a saved account: "Account:" and its username; in it, a character's key.
+constexpr std::string_view kAccountPrefix = "Account:";
+constexpr std::string_view kCharPrefix = "char:";
+
+// CON, PRN, AUX, NUL, COM1-9, LPT1-9, with or without an extension.
+bool windows_device_name(std::string_view name) {
+    std::string stem = to_lower(name.substr(0, name.find('.')));
+    static constexpr std::array<std::string_view, 4> kPlain{"con", "prn", "aux", "nul"};
+    if (std::find(kPlain.begin(), kPlain.end(), stem) != kPlain.end()) return true;
+    return stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem[3] >= '1' &&
+           stem[3] <= '9';
+}
+} // namespace
+
+std::string sanitize_file_name(std::string_view name) {
+    std::string out;
+    out.reserve(name.size());
+    for (char c : name)
+        out.push_back(alnum(c) || c == ' ' || c == '-' || c == '_' || c == '.' ? c : '_');
+    auto trim = [](char c) { return c == ' ' || c == '.'; };
+    while (!out.empty() && trim(out.back())) out.pop_back();
+    while (!out.empty() && trim(out.front())) out.erase(out.begin());
+    if (out.empty()) return "_";
+    if (windows_device_name(out)) out.insert(out.begin(), '_');
+    return out;
+}
+
+std::string make_profile_id(std::string_view name, const std::filesystem::path& servers) {
+    std::string base;
+    for (char c : name) {
+        if (alnum(c)) base.push_back(lower(c));
+        else if (!base.empty() && base.back() != '-') base.push_back('-');
+    }
+    while (!base.empty() && base.back() == '-') base.pop_back();
+    if (base.empty()) base = "server";
+    if (windows_device_name(base)) base.insert(base.begin(), '_');
+
+    std::vector<std::string> taken;
+    std::error_code ec;
+    for (auto it = std::filesystem::directory_iterator(servers, ec);
+         !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+        taken.push_back(to_lower(it->path().filename().string()));
+    auto free = [&](const std::string& id) { return std::find(taken.begin(), taken.end(), id) == taken.end(); };
+    if (free(base)) return base;
+    for (int n = 2;; ++n)
+        if (std::string id = base + "-" + std::to_string(n); free(id)) return id;
+}
+
+std::filesystem::path profile_dir(std::string_view id, const std::filesystem::path& servers) {
+    return servers / std::string(id);
+}
+std::filesystem::path profile_ini(std::string_view id, const std::filesystem::path& servers) {
+    return profile_dir(id, servers) / "server.ini";
+}
+std::filesystem::path profile_assets_dir(std::string_view id, const std::filesystem::path& servers) {
+    return profile_dir(id, servers) / "assets";
+}
+std::filesystem::path profile_maps_dir(std::string_view id, const std::filesystem::path& servers) {
+    return profile_dir(id, servers) / "maps";
+}
+std::filesystem::path profile_characters_dir(std::string_view id, const std::filesystem::path& servers) {
+    return profile_dir(id, servers) / "characters";
+}
+std::string world_folder_name(std::string_view world) { return sanitize_file_name(world); }
+std::filesystem::path character_dir(std::string_view id, std::string_view world, std::string_view character,
+                                    const std::filesystem::path& servers) {
+    return profile_characters_dir(id, servers) / world_folder_name(world) / sanitize_file_name(character);
+}
+
+std::filesystem::path profile_worlds_ini(std::string_view id, const std::filesystem::path& servers) {
+    return profile_dir(id, servers) / "worlds.ini";
+}
+
+std::vector<std::string> listed_worlds(std::string_view id, const std::filesystem::path& servers) {
+    std::vector<std::string> out;
+    IniFile ini;
+    if (id.empty() || !ini.load(profile_worlds_ini(id, servers))) return out;
+    for (const std::string& section : ini.sections())
+        if (ini.get_int(section, "listed", 0) != 0) out.push_back(ini.get_string(section, "name", section));
+    return out;
+}
+
+bool set_listed_worlds(std::string_view id, const std::vector<std::string>& worlds,
+                       const std::filesystem::path& servers) {
+    if (id.empty()) return false;
+    if (listed_worlds(id, servers) == worlds) return true;
+    const auto path = profile_worlds_ini(id, servers);
+    IniFile ini;
+    ini.load(path);
+    for (const std::string& section : ini.sections()) ini.erase(section, "listed");
+    // The listed ones in the login server's order: their sections are made again at the end.
+    for (const std::string& w : worlds) {
+        const std::string section = world_folder_name(w);
+        std::vector<std::pair<std::string, std::string>> kept;
+        for (const std::string& key : ini.keys(section))
+            if (key != "name") kept.emplace_back(key, ini.get_string(section, key));
+        ini.erase_section(section);
+        ini.set(section, "name", w);
+        for (const auto& [k, v] : kept) ini.set(section, k, v);
+        ini.set_int(section, "listed", 1);
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    return ini.save(path);
+}
+
+std::vector<ServerProfile> list_profiles(const std::filesystem::path& servers) {
+    std::vector<ServerProfile> out;
+    std::error_code ec;
+    for (auto it = std::filesystem::directory_iterator(servers, ec);
+         !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+        std::error_code type_ec;
+        if (!it->is_directory(type_ec)) continue;
+        if (auto p = load_profile(it->path().filename().string(), servers)) out.push_back(std::move(*p));
+    }
+    std::sort(out.begin(), out.end(), [](const ServerProfile& a, const ServerProfile& b) {
+        auto la = to_lower(a.name), lb = to_lower(b.name);
+        return la != lb ? la < lb : a.id < b.id;
+    });
+    return out;
+}
+
+std::optional<ServerProfile> load_profile(std::string_view id, const std::filesystem::path& servers) {
+    if (id.empty()) return std::nullopt;
+    IniFile ini;
+    if (!ini.load(profile_ini(id, servers))) return std::nullopt;
+    ServerProfile p;
+    p.id = std::string(id);
+    p.name = ini.get_string("Server", "name", id);
+    p.host = ini.get_string("Server", "host");
+    p.port = ini.get_int("Server", "port", p.port);
+    p.username = ini.get_string("Server", "username");
+    p.remember = ini.get_int("Server", "remember", 1) != 0;
+    p.ui = ini.get_string("Server", "ui");
+    for (const std::string& section : ini.sections()) {
+        if (!section.starts_with(kAccountPrefix) || section.size() == kAccountPrefix.size()) continue;
+        SavedAccount a;
+        a.username = section.substr(kAccountPrefix.size());
+        a.character = ini.get_string(section, "character");
+        a.world = ini.get_string(section, "world");
+        for (const std::string& key : ini.keys(section)) {
+            if (!key.starts_with(kCharPrefix)) continue;
+            std::string_view rest = std::string_view(key).substr(kCharPrefix.size());
+            std::size_t at = rest.find('@'); // a character's name has none
+            if (at == 0 || at == std::string_view::npos) continue;
+            SavedCharacter c;
+            c.name = std::string(rest.substr(0, at));
+            c.world = std::string(rest.substr(at + 1));
+            std::string value = ini.get_string(section, key);
+            c.level = std::atoi(value.c_str());
+            if (std::size_t sp = value.find(' '); sp != std::string::npos) c.classes = value.substr(sp + 1);
+            a.characters.push_back(std::move(c));
+        }
+        a.box = ini.get_int(section, "box", 0) != 0;
+        a.save_password = ini.get_int(section, "save_password", 0) != 0;
+        p.accounts.push_back(std::move(a));
+    }
+    return p;
+}
+
+bool save_profile(const ServerProfile& profile, const std::filesystem::path& servers) {
+    if (profile.id.empty()) return false;
+    const auto path = profile_ini(profile.id, servers);
+    IniFile ini;
+    ini.load(path); // keep what is there
+    ini.set("Server", "name", profile.name);
+    ini.set("Server", "host", profile.host);
+    ini.set_int("Server", "port", profile.port);
+    if (profile.remember) ini.set("Server", "username", profile.username);
+    else ini.erase("Server", "username");
+    ini.set_int("Server", "remember", profile.remember ? 1 : 0);
+    if (!profile.ui.empty()) ini.set("Server", "ui", profile.ui);
+    else ini.erase("Server", "ui");
+    for (const std::string& section : ini.sections())
+        if (section.starts_with(kAccountPrefix)) ini.erase_section(section);
+    for (const SavedAccount& a : profile.accounts) {
+        if (a.username.empty()) continue;
+        const std::string section = std::string(kAccountPrefix) + a.username;
+        if (!a.character.empty()) ini.set(section, "character", a.character);
+        if (!a.world.empty()) ini.set(section, "world", a.world);
+        ini.set_int(section, "box", a.box ? 1 : 0);
+        ini.set_int(section, "save_password", a.save_password ? 1 : 0);
+        for (const SavedCharacter& c : a.characters)
+            ini.set(section, std::string(kCharPrefix) + c.name + "@" + c.world,
+                    std::to_string(c.level) + (c.classes.empty() ? "" : " " + c.classes));
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(profile_assets_dir(profile.id, servers), ec);
+    return ini.save(path);
+}
+
+bool remove_profile(std::string_view id, const std::filesystem::path& servers) {
+    if (id.empty() || sanitize_file_name(id) != id) return false; // never a path outside servers/
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (!fs::is_directory(profile_dir(id, servers), ec)) return false;
+    // One rename: all of it goes or nothing does (a file held open on Windows fails it whole), and it can be undone.
+    const fs::path trash = deleted_profiles_dir(servers);
+    fs::create_directories(trash, ec);
+    auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+    std::string base = std::string(id) + "-" + std::format("{:%Y%m%d-%H%M%S}", now);
+    fs::path to = trash / base;
+    for (int n = 2; fs::exists(to, ec); ++n) to = trash / (base + "-" + std::to_string(n));
+    fs::rename(profile_dir(id, servers), to, ec);
+    return !ec;
+}
+
+std::filesystem::path deleted_profiles_dir(const std::filesystem::path& servers) { return servers / ".deleted"; }
+
+bool note_account_character(std::string_view id, std::string_view username, std::string_view world,
+                            std::string_view character, const std::filesystem::path& servers) {
+    auto p = load_profile(id, servers);
+    if (!p) return false;
+    SavedAccount* a = find_account(*p, username);
+    if (!a || (a->character == character && a->world == world)) return false;
+    a->character = std::string(character);
+    a->world = std::string(world);
+    return save_profile(*p, servers);
+}
+
+bool note_account_characters(std::string_view id, std::string_view username, std::string_view world,
+                             const std::vector<SavedCharacter>& characters, const std::filesystem::path& servers) {
+    auto p = load_profile(id, servers);
+    if (!p) return false;
+    SavedAccount* a = find_account(*p, username);
+    if (!a) return false;
+    std::vector<SavedCharacter> list;
+    for (const auto& c : a->characters)
+        if (c.world != world) list.push_back(c);
+    for (const auto& c : characters) {
+        list.push_back(c);
+        list.back().world = std::string(world);
+    }
+    auto same = [](const SavedCharacter& x, const SavedCharacter& y) {
+        return x.name == y.name && x.world == y.world && x.level == y.level && x.classes == y.classes;
+    };
+    if (std::equal(list.begin(), list.end(), a->characters.begin(), a->characters.end(), same)) return false;
+    a->characters = std::move(list);
+    return save_profile(*p, servers);
+}
+
+SavedAccount* find_account(ServerProfile& profile, std::string_view username) {
+    for (auto& a : profile.accounts)
+        if (iequals(a.username, username)) return &a;
+    return nullptr;
+}
+
+const SavedAccount* find_account(const ServerProfile& profile, std::string_view username) {
+    return find_account(const_cast<ServerProfile&>(profile), username);
+}
+
+const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view host, int port) {
+    for (const auto& p : profiles)
+        if (p.port == port && iequals(p.host, host)) return &p;
+    return nullptr;
+}
+
+const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view id) {
+    for (const auto& p : profiles)
+        if (iequals(p.id, id)) return &p;
+    return nullptr;
+}
+
+std::string client_window_title(std::string_view server, std::string_view character) {
+    std::string title = server.empty() ? std::string("Hailstone") : std::string(server);
+    if (!character.empty()) title += " - " + std::string(character);
+    return title;
+}
+
+} // namespace nmsc

@@ -1,0 +1,93 @@
+#pragma once
+
+// A character's two bone groups (game/anim_layers.h) as the renderer plays
+// them: each group is a CBoneGroup, a pair of animation tracks that
+// cross-fade (CBoneGroup::BlendToAnimation @0x1003fcc0: the new track's weight
+// 0 -> 1 and the old one's 1 -> 0, linear over the blend time; asked for the
+// animation it already plays, it does nothing), and ActorLayers decides each
+// frame what each group plays: the movement (or rider, or corpse) clip on
+// both, an OP_Animation action on both or on the upper body alone.
+
+#include <cstdint>
+
+#include "assets/character.h"
+
+namespace nmsc::render {
+
+// One bone group's tracks.
+struct GroupTrack {
+    const assets::AnimationClip* clip = nullptr;
+    std::uint8_t anim = 0xfe; // the animation it plays (old-style number or new-style code; 0xfe none)
+    float time = 0.0f;        // seconds into `clip` (counting from its start even when reversed)
+    float rate = 1.0f;
+    bool loop = true;
+    bool reverse = false;
+    float elapsed = 0.0f;     // display seconds since it started (HasCompletedCycle)
+    const assets::AnimationClip* previous = nullptr;
+    float previous_time = 0.0f;
+    bool previous_reverse = false;
+    float blend = 1.0f;       // the new track's weight
+    float blend_seconds = 0.1f;
+
+    // BlendToAnimation (blend_seconds > 0 on a group that plays something) or SetCurrentAnimation. The clip it
+    // already plays (same direction) only takes the new rate and loop flag, unless `restart`. True when it started.
+    bool start(const assets::AnimationClip* c, std::uint8_t code, float speed, bool loops, bool reversed,
+               float blend_s, bool restart = false);
+    void advance(float dt);
+    // CBoneGroup::HasCompletedCycle @0x1003f4b0: nothing playing, or one length / |speed| has passed since it
+    // started.
+    bool completed() const;
+    // CBoneGroup::SyncToBoneGroup @0x1003f660: the same animation as `other` takes its position.
+    void sync_to(const GroupTrack& other);
+    // The clip time to sample (reversed clips run from their end).
+    float shown_time() const;
+    float shown_previous_time() const;
+};
+
+// What a spawn's groups are asked this frame.
+struct LayerRequest {
+    const assets::AnimationClip* base = nullptr; // the movement, posture, rider or corpse clip
+    std::uint8_t base_anim = 0xfe;               // its animation number / code
+    float rate = 1.0f;
+    bool loop = true;
+    bool reverse = false;
+    bool restart = false;    // asked again from its start
+    float blend_ms = 100.0f; // the cross-fade into it (classic models: 100 ms)
+    bool new_style = false;  // the new-style animation object (FUN_0058afa0) rather than the classic one
+    bool corpse = false;     // dead: the base clip on the whole body, any action dropped
+    bool mounted = false;    // a rider
+    bool humanoid = false;   // PlayerBase::HasProperty(1): body type 1
+    float speed_run = 0.0f;  // +0x7c
+    std::uint8_t follow_up_after = 0x20; // classic: what +0x10c4 becomes when the stand request plays the follow-up
+                                         // (game::SpawnAnimChoice::follow_up)
+};
+
+struct ActorLayers {
+    GroupTrack group[2]; // game::kUpperBones, game::kLowerBones
+    const assets::AnimationClip* action = nullptr; // the OP_Animation action playing on the upper body
+    std::uint8_t action_anim = 0;
+    bool action_on_legs = false; // the action plays on both groups
+    // Classic models: a walk or run took the legs under the action (game::classic_legs_take_motion), so the
+    // animation playing (+0x10c0) is that rather than the action.
+    bool legs_took_motion = false;
+    // Classic models: the follow-up action (+0x10c4, 0x20 none) an OP_Animation leaves when it may not interrupt
+    // the unfinished one (game::classic_queues); the next stand request plays it.
+    std::uint8_t follow_up = 0x20;
+    const assets::AnimationClip* follow_clip = nullptr;
+    float follow_rate = 1.0f;
+
+    // An action starts (FUN_004b15b0 / FUN_0058afa0 for an OP_Animation): on the upper body alone or on both
+    // groups (game/anim_layers.h). False when the model's object plays nothing now: a new-style rider's action
+    // that is not of layer kind 1, a group mode (FUN_0058ac90) of 0 or 1 (the new-style object records a mode 1
+    // sequence at +0x10c4 / +0x10cc and never plays it), the same sequence asked again (mode 3: it keeps
+    // playing), or a classic request that may not interrupt the unfinished action (kept as the follow-up).
+    // Asked for the clip a group already plays, BlendToAnimation leaves it as it is (no replay).
+    bool start_action(const assets::AnimationClip* clip, std::uint8_t anim, float rate, const LayerRequest& req);
+    // One frame: the base clip where no action holds the group, the action ending when the upper body has played
+    // it through, then both groups advance by dt. True when a classic stand request started the follow-up.
+    bool step(const LayerRequest& req, float dt);
+    // Whether the upper body plays something other than the lower body.
+    bool split() const;
+};
+
+} // namespace nmsc::render

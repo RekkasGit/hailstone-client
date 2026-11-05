@@ -1,0 +1,284 @@
+#include "audio/mixer.h"
+
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
+#include "audio/sound_control.h"
+
+namespace nmsc::audio {
+
+Mixer::Mixer(std::uint32_t rate, std::size_t max_voices) : rate_(rate), max_voices_(max_voices) {
+    voices_.reserve(max_voices);
+    // The audio thread never allocates: render() mixes in blocks these hold.
+    scratch_.resize(kBlockFrames * 2);
+    wet_.resize(kBlockFrames);
+}
+
+Mixer::Voice* Mixer::find(std::uint32_t id) {
+    for (auto& v : voices_)
+        if (v.id == id && !v.done) return &v;
+    return nullptr;
+}
+
+const Mixer::Voice* Mixer::find(std::uint32_t id) const {
+    for (const auto& v : voices_)
+        if (v.id == id && !v.done) return &v;
+    return nullptr;
+}
+
+void Mixer::ramp(Voice& v, float volume, std::int32_t fade_ms) const {
+    v.target = std::max(0.0f, volume);
+    if (fade_ms <= 0) {
+        v.volume = v.target;
+        v.step = 0.0f;
+        if (v.target <= 0.0f) v.done = true;
+        return;
+    }
+    float frames = static_cast<float>(fade_ms) * static_cast<float>(rate_) / 1000.0f;
+    v.step = (v.target - v.volume) / std::max(frames, 1.0f);
+}
+
+std::uint32_t Mixer::add(Voice v, float volume, std::int32_t fade_ms) {
+    std::lock_guard lock(mutex_);
+    std::erase_if(voices_, [](const Voice& x) { return x.done; });
+    if (voices_.size() >= max_voices_ || volume <= 0.0f) return 0;
+    v.id = next_id_++;
+    if (next_id_ == 0) next_id_ = 1;
+    if (fade_ms > 0) {
+        v.volume = 0.0f;
+        ramp(v, volume, fade_ms);
+    } else {
+        v.volume = v.target = volume;
+    }
+    voices_.push_back(std::move(v));
+    return voices_.back().id;
+}
+
+std::uint32_t Mixer::play(std::shared_ptr<const Pcm> pcm, float volume, std::int32_t fade_ms, std::int32_t loops,
+                          Bus bus, const float* levels) {
+    if (!pcm || pcm->frames() == 0) return 0;
+    Voice v;
+    v.pcm = std::move(pcm);
+    v.loops = loops;
+    v.bus = bus;
+    if (levels) {
+        v.positional = true;
+        v.left = std::max(0.0f, levels[0]);
+        v.right = std::max(0.0f, levels[1]);
+    }
+    return add(std::move(v), volume, fade_ms);
+}
+
+std::uint32_t Mixer::play_source(std::unique_ptr<Source> source, float volume, std::int32_t fade_ms, Bus bus) {
+    if (!source) return 0;
+    Voice v;
+    v.source = std::move(source);
+    v.bus = bus;
+    return add(std::move(v), volume, fade_ms);
+}
+
+void Mixer::set_volume(std::uint32_t voice, float volume, std::int32_t fade_ms) {
+    std::lock_guard lock(mutex_);
+    if (Voice* v = find(voice)) ramp(*v, volume, fade_ms);
+}
+
+void Mixer::set_levels(std::uint32_t voice, float left, float right) {
+    std::lock_guard lock(mutex_);
+    if (Voice* v = find(voice)) {
+        v->positional = true;
+        v->left = std::max(0.0f, left);
+        v->right = std::max(0.0f, right);
+    }
+}
+
+void Mixer::set_send(std::uint32_t voice, float send) {
+    std::lock_guard lock(mutex_);
+    if (Voice* v = find(voice)) v->send = std::max(0.0f, send);
+}
+
+void Mixer::set_reverb(float level, float decay_s, float damping, float predelay_s) {
+    std::lock_guard lock(mutex_);
+    reverb_.level = std::max(0.0f, level);
+    if (reverb_.level > 0.0f) reverb_.configure(rate_, decay_s, damping, predelay_s);
+}
+
+void Mixer::Reverb::configure(std::uint32_t rate, float decay_s, float damping, float predelay_s) {
+    // Freeverb's comb and all-pass lengths (at 44.1 kHz; the right side 23 samples longer).
+    static constexpr int kCombs[4] = {1116, 1188, 1277, 1356};
+    static constexpr int kAllPasses[2] = {556, 441};
+    double scale = static_cast<double>(rate) / 44100.0;
+    decay_s = std::max(decay_s, 0.05f);
+    // A one-pole low-pass in each comb's loop: more damping, faster high-frequency decay.
+    float damp = std::clamp(damping / (1.0f + damping), 0.0f, 0.95f);
+    for (int c = 0; c < 2; ++c) {
+        for (int k = 0; k < 4; ++k) {
+            auto len = static_cast<std::size_t>((kCombs[k] + c * 23) * scale);
+            Comb& comb = combs[c][k];
+            if (comb.line.size() != len) comb.line.assign(len, 0.0f);
+            // -60 dB after decay_s: g^(decay_s * rate / len) = 0.001.
+            comb.feedback = static_cast<float>(std::pow(10.0, -3.0 * static_cast<double>(len) / (static_cast<double>(decay_s) * static_cast<double>(rate))));
+            comb.damp = damp;
+        }
+        for (int k = 0; k < 2; ++k) {
+            auto len = static_cast<std::size_t>((kAllPasses[k] + c * 23) * scale);
+            if (allpasses[c][k].line.size() != len) allpasses[c][k].line.assign(len, 0.0f);
+        }
+    }
+    auto pre = static_cast<std::size_t>(std::max(0.0f, predelay_s) * static_cast<float>(rate)) + 1;
+    if (predelay.size() != pre) {
+        predelay.assign(pre, 0.0f);
+        predelay_at = 0;
+    }
+}
+
+void Mixer::Reverb::process(const float* in, float* out, std::size_t frames) {
+    for (std::size_t f = 0; f < frames; ++f) {
+        float x = predelay[predelay_at];
+        predelay[predelay_at] = in[f];
+        predelay_at = (predelay_at + 1) % predelay.size();
+        for (int c = 0; c < 2; ++c) {
+            float y = 0.0f;
+            for (Comb& comb : combs[c]) {
+                float o = comb.line[comb.at];
+                comb.store = o * (1.0f - comb.damp) + comb.store * comb.damp;
+                comb.line[comb.at] = x + comb.store * comb.feedback;
+                comb.at = (comb.at + 1) % comb.line.size();
+                y += o;
+            }
+            for (AllPass& a : allpasses[c]) {
+                float b = a.line[a.at];
+                a.line[a.at] = y + b * 0.5f;
+                a.at = (a.at + 1) % a.line.size();
+                y = b - y;
+            }
+            out[f * 2 + static_cast<std::size_t>(c)] += y * 0.25f * level;
+        }
+    }
+}
+
+bool Mixer::alive(std::uint32_t voice) const {
+    std::lock_guard lock(mutex_);
+    return voice != 0 && find(voice) != nullptr;
+}
+
+void Mixer::stop_all() {
+    std::lock_guard lock(mutex_);
+    voices_.clear();
+}
+
+void Mixer::set_bus_volume(Bus bus, float volume) {
+    std::lock_guard lock(mutex_);
+    bus_[static_cast<int>(bus)] = std::clamp(volume, 0.0f, 1.0f);
+}
+
+void Mixer::set_master(float volume) {
+    std::lock_guard lock(mutex_);
+    master_ = std::clamp(volume, 0.0f, 1.0f);
+}
+
+void Mixer::set_swap_channels(bool swap) {
+    std::lock_guard lock(mutex_);
+    swap_ = swap;
+}
+
+std::size_t Mixer::voice_count() const {
+    std::lock_guard lock(mutex_);
+    return static_cast<std::size_t>(std::count_if(voices_.begin(), voices_.end(), [](const Voice& v) { return !v.done; }));
+}
+
+void Mixer::render(float* out, std::size_t frames) {
+    for (std::size_t done = 0; done < frames;) {
+        const std::size_t n = std::min(frames - done, kBlockFrames);
+        render_block(out + done * 2, n);
+        done += n;
+    }
+}
+
+void Mixer::render_block(float* out, std::size_t frames) {
+    std::fill(out, out + frames * 2, 0.0f);
+    std::lock_guard lock(mutex_);
+    const bool reverb = reverb_.level > 0.0f;
+    if (reverb) std::fill(wet_.begin(), wet_.begin() + static_cast<std::ptrdiff_t>(frames), 0.0f);
+    for (Voice& v : voices_) {
+        if (v.done) continue;
+        float bus = master_ * bus_[static_cast<int>(v.bus)];
+        float left = v.left * bus;
+        float right = v.right * bus;
+        float send = reverb ? v.send * (v.positional ? (v.left + v.right) * 0.5f : 1.0f) * bus * 0.5f : 0.0f;
+        // The voice's gain from its volume: a 3D voice's goes through the provider's curve.
+        float gain = v.positional ? miles_volume_curve(v.volume) : v.volume;
+        if (v.source) {
+            std::size_t got = v.source->render(scratch_.data(), frames, rate_);
+            for (std::size_t f = 0; f < got && !v.done; ++f) {
+                out[f * 2] += scratch_[f * 2] * gain * left;
+                out[f * 2 + 1] += scratch_[f * 2 + 1] * gain * right;
+                if (v.step != 0.0f) {
+                    v.volume += v.step;
+                    if ((v.step < 0.0f && v.volume <= v.target) || (v.step > 0.0f && v.volume >= v.target)) {
+                        v.volume = v.target;
+                        v.step = 0.0f;
+                        if (v.target <= 0.0f) v.done = true;
+                    }
+                    gain = v.positional ? miles_volume_curve(v.volume) : v.volume;
+                }
+            }
+            if (got < frames) v.done = true;
+            continue;
+        }
+        const Pcm& p = *v.pcm;
+        const std::size_t n = p.frames();
+        const double step = static_cast<double>(p.rate) / rate_;
+        if (n == 0) {
+            v.done = true;
+            continue;
+        }
+        for (std::size_t f = 0; f < frames && !v.done; ++f) {
+            // A step longer than the sound (a short sound played at a high
+            // rate) can pass the end more than once: each pass is one play.
+            if (v.loops <= 0 && v.pos >= static_cast<double>(n)) v.pos = std::fmod(v.pos, static_cast<double>(n));
+            while (v.pos >= static_cast<double>(n)) {
+                if (v.loops == 1) {
+                    v.done = true;
+                    break;
+                }
+                if (v.loops > 1) --v.loops;
+                v.pos -= static_cast<double>(n);
+            }
+            if (v.done) break;
+            auto i = static_cast<std::size_t>(v.pos);
+            std::size_t j = i + 1 < n ? i + 1 : (v.loops != 1 ? 0 : i);
+            float t = static_cast<float>(v.pos - static_cast<double>(i));
+            float l, r;
+            if (p.channels == 2) {
+                l = p.samples[i * 2] + (p.samples[j * 2] - p.samples[i * 2]) * t;
+                r = p.samples[i * 2 + 1] + (p.samples[j * 2 + 1] - p.samples[i * 2 + 1]) * t;
+            } else {
+                l = r = p.samples[i] + (p.samples[j] - p.samples[i]) * t;
+            }
+            out[f * 2] += l * gain * left;
+            out[f * 2 + 1] += r * gain * right;
+            if (send > 0.0f) wet_[f] += (l + r) * gain * send;
+            v.pos += step;
+            if (v.step != 0.0f) {
+                v.volume += v.step;
+                if ((v.step < 0.0f && v.volume <= v.target) || (v.step > 0.0f && v.volume >= v.target)) {
+                    v.volume = v.target;
+                    v.step = 0.0f;
+                    if (v.target <= 0.0f) {
+                        v.done = true;
+                        break;
+                    }
+                }
+                gain = v.positional ? miles_volume_curve(v.volume) : v.volume;
+            }
+        }
+    }
+    if (reverb) reverb_.process(wet_.data(), out, frames);
+    // Keep the sum in range; many emitters at once can add up past full scale.
+    for (std::size_t i = 0; i < frames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+    if (swap_)
+        for (std::size_t f = 0; f < frames; ++f) std::swap(out[f * 2], out[f * 2 + 1]);
+}
+
+} // namespace nmsc::audio

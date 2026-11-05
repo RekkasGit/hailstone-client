@@ -1,0 +1,114 @@
+#pragma once
+
+// The stock UI's art as ImGui textures, for the Lua windows (src/app/lua_eq.h): any file of uifiles/default
+// (window pieces, gauges, buttons; the layouts name them through EQUI_Animations.xml), plus the icon grids the
+// game's widgets draw from:
+//   item icons   A_DragItem   dragitem1.dds.. : 40 x 40 cells, 6 x 6 per sheet, down each column first; icon n >= 500
+//   spell icons  A_SpellIcons spells01.tga..  : 40 x 40 cells, 6 x 6 per sheet, across each row first
+//   gem icons    A_SpellGems  gemicons01.tga..: 24 x 24 cells, 10 x 10 per sheet, across each row first (the spell's
+//                                              SpellIcon, EQ_Spell +0x168: CSpellGemWnd::Init / SetSpellIconIndex)
+// Files load on first use and stay loaded.
+
+#include <cstdint>
+#include <filesystem>
+#include <map>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace nmsc { class GameDir; }
+namespace nmsc::render { class VkContext; }
+
+namespace nmsc::ui {
+
+class UiTextures {
+public:
+    struct Texture {
+        void* id = nullptr; // ImTextureID
+        int width = 0, height = 0;
+    };
+    struct Cell {
+        void* id = nullptr;
+        float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+    };
+
+    UiTextures(render::VkContext& vk, const GameDir& game);
+    ~UiTextures();
+    UiTextures(const UiTextures&) = delete;
+    UiTextures& operator=(const UiTextures&) = delete;
+
+    // Whether every uifiles/default file is used, or only the icon sheets (is_icon_file): a UI whose ui.ini has
+    // game_art = icons draws its windows itself (ui/ui_packs.h). All by default.
+    void set_all_art(bool all) { all_art_ = all; }
+    bool all_art() const { return all_art_; }
+    // A file of uifiles/default (any case); null when it is missing, cannot be decoded or is not used (set_all_art).
+    const Texture* file(std::string_view name);
+    // Any image of the game folder by its relative path (any case; the atlas pages' pictures), whatever
+    // set_all_art says; null when it is missing or cannot be decoded.
+    const Texture* game_file(std::string_view relative);
+    // A picture file of the disk (PNG, JPEG, BMP, TGA, DDS: the pre-game screens' pictures, app/screen_pictures.h);
+    // null when it cannot be read or decoded. A few stay loaded; older ones are let go (after the GPU is done).
+    const Texture* picture(const std::filesystem::path& file);
+    std::optional<Cell> item_icon(std::uint32_t icon);
+    std::optional<Cell> spell_icon(std::int32_t icon);
+    std::optional<Cell> gem_icon(std::int32_t icon);
+    // The first frame of a stock animation (<Ui2DAnimation item="name"> in any uifiles/default XML file, as
+    // CSidlManagerBase::FindAnimation finds it).
+    std::optional<Cell> animation(std::string_view name);
+    // A grid animation (<Grid>true</Grid>: A_DragItem, A_SpellGems, A_MenuIcons ...): its cell count (FUN_0087a820:
+    // the first frame's columns x rows x the frames; nullopt: no such grid animation) and cell `index` (frame by
+    // frame; down each column first when <Vertical>, else across each row), as IconCache::GetIcon draws it.
+    std::optional<int> grid_cells(std::string_view name);
+    std::optional<Cell> grid_cell(std::string_view name, int index);
+    // A top-level screen's stock <Location> and <Size> (x, y, w, h) from its EQUI_*.xml file.
+    struct Rect {
+        int x = 0, y = 0, w = 0, h = 0;
+    };
+    std::optional<Rect> screen_rect(std::string_view screen);
+
+private:
+    struct Entry;
+    std::optional<Cell> grid(const char* pattern, int sheet, int cell_size, int x, int y);
+    const Texture* load(const std::string& key, const std::string& path);
+    // Decodes and uploads; null (with a warning naming `what`) when it cannot.
+    std::unique_ptr<Entry> make(std::span<const std::byte> data, const std::string& what);
+
+    render::VkContext& vk_;
+    const GameDir& game_;
+    void* sampler_ = nullptr; // VkSampler
+    std::map<std::string, std::unique_ptr<Entry>> files_;
+    std::map<std::string, std::unique_ptr<Entry>> pictures_; // by path
+    std::vector<std::string> picture_order_;                 // the oldest first
+    struct Frame {
+        std::string file;
+        int x = 0, y = 0, w = 0, h = 0;
+    };
+    std::map<std::string, Frame> animations_; // by item name
+    struct Grid {
+        int cell_w = 0, cell_h = 0;
+        bool vertical = false;
+        std::vector<Frame> frames;
+    };
+    std::map<std::string, Grid> grids_; // the grid animations, by item name
+    bool animations_loaded_ = false;
+    bool all_art_ = true;
+    std::map<std::string, Rect> screens_;
+    void load_skin(); // animations_ and screens_, once
+};
+
+// Grid arithmetic (tested): the sheet (1-based) and the top-left pixel of an icon's cell.
+struct GridCell {
+    int sheet = 0;
+    int x = 0, y = 0;
+};
+std::optional<GridCell> gem_icon_cell(std::int32_t icon);
+// Cell `index` of a grid of frames, each frame_w x frame_h cut into cell_w x cell_h cells (frame = sheet - 1).
+std::optional<GridCell> grid_index_cell(int index, int frames, int frame_w, int frame_h, int cell_w, int cell_h,
+                                        bool vertical);
+// The icon sheets of uifiles/default (item icons dragitem*, spell icons spells*, gem icons gemicons*), by file name.
+bool is_icon_file(std::string_view name);
+
+} // namespace nmsc::ui

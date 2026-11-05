@@ -1,0 +1,88 @@
+#pragma once
+
+// The item preview's 3D view (CObjectPreviewWnd's OPW_ViewRenderArea, game/item_preview.h): a copy of the player
+// wearing the previewed item, or the item's own model, drawn by a renderer of its own into an image of its own each
+// frame the window asks for it (before the scene), which the window then shows. The original's view is its own
+// CRender camera on the preview actor (FUN_005770f0, FUN_00576120's fit, the OPW_ buttons and mouse turning, panning
+// and zooming it); here an orbit camera fits the model's bounds and the buttons, drags and wheel move it (their steps
+// are this client's; docs/unknowns.md).
+
+#include <array>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string_view>
+
+#include <glm/glm.hpp>
+
+#include "assets/character.h"
+#include "render/vk_context.h"
+
+namespace nmsc::render { class ActorRenderer; }
+
+namespace nmsc::app {
+
+class ItemPreviewView {
+public:
+    ItemPreviewView(render::VkContext& vk, std::shared_ptr<const assets::CharacterLibrary> library,
+                    const std::filesystem::path& shader_dir);
+    ~ItemPreviewView();
+    ItemPreviewView(const ItemPreviewView&) = delete;
+    ItemPreviewView& operator=(const ItemPreviewView&) = delete;
+
+    const assets::CharacterLibrary& library() const { return *library_; }
+    // What to show: `model` dressed as `mesh` (null: its own geometry), or nothing. A new subject resets the camera
+    // (FUN_00576120).
+    void set_subject(std::shared_ptr<const assets::CharacterModel> model, std::shared_ptr<const assets::CharacterMesh> mesh,
+                     float scale, float z_offset);
+    // The item alone: its model `number` (IT<n>) on a one-bone stand-in; false when the item has no model.
+    bool set_item_subject(std::uint32_t number);
+    void clear_subject();
+    bool has_subject() const { return model_ != nullptr; }
+
+    // The image for this frame, `width` x `height` pixels (an ImTextureID), drawn when the frame is recorded; null
+    // while there is nothing to show.
+    void* image(int width, int height);
+    // The OPW_ buttons and the mouse: "rotate" (dx, dy: radians), "pan" (dx, dy: fractions of the view), "zoom"
+    // (factor), "reset".
+    void control(std::string_view what, float x, float y);
+
+    // Records this frame's image when one was asked for since the last frame (between VkContext::begin_frame_commands
+    // and begin_scene).
+    void record(const render::FrameInfo& frame, float dt);
+
+private:
+    struct Target {
+        int width = 0, height = 0;
+        VkImage msaa = VK_NULL_HANDLE, resolve = VK_NULL_HANDLE, depth = VK_NULL_HANDLE, out = VK_NULL_HANDLE;
+        VmaAllocation msaa_alloc = VK_NULL_HANDLE, resolve_alloc = VK_NULL_HANDLE, depth_alloc = VK_NULL_HANDLE,
+                      out_alloc = VK_NULL_HANDLE;
+        VkImageView msaa_view = VK_NULL_HANDLE, resolve_view = VK_NULL_HANDLE, depth_view = VK_NULL_HANDLE,
+                    out_view = VK_NULL_HANDLE;
+        VkDescriptorSet set = VK_NULL_HANDLE; // ImGui's
+        bool drawn = false; // the out image has been through a frame (shader-read layout)
+    };
+    void make_target(Target& t, int width, int height);
+    void destroy_images(Target& t);
+    void reset_camera();
+
+    render::VkContext& vk_;
+    std::shared_ptr<const assets::CharacterLibrary> library_;
+    std::unique_ptr<render::ActorRenderer> actors_;
+    VkSampler sampler_ = VK_NULL_HANDLE;
+    std::array<Target, render::VkContext::kFramesInFlight> targets_{};
+    int want_width_ = 0, want_height_ = 0; // asked for this frame (0: not asked)
+    std::uint32_t want_slot_ = 0;
+
+    std::shared_ptr<const assets::CharacterModel> model_;
+    std::shared_ptr<const assets::CharacterMesh> mesh_;
+    float scale_ = 1.0f, z_offset_ = 0.0f;
+    float time_ = 0.0f;
+    // The orbit camera: around the model's centre (+ pan), at `distance_` x zoom.
+    glm::vec3 centre_{0.0f};
+    float radius_ = 1.0f;
+    float yaw_ = 0.0f, pitch_ = 0.0f, zoom_ = 1.0f;
+    glm::vec2 pan_{0.0f};
+};
+
+} // namespace nmsc::app

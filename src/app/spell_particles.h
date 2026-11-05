@@ -1,0 +1,84 @@
+#pragma once
+
+// Spell stage particles in the game: the cast stage at the caster
+// (OP_BeginCast) and the impact stage at the target (OP_Action 231), through
+// game::spawn_stage_emitters / game::ParticleSystem, drawn by
+// render::ParticleRenderer. The emitters hang from the actors' spell points
+// (assets/model_points.h) as the actor renderer last posed them. Settings:
+// eqclient.ini [Defaults] SpellParticleDensity and SpellParticleOpacity.
+
+#include <algorithm>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <span>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+#include "assets/model_points.h"
+#include "assets/spell_effects.h"
+#include "core/ini_file.h"
+#include "game/light_list.h"
+#include "game/particles.h"
+#include "render/particle_renderer.h"
+
+namespace nmsc { class GameDir; }
+namespace nmsc::assets { struct CharacterModel; }
+namespace nmsc::render { class ActorRenderer; }
+namespace nmsc::net { class GameConnection; struct SpellEffectCue; }
+
+namespace nmsc::app {
+
+class SpellParticles {
+public:
+    SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
+
+    // Plays the frame's spell effect cues (those with a delay when it is up) and advances the emitters; `actors`
+    // (may be null) gives the spawns' poses for their spell points.
+    void update(net::GameConnection& conn, std::span<const net::SpellEffectCue> cues,
+                const render::ActorRenderer* actors, float dt);
+    // Before the frame: loads textures the emitters need.
+    void prepare();
+    // `modern`: render::ParticleRenderer::draw's.
+    void draw(const render::FrameInfo& frame, const glm::mat4& view_proj, const glm::mat4& view, float glow = 1.0f,
+              const render::SceneLighting* modern = nullptr);
+    void clear();
+    // SpellParticleDensity (the Options window's combo): the emitters made from now on. eqclient_density() is the
+    // ini's, read at the start.
+    void set_density(float density) { settings_.density = std::clamp(density, 0.0f, 1.0f); }
+    float density() const { return settings_.density; }
+    float eqclient_density() const { return eqclient_density_; }
+    // The light the glowing effects give off (game::particle_lights), the `max` brightest.
+    std::vector<game::LightSource> lights(std::size_t max) const;
+
+private:
+    // The find path's look in the world (game/player_path.h, PlayerPath_Update's drawing half): its line as glowing
+    // still particles, the travelling EmitterN emitters and the FinishEmitterN at the end.
+    void update_path(net::GameConnection& conn);
+    // The point's world matrix on a spawn as last drawn.
+    std::optional<glm::mat4> point_world(const render::ActorRenderer& actors, std::uint32_t id, int point);
+
+    std::vector<assets::SpellEffect> effects_;
+    IniFile sp_offsets_; // Resources\SPOffsets.ini
+    assets::SpellPoints spell_points_;
+    game::ParticleSystem particles_;
+    game::SpellParticleSettings settings_;
+    float eqclient_density_ = 1.0f;
+    std::unique_ptr<render::ParticleRenderer> renderer_;
+    std::optional<std::size_t> path_definition_; // the line's texture as a definition of particles_
+    std::vector<std::uint32_t> path_movers_;     // the movers' serials whose emitters exist
+    // A delayed cue and when it plays.
+    struct Held {
+        double at;
+        int stage;
+        std::uint32_t caster, target, spell;
+        std::int32_t duration_ms;
+    };
+    std::vector<Held> held_;
+    double clock_ = 0.0;
+    void play(net::GameConnection& conn, const Held& cue, const render::ActorRenderer* actors);
+};
+
+} // namespace nmsc::app

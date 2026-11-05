@@ -1,0 +1,986 @@
+// mq/lua_mq.h and mq/commands.h: MacroQuest Lua scripts over the test world (tests/mq_test_world.h), held to the
+// server's rules.
+#include <doctest/doctest.h>
+
+#include <fstream>
+
+#include <imgui.h>
+
+#include "core/ini_file.h"
+#include "core/sha256.h"
+#include "mq/commands.h"
+#include "mq/lua_mq.h"
+#include "mq_test_world.h"
+#include "scratch_dir.h"
+#include "app/web_service.h"
+#include "plugin/web_access.h"
+#include "web/browser_host.h"
+
+using namespace nmsc;
+namespace fs = std::filesystem;
+
+namespace {
+
+struct Host {
+    mq_test::World world{"nmsc_mq_lua_test"};
+    fs::path lua_dir = world.dir / "lua";
+    fs::path config_dir = world.dir / "config";
+    plugin::Hooks hooks;
+    plugin::Policy policy;
+    mq::Registry reg;
+    mq::Context ctx;
+    std::vector<std::string> printed, sent;
+    std::uint32_t target = 0;
+    std::int64_t clock = 0;
+    std::unique_ptr<mq::Commands> commands;
+    std::unique_ptr<mq::ScriptHost> scripts;
+
+    explicit Host(std::uint32_t unlisted_caps = plugin::kCapAll, plugin::WebAccess* web = nullptr) {
+        fs::create_directories(lua_dir);
+        mq::register_game_tlos(reg);
+        ctx.registry = &reg;
+        ctx.conn = world.conn.get();
+        if (unlisted_caps) allow_unlisted(unlisted_caps);
+        mq::CommandEnv ce;
+        ce.hooks = &hooks;
+        ce.registry = &reg;
+        ce.context = [this]() -> const mq::Context& { return ctx; };
+        ce.echo = [this](const std::string& t) { printed.push_back(t); };
+        ce.run = [this](const std::string& l) { run(l); };
+        ce.set_target = [this](std::uint32_t id) { target = id; };
+        commands = std::make_unique<mq::Commands>(ce);
+        mq::ScriptEnv se;
+        se.hooks = &hooks;
+        se.policy = &policy;
+        se.registry = &reg;
+        se.context = ce.context;
+        se.print = ce.echo;
+        se.run = ce.run;
+        se.dirs = {lua_dir};
+        se.config_dir = config_dir;
+        se.now_ms = [this] { return clock; };
+        se.web = web;
+        scripts = std::make_unique<mq::ScriptHost>(se);
+    }
+    ~Host() {
+        scripts.reset();
+        commands.reset();
+    }
+
+    // A hailstone.cfg letting the player's own scripts do `caps`, with no Lua socials.
+    void allow_unlisted(std::uint32_t caps) {
+        plugin::Rules r;
+        r.configured = true;
+        r.player_script_caps = caps;
+        r.social_mode = plugin::ButtonMode::Off;
+        policy.set(r);
+    }
+    // A hailstone.cfg whose server sent these scripts (in lua_dir), the player's not allowed.
+    plugin::Rules server_scripts(const std::vector<std::string>& files) {
+        plugin::Rules r;
+        r.configured = true;
+        r.social_mode = plugin::ButtonMode::Off;
+        for (const auto& f : files)
+            r.server_files.push_back({plugin::FileKind::Script, "scripts/" + f, *parse_sha256(*mq::script_file_hash(lua_dir / f))});
+        return r;
+    }
+    // GameConnection::send_command: the hooks first, then the server.
+    void run(const std::string& line) {
+        std::string l = line;
+        if (hooks.command(l)) return;
+        sent.push_back(l);
+    }
+    void write(const std::string& file, const std::string& text) {
+        fs::create_directories((lua_dir / file).parent_path());
+        std::ofstream(lua_dir / file, std::ios::binary) << text;
+    }
+    bool printed_line(const std::string& text) const {
+        return std::find(printed.begin(), printed.end(), text) != printed.end();
+    }
+    void pulses(int n, std::int64_t step_ms = 0) {
+        for (int i = 0; i < n; ++i) {
+            clock += step_ms;
+            scripts->pulse();
+        }
+    }
+};
+
+} // namespace
+
+TEST_CASE("MQ Lua: mq.TLO, print, mq.cmd, mq.parse and the script's arguments") {
+    Host h;
+    h.write("hello.lua", R"(
+local mq = require('mq')
+print('hp', mq.TLO.Me.PctHPs())
+print(mq.TLO.Target.Name(), mq.TLO.Target.Distance())
+print(mq.TLO.Me.Buff(1)(), mq.TLO.Me.Buff('Holy Armor').ID())
+print('name ' .. mq.TLO.Me.Name)
+print(mq.TLO.Me.PctHPs() > 50, mq.TLO.Me.PctHPs > 80, mq.TLO.Nope.Deeper())
+print(tostring(mq.TLO.Me.Class), mq.TLO.Me.Class.ShortName())
+print(#mq.getAllSpawns(), mq.TLO.SpawnCount('npc')())
+print(mq.TLO.Spawn('npc fippy').CleanName(), mq.TLO.Group.Member(1).Name())
+mq.cmd('/sit')
+mq.cmdf('/tell %s hi %d', 'Groupie', 5)
+mq.cmd.echo('hello', 'world')
+print(mq.parse('${Me.Level} ${Me.Gem[1]}'))
+print(...)
+printf('%s-%d', 'f', 3)
+)");
+    REQUIRE(h.scripts->run("hello", {"a1", "b2"}));
+    CHECK(h.scripts->running("hello"));
+    h.pulses(1);
+    CHECK(h.printed_line("hp 75"));
+    CHECK(h.printed_line("a_rat01 50.0"));
+    CHECK(h.printed_line("Holy Armor 1"));
+    CHECK(h.printed_line("name Tester"));
+    CHECK(h.printed_line("true false nil"));
+    CHECK(h.printed_line("Cleric CLR"));
+    CHECK(h.printed_line("5 2"));
+    CHECK(h.printed_line("Fippy Darkpaw Groupie"));
+    CHECK(h.printed_line("hello world"));
+    CHECK(h.printed_line("50 Minor Healing"));
+    CHECK(h.printed_line("a1 b2"));
+    CHECK(h.printed_line("f-3"));
+    CHECK(h.sent == std::vector<std::string>{"/sit", "/tell Groupie hi 5"});
+    CHECK_FALSE(h.scripts->running("hello")); // the chunk returned
+    CHECK(h.printed_line("[Lua] hello ended"));
+}
+
+TEST_CASE("MQ Lua: mq.delay waits on the clock or a condition; binds and events run") {
+    Host h;
+    h.write("loop/init.lua", R"(
+local mq = require('mq')
+local util = require('util')
+local n = 0
+mq.bind('/bump', function(a) n = n + tonumber(a) end)
+mq.event('slain', '#*#You have slain #1#!#*#', function(line, who) print('killed', who) end)
+mq.delay('1s')
+print('after delay')
+mq.delay(10000, function() return n >= 3 end)
+print('bumped', n, util.twice(n))
+while true do
+    mq.doevents()
+    mq.delay(100)
+end
+)");
+    h.write("loop/util.lua", "local M = {} function M.twice(x) return x * 2 end return M\n");
+    REQUIRE(h.scripts->run("loop", {}));
+    h.pulses(1); // starts at 0: the delay ends at 1000
+    h.pulses(3, 300);
+    CHECK_FALSE(h.printed_line("after delay"));
+    h.pulses(1, 200);
+    CHECK(h.printed_line("after delay"));
+    h.run("/bump 1");
+    h.pulses(2, 100);
+    CHECK_FALSE(h.printed_line("bumped 1 2"));
+    h.run("/BUMP 2");
+    h.pulses(1, 100);
+    CHECK(h.printed_line("bumped 3 6"));
+    plugin::ChatLine line{"You have slain a rat!", 0, 0};
+    h.hooks.chat(line);
+    plugin::ChatLine other{"Nothing here", 0, 0};
+    h.hooks.chat(other);
+    h.pulses(2, 100);
+    CHECK(h.printed_line("killed a rat"));
+    CHECK(h.scripts->running("loop"));
+    h.run("/lua stop loop");
+    CHECK_FALSE(h.scripts->running("loop"));
+    CHECK_FALSE(h.hooks.has_command("/bump")); // the script's bind went with it
+}
+
+TEST_CASE("MQ Lua: nothing before the zone-in, anything without a hailstone.cfg, only the server's under one") {
+    Host h(0);
+    h.write("a.lua", "while true do require('mq').delay(10) end\n");
+    h.write("b.lua", "print(1)\n");
+    std::string why;
+    CHECK_FALSE(h.scripts->run("a", {}, &why));
+    CHECK(why.find("until the zone-in") != std::string::npos);
+    // No hailstone.cfg: no rules.
+    h.policy.set(plugin::Rules{});
+    REQUIRE(h.scripts->run("a", {}));
+    CHECK(h.scripts->list().front().caps == plugin::kCapAll);
+    h.scripts->stop("a");
+    h.pulses(1);
+    // Under a hailstone.cfg the server's own run, the player's do not.
+    h.policy.set(h.server_scripts({"a.lua"}));
+    h.scripts->policy_changed();
+    REQUIRE(h.scripts->run("a", {}));
+    CHECK(h.scripts->list().front().caps == plugin::kCapAll);
+    h.pulses(1);
+    CHECK_FALSE(h.scripts->run("b", {}, &why));
+    CHECK(why == "b may not run: this server runs only its own scripts (its hailstone.cfg)");
+    // The player cannot stop or pause the server's.
+    CHECK(h.scripts->stop("a"));
+    h.run("/lua stop");
+    h.run("/lua pause a");
+    h.pulses(1);
+    CHECK(h.scripts->running("a"));
+    CHECK(h.printed_line("[Lua] a is this server's own script: it keeps running"));
+    // The rules no longer having it stop it.
+    h.policy.set(h.server_scripts({}));
+    h.scripts->policy_changed();
+    CHECK_FALSE(h.scripts->running("a"));
+}
+
+TEST_CASE("MQ Lua: a module must be allowed too") {
+    Host h(0);
+    h.write("main.lua", "local m = require('helper') print('got', m)\n");
+    h.write("helper.lua", "return 42\n");
+    h.policy.set(h.server_scripts({"main.lua"}));
+    REQUIRE(h.scripts->run("main", {}));
+    h.pulses(1);
+    CHECK_FALSE(h.printed_line("got 42"));
+    bool refused = false;
+    for (const auto& l : h.printed) refused |= l.find("module 'helper'") != std::string::npos &&
+                                              l.find("may not run") != std::string::npos;
+    CHECK(refused);
+    h.policy.set(h.server_scripts({"main.lua", "helper.lua"}));
+    REQUIRE(h.scripts->run("main", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("got 42"));
+}
+
+TEST_CASE("MQ Lua: a module whose file may do less than the requiring script is refused") {
+    Host h; // the player's scripts may do everything
+    // An add-on named "mq" (read, ui) ships mq/Icons.lua; a full script's require('mq.Icons') must not run it.
+    h.write("mq/Icons.lua", "print('payload ran') return {}\n");
+    h.write("lib/Write.lua", "return {w = 7}\n"); // a library the player installed: the player's file
+    h.write("main.lua", R"(
+print(pcall(require, 'mq.Icons'))
+print('lib', require('lib.Write').w)
+)");
+    // The add-on's own script, with its own module: both under its ceiling; the player's library may do more.
+    h.write("addon/init.lua", "print('addon', require('util').x, require('lib.Write').w)\n");
+    h.write("addon/util.lua", "return {x = 1}\n");
+    auto hash = [&](const std::string& f) { return *parse_sha256(*mq::script_file_hash(h.lua_dir / f)); };
+    const std::uint32_t addon = plugin::kCapRead | plugin::kCapUi;
+    h.policy.set_ceilings({{plugin::FileKind::Script, hash("mq/Icons.lua"), addon},
+                           {plugin::FileKind::Script, hash("addon/init.lua"), addon},
+                           {plugin::FileKind::Script, hash("addon/util.lua"), addon}});
+    REQUIRE(h.scripts->run("main", {}));
+    REQUIRE(h.scripts->run("addon", {}));
+    h.pulses(1);
+    for (const auto& l : h.printed) CHECK(l.find("payload ran") == std::string::npos);
+    bool refused = false;
+    for (const auto& l : h.printed)
+        refused |= l.rfind("false", 0) == 0 && l.find("module 'mq.Icons'") != std::string::npos &&
+                   l.find("may not run in main") != std::string::npos;
+    CHECK(refused);
+    CHECK(h.printed_line("lib 7"));
+    CHECK(h.printed_line("addon 1 7"));
+}
+
+TEST_CASE("MQ Lua: the server's scripts folder comes first; its hailstone.cfg's [scripts] run starts them") {
+    Host h(0);
+    fs::path server = h.world.dir / "server" / "scripts";
+    fs::create_directories(server);
+    std::ofstream(server / "hello.lua", std::ios::binary) << "print('server hello')\n";
+    h.write("hello.lua", "print('player hello')\n");
+    h.scripts->set_server_dir(server);
+    plugin::Rules r = plugin::parse_server_cfg("[scripts]\nrun = hello\n");
+    r.server_files.push_back({plugin::FileKind::Script, "scripts/hello.lua", *parse_sha256(*mq::script_file_hash(server / "hello.lua"))});
+    h.policy.set(r);
+    h.scripts->policy_changed();
+    h.pulses(1);
+    CHECK(h.printed_line("server hello"));
+    CHECK_FALSE(h.printed_line("player hello"));
+}
+
+TEST_CASE("MQ Lua: found() lists the scripts on disk, the server's first, with what may run") {
+    Host h(0);
+    h.write("alpha.lua", "print(1)\n");
+    h.write("Beta/init.lua", "print(2)\n");
+    h.write("gamma/helper.lua", "return 1\n"); // a folder without init.lua: not a script
+    h.write("config/settings.lua", "return {}\n"); // mq.configDir's: not a script
+    h.write("notes.txt", "not lua\n");
+    fs::path server = h.world.dir / "server" / "scripts";
+    fs::create_directories(server);
+    std::ofstream(server / "alpha.lua", std::ios::binary) << "print('server alpha')\n";
+    std::ofstream(server / "hud.lua", std::ios::binary) << "print('hud')\n";
+    h.scripts->set_server_dir(server);
+    // Before the zone-in nothing may run, and each says why.
+    auto f = h.scripts->found();
+    REQUIRE(f.size() == 3);
+    CHECK(f[0].name == "alpha");
+    CHECK(f[0].server); // the server's copy hides the player's, as run() finds it
+    CHECK(f[0].entry == server / "alpha.lua");
+    CHECK(f[1].name == "beta");
+    CHECK_FALSE(f[1].server);
+    CHECK(f[1].entry == h.lua_dir / "Beta" / "init.lua");
+    CHECK(f[2].name == "hud");
+    for (const auto& s : f) {
+        CHECK(s.caps == 0);
+        CHECK(s.why.find("until the zone-in") != std::string::npos);
+    }
+    // Under a hailstone.cfg with the server's hud.lua only: that one may run.
+    plugin::Rules r;
+    r.configured = true;
+    r.social_mode = plugin::ButtonMode::Off;
+    r.server_files.push_back({plugin::FileKind::Script, "scripts/hud.lua", *parse_sha256(*mq::script_file_hash(server / "hud.lua"))});
+    h.policy.set(r);
+    f = h.scripts->found();
+    REQUIRE(f.size() == 3);
+    CHECK(f[0].caps == 0);
+    CHECK(f[0].why == "this server runs only its own scripts (its hailstone.cfg)");
+    CHECK(f[2].caps == plugin::kCapAll);
+    CHECK(f[2].why.empty());
+    // An edited file is hashed again.
+    std::ofstream(server / "hud.lua", std::ios::binary) << "print('hud, edited')\n";
+    fs::last_write_time(server / "hud.lua", fs::last_write_time(server / "hud.lua") + std::chrono::seconds(5));
+    CHECK(h.scripts->found()[2].caps == 0);
+    // The kept flag: the server's own, running under its hailstone.cfg.
+    h.policy.set(h.server_scripts({"alpha.lua"}));
+    h.scripts->set_server_dir({});
+    REQUIRE(h.scripts->run("alpha", {}));
+    REQUIRE(h.scripts->list().size() == 1);
+    CHECK(h.scripts->list().front().kept);
+}
+
+TEST_CASE("MQ Lua: the character's autorun list starts its scripts at the login, not again at a zone change") {
+    Host h(0);
+    h.write("auto.lua", "while true do require('mq').delay(10) end\n");
+    h.write("other.lua", "while true do require('mq').delay(10) end\n");
+    test::ScratchDir chars("mq_autorun");
+    fs::path file = chars.path() / "world" / "Tester" / "scripts.ini";
+    // No character yet: nothing to keep it in.
+    CHECK_FALSE(h.scripts->autorun_available());
+    CHECK_FALSE(h.scripts->set_autorun("auto", true));
+    // The character's file, before the zone-in's rules: nothing starts.
+    h.scripts->set_autorun_file(file);
+    CHECK(h.scripts->autorun_available());
+    REQUIRE(h.scripts->set_autorun("Auto", true));
+    CHECK(h.scripts->autorun("auto"));
+    CHECK_FALSE(h.scripts->autorun("other"));
+    CHECK(h.scripts->autorun_list() == std::vector<std::string>{"auto"});
+    {
+        IniFile ini;
+        REQUIRE(ini.load(file));
+        CHECK(ini.get_int("Autorun", "auto", 0) == 1);
+    }
+    h.scripts->policy_changed();
+    CHECK_FALSE(h.scripts->running("auto"));
+
+    // The login's zone-in: the rules allow the player's scripts, and the list's start.
+    h.allow_unlisted(plugin::kCapAll);
+    h.scripts->policy_changed();
+    CHECK(h.scripts->running("auto"));
+    CHECK_FALSE(h.scripts->running("other"));
+    // The player stops it; the next zone-in sets the same file and starts nothing.
+    h.scripts->stop("auto");
+    h.pulses(1);
+    h.scripts->set_autorun_file(file);
+    CHECK_FALSE(h.scripts->running("auto"));
+
+    // Another session reads the file back; a new file set while the rules allow it starts its scripts at once.
+    h.scripts->set_autorun_file({});
+    CHECK_FALSE(h.scripts->autorun("auto"));
+    h.scripts->set_autorun_file(file);
+    CHECK(h.scripts->autorun("auto"));
+    CHECK(h.scripts->running("auto"));
+    // Taken off the list: written, and kept off.
+    REQUIRE(h.scripts->set_autorun("auto", false));
+    IniFile ini;
+    REQUIRE(ini.load(file));
+    CHECK_FALSE(ini.get("Autorun", "auto"));
+    CHECK(h.scripts->autorun_list().empty());
+    // A name that would break the file is refused.
+    CHECK_FALSE(h.scripts->set_autorun("a=b", true));
+}
+
+TEST_CASE("MQ Lua: capabilities hold commands, reads, events and windows to the policy") {
+    Host h(plugin::kCapRead | plugin::kCapCommands);
+    h.write("c.lua", R"(
+local mq = require('mq')
+mq.cmd('/sit')
+mq.cmd('/target id 11')
+mq.cmd('/who')
+mq.cmd('/docommand /cast 1')
+mq.cmd('/echo ${Me.Level}')
+print(pcall(mq.event, 'x', '#*#', function() end))
+print(pcall(mq.imgui.init, 'w', function() end))
+)");
+    REQUIRE(h.scripts->run("c", {}));
+    h.pulses(1);
+    CHECK(h.sent == std::vector<std::string>{"/who"});
+    CHECK(h.target == 0);
+    CHECK(h.printed_line("50"));
+    auto refused = [&](const std::string& what) {
+        for (const auto& l : h.printed)
+            if (l.find(what) != std::string::npos && l.find("permission") != std::string::npos) return true;
+        return false;
+    };
+    CHECK(refused("/sit needs the server's 'move' permission"));
+    CHECK(refused("/target needs the server's 'target' permission"));
+    CHECK(refused("/cast needs the server's 'actions' permission"));
+    bool event_refused = false, ui_refused = false;
+    for (const auto& l : h.printed) {
+        event_refused |= l.rfind("false", 0) == 0 && l.find("'events' permission") != std::string::npos;
+        ui_refused |= l.rfind("false", 0) == 0 && l.find("'ui' permission") != std::string::npos;
+    }
+    CHECK(event_refused);
+    CHECK(ui_refused);
+
+    // Without read, TLOs fail; the player's own typing is never limited.
+    Host r(plugin::kCapCommands);
+    r.write("d.lua", "print(pcall(function() return require('mq').TLO.Me.Name() end))\n");
+    REQUIRE(r.scripts->run("d", {}));
+    r.pulses(1);
+    bool read_refused = false;
+    for (const auto& l : r.printed) read_refused |= l.find("'read' permission") != std::string::npos;
+    CHECK(read_refused);
+    r.run("/target id 11");
+    CHECK(r.target == 11);
+    r.run("/echo ${Me.PctHPs}");
+    CHECK(r.printed_line("75"));
+}
+
+TEST_CASE("MQ Lua: mq.bind needs 'commands' and never takes the client's own commands") {
+    Host h;
+    h.write("b.lua", R"(
+local mq = require('mq')
+for _, c in ipairs({'/say', '/g', '/tell', '/r', '/lua', '/echo'}) do print(c, pcall(mq.bind, c, function() end)) end
+mq.bind('/mine', function(a) print('mine', a) end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("b", {}));
+    h.pulses(1);
+    for (const char* c : {"/say", "/g", "/tell", "/r", "/lua", "/echo"}) {
+        INFO(c);
+        bool refused = false;
+        for (const auto& l : h.printed)
+            refused |= l.rfind(std::string(c) + " false", 0) == 0 && l.find("the client's own command") != std::string::npos;
+        CHECK(refused);
+    }
+    h.run("/g hello");
+    CHECK(h.sent == std::vector<std::string>{"/g hello"}); // the game's /gsay, not a script's
+    h.run("/mine x");
+    h.pulses(1);
+    CHECK(h.printed_line("mine x"));
+
+    Host r(plugin::kCapRead);
+    r.write("c.lua", "print(pcall(require('mq').bind, '/mine', function() end))\n");
+    REQUIRE(r.scripts->run("c", {}));
+    r.pulses(1);
+    bool refused = false;
+    for (const auto& l : r.printed) refused |= l.rfind("false", 0) == 0 && l.find("'commands' permission") != std::string::npos;
+    CHECK(refused);
+    CHECK_FALSE(r.hooks.has_command("/mine"));
+}
+
+namespace {
+std::string g_clipboard;
+} // namespace
+
+TEST_CASE("MQ Lua: the clipboard is only for a script that may do everything") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+    pio.Platform_GetClipboardTextFn = [](ImGuiContext*) { return g_clipboard.c_str(); };
+    pio.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* t) { g_clipboard = t; };
+    g_clipboard = "the player's secret";
+    const char* code = R"(
+print('get', pcall(ui.GetClipboardText))
+print('set', pcall(ImGui.SetClipboardText, 'planted'))
+)";
+    {
+        Host h(plugin::kCapAll & ~plugin::kCapPackets); // an add-on's ceiling, or a server's player_caps
+        h.write("c.lua", code);
+        REQUIRE(h.scripts->run("c", {}));
+        h.pulses(1);
+        int refused = 0;
+        for (const auto& l : h.printed)
+            refused += l.find("false") != std::string::npos && l.find("may use the clipboard") != std::string::npos;
+        CHECK(refused == 2);
+        CHECK(g_clipboard == "the player's secret");
+    }
+    {
+        Host h;
+        h.write("c.lua", code);
+        REQUIRE(h.scripts->run("c", {}));
+        h.pulses(1);
+        CHECK(h.printed_line("get true the player's secret"));
+        CHECK(h.printed_line("set true"));
+        CHECK(g_clipboard == "planted");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("MQ Lua: a script that never yields is paused each frame, not left to hang the client") {
+    Host h;
+    h.write("spin.lua", "local n = 0 while true do n = n + 1 end\n");
+    REQUIRE(h.scripts->run("spin", {}));
+    h.pulses(3);
+    CHECK(h.scripts->running("spin"));
+    h.scripts->stop("spin");
+    CHECK_FALSE(h.scripts->running("spin"));
+}
+
+TEST_CASE("MQ Lua: mq.pickle writes under the config directory and dofile reads it back as data") {
+    Host h;
+    h.write("cfg.lua", R"(
+local mq = require('mq')
+mq.pickle('settings/test.lua', {a = 1, b = {'x', 'y'}, name = 'bob'})
+local t = dofile('settings/test.lua')
+print(t.a, t.b[2], t.name)
+print(pcall(mq.pickle, '../outside.lua', {}))
+print(load, io, os.execute)
+)");
+    REQUIRE(h.scripts->run("cfg", {}));
+    h.pulses(1);
+    CHECK(fs::exists(h.config_dir / "settings" / "test.lua"));
+    CHECK(h.printed_line("1 y bob"));
+    CHECK_FALSE(fs::exists(h.world.dir / "outside.lua"));
+    CHECK(h.printed_line("nil nil nil"));
+}
+
+TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
+    Host h;
+    h.run("/target fippy");
+    CHECK(h.target == 11);
+    h.run("/target clear");
+    CHECK(h.target == 0);
+    h.run("/target id 12");
+    CHECK(h.target == 12);
+    h.run("/tell Groupie my hp is ${Me.PctHPs}");
+    CHECK(h.sent.back() == "/tell Groupie my hp is 75");
+    h.run("/noparse /tell Groupie ${Me.PctHPs}");
+    CHECK(h.sent.back() == "/tell Groupie ${Me.PctHPs}");
+    std::size_t before = h.printed.size();
+    h.run("/squelch /target nobody_here");
+    CHECK(h.printed.size() == before);
+    h.run("/target nobody_here");
+    CHECK(h.printed.back() == "There are no spawns matching: (nobody_here)");
+    h.run("/target");
+    CHECK(h.target == 12); // unchanged
+    CHECK(h.printed.back().rfind("Usage: /target", 0) == 0);
+}
+
+// ---------------------------------------------------------------- Lua socials
+
+namespace {
+
+// A hailstone.cfg's [socials].
+void allow_buttons(Host& h, plugin::ButtonMode mode, std::uint32_t caps, int press_commands = 0, bool faces = true) {
+    plugin::Rules r;
+    r.configured = true;
+    r.social_mode = mode;
+    r.social_caps = caps;
+    r.social_press_commands = press_commands;
+    r.social_faces = faces;
+    h.policy.set(r);
+    h.scripts->policy_changed();
+}
+
+mq::ButtonPress press(std::string code, std::string face = {}) {
+    mq::ButtonPress p;
+    p.social = 4;
+    p.name = "Test";
+    p.lua.press = std::move(code);
+    p.lua.face = std::move(face);
+    return p;
+}
+
+bool printed_part(const Host& h, const std::string& text) {
+    for (const auto& l : h.printed)
+        if (l.find(text) != std::string::npos) return true;
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("Lua socials: off before the zone-in and when the server's hailstone.cfg says so") {
+    Host h(0);
+    std::string why;
+    CHECK_FALSE(h.scripts->press_button(press("mq.cmd('/sit')"), &why));
+    CHECK(why.find("until the zone-in") != std::string::npos);
+    allow_buttons(h, plugin::ButtonMode::Off, plugin::kCapAll);
+    CHECK_FALSE(h.scripts->press_button(press("mq.cmd('/sit')"), &why));
+    CHECK(why == "this server does not run Lua socials");
+    CHECK(h.printed_line("[Lua] social 'Test': this server does not run Lua socials"));
+    CHECK(h.sent.empty());
+    // A server that allows the player's scripts does not make socials run.
+    h.allow_unlisted(plugin::kCapAll);
+    CHECK_FALSE(h.scripts->press_button(press("mq.cmd('/sit')")));
+    // No hailstone.cfg: full mode.
+    h.policy.set(plugin::Rules{});
+    CHECK(h.scripts->button_rules({}).mode == plugin::ButtonMode::Full);
+    CHECK(h.scripts->press_button(press("mq.cmd('/sit')")));
+}
+
+TEST_CASE("Lua socials: press mode runs at once, keeps state, sees the modifiers, holds to caps and limits") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapRead | plugin::kCapActions | plugin::kCapTarget, 2);
+    auto p = press(R"(
+state.n = (state.n or 0) + 1
+if button.shift then
+    mq.cmd('/cast 2')
+elseif mq.TLO.Me.PctHPs() < 80 then
+    mq.cmdf('/cast %d', state.n)
+end
+)");
+    REQUIRE(h.scripts->press_button(p));
+    CHECK(h.sent == std::vector<std::string>{"/cast 1"});
+    REQUIRE(h.scripts->press_button(p));
+    CHECK(h.sent.back() == "/cast 2");
+    p.shift = true;
+    REQUIRE(h.scripts->press_button(p));
+    CHECK(h.sent.size() == 3);
+    CHECK(h.sent.back() == "/cast 2");
+    CHECK_FALSE(h.scripts->button_running(4));
+
+    // Caps: /sit is movement.
+    REQUIRE(h.scripts->press_button(press("mq.cmd('/sit')")));
+    CHECK(h.sent.size() == 3);
+    CHECK(printed_part(h, "/sit needs the server's 'move' permission"));
+    // At most two commands a press.
+    CHECK_FALSE(h.scripts->press_button(press("mq.cmd('/cast 1') mq.cmd('/cast 2') mq.cmd('/cast 3')")));
+    CHECK(h.sent.size() == 5);
+    CHECK(printed_part(h, "at most 2 commands"));
+    // No waiting, no events, no endless loops.
+    CHECK_FALSE(h.scripts->press_button(press("mq.delay(100)")));
+    CHECK(printed_part(h, "without waiting"));
+    CHECK_FALSE(h.scripts->press_button(press("mq.event('x', '#*#', function() end)")));
+    CHECK(printed_part(h, "'events' permission"));
+    CHECK_FALSE(h.scripts->press_button(press("while true do end")));
+    CHECK(printed_part(h, "ran longer than 50 ms"));
+    // A syntax error is told, and the next press tells it again.
+    CHECK_FALSE(h.scripts->press_button(press("if then")));
+    std::string why;
+    CHECK_FALSE(h.scripts->press_button(press("if then"), &why));
+    CHECK(why.find("social 'Test' (press)") != std::string::npos);
+}
+
+TEST_CASE("Lua socials: editing the code starts a new state; forget_button drops it") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);
+    auto p = press("state.n = (state.n or 0) + 1 print('n', state.n)");
+    h.scripts->press_button(p);
+    h.scripts->press_button(p);
+    CHECK(h.printed_line("n 2"));
+    p.lua.press += " -- changed";
+    h.scripts->press_button(p);
+    CHECK(h.printed.back() == "n 1");
+    h.scripts->forget_button(4);
+    h.scripts->press_button(p);
+    CHECK(h.printed.back() == "n 1");
+}
+
+TEST_CASE("Lua socials: full mode waits across frames; a second press stops it") {
+    Host h(0);
+    auto p = press("mq.cmd('/cast 1') mq.delay('1s') mq.cmd('/cast 2')");
+    allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll);
+    REQUIRE(h.scripts->press_button(p));
+    CHECK(h.sent == std::vector<std::string>{"/cast 1"});
+    CHECK(h.scripts->button_running(4));
+    h.pulses(2, 600);
+    CHECK(h.sent.size() == 2);
+    CHECK_FALSE(h.scripts->button_running(4));
+
+    REQUIRE(h.scripts->press_button(p));
+    CHECK(h.scripts->button_running(4));
+    REQUIRE(h.scripts->press_button(p)); // stops
+    CHECK_FALSE(h.scripts->button_running(4));
+    h.pulses(3, 600);
+    CHECK(h.sent.size() == 3);
+
+    // The policy withdrawing full mode stops it.
+    REQUIRE(h.scripts->press_button(p));
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);
+    CHECK_FALSE(h.scripts->button_running(4));
+}
+
+TEST_CASE("Lua socials: faces read the game state, at most every 200 ms, and run no commands") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);
+    game::LuaSocial l{"mq.cmd('/sit')", R"(
+state.faces = (state.faces or 0) + 1
+return {label = 'HP ' .. mq.TLO.Me.PctHPs(), color = 0xff0000, cooldown = 1.5, overlay = state.faces,
+        enabled = false, tooltip = 'tip'}
+)"};
+    const auto& f = h.scripts->button_face(4, "Test", l);
+    CHECK(f.has);
+    CHECK(f.label == "HP 75");
+    CHECK(f.color == 0xff0000u);
+    CHECK(f.cooldown == 1.0f);
+    CHECK(f.overlay == "1");
+    CHECK_FALSE(f.enabled);
+    CHECK(f.tooltip == "tip");
+    CHECK(h.scripts->button_face(4, "Test", l).overlay == "1");
+    h.clock += 250;
+    CHECK(h.scripts->button_face(4, "Test", l).overlay == "2");
+
+    game::LuaSocial bad{"", "mq.cmd('/sit') return 'x'"};
+    h.clock += 250;
+    const auto& b = h.scripts->button_face(5, "Bad", bad);
+    CHECK_FALSE(b.has);
+    CHECK(b.error.find("cannot run commands") != std::string::npos);
+    CHECK(h.sent.empty());
+    game::LuaSocial colours{"", "return {label = 'c', color = {1, 0.5, 0}}"};
+    CHECK(h.scripts->button_face(6, "C", colours).color == 0xff7f00u);
+
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll, 0, false);
+    h.clock += 250;
+    CHECK_FALSE(h.scripts->button_face(4, "Test", l).has);
+}
+
+TEST_CASE("Lua socials: a dry run lists the commands and waits without sending anything") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapRead | plugin::kCapActions, 0);
+    auto p = press("mq.cmd('/cast ${Me.Level}') mq.delay(500) mq.cmd('/sit') state.x = 1");
+    auto d = h.scripts->dry_run_button(p);
+    CHECK(d.ok);
+    REQUIRE(d.lines.size() == 3);
+    CHECK(d.lines[0] == "/cast 50");
+    CHECK(d.lines[1] == "(wait 500 ms)");
+    CHECK(d.lines[2] == "/sit    (blocked: needs 'move')");
+    CHECK(h.sent.empty());
+    CHECK(d.rules.mode == plugin::ButtonMode::Press);
+
+    // Without Lua socials every command shows as blocked, and reads still work.
+    allow_buttons(h, plugin::ButtonMode::Off, 0);
+    d = h.scripts->dry_run_button(press("mq.cmd('/cast 1') print(mq.TLO.Me.Level())"));
+    CHECK(d.ok);
+    REQUIRE(d.lines.size() == 1);
+    CHECK(d.lines[0] == "/cast 1    (blocked: needs 'actions')");
+    d = h.scripts->dry_run_button(press("error('boom')"));
+    CHECK_FALSE(d.ok);
+    CHECK(d.error.find("boom") != std::string::npos);
+}
+
+TEST_CASE("TLO completion: TLO names, members through the live value and its type's parents, a NULL TLO's type") {
+    Host h;
+    auto has = [](const std::vector<std::string>& v, const char* s) { return std::find(v.begin(), v.end(), s) != v.end(); };
+    auto tlos = h.reg.complete(h.ctx, "Ta");
+    CHECK(has(tlos, "Target"));
+    CHECK_FALSE(has(tlos, "Me"));
+    auto me = h.reg.complete(h.ctx, "Me.Pct");
+    CHECK(has(me, "PctHPs"));
+    CHECK(has(me, "PctMana"));
+    CHECK(std::is_sorted(me.begin(), me.end()));
+    auto spawn = h.reg.complete(h.ctx, "Me.Na"); // character inherits spawn's Name
+    CHECK(has(spawn, "Name"));
+    auto deeper = h.reg.complete(h.ctx, "Me.Buff[1].Na"); // buff -> spell
+    CHECK(has(deeper, "Name"));
+    auto str = h.reg.complete(h.ctx, "Me.Name.Len");
+    CHECK(has(str, "Length"));
+    CHECK(h.reg.complete(h.ctx, "Nope.X").empty());
+}
+
+#ifdef NMSC_MOCK_WEB_HELPER
+// mq.web (mq/lua_mq_web.cpp) over the app's WebService and the stand-in helper (tests/mock_web_helper.cpp): the
+// script's own tab on the server's sites, a message both ways; without 'web', an error.
+TEST_CASE("MQ Lua: mq.web opens the script's own tabs, on the server's sites, under 'web'") {
+    web::BrowserHost browser([] { return web::process_transport({NMSC_MOCK_WEB_HELPER}); });
+    app::WebService web({[&] { return &browser; }, [] { return nullptr; }, [] { return std::string(); },
+                         [] { return std::vector<std::string>{"example.org"}; }, [] {}});
+    {
+        Host h(plugin::kCapAll, &web);
+        h.write("page.lua", R"(
+local mq = require('mq')
+local tab, why = mq.web.open('https://www.example.org/', 64, 48)
+print('open', tab ~= nil)
+local bad, why2 = mq.web.open('https://evil.com/')
+print('elsewhere', bad == nil and why2 ~= nil)
+print('tabs', #mq.web.tabs())
+mq.web.post(tab, 'ping')
+while true do
+  local got = mq.web.messages(tab)
+  if #got > 0 then print('got ' .. got[1]) break end
+  mq.delay(10)
+end
+print('url ' .. mq.web.state(tab).url)
+while true do mq.delay(1000) end
+)");
+        REQUIRE(h.scripts->run("page", {}));
+        for (int i = 0; i < 3000 && !h.printed_line("url https://www.example.org/"); ++i) {
+            browser.poll(0);
+            h.pulses(1, 10);
+        }
+        CHECK(h.printed_line("open true"));
+        CHECK(h.printed_line("elsewhere true"));
+        CHECK(h.printed_line("tabs 1"));
+        CHECK(h.printed_line("got echo:ping"));
+        CHECK(h.printed_line("url https://www.example.org/"));
+        // Another owner (the player, another script) sees none of it.
+        CHECK(web.tabs("").empty());
+        CHECK(web.tabs("script:other").empty());
+        const auto mine = web.tabs("script:page");
+        REQUIRE(mine.size() == 1);
+        CHECK_FALSE(web.navigate("script:other", plugin::kCapAll, mine[0], "https://example.org/"));
+        CHECK_FALSE(web.state("", mine[0]));
+        h.scripts->stop("page");
+        h.pulses(2);
+    }
+    {
+        Host h(plugin::kCapAll & ~plugin::kCapWeb, &web);
+        h.write("noweb.lua", "local mq = require('mq')\nprint('available', mq.web.available())\nmq.web.open('https://example.org/')\n");
+        REQUIRE(h.scripts->run("noweb", {}));
+        h.pulses(3);
+        CHECK(h.printed_line("available false"));
+        bool refused = false;
+        for (const auto& line : h.printed) refused |= line.find("needs the server's 'web' permission") != std::string::npos;
+        CHECK(refused);
+    }
+    browser.shutdown();
+}
+#endif
+
+TEST_CASE("MQ Lua: a script without every capability keeps its settings in a folder of its own") {
+    Host h(plugin::kCapRead | plugin::kCapCommands); // the player's scripts (an add-on's ceiling alike)
+    fs::create_directories(h.config_dir);
+    std::ofstream(h.config_dir / "Shared.lua", std::ios::binary) << "return {owner = 'server'}\n";
+    const std::string shared = (h.config_dir / "Shared.lua").generic_string();
+    h.write("capped.lua", std::string(R"(
+local mq = require('mq')
+print('dir', mq.configDir)
+mq.pickle(mq.configDir .. '/Mine.lua', {v = 1})
+print('mine', dofile(mq.configDir .. '/Mine.lua').v)
+print('rel', pcall(mq.pickle, 'Rel.lua', {v = 2}))
+)") + "print('shared', pcall(mq.pickle, '" + shared + "', {owner = 'addon'}))\n" +
+                              "print('read', pcall(dofile, '" + shared + "'))\n");
+    REQUIRE(h.scripts->run("capped", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("dir " + (h.config_dir / "capped").string()));
+    CHECK(h.printed_line("mine 1"));
+    CHECK(h.printed_line("rel true"));
+    CHECK(fs::exists(h.config_dir / "capped" / "Mine.lua"));
+    CHECK(fs::exists(h.config_dir / "capped" / "Rel.lua"));
+    bool write_refused = false, read_refused = false;
+    for (const auto& l : h.printed) {
+        write_refused |= l.rfind("shared false", 0) == 0 && l.find("outside the config directory") != std::string::npos;
+        read_refused |= l.rfind("read false", 0) == 0;
+    }
+    CHECK(write_refused);
+    CHECK(read_refused);
+    std::ifstream in(h.config_dir / "Shared.lua", std::ios::binary);
+    CHECK(std::string(std::istreambuf_iterator<char>(in), {}) == "return {owner = 'server'}\n");
+
+    // A script with every capability keeps the shared folder, and reaches the others' folders.
+    Host f;
+    f.write("full.lua", R"(
+local mq = require('mq')
+print('dir', mq.configDir)
+mq.pickle('capped/Theirs.lua', {v = 3})
+)");
+    REQUIRE(f.scripts->run("full", {}));
+    f.pulses(1);
+    CHECK(f.printed_line("dir " + f.config_dir.string()));
+    CHECK(fs::exists(f.config_dir / "capped" / "Theirs.lua"));
+}
+
+TEST_CASE("MQ Lua: the config directory's files are data, never started or required as code") {
+    Host h;
+    h.write("config/evil.lua", "print('ran evil')\n");
+    h.write("config/init.lua", "print('ran init')\n");
+    h.write("user.lua", "print(pcall(require, 'config.evil'))\n");
+    std::string why;
+    CHECK_FALSE(h.scripts->run("config/evil", {}, &why));
+    CHECK(why.find("no script named") != std::string::npos);
+    CHECK_FALSE(h.scripts->run("CONFIG/evil.lua", {}));
+    CHECK_FALSE(h.scripts->run("config", {}));
+    h.run("/lua run config/evil");
+    REQUIRE(h.scripts->run("user", {}));
+    h.pulses(2);
+    for (const auto& l : h.printed) CHECK(l.find("ran ") == std::string::npos);
+    bool refused = false;
+    for (const auto& l : h.printed) refused |= l.rfind("false", 0) == 0 && l.find("not found") != std::string::npos;
+    CHECK(refused);
+}
+
+TEST_CASE("MQ Lua: a script name stays in the script folders; the config directory in any case or spelling") {
+    Host h;
+    std::ofstream(h.world.dir / "outside.lua", std::ios::binary) << "print('ran outside')\n";
+    const std::string abs = (h.world.dir / "outside").generic_string();
+    std::string why;
+    CHECK_FALSE(h.scripts->run(abs, {}, &why));
+    CHECK(why.find("no script named") != std::string::npos);
+    CHECK_FALSE(h.scripts->run(abs + ".lua", {}));
+    h.run("/lua run " + abs);
+    // The config directory as Windows or a case-insensitive volume would take it.
+    h.write("Config/evil.lua", "print('ran evil')\n");
+    CHECK_FALSE(h.scripts->run("Config/evil", {}));
+    h.write("config./evil2.lua", "print('ran evil')\n");
+    CHECK_FALSE(h.scripts->run("config./evil2", {}));
+    // A link inside the folder to a file outside it.
+    std::error_code ec;
+    fs::create_symlink(h.world.dir / "outside.lua", h.lua_dir / "link.lua", ec);
+    if (!ec) CHECK_FALSE(h.scripts->run("link", {}));
+    // require: nothing absolute either, and the config directory in another case is still data.
+    h.write("user.lua", "print(pcall(require, '" + abs + "'))\nprint(pcall(require, 'Config.evil'))\n");
+    REQUIRE(h.scripts->run("user", {}));
+    h.pulses(2);
+    for (const auto& l : h.printed) CHECK(l.find("ran ") == std::string::npos);
+}
+
+TEST_CASE("MQ Lua: a script started by a plugin or script gets no more than its starter may do") {
+    Host h;
+    h.write("b.lua", "local mq = require('mq') mq.delay(100000)\n");
+    {
+        plugin::CallerScope scope(plugin::kCapRead | plugin::kCapCommands, "starter");
+        h.run("/lua run b"); // (as mq.cmd('/lua run b') from a script with those)
+    }
+    REQUIRE(h.scripts->running("b"));
+    for (const auto& s : h.scripts->list())
+        if (s.name == "b") CHECK(s.caps == (plugin::kCapRead | plugin::kCapCommands));
+    h.scripts->stop("b");
+    h.pulses(1);
+    // A starter that may give nothing the file would get: refused.
+    {
+        plugin::Rules r;
+        r.configured = true;
+        r.player_script_caps = plugin::kCapChat;
+        r.social_mode = plugin::ButtonMode::Off;
+        h.policy.set(r);
+    }
+    {
+        plugin::CallerScope scope(plugin::kCapRead, "starter");
+        std::string why;
+        CHECK_FALSE(h.scripts->run("b", {}, &why));
+        CHECK(why.find("starter") != std::string::npos);
+    }
+    // The player's own start: everything the file may do.
+    REQUIRE(h.scripts->run("b", {}));
+    for (const auto& s : h.scripts->list())
+        if (s.name == "b") CHECK(s.caps == plugin::kCapChat);
+}
+
+TEST_CASE("MQ commands: a window's line (LiteralLine) is sent as it is, without ${}") {
+    Host h;
+    {
+        mq::LiteralLine literal;
+        h.run("/guildmotd Welcome ${Me.Name}, hp ${Me.PctHPs}");
+    }
+    CHECK(h.sent.back() == "/guildmotd Welcome ${Me.Name}, hp ${Me.PctHPs}");
+    h.run("/say ${Me.PctHPs}"); // typed lines again
+    CHECK(h.sent.back() == "/say 75");
+}
+
+TEST_CASE("MQ commands: a plugin's command rewrite is held to the script's capabilities too") {
+    Host h;
+    // A compiled plugin's command_line hook (plugin/native_plugins.cpp): a line filter registered after MQ's, which
+    // turns its own alias into another command.
+    plugin::Hooks::Owner plugin_owner = h.hooks.new_owner("aliases");
+    h.hooks.on_command_line(plugin_owner, [](std::string& line) {
+        if (line.rfind("/myalias", 0) == 0) line = "/target id 12";
+        if (line.rfind("/mysay", 0) == 0) line = "/say from the alias";
+        return plugin::Flow::Continue;
+    });
+    {
+        // A script that may run commands but not change the target (kCapTarget).
+        plugin::CallerScope scope(plugin::kCapCommands | plugin::kCapRead | plugin::kCapChat, "capped");
+        h.run("/target id 12");
+        CHECK(h.target == 0);
+        h.run("/myalias");
+        CHECK(h.target == 0); // the rewritten line needs 'target' too
+        CHECK(printed_part(h, "capped: /target needs the server's 'target' permission"));
+        // A rewrite it may run goes, once.
+        const std::size_t sent = h.sent.size();
+        h.run("/mysay");
+        REQUIRE(h.sent.size() == sent + 1);
+        CHECK(h.sent.back() == "/say from the alias");
+        // ${} is expanded once, before the rewrite, as before.
+        h.run("/say ${Me.PctHPs}");
+        CHECK(h.sent.back() == "/say 75");
+    }
+    h.run("/myalias"); // the player: anything
+    CHECK(h.target == 12);
+}

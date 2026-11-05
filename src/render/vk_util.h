@@ -1,0 +1,59 @@
+#pragma once
+
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+
+#include <volk.h>
+
+namespace nmsc::render {
+
+// Back-face culling of EQ geometry. The original culls counter-clockwise
+// triangles (D3DCULL_CCW, set at device init by FUN_100916d0 and again by
+// CRender::DrawRenderEffectBuckets @0x1008b470); WLD triangles are clockwise
+// from the front. The screen winding after this client's projection was
+// mapped by testing (rof2decomp notes/eqgraphicsdx9.md, Culling).
+inline constexpr VkFrontFace kEqFrontFace = VK_FRONT_FACE_CLOCKWISE;
+
+inline constexpr VkFrontFace opposite(VkFrontFace f) {
+    return f == VK_FRONT_FACE_CLOCKWISE ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+}
+
+inline void vk_check(VkResult r, const char* what) {
+    if (r != VK_SUCCESS) throw std::runtime_error(std::string(what) + " failed: VkResult " + std::to_string(r));
+}
+
+inline VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect,
+                                     std::uint32_t mip_levels) {
+    VkImageViewCreateInfo v{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    v.image = image;
+    v.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    v.format = format;
+    v.subresourceRange = {aspect, 0, mip_levels, 0, 1};
+    VkImageView view;
+    vk_check(vkCreateImageView(device, &v, nullptr, &view), "vkCreateImageView");
+    return view;
+}
+
+inline void image_barrier(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect, VkImageLayout from,
+                          VkImageLayout to, VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
+                          VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access, std::uint32_t base_mip = 0,
+                          std::uint32_t mip_count = VK_REMAINING_MIP_LEVELS) {
+    VkImageMemoryBarrier2 b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+    b.srcStageMask = src_stage;
+    b.srcAccessMask = src_access;
+    b.dstStageMask = dst_stage;
+    b.dstAccessMask = dst_access;
+    b.oldLayout = from;
+    b.newLayout = to;
+    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = image;
+    b.subresourceRange = {aspect, base_mip, mip_count, 0, 1};
+    VkDependencyInfo dep{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dep.imageMemoryBarrierCount = 1;
+    dep.pImageMemoryBarriers = &b;
+    vkCmdPipelineBarrier2(cmd, &dep);
+}
+
+} // namespace nmsc::render

@@ -1,0 +1,514 @@
+#include "render/particle_renderer.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <stdexcept>
+
+#include "assets/texture.h"
+#include "assets/texture_overrides.h"
+#include "core/game_dir.h"
+#include "core/log.h"
+#include "game/particles.h"
+#include "render/culling.h"
+#include "render/scene_lighting.h"
+#include "render/vk_util.h"
+
+namespace nmsc::render {
+
+namespace {
+
+// particle.vert / particle.frag's push block.
+constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+struct Push {
+    glm::mat4 view_proj;
+    glm::vec4 screen; // SceneLighting::screen: the depth terms, 1 / the target's size (modern)
+    glm::vec4 params; // x: 1 modern
+};
+
+struct GpuVertex {
+    glm::vec3 position;
+    glm::vec2 uv;
+    glm::vec4 color;
+    std::uint32_t texture; // bit 31: additive (modern)
+    glm::vec4 shade;       // rgb the light it is drawn in (linear), w how deep it fades into the scene (modern)
+    glm::vec4 haze;        // rgb the haze's colour in front of it (linear), w how much of it shows through
+};
+constexpr std::uint32_t kAdditiveBit = 0x80000000u;
+
+glm::vec3 to_linear(const glm::vec3& c) {
+    auto one = [](float v) {
+        v = std::max(v, 0.0f);
+        return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+    };
+    return {one(c.r), one(c.g), one(c.b)};
+}
+
+// shaders/lighting.glsl light_pool.
+float light_pool(float d2, float r) {
+    float window = 1.0f - std::min(d2 / (r * r), 1.0f);
+    float core = std::clamp(r * 0.2f, 8.0f, 16.0f);
+    return window * core * core / (core * core + d2);
+}
+
+// Additive smoke (the Luclin chimneys' CSMOKE.DDS): light the smoke scatters, not light of its own; the modern
+// lighting lights it as the alpha-blended smoke, so it does not glow at night.
+bool scatters_light(const std::string& texture) {
+    std::string name = texture;
+    for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return name.find("smoke") != std::string::npos;
+}
+
+VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) throw std::runtime_error("cannot open shader " + path.string());
+    auto size = static_cast<std::size_t>(f.tellg());
+    std::vector<std::uint32_t> code(size / 4);
+    f.seekg(0);
+    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
+    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    info.codeSize = code.size() * 4;
+    info.pCode = code.data();
+    VkShaderModule module;
+    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
+    return module;
+}
+
+std::string lower(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+} // namespace
+
+void particle_basis(std::uint32_t billboard, const glm::mat3& axes, const glm::vec3& from_eye, glm::vec3& right,
+                    glm::vec3& up) {
+    if (billboard == 2) {
+        // Flat in the emitter's transverse plane: rings, rune circles, ripples on water.
+        right = glm::normalize(axes[0]);
+        up = glm::normalize(axes[1]);
+        return;
+    }
+    if (billboard == 1) {
+        // Standing along the emitter's axis, turned about it towards the eye: rays, columns, flames.
+        glm::vec3 axis = glm::normalize(axes[2]);
+        glm::vec3 side = glm::cross(axis, from_eye);
+        if (glm::dot(side, side) < 1e-8f) return; // looking straight down the axis: faces the camera
+        right = glm::normalize(side);
+        up = axis;
+    }
+}
+
+// The modern light on a puff of smoke or dust at `p`, as the objects' shading (shaders/object.frag) without a normal:
+// the sky and the ground ambient mixed as for a surface facing a little up, 0.3 of the sun's or moon's light, the
+// special ambient and half of each point light's pool round it; at least the light floor.
+glm::vec3 particle_light(const SceneLighting& l, const glm::vec3& p) { return ParticleLight(l).at(p); }
+
+ParticleLight::ParticleLight(const SceneLighting& l)
+    : base_(glm::mix(glm::vec3(l.ground), glm::vec3(l.sky), 0.65f) + glm::vec3(l.light) * 0.3f +
+            to_linear(glm::vec3(l.special_ambient))),
+      floor_(l.params.w) {
+    const int count = std::min(static_cast<int>(l.params.y + 0.5f), static_cast<int>(kMaxSceneLights));
+    lights_.reserve(static_cast<std::size_t>(std::max(count, 0)));
+    for (int i = 0; i < count; ++i) {
+        const GpuPointLight& pl = l.lights[static_cast<std::size_t>(i)];
+        if (pl.position_radius.w <= 0.0f) continue;
+        lights_.push_back({glm::vec3(pl.position_radius), pl.position_radius.w, to_linear(glm::vec3(pl.color))});
+    }
+}
+
+glm::vec3 ParticleLight::at(const glm::vec3& p) const {
+    glm::vec3 light = base_;
+    for (const Light& pl : lights_) {
+        glm::vec3 d = pl.position - p;
+        float d2 = glm::dot(d, d);
+        if (d2 >= pl.radius * pl.radius) continue;
+        light += pl.color * (2.5f * 0.5f * light_pool(d2, pl.radius));
+    }
+    return glm::max(light, glm::vec3(floor_));
+}
+
+bool particle_in_view(const Frustum& view, const glm::vec3& position, float width, float height, float size_factor) {
+    // The quad's corners lie within half its diagonal of its centre, however it turns or stands.
+    float half = 0.5f * std::sqrt(width * width + height * height) * std::abs(size_factor);
+    return box_in_frustum(view, sphere_box(position, half));
+}
+
+// shaders/lighting.glsl apply_haze at `p`, taken per particle: what shows through, the colour in front, and under
+// water what the water absorbs on the way.
+ParticleHaze haze_at(const SceneLighting& l, const glm::vec3& p) {
+    ParticleHaze h;
+    if (l.haze.z < 0.5f) return h;
+    glm::vec3 d = p - glm::vec3(l.camera);
+    float dist = glm::length(d);
+    if (l.haze.z > 1.5f) h.absorb = glm::exp(-dist * glm::vec3(0.018f, 0.006f, 0.004f));
+    float x = dist * l.haze.x;
+    h.through = std::exp(-3.5f * x * x * std::exp(-std::max(d.z, 0.0f) * l.haze.y));
+    glm::vec3 dir = d / std::max(dist, 1e-4f);
+    float glow = std::pow(std::max(glm::dot(dir, glm::vec3(l.to_light)), 0.0f), 6.0f) * l.haze.w;
+    h.color = glm::vec3(l.haze_color) + glm::vec3(l.light) * glow * 0.25f;
+    return h;
+}
+
+ParticleRenderer::ParticleRenderer(VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir)
+    : vk_(vk), game_(game) {
+    VkDevice d = vk_.device();
+    max_textures_ = std::min(kMaxTextures, vk_.caps().max_sampled_images);
+    {
+        UploadBatch upload(vk_);
+        assets::Image white;
+        white.width = white.height = 1;
+        white.mips.push_back(std::vector<std::byte>(4, std::byte{0xff}));
+        textures_.push_back(upload.texture(white));
+        upload.submit();
+    }
+    VkSamplerCreateInfo si{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    si.magFilter = VK_FILTER_LINEAR;
+    si.minFilter = VK_FILTER_LINEAR;
+    si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    si.maxLod = VK_LOD_CLAMP_NONE;
+    vk_check(vkCreateSampler(d, &si, nullptr, &sampler_), "vkCreateSampler");
+
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    binding.descriptorCount = max_textures_;
+    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | vk_.texture_array_binding_flags();
+    VkDescriptorSetLayoutBindingFlagsCreateInfo bf{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+    bf.bindingCount = 1;
+    bf.pBindingFlags = &flags;
+    VkDescriptorSetLayoutCreateInfo li{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    li.pNext = &bf;
+    li.flags = vk_.texture_array_layout_flags();
+    li.bindingCount = 1;
+    li.pBindings = &binding;
+    vk_check(vkCreateDescriptorSetLayout(d, &li, nullptr, &set_layout_), "vkCreateDescriptorSetLayout (particles)");
+    constexpr auto kSets = static_cast<std::uint32_t>(VkContext::kFramesInFlight);
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures_ * kSets};
+    VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pi.flags = vk_.texture_array_pool_flags();
+    pi.maxSets = kSets;
+    pi.poolSizeCount = 1;
+    pi.pPoolSizes = &size;
+    vk_check(vkCreateDescriptorPool(d, &pi, nullptr, &pool_), "vkCreateDescriptorPool (particles)");
+    std::array<VkDescriptorSetLayout, VkContext::kFramesInFlight> layouts;
+    layouts.fill(set_layout_);
+    VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    ai.descriptorPool = pool_;
+    ai.descriptorSetCount = kSets;
+    ai.pSetLayouts = layouts.data();
+    vk_check(vkAllocateDescriptorSets(d, &ai, sets_.data()), "vkAllocateDescriptorSets (particles)");
+
+    for (std::size_t i = 0; i < vertices_.size(); ++i) {
+        VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        bi.size = sizeof(GpuVertex) * kMaxVertices;
+        bi.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        VmaAllocationCreateInfo aci{};
+        aci.usage = VMA_MEMORY_USAGE_AUTO;
+        aci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        VmaAllocationInfo out{};
+        vk_check(vmaCreateBuffer(vk_.allocator(), &bi, &aci, &vertices_[i].buffer, &vertices_[i].allocation, &out),
+                 "create particle vertex buffer");
+        vertices_[i].size = bi.size;
+        mapped_[i] = out.pMappedData;
+    }
+    create_pipelines(shader_dir);
+}
+
+ParticleRenderer::~ParticleRenderer() {
+    VkDevice d = vk_.device();
+    vk_.wait_idle();
+    for (VkPipeline p : pipelines_)
+        if (p) vkDestroyPipeline(d, p, nullptr);
+    if (modern_pipeline_) vkDestroyPipeline(d, modern_pipeline_, nullptr);
+    if (layout_) vkDestroyPipelineLayout(d, layout_, nullptr);
+    if (pool_) vkDestroyDescriptorPool(d, pool_, nullptr);
+    if (set_layout_) vkDestroyDescriptorSetLayout(d, set_layout_, nullptr);
+    if (sampler_) vkDestroySampler(d, sampler_, nullptr);
+    for (auto& t : textures_) t.destroy(d, vk_.allocator());
+    for (auto& b : vertices_) b.destroy(vk_.allocator());
+}
+
+std::uint32_t ParticleRenderer::texture_slot(const std::string& name) const {
+    auto it = slots_.find(lower(name));
+    return it == slots_.end() ? 0u : it->second;
+}
+
+glm::vec3 ParticleRenderer::texture_color(const std::string& name) const {
+    auto it = colors_.find(lower(name));
+    return it == colors_.end() ? glm::vec3(1.0f) : it->second;
+}
+
+void ParticleRenderer::prepare(const game::ParticleSystem& particles) {
+    std::vector<std::string> wanted;
+    for (const auto& e : particles.emitters()) {
+        std::string name = lower(particles.definitions()[e.definition].texture);
+        if (!name.empty() && !slots_.contains(name) &&
+            std::find(wanted.begin(), wanted.end(), name) == wanted.end())
+            wanted.push_back(name);
+    }
+    if (wanted.empty()) return;
+    UploadBatch upload(vk_);
+    for (const auto& name : wanted) {
+        std::uint32_t slot = 0;
+        for (const char* dir : {"", "SpellEffects/", "EnvEmitterEffects/", "ActorEffects/"}) {
+            // "" is the texture reader (the zone's archives), when there is one.
+            std::optional<std::vector<std::byte>> data;
+            if (*dir) data = game_.read(std::string(dir) + name);
+            else if (reader_) data = reader_(name);
+            if (!data) continue;
+            if (auto image = assets::decode_game_texture(name, data); image && textures_.size() < max_textures_) {
+                // Its colour: the mean of rgb x alpha, scaled so the brightest channel is 1.
+                assets::Image rgba = assets::to_rgba8(*image);
+                glm::dvec3 sum(0.0);
+                const auto& px = rgba.mips[0];
+                for (std::size_t i = 0; i + 3 < px.size(); i += 4) {
+                    double a = std::to_integer<int>(px[i + 3]) / 255.0;
+                    sum += glm::dvec3(std::to_integer<int>(px[i]), std::to_integer<int>(px[i + 1]),
+                                      std::to_integer<int>(px[i + 2])) * a;
+                }
+                double top = std::max({sum.r, sum.g, sum.b});
+                colors_[name] = top > 0.0 ? glm::vec3(sum / top) : glm::vec3(1.0f);
+                slot = static_cast<std::uint32_t>(textures_.size());
+                textures_.push_back(upload.texture(*image, TextureUse::Color));
+            }
+            break;
+        }
+        if (slot == 0) log::debug("particle texture {} not found", name);
+        slots_.emplace(name, slot);
+    }
+    upload.submit();
+    ++version_;
+}
+
+void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, const glm::mat4& view,
+                            const game::ParticleSystem& particles, float glow, std::span<const std::uint8_t> hidden,
+                            const SceneLighting* modern) {
+    if (particles.emitters().empty()) return;
+    const std::uint32_t slot = frame.frame_slot;
+    if (set_version_[slot] != version_) {
+        std::vector<VkDescriptorImageInfo> infos;
+        for (const auto& t : textures_) infos.push_back({sampler_, t.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+        VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        w.dstSet = sets_[slot];
+        w.dstBinding = 0;
+        w.descriptorCount = static_cast<std::uint32_t>(infos.size());
+        w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        w.pImageInfo = infos.data();
+        vkUpdateDescriptorSets(vk_.device(), 1, &w, 0, nullptr);
+        set_version_[slot] = version_;
+    }
+    // Camera axes from the view matrix (rows of its rotation), and the eye (its translation undone).
+    glm::vec3 right(view[0][0], view[1][0], view[2][0]);
+    glm::vec3 up(view[0][1], view[1][1], view[2][1]);
+    const glm::vec3 eye = -glm::transpose(glm::mat3(view)) * glm::vec3(view[3]);
+    auto* out = static_cast<GpuVertex*>(mapped_[slot]);
+    std::uint32_t count = 0;
+    // One particle's quad.
+    auto quad = [&](const game::Particle& p, std::uint32_t tex, glm::uvec2 grid, const glm::vec4& shade,
+                    const glm::vec4& haze, const glm::mat3& axes, std::uint32_t billboard) {
+        // Full-size quads (EDD widths are full sizes, OpenEQ).
+        float hw = p.width * 0.5f * p.size_factor, hh = p.height * 0.5f * p.size_factor;
+        float a = p.rotation * 2.0f * 3.14159265f / 512.0f;
+        glm::vec3 qr = right, qu = up;
+        particle_basis(billboard, axes, p.position - eye, qr, qu);
+        glm::vec3 ax = (qr * std::cos(a) + qu * std::sin(a)) * hw;
+        glm::vec3 ay = (-qr * std::sin(a) + qu * std::cos(a)) * hh;
+        glm::vec2 cell(static_cast<float>(p.frame % grid.x), static_cast<float>(p.frame / grid.x));
+        glm::vec2 cs(1.0f / static_cast<float>(grid.x), 1.0f / static_cast<float>(grid.y));
+        auto v = [&](float sx, float sy) {
+            float row = rows_bottom_up_ ? (sy + 1.0f) * 0.5f : (1.0f - sy) * 0.5f;
+            glm::vec2 uv = (cell + glm::vec2((sx + 1.0f) * 0.5f, row)) * cs;
+            return GpuVertex{p.position + ax * sx + ay * sy, uv, p.color, tex, shade, haze};
+        };
+        for (auto [sx, sy] : {std::pair{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}})
+            out[count++] = v(sx, sy);
+    };
+    struct Batch { std::uint32_t first, count; int pipeline; };
+    std::vector<Batch> batches;
+    // Only what can show: a particle outside the camera's view is not lit, sorted or built (it was, every one of
+    // them, every frame).
+    const Frustum frustum = frustum_from(view_proj);
+    // The definitions' texture slots and flipbook grids, looked up once a frame rather than once a particle.
+    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; };
+    std::vector<DefinitionLook> looks(particles.definitions().size());
+    auto look = [&](std::size_t definition) -> const DefinitionLook& {
+        DefinitionLook& l = looks[definition];
+        if (!l.known) {
+            const auto& d = particles.definitions()[definition];
+            l = {texture_slot(d.texture), game::flipbook_grid(d.frames), true};
+        }
+        return l;
+    };
+    if (modern) {
+        // Every particle in one stream, back to front by distance (the nearest kept when there are too many).
+        const glm::vec3 camera(modern->camera);
+        struct Item { float dist2; std::uint32_t emitter, particle; };
+        std::vector<Item> order;
+        for (std::size_t ei = 0; ei < particles.emitters().size(); ++ei) {
+            if (ei < hidden.size() && hidden[ei]) continue;
+            const auto& ps = particles.emitters()[ei].particles;
+            for (std::size_t pi = 0; pi < ps.size(); ++pi) {
+                const auto& p = ps[pi];
+                if (!particle_in_view(frustum, p.position, p.width, p.height, p.size_factor)) continue;
+                glm::vec3 d = p.position - camera;
+                order.push_back({glm::dot(d, d), static_cast<std::uint32_t>(ei), static_cast<std::uint32_t>(pi)});
+            }
+        }
+        std::sort(order.begin(), order.end(), [](const Item& a, const Item& b) { return a.dist2 > b.dist2; });
+        if (order.size() > kMaxVertices / 6) order.erase(order.begin(), order.end() - kMaxVertices / 6);
+        // Light sources stay unlit; the haze takes away their light. Smoke and dust are lit and hazed.
+        std::vector<std::int8_t> lit_by_definition(particles.definitions().size(), -1);
+        const ParticleLight scene_light(*modern);
+        for (const Item& item : order) {
+            const auto& e = particles.emitters()[item.emitter];
+            const auto& d = particles.definitions()[e.definition];
+            const auto& p = e.particles[item.particle];
+            ParticleHaze h = haze_at(*modern, p.position);
+            std::int8_t& lit = lit_by_definition[e.definition];
+            if (lit < 0) lit = !d.additive || scatters_light(d.texture) ? 1 : 0;
+            glm::vec3 light = (lit ? scene_light.at(p.position) : glm::vec3(glow)) * h.absorb;
+            // It fades into the scene over a quarter of its size.
+            float soft = std::max(p.width, p.height) * p.size_factor * 0.25f;
+            const DefinitionLook& dl = look(e.definition);
+            std::uint32_t tex = dl.tex | (d.additive ? kAdditiveBit : 0u);
+            // A flat one lying on what it meets (a rune circle on the ground) would fade away whole: it fades over
+            // a quarter unit.
+            if (d.billboard == 2) soft = 0.25f;
+            quad(p, tex, dl.grid, glm::vec4(light, std::max(soft, 0.25f)),
+                 glm::vec4(h.color, h.through), e.axes, d.billboard);
+        }
+        if (count > 0) batches.push_back({0, count, -1});
+    } else {
+        for (std::size_t ei = 0; ei < particles.emitters().size(); ++ei) {
+            const auto& e = particles.emitters()[ei];
+            if (ei < hidden.size() && hidden[ei]) continue;
+            const auto& d = particles.definitions()[e.definition];
+            const DefinitionLook& dl = look(e.definition);
+            const std::uint32_t tex = dl.tex;
+            const glm::uvec2 grid = dl.grid;
+            const glm::vec4 shade(glm::vec3(d.additive ? glow : 1.0f), 0.0f);
+            std::uint32_t first = count;
+            for (const auto& p : e.particles) {
+                if (count + 6 > kMaxVertices) break;
+                if (!particle_in_view(frustum, p.position, p.width, p.height, p.size_factor)) continue;
+                quad(p, tex, grid, shade, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), e.axes, d.billboard);
+            }
+            if (count > first) batches.push_back({first, count - first, (d.additive ? 1 : 0) | (d.no_zwrite ? 2 : 0)});
+        }
+    }
+    if (batches.empty()) return;
+    vmaFlushAllocation(vk_.allocator(), vertices_[slot].allocation, 0, VK_WHOLE_SIZE);
+    VkCommandBuffer cmd = frame.cmd;
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vertices_[slot].buffer, &offset);
+    // Set 1: the depth copy (modern only; the classic shader path does not read it).
+    VkDescriptorSet sets[2] = {sets_[slot], vk_.shadow_set()};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
+    Push pc{view_proj, modern ? modern->screen : glm::vec4(0.0f), glm::vec4(modern ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f)};
+    vkCmdPushConstants(cmd, layout_, kPushStages, 0, sizeof(pc), &pc);
+    int bound = -2;
+    for (const auto& b : batches) {
+        if (b.pipeline != bound) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.pipeline < 0 ? modern_pipeline_ : pipelines_[b.pipeline]);
+            bound = b.pipeline;
+        }
+        vkCmdDraw(cmd, b.count, 1, b.first, 0);
+    }
+}
+
+void ParticleRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
+    VkDevice d = vk_.device();
+    VkPushConstantRange pc{kPushStages, 0, sizeof(Push)};
+    VkDescriptorSetLayout set_layouts[2] = {set_layout_, vk_.shadow_set_layout()};
+    VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    li.setLayoutCount = 2;
+    li.pSetLayouts = set_layouts;
+    li.pushConstantRangeCount = 1;
+    li.pPushConstantRanges = &pc;
+    vk_check(vkCreatePipelineLayout(d, &li, nullptr, &layout_), "vkCreatePipelineLayout (particles)");
+    VkShaderModule vs = load_shader(d, shader_dir / "particle.vert.spv");
+    VkShaderModule fs = load_shader(d, shader_dir / "particle.frag.spv");
+    VkPipelineShaderStageCreateInfo stages[2] = {
+        {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main", nullptr},
+        {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fs, "main", nullptr},
+    };
+    VkVertexInputBindingDescription binding{0, sizeof(GpuVertex), VK_VERTEX_INPUT_RATE_VERTEX};
+    VkVertexInputAttributeDescription attrs[] = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(GpuVertex, position)},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GpuVertex, uv)},
+        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, color)},
+        {3, 0, VK_FORMAT_R32_UINT, offsetof(GpuVertex, texture)},
+        {4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, shade)},
+        {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuVertex, haze)},
+    };
+    VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vi.vertexBindingDescriptionCount = 1;
+    vi.pVertexBindingDescriptions = &binding;
+    vi.vertexAttributeDescriptionCount = 6;
+    vi.pVertexAttributeDescriptions = attrs;
+    VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    vp.viewportCount = 1;
+    vp.scissorCount = 1;
+    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rs.polygonMode = VK_POLYGON_MODE_FILL;
+    rs.cullMode = VK_CULL_MODE_NONE;
+    rs.lineWidth = 1.0f;
+    VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    ms.rasterizationSamples = vk_.scene_samples();
+    VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    ds.dynamicStateCount = 2;
+    ds.pDynamicStates = dyn;
+    VkFormat color_format = vk_.scene_format();
+    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    ri.colorAttachmentCount = 1;
+    ri.pColorAttachmentFormats = &color_format;
+    ri.depthAttachmentFormat = vk_.depth_format();
+    // Variants 0..3 classic; 4 the modern stream: premultiplied (an additive particle gives alpha 0), no depth write.
+    for (int variant = 0; variant < 5; ++variant) {
+        const bool modern = variant == 4;
+        VkPipelineDepthStencilStateCreateInfo dss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+        dss.depthTestEnable = VK_TRUE;
+        dss.depthWriteEnable = (modern || (variant & 2)) ? VK_FALSE : VK_TRUE;
+        dss.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        VkPipelineColorBlendAttachmentState ba{};
+        ba.colorWriteMask = 0xf;
+        ba.blendEnable = VK_TRUE;
+        ba.srcColorBlendFactor = modern ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_SRC_ALPHA;
+        ba.dstColorBlendFactor = (!modern && (variant & 1)) ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        ba.colorBlendOp = VK_BLEND_OP_ADD;
+        ba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        ba.alphaBlendOp = VK_BLEND_OP_ADD;
+        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+        cb.attachmentCount = 1;
+        cb.pAttachments = &ba;
+        VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+        info.pNext = &ri;
+        info.stageCount = 2;
+        info.pStages = stages;
+        info.pVertexInputState = &vi;
+        info.pInputAssemblyState = &ia;
+        info.pViewportState = &vp;
+        info.pRasterizationState = &rs;
+        info.pMultisampleState = &ms;
+        info.pDepthStencilState = &dss;
+        info.pColorBlendState = &cb;
+        info.pDynamicState = &ds;
+        info.layout = layout_;
+        vk_check(vkCreateGraphicsPipelines(d, vk_.pipeline_cache(), 1, &info, nullptr,
+                                           modern ? &modern_pipeline_ : &pipelines_[variant]),
+                 "vkCreateGraphicsPipelines (particles)");
+    }
+    vkDestroyShaderModule(d, vs, nullptr);
+    vkDestroyShaderModule(d, fs, nullptr);
+}
+
+} // namespace nmsc::render

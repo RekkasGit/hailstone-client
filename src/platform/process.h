@@ -1,0 +1,34 @@
+#pragma once
+
+// This process and its threads as the operating system sees them: its id, its memory, a background thread's
+// priority, a lock file held for the process's life, a C file opened by path, and the system's name for bug reports.
+
+#include <cstdint>
+#include <cstdio>
+#include <filesystem>
+#include <optional>
+#include <string>
+
+namespace nmsc::platform {
+
+// This process's id.
+unsigned long process_id();
+
+// The process's resident memory (the working set on Windows) in bytes; nullopt where it cannot be read.
+std::optional<std::uint64_t> resident_memory();
+
+// Lowers the calling thread's scheduling priority (nice 10), for a background loader: the frame and the network come
+// first. Linux only, where each thread has its own nice value; elsewhere it does nothing.
+void lower_current_thread_priority();
+
+// Takes `lock` (created when missing) for this process until it ends; on Windows the file goes with it. False only
+// when another process holds it; a lock that cannot be made at all (a read-only folder) counts as taken by us.
+bool hold_lock_file(const std::filesystem::path& lock);
+
+// std::fopen for a path; on Windows by its wide name, so any character in it works.
+std::FILE* open_c_file(const std::filesystem::path& path, const char* mode);
+
+// The system, for bug reports: "Linux, CachyOS (kernel 7.3.0-4-cachyos), wayland", "Windows 10.0.26100".
+std::string system_description();
+
+} // namespace nmsc::platform

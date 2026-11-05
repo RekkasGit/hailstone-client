@@ -1,0 +1,44 @@
+# Conservative static analysis. See docs/static-analysis.md.
+#
+# This is a numeric / emulation-heavy codebase with intentional float and x87 behaviour, so the style, modernize and
+# readability families stay off, and so do the bugprone checks that only flag deliberate numeric code.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-unchecked-optional-access,
+  -bugprone-exception-escape,
+  -bugprone-branch-clone,
+  -bugprone-reserved-identifier,
+  -bugprone-macro-parentheses,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-switch-missing-default-case,
+  -bugprone-chained-comparison,
+  -bugprone-inc-dec-in-conditions,
+  -bugprone-misplaced-widening-cast,
+  -bugprone-integer-division,
+  -bugprone-signed-char-misuse,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-empty-catch,
+  -bugprone-casting-through-void,
+  performance-for-range-copy,
+  performance-implicit-conversion-in-loop,
+  performance-move-const-arg,
+  performance-move-constructor-init,
+  performance-noexcept-move-constructor,
+  performance-unnecessary-copy-initialization,
+  performance-unnecessary-value-param,
+  clang-analyzer-core.*,
+  clang-analyzer-cplusplus.*,
+  clang-analyzer-deadcode.*,
+  -clang-analyzer-deadcode.DeadStores,
+  clang-analyzer-unix.*,
+  -clang-analyzer-optin.*,
+  -clang-analyzer-security.*
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/src/.*'
+CheckOptions:
+  - key: bugprone-misplaced-widening-cast.CheckImplicitCasts
+    value: false

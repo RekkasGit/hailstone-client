@@ -1,0 +1,688 @@
+// The browser helper's messages (web/browser_protocol.h) and the client's side of it (web/browser_host.h): against
+// an in-memory helper, and against the stand-in helper program (tests/mock_web_helper.cpp) over real pipes.
+#include <doctest/doctest.h>
+
+#include <chrono>
+#include <deque>
+#include <thread>
+
+#include "app/web_service.h"
+#include "fuzz_support.h"
+#include "plugin/policy.h"
+#include "platform/helper_process.h"
+#include "scratch_dir.h"
+#include "web/browser_host.h"
+#include "web/browser_protocol.h"
+
+using namespace nmsc;
+using namespace nmsc::web;
+
+namespace {
+
+std::vector<Message> samples() {
+    Open o;
+    o.tab = 7;
+    o.width = 640;
+    o.height = 480;
+    o.restricted = true;
+    o.allow = {"example.org", "wiki.example.net"};
+    o.profile = "/data/web/server";
+    o.url = "https://example.org/";
+    Frame f;
+    f.tab = 7;
+    f.layer = Layer::Popup;
+    f.width = 4;
+    f.height = 3;
+    FrameRect r;
+    r.x = 1;
+    r.y = 1;
+    r.width = 2;
+    r.height = 2;
+    r.bgra.assign(16, std::byte{0x5a});
+    f.rects.push_back(r);
+    return {Hello{1},
+            o,
+            Navigate{7, "https://example.org/b"},
+            Resize{7, 800, 600},
+            Mouse{7, MouseKind::Down, MouseButton::Right, 2, -3, 40, kModShift | kModCtrl},
+            Wheel{7, 1, 2, 0, -120, kModAlt},
+            Key{7, KeyKind::Char, 0x41, 0x1f600, kModMeta},
+            Text{7, "h\xc3\xa9llo"},
+            Focus{7, true},
+            Nav{7, NavAction::Forward},
+            Eval{7, "1+1"},
+            Post{7, "{\"a\":1}"},
+            Close{7},
+            Shutdown{},
+            Ready{1},
+            f,
+            Popup{7, true, -5, 9, 120, 200},
+            Address{7, "https://example.org/c"},
+            Title{7, "A page"},
+            Loading{7, true, true, false},
+            CursorShape{7, Cursor::Hand},
+            Console{7, 3, "an error"},
+            PageMessage{7, "hi"},
+            Closed{7, CloseReason::Refused, "why"}};
+}
+
+// The in-memory helper: what the host sent, decoded, and bytes queued for it to receive.
+struct FakeHelper {
+    std::vector<Message> sent;
+    std::deque<std::byte> to_client;
+    bool alive = true, start_ok = true;
+    int starts = 0;
+
+    void reply(const Message& m) {
+        auto b = encode_message(m);
+        to_client.insert(to_client.end(), b.begin(), b.end());
+    }
+    template <typename T> std::vector<T> sent_of() const {
+        std::vector<T> out;
+        for (const auto& m : sent)
+            if (auto* v = std::get_if<T>(&m)) out.push_back(*v);
+        return out;
+    }
+};
+
+class FakeTransport final : public Transport {
+public:
+    explicit FakeTransport(FakeHelper& h) : h_(h) {}
+    bool start(std::string& error) override {
+        ++h_.starts;
+        h_.alive = h_.start_ok;
+        if (!h_.start_ok) error = "no such file";
+        return h_.start_ok;
+    }
+    void send(std::span<const std::byte> bytes) override {
+        reader_.feed(bytes);
+        while (auto m = reader_.next()) h_.sent.push_back(*m);
+    }
+    std::size_t receive(std::span<std::byte> out) override {
+        std::size_t n = std::min(out.size(), h_.to_client.size());
+        for (std::size_t i = 0; i < n; ++i) {
+            out[i] = h_.to_client.front();
+            h_.to_client.pop_front();
+        }
+        return n;
+    }
+    bool alive() override { return h_.alive; }
+    void stop(int) override { h_.alive = false; }
+
+private:
+    FakeHelper& h_;
+    MessageReader reader_;
+};
+
+struct Rig {
+    FakeHelper helper;
+    BrowserHost host{[this] { return std::make_unique<FakeTransport>(helper); }};
+};
+
+TabOptions script(std::vector<std::string> allow = {}) {
+    TabOptions o;
+    o.owner = "myscript";
+    o.allow = std::move(allow);
+    return o;
+}
+
+} // namespace
+
+TEST_CASE("browser protocol: every message encodes and decodes to the same bytes") {
+    for (const Message& m : samples()) {
+        auto bytes = encode_message(m);
+        MessageReader r;
+        r.feed(bytes);
+        auto back = r.next();
+        REQUIRE_MESSAGE(back, "message type " << m.index());
+        CHECK(back->index() == m.index());
+        CHECK(encode_message(*back) == bytes);
+        CHECK_FALSE(r.next());
+    }
+    const auto open_bytes = encode_message(samples()[1]);
+    auto o = std::get<Open>(*decode_message(std::span<const std::byte>(open_bytes).subspan(4)));
+    CHECK(o.allow == std::vector<std::string>{"example.org", "wiki.example.net"});
+    CHECK(o.url == "https://example.org/");
+}
+
+TEST_CASE("browser protocol: a stream in pieces; broken lengths, types and frames stop it") {
+    std::vector<std::byte> stream;
+    for (const Message& m : samples()) {
+        auto b = encode_message(m);
+        stream.insert(stream.end(), b.begin(), b.end());
+    }
+    MessageReader r;
+    std::size_t got = 0;
+    for (std::byte b : stream) { // a byte at a time
+        r.feed(std::span(&b, 1));
+        while (r.next()) ++got;
+    }
+    CHECK(got == samples().size());
+    CHECK_FALSE(r.failed());
+
+    auto broken = [](std::vector<std::byte> b) {
+        MessageReader x;
+        x.feed(b);
+        CHECK_FALSE(x.next());
+        return x.failed();
+    };
+    CHECK(broken({std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}}));             // length 0
+    CHECK(broken({std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0x10}, std::byte{1}})); // 256 MB
+    CHECK(broken({std::byte{1}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0xee}})); // unknown type
+    auto extra = encode_message(Close{1});
+    extra.push_back(std::byte{0});
+    extra[0] = static_cast<std::byte>(std::to_integer<int>(extra[0]) + 1); // a byte left over
+    CHECK(broken(extra));
+    CHECK_FALSE(broken({std::byte{9}, std::byte{0}})); // only part of a length: waits
+
+    Frame f;
+    f.width = f.height = 2;
+    FrameRect outside;
+    outside.x = 1;
+    outside.width = 2;
+    outside.height = 1;
+    outside.bgra.assign(8, std::byte{0});
+    f.rects.push_back(outside);
+    CHECK(broken(encode_message(f)));
+    Loading bad_flag{1, true, false, false};
+    auto lb = encode_message(bad_flag);
+    lb[9] = std::byte{2};
+    CHECK(broken(lb));
+}
+
+TEST_CASE("fuzz: browser protocol decoding never throws or allocates without bound") {
+    fuzz::QuietLog quiet;
+    fuzz::Rng rng(0xb10c);
+    std::vector<fuzz::Bytes> seeds;
+    for (const Message& m : samples()) {
+        auto b = encode_message(m);
+        seeds.emplace_back(b.begin() + 4, b.end());
+    }
+    auto body = [](std::span<const std::byte> in) {
+        (void)decode_message(in);
+        MessageReader r;
+        r.feed(in);
+        while (r.next()) {
+        }
+    };
+    for (const auto& s : seeds) {
+        for (std::size_t n = 0; n <= s.size(); ++n)
+            CHECK(fuzz::run_case("decode_message", fuzz::Bytes(s.begin(), s.begin() + static_cast<std::ptrdiff_t>(n)),
+                                 fuzz::Throws::Never, body));
+        for (int i = 0; i < 300; ++i) CHECK(fuzz::run_case("decode_message", fuzz::mutate(s, rng), fuzz::Throws::Never, body));
+    }
+    for (int i = 0; i < 500; ++i)
+        CHECK(fuzz::run_case("decode_message", fuzz::random_bytes(rng, rng.below(256)), fuzz::Throws::Never, body));
+}
+
+TEST_CASE("browser host: what may open; Hello first, then the tab with its rules") {
+    Rig r;
+    std::string why;
+    CHECK(r.host.open("file:///etc/passwd", {}, &why) == 0);
+    CHECK(why.find("not an http") != std::string::npos);
+    CHECK(r.helper.starts == 0); // refused before the helper starts
+    CHECK(r.host.open("https://evil.com/", script({"example.org"}), &why) == 0);
+    CHECK(why.find("not on a site") != std::string::npos);
+    CHECK(r.host.open("http://127.0.0.1:8080/", script(), &why) == 0); // never this computer or the network's
+    CHECK(why.find("private network") != std::string::npos);
+    CHECK(r.host.open("http://192.168.1.1/", script({"192.168.1.1"}), &why) == 0);
+
+    std::uint32_t mine = r.host.open("https://anything.net/", {});
+    std::uint32_t theirs = r.host.open("https://www.example.org/", script({"example.org"}));
+    CHECK(mine != 0);
+    CHECK(theirs != 0);
+    CHECK(r.helper.starts == 1);
+    REQUIRE(r.helper.sent.size() == 3);
+    CHECK(std::holds_alternative<Hello>(r.helper.sent[0]));
+    auto opens = r.helper.sent_of<Open>();
+    CHECK_FALSE(opens[0].restricted);
+    CHECK(opens[0].allow.empty());
+    CHECK(opens[1].restricted);
+    CHECK(opens[1].allow == std::vector<std::string>{"example.org"});
+
+    CHECK_FALSE(r.host.navigate(theirs, "https://evil.com/"));
+    CHECK(r.host.navigate(theirs, "https://example.org/x"));
+    CHECK(r.host.navigate(mine, "http://elsewhere.org/"));
+    CHECK(r.host.navigate(theirs, "about:blank")); // an empty page, for any tab
+    CHECK(r.helper.sent_of<Navigate>().size() == 3);
+}
+
+TEST_CASE("browser host: no helper: nothing opens, and it is not tried again") {
+    Rig r;
+    r.helper.start_ok = false;
+    std::string why;
+    CHECK(r.host.open("https://example.org/", {}, &why) == 0);
+    CHECK(why.find("did not start") != std::string::npos);
+    CHECK_FALSE(r.host.available());
+    CHECK(r.host.open("https://example.org/", {}) == 0);
+    CHECK(r.helper.starts == 1);
+}
+
+TEST_CASE("browser host: frames, the page's state and its messages") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    auto mine = r.host.open("https://example.org/", {});
+    r.helper.reply(Ready{});
+    Frame full;
+    full.tab = id;
+    full.width = 3;
+    full.height = 2;
+    FrameRect all;
+    all.width = 3;
+    all.height = 2;
+    all.bgra.assign(24, std::byte{1});
+    full.rects.push_back(all);
+    r.helper.reply(full);
+    Frame part;
+    part.tab = id;
+    part.width = 3;
+    part.height = 2;
+    FrameRect px;
+    px.x = 2;
+    px.y = 1;
+    px.width = px.height = 1;
+    px.bgra.assign(4, std::byte{9});
+    part.rects.push_back(px);
+    r.helper.reply(part);
+    r.helper.reply(Title{id, "Example"});
+    r.helper.reply(Loading{id, false, true, false});
+    r.helper.reply(CursorShape{id, Cursor::Text});
+    r.helper.reply(PageMessage{id, "one"});
+    r.helper.reply(PageMessage{id, "two"});
+    r.helper.reply(PageMessage{mine, "not for the player"});
+    r.helper.reply(Title{999, "no such tab"});
+    r.host.poll(0);
+
+    const Tab* t = r.host.tab(id);
+    REQUIRE(t);
+    CHECK(t->view.width == 3);
+    CHECK(t->view.height == 2);
+    CHECK(t->view.serial == 2);
+    CHECK(t->view.bgra[0] == std::byte{1});
+    CHECK(t->view.bgra[(1 * 3 + 2) * 4] == std::byte{9});
+    auto dirty = r.host.take_dirty(id, Layer::View);
+    REQUIRE(dirty.size() == 3); // the new size's whole image, the full rect, the pixel
+    CHECK(dirty[2].x == 2);
+    CHECK(r.host.take_dirty(id, Layer::View).empty());
+    CHECK(t->title == "Example");
+    CHECK(t->can_back);
+    CHECK(t->cursor == Cursor::Text);
+    CHECK(r.host.take_messages(id) == std::vector<std::string>{"one", "two"});
+    CHECK(r.host.take_messages(id).empty());
+    CHECK(r.host.take_messages(mine).empty());
+
+    for (int i = 0; i < 300; ++i) r.helper.reply(PageMessage{id, std::to_string(i)});
+    r.host.poll(0);
+    auto many = r.host.take_messages(id);
+    CHECK(many.size() == BrowserHost::kMessageQueue);
+    CHECK(many.front() == "44"); // the oldest went
+
+    r.host.post(id, "hello");
+    CHECK(r.helper.sent_of<Post>().back().message == "hello");
+    r.host.close(id);
+    CHECK(r.host.tab(id) == nullptr);
+    CHECK(r.helper.sent_of<Close>().back().tab == id);
+}
+
+TEST_CASE("browser host: a page's messages and console lines are held to sizes, not only counts") {
+    // The protocol: a console line or a page message longer than its own limit is a broken message, seen from the
+    // first bytes (nothing waits for 64 MB of it).
+    auto broken = [](const Message& m, std::size_t keep = 0) {
+        auto b = encode_message(m);
+        if (keep) b.resize(keep);
+        MessageReader x;
+        x.feed(b);
+        while (x.next()) {
+        }
+        return x.failed();
+    };
+    CHECK_FALSE(broken(Console{1, 0, std::string(kMaxConsoleText, 'c')}));
+    CHECK(broken(Console{1, 0, std::string(kMaxConsoleText + 1, 'c')}));
+    CHECK_FALSE(broken(PageMessage{1, std::string(kMaxPageMessage, 'm')}));
+    CHECK(broken(PageMessage{1, std::string(kMaxPageMessage + 1, 'm')}, 5));
+    CHECK_FALSE(broken(Title{1, std::string(kMaxPageMessage + 1, 't')})); // a title is kept once, not queued
+    const auto long_line = encode_message(Console{1, 0, std::string(kMaxConsoleText + 1, 'c')});
+    CHECK_FALSE(decode_message(std::span<const std::byte>(long_line).subspan(4)));
+    std::string cut = "a\xc3\xa9";
+    cut_utf8(cut, 2);
+    CHECK(cut == "a"); // not half of the e-acute
+    cut = "abc";
+    cut_utf8(cut, 5);
+    CHECK(cut == "abc");
+
+    // The host: the oldest messages go once the queue holds kMessageQueueBytes.
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    const std::size_t n = BrowserHost::kMessageQueueBytes / kMaxPageMessage + 3;
+    for (std::size_t i = 0; i < n; ++i) r.helper.reply(PageMessage{id, std::string(kMaxPageMessage, static_cast<char>('a' + i))});
+    for (int i = 0; i < 8; ++i) r.host.poll(0); // a poll reads at most 16 MB
+    REQUIRE(r.helper.to_client.empty());
+    REQUIRE(r.host.tab(id));
+    CHECK(r.host.tab(id)->message_bytes <= BrowserHost::kMessageQueueBytes);
+    CHECK_FALSE(r.host.tab(id)->closed);
+    auto got = r.host.take_messages(id);
+    CHECK(got.size() == BrowserHost::kMessageQueueBytes / kMaxPageMessage);
+    CHECK(got.front()[0] == static_cast<char>('a' + 3)); // the first three went
+    CHECK(got.back()[0] == static_cast<char>('a' + n - 1));
+    CHECK(r.host.tab(id)->message_bytes == 0);
+    r.helper.reply(PageMessage{id, "small"});
+    r.host.poll(0);
+    CHECK(r.host.take_message(id) == "small");
+    CHECK(r.host.tab(id)->message_bytes == 0);
+}
+
+TEST_CASE("web service: each script and plugin has a cookie folder of its own; the player's stays the server's") {
+    using app::WebService;
+    const std::string base = "/data/web/myserver";
+    CHECK(WebService::owner_profile(base, "") == base);
+    const std::string s1 = WebService::owner_profile(base, "script:Foo");
+    CHECK(s1.rfind(base + "/hailstone-addons/script_foo-", 0) == 0);
+    CHECK(WebService::owner_profile(base, "script:foo") == s1); // names match without case
+    CHECK(WebService::owner_profile(base + "/", "script:foo") == s1);
+    const std::string p1 = WebService::owner_profile(base, "plugin:foo");
+    const std::string odd1 = WebService::owner_profile(base, "script:a/b");
+    const std::string odd2 = WebService::owner_profile(base, "script:a_b");
+    CHECK(p1 != s1);
+    CHECK(odd1 != odd2); // the same folder-safe name, told apart by the hash
+    CHECK(odd1.find("/b") == std::string::npos);
+    CHECK(WebService::owner_profile(base, "script:../../x").find("..") == std::string::npos);
+    CHECK(WebService::owner_profile("", "script:foo").empty());
+
+    // The tabs WebService opens carry them to the helper.
+    Rig r;
+    WebService web({[&] { return &r.host; }, [] { return nullptr; }, [&] { return base; },
+                    [] { return std::vector<std::string>{}; }, [] {}});
+    CHECK(web.open("", plugin::kCapAll, "https://example.org/", 64, 64) != 0);
+    CHECK(web.open("script:Foo", plugin::kCapAll, "https://example.org/", 64, 64) != 0);
+    CHECK(web.open("plugin:foo", plugin::kCapAll, "https://example.org/", 64, 64) != 0);
+    auto opens = r.helper.sent_of<Open>();
+    REQUIRE(opens.size() == 3);
+    CHECK(opens[0].profile == base);
+    CHECK(opens[1].profile == s1);
+    CHECK(opens[2].profile == p1);
+}
+
+TEST_CASE("browser host: a script's tab that lands off its sites is closed") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script({"example.org"}));
+    r.helper.reply(Ready{});
+    r.helper.reply(Address{id, "https://www.example.org/ok"});
+    r.host.poll(0);
+    CHECK_FALSE(r.host.tab(id)->closed);
+    r.helper.reply(Address{id, "https://evil.com/"});
+    r.host.poll(0);
+    REQUIRE(r.host.tab(id));
+    CHECK(r.host.tab(id)->closed);
+    CHECK(r.helper.sent_of<Close>().size() == 1);
+    r.host.post(id, "ignored"); // a closed tab takes nothing
+    CHECK(r.helper.sent_of<Post>().empty());
+    auto t = r.host.take_closed(id);
+    REQUIRE(t);
+    CHECK(t->close_reason == CloseReason::Refused);
+    CHECK(r.host.tab(id) == nullptr);
+}
+
+TEST_CASE("browser host: a dead helper is restarted after a second with the tabs; after four deaths a minute, not") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", {});
+    r.helper.reply(Ready{});
+    r.helper.reply(Address{id, "https://example.org/later"});
+    r.host.poll(0);
+    r.helper.alive = false;
+    r.host.poll(100);
+    CHECK(r.helper.starts == 1);
+    r.host.poll(100 + BrowserHost::kRestartDelayMs - 1);
+    CHECK(r.helper.starts == 1);
+    r.helper.sent.clear();
+    r.host.poll(100 + BrowserHost::kRestartDelayMs);
+    CHECK(r.helper.starts == 2);
+    REQUIRE(r.helper.sent_of<Open>().size() == 1);
+    CHECK(r.helper.sent_of<Open>()[0].url == "https://example.org/later"); // where it was
+    CHECK(r.helper.sent_of<Open>()[0].tab == id);
+
+    std::uint64_t now = 2000;
+    for (int death = 2; death <= BrowserHost::kMaxRestarts + 1; ++death) {
+        r.helper.alive = false;
+        r.host.poll(now);
+        now += BrowserHost::kRestartDelayMs;
+        r.host.poll(now);
+    }
+    CHECK_FALSE(r.host.available());
+    CHECK(r.host.tab(id)->closed);
+    CHECK(r.host.tab(id)->close_reason == CloseReason::Crashed);
+    CHECK(r.host.open("https://example.org/", {}) == 0);
+}
+
+TEST_CASE("browser host: deaths a minute apart are restarted every time") {
+    Rig r;
+    r.host.open("https://example.org/", {});
+    std::uint64_t now = 0;
+    for (int i = 0; i < 6; ++i) {
+        r.helper.alive = false;
+        r.host.poll(now);
+        now += BrowserHost::kRestartWindowMs + BrowserHost::kRestartDelayMs;
+        r.host.poll(now);
+    }
+    CHECK(r.host.available());
+    CHECK(r.helper.starts == 7);
+}
+
+TEST_CASE("browser host: garbage from the helper counts as a death; another version gives up") {
+    Rig r;
+    r.host.open("https://example.org/", {});
+    for (std::byte b : {std::byte{2}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0xee}, std::byte{0}})
+        r.helper.to_client.push_back(b);
+    r.host.poll(0);
+    CHECK_FALSE(r.helper.alive);
+    r.host.poll(BrowserHost::kRestartDelayMs);
+    CHECK(r.helper.starts == 2);
+
+    Rig v;
+    auto id = v.host.open("https://example.org/", {});
+    v.helper.reply(Ready{kProtocolVersion + 1});
+    v.host.poll(0);
+    CHECK_FALSE(v.host.available());
+    CHECK(v.host.tab(id)->closed);
+    CHECK(v.host.last_error().find("version") != std::string::npos);
+}
+
+#ifdef NMSC_MOCK_WEB_HELPER
+namespace {
+
+// Polls until `done` or 10 s (a real process answers through real pipes).
+template <typename F> bool pump(BrowserHost& host, std::uint64_t now, F&& done) {
+    auto until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < until) {
+        host.poll(now);
+        if (done()) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("browser host: the stand-in helper over real pipes: a tab, a click, messages, a crash and a restart") {
+    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER}); });
+    TabOptions o = script();
+    o.width = 64;
+    o.height = 32;
+    auto id = host.open("https://example.org/", o);
+    REQUIRE(id != 0);
+    REQUIRE(pump(host, 0, [&] { return host.tab(id)->view.width == 64; }));
+    const Tab* t = host.tab(id);
+    CHECK(t->title == "Mock https://example.org/");
+    CHECK(t->view.bgra[(5 * 64 + 7) * 4 + 0] == std::byte{7}); // blue = x
+    CHECK(t->view.bgra[(5 * 64 + 7) * 4 + 1] == std::byte{5}); // green = y
+
+    host.mouse(Mouse{id, MouseKind::Down, MouseButton::Left, 1, 7, 5, 0});
+    REQUIRE(pump(host, 0, [&] { return t->view.bgra[(5 * 64 + 7) * 4] == std::byte{0xff}; }));
+
+    host.post(id, "ping");
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got == std::vector<std::string>{"echo:ping"});
+
+    host.resize(id, 16, 16);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 16; }));
+
+    const std::uint32_t before = t->view.serial;
+    host.eval(id, "crash");
+    REQUIRE(pump(host, 0, [&] { return !host.last_error().empty(); }));
+    CHECK(host.last_error().find("exited") != std::string::npos);
+    // The restart (a second later by the host's clock) opens the tab again, at its size now.
+    REQUIRE(pump(host, BrowserHost::kRestartDelayMs, [&] { return t->view.serial > before; }));
+    CHECK(t->view.width == 16);
+    host.post(id, "again");
+    got.clear();
+    REQUIRE(pump(host, BrowserHost::kRestartDelayMs, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got == std::vector<std::string>{"echo:again"});
+
+    auto off = host.open("https://example.org/?redirect=https://evil.com/", script({"example.org"}));
+    REQUIRE(off != 0);
+    REQUIRE(pump(host, BrowserHost::kRestartDelayMs, [&] { return host.tab(off)->closed; }));
+    CHECK(host.tab(off)->close_reason == CloseReason::Refused);
+    host.shutdown();
+}
+
+TEST_CASE("helper process: Shutdown and the end of its input let it quit by itself") {
+    platform::HelperProcess p;
+    std::string error;
+    REQUIRE(p.start({NMSC_MOCK_WEB_HELPER}, error));
+    p.write(encode_message(Shutdown{}));
+    p.stop(false);
+    CHECK(p.wait_exit(10'000));
+    CHECK(p.exit_code() == 0);
+}
+
+TEST_CASE("browser host: a helper of another version is given up on") {
+    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER, "--version", "99"}); });
+    auto id = host.open("https://example.org/", {});
+    REQUIRE(id != 0);
+    REQUIRE(pump(host, 0, [&] { return !host.available(); }));
+    CHECK(host.tab(id)->closed);
+}
+
+TEST_CASE("browser host: a helper that cannot start") {
+    BrowserHost host([] { return process_transport({"/nonexistent/hailstone-web-helper"}); });
+    std::string why;
+    std::uint32_t id = host.open("https://example.org/", {}, &why);
+    // SDL reports a missing program at once on some systems and as an early exit on others.
+    if (id == 0) {
+        CHECK_FALSE(host.available());
+    } else {
+        REQUIRE(pump(host, 0, [&] { return !host.last_error().empty(); }));
+    }
+}
+#endif
+
+#ifdef NMSC_WEB_HELPER
+// The real helper (tools/hailstone-web, CEF). A script's tab on about:blank, coloured by its own script: the whole
+// path (start, a tab, painting, the page's script, the bridge, the rules, shutdown) runs without a network or a
+// server. (A script's tab may not open 127.0.0.1; the player's error page test is the next one.)
+TEST_CASE("browser host: the CEF helper draws a page and passes messages both ways") {
+    test::ScratchDir data("hailstone-web");
+    BrowserHost host([&] { return process_transport({NMSC_WEB_HELPER, "--data=" + data.path().string()}); });
+    TabOptions o = script({"example.net"});
+    o.width = 320;
+    o.height = 200;
+    o.profile = (data.path() / "server").string();
+    auto id = host.open("about:blank", o);
+    REQUIRE(id != 0);
+    const Tab* t = host.tab(id);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 320 && !t->loading; }));
+    host.eval(id, "document.documentElement.style.background = '#c03';"
+                  "document.body.innerHTML = '<p style=\"color:#fff\">a page</p>';");
+    // Painted: something other than a blank image.
+    auto drawn = [&] {
+        for (std::size_t i = 0; i + 4 <= t->view.bgra.size(); i += 4)
+            if (t->view.bgra[i] != std::byte{0xff} || t->view.bgra[i + 1] != std::byte{0xff}) return true;
+        return false;
+    };
+    REQUIRE(pump(host, 0, drawn));
+    CHECK(t->view.height == 200);
+    CHECK_FALSE(t->closed);
+
+    host.eval(id, "hailstone.onmessage = function(m) { hailstone.post('got ' + m); }; hailstone.post('ready');");
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got.front() == "ready");
+    host.post(id, "a \"quoted\" line\nand more");
+    got.clear();
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got.front() == "got a \"quoted\" line\nand more");
+
+    host.resize(id, 160, 100);
+    REQUIRE(pump(host, 0, [&] { return t->view.width == 160; }));
+    // A script's tab is held to its sites by the helper too: the navigation is refused, the tab stays where it is.
+    host.eval(id, "location.href = 'https://example.org/';");
+    bool refused = false;
+    REQUIRE(pump(host, 0, [&] {
+        for (const auto& c : t->console) refused |= c.text.find("refused https://example.org/") != std::string::npos;
+        return refused;
+    }));
+    CHECK_FALSE(t->closed);
+    // Frames inside the page and its requests are held to the sites too, and never reach this computer.
+    host.eval(id, "document.body.innerHTML += '<iframe src=\"https://example.org/frame\"></iframe>';"
+                  "fetch('http://127.0.0.1:9/probe').catch(function() {});"
+                  "var i = new Image(); i.src = 'https://tracker.example.com/p.gif';");
+    auto console_has = [&](const std::string& text) {
+        for (const auto& c : t->console)
+            if (c.text.find(text) != std::string::npos) return true;
+        return false;
+    };
+    REQUIRE(pump(host, 0, [&] {
+        return console_has("refused https://example.org/frame") &&
+               console_has("refused a request to http://127.0.0.1:9/probe") &&
+               console_has("refused a request to https://tracker.example.com/p.gif");
+    }));
+    CHECK_FALSE(t->closed);
+    host.shutdown();
+}
+
+TEST_CASE("browser host: the CEF helper quits by itself at Shutdown, with a tab open (its cookies written)") {
+    test::ScratchDir data("hailstone-web-quit");
+    platform::HelperProcess p;
+    std::string error;
+    REQUIRE(p.start({NMSC_WEB_HELPER, "--data=" + data.path().string()}, error));
+    Open o;
+    o.tab = 1;
+    o.width = 64;
+    o.height = 64;
+    o.profile = (data.path() / "server").string();
+    o.url = "http://127.0.0.1:9/";
+    p.write(encode_message(Hello{}));
+    p.write(encode_message(o));
+    // Until the page has drawn: the browser is up.
+    MessageReader reader;
+    std::vector<std::byte> buf(1 << 16);
+    bool drawn = false;
+    auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (!drawn && std::chrono::steady_clock::now() < until) {
+        p.flush();
+        const std::size_t n = p.read(buf);
+        reader.feed(std::span<const std::byte>(buf).first(n));
+        while (auto m = reader.next()) drawn |= std::holds_alternative<Frame>(*m);
+        if (!n) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    REQUIRE(drawn);
+    p.write(encode_message(Shutdown{}));
+    p.stop(false);
+    CHECK(p.wait_exit(BrowserHost::kShutdownGraceMs * 3));
+    CHECK(p.exit_code() == 0);
+    CHECK(std::filesystem::exists(data.path() / "server")); // the profile's folder, where its cookies go
+}
+#endif

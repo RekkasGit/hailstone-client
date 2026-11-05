@@ -1,0 +1,61 @@
+-- Respawn: replaces the game's RespawnWnd (the server's choice of where to return after death, shown while you hover
+-- over your corpse). The choices as a table (the place and its zone; the server's default marked, a resurrection
+-- offered in red with its own badge), the timer bar (the game's gauge, EQType 28) and Respawn, which the window
+-- enables once its delay has passed. A row click is the window's list click, Respawn its Select button, so the
+-- choice goes to the server as the stock window sends it.
+local hud = dofile("lib/hud.lua")
+local W = dofile("lib/widgets.lua")
+local K = dofile("lib/dialogs_kit.lua")
+local T = hud.T
+local C = T.color
+local WINDOW = "RespawnWnd"
+
+-- A small rounded tag after a row's name.
+local function badge(text, col)
+  ui.SameLine(0, 6)
+  local x, y = ui.GetCursorScreenPos()
+  ui.PushFont(T.font.tiny)
+  local tw, th = ui.CalcTextSize(text)
+  ui.PopFont()
+  local _, lh = ui.CalcTextSize("Ag")
+  local by = y + (lh - th) / 2 - 1
+  ui.DrawRectFilled(x, by, x + tw + 8, by + th + 2, col[1], col[2], col[3], 0.22, 4)
+  T.Text(x + 4, by + 1, text, col, T.font.tiny)
+  ui.Dummy(tw + 8, lh)
+end
+
+local WINDOW_OPTS = {
+  size = function() return 380, 250 end,
+  resizable = { 280, 180 },
+  closable = false, -- the server's window: it closes when we are moved
+  place = function(W_, H, w, h) return W_ / 2 - w / 2, H * 0.30 end,
+}
+local function drawWindow(x, y, w, h, s)
+  local bh = K.ButtonH(s)
+  local ready = W.State(WINDOW, "SelectButton")
+  K.Caption(ready and "Choose where to return" or "You may choose where to return when the timer runs out")
+  W.Gauge(WINDOW, "TimeGauge", { eqtype = 28, color = C.hp, height = 8, s = s })
+  ui.Dummy(0, 2 * s)
+  W.List(WINDOW, "OptionsList", 0, -K.FooterH(s), {
+    hide = { [1] = true },
+    columns = { [2] = { "Destination", 0 }, [3] = { "Zone", 0 } },
+    onRow = function(row, texts)
+      local res = texts[1] == "r"
+      local col = res and C.danger or C.text
+      ui.TextColored(col[1], col[2], col[3], 1, texts[2] or "")
+      if texts[1] == "*" then badge("default", C.accent) elseif res then badge("resurrect", C.danger) end
+      ui.TableNextColumn()
+      ui.TextColored(C.muted[1], C.muted[2], C.muted[3], 1, texts[3] or "")
+      return true
+    end,
+  })
+  W.Button(WINDOW, "SelectButton", "Respawn", {
+    primary = true, width = -1, height = bh,
+    tooltip = ready and "Return at the selected place" or "Available when the timer runs out",
+  })
+end
+
+ui.window("Respawn", function()
+  if not eq.InGame() then return end
+  hud.Dialog(WINDOW, "Respawn", WINDOW_OPTS, drawWindow)
+end)

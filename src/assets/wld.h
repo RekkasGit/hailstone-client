@@ -1,0 +1,389 @@
+#pragma once
+
+// WLD files: the classic (S3D) world, object, light and character format.
+// Layout and sources: docs/formats/wld.md. In short:
+//   header: u32 magic 0x54503d02, u32 version (0x00015500 old, 0x1000c800 new),
+//           u32 fragment count, u32 region count, u32 max object bytes,
+//           u32 string-table size, u32 string count
+//   string table, XOR-encoded with an 8-byte key
+//   fragments: {u32 size, u32 type, size bytes of payload}; the payload starts
+//           with an i32 name reference
+// A reference is a signed 32-bit value: n > 0 is fragment n (1-based), n < 0
+// is the string at offset -n of the decoded table, and 0 is "none".
+//
+// This parser decodes the fragments needed for static zone rendering and
+// keeps every other fragment as an opaque entry so references still line up.
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <variant>
+#include <vector>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include "assets/model.h"
+
+namespace nmsc::assets::wld {
+
+constexpr std::uint32_t kMagic = 0x54503d02;
+constexpr std::uint32_t kVersionOld = 0x00015500;
+constexpr std::uint32_t kVersionNew = 0x1000c800;
+constexpr std::array<std::uint8_t, 8> kStringKey{0x95, 0x3a, 0xc5, 0x2a, 0x95, 0x7a, 0x95, 0x6a};
+
+using Ref = std::int32_t;
+
+// 0x03 BMINFO: texture file names (diffuse first, then optional detail layers).
+struct BitmapName {
+    std::vector<std::string> files;
+};
+
+// 0x04 SIMPLESPRITEDEF: one or more 0x03 frames; animated when it has a delay.
+struct BitmapInfo {
+    std::uint32_t flags = 0;
+    std::uint32_t current_frame = 0;
+    std::uint32_t frame_delay_ms = 0;
+    std::vector<Ref> frames;
+};
+
+// 0x05 SIMPLESPRITE: reference to a 0x04.
+struct BitmapInfoRef {
+    Ref info = 0;
+    std::uint32_t flags = 0;
+};
+
+// 0x30 MATERIALDEFINITION.
+struct MaterialDef {
+    std::uint32_t flags = 0;
+    std::uint32_t render_method = 0;
+    std::uint32_t rgb_pen = 0;
+    float brightness = 0.0f;
+    float scaled_ambient = 0.0f;
+    Ref bitmap = 0; // 0x05, or 0 for no texture
+};
+
+// 0x31 MATERIALPALETTE: a mesh's material slots. Slots are positional.
+struct MaterialList {
+    std::uint32_t flags = 0;
+    std::vector<Ref> materials;
+};
+
+inline constexpr std::uint16_t kPolygonPassable = 0x10; // no collision (CTerrain::AddWldRegionMesh: record bit 0)
+
+struct Polygon {
+    std::uint16_t flags = 0; // kPolygonPassable
+    std::array<std::uint16_t, 3> v{};
+};
+
+// 0x36 DMSPRITEDEF2: a mesh. Positions here are final (centre added).
+struct MeshDef {
+    std::uint32_t flags = 0;
+    Ref material_list = 0;
+    Ref animation = 0;
+    glm::vec3 center{0.0f};
+    float max_distance = 0.0f;
+    glm::vec3 bounds_min{0.0f};
+    glm::vec3 bounds_max{0.0f};
+    std::uint16_t scale_shift = 0;
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec2> uvs;
+    std::vector<glm::vec3> normals;
+    std::vector<std::uint32_t> colors; // as stored: bytes B, G, R, A
+    std::vector<Polygon> polygons;
+    std::vector<std::array<std::uint16_t, 2>> vertex_pieces;  // {vertex count, bone}
+    std::vector<std::array<std::uint16_t, 2>> render_groups;  // {polygon count, material slot}
+};
+
+// 0x14 ACTORDEF: an object definition referring to its sprites (0x2d mesh
+// references, or 0x11 skeleton references for animated objects).
+struct ActorDef {
+    std::uint32_t flags = 0;
+    std::string callback;
+    std::vector<Ref> sprites;
+};
+
+// 0x2D DMSPRITE: reference to a 0x36 mesh.
+struct MeshRef {
+    Ref mesh = 0;
+    std::uint32_t flags = 0;
+};
+
+// 0x15 ACTORINST: a placed actor.
+struct ActorInstance {
+    Ref actor = 0; // in objects.wld a string reference to "<NAME>_ACTORDEF"
+    std::uint32_t flags = 0;
+    Ref sphere = 0;
+    bool has_location = false;
+    glm::vec3 position{0.0f};
+    // Raw angles as stored, in 1/512ths of a full turn, in file order:
+    // around Z, around Y, around X.
+    glm::vec3 rotation_zyx{0.0f};
+    float bounding_radius = 1.0f;
+    float scale = 1.0f;
+    Ref vertex_colors = 0; // 0x33
+};
+
+// 0x32 DMRGBTRACKDEF: per-vertex colours for one placed object.
+struct VertexColors {
+    std::vector<std::uint32_t> colors; // as stored: bytes B, G, R, A
+};
+
+// 0x33 DMRGBTRACK: reference to a 0x32.
+struct VertexColorsRef {
+    Ref colors = 0;
+    std::uint32_t flags = 0;
+};
+
+// 0x1B LIGHTDEFINITION.
+struct LightDef {
+    std::uint32_t flags = 0;
+    std::vector<float> levels;
+    std::vector<glm::vec3> colors;
+};
+
+// 0x1C LIGHT: reference to a 0x1B.
+struct LightRef {
+    Ref light = 0;
+    std::uint32_t flags = 0;
+};
+
+// 0x28 POINTLIGHT: a placed light, referring to a 0x1C.
+struct PointLight {
+    Ref light = 0;
+    std::uint32_t flags = 0;
+    glm::vec3 position{0.0f};
+    float radius = 0.0f;
+};
+
+// One key of a 0x12 track: local rotation, translation and uniform scale.
+struct TrackFrame {
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f}; // as stored (not normalised)
+    glm::vec3 translation{0.0f};
+    float scale = 1.0f;
+};
+
+// 0x12 TRACKDEFINITION: the keys of one skeleton node.
+struct TrackDef {
+    std::uint32_t flags = 0; // 0x8: packed s16 keys
+    std::vector<TrackFrame> frames;
+};
+
+// 0x13 TRACKINSTANCE: reference to a 0x12.
+struct TrackRef {
+    Ref track = 0;
+    std::uint32_t flags = 0;
+    std::uint32_t frame_ms = 0; // when flags & 1
+};
+
+struct SkeletonNode {
+    std::string name;
+    std::uint32_t flags = 0;
+    Ref track = 0;  // 0x13
+    Ref sprite = 0; // usually a 0x2d mesh reference, or 0
+    std::vector<std::int32_t> children; // node indices
+};
+
+// 0x10 HIERARCHICALSPRITEDEF: a skeleton. Meshes either hang off one node
+// (SkeletonNode::sprite) or list per-vertex node runs (MeshDef::vertex_pieces).
+struct Skeleton {
+    std::uint32_t flags = 0;
+    float bounding_radius = 0.0f; // when flags & 2 (the actor's bounding radius, CActorDefinition +0x38)
+    std::vector<SkeletonNode> nodes;
+    std::vector<Ref> meshes; // 0x2d references, when flags & 0x200
+};
+
+// 0x11 HIERARCHICALSPRITE: reference to a 0x10.
+struct SkeletonRef {
+    Ref skeleton = 0;
+    std::uint32_t flags = 0;
+};
+
+// One node of the 0x21 BSP tree. A node with no children is a leaf; its
+// region is a 1-based index into the file's 0x22 fragments (0 = none).
+// Children are 1-based node indices (0 = none). A point p is in front when
+// dot(normal, p) + distance > 0.
+struct BspNode {
+    glm::vec3 normal{0.0f};
+    float distance = 0.0f;
+    std::uint32_t region = 0;
+    std::uint32_t front = 0;
+    std::uint32_t back = 0;
+};
+
+// 0x21 WORLDTREE: the zone's BSP tree (one per zone WLD).
+struct BspTree {
+    std::vector<BspNode> nodes;
+};
+
+// 0x22 REGION: one BSP region. Only its position in the file matters here
+// (BSP leaves and 0x29 lists refer to regions by their order).
+struct BspRegion {
+    std::uint32_t flags = 0;
+};
+
+// 0x29 ZONE: a tag ("WTN_...", "DRNTP...") for a set of regions. The tag is
+// the XOR-encoded payload string when present, else the fragment name.
+struct RegionTag {
+    std::uint32_t flags = 0;
+    std::vector<std::uint32_t> regions; // 0-based region indices
+    std::string tag;
+};
+
+// 0x35 GLOBALAMBIENTLIGHTDEF: the zone's global ambient colour. It has no
+// name reference; the payload is one colour, stored B, G, R, A.
+// CS3DFile::LoadGlobalAmbient @0x1001b6a0 passes it to CSceneGraph vtable
+// +0xd0, which feeds the shaders' SpecialAmbient (notes/eqgraphicsdx9.md).
+struct GlobalAmbient {
+    std::uint32_t color = 0;
+};
+
+// 0x26 BLITSPRITEDEF: a particle cloud's sprite. 12 bytes after the name in
+// every shipped archive: flags (0 throughout), a full 32-bit 0x05 reference and
+// a material word, 0x80000017 throughout, a negative alias into the renderer's
+// material table (OpenEQ docs/WLD_PARTICLE_MATERIALS.md; texture resolver
+// 0x1001d520 handles kind 0x26 by following the 0x05 -> 0x04 -> 0x03 chain).
+struct ParticleSprite {
+    std::uint32_t flags = 0;
+    Ref sprite = 0; // 0x05
+    std::uint32_t material = 0;
+};
+
+// 0x34 PCLOUDDEF: a particle emitter hung on a skeleton node (the skeleton
+// reader's third attachment kind next to 0x2d meshes and 0x11 skeletons).
+// An 80-byte fixed body after the flags-bearing first word, then optional
+// fields by flags: 0x01 two float triples, 0x02 24 skipped bytes, 0x04 the
+// sprite reference. Offsets are body offsets after the name reference; the
+// meanings are the ones the graphics DLL's converter gives them
+// (game::particle_cloud_definition, docs/formats/particles.md).
+struct ParticleCloud {
+    std::uint32_t flags = 0;    // +0x00 optional fields
+    std::uint32_t selector = 0; // +0x04 copied to the emitter definition's +0x13c (3 throughout)
+    std::uint32_t mode = 0;     // +0x08 emission shape, 0..5
+    std::uint32_t bits = 0;     // +0x0c behaviour bits (0x80 radius, 0x100 fade, 0x4000/0x8000 follow, 0x10000 scale)
+    std::uint32_t capacity = 0; // +0x10 particles at most
+    std::array<float, 4> extra{}; // +0x14 gravity, then three floats copied to +0x148..+0x150
+    std::uint32_t duration_ms = 0; // +0x24 0 = indefinite
+    float radius = 0.0f;           // +0x28 shape radius (modes 1, 2, 4, 5)
+    float angle = 0.0f;            // +0x2c spread, 512ths of a turn (mode 3)
+    std::uint32_t lifetime_ms = 0; // +0x30
+    float speed = 0.0f;            // +0x34
+    glm::vec3 direction{0.0f, 0.0f, 1.0f}; // +0x38..+0x40 in the node's frame
+    std::uint32_t interval_ms = 0; // +0x44 between emissions
+    float size = 1.0f;             // +0x48 the quad's full edge
+    std::uint32_t color = 0;       // +0x4c stored B, G, R in the low three bytes; the top byte is not used
+    std::array<glm::vec3, 2> ranges{}; // flag 0x01: box corners (mode 0)
+    // flag 0x04: the 0x26 sprite. The DLL's readers load only the low byte of
+    // this word (movzx at the texture read), which names the right fragment
+    // only for the first definitions of a file; later same-name clouds reuse
+    // the first one's registered definition by name before that read. The
+    // full reference is kept here and resolves to the same sprite.
+    Ref sprite = 0;
+};
+
+using Payload = std::variant<std::monostate, BitmapName, BitmapInfo, BitmapInfoRef, MaterialDef,
+                             MaterialList, MeshDef, ActorDef, MeshRef, ActorInstance, VertexColors,
+                             VertexColorsRef, LightDef, LightRef, PointLight, TrackDef, TrackRef,
+                             Skeleton, SkeletonRef, BspTree, BspRegion, RegionTag, GlobalAmbient,
+                             ParticleSprite, ParticleCloud>;
+
+struct Fragment {
+    std::uint32_t type = 0;
+    std::string name;
+    std::size_t offset = 0; // file offset of the fragment header
+    Payload data;           // monostate when the type is unsupported or failed to parse
+};
+
+class WldFile {
+public:
+    // Throws std::runtime_error when the header or the fragment framing is
+    // malformed. A fragment whose payload does not fit its declared size is
+    // kept as an empty entry and listed in errors().
+    static WldFile parse(std::span<const std::byte> data, std::string label = "<memory>");
+
+    const std::string& label() const { return label_; }
+    bool new_format() const { return new_format_; }
+    const std::vector<Fragment>& fragments() const { return fragments_; }
+
+    // A positive reference; nullptr when out of range or not positive.
+    const Fragment* at(Ref ref) const;
+    // Any reference: fragment index, or a named fragment for a string reference.
+    const Fragment* resolve(Ref ref) const;
+    // The first fragment with this name. Names can repeat (Plane of Knowledge's
+    // object WLD has later duplicates); the first definition is used, as in OpenEQ.
+    const Fragment* find(std::string_view name) const;
+    // String at a negative reference; empty when invalid.
+    std::string string_at(Ref ref) const;
+
+    template <typename T> const T* get(Ref ref) const {
+        const Fragment* f = resolve(ref);
+        return f ? std::get_if<T>(&f->data) : nullptr;
+    }
+
+    struct Error {
+        std::size_t index = 0; // 0-based fragment index
+        std::uint32_t type = 0;
+        std::string what;
+    };
+    const std::vector<Error>& errors() const { return errors_; }
+    // Fragment types this parser does not decode, with counts.
+    const std::map<std::uint32_t, std::size_t>& unknown_types() const { return unknown_; }
+
+private:
+    std::string label_;
+    bool new_format_ = false;
+    std::vector<std::uint8_t> strings_; // decoded string table
+    std::vector<Fragment> fragments_;
+    std::unordered_map<std::string, std::size_t> by_name_;
+    std::vector<Error> errors_;
+    std::map<std::uint32_t, std::size_t> unknown_;
+};
+
+// Drawable conversion (src/assets/wld_zone.cpp).
+
+// Maps a 0x30 render method to a blend mode (table in docs/formats/wld.md).
+BlendMode blend_mode(std::uint32_t render_method);
+
+// Converts a stored B,G,R,A colour to model.h's 0xAABBGGRR.
+std::uint32_t bgra_to_rgba(std::uint32_t stored);
+
+// Builds a drawable mesh from a 0x36 fragment. Polygon runs address the
+// material list by position, so empty or unresolved slots are kept while the
+// runs are resolved; polygons are then grouped into one MeshPart per used
+// slot, in slot order, and Mesh::materials keeps only the used slots.
+Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name);
+
+// Builds a static mesh from a skeleton in its first (rest) pose: each node's
+// frame 0 is composed parent * T * R * S, and each mesh is moved by its node
+// (whole mesh) or by its vertex runs. Returns nullopt when the skeleton is
+// malformed or a mesh cannot be tied to a node.
+std::optional<Mesh> build_skeleton_pose(const WldFile& wld, const Skeleton& skeleton, std::string name);
+
+// Each node's rest-pose matrix in actor space (frame 0, parent * T * R * S),
+// or nullopt for a malformed hierarchy (a bad child index, two parents, a cycle).
+std::optional<std::vector<glm::mat4>> skeleton_rest_pose(const WldFile& wld, const Skeleton& skeleton);
+
+// A skeleton node carrying a 0x34 particle cloud.
+struct ParticleAttachment {
+    const Fragment* cloud = nullptr; // the 0x34
+    glm::mat4 node{1.0f};            // the node's rest-pose matrix in actor space
+};
+// The particle nodes of a skeleton, in node order; empty when it has none or
+// its hierarchy is malformed.
+std::vector<ParticleAttachment> skeleton_particles(const WldFile& wld, const Skeleton& skeleton);
+
+// Object-to-world matrix for a placed actor: T(position) * Rz(z) * Ry(-y) * Rx(x) * S(scale),
+// right-handed rotations about the Z-up axes, angles in 1/512ths of a turn.
+// See docs/formats/wld.md for the evidence behind the signs.
+glm::mat4 placement_transform(const ActorInstance& inst);
+
+// XOR-decodes a string-table or bitmap-name buffer (the key restarts at 0).
+std::vector<std::uint8_t> decode_string_bytes(std::span<const std::byte> in);
+
+} // namespace nmsc::assets::wld
