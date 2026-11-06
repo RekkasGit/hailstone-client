@@ -7,7 +7,9 @@
 // name is not known (docs/unknowns.md); here the higher-numbered one does.
 //
 // Decoding runs on a worker thread: wave() returns the sound when it is ready
-// and otherwise queues it, so the game never waits on a decode.
+// and otherwise queues it, so the game never waits on a decode. The music
+// files (whole MP3s and XMIs, possibly in a snd*.pfs) are read there too, ahead
+// of their first play (set_resident_files).
 
 #include <condition_variable>
 #include <cstddef>
@@ -45,6 +47,11 @@ public:
     // The decoded sound if it is ready; otherwise queues the decode and returns nullptr.
     std::shared_ptr<const Pcm> wave(const std::string& name);
     void preload(const std::vector<std::string>& names);
+    // The files to hold as bytes (the zone's and the global music): each one not held yet is read on the worker,
+    // and one held that is not named is dropped.
+    void set_resident_files(const std::vector<std::string>& names);
+    // A resident file's bytes once the worker has read them, else nullptr (not named, not read yet, or missing).
+    std::shared_ptr<const std::vector<std::byte>> resident_file(const std::string& name) const;
     // Blocks until the queue is empty (tests and tools).
     void wait_idle();
 
@@ -71,6 +78,9 @@ private:
     std::deque<std::string> queue_;
     std::unordered_set<std::string> queued_, failed_;
     std::unordered_map<std::string, std::shared_ptr<const Pcm>> cache_;
+    std::deque<std::string> file_queue_;
+    std::unordered_set<std::string> resident_names_, missing_files_; // lower case
+    std::unordered_map<std::string, std::shared_ptr<const std::vector<std::byte>>> resident_;
     bool busy_ = false;
 
     std::mutex archive_mutex_;

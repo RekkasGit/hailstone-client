@@ -132,9 +132,30 @@ void SoundLibrary::preload(const std::vector<std::string>& names) {
     for (const auto& n : names) wave(n);
 }
 
+void SoundLibrary::set_resident_files(const std::vector<std::string>& names) {
+    std::lock_guard lock(mutex_);
+    std::unordered_set<std::string> keep;
+    for (const auto& n : names)
+        if (!n.empty()) keep.insert(lower_case(n));
+    std::erase_if(resident_, [&](const auto& kv) { return !keep.contains(kv.first); });
+    std::erase_if(file_queue_, [&](const std::string& n) { return !keep.contains(n); });
+    for (const auto& n : keep)
+        if (!resident_.contains(n) && !missing_files_.contains(n) &&
+            std::find(file_queue_.begin(), file_queue_.end(), n) == file_queue_.end())
+            file_queue_.push_back(n);
+    resident_names_ = std::move(keep);
+    cv_.notify_all();
+}
+
+std::shared_ptr<const std::vector<std::byte>> SoundLibrary::resident_file(const std::string& name) const {
+    std::lock_guard lock(mutex_);
+    auto it = resident_.find(lower_case(name));
+    return it == resident_.end() ? nullptr : it->second;
+}
+
 void SoundLibrary::wait_idle() {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [&] { return stop_ || (index_ready_ && queue_.empty() && !busy_); });
+    cv_.wait(lock, [&] { return stop_ || (index_ready_ && queue_.empty() && file_queue_.empty() && !busy_); });
 }
 
 void SoundLibrary::worker() {
@@ -142,15 +163,27 @@ void SoundLibrary::worker() {
     build_index();
     for (;;) {
         std::string key;
+        bool file = false;
         {
             std::unique_lock lock(mutex_);
             busy_ = false;
             cv_.notify_all();
-            cv_.wait(lock, [&] { return stop_ || !queue_.empty(); });
+            cv_.wait(lock, [&] { return stop_ || !queue_.empty() || !file_queue_.empty(); });
             if (stop_) return;
-            key = std::move(queue_.front());
-            queue_.pop_front();
+            // The sounds first: a wave is wanted now, a music file ahead of time.
+            file = queue_.empty();
+            std::deque<std::string>& from = file ? file_queue_ : queue_;
+            key = std::move(from.front());
+            from.pop_front();
             busy_ = true;
+        }
+        if (file) {
+            std::optional<std::vector<std::byte>> bytes = read(key);
+            std::lock_guard lock(mutex_);
+            if (!resident_names_.contains(key)) continue; // dropped meanwhile (set_resident_files)
+            if (bytes) resident_[key] = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+            else missing_files_.insert(key);
+            continue;
         }
         std::shared_ptr<const Pcm> pcm;
         if (auto bytes = read(key)) {

@@ -114,8 +114,12 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
         e.fade_in_ms = c.fade_in_ms;
         e.crossfade_ms = c.fade_out_replaced_ms;
         e.fade_out_ms = c.fade_out_stopped_ms;
+        if (!e.file.empty() && std::find(global_music_files_.begin(), global_music_files_.end(), e.file) ==
+                                   global_music_files_.end())
+            global_music_files_.push_back(e.file);
         music_.set(std::move(e));
     }
+    library_->set_resident_files(global_music_files_);
     // LoadGlobalEmitters @0x4a9df0: the rain (+0xfd8, wave 159) and wind (+0xfdc, wave 158) emitters, created
     // disabled: SoundEmitter::Init's defaults (gain 1, echo 1, any environment and time, not user-disableable) with
     // delays, loop count, range and distances 0 (always in range, looping, 2D), fades 2000 / 3000 and gain 0.5.
@@ -269,6 +273,10 @@ void AudioSystem::set_zone(const std::string& short_name) {
         if (!e.wave.empty()) preload.push_back(e.wave);
     for (const auto& [id, name] : waves_.zone) preload.push_back(name);
     library_->preload(preload);
+    std::vector<std::string> music_files = global_music_files_;
+    for (const auto& m : set.music)
+        if (!m.file.empty()) music_files.push_back(m.file);
+    library_->set_resident_files(music_files);
     log::info("audio: {}: {} emitters, {} music entries", short_name, set.emitters.size(), set.music.size());
     zone_ = ZoneEmitters(std::move(set));
     zone_.set_music_manager(&music_, *this);
@@ -341,14 +349,21 @@ void AudioSystem::release(std::uint32_t voice, std::int32_t fade_ms) { mixer_->s
 bool AudioSystem::alive(std::uint32_t voice) { return mixer_->alive(voice); }
 
 std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
+    // The zone's and the global music are read ahead on the library's worker (set_resident_files); one asked for
+    // before that read is done is read here, as it always was.
+    auto bytes_of = [&]() -> std::shared_ptr<const std::vector<std::byte>> {
+        if (auto resident = library_->resident_file(entry.file)) return resident;
+        if (auto bytes = library_->read(entry.file)) return std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+        return nullptr;
+    };
     std::unique_ptr<Source> src;
     if (ends_with_nocase(entry.file, ".mp3")) {
-        if (auto bytes = library_->read(entry.file)) src = make_mp3_source(std::move(*bytes), entry.loops);
+        if (auto bytes = bytes_of()) src = make_mp3_source(std::move(bytes), entry.loops);
     } else if (ends_with_nocase(entry.file, ".xmi")) {
         auto it = xmi_.find(entry.file);
         if (it == xmi_.end()) {
             it = xmi_.emplace(entry.file, std::vector<assets::XmiSequence>{}).first;
-            if (auto bytes = library_->read(entry.file)) {
+            if (auto bytes = bytes_of()) {
                 try {
                     it->second = assets::parse_xmi(*bytes);
                 } catch (const std::exception& e) {

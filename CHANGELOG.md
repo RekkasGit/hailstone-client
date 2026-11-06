@@ -6,6 +6,7 @@
 - Classic zones whose object archive repeats the zone's textures load a little faster: each shared texture is compared once, not once per object
 - Uncommon GPUs and drivers: doors and ground objects are drawn where they are on a driver whose memory needs flushing, and a GPU without a plain 32-bit depth format uses its depth-and-stencil one correctly
 - A long stay in a busy zone (the Bazaar, the Plane of Knowledge) no longer keeps every armour look ever seen in memory: a look nobody has worn for five minutes is freed, and dressed again if it comes back
+- Music no longer makes the game hitch: the zone's and the global music (combat, death) are read ahead when you enter a zone, and the game no longer waits for the music to decode
 
 ## 0.5.0-beta (2026-11-05)
 

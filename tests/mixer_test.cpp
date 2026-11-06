@@ -4,6 +4,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -15,6 +17,8 @@
 #include "audio/sound_library.h"
 #include "core/config.h"
 #include "game_files.h"
+#include "pfs_fixtures.h"
+#include "scratch_dir.h"
 
 using namespace nmsc;
 using namespace nmsc::audio;
@@ -294,6 +298,37 @@ TEST_CASE("Mixer: voice limit and resampling") {
     CHECK(m.alive(id));
     m.render(out.data(), 2);
     CHECK_FALSE(m.alive(id));
+}
+
+TEST_CASE("SoundLibrary: music files are read ahead on the worker, loose or in a snd*.pfs, and dropped when unnamed") {
+    test::ScratchDir dir("sound_resident");
+    auto bytes = [](const char* text) {
+        std::vector<std::byte> b;
+        for (const char* c = text; *c; ++c) b.push_back(static_cast<std::byte>(*c));
+        return b;
+    };
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "loose mp3 bytes";
+    auto pfs = test::pfs_fixtures::make_pfs({{"zone.xmi", bytes("archived xmi bytes")}});
+    std::ofstream(dir.path() / "snd3.pfs", std::ios::binary)
+        .write(reinterpret_cast<const char*>(pfs.data()), static_cast<std::streamsize>(pfs.size()));
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    library.set_resident_files({"theme.mp3", "ZONE.XMI", "missing.mp3"});
+    library.wait_idle();
+    auto theme = library.resident_file("THEME.mp3");
+    REQUIRE(theme);
+    CHECK(*theme == bytes("loose mp3 bytes"));
+    auto zone = library.resident_file("zone.xmi");
+    REQUIRE(zone);
+    CHECK(*zone == bytes("archived xmi bytes"));
+    CHECK_FALSE(library.resident_file("missing.mp3"));
+    CHECK_FALSE(library.resident_file("other.mp3"));
+    // The next zone's list: what it does not name goes, what it keeps is not read again.
+    library.set_resident_files({"theme.mp3"});
+    library.wait_idle();
+    CHECK(library.resident_file("theme.mp3") == theme);
+    CHECK_FALSE(library.resident_file("zone.xmi"));
 }
 
 TEST_CASE("Audio system without a device: zone emitters and sounds from the game") {

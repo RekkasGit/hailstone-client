@@ -36,5 +36,6 @@ public:
 
 // An MP3 streamed from its file bytes (decoded as it plays), `loops` times (0 = forever).
 std::unique_ptr<Source> make_mp3_source(std::vector<std::byte> file, std::int32_t loops);
+std::unique_ptr<Source> make_mp3_source(std::shared_ptr<const std::vector<std::byte>> file, std::int32_t loops);
 
 } // namespace nmsc::audio
