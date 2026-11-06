@@ -205,7 +205,7 @@ across the view every 2.5 s (`--lighting modern`).
 
 The classic client leaves its loading screen only when everything it shows is built. Here the zone, its objects and doors, the sky and the flora are built before the zone-in ends (`load_zone`, on the
 main thread while the session's own thread keeps acknowledging), but some things are only built as the world is
-first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then), the
+first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then; a look no spawn has worn for five minutes is freed, mesh and GPU buffers but not its shared textures, so a hub's comings and goings do not keep every look until the zone changes: `render/look_eviction.h`), the
 light shadow cubes one a frame, and the UI pack's in-game windows and the data the server sends with the zone-in
 (buffs, stats, chat). Leaving the loading screen at the zone-in showed all of them arriving over the first second or
 three.

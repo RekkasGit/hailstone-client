@@ -269,6 +269,8 @@ private:
         Buffer indices;
         std::vector<Part> parts;
         bool used = false; // drawn since the renderer was made (release_kept keeps only these)
+        std::uint64_t last_frame = 0; // VkContext::frames_begun() when last drawn or put up
+        std::uint32_t last_ms = 0;    // now_ms_ then
     };
     // A texture's slot (0: none, drawn white), with the names reading it looked up in the library
     // (assets::CharacterLookups): a zone archive defining one of them may give another image.
@@ -362,6 +364,10 @@ private:
         std::vector<std::pair<game::Appearance, std::shared_ptr<const assets::CharacterMesh>>> looks;
     };
     std::unordered_map<const assets::CharacterModel*, Looks> looks_;
+    // Frees the looks no spawn wears that have not been drawn for kLookIdleMs (render/look_eviction.h): their meshes
+    // and buffers, not the textures (shared slots). Swept every kLookSweepMs, from prepare_spawns.
+    void evict_idle_looks();
+    std::uint32_t last_look_sweep_ms_ = 0;
     const std::shared_ptr<const assets::CharacterMesh>* applied_look(const assets::CharacterModel& model,
                                                                      const game::Appearance& a) const;
     // Stopped (stop_dresser) first thing in the destructor and release_kept. Its jobs hold their own references.
