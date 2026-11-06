@@ -17,6 +17,7 @@
 #include <deque>
 #include <filesystem>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <unordered_map>
 #include <memory>
@@ -2654,6 +2655,7 @@ private:
     void log_command(const std::string& args);
     void open_chat_log(const std::string& name);
     void write_chat_log(const std::string& text);
+    void close_chat_log();
     void netstats_command();
     void track_toggle_command(game::ClientOption id, const std::string& args);
     void tracking_from_options();
@@ -2661,6 +2663,10 @@ private:
     std::function<bool(std::string_view, const std::string&)> client_commands_;
     std::string safelock_;
     std::filesystem::path chat_log_path_;
+    // The open log and the path it was opened for: one open per file, not per line (a raid's hundreds of lines a
+    // second). Reopened when /log names another file; closed when /log goes off.
+    std::unique_ptr<std::ofstream> chat_log_;
+    std::filesystem::path chat_log_open_path_;
     bool seconds_log_ = false;
     float distance_to(std::uint32_t spawn_id) const;
     bool is_ignored(const std::string& name) const;

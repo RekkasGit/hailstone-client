@@ -1,6 +1,9 @@
 // The client option commands' rules (game/option_commands.h; rof2decomp re/src/game/commands).
 #include <doctest/doctest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #include "core/ini_file.h"
@@ -335,4 +338,47 @@ TEST_CASE("local time: platform::local_time breaks a time down; ctime_text and t
     const std::string task = nmsc::game::task_ctime_text(static_cast<std::uint32_t>(t));
     CHECK(task.starts_with("Sun Oct 04 "));
     CHECK(task.ends_with(" 2026"));
+}
+
+TEST_CASE("option commands: the chat log keeps its file open, each line on disk at once, another name another file") {
+    // OutputTextToLog: one open per log, not per line (a raid's hundreds of lines a second); a log parser reading
+    // the file still sees each line as it is written.
+    mq_test::World w("nmsc_chat_log_test");
+    using A = net::GameConnectionTestAccess;
+    net::GameConnection& c = *w.conn;
+    auto read = [](const std::filesystem::path& p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+    A::ticket(c).server_name = "Test Server"; // the character's folder needs a server
+    A::client_options(c).set(ClientOption::Log, 1);
+    A::open_chat_log(c, "raid");
+    REQUIRE(c.chat_logging());
+    const std::filesystem::path raid = c.chat_log_path();
+    A::chat(c, "first line");
+    CHECK(read(raid).ends_with("] first line\n"));
+    A::chat(c, "second line");
+    std::string text = read(raid);
+    CHECK(text.find("] first line\n") != std::string::npos);
+    CHECK(text.ends_with("] second line\n"));
+
+    A::open_chat_log(c, "other");
+    const std::filesystem::path other = c.chat_log_path();
+    REQUIRE(other != raid);
+    A::chat(c, "third line");
+    CHECK(read(other).ends_with("] third line\n"));
+    CHECK(read(raid).find("third") == std::string::npos);
+
+    // Off: nothing more is written, and the file is closed (it can be moved or deleted); on again it is opened anew.
+    A::log_command(c, "off"); // (Log is on: "off", or a toggle where the words are not known, turns it off)
+    REQUIRE_FALSE(c.chat_logging());
+    A::chat(c, "not logged");
+    CHECK(read(other).find("not logged") == std::string::npos);
+    std::error_code ec;
+    std::filesystem::remove(other, ec);
+    CHECK_FALSE(ec);
+    A::client_options(c).set(ClientOption::Log, 1);
+    A::open_chat_log(c, "other");
+    A::chat(c, "fourth line");
+    CHECK(read(other).ends_with("] fourth line\n"));
 }

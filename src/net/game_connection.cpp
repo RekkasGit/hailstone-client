@@ -5,6 +5,7 @@
 #include "net/settings_packets.h"
 
 #include <algorithm>
+#include <fstream>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>

@@ -306,7 +306,7 @@ formats:
 | `GuildNotes.txt` | the guild window's personal notes ("%08X %s %s" lines) |
 | `chat.ini` | chat filters and user colours |
 | `options.ini` | the game options (Options window, /lootnodrop, /trackplayers, /log ...) |
-| `<name>.txt` | the chat log (/log; `eqlog` unless named) |
+| `<name>.txt` | the chat log (/log; `eqlog` unless named). Kept open while logging, each line written through at once; `/log off` closes it |
 
 The asset folder's `defaults.ini`, `eqclient.ini` and `UI_<name>_<server>.ini` are read as the defaults under these
 files and never written; so are its `userdata/AddressBook.txt` and `userdata/IgnoreList.txt`, the books a character
