@@ -1133,6 +1133,7 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     auto s = std::make_unique<Script>();
     Script& sc = *s;
     sc.host = &m;
+    sc.runaway_ms = m.runaway_ms();
     sc.name = key;
     sc.entry = *entry;
     sc.root = entry->parent_path();
@@ -1684,6 +1685,7 @@ Script* ScriptHost::Impl::button(const ButtonPress& p, std::string& why) {
     auto sp = std::make_unique<Script>();
     Script& sc = *sp;
     sc.host = this;
+    sc.runaway_ms = runaway_ms();
     sc.social = p.social;
     sc.name = button_name(p.name);
     sc.hash = hash;
@@ -1814,7 +1816,7 @@ bool ScriptHost::press_button(const ButtonPress& p, std::string* why) {
         }
     }
     s->commands_left = -1;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     --s->busy;
     m.reap();
     return ok;
@@ -1855,7 +1857,7 @@ ButtonDryRun ScriptHost::dry_run_button(const ButtonPress& p) {
     --s->busy;
     s->dry = nullptr;
     s->commands_left = -1;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     s->caps = caps;
     out.ok = out.error.empty();
     m.reap();
@@ -1898,7 +1900,7 @@ const ButtonFace& ScriptHost::button_face(int social, const std::string& name, c
     }
     --s->busy;
     s->face_eval = false;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     s->caps = caps;
     s->face = std::move(f);
     return s->face;

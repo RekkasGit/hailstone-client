@@ -55,6 +55,7 @@ struct ScriptHost::Impl {
     std::vector<std::unique_ptr<Script>> scripts;
     Clock::time_point start = Clock::now();
 
+    std::int64_t runaway_ms() const { return env.runaway_ms > 0 ? env.runaway_ms : kRunawayMs; }
     std::int64_t now() const {
         return env.now_ms ? env.now_ms()
                           : std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();

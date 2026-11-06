@@ -35,7 +35,8 @@ struct Host {
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<mq::ScriptHost> scripts;
 
-    explicit Host(std::uint32_t unlisted_caps = plugin::kCapAll, plugin::WebAccess* web = nullptr) {
+    explicit Host(std::uint32_t unlisted_caps = plugin::kCapAll, plugin::WebAccess* web = nullptr,
+                  std::int64_t runaway_ms = 0) {
         fs::create_directories(lua_dir);
         mq::register_game_tlos(reg);
         ctx.registry = &reg;
@@ -60,6 +61,7 @@ struct Host {
         se.config_dir = config_dir;
         se.now_ms = [this] { return clock; };
         se.web = web;
+        se.runaway_ms = runaway_ms;
         scripts = std::make_unique<mq::ScriptHost>(se);
     }
     ~Host() {
@@ -1070,7 +1072,8 @@ mq.delay(100000)
 
 TEST_CASE("MQ Lua: a window that never returns is stopped, also after a hook ran on the script's state") {
     ImGuiFrame frame;
-    Host h;
+    // A 200 ms limit for the test (kRunawayMs, 5 s, in the game): the hook's own 50 ms must not be left in place.
+    Host h(plugin::kCapAll, nullptr, 200);
     h.write("spinwin.lua", R"(
 local mq = require('mq')
 hailstone.on_packet('zone', 'in', 0x7e57, function() return false end)
@@ -1081,9 +1084,9 @@ mq.delay(100000)
     h.pulses(1);
     net::AppPacket in(0x7e57);
     CHECK(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in) == plugin::Flow::Continue);
-    h.scripts->imgui(); // kRunawayMs (5 s), then the script ends
+    h.scripts->imgui(); // the runaway limit, then the script ends
     CHECK(printed_part(h, "window Spin: "));
-    CHECK(printed_part(h, "without a chance to pause"));
+    CHECK(printed_part(h, "ran longer than 200 ms"));
     CHECK_FALSE(h.scripts->running("spinwin"));
 }
 

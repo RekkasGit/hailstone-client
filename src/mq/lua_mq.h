@@ -68,6 +68,9 @@ struct ScriptEnv {
     std::function<std::vector<std::pair<game::AutoskillRule, std::string>>()> autoskill_list;
     // Uses a skill, discipline or AA as its hot button does (hailstone.use_ability); null: none.
     std::function<bool(AbilityKind, std::string_view name)> use_ability;
+    // How long a script may run without a chance to yield before it is stopped, in real time; 0: kRunawayMs (5 s).
+    // Only tests set it, so a runaway is stopped in milliseconds.
+    std::int64_t runaway_ms = 0;
 };
 
 // A Lua social's hot button pressed (game/lua_social.h). The social's Lua sees `button` = {social, bar, button,
