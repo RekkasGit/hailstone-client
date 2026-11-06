@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 
 #include <imgui.h>
@@ -626,4 +627,64 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
     }
     nmsc::ui::texture_id_removed(&live);
     ImGui::DestroyContext(ctx);
+}
+estroyContext(ctx);
+}
+
+namespace {
+// Two frames of a pack with one script; the global `done` after them.
+bool run_pack_frames(const std::string& name, const std::string& script, int frames = 2,
+                     const std::function<void(int)>& before_frame = {}) {
+    nmsc::test::ScratchDir scratch(name);
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << script;
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    bool done = false;
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < frames; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            if (before_frame) before_frame(i);
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "done");
+        done = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+    return done;
+}
+} // namespace
+
+TEST_CASE("Lua UI: ImGui's internal window flags are not a script's, and unbalanced ends are refused") {
+    CHECK(run_pack_frames("lua_ui_api_flags_test", "ui.window('F', function()\n"
+                                                   "  ui.Begin('F', nil, 1 << 26 | 1 << 27 | 1 << 28)\n"
+                                                   "  if ui.BeginChild('c', 50, 50, false, 1 << 26 | 1 << 24) then ui.Text('x') end\n"
+                                                   "  ui.EndChild()\n"
+                                                   "  ui.EndMenu() ui.EndPopup() ui.EndCombo() ui.EndTooltip()\n"
+                                                   "  ui.Text('still F')\n"
+                                                   "  ui.End()\n"
+                                                   "  done = true\n"
+                                                   "end)\n"));
+}
+
+TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing undefined") {
+    CHECK(run_pack_frames("lua_ui_api_style_nan_test",
+                          "ui.window('S', function()\n"
+                          "  local nc = ui.PushStyleColors({ 0/0, 1, 1, 1, 1, 1e300, 1, 1, 1, 1, -math.huge, 1, 1, 1, 1,\n"
+                          "                                  ui.Col.Text, 1e300, 0/0, 1, 1 })\n"
+                          "  local nv = ui.PushStyleVars({ 0/0, 1, false, math.huge, 1, 1, ui.StyleVar.Alpha, 1e300, false })\n"
+                          "  ui.PopStyleVar(nv) ui.PopStyleColor(nc)\n"
+                          "  done = nc == 1 and nv == 1\n"
+                          "end)\n"));
 }

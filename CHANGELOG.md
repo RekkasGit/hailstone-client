@@ -17,6 +17,7 @@
 - Lua scripts: a bind that runs its own command again stops the script with an error after 16 levels, instead of crashing the game; a script that fills its 256 MB, an error in a `hailstone.hooks` table's `__index`, or a Lua social that gives `button` a metatable stops the script (or reports the error) instead of closing the game
 - For script authors: `hailstone.hooks{after_combat_ability = function(id, used) ... end}` is called with both values; it used to end the script with "attempt to call a number value"
 - For script authors: a `coroutine.wrap` generator or a coroutine of the script's own is no longer interrupted by the frame's 3 ms pause (it used to return early with no values); long work inside one is now limited only by the 5 s stop
+- For script and UI pack authors: `ui.Begin` and `ui.BeginChild` ignore ImGui's internal window flags (Popup, Tooltip, Modal, ChildMenu, ChildWindow), and a stray `ui.EndMenu`, `ui.EndPopup`, `ui.EndCombo` or `ui.EndTooltip` outside its menu, popup, combo or tooltip does nothing, where they could crash the game
 - For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
 - For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
 - For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced

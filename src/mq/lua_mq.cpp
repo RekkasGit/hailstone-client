@@ -21,6 +21,7 @@
 
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/saturate.h"
 #include "core/sha256.h"
 #include "core/windows_names.h"
 #include "game/slash_commands.h"
@@ -1710,12 +1711,12 @@ ButtonFace read_face(lua_State* L) {
             double v = lua_tonumber(L, -1);
             lua_pop(L, 1);
             if (v <= 1.0) v *= 255.0;
-            rgb = rgb << 8 | static_cast<std::uint32_t>(std::clamp(v, 0.0, 255.0));
+            rgb = rgb << 8 | saturate_cast<std::uint32_t>(std::clamp(v, 0.0, 255.0)); // (NaN: 0)
         }
         f.color = rgb;
     }
     lua_pop(L, 1);
-    if (raw_field(L, "cooldown") == LUA_TNUMBER) f.cooldown = std::clamp(static_cast<float>(lua_tonumber(L, -1)), 0.0f, 1.0f);
+    if (raw_field(L, "cooldown") == LUA_TNUMBER) f.cooldown = static_cast<float>(std::clamp(lua_tonumber(L, -1), 0.0, 1.0));
     lua_pop(L, 1);
     if (raw_field(L, "enabled") != LUA_TNIL) f.enabled = lua_toboolean(L, -1) != 0;
     lua_pop(L, 1);
