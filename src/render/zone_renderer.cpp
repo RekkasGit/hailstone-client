@@ -193,16 +193,7 @@ std::string effect_key(const assets::EffectParams& e) {
     return k;
 }
 
-std::vector<std::uint32_t> read_spirv(const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    if (size == 0 || size % 4 != 0) throw std::runtime_error("bad SPIR-V size in " + path.string());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    return code;
-}
+std::vector<std::uint32_t> read_spirv(const std::filesystem::path& path) { return read_spirv_file(path); }
 
 VkShaderModule create_shader(VkDevice device, const std::filesystem::path& path) {
     auto code = read_spirv(path);

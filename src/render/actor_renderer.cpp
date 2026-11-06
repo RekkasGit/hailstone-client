@@ -61,19 +61,7 @@ struct PushConstants {
 static_assert(sizeof(PushConstants) <= 128);
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    if (size == 0 || size % 4 != 0) throw std::runtime_error("bad SPIR-V size in " + path.string());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * 4;
-    info.pCode = code.data();
-    VkShaderModule module;
-    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
-    return module;
+    return create_shader_module(device, path);
 }
 
 // Cross-fades: CBoneGroup::BlendToAnimation @0x1003fcc0 fades the new track
