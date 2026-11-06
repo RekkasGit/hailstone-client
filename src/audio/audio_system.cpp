@@ -349,13 +349,10 @@ void AudioSystem::release(std::uint32_t voice, std::int32_t fade_ms) { mixer_->s
 bool AudioSystem::alive(std::uint32_t voice) { return mixer_->alive(voice); }
 
 std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
-    // The zone's and the global music are read ahead on the library's worker (set_resident_files); one asked for
-    // before that read is done is read here, as it always was.
-    auto bytes_of = [&]() -> std::shared_ptr<const std::vector<std::byte>> {
-        if (auto resident = library_->resident_file(entry.file)) return resident;
-        if (auto bytes = library_->read(entry.file)) return std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
-        return nullptr;
-    };
+    // The zone's and the global music are read ahead on the library's worker (set_resident_files), ahead of the
+    // zone's wave preloads; one asked for before that read is done is read here (or its read on the worker waited
+    // for), as it always was.
+    auto bytes_of = [&] { return library_->file(entry.file); };
     std::unique_ptr<Source> src;
     if (ends_with_nocase(entry.file, ".mp3")) {
         if (auto bytes = bytes_of()) src = make_mp3_source(std::move(bytes), entry.loops);

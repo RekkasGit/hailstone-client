@@ -331,6 +331,41 @@ TEST_CASE("SoundLibrary: music files are read ahead on the worker, loose or in a
     CHECK_FALSE(library.resident_file("zone.xmi"));
 }
 
+TEST_CASE("SoundLibrary: a music file is read ahead of a zone's preloads, behind a wave wanted now") {
+    test::ScratchDir dir("sound_priority");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    for (int i = 0; i < 20; ++i) std::ofstream(dir.path() / "sounds" / ("wave" + std::to_string(i) + ".wav")) << "x";
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "loose mp3 bytes";
+    std::ofstream(dir.path() / "other.mp3", std::ios::binary) << "other mp3 bytes";
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    std::vector<std::string> jobs;
+    library.hold_worker(true);
+    library.set_job_log(&jobs);
+    // set_zone's order: the bulk preload, then the music files; a wave played meanwhile; a preload played.
+    std::vector<std::string> preload;
+    for (int i = 0; i < 20; ++i) preload.push_back("WAVE" + std::to_string(i) + ".wav");
+    library.preload(preload);
+    library.set_resident_files({"theme.mp3", "other.mp3"});
+    library.set_resident_files({"theme.mp3", "other.mp3"}); // named again before it is read: queued once
+    CHECK_FALSE(library.wave("wave7.wav"));
+    // A queued file asked for now is read on the asking thread, not again on the worker.
+    auto other = library.file("OTHER.mp3");
+    REQUIRE(other);
+    CHECK(library.resident_file("other.mp3") == other);
+    library.hold_worker(false);
+    library.wait_idle();
+    library.set_job_log(nullptr);
+    REQUIRE(jobs.size() == 21);
+    CHECK(jobs[0] == "wave7.wav");
+    CHECK(jobs[1] == "theme.mp3");
+    CHECK(jobs[2] == "wave0.wav");
+    CHECK(std::count(jobs.begin(), jobs.end(), "wave7.wav") == 1);
+    CHECK(std::count(jobs.begin(), jobs.end(), "other.mp3") == 0);
+    CHECK(library.resident_file("theme.mp3"));
+    CHECK(library.file("theme.mp3") == library.resident_file("theme.mp3"));
+}
+
 TEST_CASE("Audio system without a device: zone emitters and sounds from the game") {
     const GameDir* game = test::game_dir();
     if (!game) return;
