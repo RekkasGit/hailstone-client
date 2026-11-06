@@ -194,22 +194,41 @@ TEST_CASE("Map windows: Auto Z is set over eq.MapAutoZ and kept in the UI ini") 
     nmsc::test::ScratchDir scratch("map_auto_z_test");
     const fs::path dir = scratch.path();
     fs::create_directories(dir / "maps");
+    auto get = "local on, a, b = eq.MapAutoZ() return tostring(on) .. ',' .. a .. ',' .. b";
     {
         MapLua lua(dir / "maps", dir / "UI.ini");
         lua.api.begin_frame();
-        CHECK(lua("local on, r = eq.MapAutoZ() return tostring(on) .. ',' .. r") == "false,30");
-        CHECK(lua("local on, r = eq.MapAutoZ(true, 45) return tostring(on) .. ',' .. r") == "true,45");
-        CHECK(lua("local _, r = eq.MapAutoZ(true, 99999) return r") == "1000"); // clamped
-        CHECK(lua("local _, r = eq.MapAutoZ(true, 45) return r") == "45");
+        CHECK(lua(get) == "false,30,30");
+        CHECK(lua("local on, a, b = eq.MapAutoZ(true, 45) return tostring(on) .. ',' .. a .. ',' .. b") == "true,45,45");
+        CHECK(lua("local _, a, b = eq.MapAutoZ(true, 99999, 0) return a .. ',' .. b") == "1000,1"); // clamped
+        CHECK(lua("local _, a, b = eq.MapAutoZ(true, 45, 80) return a .. ',' .. b") == "45,80");
         lua.api.save_layout();
     }
     std::string ini = slurp(dir / "UI.ini");
     CHECK(ini.find("AutoZ=true") != std::string::npos);
-    CHECK(ini.find("AutoZRange=45") != std::string::npos);
+    CHECK(ini.find("AutoZAbove=45") != std::string::npos);
+    CHECK(ini.find("AutoZBelow=80") != std::string::npos);
     {
         MapLua lua(dir / "maps", dir / "UI.ini");
         lua.api.begin_frame();
-        CHECK(lua("local on, r = eq.MapAutoZ() return tostring(on) .. ',' .. r") == "true,45");
+        CHECK(lua(get) == "true,45,80");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Map windows: an earlier version's AutoZRange sets both Auto Z ranges") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    nmsc::test::ScratchDir scratch("map_auto_z_old_test");
+    const fs::path dir = scratch.path();
+    fs::create_directories(dir / "maps");
+    {
+        std::ofstream f(dir / "UI.ini");
+        f << "[MapViewWnd]\nAutoZ=true\nAutoZRange=60\n";
+    }
+    {
+        MapLua lua(dir / "maps", dir / "UI.ini");
+        lua.api.begin_frame();
+        CHECK(lua("local on, a, b = eq.MapAutoZ() return tostring(on) .. ',' .. a .. ',' .. b") == "true,60,60");
     }
     ImGui::DestroyContext(ctx);
 }

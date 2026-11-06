@@ -1,7 +1,8 @@
 -- Minimap: a frame of this UI's own (no stock window), from the gamepad UI's (ui/gamepad/hud.lua). The zone map in a
 -- circle around the player (eq.DrawMinimap: the map window's lines, the group, a /find path; what the stock map shows,
 -- no other players or NPCs), the zone's name above it and the game clock below. A click opens the map window, the
--- wheel or + / - zoom, a right click turns rotation with the player on or off; Alt+right-click the frame's menu.
+-- wheel or + / - zoom, a right click turns rotation with the player on or off; Alt+right-click the frame's menu (which also has Auto Z
+-- and its ranges above and below you, hud.AutoZControls).
 -- Shown or hidden from any frame's menu (All frames > Minimap: hud.minimap).
 local hud = dofile("lib/hud.lua")
 local T = hud.T
@@ -38,6 +39,9 @@ local WINDOW_OPTS = {
   panel = false,
   menu = function()
     if ui.MenuItem("Rotate with the player", rotating()) then ui.SetSetting("minimap.rotate", rotating() and "0" or "1") end
+    ui.Separator()
+    hud.AutoZControls(hud.Scale())
+    ui.Separator()
     if ui.MenuItem("Hide") then ui.SetSetting("hud.minimap", "0") end
   end,
 }
