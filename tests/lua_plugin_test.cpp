@@ -417,3 +417,87 @@ print('[more] camera ' .. math.floor(hs.max_camera_distance()))
     n.scripts->pulse();
     CHECK(n.printed_part("needs the server's 'actions' permission"));
 }
+
+TEST_CASE("Lua plugin: after_combat_ability gets the spell id and whether it was used") {
+    Host h;
+    h.write("aca.lua", "hailstone.hooks{ after_combat_ability = function(id, used) print('aca', id, used) end }\n");
+    REQUIRE(h.scripts->run("aca", {}));
+    h.scripts->pulse();
+    game::SpellData spell;
+    spell.id = 717;
+    h.chain.after_combat_ability(*h.world.conn, spell, true);
+    CHECK(h.printed_part("aca 717 true"));
+    CHECK(h.scripts->running("aca"));
+}
+
+TEST_CASE("Lua plugin: a hooks table with a metatable is read in a protected call") {
+    {
+        Host h;
+        h.write("idx.lua", R"(
+hailstone.hooks(setmetatable({}, {__index = function(t, k) if k == 'is_spellcaster' then return function() return true end end end}))
+)");
+        REQUIRE(h.scripts->run("idx", {}));
+        h.scripts->pulse();
+        CHECK(h.chain.is_spellcaster(*h.world.conn));
+        CHECK(h.scripts->running("idx"));
+    }
+    {
+        Host h;
+        h.write("bad.lua", "hailstone.hooks(setmetatable({}, {__index = function(t, k) error('no ' .. k) end}))\n");
+        REQUIRE(h.scripts->run("bad", {}));
+        h.scripts->pulse();
+        CHECK_FALSE(h.chain.is_spellcaster(*h.world.conn)); // an error there ends the script, not the client
+        CHECK(h.printed_part("no is_spellcaster"));
+        h.scripts->pulse();
+        CHECK_FALSE(h.scripts->running("bad"));
+    }
+    {
+        Host h; // an __index that stops its own script and still gives the hook: the hook is not called
+        h.write("quit.lua", R"(
+hailstone.hooks(setmetatable({}, {__index = function(t, k)
+  mq.cmd('/lua stop quit')
+  return function() print('hook ran') return true end
+end}))
+)");
+        REQUIRE(h.scripts->run("quit", {}));
+        h.scripts->pulse();
+        CHECK_FALSE(h.chain.is_spellcaster(*h.world.conn));
+        CHECK_FALSE(h.printed_part("hook ran"));
+        h.scripts->pulse();
+        CHECK_FALSE(h.scripts->running("quit"));
+    }
+}
+
+TEST_CASE("Lua plugin: a script restarted by another during pulse keeps the UI it registers") {
+    Host h;
+    h.write("x.lua", "hailstone.ui_function('f', function() return 7 end)\n");
+    h.write("restarter.lua", "mq.cmd('/lua stop x')\nmq.cmd('/lua run x')\n");
+    REQUIRE(h.scripts->run("x", {}));
+    h.scripts->pulse();
+    REQUIRE(h.bridge.has_plugin("x"));
+    REQUIRE(h.scripts->run("restarter", {}));
+    h.scripts->pulse(); // the old x closes in this walk; the new one first runs next frame
+    CHECK(h.scripts->running("x"));
+    h.scripts->pulse();
+    CHECK(h.bridge.has_plugin("x"));
+    CHECK(h.bridge.call("x", "f", {}));
+}
+
+TEST_CASE("Lua plugin: a script that stops itself cannot run itself again until it has stopped") {
+    Host h;
+    h.write("self.lua", "hailstone.ui_function('f', function() return 1 end)\nmq.cmd('/lua stop self')\nmq.cmd('/lua run self')\n");
+    REQUIRE(h.scripts->run("self", {}));
+    h.scripts->pulse();
+    CHECK(h.printed_part("self is still stopping"));
+    CHECK_FALSE(h.scripts->running("self"));
+    CHECK_FALSE(h.bridge.has_plugin("self"));
+}
+
+TEST_CASE("Lua plugin: two scripts that restart each other run one step a frame") {
+    Host h;
+    h.write("ping.lua", "mq.cmd('/lua stop pong')\nmq.cmd('/lua run pong')\n");
+    h.write("pong.lua", "mq.cmd('/lua stop ping')\nmq.cmd('/lua run ping')\n");
+    REQUIRE(h.scripts->run("ping", {}));
+    for (int i = 0; i < 4; ++i) h.scripts->pulse(); // before, the first pulse never returned
+    CHECK(h.scripts->list().size() <= 2);
+}

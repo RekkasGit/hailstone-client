@@ -13,6 +13,16 @@
 - A Lua script's window whose function never returns is stopped after 5 seconds, as the rest of a script is, instead of freezing the game
 - Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
 - For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
+- Lua scripts: a launcher window whose buttons start or stop other scripts (`mq.cmd('/lua run ...')`, `/lua stop ...`) no longer crashes the game
+- Lua scripts: a bind that runs its own command again stops the script with an error after 16 levels, instead of crashing the game; a script that fills its 256 MB, an error in a `hailstone.hooks` table's `__index`, or a Lua social that gives `button` a metatable stops the script (or reports the error) instead of closing the game
+- Lua scripts: a launcher that stops and runs a script again in one go (`/lua stop x`, then `/lua run x`) no longer leaves the restarted script without the `hailstone` UI functions, options and menu entries it registered; a script started by another first runs on the next frame, and two scripts that restart each other no longer freeze the game
+- For script authors: a command of more than 1000 words for a bind is refused with a line in the chat instead of ending the script
+- For script authors: `hailstone.hooks{after_combat_ability = function(id, used) ... end}` is called with both values; it used to end the script with "attempt to call a number value"
+- For script authors: a `coroutine.wrap` generator or a coroutine of the script's own is no longer interrupted by the frame's 3 ms pause (it used to return early with no values); long work inside one is now limited only by the 5 s stop
+- For script and UI pack authors: `ui.Begin` and `ui.BeginChild` ignore ImGui's internal window flags (Popup, Tooltip, Modal, ChildMenu, ChildWindow), and a stray `ui.EndMenu`, `ui.EndPopup`, `ui.EndCombo` or `ui.EndTooltip` outside its menu, popup, combo or tooltip does nothing, where they could crash the game
+- For script authors: an id, door number or coordinate that no spawn or door can have (`/nav door id 300`, `${Spawn[id -5]}`, NaN, 1e300) finds nothing instead of a wrapped number (door 300 was door 44), and `${Heading[nan]}` is NULL
+- The Lua social editor stays smooth with a long script: its colours are placed in one pass over the text instead of once per word
+- The Lua UI's window settings are saved through a new file that replaces the old one, so a crash or a full disk while saving no longer loses every window's layout
 - For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
 - For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
 - For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced

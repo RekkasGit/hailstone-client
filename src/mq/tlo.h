@@ -11,13 +11,16 @@
 // NULL), never an error.
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace nmsc::net { class GameConnection; }
@@ -174,6 +177,20 @@ bool parse_float(std::string_view text, double& out);
 // A number cut to a whole one (toward zero), as ${Int[...]} and float.Int give it; nullopt for NaN, an infinity or one
 // past int64 (std::from_chars reads "nan", "inf" and 1e300, and a cast of those is undefined).
 std::optional<std::int64_t> whole_number(double d);
+// A number read from text as T when it is finite and fits T (an integer T: cut toward zero); nullopt for NaN, an
+// infinity or one beyond T, whose cast would be undefined. For ids, door numbers, coordinates.
+template <typename T> std::optional<T> in_range(double d) {
+    if constexpr (std::is_floating_point_v<T>) {
+        if (!std::isfinite(d) || std::fabs(d) > static_cast<double>(std::numeric_limits<T>::max())) return std::nullopt;
+        return static_cast<T>(d);
+    } else {
+        static_assert(std::is_integral_v<T> && sizeof(T) <= 4, "whole_number for 64 bits");
+        const double t = std::trunc(d); // (NaN stays NaN and fails below)
+        if (!(t >= static_cast<double>(std::numeric_limits<T>::min()) && t <= static_cast<double>(std::numeric_limits<T>::max())))
+            return std::nullopt;
+        return static_cast<T>(t);
+    }
+}
 bool iequals(std::string_view a, std::string_view b);
 // Case-insensitive substring.
 bool icontains(std::string_view haystack, std::string_view needle);

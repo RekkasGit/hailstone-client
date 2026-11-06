@@ -309,3 +309,42 @@ TEST_CASE("Lua slot reads: both packs' hot bars, spell gems and buff trays draw 
         ImGui::DestroyContext(ctx);
     }
 }
+
+// eq.SetLuaSocial reads every field before it builds anything: a table whose __index raises changes nothing (and
+// leaves no C++ string behind), and one whose __index gives the fields is read as before.
+TEST_CASE("Lua socials: eq.SetLuaSocial reads a table's fields, metamethods included, before building the social") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        nmsc::test::ScratchDir scratch("lua_set_social");
+        GameDir game(scratch.path());
+        net::GameConnection conn(game, {});
+        game::HotButtonStore store;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.conn = &conn;
+        host.hot_buttons = &store;
+        app::EqApi api(host);
+        lua_State* L = luaL_newstate();
+        luaL_openlibs(L);
+        lua_newtable(L);
+        api.register_functions(L);
+        lua_setglobal(L, "eq");
+        CHECK(run(L, R"lua(
+local ok, err = pcall(eq.SetLuaSocial, 0, setmetatable({name = 'a name past the short string buffer'},
+                                                       {__index = function() error('boom') end}))
+return tostring(ok) .. ' ' .. tostring(err):match('boom')
+)lua") == "false boom");
+        CHECK(store.social(0).name.empty());
+        CHECK(run(L, R"lua(
+return tostring(eq.SetLuaSocial(0, setmetatable({name = 'Proxy'}, {__index = function(t, k)
+  if k == 'press' then return "mq.cmd('/sit')" end
+  if k == 'color' then return 4 end
+end})))
+)lua") == "true");
+        CHECK(store.social(0).name == "Proxy");
+        CHECK(store.social(0).color == 4);
+        CHECK(store.social(0).lua.press == "mq.cmd('/sit')");
+        lua_close(L);
+    }
+    ImGui::DestroyContext(ctx);
+}

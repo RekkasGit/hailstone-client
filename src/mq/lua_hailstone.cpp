@@ -72,7 +72,11 @@ bool call_script(Script& s, int nargs, int nres) {
     const lua_Hook hook = lua_gethook(L);
     const int mask = lua_gethookmask(L), count = lua_gethookcount(L);
     lua_sethook(L, runaway_hook, LUA_MASKCOUNT, 1000);
-    const int st = lua_pcall(L, nargs, nres, 0);
+    int st = 0;
+    {
+        ScriptRun run(s);
+        st = lua_pcall(L, nargs, nres, 0);
+    }
     lua_sethook(L, hook, mask, count);
     s.runaway_ms = runaway;
     s.slice_start = start;
@@ -86,6 +90,12 @@ bool call_script(Script& s, int nargs, int nres) {
 }
 
 void need_cap(lua_State* L, std::uint32_t cap, const char* what) { need_caps(L, cap, what); }
+
+// Pushes t[key] of the table at the top, raw (no metamethods run); its type.
+int raw_field(lua_State* L, const char* key) {
+    lua_pushstring(L, key);
+    return lua_rawget(L, -2);
+}
 
 net::GameConnection* writable(Script& s) { return s.host->env.connection ? s.host->env.connection() : nullptr; }
 const net::GameConnection* readable(Script& s) {
@@ -329,7 +339,7 @@ public:
         if (!hook("after_combat_ability")) return;
         lua_pushinteger(L(), s.id);
         lua_pushboolean(L(), used);
-        if (run(1)) lua_pop(L(), 1);
+        if (run(2)) lua_pop(L(), 1);
     }
     std::optional<std::string> combat_effect_label(const net::GameConnection&) const override {
         return hook("combat_effect_label") && run(0) ? string_result() : std::nullopt;
@@ -344,11 +354,12 @@ public:
         std::optional<game::MapSpawnMark> out;
         if (lua_istable(l, -1)) {
             game::MapSpawnMark m = defaults;
-            if (lua_getfield(l, -1, "color") == LUA_TNUMBER) m.rgb = static_cast<std::uint32_t>(lua_tointeger(l, -1)) & 0xffffffu;
+            // Raw: the host reads the answer outside any protected call, where a metamethod's error would abort.
+            if (raw_field(l, "color") == LUA_TNUMBER) m.rgb = static_cast<std::uint32_t>(lua_tointeger(l, -1)) & 0xffffffu;
             lua_pop(l, 1);
-            if (lua_getfield(l, -1, "layer") == LUA_TNUMBER) m.layer = static_cast<int>(std::clamp<lua_Integer>(lua_tointeger(l, -1), 0, 3));
+            if (raw_field(l, "layer") == LUA_TNUMBER) m.layer = static_cast<int>(std::clamp<lua_Integer>(lua_tointeger(l, -1), 0, 3));
             lua_pop(l, 1);
-            if (lua_getfield(l, -1, "label") == LUA_TSTRING) m.label = lua_tostring(l, -1);
+            if (raw_field(l, "label") == LUA_TSTRING) m.label = lua_tostring(l, -1);
             lua_pop(l, 1);
             out = std::move(m);
         } else if (lua_toboolean(l, -1)) {
@@ -433,13 +444,30 @@ public:
 private:
     lua_State* L() const { return s_->L; }
     bool flag(std::uint32_t f) const { return s_ && (s_->flags & f) != 0; }
-    // Pushes hooks[name] when it is a function and the script can be called now.
+    // Pushes hooks[name] when it is a function and the script can be called now. A table with a metatable is read
+    // in a protected call (its __index is the script's code, and an error there ends the script); outside one it
+    // could only abort.
     bool hook(const char* name) const {
         if (!s_ || !usable(*s_) || s_->hooks_ref == LUA_NOREF) return false;
         lua_State* l = s_->L;
         lua_rawgeti(l, LUA_REGISTRYINDEX, s_->hooks_ref);
-        lua_getfield(l, -1, name);
-        lua_remove(l, -2);
+        if (lua_getmetatable(l, -1)) {
+            lua_pop(l, 1);
+            lua_pushcfunction(l, [](lua_State* f) -> int {
+                lua_gettable(f, 1);
+                return 1;
+            });
+            lua_insert(l, -2);
+            lua_pushstring(l, name);
+            if (!call_script(*s_, 2, 1)) return false;
+            if (!usable(*s_)) { // the __index stopped its own script (mq.exit, /lua stop): nothing more of it runs
+                lua_pop(l, 1);
+                return false;
+            }
+        } else {
+            raw_field(l, name);
+            lua_remove(l, -2);
+        }
         if (lua_isfunction(l, -1)) return true;
         lua_pop(l, 1);
         return false;

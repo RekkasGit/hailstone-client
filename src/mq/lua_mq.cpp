@@ -21,6 +21,7 @@
 
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/saturate.h"
 #include "core/sha256.h"
 #include "core/windows_names.h"
 #include "game/slash_commands.h"
@@ -53,10 +54,15 @@ std::string lower(std::string_view s) {
 
 } // namespace
 
+// The running one first: one stopped while pulse() or imgui() walked the list stays in it until reap().
 Script* ScriptHost::Impl::find(std::string_view name) const {
+    Script* stopped = nullptr;
     for (const auto& s : scripts)
-        if (iequals(s->name, name)) return s.get();
-    return nullptr;
+        if (iequals(s->name, name)) {
+            if (!s->stop_requested) return s.get();
+            if (!stopped) stopped = s.get();
+        }
+    return stopped;
 }
 
 namespace {
@@ -69,16 +75,19 @@ void* limited_alloc(void* ud, void* ptr, std::size_t old_size, std::size_t new_s
         s->memory -= old;
         return nullptr;
     }
-    if (new_size > old && s->memory + (new_size - old) > kMemoryLimit) return nullptr;
+    if (s->limited > 0 && new_size > old && s->memory + (new_size - old) > kMemoryLimit) return nullptr;
     void* p = std::realloc(ptr, new_size);
     if (p) s->memory = s->memory - old + new_size;
     return p;
 }
 
+// Past kSliceMs it yields the host's own thread (ScriptRun's), which the host resumes next frame; a coroutine the
+// script made itself inherits the hook but is never yielded by it (that would return to the script's own
+// coroutine.resume with no values, mid-work): there only the runaway check holds.
 void preempt_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
-    if (ran >= kSliceMs && lua_isyieldable(L)) {
+    if (ran >= kSliceMs && L == s.resumed && lua_isyieldable(L)) {
         lua_yield(L, 0);
         return;
     }
@@ -464,18 +473,37 @@ int l_next_event(lua_State* L) {
 }
 
 // Runs fn(args...) as a new coroutine of the script (binds): it may mq.delay; pulse() resumes it.
+// A bind that runs itself (mq.bind('/x', function() mq.cmd('/x') end)) nests here on the native stack: each resume
+// starts Lua's own C-stack count again (no `from`), so past kMaxNesting the script is stopped instead.
 void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
     if (!s.L || s.stop_requested) return;
+    if (s.busy >= kMaxNesting) {
+        s.fail(std::format("its commands ran each other more than {} deep", kMaxNesting));
+        return;
+    }
+    HostWork host(s);
     ++s.busy;
     lua_State* t = lua_newthread(s.L);
     int ref = luaL_ref(s.L, LUA_REGISTRYINDEX);
+    if (args.size() > 1000 || !lua_checkstack(t, static_cast<int>(args.size()) + 1)) {
+        luaL_unref(s.L, LUA_REGISTRYINDEX, ref);
+        --s.busy;
+        // That one line is refused; the script runs on (a long line it passes to its own bind is no reason to end it).
+        s.host->say(std::format("[Lua] {}: a command with too many words for its bind ({}) is refused", s.name, args.size()));
+        log::warn("lua: {}: a bind's command of {} words refused", s.name, args.size());
+        return;
+    }
     watch(t);
     lua_rawgeti(t, LUA_REGISTRYINDEX, fn_ref);
     for (const auto& a : args) lua_pushlstring(t, a.data(), a.size());
     plugin::CallerScope scope(s.caps, s.name);
     s.slice_start = Clock::now();
     int nres = 0;
-    int st = lua_resume(t, nullptr, static_cast<int>(args.size()), &nres);
+    int st = 0;
+    {
+        ScriptRun run(s, t);
+        st = lua_resume(t, nullptr, static_cast<int>(args.size()), &nres);
+    }
     if (st == LUA_YIELD) {
         lua_pop(t, nres);
         s.threads.emplace_back(t, ref);
@@ -950,6 +978,7 @@ std::optional<fs::path> ScriptHost::Impl::resolve(const std::string& name) const
 }
 
 void Script::close() {
+    if (closing) return; // closed already (reap() during a walk), or closing now: once only
     closing = true;
     stop_requested = true;
     release_plugin(*this);
@@ -986,6 +1015,13 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     }
     lua_State* L = sc.L;
     *static_cast<Script**>(lua_getextraspace(L)) = &sc;
+    // Only a note: the host reads script tables raw and lifts the memory limit outside ScriptRun, so nothing should
+    // raise outside a protected call; when something does, Lua still aborts once this returns.
+    lua_atpanic(L, [](lua_State* S) -> int {
+        log::error("lua {}: error outside any protected call: {}", Script::of(S).name,
+                   lua_tostring(S, -1) ? lua_tostring(S, -1) : "?");
+        return 0;
+    });
     // The main state's own calls (its windows, hooks, a social's press) are held to runaway_ms too; its threads
     // (lua_newthread copies the hook) also pause after kSliceMs.
     watch(L);
@@ -1115,6 +1151,9 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     m.reap();
     std::string key = lower(name);
     if (Script* old = m.find(key); old && !old->stop_requested) return refuse(key + " is already running");
+    // reap() closed every stopped one nothing is in. One still running code (it stops itself and runs itself again)
+    // would close later, and its close takes the name's UI registrations away: the new one's too.
+    if (Script* old = m.find(key); old && !old->closing) return refuse(key + " is still stopping: run it again");
     auto entry = m.resolve(key);
     if (!entry) return refuse("no script named " + name);
     auto text = read_file(*entry);
@@ -1236,7 +1275,21 @@ bool ScriptHost::running(std::string_view name) const {
     return s && !s->stop_requested && (s->status == Script::Status::Running || s->status == Script::Status::Paused);
 }
 
+// A stopped script that nothing has entered is closed at once, even while pulse() or imgui() walks the lists: a
+// script of the same name started in the walk must not lose its registrations to the old one's close() later. Only
+// the erase waits for the walk's end (its own reap()).
 void ScriptHost::Impl::reap() {
+    if (walking > 0) {
+        for (auto& [social, sp] : buttons)
+            if (sp->stop_requested && sp->busy == 0) sp->close();
+        for (auto& sp : scripts)
+            if (sp->stop_requested && sp->busy == 0) {
+                if (sp->status == Script::Status::Running || sp->status == Script::Status::Paused)
+                    sp->status = Script::Status::Exited;
+                sp->close();
+            }
+        return;
+    }
     for (auto it = buttons.begin(); it != buttons.end();) {
         Script& s = *it->second;
         if (s.stop_requested && s.busy == 0) {
@@ -1260,7 +1313,11 @@ void ScriptHost::Impl::reap() {
 
 void ScriptHost::pulse() {
     Impl& m = *impl_;
-    for (std::size_t i = 0; i < m.scripts.size(); ++i) {
+    Impl::Walk walk(m);
+    // A script started in this walk (mq.cmd('/lua run x')) first runs next frame: two scripts that restart each other
+    // cannot keep one walk going.
+    const std::size_t count = m.scripts.size();
+    for (std::size_t i = 0; i < count; ++i) {
         Script& s = *m.scripts[i];
         if (s.stop_requested || s.status != Script::Status::Running || !s.co) continue;
         if (s.main_done) { // a plugin whose main chunk returned: only its binds' threads
@@ -1276,11 +1333,20 @@ void ScriptHost::pulse() {
         int nargs = 0;
         if (!s.started) {
             s.started = true;
+            if (s.args.size() > 1000 || !lua_checkstack(s.co, static_cast<int>(s.args.size()) + 1)) {
+                s.fail("too many arguments");
+                --s.busy;
+                continue;
+            }
             for (const auto& a : s.args) lua_pushlstring(s.co, a.data(), a.size());
             nargs = static_cast<int>(s.args.size());
         }
         int nres = 0;
-        int st = lua_resume(s.co, nullptr, nargs, &nres);
+        int st = 0;
+        {
+            ScriptRun run(s, s.co);
+            st = lua_resume(s.co, nullptr, nargs, &nres);
+        }
         if (st == LUA_YIELD) {
             lua_pop(s.co, nres);
         } else if (st == LUA_OK && s.registered) {
@@ -1312,6 +1378,7 @@ void ScriptHost::pulse() {
         m.resume_threads(s);
         --s.busy;
     }
+    walk.end();
     m.reap();
 }
 
@@ -1321,7 +1388,11 @@ void ScriptHost::Impl::resume_threads(Script& s) {
         auto [thread, ref] = s.threads[t];
         s.slice_start = Clock::now();
         int tn = 0;
-        int ts = lua_resume(thread, nullptr, 0, &tn);
+        int ts = 0;
+        {
+            ScriptRun run(s, thread);
+            ts = lua_resume(thread, nullptr, 0, &tn);
+        }
         if (ts == LUA_YIELD) {
             lua_pop(thread, tn);
             ++t;
@@ -1339,10 +1410,14 @@ void ScriptHost::Impl::resume_threads(Script& s) {
     }
 }
 
+// A window's draw may start or stop scripts (mq.cmd('/lua run x')): the list is walked by index, and nothing is
+// removed from it (reap) until the walk ends.
 void ScriptHost::imgui() {
     Impl& m = *impl_;
-    for (auto& sp : m.scripts) m.draw_windows(*sp);
+    Impl::Walk walk(m);
+    for (std::size_t i = 0; i < m.scripts.size(); ++i) m.draw_windows(*m.scripts[i]);
     for (auto& [social, sp] : m.buttons) m.draw_windows(*sp);
+    walk.end();
     m.reap();
 }
 
@@ -1351,16 +1426,22 @@ void ScriptHost::Impl::draw_windows(Script& s) {
     ++s.busy;
     plugin::CallerScope scope(s.caps, s.name);
     // A draw function may destroy or make windows (its own too): this frame draws the ones there were, those still
-    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs.
-    const auto windows = s.windows;
-    for (const auto& w : windows) {
+    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs. (The copy goes into the same
+    // vector each frame: its strings keep their buffers, so a frame allocates nothing.)
+    s.drawing = s.windows;
+    for (const auto& w : s.drawing) {
         if (s.stop_requested) break;
         if (std::find(s.windows.begin(), s.windows.end(), w) == s.windows.end()) continue;
         ImGuiErrorRecoveryState state;
         ImGui::ErrorRecoveryStoreState(&state);
         lua_rawgeti(s.L, LUA_REGISTRYINDEX, w.second);
         s.slice_start = Clock::now();
-        if (lua_pcall(s.L, 0, 0, 0) != LUA_OK) {
+        int st = 0;
+        {
+            ScriptRun run(s);
+            st = lua_pcall(s.L, 0, 0, 0);
+        }
+        if (st != LUA_OK) {
             ImGui::ErrorRecoveryTryToRecoverState(&state);
             if (lua_touserdata(s.L, -1) == &kExitKey) {
                 if (s.social < 0) s.stop_requested = true;
@@ -1552,8 +1633,10 @@ void ScriptHost::Impl::lua_command(std::string_view args) {
     }
     if (verb == "list" || verb == "ps" || verb == "info") {
         reap();
-        if (scripts.empty()) say("[Lua] no scripts are running");
+        if (std::all_of(scripts.begin(), scripts.end(), [](const auto& s) { return s->stop_requested; }))
+            say("[Lua] no scripts are running");
         for (const auto& s : scripts) {
+            if (s->stop_requested) continue; // stopped while a window drew (reap waits for the walk)
             std::string st = s->status == Script::Status::Paused ? "paused" : "running";
             say(std::format("[Lua] {} ({}) - {}", s->name, st, plugin::caps_text(s->caps)));
         }
@@ -1572,33 +1655,43 @@ namespace {
 
 std::string button_name(const std::string& name) { return "social '" + name + "'"; }
 
-// The `button` table the social's Lua sees.
+// t[key] = the value at the top, popped (raw: no metamethods run).
+void raw_set(lua_State* L, int t, const char* key) {
+    t = lua_absindex(L, t);
+    lua_pushstring(L, key);
+    lua_insert(L, -2);
+    lua_rawset(L, t);
+}
+
+// The `button` table the social's Lua sees. Read and written raw, outside any protected call: a metamethod the
+// social's code gave `button` or _G would run where its error could only abort.
 void set_button(Script& s, const ButtonPress& p) {
     lua_State* L = s.L;
-    lua_getglobal(L, "button");
-    if (!lua_istable(L, -1)) {
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+    lua_pushliteral(L, "button");
+    if (lua_rawget(L, -2) != LUA_TTABLE) {
         lua_pop(L, 1);
         lua_newtable(L);
         lua_pushvalue(L, -1);
-        lua_setglobal(L, "button");
+        raw_set(L, -3, "button");
     }
     lua_pushinteger(L, p.social + 1);
-    lua_setfield(L, -2, "social");
+    raw_set(L, -2, "social");
     if (p.bar >= 0) lua_pushinteger(L, p.bar + 1);
     else lua_pushnil(L);
-    lua_setfield(L, -2, "bar");
+    raw_set(L, -2, "bar");
     if (p.button >= 0) lua_pushinteger(L, p.button + 1);
     else lua_pushnil(L);
-    lua_setfield(L, -2, "button");
+    raw_set(L, -2, "button");
     lua_pushboolean(L, p.shift);
-    lua_setfield(L, -2, "shift");
+    raw_set(L, -2, "shift");
     lua_pushboolean(L, p.ctrl);
-    lua_setfield(L, -2, "ctrl");
+    raw_set(L, -2, "ctrl");
     lua_pushboolean(L, p.alt);
-    lua_setfield(L, -2, "alt");
+    raw_set(L, -2, "alt");
     lua_pushinteger(L, static_cast<lua_Integer>(s.presses));
-    lua_setfield(L, -2, "presses");
-    lua_pop(L, 1);
+    raw_set(L, -2, "presses");
+    lua_pop(L, 2);
 }
 
 // The value of `key` in the table at the top (raw: no metamethods run).
@@ -1640,12 +1733,12 @@ ButtonFace read_face(lua_State* L) {
             double v = lua_tonumber(L, -1);
             lua_pop(L, 1);
             if (v <= 1.0) v *= 255.0;
-            rgb = rgb << 8 | static_cast<std::uint32_t>(std::clamp(v, 0.0, 255.0));
+            rgb = rgb << 8 | saturate_cast<std::uint32_t>(std::clamp(v, 0.0, 255.0)); // (NaN: 0)
         }
         f.color = rgb;
     }
     lua_pop(L, 1);
-    if (raw_field(L, "cooldown") == LUA_TNUMBER) f.cooldown = std::clamp(static_cast<float>(lua_tonumber(L, -1)), 0.0f, 1.0f);
+    if (raw_field(L, "cooldown") == LUA_TNUMBER) f.cooldown = static_cast<float>(std::clamp(lua_tonumber(L, -1), 0.0, 1.0));
     lua_pop(L, 1);
     if (raw_field(L, "enabled") != LUA_TNIL) f.enabled = lua_toboolean(L, -1) != 0;
     lua_pop(L, 1);
@@ -1807,7 +1900,12 @@ bool ScriptHost::press_button(const ButtonPress& p, std::string* why) {
         plugin::CallerScope scope(s->caps, s->name);
         s->slice_start = Clock::now();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->press_ref);
-        if (lua_pcall(s->L, 0, 0, 0) != LUA_OK) {
+        int st = 0;
+        {
+            ScriptRun run(*s);
+            st = lua_pcall(s->L, 0, 0, 0);
+        }
+        if (st != LUA_OK) {
             if (lua_touserdata(s->L, -1) != &kExitKey) {
                 ok = false;
                 s->fail(lua_tostring(s->L, -1) ? lua_tostring(s->L, -1) : "error");
@@ -1849,7 +1947,12 @@ ButtonDryRun ScriptHost::dry_run_button(const ButtonPress& p) {
         plugin::CallerScope scope(s->caps, s->name);
         s->slice_start = Clock::now();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->press_ref);
-        if (lua_pcall(s->L, 0, 0, 0) != LUA_OK) {
+        int st = 0;
+        {
+            ScriptRun run(*s);
+            st = lua_pcall(s->L, 0, 0, 0);
+        }
+        if (st != LUA_OK) {
             if (lua_touserdata(s->L, -1) != &kExitKey) out.error = lua_tostring(s->L, -1) ? lua_tostring(s->L, -1) : "error";
             lua_pop(s->L, 1);
         }
@@ -1890,7 +1993,12 @@ const ButtonFace& ScriptHost::button_face(int social, const std::string& name, c
         plugin::CallerScope scope(plugin::kCapRead, s->name);
         s->slice_start = Clock::now();
         lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->face_ref);
-        if (lua_pcall(s->L, 0, 1, 0) == LUA_OK) {
+        int st = 0;
+        {
+            ScriptRun run(*s);
+            st = lua_pcall(s->L, 0, 1, 0);
+        }
+        if (st == LUA_OK) {
             f = read_face(s->L);
         } else {
             f.error = lua_tostring(s->L, -1) ? lua_tostring(s->L, -1) : "error";

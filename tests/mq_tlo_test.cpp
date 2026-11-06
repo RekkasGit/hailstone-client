@@ -203,3 +203,39 @@ TEST_CASE("TLO: a registry's own TLOs come and go") {
     f.reg.remove_tlo("myplugin");
     CHECK(f.p("${MyPlugin}") == "NULL");
 }
+
+TEST_CASE("TLO: numbers from text out of range, NaN or infinite are no id, loc or heading") {
+    Fixture f;
+    for (const char* q : {"id -5", "id 1e300", "id nan", "id 4294967296", "loc nan 0", "loc inf 0 0"}) {
+        INFO(q);
+        CHECK(mq::search_spawns(mq::parse_spawn_search(q), f.world.conn->world(), nullptr).empty());
+    }
+    CHECK(f.p("${Spawn[id -5]}") == "NULL");
+    // An id that fits still matches; a huge radius or level is a limit, not undefined.
+    CHECK(mq::parse_spawn_search("id 7").id == 7u);
+    auto s = mq::parse_spawn_search("notid -1 radius 1e300 level 1e300");
+    CHECK(s.not_ids.empty());
+    CHECK(s.radius == 0.0f);
+    CHECK(s.max_level == std::numeric_limits<int>::max());
+    CHECK(mq::parse_spawn_search("range -1e300 nan").min_level == std::numeric_limits<int>::min());
+    // LineOfSight[] passes the collision grid only finite points within float.
+    int asked = 0;
+    f.ctx.line_of_sight = [&](const std::array<float, 3>&, const std::array<float, 3>&) -> std::optional<bool> {
+        ++asked;
+        return true;
+    };
+    CHECK(f.p("${LineOfSight[1e300,0,0:0,0,0]}") == "NULL");
+    CHECK(f.p("${LineOfSight[0,nan,0:0,0,0]}") == "NULL");
+    CHECK(f.p("${LineOfSight[0,0,0:0,0,-inf]}") == "NULL");
+    CHECK(asked == 0);
+    CHECK(f.p("${LineOfSight[1,2,3:4,5,6]}") == "TRUE");
+    CHECK(asked == 1);
+    CHECK(f.p("${Heading[nan]}") == "NULL");
+    CHECK(f.p("${Heading[inf].ShortName}") == "NULL");
+    CHECK(f.p("${Heading[-90].ShortName}") == "W");
+    CHECK(mq::in_range<std::uint8_t>(300.0) == std::nullopt);
+    CHECK(mq::in_range<std::uint8_t>(44.9) == std::uint8_t{44});
+    CHECK(mq::in_range<std::uint32_t>(-0.5) == 0u); // cut toward zero, as a cast
+    CHECK(mq::in_range<float>(1e300) == std::nullopt);
+    CHECK(mq::in_range<float>(std::numeric_limits<double>::quiet_NaN()) == std::nullopt);
+}

@@ -159,7 +159,13 @@ A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQues
 5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
 cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
-pause, is stopped the same way. Each script's memory is capped at 256 MB. A script's tables cannot have a `__gc`
+pause, is stopped the same way. Only the script's own run and its binds are paused: a coroutine the script made itself
+(`coroutine.create`, `coroutine.wrap`) is never yielded by the pause, which would hand its `coroutine.resume` an
+early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. A bind
+whose function runs commands that start binds of the same script again (`mq.bind('/x', function() mq.cmd('/x')
+end)`) ends the script once they nest 16 deep; a command of more than 1000 words for a bind is refused (a line in
+the chat) and the script runs on. Each script's memory is capped at 256 MB: past it the script's own
+code gets "not enough memory", and a script that ends that way is stopped with its error. A script's tables cannot have a `__gc`
 finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
 end, after what it registered is taken back. For the same reason an `mq.TLO` value's metatable is locked
 (`getmetatable` gives `"mq.TLO"`).
@@ -261,7 +267,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 
 | | |
 |---|---|
-| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`) |
+| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`). A hooks table with a metatable is read through it, in a protected call: an error in its `__index` ends the script |
 | `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand` (`extend`) |
 | `set_player_classes(mask)`, `set_character_classes(name, mask)`, `set_pet_list{{spawn =, class =}}`, `set_vitals{max_hp =, ...}` | what the server knows (`extend`) |
 | `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. With Lua's `string.pack` / `string.unpack` a script reads and writes any layout (`packets`) |
@@ -291,7 +297,9 @@ To start one: the server lists it in its `hailstone.cfg` `[scripts] run`; the pl
 window, or runs it there or with `/lua run <name>`. With the `login` capability it starts at the world login
 (above). A script that another script or a plugin starts (`mq.cmd('/lua run x')`, a plugin's command) gets no more
 capabilities than its starter has at that moment, whatever its own file would get; one its starter can give nothing
-does not start. Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
+does not start. It first runs on the next frame. A script stopped and run again in one go (`/lua stop x` then
+`/lua run x`) is closed before the new one starts, so the new one keeps the UI functions, options and menu entries it
+registers; a script that stops itself and runs itself again from its own code is refused ("is still stopping"). Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
 as a module: those files are data. That holds for the folder in any case and with trailing dots or spaces
 (`Config/`, `config./`), as Windows and macOS would open it, and through links. A script or module name is a path
 inside the script folders: an absolute one (`/lua run /home/x/evil`, `require('/x')`) or one whose file is a link

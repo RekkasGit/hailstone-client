@@ -32,6 +32,7 @@
 #include "plugin/ui_bridge.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/saturate.h"
 #include "game/hot_button_state.h"
 #include "game/item_sort.h"
 #include "game/merchant.h"
@@ -1315,8 +1316,8 @@ int HotButtonState(lua_State* L) {
         lua_pushnumber(L, *hb->cool_down);
         lua_setfield(L, -2, "cooldown");
         if (lua_isnumber(L, 3) && lua_isnumber(L, 4)) {
-            lua_pushinteger(L, game::spell_gem_overlay_top(*hb->cool_down, static_cast<std::int32_t>(lua_tonumber(L, 3)),
-                                                           static_cast<std::int32_t>(lua_tonumber(L, 4))));
+            lua_pushinteger(L, game::spell_gem_overlay_top(*hb->cool_down, saturate_cast<std::int32_t>(lua_tonumber(L, 3)),
+                                                           saturate_cast<std::int32_t>(lua_tonumber(L, 4))));
             lua_setfield(L, -2, "top");
         }
     }
@@ -2192,8 +2193,8 @@ int WindowClient(lua_State* L) {
 int SizeWindow(lua_State* L) {
     auto& m = Impl::of(L);
     if (StockWindow* w = m.window(luaL_checkstring(L, 1)))
-        w->size_window(m.host, static_cast<int>(luaL_checknumber(L, 2) + luaL_optnumber(L, 4, 0)),
-                       static_cast<int>(luaL_checknumber(L, 3) + luaL_optnumber(L, 5, 0)));
+        w->size_window(m.host, saturate_cast<int>(luaL_checknumber(L, 2) + luaL_optnumber(L, 4, 0)),
+                       saturate_cast<int>(luaL_checknumber(L, 3) + luaL_optnumber(L, 5, 0)));
     return 0;
 }
 

@@ -1190,3 +1190,115 @@ TEST_CASE("MQ Lua: caps_of is list()'s caps for a running or paused script, 0 fo
     h.scripts->stop("c");
     CHECK(h.scripts->caps_of("c") == 0u);
 }
+
+TEST_CASE("MQ Lua: a window that starts and stops other scripts while the list is drawn") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("launch.lua", R"(
+local mq = require('mq')
+local frame = 0
+mq.imgui.init('L', function()
+  frame = frame + 1
+  if frame == 1 then mq.cmd('/lua stop b') end
+  if frame == 2 then mq.cmd('/lua run d') mq.cmd('/lua run e') end
+end)
+mq.delay(100000)
+)");
+    for (const char* n : {"b", "c", "d", "e"})
+        h.write(std::string(n) + ".lua", std::string("local mq = require('mq') mq.imgui.init('") + n +
+                                             "', function() print('drew " + n + "') end) mq.delay(100000)\n");
+    REQUIRE(h.scripts->run("launch", {}));
+    REQUIRE(h.scripts->run("b", {}));
+    REQUIRE(h.scripts->run("c", {}));
+    h.pulses(1);
+    h.scripts->imgui(); // the stop removes nothing from the list being drawn
+    CHECK_FALSE(h.scripts->running("b"));
+    CHECK(h.scripts->running("c"));
+    CHECK(h.printed_line("drew c"));
+    CHECK_FALSE(h.printed_line("drew b"));
+    std::size_t listed = 0;
+    for (const auto& i : h.scripts->list()) listed += i.name == "b";
+    CHECK(listed == 0); // reaped once the walk ended
+    h.scripts->imgui(); // two more scripts while the list is walked
+    CHECK(h.scripts->running("d"));
+    CHECK(h.scripts->running("e"));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(h.printed_line("drew d"));
+    CHECK(h.printed_line("drew e"));
+}
+
+TEST_CASE("MQ Lua: a bind that runs its own command is stopped, not left to overflow the stack") {
+    Host h;
+    h.write("loop.lua", "local mq = require('mq') mq.bind('/loopme', function() mq.cmd('/loopme') end) mq.delay(100000)\n");
+    h.write("other.lua", "local mq = require('mq') mq.delay(100000)\n");
+    REQUIRE(h.scripts->run("loop", {}));
+    REQUIRE(h.scripts->run("other", {}));
+    h.pulses(1);
+    h.run("/loopme");
+    CHECK(printed_part(h, "ran each other more than 16 deep"));
+    h.pulses(1);
+    CHECK_FALSE(h.scripts->running("loop"));
+    CHECK(h.scripts->running("other"));
+}
+
+TEST_CASE("MQ Lua: a bind's command with too many words is refused; the script runs on") {
+    Host h;
+    h.write("words.lua", "local mq = require('mq') mq.bind('/words', function(...) print('words', select('#', ...)) end)"
+                         " mq.cmd('/words' .. string.rep(' w', 1200)) mq.cmd('/words a b') mq.delay(100000)\n");
+    REQUIRE(h.scripts->run("words", {}));
+    h.pulses(2);
+    CHECK(printed_part(h, "too many words for its bind (1200) is refused"));
+    CHECK(printed_part(h, "words 2"));
+    CHECK(h.scripts->running("words"));
+}
+
+TEST_CASE("MQ Lua: the frame's pause never yields a coroutine the script made itself") {
+    Host h;
+    // Each producer runs well past the 3 ms slice between its yields.
+    h.write("gen.lua", R"(
+local mq = require('mq')
+local function spin() local t = os.clock() while os.clock() - t < 0.02 do end end
+local gen = coroutine.wrap(function() spin() coroutine.yield('done') end)
+print('got', gen())
+local n = 0
+for v in coroutine.wrap(function() for i = 1, 3 do spin() coroutine.yield(i) end end) do n = n + v end
+print('sum', n)
+)");
+    REQUIRE(h.scripts->run("gen", {}));
+    for (int i = 0; i < 100 && h.scripts->running("gen"); ++i) h.pulses(1);
+    CHECK(h.printed_line("got done"));
+    CHECK(h.printed_line("sum 6"));
+}
+
+TEST_CASE("Lua socials: a `button` table with metamethods of the social's own is set raw") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);
+    auto p = press(R"(
+if state.n then print('pressed', rawget(button, 'presses')) end
+state.n = 1
+button = setmetatable({}, {__newindex = function() error('x') end, __index = function() error('y') end})
+)");
+    REQUIRE(h.scripts->press_button(p));
+    REQUIRE(h.scripts->press_button(p)); // set_button writes past __newindex, where an error could only abort
+    CHECK(h.printed_line("pressed 2"));
+}
+
+TEST_CASE("MQ Lua: a script that ends with its heap full is stopped with its error, not an abort") {
+    Host h;
+    // Fills the 256 MB heap to within a few bytes, every byte reachable, then fails: the host's traceback needs memory.
+    h.write("full.lua", R"(
+local h
+local n = 4096
+while n >= 1 do
+  pcall(function() while true do h = {h, string.rep('x', n)} end end)
+  n = n // 2
+end
+pcall(function() while true do h = {h} end end)
+error('bye')
+)");
+    REQUIRE(h.scripts->run("full", {}));
+    for (int i = 0; i < 20000 && h.scripts->running("full"); ++i) h.pulses(1);
+    CHECK_FALSE(h.scripts->running("full"));
+    CHECK(printed_part(h, "[Lua] full ended with an error"));
+}
