@@ -488,7 +488,9 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
     if (args.size() > 1000 || !lua_checkstack(t, static_cast<int>(args.size()) + 1)) {
         luaL_unref(s.L, LUA_REGISTRYINDEX, ref);
         --s.busy;
-        s.fail("a command with too many words for its bind");
+        // That one line is refused; the script runs on (a long line it passes to its own bind is no reason to end it).
+        s.host->say(std::format("[Lua] {}: a command with too many words for its bind ({}) is refused", s.name, args.size()));
+        log::warn("lua: {}: a bind's command of {} words refused", s.name, args.size());
         return;
     }
     watch(t);

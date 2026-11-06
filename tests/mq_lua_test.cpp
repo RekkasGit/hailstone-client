@@ -1242,6 +1242,17 @@ TEST_CASE("MQ Lua: a bind that runs its own command is stopped, not left to over
     CHECK(h.scripts->running("other"));
 }
 
+TEST_CASE("MQ Lua: a bind's command with too many words is refused; the script runs on") {
+    Host h;
+    h.write("words.lua", "local mq = require('mq') mq.bind('/words', function(...) print('words', select('#', ...)) end)"
+                         " mq.cmd('/words' .. string.rep(' w', 1200)) mq.cmd('/words a b') mq.delay(100000)\n");
+    REQUIRE(h.scripts->run("words", {}));
+    h.pulses(2);
+    CHECK(printed_part(h, "too many words for its bind (1200) is refused"));
+    CHECK(printed_part(h, "words 2"));
+    CHECK(h.scripts->running("words"));
+}
+
 TEST_CASE("MQ Lua: the frame's pause never yields a coroutine the script made itself") {
     Host h;
     // Each producer runs well past the 3 ms slice between its yields.
