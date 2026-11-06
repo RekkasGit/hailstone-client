@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page
