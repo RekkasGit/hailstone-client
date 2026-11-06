@@ -127,3 +127,59 @@ TEST_CASE("font faces: a file whose name is not ASCII is found") {
     CHECK(faces[0].family == "Test Sans");
     CHECK(faces[0].file == file);
 }
+
+// read_font_face reads the table directory and the name table alone: a name table far into the file is found, and an
+// offset past the end of the file (up to 4 GB, or one whose sum with the length wraps) is no face. (These pass on the
+// old code too, where the 4 GB image usually allocates and the read then falls short: the sparse-file case below is
+// the one that shows the fix.)
+TEST_CASE("font faces: the name table at any offset, and a broken offset is no face") {
+    nmsc::test::ScratchDir dir("font_faces_offset");
+    auto write = [&](const std::string& name, const std::vector<unsigned char>& d) {
+        const auto path = dir.path() / name;
+        std::ofstream(path, std::ios::binary)
+            .write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
+        return path;
+    };
+    auto set32 = [](std::vector<unsigned char>& d, std::size_t at, std::uint32_t v) {
+        for (std::size_t k = 0; k < 4; ++k) d[at + k] = static_cast<unsigned char>(v >> (24 - 8 * k));
+    };
+    const auto plain = font_file("Far Sans", "Regular");
+    // The name table moved 100000 bytes in (past the 4 KB the directory is read from).
+    std::vector<unsigned char> far(plain.begin(), plain.begin() + 28);
+    far.resize(100000, 0);
+    far.insert(far.end(), plain.begin() + 28, plain.end());
+    set32(far, 12 + 8, 100000);
+    auto face = read_font_face(write("far.ttf", far));
+    REQUIRE(face);
+    CHECK(face->family == "Far Sans");
+
+    std::vector<unsigned char> broken = plain;
+    set32(broken, 12 + 8, 0xfff00000u);
+    CHECK_FALSE(read_font_face(write("huge.ttf", broken)));
+    set32(broken, 12 + 8, 0xfffffff0u); // + its length wraps in 32 bits
+    CHECK_FALSE(read_font_face(write("wrap.ttf", broken)));
+}
+
+#ifndef _WIN32
+// A name table that really is near 4 GB in (a sparse file: the gap takes no disk here, where NTFS would write it), its
+// offset's sum with its length wrapping in 32 bits. Read into an image of its own size, it is found; an image sized
+// from that sum was a few bytes long and the table was read 4 GB past it (a crash even without the sanitizer).
+TEST_CASE("font faces: a name table near 4 GB in, its end past 32 bits, is read into a buffer of its size") {
+    nmsc::test::ScratchDir dir("font_faces_sparse");
+    std::vector<unsigned char> plain = font_file("Edge Sans", "Regular");
+    const std::uint32_t offset = 0xfffffff0u;
+    REQUIRE(plain.size() - 28 > 0x10); // so offset + length passes 2^32
+    for (std::size_t k = 0; k < 4; ++k) plain[12 + 8 + k] = static_cast<unsigned char>(offset >> (24 - 8 * k));
+    const auto path = dir.path() / "edge.ttf";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(plain.data()), 28);
+        out.seekp(static_cast<std::streamoff>(offset));
+        out.write(reinterpret_cast<const char*>(plain.data() + 28), static_cast<std::streamsize>(plain.size() - 28));
+        REQUIRE(out);
+    }
+    auto face = read_font_face(path);
+    REQUIRE(face);
+    CHECK(face->family == "Edge Sans");
+}
+#endif

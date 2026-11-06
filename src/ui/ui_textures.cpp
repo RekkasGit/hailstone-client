@@ -17,6 +17,7 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 #include "render/vk_util.h"
+#include "ui/imgui_vk_textures.h"
 #include "ui/item_windows.h"
 #include "ui/spell_windows.h"
 
@@ -199,7 +200,7 @@ UiTextures::~UiTextures() {
     for (auto* map : {&files_, &pictures_})
         for (auto& [name, e] : *map) {
             if (!e) continue;
-            if (e->set) ImGui_ImplVulkan_RemoveTexture(e->set);
+            if (e->set) ui::remove_imgui_texture(e->set);
             e->texture.destroy(vk_.device(), vk_.allocator());
         }
     if (sampler_) vkDestroySampler(vk_.device(), static_cast<VkSampler>(sampler_), nullptr);
@@ -253,7 +254,7 @@ std::unique_ptr<UiTextures::Entry> UiTextures::make(std::span<const std::byte> d
     render::UploadBatch batch(vk_);
     e->texture = batch.texture(rgba);
     batch.submit();
-    e->set = ImGui_ImplVulkan_AddTexture(static_cast<VkSampler>(sampler_), e->texture.view,
+    e->set = ui::add_imgui_texture(static_cast<VkSampler>(sampler_), e->texture.view,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if (!e->set) {
         log::warn("ui art: no descriptor left for {}", what);
@@ -276,7 +277,7 @@ const UiTextures::Texture* UiTextures::picture(const std::filesystem::path& file
             auto it = pictures_.find(picture_order_.front());
             if (it != pictures_.end()) {
                 if (it->second) {
-                    if (it->second->set) ImGui_ImplVulkan_RemoveTexture(it->second->set);
+                    if (it->second->set) ui::remove_imgui_texture(it->second->set);
                     it->second->texture.destroy(vk_.device(), vk_.allocator());
                 }
                 pictures_.erase(it);

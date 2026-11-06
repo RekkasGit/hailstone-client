@@ -6,6 +6,7 @@
 
 #include "render/vk_context.h"
 #include "render/vk_util.h"
+#include "ui/imgui_vk_textures.h"
 #include "web/browser_host.h"
 
 namespace nmsc::ui {
@@ -58,12 +59,12 @@ WebTextures::Entry WebTextures::make(std::uint16_t width, std::uint16_t height) 
     ai.usage = VMA_MEMORY_USAGE_AUTO;
     render::vk_check(vmaCreateImage(vk_.allocator(), &info, &ai, &e.image, &e.allocation, nullptr), "create web image");
     e.view = render::create_image_view(vk_.device(), e.image, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-    e.set = ImGui_ImplVulkan_AddTexture(sampler_, e.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    e.set = ui::add_imgui_texture(sampler_, e.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     return e;
 }
 
 void WebTextures::destroy(Entry& e) {
-    if (e.set) ImGui_ImplVulkan_RemoveTexture(e.set);
+    if (e.set) ui::remove_imgui_texture(e.set);
     if (e.view) vkDestroyImageView(vk_.device(), e.view, nullptr);
     if (e.image) vmaDestroyImage(vk_.allocator(), e.image, e.allocation);
     e = Entry{};

@@ -4,6 +4,7 @@
 // web::BrowserHost: who may do what with which tab, and the page's view in an ImGui window (its texture, the mouse
 // and keyboard it takes).
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -26,6 +27,11 @@ struct WebServiceEnv {
 
 class WebService final : public plugin::WebAccess {
 public:
+    // The most tabs one script or plugin holds at once, those the helper or the rules closed included (they stay,
+    // with their queued messages, until it closes them): each is a browser in the helper and up to a 64 MB image
+    // here. The player's own tabs are not limited.
+    static constexpr std::size_t kMaxTabsPerOwner = 16;
+
     explicit WebService(WebServiceEnv env) : env_(std::move(env)) {}
 
     bool available() override;

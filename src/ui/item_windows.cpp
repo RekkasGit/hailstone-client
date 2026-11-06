@@ -15,6 +15,7 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 #include "render/vk_util.h"
+#include "ui/imgui_vk_textures.h"
 
 namespace nmsc::ui {
 
@@ -57,7 +58,7 @@ ItemIconCache::~ItemIconCache() {
     vk_.wait_idle();
     for (auto& [n, s] : sheets_) {
         if (!s) continue;
-        if (s->set) ImGui_ImplVulkan_RemoveTexture(s->set);
+        if (s->set) ui::remove_imgui_texture(s->set);
         s->texture.destroy(vk_.device(), vk_.allocator());
     }
     if (sampler_) vkDestroySampler(vk_.device(), static_cast<VkSampler>(sampler_), nullptr);
@@ -79,7 +80,7 @@ const ItemIconCache::Sheet* ItemIconCache::sheet(int number) {
             render::UploadBatch batch(vk_);
             s->texture = batch.texture(rgba);
             batch.submit();
-            s->set = ImGui_ImplVulkan_AddTexture(static_cast<VkSampler>(sampler_), s->texture.view,
+            s->set = ui::add_imgui_texture(static_cast<VkSampler>(sampler_), s->texture.view,
                                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             if (!s->set) {
                 log::warn("item icons: no descriptor left for {}", name);

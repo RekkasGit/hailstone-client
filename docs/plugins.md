@@ -626,7 +626,9 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
 - keeps settings of its own: `ui.SetSetting(key, v)` writes `plugin.<owner>.<key>` in the pack's settings file (a
   window's place under `hud.` is the character's, as the pack's are), `ui.GetSetting(key)` reads that, else the
   pack's own key of that name (the palette, the place of a window it took over), and neither reaches the pack's test
-  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys;
+  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys
+  (`ui.SetSetting` refuses, and returns false for, a key with `=` or a line break or a value with a line break, since
+  the file is one `key=value` a line and such text would be read back as other keys);
   `ui.DisableWindow(name)` turns off only its own window of that name;
 - runs for at most a second at a time (a window's draw, its file's load, a function of its that the pack calls) and
   the pack's own code for five: code that runs longer is stopped with an error, which a `pcall` of its own cannot
@@ -690,7 +692,12 @@ or a private network (`localhost`, `192.168.x.x`, `10.x.x.x` and the like), even
 script and plugin has a cookie store of its own, apart from the player's and from each other's. A script or plugin sees
 and changes only its own tabs; the player's are not theirs, and theirs are not in the player's browser window. They
 close when it stops (a script whose main chunk has returned is stopped: keep it running, as for a window) or unloads.
-Without the helper (macOS, or not installed) `open` gives nil and why.
+Without the helper (macOS, or not installed) `open` gives nil and why. A script or plugin holds at most 16 tabs at
+once (`WebService::kMaxTabsPerOwner`), those the helper or the rules closed included until it closes them: a 17th
+`open` gives nil and why. An address is at most 2 MB, a `post` to the page at most 1 MB, and an `eval` or `text` at
+most what one message to the helper holds (64 MB): a longer one is refused (false; `navigate` with why) and nothing
+is sent. While 32 MB still wait for the helper to read them, `open`, `navigate`, `eval`, `text` and `post` are refused
+the same way; try again a frame or so later. An empty queue takes the largest message.
 
 The page and its owner talk through `window.hailstone`: the page's `hailstone.post(text)` is queued for the owner
 (`mq.web.messages(tab)`, `eq.WebMessages(tab)`, `web_message`; a message is at most 1 MB, and at most 256 and 8 MB

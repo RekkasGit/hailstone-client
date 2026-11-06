@@ -29,6 +29,11 @@
 - `/raidwindow` (and short forms such as `/raidwin`) opens and closes the raid window, as the raid key does; it opened an old built-in window instead
 - Modern UI: the raid leader can move players between groups in the raid window again: drag a player onto another group (or onto Not in a group), or select one and use Move here. The game only allows moves while the raid is locked, so a move in an unlocked raid locks it first, and a strip above the groups says so, with Lock and Unlock. A full group refuses the drop. The groups show their empty slots, head count and average level; leaders, the raid's main assists and markers have tags, and a player's note shows when you point at them
 - Gamepad UI: in an unlocked raid, the leader's Move to a group locks the raid first instead of being greyed out
+- A UI script or plugin can no longer add lines to the UI settings file: `ui.SetSetting` refuses (and returns false for) a key with `=` or a line break, or a value with a line break. A plugin could use one to set the pack's own keys, which click windows' buttons at the next start
+- A UI script that calls `ui.TableNextRow` or the table header row outside a table (for example when `ui.BeginTable` returned false) no longer crashes the client; a table column or freeze set up after the first row is ignored
+- `ui.Image`, `ui.ImageButton` and `ui.DrawImage` draw only textures the client handed out and has not freed: any other value (an `mq.TLO` value, for example) is drawn as nothing instead of reaching the graphics driver
+- For script and plugin authors: the in-game browser refuses an `eval`, `text` or `post` too long to send (and an address over 2 MB) instead of sending it, which made the browser helper quit and, repeated, turned the in-game browser off for the session; a `post` is at most 1 MB, as the page's own messages are. While 32 MB wait for the browser helper, further calls return false instead of queueing (several large evals in one frame no longer end the helper and close the player's tabs), and a helper that stops reading its input is restarted after 10 seconds. A script or plugin holds at most 16 tabs at once, and a closed tab's image is freed at once
+- A broken font file in the system or user font folder no longer makes the font option allocate up to 4 GB
 
 ## 0.4.0-alpha (2026-11-05)
 

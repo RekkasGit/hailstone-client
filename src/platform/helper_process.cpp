@@ -43,6 +43,11 @@ bool HelperProcess::start(const std::vector<std::string>& args, std::string& err
 
 void HelperProcess::write(std::span<const std::byte> bytes) {
     if (!in_) return;
+    flush();
+    if (out_.size() + bytes.size() > max_pending_) { // not reading: ended, so the client sees it die and restarts it
+        stop(true);
+        return;
+    }
     out_.insert(out_.end(), bytes.begin(), bytes.end());
     flush();
 }
@@ -54,6 +59,7 @@ void HelperProcess::flush() {
         out_.clear();
         return;
     }
+    written_ += n;
     out_.erase(out_.begin(), out_.begin() + static_cast<std::ptrdiff_t>(n));
 }
 
