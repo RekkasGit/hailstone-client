@@ -259,8 +259,9 @@ void ServerFileSync::handle(const ServerFilesReply& reply, Clock::time_point now
     in.received += want;
     bytes_done_ += want;
     rate_bytes_ += want;
+    // A file that came out of order is hashed by update() alone, once a frame: the frame drains every chunk that came,
+    // so a budget spent here would be spent once a chunk, not once a frame.
     if (in.received == e.size) received_file(chunk.index);
-    if (state_ == State::Downloading && !rehash_.empty()) rehash();
     // The server answers in the order asked: the pieces asked before this one that have not come were skipped.
     while (state_ == State::Downloading && !asks_.empty() && asks_.begin()->first < number)
         ask_again(asks_.begin()->first);

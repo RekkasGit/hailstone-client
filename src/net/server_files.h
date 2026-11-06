@@ -89,8 +89,8 @@ public:
     // in one burst) overflowed a 128 KiB socket buffer and stalled on EQEmu's backed-off resends, and Linux caps
     // the buffer platform/udp_socket.cpp asks for at net.core.rmem_max (often ~200 KiB).
     static constexpr int kWindow = 32;
-    // The bytes hashed in one handle() or update() call while verifying, or while downloading a file whose pieces
-    // came out of order (a few tens of ms).
+    // The bytes hashed in one update() call while verifying, or while downloading a file whose pieces came out of
+    // order (a few tens of ms); handle() hashes only plan()'s first share, once a list.
     static constexpr std::uint64_t kHashBytesPerUpdate = std::uint64_t{16} << 20;
 
     // profile_dir: servers/<id>/.

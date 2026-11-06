@@ -205,6 +205,8 @@ TEST_CASE("server files: a piece the server skipped is asked for again, at once"
         server.replies.pop_front();
         sync.handle(*net::decode_server_files(p), now); // no time passes: no timeout is involved
     }
+    // a.bin came out of order: update() hashes it from .download/.
+    for (int calls = 0; !sync.finished() && calls < 100; ++calls) sync.update(now);
     CHECK(sync.state() == ServerFileSync::State::Done);
     CHECK(server.requests == server.pieces + 3);
     CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
@@ -573,4 +575,34 @@ TEST_CASE("server files: a file whose pieces came out of order and does not matc
     CHECK(sync.state() == ServerFileSync::State::Failed);
     CHECK(sync.error().find("arrived damaged") != std::string::npos);
     CHECK_FALSE(fs::exists(dir.path / ".download" / "assets" / "a.bin"));
+}
+
+TEST_CASE("server files: chunks of other files handled in one frame do not hash an out-of-order file") {
+    // The frame drains every chunk that came: hashing a budget's worth on each would hash a large file in one frame.
+    // The file that came out of order is hashed by update() alone, one budget a call.
+    TempDir dir("rehash_frame");
+    FakeServer server;
+    server.files["a.bin"] = std::string(100000, 'a');                          // four pieces, the first asked again
+    server.files["b.bin"] = std::string(64 * net::kServerFilesChunkMax, 'b'); // still coming after a.bin is all here
+    server.drop = {1};
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    sync.set_hash_budget(1000);
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    for (int steps = 0; !server.replies.empty() && steps < 1000; ++steps) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading); // b.bin came in order; a.bin is not hashed yet
+    int calls = 0;
+    while (sync.state() == ServerFileSync::State::Downloading && calls < 1000) {
+        now += std::chrono::seconds(10);
+        sync.update(now);
+        ++calls;
+    }
+    CHECK(calls >= 100); // all of a.bin's 100000 bytes, 1000 a call
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
+    CHECK(read(dir.path / "assets" / "b.bin") == server.files["b.bin"]);
 }
