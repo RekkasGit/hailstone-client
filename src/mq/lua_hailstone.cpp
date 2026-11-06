@@ -453,7 +453,11 @@ private:
     std::optional<lua_Integer> int_result() const {
         std::optional<lua_Integer> r;
         if (lua_isinteger(L(), -1)) r = lua_tointeger(L(), -1);
-        else if (lua_isnumber(L(), -1)) r = static_cast<lua_Integer>(lua_tonumber(L(), -1));
+        else if (lua_isnumber(L(), -1)) {
+            // A float answer is cut to an integer; NaN, an infinity or one beyond lua_Integer is no answer.
+            const double d = lua_tonumber(L(), -1);
+            if (d >= -0x1p63 && d < 0x1p63) r = static_cast<lua_Integer>(d);
+        }
         lua_pop(L(), 1);
         return r;
     }

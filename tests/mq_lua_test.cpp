@@ -1082,6 +1082,29 @@ mq.delay(100000)
     CHECK_FALSE(h.scripts->running("spinwin"));
 }
 
+TEST_CASE("MQ Lua: mq.delay takes math.huge and huge text as a long wait, and NaN as a bad time") {
+    Host h;
+    h.write("d.lua", R"(
+local mq = require('mq')
+print('huge', mq._delay_ms(math.huge), mq._delay_ms(-math.huge), mq._delay_ms(1e300), mq._delay_ms('1e300s'))
+print('int', mq._delay_ms(math.maxinteger), mq._delay_ms(1500), mq._delay_ms('2s'), mq._delay_ms(2.9))
+print('nan', pcall(mq._delay_ms, 0/0))
+print('nantext', pcall(mq._delay_ms, 'nan'))
+print('inftext', mq._delay_ms('inf'))
+mq.delay(math.huge)
+print('never')
+)");
+    REQUIRE(h.scripts->run("d", {}));
+    h.pulses(3, 1000);
+    CHECK(h.printed_line("huge 9000000000000000 -9000000000000000 9000000000000000 9000000000000000"));
+    CHECK(h.printed_line("int 9000000000000000 1500 2000 2"));
+    CHECK(printed_part(h, "nan false"));
+    CHECK(printed_part(h, "nantext false"));
+    CHECK(h.printed_line("inftext 9000000000000000"));
+    CHECK_FALSE(h.printed_line("never"));
+    CHECK(h.scripts->running("d"));
+}
+
 TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
     Host h(0);
     allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll & ~plugin::kCapPackets);

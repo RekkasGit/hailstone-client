@@ -152,6 +152,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] A Lua social's dry run does nothing but note its commands and waits; `eq.LuaSocialDryRun` needs `commands` and `actions` from a plugin (tests/mq_lua_test.cpp, tests/plugin_ui_sandbox_test.cpp).
 - [x] The Lua bridge checks its arguments before it makes C++ strings (an error longjmps past them: Lua is built as C).
 - [x] `mq.imgui` windows held to the 5 s runaway limit, also after a hook ran; a window that destroys windows no longer reads past the list (tests/mq_lua_test.cpp).
+- [x] `mq.delay` and the hooks' number answers defined for NaN, infinities and huge numbers (tests/mq_lua_test.cpp, tests/lua_plugin_test.cpp).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `NmscWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).

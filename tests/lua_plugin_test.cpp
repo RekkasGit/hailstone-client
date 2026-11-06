@@ -286,6 +286,22 @@ TEST_CASE("Lua plugin: held to its capabilities; an error or a runaway in a hook
     }
 }
 
+TEST_CASE("Lua plugin: a hook's number beyond an integer (NaN, math.huge) is no answer") {
+    Host h;
+    h.write("huge.lua", R"(
+local answers = {[1] = math.huge, [2] = 0/0, [3] = -1e300, [4] = 12.75}
+hailstone.hooks{ discipline_reuse = function(id) return answers[id] end }
+)");
+    REQUIRE(h.scripts->run("huge", {}));
+    h.scripts->pulse();
+    for (std::int32_t id : {1, 2, 3}) {
+        INFO(id);
+        CHECK_FALSE(h.chain.discipline_reuse_timer(*h.world.conn, id));
+    }
+    CHECK(h.chain.discipline_reuse_timer(*h.world.conn, 4) == 12u); // a float in range is cut, as before
+    CHECK(h.scripts->running("huge"));
+}
+
 TEST_CASE("Lua plugin: its folder's ui/ is its windows for each pack") {
     Host h;
     h.write("withui/init.lua", "-- windows only\n");

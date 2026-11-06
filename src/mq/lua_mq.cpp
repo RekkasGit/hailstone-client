@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -329,10 +330,26 @@ int l_gettime(lua_State* L) {
     return 1;
 }
 
-// mq.delay's argument in ms: a number, or text with ms / s / m / h.
+// The longest wait mq.delay keeps (about 285 000 years): longer, math.huge included, is cut to it, so the cast is
+// defined and mq.gettime() + ms cannot wrap.
+constexpr lua_Integer kMaxDelayMs = 9'000'000'000'000'000;
+
+lua_Integer delay_ms(double v) {
+    if (v >= static_cast<double>(kMaxDelayMs)) return kMaxDelayMs;
+    if (v <= -static_cast<double>(kMaxDelayMs)) return -kMaxDelayMs;
+    return static_cast<lua_Integer>(v);
+}
+
+// mq.delay's argument in ms: a number, or text with ms / s / m / h. NaN is a bad time.
 int l_delay_ms(lua_State* L) {
+    if (lua_isinteger(L, 1)) {
+        lua_pushinteger(L, std::clamp(lua_tointeger(L, 1), -kMaxDelayMs, kMaxDelayMs));
+        return 1;
+    }
     if (lua_type(L, 1) == LUA_TNUMBER) {
-        lua_pushinteger(L, static_cast<lua_Integer>(lua_tonumber(L, 1)));
+        const double v = lua_tonumber(L, 1);
+        if (std::isnan(v)) return luaL_error(L, "mq.delay: bad time (NaN)");
+        lua_pushinteger(L, delay_ms(v));
         return 1;
     }
     const char* given = luaL_checkstring(L, 1);
@@ -348,11 +365,11 @@ int l_delay_ms(lua_State* L) {
         else if (ends("s")) { t.pop_back(); scale = 1000; }
         else if (ends("m")) { t.pop_back(); scale = 60000; }
         else if (ends("h")) { t.pop_back(); scale = 3600000; }
-        ok = parse_float(t, v);
+        ok = parse_float(t, v) && !std::isnan(v);
         v *= scale;
     }
     if (!ok) return luaL_error(L, "mq.delay: bad time '%s'", given);
-    lua_pushinteger(L, static_cast<lua_Integer>(v));
+    lua_pushinteger(L, delay_ms(v));
     return 1;
 }
 
