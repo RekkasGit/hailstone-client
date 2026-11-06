@@ -6,7 +6,6 @@
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
 - A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
-- While connecting, a session reply from another address than the server's is ignored (one from another port of the server's address is still taken, for NAT), so someone who sees the connect code cannot take over the connection
 - A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
 - After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
 - A Lua script's `/keypress` of a hot button, target or ability key now works while you are typing in the chat (only movement keys did)

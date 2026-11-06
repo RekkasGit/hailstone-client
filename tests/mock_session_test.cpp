@@ -441,8 +441,9 @@ TEST_CASE("mock session: a first fragment without its total length ends the sess
     REQUIRE(rig.until([&] { return rig.server.client_disconnected(); }));
 }
 
-TEST_CASE("mock session: a SessionResponse from another address is ignored; from another port of the server it is taken") {
-    // A raw stand-in for the server on 127.0.0.1, and a second host on 127.0.0.2 that has seen the connect code.
+TEST_CASE("mock session: a SessionResponse with the connect code is taken from another address of the server") {
+    // A raw stand-in for the server on 127.0.0.1, its secondary address 127.0.0.2 (EQEmu binds 0.0.0.0 and answers
+    // from the address its route picks), and another port of 127.0.0.1. A reply without the connect code is ignored.
     std::string error;
     platform::UdpSocket server, other_port, other_host;
     const auto here = platform::Endpoint::v4(127, 0, 0, 1, 0);
@@ -475,15 +476,16 @@ TEST_CASE("mock session: a SessionResponse from another address is ignored; from
         w.be<std::uint32_t>(512);
         return w.take();
     };
-    if (other_host.is_open()) {
-        REQUIRE(other_host.send_to(client, response()));
-        for (int i = 0; i < 50; ++i) {
-            session->update();
-            std::this_thread::sleep_for(1ms);
-        }
-        CHECK(session->state() == SessionState::Connecting);
+    // Another connect code: ignored, from any address.
+    auto wrong = response();
+    wrong[2] ^= std::byte{1};
+    REQUIRE(other_port.send_to(client, wrong));
+    for (int i = 0; i < 50; ++i) {
+        session->update();
+        std::this_thread::sleep_for(1ms);
     }
-    // The server's own address, another port (NAT): adopted.
-    REQUIRE(other_port.send_to(client, response()));
+    CHECK(session->state() == SessionState::Connecting);
+    // The server's other address (or, where 127.0.0.2 cannot be bound, another port of its own): adopted.
+    REQUIRE((other_host.is_open() ? other_host : other_port).send_to(client, response()));
     CHECK(pump([&] { session->update(); }, [&] { return session->state() == SessionState::Connected; }, 5s));
 }
