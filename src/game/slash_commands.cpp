@@ -47,6 +47,16 @@ std::string next_cmd_arg(std::string_view& rest) {
     return word;
 }
 
+std::int32_t cmd_atol(std::string_view text) {
+    std::size_t i = 0;
+    while (i < text.size() && (text[i] == ' ' || (text[i] >= '\t' && text[i] <= '\r'))) ++i;
+    bool negative = false;
+    if (i < text.size() && (text[i] == '-' || text[i] == '+')) negative = text[i++] == '-';
+    std::uint32_t v = 0; // the digits accumulate in 32 bits and wrap, as atoi_msvc in spell_description.cpp does
+    for (; i < text.size() && text[i] >= '0' && text[i] <= '9'; ++i) v = v * 10u + static_cast<std::uint32_t>(text[i] - '0');
+    return static_cast<std::int32_t>(negative ? 0u - v : v);
+}
+
 std::optional<std::size_t> find_slash_command(std::string_view word, bool gm, const EqStrings* strings) {
     if (word.empty()) return std::nullopt;
     // First loop: the localised names (LoadStringTables fills them from

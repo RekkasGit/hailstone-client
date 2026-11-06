@@ -7,6 +7,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -802,4 +803,19 @@ TEST_CASE("guild appearance lines: Handle_OP_SpawnAppearance cases 0x16 and 0x17
     CHECK(guild_rank_appearance_line(g, false, 18, 6, 6, "Bob").eqstr == 0);
     CHECK(guild_rank_appearance_line(g, false, 5, 8, 6, "Bob").eqstr == 0); // another guild's member
     CHECK(guild_rank_appearance_line(g, false, 18, 8, 9, "Bob").eqstr == 0);
+}
+
+TEST_CASE("slash commands: cmd_atol reads a number as the original's 32-bit atol") {
+    CHECK(game::cmd_atol("") == 0);
+    CHECK(game::cmd_atol("abc") == 0);
+    CHECK(game::cmd_atol("  12x") == 12);
+    CHECK(game::cmd_atol("\t+7") == 7);
+    CHECK(game::cmd_atol("-5") == -5);
+    CHECK(game::cmd_atol("2147483647") == 2147483647);
+    CHECK(game::cmd_atol("-2147483648") == std::numeric_limits<std::int32_t>::min());
+    // Past the long's range the digits wrap in 32 bits, the same on every platform (std::atol's long is 64 bits
+    // on Linux and macOS, and its overflow undefined).
+    CHECK(game::cmd_atol("2147483648") == std::numeric_limits<std::int32_t>::min());
+    CHECK(game::cmd_atol("4294967297") == 1);
+    CHECK(game::cmd_atol("9999999999999999999") == static_cast<std::int32_t>(9999999999999999999ull & 0xffffffffull));
 }

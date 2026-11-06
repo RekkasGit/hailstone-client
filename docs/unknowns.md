@@ -157,6 +157,7 @@ What the client does not implement yet, or implements with an approximation it c
 - File selection browses folders, not the OS shell namespace.
 - Context tips: the event tips are hooked (experience, group and guild invitations, consent, red con on the attack key and on a target change while attacking, world containers, interactive objects, the Actions window's page on show, player customization), unit-tested; EQEmu never sends the experience tip's flag (the second dword 2). Not hooked: the Actions window's page keys while it is already shown (FUN_00614510's other callers) and its Abilities page function 0x613a20, the Options window's Display / Keyboard pages (COptionsWnd::WndNotification, 6 / 7), the hot bar help (CHotButtonWnd::WndNotification, 0x57 forced), the merchant tips 0x25 / 0x30 / 0x3f (FUN_004107d0, FUN_005aa200, FUN_00460b40: their callers not traced) and the real estate overview key (0x51: the overview window is not built).
 - `/report` text collection, `/outputfile` destination (the character's folder) and `/survey` (shows the address) differ in detail.
+- Slash-command numbers (`/split`, `game::cmd_atol`): the original's atol on its 32-bit long; the client accumulates the digits in 32 bits and wraps, as the port's MSVC atoi does (`spell_description.cpp`), and `/split` sums the four amounts with a 32-bit wrap. Whether the CRT the original links wraps or saturates (LONG_MAX) a number out of range is not traced; only `/split` amounts past 2147483647 differ. Reading the atol / strtol the original links would settle it.
 
 ## Real estate
 
