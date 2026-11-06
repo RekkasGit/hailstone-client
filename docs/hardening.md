@@ -46,6 +46,7 @@ dependencies was run); the deterministic tests are the verified part.
 | `src/assets/pfs.cpp` `inflate_entry` | within that ratio, ~4 MB of junk deflate could still declare 4 GB, zero-filled before zlib saw a byte | the output grows with what zlib writes (64 KB, then doubling) |
 | `src/assets/eqg_character.cpp` `build_model` | EQGA key times 0 and 0xFFFFFFFF resampled to 21 million poses per bone | a clip is cut at 4096 frames (13.6 minutes at 200 ms) |
 | `src/assets/eqg_character.cpp` `EqgCharacterStore::part_mesh` | a Resources/Layers chain of distinct names recursed once per link (stack overflow at ~100k) | a layered part follows at most 8 rows to its base |
+| `src/assets/zone_fires.cpp` `merge_fires` | a non-finite or absurdly scaled flame cast NaN to int64 or walked (1e14)^2 grid cells | drop non-finite flames and those over 1000 units; grid cells saturate |
 | `src/assets/texture.cpp` `decode_bmp` | `biClrUsed` larger than the bit depth can index (e.g. 256 colours at 1 bit) wrote past the palette array: heap-buffer-overflow | clamp the entry count to `1 << bits` |
 | `src/assets/eqg.cpp` `parse_heightmap` | tile longitude/latitude `i32 - 100000` overflowed a signed int for values near `INT_MIN` | subtract as `uint32_t` and wrap |
 | `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite object position (corrupt record) reached float-to-unsigned casts | treat non-finite coordinates as 0 |

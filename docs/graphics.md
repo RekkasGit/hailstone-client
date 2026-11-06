@@ -122,7 +122,9 @@ Not flames, though named like them: logs, coals and holders (`FIREWOOD`, `COALS`
 Takish's red crystal torches (`TAKTORCH01`), `YKFLAME01` (black; its fireplace's flame is the cloud on it), smoke, and
 `GENE01` sparkles. The flames from the different forms are merged, the bigger kept where one stands in another's flame
 (frozenshadow's emitters burn on its torches' meshes). A flame with none of the zone's lights within 30 units gets one
-of its own, in its hue (EQG zones such as argath and commonlands have flames and no lights).
+of its own, in its hue (EQG zones such as argath and commonlands have flames and no lights). A flame with a non-finite
+place or size, or one more than 1000 units wide or tall (a placement scaled absurdly in a broken zone file), is dropped
+before the merge: its neighbour search would walk billions of grid cells.
 
 Not yet: a torch held in a hand (its flame is a gequip particle cloud, which is not loaded) and particle clouds on
 server doors (never spawned) still show no flame.
