@@ -8,7 +8,9 @@
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -820,6 +822,24 @@ assets::RegionBox dat_region_box(const HeightmapRegion& g, const HeightmapTile& 
     box.angles = {g.rotation.z * k512, g.rotation.y * k512, g.rotation.x * k512};
     box.extents = g.size * 0.5f;
     return box;
+}
+
+std::optional<glm::vec3> light_definition_color(std::string_view view) {
+    const std::string text(view); // strtod needs the terminator
+    auto value = [&](std::string_view key) -> std::optional<double> {
+        auto at = text.find(key);
+        if (at == std::string::npos) return std::nullopt;
+        return std::strtod(text.c_str() + at + key.size(), nullptr);
+    };
+    auto c = value("*COLOR");
+    if (!c) return std::nullopt;
+    // "1e400" or "nan" in a broken file: casting those to an integer is undefined, so they saturate.
+    auto argb = static_cast<std::uint32_t>(saturate_cast<std::int64_t>(*c));
+    auto k = static_cast<float>(value("*INTENSITY").value_or(1.0));
+    if (!std::isfinite(k)) k = 1.0f;
+    return glm::vec3(static_cast<float>((argb >> 16) & 255), static_cast<float>((argb >> 8) & 255),
+                     static_cast<float>(argb & 255)) /
+           255.0f * k;
 }
 
 } // namespace nmsc::assets::eqg

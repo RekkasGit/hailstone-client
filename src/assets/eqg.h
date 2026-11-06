@@ -186,6 +186,9 @@ struct HeightmapLight {
     glm::vec3 position{0.0f};
     float radius = 0.0f;
 };
+// A light's colour from its <definition>.def text: "*COLOR <ARGB as a number>" scaled by "*INTENSITY <k>" (1 when
+// absent), or nullopt without *COLOR. A number out of range saturates; a non-finite intensity counts as 1.
+std::optional<glm::vec3> light_definition_color(std::string_view text);
 
 struct Heightmap {
     HeightmapOptions options;

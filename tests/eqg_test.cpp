@@ -225,6 +225,23 @@ TEST_CASE("EQG effect parameters come from the e_* properties") {
     CHECK(e.water_color1.a == doctest::Approx(1.0f));
 }
 
+TEST_CASE("heightmap light .def: *COLOR is ARGB, scaled by *INTENSITY; broken numbers saturate") {
+    auto c = eqg::light_definition_color("*COLOR 4294934528\r\n*INTENSITY 0.5\r\n"); // 0xFFFF8000
+    REQUIRE(c);
+    CHECK(c->r == doctest::Approx(0.5f));
+    CHECK(c->g == doctest::Approx(128.0f / 255.0f * 0.5f));
+    CHECK(c->b == doctest::Approx(0.0f));
+    CHECK_FALSE(eqg::light_definition_color("*INTENSITY 2\n"));
+    // Out of an integer's range: once undefined behaviour in the cast. INT64_MAX's low 32 bits are white.
+    auto huge = eqg::light_definition_color("*COLOR 1e400\n*INTENSITY 1e400\n");
+    REQUIRE(huge);
+    CHECK(huge->r == doctest::Approx(1.0f));
+    CHECK(std::isfinite(huge->g));
+    auto nan = eqg::light_definition_color("*COLOR nan\n");
+    REQUIRE(nan);
+    CHECK(nan->r == 0.0f);
+}
+
 TEST_CASE("water.dat: finite sheets and *WATERSHEETDATA by *INDEX") {
     const std::string text =
         "*BEGIN_WATERSHEETS\n"
