@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "core/config.h"
@@ -262,6 +263,34 @@ TEST_CASE("UseSkill: bash needs a shield, taunt needs an NPC in melee range") {
     REQUIRE(far.messages.size() == 1);
     CHECK(far.messages[0].eqstr == 386);
     CHECK(st2.timers.is_available(skill::kTaunt)); // a failed check gives the skill back at once
+}
+
+TEST_CASE("UseSkill: the hide-moved check on a corrupt position: __ftol2's INT_MIN, a 32-bit z difference") {
+    Fixture f;
+    SkillContext c = f.context(1000);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    constexpr std::int32_t kMin = std::numeric_limits<std::int32_t>::min();
+    // Hidden where the position was NaN (save_position stored INT_MIN three times): still NaN, so not moved.
+    SkillState st;
+    st.hidden = true;
+    st.hide_x = st.hide_y = st.hide_z = kMin;
+    c.me.x = c.me.y = c.me.z = nan;
+    CHECK_FALSE(check_hide_moved(c, st, 1));
+    CHECK(st.hidden);
+    // The same x and y, z back at 100: INT_MIN - 100 wraps to 0x7fffff9c, which is more than 5.
+    c.me.z = 100.0f;
+    CHECK(check_hide_moved(c, st, 1));
+    // Hidden at z 0, z now past the int range (INT_MIN): 0 - INT_MIN has the magnitude INT_MIN, not above 5.
+    SkillState st2;
+    st2.hidden = true;
+    c.me.x = c.me.y = 0.0f;
+    c.me.z = 3.0e9f;
+    CHECK_FALSE(check_hide_moved(c, st2, 1));
+    // In range it is the plain truncation and abs: 5.9 truncates to 5 (not moved), -6.5 to -6 (moved).
+    c.me.z = 5.9f;
+    CHECK_FALSE(check_hide_moved(c, st2, 1));
+    c.me.z = -6.5f;
+    CHECK(check_hide_moved(c, st2, 1));
 }
 
 TEST_CASE("UseSkill: sneak and hide toggles") {

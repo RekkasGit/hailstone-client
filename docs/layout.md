@@ -88,9 +88,13 @@ breaks its signature, so a bundle keeps its data in `~/Library/Application Suppo
 `HAILSTONE_DATA_DIR` to keep them elsewhere.
 
 `hailstone.ini`, `server.ini` and the characters' files are written through a temporary file renamed over the old
-one, so a crash never leaves half a file. A save that fails is logged; on Windows, where the replace is refused while
-another program has the file open, it is tried a few more times first. Two clients may share `hailstone.ini`: when the file changed since a client
-read it, that client writes only the keys it changed over the other's (`core/config.h`).
+one, so a crash never leaves half a file. Names that reach these files from a server (a world's or a character's
+name, kept as a `char:<name>@<world>` key in `server.ini`) cannot add lines of their own: in a key a line break or
+`=` becomes `_` (also a leading `;`, `#` or `[`), and in a section name a line break or `]` (`core/ini_file.h`). A
+world or character name is compared with the saved list in that form, so such a world keeps one set of characters.
+A save that fails is logged; on Windows, where the replace is refused while another program has the file open, it
+is tried a few more times first. Two clients may share `hailstone.ini`: when the file changed since a client read
+it, that client writes only the keys it changed over the other's (`core/config.h`).
 
 Scripts and plugins are also looked for in the install's own `scripts/` and `plugins/` when the data folder is
 elsewhere (a macOS app bundle, `HAILSTONE_DATA_DIR`), so an install can ship some.

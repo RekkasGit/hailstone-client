@@ -366,6 +366,31 @@ TEST_CASE("Login accounts: the worlds the login server listed, for the World lis
     CHECK(out.worlds == std::vector<std::string>{"Tunaria", "Old World"});
 }
 
+TEST_CASE("Server profile: a world name with '=' keeps one set of characters, written once") {
+    using namespace nmsc;
+    TempServers servers;
+    Config cfg;
+    ui::LoginView view;
+    ui::load_login_settings(view, cfg, servers.path);
+    view.name = "Odd";
+    view.host = "odd.example.org";
+    view.username = "me";
+    REQUIRE(ui::store_login_settings(view, cfg));
+    CHECK(saved_character_key_part("A=B\r\nC") == "A_B__C");
+    CHECK(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}, {"Two", "", 6, "CLR"}}, servers.path));
+    CHECK_FALSE(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}, {"Two", "", 6, "CLR"}},
+                                        servers.path)); // the same list: nothing written
+    // A character deleted on the server leaves the saved list.
+    CHECK(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}}, servers.path));
+    auto p = load_profile("odd", servers.path);
+    REQUIRE(p);
+    const SavedAccount* a = find_account(*p, "me");
+    REQUIRE(a);
+    REQUIRE(a->characters.size() == 1);
+    CHECK(a->characters[0].name == "One");
+    CHECK(a->characters[0].world == saved_character_key_part("A=B"));
+}
+
 TEST_CASE("Keyring keys: the address in lower case and the port") {
     CHECK(nmsc::platform::credential_server("Play.Example.ORG", 5999) == "play.example.org:5999");
 }

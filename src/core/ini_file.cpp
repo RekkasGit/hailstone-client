@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <system_error>
+#include <utility>
 
 #include "core/atomic_file.h"
 
@@ -24,7 +25,25 @@ bool iequal(std::string_view a, std::string_view b) {
                return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
            });
 }
+// Names that reach the file from outside (a world or character name the server sends, a typed account) must stay
+// on their own line: a line break in a key or section would write lines of its own ("\n[Server]\nhost=..."), an '='
+// in a key would split it in the wrong place on the next load, a ']' would end a section name early, and a key that
+// starts like a comment or a section header would not come back as a key. Such characters become '_'; get, set and
+// erase clean the name the same way, so a cleaned name is found again.
+std::string clean_name(std::string_view name, bool section) {
+    std::string out(name);
+    for (char& c : out)
+        if (c == '\n' || c == '\r' || (section ? c == ']' : c == '=')) c = '_';
+    if (!section) {
+        std::size_t first = out.find_first_not_of(" \t");
+        if (first != std::string::npos && (out[first] == ';' || out[first] == '#' || out[first] == '['))
+            out[first] = '_';
+    }
+    return out;
+}
 } // namespace
+
+std::string IniFile::clean_key(std::string_view key) { return clean_name(key, false); }
 
 bool IniFile::load(const std::filesystem::path& path) {
     sections_.clear();
@@ -72,21 +91,21 @@ bool IniFile::save(const std::filesystem::path& path) const {
 }
 
 IniFile::Section* IniFile::find(std::string_view name) {
-    for (Section& s : sections_)
-        if (iequal(s.name, name)) return &s;
-    return nullptr;
+    return const_cast<Section*>(std::as_const(*this).find(name));
 }
 
 const IniFile::Section* IniFile::find(std::string_view name) const {
+    const std::string clean = clean_name(name, true);
     for (const Section& s : sections_)
-        if (iequal(s.name, name)) return &s;
+        if (iequal(s.name, clean)) return &s;
     return nullptr;
 }
 
 std::optional<std::string> IniFile::get(std::string_view section, std::string_view key) const {
+    const std::string clean = clean_name(key, false);
     if (const Section* s = find(section))
         for (const auto& [k, v] : s->entries)
-            if (iequal(k, key)) return v;
+            if (iequal(k, clean)) return v;
     return std::nullopt;
 }
 
@@ -121,26 +140,29 @@ void IniFile::set(std::string_view section, std::string_view key, std::string_vi
     std::string v(value);
     std::replace(v.begin(), v.end(), '\n', ' ');
     std::replace(v.begin(), v.end(), '\r', ' ');
+    std::string clean = clean_name(key, false);
     Section* s = find(section);
     if (!s) {
-        sections_.push_back({std::string(section), {}});
+        sections_.push_back({clean_name(section, true), {}});
         s = &sections_.back();
     }
     for (auto& [k, val] : s->entries)
-        if (iequal(k, key)) {
+        if (iequal(k, clean)) {
             val = std::move(v);
             return;
         }
-    s->entries.emplace_back(std::string(key), std::move(v));
+    s->entries.emplace_back(std::move(clean), std::move(v));
 }
 
 void IniFile::erase(std::string_view section, std::string_view key) {
+    const std::string clean = clean_name(key, false);
     if (Section* s = find(section))
-        std::erase_if(s->entries, [&](const auto& e) { return iequal(e.first, key); });
+        std::erase_if(s->entries, [&](const auto& e) { return iequal(e.first, clean); });
 }
 
 void IniFile::erase_section(std::string_view section) {
-    std::erase_if(sections_, [&](const Section& s) { return iequal(s.name, section); });
+    const std::string clean = clean_name(section, true);
+    std::erase_if(sections_, [&](const Section& s) { return iequal(s.name, clean); });
 }
 
 } // namespace nmsc

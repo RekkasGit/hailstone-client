@@ -83,7 +83,9 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] The world and zone link-death timeout is the original's 180 s of silence (Params 0x12, UdpConnection +0x15c), not 15 s; 15 s is the keepalive delay (Params 0xe) and /offlinemode's exit window (0x3a98 @0x53ddc3). Login (14.8 s) and chat (44 s) keep the client's limits (docs/unknowns.md). Checked live on the NMS dev server (2026-10-31): a character idle in South Qeynos for 270 s stayed connected and camped out normally.
 - [x] rof2decomp notes: Params 0xe is the keepalive delay, not the no-data timeout (checked at 0x8c4197 / 0x8c61c4).
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
-- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md).
+- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
+- [ ] Whether the original takes a SessionResponse from another address of the server (the client takes another port only; unknowns.md).
+- [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
 
 ### Real estate (player housing, guild halls)
 - [x] The packets, the manager (catalog, records, access, item rows, owned lists, areas, placed objects, occupancy), result messages, upkeep time left; unit and mock-server tests.
@@ -221,6 +223,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] The 60 Hz game clock in a live session: jumps, falls and fall damage, /follow and the camera at 30, 60, 144 and uncapped; turning and strafing feel; a zone's load (a dropped stretch).
 - [ ] The cameras 1..5 (docs/mechanics.md "Cameras") in a live session: each one's place, the sweep against walls and doors, mouse look and the camera keys in each, riding and sitting (the tether's bone 0). Unit tests only so far.
 - [ ] The cameras the original switches to itself: the overhead view while knocked out (KnockedOut @0x5a3d1b, back with RestoreSavedCameraType on GetConscious), first person when drunk (70 and over), the missile camera (8) for the player's own arrow with its option (0xe635a9), and RestoreSavedCameraType after zoning.
+
+## Code health
+
+- [ ] The layer order (`app` -> `game` / ... -> `assets` / `net` / `web` -> `core` / `platform`, docs/plan.md and AGENTS.md) does not hold for `net` and `assets`: they include `game/` headers. In `net`: every `game_connection*.cpp` (GameConnection keeps the game state), and the packet codecs `zone_packets.cpp` (`game/mechanics/remote_spawns.h`: the bit-packed positions), `spell_packets.h` (`game::mechanics::cast::Packet`), `task_packets.h` (`game::Task`), `training_packets.h` (`game::kTrainSkills`, `kTrainLanguages`), `aa_packets.h` (`game/alt_adv.h`) and `ability_packets.h` (`game/mechanics/abilities.h`). In `assets`: `wld_zone.cpp` (`game/zone_names.h`), `model_points.cpp` (`game/sine_table.h`), `eqg_character.cpp` (`game/mechanics/anim_select.h`, `game/race_models.h`), `character.cpp`, `character_parts.cpp` and `character_dress.cpp` (`game/appearance*.h`, `game/actor_look.h`, `game/race_models.h`). Everything builds into the one `nmsc_engine` library, so nothing fails to link today, but the documented order is not what the code does, and no check enforces it. Either move the shared pieces down (the position unpacking, race and appearance tables, zone names and the sine table into `core/` or the layer that reads them, and the packet structs out of `game::` types), or write the real order into docs/plan.md and AGENTS.md (GameConnection above `game`; the tables `assets` reads as a lower part of `game`). Then add a check (a CI grep like the NMS one) so it stays true.
 
 ## Not planned
 

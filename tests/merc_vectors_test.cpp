@@ -581,3 +581,52 @@ TEST_CASE("mercenary: the timer's has-mercenary flag is the low byte") {
     CHECK(m.has_mercenary == 1);
     CHECK(h.sent == std::vector<std::uint16_t>{kOpMercDataUpdateRequest});
 }
+
+TEST_CASE("mercenary lists: a huge count over a short tail stops where the bytes do") {
+    auto u32 = [](std::vector<std::uint8_t>& b, std::uint32_t v) {
+        for (int i = 0; i < 4; ++i) b.push_back(static_cast<std::uint8_t>(v >> (8 * i)));
+    };
+    {
+        // OP_MercenaryDataResponse FF FF FF FF 00: 2^32 - 1 types and one byte. It used to push a zero per count.
+        MercManager m;
+        Recorder h;
+        std::vector<std::uint8_t> d = {0xff, 0xff, 0xff, 0xff, 0x00};
+        merc_handle_data_response(m, d, h);
+        CHECK(m.merc_types.empty());
+        // Two whole types, then a short tail: both kept.
+        std::vector<std::uint8_t> two;
+        u32(two, 0xffffffffu);
+        u32(two, 7);
+        u32(two, 9);
+        two.push_back(1);
+        merc_handle_data_response(m, two, h);
+        CHECK(m.merc_types == std::vector<std::uint32_t>{7, 9});
+    }
+    {
+        // OP_MercenaryDataUpdate: one record with 2^32 - 1 stance pairs, two of them there, then one byte. The loop
+        // used to spin through the whole count.
+        MercManager m;
+        Recorder h;
+        std::vector<std::uint8_t> d;
+        u32(d, 0);        // current index
+        u32(d, 1);        // one record
+        for (int i = 0; i < 9; ++i) u32(d, 0);
+        d.push_back(0);   // +0x20
+        u32(d, 0);        // time left
+        u32(d, 0);        // command
+        u32(d, 0);        // stance
+        u32(d, 0xffffffffu); // stance count
+        u32(d, 0);        // active since
+        d.push_back(0);   // assist mode
+        d.push_back(0);   // empty name
+        u32(d, 1); u32(d, 11); // pair 0
+        u32(d, 2); u32(d, 12); // pair 1
+        d.push_back(5);
+        merc_handle_data_update(m, d, h);
+        REQUIRE(m.owned.size() == 1);
+        CHECK(m.owned[0].stance_count == 0xffffffffu);
+        REQUIRE(m.owned[0].stances.size() >= 2);
+        CHECK(m.owned[0].stances[0].stance == 11);
+        CHECK(m.owned[0].stances[1].stance == 12);
+    }
+}

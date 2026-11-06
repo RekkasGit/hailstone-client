@@ -104,6 +104,10 @@ struct HugeAllocation : std::bad_alloc {
 constexpr std::size_t kMaxAllocation = 64u << 20;
 
 void arm_allocation_guard(bool on);
+// The largest single request made while the guard was armed since the last reset (for tests that a small input
+// does not allocate much before it is refused).
+void reset_largest_allocation();
+std::size_t largest_allocation();
 
 // Mutated input makes parsers log warnings by the thousand; keep them out of the test output.
 struct QuietLog {

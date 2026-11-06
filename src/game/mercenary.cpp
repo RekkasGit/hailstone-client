@@ -92,6 +92,9 @@ void merc_read_record(std::span<const std::uint8_t> d, std::size_t& pos, MercRec
     if (r.stances.size() > r.stance_count) r.stances.resize(r.stance_count);
     for (std::uint32_t k = 0; k < r.stance_count; ++k) {
         if (pos >= d.size()) break; // nothing left to read: every further pair keeps its value
+        // Past the stored pairs a pass only moves the position, and with under 4 bytes left none can: stop rather
+        // than spin through a wire count of up to 2^32.
+        if (k >= kMercMaxStances && pos + 4 > d.size()) break;
         MercStance s = k < r.stances.size() ? r.stances[k] : MercStance{};
         read_field(d, pos, s.index);
         read_field(d, pos, s.stance);
@@ -155,7 +158,9 @@ void merc_handle_data_response(MercManager& m, std::span<const std::uint8_t> d, 
     m.merc_types.clear();
     for (std::uint32_t k = 0; k < types && pos < d.size(); ++k) {
         std::uint32_t t = 0;
-        read_u32(d, pos, t);
+        // A short tail (1-3 bytes) moves nothing: stop there rather than push a zero per remaining count, which a
+        // wire count of up to 2^32 turns into gigabytes.
+        if (!read_u32(d, pos, t)) break;
         m.merc_types.push_back(t);
     }
     std::uint32_t count = 0;

@@ -141,4 +141,9 @@ std::optional<AppPacket> encode_skill_send(const game::mechanics::SkillSend& s) 
     return std::nullopt;
 }
 
+std::optional<std::uint32_t> decode_track_reply_header(const AppPacket& p) {
+    if (p.data.size() < 4) return std::nullopt;
+    return detail::decode_with(p, [](ByteReader& r) { return r.le<std::uint32_t>(); });
+}
+
 } // namespace nmsc::net

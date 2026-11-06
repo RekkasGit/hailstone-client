@@ -329,7 +329,7 @@ The client decides locally whether a skill may be used and sends one request; th
 | CancelSneakHide | Z→C | 0x0927 | empty: hide and sneak are over |
 | SpawnAppearance (sneak / hide) | both | 0x0971 | type 15 (sneak) parameter 0/1 from the server sets the player's sneak flag; the client sends {me, 15, 0} to stop sneaking and {me, 3, 0} to unhide before a disarm |
 | SkillUpdate | Z→C | 0x004c | 12 B: u32 skill, u32 value, 4 unknown bytes; the value goes into the profile's skills |
-| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (not decoded yet) |
+| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (`game::set_tracking_list`); a first u32 of 0xff8b344f (`decode_track_reply_header`) is the tracking timer, not a list |
 
 ### Doors and ground objects (`net/door_packets.h`, `GameConnection` in `net/game_connection_doors.cpp`, rules in `game/doors.{h,cpp}`, drawing and collision in `app/world_objects.{h,cpp}`)
 
@@ -344,7 +344,7 @@ The client decides locally whether a skill may be used and sends one request; th
 | ClickObject | both | 0x4aa1 | 8 B: u32 drop id, u32 player spawn id. C→Z: pick up / open (LMouseUp, under 20 units). Z→C: the object is gone (picked up by someone, decayed); the item itself comes as an item packet of type 0x67 to the cursor |
 | ClickObjectAction | Z→C | 0x0c1e | 92 B: u32 drop id (0xffffffff: someone else is using it), i32 -1, i32 -1, u32 container type, u32 0x0a, u32 icon, u32, `char[64]` name: a tradeskill container opened; its contents follow as item packets of type 0x6b (slot type 4, World) |
 | ClickObjectAction | C→Z | 0x0c1e | empty: close the container (EQEmu `Object::Close`, which answers OP_ClearObject) |
-| ClearObject | Z→C | 0x7a11 | 8 B: u8 clear, 3 B, u32 slot. Clear 0 removes the world container's item in that slot; anything else empties every slot of the world container, which EQEmu sends when it closes a container and after a combine emptied it; the window stays open |
+| ClearObject | Z→C | 0x7a11 | 8 B (`decode_clear_object`): u8 clear, 3 B, u32 slot. Clear 0 removes the world container's item in that slot; anything else empties every slot of the world container, which EQEmu sends when it closes a container and after a combine emptied it; the window stays open |
 | TradeSkillCombine | C→Z | 0x579a | 24 B: container slot (12 B InventorySlot; a world container is type 4, slot -1 = SLOT_TRADESKILL_EXPERIMENT_COMBINE), guild-tribute slot (all -1) |
 | RecipesFavorite / RecipesSearch | C→Z | 0x71b1 / 0x6290 | 2008 B {u32 container type, u32 bag item id (0 world), 500 × u32 recipe ids} / 80 B {type, id, u32 min trivial, u32 max trivial, `char[56]` partial name, u32 0x300, u32}; one RecipeReply each |
 | RecipeReply | Z→C | 0x1db6 | 84 B: type, id, u32 component count, u32 recipe id, u32 trivial, `char[64]` name |
@@ -606,7 +606,7 @@ RoF2 has no OP_TraderBuy: everything goes through OP_Trader (trader mode) and OP
 | BuyerItems 9 (sell) | C→Z | 0x1a6a | {u32 9, the 0x178-byte sale record: u32 method (0 at the buyer, 1 a buyer in this zone, 2 elsewhere), u32 1, u32 buyer spawn, u32 buyer character (0 at the buyer), 8 B, three empty strings, the buy line with its buyer fields, u32 quantity, u32 0}; EQEmu's DECODE reads the same bytes |
 | BuyerItems 9 / 10 (result) | Z→C | 0x1a6a | {u32 9 sold / 10 bought, the sale record: +0 method, +4 result (0 sold, 1 failed, 3 pending, 4 out of date, 5 buyer full, 6 no item, 7 / 9 Krono, 8 same zone), buyer [64], item [32], seller [64], the line (name, cost, compensation), +0x170, +0x174 the quantity}; EQEmu writes its sub action at +0 and its error code at +4, the line's item id as 0xffffff |
 | Barter 1 (search) | C→Z | 0x243a | 84 B: u32 1, `char[64]` text, u32 transaction (__EQGetTime), u32 0, u32 buyer character (the combo's buyer; 0 all), u32 scope (1 "Local Barterers"); EQEmu reads 83 B packed, its u16 zone from the scope dword's upper bytes (0) |
-| BuyerItems 1 (matches) | Z→C | 0x1a6a | {u32 1, search text, u32 transaction, u32, u32, u8, u32 count, count × the line with its buyer fields (EQEmu: u16 zone, u16 instance at the zone dword)}; read only for the last search with the window open; 6063 at 200 or more, 6064 the count |
+| BuyerItems 1 (matches) | Z→C | 0x1a6a | {u32 1, search text, u32 transaction, u32, u32, u8, u32 count, count × the line with its buyer fields (EQEmu: u16 zone, u16 instance at the zone dword)}; read only for the last search with the window open; 6063 at 200 or more, 6064 the count. The lines stop where the data does: a count with nothing behind it makes no empty lines (the reader is lenient, so it would otherwise give a default line per count) |
 | Barter 2 / 3 (buyer mode) | both | 0x243a | 4 B {2 on / 3 off}: asked when it differs from the flag (off clears it at once); the server's 2: 6058, the welcome (0x13) and BuyerItems 6 with the enabled, active lines; 3: 6059 (EQEmu: on needs a barter stall door, opentype 155) |
 | Barter 0 (item search) | both | 0x243a | C→Z 68 B {0, `char[64]` text} (6057 to the status text); Z→C {0, u32 count, count × 76 B {`char[64]` name, u32 item id, u32 icon, u32}} |
 | BuyerItems 6 / 7 (our lines) | C→Z | 0x1a6a | 6: {u32 6, u16 count, count × line}; 7: {u32 7, line} (create / modify / toggle in buyer mode); our lines' buyer fields are zero (13 B) |
@@ -615,7 +615,7 @@ RoF2 has no OP_TraderBuy: everything goes through OP_Trader (trader mode) and OP
 | Barter 0x0f / 0x15 (inspect) | C→Z | 0x243a | 0x0f 32 B {0x0f, 0, buyer (spawn id in this zone, else character id), zone, slot, compensation index (-1 the item bought), item id, 2 with Shift}; 0x15 12 B {0x15, item id, 2 with Shift} (an item search result) |
 | Barter 0x10 / 0x14 / 0x16 | Z→C | 0x243a | 0x10 {name}: 6060 "browsing"; 0x14 {name at +8, text at +0x48}: 6070 / 788 (EQEmu sends a chat line instead); 0x16: "Your inventory is full!" |
 | Barter 0x11 / 0x14 / 0x17 | C→Z | 0x243a | 0x11 4 B the hall's welcome; 0x14 8 B {0x14, buyer character} the buyer's greeting; 0x17 4 B the buyers for the search window's combo, once per zone |
-| Barter 0x1a / 0x1b, BuyerItems 0x19 | Z→C | both | 0x1a {zone, character id, spawn id, name[64]} adds a buyer to the combo, 0x1b {character id} removes one, BuyerItems 0x19 {count, records} replaces them (EQEmu never sends it) |
+| Barter 0x1a / 0x1b, BuyerItems 0x19 | Z→C | both | 0x1a {zone, character id, spawn id, name[64]} adds a buyer to the combo, 0x1b {character id} removes one, BuyerItems 0x19 {count, records} replaces them (EQEmu never sends it; the records stop where the data does) |
 | BuyerItems 5 | Z→C | 0x1a6a | {5, u32 length, "<count>$<record>$..."}: lines in the BART ini format, stored and saved (EQEmu never sends it) |
 
 The trader window opens only with the membership feature 0xe and in The Bazaar (zone flag 0x10000000, only zone 151); Begin Trader needs the player standing on a trader stall (the floor switch under the feet, types 0x99 / 0x9b, else 6743); its 200 slots are the items in Trader's Satchels (bag type 51) in the general slots, in slot order; prices come from `[ItemToSell]` of `BZR_<name>_<server>.ini` (key: the item id, or "id:charges" for an item with a click spell), written by Set Price (6751) for every slot holding the same item. Prices show as "12p 3g 4s 5c".
@@ -698,7 +698,7 @@ pairs; this client skips any further ones (stance count kept as sent).
 | Packet | Dir | Opcode | Layout |
 |---|---|---|---|
 | MercenaryDataRequest | C→Z | 0x11c1 | u32 liaison spawn id; sent when the merchant window shows (a right click on a class-71 NPC within 20 opens it) |
-| MercenaryDataResponse | Z→C | 0x72ce | u32 type count, u32 types, u32 entry count, entries. No types: "You do not meet the requirements to purchase any mercenaries." (with a liaison open) and the merchant window hides; a leftover length logs "ERROR: Corrupt MSG_MERCENARIES."; event 0xd fills the window |
+| MercenaryDataResponse | Z→C | 0x72ce | u32 type count, u32 types, u32 entry count, entries. No types: "You do not meet the requirements to purchase any mercenaries." (with a liaison open) and the merchant window hides; a leftover length logs "ERROR: Corrupt MSG_MERCENARIES."; event 0xd fills the window. A type list or a record's stance pairs stop where the bytes do (a count up to 2^32 over a short tail is not run through) |
 | MercenaryDataUpdate | Z→C | 0x61a4 | i32 current index, u32 count, entries, u32 slot count when it fits. No entries: "You do not currently have a mercenary." and the manage window hides; an index inside the list becomes the active mercenary (upkeep tick reset, event 0x13, event 5 or 2 by state), else -1 |
 | MercenaryDataUpdateRequest | C→Z | 0x7b89 | empty; sent by OP_MercenaryTimer |
 | MercenaryHire | C→Z | 0x7169 | 16 B: u32 selected entry id, u32 mercenary id, u32 liaison id, u8 0 + 3 bytes left unset on the wire (0 here) |

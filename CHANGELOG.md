@@ -5,6 +5,10 @@
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
+- A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
+- While connecting, a session reply from another address than the server's is ignored (one from another port of the server's address is still taken, for NAT), so someone who sees the connect code cannot take over the connection
+- A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
+- After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
 
 ## 0.5.0-beta (2026-11-05)
 
@@ -92,7 +96,7 @@
 - Approving an add-on's update approves what you were shown: if the add-on's repository asks for more (or offers another version) by the time you click, nothing is installed and you are asked to review it again
 - A Lua script started by another script or a plugin gets no more permissions than the one that started it, and the settings files scripts write under `scripts/config/` can no longer be run as scripts
 - For server owners: Hailstone's server script looks at `client_files/` again at most every 5 minutes when a player asks (the new `files_rescan` setting; `#reloadquest` picks changes up at once), holds each player to 1024 file pieces a second (`files_chunks_per_second`), keeps up to eight files open so players fetching different files no longer make the zone reopen them at every piece, and passes on at most 5 group declines a player in 10 s
-- A new server on the login screen starts with an empty address instead of a private network address (192.168.12.250) left over from development; type your server's address
+- A new server on the login screen starts with an empty address instead of a development address left in by mistake; type your server's address
 - Zoning or quitting while a neighbour zone (the distant zone past a zone line, modern lighting) is still loading no longer waits for the whole load to finish
 - On a system whose window surface reports a size other than the window's (some scaled or tiling desktops), the graphics are no longer set up again every frame
 - A graphics driver whose window images cannot be copied no longer gets an invalid copy for a screenshot: the screenshot is refused with a chat line and a log line instead

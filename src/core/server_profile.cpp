@@ -248,18 +248,26 @@ bool note_account_character(std::string_view id, std::string_view username, std:
     return save_profile(*p, servers);
 }
 
+std::string saved_character_key_part(std::string_view name) {
+    // The prefix keeps the key's first character fixed, so only the per-character rule applies to the name.
+    return IniFile::clean_key(std::string(kCharPrefix) + std::string(name)).substr(kCharPrefix.size());
+}
+
 bool note_account_characters(std::string_view id, std::string_view username, std::string_view world,
                              const std::vector<SavedCharacter>& characters, const std::filesystem::path& servers) {
     auto p = load_profile(id, servers);
     if (!p) return false;
     SavedAccount* a = find_account(*p, username);
     if (!a) return false;
+    // Compared and kept as the file stores them, so a world name with an '=' still replaces its old entries.
+    const std::string saved_world = saved_character_key_part(world);
     std::vector<SavedCharacter> list;
     for (const auto& c : a->characters)
-        if (c.world != world) list.push_back(c);
+        if (c.world != saved_world) list.push_back(c);
     for (const auto& c : characters) {
         list.push_back(c);
-        list.back().world = std::string(world);
+        list.back().name = saved_character_key_part(c.name);
+        list.back().world = saved_world;
     }
     auto same = [](const SavedCharacter& x, const SavedCharacter& y) {
         return x.name == y.name && x.world == y.world && x.level == y.level && x.classes == y.classes;

@@ -1324,7 +1324,7 @@ void GameConnection::handle_leadership_ability(Op op, const AppPacket& p) {
                 const game::SpellData* s = spell_table_ ? spell_table_->get(static_cast<std::uint32_t>(b->spells[i])) : nullptr;
                 if (!s) continue;
                 if (b->ticks[i] < 1) chat(ChatEvent::Kind::System, s->name, 0, 0x14a);
-                else line(0x225f, {s->name, std::to_string((b->ticks[i] * 3 + 15) * 2 / 60)});
+                else line(0x225f, {s->name, std::to_string(inspect_buff_minutes(b->ticks[i]))});
             }
         }
         break;

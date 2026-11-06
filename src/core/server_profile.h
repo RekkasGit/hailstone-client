@@ -131,6 +131,10 @@ bool note_account_characters(std::string_view id, std::string_view username, std
                              const std::vector<SavedCharacter>& characters,
                              const std::filesystem::path& servers = platform::servers_dir());
 
+// A character's or world's name as server.ini keeps it inside a char:<name>@<world> key (IniFile::clean_key): a
+// line break or '=' in it is a '_'. A name read back from the file compares with a live one in this form.
+std::string saved_character_key_part(std::string_view name);
+
 // The first profile with this host (case-insensitively) and port, or nullptr.
 const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view host, int port);
 const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view id);

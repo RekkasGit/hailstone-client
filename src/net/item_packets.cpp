@@ -4,6 +4,7 @@
 
 #include "net/item_packets.h"
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -21,6 +22,13 @@ constexpr int kMaxItemDepth = 4;          // a bag's content is depth 1; an item
                                           // too, each with its socket as the index (child i = socket i)
 constexpr std::uint32_t kMaxContents = kMaxBagContents;
 constexpr std::uint32_t kMaxInventoryItems = 4096;
+// Fewer bytes than any serialized item takes (an empty item is several hundred: its fixed fields and the empty
+// strings' terminators; item_packets_test checks this stays below it). The vectors reserve no more entries than the
+// bytes left could hold, so a few-byte packet that claims thousands of items does not allocate megabytes first.
+constexpr std::size_t kMinItemBytes = 64;
+std::size_t reserve_for(std::uint32_t count, const ByteReader& r, std::size_t per_entry) {
+    return std::min<std::size_t>(count, r.remaining() / per_entry);
+}
 
 double read_f64(ByteReader& r) {
     std::uint64_t bits = r.le<std::uint64_t>();
@@ -261,7 +269,7 @@ Item read_item_at(ByteReader& r, int depth) {
     // Contents.
     std::uint32_t count = r.le<std::uint32_t>();
     if (count > kMaxContents) throw std::out_of_range("too many bag contents");
-    it.contents.reserve(count);
+    it.contents.reserve(reserve_for(count, r, 4 + kMinItemBytes)); // each entry: its u32 index and the item
     for (std::uint32_t i = 0; i < count; ++i) {
         BagItem b;
         b.index = r.le<std::uint32_t>();
@@ -520,7 +528,7 @@ std::optional<std::vector<Item>> decode_char_inventory(const AppPacket& p) {
         std::uint32_t count = r.le<std::uint32_t>();
         if (count > kMaxInventoryItems) throw std::out_of_range("too many items");
         std::vector<Item> items;
-        items.reserve(count);
+        items.reserve(reserve_for(count, r, kMinItemBytes));
         for (std::uint32_t i = 0; i < count; ++i) items.push_back(read_item(r));
         if (!r.empty()) throw std::out_of_range("trailing bytes after the inventory");
         return items;

@@ -214,6 +214,9 @@ struct InspectBuffs {
 };
 std::optional<InspectBuffs> decode_inspect_buffs(const AppPacket& p);
 AppPacket encode(const InspectBuffs& v); // server direction, for tests
+// The minutes the inspect line shows for a buff's tick count: (ticks x 3 + 15) x 2 / 60 in the original's 32 bits,
+// so a tick count past 2^31 / 6 wraps there as it does here (core::wrapped_div, never a plain divide of a product).
+std::int32_t inspect_buff_minutes(std::int32_t ticks);
 // OP_DoGroupLeadershipAbility (0x6eae, 8 bytes): u32 ability, u32 parameter.
 AppPacket encode_do_group_leadership_ability(std::uint32_t ability, std::uint32_t parameter);
 // OP_XTargetResponse, zone → client (ExtendedTargetList_UnSerializeSlots @0x548a10): u32 max (the list's size), u32

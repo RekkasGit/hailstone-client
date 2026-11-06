@@ -48,4 +48,8 @@ AppPacket encode_skill_update(const SkillUpdate& v); // server direction, for te
 // packets for hide, sneak, forage, mend, ...).
 std::optional<AppPacket> encode_skill_send(const game::mechanics::SkillSend& s);
 
+// OP_Track, zone -> client: the reply's first u32 (none for a packet under 4 bytes). game::kTrackReplyTimer there
+// means the reply is the tracking timer, not a list; any other value starts the list (game::set_tracking_list).
+std::optional<std::uint32_t> decode_track_reply_header(const AppPacket& p);
+
 } // namespace nmsc::net

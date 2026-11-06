@@ -453,7 +453,8 @@ struct LenientReader {
     std::span<const std::byte> data;
     std::size_t pos = 0;
 
-    bool has(std::size_t n) const { return pos + n <= data.size(); }
+    // Written so that a server-sent length near 2^32 cannot wrap pos + n on a 32-bit size_t.
+    bool has(std::size_t n) const { return pos <= data.size() && n <= data.size() - pos; }
     std::uint32_t u32(std::uint32_t fallback = 0) {
         if (!has(4)) return fallback;
         std::uint32_t v = 0;
@@ -737,7 +738,14 @@ std::optional<BarterSearchResults> decode_barter_search_results(const AppPacket&
         r.u8();
         std::uint32_t n = r.u32();
         if (n > 10000) return std::nullopt;
-        for (std::uint32_t i = 0; i < n; ++i) v.lines.push_back(read_line(r));
+        // A read past the end gives defaults rather than failing, so a count with nothing behind it would make
+        // that many empty lines: stop once the data runs out or a line reads nothing.
+        for (std::uint32_t i = 0; i < n && r.has(1); ++i) {
+            const std::size_t at = r.pos;
+            BuyLine line = read_line(r);
+            if (r.pos == at) break;
+            v.lines.push_back(std::move(line));
+        }
         return v;
     } catch (const std::out_of_range&) {
         return std::nullopt;
@@ -923,7 +931,12 @@ std::optional<std::vector<BarterBuyer>> decode_barter_buyer_list(const AppPacket
     std::uint32_t n = r.u32();
     if (n > 10000) return std::nullopt;
     std::vector<BarterBuyer> v;
-    for (std::uint32_t i = 0; i < n; ++i) v.push_back(read_buyer(r));
+    for (std::uint32_t i = 0; i < n && r.has(1); ++i) { // as the search results: no empty buyers past the data
+        const std::size_t at = r.pos;
+        BarterBuyer b = read_buyer(r);
+        if (r.pos == at) break;
+        v.push_back(std::move(b));
+    }
     return v;
 }
 

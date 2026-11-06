@@ -1240,3 +1240,37 @@ TEST_CASE("consume: OP_Consume is RoF2's 24-byte Consume_Struct") {
     std::memcpy(&automatic, nmsc::net::encode_consume(nmsc::net::ItemSlot::possessions(23), false, false).data.data() + 12, 4);
     CHECK(automatic == 999u); // a right click
 }
+
+#include "net/group_packets.h"
+
+TEST_CASE("OP_InspectBuffs minutes: the original's 32-bit arithmetic") {
+    using namespace nmsc::net;
+    // (ticks x 3 + 15) x 2 / 60 in 32 bits: 10 ticks are 1 minute, and a count past 2^31 / 6 wraps as the
+    // original's imul / idiv does: 0x20000000 x 6 + 30 is 0xc000001e, -1073741794 / 60.
+    CHECK(inspect_buff_minutes(1) == 0);
+    CHECK(inspect_buff_minutes(10) == 1);
+    CHECK(inspect_buff_minutes(0x20000000) == -17895696);
+    CHECK(inspect_buff_minutes(0x7fffffff) == 0);
+}
+
+#include "net/ability_packets.h"
+
+TEST_CASE("the OP_Track reply's header and OP_ClearObject decoders") {
+    using namespace nmsc::net;
+    auto bytes = [](std::initializer_list<std::uint8_t> v) {
+        std::vector<std::byte> out;
+        for (auto b : v) out.push_back(std::byte{b});
+        return out;
+    };
+    const auto track = to_wire(Op::Track);
+    CHECK_FALSE(decode_track_reply_header(AppPacket(track, {})));
+    CHECK_FALSE(decode_track_reply_header(AppPacket(track, bytes({0x4f, 0x34, 0x8b}))));
+    CHECK(decode_track_reply_header(AppPacket(track, bytes({0x4f, 0x34, 0x8b, 0xff, 1}))) == 0xff8b344fu);
+
+    auto c = decode_clear_object(encode(ClearObject{0, 7}));
+    REQUIRE(c);
+    CHECK(c->clear == 0);
+    CHECK(c->slot == 7);
+    CHECK(encode(ClearObject{1, -1}).data.size() == kClearObjectSize);
+    CHECK_FALSE(decode_clear_object(AppPacket(to_wire(Op::ClearObject), bytes({1, 0, 0, 0, 2, 0, 0}))));
+}

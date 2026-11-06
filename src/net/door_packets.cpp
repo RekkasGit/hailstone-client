@@ -207,6 +207,25 @@ AppPacket encode(const ClickObjectAction& v) {
     return make_packet(Op::ClickObjectAction, std::move(w));
 }
 
+AppPacket encode(const ClearObject& v) {
+    ByteWriter w;
+    w.le(v.clear);
+    for (int i = 0; i < 3; ++i) w.le(std::uint8_t{0});
+    w.le(v.slot);
+    return make_packet(Op::ClearObject, std::move(w));
+}
+
+std::optional<ClearObject> decode_clear_object(const AppPacket& p) {
+    if (p.data.size() < kClearObjectSize) return std::nullopt;
+    return decode_with(p, [](ByteReader& r) {
+        ClearObject v;
+        v.clear = r.le<std::uint8_t>();
+        r.skip(3);
+        v.slot = r.le<std::int32_t>();
+        return v;
+    });
+}
+
 std::optional<ClickObjectAction> decode_click_object_action(const AppPacket& p) {
     if (p.data.size() != kClickObjectActionSize) return std::nullopt;
     return decode_with(p, [](ByteReader& r) {

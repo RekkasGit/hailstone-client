@@ -3,6 +3,7 @@
 #include <array>
 #include <cctype>
 
+#include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 
 namespace nmsc::game {
@@ -46,6 +47,8 @@ std::string next_cmd_arg(std::string_view& rest) {
     rest.remove_prefix(i);
     return word;
 }
+
+std::int32_t cmd_atol(std::string_view text) { return core::msvc_atoi(text); }
 
 std::optional<std::size_t> find_slash_command(std::string_view word, bool gm, const EqStrings* strings) {
     if (word.empty()) return std::nullopt;

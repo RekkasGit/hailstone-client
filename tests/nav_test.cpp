@@ -25,6 +25,7 @@
 #include "mock_server/harness.h"
 #include "mq_test_world.h"
 #include "net/movement_packets.h"
+#include "net/world_packets.h"
 #include "nav/nav_mesh.h"
 #include "nav/path_follower.h"
 #include "nav/zone_nav.h"
@@ -2178,3 +2179,16 @@ TEST_CASE("nav: real zones: Lower Guk, walked from the undead side's entrance to
 }
 
 
+
+TEST_CASE("nav: a quiet path asked and not answered before a zone change does not take the next zone's /find reply") {
+    test::Rig rig(test::MockConfig::standard(), test::quick_options());
+    REQUIRE(rig.to_zone());
+    rig.conn.request_quiet_path(42);
+    // The zone change comes before the reply (the old zone's link dropped with it unanswered).
+    rig.conn.receive_world_packet_for_test(net::encode(net::ZoneServerInfo{"127.0.0.1", 7001}));
+    const auto finds = rig.conn.find_replies();
+    std::vector<glm::vec3> path{{0, 0, 0}, {10, 5, 0}};
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(path));
+    CHECK_FALSE(rig.conn.take_quiet_path()); // the reply is a /find's: the find window counts it
+    CHECK(rig.conn.find_replies() == finds + 1);
+}
