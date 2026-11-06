@@ -221,6 +221,27 @@ TEST_CASE("addon_install: an update that turns a folder into a file of its name 
     CHECK(read_installed_addons(dir.path())[0].version == "1.2.0");
 }
 
+// An update takes out only the folders its files left empty or that are in a new file's way: an empty folder a
+// script made at run time (its saves) or the player made stays.
+TEST_CASE("addon_install: an update keeps empty folders it did not empty") {
+    test::ScratchDir dir("addon_keep_empty");
+    const fs::path folder = addon_folder(dir.path(), AddonKind::Script, "foo");
+    install_script(dir.path(), "foo", "1.0.0", {{"init.lua", "-- v1\n"}, {"old/deep/a.lua", "return 1\n"}});
+    fs::create_directories(folder / "saves");
+    fs::create_directories(folder / "logs" / "today");
+    install_script(dir.path(), "foo", "1.1.0", {{"init.lua", "-- v2\n"}, {"new/b.lua", "return 2\n"}});
+    CHECK(fs::is_directory(folder / "saves"));
+    CHECK(fs::is_directory(folder / "logs" / "today"));
+    CHECK_FALSE(fs::exists(folder / "old")); // the earlier version's, emptied by this update
+    CHECK(read_file(folder / "new" / "b.lua") == "return 2\n");
+    // An empty folder in a new file's way still goes.
+    fs::create_directories(folder / "data" / "empty");
+    install_script(dir.path(), "foo", "1.2.0", {{"init.lua", "-- v3\n"}, {"data", "x\n"}});
+    CHECK(read_file(folder / "data") == "x\n");
+    CHECK(fs::is_directory(folder / "saves"));
+    CHECK_FALSE(fs::exists(folder / "new")); // 1.1.0's, emptied
+}
+
 TEST_CASE("addon_install: an install cut off is undone at the next start") {
     test::ScratchDir dir("addon_journal");
     const fs::path folder = addon_folder(dir.path(), AddonKind::Script, "autoloot");

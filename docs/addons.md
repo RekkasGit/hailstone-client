@@ -297,6 +297,8 @@ plugins/<name>/   an installed plugin
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
   not is taken out. The player's other files there stay: a plugin's settings beside it (`nmsc->config_dir`), notes.
+  So do empty folders, other than those the update emptied and an empty folder where a file now goes (a folder that
+  still holds the player's files stops the update).
 - **A removal** takes out the add-on's files and its record. The player's files in its folder stay, and the folder
   goes once it is empty.
 - **A cut-off install or removal** (the client died between its moves) is undone at the next start from the journal.
