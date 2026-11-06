@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "core/byte_io.h"
+#include "core/wrap_math.h"
 #include "net/packet_io.h"
 
 namespace nmsc::net {
@@ -342,6 +343,10 @@ AppPacket encode_mark_npc(Op op, const MarkNpc& v) {
     w.le(v.number);
     name64(w, v.name);
     return make_packet(op, std::move(w));
+}
+
+std::int32_t inspect_buff_minutes(std::int32_t ticks) {
+    return core::wrapped_div((static_cast<std::uint32_t>(ticks) * 3u + 15u) * 2u, 60);
 }
 
 std::optional<InspectBuffs> decode_inspect_buffs(const AppPacket& p) {

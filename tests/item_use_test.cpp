@@ -94,6 +94,19 @@ TEST_CASE("item use: a right click sends OP_ItemVerifyRequest; the reply eats th
     CHECK(conn.spell_state().pending == 0);
 }
 
+TEST_CASE("item use: a food duration past 2^31 / 100 wraps as the original's 32-bit FoodDuration x 100 / 2") {
+    // 0x02000000 x 100 is 0xc8000000 in 32 bits, -939524096, so half of it is -469762048: the hunger goes down from
+    // 5999 to -469756049 (stored as the u32 the meter keeps), as the original's imul / idiv gives, on every compiler.
+    MockConfig config = with_items({});
+    config.characters[0].inventory[1].cast_time_ = 0x02000000;
+    Rig rig(config);
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    const ItemSlot rations = ItemSlot::possessions(23);
+    conn.receive_zone_packet_for_test(encode(ItemVerifyReply{rations, 0, 0}));
+    CHECK(conn.spell_state().hunger == static_cast<std::uint32_t>(5999 - 469762048));
+}
+
 TEST_CASE("item use: a bag toggles its container, the bank and corpse paths send no request") {
     Item bag = make_item(1003, "Backpack", 24);
     bag.item_class = 1;

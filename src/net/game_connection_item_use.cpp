@@ -12,6 +12,7 @@
 #include <format>
 
 #include "core/log.h"
+#include "core/wrap_math.h"
 #include "game/augments.h"
 #include "game/item_preview.h"
 #include "game/mechanics/character.h"
@@ -176,8 +177,11 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
         }
         const bool vowel = !item->name.empty() && is_vowel(item->name[0]);
         system(drink ? (vowel ? 8502 : 12078) : (vowel ? 8501 : 12075), {item->name}, kChatFood);
-        level = static_cast<std::uint32_t>(
-            std::min(kFull, static_cast<std::int32_t>(level) + item->cast_time_ * 100 / 2)); // FoodDuration
+        // FoodDuration x 100 / 2 in the original's 32 bits (imul, then idiv): a duration past 2^31 / 100 wraps as it
+        // does there, written with wrapped_div so that no compiler folds it as if nothing wrapped (AGENTS.md).
+        const std::int32_t gain =
+            core::wrapped_div(static_cast<std::uint32_t>(item->cast_time_) * 100u, 2); // |gain| <= 2^30
+        level = static_cast<std::uint32_t>(std::min(kFull, static_cast<std::int32_t>(level) + gain));
         if (drink) wave(0x95);
         system(drink ? 12079 : 12076, {}, kChatFood);
         send_zone(encode_consume_reply(slot, drink));
