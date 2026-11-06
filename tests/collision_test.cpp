@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -62,6 +63,25 @@ TEST_CASE("line_of_sight is blocked by solid geometry") {
     auto mesh = CollisionMesh::build(flat_zone());
     CHECK(mesh.line_of_sight({10, 10, 5}, {90, 90, 5}));    // above the floor, beside the ledge
     CHECK_FALSE(mesh.line_of_sight({50, 50, 20}, {50, 50, -5})); // through the ledge and the floor
+}
+
+TEST_CASE("line_of_sight and the probes: huge or non-finite coordinates return at once") {
+    // One axis 2^31 cells long: the int32 span wrapped negative, passed the 256-cell guard and the loop walked
+    // about 2^31 cells (and the float-to-int32 casts were undefined).
+    auto mesh = CollisionMesh::build(flat_zone());
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    CHECK(mesh.line_of_sight({-1e30f, 50, 5}, {100, 50, 5}));
+    CHECK(mesh.line_of_sight({-1.5e10f, 0, 5}, {0, 0, 5}));
+    CHECK(mesh.line_of_sight({0, -1.37e11f, 5}, {0, 1.37e11f, 5}));
+    CHECK(mesh.line_of_sight({-inf, 50, 5}, {100, 50, 5}));
+    CHECK(mesh.line_of_sight({nan, 50, 5}, {100, 50, 5}));
+    CHECK_FALSE(mesh.floor_below({1e30f, -1e30f, 5}, 2).has_value());
+    CHECK_FALSE(mesh.floor_below({nan, nan, 5}, 2).has_value());
+    CHECK_FALSE(mesh.ceiling_above({-1e30f, 50, 5}).has_value());
+    CHECK_FALSE(mesh.first_hit({-1e30f, 50, 5}, {1e30f, 50, 5}, true).has_value());
+    // In range nothing changed.
+    CHECK_FALSE(mesh.line_of_sight({50, 50, 20}, {50, 50, -5}));
+    CHECK(mesh.first_hit({50, 50, 20}, {50, 50, -5}, true).has_value());
 }
 
 TEST_CASE("line_of_sight: only the cells under the sight line are searched, with the same answers") {

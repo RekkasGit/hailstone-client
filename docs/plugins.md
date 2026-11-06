@@ -220,7 +220,7 @@ For a script that fights:
   (22), `.Feared` (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%).
 - Line of sight: `Spawn.LineOfSight` (the player's eyes to the spawn through the zone's collision, the check the
   client's own abilities make), `LineOfSight[y,x,z:y,x,z]` (two points in MQ's order); NULL before the zone's
-  collision is loaded.
+  collision is loaded, and for a coordinate that is not a finite number below 1000000 in size.
 - `/stick` and the `Stick` TLO (`docs/navigation.md`).
 
 Spawn searches use MQ's words:

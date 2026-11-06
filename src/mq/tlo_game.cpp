@@ -1371,7 +1371,8 @@ void register_game_tlos(Registry& r) {
                 std::string_view part = text.substr(i, j - i);
                 while (!part.empty() && part.front() == ' ') part.remove_prefix(1);
                 while (!part.empty() && part.back() == ' ') part.remove_suffix(1);
-                if (!parse_float(part, v[n])) return std::nullopt;
+                // A point past the world (as nav_mesh bounds it), inf or nan has no sight line: nil.
+                if (!parse_float(part, v[n]) || !std::isfinite(v[n]) || std::abs(v[n]) >= 1.0e6) return std::nullopt;
                 ++n;
                 i = j + 1;
             }

@@ -109,9 +109,8 @@ void CollisionMesh::index() {
         const auto& tri = triangles_[t];
         glm::vec3 lo = glm::min(glm::min(tri.v0, tri.v1), tri.v2);
         glm::vec3 hi = glm::max(glm::max(tri.v0, tri.v1), tri.v2);
-        auto x0 = static_cast<std::int32_t>(std::floor(lo.x / kCell)), x1 = static_cast<std::int32_t>(std::floor(hi.x / kCell));
-        auto y0 = static_cast<std::int32_t>(std::floor(lo.y / kCell)), y1 = static_cast<std::int32_t>(std::floor(hi.y / kCell));
-        if (static_cast<std::int64_t>(x1 - x0 + 1) * (y1 - y0 + 1) > 4096) {
+        const auto x0 = cell_of(lo.x), x1 = cell_of(hi.x), y0 = cell_of(lo.y), y1 = cell_of(hi.y);
+        if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 4096) {
             big_.push_back(t); // a huge triangle: tested by every sweep
             continue;
         }
@@ -121,8 +120,7 @@ void CollisionMesh::index() {
 }
 
 std::optional<float> CollisionMesh::floor_below(const glm::vec3& p, float step_up) const {
-    auto it = cells_.find(cell_key(static_cast<std::int32_t>(std::floor(p.x / kCell)),
-                                   static_cast<std::int32_t>(std::floor(p.y / kCell))));
+    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
     if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
     const float limit = p.z + step_up;
@@ -144,8 +142,7 @@ std::optional<float> CollisionMesh::floor_below(const glm::vec3& p, float step_u
 }
 
 std::optional<float> CollisionMesh::ceiling_above(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(static_cast<std::int32_t>(std::floor(p.x / kCell)),
-                                   static_cast<std::int32_t>(std::floor(p.y / kCell))));
+    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
     if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
     for (std::uint32_t t : it->second) {
@@ -166,8 +163,7 @@ std::optional<float> CollisionMesh::ceiling_above(const glm::vec3& p) const {
 
 std::vector<CollisionMesh::SurfaceHit> CollisionMesh::surfaces_above(const glm::vec3& p) const {
     std::vector<SurfaceHit> out;
-    auto it = cells_.find(cell_key(static_cast<std::int32_t>(std::floor(p.x / kCell)),
-                                   static_cast<std::int32_t>(std::floor(p.y / kCell))));
+    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
     if (it == cells_.end()) return out;
     for (std::uint32_t t : it->second) {
         const auto& tri = triangles_[t];
@@ -179,8 +175,7 @@ std::vector<CollisionMesh::SurfaceHit> CollisionMesh::surfaces_above(const glm::
 }
 
 std::optional<float> CollisionMesh::ground_below(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(static_cast<std::int32_t>(std::floor(p.x / kCell)),
-                                   static_cast<std::int32_t>(std::floor(p.y / kCell))));
+    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
     if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
     for (std::uint32_t t : it->second) {
@@ -193,8 +188,7 @@ std::optional<float> CollisionMesh::ground_below(const glm::vec3& p) const {
 }
 
 std::optional<float> CollisionMesh::roof_above(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(static_cast<std::int32_t>(std::floor(p.x / kCell)),
-                                   static_cast<std::int32_t>(std::floor(p.y / kCell))));
+    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
     if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
     for (std::uint32_t t : it->second) {
@@ -210,11 +204,12 @@ bool CollisionMesh::line_of_sight(const glm::vec3& a, const glm::vec3& b) const 
     glm::vec3 d = b - a;
     float length = glm::length(d);
     if (length < 1e-3f) return true;
-    auto x0 = static_cast<std::int32_t>(std::floor(std::min(a.x, b.x) / kCell));
-    auto x1 = static_cast<std::int32_t>(std::floor(std::max(a.x, b.x) / kCell));
-    auto y0 = static_cast<std::int32_t>(std::floor(std::min(a.y, b.y) / kCell));
-    auto y1 = static_cast<std::int32_t>(std::floor(std::max(a.y, b.y) / kCell));
-    if (static_cast<std::int64_t>(x1 - x0 + 1) * (y1 - y0 + 1) > 256) return true; // too long to bother
+    // A NaN or infinite end (a script's LineOfSight, a server teleport) is answered like a line too long to test.
+    if (!finite(a) || !finite(b)) return true;
+    const auto x0 = cell_of(std::min(a.x, b.x)), x1 = cell_of(std::max(a.x, b.x));
+    const auto y0 = cell_of(std::min(a.y, b.y)), y1 = cell_of(std::max(a.y, b.y));
+    // The span in 64 bits: an int32 x1 - x0 wrapped negative for ends 2^31 cells apart and let the loop run.
+    if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 256) return true; // too long to bother
     // Only the box's cells the segment passes over (within a unit, for rounding): a triangle it crosses is listed in
     // the cell under the crossing (index() lists a triangle in every cell its box overlaps), so the others cannot
     // change the answer. A diagonal sight line's box held up to 256 cells, most of them nowhere near it; the
@@ -306,8 +301,8 @@ void CollisionMesh::for_each_on_segment(const glm::vec3& a, const glm::vec3& b,
     };
     // The cells the segment's XY projection crosses (Amanatides and Woo).
     glm::vec2 p(a.x / kCell, a.y / kCell), q(b.x / kCell, b.y / kCell);
-    auto x = static_cast<std::int32_t>(std::floor(p.x)), y = static_cast<std::int32_t>(std::floor(p.y));
-    auto x_end = static_cast<std::int32_t>(std::floor(q.x)), y_end = static_cast<std::int32_t>(std::floor(q.y));
+    auto x = cell_of(a.x), y = cell_of(a.y);
+    const auto x_end = cell_of(b.x), y_end = cell_of(b.y);
     glm::vec2 d = q - p;
     int step_x = d.x > 0 ? 1 : (d.x < 0 ? -1 : 0), step_y = d.y > 0 ? 1 : (d.y < 0 ? -1 : 0);
     float t_max_x = step_x ? ((step_x > 0 ? std::floor(p.x) + 1.0f - p.x : p.x - std::floor(p.x)) / std::abs(d.x)) : 2.0f;
@@ -339,9 +334,8 @@ void CollisionMesh::for_each_near_sweep(const SphereSweep& s, Fn&& fn) const {
     glm::vec3 lo = glm::min(s.start, s.end) - glm::vec3(s.radius);
     glm::vec3 hi = glm::max(s.start, s.end) + glm::vec3(s.radius);
     if (!finite(lo) || !finite(hi)) return;
-    auto x0 = static_cast<std::int32_t>(std::floor(lo.x / kCell)), x1 = static_cast<std::int32_t>(std::floor(hi.x / kCell));
-    auto y0 = static_cast<std::int32_t>(std::floor(lo.y / kCell)), y1 = static_cast<std::int32_t>(std::floor(hi.y / kCell));
-    if (static_cast<std::int64_t>(x1 - x0 + 1) * (y1 - y0 + 1) > 4096) return; // a sweep across the zone: not a move
+    const auto x0 = cell_of(lo.x), x1 = cell_of(hi.x), y0 = cell_of(lo.y), y1 = cell_of(hi.y);
+    if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 4096) return; // a sweep across the zone: not a move
     std::vector<std::uint32_t> seen;
     for (auto x = x0; x <= x1; ++x) {
         for (auto y = y0; y <= y1; ++y) {
