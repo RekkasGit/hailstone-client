@@ -73,7 +73,9 @@ class ServerFileSync {
 public:
     using Clock = std::chrono::steady_clock;
     using Send = std::function<void(AppPacket)>;
-    enum class State { Idle, Listing, Downloading, Done, NoAnswer, Failed };
+    // Verifying: the list came, and the files already in the profile's folder (or left complete in .download/) that
+    // the record does not vouch for are being hashed, kHashBytesPerUpdate a call, so the loading screen keeps drawing.
+    enum class State { Idle, Listing, Verifying, Downloading, Done, NoAnswer, Failed };
 
     static constexpr std::chrono::seconds kListTimeout{5};
     static constexpr std::chrono::seconds kKnownListTimeout{30};
@@ -87,6 +89,8 @@ public:
     // in one burst) overflowed a 128 KiB socket buffer and stalled on EQEmu's backed-off resends, and Linux caps
     // the buffer platform/udp_socket.cpp asks for at net.core.rmem_max (often ~200 KiB).
     static constexpr int kWindow = 32;
+    // The bytes hashed in one handle() or update() call while verifying (a few tens of ms).
+    static constexpr std::uint64_t kHashBytesPerUpdate = std::uint64_t{16} << 20;
 
     // profile_dir: servers/<id>/.
     ServerFileSync(std::filesystem::path profile_dir, Send send);
@@ -114,6 +118,8 @@ public:
     float progress() const;
     std::size_t files_needed() const { return needed_.size(); }
     std::uint64_t bytes_needed() const { return bytes_total_; }
+    // Tests: a smaller verifying budget than kHashBytesPerUpdate.
+    void set_hash_budget(std::uint64_t bytes) { hash_budget_ = bytes; }
 
 private:
     struct Incoming {
@@ -134,6 +140,9 @@ private:
     std::filesystem::path record_file() const { return dir_ / "server_files.txt"; }
     void fail(std::string message);
     void plan(Clock::time_point now);
+    // Hashes what plan() left to check, at most hash_budget_ bytes; true when all are checked.
+    bool verify();
+    void finish_plan(Clock::time_point now);
     void ask_more();
     void ask(std::uint32_t index, std::uint32_t offset, std::uint32_t length, int tries);
     void ask_again(std::uint64_t number);
@@ -170,6 +179,25 @@ private:
     std::vector<std::uint32_t> ready_;   // in staging_dir(), checked
     std::vector<bool> staged_;           // by index into list_: in ready_
     std::vector<std::string> remove_;    // lower-cased paths in record_ the server no longer lists
+    // plan()'s files to hash: the copy in the profile's folder (when its size matches but the record does not vouch
+    // for it), then the one in .download/ (when its size matches). Checked in order, kHashBytesPerUpdate a call.
+    struct Check {
+        std::uint32_t index = 0;
+        std::string key;              // lower-cased place
+        std::filesystem::path present; // empty: none to hash
+        std::filesystem::path staged;  // empty: none to hash
+        int step = 0;                  // 0 the present copy, 1 the staged one, 2 decided
+    };
+    std::vector<Check> checks_;
+    std::size_t next_check_ = 0;
+    struct Hashing {
+        std::ifstream in;
+        Sha256 hash;
+    };
+    std::unique_ptr<Hashing> hashing_; // the file being hashed across calls
+    std::unordered_map<std::string, bool> listed_; // plan(): the places the list names
+    std::size_t refused_ = 0, skipped_ = 0;
+    std::uint64_t hash_budget_ = kHashBytesPerUpdate;
     std::size_t next_file_ = 0;          // into needed_: the file pieces are asked from
     std::uint32_t next_offset_ = 0;
     int outstanding_ = 0;

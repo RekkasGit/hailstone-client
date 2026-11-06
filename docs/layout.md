@@ -247,7 +247,9 @@ refused on every platform; `core/windows_names.h`, which the zip reader of updat
 `.dll`, `.so`, `.lua` ...) are refused, except Lua and data in `scripts/` and this platform's libraries and data in
 `plugins/` (other platforms' are skipped). What those may do is the server's `hailstone.cfg`'s (docs/plugins.md).
 Files the player added by hand stay unless the server lists the same name; one that matches
-the server's hash is kept as is. A server without the script does not answer, and after 5 s (30 s for a server that
+the server's hash is kept as is. Checking those (a file of the right size that `server_files.txt` does not vouch for,
+or one left complete in `.download/`) means hashing it: that is done 16 MB a frame, so a folder of large files copied
+in by hand keeps the loading screen drawing (**Checking the server's files**, with the files done) instead of freezing it. A server without the script does not answer, and after 5 s (30 s for a server that
 sent files before, whose zone may be hashing new ones) the zone-in goes on with what is there.
 
 On a live asset folder a RoF2 server's `client_files/` needs the RoF2 files live lacks or changed (above): the five
