@@ -185,7 +185,8 @@ The install waits while the box set's other windows run (they use the same files
 
    This writes `hailstone-0.2.0-alpha-linux-x64.zip` (the folder's files with no top folder; a player unpacks it
    into a folder of their own) and its line in `hailstone-update.txt`. The zip is made the same way each time
-   (sorted, dated 1980-01-01, the files' Unix permissions), and a symbolic link goes in as the file it points to.
+   (sorted, dated 1980-01-01, the files' Unix permissions), and a symbolic link goes in as the file or folder it
+   points to (a link that leads back into a folder holding it stops the tool).
 4. Sign the manifest:
 
    ```sh

@@ -17,8 +17,8 @@ Then sign it, if you want players' clients to refuse versions signed by anyone e
   build/hailstone_sign keygen <secret-key-file>          (once; keep the file off GitHub)
   build/hailstone_sign sign <secret-key-file> release/hailstone-addon.txt
 
-Files whose name starts with '.' are left out. The zips are made the same way each time (sorted, dated
-1980-01-01), so an unchanged package keeps its hash. What a package may hold is checked again by the client.
+Files whose name starts with '.' are left out; a link is stored as the file or folder it points to. The zips are made
+the same way each time (sorted, dated 1980-01-01), so an unchanged package keeps its hash. What a package may hold is checked again by the client.
 """
 import argparse
 import hashlib
@@ -39,17 +39,27 @@ LIBRARY = {"linux": ".so", "windows": ".dll", "macos": ".dylib"}
 
 
 def files_under(root):
-    """Every file under root, as '/'-separated names relative to it, sorted; dotfiles and dot-folders left out."""
+    """Every file under root, as '/'-separated names relative to it, sorted; dotfiles and dot-folders left out. A link
+    to a folder is walked as the folder it points to; one that leads back into a folder holding it stops the tool."""
     out = []
-    for folder, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        for f in files:
-            if f.startswith("."):
+
+    def walk(folder, holding):
+        real = os.path.realpath(folder)
+        if real in holding:
+            sys.exit(f"{folder}: a link to a folder that holds it")
+        holding = holding | {real}
+        for name in sorted(os.listdir(folder)):
+            if name.startswith("."):
                 continue
-            full = os.path.join(folder, f)
+            full = os.path.join(folder, name)
+            if os.path.isdir(full):
+                walk(full, holding)
+                continue
             if os.path.islink(full) and not os.path.isfile(full):
                 sys.exit(f"{full}: a link to no file")
             out.append(os.path.relpath(full, root).replace(os.sep, "/"))
+
+    walk(root, frozenset())
     return sorted(out)
 
 
