@@ -345,7 +345,14 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
     remove_quietly(dir / "journal.txt");
     std::error_code ec;
     fs::remove(dir / "installed.prev.txt", ec);
-    if (fs::exists(dir / "installed.txt", ec)) fs::copy_file(dir / "installed.txt", dir / "installed.prev.txt", ec);
+    // Saved before anything moves: a roll-back without installed.prev.txt takes it there was no registry and
+    // deletes installed.txt, which still describes the files it puts back.
+    if (fs::exists(dir / "installed.txt", ec) &&
+        !fs::copy_file(dir / "installed.txt", dir / "installed.prev.txt", ec)) {
+        r.error = "cannot save " + (dir / "installed.txt").string() + (ec ? ": " + ec.message() : std::string());
+        remove_quietly(dir / "new");
+        return r;
+    }
     if (!write_state(install_dir, {"installing", staged->version, running, 0})) {
         r.error = "cannot write " + (dir / "state.txt").string();
         remove_quietly(dir / "new");

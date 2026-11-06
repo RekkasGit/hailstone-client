@@ -368,6 +368,30 @@ TEST_CASE("update install: refusals leave the folder as it was") {
     CHECK(!fs::exists(inst / "update/state.txt"));
 }
 
+// installed.txt is saved before any file moves; when it cannot be, nothing moves (a roll-back would otherwise take
+// it there was none and delete it).
+TEST_CASE("update install: an installed.txt that cannot be saved stops the install before anything moves") {
+    test::ScratchDir dir("updater_registry");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    const std::string zip = zip_of({{"hailstone", "new"}});
+    put(inst / "update/download/p.zip", zip);
+    UpdatePackage p;
+    p.component = "core";
+    p.file = "p.zip";
+    p.size = zip.size();
+    p.sha256 = sha256(zip);
+    REQUIRE(stage_update(inst, "9.0.0", {p}, nullptr));
+    put(inst / "update/installed.txt", "the registry\n");
+    put(inst / "update/installed.prev.txt/in-the-way", "x"); // a folder there: the copy fails
+    const auto r = install_staged_update(inst, "1.0.0");
+    CHECK_FALSE(r.ok);
+    CHECK(r.error.find("cannot save") != std::string::npos);
+    CHECK(get(inst / "hailstone") == "old");
+    CHECK(get(inst / "update/installed.txt") == "the registry\n");
+    CHECK_FALSE(fs::exists(inst / "update/state.txt"));
+}
+
 TEST_CASE("update install: an optional plugin package is left out when an add-on took its folder since") {
     test::ScratchDir dir("updater_addon_folder");
     const fs::path inst = dir.path();
