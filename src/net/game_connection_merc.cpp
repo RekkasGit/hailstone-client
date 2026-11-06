@@ -126,7 +126,8 @@ bool GameConnection::handle_merc(const AppPacket& p) {
     // The handlers read fixed offsets of the packet buffer; a short packet reads zeros here (the original reads
     // whatever follows in its buffer).
     std::array<std::uint8_t, 32> buf{};
-    std::memcpy(buf.data(), bytes.data(), std::min(bytes.size(), buf.size()));
+    // copy_n, not memcpy: an empty packet's data() may be null, which memcpy may not be given even for 0 bytes.
+    std::copy_n(bytes.begin(), std::min(bytes.size(), buf.size()), buf.begin());
     fn(merc_, buf.data(), link);
     return true;
 }
