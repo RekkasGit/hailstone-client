@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Options > Display no longer has a Video Modes button: the Resolution list above it sets the same thing (the window still opens from the EQ menu)
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times

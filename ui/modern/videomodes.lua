@@ -1,5 +1,5 @@
--- Video modes: replaces the game's VideoModesWindow (Options > Display's Video Modes, or the EQ menu). This client's
--- display modes: the resolutions as a list, the refresh rate and bit depth of the one selected (filled in full
+-- Video modes: replaces the game's VideoModesWindow (the EQ menu or its key; Options > Display sets the
+-- resolution itself). This client's display modes: the resolutions as a list, the refresh rate and bit depth of the one selected (filled in full
 -- screen only, as the original's) and Accept, which sets the mode (and in full screen asks to keep it). All of it
 -- is the original's (app/lua_eq_video.cpp); a double click on a resolution is Accept.
 local hud = dofile("lib/hud.lua")

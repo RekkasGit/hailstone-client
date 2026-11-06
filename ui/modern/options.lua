@@ -380,11 +380,6 @@ local function displayTab()
         if changed then ui.SetSetting("hud.snap.size", tostring(v)) end
       end)
     end
-    ui.TableNextRow()
-    ui.TableNextColumn()
-    ui.TableNextColumn()
-    if ui.Button("Video Modes", 0, 0) then eq.ShowWindow("VideoModesWindow", true) end
-    tip("Select your screen's resolution, color, and refresh rate settings.")
   end)
   section("Buffs and Songs", function()
     check("show_buff_timer", "Show Buff Timer", "Determines whether the buff timer is displayed on the buff.")
