@@ -44,7 +44,7 @@ bool HelperProcess::start(const std::vector<std::string>& args, std::string& err
 void HelperProcess::write(std::span<const std::byte> bytes) {
     if (!in_) return;
     flush();
-    if (out_.size() + bytes.size() > max_pending_) { // not reading: ended, so the client sees it die and restarts it
+    if (pending_write() + bytes.size() > max_pending_) { // not reading: ended, so the client sees it die and restarts it
         stop(true);
         return;
     }
@@ -53,14 +53,26 @@ void HelperProcess::write(std::span<const std::byte> bytes) {
 }
 
 void HelperProcess::flush() {
-    if (!in_ || out_.empty()) return;
-    std::size_t n = SDL_WriteIO(in_, out_.data(), out_.size());
-    if (n < out_.size() && SDL_GetIOStatus(in_) == SDL_IO_STATUS_ERROR) { // the helper is gone
+    if (!in_ || pending_write() == 0) return;
+    const std::size_t left = pending_write();
+    std::size_t n = SDL_WriteIO(in_, out_.data() + head_, left);
+    if (n < left && SDL_GetIOStatus(in_) == SDL_IO_STATUS_ERROR) { // the helper is gone
         out_.clear();
+        head_ = 0;
         return;
     }
     written_ += n;
-    out_.erase(out_.begin(), out_.begin() + static_cast<std::ptrdiff_t>(n));
+    head_ += n;
+    // A pipe takes about 64 KB a write, so erasing what went from the front each time would move a large message
+    // over and over (quadratic: seconds for one 60 MB message). The written bytes are dropped once they are at
+    // least half the queue, so each byte is moved at most about once.
+    if (head_ == out_.size()) {
+        out_.clear();
+        head_ = 0;
+    } else if (head_ >= out_.size() / 2) {
+        out_.erase(out_.begin(), out_.begin() + static_cast<std::ptrdiff_t>(head_));
+        head_ = 0;
+    }
 }
 
 std::size_t HelperProcess::read(std::span<std::byte> out) {
@@ -97,6 +109,7 @@ void HelperProcess::stop(bool kill) {
         SDL_CloseIO(in_);
         in_ = nullptr;
         out_.clear();
+        head_ = 0;
     }
     if (kill && running()) SDL_KillProcess(process_, true);
 }

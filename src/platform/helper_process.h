@@ -32,7 +32,7 @@ public:
     // that would pass the most it may hold ends the helper instead (running() is then false).
     void write(std::span<const std::byte> bytes);
     void flush();
-    std::size_t pending_write() const { return out_.size(); }
+    std::size_t pending_write() const { return out_.size() - head_; }
     std::uint64_t written() const { return written_; } // bytes the helper's input has taken in all
     // What has arrived (at most out.size() bytes), without waiting; 0 when nothing has.
     std::size_t read(std::span<std::byte> out);
@@ -48,6 +48,7 @@ private:
     SDL_Process* process_ = nullptr;
     SDL_IOStream* in_ = nullptr; // its standard input
     std::vector<std::byte> out_;
+    std::size_t head_ = 0; // out_'s bytes before this are written
     std::size_t max_pending_;
     std::uint64_t written_ = 0;
     bool exited_ = false;
