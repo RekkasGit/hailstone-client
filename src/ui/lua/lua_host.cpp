@@ -20,6 +20,7 @@
 #include <imgui_internal.h>
 #include <lua.hpp>
 
+#include "core/atomic_file.h"
 #include "core/frame_sections.h"
 #include "core/log.h"
 
@@ -199,11 +200,11 @@ struct LuaUi::Impl {
         }
         return out;
     }
+    // Atomically (core/atomic_file.h): a crash, a full disk or another client reading it never finds it half written.
     static void write_settings(const fs::path& file, const std::map<std::string, std::string>& values) {
-        std::error_code ec;
-        fs::create_directories(file.parent_path(), ec);
-        std::ofstream f(file, std::ios::trunc);
-        for (const auto& [k, v] : values) f << k << '=' << v << '\n';
+        std::string text;
+        for (const auto& [k, v] : values) text += k + '=' + v + '\n';
+        write_file_atomic(file, text);
     }
     void load_settings() { settings = read_settings(settings_file); }
     void save_settings_now() {

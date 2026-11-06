@@ -20,6 +20,7 @@
 - For script and UI pack authors: `ui.Begin` and `ui.BeginChild` ignore ImGui's internal window flags (Popup, Tooltip, Modal, ChildMenu, ChildWindow), and a stray `ui.EndMenu`, `ui.EndPopup`, `ui.EndCombo` or `ui.EndTooltip` outside its menu, popup, combo or tooltip does nothing, where they could crash the game
 - For script authors: an id, door number or coordinate that no spawn or door can have (`/nav door id 300`, `${Spawn[id -5]}`, NaN, 1e300) finds nothing instead of a wrapped number (door 300 was door 44), and `${Heading[nan]}` is NULL
 - The Lua social editor stays smooth with a long script: its colours are placed in one pass over the text instead of once per word
+- The Lua UI's window settings are saved through a new file that replaces the old one, so a crash or a full disk while saving no longer loses every window's layout
 - For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
 - For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
 - For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced
