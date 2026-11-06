@@ -17,6 +17,7 @@
 #include "assets/xmi.h"
 #include "audio/audio_system.h"
 #include "audio/mixer.h"
+#include "audio/pcm.h"
 #include "audio/sound_library.h"
 #include "audio/xmi_player.h"
 #include "core/game_dir.h"
@@ -29,27 +30,10 @@ namespace {
 constexpr std::uint32_t kRate = 48000; // the AudioSystem mixer's rate
 
 bool write_wav(const std::string& path, const std::vector<float>& stereo) {
+    const std::vector<std::byte> wav = audio::encode_wav16(stereo, kRate, 2);
     std::ofstream out(path, std::ios::binary);
     if (!out) return false;
-    auto u32 = [&](std::uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
-    auto u16 = [&](std::uint16_t v) { out.write(reinterpret_cast<const char*>(&v), 2); };
-    auto bytes = static_cast<std::uint32_t>(stereo.size() * 2);
-    out.write("RIFF", 4);
-    u32(36 + bytes);
-    out.write("WAVEfmt ", 8);
-    u32(16);
-    u16(1);
-    u16(2);
-    u32(kRate);
-    u32(kRate * 4);
-    u16(4);
-    u16(16);
-    out.write("data", 4);
-    u32(bytes);
-    for (float f : stereo) {
-        auto s = static_cast<std::int16_t>(std::lround(std::clamp(f, -1.0f, 1.0f) * 32767.0f));
-        out.write(reinterpret_cast<const char*>(&s), 2);
-    }
+    out.write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
     return static_cast<bool>(out);
 }
 
