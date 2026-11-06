@@ -116,6 +116,11 @@ TEST_CASE("EQG models parse; triangle ordinals resolve to the first same-named m
     CHECK(m.materials[1].texture("E_TEXTUREDIFFUSE0") == "leaf_c.dds");
     CHECK(m.material_for(2) == &m.materials[0]); // ordinal 2 is "stone" -> the first "stone"
     CHECK(m.material_for(7) == nullptr);
+    // Resolved once at parse time, not scanned per triangle.
+    CHECK(m.first_material == std::vector<std::uint32_t>{0, 1, 0});
+    auto scanned = m;
+    scanned.first_material.clear();
+    CHECK(scanned.material_for(2) == &scanned.materials[0]);
     REQUIRE(m.colors.size() == 4);
     CHECK(m.colors[0] == 0xff102030u);
     CHECK(m.triangles[1].flags == eqg::kTrianglePassable);
