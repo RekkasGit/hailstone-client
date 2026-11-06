@@ -488,6 +488,10 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
         }
         if (max_keys > 1) step = duration / static_cast<std::uint32_t>(max_keys - 1);
         step = std::clamp<std::uint32_t>(step ? step : 33, 10, 200);
+        // A clip is cut at kMaxClipFrames frames (13.6 minutes at the 200 ms
+        // ceiling; stock clips run seconds), so a bad file's key times (0 and
+        // 0xFFFFFFFF) cannot ask for a pose per bone per frame for 50 days.
+        duration = std::min(duration, (kMaxClipFrames - 1) * step);
         AnimationClip a;
         a.frame_ms = step;
         a.frame_count = std::max<std::uint32_t>(1, duration / step + 1);
@@ -746,6 +750,11 @@ void EqgCharacterStore::open_texture_owner(std::string_view name) {
 }
 
 std::shared_ptr<const eqg_character::MeshFile> EqgCharacterStore::part_mesh(std::string_view name_view) {
+    return part_mesh(name_view, 0);
+}
+
+std::shared_ptr<const eqg_character::MeshFile> EqgCharacterStore::part_mesh(std::string_view name_view,
+                                                                         std::uint32_t depth) {
     std::string name = upper(name_view);
     if (auto it = parts_.find(name); it != parts_.end()) return it->second;
     std::shared_ptr<const eqg_character::MeshFile> result;
@@ -763,7 +772,10 @@ std::shared_ptr<const eqg_character::MeshFile> EqgCharacterStore::part_mesh(std:
     if (!result)
         if (auto layered = layered_part(name)) {
             parts_.emplace(name, nullptr); // a row naming itself as its base stops here
-            auto base = part_mesh(layered->first);
+            // Live rows layer on a real mesh, one level deep; a longer chain of
+            // distinct names (A on B on C ...) ends at kMaxLayerDepth.
+            std::shared_ptr<const eqg_character::MeshFile> base;
+            if (depth < kMaxLayerDepth) base = part_mesh(layered->first, depth + 1);
             // The layer: indexed or in an archive opened so far, else in <layer>.eqg (RALLOSIANLEATHER).
             const eqg_character::Layer* l = layer(layered->second);
             if (!l && game_.exists(lower(layered->second) + ".eqg")) {
