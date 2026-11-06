@@ -83,6 +83,10 @@ TEST_CASE("soundassets.txt, mp3index.txt") {
     CHECK(s.size() == 2);
     CHECK(s.at(39) == "Death_M.WAV");
     CHECK(s.at(100) == "WaterIn.WAV");
+    // An id past int32 wraps as 32-bit atoi on every platform (strtol's 64-bit long saturated it to -1 on Linux).
+    auto wide = parse_sound_assets("99999999999999999999^Big.WAV\n");
+    REQUIRE(wide.size() == 1);
+    CHECK(wide.contains(1661992959));
     // The named lines (FUN_004ab800 gives each a free id; FUN_004ab700 finds it by name).
     auto n = parse_named_sound_assets("1^Unknown\nYouveGotMail^mail1.wav\r\n39^Death_M.WAV\n");
     REQUIRE(n.size() == 1);
