@@ -64,6 +64,13 @@ public:
     bool ok() const { return static_cast<bool>(out_); }
     // Moves `from` to `to` (making its folder), written to the journal first.
     bool move(const fs::path& from, const fs::path& to, std::string* error) {
+        // Something already there (a folder holding the player's files, where a file goes now) stops it before the
+        // journal names the move: an undo would take that for the moved file and carry it off.
+        std::error_code in_way;
+        if (fs::exists(to, in_way)) {
+            if (error) *error = "cannot move " + from.string() + " to " + to.string() + ": something is there";
+            return false;
+        }
         out_ << "move\t" << journal_path(data_dir_, from) << "\t" << journal_path(data_dir_, to) << "\n";
         out_.flush();
         if (!out_) {
@@ -522,10 +529,13 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     for (const auto& f : addon.files)
         if (std::find(out.begin(), out.end(), f.path) == out.end()) out.push_back(f.path);
     std::string why;
+    // Files only: a folder that is the name of a file now (lib/util.lua before, lib now) is left, emptied, and
+    // taken out below so the file can go there; one the player put files in stays, and the move into it fails.
     for (const auto& p : out) {
-        if (!fs::exists(target / rel(p), ec)) continue;
+        if (!fs::exists(target / rel(p), ec) || fs::is_directory(target / rel(p), ec)) continue;
         if (!journal.move(target / rel(p), prev / rel(p), &why)) return undo(why);
     }
+    remove_empty_dirs(target, false);
     for (const auto& f : addon.files)
         if (!journal.move(src / rel(f.path), target / rel(f.path), &why)) return undo(why);
     InstalledAddon entry = addon;

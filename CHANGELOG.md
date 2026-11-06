@@ -45,6 +45,7 @@
 - The developer Plugins & Lua window no longer reads and hashes every plugin file on every frame while it is open (once a second now)
 - Add-ons: installing an add-on again while it is still downloading or waiting to be installed is refused with a message, instead of unpacking into the folder the waiting install is moving files out of
 - Add-ons: an add-on installed from one repository is no longer replaced by another of the same name from another repository or signing key when both were installed at about the same time
+- Add-ons: an update in which a folder became a file of the same name installs, instead of failing and being rolled back at every login screen; an update that would put a file where you keep your own files in a folder stops and leaves them alone
 
 ## 0.5.0-beta (2026-11-05)
 
