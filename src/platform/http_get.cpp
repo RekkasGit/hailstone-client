@@ -73,18 +73,23 @@ struct Handle {
     }
 };
 
-// Ends a blocking WinHTTP call once `cancelled` says so: closing the request handle from another thread is how
-// WinHTTP cancels a synchronous request (the call it was in fails). The handle is then the watcher's to have closed,
-// so the request's Handle lets it be.
-class Canceller {
+// The request handle, and a watcher that ends a blocking WinHTTP call once `cancelled` says so: closing the request
+// handle from another thread is how WinHTTP cancels a synchronous request (the call it is in fails). Every call on
+// the handle goes through call(), so the watcher closes it only while a call is in progress (WinHTTP keeps the
+// request alive until that call returns), and once it has, no further call is made on it: the handle's value may
+// already name another thread's new request (the updater and the add-on manager fetch at once). The one window
+// left is between call() marking itself in progress and WinHTTP taking the handle, a few instructions, against the
+// watcher's 100 ms polls. The handle is closed once: by the watcher, or here at the end.
+class Request {
 public:
-    Canceller(Handle& request, const std::function<bool()>& cancelled) : request_(request) {
-        if (!cancelled) return;
-        thread_ = std::thread([this, &cancelled] {
+    Request(HINTERNET h, const std::function<bool()>& cancelled) : h_(h), cancelled_(cancelled) {
+        if (!h_ || !cancelled_) return;
+        thread_ = std::thread([this] {
             std::unique_lock lock(mutex_);
             while (!finished_) {
-                if (cancelled()) {
-                    WinHttpCloseHandle(request_.h);
+                if (!stop_ && cancelled_()) stop_ = true;
+                if (stop_ && in_call_) {
+                    WinHttpCloseHandle(h_);
                     closed_ = true;
                     return;
                 }
@@ -92,10 +97,32 @@ public:
             }
         });
     }
-    Canceller(const Canceller&) = delete;
-    Canceller& operator=(const Canceller&) = delete;
-    ~Canceller() { finish(); }
-    // Stops watching; true when it closed the request (the transfer was cancelled).
+    Request(const Request&) = delete;
+    Request& operator=(const Request&) = delete;
+    ~Request() {
+        finish();
+        if (h_ && !closed_) WinHttpCloseHandle(h_);
+    }
+    explicit operator bool() const { return h_ != nullptr; }
+
+    // f(handle), unless the transfer was cancelled first; false when it was cancelled before or during the call
+    // (`*result` is f's answer when f ran).
+    template <class F>
+    bool call(F&& f, BOOL* result) {
+        {
+            std::lock_guard lock(mutex_);
+            if (stop_ || closed_) {
+                refused_ = true;
+                return false;
+            }
+            in_call_ = true;
+        }
+        *result = f(h_);
+        std::lock_guard lock(mutex_);
+        in_call_ = false;
+        return !closed_;
+    }
+    // Stops watching; true when the transfer was cancelled (a call was ended or not made because of it).
     bool finish() {
         if (thread_.joinable()) {
             {
@@ -104,16 +131,16 @@ public:
             }
             cv_.notify_all();
             thread_.join();
-            if (closed_) request_.h = nullptr;
         }
-        return closed_;
+        return refused_ || closed_;
     }
 
 private:
-    Handle& request_;
+    HINTERNET h_ = nullptr;
+    const std::function<bool()>& cancelled_;
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool finished_ = false, closed_ = false;
+    bool finished_ = false, stop_ = false, in_call_ = false, closed_ = false, refused_ = false;
     std::thread thread_;
 };
 
@@ -172,36 +199,45 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
         r.error = win_error("WinHttpConnect");
         return r;
     }
-    Handle request(WinHttpOpenRequest(connection.h, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
-                                      WINHTTP_DEFAULT_ACCEPT_TYPES, secure ? WINHTTP_FLAG_SECURE : 0));
-    if (!request.h) {
+    // Declared last, so its handle is closed (and its watcher stopped) before the connection's and the session's.
+    Request request(WinHttpOpenRequest(connection.h, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
+                                       WINHTTP_DEFAULT_ACCEPT_TYPES, secure ? WINHTTP_FLAG_SECURE : 0),
+                    options.cancelled);
+    if (!request) {
         r.error = win_error("WinHttpOpenRequest");
         return r;
     }
-    Canceller watch(request, options.cancelled);
-    // Whatever failed once the watcher closed the request failed because it did.
+    // Whatever failed once the transfer was cancelled failed because it was.
     auto done = [&](HttpGetResult res) {
-        if (watch.finish()) {
+        if (request.finish()) {
             res.ok = false;
             res.error = "cancelled";
         }
         return res;
     };
+    // A WinHTTP call on the request; false (and r.error set) when it failed or the transfer was cancelled.
+    auto winhttp = [&](const char* what, auto&& f) {
+        BOOL ok = FALSE;
+        if (!request.call(f, &ok)) {
+            r.error = "cancelled";
+            return false;
+        }
+        if (!ok) r.error = win_error(what);
+        return ok != FALSE;
+    };
     // WinHTTP follows redirects itself and by default never from https to http (WINHTTP_OPTION_REDIRECT_POLICY).
-    if (!WinHttpSendRequest(request.h, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
-        r.error = win_error("WinHttpSendRequest");
+    if (!winhttp("WinHttpSendRequest", [](HINTERNET h) {
+            return WinHttpSendRequest(h, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        }))
         return done(r);
-    }
-    if (!WinHttpReceiveResponse(request.h, nullptr)) {
-        r.error = win_error("WinHttpReceiveResponse");
+    if (!winhttp("WinHttpReceiveResponse", [](HINTERNET h) { return WinHttpReceiveResponse(h, nullptr); }))
         return done(r);
-    }
     DWORD status = 0, size = sizeof(status);
-    if (!WinHttpQueryHeaders(request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                             WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX)) {
-        r.error = win_error("WinHttpQueryHeaders");
+    if (!winhttp("WinHttpQueryHeaders", [&](HINTERNET h) {
+            return WinHttpQueryHeaders(h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                       WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX);
+        }))
         return done(r);
-    }
     r.status = static_cast<int>(status);
     if (!is_2xx(r.status)) {
         r.error = status_error(r.status);
@@ -210,11 +246,16 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
     if (options.allow_url) {
         // The address the redirects ended on.
         DWORD url_size = 0;
-        WinHttpQueryOption(request.h, WINHTTP_OPTION_URL, nullptr, &url_size);
+        BOOL ignored = FALSE;
+        if (!request.call([&](HINTERNET h) { return WinHttpQueryOption(h, WINHTTP_OPTION_URL, nullptr, &url_size); },
+                          &ignored))
+            return done(r);
         std::wstring final_url(url_size / sizeof(wchar_t) + 1, L'\0');
         url_size = static_cast<DWORD>(final_url.size() * sizeof(wchar_t));
         std::string narrow;
-        if (WinHttpQueryOption(request.h, WINHTTP_OPTION_URL, final_url.data(), &url_size)) {
+        if (winhttp("WinHttpQueryOption", [&](HINTERNET h) {
+                return WinHttpQueryOption(h, WINHTTP_OPTION_URL, final_url.data(), &url_size);
+            })) {
             final_url.resize(url_size / sizeof(wchar_t));
             int n = WideCharToMultiByte(CP_UTF8, 0, final_url.data(), static_cast<int>(final_url.size()), nullptr, 0,
                                         nullptr, nullptr);
@@ -224,6 +265,7 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
                                     nullptr, nullptr);
             }
         }
+        if (r.error == "cancelled") return done(r);
         if (narrow.empty() || !options.allow_url(narrow)) {
             r.error = "the download was sent to an address it may not come from";
             return done(r);
@@ -233,8 +275,15 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
     std::uint64_t total = 0;
     wchar_t length[32] = {};
     DWORD length_size = sizeof(length);
-    if (WinHttpQueryHeaders(request.h, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX, length,
-                            &length_size, WINHTTP_NO_HEADER_INDEX)) {
+    BOOL have_length = FALSE;
+    if (!request.call(
+            [&](HINTERNET h) {
+                return WinHttpQueryHeaders(h, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX, length,
+                                           &length_size, WINHTTP_NO_HEADER_INDEX);
+            },
+            &have_length))
+        return done(r);
+    if (have_length) {
         for (const wchar_t* p = length; *p >= L'0' && *p <= L'9'; ++p)
             total = total * 10 + static_cast<std::uint64_t>(*p - L'0');
     }
@@ -251,10 +300,10 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
     }
     for (;;) {
         DWORD got = 0;
-        if (!WinHttpReadData(request.h, buffer.data(), static_cast<DWORD>(buffer.size()), &got)) {
-            r.error = win_error("WinHttpReadData");
+        if (!winhttp("WinHttpReadData", [&](HINTERNET h) {
+                return WinHttpReadData(h, buffer.data(), static_cast<DWORD>(buffer.size()), &got);
+            }))
             return done(r);
-        }
         if (got == 0) break;
         received += got;
         if (options.max_bytes && received > options.max_bytes) {
