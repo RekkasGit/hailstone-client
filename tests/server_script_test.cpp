@@ -4,10 +4,13 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 
 #include <lua.hpp>
+
+#include "scratch_dir.h"
 
 namespace {
 
@@ -20,7 +23,7 @@ std::string script_path() {
 constexpr const char* kHarness = R"lua(
 package.config = "/\n;\n?\n!\n-\n" -- the script's Linux commands, whatever runs the test
 T = { now = 1000, finds = 0, stats = 0, gets = 0, opens = {}, open_now = 0, open_max = 0, messages = {}, data = {}, files = {},
-      mtimes = {}, handlers = {}, timers = {}, clients = {}, logs = {} }
+      mtimes = {}, handlers = {}, powershell = {}, timers = {}, clients = {}, logs = {} }
 os.time = function() return T.now end
 
 local function bytes_packet(op, size)
@@ -62,7 +65,7 @@ eq = {
   stop_timer = function(name) T.timers[name] = nil end,
 }
 
-local real_open = io.open
+local real_open, real_popen = io.open, io.popen
 io.open = function(path, mode)
   if path == SCRIPT then return real_open(path, mode) end
   if mode and mode:sub(1, 1) == "w" then
@@ -88,7 +91,13 @@ end
 io.popen = function(cmd)
   local out = ""
   local one = cmd:match("^find '(client_files/[^']+)' %-maxdepth 0")
-  if one then
+  if T.real_root and cmd:match("^find ") and not one then
+    -- The script's own listing command, run by the shell in a scratch folder holding a real client_files.
+    T.finds = T.finds + 1
+    local p = real_popen("cd '" .. T.real_root .. "' && " .. cmd)
+    out = p:read("*a")
+    p:close()
+  elseif one then
     T.stats = T.stats + 1
     if T.files[one] then out = #T.files[one] .. "\t" .. (T.mtimes[one] or "1700000000.0") .. "\n" end
   elseif cmd:match("^find ") then
@@ -99,11 +108,26 @@ io.popen = function(cmd)
       if rel then names[#names + 1] = rel .. "\t" .. #text .. "\t" .. (T.mtimes[path] or "1700000000.0") end
     end
     out = table.concat(names, "\n") .. "\n"
+  elseif cmd:match("^powershell ") then
+    -- The Windows commands: the script file the zone wrote, then the list (no argument) or the hashes of a list.
+    local text = T.files["client_files/" .. cmd:match('"client_files\\([^"]+)"')] or ""
+    T.powershell[#T.powershell + 1] = text
+    local names = {}
+    if text:find("Get-FileHash", 1, true) then
+      for rel in (T.files["client_files/" .. cmd:match('" (%S+)$')] or ""):gmatch("[^\n]+") do
+        names[#names + 1] = string.rep("cd", 32) .. "  " .. rel
+      end
+    else
+      for path, data in pairs(T.files) do
+        local rel = path:match("^client_files/([^.].*)$")
+        if rel then names[#names + 1] = rel .. "\t" .. #data .. "\t638000000000000000" end
+      end
+    end
+    out = table.concat(names, "\r\n") .. "\r\n"
   elseif cmd:match("sha256sum") then
     local names = {}
-    for path in pairs(T.files) do
-      local rel = path:match("^client_files/([^.].*)$")
-      if rel then names[#names + 1] = string.rep("ab", 32) .. "  " .. rel end
+    for rel in (T.files["client_files/" .. cmd:match("%-a (%S+)")] or ""):gmatch("[^\n]+") do
+      names[#names + 1] = string.rep("ab", 32) .. "  " .. rel
     end
     out = table.concat(names, "\n") .. "\n"
   end
@@ -232,6 +256,27 @@ assert(page:ReadInt32(12) == 0, "and an empty list sent")
 )lua");
 }
 
+TEST_CASE("Server script: on Windows the commands write UTF-8, and a name outside ASCII is left out with a log line") {
+    check_run(R"lua(
+package.config = "\\\n;\n?\n!\n-\n"
+T.files["client_files/hailstone.cfg"] = "[plugins]\n"
+T.files["client_files/scripts/donn\195\169es.lua"] = "print(1)\n"
+load_script()
+assert(#T.powershell == 2, "a list and a hash: " .. #T.powershell)
+for _, ps in ipairs(T.powershell) do
+  assert(ps:find("[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false", 1, true), "UTF-8 out")
+end
+local page = list_request(client(1, "Alpha"), 0)
+assert(page:ReadInt32(12) == 1, "only the ASCII name is listed: " .. page:ReadInt32(12))
+local logged = false
+for _, l in ipairs(T.logs) do
+  if l:find("donn\195\169es.lua is not sent: a name outside ASCII", 1, true) then logged = true end
+  assert(not l:find("could not hash", 1, true), l)
+end
+assert(logged, "the owner is told why")
+)lua");
+}
+
 TEST_CASE("Server script: clients fetching different files keep each open, a few at a time") {
     check_run(R"lua(
 add_files(10, 40000)
@@ -263,14 +308,14 @@ load_script()
 local a, b = client(1, "Alpha"), client(2, "Beta")
 local id = list_request(a, 0):ReadInt32(8)
 local sent = 0
-for _ = 1, 1100 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
-assert(sent == 1024, "1024 a second by default: " .. sent)
+for _ = 1, 1000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 768, "768 a second by default: " .. sent)
 assert(chunk_request(b, id, 0, 0) ~= nil, "another client is not held back")
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 1024, "the same second: what waits still waits")
+assert(#a.sent == 1 + 768, "the same second: what waits still waits")
 T.now = T.now + 1
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 1025, "the next second: the request that waited (asked again, held once)")
+assert(#a.sent == 1 + 769, "the next second: the request that waited (asked again, held once)")
 assert(T.timers["hailstone:files"] == nil, "nothing waits: the timer stops")
 assert(chunk_request(a, id, 0, 0) ~= nil, "and new ones go at once")
 T.data["hailstone:files_chunks_per_second"] = "3"
@@ -280,10 +325,83 @@ for _ = 1, 10 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
 assert(sent == 3, "the owner's limit: " .. sent)
 T.data["hailstone:files_chunks_per_second"] = "0"
 T.now = T.now + 10
+fire_timer("hailstone:files") -- the one held under the limit of 3 goes
+T.now = T.now + 1
+sent = 0
+for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 1024, "0: the zone's limit still holds: " .. sent)
+T.data["hailstone:files_chunks_per_second_zone"] = "0"
+T.now = T.now + 10
 fire_timer("hailstone:files")
 sent = 0
 for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
-assert(sent == 2000, "0: no limit")
+assert(sent == 2000, "both 0: no limit")
+)lua");
+}
+
+TEST_CASE("Server script: all of a zone's clients together are held to files_chunks_per_second_zone") {
+    // Characters that ask and never acknowledge make EQEmu hold every piece for 30 s: alts must not add up.
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local cs = {}
+for k = 1, 5 do cs[k] = client(k, "C" .. k) end
+local id = list_request(cs[1], 0):ReadInt32(8)
+local sent = 0
+for k = 1, 5 do
+  for _ = 1, 1000 do if chunk_request(cs[k], id, 0, k) then sent = sent + 1 end end
+end
+assert(sent == 1024, "1024 a second for the zone by default: " .. sent)
+assert(#cs[1].sent == 1 + 768 and #cs[2].sent == 256 and #cs[3].sent == 0, "the first at its own limit, the second the rest")
+-- What waits is served as the zone's limit allows, never more in a second.
+local before = 0
+for k = 1, 5 do before = before + #cs[k].sent end
+T.now = T.now + 1
+fire_timer("hailstone:files")
+local after = 0
+for k = 1, 5 do after = after + #cs[k].sent end
+assert(after - before <= 1024 and after - before == 5, "each one's held request (asked again, held once): " .. (after - before))
+T.data["hailstone:files_chunks_per_second_zone"] = "100"
+T.now = T.now + 10
+sent = 0
+for k = 1, 5 do
+  for _ = 1, 50 do if chunk_request(cs[k], id, 0, 7) then sent = sent + 1 end end
+end
+assert(sent == 100, "the owner's zone limit: " .. sent)
+)lua");
+}
+
+TEST_CASE("Server script: under the zone's limit, clients downloading at once are served in turn") {
+    // Honest clients: each keeps 32 pieces asked for and asks for another as each one comes. Served first come,
+    // first served, the ones that ask first would take the zone's whole limit every second.
+    check_run(R"lua(
+add_files(1, 32768 * 2000)
+load_script()
+T.data["hailstone:files_chunks_per_second_zone"] = "60"
+local cs, asked, seen = {}, {}, {}
+for k = 1, 3 do cs[k] = client(k, "C" .. k); asked[k] = 0; seen[k] = 0 end
+local id = list_request(cs[1], 0):ReadInt32(8)
+seen[1] = 1 -- the list
+local function ask(k) chunk_request(cs[k], id, 0, asked[k] * 32768); asked[k] = asked[k] + 1 end
+for k = 1, 3 do for _ = 1, 32 do ask(k) end end
+for _ = 1, 10 do
+  T.now = T.now + 1
+  if T.timers["hailstone:files"] then fire_timer("hailstone:files") end
+  -- Each client asks again for what came, the first client first, as at the start of every second.
+  for k = 1, 3 do
+    local got = #cs[k].sent - seen[k]
+    seen[k] = #cs[k].sent
+    for _ = 1, got do ask(k) end
+  end
+end
+local total = 0
+for k = 1, 3 do total = total + #cs[k].sent end
+total = total - 1
+assert(total <= 60 * 11, "never more than the zone's limit a second: " .. total)
+for k = 1, 3 do
+  local n = #cs[k].sent - (k == 1 and 1 or 0)
+  assert(n >= total / 3 - 40, "client " .. k .. " has its share: " .. n .. " of " .. total)
+end
 )lua");
 }
 
@@ -421,7 +539,7 @@ local a = client(1, "Alpha")
 local id = list_request(a, 0):ReadInt32(8)
 local gets = T.gets
 for _ = 1, 200 do chunk_request(a, id, 0, 32768) end
-assert(T.gets - gets <= 1, "200 pieces, at most one read for the limit: " .. (T.gets - gets))
+assert(T.gets - gets <= 2, "200 pieces, at most one read for each limit: " .. (T.gets - gets))
 for _ = 1, 3 do settings_request(a); guild_hello(a) end
 gets = T.gets
 for _ = 1, 3 do T.now = T.now + 1; settings_request(a) end
@@ -450,6 +568,29 @@ T.now = T.now + 300
 id = list_request(a, 0):ReadInt32(8)
 chunk_request(a, id, 0, 0)
 assert(T.stats == 3, "after the next listing: " .. T.stats)
+)lua");
+}
+
+TEST_CASE("Server script: an empty client_files list is logged once until files are listed again") {
+    check_run(R"lua(
+load_script()
+local function count()
+  local n = 0
+  for _, l in ipairs(T.logs) do if l:find("client_files: no files listed", 1, true) then n = n + 1 end end
+  return n
+end
+assert(count() == 1, "the zone's first listing found nothing: " .. count())
+local a = client(1, "Alpha")
+T.now = T.now + 400
+list_request(a, 0)
+assert(count() == 1, "not again at every listing")
+add_files(1, 100)
+T.now = T.now + 400
+list_request(a, 0)
+for k in pairs(T.files) do T.files[k] = nil end
+T.now = T.now + 400
+list_request(a, 0)
+assert(count() == 2, "again once the files that were there are gone: " .. count())
 )lua");
 }
 
@@ -484,3 +625,34 @@ T.now = T.now + 10
 assert(guild_hello(a) and settings_request(a), "the next 10 s")
 )lua");
 }
+
+#if defined(__linux__)
+TEST_CASE("Server script: a client_files that is a link to a folder elsewhere is listed, hailstone.cfg with it") {
+    // The script's real find command in a scratch folder: GNU find without -H lists nothing under a starting point
+    // that is a link, so the clients were sent no files and no hailstone.cfg (no server rules), with no log line.
+    namespace fs = std::filesystem;
+    nmsc::test::ScratchDir dir("server_files_link");
+    fs::create_directories(dir.path() / "elsewhere" / "scripts");
+    std::ofstream(dir.path() / "elsewhere" / "hailstone.cfg") << "[plugins]\n";
+    std::ofstream(dir.path() / "elsewhere" / "scripts" / "a.lua") << "print(1)\n";
+    std::ofstream(dir.path() / "elsewhere" / ".hidden") << "x";
+    fs::create_directory_symlink(dir.path() / "elsewhere", dir.path() / "client_files");
+    std::string root = dir.path().string();
+    REQUIRE(root.find('\'') == std::string::npos);
+    check_run(("T.real_root = '" + root + "'\n" + R"lua(
+load_script()
+local page = list_request(client(1, "Alpha"), 0)
+assert(page:ReadInt32(12) == 2, "two files under the link: " .. page:ReadInt32(12))
+local names = {}
+local pos = 24
+for _ = 1, page:ReadInt32(20) do
+  local n = page:ReadInt16(pos + 36)
+  local t = {}
+  for i = 0, n - 1 do t[#t + 1] = string.char(page:ReadInt8(pos + 38 + i)) end
+  names[#names + 1] = table.concat(t)
+  pos = pos + 38 + n
+end
+assert(names[1] == "hailstone.cfg" and names[2] == "scripts/a.lua", table.concat(names, ","))
+)lua").c_str());
+}
+#endif

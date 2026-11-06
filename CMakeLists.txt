@@ -782,7 +782,8 @@ if(NMSC_BROWSER)
 endif()
 
 # Command-line tools.
-foreach(tool pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+set(NMSC_TOOLS pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+foreach(tool ${NMSC_TOOLS})
   add_executable(${tool} tools/${tool}.cpp ${NMSC_WIN_MANIFEST})
   target_compile_options(${tool} PRIVATE ${NMSC_WARNINGS})
   if(NMSC_CLANG_TIDY)
@@ -800,6 +801,7 @@ if(NMSC_BUILD_TESTS)
     tests/byte_io_test.cpp
     tests/private_file_test.cpp
     tests/server_script_test.cpp
+    tests/server_tools_test.cpp
     tests/float_chars_test.cpp
     tests/screen_pictures_test.cpp
     tests/window_icon_test.cpp
@@ -1154,7 +1156,7 @@ endif()
 # Windows has no rpath: the shared dependencies' DLLs (SDL3) next to each tool too (hailstone and nmsc_tests have
 # their own copy steps above).
 if(WIN32)
-  foreach(exe pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check)
+  foreach(exe ${NMSC_TOOLS})
     add_custom_command(TARGET ${exe} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${exe}> $<TARGET_FILE_DIR:${exe}>
       COMMAND_EXPAND_LISTS)

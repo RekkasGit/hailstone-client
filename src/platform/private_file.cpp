@@ -7,6 +7,7 @@
 #else
 #include <cerrno>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -43,6 +44,15 @@ bool write_private_file(const std::filesystem::path& path, std::string_view text
         std::filesystem::remove(path, rm);
     }
     return ok;
+}
+
+bool make_private_dir(const std::filesystem::path& path) {
+#if defined(_WIN32)
+    std::error_code ec;
+    return std::filesystem::create_directory(path, ec) && !ec;
+#else
+    return ::mkdir(path.c_str(), S_IRWXU) == 0;
+#endif
 }
 
 } // namespace nmsc::platform

@@ -111,6 +111,28 @@ TEST_CASE("WAV decoding: 16-bit mono at 22000 Hz") {
     CHECK_FALSE(decode_wav(std::vector<std::byte>(10)));
 }
 
+TEST_CASE("WAV encoding: little-endian header and samples, read back as written") {
+    const std::vector<float> stereo = {0.0f, 0.5f, -0.5f, 1.0f, 2.0f, -2.0f};
+    const auto wav = encode_wav16(stereo, 48000, 2);
+    REQUIRE(wav.size() == 44 + stereo.size() * 2);
+    auto byte = [&](std::size_t i) { return std::to_integer<unsigned>(wav[i]); };
+    CHECK(byte(4) == ((36 + 12) & 0xff)); // the RIFF size's low byte first, whatever the host's order
+    CHECK(byte(24) == 0x80);              // 48000 = 0xbb80
+    CHECK(byte(25) == 0xbb);
+    CHECK(byte(32) == 4);                 // block align: 2 channels x 2 bytes
+    CHECK(byte(46) == 0x00);              // the second sample, 0.5 -> 16384 = 0x4000, low byte first
+    CHECK(byte(47) == 0x40);
+    auto pcm = decode_wav(wav);
+    REQUIRE(pcm);
+    CHECK(pcm->rate == 48000);
+    CHECK(pcm->channels == 2);
+    REQUIRE(pcm->samples.size() == stereo.size());
+    CHECK(pcm->samples[1] == doctest::Approx(0.5).epsilon(0.001));
+    CHECK(pcm->samples[2] == doctest::Approx(-0.5).epsilon(0.001));
+    CHECK(pcm->samples[4] == doctest::Approx(1.0).epsilon(0.001)); // clamped
+    CHECK(pcm->samples[5] == doctest::Approx(-1.0).epsilon(0.001));
+}
+
 TEST_CASE("Mixer: volume, buses, loops and fades") {
     Mixer m(1000, 4);
     std::vector<float> out(200);

@@ -5,3 +5,6 @@ build.log
 /plugins/nms
 /plugins/projecttriune
 __pycache__/
+# What a local release writes in the checkout (docs/updater.md "Making a release", docs/addons.md "For authors").
+/dist/
+/release/

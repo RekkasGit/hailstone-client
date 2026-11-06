@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/byte_io.h"
+
 #include <dr_mp3.h>
 #include <dr_wav.h>
 
@@ -26,6 +28,29 @@ std::optional<Pcm> decode_wav(std::span<const std::byte> data) {
     }
     drwav_free(p, nullptr);
     return out;
+}
+
+std::vector<std::byte> encode_wav16(std::span<const float> samples, std::uint32_t rate, std::uint16_t channels) {
+    const auto bytes = static_cast<std::uint32_t>(samples.size() * 2);
+    const auto block = static_cast<std::uint16_t>(channels * 2);
+    ByteWriter w;
+    w.fixed_string("RIFF", 4);
+    w.le<std::uint32_t>(36 + bytes);
+    w.fixed_string("WAVEfmt ", 8);
+    w.le<std::uint32_t>(16);
+    w.le<std::uint16_t>(1); // PCM
+    w.le<std::uint16_t>(channels);
+    w.le<std::uint32_t>(rate);
+    w.le<std::uint32_t>(rate * block);
+    w.le<std::uint16_t>(block);
+    w.le<std::uint16_t>(16);
+    w.fixed_string("data", 4);
+    w.le<std::uint32_t>(bytes);
+    for (float f : samples) {
+        const float c = std::isnan(f) ? 0.0f : std::clamp(f, -1.0f, 1.0f);
+        w.le<std::int16_t>(static_cast<std::int16_t>(std::lround(c * 32767.0f)));
+    }
+    return w.take();
 }
 
 std::optional<Pcm> decode_mp3(std::span<const std::byte> data) {

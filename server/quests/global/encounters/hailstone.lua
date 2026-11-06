@@ -27,10 +27,11 @@
 -- sha256sum (GNU find and xargs; on Windows PowerShell's Get-FileHash) when the zone starts (and at #reloadquest),
 -- and again when a client asks and it is older than files_rescan seconds (300; never under 30); the hashes are kept
 -- in client_files/.hailstone-cache, so only new or changed files are hashed again. Names starting with '.' are not
--- sent. A client may ask for files_chunks_per_second pieces a second (1024, 32 MB/s); more wait their turn (a few
--- dozen per client, on a timer) and are served in order. A file that changed on disk since it was hashed (its size,
--- or its time where find can tell) makes the zone hash again and the client list again, instead of sending bytes
--- that do not match the list.
+-- sent. A client may ask for files_chunks_per_second pieces a second (768, 24 MB/s), and all of the zone's clients
+-- together for files_chunks_per_second_zone (1024, 32 MB/s); more wait their turn (a few dozen per client, on a
+-- timer) and are served in order, a client at a time in turn. A file that changed on disk since it was hashed (its
+-- size, or its time where find can tell) makes the zone hash again and the client list again, instead of sending
+-- bytes that do not match the list.
 --
 -- global/script_init.lua loads it with eq.load_encounter("hailstone"). It registers its player event through the
 -- encounter, so it runs beside the server's own player scripts (Perl or Lua) instead of replacing them.
@@ -43,7 +44,8 @@ local settings = {
 	client_files           = 1,  -- send client_files/ to Hailstone clients (0: they get an empty list)
 	group_declines         = 1,  -- tell the inviter when a RoF2 client declines a group invitation
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
-	files_chunks_per_second = 1024, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
+	files_chunks_per_second = 768, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
+	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
 }
 
 local OP_SETTINGS_REQUEST = 0x1424
@@ -105,16 +107,6 @@ local function allow(l, id, max)
 	local r = window(l, id)
 	r.count = r.count + 1
 	return r.count <= max, r.count == max + 1
-end
-
--- Counts one request if the window has room for it (nothing counted otherwise).
-local function take(l, id, max)
-	local r = window(l, id)
-	if r.count >= max then
-		return false
-	end
-	r.count = r.count + 1
-	return true
 end
 
 -- Runs one statement; returns the statement (to fetch from) or nil. Servers older than the Lua Database class
@@ -518,16 +510,21 @@ local open_files  = {} -- path -> { handle, used }: several clients may be fetch
 local open_count  = 0
 local open_tick   = 0
 local chunk_limit = limiter(1)
--- Piece requests over files_chunks_per_second, by character id: { first, last, keys, [n] = {id, index, offset,
+local zone_chunk_limit = limiter(1) -- one id, 0: the whole zone
+-- Piece requests over the limits (take_piece), by character id: { first, last, keys, [n] = {id, index, offset,
 -- length} }, served in order from the FILES_TIMER timer as the limit allows.
 local waiting     = {}
 local files_timer = false
+local files_empty_logged = false -- build_client_files logged an empty list
 local windows   = package.config:sub(1, 1) == "\\"
 
 -- A name for this process's scratch files in client_files/ (zones may hash at the same time).
 local scratch = tostring(os.time()) .. (tostring({}):match("(%x+)$") or "0")
 
+-- Both write UTF-8: PowerShell's pipe is in the console's OEM code page otherwise, which turned a name outside ASCII
+-- into bytes neither PS_HASH (reading the list as UTF-8) nor the client could use.
 local PS_LIST = [[
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $root = (Resolve-Path -LiteralPath 'client_files').Path.TrimEnd('\')
 Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object {
 	$rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
@@ -537,6 +534,7 @@ Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object {
 
 local PS_HASH = [[
 param($list)
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $root = (Resolve-Path -LiteralPath 'client_files').Path.TrimEnd('\')
 Get-Content -LiteralPath (Join-Path $root $list) -Encoding UTF8 | ForEach-Object {
 	$h = Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $_)
@@ -587,18 +585,23 @@ local function move_file(from, to)
 	end
 end
 
--- {path, size, mtime} of every file, sorted by path; {} without the folder.
+-- {path, size, mtime} of every file, sorted by path; {} without the folder. On Windows a name outside ASCII is left
+-- out: Lua's io.open takes the name in the ANSI code page, not UTF-8, so the zone could list it but not read it.
 local function list_client_files()
 	local out
 	if windows then
 		out = powershell(PS_LIST)
 	else
-		out = run("find " .. sh_quote(FILES_DIR) .. " -type f ! -path '*/.*' -printf '%P\\t%s\\t%T@\\n' 2>/dev/null")
+		-- -H: a client_files that is itself a link to a folder (on another disk) is followed, as PowerShell and
+		-- hailstone_check do; without it find lists nothing there, and the clients get no hailstone.cfg.
+		out = run("find -H " .. sh_quote(FILES_DIR) .. " -type f ! -path '*/.*' -printf '%P\\t%s\\t%T@\\n' 2>/dev/null")
 	end
 	local list = {}
 	for line in (out or ""):gmatch("[^\r\n]+") do
 		local path, size, mtime = line:match("^(.-)\t(%d+)\t(%S+)$")
-		if path then
+		if path and windows and path:find("[\128-\255]") then
+			log("client_files: " .. path .. " is not sent: a name outside ASCII cannot be opened on Windows")
+		elseif path then
 			list[#list + 1] = { path = path, size = tonumber(size), mtime = mtime }
 		end
 	end
@@ -715,6 +718,16 @@ local function build_client_files(force)
 		return
 	end
 	local list  = list_client_files()
+	-- A missing folder and one that cannot be listed look the same from here; either way say so, once until files
+	-- are listed again, so that clients sent no hailstone.cfg do not go unnoticed.
+	if #list == 0 then
+		if not files_empty_logged then
+			log("client_files: no files listed (the folder is missing, empty or cannot be read); clients get an empty list")
+			files_empty_logged = true
+		end
+	else
+		files_empty_logged = false
+	end
 	local cache = read_hash_cache()
 	local need  = {}
 	for _, e in ipairs(list) do
@@ -866,6 +879,26 @@ local function send_files_chunk(client, id, index, offset, length)
 	client:QueuePacket(p)
 end
 
+-- Counts one piece for `char_id` and for the zone if both limits have room for it (nothing counted otherwise).
+-- The zone cannot see what a client has received: EQEmu keeps every piece it sent until the client acknowledges it
+-- (or 30 s pass and the link is closed), so a client that asks and never acknowledges makes the zone hold what the
+-- limits let through in 30 s. The zone's limit bounds that whatever the number of characters (docs/unknowns.md).
+local function take_piece(char_id)
+	local limit = setting("files_chunks_per_second") or 0
+	local zone  = setting("files_chunks_per_second_zone") or 0
+	local r = limit > 0 and window(chunk_limit, char_id) or nil
+	local z = zone > 0 and window(zone_chunk_limit, 0) or nil
+	if z and z.count >= zone then
+		return false, "zone"
+	end
+	if r and r.count >= limit then
+		return false, "own"
+	end
+	if r then r.count = r.count + 1 end
+	if z then z.count = z.count + 1 end
+	return true
+end
+
 -- Holds a request over the limit. A request already held (the client asked again) is not held twice; past
 -- FILES_WAIT_MAX it is dropped, and the client asks again for a piece that does not come.
 local function hold_request(client, char_id, req)
@@ -894,29 +927,65 @@ local function hold_request(client, char_id, req)
 	end
 end
 
--- The FILES_TIMER timer: what the limit allows of each client's held requests, in order. A client that left
+-- What the limits allow of each client's held requests, each client's in order: one piece a client in turn, the
+-- turn starting after the client served last, so that under the zone's limit no client is always last in line and
+-- left with nothing. Run by the FILES_TIMER timer and at every piece request while any wait. A client that left
 -- loses its own; the timer stops when none are held.
+local served_last = nil -- the character id served last
+
 local function serve_waiting()
-	local limit = setting("files_chunks_per_second") or 0
 	local list  = eq.get_entity_list()
-	for char_id, q in pairs(waiting) do
+	local order = {}
+	for char_id in pairs(waiting) do
+		order[#order + 1] = char_id
+	end
+	table.sort(order)
+	local start = 1
+	if served_last ~= nil then
+		for k = 1, #order do
+			if order[k] > served_last then
+				start = k
+				break
+			end
+		end
+	end
+	local turn, clients = {}, {}
+	for k = 0, #order - 1 do
+		local char_id = order[(start - 1 + k) % #order + 1]
 		local client = list:GetClientByCharID(char_id)
 		if client == nil or not client.valid then
 			waiting[char_id] = nil
 		else
-			while q.first <= q.last and (limit <= 0 or take(chunk_limit, char_id, limit)) do
+			turn[#turn + 1] = char_id
+			clients[char_id] = client
+		end
+	end
+	local zone_full = false
+	while #turn > 0 and not zone_full do
+		local again = {}
+		for _, char_id in ipairs(turn) do
+			local ok, why = take_piece(char_id)
+			if ok then
+				local q = waiting[char_id]
 				local req = q[q.first]
 				q[q.first] = nil
 				q.first = q.first + 1
 				q.keys[req[1] .. ":" .. req[2] .. ":" .. req[3]] = nil
-				send_files_chunk(client, req[1], req[2], req[3], req[4])
-			end
-			if q.first > q.last then
-				waiting[char_id] = nil
+				send_files_chunk(clients[char_id], req[1], req[2], req[3], req[4])
+				served_last = char_id
+				if q.first > q.last then
+					waiting[char_id] = nil
+				else
+					again[#again + 1] = char_id
+				end
+			elseif why == "zone" then
+				zone_full = true
+				break
 			end
 		end
+		turn = again
 	end
-	if next(waiting) == nil then
+	if next(waiting) == nil and files_timer then
 		eq.stop_timer(FILES_TIMER, encounter)
 		files_timer = false
 	end
@@ -958,13 +1027,18 @@ local function on_files_request(client, packet)
 		end
 		send_files_page(client, first)
 	elseif action == 2 and packet:GetSize() >= 24 then
-		-- A client asks for at most 32 pieces at a time (its window), each when one comes. Beyond the limit a
-		-- request waits its turn (serve_waiting), behind any that already wait, so the pieces go in the order asked.
-		local limit = setting("files_chunks_per_second") or 0
+		-- A client asks for at most 32 pieces at a time (its window), each when one comes. Beyond the limits a
+		-- request waits its turn (serve_waiting), behind any of its own that already wait, so the pieces go in the
+		-- order asked. While any client's requests wait, every request joins them and they are served in turn at
+		-- once, so a client asking at the start of a second cannot take the zone's whole limit ahead of those held.
 		local char_id = client:CharacterID()
 		local req = { packet:ReadInt32(8), packet:ReadInt32(12), packet:ReadInt32(16), packet:ReadInt32(20) }
-		if limit > 0 and (waiting[char_id] ~= nil or not take(chunk_limit, char_id, limit)) then
+		local others = next(waiting) ~= nil
+		if others or not take_piece(char_id) then
 			hold_request(client, char_id, req)
+			if others then
+				serve_waiting()
+			end
 			return
 		end
 		send_files_chunk(client, req[1], req[2], req[3], req[4])
@@ -1035,7 +1109,7 @@ function event_encounter_load(e)
 end
 
 function event_encounter_unload(e)
-	waiting, files_timer = {}, false
+	waiting, files_timer, served_last = {}, false, nil
 	eq.unregister_player_event("hailstone", Event.unhandled_opcode)
 	eq.unregister_player_event("hailstone", Event.signal)
 end

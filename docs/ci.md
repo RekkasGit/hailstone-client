@@ -3,7 +3,9 @@
 GitHub Actions runs checks only (`.github/workflows/ci.yml`), on every push to `main`, `cloud/**` or `claude/**`
 and on pull requests to `main`:
 
-- `core-names`: `tools/check_core_names.py`, the client's sources name no server outside comments. Its one
+- `core-names`: `tools/check_core_names.py`, the client's sources name no server outside comments (Lua long
+  strings count as code). The old names pass only in their own spellings (`nmsc`, `nmsc_`, `nmsc::`, `NMSC_`, the
+  SDK's `Nmsc<Word>`, `nms-client`), so `NMSChat` or `kNmsCombatOp` fails; tests/server_tools_test.cpp checks both. Its one
   exception is the updater's table of files old releases shipped under `plugins/nms/` (path, size, SHA-256;
   `retired_release_files()` in `src/app/update_install.cpp`), let through by file and exact line shape.
 
