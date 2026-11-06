@@ -663,6 +663,9 @@ int l_write_config(lua_State* L) {
     const char* given = luaL_checkstring(L, 1);
     std::size_t n = 0;
     const char* text = luaL_checklstring(L, 2, &n);
+    const Script& s = Script::of(L);
+    if (s.dry) return luaL_error(L, "mq.pickle does nothing in a dry run");
+    if (s.closing) return luaL_error(L, "mq.pickle: the script is stopping");
     int problem = 0; // 1 outside, 2 cannot write
     {
         auto p = config_path(L, given);

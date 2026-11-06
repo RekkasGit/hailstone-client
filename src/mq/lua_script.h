@@ -181,7 +181,8 @@ struct Script {
 };
 
 // The capability check of the script's functions (mq.*, hailstone.*): a Lua error when the script may not do `cap`.
-// Nothing but reading works in a closing state.
+// Nothing but reading works in a closing state or in a Lua social's dry run (which notes its commands and waits, and
+// does nothing else).
 inline void need_caps(lua_State* L, std::uint32_t cap, const char* what) {
     const Script& s = Script::of(L);
     if ((s.caps & cap) != cap) {
@@ -192,6 +193,7 @@ inline void need_caps(lua_State* L, std::uint32_t cap, const char* what) {
     }
     if ((cap & ~plugin::kCapRead) == 0) return;
     if (s.closing) luaL_error(L, "%s: the script is stopping", what);
+    if (s.dry) luaL_error(L, "%s does nothing in a dry run", what);
 }
 
 } // namespace nmsc::mq

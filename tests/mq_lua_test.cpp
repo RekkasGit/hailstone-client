@@ -1006,3 +1006,38 @@ mq.delay(100000)
     CHECK_FALSE(h.hooks.has_command("/late"));
     CHECK_FALSE(h.hooks.has_command("/early"));
 }
+
+TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll & ~plugin::kCapPackets);
+    auto d = h.scripts->dry_run_button(press(R"(
+mq.cmd('/sit')
+print('bind', pcall(mq.bind, '/drybind', function() end))
+print('event', pcall(mq.event, 'e', '#*#', function() end))
+print('window', pcall(mq.imgui.init, 'w', function() end))
+print('pickle', pcall(mq.pickle, 'dry.lua', {a = 1}))
+print('ability', pcall(hailstone.use_ability, 'skill', 'Taunt'))
+print('read', mq.TLO.Me.Level())
+)"));
+    CHECK(d.ok);
+    REQUIRE(d.lines.size() == 1);
+    CHECK(d.lines[0] == "/sit");
+    CHECK(h.sent.empty());
+    for (const char* what : {"bind false", "event false", "window false", "pickle false", "ability false"}) {
+        INFO(what);
+        bool refused = false;
+        for (const auto& l : h.printed)
+            refused |= l.rfind(what, 0) == 0 && l.find("does nothing in a dry run") != std::string::npos;
+        CHECK(refused);
+    }
+    CHECK(h.printed_line("read 50"));
+    CHECK_FALSE(h.hooks.has_command("/drybind"));
+    std::error_code ec;
+    bool written = false;
+    for (auto it = fs::recursive_directory_iterator(h.world.dir, ec); !ec && it != fs::recursive_directory_iterator(); ++it)
+        written |= it->path().filename() == "dry.lua";
+    CHECK_FALSE(written);
+    // A real press still does it.
+    CHECK(h.scripts->press_button(press("mq.bind('/drybind', function() end)")));
+    CHECK(h.hooks.has_command("/drybind"));
+}

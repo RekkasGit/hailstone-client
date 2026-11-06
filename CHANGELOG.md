@@ -2,7 +2,9 @@
 
 ## Unreleased
 
+- Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
 - For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
+- For add-on authors: `eq.LuaSocialDryRun` needs the `commands` and `actions` capabilities in a plugin's window, as `eq.SetLuaSocial` does
 
 ## 0.5.0-beta (2026-11-05)
 

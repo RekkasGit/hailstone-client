@@ -59,7 +59,7 @@ constexpr Entry kCalls[] = {
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
     {"SpellSets", 0}, {"DrawMap", 0}, {"MapZoom", 0}, {"MapMouseDown", 0}, {"MapMouseUp", 0}, {"MapPanReset", 0},
     {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
-    {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialDryRun", 0}, {"LuaSocialExport", 0},
+    {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},
     {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"LuaSocialEditRequest", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
     {"gamepad.connected", 0}, {"gamepad.type", 0}, {"gamepad.down", 0}, {"gamepad.pressed", 0},
     {"gamepad.released", 0}, {"gamepad.axis", 0}, {"gamepad.mode", 0}, {"gamepad.cross_set", 0},
@@ -106,8 +106,9 @@ constexpr Entry kCalls[] = {
     {"UseSkill", kCapActions}, {"SpellBookClick", kCapActions}, {"SpellBookMemorize", kCapActions},
     {"SpellBookSwap", kCapActions}, {"MemorizeSpellSet", kCapActions}, {"SocialToCursor", kCapActions},
     {"PressLuaSocial", kCapActions}, {"gamepad.drop_cursor", kCapActions},
-    // A social's Lua is code the player's key press runs later
-    {"SetLuaSocial", kCapCommands | kCapActions},
+    // A social's Lua is code the player's key press runs later; a dry run runs the code it is given, with the server's
+    // Lua social capabilities
+    {"SetLuaSocial", kCapCommands | kCapActions}, {"LuaSocialDryRun", kCapCommands | kCapActions},
 };
 
 // A plugin's code called a function its capabilities do not cover: it did nothing (said once per caller and name).
