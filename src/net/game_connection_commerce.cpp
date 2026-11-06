@@ -110,7 +110,10 @@ void GameConnection::merchant_buy(std::uint32_t merchant_slot, std::uint32_t qua
         return;
     }
     const Item& item = it->second;
-    std::int64_t cost = static_cast<std::int64_t>(static_cast<std::int32_t>(item.price) * static_cast<std::int32_t>(quantity));
+    // In 64 bits, as handle_trader_purchase: a signed 32-bit product of a large price and quantity overflows
+    // (undefined), and wrapped negative it would skip the can-afford check. Whether RequestGetItem's own product wraps
+    // is not traced (docs/unknowns.md); a product within 2^31 is the same either way.
+    const std::int64_t cost = static_cast<std::int64_t>(item.price) * static_cast<std::int64_t>(quantity);
     if (merchant_->trader) {
         // A player trader: RequestGetItem's own check (12060 / 12061 with the trader's name), then OP_TraderShop 10.
         if (game::total_copper(coins_) < cost) {

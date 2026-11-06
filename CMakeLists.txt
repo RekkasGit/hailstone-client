@@ -870,6 +870,7 @@ if(NMSC_BUILD_TESTS)
     ${NMSC_TRIUNE_LOGIC}
     tests/tcp_socket_test.cpp
     tests/plugin_tcp_test.cpp
+    tests/merchant_buy_test.cpp
     tests/ascii_case_test.cpp
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
