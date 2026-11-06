@@ -483,9 +483,11 @@ int TableGetHoveredColumn(lua_State *L) { // 0-based column under the mouse in t
 }
 int TableSetupColumn(lua_State *L) {
 	const char *label = S(L, 1);
-	const int flags = I(L, 2);
+	// The status bits are ImGui's own to set (passing them asserts); ImGui clears them each frame regardless.
+	const int flags = I(L, 2) & ~ImGuiTableColumnFlags_StatusMask_;
 	const float width = F(L, 3);
-	if (TableLayoutOpen()) {
+	ImGuiTable *table = GImGui->CurrentTable;
+	if (TableLayoutOpen() && table->DeclColumnsCount < table->ColumnsCount) {
 		ImGui::TableSetupColumn(label, flags, width);
 	}
 	return 0;
