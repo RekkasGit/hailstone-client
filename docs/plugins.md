@@ -158,7 +158,8 @@ Only Lua scripts are supported. MQ's old `.mac` macro language is not.
 A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQuest uses. Each script gets its own Lua
 5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
-cannot freeze the client. One that cannot pause for 5 s is stopped. Each script's memory is capped at 256 MB. A script's tables cannot have a `__gc`
+cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
+pause, is stopped the same way. Each script's memory is capped at 256 MB. A script's tables cannot have a `__gc`
 finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
 end, after what it registered is taken back.
 

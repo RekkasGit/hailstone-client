@@ -65,9 +65,13 @@ bool call_script(Script& s, int nargs, int nres) {
     const Clock::time_point start = s.slice_start;
     s.runaway_ms = kHookMs;
     s.slice_start = Clock::now();
+    // The state's own hook (preempt_hook, ScriptHost::Impl::open_state) comes back after: it holds the script's
+    // windows and a social's press to their limits.
+    const lua_Hook hook = lua_gethook(L);
+    const int mask = lua_gethookmask(L), count = lua_gethookcount(L);
     lua_sethook(L, runaway_hook, LUA_MASKCOUNT, 1000);
     const int st = lua_pcall(L, nargs, nres, 0);
-    lua_sethook(L, nullptr, 0, 0);
+    lua_sethook(L, hook, mask, count);
     s.runaway_ms = runaway;
     s.slice_start = start;
     --s.busy;

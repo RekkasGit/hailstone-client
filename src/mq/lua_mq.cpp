@@ -1006,6 +1006,10 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     }
     lua_State* L = sc.L;
     *static_cast<Script**>(lua_getextraspace(L)) = &sc;
+    // The main state's own calls (its windows, hooks, a social's press) are held to runaway_ms too; its threads
+    // (lua_newthread copies the hook) also pause after kSliceMs.
+    watch(L);
+    sc.slice_start = Clock::now(); // the prelude below
     luaL_requiref(L, "_G", luaopen_base, 1);
     luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
     luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 1);
@@ -1355,10 +1359,15 @@ void ScriptHost::Impl::draw_windows(Script& s) {
     if (s.stop_requested || s.windows.empty() || (s.caps & plugin::kCapUi) == 0) return;
     ++s.busy;
     plugin::CallerScope scope(s.caps, s.name);
-    for (std::size_t i = 0; i < s.windows.size() && !s.stop_requested; ++i) {
+    // A draw function may destroy or make windows (its own too): this frame draws the ones there were, those still
+    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs.
+    const auto windows = s.windows;
+    for (const auto& w : windows) {
+        if (s.stop_requested) break;
+        if (std::find(s.windows.begin(), s.windows.end(), w) == s.windows.end()) continue;
         ImGuiErrorRecoveryState state;
         ImGui::ErrorRecoveryStoreState(&state);
-        lua_rawgeti(s.L, LUA_REGISTRYINDEX, s.windows[i].second);
+        lua_rawgeti(s.L, LUA_REGISTRYINDEX, w.second);
         s.slice_start = Clock::now();
         if (lua_pcall(s.L, 0, 0, 0) != LUA_OK) {
             ImGui::ErrorRecoveryTryToRecoverState(&state);
@@ -1366,7 +1375,7 @@ void ScriptHost::Impl::draw_windows(Script& s) {
                 if (s.social < 0) s.stop_requested = true;
                 else stop_threads(s);
             } else {
-                s.fail(std::string("window ") + s.windows[i].first + ": " + (lua_tostring(s.L, -1) ? lua_tostring(s.L, -1) : "error"));
+                s.fail(std::string("window ") + w.first + ": " + (lua_tostring(s.L, -1) ? lua_tostring(s.L, -1) : "error"));
             }
             lua_pop(s.L, 1);
         }

@@ -985,6 +985,29 @@ TEST_CASE("MQ commands: a plugin's command rewrite is held to the script's capab
     CHECK(h.target == 12);
 }
 
+namespace {
+
+// An ImGui context with a frame open, for ScriptHost::imgui().
+struct ImGuiFrame {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiFrame() {
+        ImGuiIO& io = ImGui::GetIO();
+        io.IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        io.Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        io.DisplaySize = ImVec2(800, 600);
+        io.DeltaTime = 1.0f / 60.0f;
+        ImGui::NewFrame();
+    }
+    ~ImGuiFrame() {
+        ImGui::Render();
+        ImGui::DestroyContext(ctx);
+    }
+};
+
+} // namespace
+
 TEST_CASE("MQ Lua: a script's tables cannot have __gc; nothing it registers outlives it") {
     Host h;
     h.write("gc.lua", R"(
@@ -1005,6 +1028,58 @@ mq.delay(100000)
     // A finalizer at the close would have bound /late as the client's own, holding the freed script.
     CHECK_FALSE(h.hooks.has_command("/late"));
     CHECK_FALSE(h.hooks.has_command("/early"));
+}
+
+TEST_CASE("MQ Lua: a window that destroys itself and fails names itself; the others still draw") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("w.lua", R"(
+local mq = require('mq')
+mq.imgui.init('A', function() mq.imgui.destroy('A') error('x') end)
+mq.imgui.init('B', function() print('drew B') end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("w", {}));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(printed_part(h, "window A: "));
+    CHECK(h.printed_line("drew B") == false); // the error ends the script: B is not drawn after it
+    CHECK_FALSE(h.scripts->running("w"));
+
+    // Destroying another window skips it; the rest are drawn this frame.
+    h.write("v.lua", R"(
+local mq = require('mq')
+mq.imgui.init('A', function() print('drew A') mq.imgui.destroy('B') end)
+mq.imgui.init('B', function() print('drew B') end)
+mq.imgui.init('C', function() print('drew C') end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("v", {}));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(h.printed_line("drew A"));
+    CHECK_FALSE(h.printed_line("drew B"));
+    CHECK(h.printed_line("drew C"));
+    CHECK(h.scripts->running("v"));
+}
+
+TEST_CASE("MQ Lua: a window that never returns is stopped, also after a hook ran on the script's state") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("spinwin.lua", R"(
+local mq = require('mq')
+hailstone.on_packet('zone', 'in', 0x7e57, function() return false end)
+mq.imgui.init('Spin', function() while true do end end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("spinwin", {}));
+    h.pulses(1);
+    net::AppPacket in(0x7e57);
+    CHECK(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in) == plugin::Flow::Continue);
+    h.scripts->imgui(); // kRunawayMs (5 s), then the script ends
+    CHECK(printed_part(h, "window Spin: "));
+    CHECK(printed_part(h, "without a chance to pause"));
+    CHECK_FALSE(h.scripts->running("spinwin"));
 }
 
 TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
