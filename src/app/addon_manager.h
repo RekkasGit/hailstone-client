@@ -162,6 +162,8 @@ public:
     bool has_ready() const;
 
     AddonsStatus status() const;
+    // status().serial without copying the rest (the index, the store's manifests): what the world asks each frame.
+    std::uint32_t serial() const;
     std::vector<InstalledAddon> installed() const;
     // Waits until the worker has nothing to do (tests).
     void wait_idle();

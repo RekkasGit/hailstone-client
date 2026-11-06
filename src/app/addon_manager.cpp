@@ -791,6 +791,11 @@ AddonsStatus AddonManager::status() const {
     return status_;
 }
 
+std::uint32_t AddonManager::serial() const {
+    std::lock_guard lock(mutex_);
+    return status_.serial;
+}
+
 std::vector<InstalledAddon> AddonManager::installed() const { return read_installed_addons(env_.data_dir); }
 
 // ---------------------------------------------------------------- the lists beside the add-ons

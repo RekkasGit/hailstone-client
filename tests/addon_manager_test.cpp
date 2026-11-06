@@ -139,6 +139,7 @@ TEST_CASE("addon_manager: a link's manifest is the install card, and yes install
     CHECK(installed[0].source == kRepo);
     CHECK(installed[0].caps == (plugin::kCapRead | plugin::kCapUi | plugin::kCapActions));
     CHECK(h.manager->status().serial > 0);
+    CHECK(h.manager->serial() == h.manager->status().serial); // what the world reads each frame
     // The package goes once installed.
     CHECK(fs::is_empty(addons_dir(h.dir.path()) / "download"));
 
