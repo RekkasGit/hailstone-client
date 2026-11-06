@@ -17,6 +17,7 @@
 #include "assets/zone.h"
 #include "core/byte_io.h"
 #include "core/game_dir.h"
+#include "core/log.h"
 #include "game/collision.h"
 #include "game_files.h"
 #include "pfs_fixtures.h"
@@ -820,4 +821,40 @@ TEST_CASE("binary ZON: a terrain listed many times is loaded once") {
     GameDir game(dir.path());
     auto zone = load_zone(game, "terdup");
     CHECK(zone.terrain.size() == 1);
+}
+
+TEST_CASE("binary ZON: a .mod that is missing or does not parse is tried once however often it is listed") {
+    Strings s;
+    auto bad = s.add("bad.mod");
+    auto gone = s.add("gone.mod");
+    ByteWriter w;
+    w.le<std::uint32_t>(eqg::kZonMagic);
+    w.le<std::uint32_t>(1);
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(s.bytes.size()));
+    w.le<std::uint32_t>(100); // models: a broken .mod fifty times, then a missing one fifty times
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.bytes(s.bytes);
+    for (int i = 0; i < 50; ++i) w.le(bad);
+    for (int i = 0; i < 50; ++i) w.le(gone);
+    nmsc::test::ScratchDir dir("eqg_mod_dup");
+    {
+        std::vector<std::byte> garbage(64, std::byte{0x5a});
+        auto eqg = nmsc::test::pfs_fixtures::make_pfs({{"moddup.zon", w.take()}, {"bad.mod", garbage}});
+        std::ofstream f(dir.path() / "moddup.eqg", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(eqg.data()), static_cast<std::streamsize>(eqg.size()));
+    }
+    GameDir game(dir.path());
+    auto zone = load_zone(game, "moddup");
+    CHECK(zone.objects.empty());
+    // The log keeps its last 16 lines: one failed parse and one missing model, not one per entry.
+    char recent[4096];
+    nmsc::log::copy_recent_lines(recent, sizeof recent);
+    std::string lines(recent);
+    std::size_t parses = 0;
+    for (auto at = lines.find("model bad.mod:"); at != std::string::npos; at = lines.find("model bad.mod:", at + 1))
+        ++parses;
+    CHECK(parses == 1);
+    CHECK(lines.find("1 of 100 models missing") != std::string::npos);
 }

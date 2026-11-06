@@ -349,9 +349,10 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
     std::vector<std::string> keys(zon.models.size()); // object key per model; empty = terrain or missing
     std::size_t missing = 0;
     eqg::MeshStats stats;
-    // A .ter listed again is the same terrain: loading it twice would draw and collide with it twice, and a forged
-    // list of one name repeated would parse it once per entry.
-    std::unordered_set<std::string> terrain_seen;
+    // Each model file is read at most once. A .ter listed again is the same terrain: loading it twice would draw and
+    // collide with it twice. A .mod listed again reuses the loaded object; one that was missing or failed to parse
+    // is not read again, so a forged list of one name repeated costs one read, not one per entry.
+    std::unordered_set<std::string> tried;
     for (std::size_t i = 0; i < zon.models.size(); ++i) {
         std::string file = lower(zon.models[i]);
         bool terrain = ends_with(file, ".ter");
@@ -361,7 +362,7 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
             keys[i] = key;
             continue;
         }
-        if (terrain && !terrain_seen.insert(key).second) continue;
+        if (!tried.insert(key).second) continue;
         auto data = src.read(file);
         if (!data) {
             ++missing;
