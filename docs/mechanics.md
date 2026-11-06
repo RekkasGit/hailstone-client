@@ -875,6 +875,12 @@ Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle
   (LastTell_CycleIndex), only while the chat input has the keys and holds a "?tell" or "?rtarget" line
   (`game::cycle_reply`). Here they are the chat input's own Tab and Shift+Tab (the default keys; another key bound to
   them does not reach the input).
+- The active chat window (GetActiveChatWindow) is the Always Chat Here window when there is one (the chat menu's
+  item 0x2b, kept as `LockedActiveWindow`), else the one clicked last; a click into another window's input still
+  types there. A Hailstone difference: the original has no locked window until one is ticked, and unticking drops
+  it. Here the main window is locked by default (no `LockedActiveWindow` key, the locked window closed, another
+  window unticked), so Enter and '/' start a line in the main window; unticking the main window itself gives the
+  original's last-clicked behaviour (`LockedActiveWindow=-1`, kept).
 - PvP rule set (OP_LogServer +4): con levels (rules 1 / 2 / 4: below -4 / -8 / -5 levels 1, from 5 / 9 / 6 levels 7,
   else 5; every rule but 0 then clamps levels up to 5), who may attack whom (see `attack_rules.*`), CastSpell 210,
   hit-by-spell, resist debuffs x 1.5, steal, bind wound 145, invites by deity team under rule 4, the death coin rule.

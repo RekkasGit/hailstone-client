@@ -331,7 +331,7 @@ struct ChatManager {
     std::array<ChatWnd, kMaxChatWindows> wnd{};
     int num_windows = 1;        // NumWindows: the slots below it are in use or freed
     int active = 0;             // CurrentActive
-    int locked = -1;            // LockedActive (Always Chat Here)
+    int locked = 0;             // LockedActive (Always Chat Here; -1: none); the main window by default (set_locked)
     std::array<int, game::kChatChannelCount> channel_map{}; // the window of each channel
     std::array<int, game::kChatHitModeCount> hit_modes{};
     int default_channel = 8;    // eqclient.ini [Defaults] DefaultChannel
@@ -351,7 +351,7 @@ struct ChatManager {
         wnd[0].serial = next_serial++;
         num_windows = 1;
         active = 0;
-        locked = -1;
+        locked = 0;
         channel_map.fill(0);
         hit_modes.fill(0);
         tell_windows = false;
@@ -596,7 +596,7 @@ void free_window(int w) {
     for (int& c : m.channel_map)
         if (c == w) c = 0;
     m.active = 0;
-    if (m.locked == w) m.locked = -1;
+    if (m.locked == w) m.locked = 0; // (the original: -1; Hailstone's default lock, set_locked)
     int host = wnd(w).dock;
     wnd(w) = {};
     if (used(host) && wnd(host).up == w) {
@@ -616,6 +616,21 @@ int active_window() {
 // SetActiveChatWindow (OnSetFocus, the input's focus).
 void set_active(int w) {
     if (used(w)) manager().active = w;
+}
+
+// Always Chat Here (menu id 0x2b) ticked: the window is the locked one, GetActiveChatWindow's first choice, so Enter
+// and the chat keys start a line there whichever window was clicked last (a click into another window's input still
+// types there). Toggling says eqstr 15011 / 15010 in the window (colour 10).
+// A Hailstone difference: the original has no lock until one is ticked (LockedActiveWindow -1), and unticking drops
+// it. Here the main window is the locked one by default (a character with no LockedActiveWindow key, a freed locked
+// window, another window unticked), so Enter goes to the main window until another is picked; unticking the main
+// window itself drops the lock, which leaves the original's last-clicked window.
+void set_locked(int w, bool on) {
+    ChatManager& m = manager();
+    if (!used(w) || (m.locked == w) == on) return;
+    m.locked = on ? w : (w == 0 ? -1 : 0);
+    window_text(w, eqstr(on ? game::kStrChatHereOn : game::kStrChatHereOff), 10);
+    changed();
 }
 
 // The player's tell window, made when missing as a tab of the first one (the tab that is up stays; this one shows it
@@ -1056,13 +1071,7 @@ std::vector<Row> chat_menu(int w) {
         Row r; // 0x2b: Always Chat Here (checked while it is the locked window)
         r.text = eqstr(game::kStrAlwaysChatHere);
         r.check = m.locked == w;
-        r.act = on_window(w, [](int win) {
-            ChatManager& mm = manager();
-            bool here = mm.locked == win;
-            mm.locked = here ? -1 : win;
-            window_text(win, eqstr(here ? game::kStrChatHereOff : game::kStrChatHereOn), 10);
-            changed();
-        });
+        r.act = on_window(w, [](int win) { set_locked(win, manager().locked != win); });
         rows.push_back(std::move(r));
     }
     rows.push_back(separator());
@@ -1368,9 +1377,9 @@ std::string default_name(const ChatWnd& c) {
     return eqstr(6630);
 }
 
-// font, active, default, scrollbar = eq.ChatInfo(slot)   -- the font of the tab that is up (CChatWindow::
-// SetChatFont's index), whether it is the active window, its default channel's name, and whether its output has a
-// scrollbar
+// font, active, default, scrollbar, here = eq.ChatInfo(slot)   -- the font of the tab that is up (CChatWindow::
+// SetChatFont's index), whether it is the active window, its default channel's name, whether its output has a
+// scrollbar, and whether it is the Always Chat Here window
 int ChatInfo(lua_State* L) {
     int w = up_window(L, 1);
     if (w < 0) {
@@ -1378,13 +1387,21 @@ int ChatInfo(lua_State* L) {
         lua_pushboolean(L, false);
         lua_pushstring(L, "Say");
         lua_pushboolean(L, true);
-        return 4;
+        lua_pushboolean(L, false);
+        return 5;
     }
     lua_pushinteger(L, wnd(w).font);
     lua_pushboolean(L, active_window() == w);
     lua_pushstring(L, default_name(wnd(w)).c_str());
     lua_pushboolean(L, wnd(w).scrollbar);
-    return 4;
+    lua_pushboolean(L, manager().locked == w);
+    return 5;
+}
+
+// eq.ChatSetAlwaysHere(slot, on)   -- the menu's Always Chat Here for the tab that is up (set_locked)
+int ChatSetAlwaysHere(lua_State* L) {
+    set_locked(up_window(L, 1), lua_toboolean(L, 2) != 0);
+    return 0;
 }
 
 // eq.ChatActivate(slot)   -- the window's tab that is up becomes the active window (where Enter and the chat keys go)
@@ -1839,8 +1856,8 @@ void chat_layout_loaded(ui::UiIni& ini, EqHost& host, const std::filesystem::pat
         if (c.used && (c.dock == w || !used(c.dock) || wnd(c.dock).dock >= 0)) c.dock = -1; // only one level of tabs
     }
     for (int w = 0; w < kMaxChatWindows; ++w) m.wnd[static_cast<std::size_t>(w)].select = true;
-    int locked = num("LockedActiveWindow", -1);
-    m.locked = locked >= 0 && locked < m.num_windows && used(locked) ? locked : -1;
+    int locked = num("LockedActiveWindow", 0); // (the original's default: -1; set_locked)
+    m.locked = locked >= 0 && locked < m.num_windows && used(locked) ? locked : (locked < 0 ? -1 : 0);
     for (int ch = 0; ch < game::kChatChannelCount; ++ch) {
         int w = num(std::format("ChannelMap{}", ch), -1);
         if (w >= 0 && w < m.num_windows && used(w)) m.channel_map[static_cast<std::size_t>(ch)] = w;
@@ -2010,6 +2027,7 @@ void register_chat_api(lua_State* L, EqHost& h) {
                                    {"ChatTakeFocus", ChatTakeFocus}, {"ChatHistory", ChatHistory},
                                    {"ChatCycleReply", ChatCycleReply}, {"ChatPage", ChatPage},
                                    {"ChatInfo", ChatInfo}, {"ChatLink", ChatLink}, {"ChatActivate", ChatActivate},
+                                   {"ChatSetAlwaysHere", ChatSetAlwaysHere},
                                    {"ChatNewWindow", ChatNewWindow}, {"ChatCloseWindow", ChatCloseWindow},
                                    {"ChatSetTitle", ChatSetTitle}, {"ChatFilters", ChatFilters},
                                    {"ChatSetFilter", ChatSetFilter}, {"ChatSetFont", ChatSetFont},

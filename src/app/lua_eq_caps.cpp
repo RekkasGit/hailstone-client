@@ -83,7 +83,7 @@ constexpr Entry kCalls[] = {
     {"ChatActivate", kCapCommands}, {"ChatClear", kCapCommands}, {"ChatNewWindow", kCapCommands},
     {"ChatCloseWindow", kCapCommands}, {"ChatNewTab", kCapCommands}, {"ChatCloseTab", kCapCommands},
     {"ChatSelectTab", kCapCommands}, {"ChatSetTitle", kCapCommands}, {"ChatSetFilter", kCapCommands},
-    {"ChatSetFont", kCapCommands}, {"ChatSetDefault", kCapCommands}, {"ChatSetTellWindows", kCapCommands},
+    {"ChatSetFont", kCapCommands}, {"ChatSetDefault", kCapCommands}, {"ChatSetAlwaysHere", kCapCommands}, {"ChatSetTellWindows", kCapCommands},
     {"ChatSetHitMode", kCapCommands}, {"AbilityBookFavorite", kCapCommands}, {"AbilityBookAutoskill", kCapCommands},
     {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands},
     {"HotBarSetting", kCapCommands}, {"ShowSpell", kCapCommands}, {"SaveSpellSet", kCapCommands},
