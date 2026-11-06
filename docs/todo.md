@@ -177,6 +177,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The item display's placeable, collectible, No Destroy, No Storage and trophy lines (stock EQEmu sends none of this data; unit tests).
 - [x] Context tips for experience, invites, consent, red-con target, world containers and more; the tip table's ids fixed (two missing entries shifted every tip from 0x38); OP_ConsentResponse / OP_DenyResponse handled (unit tests). Open: the tips listed in unknowns.md.
 - [x] The chat server's per-window channel state is saved (it already was; a test added).
+- [ ] The chat log (/log): trace `CEverQuest::OutputTextToLog` @0x5130c0's file handling (opened and closed per line, or held open) and match it; the client holds the file open while logging (docs/unknowns.md).
 - [x] Tracking window: the controls run the /track commands, auto update saved (modern checked live).
 - [x] Tracking in the gamepad pack's More window for characters with the skill (checked live).
 - [x] `/copylayout`, `/offlinemode`, `/bugreport` (f3c5c5d; `/offlinemode`'s yes path not seen live).

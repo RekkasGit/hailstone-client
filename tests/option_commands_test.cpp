@@ -357,10 +357,20 @@ TEST_CASE("option commands: the chat log keeps its file open, each line on disk 
     const std::filesystem::path raid = c.chat_log_path();
     A::chat(c, "first line");
     CHECK(read(raid).ends_with("] first line\n"));
+    std::ofstream* const stream = A::chat_log_stream(c);
+    REQUIRE(stream != nullptr);
     A::chat(c, "second line");
+    CHECK(A::chat_log_stream(c) == stream); // the same open file, not one per line
     std::string text = read(raid);
     CHECK(text.find("] first line\n") != std::string::npos);
     CHECK(text.ends_with("] second line\n"));
+
+    // A write that failed (a full disk, a file pulled away) leaves the stream bad: the next line opens it anew.
+    A::chat_log_stream(c)->setstate(std::ios::badbit);
+    A::chat(c, "after a failure");
+    REQUIRE(A::chat_log_stream(c) != nullptr);
+    CHECK(A::chat_log_stream(c)->good());
+    CHECK(read(raid).ends_with("] after a failure\n"));
 
     A::open_chat_log(c, "other");
     const std::filesystem::path other = c.chat_log_path();
@@ -372,6 +382,7 @@ TEST_CASE("option commands: the chat log keeps its file open, each line on disk 
     // Off: nothing more is written, and the file is closed (it can be moved or deleted); on again it is opened anew.
     A::log_command(c, "off"); // (Log is on: "off", or a toggle where the words are not known, turns it off)
     REQUIRE_FALSE(c.chat_logging());
+    CHECK(A::chat_log_stream(c) == nullptr);
     A::chat(c, "not logged");
     CHECK(read(other).find("not logged") == std::string::npos);
     std::error_code ec;
