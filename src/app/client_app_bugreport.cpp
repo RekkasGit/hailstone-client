@@ -50,6 +50,7 @@ void ClientApp::wire_bug_reports(EqHost& h) {
             fs::remove(bug_capture_, ec); // never last report's picture
             vk_.request_screenshot(bug_capture_, 1920);
         };
+        h.bug_report_now = [this](BugReport& r) { fill_bug_report(r); };
         h.save_bug_report = [this](BugReport r) { return save_bug_report(std::move(r)); };
         h.crash_report_note = [this](const std::string& note) {
             if (!crash_report_ || !crash_saved_) return;
@@ -82,6 +83,12 @@ void ClientApp::add_private_names(BugReport& r) const {
 }
 
 std::future<std::optional<SavedBugReport>> ClientApp::save_bug_report(BugReport r) {
+    if (r.time == 0) fill_bug_report(r); // not filled at its Send (bug_report_now)
+    // The files are copied, cleaned and packed on a thread of their own.
+    return save_bug_report_async(std::move(r), platform::bug_reports_dir());
+}
+
+void ClientApp::fill_bug_report(BugReport& r) {
     r.time = std::time(nullptr);
     std::vector<std::pair<std::string, std::string>> facts = {
         {"Build", std::string("Hailstone ") + build_version()},
@@ -122,10 +129,10 @@ std::future<std::optional<SavedBugReport>> ClientApp::save_bug_report(BugReport 
     r.settings = {config_path_, platform::ui_settings_file(ui_name_)};
     if (!ui_character_dir_.empty()) r.settings.push_back(CharacterFiles{ui_character_dir_}.ui_settings(ui_name_));
     r.capture = bug_capture_;
+    // Its bytes now: the window opened again deletes and writes that file while this report may still be saved.
+    if (!bug_capture_.empty()) r.capture_png = read_text_file(bug_capture_).value_or(std::string());
     r.screenshots = platform::screenshots_dir();
     add_private_names(r);
-    // The facts are the client's state now; the files are copied, cleaned and packed on a thread of their own.
-    return save_bug_report_async(std::move(r), platform::bug_reports_dir());
 }
 
 void ClientApp::report_last_crash() {

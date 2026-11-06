@@ -348,8 +348,9 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
             !((text = read_file(f, 2u << 20)) && put(name, clean(redact_chat(*text)))))
             saved.left_out.push_back(name);
     }
-    if (!r.capture.empty())
-        if (auto png = read_file(r.capture); png && !put("screenshots/at-report.png", *png))
+    if (r.capture_png || !r.capture.empty())
+        if (auto png = r.capture_png ? r.capture_png : read_file(r.capture); png && !png->empty() &&
+                                                                              !put("screenshots/at-report.png", *png))
             saved.left_out.push_back("screenshots/at-report.png");
     for (const fs::path& f : recent_screenshots(r.screenshots, r.time)) {
         const std::string name = "screenshots/" + f.filename().string();

@@ -874,6 +874,8 @@ private:
     void wire_bug_reports(EqHost& h);
     void leave_character(); // the connection gone (camp, logout, link death): the character's state let go
     std::future<std::optional<SavedBugReport>> save_bug_report(BugReport report);
+    // The client's facts, files and the screenshot's bytes into a report, as they are now (at its Send).
+    void fill_bug_report(BugReport& report);
     // The account names and home folder a report takes out of its files (BugReport::accounts, home).
     void add_private_names(BugReport& report) const;
     void report_last_crash();

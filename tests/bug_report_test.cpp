@@ -109,6 +109,22 @@ TEST_CASE("zip: text deflated, noise stored, both read back") {
     CHECK_FALSE(zip.add("late.txt", "after finish", some_day()));
 }
 
+// The screenshot's bytes read at Send are what goes in: the file is the next window's to delete and write again
+// while this report is still being written.
+TEST_CASE("bug report: the screenshot taken at Send goes in, not the file as it is later") {
+    test::ScratchDir tmp("bugreport-capture");
+    const fs::path capture = tmp.path() / "bug-report-capture.png";
+    write_text(capture, "the next window's picture");
+    app::BugReport r;
+    r.time = 1791115200;
+    r.capture = capture;
+    r.capture_png = "this report's picture";
+    auto saved = app::save_bug_report_async(r, tmp.path() / "bug-reports").get();
+    REQUIRE(saved);
+    auto files = unzip(read_bytes(saved->zip));
+    CHECK(files["screenshots/at-report.png"] == "this report's picture");
+}
+
 TEST_CASE("zip: add_within keeps the finished archive under the limit") {
     ZipWriter zip;
     const std::string a = noise(1000), b = noise(1000);

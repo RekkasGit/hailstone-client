@@ -131,3 +131,27 @@ TEST_CASE("Bug report window: a Send while an earlier report is still being writ
     CHECK(w.shown() == "true");
     CHECK(w.saved_name() == "bug-second.zip");
 }
+
+// A Send that waits for an earlier report is filled at its Send (EqHost::bug_report_now: the zone, the place, the
+// screenshot's bytes), not when its turn to be written comes, by which time the player may have zoned.
+TEST_CASE("Bug report window: a queued Send keeps the facts of the moment it was sent") {
+    Window w;
+    int now = 0;
+    w.host.bug_report_now = [&](app::BugReport& r) { r.facts.emplace_back("Moment", std::to_string(++now)); };
+    w.conn.set_bug_report_open(true);
+    CHECK(w.shown() == "true");
+    w.send("first");
+    w.send("second");
+    CHECK(now == 2); // both filled at their Send
+    now = 100;       // what a late fill would see
+    w.saves.done(0, "bug-first.zip");
+    CHECK(w.shown() == "true");
+    REQUIRE(w.saves.reports.size() == 2);
+    auto moment = [](const app::BugReport& r) {
+        for (const auto& [k, v] : r.facts)
+            if (k == "Moment") return v;
+        return std::string();
+    };
+    CHECK(moment(w.saves.reports[0]) == "1");
+    CHECK(moment(w.saves.reports[1]) == "2");
+}

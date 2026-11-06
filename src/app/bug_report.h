@@ -41,6 +41,9 @@ struct BugReport {
     std::vector<std::filesystem::path> logs;         // most wanted first
     std::vector<std::filesystem::path> settings;     // hailstone.ini ...: password, token and secret lines blanked
     std::filesystem::path capture;                   // the screenshot taken when the window opened (may be empty)
+    // That screenshot's bytes, read at Send: when set, `capture` is not read (the file is the next window's to
+    // delete and write again while this report is still being saved).
+    std::optional<std::string> capture_png;
     std::filesystem::path screenshots;               // the player's screenshots folder (may be empty)
     // Taken out of every text in the archive (redact_private()): the player's login account names, and the home
     // folder (on Linux, its name is the player's system account name).

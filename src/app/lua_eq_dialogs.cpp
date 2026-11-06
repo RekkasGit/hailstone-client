@@ -660,7 +660,9 @@ public:
             saved_.reset();
             if (host.save_bug_report) {
                 show_ = ++sends_;
-                queued_.emplace_back(show_, report(category));
+                BugReport r = report(category);
+                if (host.bug_report_now) host.bug_report_now(r); // the state at this Send, not at its turn
+                queued_.emplace_back(show_, std::move(r));
                 if (!saving_.valid()) start_save(host);
             }
             text_.clear();
