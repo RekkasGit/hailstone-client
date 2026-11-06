@@ -311,3 +311,38 @@ TEST_CASE("/stopdisc and /dismount") {
     c.dismount_command();
     CHECK(drain(c).size() == 1); // 6159
 }
+
+TEST_CASE("CYCLE_XTARGET after the server shrank the list past the cursor ends") {
+    // The cursor at slot 7 of 10; the list then shrinks to 5 (or 0) empty slots: the cycle used to look for its start
+    // forever. The cursor stays in the list, and the cycle looks at every slot once.
+    mq_test::World w("nmsc_xtarget_shrink_test");
+    auto& c = *w.conn;
+    auto response = [](std::uint32_t max, std::int32_t slot, std::uint32_t id) {
+        ByteWriter b;
+        b.le<std::uint32_t>(max);
+        b.le<std::uint32_t>(id ? 1 : 0);
+        if (id) {
+            b.le<std::int32_t>(slot);
+            b.le<std::uint8_t>(1);
+            b.le<std::uint32_t>(id);
+            b.fixed_string("a_rat01", 8);
+        }
+        return net::AppPacket(net::to_wire(net::Op::XTargetResponse), b.take());
+    };
+    c.receive_zone_packet_for_test(response(10, 7, 10));
+    w.conn->world_for_test().target_id = 0;
+    c.target_next_xtarget();
+    REQUIRE(c.xtargets().current == 7);
+    CHECK(c.world().target_id == 10);
+    c.receive_zone_packet_for_test(response(5, 0, 0));
+    CHECK(c.xtargets().current < 5);
+    c.target_next_xtarget(); // no slot holds a spawn
+    CHECK(c.xtargets().current < 5);
+    c.receive_zone_packet_for_test(response(0, 0, 0));
+    c.target_next_xtarget();
+    CHECK(c.xtargets().current == 0);
+    // A spawn in the shrunk list is still found.
+    c.receive_zone_packet_for_test(response(5, 2, 11));
+    c.target_next_xtarget();
+    CHECK(c.world().target_id == 11);
+}

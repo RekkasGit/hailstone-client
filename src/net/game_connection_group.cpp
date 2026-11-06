@@ -256,8 +256,11 @@ void GameConnection::select_xtarget(int slot) {
 void GameConnection::target_next_xtarget() {
     // The loop of ExtendedTargetList_TargetNextSlot: the cursor advances (wrapping to 0) until a slot with a spawn
     // id above 0 was seen and the cursor is not back at its start; then that slot's spawn, when it exists.
-    int start = xtargets_.current, at = start;
     int n = static_cast<int>(xtargets_.slots.size());
+    if (n == 0) return;
+    // A client guard: a cursor past a list the server shrank would never come back to its start (the loop would not
+    // end when no slot holds a spawn); it goes on from the last slot instead, so slot 0 is looked at first.
+    int start = std::clamp(xtargets_.current, 0, n - 1), at = start;
     bool seen = false;
     for (;;) {
         at = at + 1 >= n ? 0 : at + 1;
@@ -550,7 +553,13 @@ void GameConnection::handle_group(Op op, const AppPacket& p) {
         // an empty status turns a specific NPC slot (type 3) back into an auto hater (1).
         auto x = decode_xtarget_response(p);
         if (!x) break;
-        if (x->max <= 20) xtargets_.slots.resize(x->max);
+        if (x->max <= 20) {
+            xtargets_.slots.resize(x->max);
+            // A client guard: the cursors stay in the list (target_next_xtarget; the window's menu slot).
+            const int n = static_cast<int>(x->max);
+            if (xtargets_.current >= n) xtargets_.current = n > 0 ? n - 1 : 0;
+            if (xtargets_.selected >= n) xtargets_.selected = -1;
+        }
         for (auto& e : x->entries) {
             if (e.slot < 0 || e.slot >= static_cast<std::int32_t>(xtargets_.slots.size())) continue;
             auto& s = xtargets_.slots[static_cast<std::size_t>(e.slot)];

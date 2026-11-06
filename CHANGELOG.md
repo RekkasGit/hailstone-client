@@ -24,6 +24,7 @@
 - Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
 - A server-file download no longer fails with "the server's files keep changing" when the server owner changes a file in `client_files/` during it: the files are listed again once and the download finishes
 - A hostile server can no longer make the map editor overwrite or read `.txt` files outside Hailstone's maps folders (the game folder's included) by sending a zone name that is a path; such a name is not used
+- Cycling the extended targets no longer freezes the game after the server shrinks the list below the slot last cycled to
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
 - Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame
