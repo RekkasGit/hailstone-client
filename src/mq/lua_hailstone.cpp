@@ -17,7 +17,9 @@
 // one ends the script, as an error in its main chunk does. A script that gave the client any of these stays after its
 // main chunk returns, until it is stopped.
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cstddef>
 #include <ctime>
 #include <optional>
 #include <string>
@@ -555,19 +557,22 @@ int l_set_character_classes(lua_State* L) {
 int l_set_pet_list(lua_State* L) {
     need_cap(L, plugin::kCapExtend, "hailstone.set_pet_list");
     luaL_checktype(L, 1, LUA_TTABLE);
-    std::vector<game::PetInfo> list;
-    const lua_Unsigned n = std::min<lua_Unsigned>(lua_rawlen(L, 1), 256);
+    // Read into a plain array first: an entry's __index may raise, and that longjmp would skip a vector's destructor.
+    std::array<game::PetInfo, 256> read{};
+    std::size_t count = 0;
+    const lua_Unsigned n = std::min<lua_Unsigned>(lua_rawlen(L, 1), read.size());
     for (lua_Unsigned i = 1; i <= n; ++i) {
         lua_rawgeti(L, 1, static_cast<lua_Integer>(i));
         if (lua_istable(L, -1)) {
             lua_getfield(L, -1, "spawn");
             lua_getfield(L, -2, "class");
-            list.push_back({static_cast<std::uint32_t>(lua_tointeger(L, -2)), static_cast<std::uint32_t>(lua_tointeger(L, -1))});
+            read[count++] = {static_cast<std::uint32_t>(lua_tointeger(L, -2)), static_cast<std::uint32_t>(lua_tointeger(L, -1))};
             lua_pop(L, 2);
         }
         lua_pop(L, 1);
     }
-    if (auto* c = writable(Script::of(L))) c->set_pet_list(std::move(list));
+    if (auto* c = writable(Script::of(L)))
+        c->set_pet_list(std::vector<game::PetInfo>(read.begin(), read.begin() + static_cast<std::ptrdiff_t>(count)));
     return 0;
 }
 
@@ -708,24 +713,30 @@ int l_option(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTABLE);
     Script& s = Script::of(L);
     if (!s.host->env.ui) return 0;
-    plugin::UiBridge::Option o;
-    o.plugin = s.name;
-    o.kind = plugin::UiBridge::Kind::Script;
+    // Every field is read and checked before the Option (strings, std::function) exists, and get and set are
+    // referenced only once both are known to be functions: a failed check, or a table's __index that raises, longjmps.
     lua_getfield(L, 1, "name");
-    o.name = luaL_checkstring(L, -1);
+    const char* name = luaL_checkstring(L, -1);
     lua_getfield(L, 1, "label");
-    o.label = lua_isstring(L, -1) ? lua_tostring(L, -1) : o.name;
+    const char* label = lua_isstring(L, -1) ? lua_tostring(L, -1) : name;
     lua_getfield(L, 1, "min");
-    o.min = static_cast<int>(luaL_optinteger(L, -1, 0));
+    const int min = static_cast<int>(luaL_optinteger(L, -1, 0));
     lua_getfield(L, 1, "max");
-    o.max = std::max(o.min, static_cast<int>(luaL_optinteger(L, -1, 1)));
-    lua_pop(L, 4);
+    const int max = std::max(min, static_cast<int>(luaL_optinteger(L, -1, 1)));
     lua_getfield(L, 1, "get");
     luaL_checktype(L, -1, LUA_TFUNCTION);
-    const int get = luaL_ref(L, LUA_REGISTRYINDEX);
     lua_getfield(L, 1, "set");
     luaL_checktype(L, -1, LUA_TFUNCTION);
     const int set = luaL_ref(L, LUA_REGISTRYINDEX);
+    const int get = luaL_ref(L, LUA_REGISTRYINDEX);
+    plugin::UiBridge::Option o;
+    o.plugin = s.name;
+    o.kind = plugin::UiBridge::Kind::Script;
+    o.name = name;
+    o.label = label;
+    o.min = min;
+    o.max = max;
+    lua_pop(L, 4); // name, label, min, max: the strings are copied
     Script* sp = &s;
     o.get = [sp, get]() -> int {
         if (!usable(*sp)) return 0;
@@ -913,11 +924,13 @@ int l_eqstr(lua_State* L) {
     const net::GameConnection* c = readable(Script::of(L));
     const auto id = static_cast<std::uint32_t>(luaL_checkinteger(L, 1));
     if (!c || !c->strings().has(id)) return 0;
+    // Every argument made text on the stack first: a __tostring may raise, and that longjmp would skip the vector.
+    const int top = lua_gettop(L);
+    const int last = std::min(top, 17);
+    luaL_checkstack(L, last - 1, "hailstone.eqstr");
+    for (int i = 2; i <= last; ++i) luaL_tolstring(L, i, nullptr);
     std::vector<std::string> args;
-    for (int i = 2; i <= lua_gettop(L) && args.size() < 16; ++i) {
-        args.emplace_back(luaL_tolstring(L, i, nullptr));
-        lua_pop(L, 1);
-    }
+    for (int i = top + 1; i <= lua_gettop(L); ++i) args.emplace_back(lua_tostring(L, i));
     std::string r = c->strings().format(id, args);
     lua_pushlstring(L, r.data(), r.size());
     return 1;
@@ -1118,7 +1131,9 @@ int l_train_aa(lua_State* L) {
 // own (plugin::Rules::script_sections; [autocombat] hunter = off), as written; nil when the server has no
 // hailstone.cfg or does not set it. Names ignore case.
 int l_server_rule(lua_State* L) {
-    std::string section(luaL_checkstring(L, 1)), key(luaL_checkstring(L, 2));
+    const char* section_arg = luaL_checkstring(L, 1);
+    const char* key_arg = luaL_checkstring(L, 2); // both checked before a std::string exists to be skipped
+    std::string section(section_arg), key(key_arg);
     for (std::string* t : {&section, &key})
         for (char& ch : *t) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     const plugin::Policy* policy = Script::of(L).host->env.policy;
