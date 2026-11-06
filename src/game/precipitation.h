@@ -21,6 +21,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <span>
@@ -168,8 +169,11 @@ private:
     PrecipitationDefinitions defs_;
     std::vector<PrecipitationParticle> particles_;
     std::vector<std::uint32_t> active_; // +0x20 list
-    std::vector<std::uint32_t> cached_; // +0x2c list (landed: their column can be reused)
-    std::vector<std::uint32_t> free_;   // +0x38 list
+    // FIFO, as the original's lists: taken from the front, so a deque (a vector's erase(begin()) moved the whole pool
+    // for every drop).
+    std::deque<std::uint32_t> cached_; // +0x2c list (landed: their column can be reused)
+    std::deque<std::uint32_t> free_;   // +0x38 list
+    std::vector<std::uint32_t> still_; // update()'s scratch, kept between frames
     std::int32_t kind_ = 0xff;          // +0x0c
     glm::vec3 wind_{0.0f, 0.0f, -1.0f}; // +0x44 (DAT_10173058..60)
     bool wind_changed_ = false;         // DAT_1017c988
