@@ -573,6 +573,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_player_for_zone();
         reset_market_for_zone();
         path_.stop();
+        // A quiet path asked in the old zone and never answered there: the new zone's first /find reply is not it.
+        quiet_path_pending_ = false;
+        quiet_path_.reset();
         expedition_.compass.clear();
         // NPC windows close with the zone (a guild bank deposit outside the guild hall would lose the item).
         reset_real_estate_for_zone();
