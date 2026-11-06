@@ -8,12 +8,14 @@
 //   Eval             "crash": exit 3; "garbage": bytes that are no message; "console": a console line; "close":
 //                    Closed (failed)
 //   Shutdown, end of input: exit 0
-// "--version N" answers Hello with that version.
+// "--version N" answers Hello with that version; "--stall 1" never reads its input (a helper that is stuck).
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "platform/binary_stdio.h"
@@ -66,6 +68,9 @@ int main(int argc, char** argv) {
     std::uint32_t version = kProtocolVersion;
     for (int i = 1; i + 1 < argc; ++i)
         if (std::strcmp(argv[i], "--version") == 0) version = static_cast<std::uint32_t>(std::atoi(argv[i + 1]));
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::strcmp(argv[i], "--stall") == 0)
+            for (;;) std::this_thread::sleep_for(std::chrono::seconds(1)); // until it is ended
     struct Size {
         std::uint16_t w = 0, h = 0;
     };

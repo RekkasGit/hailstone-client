@@ -15,14 +15,19 @@ namespace nmsc::platform {
 
 class HelperProcess {
 public:
-    HelperProcess() = default;
+    // Bytes queued for a helper that is not reading its input (stopped, or its reader stuck): past this it is taken
+    // as dead and ended, rather than the queue growing with every message. Two of the protocol's largest messages.
+    static constexpr std::size_t kMaxPending = std::size_t{128} << 20;
+
+    explicit HelperProcess(std::size_t max_pending = kMaxPending) : max_pending_(max_pending) {}
     HelperProcess(const HelperProcess&) = delete;
     HelperProcess& operator=(const HelperProcess&) = delete;
     ~HelperProcess(); // stops it
 
     // args[0] is the program. False (with error set) when it could not be started.
     bool start(const std::vector<std::string>& args, std::string& error);
-    // Queues the bytes and writes what the pipe takes now; the rest goes with later writes and flush().
+    // Queues the bytes and writes what the pipe takes now; the rest goes with later writes and flush(). A queue
+    // that would pass the most it may hold ends the helper instead (running() is then false).
     void write(std::span<const std::byte> bytes);
     void flush();
     std::size_t pending_write() const { return out_.size(); }
@@ -40,6 +45,7 @@ private:
     SDL_Process* process_ = nullptr;
     SDL_IOStream* in_ = nullptr; // its standard input
     std::vector<std::byte> out_;
+    std::size_t max_pending_;
     bool exited_ = false;
     int exit_code_ = 0;
 };

@@ -562,6 +562,25 @@ TEST_CASE("helper process: Shutdown and the end of its input let it quit by itse
     CHECK(p.exit_code() == 0);
 }
 
+// A helper that stops reading its input: what the client queues for it is held to a limit, past which the helper is
+// ended (and so, in a BrowserHost, seen to die and restarted) rather than the queue growing.
+TEST_CASE("helper process: a helper that does not read is ended once its queue is full") {
+    platform::HelperProcess p(std::size_t{1} << 20);
+    std::string error;
+    REQUIRE(p.start({NMSC_MOCK_WEB_HELPER, "--stall", "1"}, error));
+    const std::vector<std::byte> chunk(std::size_t{64} << 10, std::byte{0x55});
+    std::size_t written = 0;
+    // (Past the pipe's own buffer and the limit, a queue that is empty again is one the helper's end took.)
+    while (written < (std::size_t{64} << 20)) {
+        p.write(chunk);
+        written += chunk.size();
+        if (written > (std::size_t{2} << 20) && p.pending_write() == 0) break;
+    }
+    CHECK(written < (std::size_t{64} << 20));
+    CHECK(p.pending_write() == 0);
+    CHECK(p.wait_exit(10'000)); // ended
+}
+
 TEST_CASE("browser host: a helper of another version is given up on") {
     BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER, "--version", "99"}); });
     auto id = host.open("https://example.org/", {});
