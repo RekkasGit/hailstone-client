@@ -3,6 +3,11 @@
 ## Unreleased
 
 - After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
+- Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
+
+## Unreleased
+
+- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
 
 ## 0.5.0-beta (2026-11-05)
 

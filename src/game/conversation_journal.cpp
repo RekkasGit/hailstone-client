@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "game/spell_record.h"
+#include "platform/process.h"
 
 namespace nmsc::game {
 
@@ -160,6 +161,14 @@ bool read_line(std::FILE* f, std::string& out, int max) {
     return true;
 }
 
+// <base><suffix> ("CJ" + ".txt"), joined as a path: path::string() throws on Windows for a name the ANSI code page
+// cannot show (the data folder under a user name in another script), and a narrow fopen cannot open it.
+std::filesystem::path with_suffix(const std::filesystem::path& base, const char* suffix) {
+    std::filesystem::path p = base;
+    p += suffix;
+    return p;
+}
+
 std::string strip_newline(std::string s) {
     if (!s.empty() && s.back() == '\n') s.pop_back();
     return s;
@@ -168,9 +177,9 @@ std::string strip_newline(std::string s) {
 } // namespace
 
 int ConversationJournal::load(const std::filesystem::path& base) {
-    std::FILE* txt = std::fopen((base.string() + ".txt").c_str(), "rt");
+    std::FILE* txt = platform::open_c_file(with_suffix(base, ".txt"), "rt");
     if (!txt) return -1; // "Warning: Unable to open journal, creating new file."
-    std::FILE* hdr = std::fopen((base.string() + ".hdr").c_str(), "rt");
+    std::FILE* hdr = platform::open_c_file(with_suffix(base, ".hdr"), "rt");
     if (!hdr) {
         std::fclose(txt);
         return -2; // "Error: Unable to open Journal."
@@ -240,9 +249,9 @@ int ConversationJournal::load(const std::filesystem::path& base) {
 }
 
 int ConversationJournal::save(const std::filesystem::path& base) const {
-    std::FILE* txt = std::fopen((base.string() + ".txt").c_str(), "wt");
+    std::FILE* txt = platform::open_c_file(with_suffix(base, ".txt"), "wt");
     if (!txt) return -1;
-    std::FILE* hdr = std::fopen((base.string() + ".hdr").c_str(), "wt");
+    std::FILE* hdr = platform::open_c_file(with_suffix(base, ".hdr"), "wt");
     if (!hdr) {
         std::fclose(txt);
         return -1;
