@@ -383,10 +383,11 @@ std::array<std::pair<const char*, std::int32_t>, 8> viewport_ini(const Viewport&
 
 ViewRect viewport_rect(const Viewport& v, std::int32_t screen_w, std::int32_t screen_h) {
     ViewRect r;
-    r.x = v.v[4] ? screen_w * v.v[4] / 100 : v.v[0];
-    r.y = v.v[5] ? screen_h * v.v[5] / 100 : v.v[1];
-    r.w = v.v[6] ? screen_w * v.v[6] / 100 : wrap_sub(v.v[2], v.v[0]);
-    r.h = v.v[7] ? screen_h * v.v[7] / 100 : wrap_sub(v.v[3], v.v[1]);
+    // imul then idiv: a scale from a hand-edited display.viewport wraps the product (core/wrap_math.h).
+    r.x = v.v[4] ? core::wrapped_mul_div(screen_w, v.v[4], 100) : v.v[0];
+    r.y = v.v[5] ? core::wrapped_mul_div(screen_h, v.v[5], 100) : v.v[1];
+    r.w = v.v[6] ? core::wrapped_mul_div(screen_w, v.v[6], 100) : wrap_sub(v.v[2], v.v[0]);
+    r.h = v.v[7] ? core::wrapped_mul_div(screen_h, v.v[7], 100) : wrap_sub(v.v[3], v.v[1]);
     if (r.w < 1 || r.w > screen_w) r.w = screen_w;
     if (r.x < 0) r.x = 0;
     if (wrap_add(r.w, r.x) > screen_w) r.x = wrap_sub(screen_w, r.w);

@@ -1,5 +1,7 @@
 #include "game/training.h"
 
+#include "core/wrap_math.h"
+
 namespace nmsc::game {
 
 namespace {
@@ -82,9 +84,11 @@ std::vector<TrainingRow> training_rows(const TraineeView& who, const std::array<
 }
 
 std::int32_t training_cost(std::int32_t value) {
-    std::int32_t v = value - 10;
+    // 32-bit sub, imul, imul, idiv: a skill past 1301 wraps the cube (the server's value is uncapped).
+    auto v = static_cast<std::int32_t>(static_cast<std::uint32_t>(value) - 10u);
     if (v < 0) v = 0;
-    return v * v * v / 100;
+    const auto u = static_cast<std::uint32_t>(v);
+    return core::wrapped_div(u * u * u, 100);
 }
 
 std::int32_t pc_skill_limit(const SkillLimitView& who, std::uint32_t skill) {

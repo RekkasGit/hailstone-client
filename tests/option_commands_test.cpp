@@ -237,6 +237,11 @@ TEST_CASE("option commands: the viewport's rectangle (ResetUIForResolution)") {
     CHECK(back->v == v->v);
     CHECK_FALSE(parse_viewport("1 2 3"));
     CHECK_FALSE(parse_viewport(""));
+    // A hand-edited scale: the product wraps in 32 bits before the divide (it overflowed, and MSVC folded it).
+    auto edited = parse_viewport("0 0 100 100 0 0 2237014 0");
+    REQUIRE(edited);
+    r = viewport_rect(*edited, 1920, 1080);
+    CHECK(r.w == 995); // 1920 * 2237014 = 0x1_0001_8500, 0x18500 / 100
 }
 
 TEST_CASE("option commands: tracking choices and ini values") {

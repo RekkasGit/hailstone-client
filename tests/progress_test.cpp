@@ -423,6 +423,9 @@ TEST_CASE("training: rows, cost, checkLang and the train checks") {
     CHECK(game::training_cost(10) == 0);
     CHECK(game::training_cost(15) == 1);  // 125 / 100
     CHECK(game::training_cost(60) == 1250);
+    // A server's skill past 1301: the cube wraps in 32 bits, then the idiv (it overflowed).
+    CHECK(game::training_cost(1500) == -9870182); // 1490^3 = 0xc52b4bc8
+    CHECK(game::training_cost(INT32_MIN) == -10); // the sub wraps too: 0x7ffffff6^3 = 0xfffffc18
 
     CHECK_FALSE(game::check_train(who, rows[0]));
     auto r = game::check_train(who, rows[1]);
