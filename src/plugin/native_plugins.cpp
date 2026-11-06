@@ -26,7 +26,7 @@
 #include "mq/tlo.h"
 #include "net/game_connection.h"
 #include "net/social_packets.h"
-#include "platform/tcp_socket.h"
+#include "plugin/plugin_tcp.h"
 #include "plugin/ui_bridge.h"
 #include "plugin/web_access.h"
 
@@ -217,13 +217,10 @@ struct Loaded {
     int busy = 0;              // inside one of its callbacks
     bool unload_pending = false; // unload asked for while busy: done at the next pulse
 
-    // Its TCP connections (tcp_open ...), closed with it. `pending` from `sent` on is what the system has not taken.
+    // Its TCP connections (tcp_open ...), closed with it.
     struct Tcp {
         std::int32_t id = 0;
-        platform::TcpSocket socket;
-        std::vector<std::byte> pending;
-        std::size_t sent = 0;
-        std::string error;
+        std::unique_ptr<PluginTcp> conn;
     };
     std::vector<std::unique_ptr<Tcp>> tcp;
     std::int32_t next_tcp = 1;
@@ -1239,29 +1236,10 @@ void h_set_hot_bar_page(void* h, std::int32_t bar, std::int32_t page) {
 
 // ---- the plugin's TCP connections (NMSC_CAP_NET)
 
-// What tcp_send keeps for a peer that stopped reading before the connection counts as broken.
-constexpr std::size_t kTcpPendingMax = std::size_t{16} << 20;
-
 Loaded::Tcp* find_tcp(Loaded& l, std::int32_t handle) {
     for (auto& t : l.tcp)
         if (t->id == handle) return t.get();
     return nullptr;
-}
-
-// Hands the system what it will take of the waiting bytes.
-void flush_tcp(Loaded::Tcp& t) {
-    while (t.sent < t.pending.size()) {
-        const auto n = t.socket.send(std::span<const std::byte>(t.pending).subspan(t.sent));
-        if (!n) {
-            t.pending.clear();
-            t.sent = 0;
-            return;
-        }
-        if (*n == 0) return;
-        t.sent += *n;
-    }
-    t.pending.clear();
-    t.sent = 0;
 }
 
 std::int32_t h_tcp_open(void* h, const char* address, std::uint16_t port) {
@@ -1272,52 +1250,34 @@ std::int32_t h_tcp_open(void* h, const char* address, std::uint16_t port) {
     }
     if (!address || !*address || l.tcp.size() >= NMSC_TCP_MAX) return 0;
     std::string error;
-    auto t = std::make_unique<Loaded::Tcp>();
-    bool started = false;
-    for (const auto& ep : platform::resolve(address, port, error)) {
-        if ((started = t->socket.connect(ep, error))) break;
-    }
-    if (!started) {
+    auto conn = PluginTcp::open(address, port, error); // a name is looked up off the frame (plugin/plugin_tcp.h)
+    if (!conn) {
         log::warn("plugin {}: tcp to {}:{}: {}", l.name, address, port, error);
         return 0;
     }
     log::info("plugin {}: tcp to {}:{}", l.name, address, port);
+    auto t = std::make_unique<Loaded::Tcp>();
     t->id = l.next_tcp++;
+    t->conn = std::move(conn);
     l.tcp.push_back(std::move(t));
     return l.tcp.back()->id;
 }
 
 std::int32_t h_tcp_state(void* h, std::int32_t handle) {
     Loaded::Tcp* t = find_tcp(Loaded::of(h), handle);
-    if (!t) return -1;
-    flush_tcp(*t);
-    switch (t->socket.state()) {
-    case platform::TcpSocket::State::Connected: return 1;
-    case platform::TcpSocket::State::Connecting: return 0;
-    default: return -1;
-    }
+    return t ? t->conn->state() : -1;
 }
 
 std::int64_t h_tcp_send(void* h, std::int32_t handle, const void* data, std::size_t size) {
     Loaded::Tcp* t = find_tcp(Loaded::of(h), handle);
-    if (!t || t->socket.state() == platform::TcpSocket::State::Closed) return -1;
-    if (t->pending.size() - t->sent + size > kTcpPendingMax) {
-        t->error = "the peer stopped reading";
-        t->socket.close();
-        return -1;
-    }
-    const auto* p = static_cast<const std::byte*>(data);
-    if (size) t->pending.insert(t->pending.end(), p, p + size);
-    flush_tcp(*t);
-    return static_cast<std::int64_t>(size);
+    if (!t) return -1;
+    return t->conn->send(std::span<const std::byte>(static_cast<const std::byte*>(data), data ? size : 0));
 }
 
 std::int64_t h_tcp_recv(void* h, std::int32_t handle, void* out, std::size_t size) {
     Loaded::Tcp* t = find_tcp(Loaded::of(h), handle);
     if (!t) return -1;
-    flush_tcp(*t);
-    const auto n = t->socket.recv(std::span<std::byte>(static_cast<std::byte*>(out), out ? size : 0));
-    return n ? static_cast<std::int64_t>(*n) : -1;
+    return t->conn->recv(std::span<std::byte>(static_cast<std::byte*>(out), out ? size : 0));
 }
 
 void h_tcp_close(void* h, std::int32_t handle) {
@@ -1328,7 +1288,7 @@ void h_tcp_close(void* h, std::int32_t handle) {
 int h_tcp_error(void* h, std::int32_t handle, char* out, std::size_t size) {
     Loaded::Tcp* t = find_tcp(Loaded::of(h), handle);
     if (!t) return -1;
-    return copy_out(t->error.empty() ? t->socket.last_error() : t->error, out, size);
+    return copy_out(t->conn->error(), out, size);
 }
 
 float h_max_camera_distance(void* h) {

@@ -505,7 +505,7 @@ own and works the same on every platform. Nothing waits on the network:
 
 | Function | What |
 |---|---|
-| `tcp_open(address, port)` | looks the name up (that can take a moment) and starts connecting: a handle above 0, or 0 (no such host, no `net`, already `NMSC_TCP_MAX` = 8 open) |
+| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `NMSC_TCP_MAX` = 8 open). A name is looked up in the background, the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why |
 | `tcp_state(handle)` | 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the other side) |
 | `tcp_send(handle, data, size)` | takes every byte (what the system cannot take yet waits in the client and goes out at the next `tcp_*` call) and returns the count, or -1 once closed |
 | `tcp_recv(handle, out, size)` | what has arrived: the count, 0 for nothing yet, -1 once closed with nothing left |

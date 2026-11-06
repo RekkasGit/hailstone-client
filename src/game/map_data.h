@@ -78,7 +78,8 @@ struct MapLayerParse {
 // stack buffer for all layers); a label size is clamped to 1..3.
 MapLayerParse parse_map_layer(std::string_view text, int layer, std::string& label_buffer);
 
-// The file name of a layer: "<zone>.txt", "<zone>_1.txt" ..
+// The file name of a layer: "<zone>.txt", "<zone>_1.txt" .., or "" when `zone` is not a zone short name
+// (is_zone_short_name: a name with a separator, "..", a drive or a device name would name a file elsewhere).
 std::string map_layer_file_name(std::string_view zone, int layer);
 
 // A label's place candidates (MapLabel_PlacementRect @0x6c8290, rof2decomp re/src/game/ui/map_labels.cpp): the

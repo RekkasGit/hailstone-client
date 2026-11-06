@@ -84,7 +84,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] rof2decomp notes: Params 0xe is the keepalive delay, not the no-data timeout (checked at 0x8c4197 / 0x8c61c4).
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
 - [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
-- [ ] Whether the original takes a SessionResponse from another address of the server (the client takes another port only; unknowns.md).
+- [ ] Whether the original checks the address a SessionResponse comes from (the client takes any with its connect code, as multi-homed EQEmu hosts need; unknowns.md).
 - [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
 
 ### Real estate (player housing, guild halls)
@@ -205,6 +205,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `/nav` (MQ2Nav's commands), `/moveto`, the `Navigation` TLO; the walk steers by the heading and the movement keys, gets unstuck, opens doors in its way, and asks the server's `/find` path while the mesh is building.
 - [x] Tried live on NMS Dev (ecommons): long walks, /moveto, a door, the TLO, the overlay, pause, cancelling with a key, an unreachable point.
 - [ ] Live: a moving spawn, a closed door clicked on the way, the server-path fallback, a stock EQEmu server.
+- [ ] Find replies: a quiet path request and a shown `/find` in flight together can still swap on stock EQEmu (an empty reply is sent at once, a full path later); the 10 s cut-off for an unanswered request is a guess (docs/unknowns.md).
 - [x] /follow helped by the mesh (round corners and walls, unstuck, a 400 leash), switchable with `nav.follow`.
 - [ ] /follow's help live (following a player round corners and through a doorway).
 - [ ] Lifts, jumps and safe drops as off-mesh links (drops checked against the fall-damage rules).

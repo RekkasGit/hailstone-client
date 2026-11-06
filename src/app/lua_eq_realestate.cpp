@@ -11,6 +11,7 @@
 #include <imgui.h>
 
 #include "app/lua_eq_windows.h"
+#include "core/saturate.h"
 #include "game/inventory.h"
 #include "game/quantity_dialog.h"
 #include "net/game_connection.h"
@@ -354,7 +355,7 @@ public:
             balance_ = make_list({{"Currency", 140}, {"Balance", 120}});
             balance_rows_.clear();
             for (const auto& b : r->escrow) {
-                auto total = static_cast<std::uint64_t>(std::max(0.0, b.amount));
+                auto total = saturate_cast<std::uint64_t>(b.amount); // the server's f64: NaN or negative 0
                 if (b.currency == 0) {
                     static const char* kNames[] = {"Platinum", "Gold", "Silver", "Copper"};
                     auto piles = split_copper(total);

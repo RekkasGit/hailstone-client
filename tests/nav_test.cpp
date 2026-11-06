@@ -2202,3 +2202,31 @@ TEST_CASE("nav: a quiet path asked and not answered before a zone change does no
     CHECK_FALSE(rig.conn.take_quiet_path()); // the reply is a /find's: the find window counts it
     CHECK(rig.conn.find_replies() == finds + 1);
 }
+
+TEST_CASE("nav: a shown find and a quiet path in flight together each get their own reply, in order") {
+    // The server answers in the order asked: the find's reply first, then the navigation's. One flag for "the next
+    // reply is quiet" gave the find's path to the navigation and drew the navigation's.
+    test::Rig rig(test::MockConfig::standard(), test::quick_options());
+    REQUIRE(rig.to_zone());
+    rig.conn.find_map_location({30.0f, 40.0f, 0.0f}); // shown (the map's right click)
+    rig.conn.request_quiet_path(42);
+    const auto finds = rig.conn.find_replies();
+    std::vector<glm::vec3> shown{{0, 0, 0}, {30, 40, 0}};
+    std::vector<glm::vec3> quiet{{0, 0, 0}, {10, 5, 0}, {20, 5, 1}};
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(shown));
+    CHECK(rig.conn.find_replies() == finds + 1);
+    CHECK_FALSE(rig.conn.take_quiet_path());
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(quiet));
+    auto got = rig.conn.take_quiet_path();
+    REQUIRE(got);
+    CHECK(got->size() == 4);
+    CHECK(rig.conn.find_replies() == finds + 1);
+    // The other way round: the quiet one first.
+    rig.conn.request_quiet_path(42);
+    rig.conn.find_map_location({30.0f, 40.0f, 0.0f});
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(quiet));
+    CHECK(rig.conn.take_quiet_path());
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(shown));
+    CHECK(rig.conn.find_replies() == finds + 2);
+    CHECK_FALSE(rig.conn.take_quiet_path());
+}

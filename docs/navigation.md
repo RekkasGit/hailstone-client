@@ -147,7 +147,12 @@ when first wanted: a `/nav` or the overlay. The tiles are built on worker thread
 8), nearest the player first, and a walk asked for meanwhile starts when its tiles are there. A walk to a spawn asks
 the server for its path meanwhile, when there is no mesh under the player yet: the same `OP_FindPersonRequest` as
 `/find`, but quiet (`GameConnection::request_quiet_path`: no path drawn, no sound, no chat line). A stock EQEmu server
-answers from its own navigation mesh when it has one. A walk that needs a new path while the mesh is unfinished waits
+answers from its own navigation mesh when it has one. The client keeps the requests in flight in order and gives
+each reply to the oldest one waiting. EQEmu does not promise that order: it sends an empty reply (no target, no route
+or only part of one) at once, but builds a full path on its thread pool and sends it when done, so a quiet request for
+a long path and a `/find` that fails just after it can still swap (`docs/unknowns.md`). EQEmu leaves a find of a
+trader unanswered (it moves the player to the trader instead), so a request still waiting after 10 s (our own number)
+is taken as never answered. A walk that needs a new path while the mesh is unfinished waits
 for its tiles (and asks the server again) instead of giving up. A `/nav` word of three letters or more that begins only
 one subcommand stands for it (`/nav tar` is `/nav target`). Measured with 4 threads:
 qeynos2 0.6 s (720 tiles), befallen 0.07 s, anguish 4.6 s (5440 tiles).

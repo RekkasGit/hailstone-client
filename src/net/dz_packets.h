@@ -59,6 +59,10 @@ struct DzMember {
     std::string name;
     DzMemberStatus status = DzMemberStatus::Unknown;
 };
+// A client limit: more members than this fails the decode (and the list grows no further). An expedition holds at
+// most a raid (72) on stock EQEmu; the status update matches each name against the list, so a count the packet
+// alone bounded (millions of 2-byte entries) would stop the frame.
+inline constexpr std::uint32_t kDzMembersMax = 1000;
 std::optional<std::vector<DzMember>> decode_dz_members(const AppPacket& p);
 AppPacket encode(const std::vector<DzMember>& v, bool status_update = false); // server direction, for tests
 

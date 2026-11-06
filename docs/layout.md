@@ -217,6 +217,12 @@ too (Display > Interface > Map Pack in the modern pack, Interface > Map pack in 
 character in the character's `UI.ini` with the map window's other settings. The list is read again each time
 Options starts showing it, so a pack dropped into `maps/` during play shows up without a restart.
 
+The layer files are named from the zone's short name, which the server sends (OP_NewZone). A name that is not
+letters, digits and `_` (stock short names are lower case alphanumerics and `_`), or that is a Windows device name,
+is not used: the connection drops it at OP_NewZone (the zone then loads without scenery), and the map reads and
+writes no file for it (`core/zone_name.h`), so a hostile server's `../` or absolute name cannot reach files outside
+these folders.
+
 ## Servers
 
 The login screen lists the saved servers (`core/server_profile.h`, `ui/dev_screens.h`). The last one used
@@ -241,7 +247,7 @@ spawns (`OP_ReqClientSpawn`) nor load the zone, and the zone keeps the character
 screen says **Downloading server files** with the files and megabytes done and the speed, so a long first zone-in is
 not taken for a hang. The files come into `.download/` a piece at a time (32 KB, 32 pieces asked ahead), each checked
 against its hash (as its pieces come; a file with a piece asked for again is read back from `.download/` 16 MB a
-frame once all have come), and only when all have come are they moved into place; the files a former list brought that
+frame once all have come, however many pieces of other files the frame takes in), and only when all have come are they moved into place; the files a former list brought that
 the server no longer lists are deleted then. A broken-off download keeps the files that came complete for the next
 try, and leaves the folder as it was. Once something in `assets/` changed the client reads its files again (`GameDir::rescan`, the
 connection's strings, spells and race data, then what `reload_server_files` reads) before the zone loads.
@@ -271,7 +277,9 @@ without), 32 pieces are asked ahead, and the socket's receive buffer is 2 MiB so
 A piece that does not come is asked for again (`ServerFileSync::kChunkRetry`, `kChunkRetries`): at once when one
 asked after it has come (the script answers in order, so it skipped it, as an older script over its limit did), or
 after 3 s with nothing; after 5 requests for the same piece the sync fails and the zone-in goes on with the old
-files.
+files. When the server's files change during a download (its list id moves on), the script answers each piece asked
+for with a stale error: the first one lists the files again and the download goes on with the new list; the others,
+for the old list, are left (more than three such restarts in one sync fail it).
 
 The OS window's title is the picked server's name ("Hailstone" before one is picked), and in the world
 `<server> - <character>` (`client_window_title`). A character with several classes (multiclass, set by the

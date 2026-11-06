@@ -2937,7 +2937,10 @@ private:
 
     // Doors and ground objects.
     std::vector<game::Door> doors_;
-    bool quiet_path_pending_ = false;                     // the next OP_FindPersonReply is request_quiet_path's
+    // The OP_FindPersonRequests waiting for their reply, in the order sent (each reply goes to the oldest; EQEmu's
+    // order is not guaranteed, see path_reply): true for request_quiet_path's, false for a shown find's; with when
+    // each went out (now_ms).
+    std::deque<std::pair<bool, std::int64_t>> find_requests_;
     std::optional<std::vector<glm::vec3>> quiet_path_;
     game::SwitchClock switch_clock_;
     std::vector<game::GroundObject> ground_objects_;

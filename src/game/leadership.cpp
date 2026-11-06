@@ -1,5 +1,8 @@
 #include "game/leadership.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace nmsc::game {
 
 namespace {
@@ -90,6 +93,11 @@ int leadership_max_rank(int index) {
 std::uint32_t leadership_next_cost(int index, std::uint32_t rank) {
     if (rank >= static_cast<std::uint32_t>(kLeadershipRanks)) return 0;
     return leadership_ability(index).costs[rank];
+}
+
+int leadership_gauge(double exp, double per) {
+    const double g = exp / per * 1000.0;
+    return std::isnan(g) ? 0 : static_cast<int>(std::clamp(g, 0.0, 1000.0));
 }
 
 } // namespace nmsc::game

@@ -48,6 +48,7 @@ void GameConnection::send_find(const game::FindRequest& r, bool found) {
     fr.at = motion_known_ ? position_ : me->position;
     fr.point = r.point;
     send_zone(encode(fr));
+    find_requests_.emplace_back(false, now_ms());
 }
 
 void GameConnection::find_person_request() {
@@ -118,17 +119,30 @@ void GameConnection::request_quiet_path(std::uint32_t spawn_id) {
     fr.kind = static_cast<std::uint32_t>(game::FindKind::Spawn);
     fr.id = static_cast<std::uint16_t>(spawn_id);
     fr.at = motion_known_ ? position_ : me->position;
-    quiet_path_pending_ = true;
     quiet_path_.reset();
     send_zone(encode(fr));
+    find_requests_.emplace_back(true, now_ms());
 }
 
 void GameConnection::path_reply(const AppPacket& p) {
     auto points = decode_find_person_reply(p);
     if (!points) return;
-    if (quiet_path_pending_) {
+    // Each request gets one reply, and the oldest waiting takes it. EQEmu does not promise the order: Client::SendPath
+    // sends an empty reply (no target, no route, a partial one) at once, but builds a full path in a task on the
+    // thread pool (SendPathPacket, CullPoints) and sends it when that ends. So a quiet request for a long path then a
+    // /find that fails can still swap (docs/unknowns.md, Navigation). A request EQEmu does not answer at all (a find of
+    // a trader warps the player instead) would leave every later reply one off, so one waiting longer than
+    // kFindReplyWaitMs, our own number, is taken as never answered.
+    constexpr std::int64_t kFindReplyWaitMs = 10000;
+    const std::int64_t now = now_ms();
+    while (!find_requests_.empty() && now - find_requests_.front().second > kFindReplyWaitMs) find_requests_.pop_front();
+    bool quiet = false;
+    if (!find_requests_.empty()) {
+        quiet = find_requests_.front().first;
+        find_requests_.pop_front();
+    }
+    if (quiet) {
         // The navigation's request (request_quiet_path): no find shown, no sound, no message.
-        quiet_path_pending_ = false;
         quiet_path_ = std::move(*points);
         return;
     }

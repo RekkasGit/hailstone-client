@@ -15,6 +15,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
+#include "core/zone_name.h"
 #include "core/log.h"
 #include "game/appearance.h"
 #include "game/boats.h"
@@ -585,8 +586,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_player_for_zone();
         reset_market_for_zone();
         path_.stop();
-        // A quiet path asked in the old zone and never answered there: the new zone's first /find reply is not it.
-        quiet_path_pending_ = false;
+        // Finds asked in the old zone and never answered there: the new zone's first /find reply is not theirs.
+        find_requests_.clear();
         quiet_path_.reset();
         expedition_.compass.clear();
         // NPC windows close with the zone (a guild bank deposit outside the guild hall would lose the item).
@@ -1152,6 +1153,14 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     case Op::NewZone:
         new_zone_ = decode_new_zone(p);
+        if (new_zone_ && !is_zone_short_name(new_zone_->zone_short_name)) {
+            // It names the zone's files (archives, map layers, the navmesh cache): a path here could reach outside
+            // their folders. Stock short names are letters, digits and '_' (core/zone_name.h); this one is dropped
+            // and the zone loads without scenery.
+            log::warn("zone: OP_NewZone's short name ({} bytes) is not a zone name; it is not used",
+                      new_zone_->zone_short_name.size());
+            new_zone_->zone_short_name.clear();
+        }
         if (new_zone_) {
             world_.zone_short_name = new_zone_->zone_short_name;
             world_.zone_long_name = new_zone_->zone_long_name;

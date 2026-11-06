@@ -153,7 +153,8 @@ void ChatServer::connect(const ChatServerInfo& info) {
     logged_in_ = false;
     // CEverQuest::ChatServerConnect runs while the player is in the zone: the name (from OP_SetChatServer2) is looked
     // up on a thread, and update() opens the session on its address. A lookup given up on (disconnect, another
-    // connect) finishes on its own and is dropped; one still running at exit is waited for (resolve_async).
+    // connect) finishes on its own and is dropped; one still running at exit is left to the process's end
+    // (resolve_async).
     auto r = std::make_shared<Resolve>();
     resolving_ = r;
     platform::resolve_async(info.host, info.port, [r](std::vector<platform::Endpoint> endpoints, std::string error) {

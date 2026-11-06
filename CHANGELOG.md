@@ -6,7 +6,6 @@
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
 - A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
-- While connecting, a session reply from another address than the server's is ignored (one from another port of the server's address is still taken, for NAT), so someone who sees the connect code cannot take over the connection
 - A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
 - After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
 - A Lua script's `/keypress` of a hot button, target or ability key now works while you are typing in the chat (only movement keys did)
@@ -32,6 +31,17 @@
 - Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
 - With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
 - Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
+- Connecting to a login, world or zone server given by name, and a plugin's `tcp_open` of a name, no longer freeze the game while the name is looked up; a name that does not answer within the connect timeout ends the connect with "cannot resolve"
+- Quitting soon after zoning in no longer leaves the client running, with no window, for up to tens of seconds when the chat server's name lookup is stuck
+- A server-file download no longer fails with "the server's files keep changing" when the server owner changes a file in `client_files/` during it: the files are listed again once and the download finishes
+- A hostile server can no longer make the map editor overwrite or read `.txt` files outside Hailstone's maps folders (the game folder's included) by sending a zone name that is a path; such a name is not used
+- Cycling the extended targets no longer freezes the game after the server shrinks the list below the slot last cycled to
+- A server that sends a coin count of 2^31 or more no longer freezes the game at the next purchase, tribute or market buy
+- A plugin that streams a lot of data with `tcp_send` over a busy link no longer keeps every byte it ever sent in memory
+- A broken or hostile server can no longer freeze the client with an expedition member list of millions of names
+- A broken or hostile server can no longer freeze the client with real estate records whose parents form a loop or whose child lists name themselves or repeat
+- Buying a stack whose total cost is more than 2^31 copper (about 2.1 million platinum) at a merchant or trader is refused with the can't-afford message instead of being sent
+- A `/find` and the navigator's own path request made at the same moment mostly no longer swap their replies (the navigator walked the `/find`'s path and the navigator's was drawn); a fast empty reply can still overtake a slow full path on stock EQEmu
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
 - Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame

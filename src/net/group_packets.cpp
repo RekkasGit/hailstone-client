@@ -395,4 +395,13 @@ std::optional<XTargetResponse> decode_xtarget_response(const AppPacket& p) {
     return v;
 }
 
+AppPacket encode_xtarget_request(std::uint32_t slot, std::uint32_t type, std::string_view name) {
+    ByteWriter w;
+    w.le<std::uint32_t>(1);
+    w.le(slot);
+    w.le(type);
+    w.fixed_string(name, name.size() + 1); // NUL-terminated
+    return make_packet(Op::XTargetRequest, std::move(w));
+}
+
 } // namespace nmsc::net

@@ -67,6 +67,11 @@ TEST_CASE("Map files: L and P records as MapViewMap::Load scans them") {
 TEST_CASE("Map files: layer names, long label texts and long lines") {
     CHECK(map_layer_file_name("qeynos2", 0) == "qeynos2.txt");
     CHECK(map_layer_file_name("qeynos2", 3) == "qeynos2_3.txt");
+    CHECK(map_layer_file_name("Freeport_West", 1) == "Freeport_West_1.txt");
+    // A server's zone name that is a path names no file: it would reach outside the maps folder.
+    for (const char* bad : {"", "../x", "..", "a/b", "a\\b", "/home/user/notes", "C:x", "C:\\EQ\\spells_us", "con",
+                            "LPT1", "qeynos.2", "qeynos2 "})
+        CHECK_MESSAGE(map_layer_file_name(bad, 0).empty(), bad);
     std::string buffer;
     std::string longtext(300, 'a');
     auto p = parse_map_layer("P 0, 0, 0,  1, 1, 1,  1,  " + longtext + "\n", 0, buffer);
