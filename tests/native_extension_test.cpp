@@ -222,6 +222,17 @@ TEST_CASE("plugin server extension: setters, switches and hooks through the chai
         h.printed.clear();
         h.run("/extnext " + ids[0]);
         CHECK(h.printed == std::vector<std::string>{"[next] " + ids[1]});
+        // A walk resumed from a saved id, after one spawn came and another went (the same count, and the id it
+        // had next still there), sees the new one.
+        h.run("/extnext 0");
+        auto& world = net::GameConnectionTestAccess::world(*h.world.conn);
+        REQUIRE(ids.front() == "1");
+        REQUIRE(world.spawns.erase(13) == 1);
+        ++world.spawn_set_serial; // as OP_DeleteSpawn
+        h.world.add(5, "newcomer", true, 1, {});
+        h.printed.clear();
+        h.run("/extnext 2");
+        CHECK(h.printed == std::vector<std::string>{"[next] 5"});
     }
 
     // The rest of the host: folders, zone names, actions, the camera.

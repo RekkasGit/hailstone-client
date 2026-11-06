@@ -280,6 +280,7 @@ void GameConnection::hide_looted_corpse() {
     if (world_.target_id == corpse) world_.target_id = 0;
     spawn_leaving(corpse);
     world_.spawns.erase(corpse);
+    ++world_.spawn_set_serial;
 }
 
 void GameConnection::decaycorpse_command() {

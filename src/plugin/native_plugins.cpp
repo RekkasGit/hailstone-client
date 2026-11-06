@@ -213,9 +213,11 @@ struct Loaded {
     std::vector<std::string> threw_at;       // the callbacks that let an exception out (said once each)
 
     // next_spawn's walk: the zone's spawn ids in order, made again at a walk's start (after_id 0) and whenever the
-    // spawns are not the ones it was made from (another count, or an id gone), so a walk is n log n, not n^2.
+    // spawns are not the ones it was made from (WorldState::spawn_set_serial moved, another count, or an id gone),
+    // so a walk is n log n, not n^2.
     std::vector<std::uint32_t> spawn_ids;
     const void* spawn_ids_of = nullptr; // the spawn map they came from
+    std::uint64_t spawn_ids_serial = 0;
 
     // The packet OnPacket is looking at (resize_packet's target).
     net::AppPacket* current_packet = nullptr;
@@ -1048,8 +1050,12 @@ int h_next_spawn(void* h, std::uint32_t after_id, NmscSpawn* out) {
         for (const auto& [id, s] : spawns) l.spawn_ids.push_back(id);
         std::sort(l.spawn_ids.begin(), l.spawn_ids.end());
         l.spawn_ids_of = &spawns;
+        l.spawn_ids_serial = c->world().spawn_set_serial;
     };
-    if (after_id == 0 || l.spawn_ids_of != &spawns || l.spawn_ids.size() != spawns.size()) rebuild();
+    // A walk that starts at 0, or any spawn added or gone since (a resumed walk, from a saved id, sees them too).
+    if (after_id == 0 || l.spawn_ids_of != &spawns || l.spawn_ids.size() != spawns.size() ||
+        l.spawn_ids_serial != c->world().spawn_set_serial)
+        rebuild();
     for (int pass = 0; pass < 2; ++pass) {
         auto it = std::upper_bound(l.spawn_ids.begin(), l.spawn_ids.end(), after_id);
         if (it == l.spawn_ids.end()) return 0;
