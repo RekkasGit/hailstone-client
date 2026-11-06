@@ -502,6 +502,7 @@ add_library(nmsc_engine STATIC
   src/net/notice_packets.cpp
   src/render/spawn_renderer.cpp
   src/render/spirv_file.cpp
+  src/render/particle_textures.cpp
   src/render/actor_renderer.cpp
   src/render/actor_layers.cpp
   src/render/object_renderer.cpp
@@ -1017,6 +1018,7 @@ if(NMSC_BUILD_TESTS)
     tests/cast_spell_vectors_test.cpp
     tests/sound_files_test.cpp
     tests/spirv_file_test.cpp
+    tests/particle_textures_test.cpp
     tests/xmi_test.cpp
     tests/zone_emitters_test.cpp
     tests/sound_rules_test.cpp

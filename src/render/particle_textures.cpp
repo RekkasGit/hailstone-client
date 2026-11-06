@@ -1,0 +1,35 @@
+#include "render/particle_textures.h"
+
+#include <algorithm>
+
+#include "assets/texture_overrides.h"
+#include "core/game_dir.h"
+
+namespace nmsc::render {
+
+LoadedParticleTexture load_particle_texture(const std::string& name, std::optional<std::vector<std::byte>> zone_bytes,
+                                            const GameDir& game) {
+    LoadedParticleTexture out;
+    std::optional<std::vector<std::byte>> data = std::move(zone_bytes);
+    for (const char* dir : {"SpellEffects/", "EnvEmitterEffects/", "ActorEffects/"}) {
+        if (data) break;
+        data = game.read(std::string(dir) + name);
+    }
+    if (!data) return out;
+    out.image = assets::decode_game_texture(name, data);
+    if (!out.image) return out;
+    // Its colour: the mean of rgb x alpha, scaled so the brightest channel is 1.
+    assets::Image rgba = assets::to_rgba8(*out.image);
+    glm::dvec3 sum(0.0);
+    const auto& px = rgba.mips[0];
+    for (std::size_t i = 0; i + 3 < px.size(); i += 4) {
+        double a = std::to_integer<int>(px[i + 3]) / 255.0;
+        sum += glm::dvec3(std::to_integer<int>(px[i]), std::to_integer<int>(px[i + 1]), std::to_integer<int>(px[i + 2])) *
+               a;
+    }
+    double top = std::max({sum.r, sum.g, sum.b});
+    out.color = top > 0.0 ? glm::vec3(sum / top) : glm::vec3(1.0f);
+    return out;
+}
+
+} // namespace nmsc::render
