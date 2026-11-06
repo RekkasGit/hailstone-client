@@ -308,14 +308,14 @@ load_script()
 local a, b = client(1, "Alpha"), client(2, "Beta")
 local id = list_request(a, 0):ReadInt32(8)
 local sent = 0
-for _ = 1, 600 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
-assert(sent == 512, "512 a second by default: " .. sent)
+for _ = 1, 1000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 768, "768 a second by default: " .. sent)
 assert(chunk_request(b, id, 0, 0) ~= nil, "another client is not held back")
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 512, "the same second: what waits still waits")
+assert(#a.sent == 1 + 768, "the same second: what waits still waits")
 T.now = T.now + 1
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 513, "the next second: the request that waited (asked again, held once)")
+assert(#a.sent == 1 + 769, "the next second: the request that waited (asked again, held once)")
 assert(T.timers["hailstone:files"] == nil, "nothing waits: the timer stops")
 assert(chunk_request(a, id, 0, 0) ~= nil, "and new ones go at once")
 T.data["hailstone:files_chunks_per_second"] = "3"
@@ -349,10 +349,10 @@ for k = 1, 5 do cs[k] = client(k, "C" .. k) end
 local id = list_request(cs[1], 0):ReadInt32(8)
 local sent = 0
 for k = 1, 5 do
-  for _ = 1, 600 do if chunk_request(cs[k], id, 0, k) then sent = sent + 1 end end
+  for _ = 1, 1000 do if chunk_request(cs[k], id, 0, k) then sent = sent + 1 end end
 end
 assert(sent == 1024, "1024 a second for the zone by default: " .. sent)
-assert(#cs[1].sent == 1 + 512 and #cs[2].sent == 512 and #cs[3].sent == 0, "the first two at their own limit")
+assert(#cs[1].sent == 1 + 768 and #cs[2].sent == 256 and #cs[3].sent == 0, "the first at its own limit, the second the rest")
 -- What waits is served as the zone's limit allows, never more in a second.
 local before = 0
 for k = 1, 5 do before = before + #cs[k].sent end
@@ -368,6 +368,40 @@ for k = 1, 5 do
   for _ = 1, 50 do if chunk_request(cs[k], id, 0, 7) then sent = sent + 1 end end
 end
 assert(sent == 100, "the owner's zone limit: " .. sent)
+)lua");
+}
+
+TEST_CASE("Server script: under the zone's limit, clients downloading at once are served in turn") {
+    // Honest clients: each keeps 32 pieces asked for and asks for another as each one comes. Served first come,
+    // first served, the ones that ask first would take the zone's whole limit every second.
+    check_run(R"lua(
+add_files(1, 32768 * 2000)
+load_script()
+T.data["hailstone:files_chunks_per_second_zone"] = "60"
+local cs, asked, seen = {}, {}, {}
+for k = 1, 3 do cs[k] = client(k, "C" .. k); asked[k] = 0; seen[k] = 0 end
+local id = list_request(cs[1], 0):ReadInt32(8)
+seen[1] = 1 -- the list
+local function ask(k) chunk_request(cs[k], id, 0, asked[k] * 32768); asked[k] = asked[k] + 1 end
+for k = 1, 3 do for _ = 1, 32 do ask(k) end end
+for _ = 1, 10 do
+  T.now = T.now + 1
+  if T.timers["hailstone:files"] then fire_timer("hailstone:files") end
+  -- Each client asks again for what came, the first client first, as at the start of every second.
+  for k = 1, 3 do
+    local got = #cs[k].sent - seen[k]
+    seen[k] = #cs[k].sent
+    for _ = 1, got do ask(k) end
+  end
+end
+local total = 0
+for k = 1, 3 do total = total + #cs[k].sent end
+total = total - 1
+assert(total <= 60 * 11, "never more than the zone's limit a second: " .. total)
+for k = 1, 3 do
+  local n = #cs[k].sent - (k == 1 and 1 or 0)
+  assert(n >= total / 3 - 40, "client " .. k .. " has its share: " .. n .. " of " .. total)
+end
 )lua");
 }
 

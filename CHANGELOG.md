@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- For server owners: Hailstone's server script sends one player at most 512 file pieces a second (16 MB/s; it was 1024), and all of a zone's players together at most 1024 (the new `files_chunks_per_second_zone`), so a modified client, or several characters, asking for pieces and never acknowledging them can no longer make the zone hold gigabytes of unsent data
+- For server owners: Hailstone's server script sends one player at most 768 file pieces a second (24 MB/s; it was 1024), and all of a zone's players together at most 1024 (the new `files_chunks_per_second_zone`), shared in turn between the players downloading at once. A modified client, or several characters, asking for pieces and never acknowledging them can make the zone hold at most about 1 GB of unsent data at the defaults (it was unbounded with alts); lower `files_chunks_per_second_zone` on a small host
 - For server owners: `server/install.py` keeps `eqemu_config.json`'s permissions and owner; it rewrote the file with the default ones, which could make the database password readable by every user of the machine
 - For server owners: on a Windows server, a file in `client_files/` whose name has characters outside ASCII is left out with a line in the zone's log naming it, instead of "could not hash" and a mangled name
 - For server owners: a `client_files` folder that is a link to a folder elsewhere is served on Linux; the server script listed nothing there, so players were sent no files and no `hailstone.cfg`, and no server rules applied

@@ -27,11 +27,11 @@
 -- sha256sum (GNU find and xargs; on Windows PowerShell's Get-FileHash) when the zone starts (and at #reloadquest),
 -- and again when a client asks and it is older than files_rescan seconds (300; never under 30); the hashes are kept
 -- in client_files/.hailstone-cache, so only new or changed files are hashed again. Names starting with '.' are not
--- sent. A client may ask for files_chunks_per_second pieces a second (512, 16 MB/s), and all of the zone's clients
+-- sent. A client may ask for files_chunks_per_second pieces a second (768, 24 MB/s), and all of the zone's clients
 -- together for files_chunks_per_second_zone (1024, 32 MB/s); more wait their turn (a few dozen per client, on a
--- timer) and are served in order. A file that changed on disk since it was hashed (its size,
--- or its time where find can tell) makes the zone hash again and the client list again, instead of sending bytes
--- that do not match the list.
+-- timer) and are served in order, a client at a time in turn. A file that changed on disk since it was hashed (its
+-- size, or its time where find can tell) makes the zone hash again and the client list again, instead of sending
+-- bytes that do not match the list.
 --
 -- global/script_init.lua loads it with eq.load_encounter("hailstone"). It registers its player event through the
 -- encounter, so it runs beside the server's own player scripts (Perl or Lua) instead of replacing them.
@@ -44,7 +44,7 @@ local settings = {
 	client_files           = 1,  -- send client_files/ to Hailstone clients (0: they get an empty list)
 	group_declines         = 1,  -- tell the inviter when a RoF2 client declines a group invitation
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
-	files_chunks_per_second = 512, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
+	files_chunks_per_second = 768, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
 	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
 }
 
@@ -877,8 +877,11 @@ local function take_piece(char_id)
 	local zone  = setting("files_chunks_per_second_zone") or 0
 	local r = limit > 0 and window(chunk_limit, char_id) or nil
 	local z = zone > 0 and window(zone_chunk_limit, 0) or nil
-	if (r and r.count >= limit) or (z and z.count >= zone) then
-		return false
+	if z and z.count >= zone then
+		return false, "zone"
+	end
+	if r and r.count >= limit then
+		return false, "own"
 	end
 	if r then r.count = r.count + 1 end
 	if z then z.count = z.count + 1 end
@@ -913,28 +916,65 @@ local function hold_request(client, char_id, req)
 	end
 end
 
--- The FILES_TIMER timer: what the limit allows of each client's held requests, in order. A client that left
+-- What the limits allow of each client's held requests, each client's in order: one piece a client in turn, the
+-- turn starting after the client served last, so that under the zone's limit no client is always last in line and
+-- left with nothing. Run by the FILES_TIMER timer and at every piece request while any wait. A client that left
 -- loses its own; the timer stops when none are held.
+local served_last = nil -- the character id served last
+
 local function serve_waiting()
 	local list  = eq.get_entity_list()
-	for char_id, q in pairs(waiting) do
+	local order = {}
+	for char_id in pairs(waiting) do
+		order[#order + 1] = char_id
+	end
+	table.sort(order)
+	local start = 1
+	if served_last ~= nil then
+		for k = 1, #order do
+			if order[k] > served_last then
+				start = k
+				break
+			end
+		end
+	end
+	local turn, clients = {}, {}
+	for k = 0, #order - 1 do
+		local char_id = order[(start - 1 + k) % #order + 1]
 		local client = list:GetClientByCharID(char_id)
 		if client == nil or not client.valid then
 			waiting[char_id] = nil
 		else
-			while q.first <= q.last and take_piece(char_id) do
+			turn[#turn + 1] = char_id
+			clients[char_id] = client
+		end
+	end
+	local zone_full = false
+	while #turn > 0 and not zone_full do
+		local again = {}
+		for _, char_id in ipairs(turn) do
+			local ok, why = take_piece(char_id)
+			if ok then
+				local q = waiting[char_id]
 				local req = q[q.first]
 				q[q.first] = nil
 				q.first = q.first + 1
 				q.keys[req[1] .. ":" .. req[2] .. ":" .. req[3]] = nil
-				send_files_chunk(client, req[1], req[2], req[3], req[4])
-			end
-			if q.first > q.last then
-				waiting[char_id] = nil
+				send_files_chunk(clients[char_id], req[1], req[2], req[3], req[4])
+				served_last = char_id
+				if q.first > q.last then
+					waiting[char_id] = nil
+				else
+					again[#again + 1] = char_id
+				end
+			elseif why == "zone" then
+				zone_full = true
+				break
 			end
 		end
+		turn = again
 	end
-	if next(waiting) == nil then
+	if next(waiting) == nil and files_timer then
 		eq.stop_timer(FILES_TIMER, encounter)
 		files_timer = false
 	end
@@ -977,11 +1017,17 @@ local function on_files_request(client, packet)
 		send_files_page(client, first)
 	elseif action == 2 and packet:GetSize() >= 24 then
 		-- A client asks for at most 32 pieces at a time (its window), each when one comes. Beyond the limits a
-		-- request waits its turn (serve_waiting), behind any that already wait, so the pieces go in the order asked.
+		-- request waits its turn (serve_waiting), behind any of its own that already wait, so the pieces go in the
+		-- order asked. While any client's requests wait, every request joins them and they are served in turn at
+		-- once, so a client asking at the start of a second cannot take the zone's whole limit ahead of those held.
 		local char_id = client:CharacterID()
 		local req = { packet:ReadInt32(8), packet:ReadInt32(12), packet:ReadInt32(16), packet:ReadInt32(20) }
-		if waiting[char_id] ~= nil or not take_piece(char_id) then
+		local others = next(waiting) ~= nil
+		if others or not take_piece(char_id) then
 			hold_request(client, char_id, req)
+			if others then
+				serve_waiting()
+			end
 			return
 		end
 		send_files_chunk(client, req[1], req[2], req[3], req[4])
@@ -1052,7 +1098,7 @@ function event_encounter_load(e)
 end
 
 function event_encounter_unload(e)
-	waiting, files_timer = {}, false
+	waiting, files_timer, served_last = {}, false, nil
 	eq.unregister_player_event("hailstone", Event.unhandled_opcode)
 	eq.unregister_player_event("hailstone", Event.signal)
 end
