@@ -127,6 +127,48 @@ TEST_CASE("do_stand's refusals: no room (4067) and no rider dag (5524) end the s
     CHECK(horse.rider_id == 10); // set before the attach (do_stand @0x593f7d)
 }
 
+TEST_CASE("illusion_mounts: a rider whose model cannot ride still mounts; the mount's dag is still needed") {
+    WorldState w;
+    w.illusion_mounts = true;
+    Spawn& me = add(w, 10, "Gennro", 2, false);
+    Spawn& horse = add(w, 20, "Gennro`s_Mount00", 709, true); // Onyx Skystrider
+    w.player_id = 10;
+    me.tunic_point = false; // an illusion's model with no tunic point
+    REQUIRE(riding_blocked(me));
+    Answers q;
+    MountEvents ev;
+    do_stand(w, me, &horse, q, ev);
+    CHECK(ev.messages.empty());
+    CHECK_FALSE(ev.remove_mount_affect);
+    CHECK(me.mount_id == 20);
+    CHECK(w.controlled_id == 20);
+
+    // An illusion of a mount race drawn as the human fallback rides too.
+    WorldState w2;
+    w2.illusion_mounts = true;
+    Spawn& me2 = add(w2, 10, "Gennro", 216, false);
+    me2.human_actor = true;
+    REQUIRE(human_actor_mount(me2));
+    Spawn& horse2 = add(w2, 20, "Gennro`s_Mount00", 709, true);
+    w2.player_id = 10;
+    MountEvents ev2;
+    do_stand(w2, me2, &horse2, q, ev2);
+    CHECK(me2.mount_id == 20);
+
+    // A mount without a seat for the rider still refuses it (the renderer has nowhere to draw it).
+    WorldState w3;
+    w3.illusion_mounts = true;
+    Spawn& me3 = add(w3, 10, "Gennro", 2, false);
+    me3.tunic_point = false;
+    Spawn& horse3 = add(w3, 20, "Gennro`s_Mount00", 709, true);
+    w3.player_id = 10;
+    q.point = false;
+    MountEvents ev3;
+    do_stand(w3, me3, &horse3, q, ev3);
+    CHECK(ev3.messages == std::vector<std::uint32_t>{5524});
+    CHECK(me3.mount_id == 0);
+}
+
 TEST_CASE("ClearVehicleMountLinks: a mount that goes unseats its rider") {
     Answers q;
     WorldState w;

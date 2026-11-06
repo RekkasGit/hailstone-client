@@ -205,6 +205,8 @@ local function generalTab()
       "Toggle whether you will let the game make you duck to fit into small spaces.")
     check("allow_auto_stand", "Allow Auto-stand",
       "Toggle whether moving forward automatically makes your character stand up if sitting.")
+    check("illusion_mounts", "Ride While Illusioned",
+      "Hailstone: an illusion does not stop you summoning and riding a mount. Off: as in the original, many illusions refuse the mount.")
     bit("click_through", 1, "Click Through Self", "Click through yourself.")
     bit("click_through", 2, "Click Through Pets", "Click through pets.")
     bit("click_through", 4, "Click Through Mercs", "Click through mercenaries.")
