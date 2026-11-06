@@ -1041,6 +1041,10 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         lua_pushcfunction(L, fn);
         lua_setfield(L, -2, n);
     }
+    // Locked: every TLO value is marked for finalization when it is made, and Lua looks __gc up only when it
+    // collects one, so a script that could reach this table could swap in a finalizer of its own.
+    lua_pushliteral(L, "mq.TLO");
+    lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
 
     lua_newtable(L); // mq

@@ -1014,6 +1014,9 @@ TEST_CASE("MQ Lua: a script's tables cannot have __gc; nothing it registers outl
 local mq = require('mq')
 print('gc', pcall(setmetatable, {}, {__gc = function() mq.bind('/late', function() end) end}))
 print('plain', getmetatable(setmetatable({}, {__index = {x = 1}})).__index.x)
+-- A TLO value's metatable has a __gc of its own; a script cannot reach it to swap that out.
+print('tlometa', type(getmetatable(mq.TLO.Me)), getmetatable(mq.TLO.Me))
+print('tloset', pcall(function() getmetatable(mq.TLO.Me).__gc = function() end end))
 mq.bind('/early', function() end)
 mq.delay(100000)
 )");
@@ -1022,6 +1025,8 @@ mq.delay(100000)
     CHECK(printed_part(h, "gc false"));
     CHECK(printed_part(h, "a script's tables cannot have __gc"));
     CHECK(h.printed_line("plain 1"));
+    CHECK(h.printed_line("tlometa string mq.TLO"));
+    CHECK(printed_part(h, "tloset false"));
     CHECK(h.hooks.has_command("/early"));
     h.run("/lua stop gc");
     CHECK_FALSE(h.scripts->running("gc"));

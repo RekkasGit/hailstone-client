@@ -161,7 +161,8 @@ script that runs more than 3 ms without yielding is paused until the next frame,
 cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
 pause, is stopped the same way. Each script's memory is capped at 256 MB. A script's tables cannot have a `__gc`
 finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
-end, after what it registered is taken back.
+end, after what it registered is taken back. For the same reason an `mq.TLO` value's metatable is locked
+(`getmetatable` gives `"mq.TLO"`).
 
 ### The `mq` module
 

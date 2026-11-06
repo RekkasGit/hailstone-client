@@ -7,6 +7,7 @@
 - Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
 - For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
 - For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
+- For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced
 - `mq.event` patterns with several `#n#` no longer stall the game on long chat lines
 - For add-on authors: `eq.LuaSocialDryRun` needs the `commands` and `actions` capabilities in a plugin's window, as `eq.SetLuaSocial` does
 
