@@ -124,6 +124,9 @@ public:
     };
     std::vector<Info> list() const;
     bool running(std::string_view name) const;
+    // The capabilities of the script named `name` (exactly) while it runs or is paused, else 0: list()'s caps without
+    // building the list (asked at every switch to a script's code in the Lua UI).
+    std::uint32_t caps_of(std::string_view name) const;
 
     // The scripts on disk (the Scripts window): <name>.lua and <name>/init.lua in each folder in the order run()
     // looks (the server's first; a name found twice is the first folder's), config/ left out. Each with whether it

@@ -1220,6 +1220,12 @@ std::vector<ScriptHost::Info> ScriptHost::list() const {
     return out;
 }
 
+std::uint32_t ScriptHost::caps_of(std::string_view name) const {
+    for (const auto& s : impl_->scripts)
+        if (s->name == name && (s->status == Script::Status::Running || s->status == Script::Status::Paused)) return s->caps;
+    return 0;
+}
+
 bool ScriptHost::running(std::string_view name) const {
     const Script* s = impl_->find(lower(name));
     return s && !s->stop_requested && (s->status == Script::Status::Running || s->status == Script::Status::Paused);

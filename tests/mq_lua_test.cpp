@@ -1164,3 +1164,19 @@ print('read', mq.TLO.Me.Level())
     CHECK(h.scripts->press_button(press("mq.bind('/drybind', function() end)")));
     CHECK(h.hooks.has_command("/drybind"));
 }
+
+TEST_CASE("MQ Lua: caps_of is list()'s caps for a running or paused script, 0 for any other name") {
+    Host h(plugin::kCapRead | plugin::kCapCommands);
+    h.write("c.lua", "require('mq').delay(100000)\n");
+    REQUIRE(h.scripts->run("c", {}));
+    h.pulses(1);
+    CHECK(h.scripts->caps_of("c") == (plugin::kCapRead | plugin::kCapCommands));
+    REQUIRE(h.scripts->list().size() == 1);
+    CHECK(h.scripts->caps_of("c") == h.scripts->list()[0].caps);
+    h.scripts->pause("c", true);
+    CHECK(h.scripts->caps_of("c") == (plugin::kCapRead | plugin::kCapCommands));
+    CHECK(h.scripts->caps_of("C") == 0u); // the tag's name exactly, as plugin_caps compared it
+    CHECK(h.scripts->caps_of("other") == 0u);
+    h.scripts->stop("c");
+    CHECK(h.scripts->caps_of("c") == 0u);
+}
