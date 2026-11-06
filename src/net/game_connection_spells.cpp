@@ -191,8 +191,10 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
         ~Busy() { flag = was; }
     } busy{character_sheet_busy_, character_sheet_busy_};
     character_sheet_busy_ = true;
-    game::mechanics::build_sheet_into(*sheet, *profile_, inventory_, spells_, live, nullptr, &world_);
-    alt_adv_.sheet_abilities_into(sheet->abilities);
+    game::mechanics::build_sheet_into(
+        *sheet, *profile_, inventory_, spells_, live,
+        [this](std::vector<game::mechanics::SheetAbility>& out) { alt_adv_.sheet_abilities_into(out); }, nullptr,
+        &world_);
     game::mechanics::Character ch(*sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
     fn(ch);
 }

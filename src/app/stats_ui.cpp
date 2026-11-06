@@ -64,9 +64,10 @@ void StatsUi::draw(net::GameConnection& conn) {
     // its items, buffs and abilities reuse their storage, so an unchanged inventory is copied without allocating.
     character_.reset();
     if (!sheet_) sheet_ = std::make_unique<CharacterSheet>();
+    // The owned AA ranks' effects (CacheAAEffects).
     build_sheet_into(*sheet_, *profile, conn.inventory(), conn.spell_state(), live,
+                     [&conn](std::vector<SheetAbility>& out) { conn.aa_sheet_abilities_into(out); },
                      conn.zone_info() ? &*conn.zone_info() : nullptr, &conn.world());
-    conn.aa_sheet_abilities_into(sheet_->abilities); // the owned AA ranks' effects (CacheAAEffects)
     sheet_->prestige_limit = conn.game_feature(0x13); // GetGameFeature(UseItem): the membership's (-1 none)
     const CharacterSheet& sheet = *sheet_;
     character_ = std::make_unique<Character>(sheet, *tables_, spell_lookup(conn.spell_table()));

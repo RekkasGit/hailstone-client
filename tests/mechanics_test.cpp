@@ -481,7 +481,12 @@ TEST_CASE("build_sheet_into: a sheet built again in place is the sheet build_she
     live_before.sitting = true;
 
     CharacterSheet reused;
-    build_sheet_into(reused, p, before, spells_before, live_before);
+    build_sheet_into(reused, p, before, spells_before, live_before, [](std::vector<SheetAbility>& out) {
+        out.resize(2);
+        out[0].id = 1;
+        out[0].effects = {{326, 1, 0}};
+        out[1].id = 2;
+    });
     reused.prestige_limit = 7;
     reused.extra_items[0] = ring;
 
@@ -498,7 +503,7 @@ TEST_CASE("build_sheet_into: a sheet built again in place is the sheet build_she
     LiveState live_now;
     live_now.level = 61;
     live_now.hp = 700;
-    build_sheet_into(reused, p, now, spells_now, live_now);
+    build_sheet_into(reused, p, now, spells_now, live_now, {}); // no abilities now: the last list does not stay
     CharacterSheet fresh = build_sheet(p, now, spells_now, live_now);
 
     CHECK(reused.level == fresh.level);
@@ -526,6 +531,16 @@ TEST_CASE("build_sheet_into: a sheet built again in place is the sheet build_she
         CHECK(reused.buffs[i].spell_id == fresh.buffs[i].spell_id);
         CHECK(reused.buffs[i].type == fresh.buffs[i].type);
     }
+    CHECK(reused.abilities.empty());
+    CHECK(fresh.abilities.empty());
+    // An ability list set again into the last one: the new list only.
+    build_sheet_into(reused, p, now, spells_now, live_now, [](std::vector<SheetAbility>& out) {
+        REQUIRE(out.empty());
+        out.resize(1);
+        out[0].id = 3;
+    });
+    REQUIRE(reused.abilities.size() == 1);
+    CHECK(reused.abilities[0].id == 3);
 }
 
 TEST_CASE("A server extension's vitals answer Max / Cur HP, mana and endurance (the NMS patch's detours)") {

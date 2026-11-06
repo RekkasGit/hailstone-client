@@ -19,13 +19,13 @@ SpellLookup spell_lookup(const SpellTable& table) {
 CharacterSheet build_sheet(const net::PlayerProfile& p, const Inventory& inventory, const SpellState& spells,
                            const LiveState& live, const net::NewZone* zone, const WorldState* world) {
     CharacterSheet s;
-    build_sheet_into(s, p, inventory, spells, live, zone, world);
+    build_sheet_into(s, p, inventory, spells, live, {}, zone, world); // the caller sets the abilities
     return s;
 }
 
 void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inventory& inventory,
-                      const SpellState& spells, const LiveState& live, const net::NewZone* zone,
-                      const WorldState* world) {
+                      const SpellState& spells, const LiveState& live, const SheetAbilitiesInto& fill_abilities,
+                      const net::NewZone* zone, const WorldState* world) {
     {
         // Everything back to its default, but the containers keep their storage.
         auto possessions = std::move(s.possessions);
@@ -36,6 +36,8 @@ void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inve
         s.buffs = std::move(buffs);
         s.abilities = std::move(abilities);
     }
+    if (fill_abilities) fill_abilities(s.abilities);
+    else s.abilities.clear();
     s.race = p.race;
     s.class_id = p.class_;
     s.class_mask = live.class_mask;
