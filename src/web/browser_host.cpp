@@ -203,24 +203,26 @@ void BrowserHost::resize(std::uint32_t id, std::uint16_t width, std::uint16_t he
     t->options.height = height;
 }
 
+// The player's input goes whatever the queue holds: a few bytes each, and a release or a focus change refused while
+// a script's large message drains would leave the page holding a button or key.
 void BrowserHost::mouse(const Mouse& m) {
-    if (live(m.tab)) send(m);
+    if (live(m.tab)) send(m, true);
 }
 void BrowserHost::wheel(const Wheel& w) {
-    if (live(w.tab)) send(w);
+    if (live(w.tab)) send(w, true);
 }
 void BrowserHost::key(const Key& k) {
-    if (live(k.tab)) send(k);
+    if (live(k.tab)) send(k, true);
 }
 bool BrowserHost::text(std::uint32_t id, const std::string& s) {
     if (!live(id)) return false;
     return s.empty() || send(Text{id, s});
 }
 void BrowserHost::focus(std::uint32_t id, bool on) {
-    if (live(id)) send(Focus{id, on});
+    if (live(id)) send(Focus{id, on}, true);
 }
 void BrowserHost::nav(std::uint32_t id, NavAction action) {
-    if (live(id)) send(Nav{id, action});
+    if (live(id)) send(Nav{id, action}, true);
 }
 bool BrowserHost::eval(std::uint32_t id, const std::string& script) { return live(id) && send(Eval{id, script}); }
 bool BrowserHost::post(std::uint32_t id, const std::string& message) {

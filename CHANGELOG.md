@@ -36,6 +36,7 @@
 - An add-on install or removal cut off at the wrong moment now puts the add-on list back with the files, so the add-on shows its real version and can be updated again
 - For add-on authors and release builders: `tools/make_addon.py` and `tools/make_update.py` take in a linked folder's files instead of leaving them out, and stop at a link that loops
 - For server owners: `hailstone.lua` reads its `hailstone:<name>` data buckets at most every 10 seconds instead of at every packet, looks at a client file's time once until the list is next made instead of at every first-piece request, and limits each character's file-list, guild and settings requests
+- In-game browser: a mouse button or key let go while a script's large message was still on its way to the browser is no longer lost (the page used to keep the button or key held)
 
 ## 0.5.0-beta (2026-11-05)
 

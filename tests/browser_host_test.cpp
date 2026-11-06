@@ -511,6 +511,35 @@ TEST_CASE("browser host: a full queue refuses messages instead of ending the hel
     CHECK(r.host.last_error().empty());
 }
 
+// The player's input is never refused for a script's large message still draining: a lost button or key release
+// would leave the page holding it.
+TEST_CASE("browser host: input and focus messages go while the queue is over its budget") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    r.helper.hold = true;
+    REQUIRE(r.host.eval(id, std::string(std::size_t{40} << 20, 'x')));
+    REQUIRE(r.helper.pending > BrowserHost::kSendBudget);
+    std::size_t held = r.helper.pending;
+    auto went = [&] {
+        const bool grew = r.helper.pending > held;
+        held = r.helper.pending;
+        return grew;
+    };
+    r.host.mouse(Mouse{id, MouseKind::Up, MouseButton::Left, 1, 5, 5, 0});
+    CHECK(went());
+    r.host.key(Key{id, KeyKind::Up, 0x41, 0, 0});
+    CHECK(went());
+    r.host.wheel(Wheel{id, 5, 5, 0, -120, 0});
+    CHECK(went());
+    r.host.focus(id, false);
+    CHECK(went());
+    r.host.nav(id, NavAction::Stop);
+    CHECK(went());
+    CHECK_FALSE(r.host.eval(id, "1+1")); // a script's message is still refused
+}
+
 // A helper with bytes waiting is ended only when it takes none of them for kStallMs: one still taking them, however
 // slowly, is left alone.
 TEST_CASE("browser host: a helper that takes nothing of its queue for a while is ended and restarted") {
