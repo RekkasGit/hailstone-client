@@ -271,6 +271,29 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
     }
 }
 
+TEST_CASE("face_on_attack: the attack key turns the player to the target only when the option is on") {
+    mq_test::World w("nmsc_face_on_attack_test");
+    auto& c = *w.conn;
+    REQUIRE(c.world().target_id == 10);
+    c.set_auto_attack(false); // the test world starts attacking
+    // On (the default, as the original's AUTOPRIM): turning auto attack on turns the player; turning it off does not.
+    REQUIRE(c.face_on_attack());
+    CHECK(c.toggle_auto_attack());
+    CHECK(c.auto_attack());
+    CHECK_FALSE(c.toggle_auto_attack());
+    CHECK_FALSE(c.auto_attack());
+    // Off: auto attack still goes on, and the heading is left alone.
+    c.set_face_on_attack(false);
+    CHECK_FALSE(c.toggle_auto_attack());
+    CHECK(c.auto_attack());
+    CHECK_FALSE(c.toggle_auto_attack());
+    // Refused (the player as the target): no attack, no turn.
+    c.set_face_on_attack(true);
+    A::world(c).target_id = A::world(c).player_id;
+    CHECK_FALSE(c.toggle_auto_attack());
+    CHECK_FALSE(c.auto_attack());
+}
+
 TEST_CASE("/stopdisc and /dismount") {
     mq_test::World w("nmsc_stopdisc_test");
     auto& c = *w.conn;
