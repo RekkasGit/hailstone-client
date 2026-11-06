@@ -288,6 +288,9 @@ private:
         ActorLayers layers; // the two bone groups and the action playing (OP_Animation)
         bool new_style = false; // the new-style animation object drew it last
         bool seen = false;
+        // Not drawn on purpose (prepare_spawns): kept only so the look it wears is not freed; drawn again, it
+        // starts as a new state.
+        bool hidden = false;
         std::uint32_t action_seq = 0;
         bool action_seq_known = false;
     };

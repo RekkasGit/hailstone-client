@@ -1138,8 +1138,24 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         if (s.mount_id) order.push_back(id);
     for (std::uint32_t id : order) {
         const game::Spawn& s = world.spawns.at(id);
-        if (id == hide_id) continue;
+        // A spawn hidden on purpose (the player in first person, a market-hidden one) keeps its state, and so the
+        // look it wears: evict_idle_looks frees only looks no state holds, so it is drawn again in that look at once.
+        // Otherwise it is as if it were gone: its dressing is dropped and it comes back as a new state.
+        auto keep = [&] {
+            auto it = spawns_.find(id);
+            if (it == spawns_.end()) return;
+            it->second.seen = true;
+            if (it->second.hidden) return;
+            it->second.hidden = true;
+            if (dresser_) dresser_->cancel(id);
+            ready_.erase(id);
+        };
+        if (id == hide_id) {
+            keep();
+            continue;
+        }
         if (hidden_ && hidden_->contains(id)) {
+            keep();
             empty_ids_.push_back(id);
             continue;
         }
@@ -1157,7 +1173,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
 
         auto& st = spawns_[id];
         st.seen = true;
-        if (st.model != model) st = SpawnState{model};
+        if (st.model != model || st.hidden) st = SpawnState{model};
         st.seen = true;
         // Appearance: rebuilt when it changes (WearChange, Illusion), on the worker; until it is ready (and applied
         // within the frame's budget) the previous one stays. One applied before for the same model and look is
@@ -1392,7 +1408,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
 
 std::optional<bool> ActorRenderer::jump_animation_playing(std::uint32_t id) const {
     auto it = spawns_.find(id);
-    if (it == spawns_.end() || !it->second.anim.started) return std::nullopt;
+    if (it == spawns_.end() || it->second.hidden || !it->second.anim.started) return std::nullopt;
     return game::mechanics::is_jump_animation(it->second.anim.anim, it->second.new_style);
 }
 
