@@ -758,13 +758,22 @@ std::vector<std::string> AddonManager::install_ready() {
                 continue;
             }
         }
+        std::string error;
         {
             // The row shows the switch as installed.txt has it (apply_addon keeps the installed entry's).
             const auto all = read_installed_addons(env_.data_dir);
-            if (const InstalledAddon* cur = find_addon(all, st.addon.name)) st.addon.auto_update = cur->auto_update;
+            if (const InstalledAddon* cur = find_addon(all, st.addon.name)) {
+                st.addon.auto_update = cur->auto_update;
+                // inspect()'s pins again, against installed.txt as it is now: one of that name installed from
+                // elsewhere since the card was made (two first installs, the other applied first) is not replaced.
+                if (!same_repository(cur->source, st.addon.source))
+                    error = "an add-on named " + cur->name + " is installed already, from " + cur->source;
+                else if (cur->key && st.addon.key != cur->key)
+                    error = cur->name + " is signed with another key than the one installed: remove it first to "
+                                        "trust the new key";
+            }
         }
-        std::string error;
-        const bool ok = apply_addon(env_.data_dir, st.addon, &error);
+        const bool ok = error.empty() && apply_addon(env_.data_dir, st.addon, &error);
         std::lock_guard lock(mutex_);
         AddonStatus s;
         if (const AddonStatus* r = row(st.addon.name)) s = *r;

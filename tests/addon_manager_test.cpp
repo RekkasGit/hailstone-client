@@ -561,3 +561,34 @@ TEST_CASE("addon_manager: installing an add-on again while it waits to be instal
     CHECK(h.manager->install_ready() == std::vector<std::string>{"autoloot"});
     CHECK(read_file(h.folder() / "init.lua") == "-- script\n");
 }
+
+// Two first installs of one name from two repositories: the card of the second was made before the first was in
+// installed.txt, so it was not blocked. When it comes to be installed, the pin holds against the one there now.
+TEST_CASE("addon_manager: a staged add-on is not installed over one of its name from another repository") {
+    Harness h;
+    h.publish("1.0.0", "read");
+    const std::string zip = zip_of({{"init.lua", "-- impostor\n"}});
+    h.github.release("other/autoloot", manifest_for("autoloot", "script", "2.0.0", "read", "any", zip, "a.zip"),
+                     "a.zip", zip);
+    h.start();
+    auto s = h.inspect("https://github.com/" + kRepo);
+    REQUIRE(s.offer);
+    h.manager->install_offer();
+    h.manager->wait_idle();
+    REQUIRE(h.manager->has_ready());
+    s = h.inspect("https://github.com/other/autoloot"); // nothing of that name in installed.txt yet
+    REQUIRE(s.offer);
+    REQUIRE(s.offer->blocked.empty());
+    CHECK(h.manager->install_ready() == std::vector<std::string>{"autoloot"});
+    h.manager->install_offer(); // the card made before
+    h.manager->wait_idle();
+    REQUIRE(h.manager->has_ready());
+    CHECK(h.manager->install_ready().empty());
+    s = h.manager->status();
+    CHECK(s.message_error);
+    CHECK(s.message.find("installed already, from") != std::string::npos);
+    const auto installed = read_installed_addons(h.dir.path());
+    REQUIRE(installed.size() == 1);
+    CHECK(installed[0].source == kRepo);
+    CHECK(read_file(h.folder() / "init.lua") == "-- script\n");
+}
