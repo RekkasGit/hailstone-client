@@ -461,6 +461,12 @@ bool name_sprite_shows_guild(const Spawn& s, int show_names) {
     return s.anon == 0 || ((s.anon >> 1) & 1) != 0;
 }
 
+bool name_sprite_switched_on(const Spawn& s, bool local_player, bool model_hidden, const NameSpriteSwitches& on) {
+    if (s.is_npc || s.is_corpse) return on.npc_names;
+    if (local_player) return on.pc_names && on.own_name && !model_hidden;
+    return on.pc_names;
+}
+
 std::string npc_owner_line(const Spawn& s, bool pet_owner_names) {
     if (!s.is_npc || s.is_corpse || s.last_name.empty()) return {};
     if (s.pet_owner_id == 0) return "(" + s.last_name + ")";

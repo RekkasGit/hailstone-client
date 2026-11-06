@@ -331,6 +331,8 @@ local function displayTab()
       note("Restart the game to change the UI scale (now " .. now .. " %).")
     end
     check("pc_names", "Show Player Names", "The names over other players.")
+    check("own_name", "Show My Name",
+      "Hailstone: your own name over your head in the third-person views, with your title and guild as /shownames sets them for everyone.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
     check("show_target_ring", "Show 3D Target Ring", "A colored ring appears around your current target's feet.")
     check("tab_skip_pets", "Tab Skips Pets",

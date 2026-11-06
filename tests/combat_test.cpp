@@ -506,6 +506,31 @@ TEST_CASE("npc_owner_line: an NPC's last name under its name; a pet's only with 
     CHECK(game::npc_owner_line(corpse, true).empty());
 }
 
+TEST_CASE("name_sprite_switched_on: the name switches, and the player's own name outside first person") {
+    game::Spawn pc, npc, corpse;
+    npc.is_npc = true;
+    corpse.is_corpse = true;
+    game::NameSpriteSwitches on;
+    CHECK(game::name_sprite_switched_on(pc, false, false, on));
+    CHECK(game::name_sprite_switched_on(pc, true, false, on)); // the original draws the local player's too
+    CHECK_FALSE(game::name_sprite_switched_on(pc, true, true, on)); // first person: the model is hidden
+    CHECK(game::name_sprite_switched_on(npc, false, false, on));
+    game::NameSpriteSwitches own_off = on;
+    own_off.own_name = false;
+    CHECK_FALSE(game::name_sprite_switched_on(pc, true, false, own_off));
+    CHECK(game::name_sprite_switched_on(pc, false, false, own_off)); // other players keep theirs
+    game::NameSpriteSwitches pcs_off = on;
+    pcs_off.pc_names = false; // /shownames off: the player's own goes with the rest
+    CHECK_FALSE(game::name_sprite_switched_on(pc, false, false, pcs_off));
+    CHECK_FALSE(game::name_sprite_switched_on(pc, true, false, pcs_off));
+    CHECK(game::name_sprite_switched_on(npc, false, false, pcs_off));
+    game::NameSpriteSwitches npcs_off = on;
+    npcs_off.npc_names = false; // corpses go with the NPCs
+    CHECK_FALSE(game::name_sprite_switched_on(npc, false, false, npcs_off));
+    CHECK_FALSE(game::name_sprite_switched_on(corpse, false, false, npcs_off));
+    CHECK(game::name_sprite_switched_on(pc, true, false, npcs_off));
+}
+
 TEST_CASE("name_sprite_shows_guild: SetNameSpriteState's guild line (bGuildShowAnim, not anonymous, /shownames 3 or 4)") {
     game::Spawn p;
     p.guild_id = 18;

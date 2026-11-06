@@ -315,6 +315,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (auto d = display_option(o)) return d;
     if (auto v = video_option(o)) return v;
     if (o == "pc_names") return pc_names_ ? 1 : 0;
+    // Hailstone: the player's own name over its head (game::NameSpriteSwitches), on by default.
+    if (o == "own_name") return own_name_ ? 1 : 0;
     if (o == "font_face") {
         // The face's place in option_choices("font_face"): 0 the default, -1 one not in the list.
         std::string face = config_.get_string("ui.font_face", "");
@@ -430,6 +432,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "pc_names" || o == "npc_names") {
         (o == "pc_names" ? pc_names_ : npc_names_) = v != 0;
         config_.set_bool(o == "pc_names" ? "display.pc_names" : "display.npc_names", v != 0);
+        config_.save(config_path_);
+        return;
+    }
+    if (o == "own_name") {
+        own_name_ = v != 0;
+        config_.set_bool("display.own_name", own_name_);
         config_.save(config_path_);
         return;
     }

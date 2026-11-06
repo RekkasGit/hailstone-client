@@ -72,10 +72,14 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
         marks.group_marks = l.group_marks;
         marks.raid_marks = l.raid_marks;
     }
+    const game::NameSpriteSwitches switches{pc_names_, npc_names_, own_name_};
+    const std::uint32_t hidden = hidden_spawn();
     for (const auto& [id, s] : world.spawns) {
-        if (id == world.player_id) continue;
         if (market_hidden_.contains(id)) continue; // IsInvisible: Hide Traders / Hide Buyers
-        if (s.is_npc || s.is_corpse ? !npc_names_ : !pc_names_) continue; // ToggleNpcNameSprites / ToggleCharacterNameSprites
+        // ToggleNpcNameSprites / ToggleCharacterNameSprites; the player's own name too, as the original draws it (not
+        // in first person, where its model is hidden).
+        const bool me = id == world.player_id;
+        if (!game::name_sprite_switched_on(s, me, me && hidden == id, switches)) continue;
         // PlayerClient::SetNameSpriteState draws nothing without bDisplayNameSprite (the spawn's showname bit); body
         // type 11 has no name either (EQEmu's BodyType::NoTarget, "no name, can't target": the server's teleport
         // triggers, #TPTrigger*, are sent with showname set).
