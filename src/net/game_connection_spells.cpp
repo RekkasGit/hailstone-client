@@ -342,15 +342,19 @@ void GameConnection::update_usable_gems() {
     int n = 0;
     // CanUseMemorizedSpellSlot, or the server extension's (the NMS patch's detour: gem < 12, from level 1).
     const game::ServerExtension& ext = server_ext();
+    bool stock = false; // a gem the server extension did not answer
     auto usable = [&](int gem) {
         if (auto v = ext.can_use_gem(*this, gem)) return *v;
+        stock = true;
         return gems::can_use_memorized_spell_slot(profile_.has_value(), 0, gem, totals);
     };
     while (n < game::kSpellGems && usable(n)) ++n;
-    if (n != usable_gems_ && totals_known)
+    if (n != usable_gems_ && !stock)
+        log::info("spells: {} gems usable (the server's rule)", n);
+    else if (n != usable_gems_ && totals_known && profile_)
         log::info("spells: {} gems usable (SPA 326: AA {}, buffs {}, items {})", n, aa, buff, item);
     else if (n != usable_gems_)
-        log::info("spells: {} gems usable (the server's rule)", n);
+        log::info("spells: {} gems usable", n);
     usable_gems_ = n;
 }
 
