@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page

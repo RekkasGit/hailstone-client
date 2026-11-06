@@ -12,6 +12,7 @@
 #include <random>
 
 #include "core/game_dir.h"
+#include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "core/log.h"
 #include "game/appearance.h"
@@ -97,6 +98,10 @@ void GameConnection::reload_game_files() {
     if (racedata.empty()) log::warn("racedata.txt not found; spawn heights use the defaults");
     world_.height_tables =
         std::make_shared<const game::HeightTables>(game::parse_height_tables(racedata, text("Resources/moddat.ini")));
+    // CDisplay's UseLuclinElementals (game/world_state.h luclin_elementals), read once as the display starts.
+    IniFile ini;
+    if (auto path = game_.find("eqclient.ini")) ini.load(*path);
+    world_.luclin_elementals = game::eqclient_ini_bool(ini.get("Defaults", "UseLuclinElementals"), true);
 }
 
 GameConnection::~GameConnection() { disconnect(); }

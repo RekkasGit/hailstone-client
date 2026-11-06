@@ -154,6 +154,20 @@ struct Spawn {
 // "a_rat01" -> "a rat": trailing digits stripped, underscores to spaces.
 std::string display_name(const std::string& name);
 
+// CDisplay::CreatePlayerActor's elemental swap (0x48f5bc..0x48f771, before the model lookup), keyed on the body
+// texture (TextureType). With UseLuclinElementals on, race 75 (ELE, one body with four skins) becomes the typed
+// Luclin elemental: texture 0 earth 209, 1 fire 212, 2 water 211, any other air 210; the typed models have one skin,
+// so the texture and HeadType become 0 (only once that model is found: CreatePlayerActor keeps race 75 and the
+// texture otherwise). Off, 209 / 212 / 211 / 210 become race 75 with texture 0 / 1 / 2 / 3. nullopt: no swap.
+struct ElementalSwap {
+    std::uint16_t race = 0;
+    std::uint8_t texture = 0;
+};
+std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint8_t texture, bool luclin_elementals);
+// GetEQClientIniBool @0x5fa680 on a value: missing gives the default; true when it starts with T, t or 1 (an empty
+// one is false). UseLuclinElementals is read this way with default TRUE.
+bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback);
+
 struct WorldState {
     std::string zone_short_name;
     std::string zone_long_name;
@@ -169,6 +183,9 @@ struct WorldState {
     std::shared_ptr<const HeightTables> height_tables;
     // Dword 0xddfba4 (NewZone +0x2b4): 1 from the startup defaults until the first OP_NewZone, which copies it.
     bool old_model_scale = true;
+    // CDisplay +0x129: eqclient.ini [Defaults] UseLuclinElementals (read @0x49276f, default TRUE). On, make_actors
+    // draws a race-75 elemental as the typed Luclin one (209..212); off, those as race 75 (luclin_elemental_swap).
+    bool luclin_elementals = true;
 
     // EQPlayer::SetHeights(view_offset, anim_scale) for a spawn, from s.heights.height.
     void set_heights(Spawn& s, float view_offset = 0.0f, float anim_scale = 1.0f) const;
@@ -183,8 +200,9 @@ struct WorldState {
         bool human_fallback = false; // the race's model is not loaded: the actor is HUM / HUF instead
     };
     // CreatePlayerActor for the spawns whose actor can be made now (`actor_model` nullopt while none can, as
-    // before the zone is in). A spawn whose model is not loaded becomes a Human (SetRace(1), not for a mount
-    // race; its heights stay). With a tunic point, the height fix-up: ChangeHeight(new, 0, 1.0) for the exact
+    // before the zone is in). First the elemental swap (luclin_elemental_swap; with UseLuclinElementals on and the
+    // typed model not loaded, the spawn stays race 75). A spawn whose model is not loaded becomes a Human
+    // (SetRace(1), not for a mount race; its heights stay). With a tunic point, the height fix-up: ChangeHeight(new, 0, 1.0) for the exact
     // sizes, and the ViewHeight from before put back. Runs once per spawn (and again after an illusion makes a
     // new actor).
     using ActorModelFn = std::function<std::optional<ActorModel>(const Spawn&)>;

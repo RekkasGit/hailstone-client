@@ -23,6 +23,32 @@ std::string display_name(const std::string& name) {
     return out;
 }
 
+std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint8_t texture, bool luclin_elementals) {
+    constexpr std::uint16_t kElemental = 75, kEarth = 209, kAir = 210, kWater = 211, kFire = 212;
+    if (luclin_elementals) {
+        if (race != kElemental) return std::nullopt;
+        switch (texture) {
+        case 0: return ElementalSwap{kEarth, 0};
+        case 1: return ElementalSwap{kFire, 0};
+        case 2: return ElementalSwap{kWater, 0};
+        default: return ElementalSwap{kAir, 0};
+        }
+    }
+    switch (race) {
+    case kEarth: return ElementalSwap{kElemental, 0};
+    case kFire: return ElementalSwap{kElemental, 1};
+    case kWater: return ElementalSwap{kElemental, 2};
+    case kAir: return ElementalSwap{kElemental, 3};
+    default: return std::nullopt;
+    }
+}
+
+bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback) {
+    if (!text) return fallback;
+    char c = text->empty() ? '\0' : (*text)[0];
+    return c == 'T' || c == 't' || c == '1';
+}
+
 namespace {
 // How far a spawn at rest may settle onto the floor (see WorldState::smooth).
 constexpr float kRestSettleReach = 5.0f;
@@ -205,7 +231,28 @@ std::vector<std::uint32_t> WorldState::make_actors(const ActorModelFn& actor_mod
     if (!actor_model) return made;
     for (auto& [id, s] : spawns) {
         if (s.actor_made) continue;
-        std::optional<ActorModel> m = actor_model(s);
+        // The elemental swap (luclin_elemental_swap): SetRace, then the model lookup. With UseLuclinElementals on,
+        // a typed model that is not loaded leaves race 75 (0x48f720: SetRace(0x4b) and ELE_ACTORDEF), and only a
+        // found one takes texture 0 and HeadType 0.
+        const std::uint16_t sent_race = s.race;
+        std::optional<ActorModel> m;
+        if (auto swap = luclin_elemental_swap(s.race, s.appearance.texture, luclin_elementals)) {
+            s.race = swap->race;
+            m = actor_model(s);
+            if (!m) {
+                s.race = sent_race; // tried again once an actor can be made
+                continue;
+            }
+            if (luclin_elementals && m->human_fallback) {
+                s.race = sent_race;
+                m = actor_model(s);
+            } else {
+                s.appearance.texture = swap->texture;
+                if (luclin_elementals) s.appearance.helm = 0;
+            }
+        } else {
+            m = actor_model(s);
+        }
         if (!m) continue;
         s.actor_made = true;
         s.tunic_point = m->tunic_point;
@@ -213,7 +260,6 @@ std::vector<std::uint32_t> WorldState::make_actors(const ActorModelFn& actor_mod
         made.push_back(id);
         // BuildActorForSpawn (0x48f837 / 0x48f85e): HUF_ACTORDEF / HUM_ACTORDEF, then SetRace(1) unless a mount
         // race; the gender is kept.
-        const std::uint16_t sent_race = s.race;
         if (m->human_fallback && !is_mount_race(s.race)) s.race = 1;
         // The player's and their pets' looks, for reports of models drawn wrong.
         if (id == player_id || (player_id != 0 && s.pet_owner_id == player_id)) {
@@ -223,10 +269,12 @@ std::vector<std::uint32_t> WorldState::make_actors(const ActorModelFn& actor_mod
                 for (std::uint32_t x : v) out += (out.empty() ? "" : ",") + std::to_string(x);
                 return out;
             };
-            log::info("appearance {}{}: race {}{} gender {} class {} size {:.1f} texture {} helm {} face {} hair {} / {} "
+            log::info("appearance {}{}: race {}{}{} gender {} class {} size {:.1f} texture {} helm {} face {} hair {} / {} "
                       "beard {} / {} eyes {} / {} heritage {} tattoo {} details {} material [{}] tint [{}] hero_forge [{}] "
                       "npc_tint {}",
-                      s.name, id == player_id ? "" : " (pet)", sent_race, m->human_fallback ? " (as human)" : "", s.gender,
+                      s.name, id == player_id ? "" : " (pet)", sent_race, m->human_fallback ? " (as human)" : "",
+                      s.race != sent_race && !m->human_fallback ? " (as " + std::to_string(s.race) + ")" : std::string(),
+                      s.gender,
                       s.class_id, s.size, a.texture, a.helm, a.face, a.hair_style, a.hair_color, a.beard, a.beard_color,
                       a.eye_color1, a.eye_color2, a.drakkin_heritage, a.drakkin_tattoo, a.drakkin_details,
                       list(a.material), list(a.tint), list(a.hero_forge), a.npc_tint);
