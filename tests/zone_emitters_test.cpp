@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <string>
 
@@ -282,4 +284,42 @@ TEST_CASE("Zone emitters of the installed game") {
     CHECK(wind);
     CHECK_FALSE(set.music.empty());
     for (const auto& m : set.music) CHECK(m.file == "gfaydark.xmi");
+}
+
+TEST_CASE("Zone sound files: forged radii, ranges and delays convert and add as the original's 32-bit code") {
+    WaveTable waves;
+    waves.zone = {{1, "a.wav"}};
+    // A NaN radius on a music record, a huge negative one on a wave record (its environment): cvttss2si's INT_MIN.
+    auto music = record(1, -1, -1, std::numeric_limits<float>::quiet_NaN());
+    auto wave = record(0, 1, 1, -1e30f);
+    // Cooldown and random past int32 when added: they wrap.
+    wave.cooldown[0] = wave.cooldown[1] = 2147483000;
+    wave.random_delay = 1000;
+    auto set = emitters_from_eff({music, wave}, waves, {"one.mp3"}, "", all_exist, "z");
+    REQUIRE(set.emitters.size() == 2);
+    REQUIRE(set.music.size() == 1);
+    CHECK(set.music[0].priority == std::numeric_limits<std::int32_t>::min());
+    CHECK(set.emitters[1].environment == std::numeric_limits<std::int32_t>::min());
+    CHECK(set.emitters[1].delay_min == static_cast<std::int32_t>(2147483000u + 500u));
+    CHECK(set.emitters[1].delay_max == static_cast<std::int32_t>(2147483000u + 1500u));
+
+    assets::EmtRow row;
+    row.file = "b.mp3";
+    row.range = std::numeric_limits<float>::infinity();
+    auto emt = emitters_from_emt({row}, all_exist, "z.emt");
+    REQUIRE(emt.music.size() == 1);
+    CHECK(emt.music[0].priority == std::numeric_limits<std::int32_t>::min());
+
+    // A delay span past int32 (-2e9 .. 2e9) is reduced as the original's wrapped sub, not overflowed.
+    assets::EmtRow loud;
+    loud.file = "a.wav";
+    loud.gain = 1.0f;
+    loud.loop_count = 1;
+    loud.max_distance = 100.0f;
+    loud.range = 100.0f;
+    loud.delay_min = -2000000000;
+    loud.delay_max = 2000000000;
+    ZoneEmitters z(emitters_from_emt({loud}, all_exist, "z.emt"));
+    FakeSink sink;
+    z.update({0, 0, 0}, 1000, 1.0f, 1.0f, sink); // the timer starts: a UBSan build caught the overflow here
 }
