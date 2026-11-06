@@ -571,6 +571,29 @@ assert(T.stats == 3, "after the next listing: " .. T.stats)
 )lua");
 }
 
+TEST_CASE("Server script: an empty client_files list is logged once until files are listed again") {
+    check_run(R"lua(
+load_script()
+local function count()
+  local n = 0
+  for _, l in ipairs(T.logs) do if l:find("client_files: no files listed", 1, true) then n = n + 1 end end
+  return n
+end
+assert(count() == 1, "the zone's first listing found nothing: " .. count())
+local a = client(1, "Alpha")
+T.now = T.now + 400
+list_request(a, 0)
+assert(count() == 1, "not again at every listing")
+add_files(1, 100)
+T.now = T.now + 400
+list_request(a, 0)
+for k in pairs(T.files) do T.files[k] = nil end
+T.now = T.now + 400
+list_request(a, 0)
+assert(count() == 2, "again once the files that were there are gone: " .. count())
+)lua");
+}
+
 TEST_CASE("Server script: list, guild and settings requests are limited per character") {
     check_run(R"lua(
 add_files(1, 100)

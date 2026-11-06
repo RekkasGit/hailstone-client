@@ -81,7 +81,8 @@ game install folder: `spells_us.txt`, `Resources/SkillCaps.txt`, `commons.s3d` .
 for `spells_us.txt`, `dbstr_us.txt`, `SkillCaps.txt` and `BaseData.txt` (the last two go in `Resources/`), so they
 match the database. Names starting with `.` are not sent, and on a Windows server neither are names with
 characters outside ASCII (EQEmu's Lua cannot open them there; the zone's log names each one). `client_files` may be a
-link to a folder elsewhere. Programs and scripts (`.exe`, `.dll`, `.lua` ...) are
+link to a folder elsewhere. When a zone lists no files at all (the folder is missing, empty or cannot be read), its
+log says so once, until files are listed again. Programs and scripts (`.exe`, `.dll`, `.lua` ...) are
 refused by the client outside `scripts/` (Lua) and `plugins/` (each platform's libraries).
 
 A zone hashes the folder (SHA-256) when it starts and keeps the hashes in `client_files/.hailstone-cache` by size

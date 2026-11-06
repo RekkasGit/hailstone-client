@@ -515,6 +515,7 @@ local zone_chunk_limit = limiter(1) -- one id, 0: the whole zone
 -- length} }, served in order from the FILES_TIMER timer as the limit allows.
 local waiting     = {}
 local files_timer = false
+local files_empty_logged = false -- build_client_files logged an empty list
 local windows   = package.config:sub(1, 1) == "\\"
 
 -- A name for this process's scratch files in client_files/ (zones may hash at the same time).
@@ -717,6 +718,16 @@ local function build_client_files(force)
 		return
 	end
 	local list  = list_client_files()
+	-- A missing folder and one that cannot be listed look the same from here; either way say so, once until files
+	-- are listed again, so that clients sent no hailstone.cfg do not go unnoticed.
+	if #list == 0 then
+		if not files_empty_logged then
+			log("client_files: no files listed (the folder is missing, empty or cannot be read); clients get an empty list")
+			files_empty_logged = true
+		end
+	else
+		files_empty_logged = false
+	end
 	local cache = read_hash_cache()
 	local need  = {}
 	for _, e in ipairs(list) do
