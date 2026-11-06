@@ -1735,9 +1735,12 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             if (z == ZonePhase::End && lp->end_zone) lp->end_zone();
             if (z == ZonePhase::Zoned && lp->zoned) lp->zoned();
         }));
+    // Registered under the capability they need, and asked again each time: a narrower policy (policy_changed) keeps
+    // the plugin loaded and its hooks registered, but what it lost it no longer sees.
     if (p.add_spawn || p.remove_spawn) {
         if (p.can(kCapRead)) {
             hooks.on_spawn(p.owner, scoped([lp](std::uint32_t id, bool added) {
+                if (!lp->can(kCapRead)) return;
                 if (added && lp->add_spawn) lp->add_spawn(id);
                 if (!added && lp->remove_spawn) lp->remove_spawn(id);
             }));
@@ -1748,6 +1751,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     if (p.incoming_chat || p.filter_chat) {
         if (p.can(kCapEvents)) {
             hooks.on_chat(p.owner, scoped([lp](ChatLine& line) {
+                if (!lp->can(kCapEvents)) return Flow::Continue;
                 if (lp->incoming_chat) lp->incoming_chat(line.text.c_str(), line.color);
                 if (lp->filter_chat && lp->filter_chat(line.text.c_str(), line.color)) return Flow::Drop;
                 return Flow::Continue;
@@ -1761,6 +1765,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             for (Stream st : {Stream::World, Stream::Zone})
                 for (Direction dir : {Direction::In, Direction::Out})
                     hooks.on_packet(p.owner, st, dir, 0, scoped([lp, st, dir](net::AppPacket& pk) {
+                        if (!lp->can(kCapPackets)) return Flow::Continue;
                         NmscPacket c{pk.opcode, reinterpret_cast<std::uint8_t*>(pk.data.data()), pk.data.size()};
                         net::AppPacket* before = std::exchange(lp->current_packet, &pk);
                         int drop = lp->packet(st == Stream::World ? NMSC_STREAM_WORLD : NMSC_STREAM_ZONE,
@@ -1812,7 +1817,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
         // The command line rewrite: on the hook bus, ahead of the commands, while the plugin is active.
         if (lp->hooks.command_line && lp->can(kCapExtend))
             hooks.on_command_line(p.owner, scoped([lp](std::string& line) {
-                if (!lp->active || !lp->hooks.command_line) return Flow::Continue;
+                if (!lp->active || !lp->hooks.command_line || !lp->can(kCapExtend)) return Flow::Continue;
                 if (const char* r = lp->hooks.command_line(line.c_str())) line = r;
                 return Flow::Continue;
             }));

@@ -130,6 +130,11 @@ Each running file carries a set of capability bits: every one for the server's f
 manager installed gets no more than its manifest's `caps`, whatever the server allows (docs/addons.md "Capabilities":
 `plugin::Policy::set_ceilings`, by the file's hash).
 
+The bits are checked again whenever they change (the server's `hailstone.cfg` arriving at the zone-in after a first
+visit's provisional rules, a lowered ceiling): a compiled plugin that stays loaded with fewer of them gets no more
+packets (`OnPacket`), chat lines (`OnIncomingChat`, `OnFilterChat`), spawn events or command lines (the server
+extension's `command_line`) from the moment it lost the bit, and its web tabs close.
+
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |

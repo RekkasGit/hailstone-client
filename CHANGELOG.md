@@ -41,6 +41,7 @@
 - In-game browser: a script's or plugin's page is closed (it is told why) when the server's `[web] allow` changes or the script loses the `web` permission, for example when the server's `hailstone.cfg` arrives at the first zone-in; it used to keep the sites it was opened with for the rest of the session
 - For plugin authors: `web_message(host, tab, NULL, 0)` gives the next page message's length and leaves it queued, so a plugin can make room for a long one; given a buffer the message is still taken, cut or not
 - A server (or a quest looping on `SendWebLink`) can no longer open hundreds of browser pages or system-browser tabs: the same link again within 10 seconds is not opened again, at most 5 open a minute, and once 4 such pages are open the newest is reused
+- A compiled plugin that keeps running with fewer permissions (the server's `hailstone.cfg` arriving at the zone-in, a lowered add-on ceiling) no longer goes on seeing packets, chat lines, spawn events or typed command lines it lost the permission for
 
 ## 0.5.0-beta (2026-11-05)
 

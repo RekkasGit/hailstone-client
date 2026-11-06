@@ -203,6 +203,31 @@ TEST_CASE("native plugins: callbacks it may not use are left off; the policy can
     CHECK(h.plugins->loaded("MQ2Example"));
 }
 
+// A narrower policy keeps the plugin loaded (it still has caps), and its hooks stay registered, but it no longer
+// sees the chat, packets or spawns it lost the permission for.
+TEST_CASE("native plugins: a plugin whose capabilities narrow loses its chat and packet hooks at once") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("MQ2Example"));
+    plugin::ChatLine spam{"buy spam now", 0, 0};
+    net::AppPacket in(0x7e57);
+    REQUIRE(h.hooks.chat(spam) == plugin::Flow::Drop);
+    REQUIRE(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in) == plugin::Flow::Drop);
+    h.approve(plugin::kCapCommands | plugin::kCapRead);
+    h.plugins->policy_changed({"*"});
+    REQUIRE(h.plugins->loaded("MQ2Example"));
+    plugin::ChatLine spam2{"buy spam now", 0, 0};
+    net::AppPacket in2(0x7e57);
+    CHECK(h.hooks.chat(spam2) == plugin::Flow::Continue);
+    CHECK(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in2) == plugin::Flow::Continue);
+    CHECK(h.p("${Example.Chats}") == "1"); // the second line never reached it
+    // Given back: it sees them again (its hooks were never taken out).
+    h.approve(plugin::kCapAll);
+    h.plugins->policy_changed({"*"});
+    plugin::ChatLine spam3{"buy spam now", 0, 0};
+    CHECK(h.hooks.chat(spam3) == plugin::Flow::Drop);
+}
+
 TEST_CASE("native plugins: AddCommand needs 'commands'") {
     Host h;
     h.approve(plugin::kCapRead);
