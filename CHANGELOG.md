@@ -48,6 +48,7 @@
 - Add-ons: an update in which a folder became a file of the same name installs, instead of failing and being rolled back at every login screen; an update that would put a file where you keep your own files in a folder stops and leaves them alone
 - Updates: when the record of the installed update cannot be saved first (disk full, a file in the way), the update stops before moving anything, instead of deleting that record if it later had to be rolled back
 - Windows: quitting while an update check or an add-on download waits on a network that has stopped answering no longer keeps hailstone.exe running for up to a minute after its window closes
+- Bug reports: a Linux crash report whose last log line was chat keeps its stack trace in the report (taking the chat out used to take the stack with it)
 
 ## 0.5.0-beta (2026-11-05)
 

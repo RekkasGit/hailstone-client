@@ -243,10 +243,16 @@ TEST_CASE("bug report: chat lines' words taken out of the logs and the crash rep
     CHECK(app::redact_chat("what: signal 11\nlast log lines:\n[info] chat: a\nb") ==
           "what: signal 11\nlast log lines:\n[info] chat: (chat taken out of the report)\n");
 
+    // A crash report's stack after its last log lines is never a chat line's continuation, even when the newest
+    // log line was chat (redact_crash_report).
+    CHECK(app::redact_crash_report("last log lines:\n[info] chat: a\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\nframe\n") ==
+          "last log lines:\n[info] chat: (chat taken out of the report)\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\nframe\n");
+    CHECK(app::redact_crash_report("what: x\n[info] chat: a\nb\n") == "what: x\n[info] chat: (chat taken out of the report)\n");
+
     test::ScratchDir tmp("bugreport-chat");
     const fs::path log = tmp.path() / "hailstone.log", crash = tmp.path() / "crash-2.txt";
     write_text(log, "[info] chat: Soandso tells you, 'meet at the docks'\n[info] zoning\n");
-    write_text(crash, "what: signal 11\n[info] chat: Guildie tells the guild, 'hi'\n");
+    write_text(crash, "what: signal 11\n[info] chat: Guildie tells the guild, 'hi'\n\nstack:\n/opt/hailstone(+0x1a2b) [0x5]\n");
     app::BugReport r;
     r.time = 1791115200; // noon UTC, 2026-10-04
     r.logs = {log};
@@ -255,7 +261,8 @@ TEST_CASE("bug report: chat lines' words taken out of the logs and the crash rep
     REQUIRE(saved);
     auto files = unzip(read_bytes(saved->zip));
     CHECK(files["logs/hailstone.log"] == "[info] chat: (chat taken out of the report)\n[info] zoning\n");
-    CHECK(files["crash/crash-2.txt"] == "what: signal 11\n[info] chat: (chat taken out of the report)\n");
+    CHECK(files["crash/crash-2.txt"] ==
+          "what: signal 11\n[info] chat: (chat taken out of the report)\n\nstack:\n/opt/hailstone(+0x1a2b) [0x5]\n");
     CHECK(files["report.txt"].find("(2026-10-04 12:00:00 UTC)") != std::string::npos);
 }
 

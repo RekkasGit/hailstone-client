@@ -230,6 +230,13 @@ std::string redact_chat(std::string_view text) {
     return out;
 }
 
+std::string redact_crash_report(std::string_view text) {
+    static constexpr std::string_view kStack = "\nstack:\n"; // crash_log.cpp's, after the last log lines
+    const std::size_t at = text.rfind(kStack);
+    if (at == std::string_view::npos) return redact_chat(text);
+    return redact_chat(text.substr(0, at)) + std::string(text.substr(at));
+}
+
 std::string bug_report_text(const BugReport& r, const std::vector<std::string>& included,
                             const std::vector<std::string>& left_out) {
     std::string out = r.crash ? "Hailstone crash report\n" : "Hailstone bug report\n";
@@ -326,7 +333,7 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
         if (const std::size_t at = name.find(".reported."); at != std::string::npos) name.erase(at, 9);
         // A Windows minidump is binary: a changed length would break it, so it goes in as it is.
         const bool binary = lower(f.extension().string()) == ".dmp";
-        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(redact_chat(*text))))
+        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(redact_crash_report(*text))))
             saved.left_out.push_back(name);
     }
     for (const fs::path& f : r.settings)
