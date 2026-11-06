@@ -125,6 +125,7 @@ What the client does not implement yet, or implements with an approximation it c
 - PFS archives: a member may declare at most 256 MiB (the largest stock one, theater.eqg's, is about 37 MB) and the name table 16 MiB, limits of ours; what the original does past them is not known. A name the name table lists twice is one member (no stock archive does it).
 - A ZON that lists a `.ter` twice loads it once (no stock zone does it; what the original does is not known).
 - weather.ini clouds: at most 256 patches per cloud (`kMaxCloudPatches`, a limit of ours; stock files ask for at most 80). The original's limit is not known.
+- JPEG UI art: at most 16384 a side and 8192 x 8192 texels, as PNG and DDS (a limit of ours).
 
 ## World rendering
 

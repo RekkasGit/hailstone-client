@@ -13,6 +13,12 @@
 
 namespace nmsc::assets {
 
+namespace {
+// The PNG and DDS decoders' limits (png_read.cpp, texture.cpp): stb's own allows 2^24 a side.
+constexpr int kMaxSide = 16384;
+constexpr long long kMaxPixels = 8192LL * 8192;
+} // namespace
+
 bool is_jpeg(std::span<const std::byte> data) {
     return data.size() >= 3 && data[0] == std::byte{0xff} && data[1] == std::byte{0xd8} && data[2] == std::byte{0xff};
 }
@@ -23,6 +29,15 @@ std::optional<Image> decode_jpeg(std::span<const std::byte> data, std::string* e
         return std::nullopt;
     }
     int w = 0, h = 0, channels = 0;
+    if (!stbi_info_from_memory(reinterpret_cast<const stbi_uc*>(data.data()), static_cast<int>(data.size()), &w, &h,
+                               &channels)) {
+        if (error) *error = std::string("JPEG: ") + stbi_failure_reason();
+        return std::nullopt;
+    }
+    if (w <= 0 || h <= 0 || w > kMaxSide || h > kMaxSide || static_cast<long long>(w) * h > kMaxPixels) {
+        if (error) *error = "JPEG: image too large";
+        return std::nullopt;
+    }
     stbi_uc* pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(data.data()), static_cast<int>(data.size()),
                                             &w, &h, &channels, 4);
     if (!pixels) {

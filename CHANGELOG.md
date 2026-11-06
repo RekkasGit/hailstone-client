@@ -7,6 +7,7 @@
 - A zone that lists its terrain thousands of times no longer loads it thousands of times
 - A model with thousands of material names no longer stalls the zone load
 - A weather.ini cloud that asks for billions of patches gets at most 256
+- A JPEG in the UI art that claims an enormous size is refused instead of taking gigabytes of memory
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
