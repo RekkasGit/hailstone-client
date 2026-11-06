@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/msvc_atoi.h"
 #include "core/wrap_math.h"
 
 namespace nmsc::game {
@@ -208,11 +209,11 @@ void social_passage_of_time(SocialQueue& s, std::uint32_t now_ms, SocialRunQueri
                 if (cmd.empty()) break;
                 if (starts_with_nocase(cmd, "/pause")) {
                     cmd = from(cmd, ' ');
-                    std::int32_t n = std::atoi(cmd.c_str());
+                    std::int32_t n = core::msvc_atoi(cmd);
                     pause = n > 600 ? 600 : (n < 1 ? 1 : n);
                 } else if (starts_with_nocase(cmd, "/timer")) {
                     cmd = from(cmd, ' ');
-                    std::int32_t n = std::atoi(cmd.c_str());
+                    std::int32_t n = core::msvc_atoi(cmd);
                     n = n > 360000 ? 360000 : (n < 0 ? 0 : n);
                     if (n * 100 > 0 && !q.cooldown_running(social)) q.start_cooldown(social, n * 100);
                 } else {

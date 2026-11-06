@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 #include "core/ini_file.h"
+#include "core/msvc_atoi.h"
 
 namespace nmsc::game {
 
@@ -41,7 +42,7 @@ PathSettings load_path_settings(const IniFile* ini) {
     };
     auto integer = [&](std::string_view key, int fallback) {
         auto v = ini->get(sec, key);
-        return v && !v->empty() ? std::atoi(v->c_str()) : fallback;
+        return v && !v->empty() ? core::msvc_atoi(*v) : fallback;
     };
     s.segment_length = num("SegmentLength", 5.0f);
     s.lod_factor = num("LODFactor", 0.0f);
@@ -77,14 +78,14 @@ PathSettings load_path_settings(const IniFile* ini) {
     s.sound_loop_volume = num("SoundLoopVolume", 4.0f);
     s.sound_loop_speed = num("SoundLoopSpeed", 1.0f);
     auto b = ini->get(sec, "Additive");
-    s.additive = !b || b->empty() || std::atoi(b->c_str()) != 0 || *b == "true" || *b == "TRUE";
+    s.additive = !b || b->empty() || core::msvc_atoi(*b) != 0 || *b == "true" || *b == "TRUE";
     // PlayerPath_LoadEmitterSettings / LoadFinishEmitterSettings: [Path] Emitter<n> / FinishEmitter<n> name a
     // section with Definition (-1), LifeSpan (10, as float then truncated), Density (1), Opacity (1).
     auto emitter = [&](const std::string& key) {
         PathEmitterSettings e;
         std::string section = ini->get_string(sec, key);
         auto get = [&](std::string_view k) { return ini->get(section, k); };
-        if (auto v = get("Definition"); v && !v->empty()) e.definition = std::atoi(v->c_str());
+        if (auto v = get("Definition"); v && !v->empty()) e.definition = core::msvc_atoi(*v);
         if (auto v = get("LifeSpan"); v && !v->empty()) e.life_span = static_cast<int>(std::strtof(v->c_str(), nullptr));
         if (auto v = get("Density"); v && !v->empty()) e.density = std::strtof(v->c_str(), nullptr);
         if (auto v = get("Opacity"); v && !v->empty()) e.opacity = std::strtof(v->c_str(), nullptr);

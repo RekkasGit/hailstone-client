@@ -5,6 +5,7 @@
 #include <format>
 #include <utility>
 
+#include "core/msvc_atoi.h"
 #include "core/wrap_math.h"
 #include "game/slash_commands.h"
 #include "platform/local_time.h"
@@ -58,7 +59,7 @@ bool same_no_case(std::string_view a, std::string_view b) {
     return true;
 }
 
-std::int32_t eq_atoi(std::string_view text) { return std::atoi(std::string(text).c_str()); }
+std::int32_t eq_atoi(std::string_view text) { return core::msvc_atoi(text); }
 
 Switch off_on_toggle(std::string_view args, std::string_view off, std::string_view on) {
     if (starts_no_case(args, off, 3)) return Switch::Off;

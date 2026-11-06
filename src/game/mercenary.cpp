@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "core/msvc_atoi.h"
+
 namespace nmsc::game {
 
 namespace {
@@ -450,7 +452,7 @@ void merc_assist_command(MercManager& m, const std::string& args, MercHooks& h) 
 void merc_switch_command(MercManager& m, const std::string& args, MercHooks& h) {
     if (m.owned.empty()) return h.chat("You don't have any mercenaries!", 15);
     if (args.empty()) return h.chat("Specify which mercenary you want to switch to.", 15);
-    int n = std::atoi(args.c_str());
+    int n = core::msvc_atoi(args);
     if (n > 0 && n <= static_cast<int>(m.owned.size())) return merc_send_switch(m, n - 1, h);
     h.chat("That is an invalid mercenary index.", 15);
 }

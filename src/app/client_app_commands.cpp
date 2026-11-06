@@ -13,6 +13,7 @@
 #include "app/client_app_internal.h"
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
+#include "core/msvc_atoi.h"
 #include "game/hotbuttons.h"
 #include "game/option_commands.h"
 #include "game/slash_commands.h"
@@ -95,9 +96,10 @@ void ClientApp::xtarget_command(const std::string& args) {
         c.show_chat(std::format("Slot_number must be between 1 and {} (your current maximum number of slots).", count));
     };
     auto target_slot = [&](const std::string& w) {
-        int n = std::atoi(w.c_str()) - 1;
+        // In 64 bits: "2147483648" is INT_MIN, and INT_MIN - 1 overflowed.
+        const std::int64_t n = std::int64_t{core::msvc_atoi(w)} - 1;
         if (n < 0 || n >= count) return range();
-        c.target_xtarget(n);
+        c.target_xtarget(static_cast<int>(n));
     };
     auto incorrect = [&] { c.show_chat("Incorrect Usage. Type /xtarget for correct usage.", 0xd); };
     const game::Spawn* target = nullptr;
@@ -134,8 +136,9 @@ void ClientApp::xtarget_command(const std::string& args) {
     }
     if (prefix(word[0], "set", 3)) {
         if (!digit(word[1])) return incorrect();
-        int slot = std::atoi(word[1].c_str()) - 1;
-        if (slot < 0) return incorrect();
+        const std::int64_t wide = std::int64_t{core::msvc_atoi(word[1])} - 1;
+        if (wide < 0) return incorrect();
+        const int slot = static_cast<int>(wide);
         std::uint32_t type = 0;
         std::string name;
         if (auto parsed = game::parse_xtarget_type(word[2])) {

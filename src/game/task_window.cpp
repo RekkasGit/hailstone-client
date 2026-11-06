@@ -7,6 +7,7 @@
 #include <format>
 #include <string_view>
 
+#include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 #include "game/item_links.h"
 #include "game/merchant.h"
@@ -181,7 +182,7 @@ std::string task_zone_names(const std::string& zones, const std::function<std::s
         std::size_t q = list.find(';', p);
         if (q == std::string::npos) q = list.size();
         if (q > p) {
-            int id = std::atoi(list.substr(p, q - p).c_str());
+            int id = core::msvc_atoi(list.substr(p, q - p));
             std::uint32_t z = static_cast<std::uint32_t>(id);
             if (id > 1000) z = static_cast<std::uint32_t>(id) & 0x7fff;
             std::string name = id > 0 && z > 0 && z < 1001 && zone_name ? zone_name(z) : std::string();
@@ -317,7 +318,7 @@ std::optional<TaskCompassMark> task_compass_mark(const TaskState& s, std::uint32
                 while (p < list.size() && !here) {
                     std::size_t q = list.find(';', p);
                     if (q == std::string::npos) q = list.size();
-                    if (q > p && static_cast<std::uint32_t>(std::atoi(list.substr(p, q - p).c_str())) == zone_id) here = true;
+                    if (q > p && static_cast<std::uint32_t>(core::msvc_atoi(list.substr(p, q - p))) == zone_id) here = true;
                     p = q + 1;
                 }
                 if (!here) continue;

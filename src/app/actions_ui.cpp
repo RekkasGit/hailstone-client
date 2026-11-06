@@ -10,6 +10,7 @@
 
 #include "core/config.h"
 #include "core/log.h"
+#include "core/msvc_atoi.h"
 #include "game/coords.h"
 #include "game/eq_strings.h"
 #include "game/hot_button_menu.h"
@@ -371,12 +372,14 @@ void ActionsUi::doability_command(net::GameConnection& conn, const mech::Charact
                                   const std::string& args) {
     // _atoi(args) - 1: 0..5 index the [Abilities] list (0xe15e60), 6..9 the four dwords before it, the
     // [CombatSkills] list (0xe15e50; the original indexes 0xe15e38 + 4 * n).
-    const int button = std::atoi(args.c_str()) - 1;
-    if (button < 0 || button >= 10) {
+    // In 64 bits: "-2147483648" - 1 overflowed.
+    const std::int64_t wide = std::int64_t{core::msvc_atoi(args)} - 1;
+    if (wide < 0 || wide >= 10) {
         messages_.push_back({conn.strings().format(13256, {}), 0x111}); // Format: /doability 1 - 10
         messages_.push_back({conn.strings().format(13257, {}), 0x111}); // (1 - 6 are abilities, 7 - 10 ...)
         return;
     }
+    const auto button = static_cast<int>(wide);
     const std::int32_t skill = button < 6 ? store_.abilities[static_cast<std::size_t>(button)]
                                           : store_.combat_skills[static_cast<std::size_t>(button - 6)];
     if (skill == -1) return;
