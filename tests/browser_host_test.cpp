@@ -706,9 +706,11 @@ TEST_CASE("browser host: input and focus messages go while the queue is over its
     CHECK(went());
     r.host.focus(id, false);
     CHECK(went());
-    r.host.nav(id, NavAction::Stop);
+    CHECK(r.host.nav(id, NavAction::Stop, true));
     CHECK(went());
     CHECK_FALSE(r.host.eval(id, "1+1")); // a script's message is still refused
+    CHECK_FALSE(r.host.nav(id, NavAction::Reload, false)); // and so is a script's nav
+    CHECK_FALSE(went());
 }
 
 // A helper with bytes waiting is ended only when it takes none of them for kStallMs: one still taking them, however

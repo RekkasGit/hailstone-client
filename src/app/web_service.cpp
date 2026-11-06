@@ -183,8 +183,7 @@ bool WebService::nav(const std::string& owner, std::uint32_t caps, std::uint32_t
     else if (action == "reload") a = web::NavAction::Reload;
     else if (action == "stop") a = web::NavAction::Stop;
     else return false;
-    host()->nav(tab, a);
-    return true;
+    return host()->nav(tab, a, owner.empty());
 }
 
 void WebService::close(const std::string& owner, std::uint32_t tab) {

@@ -110,7 +110,9 @@ public:
     // on a message over its limit, or the helper's queue full (kSendBudget): never sent.
     bool text(std::uint32_t tab, const std::string& text);
     void focus(std::uint32_t tab, bool on);
-    void nav(std::uint32_t tab, NavAction action);
+    // `player`: the player's own toolbar, sent whatever the queue holds as their other input is; a script's or
+    // plugin's is held to kSendBudget like its other messages. False when not sent.
+    bool nav(std::uint32_t tab, NavAction action, bool player);
     bool eval(std::uint32_t tab, const std::string& script);
     bool post(std::uint32_t tab, const std::string& message);
     // Closes and forgets it (the tabs the helper or the rules close stay until take_closed).

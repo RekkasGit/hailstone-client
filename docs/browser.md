@@ -113,7 +113,8 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   script could repeat until the client gave up on the browser). While 32 MB wait for the helper to read them
   (`BrowserHost::kSendBudget`), anything but the client's own Hello, Close, Shutdown and a restart's reopened tabs is
   refused (an `eval`, `text`, `post`, `navigate` or `open` returns false; the player's mouse, wheel, keys, focus and
-  back/forward/reload/stop always go, a few bytes each, so a release is never lost); an empty queue takes any
+  back/forward/reload/stop always go, a few bytes each, so a release is never lost; a script's or plugin's
+  back/forward/reload/stop is refused like its other messages); an empty queue takes any
   message, so several large evals in one frame send the first and refuse the rest instead of piling up. A helper that
   takes none of what waits for 10 seconds (`kStallMs`) has stopped reading: it is ended and restarted as a dead one
   is. `HelperProcess` also ends one whose queue would pass 128 MB (`kMaxPending`), which the budget keeps out of

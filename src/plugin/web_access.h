@@ -33,7 +33,8 @@ public:
                                int height, std::string* why = nullptr) = 0;
     virtual bool navigate(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& url,
                           std::string* why = nullptr) = 0;
-    // "back", "forward", "reload", "stop"; false for another word or a tab not the caller's.
+    // "back", "forward", "reload", "stop"; false for another word, a tab not the caller's, or (a script's or
+    // plugin's) the helper's queue full: the player's own (owner "") always goes.
     virtual bool nav(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& action) = 0;
     virtual void close(const std::string& owner, std::uint32_t tab) = 0;
     // Runs script in the page's main frame; posts to its window.hailstone.onmessage; types text where its cursor is.

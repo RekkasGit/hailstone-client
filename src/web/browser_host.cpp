@@ -204,7 +204,8 @@ void BrowserHost::resize(std::uint32_t id, std::uint16_t width, std::uint16_t he
 }
 
 // The player's input goes whatever the queue holds: a few bytes each, and a release or a focus change refused while
-// a script's large message drains would leave the page holding a button or key.
+// a script's large message drains would leave the page holding a button or key. Scripts and plugins can call nav
+// too (in a loop), so only the player's goes past the budget.
 void BrowserHost::mouse(const Mouse& m) {
     if (live(m.tab)) send(m, true);
 }
@@ -221,8 +222,8 @@ bool BrowserHost::text(std::uint32_t id, const std::string& s) {
 void BrowserHost::focus(std::uint32_t id, bool on) {
     if (live(id)) send(Focus{id, on}, true);
 }
-void BrowserHost::nav(std::uint32_t id, NavAction action) {
-    if (live(id)) send(Nav{id, action}, true);
+bool BrowserHost::nav(std::uint32_t id, NavAction action, bool player) {
+    return live(id) && send(Nav{id, action}, player);
 }
 bool BrowserHost::eval(std::uint32_t id, const std::string& script) { return live(id) && send(Eval{id, script}); }
 bool BrowserHost::post(std::uint32_t id, const std::string& message) {
