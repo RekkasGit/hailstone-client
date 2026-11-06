@@ -5,6 +5,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
+#include <deque>
 #include <format>
 #include <future>
 #include <optional>
@@ -568,7 +569,9 @@ bool saved_report_click(const SavedBugReport& saved, std::string_view id) {
 // the report, the location (taken when the window opens and on Update Location), the optional flags and the target.
 // Send gives the server its copy (OP_Bug) and saves the full report for the player to post (app/bug_report.h): the
 // window then shows the saved file (SavedName ...) with Open Folder, Copy Summary and Done (SavedName says it is being
-// saved while a worker writes it, so a large log does not stall the frame). The frame the window
+// saved while a worker writes it, so a large log does not stall the frame). One report is written at a time: a Send
+// while an earlier one is still being written waits its turn, and the window shows only the last Send since it was
+// opened (a report whose window was closed is still written, but not shown). The frame the window
 // opens it stays hidden while the report's screenshot is taken, so the picture shows what the player saw.
 class BugReportWindow : public StockWindow {
 public:
@@ -584,16 +587,23 @@ public:
                 capture_frame_ = ImGui::GetFrameCount();
             }
         }
-        if (!open) saved_.reset();
+        if (!open) {
+            saved_.reset();
+            show_ = 0; // a report still being written is not shown when the window opens again
+        }
         // The report Send started, once it is written: nothing written closes the window, as before.
         if (saving_.valid() && saving_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             auto saved = saving_.get();
-            if (open && saved) saved_ = std::move(saved);
-            else if (open && host.conn) {
-                host.conn->set_bug_report_open(false);
-                open = false;
+            if (open && saving_seq_ == show_) {
+                show_ = 0;
+                if (saved) saved_ = std::move(saved);
+                else if (host.conn) {
+                    host.conn->set_bug_report_open(false);
+                    open = false;
+                }
             }
         }
+        if (!saving_.valid() && !queued_.empty()) start_save(host);
         was_open_ = open;
         return open && ImGui::GetFrameCount() != capture_frame_;
     }
@@ -603,7 +613,7 @@ public:
     void child(EqHost& host, std::string_view id, Child& out) override {
         if (!host.conn) return;
         if (saved_) saved_report_child(*saved_, id, out);
-        else if (saving_.valid() && id == "SavedName") out.text = "(being saved)";
+        else if (show_ != 0 && id == "SavedName") out.text = "(being saved)";
         if (id == "Edit") out.text = text_;
         else if (id == "LocX") out.text = std::format("{:.0f}", loc_.x);
         else if (id == "LocY") out.text = std::format("{:.0f}", loc_.y);
@@ -647,16 +657,34 @@ public:
         else if (id == "SendButton") {
             const auto category = static_cast<std::uint32_t>(std::max(categories_.selected, 0));
             host.conn->send_bug_report(category, flags_, text_);
-            if (host.save_bug_report && !saving_.valid()) saving_ = host.save_bug_report(report(category));
+            saved_.reset();
+            if (host.save_bug_report) {
+                show_ = ++sends_;
+                queued_.emplace_back(show_, report(category));
+                if (!saving_.valid()) start_save(host);
+            }
             text_.clear();
             flags_ = 0;
-            if (!saving_.valid()) host.conn->set_bug_report_open(false);
+            if (show_ == 0) host.conn->set_bug_report_open(false);
         } else if (id == "CancelButton" || id == "DoneButton") host.conn->set_bug_report_open(false);
         else return false;
         return true;
     }
 
 private:
+    // The next queued report to the worker; one that cannot be started counts as not written.
+    void start_save(EqHost& host) {
+        while (!queued_.empty() && !saving_.valid()) {
+            auto [seq, r] = std::move(queued_.front());
+            queued_.pop_front();
+            if (host.save_bug_report) saving_ = host.save_bug_report(std::move(r));
+            saving_seq_ = seq;
+            if (!saving_.valid() && seq == show_) {
+                show_ = 0;
+                if (host.conn) host.conn->set_bug_report_open(false);
+            }
+        }
+    }
     void take_location(EqHost& host) {
         const game::Spawn* me = host.conn ? host.conn->world().player() : nullptr;
         if (me) loc_ = game::world_to_server(me->position);
@@ -680,7 +708,11 @@ private:
     bool was_open_ = false;
     int capture_frame_ = -1;
     std::optional<SavedBugReport> saved_;
-    std::future<std::optional<SavedBugReport>> saving_; // Send's report, while it is written
+    std::future<std::optional<SavedBugReport>> saving_; // a Send's report, while it is written
+    std::uint32_t saving_seq_ = 0;                       // which Send saving_ is
+    std::deque<std::pair<std::uint32_t, BugReport>> queued_; // Sends waiting for saving_
+    std::uint32_t sends_ = 0;                            // Sends so far
+    std::uint32_t show_ = 0; // the Send whose file the window waits to show; 0 for none
 };
 
 // CrashReportWindow (Hailstone's own): shown at the start after a crash, over any screen, with the report the client
