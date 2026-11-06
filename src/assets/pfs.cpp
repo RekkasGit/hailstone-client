@@ -16,6 +16,10 @@ constexpr std::uint32_t kMagic = 0x20534650; // "PFS "
 constexpr std::uint32_t kNameTableCrc = 0x61580ac9;
 // The most a zlib stream expands: deflate's limit is about 1032:1 (real archives stay under 300:1).
 constexpr std::uint64_t kMaxDeflateRatio = 1032;
+// A valid zlib stream of zeros stays inside that ratio, so the size a member declares is capped as well. The largest
+// stock member (theater.eqg's) is about 37 MB and the largest name table about 100 KB.
+constexpr std::uint32_t kMaxMemberSize = 256u << 20;
+constexpr std::uint32_t kMaxNameTableSize = 16u << 20;
 
 constexpr std::array<std::uint32_t, 256> make_crc_table() {
     std::array<std::uint32_t, 256> t{};
@@ -121,6 +125,7 @@ PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string labe
     std::unordered_map<std::uint32_t, Entry> by_crc;
     for (const auto& e : entries) by_crc.emplace(e.crc, e);
 
+    if (table_entry.size > kMaxNameTableSize) throw std::runtime_error(a.label_ + ": PFS name table is too large");
     auto table_data = a.inflate_entry(table_entry);
     ByteReader tr(table_data);
     auto name_count = tr.le<std::uint32_t>();
@@ -129,8 +134,8 @@ PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string labe
         std::string key = GameDir::normalize(tr.fixed_string(len));
         auto it = by_crc.find(pfs_name_crc(key));
         if (it == by_crc.end()) continue;
-        a.names_.push_back(key);
-        a.by_name_.emplace(std::move(key), it->second);
+        // A name listed again is one member: callers walk names(), so a repeat would parse it once per copy.
+        if (a.by_name_.emplace(key, it->second).second) a.names_.push_back(std::move(key));
     }
     std::sort(a.names_.begin(), a.names_.end(), [&](const std::string& x, const std::string& y) {
         return a.by_name_.at(x).offset < a.by_name_.at(y).offset;
@@ -150,6 +155,7 @@ std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {
     // The block headers are walked before anything is allocated, so the size a file declares is trusted only as far
     // as its compressed bytes back it: each block expands by at most kMaxDeflateRatio, and the blocks add up to
     // exactly the file's size.
+    if (e.size > kMaxMemberSize) throw std::runtime_error(label_ + ": PFS file is larger than any game file");
     ByteReader r(data_);
     r.seek(e.offset);
     for (std::uint64_t total = 0; total < e.size;) {

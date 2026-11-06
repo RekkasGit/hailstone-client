@@ -138,3 +138,47 @@ TEST_CASE("PfsArchive: memory follows the bytes zlib writes, not the size a bloc
     CHECK(PfsArchive::from_memory(make_pfs({{"b.bin", text}}, 8192)).read("b.bin").value() == text);
     CHECK(PfsArchive::from_memory(make_pfs({{"e.bin", {}}})).read("e.bin").value().empty());
 }
+
+TEST_CASE("PfsArchive: a name listed many times is one member") {
+    using namespace nmsc::test::pfs_fixtures;
+    std::vector<std::byte> text(10, std::byte{'w'});
+    auto archive = make_pfs({{"zone.wld", text}, {"other.txt", text}});
+    // Rebuild the name table so it lists zone.wld 1000 times (and other.txt once).
+    nmsc::ByteWriter names;
+    names.le<std::uint32_t>(1001);
+    for (int i = 0; i < 1000; ++i) {
+        names.le<std::uint32_t>(9);
+        names.fixed_string("ZONE.WLD", 9);
+    }
+    names.le<std::uint32_t>(10);
+    names.fixed_string("other.txt", 10);
+    auto table = deflate_blocks(names.data(), 1 << 20);
+    const std::size_t dir = first_entry_at(archive) - 4;
+    nmsc::ByteWriter w;
+    w.bytes({archive.data(), dir});
+    const auto table_at = static_cast<std::uint32_t>(w.size());
+    w.bytes(table);
+    const auto new_dir = static_cast<std::uint32_t>(w.size());
+    w.bytes({archive.data() + dir, archive.size() - dir});
+    auto out = w.take();
+    put_u32(out, 0, new_dir);
+    // The name table is the directory's last entry.
+    put_u32(out, new_dir + 4 + 2 * 12 + 4, table_at);
+    put_u32(out, new_dir + 4 + 2 * 12 + 8, static_cast<std::uint32_t>(names.size()));
+    auto a = PfsArchive::from_memory(out);
+    CHECK(a.names() == std::vector<std::string>{"zone.wld", "other.txt"});
+    CHECK(a.read("zone.wld").value() == text);
+}
+
+TEST_CASE("PfsArchive refuses a member or name table larger than any game file") {
+    using namespace nmsc::test::pfs_fixtures;
+    std::vector<std::byte> text(100, std::byte{'a'});
+    auto archive = make_pfs({{"a.txt", text}});
+    // Zeros deflate within the ratio check, so the declared size alone has to be refused.
+    auto big = archive;
+    put_u32(big, first_entry_at(big) + 8, 0x20000000u);
+    CHECK_THROWS_WITH(PfsArchive::from_memory(big).read("a.txt"), doctest::Contains("larger than any game file"));
+    auto table = archive;
+    put_u32(table, first_entry_at(table) + 12 + 8, 0x02000000u);
+    CHECK_THROWS_WITH(PfsArchive::from_memory(table), doctest::Contains("name table is too large"));
+}
