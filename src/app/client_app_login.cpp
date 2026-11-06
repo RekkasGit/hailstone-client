@@ -594,6 +594,7 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
     pre_game_failed_ = false;
     conn_->set_attack_until_xtarget_clear(config_.get_bool("combat.attack_until_xtarget_clear", false));
     conn_->set_auto_target_xtarget(config_.get_bool("combat.auto_target_xtarget", true));
+    conn_->set_face_on_attack(config_.get_bool("combat.face_on_attack", true));
     conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
     conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
     conn_->set_client_commands([this](std::string_view h, const std::string& args) { return client_command(h, args); });
