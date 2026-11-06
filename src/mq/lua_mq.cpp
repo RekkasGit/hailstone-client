@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -11,7 +12,6 @@
 #include <iterator>
 #include <fstream>
 #include <map>
-#include <regex>
 #include <sstream>
 #include <system_error>
 
@@ -49,35 +49,6 @@ std::string lower(std::string_view s) {
     std::string out(s);
     for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return out;
-}
-
-// MQ's event pattern: #*# any text, #n# the n-th argument passed to the callback; everything else literal.
-std::string event_regex(std::string_view pattern, std::vector<int>& order) {
-    std::string re;
-    for (std::size_t i = 0; i < pattern.size(); ++i) {
-        char c = pattern[i];
-        if (c == '#') {
-            std::size_t close = pattern.find('#', i + 1);
-            if (close != std::string_view::npos) {
-                std::string_view inner = pattern.substr(i + 1, close - i - 1);
-                std::int64_t n = 0;
-                if (inner == "*") {
-                    re += ".*";
-                    i = close;
-                    continue;
-                }
-                if (parse_int(inner, n) && n > 0) {
-                    re += "(.*?)";
-                    order.push_back(static_cast<int>(n));
-                    i = close;
-                    continue;
-                }
-            }
-        }
-        if (std::string_view(".^$|()[]{}*+?\\/").find(c) != std::string_view::npos) re += '\\';
-        re += c;
-    }
-    return re;
 }
 
 } // namespace
@@ -119,14 +90,26 @@ void preempt_hook(lua_State* L, lua_Debug*) {
 
 void watch(lua_State* thread) { lua_sethook(thread, preempt_hook, LUA_MASKCOUNT, 1000); }
 
+// setmetatable without __gc (upvalue 1: Lua's own). A finalizer runs whenever the collector likes, with no hook
+// (Lua turns hooks off in it, so a loop there is never stopped), and at close, after the script's hooks are gone.
+int l_setmetatable(lua_State* L) {
+    if (lua_type(L, 2) == LUA_TTABLE) {
+        lua_pushliteral(L, "__gc");
+        const bool gc = lua_rawget(L, 2) != LUA_TNIL;
+        lua_pop(L, 1);
+        if (gc) return luaL_error(L, "setmetatable: a script's tables cannot have __gc");
+    }
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
+}
+
 const Context& ctx_of(lua_State* L) { return Script::of(L).host->env.context(); }
 
 const Registry& reg_of(lua_State* L) { return *Script::of(L).host->env.registry; }
 
-void need(lua_State* L, std::uint32_t cap, const char* what) {
-    if ((Script::of(L).caps & cap) != cap)
-        luaL_error(L, "%s needs the server's '%s' permission", what, plugin::caps_text(cap).c_str());
-}
+void need(lua_State* L, std::uint32_t cap, const char* what) { need_caps(L, cap, what); }
 
 // ---------------------------------------------------------------- mq.TLO values
 
@@ -317,10 +300,26 @@ int l_gettime(lua_State* L) {
     return 1;
 }
 
-// mq.delay's argument in ms: a number, or text with ms / s / m / h.
+// The longest wait mq.delay keeps (about 285 000 years): longer, math.huge included, is cut to it, so the cast is
+// defined and mq.gettime() + ms cannot wrap.
+constexpr lua_Integer kMaxDelayMs = 9'000'000'000'000'000;
+
+lua_Integer delay_ms(double v) {
+    if (v >= static_cast<double>(kMaxDelayMs)) return kMaxDelayMs;
+    if (v <= -static_cast<double>(kMaxDelayMs)) return -kMaxDelayMs;
+    return static_cast<lua_Integer>(v);
+}
+
+// mq.delay's argument in ms: a number, or text with ms / s / m / h. NaN is a bad time.
 int l_delay_ms(lua_State* L) {
+    if (lua_isinteger(L, 1)) {
+        lua_pushinteger(L, std::clamp(lua_tointeger(L, 1), -kMaxDelayMs, kMaxDelayMs));
+        return 1;
+    }
     if (lua_type(L, 1) == LUA_TNUMBER) {
-        lua_pushinteger(L, static_cast<lua_Integer>(lua_tonumber(L, 1)));
+        const double v = lua_tonumber(L, 1);
+        if (std::isnan(v)) return luaL_error(L, "mq.delay: bad time (NaN)");
+        lua_pushinteger(L, delay_ms(v));
         return 1;
     }
     const char* given = luaL_checkstring(L, 1);
@@ -336,11 +335,11 @@ int l_delay_ms(lua_State* L) {
         else if (ends("s")) { t.pop_back(); scale = 1000; }
         else if (ends("m")) { t.pop_back(); scale = 60000; }
         else if (ends("h")) { t.pop_back(); scale = 3600000; }
-        ok = parse_float(t, v);
+        ok = parse_float(t, v) && !std::isnan(v);
         v *= scale;
     }
     if (!ok) return luaL_error(L, "mq.delay: bad time '%s'", given);
-    lua_pushinteger(L, static_cast<lua_Integer>(v));
+    lua_pushinteger(L, delay_ms(v));
     return 1;
 }
 
@@ -369,7 +368,7 @@ int l_exit(lua_State* L) {
     return lua_error(L);
 }
 
-bool add_event(lua_State* L, Script& s, const std::string& name, const std::string& pattern);
+void add_event(lua_State* L, Script& s, const char* name, const char* pattern);
 
 int l_event(lua_State* L) {
     need(L, plugin::kCapEvents, "mq.event");
@@ -377,26 +376,20 @@ int l_event(lua_State* L) {
     const char* name_text = luaL_checkstring(L, 1);
     const char* pattern = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
-    if (!add_event(L, s, name_text, pattern)) return luaL_error(L, "mq.event: bad pattern '%s'", pattern);
+    add_event(L, s, name_text, pattern); // every pattern is one (a '#' that starts no #*# or #n# is itself)
     return 0;
 }
 
 // The callback is argument 3 on L, the calling thread's stack.
-bool add_event(lua_State* L, Script& s, const std::string& name, const std::string& pattern) {
-    Script::Event e;
-    e.name = name;
-    try {
-        e.re = std::regex(event_regex(pattern, e.order));
-    } catch (const std::regex_error&) {
-        return false;
-    }
+void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
     lua_pushvalue(L, 3);
-    e.fn = luaL_ref(L, LUA_REGISTRYINDEX);
+    const int fn = luaL_ref(L, LUA_REGISTRYINDEX);
+    Script::Event e{name, EventPattern(pattern), fn};
     for (auto& old : s.events)
         if (old.name == name) {
             luaL_unref(L, LUA_REGISTRYINDEX, old.fn);
             old = std::move(e);
-            return true;
+            return;
         }
     s.events.push_back(std::move(e));
     if (!s.chat_hooked) {
@@ -405,12 +398,12 @@ bool add_event(lua_State* L, Script& s, const std::string& name, const std::stri
         s.host->env.hooks->on_chat(s.owner, [sp](plugin::ChatLine& line) {
             if (sp->status != Script::Status::Running && sp->status != Script::Status::Paused) return plugin::Flow::Continue;
             for (const auto& ev : sp->events) {
-                std::smatch m;
-                if (!std::regex_match(line.text, m, ev.re)) continue;
+                auto m = ev.pattern.match(line.text);
+                if (!m) continue;
                 std::vector<std::string> args{line.text};
                 std::vector<std::pair<int, std::string>> numbered;
-                for (std::size_t g = 0; g < ev.order.size() && g + 1 < m.size(); ++g)
-                    numbered.emplace_back(ev.order[g], m[g + 1].str());
+                for (std::size_t g = 0; g < ev.pattern.order().size() && g < m->size(); ++g)
+                    numbered.emplace_back(ev.pattern.order()[g], std::move((*m)[g]));
                 std::sort(numbered.begin(), numbered.end());
                 for (auto& [n, text] : numbered) args.push_back(std::move(text));
                 if (sp->queued.size() < kMaxQueuedEvents) sp->queued.emplace_back(ev.name, std::move(args));
@@ -418,7 +411,6 @@ bool add_event(lua_State* L, Script& s, const std::string& name, const std::stri
             return plugin::Flow::Continue;
         });
     }
-    return true;
 }
 
 int l_unevent(lua_State* L) {
@@ -495,19 +487,18 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
     --s.busy;
 }
 
-// mq.bind(cmd, fn): a command of the script's own (the 'commands' capability). The client's own commands (the game's,
-// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command); a name another
-// script or plugin bound is taken over, as in MQ, until this one unbinds.
-int l_bind(lua_State* L) {
-    need(L, plugin::kCapCommands, "mq.bind");
-    Script& s = Script::of(L);
-    const char* given = luaL_checkstring(L, 1);
-    luaL_checktype(L, 2, LUA_TFUNCTION);
+// mq.bind's work once its arguments are checked; false with the error's text on the stack. Its strings are gone
+// before l_bind raises the error (Lua is built as C: an error longjmps past C++ objects).
+bool bind_command(lua_State* L, Script& s, const char* given) {
     std::string cmd = given;
     if (cmd.empty() || cmd.front() != '/') cmd.insert(cmd.begin(), '/');
     cmd = lower(cmd);
-    if (s.host->env.hooks->reserved_command(cmd))
-        return luaL_error(L, "mq.bind: %s is the client's own command", cmd.c_str());
+    if (s.host->env.hooks->reserved_command(cmd)) {
+        luaL_where(L, 1);
+        lua_pushfstring(L, "mq.bind: %s is the client's own command", cmd.c_str());
+        lua_concat(L, 2);
+        return false;
+    }
     if (auto it = s.binds.find(cmd); it != s.binds.end()) {
         luaL_unref(L, LUA_REGISTRYINDEX, it->second);
         s.binds.erase(it);
@@ -527,6 +518,18 @@ int l_bind(lua_State* L) {
         }
         start_thread(*sp, ref, words);
     });
+    return true;
+}
+
+// mq.bind(cmd, fn): a command of the script's own (the 'commands' capability). The client's own commands (the game's,
+// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command); a name another
+// script or plugin bound is taken over, as in MQ, until this one unbinds.
+int l_bind(lua_State* L) {
+    need(L, plugin::kCapCommands, "mq.bind");
+    Script& s = Script::of(L);
+    const char* given = luaL_checkstring(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (!bind_command(L, s, given)) return lua_error(L);
     return 0;
 }
 
@@ -651,6 +654,9 @@ int l_write_config(lua_State* L) {
     const char* given = luaL_checkstring(L, 1);
     std::size_t n = 0;
     const char* text = luaL_checklstring(L, 2, &n);
+    const Script& s = Script::of(L);
+    if (s.dry) return luaL_error(L, "mq.pickle does nothing in a dry run");
+    if (s.closing) return luaL_error(L, "mq.pickle: the script is stopping");
     int problem = 0; // 1 outside, 2 cannot write
     {
         auto p = config_path(L, given);
@@ -943,6 +949,20 @@ std::optional<fs::path> ScriptHost::Impl::resolve(const std::string& name) const
     return std::nullopt;
 }
 
+void Script::close() {
+    closing = true;
+    stop_requested = true;
+    release_plugin(*this);
+    if (host->env.hooks && owner) host->env.hooks->remove(owner);
+    if (L) lua_close(L);
+    // What the state's last code (a to-be-closed variable, a C finalizer) still gave the client, though need_caps
+    // refuses it while closing: nothing may keep this Script once it is freed.
+    release_plugin(*this);
+    if (host->env.hooks && owner) host->env.hooks->remove(owner);
+    owner = 0;
+    L = co = nullptr;
+}
+
 ScriptHost::ScriptHost(ScriptEnv env) : impl_(std::make_unique<Impl>()) {
     impl_->env = std::move(env);
     impl_->self = this;
@@ -966,6 +986,10 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     }
     lua_State* L = sc.L;
     *static_cast<Script**>(lua_getextraspace(L)) = &sc;
+    // The main state's own calls (its windows, hooks, a social's press) are held to runaway_ms too; its threads
+    // (lua_newthread copies the hook) also pause after kSliceMs.
+    watch(L);
+    sc.slice_start = Clock::now(); // the prelude below
     luaL_requiref(L, "_G", luaopen_base, 1);
     luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
     luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 1);
@@ -996,6 +1020,9 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         lua_pushcfunction(L, fn);
         lua_setglobal(L, n);
     }
+    lua_getglobal(L, "setmetatable");
+    lua_pushcclosure(L, l_setmetatable, 1);
+    lua_setglobal(L, "setmetatable");
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.loaded");
     ui::lua::register_ui_api(L);
@@ -1014,6 +1041,10 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         lua_pushcfunction(L, fn);
         lua_setfield(L, -2, n);
     }
+    // Locked: every TLO value is marked for finalization when it is made, and Lua looks __gc up only when it
+    // collects one, so a script that could reach this table could swap in a finalizer of its own.
+    lua_pushliteral(L, "mq.TLO");
+    lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
 
     lua_newtable(L); // mq
@@ -1102,6 +1133,7 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     auto s = std::make_unique<Script>();
     Script& sc = *s;
     sc.host = &m;
+    sc.runaway_ms = m.runaway_ms();
     sc.name = key;
     sc.entry = *entry;
     sc.root = entry->parent_path();
@@ -1191,6 +1223,12 @@ std::vector<ScriptHost::Info> ScriptHost::list() const {
         out.push_back(std::move(i));
     }
     return out;
+}
+
+std::uint32_t ScriptHost::caps_of(std::string_view name) const {
+    for (const auto& s : impl_->scripts)
+        if (s->name == name && (s->status == Script::Status::Running || s->status == Script::Status::Paused)) return s->caps;
+    return 0;
 }
 
 bool ScriptHost::running(std::string_view name) const {
@@ -1312,10 +1350,15 @@ void ScriptHost::Impl::draw_windows(Script& s) {
     if (s.stop_requested || s.windows.empty() || (s.caps & plugin::kCapUi) == 0) return;
     ++s.busy;
     plugin::CallerScope scope(s.caps, s.name);
-    for (std::size_t i = 0; i < s.windows.size() && !s.stop_requested; ++i) {
+    // A draw function may destroy or make windows (its own too): this frame draws the ones there were, those still
+    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs.
+    const auto windows = s.windows;
+    for (const auto& w : windows) {
+        if (s.stop_requested) break;
+        if (std::find(s.windows.begin(), s.windows.end(), w) == s.windows.end()) continue;
         ImGuiErrorRecoveryState state;
         ImGui::ErrorRecoveryStoreState(&state);
-        lua_rawgeti(s.L, LUA_REGISTRYINDEX, s.windows[i].second);
+        lua_rawgeti(s.L, LUA_REGISTRYINDEX, w.second);
         s.slice_start = Clock::now();
         if (lua_pcall(s.L, 0, 0, 0) != LUA_OK) {
             ImGui::ErrorRecoveryTryToRecoverState(&state);
@@ -1323,7 +1366,7 @@ void ScriptHost::Impl::draw_windows(Script& s) {
                 if (s.social < 0) s.stop_requested = true;
                 else stop_threads(s);
             } else {
-                s.fail(std::string("window ") + s.windows[i].first + ": " + (lua_tostring(s.L, -1) ? lua_tostring(s.L, -1) : "error"));
+                s.fail(std::string("window ") + w.first + ": " + (lua_tostring(s.L, -1) ? lua_tostring(s.L, -1) : "error"));
             }
             lua_pop(s.L, 1);
         }
@@ -1642,6 +1685,7 @@ Script* ScriptHost::Impl::button(const ButtonPress& p, std::string& why) {
     auto sp = std::make_unique<Script>();
     Script& sc = *sp;
     sc.host = this;
+    sc.runaway_ms = runaway_ms();
     sc.social = p.social;
     sc.name = button_name(p.name);
     sc.hash = hash;
@@ -1772,7 +1816,7 @@ bool ScriptHost::press_button(const ButtonPress& p, std::string* why) {
         }
     }
     s->commands_left = -1;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     --s->busy;
     m.reap();
     return ok;
@@ -1813,7 +1857,7 @@ ButtonDryRun ScriptHost::dry_run_button(const ButtonPress& p) {
     --s->busy;
     s->dry = nullptr;
     s->commands_left = -1;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     s->caps = caps;
     out.ok = out.error.empty();
     m.reap();
@@ -1856,7 +1900,7 @@ const ButtonFace& ScriptHost::button_face(int social, const std::string& name, c
     }
     --s->busy;
     s->face_eval = false;
-    s->runaway_ms = kRunawayMs;
+    s->runaway_ms = s->host->runaway_ms();
     s->caps = caps;
     s->face = std::move(f);
     return s->face;

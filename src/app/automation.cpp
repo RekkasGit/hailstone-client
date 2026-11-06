@@ -228,12 +228,9 @@ std::uint32_t Automation::plugin_caps(std::string_view tag) const {
     if (!owner) return 0;
     const std::string& name = owner->second;
     // Asked at every switch to a plugin's code in the Lua UI, many times a frame: the loaded plugin's own entry, not
-    // NativePlugins::list(), which reads and hashes every plugin file.
+    // NativePlugins::list(), which reads and hashes every plugin file; a script's, not ScriptHost::list().
     if (owner->first == plugin::UiBridge::Kind::Plugin) return impl_->plugins ? impl_->plugins->loaded_caps(name) : 0;
-    if (impl_->scripts)
-        for (const auto& s : impl_->scripts->list())
-            if (s.name == name && (s.status == "RUNNING" || s.status == "PAUSED")) return s.caps;
-    return 0;
+    return impl_->scripts ? impl_->scripts->caps_of(name) : 0;
 }
 
 bool Automation::web_owner_alive(const std::string& owner) const {

@@ -286,6 +286,22 @@ TEST_CASE("Lua plugin: held to its capabilities; an error or a runaway in a hook
     }
 }
 
+TEST_CASE("Lua plugin: a hook's number beyond an integer (NaN, math.huge) is no answer") {
+    Host h;
+    h.write("huge.lua", R"(
+local answers = {[1] = math.huge, [2] = 0/0, [3] = -1e300, [4] = 12.75}
+hailstone.hooks{ discipline_reuse = function(id) return answers[id] end }
+)");
+    REQUIRE(h.scripts->run("huge", {}));
+    h.scripts->pulse();
+    for (std::int32_t id : {1, 2, 3}) {
+        INFO(id);
+        CHECK_FALSE(h.chain.discipline_reuse_timer(*h.world.conn, id));
+    }
+    CHECK(h.chain.discipline_reuse_timer(*h.world.conn, 4) == 12u); // a float in range is cut, as before
+    CHECK(h.scripts->running("huge"));
+}
+
 TEST_CASE("Lua plugin: its folder's ui/ is its windows for each pack") {
     Host h;
     h.write("withui/init.lua", "-- windows only\n");
@@ -316,6 +332,36 @@ print('[rules] ' .. tostring(hs.server_rule('autocombat', 'hunter')) .. ' ' .. t
     REQUIRE(h.scripts->run("rules", {}));
     h.scripts->pulse();
     CHECK(h.printed_part("[rules] nil nil nil nil"));
+}
+
+TEST_CASE("Lua plugin: a bad argument or a raising table is an error; nothing is half made") {
+    // (Lua is built as C: each error is a longjmp, so these are read before a C++ object exists. A leak checker,
+    // -DNMSC_SANITIZE=ON, is what sees a string or a reference left behind.)
+    Host h;
+    h.write("bad.lua", R"lua(
+local hs = require('hailstone')
+local raising = setmetatable({}, {__index = function(_, k) error('no ' .. k) end})
+print('[bad] option', pcall(hs.option, {name = 'x', get = function() return 0 end}))
+print('[bad] option2', pcall(hs.option, setmetatable({name = 'y', get = function() return 0 end}, getmetatable(raising))))
+print('[bad] rule', pcall(hs.server_rule, 'autocombat'))
+print('[bad] pets', pcall(hs.set_pet_list, {{spawn = 1, class = 2}, raising}))
+hs.set_pet_list({{spawn = 300, class = 13}, setmetatable({}, {__index = {spawn = 301, class = 14}})})
+print('[bad] done')
+)lua");
+    REQUIRE(h.scripts->run("bad", {}));
+    h.scripts->pulse();
+    CHECK(h.printed_part("[bad] option false"));
+    CHECK(h.printed_part("[bad] option2 false"));
+    CHECK(h.printed_part("[bad] rule false"));
+    CHECK(h.printed_part("[bad] pets false"));
+    CHECK(h.printed_part("no spawn"));
+    CHECK(h.printed_part("[bad] done"));
+    CHECK(h.bridge.options().empty());
+    // A table's __index still answers for an entry.
+    const auto& pets = h.world.conn->pets().list;
+    REQUIRE(pets.size() == 2);
+    CHECK(pets[1].spawn_id == 301);
+    CHECK(pets[1].class_id == 14);
 }
 
 TEST_CASE("Lua plugin: folders, zone names, actions and the camera") {

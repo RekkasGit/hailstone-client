@@ -35,7 +35,8 @@ struct Host {
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<mq::ScriptHost> scripts;
 
-    explicit Host(std::uint32_t unlisted_caps = plugin::kCapAll, plugin::WebAccess* web = nullptr) {
+    explicit Host(std::uint32_t unlisted_caps = plugin::kCapAll, plugin::WebAccess* web = nullptr,
+                  std::int64_t runaway_ms = 0) {
         fs::create_directories(lua_dir);
         mq::register_game_tlos(reg);
         ctx.registry = &reg;
@@ -60,6 +61,7 @@ struct Host {
         se.config_dir = config_dir;
         se.now_ms = [this] { return clock; };
         se.web = web;
+        se.runaway_ms = runaway_ms;
         scripts = std::make_unique<mq::ScriptHost>(se);
     }
     ~Host() {
@@ -983,4 +985,208 @@ TEST_CASE("MQ commands: a plugin's command rewrite is held to the script's capab
     }
     h.run("/myalias"); // the player: anything
     CHECK(h.target == 12);
+}
+
+namespace {
+
+// An ImGui context with a frame open, for ScriptHost::imgui().
+struct ImGuiFrame {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiFrame() {
+        ImGuiIO& io = ImGui::GetIO();
+        io.IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        io.Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        io.DisplaySize = ImVec2(800, 600);
+        io.DeltaTime = 1.0f / 60.0f;
+        ImGui::NewFrame();
+    }
+    ~ImGuiFrame() {
+        ImGui::Render();
+        ImGui::DestroyContext(ctx);
+    }
+};
+
+} // namespace
+
+TEST_CASE("MQ Lua: a script's tables cannot have __gc; nothing it registers outlives it") {
+    Host h;
+    h.write("gc.lua", R"(
+local mq = require('mq')
+print('gc', pcall(setmetatable, {}, {__gc = function() mq.bind('/late', function() end) end}))
+print('plain', getmetatable(setmetatable({}, {__index = {x = 1}})).__index.x)
+-- A TLO value's metatable has a __gc of its own; a script cannot reach it to swap that out.
+print('tlometa', type(getmetatable(mq.TLO.Me)), getmetatable(mq.TLO.Me))
+print('tloset', pcall(function() getmetatable(mq.TLO.Me).__gc = function() end end))
+mq.bind('/early', function() end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("gc", {}));
+    h.pulses(1);
+    CHECK(printed_part(h, "gc false"));
+    CHECK(printed_part(h, "a script's tables cannot have __gc"));
+    CHECK(h.printed_line("plain 1"));
+    CHECK(h.printed_line("tlometa string mq.TLO"));
+    CHECK(printed_part(h, "tloset false"));
+    CHECK(h.hooks.has_command("/early"));
+    h.run("/lua stop gc");
+    CHECK_FALSE(h.scripts->running("gc"));
+    // A finalizer at the close would have bound /late as the client's own, holding the freed script.
+    CHECK_FALSE(h.hooks.has_command("/late"));
+    CHECK_FALSE(h.hooks.has_command("/early"));
+}
+
+TEST_CASE("MQ Lua: a window that destroys itself and fails names itself; the others still draw") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("w.lua", R"(
+local mq = require('mq')
+mq.imgui.init('A', function() mq.imgui.destroy('A') error('x') end)
+mq.imgui.init('B', function() print('drew B') end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("w", {}));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(printed_part(h, "window A: "));
+    CHECK(h.printed_line("drew B") == false); // the error ends the script: B is not drawn after it
+    CHECK_FALSE(h.scripts->running("w"));
+
+    // Destroying another window skips it; the rest are drawn this frame.
+    h.write("v.lua", R"(
+local mq = require('mq')
+mq.imgui.init('A', function() print('drew A') mq.imgui.destroy('B') end)
+mq.imgui.init('B', function() print('drew B') end)
+mq.imgui.init('C', function() print('drew C') end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("v", {}));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(h.printed_line("drew A"));
+    CHECK_FALSE(h.printed_line("drew B"));
+    CHECK(h.printed_line("drew C"));
+    CHECK(h.scripts->running("v"));
+}
+
+TEST_CASE("MQ Lua: a window that never returns is stopped, also after a hook ran on the script's state") {
+    ImGuiFrame frame;
+    // A 200 ms limit for the test (kRunawayMs, 5 s, in the game): the hook's own 50 ms must not be left in place.
+    Host h(plugin::kCapAll, nullptr, 200);
+    h.write("spinwin.lua", R"(
+local mq = require('mq')
+hailstone.on_packet('zone', 'in', 0x7e57, function() return false end)
+mq.imgui.init('Spin', function() while true do end end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("spinwin", {}));
+    h.pulses(1);
+    net::AppPacket in(0x7e57);
+    CHECK(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in) == plugin::Flow::Continue);
+    h.scripts->imgui(); // the runaway limit, then the script ends
+    CHECK(printed_part(h, "window Spin: "));
+    CHECK(printed_part(h, "ran longer than 200 ms"));
+    CHECK_FALSE(h.scripts->running("spinwin"));
+}
+
+TEST_CASE("MQ Lua: mq.delay takes math.huge and huge text as a long wait, and NaN as a bad time") {
+    Host h;
+    h.write("d.lua", R"(
+local mq = require('mq')
+print('huge', mq._delay_ms(math.huge), mq._delay_ms(-math.huge), mq._delay_ms(1e300), mq._delay_ms('1e300s'))
+print('int', mq._delay_ms(math.maxinteger), mq._delay_ms(1500), mq._delay_ms('2s'), mq._delay_ms(2.9))
+print('nan', pcall(mq._delay_ms, 0/0))
+print('nantext', pcall(mq._delay_ms, 'nan'))
+print('inftext', mq._delay_ms('inf'))
+print('tloint', mq.TLO.Int('nan')(), mq.TLO.Int('1e300')(), mq.TLO.Int('-inf')(), mq.TLO.Int('7.9')())
+mq.delay(math.huge)
+print('never')
+)");
+    REQUIRE(h.scripts->run("d", {}));
+    h.pulses(3, 1000);
+    CHECK(h.printed_line("huge 9000000000000000 -9000000000000000 9000000000000000 9000000000000000"));
+    CHECK(h.printed_line("int 9000000000000000 1500 2000 2"));
+    CHECK(printed_part(h, "nan false"));
+    CHECK(printed_part(h, "nantext false"));
+    CHECK(h.printed_line("inftext 9000000000000000"));
+    CHECK(h.printed_line("tloint nil nil nil 7"));
+    CHECK_FALSE(h.printed_line("never"));
+    CHECK(h.scripts->running("d"));
+}
+
+TEST_CASE("MQ Lua: mq.event's patterns, as MQ's: wildcards, numbered arguments in order, literal text") {
+    Host h;
+    h.write("ev.lua", R"(
+local mq = require('mq')
+mq.event('slain', '#*#You have slain #1#!#*#', function(line, who) print('slain', who) end)
+mq.event('hits', '#2# hits #1# for #3# points.', function(line, a, b, c) print('hits', a, b, c) end)
+mq.event('lit', '(1+1) = [#1#]', function(line, v) print('lit', v) end)
+mq.event('hash', '#a# #1#', function(line, v) print('hash', v) end)
+while true do mq.doevents() mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("ev", {}));
+    h.pulses(1);
+    for (const char* text : {"You have slain a rat!", "A gnoll hits you for 12 points.", "(1+1) = [2]", "#a# x y",
+                             "(1+1) = 2", "nothing"}) {
+        plugin::ChatLine line{text, 0, 0};
+        h.hooks.chat(line);
+    }
+    h.pulses(2, 10);
+    CHECK(h.printed_line("slain a rat"));
+    CHECK(h.printed_line("hits you A gnoll 12"));
+    CHECK(h.printed_line("lit 2"));
+    CHECK(h.printed_line("hash x y"));
+    CHECK(h.printed.size() == 4u + 1u); // and the "[Lua] running" line
+}
+
+TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll & ~plugin::kCapPackets);
+    auto d = h.scripts->dry_run_button(press(R"(
+mq.cmd('/sit')
+print('bind', pcall(mq.bind, '/drybind', function() end))
+print('event', pcall(mq.event, 'e', '#*#', function() end))
+print('window', pcall(mq.imgui.init, 'w', function() end))
+print('pickle', pcall(mq.pickle, 'dry.lua', {a = 1}))
+print('ability', pcall(hailstone.use_ability, 'skill', 'Taunt'))
+print('read', mq.TLO.Me.Level())
+)"));
+    CHECK(d.ok);
+    REQUIRE(d.lines.size() == 1);
+    CHECK(d.lines[0] == "/sit");
+    CHECK(h.sent.empty());
+    for (const char* what : {"bind false", "event false", "window false", "pickle false", "ability false"}) {
+        INFO(what);
+        bool refused = false;
+        for (const auto& l : h.printed)
+            refused |= l.rfind(what, 0) == 0 && l.find("does nothing in a dry run") != std::string::npos;
+        CHECK(refused);
+    }
+    CHECK(h.printed_line("read 50"));
+    CHECK_FALSE(h.hooks.has_command("/drybind"));
+    std::error_code ec;
+    bool written = false;
+    for (auto it = fs::recursive_directory_iterator(h.world.dir, ec); !ec && it != fs::recursive_directory_iterator(); ++it)
+        written |= it->path().filename() == "dry.lua";
+    CHECK_FALSE(written);
+    // A real press still does it.
+    CHECK(h.scripts->press_button(press("mq.bind('/drybind', function() end)")));
+    CHECK(h.hooks.has_command("/drybind"));
+}
+
+TEST_CASE("MQ Lua: caps_of is list()'s caps for a running or paused script, 0 for any other name") {
+    Host h(plugin::kCapRead | plugin::kCapCommands);
+    h.write("c.lua", "require('mq').delay(100000)\n");
+    REQUIRE(h.scripts->run("c", {}));
+    h.pulses(1);
+    CHECK(h.scripts->caps_of("c") == (plugin::kCapRead | plugin::kCapCommands));
+    REQUIRE(h.scripts->list().size() == 1);
+    CHECK(h.scripts->caps_of("c") == h.scripts->list()[0].caps);
+    h.scripts->pause("c", true);
+    CHECK(h.scripts->caps_of("c") == (plugin::kCapRead | plugin::kCapCommands));
+    CHECK(h.scripts->caps_of("C") == 0u); // the tag's name exactly, as plugin_caps compared it
+    CHECK(h.scripts->caps_of("other") == 0u);
+    h.scripts->stop("c");
+    CHECK(h.scripts->caps_of("c") == 0u);
 }

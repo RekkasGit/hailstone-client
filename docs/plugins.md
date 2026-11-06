@@ -158,7 +158,11 @@ Only Lua scripts are supported. MQ's old `.mac` macro language is not.
 A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQuest uses. Each script gets its own Lua
 5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
-cannot freeze the client. One that cannot pause for 5 s is stopped. Each script's memory is capped at 256 MB.
+cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
+pause, is stopped the same way. Each script's memory is capped at 256 MB. A script's tables cannot have a `__gc`
+finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
+end, after what it registered is taken back. For the same reason an `mq.TLO` value's metatable is locked
+(`getmetatable` gives `"mq.TLO"`).
 
 ### The `mq` module
 
@@ -166,8 +170,8 @@ cannot freeze the client. One that cannot pause for 5 s is stopped. Each script'
 |---|---|
 | `mq.TLO.<Name>...` | MQ's TLOs (below). Call with no arguments for the plain value (`mq.TLO.Me.PctHPs()`, `nil` for NULL). Call with arguments for an indexed member (`mq.TLO.Me.Buff(1).Duration.TotalSeconds()`, `mq.TLO.Spawn('npc radius 50').ID()`). Values also work with `tostring`, `..`, `==`, `<` and `<=`. |
 | `mq.cmd(line)`, `mq.cmd.<name>(args...)`, `mq.cmdf(fmt, ...)` | a command line, with `${...}` parsed |
-| `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true |
-| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: `#*#` matches any text; `#1#`, `#2#`, ... are passed to `fn(line, arg1, ...)` |
+| `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true. A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
+| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: the whole line must match; `#*#` matches any text (as much as it can); `#1#`, `#2#`, ... (as little as they can) are passed to `fn(line, arg1, ...)` in their number's order; neither takes a line break; any other `#` is literal (`mq/event_pattern.h`) |
 | `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`. The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either), `/lua`, `/plugin` and MQ's (`/echo`, ...). A name another script or plugin bound is taken over until this one unbinds, as in MQ |
 | `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui` |
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
@@ -196,7 +200,8 @@ The data types use MQ's member names and inheritance:
 - `character` → `spawn`, `buff` → `spell`, `groupmember` → `spawn`.
 - `class`, `race`, `heading` (`Degrees`, `ShortName`, ...), `timestamp` (`TotalSeconds`, `TimeHMS`, ...), `item`.
 - MQ's pure types: `int`, `float` (`Deci`, `Precision`, `Int`), `string` (`Length`, `Upper`, `Left`, `Mid`,
-  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`.
+  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`. `Int[...]` and `float.Int` cut toward zero, and are NULL for NaN, an
+  infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
 
 For example `Me.PctHPs`, `Me.Buff[n|name].Duration`, `Me.Gem[n|name]`, `Me.SpellReady[n|name]`, `Me.Casting`,
 `Me.Combat`, `Me.XTarget[n]`, `Me.FreeInventory`, `Me.Inventory[mainhand|pack1|23]`, and on spawns `Target.Distance`,
@@ -343,7 +348,9 @@ return {label = hp and (hp .. '%') or 'Heal', enabled = hp ~= nil}
 - The editor colours the Lua and completes `mq.TLO` paths from the live game (Tab takes a name, Ctrl+Up / Ctrl+Down
   choose one), as well as `mq.` and `button.`. It marks the line of an error.
 - **Dry run** runs the press with the chosen modifiers and lists the commands it would send, with any the server
-  would block. Nothing is sent and waits are not waited. A dry run works even on a server without Lua socials.
+  would block. Nothing is sent and waits are not waited. Reading works; anything else that would act or stay
+  (`mq.bind`, `mq.event`, `mq.imgui`, `mq.pickle`, `mq.web`, the `hailstone` module's actions and hooks) is an error
+  that ends the dry run ("does nothing in a dry run"). A dry run works even on a server without Lua socials.
 - **Put on cursor** puts the social on the cursor, ready to drop on a hot bar.
 - **Copy share text** / **Paste** share a social as one line (`hailstone-social:1:...`).
 - Pressing a Lua social again while its Lua still runs (full mode) stops it, and so does a right click.
@@ -641,7 +648,7 @@ a line in the log once.
 |---|---|
 | nothing | everything that reads or draws (`eq.Item`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below) |
 | `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
-| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` needs `commands` too) |
+| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 
 What stays shared: a plugin can still write into the tables the pack keeps in its globals (that is how its windows

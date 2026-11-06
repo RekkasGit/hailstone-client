@@ -152,6 +152,14 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Values between Lua and plugins: cycles refused, a budget of values and bytes (`plugin/lua_value.h`; tests/lua_eq_args_test.cpp).
 - [x] Script and module names stay inside the script folders (no absolute names, no links out); the config check canonical and case-insensitive (tests/mq_lua_test.cpp).
 - [x] `mq.pickle`: a script without every capability gets `scripts/config/<script>/` (tests/mq_lua_test.cpp).
+- [x] Scripts' tables cannot have `__gc` (a finalizer at the close registered hooks as the client's own, keeping the freed script); nothing is registered while a state closes (tests/mq_lua_test.cpp).
+- [x] A Lua social's dry run does nothing but note its commands and waits; `eq.LuaSocialDryRun` needs `commands` and `actions` from a plugin (tests/mq_lua_test.cpp, tests/plugin_ui_sandbox_test.cpp).
+- [x] The Lua bridge checks its arguments before it makes C++ strings (an error longjmps past them: Lua is built as C).
+- [x] `mq.imgui` windows held to the 5 s runaway limit, also after a hook ran; a window that destroys windows no longer reads past the list (tests/mq_lua_test.cpp).
+- [x] `mq.delay` and the hooks' number answers defined for NaN, infinities and huge numbers (tests/mq_lua_test.cpp, tests/lua_plugin_test.cpp).
+- [x] `${Int[...]}` and `float.Int` defined for NaN, infinities and huge numbers (tests/mq_tlo_test.cpp, tests/mq_lua_test.cpp).
+- [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
+- [x] `mq.event` patterns matched in linear time with the regex's own results (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp checks it against the regex on random patterns).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `NmscWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).

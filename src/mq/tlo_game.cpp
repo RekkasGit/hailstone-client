@@ -1465,7 +1465,8 @@ void register_game_tlos(Registry& r) {
     });
     r.add_tlo("Int", [](const Context&, std::string_view index) -> V {
         double d = 0;
-        return parse_float(index, d) ? V::integer(static_cast<std::int64_t>(d)) : V::nil();
+        const auto n = parse_float(index, d) ? whole_number(d) : std::nullopt;
+        return n ? V::integer(*n) : V::nil();
     });
     r.add_tlo("Float", [](const Context&, std::string_view index) -> V {
         double d = 0;

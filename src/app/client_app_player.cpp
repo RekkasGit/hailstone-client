@@ -368,8 +368,9 @@ void ClientApp::update_player(float dt) {
     if (keys) {
         update_combat_input();
     } else {
-        // A window has the keyboard (typing in the chat): the pad is not the keyboard, its commands still act.
-        for (std::size_t i = pad_first; i < key_events_.size(); ++i) key_command(key_events_[i]);
+        // A window has the keyboard (typing in the chat): the scripts' /keypress and the pad are not the keyboard,
+        // their commands still act (a script's press would be lost otherwise: script_keys_ is not kept).
+        for (std::size_t i = player_keys; i < key_events_.size(); ++i) key_command(key_events_[i]);
     }
     update_placement();
     update_item_input();

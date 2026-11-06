@@ -9,6 +9,15 @@
 - While connecting, a session reply from another address than the server's is ignored (one from another port of the server's address is still taken, for NAT), so someone who sees the connect code cannot take over the connection
 - A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
 - After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
+- A Lua script's `/keypress` of a hot button, target or ability key now works while you are typing in the chat (only movement keys did)
+- A Lua script's window whose function never returns is stopped after 5 seconds, as the rest of a script is, instead of freezing the game
+- Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
+- For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
+- For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
+- For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
+- For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced
+- `mq.event` patterns with several `#n#` no longer stall the game on long chat lines
+- For add-on authors: `eq.LuaSocialDryRun` needs the `commands` and `actions` capabilities in a plugin's window, as `eq.SetLuaSocial` does
 
 ## 0.5.0-beta (2026-11-05)
 

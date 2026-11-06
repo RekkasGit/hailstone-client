@@ -143,6 +143,10 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Window[InventoryWindow].Open} ${Window[BankWnd].Open}") == "TRUE FALSE");
     CHECK(f.p("${EverQuest.GameState} ${EverQuest.Server}") == "INGAME TestServer");
     CHECK(f.p("${Int[7.9]} ${Float[2].Deci} ${Bool[0]} ${Bool[yes]}") == "7 2.0 FALSE TRUE");
+    // No whole number for NaN, an infinity or one past int64 (the cast would be undefined); in range is cut as before.
+    CHECK(f.p("${Int[nan]} ${Int[inf]} ${Int[-inf]} ${Int[1e300]} ${Int[-1e300]}") == "NULL NULL NULL NULL NULL");
+    CHECK(f.p("${Float[nan].Int} ${Float[inf].Int} ${Float[1e300].Int}") == "NULL NULL NULL");
+    CHECK(f.p("${Int[-7.9]} ${Float[1e18].Int} ${Float[-2.5].Int}") == "-7 1000000000000000000 -2");
     CHECK(f.p("${Select[b,a,b,c]}") == "2");
     CHECK(f.p("${Heading[90].ShortName}") == "E");
     CHECK(f.p("${Heading[0].ShortName}") == "N");

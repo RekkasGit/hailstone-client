@@ -224,6 +224,8 @@ TEST_CASE("Plugin UI: eq functions that act need the plugin's capability") {
     CHECK(app::eq_call_caps("ClickSlot") == plugin::kCapActions);
     CHECK(app::eq_call_caps("ShowWindow") == plugin::kCapCommands);
     CHECK(app::eq_call_caps("Item") == 0u);
+    // A dry run runs the code it is given with the server's Lua social capabilities: as SetLuaSocial.
+    CHECK(app::eq_call_caps("LuaSocialDryRun") == (plugin::kCapCommands | plugin::kCapActions));
     CHECK_FALSE(app::eq_call_caps("NoSuchFunction"));
     // (no such window: the real functions give false; a refused call gives nil)
     const std::string calls = "return tostring(eq.ClickChild('NoWnd', 'X')) .. ' ' .. tostring(eq.WindowButton('NoWnd', "
