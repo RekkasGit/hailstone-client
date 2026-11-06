@@ -121,6 +121,10 @@ Gaps beyond NMS's needs, to cover in phases 2-5:
   `OP_HailstoneSettings*` (`HailstoneGuild`, `HailstoneSettings`, `encode_hailstone_guild` ...), with the same
   wire values and magic numbers. `tools/check_core_names.py` fails CI (job "no server code in the client") when
   src/, sdk/ or ui/ name NMS outside comments; `nmsc` and `nms-client` are allowed.
+- Since then: the NMS plugin moved to a repository of its own (projecthailstone/hailstone-nms), released as an
+  add-on and cloned into `plugins/nms` to build with the client; its docs (`docs/nms.md` there) went with it, so
+  `docs/plugins/nms.md` and the `tests/nms_*` files named below are not in this repository (docs/plugins.md). The
+  sections below describe the code as it was before the move.
 
 ## 1. The `ServerExtension` hooks
 

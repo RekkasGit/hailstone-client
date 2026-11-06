@@ -12,6 +12,8 @@ Hailstone is an educational project: a study of how a game client of its era wor
 
 Hailstone is an independent project. It contains no code or assets from proprietary software. You supply your own RoF2-compatible game data folder, which Hailstone only reads and never modifies or redistributes.
 
+**Please subscribe to EverQuest.** Hailstone plays on files from an EverQuest installation, a RoF2 one or a current live one, and those files are Daybreak Game Company's work. If you use them, we highly encourage you to subscribe to [EverQuest](https://www.everquest.com) and support the game they come from. Hailstone is not affiliated with or endorsed by Daybreak Game Company; EverQuest is its trademark.
+
 ## What works
 
 - Server list, login, character create/delete, world and zone entry
@@ -21,10 +23,13 @@ Hailstone is an independent project. It contains no code or assets from propriet
 - Chat, hot bar, skills and abilities
 - Zone sound and music
 - Lua UI packs (`modern`, `gamepad`) with full gamepad support
-- MacroQuest-style Lua scripting and compiled plugins ([docs/plugins.md](docs/plugins.md))
+- MacroQuest-style Lua scripting and compiled plugins ([Plugins and Scripts](https://github.com/projecthailstone/hailstone-client/wiki/Plugins-and-Scripts)), with `/nav` and `/stick` on a navigation mesh ([Navigation](https://github.com/projecthailstone/hailstone-client/wiki/Navigation))
+- Add-ons from GitHub, with a store on the login screen that lists them and an install card that shows what each one asks to do ([Add-ons](https://github.com/projecthailstone/hailstone-client/wiki/Add-ons))
+- Automatic, signed updates, and the version and its release notes on the login screen ([Updater](https://github.com/projecthailstone/hailstone-client/wiki/Updater))
+- An in-game browser for the pages a server sends, on Linux and Windows ([Browser](https://github.com/projecthailstone/hailstone-client/wiki/Browser))
 - Optional server-side support: client file delivery, cross-zone guild invites ([server/README.md](server/README.md))
 
-Work in progress and known gaps are tracked in [docs/plan.md](docs/plan.md) and [docs/unknowns.md](docs/unknowns.md).
+Work in progress and known gaps are tracked in the [plan](https://github.com/projecthailstone/hailstone-client/wiki/Plan), the [to-do list](https://github.com/projecthailstone/hailstone-client/wiki/To-Do) and the [known gaps](https://github.com/projecthailstone/hailstone-client/wiki/Known-Gaps).
 
 ## System requirements
 
@@ -32,7 +37,7 @@ Work in progress and known gaps are tracked in [docs/plan.md](docs/plan.md) and 
 |---|---|
 | **Operating system** | Linux x64: Ubuntu 24.04 or a distribution of the same age or newer (the release is built against its glibc). Windows x64: Windows 10 version 1903 or later. macOS and arm64: build from source (no release packages yet). |
 | **Graphics** | A GPU and driver with Vulkan 1.3, dynamic rendering, synchronization2 and descriptor indexing (runtime descriptor arrays, non-uniform sampled image indexing, partially bound and variable-count bindings). On macOS, MoltenVK. |
-| **Game data** | Your own RoF2-compatible game folder. Hailstone reads it and never writes to it. |
+| **Game data** | Your own RoF2-compatible game folder: a RoF2 install or a current live one. Hailstone reads it and never writes to it. We highly encourage an EverQuest subscription if you use its files. |
 | **Server** | An EQEmu server that accepts RoF2 clients. |
 | **Network** | UDP to the login and world servers. Automatic updates need HTTPS: on Linux the system's libcurl. |
 | **Input** | Keyboard and mouse, or a gamepad. |
@@ -41,10 +46,14 @@ To check a GPU, run `vulkaninfo --summary` and look for `apiVersion` 1.3 or high
 
 Memory, VRAM and CPU minimums have not been measured yet.
 
-## Quick start
+## Download
+
+Release packages for Linux x64 and Windows x64 are on the [releases page](https://github.com/projecthailstone/hailstone-client/releases). Unzip one anywhere and run `hailstone` (`hailstone.exe` on Windows). Hailstone updates itself from then on.
+
+## Building from source
 
 ```sh
-git clone https://github.com/gennro/hailstone-client.git
+git clone https://github.com/projecthailstone/hailstone-client.git
 cd hailstone-client
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
@@ -53,7 +62,7 @@ build/hailstone/hailstone
 
 On first start Hailstone asks for your game data folder and remembers it. You can also pass `--game-dir PATH` or set `EQ_GAME_DIR`.
 
-Hailstone is portable: settings, per-server files, characters and logs live in the `hailstone/` folder next to the binary ([docs/layout.md](docs/layout.md)).
+Hailstone is portable: settings, per-server files, characters and logs live in the `hailstone/` folder next to the binary ([Folder Layout](https://github.com/projecthailstone/hailstone-client/wiki/Folder-Layout)).
 
 ### Build requirements
 
@@ -62,19 +71,25 @@ Hailstone is portable: settings, per-server files, characters and logs live in t
 - `glslc` (shaderc) or `glslangValidator`
 - A Vulkan 1.3 driver (MoltenVK on macOS)
 
-Dependencies are fetched automatically unless the system already provides them. Run tests with `ctest --test-dir build` and see all options with `--help`.
+Dependencies are fetched automatically unless the system already provides them. On Linux and Windows the in-game browser's helper is built on CEF, which is a few hundred MB to fetch; `-DNMSC_BROWSER=OFF` leaves it out, and pages then open in the system's browser. Run tests with `ctest --test-dir build` and see the client's options with `build/hailstone/hailstone --help`.
 
 ## Documentation
 
+The documentation is on the [wiki](https://github.com/projecthailstone/hailstone-client/wiki). It is built from the [docs/](docs/) folder, which is where to change it ([Wiki](https://github.com/projecthailstone/hailstone-client/wiki/Wiki)).
+
 | | |
 |---|---|
-| [docs/plan.md](docs/plan.md) | Roadmap and milestones |
-| [docs/layout.md](docs/layout.md) | Folder layout and configuration |
-| [docs/dev-ui.md](docs/dev-ui.md) | Writing UI packs |
-| [docs/gamepad.md](docs/gamepad.md) | Gamepad support |
-| [docs/plugins.md](docs/plugins.md) | Lua scripts and plugins |
-| [docs/protocol/](docs/protocol/) | Network protocol notes |
-| [docs/formats/](docs/formats/) | File format notes |
+| [Plan](https://github.com/projecthailstone/hailstone-client/wiki/Plan) | Goals, rules, architecture and milestones |
+| [Folder Layout](https://github.com/projecthailstone/hailstone-client/wiki/Folder-Layout) | The Hailstone folder, settings and the game folder |
+| [Gamepad](https://github.com/projecthailstone/hailstone-client/wiki/Gamepad) | Gamepad support and the gamepad UI |
+| [Add-ons](https://github.com/projecthailstone/hailstone-client/wiki/Add-ons) | Installing add-ons, and publishing one |
+| [Plugins and Scripts](https://github.com/projecthailstone/hailstone-client/wiki/Plugins-and-Scripts) | Lua scripts, compiled plugins and their API |
+| [Developer UI](https://github.com/projecthailstone/hailstone-client/wiki/Developer-UI) | Writing UI packs |
+| [Mechanics](https://github.com/projecthailstone/hailstone-client/wiki/Mechanics) | Game rules and where they were checked |
+| [Graphics](https://github.com/projecthailstone/hailstone-client/wiki/Graphics) | The renderer |
+| [Protocol](https://github.com/projecthailstone/hailstone-client/wiki/Protocol-Session) | Session, login and RoF2 packet notes |
+| [File formats](https://github.com/projecthailstone/hailstone-client/wiki/Format-WLD) | WLD, EQG, textures, characters, particles, sky, audio |
+| [CI and Local Builds](https://github.com/projecthailstone/hailstone-client/wiki/CI-and-Local-Builds) | How builds, tests and releases are run |
 
 ## Contributing
 

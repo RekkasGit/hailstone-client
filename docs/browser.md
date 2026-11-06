@@ -165,8 +165,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
 1. **Done:** OP_Weblink, `/url` and `/www` in the system's browser; the `web` permission; `[web] allow`.
 2. **Done:** the helper's messages, the platform pipes and `BrowserHost`, tested against an in-memory helper and
    the stand-in helper program (`tests/mock_web_helper.cpp`: a test pattern, clicks, messages echoed, crashes) over
-   real pipes; the decoder fuzzed. No CEF yet, so all of it runs in CI.
-3. **Done for Linux (x64; arm64 and Windows built by CI, not run here):** `tools/hailstone-web` on CEF's pinned
+   real pipes; the decoder fuzzed. None of it needs CEF, so all of it runs in every build's `nmsc_tests`.
+3. **Done for Linux (x64; arm64 and Windows were built by CI's build legs before they were dropped, docs/ci.md, not
+   run here):** `tools/hailstone-web` on CEF's pinned
    minimal builds, in `browser/` of the build and the install (below). Open: macOS (CEF needs an app bundle with
    its helper apps and framework: `NMSC_BROWSER` is off there), and a moment for CEF to write its cookies at
    shutdown (done since: below).

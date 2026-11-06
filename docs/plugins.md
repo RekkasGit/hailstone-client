@@ -6,7 +6,7 @@ frame:
 
 | What | Where | Who decides |
 |---|---|---|
-| **Lua windows**: the game's windows, rewritten in Lua (`ui/classic/*.lua`, `src/ui/lua`) | ships with the client | always on |
+| **Lua windows**: the game's windows, rewritten in Lua (`ui/<pack>/*.lua`, `src/ui/lua`) | ships with the client | always on |
 | **MacroQuest Lua scripts**: automation with MQ's `mq` module, `/lua run <name>` | the server's `scripts/`, then `scripts/` (then the install's) | the server's `hailstone.cfg` |
 | **Compiled plugins**: shared libraries with MQ-style callbacks (`sdk/nmsc_plugin.h`) | the server's `plugins/`, then `plugins/` or `plugins/<name>/` (then the install's) | the server's `hailstone.cfg` |
 
@@ -105,7 +105,7 @@ pack window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its ow
 - `/lua run <script> [args...]`, `/lua stop [script]`, `/lua pause [script]`, `/lua list`
 - `/plugin list`, `/plugin <name> [load|unload]`
 - A server's compiled plugins load only once you allow them: see "The server's compiled plugins ask first" above.
-- **Add-ons** on the login screen installs a script or plugin from a GitHub link, keeps it up to date and removes it
+- **Add-ons** on the login screen installs a script or plugin from its store or a GitHub link, keeps it up to date and removes it
   (docs/addons.md). It lists the picked server's own too, which cannot be removed or turned off.
 - Ctrl+Shift+D opens the developer windows, including **Plugins & Lua**. That window shows the server's rules,
   every script and plugin found with its SHA-256 and whether it is the server's (and for the server's compiled
@@ -236,8 +236,8 @@ a search; `fast`), `/keypress <command> [hold|release]` (the game's key command 
 `/squelch <cmd>`, `/docommand <cmd>`, `/noparse <cmd>`, `/lua ...`, `/plugin ...`. `${...}` is parsed in every
 command line, typed or scripted, except `/noparse` and the lines the client's own windows send for a button
 (`mq::LiteralLine`: the guild window's Go to URL, Join Channel and Update MOTD, a member's or friend's name; their
-text is what other players and the server wrote, and the original has no `${...}`). `/nav` (MQ2Nav's commands) and
-`/moveto` are built in (`docs/navigation.md`); `/stick` is not yet.
+text is what other players and the server wrote, and the original has no `${...}`). `/nav` (MQ2Nav's commands),
+`/moveto` and `/stick` are built in (`docs/navigation.md`).
 
 `${...}` is expanded in one pass, innermost first (`${Me.Buff[${n}].Duration}` works as in MQ), and a value's text
 is never parsed again: a spawn named `${Me.Name}`, or a guild, title or item name holding `${`, stays that text.
@@ -668,8 +668,8 @@ Project Triune's (private). Either, cloned into `plugins/<name>/`, is built with
 script lives in a repository of its own too and is installed with the add-on manager (docs/addons.md "For authors").
 
 **Server admins:** a compiled plugin is native code. The capabilities limit what the client's host table lets it
-do, but a plugin can still call the operating system directly, and a server's plugins load on every player's
-machine without asking. Ship only plugins whose code you trust. Scripts are different: everything they can do goes
+do, but a plugin can still call the operating system directly, and a server's plugins load on every machine whose
+player allowed them ("The server's compiled plugins ask first" above). Ship only plugins whose code you trust. Scripts are different: everything they can do goes
 through the client, so their capabilities hold. All of this is enforced by the client: a modified client can ignore
 `hailstone.cfg`, so the server's own checks stay the real line.
 

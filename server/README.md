@@ -1,6 +1,6 @@
 # Hailstone server support
 
-Hailstone works on any EQEmu server as is. A server can add four things:
+Hailstone works on any EQEmu server as is. A server can add three things:
 
 - **sending the server's client files**: what the owner puts in `client_files/` (spells, strings, zones, models, and
   the server's own plugins and Lua scripts with the `hailstone.cfg` that sets the rules for plugins, scripts and
@@ -13,7 +13,7 @@ Hailstone works on any EQEmu server as is. A server can add four things:
   other refusals), else the same line as text. It works for any RoF2 client, Hailstone or not. EQEmu's Lua cannot
   tell whether the named player really invited the sender, so at most 5 declines a sender in 10 s are passed on.
 
-This folder does all four with a Lua quest script. It needs no C++ changes, no rebuild and no opcode
+This folder does all three with a Lua quest script. It needs no C++ changes, no rebuild and no opcode
 edits, and it runs next to the server's own quests (Perl or Lua) without replacing any of them. Tested on
 EQEmu 23.10.3 with the PEQ quests.
 

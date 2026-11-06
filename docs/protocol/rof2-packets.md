@@ -255,7 +255,7 @@ The online client never finishes a cast itself. It gates the cast, starts its ow
 | TargetBuffs | Z→C | 0x4f4b | as BuffCreate, type 5 (PC) or 7 (NPC): the target window's buffs |
 | BuffRemoveRequest | C→Z | 0x64f2 | 8 B: u32 slot, u32 entity (own id or the pet's): click a buff off. EQEmu fades it if it is not detrimental |
 | DeleteSpell | both | 0x3358 | 8 B: i16 book slot, 2 B, u8 success (the echo: 1 = deleted), 3 B |
-| LoadSpellSet | C→Z | 0x261d | 16 B: u8 forget[12] (non-zero = forget that gem), u32 count (12). Not sent yet |
+| LoadSpellSet | C→Z | 0x261d | 16 B: u8 forget[12] (non-zero = forget that gem), u32 count (12). Sent when a spell set is memorized (the spell book's sets, the gem menu, `/memspellset`; `net/game_connection_spell_sets.cpp`), forgetting the gems the set replaces |
 | ColoredText | Z→C | 0x43af | u32 chat colour, text (EQEmu copies strlen bytes without a terminator; the struct padding usually supplies one). Buff fade texts |
 | LinkedReuse | Z→C | 0x1619 | 12 B: u32 timer 1..19, u32 end, u32 start (seconds): a shared spell timer; tints the gems only |
 | Stamina | Z→C | 0x2a79 | 8 B: u32 food, u32 water |
@@ -287,7 +287,7 @@ Server side: zone `Handle_OP_Group*` (client_packet.cpp), `Group::*` (groups.cpp
 | GroupUpdateB | Z→C | 0x6194 | u32 group id (0), u32 count, cstr leader; count × {u32 slot, cstr name, u16 merc, cstr owner, u32 level, u8 tank, u8 assist, u8 puller, u32 offline, u32 timestamp}. EQEmu: the receiver in slot 0, levels 0x46/0x41 (fake); "group created" (`SendGroupCreatePacket`, the inviter only) has an empty leader and one member with the real level. The client rebuilds every slot |
 | GroupLeaderChange | Z→C | 0x21b4 | 148 B: 64 B, `char[64]` leader, 20 B |
 | GroupAcknowledge | Z→C | 0x7323 | 4 B: "You have joined the group." (12004). Sent to both sides when a group forms |
-| GroupLeadershipAAUpdate | Z→C | 0x02cf | leadership AAs; sent after every group update; ignored for now |
+| GroupLeadershipAAUpdate | Z→C | 0x02cf | leadership AAs; sent after every group update; the group leader's ability ranks and NPC marker are kept (`GameConnection::handle_leadership_ability`) |
 | GroupMakeLeader | C→Z | 0x4229 | 456 B: u32 8, `char[64]` current leader (me), `char[64]` new leader, 324 B 0. The client then sends GroupMentor {0, ""} |
 | GroupMentor | C→Z | 0x3342 | 68 B: i32 percent, `char[64]` name ("" clears) |
 | MobManaUpdate / MobEnduranceUpdate | Z→C | 0x2404 / 0x1c81 | 3 B: u16 spawn, u8 percent; group members' mana and endurance |
@@ -329,7 +329,7 @@ The client decides locally whether a skill may be used and sends one request; th
 | CancelSneakHide | Z→C | 0x0927 | empty: hide and sneak are over |
 | SpawnAppearance (sneak / hide) | both | 0x0971 | type 15 (sneak) parameter 0/1 from the server sets the player's sneak flag; the client sends {me, 15, 0} to stop sneaking and {me, 3, 0} to unhide before a disarm |
 | SkillUpdate | Z→C | 0x004c | 12 B: u32 skill, u32 value, 4 unknown bytes; the value goes into the profile's skills |
-| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (not decoded yet) |
+| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (decoded, sorted and filtered for the tracking window: `net/game_connection_tracking.cpp`) |
 
 ### Doors and ground objects (`net/door_packets.h`, `GameConnection` in `net/game_connection_doors.cpp`, rules in `game/doors.{h,cpp}`, drawing and collision in `app/world_objects.{h,cpp}`)
 
@@ -407,7 +407,7 @@ The element text is the server's description, else the type's template (with / w
 
 ### Chat and slash commands (`game/slash_commands.{h,cpp}`, `net/game_connection_social.cpp`)
 
-A typed line is matched against the 391-entry command table less the four voice macro commands, which this client leaves out (`src/game/slash_commands.inc`): localised names first, then built-in names, a typed word matching the first command (in table order) that it is a case-insensitive prefix of (`/wh` = `/who`, `/g` = `/gsay`, `/s` = `/split`, `/lfg` = `/lfgroup` by its localised name). GM-only entries never match for players. No match: eqstr 12380 for a `/` word, else the default channel (say). `;` and `[` lines go to the chat server. Dead players get 538 unless the entry's flag bit 0 allows it.
+A typed line is matched against the 391-entry command table less the commands this client leaves out (the four voice macro commands, /achievements, /tcg and /mp3; 383 remain, `src/game/slash_commands.inc`, `tools/gen_slash_commands.py`): localised names first, then built-in names, a typed word matching the first command (in table order) that it is a case-insensitive prefix of (`/wh` = `/who`, `/g` = `/gsay`, `/s` = `/split`, `/lfg` = `/lfgroup` by its localised name). GM-only entries never match for players. No match: eqstr 12380 for a `/` word, else the default channel (say). `;` and `[` lines go to the chat server. Dead players get 538 unless the entry's flag bit 0 allows it.
 
 Chat out (OP_ChannelMessage 0x2b2d) is echoed locally with the client's own template and the server's copy of our own line is dropped on arrival (lines whose sender is the player are skipped; a tell's copy comes back on channel 7 or 14 and prints 1400 "You told %1, '%2'"). Echoes: say 12344, group 12346 (12345 without a group), shout 12348, auction 12350, OOC 12352, guild 12263 (12242 without a guild), raid 5109 (5108 without a raid), emote "<name> <text>" (channel 22). Incoming templates: 1410 say, 1414 group, 1415 guild, 1416 tell, 1420 shout, 1421 auction, 1422 OOC, 5112 raid, 1036 emote; the language part is 1411 " in <language>," (language names from the client's table) or 1412 when the skill is 24 or less. EQEmu sends a sent tell back as channel 14 (TellEcho).
 

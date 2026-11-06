@@ -115,7 +115,7 @@ The flames are found in the zone's data (`assets/zone_fires.h`), in three forms 
   the zone's particle fixtures, pointing up, so both lightings draw them (they were not drawn at all before): torches,
   braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow, lavastorm).
   Their flames are the definitions with a flame sprite (`FlameD.dds`, `new_flame.dds`, `new_fire.dds`, `fire01.dds`,
-  `fire01_gray.dds`, `flamegray.dds`) and no "lava" in the name; their hue comes from the definition's start colour
+  `fire01_gray.dds`, `flamegray.dds`) and no "lava" in the name (nor an `mml_instance_flame` one); their hue comes from the definition's start colour
   (vald_bluetorch is FlameD.dds in 10, 10, 255), or for a grey one from its name (cob_brazier_green).
 
 Not flames, though named like them: logs, coals and holders (`FIREWOOD`, `COALS`, `TORCHTOP`), fireplace stones,
@@ -872,7 +872,7 @@ At run time:
 
 ## Settings
 
-In `hailstone.ini`, and in the Options window (`ui/classic/options.lua`, this client's own window: its Display and
+In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
 Graphics tabs; the client's options by name in `app/client_app_options.cpp`, the graphics ones `display_option`); the
 viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale` and `--sharpness`.
 
