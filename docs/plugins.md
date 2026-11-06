@@ -619,7 +619,9 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
 - keeps settings of its own: `ui.SetSetting(key, v)` writes `plugin.<owner>.<key>` in the pack's settings file (a
   window's place under `hud.` is the character's, as the pack's are), `ui.GetSetting(key)` reads that, else the
   pack's own key of that name (the palette, the place of a window it took over), and neither reaches the pack's test
-  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys;
+  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys
+  (`ui.SetSetting` refuses, and returns false for, a key with `=` or a line break or a value with a line break, since
+  the file is one `key=value` a line and such text would be read back as other keys);
   `ui.DisableWindow(name)` turns off only its own window of that name;
 - runs for at most a second at a time (a window's draw, its file's load, a function of its that the pack calls) and
   the pack's own code for five: code that runs longer is stopped with an error, which a `pcall` of its own cannot

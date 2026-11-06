@@ -12,6 +12,7 @@
 #include <map>
 #include <fstream>
 #include <memory>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -390,6 +391,33 @@ TEST_CASE("Plugin UI: a plugin's settings and window switches are its own") {
     CHECK(s.run("plugin:A", "return PLUG_DRAWN") == "0");
     CHECK(s.run("", "return tostring(ui.GetSetting('enabled.PackWin')) .. ' ' .. tostring(ui.GetSetting('enabled.PlugWin'))") ==
           "nil nil");
+}
+
+// The settings file is one key=value a line: a value with a line break (or a key with '=' or one) is refused, so a
+// plugin cannot write lines that read back as the pack's test hooks, the window switches or another's keys.
+TEST_CASE("Plugin UI: ui.SetSetting refuses text that would add lines to the settings file") {
+    std::string file;
+    {
+        SandboxUi s;
+        s.caps["plugin:A"] = plugin::kCapAll;
+        s.add_folder("plugin:A");
+        s.frame();
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('x', '1\\ntest.click.RaidWindow=B\\nenabled.Inv=0'))") ==
+              "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('x', '1\\rtest.show=Raid'))") == "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('y\\ntest.show', 'Raid'))") == "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('y=test', 'Raid'))") == "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('z', 'a\\0b'))") == "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.SetSetting('ok', 'a=b'))") == "true"); // '=' in a value reads back
+        CHECK(s.run("", "return tostring(ui.SetSetting('pack\\nenabled.Inv', '0'))") == "false");
+        CHECK(s.run("plugin:A", "return tostring(ui.GetSetting('x'))") == "nil");
+        CHECK(s.run("plugin:A", "return ui.GetSetting('ok')") == "a=b");
+        const fs::path path = s.scratch.path() / "ui.txt";
+        s.lua.reset(); // saves
+        std::ifstream f(path);
+        file.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
+    CHECK(file == "plugin.plugin:A.ok=a=b\n");
 }
 
 // A window that runs forever or keeps allocating is stopped with an error and turned off, and the UI goes on; a
