@@ -119,6 +119,9 @@ TEST_CASE("procedural sky clouds: weather.ini definitions and patch motion") {
         CHECK(x.desired_count == -2147483647 - 1);
         CHECK(x.subdivision_x == 2147483647);
         CHECK(x.subdivision_y == 0);
+        nmsc::IniFile big;
+        big.parse("[Cloud-X]\nDesiredCount=2000000000\n");
+        CHECK(nmsc::assets::parse_cloud_definition(big, "X").desired_count == nmsc::assets::kMaxCloudPatches);
     }
 
     // rand() / 32767 x (max - min) + min.

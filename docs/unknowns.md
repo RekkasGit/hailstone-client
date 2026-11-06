@@ -124,6 +124,7 @@ What the client does not implement yet, or implements with an approximation it c
 - Forged numbers in asset text (zone-line region tags, `_environmentemitters.txt`, weather.ini cloud counts) past an integer field's range are clamped to it (`core/saturate.h`); the original converts with atoi / float casts whose overflow is undefined, so what it does with them is not known. An ATP tag's zone point is clamped to 214748364 before it is multiplied by 10.
 - PFS archives: a member may declare at most 256 MiB (the largest stock one, theater.eqg's, is about 37 MB) and the name table 16 MiB, limits of ours; what the original does past them is not known. A name the name table lists twice is one member (no stock archive does it).
 - A ZON that lists a `.ter` twice loads it once (no stock zone does it; what the original does is not known).
+- weather.ini clouds: at most 256 patches per cloud (`kMaxCloudPatches`, a limit of ours; stock files ask for at most 80). The original's limit is not known.
 
 ## World rendering
 
