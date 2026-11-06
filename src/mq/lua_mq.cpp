@@ -976,6 +976,7 @@ std::optional<fs::path> ScriptHost::Impl::resolve(const std::string& name) const
 }
 
 void Script::close() {
+    if (closing) return; // closed already (reap() during a walk), or closing now: once only
     closing = true;
     stop_requested = true;
     release_plugin(*this);
@@ -1148,6 +1149,9 @@ bool ScriptHost::run(const std::string& name, const std::vector<std::string>& ar
     m.reap();
     std::string key = lower(name);
     if (Script* old = m.find(key); old && !old->stop_requested) return refuse(key + " is already running");
+    // reap() closed every stopped one nothing is in. One still running code (it stops itself and runs itself again)
+    // would close later, and its close takes the name's UI registrations away: the new one's too.
+    if (Script* old = m.find(key); old && !old->closing) return refuse(key + " is still stopping: run it again");
     auto entry = m.resolve(key);
     if (!entry) return refuse("no script named " + name);
     auto text = read_file(*entry);
@@ -1269,8 +1273,21 @@ bool ScriptHost::running(std::string_view name) const {
     return s && !s->stop_requested && (s->status == Script::Status::Running || s->status == Script::Status::Paused);
 }
 
+// A stopped script that nothing has entered is closed at once, even while pulse() or imgui() walks the lists: a
+// script of the same name started in the walk must not lose its registrations to the old one's close() later. Only
+// the erase waits for the walk's end (its own reap()).
 void ScriptHost::Impl::reap() {
-    if (walking > 0) return; // pulse() or imgui() walks the lists: their own reap() comes after
+    if (walking > 0) {
+        for (auto& [social, sp] : buttons)
+            if (sp->stop_requested && sp->busy == 0) sp->close();
+        for (auto& sp : scripts)
+            if (sp->stop_requested && sp->busy == 0) {
+                if (sp->status == Script::Status::Running || sp->status == Script::Status::Paused)
+                    sp->status = Script::Status::Exited;
+                sp->close();
+            }
+        return;
+    }
     for (auto it = buttons.begin(); it != buttons.end();) {
         Script& s = *it->second;
         if (s.stop_requested && s.busy == 0) {
@@ -1295,7 +1312,10 @@ void ScriptHost::Impl::reap() {
 void ScriptHost::pulse() {
     Impl& m = *impl_;
     Impl::Walk walk(m);
-    for (std::size_t i = 0; i < m.scripts.size(); ++i) {
+    // A script started in this walk (mq.cmd('/lua run x')) first runs next frame: two scripts that restart each other
+    // cannot keep one walk going.
+    const std::size_t count = m.scripts.size();
+    for (std::size_t i = 0; i < count; ++i) {
         Script& s = *m.scripts[i];
         if (s.stop_requested || s.status != Script::Status::Running || !s.co) continue;
         if (s.main_done) { // a plugin whose main chunk returned: only its binds' threads

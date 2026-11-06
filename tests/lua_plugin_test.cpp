@@ -452,3 +452,37 @@ hailstone.hooks(setmetatable({}, {__index = function(t, k) if k == 'is_spellcast
         CHECK_FALSE(h.scripts->running("bad"));
     }
 }
+
+TEST_CASE("Lua plugin: a script restarted by another during pulse keeps the UI it registers") {
+    Host h;
+    h.write("x.lua", "hailstone.ui_function('f', function() return 7 end)\n");
+    h.write("restarter.lua", "mq.cmd('/lua stop x')\nmq.cmd('/lua run x')\n");
+    REQUIRE(h.scripts->run("x", {}));
+    h.scripts->pulse();
+    REQUIRE(h.bridge.has_plugin("x"));
+    REQUIRE(h.scripts->run("restarter", {}));
+    h.scripts->pulse(); // the old x closes in this walk; the new one first runs next frame
+    CHECK(h.scripts->running("x"));
+    h.scripts->pulse();
+    CHECK(h.bridge.has_plugin("x"));
+    CHECK(h.bridge.call("x", "f", {}));
+}
+
+TEST_CASE("Lua plugin: a script that stops itself cannot run itself again until it has stopped") {
+    Host h;
+    h.write("self.lua", "hailstone.ui_function('f', function() return 1 end)\nmq.cmd('/lua stop self')\nmq.cmd('/lua run self')\n");
+    REQUIRE(h.scripts->run("self", {}));
+    h.scripts->pulse();
+    CHECK(h.printed_part("self is still stopping"));
+    CHECK_FALSE(h.scripts->running("self"));
+    CHECK_FALSE(h.bridge.has_plugin("self"));
+}
+
+TEST_CASE("Lua plugin: two scripts that restart each other run one step a frame") {
+    Host h;
+    h.write("ping.lua", "mq.cmd('/lua stop pong')\nmq.cmd('/lua run pong')\n");
+    h.write("pong.lua", "mq.cmd('/lua stop ping')\nmq.cmd('/lua run ping')\n");
+    REQUIRE(h.scripts->run("ping", {}));
+    for (int i = 0; i < 4; ++i) h.scripts->pulse(); // before, the first pulse never returned
+    CHECK(h.scripts->list().size() <= 2);
+}

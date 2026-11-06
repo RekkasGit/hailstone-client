@@ -296,7 +296,9 @@ To start one: the server lists it in its `hailstone.cfg` `[scripts] run`; the pl
 window, or runs it there or with `/lua run <name>`. With the `login` capability it starts at the world login
 (above). A script that another script or a plugin starts (`mq.cmd('/lua run x')`, a plugin's command) gets no more
 capabilities than its starter has at that moment, whatever its own file would get; one its starter can give nothing
-does not start. Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
+does not start. It first runs on the next frame. A script stopped and run again in one go (`/lua stop x` then
+`/lua run x`) is closed before the new one starts, so the new one keeps the UI functions, options and menu entries it
+registers; a script that stops itself and runs itself again from its own code is refused ("is still stopping"). Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
 as a module: those files are data. That holds for the folder in any case and with trailing dots or spaces
 (`Config/`, `config./`), as Windows and macOS would open it, and through links. A script or module name is a path
 inside the script folders: an absolute one (`/lua run /home/x/evil`, `require('/x')`) or one whose file is a link
