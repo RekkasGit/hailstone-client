@@ -77,7 +77,9 @@ so each read is a database query), and at once after `#reloadquest`.
 Put the files players need in `client_files/` in the server folder (beside `eqemu_config.json`), laid out as in a
 game install folder: `spells_us.txt`, `Resources/SkillCaps.txt`, `commons.s3d` ... Run EQEmu's `export_client_files`
 for `spells_us.txt`, `dbstr_us.txt`, `SkillCaps.txt` and `BaseData.txt` (the last two go in `Resources/`), so they
-match the database. Names starting with `.` are not sent. Programs and scripts (`.exe`, `.dll`, `.lua` ...) are
+match the database. Names starting with `.` are not sent, and on a Windows server neither are names with
+characters outside ASCII (EQEmu's Lua cannot open them there; the zone's log names each one). `client_files` may be a
+link to a folder elsewhere. Programs and scripts (`.exe`, `.dll`, `.lua` ...) are
 refused by the client outside `scripts/` (Lua) and `plugins/` (each platform's libraries).
 
 A zone hashes the folder (SHA-256) when it starts and keeps the hashes in `client_files/.hailstone-cache` by size

@@ -527,7 +527,10 @@ local windows   = package.config:sub(1, 1) == "\\"
 -- A name for this process's scratch files in client_files/ (zones may hash at the same time).
 local scratch = tostring(os.time()) .. (tostring({}):match("(%x+)$") or "0")
 
+-- Both write UTF-8: PowerShell's pipe is in the console's OEM code page otherwise, which turned a name outside ASCII
+-- into bytes neither PS_HASH (reading the list as UTF-8) nor the client could use.
 local PS_LIST = [[
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $root = (Resolve-Path -LiteralPath 'client_files').Path.TrimEnd('\')
 Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object {
 	$rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
@@ -537,6 +540,7 @@ Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object {
 
 local PS_HASH = [[
 param($list)
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $root = (Resolve-Path -LiteralPath 'client_files').Path.TrimEnd('\')
 Get-Content -LiteralPath (Join-Path $root $list) -Encoding UTF8 | ForEach-Object {
 	$h = Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $_)
@@ -587,18 +591,23 @@ local function move_file(from, to)
 	end
 end
 
--- {path, size, mtime} of every file, sorted by path; {} without the folder.
+-- {path, size, mtime} of every file, sorted by path; {} without the folder. On Windows a name outside ASCII is left
+-- out: Lua's io.open takes the name in the ANSI code page, not UTF-8, so the zone could list it but not read it.
 local function list_client_files()
 	local out
 	if windows then
 		out = powershell(PS_LIST)
 	else
-		out = run("find " .. sh_quote(FILES_DIR) .. " -type f ! -path '*/.*' -printf '%P\\t%s\\t%T@\\n' 2>/dev/null")
+		-- -H: a client_files that is itself a link to a folder (on another disk) is followed, as PowerShell and
+		-- hailstone_check do; without it find lists nothing there, and the clients get no hailstone.cfg.
+		out = run("find -H " .. sh_quote(FILES_DIR) .. " -type f ! -path '*/.*' -printf '%P\\t%s\\t%T@\\n' 2>/dev/null")
 	end
 	local list = {}
 	for line in (out or ""):gmatch("[^\r\n]+") do
 		local path, size, mtime = line:match("^(.-)\t(%d+)\t(%S+)$")
-		if path then
+		if path and windows and path:find("[\128-\255]") then
+			log("client_files: " .. path .. " is not sent: a name outside ASCII cannot be opened on Windows")
+		elseif path then
 			list[#list + 1] = { path = path, size = tonumber(size), mtime = mtime }
 		end
 	end

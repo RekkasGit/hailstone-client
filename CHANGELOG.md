@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- For server owners: on a Windows server, a file in `client_files/` whose name has characters outside ASCII is left out with a line in the zone's log naming it, instead of "could not hash" and a mangled name
+- For server owners: a `client_files` folder that is a link to a folder elsewhere is served on Linux; the server script listed nothing there, so players were sent no files and no `hailstone.cfg`, and no server rules applied
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
