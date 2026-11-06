@@ -169,6 +169,7 @@ private:
     std::vector<std::string> global_wave_files_; // LoadGlobalWaves' (kept by SoundLibrary::drop_idle_waves)
     MusicManager music_;
     RoomPresets rooms_;
+    std::vector<ZoneRoomPreset> zone_rooms_; // SetCurrentZone's table, from the player's eqgame.exe
     std::int32_t environment_ = kEnvironmentOutside;
     std::optional<std::int32_t> special_room_;
     std::shared_ptr<SoundFont> font_;

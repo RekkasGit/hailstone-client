@@ -126,7 +126,8 @@ The check (`core/asset_folder.h`) names what is missing. Required: `spells_us.tx
 `uifiles/default/EQUI_Animations.xml`. Only RoF2 has `Resources/OnDemandResources.txt`,
 `Resources/SpellRequirementAssociations.txt`, `Resources/PlayerCustomization.txt` and `spellsnew.edd`, so without
 them the folder is an older client or incomplete. A missing game executable is only a warning: it is read for the login
-checksum alone. A current install passes the same check.
+checksum and for the per-zone sound room table (docs/formats/audio.md, Room), and only read; without it every zone
+uses the default rooms. A current install passes the same check.
 
 ### RoF2 or live
 

@@ -525,6 +525,7 @@ add_library(nmsc_engine STATIC
   src/audio/zone_emitters.cpp
   src/audio/music_manager.cpp
   src/audio/listener.cpp
+  src/audio/environment_presets.cpp
   src/audio/audio_system.cpp
   src/app/sound_events.cpp
   src/app/actor_emitters.cpp
@@ -1018,6 +1019,7 @@ if(NMSC_BUILD_TESTS)
     tests/cast_spell_vectors_test.cpp
     tests/sound_files_test.cpp
     tests/spirv_file_test.cpp
+    tests/environment_presets_test.cpp
     tests/particle_textures_test.cpp
     tests/xmi_test.cpp
     tests/zone_emitters_test.cpp

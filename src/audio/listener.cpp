@@ -13,14 +13,6 @@ using game::mechanics::Fpu;
 using game::mechanics::FpuPrecision;
 using game::mechanics::X87;
 
-struct ZonePreset {
-    const char* zone;
-    std::int32_t outside, high, low;
-};
-constexpr ZonePreset kZonePresets[] = {
-#include "audio/environment_presets.inc"
-};
-
 constexpr double kTwoPi = 6.28318530717958;     // 0x9ca188 (the exe's double, not std::numbers::pi * 2)
 constexpr double kOneOver512 = 0.001953125;     // 0x9ca180
 constexpr std::uint32_t kQuietBit = 0x00400000u;
@@ -32,11 +24,11 @@ std::uint32_t bits_of(float f) { return std::bit_cast<std::uint32_t>(f); }
 // fld dword / fstp dword: a signalling NaN comes out quiet; everything else is unchanged.
 std::uint32_t through_fpu(std::uint32_t b) { return std::isnan(as_float(b)) ? b | kQuietBit : b; }
 
-bool same_name(std::string_view a, const char* b) {
-    std::size_t i = 0;
-    for (; i < a.size() && b[i] != 0; ++i)
+bool same_name(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
         if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
-    return i == a.size() && b[i] == 0;
+    return true;
 }
 
 // A small unsigned integer of up to 70 bits (hi:lo).
@@ -139,8 +131,8 @@ RoomReverb miles_room_reverb(std::int32_t room) {
     return room >= 0 && room < 26 ? kRooms[room] : kRooms[0];
 }
 
-RoomPresets zone_room_presets(std::string_view zone) {
-    for (const ZonePreset& p : kZonePresets)
+RoomPresets zone_room_presets(std::span<const ZoneRoomPreset> table, std::string_view zone) {
+    for (const ZoneRoomPreset& p : table)
         if (same_name(zone, p.zone)) return {p.outside, p.high, p.low};
     return {};
 }

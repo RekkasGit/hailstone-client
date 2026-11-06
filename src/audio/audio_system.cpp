@@ -80,6 +80,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     }
     mp3index_ = assets::parse_mp3_index(text_of(game_.read("mp3index.txt")));
     race_ids_ = assets::parse_race_sounds(text_of(game_.read("racedata.txt")));
+    zone_rooms_ = load_zone_room_presets(game_);
     waves_.global = &global_waves_;
     std::uint32_t rate = 48000;
     mixer_ = std::make_unique<Mixer>(rate);
@@ -245,7 +246,7 @@ void AudioSystem::set_zone(const std::string& short_name) {
     std::erase_if(xmi_, [&](const auto& kv) { return kv.first == zone_xmi_; });
     zone_xmi_.clear();
     // SetCurrentZone: the room presets back to their defaults, then the zone's row of the table.
-    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(short_name);
+    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(zone_rooms_, short_name);
     apply_room();
     waves_.zone.clear();
     for (auto& [id, l] : loops_)
