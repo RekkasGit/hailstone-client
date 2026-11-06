@@ -388,6 +388,20 @@ TEST_CASE("eq.WindowShown: eq.ReplaceWindow's shown, the window counted as repla
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("eq.TakeCloseTopWindow: the close-top-window key's press, taken once") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        app::EqHost host;
+        EqTable eq(host);
+        CHECK(eq.run("return eq.TakeCloseTopWindow()") == "false");
+        host.close_top_window = true; // (ClientApp::key_command: CLOSE_TOP_WINDOW no window of the client's took)
+        CHECK(eq.run("return eq.TakeCloseTopWindow()") == "true");
+        CHECK_FALSE(host.close_top_window);
+        CHECK(eq.run("return eq.TakeCloseTopWindow()") == "false");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("eq windows: found by name as a scan from the front finds them") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {

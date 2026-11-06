@@ -18,11 +18,13 @@
 -- with Alt held); drag its bottom-right corner to resize it (the chat changes size, other frames their scale).
 -- "Lock" (one frame, or all of them) stops both. Layout mode (the right-click menu) also shows the frames that
 -- hide while empty (target, group, extended targets, buffs), outlined, so they can be placed too. "Snap to grid"
--- (lib/snap.lua) lines up the frames and dialogs a drag places.
+-- (lib/snap.lua) lines up the frames and dialogs a drag places. A window that can be closed has "Close with Esc" in
+-- its right-click menu (lib/escape.lua, off until ticked).
 
 local T = dofile("lib/theme.lua")
 local style = dofile("lib/style.lua")
 local snap = dofile("lib/snap.lua")
+local esc = dofile("lib/escape.lua")
 local hud = { T = T }
 
 -- Shared by every window script (each dofile makes its own copy of this file).
@@ -270,6 +272,7 @@ local function menu(window, title, opts)
   elseif opts.closable ~= false and opts.screen and ui.MenuItem("Close") then
     eq.ShowWindow(opts.screen, false)
   end
+  if opts.onClose or (opts.closable ~= false and opts.screen) then esc.MenuItem(window) end
   if ui.BeginMenu("All frames") then
     ui.SetNextItemWidth(180)
     local hs, hc = ui.SliderFloat("HUD scale", hud.Scale(), 0.5, 2.5)
@@ -411,6 +414,8 @@ function hud.Window(screen, title, opts, body)
   local failure = nil -- an error in the body: raised once the window is closed and the style popped
   local visible = ui.Begin(windowName(k, title), nil, flags)
   ui.PopStyleVar(3)
+  local closeNow = false -- Esc closes it (lib/escape.lua): once its Begin and End are done
+  if opts.onClose or (opts.closable ~= false and screen) then closeNow = esc.Frame(key) end
   if visible then
     local wx, wy = ui.GetWindowPos()
     ui.SetWindowFontScale(hudScale * ownScale)
@@ -503,6 +508,9 @@ function hud.Window(screen, title, opts, body)
   end
   ui.End()
   style.Pop()
+  if closeNow then
+    if opts.onClose then opts.onClose() else eq.ShowWindow(screen, false) end
+  end
   if failure then error(failure, 0) end
 end
 
@@ -612,7 +620,8 @@ function hud.Dialog(screen, title, opts, body)
   if gameTitle and gameTitle ~= "" and not opts.keepTitle then title = gameTitle end
   local failure = nil
   local visible, open = ui.Begin(windowName(k, title), opts.closable ~= false or nil, flags)
-  if opts.closable == false then open = true end
+  if opts.closable == false then open = true
+  elseif esc.Frame(key) then open = false end
   ui.PopStyleVar(2)
   if visible then
     local wx, wy = ui.GetWindowPos()
@@ -725,6 +734,7 @@ function hud.Dialog(screen, title, opts, body)
       if opts.closable ~= false then
         ui.Separator()
         if ui.MenuItem("Close") then open = false end
+        esc.MenuItem(key)
       end
       ui.Separator()
       ui.TextDisabled("Drag the bottom-right corner to scale")
