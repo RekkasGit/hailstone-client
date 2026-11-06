@@ -429,3 +429,26 @@ TEST_CASE("Lua plugin: after_combat_ability gets the spell id and whether it was
     CHECK(h.printed_part("aca 717 true"));
     CHECK(h.scripts->running("aca"));
 }
+
+TEST_CASE("Lua plugin: a hooks table with a metatable is read in a protected call") {
+    {
+        Host h;
+        h.write("idx.lua", R"(
+hailstone.hooks(setmetatable({}, {__index = function(t, k) if k == 'is_spellcaster' then return function() return true end end end}))
+)");
+        REQUIRE(h.scripts->run("idx", {}));
+        h.scripts->pulse();
+        CHECK(h.chain.is_spellcaster(*h.world.conn));
+        CHECK(h.scripts->running("idx"));
+    }
+    {
+        Host h;
+        h.write("bad.lua", "hailstone.hooks(setmetatable({}, {__index = function(t, k) error('no ' .. k) end}))\n");
+        REQUIRE(h.scripts->run("bad", {}));
+        h.scripts->pulse();
+        CHECK_FALSE(h.chain.is_spellcaster(*h.world.conn)); // an error there ends the script, not the client
+        CHECK(h.printed_part("no is_spellcaster"));
+        h.scripts->pulse();
+        CHECK_FALSE(h.scripts->running("bad"));
+    }
+}
