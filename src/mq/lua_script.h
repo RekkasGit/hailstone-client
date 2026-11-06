@@ -11,7 +11,6 @@
 #include <map>
 #include <optional>
 #include <memory>
-#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,6 +20,7 @@
 #include "core/log.h"
 #include "core/sha256.h"
 #include "game/server_ext.h"
+#include "mq/event_pattern.h"
 #include "mq/lua_mq.h"
 
 namespace nmsc::mq {
@@ -125,8 +125,7 @@ struct Script {
 
     struct Event {
         std::string name;
-        std::regex re;
-        std::vector<int> order;
+        EventPattern pattern;
         int fn = LUA_NOREF;
     };
     std::vector<Event> events;

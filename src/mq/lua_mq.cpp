@@ -12,7 +12,6 @@
 #include <iterator>
 #include <fstream>
 #include <map>
-#include <regex>
 #include <sstream>
 #include <system_error>
 
@@ -50,35 +49,6 @@ std::string lower(std::string_view s) {
     std::string out(s);
     for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return out;
-}
-
-// MQ's event pattern: #*# any text, #n# the n-th argument passed to the callback; everything else literal.
-std::string event_regex(std::string_view pattern, std::vector<int>& order) {
-    std::string re;
-    for (std::size_t i = 0; i < pattern.size(); ++i) {
-        char c = pattern[i];
-        if (c == '#') {
-            std::size_t close = pattern.find('#', i + 1);
-            if (close != std::string_view::npos) {
-                std::string_view inner = pattern.substr(i + 1, close - i - 1);
-                std::int64_t n = 0;
-                if (inner == "*") {
-                    re += ".*";
-                    i = close;
-                    continue;
-                }
-                if (parse_int(inner, n) && n > 0) {
-                    re += "(.*?)";
-                    order.push_back(static_cast<int>(n));
-                    i = close;
-                    continue;
-                }
-            }
-        }
-        if (std::string_view(".^$|()[]{}*+?\\/").find(c) != std::string_view::npos) re += '\\';
-        re += c;
-    }
-    return re;
 }
 
 } // namespace
@@ -398,7 +368,7 @@ int l_exit(lua_State* L) {
     return lua_error(L);
 }
 
-bool add_event(lua_State* L, Script& s, const std::string& name, const std::string& pattern);
+void add_event(lua_State* L, Script& s, const char* name, const char* pattern);
 
 int l_event(lua_State* L) {
     need(L, plugin::kCapEvents, "mq.event");
@@ -406,26 +376,20 @@ int l_event(lua_State* L) {
     const char* name_text = luaL_checkstring(L, 1);
     const char* pattern = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
-    if (!add_event(L, s, name_text, pattern)) return luaL_error(L, "mq.event: bad pattern '%s'", pattern);
+    add_event(L, s, name_text, pattern); // every pattern is one (a '#' that starts no #*# or #n# is itself)
     return 0;
 }
 
 // The callback is argument 3 on L, the calling thread's stack.
-bool add_event(lua_State* L, Script& s, const std::string& name, const std::string& pattern) {
-    Script::Event e;
-    e.name = name;
-    try {
-        e.re = std::regex(event_regex(pattern, e.order));
-    } catch (const std::regex_error&) {
-        return false;
-    }
+void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
     lua_pushvalue(L, 3);
-    e.fn = luaL_ref(L, LUA_REGISTRYINDEX);
+    const int fn = luaL_ref(L, LUA_REGISTRYINDEX);
+    Script::Event e{name, EventPattern(pattern), fn};
     for (auto& old : s.events)
         if (old.name == name) {
             luaL_unref(L, LUA_REGISTRYINDEX, old.fn);
             old = std::move(e);
-            return true;
+            return;
         }
     s.events.push_back(std::move(e));
     if (!s.chat_hooked) {
@@ -434,12 +398,12 @@ bool add_event(lua_State* L, Script& s, const std::string& name, const std::stri
         s.host->env.hooks->on_chat(s.owner, [sp](plugin::ChatLine& line) {
             if (sp->status != Script::Status::Running && sp->status != Script::Status::Paused) return plugin::Flow::Continue;
             for (const auto& ev : sp->events) {
-                std::smatch m;
-                if (!std::regex_match(line.text, m, ev.re)) continue;
+                auto m = ev.pattern.match(line.text);
+                if (!m) continue;
                 std::vector<std::string> args{line.text};
                 std::vector<std::pair<int, std::string>> numbered;
-                for (std::size_t g = 0; g < ev.order.size() && g + 1 < m.size(); ++g)
-                    numbered.emplace_back(ev.order[g], m[g + 1].str());
+                for (std::size_t g = 0; g < ev.pattern.order().size() && g < m->size(); ++g)
+                    numbered.emplace_back(ev.pattern.order()[g], std::move((*m)[g]));
                 std::sort(numbered.begin(), numbered.end());
                 for (auto& [n, text] : numbered) args.push_back(std::move(text));
                 if (sp->queued.size() < kMaxQueuedEvents) sp->queued.emplace_back(ev.name, std::move(args));
@@ -447,7 +411,6 @@ bool add_event(lua_State* L, Script& s, const std::string& name, const std::stri
             return plugin::Flow::Continue;
         });
     }
-    return true;
 }
 
 int l_unevent(lua_State* L) {

@@ -1105,6 +1105,31 @@ print('never')
     CHECK(h.scripts->running("d"));
 }
 
+TEST_CASE("MQ Lua: mq.event's patterns, as MQ's: wildcards, numbered arguments in order, literal text") {
+    Host h;
+    h.write("ev.lua", R"(
+local mq = require('mq')
+mq.event('slain', '#*#You have slain #1#!#*#', function(line, who) print('slain', who) end)
+mq.event('hits', '#2# hits #1# for #3# points.', function(line, a, b, c) print('hits', a, b, c) end)
+mq.event('lit', '(1+1) = [#1#]', function(line, v) print('lit', v) end)
+mq.event('hash', '#a# #1#', function(line, v) print('hash', v) end)
+while true do mq.doevents() mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("ev", {}));
+    h.pulses(1);
+    for (const char* text : {"You have slain a rat!", "A gnoll hits you for 12 points.", "(1+1) = [2]", "#a# x y",
+                             "(1+1) = 2", "nothing"}) {
+        plugin::ChatLine line{text, 0, 0};
+        h.hooks.chat(line);
+    }
+    h.pulses(2, 10);
+    CHECK(h.printed_line("slain a rat"));
+    CHECK(h.printed_line("hits you A gnoll 12"));
+    CHECK(h.printed_line("lit 2"));
+    CHECK(h.printed_line("hash x y"));
+    CHECK(h.printed.size() == 4u + 1u); // and the "[Lua] running" line
+}
+
 TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
     Host h(0);
     allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll & ~plugin::kCapPackets);
