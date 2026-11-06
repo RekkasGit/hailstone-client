@@ -1,8 +1,12 @@
 #include "platform/udp_socket.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <format>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -175,6 +179,64 @@ std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::
     std::stable_partition(out.begin(), out.end(), [](const Endpoint& e) { return e.family == Endpoint::Family::V4; });
     if (out.empty()) error = std::format("no usable address for {}", host);
     return out;
+}
+
+namespace {
+
+// resolve_async's threads. Joined, not detached: one still in getaddrinfo when the program exits would otherwise
+// run on while static destructors do, WinsockInit's WSACleanup among them. ensure_init() is called before this is
+// first made, so this is destroyed first. A finished thread is joined when the next lookup starts.
+class Lookups {
+public:
+    ~Lookups() {
+        std::vector<Entry> all;
+        {
+            std::lock_guard lock(mutex_);
+            all.swap(entries_);
+        }
+        for (auto& e : all)
+            if (e.thread.joinable()) e.thread.join();
+    }
+    void start(std::function<void()> fn) {
+        std::lock_guard lock(mutex_);
+        for (auto it = entries_.begin(); it != entries_.end();) {
+            if (it->done->load()) {
+                it->thread.join();
+                it = entries_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        auto done = std::make_shared<std::atomic<bool>>(false);
+        Entry e;
+        e.done = done;
+        e.thread = std::thread([fn = std::move(fn), done] {
+            fn();
+            done->store(true);
+        });
+        entries_.push_back(std::move(e));
+    }
+
+private:
+    struct Entry {
+        std::thread thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+    std::mutex mutex_;
+    std::vector<Entry> entries_;
+};
+
+} // namespace
+
+void resolve_async(std::string host, std::uint16_t port,
+                   std::function<void(std::vector<Endpoint> endpoints, std::string error)> done) {
+    ensure_init(); // its static first, so the lookups' static below is destroyed before it
+    static Lookups lookups;
+    lookups.start([host = std::move(host), port, done = std::move(done)] {
+        std::string error;
+        auto endpoints = resolve(host, port, error);
+        done(std::move(endpoints), std::move(error));
+    });
 }
 
 UdpSocket::~UdpSocket() { close(); }
