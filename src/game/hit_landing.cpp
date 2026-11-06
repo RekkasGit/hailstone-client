@@ -248,7 +248,9 @@ public:
     void set_endurance(std::int32_t) override {}
     void cur_endurance() override {}
     void cur_mana() override {}
-    void feign(std::uint32_t, std::int32_t) override {}
+    // CharacterZoneClient_StopCastAndFeignDeath @0x433b80 (SPA 74) ignores both: with the spawn it clears the bard
+    // twist, StopSpellCast(0, the casting spell) and ChangePosition(0x73). The connection does those.
+    void feign(std::uint32_t, std::int32_t) override { out_.feigned = true; }
     hit::Handle get_item(std::uint32_t) override { return 0; }
     void release_item() override {}
     const char* lore_name(hit::Handle) override { return ""; }

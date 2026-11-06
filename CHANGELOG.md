@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times
