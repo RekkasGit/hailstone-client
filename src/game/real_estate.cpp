@@ -4,6 +4,8 @@
 #include <cmath>
 #include <string>
 
+#include "core/saturate.h"
+
 namespace nmsc::game {
 
 using net::ReType;
@@ -387,8 +389,9 @@ std::string re_format_time_left(double days) {
     // and "%dd" (the days past the weeks), "<1d" under a day.
     if (days < 0) return "Unlimited";
     if (days == 0) return "Expired";
-    auto weeks = static_cast<long long>(days / 7.0);
-    auto whole = static_cast<long long>(days);
+    // The days come from the server's f64 balance: saturated, as a NaN or a value past long long would be undefined.
+    auto weeks = saturate_cast<long long>(days / 7.0);
+    auto whole = saturate_cast<long long>(days);
     if (weeks == 0 && whole % 7 == 0) return "<1d";
     std::string s;
     if (weeks != 0) s = std::to_string(weeks) + "w ";

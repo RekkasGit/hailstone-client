@@ -4,6 +4,8 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "core/byte_io.h"
@@ -376,6 +378,11 @@ TEST_CASE("real estate: upkeep time left") {
     CHECK(game::re_format_time_left(0.5) == "<1d");
     CHECK(game::re_format_time_left(0) == "Expired");
     CHECK(game::re_format_time_left(-1) == "Unlimited");
+    // A balance the server sent as 1e300, infinity or NaN: no undefined conversion (UBSan), a saturated count.
+    const std::string most = std::to_string(std::numeric_limits<long long>::max());
+    CHECK(game::re_format_time_left(1e300) == most + "w " + std::to_string(std::numeric_limits<long long>::max() % 7) + "d");
+    CHECK(game::re_format_time_left(std::numeric_limits<double>::infinity()).starts_with(most + "w "));
+    CHECK(game::re_format_time_left(std::numeric_limits<double>::quiet_NaN()) == "<1d");
     r.upkeep_set = 4;
     CHECK(game::re_upkeep_days(m, r) == -1.0);
 }
