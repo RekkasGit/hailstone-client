@@ -41,10 +41,8 @@ std::span<const SlashCommand> slash_commands();
 // stops at a space or at an item link's \x12. Advances `rest` past the word.
 std::string next_cmd_arg(std::string_view& rest);
 
-// The original's atol on a command argument, with its 32-bit long: leading white space, a sign, then digits (the
-// rest ignored; none: 0), accumulated in 32 bits the way the port's MSVC atoi (spell_description.cpp) does. Here
-// independent of the platform's long and free of std::atol's undefined behaviour on overflow. Whether the original's
-// CRT wraps or saturates an out-of-range number is open (docs/unknowns.md).
+// The original's atol on a command argument, with its 32-bit long (core/msvc_atoi.h): leading white space, a sign,
+// then digits, accumulated in 32 bits; independent of the platform's long.
 std::int32_t cmd_atol(std::string_view text);
 
 // The table index for a typed word (InterpretCmd's two loops), or nullopt.
