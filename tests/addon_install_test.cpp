@@ -176,11 +176,16 @@ TEST_CASE("addon_install: install, update and remove keep the player's own files
     all = read_installed_addons(dir.path());
     REQUIRE(all.size() == 1);
     CHECK(all[0].version == "2.0.0");
+    // The registry saved before installed.txt was rewritten is gone once the update is done.
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.prev.txt"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
 
     // Removal takes the add-on's files and its record; the player's file and the folder holding it stay.
     std::string why;
     REQUIRE_MESSAGE(remove_addon(dir.path(), "AUTOLOOT", &why), why);
     CHECK(read_installed_addons(dir.path()).empty());
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.prev.txt"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
     CHECK_FALSE(fs::exists(folder / "init.lua"));
     CHECK_FALSE(fs::exists(folder / "sub"));
     CHECK(read_file(folder / "my-notes.txt") == "mine\n");
