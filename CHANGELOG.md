@@ -4,6 +4,7 @@
 
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
+- A zone that lists its terrain thousands of times no longer loads it thousands of times
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)

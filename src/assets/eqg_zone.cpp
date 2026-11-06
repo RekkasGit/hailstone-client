@@ -12,6 +12,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <stdexcept>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -348,6 +349,9 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
     std::vector<std::string> keys(zon.models.size()); // object key per model; empty = terrain or missing
     std::size_t missing = 0;
     eqg::MeshStats stats;
+    // A .ter listed again is the same terrain: loading it twice would draw and collide with it twice, and a forged
+    // list of one name repeated would parse it once per entry.
+    std::unordered_set<std::string> terrain_seen;
     for (std::size_t i = 0; i < zon.models.size(); ++i) {
         std::string file = lower(zon.models[i]);
         bool terrain = ends_with(file, ".ter");
@@ -357,6 +361,7 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
             keys[i] = key;
             continue;
         }
+        if (terrain && !terrain_seen.insert(key).second) continue;
         auto data = src.read(file);
         if (!data) {
             ++missing;

@@ -19,6 +19,8 @@
 #include "core/game_dir.h"
 #include "game/collision.h"
 #include "game_files.h"
+#include "pfs_fixtures.h"
+#include "scratch_dir.h"
 
 using namespace nmsc;
 using namespace nmsc::assets;
@@ -786,4 +788,31 @@ TEST_CASE("EQG character meshes: a vertex count the file cannot hold is refused 
         std::copy(n.data().begin(), n.data().end(), data.begin() + 16);
         CHECK_THROWS_WITH(eqg_character::parse_mesh(data, "IT1"), doctest::Contains("vertex count"));
     }
+}
+
+TEST_CASE("binary ZON: a terrain listed many times is loaded once") {
+    std::vector<glm::vec3> pos{{0, 0, 0}, {10, 0, 0}, {10, 10, 0}};
+    std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {1, 1}};
+    auto ter = make_model(true, 1, {{"ground", "Opaque_MPLBasic.fx", "ground_c.dds"}}, pos, uv, {{0, 1, 2, 0, 0}});
+    Strings s;
+    auto name = s.add("TER_dup.TER");
+    ByteWriter w;
+    w.le<std::uint32_t>(eqg::kZonMagic);
+    w.le<std::uint32_t>(1);
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(s.bytes.size()));
+    w.le<std::uint32_t>(50); // models: the same terrain fifty times
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.bytes(s.bytes);
+    for (int i = 0; i < 50; ++i) w.le(name);
+    nmsc::test::ScratchDir dir("eqg_ter_dup");
+    {
+        auto eqg = nmsc::test::pfs_fixtures::make_pfs({{"terdup.zon", w.take()}, {"ter_dup.ter", ter}});
+        std::ofstream f(dir.path() / "terdup.eqg", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(eqg.data()), static_cast<std::streamsize>(eqg.size()));
+    }
+    GameDir game(dir.path());
+    auto zone = load_zone(game, "terdup");
+    CHECK(zone.terrain.size() == 1);
 }
