@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page

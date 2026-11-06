@@ -1153,7 +1153,6 @@ private:
     float last_speed_run_ = 0.0f;                 // the last frame's SpeedRun (+0x7c, /follow's bands)
     bool follow_move_ = false, follow_run_ = false; // the last follow step (for the log)
     std::uint32_t follow_logged_ = 0;
-    const net::GameConnection* los_conn_ = nullptr; // the connection the line of sight test was given to
     std::size_t abilities_test_step_ = 0;         // --abilities-test
     Clock::time_point abilities_test_at_{};
     int melee_test_phase_ = 0;                   // --melee-test

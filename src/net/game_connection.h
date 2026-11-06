@@ -1392,6 +1392,9 @@ public:
     }
     // PlayerBase::CanSee's zone test (the app's collision): true when nothing blocks the segment (world coordinates).
     void set_line_of_sight(std::function<bool(const glm::vec3&, const glm::vec3&)> los) { line_of_sight_ = std::move(los); }
+    // True once the app has given this connection its hooks (line of sight, teleport, app commands): the app installs
+    // them on each new connection, and a fresh one has none.
+    bool has_line_of_sight() const { return static_cast<bool>(line_of_sight_); }
     // OP_RequestClientZoneChange's DoTeleportB (the app's: the player's position and the zone's floor), given the
     // packet's zone dword (zone | instance << 16), its first float pair as world x / y, z, heading, the type as the
     // reason and its +4 dword; without one the client answers with OP_ZoneChange itself.
