@@ -491,11 +491,19 @@ void AddonManager::install_offer() {
     const AddonManifest& m = offer->manifest;
     // Its row at once, as it downloads.
     AddonStatus s;
+    bool busy = false;
     {
         std::lock_guard lock(mutex_);
-        if (const AddonStatus* r = row(m.name)) s = *r;
-        removed_.erase(lower(m.name)); // the player installs it again
+        if (const AddonStatus* r = row(m.name)) {
+            // One downloading, or staged for install_ready (which moves it out of addons/new/<name>/ while a new
+            // download would unpack there): this one waits until that is done, as check_one does.
+            busy = r->state == AddonState::Ready || r->state == AddonState::Downloading;
+            s = *r;
+        }
+        if (!busy) removed_.erase(lower(m.name)); // the player installs it again
     }
+    if (busy)
+        return say(m.name + " is already being installed: install it again once that is done", true);
     const bool update = s.installed && !s.addon.name.empty();
     if (!update) {
         s.installed = false;

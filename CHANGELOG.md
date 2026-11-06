@@ -43,6 +43,7 @@
 - A server (or a quest looping on `SendWebLink`) can no longer open hundreds of browser pages or system-browser tabs: the same link again within 10 seconds is not opened again, at most 5 open a minute, and once 4 such pages are open the newest is reused
 - A compiled plugin that keeps running with fewer permissions (the server's `hailstone.cfg` arriving at the zone-in, a lowered add-on ceiling) no longer goes on seeing packets, chat lines, spawn events or typed command lines it lost the permission for
 - The developer Plugins & Lua window no longer reads and hashes every plugin file on every frame while it is open (once a second now)
+- Add-ons: installing an add-on again while it is still downloading or waiting to be installed is refused with a message, instead of unpacking into the folder the waiting install is moving files out of
 
 ## 0.5.0-beta (2026-11-05)
 

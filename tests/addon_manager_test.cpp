@@ -535,3 +535,29 @@ TEST_CASE("addon_manager: a plugin installs with its library and windows") {
     CHECK(c[0].kind == plugin::FileKind::Plugin);
     CHECK(c[0].caps == (plugin::kCapRead | plugin::kCapUi));
 }
+
+// install_ready moves a staged add-on out of addons/new/<name>/; a second install of it meanwhile would unpack
+// into that same folder on the worker. It waits instead, and the staged one installs as it was.
+TEST_CASE("addon_manager: installing an add-on again while it waits to be installed is refused") {
+    Harness h;
+    h.publish("1.0.0", "read");
+    h.start();
+    auto s = h.inspect("https://github.com/" + kRepo);
+    REQUIRE(s.offer);
+    h.manager->install_offer();
+    h.manager->wait_idle();
+    REQUIRE(h.manager->has_ready());
+    h.publish("1.1.0", "read", "-- newer\n");
+    s = h.inspect("https://github.com/" + kRepo);
+    REQUIRE_MESSAGE(s.offer, s.message);
+    h.manager->install_offer();
+    h.manager->wait_idle();
+    s = h.manager->status();
+    CHECK(s.message_error);
+    CHECK(s.message.find("already being installed") != std::string::npos);
+    const AddonStatus* r = h.row("autoloot");
+    REQUIRE(r);
+    CHECK(r->state == AddonState::Ready);
+    CHECK(h.manager->install_ready() == std::vector<std::string>{"autoloot"});
+    CHECK(read_file(h.folder() / "init.lua") == "-- script\n");
+}
