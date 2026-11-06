@@ -360,8 +360,9 @@ std::uint32_t particle_definition(Zone& zone, ActorParticles& particles, const w
 // another picture (qeytoqrg.s3d's treea.bmp is an opaque DXT1 on the willows' green, qeytoqrg_obj.s3d's the DXT5
 // cut-out the willows draw). Zone::read_file searches the zone's archives in order, so such a frame is renamed
 // "<archive>/<file>" (assets::stem_of and the texture packs still see <file>) with the object archive's bytes as a
-// generated file. A file only in later archives, or the same bytes, keeps its name.
-void use_own_textures(Zone& zone, const PfsArchive& own, Mesh& mesh) {
+// generated file. A file only in later archives, or the same bytes, keeps its name; `same` remembers the aliases
+// found to have the same bytes, so a frame many meshes share is inflated and compared once.
+void use_own_textures(Zone& zone, const PfsArchive& own, Mesh& mesh, std::unordered_set<std::string>& same) {
     std::size_t index = 0;
     while (index < zone.archives.size() && zone.archives[index].get() != &own) ++index;
     for (auto& m : mesh.materials)
@@ -371,9 +372,13 @@ void use_own_textures(Zone& zone, const PfsArchive& own, Mesh& mesh) {
                 if (zone.archives[i]->contains(frame)) earlier = zone.archives[i].get();
             if (!earlier || !own.contains(frame)) continue;
             std::string alias = lower(std::filesystem::path(own.label()).stem().string() + "/" + frame);
+            if (same.contains(alias)) continue;
             if (!zone.generated_files.contains(alias)) {
                 auto mine = own.read(frame);
-                if (!mine || mine == earlier->read(frame)) continue;
+                if (!mine || mine == earlier->read(frame)) {
+                    same.insert(std::move(alias));
+                    continue;
+                }
                 zone.generated_files.emplace(alias, std::move(*mine));
             }
             frame = alias;
@@ -383,9 +388,10 @@ void use_own_textures(Zone& zone, const PfsArchive& own, Mesh& mesh) {
 // Adds every static (mesh-sprite) actor definition of a WLD to the zone and
 // returns the fragment indices of the meshes they use. Skeletal actors' 0x34
 // particle nodes go to `particles`, also for an actor without a mesh. `own` is
-// the WLD's archive when it is not the zone's first (use_own_textures).
+// the WLD's archive when it is not the zone's first (use_own_textures, with `same` its memo).
 std::unordered_set<const wld::Fragment*> add_actor_defs(Zone& zone, const wld::WldFile& w, ActorParticles& particles,
-                                                        const PfsArchive* own = nullptr) {
+                                                        const PfsArchive* own = nullptr,
+                                                        std::unordered_set<std::string>* same = nullptr) {
     std::unordered_set<const wld::Fragment*> used;
     std::size_t failed = 0;
     for (const auto& f : w.fragments()) {
@@ -419,7 +425,7 @@ std::unordered_set<const wld::Fragment*> add_actor_defs(Zone& zone, const wld::W
         }
         if (!mesh) continue;
         mesh->name = f.name;
-        if (own && first) use_own_textures(zone, *own, *mesh);
+        if (own && same && first) use_own_textures(zone, *own, *mesh, *same);
         zone.objects.try_emplace(upper(f.name), std::move(*mesh));
     }
     if (failed) log::debug("{}: {} skeletal actors could not be posed", w.label(), failed);
@@ -481,13 +487,14 @@ Zone load_classic_zone(const GameDir& game, std::string_view name_view, const Zo
     check();
 
     ActorParticles particles;
+    std::unordered_set<std::string> same_textures; // use_own_textures' memo
     // Object meshes: every WLD in the object archives, then any actor
     // definitions in the zone WLD itself. The first definition of a name wins.
     for (const auto& a : obj_archives)
         for (const auto& member : a->names())
             if (member.size() > 4 && member.ends_with(".wld")) {
                 check();
-                add_actor_defs(zone, parse_member(*a, member), particles, a.get());
+                add_actor_defs(zone, parse_member(*a, member), particles, a.get(), &same_textures);
             }
 
     check();

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Broken or hostile game files (in your game folder or a server's assets folder) can no longer make the client claim gigabytes of memory, hang on zone load or crash: an archive member that claims a huge size, an animation whose key times run for days, an endless chain of hero's forge layers, an absurdly scaled or misplaced flame, and a light colour out of range
+- Classic zones whose object archive repeats the zone's textures load a little faster: each shared texture is compared once, not once per object
 
 ## 0.5.0-beta (2026-11-05)
 
