@@ -289,7 +289,6 @@ void ServerFileSync::ask_again(std::uint64_t number) {
 void ServerFileSync::received_file(std::uint32_t index) {
     auto node = incoming_.extract(index);
     Incoming& in = *node.mapped();
-    const ServerFileEntry& e = list_[index];
     in.out.close();
     if (!in.in_order) {
         // A piece came again after later ones: the file is hashed from .download/ by update(), kHashBytesPerUpdate
