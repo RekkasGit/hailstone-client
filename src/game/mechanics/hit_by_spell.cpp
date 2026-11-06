@@ -397,7 +397,8 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                             val = total;
                         } else {
                             std::int32_t x = (static_cast<std::int32_t>(q.get_level(caster)) - 0x28) * 0x2c;
-                            val += x < 0 ? 0 : x;
+                            val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) +
+                                                            static_cast<std::uint32_t>(x < 0 ? 0 : x)); // add: wraps
                         }
                     }
                 } else {
@@ -408,7 +409,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         std::int32_t x = (lv * 5 - 0xc8) * 4;
                         x = x < 0 ? 0 : (x > 0x1f4 ? 0x1f4 : x);
                         Character* c = caster->character;
-                        val -= x;
+                        val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) - static_cast<std::uint32_t>(x));
                         if (c != nullptr) {
                             std::int32_t n = q.max_effects(c);
                             for (std::int32_t j = 0; j < n; ++j) {
@@ -424,7 +425,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         std::int32_t lv = q.get_level(caster);
                         std::int32_t x = (lv * 5 - 0xe1) * 2;
                         x = x < 0 ? 0 : (x > 0xc8 ? 0xc8 : x);
-                        val -= x;
+                        val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) - static_cast<std::uint32_t>(x));
                     }
                 }
             }

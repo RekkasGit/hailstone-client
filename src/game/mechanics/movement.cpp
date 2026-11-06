@@ -344,7 +344,7 @@ RegionDamage region_damage(std::uint8_t body_wet, std::uint32_t zone, std::int32
         } else if (r == 0x116) {
             divisor = 5;
         }
-        damage = zone_lava_damage - idiv(resist, divisor);
+        damage = wrap_add(zone_lava_damage, wrap_neg(idiv(resist, divisor))); // sub: wraps
         if (damage < zone_min_lava_damage) damage = zone_min_lava_damage;
     }
     if (body_wet == 4 || body_wet == 8) {

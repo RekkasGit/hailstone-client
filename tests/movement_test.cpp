@@ -241,6 +241,9 @@ TEST_CASE("Region damage: lava and freezing water") {
     CHECK(region_damage(7, 1000, 30, 0, 60, 100, 20).damage == 90);
     // Truncating division of a negative resist: -4 / 3 = -1.
     CHECK(region_damage(7, 1, -4, 0, 0, 100, 20).damage == 101);
+    // The server's lava damage is any 32-bit value; the sub wraps as the original's does (it overflowed, UB).
+    CHECK(region_damage(7, 1, 60, 0, 0, INT32_MIN, 20).damage == 0x7fffffec);
+    CHECK(region_damage(7, 1, -3, 0, 0, INT32_MAX, 20).damage == 20);
     r = region_damage(8, 1, 0, 30, 0, 0, 0);
     CHECK(r.damage == 40);
     CHECK(r.type == kEnvDamageFreezing);
