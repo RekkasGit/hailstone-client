@@ -79,10 +79,7 @@ bool call_script(Script& s, int nargs, int nres) {
     return false;
 }
 
-void need_cap(lua_State* L, std::uint32_t cap, const char* what) {
-    if ((Script::of(L).caps & cap) != cap)
-        luaL_error(L, "%s needs the server's '%s' permission", what, plugin::caps_text(cap).c_str());
-}
+void need_cap(lua_State* L, std::uint32_t cap, const char* what) { need_caps(L, cap, what); }
 
 net::GameConnection* writable(Script& s) { return s.host->env.connection ? s.host->env.connection() : nullptr; }
 const net::GameConnection* readable(Script& s) {

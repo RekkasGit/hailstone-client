@@ -148,6 +148,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Values between Lua and plugins: cycles refused, a budget of values and bytes (`plugin/lua_value.h`; tests/lua_eq_args_test.cpp).
 - [x] Script and module names stay inside the script folders (no absolute names, no links out); the config check canonical and case-insensitive (tests/mq_lua_test.cpp).
 - [x] `mq.pickle`: a script without every capability gets `scripts/config/<script>/` (tests/mq_lua_test.cpp).
+- [x] Scripts' tables cannot have `__gc` (a finalizer at the close registered hooks as the client's own, keeping the freed script); nothing is registered while a state closes (tests/mq_lua_test.cpp).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `NmscWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).

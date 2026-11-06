@@ -984,3 +984,25 @@ TEST_CASE("MQ commands: a plugin's command rewrite is held to the script's capab
     h.run("/myalias"); // the player: anything
     CHECK(h.target == 12);
 }
+
+TEST_CASE("MQ Lua: a script's tables cannot have __gc; nothing it registers outlives it") {
+    Host h;
+    h.write("gc.lua", R"(
+local mq = require('mq')
+print('gc', pcall(setmetatable, {}, {__gc = function() mq.bind('/late', function() end) end}))
+print('plain', getmetatable(setmetatable({}, {__index = {x = 1}})).__index.x)
+mq.bind('/early', function() end)
+mq.delay(100000)
+)");
+    REQUIRE(h.scripts->run("gc", {}));
+    h.pulses(1);
+    CHECK(printed_part(h, "gc false"));
+    CHECK(printed_part(h, "a script's tables cannot have __gc"));
+    CHECK(h.printed_line("plain 1"));
+    CHECK(h.hooks.has_command("/early"));
+    h.run("/lua stop gc");
+    CHECK_FALSE(h.scripts->running("gc"));
+    // A finalizer at the close would have bound /late as the client's own, holding the freed script.
+    CHECK_FALSE(h.hooks.has_command("/late"));
+    CHECK_FALSE(h.hooks.has_command("/early"));
+}

@@ -119,14 +119,26 @@ void preempt_hook(lua_State* L, lua_Debug*) {
 
 void watch(lua_State* thread) { lua_sethook(thread, preempt_hook, LUA_MASKCOUNT, 1000); }
 
+// setmetatable without __gc (upvalue 1: Lua's own). A finalizer runs whenever the collector likes, with no hook
+// (Lua turns hooks off in it, so a loop there is never stopped), and at close, after the script's hooks are gone.
+int l_setmetatable(lua_State* L) {
+    if (lua_type(L, 2) == LUA_TTABLE) {
+        lua_pushliteral(L, "__gc");
+        const bool gc = lua_rawget(L, 2) != LUA_TNIL;
+        lua_pop(L, 1);
+        if (gc) return luaL_error(L, "setmetatable: a script's tables cannot have __gc");
+    }
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_insert(L, 1);
+    lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+    return lua_gettop(L);
+}
+
 const Context& ctx_of(lua_State* L) { return Script::of(L).host->env.context(); }
 
 const Registry& reg_of(lua_State* L) { return *Script::of(L).host->env.registry; }
 
-void need(lua_State* L, std::uint32_t cap, const char* what) {
-    if ((Script::of(L).caps & cap) != cap)
-        luaL_error(L, "%s needs the server's '%s' permission", what, plugin::caps_text(cap).c_str());
-}
+void need(lua_State* L, std::uint32_t cap, const char* what) { need_caps(L, cap, what); }
 
 // ---------------------------------------------------------------- mq.TLO values
 
@@ -943,6 +955,20 @@ std::optional<fs::path> ScriptHost::Impl::resolve(const std::string& name) const
     return std::nullopt;
 }
 
+void Script::close() {
+    closing = true;
+    stop_requested = true;
+    release_plugin(*this);
+    if (host->env.hooks && owner) host->env.hooks->remove(owner);
+    if (L) lua_close(L);
+    // What the state's last code (a to-be-closed variable, a C finalizer) still gave the client, though need_caps
+    // refuses it while closing: nothing may keep this Script once it is freed.
+    release_plugin(*this);
+    if (host->env.hooks && owner) host->env.hooks->remove(owner);
+    owner = 0;
+    L = co = nullptr;
+}
+
 ScriptHost::ScriptHost(ScriptEnv env) : impl_(std::make_unique<Impl>()) {
     impl_->env = std::move(env);
     impl_->self = this;
@@ -996,6 +1022,9 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         lua_pushcfunction(L, fn);
         lua_setglobal(L, n);
     }
+    lua_getglobal(L, "setmetatable");
+    lua_pushcclosure(L, l_setmetatable, 1);
+    lua_setglobal(L, "setmetatable");
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.loaded");
     ui::lua::register_ui_api(L);

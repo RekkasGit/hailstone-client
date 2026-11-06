@@ -118,6 +118,7 @@ struct Script {
     std::string error;
     bool stop_requested = false;
     int busy = 0; // entered (resuming, a bind, a window): closing waits
+    bool closing = false; // close() runs: the state's last code may give the client nothing more
     std::size_t memory = 0;
     plugin::Hooks::Owner owner = 0;
     Clock::time_point slice_start{};
@@ -175,13 +176,22 @@ struct Script {
         stop_requested = true;
     }
 
-    void close() {
-        release_plugin(*this);
-        if (host->env.hooks && owner) host->env.hooks->remove(owner);
-        owner = 0;
-        if (L) lua_close(L);
-        L = co = nullptr;
-    }
+    // Takes back what the script gave the client and closes its state (lua_mq.cpp).
+    void close();
 };
+
+// The capability check of the script's functions (mq.*, hailstone.*): a Lua error when the script may not do `cap`.
+// Nothing but reading works in a closing state.
+inline void need_caps(lua_State* L, std::uint32_t cap, const char* what) {
+    const Script& s = Script::of(L);
+    if ((s.caps & cap) != cap) {
+        luaL_where(L, 1);
+        lua_pushfstring(L, "%s needs the server's '%s' permission", what, plugin::caps_text(cap).c_str());
+        lua_concat(L, 2);
+        lua_error(L); // not luaL_error: the text's std::string is gone before the error jumps (Lua is built as C)
+    }
+    if ((cap & ~plugin::kCapRead) == 0) return;
+    if (s.closing) luaL_error(L, "%s: the script is stopping", what);
+}
 
 } // namespace nmsc::mq
