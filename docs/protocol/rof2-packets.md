@@ -698,7 +698,7 @@ pairs; this client skips any further ones (stance count kept as sent).
 | Packet | Dir | Opcode | Layout |
 |---|---|---|---|
 | MercenaryDataRequest | C→Z | 0x11c1 | u32 liaison spawn id; sent when the merchant window shows (a right click on a class-71 NPC within 20 opens it) |
-| MercenaryDataResponse | Z→C | 0x72ce | u32 type count, u32 types, u32 entry count, entries. No types: "You do not meet the requirements to purchase any mercenaries." (with a liaison open) and the merchant window hides; a leftover length logs "ERROR: Corrupt MSG_MERCENARIES."; event 0xd fills the window |
+| MercenaryDataResponse | Z→C | 0x72ce | u32 type count, u32 types, u32 entry count, entries. No types: "You do not meet the requirements to purchase any mercenaries." (with a liaison open) and the merchant window hides; a leftover length logs "ERROR: Corrupt MSG_MERCENARIES."; event 0xd fills the window. A type list or a record's stance pairs stop where the bytes do (a count up to 2^32 over a short tail is not run through) |
 | MercenaryDataUpdate | Z→C | 0x61a4 | i32 current index, u32 count, entries, u32 slot count when it fits. No entries: "You do not currently have a mercenary." and the manage window hides; an index inside the list becomes the active mercenary (upkeep tick reset, event 0x13, event 5 or 2 by state), else -1 |
 | MercenaryDataUpdateRequest | C→Z | 0x7b89 | empty; sent by OP_MercenaryTimer |
 | MercenaryHire | C→Z | 0x7169 | 16 B: u32 selected entry id, u32 mercenary id, u32 liaison id, u8 0 + 3 bytes left unset on the wire (0 here) |
