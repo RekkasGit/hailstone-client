@@ -43,6 +43,8 @@ std::string clean_name(std::string_view name, bool section) {
 }
 } // namespace
 
+std::string IniFile::clean_key(std::string_view key) { return clean_name(key, false); }
+
 bool IniFile::load(const std::filesystem::path& path) {
     sections_.clear();
     std::ifstream in(path, std::ios::binary);

@@ -32,6 +32,9 @@ public:
     void erase(std::string_view section, std::string_view key);
     // The section and all its keys.
     void erase_section(std::string_view section);
+    // A key as the file keeps it: a line break or '=' becomes '_', and so does a leading ';', '#' or '[' (get, set
+    // and erase clean keys this way).
+    static std::string clean_key(std::string_view key);
 
 private:
     struct Section {
