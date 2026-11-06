@@ -212,6 +212,11 @@ struct Loaded {
     std::atomic<bool> thread_warned{false}; // said once that it called the host from another thread
     std::vector<std::string> threw_at;       // the callbacks that let an exception out (said once each)
 
+    // next_spawn's walk: the zone's spawn ids in order, made again at a walk's start (after_id 0) and whenever the
+    // spawns are not the ones it was made from (another count, or an id gone), so a walk is n log n, not n^2.
+    std::vector<std::uint32_t> spawn_ids;
+    const void* spawn_ids_of = nullptr; // the spawn map they came from
+
     // The packet OnPacket is looking at (resize_packet's target).
     net::AppPacket* current_packet = nullptr;
     int busy = 0;              // inside one of its callbacks
@@ -1033,12 +1038,26 @@ int h_get_spawn(void* h, std::uint32_t id, NmscSpawn* out) {
 }
 
 int h_next_spawn(void* h, std::uint32_t after_id, NmscSpawn* out) {
-    const net::GameConnection* c = readable(Loaded::of(h), "next_spawn");
+    Loaded& l = Loaded::of(h);
+    const net::GameConnection* c = readable(l, "next_spawn");
     if (!c) return 0;
-    const game::Spawn* best = nullptr;
-    for (const auto& [id, s] : c->world().spawns)
-        if (id > after_id && (!best || id < best->id)) best = &s;
-    return best ? give(out, spawn_struct(*c, *best)) : 0;
+    const auto& spawns = c->world().spawns;
+    auto rebuild = [&] {
+        l.spawn_ids.clear();
+        l.spawn_ids.reserve(spawns.size());
+        for (const auto& [id, s] : spawns) l.spawn_ids.push_back(id);
+        std::sort(l.spawn_ids.begin(), l.spawn_ids.end());
+        l.spawn_ids_of = &spawns;
+    };
+    if (after_id == 0 || l.spawn_ids_of != &spawns || l.spawn_ids.size() != spawns.size()) rebuild();
+    for (int pass = 0; pass < 2; ++pass) {
+        auto it = std::upper_bound(l.spawn_ids.begin(), l.spawn_ids.end(), after_id);
+        if (it == l.spawn_ids.end()) return 0;
+        auto s = spawns.find(*it);
+        if (s != spawns.end()) return give(out, spawn_struct(*c, s->second));
+        rebuild(); // one gone since: made again from the spawns there are
+    }
+    return 0;
 }
 
 int h_get_spell(void* h, std::uint32_t id, NmscSpell* out) {
