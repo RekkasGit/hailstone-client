@@ -126,6 +126,7 @@ What the client does not implement yet, or implements with an approximation it c
 - A ZON that lists a `.ter` twice loads it once (no stock zone does it; what the original does is not known).
 - weather.ini clouds: at most 256 patches per cloud (`kMaxCloudPatches`, a limit of ours; stock files ask for at most 80). The original's limit is not known.
 - JPEG UI art: at most 16384 a side and 8192 x 8192 texels, as PNG and DDS (a limit of ours).
+- EQG models: one model's clips together get at most 8M resampled bone poses (`kMaxModelPoses`, a limit of ours; the most a stock model has is about 400,000); a clip past it is left out.
 
 ## World rendering
 
