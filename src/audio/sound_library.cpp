@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 
 #include "assets/pfs.h"
 #include "core/log.h"
@@ -27,8 +28,12 @@ SoundLibrary::SoundLibrary(const GameDir& game) : game_(game) {
         std::string name = lower_case(entry.name);
         if (name.size() > 7 && name.starts_with("snd") && name.ends_with(".pfs")) {
             std::string digits = name.substr(3, name.size() - 7);
-            if (!digits.empty() && std::all_of(digits.begin(), digits.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); }))
-                found.emplace_back(std::stoi(digits), entry.path);
+            // A number past int (snd99999999999.pfs) is not an archive of the set; std::stoi threw out of here.
+            int n = 0;
+            const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), n);
+            const bool all_digits = std::all_of(digits.begin(), digits.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); });
+            if (!digits.empty() && all_digits && ec == std::errc{} && end == digits.data() + digits.size())
+                found.emplace_back(n, entry.path);
         }
     }
     std::sort(found.begin(), found.end());

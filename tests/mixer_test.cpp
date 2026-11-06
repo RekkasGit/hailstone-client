@@ -529,3 +529,11 @@ TEST_CASE("WAV decoding: an IEEE-float WAV's NaN and infinite samples are silenc
     REQUIRE(pcm);
     CHECK(pcm->samples == std::vector<float>{0.25f, 0.0f, 0.0f, -0.5f});
 }
+
+TEST_CASE("SoundLibrary: a snd<N>.pfs whose number does not fit an int is not one of the set, and does not throw") {
+    test::ScratchDir dir("sound_bignum");
+    std::ofstream(dir.path() / "snd99999999999.pfs", std::ios::binary) << "x";
+    std::ofstream(dir.path() / "snd-1.pfs", std::ios::binary) << "x";
+    GameDir game(dir.path());
+    CHECK_NOTHROW(SoundLibrary{game});
+}
