@@ -59,6 +59,7 @@ void HelperProcess::flush() {
         out_.clear();
         return;
     }
+    written_ += n;
     out_.erase(out_.begin(), out_.begin() + static_cast<std::ptrdiff_t>(n));
 }
 

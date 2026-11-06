@@ -28,6 +28,10 @@ public:
     virtual void send(std::span<const std::byte> bytes) = 0;
     virtual std::size_t receive(std::span<std::byte> out) = 0; // without waiting
     virtual bool alive() = 0;
+    // Bytes sent and not yet taken by the helper, and how many it has taken in all (what BrowserHost holds back for,
+    // and how it tells a slow helper from a stuck one).
+    virtual std::size_t pending() { return 0; }
+    virtual std::uint64_t taken() { return 0; }
     // Ends it: `grace_ms` > 0 gives it that long to quit by itself after the end of its input (CEF writes its cookies
     // as it shuts down), 0 ends it at once.
     virtual void stop(int grace_ms) = 0;
@@ -82,6 +86,12 @@ public:
     static constexpr std::uint64_t kRestartWindowMs = 60'000;
     static constexpr std::uint64_t kRestartDelayMs = 1'000;
     static constexpr int kShutdownGraceMs = 3'000; // shutdown(): the helper's time to quit by itself
+    // A message (other than the client's own Hello, Close, Shutdown and a restart's reopening of its tabs) is refused
+    // while this much already waits for the helper, so a script's traffic is dropped instead of filling the queue
+    // to HelperProcess::kMaxPending and ending a helper that is still reading. An empty queue takes any message.
+    static constexpr std::size_t kSendBudget = std::size_t{32} << 20;
+    // A helper with bytes waiting that takes none of them this long has stopped reading: ended and restarted.
+    static constexpr std::uint64_t kStallMs = 10'000;
 
     explicit BrowserHost(std::function<std::unique_ptr<Transport>()> make_transport);
     ~BrowserHost();
@@ -89,15 +99,15 @@ public:
     BrowserHost& operator=(const BrowserHost&) = delete;
 
     // A new tab, 0 when it may not open (`why` says so): not an http(s) address, a host outside its allow list, an
-    // address longer than kMaxUrl, or no helper.
+    // address longer than kMaxUrl, no helper, or the helper's queue full (kSendBudget).
     std::uint32_t open(const std::string& url, TabOptions options, std::string* why = nullptr);
     bool navigate(std::uint32_t tab, const std::string& url, std::string* why = nullptr);
     void resize(std::uint32_t tab, std::uint16_t width, std::uint16_t height);
     void mouse(const Mouse& m);
     void wheel(const Wheel& w);
     void key(const Key& k);
-    // False for a tab not live, or text too long to send (kMaxMessage; a Post kMaxPostMessage): never sent, since
-    // the helper quits on a message over its limit.
+    // False for a tab not live, text too long to send (kMaxMessage; a Post kMaxPostMessage), since the helper quits
+    // on a message over its limit, or the helper's queue full (kSendBudget): never sent.
     bool text(std::uint32_t tab, const std::string& text);
     void focus(std::uint32_t tab, bool on);
     void nav(std::uint32_t tab, NavAction action);
@@ -124,7 +134,8 @@ public:
 
 private:
     bool ensure_started();
-    bool send(const Message& m); // false: too long to send (logged)
+    // False (logged, `why` set): too long to send, or the queue full and not `always`.
+    bool send(const Message& m, bool always = false, std::string* why = nullptr);
     void handle(Message m);
     void helper_died(std::uint64_t now_ms, const std::string& why);
     void close_tab(Tab& t, CloseReason reason, std::string detail);
@@ -141,6 +152,9 @@ private:
     bool gave_up_ = false;
     std::deque<std::uint64_t> deaths_;
     std::optional<std::uint64_t> restart_at_;
+    std::uint64_t taken_ = 0;                 // the helper's taken() at the last poll
+    std::optional<std::uint64_t> stall_since_; // since when bytes wait and none are taken
+    bool refusing_ = false;                   // a full queue's refusal is logged (once until a send goes)
     std::string last_error_;
 };
 

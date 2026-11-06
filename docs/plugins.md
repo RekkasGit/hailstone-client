@@ -689,7 +689,8 @@ Without the helper (macOS, or not installed) `open` gives nil and why. A script 
 once (`WebService::kMaxTabsPerOwner`), those the helper or the rules closed included until it closes them: a 17th
 `open` gives nil and why. An address is at most 2 MB, a `post` to the page at most 1 MB, and an `eval` or `text` at
 most what one message to the helper holds (64 MB): a longer one is refused (false; `navigate` with why) and nothing
-is sent.
+is sent. While 32 MB still wait for the helper to read them, `open`, `navigate`, `eval`, `text` and `post` are refused
+the same way; try again a frame or so later. An empty queue takes the largest message.
 
 The page and its owner talk through `window.hailstone`: the page's `hailstone.post(text)` is queued for the owner
 (`mq.web.messages(tab)`, `eq.WebMessages(tab)`, `web_message`; a message is at most 1 MB, and at most 256 and 8 MB

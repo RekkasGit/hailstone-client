@@ -4,6 +4,7 @@
 // started by the client, read without blocking, and stopped with it. Its standard error is the client's.
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
@@ -16,7 +17,8 @@ namespace nmsc::platform {
 class HelperProcess {
 public:
     // Bytes queued for a helper that is not reading its input (stopped, or its reader stuck): past this it is taken
-    // as dead and ended, rather than the queue growing with every message. Two of the protocol's largest messages.
+    // as dead and ended, rather than the queue growing with every message. Two of the protocol's largest messages:
+    // BrowserHost holds itself well under it (BrowserHost::kSendBudget), so this ends only a helper gone wrong.
     static constexpr std::size_t kMaxPending = std::size_t{128} << 20;
 
     explicit HelperProcess(std::size_t max_pending = kMaxPending) : max_pending_(max_pending) {}
@@ -31,6 +33,7 @@ public:
     void write(std::span<const std::byte> bytes);
     void flush();
     std::size_t pending_write() const { return out_.size(); }
+    std::uint64_t written() const { return written_; } // bytes the helper's input has taken in all
     // What has arrived (at most out.size() bytes), without waiting; 0 when nothing has.
     std::size_t read(std::span<std::byte> out);
     // Started and not exited (an exit is noticed here). exit_code() is its code once it has exited.
@@ -46,6 +49,7 @@ private:
     SDL_IOStream* in_ = nullptr; // its standard input
     std::vector<std::byte> out_;
     std::size_t max_pending_;
+    std::uint64_t written_ = 0;
     bool exited_ = false;
     int exit_code_ = 0;
 };

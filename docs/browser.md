@@ -110,8 +110,13 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   holds itself to limits before it sends (`BrowserHost`): an address at most 2 MB (`kMaxUrl`, Chromium's own
   limit), a Post at most 1 MB (`kMaxPostMessage`, as the page's), and any message at most 64 MB; a longer one is
   refused and never sent, since the helper takes a message over its limit as a broken stream and quits (which a
-  script could repeat until the client gave up on the browser). A helper that stops reading its input is ended once
-  128 MB wait for it (`HelperProcess::kMaxPending`), and restarted as a dead one is. A script or plugin holds at most
+  script could repeat until the client gave up on the browser). While 32 MB wait for the helper to read them
+  (`BrowserHost::kSendBudget`), anything but the client's own Hello, Close, Shutdown and a restart's reopened tabs is
+  refused (an `eval`, `text`, `post`, `navigate` or `open` returns false; input is dropped); an empty queue takes any
+  message, so several large evals in one frame send the first and refuse the rest instead of piling up. A helper that
+  takes none of what waits for 10 seconds (`kStallMs`) has stopped reading: it is ended and restarted as a dead one
+  is. `HelperProcess` also ends one whose queue would pass 128 MB (`kMaxPending`), which the budget keeps out of
+  reach. A script or plugin holds at most
   16 tabs (`WebService::kMaxTabsPerOwner`), closed ones included until it closes them; a closed tab's images are let
   go when it closes.
 
