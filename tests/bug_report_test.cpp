@@ -261,8 +261,14 @@ TEST_CASE("bug report: chat lines' words taken out of the logs and the crash rep
 
     // A crash report's stack after its last log lines is never a chat line's continuation, even when the newest
     // log line was chat (redact_crash_report).
-    CHECK(app::redact_crash_report("last log lines:\n[info] chat: a\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\nframe\n") ==
-          "last log lines:\n[info] chat: (chat taken out of the report)\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\nframe\n");
+    CHECK(app::redact_crash_report("last log lines:\n[info] chat: a\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\n"
+                                   "/lib/libc.so.6(abort+0x12) [0x7f3a]\n") ==
+          "last log lines:\n[info] chat: (chat taken out of the report)\n\nstack:\n/opt/hailstone(+0x1a) [0x2]\n"
+          "/lib/libc.so.6(abort+0x12) [0x7f3a]\n");
+    // With no stack (Windows, a build without backtrace), a chat line's continuation that reads "stack:" is still
+    // chat, and so is what follows it.
+    CHECK(app::redact_crash_report("last log lines:\n[info] chat: a\nstack:\nmeet at the docks\n") ==
+          "last log lines:\n[info] chat: (chat taken out of the report)\n");
     CHECK(app::redact_crash_report("what: x\n[info] chat: a\nb\n") == "what: x\n[info] chat: (chat taken out of the report)\n");
 
     test::ScratchDir tmp("bugreport-chat");
