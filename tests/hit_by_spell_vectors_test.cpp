@@ -1323,3 +1323,25 @@ TEST_CASE("A spell landing on the player: its push, and SPA 123 immunity") {
     CHECK(r.value == 0);
     CHECK(r.velocity_change == glm::vec3(0.0f));
 }
+
+TEST_CASE("A spell landing on the player: SPA 74 feigns death (StopCastAndFeignDeath)") {
+    nmsc::game::SpellTable table;
+    // Imitate Death's shape: a beneficial self spell whose first slot is SPA 74 (base 100), and a spell without it.
+    std::string text = landing_spell_line({{0, "400"}, {1, "Feign"}, {20, "100"}, {86, "74"}, {83, "1"}}) + "\n" +
+                       landing_spell_line({{0, "401"}, {1, "Shove"}, {11, "10"}, {83, "0"}, {98, "5"}});
+    REQUIRE(table.parse(text) == 2);
+    nmsc::game::WorldState world;
+    world.player_id = 1;
+    world.spawns[1].id = 1;
+    world.spawns[1].level = 10;
+    nmsc::game::SpellState state;
+    nmsc::game::HitLandingContext ctx;
+    ctx.spells = &table;
+    ctx.world = &world;
+    ctx.spell_state = &state;
+    ctx.level = 10;
+    auto r = nmsc::game::land_spell(nmsc::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 400, 10), ctx);
+    CHECK(r.feigned);
+    r = nmsc::game::land_spell(nmsc::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 401, 10), ctx);
+    CHECK_FALSE(r.feigned);
+}

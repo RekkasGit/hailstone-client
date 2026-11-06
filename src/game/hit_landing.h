@@ -21,8 +21,9 @@
 // Applied: the Teleport sound (0x89) of SPA 83 / 145 with a zone (player spawns
 // only) and of a valid SPA 379 (whose IsValidTeleport answers "no" here),
 // the messages (immunity 0x30a0, bind refusals, books, identify),
-// buffs removed (the invisibility removal), drunkenness, the push and the
-// stop-turning of SPA 56.
+// buffs removed (the invisibility removal), drunkenness, the push, the
+// stop-turning of SPA 56 and the feign death of SPA 74 (reported; the
+// connection stops the cast and lies the player down).
 
 #include <cstdint>
 #include <functional>
@@ -79,6 +80,7 @@ struct HitLandingResult {
     std::vector<PlacedBuff> placed_buffs; // the buff HitBySpell placed (after the removals)
     std::vector<std::int32_t> sounds;  // PlayerClient::PlaySound(wave) at the player, in order
     bool buff_timers_on_hold = false;  // SPA 0x1b4 landed: FUN_004325e0(1), the spawn's +0x22d
+    bool feigned = false;              // SPA 74 landed: StopCastAndFeignDeath (the twist, the cast, lie down)
     // PlayerClient_RecordPositionSample(kind, 0, 0) on the player, in order (3 teleport, 7 knock-back, 9 spell move).
     std::vector<std::uint32_t> position_samples;
 };

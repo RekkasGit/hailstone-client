@@ -1009,6 +1009,15 @@ void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     for (std::uint32_t kind : r.position_samples) record_position_sample(kind);
     landing_.velocity_change += r.velocity_change;
     if (r.heading_changed) landing_.heading = r.heading;
+    if (r.feigned) {
+        // CharacterZoneClient_StopCastAndFeignDeath @0x433b80 (SPA 74: Imitate Death, Death Peace and the
+        // like): the bard twist ends, StopSpellCast(0, the casting spell), then ChangePosition(0x73), which lies
+        // the player down, stops auto attack and sends OP_SpawnAppearance {me, 14, 115}. EQEmu's SE_FeignDeath
+        // only marks the client feigned and sends no appearance, so without this the player stays standing.
+        clear_bard_twist();
+        stop_current_spell_cast();
+        set_stand_state(kStandLying);
+    }
 }
 
 } // namespace nmsc::net

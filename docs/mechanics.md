@@ -659,6 +659,13 @@ find affect slot 1600). Each record is replayed call for call against the record
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.
 - No stacking is checked before a cast: find_affect_slot's only caller is the hit-by-spell path, so the client
   predicts where a buff lands when OP_Action 231 arrives and the server's OP_Buff overwrites the slot.
+- Feign death by spell (SPA 74: Imitate Death, Death Peace): HitBySpell calls
+  CharacterZoneClient_StopCastAndFeignDeath @0x433b80, which ignores the spell and its base. With the spawn it clears
+  the bard twist, stops the cast (StopSpellCast(0, the casting spell)) and calls ChangePosition(0x73), which lies the
+  player down, stops auto attack and sends OP_SpawnAppearance {me, 14, 115}. The landing reports it
+  (`HitLandingResult::feigned`) and `GameConnection::land_spell_on_me` does the rest. EQEmu's SE_FeignDeath only rolls
+  the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
+  for everyone (`tests/feign_death_spell_test.cpp`).
 
 ## Using items
 
@@ -853,6 +860,19 @@ lack). Higher than 50 the server more likely means it. A spawn is measured again
 collision loads (spawns come before it, while character select's scene is still loaded); with no floor under it, every
 frame until there is one. Only `display_position` is lowered, so the model, name, target ring, picking and the NPC
 walls follow the drawn body; `position`, which range, melee and the other rules use, keeps the server's z.
+
+## Name sprites
+
+`draw_nameplates` (app) with `game::name_sprite_switched_on`, `name_sprite_shows_guild` and `npc_owner_line`
+(`game/combat.h`), after PlayerClient::SetNameSpriteState @0x58e2d0 and unk_PlayerClient_UpdateNameSprite @0x58f050:
+
+- Options > Display "Show Player Names" / "Show NPC Names" (hailstone.ini `display.pc_names`, `display.npc_names`;
+  `/shownames off` clears the first) switch the sprites by kind; corpses go with the NPCs.
+- The player's own name is drawn over its head as the original draws it, with the same `/shownames` parts as other
+  players' (title and suffix above 3, the last name at 2, 3, 4 and 6, the `<guild>` line at 3 and 4), and not in first
+  person, where the model is hidden. Hailstone adds a switch for it alone (a deliberate difference: Options > Display
+  "Show My Name", hailstone.ini `display.own_name`, on by default); "Show Player Names" off hides it too. Not done:
+  the original shows the title window's chosen title and suffix on the player's own sprite while that window is open.
 
 ## Chat keys, the PvP rule set, trade and group invites
 
