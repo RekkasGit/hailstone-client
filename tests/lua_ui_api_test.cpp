@@ -628,8 +628,6 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
     nmsc::ui::texture_id_removed(&live);
     ImGui::DestroyContext(ctx);
 }
-estroyContext(ctx);
-}
 
 namespace {
 // Two frames of a pack with one script; the global `done` after them.
@@ -687,4 +685,46 @@ TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing 
                           "  ui.PopStyleVar(nv) ui.PopStyleColor(nc)\n"
                           "  done = nc == 1 and nv == 1\n"
                           "end)\n"));
+}
+
+TEST_CASE("Lua UI: a completion list whose __len raises is read raw, not left to unwind the editor") {
+    CHECK(run_pack_frames("lua_ui_api_complete_len_test",
+                          "local frame = 0\n"
+                          "ui.window('E', function()\n"
+                          "  frame = frame + 1\n"
+                          "  ui.SetNextWindowPos(0, 0, ui.Cond.Always)\n"
+                          "  ui.SetNextWindowSize(300, 200, ui.Cond.Always)\n"
+                          "  ui.Begin('E')\n"
+                          "  local opts = { complete = function(before)\n"
+                          "    asked = true\n"
+                          "    return 1, setmetatable({ 'abc' }, { __len = function() error('len') end })\n"
+                          "  end }\n"
+                          "  local text, changed, cursor, active = ui.CodeEditor('code', 'a', 200, 100, opts)\n"
+                          "  ui.End()\n"
+                          "  if frame >= 4 then done = asked == true end\n"
+                          "end)\n",
+                          5, [](int i) { // a click in the box makes it active
+                              ImGui::GetIO().AddMousePosEvent(60, 70);
+                              if (i == 1) ImGui::GetIO().AddMouseButtonEvent(0, true);
+                              if (i == 2) ImGui::GetIO().AddMouseButtonEvent(0, false);
+                          }));
+}
+
+TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept for the session") {
+    std::size_t kept = 0;
+    CHECK(run_pack_frames("lua_ui_api_editors_test",
+                          "local frame = 0\n"
+                          "ui.window('C', function()\n"
+                          "  frame = frame + 1\n"
+                          "  ui.Begin('C')\n"
+                          "  ui.CodeEditor('kept', 'x', 100, 50)\n"
+                          "  ui.CodeEditor('id ' .. frame, 'x', 100, 50)\n"
+                          "  ui.End()\n"
+                          "  done = true\n"
+                          "end)\n",
+                          400, [&](int i) {
+                              if (i == 399) kept = nmsc::ui::lua::code_editors_kept();
+                          }));
+    CHECK(kept > 0);
+    CHECK(kept <= 258); // past 256, those not drawn last frame go
 }

@@ -13,6 +13,7 @@
 // Also ui.SetClipboardText(text) and ui.GetClipboardText(); a host may refuse them to a state (check_clipboard).
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -22,6 +23,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "ui/code_syntax.h"
+#include "ui/lua/lua_host.h"
 
 #include <lua.hpp>
 
@@ -38,11 +40,31 @@ struct EditorState {
     bool accept = false;
     bool hovered = false; // the names' window had the mouse last frame (a click there takes the box's focus)
     ImGuiID input = 0;
+    int seen = 0; // the frame it was last drawn
 };
+
+// An editor not drawn for this many frames is forgotten; past kMaxEditors (ids made from changing text) every one
+// not drawn this frame is. The map is C++ memory, outside every Lua memory limit.
+constexpr int kForgetFrames = 3600;
+constexpr std::size_t kMaxEditors = 256;
 
 std::unordered_map<ImGuiID, EditorState>& editors() {
     static std::unordered_map<ImGuiID, EditorState> e;
     return e;
+}
+
+// Once a frame, before any editor of it is looked up (a reference into the map stays valid until then: the map only
+// erases here, and a nested ui.CodeEditor in a completion function only adds).
+void forget_editors(int frame) {
+    static int swept = -1;
+    if (frame == swept) return;
+    swept = frame;
+    auto& e = editors();
+    const bool over = e.size() > kMaxEditors;
+    std::erase_if(e, [&](const auto& kv) {
+        const int seen = kv.second.seen;
+        return seen > frame || frame - seen > (over ? 0 : kForgetFrames); // (a new ImGui context counts from 0)
+    });
 }
 
 struct Callback {
@@ -89,23 +111,49 @@ ImU32 token_color(CodeToken k) {
     return IM_COL32(230, 230, 230, 255);
 }
 
-// The line and the x of byte `at`.
-ImVec2 place(const std::string& text, std::size_t at, float line_h) {
-    at = std::min(at, text.size());
-    std::size_t line_start = text.rfind('\n', at == 0 ? 0 : at - 1);
-    line_start = (line_start == std::string::npos || at == 0) ? 0 : line_start + 1;
-    float line = static_cast<float>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(line_start), '\n'));
-    float x = ImGui::CalcTextSize(text.data() + line_start, text.data() + at).x;
-    return ImVec2(x, line * line_h);
-}
+// The line and the x of bytes of the text, as CalcTextSize from the line's start gives it. Asked in increasing order
+// (the spans are), each call walks on from the last, so a frame costs the text's length once, not its length for
+// every span; asked for an earlier byte, it starts again.
+struct Placer {
+    const std::string& text;
+    float line_h;
+    std::size_t at = 0;
+    float line = 0, x = 0; // x: the line's width up to `at`, not yet rounded
+
+    ImVec2 operator()(std::size_t to) {
+        to = std::min(to, text.size());
+        if (to < at) {
+            at = 0;
+            line = 0;
+            x = 0;
+        }
+        while (at < to) {
+            const std::size_t nl = text.find('\n', at);
+            if (nl == std::string::npos || nl >= to) {
+                x += ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, text.data() + at, text.data() + to).x;
+                at = to;
+                break;
+            }
+            at = nl + 1;
+            line += 1;
+            x = 0;
+        }
+        return ImVec2(x > 0 ? IM_TRUNC(x + 0.99999f) : 0.0f, line * line_h); // (CalcTextSize's rounding)
+    }
+};
 
 } // namespace
+
+std::size_t code_editors_kept() { return editors().size(); }
 
 int CodeEditor(lua_State* L) {
     const char* id = luaL_checkstring(L, 1);
     std::size_t len = 0;
     const char* given = luaL_optlstring(L, 2, "", &len);
-    float w = static_cast<float>(luaL_optnumber(L, 3, 0)), h = static_cast<float>(luaL_optnumber(L, 4, 0));
+    // (Held to float's range: a cast past it is undefined.)
+    constexpr double kMax = FLT_MAX;
+    float w = static_cast<float>(std::clamp(luaL_optnumber(L, 3, 0), -kMax, kMax));
+    float h = static_cast<float>(std::clamp(luaL_optnumber(L, 4, 0), -kMax, kMax));
     int error_line = 0, complete = 0;
     bool read_only = false;
     if (lua_istable(L, 5)) {
@@ -123,7 +171,9 @@ int CodeEditor(lua_State* L) {
     const float line_h = ImGui::GetFontSize();
     ImGui::PushID(id);
     const ImGuiID key = ImGui::GetID("##code");
+    forget_editors(ImGui::GetFrameCount());
     EditorState& st = editors()[key];
+    st.seen = ImGui::GetFrameCount();
     const bool showing = !st.names.empty();
 
     // Ctrl+Up / Ctrl+Down move the highlight (ImGui's box only scrolls on them, and it never scrolls: see above).
@@ -173,6 +223,7 @@ int CodeEditor(lua_State* L) {
         dl->AddRectFilled(ImVec2(ImGui::GetItemRectMin().x, y), ImVec2(ImGui::GetItemRectMax().x, y + line_h),
                           IM_COL32(160, 40, 40, 90));
     }
+    Placer place{text, line_h};
     for (const CodeSpan& s : lua_code_spans(text)) {
         // A span may cross lines (long comments and strings): draw it a line at a time.
         std::size_t at = s.begin;
@@ -180,13 +231,13 @@ int CodeEditor(lua_State* L) {
             std::size_t nl = text.find('\n', at);
             std::size_t end = nl == std::string::npos || nl > s.end ? s.end : nl;
             if (end > at) {
-                ImVec2 p = place(text, at, line_h);
+                ImVec2 p = place(at);
                 dl->AddText(ImVec2(origin.x + p.x, origin.y + p.y), token_color(s.kind), text.data() + at, text.data() + end);
             }
             at = end + 1;
         }
     }
-    ImVec2 caret = place(text, static_cast<std::size_t>(std::max(0, st.cursor)), line_h);
+    ImVec2 caret = place(static_cast<std::size_t>(std::max(0, st.cursor)));
     if (active && std::fmod(ImGui::GetTime(), 1.2) < 0.8)
         dl->AddLine(ImVec2(origin.x + caret.x, origin.y + caret.y), ImVec2(origin.x + caret.x, origin.y + caret.y + line_h),
                     IM_COL32(240, 240, 240, 255));
@@ -219,7 +270,8 @@ int CodeEditor(lua_State* L) {
             if (lua_pcall(L, 1, 2, 0) == LUA_OK) {
                 st.start = static_cast<int>(lua_tointeger(L, -2)) - 1;
                 if (lua_istable(L, -1)) {
-                    lua_Integer n = luaL_len(L, -1);
+                    // Raw: a __len of the script's could raise here, outside the pcall, past `text` and the ID pushed.
+                    const auto n = static_cast<lua_Integer>(std::min<lua_Unsigned>(lua_rawlen(L, -1), 50));
                     for (lua_Integer i = 1; i <= n && i <= 50; ++i) {
                         lua_rawgeti(L, -1, i);
                         if (lua_type(L, -1) == LUA_TSTRING) st.names.emplace_back(lua_tostring(L, -1));

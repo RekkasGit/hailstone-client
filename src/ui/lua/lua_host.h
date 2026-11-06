@@ -60,6 +60,8 @@ void raise_guarded_windows();
 // Whether `L` runs the pack's own code now: the UI pack's state (LuaUi; its registry holds kPackStateKey), with no
 // plugin folder's code running.
 bool pack_code(lua_State* L);
+// How many ui.CodeEditor states (lua_code_editor.cpp) are kept now; for the tests.
+std::size_t code_editors_kept();
 inline constexpr const char* kPackStateKey = "nmsc.ui.pack";
 // A plugin sees the pack's shared tables through views (lua_host.cpp); a C function that reads a table raw
 // (lua_rawgeti, lua_next, lua_rawlen) calls this first on its argument: a view at idx is replaced by its table (only
