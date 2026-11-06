@@ -286,7 +286,8 @@ struct MapState {
 
     // MapViewMap_SaveLayerFile @0x6cc710: the four layer files.
     bool save(EqHost& h) {
-        if (zone.empty() || user_maps().empty()) return false;
+        // A zone name that is not a plain file name (from a hostile server) is never written: map_layer_file_name.
+        if (zone.empty() || user_maps().empty() || game::map_layer_file_name(zone, 0).empty()) return false;
         std::error_code ec;
         fs::create_directories(user_maps(), ec);
         bool ok = true;

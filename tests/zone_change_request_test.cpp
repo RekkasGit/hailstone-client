@@ -75,3 +75,21 @@ TEST_CASE("A new connection has none of the app's hooks, even where the freed on
     w.conn = std::make_unique<net::GameConnection>(*w.game, net::ConnectionOptions{});
     CHECK_FALSE(w.conn->has_line_of_sight());
 }
+
+TEST_CASE("OP_NewZone: a short name that is a path is not used for the zone's files") {
+    // It names the zone's archives, map layers and navmesh cache (core/zone_name.h).
+    mq_test::World w("nmsc_new_zone_name_test");
+    net::GameConnection& c = *w.conn;
+    net::NewZone nz;
+    nz.zone_long_name = "Nowhere";
+    for (const char* bad : {"../../../EverQuest/spells_us", "/home/user/notes", "C:\\EQ\\spells_us", "nul"}) {
+        nz.zone_short_name = bad;
+        c.receive_zone_packet_for_test(net::encode(nz));
+        CHECK(c.world().zone_short_name.empty());
+        CHECK(c.take_zone_to_load() == std::optional<std::string>(""));
+    }
+    nz.zone_short_name = "qeynos2";
+    c.receive_zone_packet_for_test(net::encode(nz));
+    CHECK(c.world().zone_short_name == "qeynos2");
+    CHECK(c.take_zone_to_load() == std::optional<std::string>("qeynos2"));
+}

@@ -217,6 +217,12 @@ too (Display > Interface > Map Pack in the modern pack, Interface > Map pack in 
 character in the character's `UI.ini` with the map window's other settings. The list is read again each time
 Options starts showing it, so a pack dropped into `maps/` during play shows up without a restart.
 
+The layer files are named from the zone's short name, which the server sends (OP_NewZone). A name that is not
+letters, digits and `_` (stock short names are lower case alphanumerics and `_`), or that is a Windows device name,
+is not used: the connection drops it at OP_NewZone (the zone then loads without scenery), and the map reads and
+writes no file for it (`core/zone_name.h`), so a hostile server's `../` or absolute name cannot reach files outside
+these folders.
+
 ## Servers
 
 The login screen lists the saved servers (`core/server_profile.h`, `ui/dev_screens.h`). The last one used

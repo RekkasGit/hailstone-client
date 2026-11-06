@@ -75,6 +75,7 @@ const char* map_source_name(MapSource s) {
 }
 
 MapFiles find_map_files(const MapFolders& f, std::string_view zone, std::string_view skin) {
+    if (map_layer_file_name(zone, 0).empty()) return {}; // not a zone short name: no file of it is read
     std::vector<std::string_view> dirs;
     if (!skin.empty()) dirs.push_back(skin);
     dirs.push_back({});

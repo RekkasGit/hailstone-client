@@ -56,6 +56,16 @@ TEST_CASE("map files: own edits, then the server's assets, then the global folde
     CHECK(f.find("crushbone").source == game::MapSource::Global);
 }
 
+TEST_CASE("map files: a zone name that is a path reads nothing outside the maps folders") {
+    Folders f;
+    Folders::put(f.scratch.path() / "server" / "secret.txt");
+    Folders::put(f.scratch.path() / "abs.txt");
+    CHECK(f.find("../secret").source == game::MapSource::None);
+    CHECK(f.find((f.scratch.path() / "abs").string()).source == game::MapSource::None);
+    Folders::put(f.base / "maps" / "qeynos.txt");
+    CHECK(f.find("qeynos").source == game::MapSource::Game);
+}
+
 TEST_CASE("map files: a zone's four layers come from one place, never mixed") {
     Folders f;
     for (const char* n : {"qeynos.txt", "qeynos_1.txt", "qeynos_2.txt", "qeynos_3.txt"}) Folders::put(f.global / n);
