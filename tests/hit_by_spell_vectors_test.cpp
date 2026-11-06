@@ -1214,7 +1214,52 @@ void run_file(const char* file, const Family& family, std::uint32_t seed, void (
     });
 }
 
+// The Moves records' worlds again, with each SPA 379 base raised to 2^26: there 2^26 - 2 rounds back to 2^26, and
+// the shadow step's distance loop never ended (the original's x87 code would not end either). The run stops at
+// the first step that leaves the distance unchanged; the replay's later mismatches are expected and ignored.
+int shadow_step_fixed_points() {
+    static World world;
+    Rng rng(0x7e44);
+    int it = 0, raised = 0;
+    nmsc::test::each_vector("HitBySpell_Moves.jsonl", [&](const Json& r) -> std::string {
+        World& w = world;
+        Rng local(rng.Next());
+        make_world(w, local, kMoves, static_cast<std::uint32_t>(it) * 7);
+        ++it;
+        moves_tweak(w, local);
+        w.k[kThrowAt] = 0;
+        bool no_launch = local.Chance(2) && kMoves.early;
+        w.launch_used = no_launch ? nullptr : &w.launch;
+        w.duration = local.Chance(80) ? -1 : value(local);
+        Names names(w);
+        if (!check_inputs(r["in"], w, names).empty()) return "";
+        bool any = false;
+        for (std::size_t i = 0; i < 12; ++i)
+            if (w.spells[0].attrib[i] == 379 && w.spells[0].base[i] > 5) {
+                w.spells[0].base[i] = 1 << 26;
+                any = true;
+            }
+        if (!any) return "";
+        ++raised;
+        Fpu fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
+        Replay replay(w, r["out"], fpu);
+        HitState state;
+        state.self = &w.self;
+        state.globals = &w.globals;
+        state.frame = &replay.frame;
+        (void)hit_by_spell(state, w.hit, w.launch_used, w.duration, replay, fpu);
+        return "";
+    });
+    return raised;
+}
+
 } // namespace
+
+TEST_CASE("HitBySpell: a shadow step (SPA 379) whose float distance cannot shrink ends") {
+    const int raised = shadow_step_fixed_points();
+    if (!nmsc::test::vector_dir()) MESSAGE("no vectors (NMSC_VECTORS_DIR); nothing checked");
+    else CHECK(raised > 0);
+}
 
 TEST_CASE("HitBySpell vectors: validation") { run_file("HitBySpell_Validation.jsonl", kEarly, 0x7e41, early_tweak); }
 TEST_CASE("HitBySpell vectors: instant effects") { run_file("HitBySpell_Instant.jsonl", kInstant, 0x7e42, nullptr); }

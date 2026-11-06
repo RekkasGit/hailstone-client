@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "core/msvc_atoi.h"
+
 namespace nmsc::game {
 
 bool is_combine_container(std::uint32_t bag_type) {
@@ -136,7 +138,7 @@ RecipeFavorites parse_recipe_favorites(std::string_view value) {
         if (t.size() > 1 && t[0] == '0' && t[1] == 'x')
             place = static_cast<std::uint32_t>(std::strtol(t.c_str(), nullptr, 16));
         else
-            place = static_cast<std::uint32_t>(std::atoi(t.c_str()));
+            place = static_cast<std::uint32_t>(core::msvc_atoi(t));
     }
     return f;
 }

@@ -5,6 +5,7 @@
 #include <format>
 #include <utility>
 
+#include "core/msvc_atoi.h"
 #include "core/wrap_math.h"
 #include "game/slash_commands.h"
 #include "platform/local_time.h"
@@ -58,7 +59,7 @@ bool same_no_case(std::string_view a, std::string_view b) {
     return true;
 }
 
-std::int32_t eq_atoi(std::string_view text) { return std::atoi(std::string(text).c_str()); }
+std::int32_t eq_atoi(std::string_view text) { return core::msvc_atoi(text); }
 
 Switch off_on_toggle(std::string_view args, std::string_view off, std::string_view on) {
     if (starts_no_case(args, off, 3)) return Switch::Off;
@@ -383,10 +384,11 @@ std::array<std::pair<const char*, std::int32_t>, 8> viewport_ini(const Viewport&
 
 ViewRect viewport_rect(const Viewport& v, std::int32_t screen_w, std::int32_t screen_h) {
     ViewRect r;
-    r.x = v.v[4] ? screen_w * v.v[4] / 100 : v.v[0];
-    r.y = v.v[5] ? screen_h * v.v[5] / 100 : v.v[1];
-    r.w = v.v[6] ? screen_w * v.v[6] / 100 : wrap_sub(v.v[2], v.v[0]);
-    r.h = v.v[7] ? screen_h * v.v[7] / 100 : wrap_sub(v.v[3], v.v[1]);
+    // imul then idiv: a scale from a hand-edited display.viewport wraps the product (core/wrap_math.h).
+    r.x = v.v[4] ? core::wrapped_mul_div(screen_w, v.v[4], 100) : v.v[0];
+    r.y = v.v[5] ? core::wrapped_mul_div(screen_h, v.v[5], 100) : v.v[1];
+    r.w = v.v[6] ? core::wrapped_mul_div(screen_w, v.v[6], 100) : wrap_sub(v.v[2], v.v[0]);
+    r.h = v.v[7] ? core::wrapped_mul_div(screen_h, v.v[7], 100) : wrap_sub(v.v[3], v.v[1]);
     if (r.w < 1 || r.w > screen_w) r.w = screen_w;
     if (r.x < 0) r.x = 0;
     if (wrap_add(r.w, r.x) > screen_w) r.x = wrap_sub(screen_w, r.w);

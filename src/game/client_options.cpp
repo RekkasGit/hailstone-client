@@ -5,6 +5,7 @@
 #include <string>
 
 #include "core/ini_file.h"
+#include "core/msvc_atoi.h"
 #include "game/option_commands.h"
 
 namespace nmsc::game {
@@ -110,7 +111,7 @@ void ClientOptions::load(const IniFile& ini) {
         } else if (o.id == O::TargetGroupBuff) {
             // DoMainLoop @0x53d964: "*NULL*" (missing) or any text starting with '*' is not sent; else atoi.
             auto text = ini.get(o.section, o.key);
-            v = !text || (!text->empty() && (*text)[0] == '*') ? kTargetGroupBuffUnset : std::atoi(text->c_str());
+            v = !text || (!text->empty() && (*text)[0] == '*') ? kTargetGroupBuffUnset : core::msvc_atoi(*text);
         } else if (o.id == O::AcceptKickRequests) {
             // The startup's AcceptKickRequests (unk_InitCameras @0x5338a0): 'T', 't' or '1' true, anything else and a
             // missing key false.

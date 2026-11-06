@@ -397,7 +397,8 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                             val = total;
                         } else {
                             std::int32_t x = (static_cast<std::int32_t>(q.get_level(caster)) - 0x28) * 0x2c;
-                            val += x < 0 ? 0 : x;
+                            val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) +
+                                                            static_cast<std::uint32_t>(x < 0 ? 0 : x)); // add: wraps
                         }
                     }
                 } else {
@@ -408,7 +409,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         std::int32_t x = (lv * 5 - 0xc8) * 4;
                         x = x < 0 ? 0 : (x > 0x1f4 ? 0x1f4 : x);
                         Character* c = caster->character;
-                        val -= x;
+                        val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) - static_cast<std::uint32_t>(x));
                         if (c != nullptr) {
                             std::int32_t n = q.max_effects(c);
                             for (std::int32_t j = 0; j < n; ++j) {
@@ -424,7 +425,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         std::int32_t lv = q.get_level(caster);
                         std::int32_t x = (lv * 5 - 0xe1) * 2;
                         x = x < 0 ? 0 : (x > 0xc8 ? 0xc8 : x);
-                        val -= x;
+                        val = static_cast<std::int32_t>(static_cast<std::uint32_t>(val) - static_cast<std::uint32_t>(x));
                     }
                 }
             }
@@ -783,8 +784,13 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         }
                         // 0x440860: fld d / fsub 2 / fst d / fcomp 5.
                         double next = o.sub(Ops::ld(distance), Ops::mem(kTwo));
+                        const std::uint32_t before = distance;
                         distance = Ops::store(next);
                         more = next > static_cast<double>(as_float(kFive));
+                        // A deliberate difference: from 2^25 up a float's d - 2 can round back to d, and the
+                        // original then loops here for ever (the distance alone decides the loop). Stop instead;
+                        // every base that ends in the original ends here at the same step (docs/mechanics.md).
+                        if (distance == before) more = false;
                     } while (more);
                 }
                 break;

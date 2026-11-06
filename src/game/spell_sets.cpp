@@ -6,6 +6,7 @@
 #include <format>
 
 #include "core/ini_file.h"
+#include "core/msvc_atoi.h"
 
 namespace nmsc::game {
 
@@ -116,7 +117,7 @@ bool SpellLoadouts::remove(int n) {
 int SpellLoadouts::find(std::string_view arg) const {
     if (arg.empty()) return -1;
     if (std::all_of(arg.begin(), arg.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); })) {
-        unsigned number = static_cast<unsigned>(std::atoi(std::string(arg).c_str())) - 1u;
+        unsigned number = static_cast<unsigned>(core::msvc_atoi(arg)) - 1u;
         if (number <= 9u && sets_[number].in_use) return static_cast<int>(number);
         return -1;
     }

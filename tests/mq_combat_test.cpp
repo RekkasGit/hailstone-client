@@ -289,4 +289,12 @@ TEST_CASE("TLO: Spawn.LineOfSight and LineOfSight[y,x,z:y,x,z]") {
     CHECK(p("${LineOfSight[1,2:4,5,6]}") == "NULL");
     CHECK(p("${LineOfSight[1,2,3]}") == "NULL");
     CHECK(p("${LineOfSight[a,b,c:4,5,6]}") == "NULL");
+    // Past the world, inf or nan: no sight line to ask about (the collision grid overflowed int32 on these).
+    from = {};
+    CHECK(p("${LineOfSight[-1e12,0,0:0,0,0]}") == "NULL");
+    CHECK(p("${LineOfSight[0,0,0:1000000,0,0]}") == "NULL");
+    CHECK(p("${LineOfSight[inf,0,0:0,0,0]}") == "NULL");
+    CHECK(p("${LineOfSight[0,nan,0:0,0,0]}") == "NULL");
+    CHECK(from == std::array<float, 3>{});
+    CHECK(p("${LineOfSight[-99999,2,3:4,5,6]}") == "TRUE");
 }

@@ -296,3 +296,17 @@ TEST_CASE("SpellData's deity mask is the record's +0x15c") {
     std::memcpy(&mask, r.data() + 0x15c, 4);
     CHECK(s->deity_mask == mask);
 }
+
+TEST_CASE("The spell record image is little-endian on every host (its CRC goes to the server)") {
+    std::vector<std::string> f(237, "0");
+    f[0] = "4514";    // +0x174, 0x11a2
+    f[1] = "Mighty Strike";
+    f[9] = "1.5";     // +0x0, 0x3fc00000
+    f[10] = "-2";     // +0x4, 0xc0000000
+    std::string line;
+    for (std::size_t i = 0; i < f.size(); ++i) line += (i ? "^" : "") + f[i];
+    const game::SpellRecord r = game::spell_record_from_line(line);
+    CHECK((r[0x174] == 0xa2 && r[0x175] == 0x11 && r[0x176] == 0 && r[0x177] == 0));
+    CHECK((r[0] == 0 && r[1] == 0 && r[2] == 0xc0 && r[3] == 0x3f));
+    CHECK((r[4] == 0 && r[5] == 0 && r[6] == 0 && r[7] == 0xc0));
+}

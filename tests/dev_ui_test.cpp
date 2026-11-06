@@ -438,6 +438,18 @@ TEST_CASE("Character creation: stats start at the base with the class's points t
     for (int i = 0; i < 10; ++i) CHECK(create_stat_up(v, 0));
     CHECK_FALSE(create_stat_up(v, 0));
     CHECK(v.points_left == 15);
+    // A world server's absurd allocation: no signed overflow in the sum or the cap.
+    CreateOption huge = o;
+    huge.base.fill(0xffffffffu);
+    huge.points.fill(0x7fffffffu);
+    v.options = {huge};
+    v.option = 0;
+    create_reset_stats(v);
+    CHECK(v.stats[0] == 255);
+    CHECK(v.points_left == 7 * 255);
+    CHECK(create_stat_cap(v, 0) == 150);
+    CHECK_FALSE(create_stat_up(v, 0));
+    CHECK_FALSE(create_stat_down(v, 0));
 }
 
 TEST_CASE("Character creation: race and class stay among the options; a deity keeps the city that still goes with it") {

@@ -8,6 +8,7 @@
 #include <format>
 #include <string_view>
 
+#include "core/msvc_atoi.h"
 #include "game/eq_names.h"
 #include "game/eq_strings.h"
 #include "game/slash_commands.h"
@@ -67,7 +68,7 @@ WhoParse parse_who_args(const std::string& args, const WhoContext& ctx, const Eq
             out.guild = static_cast<std::uint32_t>(-5);
         } else if (std::string g = str(strings, 13122); w.size() > 5 && iprefix(w, g) &&
                                                          std::isdigit(static_cast<unsigned char>(w[5]))) {
-            out.guild = static_cast<std::uint32_t>(std::atoi(w.c_str() + 5));
+            out.guild = static_cast<std::uint32_t>(core::msvc_atoi(std::string_view(w).substr(5)));
         } else if (iequals(w, str(strings, 13122))) { // guild
             if (ctx.own_guild_id == 0xffffffff) {
                 out.error = 12336; // You aren't in a guild, so can't ask for guild info in who list.
@@ -99,10 +100,10 @@ WhoParse parse_who_args(const std::string& args, const WhoContext& ctx, const Eq
             }
             if (matched) continue;
             if (all_digits(w) && !low_set) {
-                low = std::atoi(w.c_str());
+                low = core::msvc_atoi(w);
                 low_set = true;
             } else if (all_digits(w) && !high_set) {
-                high = std::atoi(w.c_str());
+                high = core::msvc_atoi(w);
                 high_set = true;
             } else if (auto gid = ctx.guild_by_name ? ctx.guild_by_name(w) : std::nullopt) {
                 out.guild = *gid;

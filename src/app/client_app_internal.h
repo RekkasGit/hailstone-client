@@ -1350,7 +1350,11 @@ private:
         float radius = 0.0f;
         std::vector<glm::vec3> probes; // the helm's (game::hull_probes)
         Clock::time_point taken{};
+        // The take and pose its vehicles_ entry was last placed with: the same again reuses it as it is.
+        Clock::time_point placed_taken{};
+        game::BoatPose placed_pose{};
     };
+    std::vector<ZoneMoveWorld::Vehicle> vehicles_spare_; // the last step's vehicles_, their storage reused
     std::unordered_map<std::uint32_t, VehicleModel> vehicle_models_;
     std::optional<glm::vec3> boat_hold_; // where a zone-in onto a boat holds the player until the boat is ready
     void update_vehicles();

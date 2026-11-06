@@ -1793,6 +1793,12 @@ bool create_stat_max(CharacterCreateView& view, int stat) {
     return any;
 }
 
+namespace {
+// A stat's base or free points from the world server's allocation table, as an int, at most 255 (no stock value
+// comes near it): a value near 2^32 overflowed the points sum and the base + 25 cap.
+int create_value(std::uint32_t v) { return static_cast<int>(std::min<std::uint32_t>(v, 255)); }
+} // namespace
+
 void create_reset_stats(CharacterCreateView& view) {
     view.stats_for = view.option;
     view.points_left = 0;
@@ -1800,14 +1806,14 @@ void create_reset_stats(CharacterCreateView& view) {
     if (view.option < 0 || view.option >= static_cast<int>(view.options.size())) return;
     const CreateOption& o = view.options[static_cast<std::size_t>(view.option)];
     for (std::size_t i = 0; i < 7; ++i) {
-        view.stats[i] = static_cast<int>(o.base[i]);
-        view.points_left += static_cast<int>(o.points[i]);
+        view.stats[i] = create_value(o.base[i]);
+        view.points_left += create_value(o.points[i]);
     }
 }
 
 int create_stat_cap(const CharacterCreateView& view, int stat) {
     if (view.option < 0 || view.option >= static_cast<int>(view.options.size()) || stat < 0 || stat >= 7) return 0;
-    int base = static_cast<int>(view.options[static_cast<std::size_t>(view.option)].base[static_cast<std::size_t>(stat)]);
+    int base = create_value(view.options[static_cast<std::size_t>(view.option)].base[static_cast<std::size_t>(stat)]);
     return std::min(base + 25, 150);
 }
 
@@ -1822,7 +1828,7 @@ bool create_stat_up(CharacterCreateView& view, int stat) {
 bool create_stat_down(CharacterCreateView& view, int stat) {
     if (view.stats_for != view.option || view.option < 0 || stat < 0 || stat >= 7) return false;
     auto& v = view.stats[static_cast<std::size_t>(stat)];
-    if (v - 1 < static_cast<int>(view.options[static_cast<std::size_t>(view.option)].base[static_cast<std::size_t>(stat)]))
+    if (v - 1 < create_value(view.options[static_cast<std::size_t>(view.option)].base[static_cast<std::size_t>(stat)]))
         return false;
     --v, ++view.points_left;
     return true;

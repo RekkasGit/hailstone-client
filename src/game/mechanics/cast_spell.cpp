@@ -33,11 +33,13 @@ std::uint32_t fpu_copy(std::uint32_t bits) {
 // a player, a pet or a mercenary.
 std::int32_t cached_total(const State& s, Queries& q, std::int32_t spa) {
     if (!s.effects_cached) q.recache_spell_effects();
-    std::int32_t t = q.cached_buff_effect(spa, 0);
-    t += q.cached_aa_effect(spa, 0);
+    // add: wraps (the AA term is the server's bases, any size).
+    auto t = static_cast<std::uint32_t>(q.cached_buff_effect(spa, 0));
+    t += static_cast<std::uint32_t>(q.cached_aa_effect(spa, 0));
     const Spawn* me = s.caster;
-    if (me && (me->type == 0 || me->master_id != 0 || me->mercenary != 0)) t += q.cached_item_effect(spa, 0);
-    return t;
+    if (me && (me->type == 0 || me->master_id != 0 || me->mercenary != 0))
+        t += static_cast<std::uint32_t>(q.cached_item_effect(spa, 0));
+    return static_cast<std::int32_t>(t);
 }
 
 // A PC caster's range: Range + GetFocusRangeModifier (fiadd), stored as a float, at most 5 x Range (compared at the

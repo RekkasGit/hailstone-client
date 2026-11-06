@@ -4,6 +4,8 @@
 #include <cctype>
 #include <cstdlib>
 
+#include "core/msvc_atoi.h"
+
 namespace nmsc::game {
 
 namespace {
@@ -39,7 +41,7 @@ std::size_t token(std::string_view text, std::string& out, std::size_t size) {
 std::size_t int_token(std::string_view text, int& out) {
     std::string t;
     std::size_t used = token(text, t, 0x800);
-    out = std::atoi(t.c_str());
+    out = core::msvc_atoi(t);
     return used;
 }
 
