@@ -364,18 +364,7 @@ void ClientApp::draw_ui(float fps) {
         conn_->set_spellbook_open(conn_->spell_book_open()); // /book's flag follows the book (it closes itself)
         for (int tip : conn_->take_context_tips()) // the connection's events' context tips
             if (eq_api_) eq_api_->activate_tip(tip);
-        for (const std::string& url : conn_->take_web_links()) {
-            // OP_Weblink: the original opens it at once in an in-game HTML window (WebManager_CreateHtmlWnd); here
-            // the browser window (docs/browser.md). Without the helper, a deliberate difference: the system's browser,
-            // with the original's /url line (4095 "Opening %1") to say why one opened. Only http(s) pages (what the
-            // original lets through is not traced: docs/unknowns.md "OP_Weblink").
-            if (!web::url_allowed(url, {})) {
-                log::warn("OP_Weblink: not an http(s) page, not opened: {}", url);
-                continue;
-            }
-            if (!open_web_page(url))
-                conn_->show_with_line_breaks(conn_->strings().format(4095, std::vector<std::string>{url}));
-        }
+        for (const std::string& url : conn_->take_web_links()) open_server_link(url);
         social_ui_.draw(*conn_);
         if (spell_ui_) {
             spell_ui_->draw(*conn_, stats_ui_ ? stats_ui_->character() : nullptr);

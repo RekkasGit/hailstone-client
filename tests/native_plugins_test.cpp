@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <deque>
 #include <fstream>
 #include <thread>
 
@@ -200,6 +201,31 @@ TEST_CASE("native plugins: callbacks it may not use are left off; the policy can
     h.approve(plugin::kCapAll);
     h.plugins->policy_changed({"*"});
     CHECK(h.plugins->loaded("MQ2Example"));
+}
+
+// A narrower policy keeps the plugin loaded (it still has caps), and its hooks stay registered, but it no longer
+// sees the chat, packets or spawns it lost the permission for.
+TEST_CASE("native plugins: a plugin whose capabilities narrow loses its chat and packet hooks at once") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("MQ2Example"));
+    plugin::ChatLine spam{"buy spam now", 0, 0};
+    net::AppPacket in(0x7e57);
+    REQUIRE(h.hooks.chat(spam) == plugin::Flow::Drop);
+    REQUIRE(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in) == plugin::Flow::Drop);
+    h.approve(plugin::kCapCommands | plugin::kCapRead);
+    h.plugins->policy_changed({"*"});
+    REQUIRE(h.plugins->loaded("MQ2Example"));
+    plugin::ChatLine spam2{"buy spam now", 0, 0};
+    net::AppPacket in2(0x7e57);
+    CHECK(h.hooks.chat(spam2) == plugin::Flow::Continue);
+    CHECK(h.hooks.packet(plugin::Stream::Zone, plugin::Direction::In, in2) == plugin::Flow::Continue);
+    CHECK(h.p("${Example.Chats}") == "1"); // the second line never reached it
+    // Given back: it sees them again (its hooks were never taken out).
+    h.approve(plugin::kCapAll);
+    h.plugins->policy_changed({"*"});
+    plugin::ChatLine spam3{"buy spam now", 0, 0};
+    CHECK(h.hooks.chat(spam3) == plugin::Flow::Drop);
 }
 
 TEST_CASE("native plugins: AddCommand needs 'commands'") {
@@ -560,7 +586,17 @@ struct OneTab : plugin::WebAccess {
     bool eval(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
     bool post(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
     bool text(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
-    std::optional<std::string> take_message(const std::string&, std::uint32_t) override { return std::nullopt; }
+    std::deque<std::string> messages; // tab 1's
+    std::optional<std::string> take_message(const std::string& owner, std::uint32_t tab) override {
+        if (owner != "plugin:HostProbe" || tab != 1 || messages.empty()) return std::nullopt;
+        std::string m = messages.front();
+        messages.pop_front();
+        return m;
+    }
+    std::optional<std::size_t> next_message_size(const std::string& owner, std::uint32_t tab) override {
+        if (owner != "plugin:HostProbe" || tab != 1 || messages.empty()) return std::nullopt;
+        return messages.front().size();
+    }
     std::optional<plugin::WebState> state(const std::string& owner, std::uint32_t tab) override {
         if (owner != "plugin:HostProbe" || tab != 1) return std::nullopt;
         plugin::WebState s;
@@ -588,4 +624,23 @@ TEST_CASE("native plugins: web_state fills what a shorter NmscWebState holds, as
     CHECK(h.printed_line("[Probe] state 1, size " + std::to_string(shorter) + ", url https://example.org/, title untouched"));
     h.run("/probestate 2"); // not even its size
     CHECK(h.printed_line("[Probe] state 0, size 2, url -, title untouched"));
+}
+
+// web_message's length with no buffer leaves the message queued, so a plugin can make room for one too long for
+// its buffer; given a buffer the message is taken, cut or not (a loop with a fixed buffer still drains the queue).
+TEST_CASE("native plugins: web_message with no buffer gives the length and keeps the message") {
+    OneTab web;
+    web.messages = {"a long message of thirty-two byte", "next"};
+    Host h(false, &web, NMSC_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probemessage 0");
+    CHECK(h.printed_line("[Probe] message 33, -"));
+    CHECK(web.messages.size() == 2);
+    h.run("/probemessage 64");
+    CHECK(h.printed_line("[Probe] message 33, a long message of thirty-two byte"));
+    h.run("/probemessage 5");
+    CHECK(h.printed_line("[Probe] message 4, next"));
+    h.run("/probemessage 0");
+    CHECK(h.printed_line("[Probe] message -1, -"));
 }

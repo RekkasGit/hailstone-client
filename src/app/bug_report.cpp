@@ -230,6 +230,34 @@ std::string redact_chat(std::string_view text) {
     return out;
 }
 
+std::string redact_crash_report(std::string_view text) {
+    // crash_log.cpp's stack, written after the last log lines and only on builds with backtrace(): its marker, then
+    // backtrace_symbols_fd's frames ("/opt/hailstone(+0x1a) [0x5555...]") to the end. Neither Windows nor a build
+    // without it writes one, so a chat line's continuation that reads "stack:" is told apart by what follows it.
+    static constexpr std::string_view kStack = "\nstack:\n";
+    static constexpr std::string_view kLog = "last log lines:\n";
+    auto frames_only = [](std::string_view rest) {
+        while (!rest.empty()) {
+            const std::size_t end = rest.find('\n');
+            std::string_view line = rest.substr(0, end);
+            rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
+            if (line.ends_with('\r')) line.remove_suffix(1);
+            const std::size_t open = line.rfind(" [0x");
+            if (line.empty()) continue;
+            if (open == std::string_view::npos || !line.ends_with(']')) return false;
+            for (char c : line.substr(open + 4, line.size() - open - 5))
+                if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
+        }
+        return true;
+    };
+    const std::size_t log = text.find(kLog);
+    const std::size_t at = text.rfind(kStack);
+    if (at == std::string_view::npos || (log != std::string_view::npos && at < log) ||
+        !frames_only(text.substr(at + kStack.size())))
+        return redact_chat(text);
+    return redact_chat(text.substr(0, at)) + std::string(text.substr(at));
+}
+
 std::string bug_report_text(const BugReport& r, const std::vector<std::string>& included,
                             const std::vector<std::string>& left_out) {
     std::string out = r.crash ? "Hailstone crash report\n" : "Hailstone bug report\n";
@@ -326,7 +354,7 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
         if (const std::size_t at = name.find(".reported."); at != std::string::npos) name.erase(at, 9);
         // A Windows minidump is binary: a changed length would break it, so it goes in as it is.
         const bool binary = lower(f.extension().string()) == ".dmp";
-        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(redact_chat(*text))))
+        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(redact_crash_report(*text))))
             saved.left_out.push_back(name);
     }
     for (const fs::path& f : r.settings)
@@ -341,8 +369,9 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
             !((text = read_file(f, 2u << 20)) && put(name, clean(redact_chat(*text)))))
             saved.left_out.push_back(name);
     }
-    if (!r.capture.empty())
-        if (auto png = read_file(r.capture); png && !put("screenshots/at-report.png", *png))
+    if (r.capture_png || !r.capture.empty())
+        if (auto png = r.capture_png ? r.capture_png : read_file(r.capture); png && !png->empty() &&
+                                                                              !put("screenshots/at-report.png", *png))
             saved.left_out.push_back("screenshots/at-report.png");
     for (const fs::path& f : recent_screenshots(r.screenshots, r.time)) {
         const std::string name = "screenshots/" + f.filename().string();

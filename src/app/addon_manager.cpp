@@ -491,11 +491,19 @@ void AddonManager::install_offer() {
     const AddonManifest& m = offer->manifest;
     // Its row at once, as it downloads.
     AddonStatus s;
+    bool busy = false;
     {
         std::lock_guard lock(mutex_);
-        if (const AddonStatus* r = row(m.name)) s = *r;
-        removed_.erase(lower(m.name)); // the player installs it again
+        if (const AddonStatus* r = row(m.name)) {
+            // One downloading, or staged for install_ready (which moves it out of addons/new/<name>/ while a new
+            // download would unpack there): this one waits until that is done, as check_one does.
+            busy = r->state == AddonState::Ready || r->state == AddonState::Downloading;
+            s = *r;
+        }
+        if (!busy) removed_.erase(lower(m.name)); // the player installs it again
     }
+    if (busy)
+        return say(m.name + " is already being installed: install it again once that is done", true);
     const bool update = s.installed && !s.addon.name.empty();
     if (!update) {
         s.installed = false;
@@ -750,13 +758,22 @@ std::vector<std::string> AddonManager::install_ready() {
                 continue;
             }
         }
+        std::string error;
         {
             // The row shows the switch as installed.txt has it (apply_addon keeps the installed entry's).
             const auto all = read_installed_addons(env_.data_dir);
-            if (const InstalledAddon* cur = find_addon(all, st.addon.name)) st.addon.auto_update = cur->auto_update;
+            if (const InstalledAddon* cur = find_addon(all, st.addon.name)) {
+                st.addon.auto_update = cur->auto_update;
+                // inspect()'s pins again, against installed.txt as it is now: one of that name installed from
+                // elsewhere since the card was made (two first installs, the other applied first) is not replaced.
+                if (!same_repository(cur->source, st.addon.source))
+                    error = "an add-on named " + cur->name + " is installed already, from " + cur->source;
+                else if (cur->key && st.addon.key != cur->key)
+                    error = cur->name + " is signed with another key than the one installed: remove it first to "
+                                        "trust the new key";
+            }
         }
-        std::string error;
-        const bool ok = apply_addon(env_.data_dir, st.addon, &error);
+        const bool ok = error.empty() && apply_addon(env_.data_dir, st.addon, &error);
         std::lock_guard lock(mutex_);
         AddonStatus s;
         if (const AddonStatus* r = row(st.addon.name)) s = *r;
@@ -789,6 +806,11 @@ std::vector<std::string> AddonManager::install_ready() {
 AddonsStatus AddonManager::status() const {
     std::lock_guard lock(mutex_);
     return status_;
+}
+
+std::uint32_t AddonManager::serial() const {
+    std::lock_guard lock(mutex_);
+    return status_.serial;
 }
 
 std::vector<InstalledAddon> AddonManager::installed() const { return read_installed_addons(env_.data_dir); }

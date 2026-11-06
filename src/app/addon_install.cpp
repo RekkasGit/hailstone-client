@@ -64,6 +64,13 @@ public:
     bool ok() const { return static_cast<bool>(out_); }
     // Moves `from` to `to` (making its folder), written to the journal first.
     bool move(const fs::path& from, const fs::path& to, std::string* error) {
+        // Something already there (a folder holding the player's files, where a file goes now) stops it before the
+        // journal names the move: an undo would take that for the moved file and carry it off.
+        std::error_code in_way;
+        if (fs::exists(to, in_way)) {
+            if (error) *error = "cannot move " + from.string() + " to " + to.string() + ": something is there";
+            return false;
+        }
         out_ << "move\t" << journal_path(data_dir_, from) << "\t" << journal_path(data_dir_, to) << "\n";
         out_.flush();
         if (!out_) {
@@ -177,6 +184,18 @@ void remove_empty_dirs(const fs::path& root, bool self) {
     for (const auto& d : dirs)
         if (fs::is_empty(d, ec)) fs::remove(d, ec);
     if (self && fs::is_empty(root, ec)) fs::remove(root, ec);
+}
+
+// Removes `dir` while it is empty, then its parent the same way, up to `stop` (which stays).
+void remove_empty_parents(fs::path dir, const fs::path& stop) {
+    std::error_code ec;
+    const fs::path top = stop.lexically_normal();
+    for (dir = dir.lexically_normal(); dir != top && dir.has_relative_path(); dir = dir.parent_path()) {
+        const fs::path inside = dir.lexically_relative(top);
+        if (inside.empty() || *inside.begin() == "..") return;
+        if (!fs::is_directory(dir, ec) || !fs::is_empty(dir, ec)) return;
+        if (!fs::remove(dir, ec)) return;
+    }
 }
 
 std::string file_of(std::string_view path) {
@@ -522,10 +541,18 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     for (const auto& f : addon.files)
         if (std::find(out.begin(), out.end(), f.path) == out.end()) out.push_back(f.path);
     std::string why;
+    // Files only: a folder that is the name of a file now (lib/util.lua before, lib now) is left, emptied, and
+    // taken out below so the file can go there; one the player put files in stays, and the move into it fails.
+    std::vector<std::string> moved_out;
     for (const auto& p : out) {
-        if (!fs::exists(target / rel(p), ec)) continue;
+        if (!fs::exists(target / rel(p), ec) || fs::is_directory(target / rel(p), ec)) continue;
         if (!journal.move(target / rel(p), prev / rel(p), &why)) return undo(why);
+        moved_out.push_back(p);
     }
+    // Only the folders in a new file's way: any other empty folder (one a script made for its saves, or the
+    // player's) is not this install's to take.
+    for (const auto& f : addon.files)
+        if (fs::is_directory(target / rel(f.path), ec)) remove_empty_dirs(target / rel(f.path), true);
     for (const auto& f : addon.files)
         if (!journal.move(src / rel(f.path), target / rel(f.path), &why)) return undo(why);
     InstalledAddon entry = addon;
@@ -543,7 +570,8 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     remove_quietly(dir / "installed.prev.txt");
     remove_quietly(prev);
     remove_quietly(src);
-    remove_empty_dirs(target, false);
+    // The earlier version's folders its files left empty, and only those.
+    for (const auto& p : moved_out) remove_empty_parents((target / rel(p)).parent_path(), target);
     log::info("Add-ons: {} {} installed into {}", addon.name, addon.version, target.string());
     return true;
 }

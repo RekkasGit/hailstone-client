@@ -127,7 +127,7 @@ void Updater::run_check() {
             text.append(reinterpret_cast<const char*>(piece.data()), piece.size());
             return !cancel_;
         },
-        [&](std::uint64_t, std::uint64_t) { return !cancel_.load(); });
+        [&](std::uint64_t, std::uint64_t) { return !cancel_.load(); }, [this] { return cancel_.load(); });
     if (cancel_) return;
     if (!got.ok) {
         s.state = UpdateState::Failed;
@@ -241,7 +241,8 @@ void Updater::run_download() {
                     progress.done = before + received;
                     set(progress);
                     return !cancel_.load();
-                });
+                },
+                [this] { return cancel_.load(); });
             out.close();
             if (cancel_) return;
             if (!got.ok || !package_file_ok(part, p)) {

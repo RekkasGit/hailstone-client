@@ -203,24 +203,27 @@ void BrowserHost::resize(std::uint32_t id, std::uint16_t width, std::uint16_t he
     t->options.height = height;
 }
 
+// The player's input goes whatever the queue holds: a few bytes each, and a release or a focus change refused while
+// a script's large message drains would leave the page holding a button or key. Scripts and plugins can call nav
+// too (in a loop), so only the player's goes past the budget.
 void BrowserHost::mouse(const Mouse& m) {
-    if (live(m.tab)) send(m);
+    if (live(m.tab)) send(m, true);
 }
 void BrowserHost::wheel(const Wheel& w) {
-    if (live(w.tab)) send(w);
+    if (live(w.tab)) send(w, true);
 }
 void BrowserHost::key(const Key& k) {
-    if (live(k.tab)) send(k);
+    if (live(k.tab)) send(k, true);
 }
 bool BrowserHost::text(std::uint32_t id, const std::string& s) {
     if (!live(id)) return false;
     return s.empty() || send(Text{id, s});
 }
 void BrowserHost::focus(std::uint32_t id, bool on) {
-    if (live(id)) send(Focus{id, on});
+    if (live(id)) send(Focus{id, on}, true);
 }
-void BrowserHost::nav(std::uint32_t id, NavAction action) {
-    if (live(id)) send(Nav{id, action});
+bool BrowserHost::nav(std::uint32_t id, NavAction action, bool player) {
+    return live(id) && send(Nav{id, action}, player);
 }
 bool BrowserHost::eval(std::uint32_t id, const std::string& script) { return live(id) && send(Eval{id, script}); }
 bool BrowserHost::post(std::uint32_t id, const std::string& message) {
@@ -232,6 +235,13 @@ void BrowserHost::close(std::uint32_t id) {
     if (it == tabs_.end()) return;
     if (!it->second.closed) send(Close{id}, true);
     tabs_.erase(it);
+}
+
+void BrowserHost::refuse(std::uint32_t id, std::string detail) {
+    Tab* t = live(id);
+    if (!t) return;
+    send(Close{id}, true);
+    close_tab(*t, CloseReason::Refused, std::move(detail));
 }
 
 void BrowserHost::close_tab(Tab& t, CloseReason reason, std::string detail) {

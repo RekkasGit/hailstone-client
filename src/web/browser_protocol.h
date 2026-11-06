@@ -16,7 +16,8 @@
 namespace nmsc::web {
 
 inline constexpr std::uint32_t kProtocolVersion = 1;
-// The largest message either side accepts: a 4K page's full frame is 33 MB.
+// The largest message either side accepts: a 4K page's full frame is 33 MB. A larger paint (a 4096x4096 tab's is
+// just over 64 MiB) goes as several Frames (split_frame).
 inline constexpr std::size_t kMaxMessage = std::size_t{64} << 20;
 // What the page decides the size of, smaller: a console line's text (the helper cuts it, at a UTF-8 character) and
 // a window.hailstone.post() message (the page gets an exception for a longer one). A Console or PageMessage longer
@@ -168,6 +169,13 @@ std::vector<std::byte> encode_message(const Message& m);
 // A message's bytes after the length; nullopt for an unknown type, a short message, bytes left over or values out
 // of range (a frame rectangle outside its image).
 std::optional<Message> decode_message(std::span<const std::byte> body);
+
+// A Frame as Frames whose bodies are each at most `max_body` bytes (kMaxMessage): rectangles grouped while they fit,
+// and one too large on its own cut into bands of whole rows. The client copies each in turn, so the image is the
+// same. `max_body` must hold a frame of one row of the widest rectangle.
+std::vector<Frame> split_frame(Frame f, std::size_t max_body = kMaxMessage);
+// The body size of a Frame message (the type byte and its fields).
+std::size_t frame_body_size(const Frame& f);
 
 // The largest body (after the length) a message of this type byte may have: kMaxMessage, less for Console and
 // PageMessage.

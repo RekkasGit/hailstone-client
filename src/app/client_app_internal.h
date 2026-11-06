@@ -14,6 +14,7 @@
 #include "app/client_app.h"
 #include "app/input_script.h"
 #include "app/zone_settle.h"
+#include "app/server_links.h"
 
 #include <algorithm>
 #include <array>
@@ -873,6 +874,8 @@ private:
     void wire_bug_reports(EqHost& h);
     void leave_character(); // the connection gone (camp, logout, link death): the character's state let go
     std::future<std::optional<SavedBugReport>> save_bug_report(BugReport report);
+    // The client's facts, files and the screenshot's bytes into a report, as they are now (at its Send).
+    void fill_bug_report(BugReport& report);
     // The account names and home folder a report takes out of its files (BugReport::accounts, home).
     void add_private_names(BugReport& report) const;
     void report_last_crash();
@@ -1117,7 +1120,10 @@ private:
     // The in-game browser (docs/browser.md): its tab host, made on first use when browser/hailstone-web is installed
     // (null without it: pages go to the system's browser); open_web_page opens one in its window (true), else there.
     web::BrowserHost* browser();
-    bool open_web_page(const std::string& url);
+    // `tab`: the tab it opened, 0 when it went to the system's browser.
+    bool open_web_page(const std::string& url, std::uint32_t* tab = nullptr);
+    ServerLinks server_links_; // OP_Weblink's limits (app/server_links.h)
+    void open_server_link(const std::string& url);
     // Closes the tabs of scripts that stopped and plugins that unloaded (once a frame).
     void close_orphan_tabs();
     // The item previews' subjects (app/item_preview_view.h) from the connection's last replies, before the UI draws:

@@ -45,10 +45,22 @@ public:
     bool post(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& message) override;
     bool text(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& text) override;
     std::optional<std::string> take_message(const std::string& owner, std::uint32_t tab) override;
+    std::optional<std::size_t> next_message_size(const std::string& owner, std::uint32_t tab) override;
     std::optional<plugin::WebState> state(const std::string& owner, std::uint32_t tab) override;
     std::vector<std::uint32_t> tabs(const std::string& owner) override;
     bool view(const std::string& owner, std::uint32_t caps, std::uint32_t tab, float width, float height) override;
     void close_owner(const std::string& owner) override;
+
+    // A tab for the server's OP_Weblink (app/client_app_web.cpp): the player's own (owner "", shown in the browser
+    // window, the player browses on from it), as the original's HTML window is, but in a cookie folder of its own
+    // (server_link_profile), so a page the server picked does not run with the player's sign-ins. `url` is checked
+    // by the caller.
+    std::uint32_t open_server_link(const std::string& url, std::string* why = nullptr);
+
+    // Once a frame: a script's or plugin's tab is closed (Refused) when its owner no longer has 'web' (`caps_of`, by
+    // owner) or the server's [web] allow is not the one it was opened with, since the helper keeps a tab's sites for
+    // its life. The owner sees why (state) and may open it again under the new rules.
+    void recheck(const std::function<std::uint32_t(const std::string&)>& caps_of);
 
     // What the player typed into an address bar: a bare host or path gets https://.
     static std::string address(std::string text);
@@ -56,6 +68,8 @@ public:
     // own below it for each script and plugin ("hailstone-addons/<name>-<hash>"), so no add-on's page shares the
     // player's cookies (signed-in sessions) or another add-on's.
     static std::string owner_profile(const std::string& base, const std::string& owner);
+    // The cookie and cache folder of the server's links' tabs: "server-links" in the server's folder `base`.
+    static std::string server_link_profile(const std::string& base);
 
 private:
     web::BrowserHost* host();

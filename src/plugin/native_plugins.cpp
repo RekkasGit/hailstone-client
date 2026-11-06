@@ -212,6 +212,13 @@ struct Loaded {
     std::atomic<bool> thread_warned{false}; // said once that it called the host from another thread
     std::vector<std::string> threw_at;       // the callbacks that let an exception out (said once each)
 
+    // next_spawn's walk: the zone's spawn ids in order, made again at a walk's start (after_id 0) and whenever the
+    // spawns are not the ones it was made from (WorldState::spawn_set_serial moved, another count, or an id gone),
+    // so a walk is n log n, not n^2.
+    std::vector<std::uint32_t> spawn_ids;
+    const void* spawn_ids_of = nullptr; // the spawn map they came from
+    std::uint64_t spawn_ids_serial = 0;
+
     // The packet OnPacket is looking at (resize_packet's target).
     net::AppPacket* current_packet = nullptr;
     int busy = 0;              // inside one of its callbacks
@@ -1030,12 +1037,30 @@ int h_get_spawn(void* h, std::uint32_t id, NmscSpawn* out) {
 }
 
 int h_next_spawn(void* h, std::uint32_t after_id, NmscSpawn* out) {
-    const net::GameConnection* c = readable(Loaded::of(h), "next_spawn");
+    Loaded& l = Loaded::of(h);
+    const net::GameConnection* c = readable(l, "next_spawn");
     if (!c) return 0;
-    const game::Spawn* best = nullptr;
-    for (const auto& [id, s] : c->world().spawns)
-        if (id > after_id && (!best || id < best->id)) best = &s;
-    return best ? give(out, spawn_struct(*c, *best)) : 0;
+    const auto& spawns = c->world().spawns;
+    auto rebuild = [&] {
+        l.spawn_ids.clear();
+        l.spawn_ids.reserve(spawns.size());
+        for (const auto& [id, s] : spawns) l.spawn_ids.push_back(id);
+        std::sort(l.spawn_ids.begin(), l.spawn_ids.end());
+        l.spawn_ids_of = &spawns;
+        l.spawn_ids_serial = c->world().spawn_set_serial;
+    };
+    // A walk that starts at 0, or any spawn added or gone since (a resumed walk, from a saved id, sees them too).
+    if (after_id == 0 || l.spawn_ids_of != &spawns || l.spawn_ids.size() != spawns.size() ||
+        l.spawn_ids_serial != c->world().spawn_set_serial)
+        rebuild();
+    for (int pass = 0; pass < 2; ++pass) {
+        auto it = std::upper_bound(l.spawn_ids.begin(), l.spawn_ids.end(), after_id);
+        if (it == l.spawn_ids.end()) return 0;
+        auto s = spawns.find(*it);
+        if (s != spawns.end()) return give(out, spawn_struct(*c, s->second));
+        rebuild(); // one gone since: made again from the spawns there are
+    }
+    return 0;
 }
 
 int h_get_spell(void* h, std::uint32_t id, NmscSpell* out) {
@@ -1363,7 +1388,14 @@ int h_web_text(void* h, std::uint32_t tab, const char* text) {
 int h_web_message(void* h, std::uint32_t tab, char* out, std::size_t out_size) {
     Loaded& l = Loaded::of(h);
     WebAccess* w = web_of(l, "web_message");
-    auto m = w ? w->take_message(web_owner(l), tab) : std::nullopt;
+    if (!w) return -1;
+    // No buffer: the length only, left queued, so the plugin can make room for it (one given takes it, cut or not:
+    // a loop with a fixed buffer never sees the same message twice).
+    if (!out || out_size == 0) {
+        auto n = w->next_message_size(web_owner(l), tab);
+        return n ? static_cast<int>(*n) : -1;
+    }
+    auto m = w->take_message(web_owner(l), tab);
     return m ? copy_out(*m, out, out_size) : -1;
 }
 int h_web_state(void* h, std::uint32_t tab, NmscWebState* out) {
@@ -1688,9 +1720,12 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             if (z == ZonePhase::End && lp->end_zone) lp->end_zone();
             if (z == ZonePhase::Zoned && lp->zoned) lp->zoned();
         }));
+    // Registered under the capability they need, and asked again each time: a narrower policy (policy_changed) keeps
+    // the plugin loaded and its hooks registered, but what it lost it no longer sees.
     if (p.add_spawn || p.remove_spawn) {
         if (p.can(kCapRead)) {
             hooks.on_spawn(p.owner, scoped([lp](std::uint32_t id, bool added) {
+                if (!lp->can(kCapRead)) return;
                 if (added && lp->add_spawn) lp->add_spawn(id);
                 if (!added && lp->remove_spawn) lp->remove_spawn(id);
             }));
@@ -1701,6 +1736,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     if (p.incoming_chat || p.filter_chat) {
         if (p.can(kCapEvents)) {
             hooks.on_chat(p.owner, scoped([lp](ChatLine& line) {
+                if (!lp->can(kCapEvents)) return Flow::Continue;
                 if (lp->incoming_chat) lp->incoming_chat(line.text.c_str(), line.color);
                 if (lp->filter_chat && lp->filter_chat(line.text.c_str(), line.color)) return Flow::Drop;
                 return Flow::Continue;
@@ -1714,6 +1750,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
             for (Stream st : {Stream::World, Stream::Zone})
                 for (Direction dir : {Direction::In, Direction::Out})
                     hooks.on_packet(p.owner, st, dir, 0, scoped([lp, st, dir](net::AppPacket& pk) {
+                        if (!lp->can(kCapPackets)) return Flow::Continue;
                         NmscPacket c{pk.opcode, reinterpret_cast<std::uint8_t*>(pk.data.data()), pk.data.size()};
                         net::AppPacket* before = std::exchange(lp->current_packet, &pk);
                         int drop = lp->packet(st == Stream::World ? NMSC_STREAM_WORLD : NMSC_STREAM_ZONE,
@@ -1765,7 +1802,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
         // The command line rewrite: on the hook bus, ahead of the commands, while the plugin is active.
         if (lp->hooks.command_line && lp->can(kCapExtend))
             hooks.on_command_line(p.owner, scoped([lp](std::string& line) {
-                if (!lp->active || !lp->hooks.command_line) return Flow::Continue;
+                if (!lp->active || !lp->hooks.command_line || !lp->can(kCapExtend)) return Flow::Continue;
                 if (const char* r = lp->hooks.command_line(line.c_str())) line = r;
                 return Flow::Continue;
             }));

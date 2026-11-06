@@ -130,6 +130,11 @@ Each running file carries a set of capability bits: every one for the server's f
 manager installed gets no more than its manifest's `caps`, whatever the server allows (docs/addons.md "Capabilities":
 `plugin::Policy::set_ceilings`, by the file's hash).
 
+The bits are checked again whenever they change (the server's `hailstone.cfg` arriving at the zone-in after a first
+visit's provisional rules, a lowered ceiling): a compiled plugin that stays loaded with fewer of them gets no more
+packets (`OnPacket`), chat lines (`OnIncomingChat`, `OnFilterChat`), spawn events or command lines (the server
+extension's `command_line`) from the moment it lost the bit, and its web tabs close.
+
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |
@@ -709,8 +714,10 @@ the same way; try again a frame or so later. An empty queue takes the largest me
 
 The page and its owner talk through `window.hailstone`: the page's `hailstone.post(text)` is queued for the owner
 (`mq.web.messages(tab)`, `eq.WebMessages(tab)`, `web_message`; a message is at most 1 MB, and at most 256 and 8 MB
-wait, the oldest going first), and the owner's `post` calls
-the page's `hailstone.onmessage(text)` when it set one. A page cannot run commands or read the game itself; what a
+wait, the oldest going first; `web_message` with a buffer takes the message off the queue even when it is cut, and
+with `out` NULL gives only its length and leaves it queued, so a plugin can make room for a long one first), and the
+owner's `post` calls the page's `hailstone.onmessage(text)` when it set one. A tab is closed (Refused, with why)
+when its owner loses `web` or the server's `[web] allow` changes (docs/browser.md "Rules that change"). A page cannot run commands or read the game itself; what a
 message does is up to its owner, within the owner's own permissions.
 
 | | Lua scripts and Lua plugins | A plugin's windows (UI pack) | Compiled plugins (ABI 3) |

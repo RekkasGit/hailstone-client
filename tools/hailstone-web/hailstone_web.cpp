@@ -254,7 +254,9 @@ public:
                 std::memcpy(fr.bgra.data() + y * row, px + (y0 + y) * stride + static_cast<std::size_t>(x0) * 4, row);
             f.rects.push_back(std::move(fr));
         }
-        if (!f.rects.empty()) send(f);
+        // A full paint of the largest tab (4096x4096) is over kMaxMessage, which the client takes as a broken stream.
+        if (!f.rects.empty())
+            for (const web::Frame& part : web::split_frame(std::move(f))) send(part);
     }
     void OnPopupShow(CefRefPtr<CefBrowser>, bool show) override {
         popup_shown_ = show;

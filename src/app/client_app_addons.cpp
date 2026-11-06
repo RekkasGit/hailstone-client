@@ -95,6 +95,7 @@ void ClientApp::start_addons() {
         platform::HttpGetOptions options;
         options.user_agent = agent;
         options.allow_url = allow_url;
+        options.cancelled = [&keep_going] { return !keep_going(); }; // quitting does not wait out a stalled fetch
         return platform::http_get(url, options, sink,
                                   [&keep_going](std::uint64_t, std::uint64_t) { return keep_going(); });
     };
@@ -148,14 +149,16 @@ void ClientApp::update_addons() {
     if (addons_ && at_login && !login_view_.busy && !login_ && !conn_ && box_clients_.running() == 0 &&
         addons_->has_ready())
         addons_->install_ready();
-    const AddonsStatus st = addons_ ? addons_->status() : AddonsStatus{};
-    if (st.serial != addons_serial_ || addons_dirty_) {
-        addons_serial_ = st.serial;
+    // Each frame in the world too: only the serial, not a copy of the whole status (the index, the store).
+    const std::uint32_t serial = addons_ ? addons_->serial() : 0;
+    if (serial != addons_serial_ || addons_dirty_) {
+        addons_serial_ = serial;
         addons_dirty_ = false;
         if (automation_) automation_->set_addon_ceilings(addon_ceilings(read_installed_addons(data)));
         addons_listed_ = {};
     }
     if (!at_login) return;
+    const AddonsStatus st = addons_ ? addons_->status() : AddonsStatus{};
 
     // The lists beside the add-ons read folders: when the picked server changes, and every few seconds.
     const std::string profile = ui::selected_profile_id(login_view_);

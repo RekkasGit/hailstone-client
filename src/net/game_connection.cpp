@@ -531,6 +531,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         world_drop_pending_ = true;
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
         world_.spawns.clear();
+        ++world_.spawn_set_serial;
         world_.player_id = 0;
         world_.controlled_id = 0;
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
@@ -747,7 +748,9 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
 
 void GameConnection::apply_spawn(const Spawn& s) {
+    const std::size_t had = world_.spawns.size();
     game::Spawn& out = world_.spawns[s.spawn_id];
+    if (world_.spawns.size() != had) ++world_.spawn_set_serial;
     out.id = s.spawn_id;
     out.name = s.name;
     out.last_name = s.last_name;
@@ -1198,7 +1201,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             // (CTradeWnd_CancelAndClose, which sends OP_CancelTrade). EQEmu tells only the player who left.
             if (trade_ && trade_->partner_id == *id) trade_cancel();
             spawn_leaving(*id);
-            world_.spawns.erase(*id);
+            if (world_.spawns.erase(*id)) ++world_.spawn_set_serial;
             forget_pet_spawn(*id);
             // msgEQRmPlayer @0x4b8380: the target leaving stops auto attack and clears the target (no OP_TargetMouse).
             // Hailstone, as after a death: attack_until_xtarget_clear keeps attacking while the extended target list

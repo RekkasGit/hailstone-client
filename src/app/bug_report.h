@@ -41,6 +41,9 @@ struct BugReport {
     std::vector<std::filesystem::path> logs;         // most wanted first
     std::vector<std::filesystem::path> settings;     // hailstone.ini ...: password, token and secret lines blanked
     std::filesystem::path capture;                   // the screenshot taken when the window opened (may be empty)
+    // That screenshot's bytes, read at Send: when set, `capture` is not read (the file is the next window's to
+    // delete and write again while this report is still being saved).
+    std::optional<std::string> capture_png;
     std::filesystem::path screenshots;               // the player's screenshots folder (may be empty)
     // Taken out of every text in the archive (redact_private()): the player's login account names, and the home
     // folder (on Linux, its name is the player's system account name).
@@ -82,6 +85,9 @@ std::string redact_private(std::string_view text, const std::vector<std::string>
                            const std::filesystem::path& home);
 // `text` (a log) with the words of each chat line ("[info] chat: ...") taken out, the line itself kept.
 std::string redact_chat(std::string_view text);
+// A crash report (platform/crash_log.cpp) with redact_chat() on its last log lines only: the stack written after
+// them ("\nstack:\n" and the frames, no level's tag) is never taken for a chat line's continuation.
+std::string redact_crash_report(std::string_view text);
 // Deletes all but the newest `keep` hailstone-*.zip in `dir`.
 void prune_bug_reports(const std::filesystem::path& dir, std::size_t keep = kBugReportsKept);
 // The crash reports in `logs` not bundled yet (crash-*.txt, oldest first).

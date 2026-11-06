@@ -21,7 +21,7 @@ export (docs/unknowns.md "OP_Weblink").
 
 | Path | Hailstone |
 |---|---|
-| OP_Weblink | A new tab in the browser window, as the original's HTML window opens at once. Without the helper (macOS, or not installed) the system's browser, with 4095 "Opening %1" in chat so the player sees why: a deliberate difference. Only http and https addresses (others are logged and dropped). |
+| OP_Weblink | A new tab in the browser window, as the original's HTML window opens at once. Without the helper (macOS, or not installed) the system's browser, with 4095 "Opening %1" in chat so the player sees why: a deliberate difference. Only http and https addresses (others are logged and dropped). A server's link is not the player's choice, so a flood (a quest looping on `SendWebLink`) is held to limits, a deliberate difference past what a quest plausibly sends (`app/server_links.h`): the same address again within 10 seconds is not opened again, at most 5 links open a minute (the rest are dropped, logged once), and once 4 of the links' tabs are open the newest is sent to the next address instead of a new tab. A tab is the links' only while it shows the address the last link sent it to: one the player browsed on from is the player's and is never taken over. The tab is the player's own (shown in the browser window, not held to a script's rules), as the original's HTML window is a browser the player uses, with two limits of Hailstone's: a link to this computer or the player's network (`web::private_host`: localhost, 192.168.x.x ...) is logged and not opened, and the links' tabs keep their cookies in `server-links/` in the server's folder, so a page the server picked does not run with the player's sign-ins. |
 | /web [address] | Hailstone's own: the browser window, on the address in a new tab (no scheme: `https://`). The player's only; a script or plugin is told to use /url. Without the helper, the system's browser. |
 | /url, /www | As the original for the player's own typing. For a script or plugin: needs the `web` permission, and the address must be http(s) on a host the server's `[web] allow` lets through (`core/web_url.h`), never this computer or a private network (`web/page_rules.h`, below). |
 | The guild window's Go to URL | The guild's URL (what an officer set: other players' text) through `/url`, without `${...}` expansion, and only when it is http(s); one without a scheme gets `http://`, as `/www` does. A deliberate difference: what the original's `CGuildMgmtWnd` opens is not traced (docs/unknowns.md). Join Channel and Update MOTD send their text without `${...}` too (docs/plugins.md "MQ commands"). |
@@ -90,7 +90,7 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   never see another's cookies, for the player's own tabs. Each script and plugin has a profile of its own below it,
   `hailstone-addons/<owner>-<hash>/` (`WebService::owner_profile`: the owner's name lower-cased, what is not a letter,
   digit, `-` or `_` as `_`, and its FNV-1a hash), and the helper a request context for each profile: an add-on's page
-  never sees the player's sign-ins or another add-on's. Nothing goes in the game folder. A generic user agent naming
+  never sees the player's sign-ins or another add-on's. The server's links (OP_Weblink) have `server-links/` below it. Nothing goes in the game folder. A generic user agent naming
   Hailstone; no hardware identifiers.
 - **Scripts and plugins** (docs/plugins.md "Web pages"): `mq.web` for scripts, `eq.Web*` in a plugin's windows,
   `web_*` in the host table (ABI 3). The page sees only `window.hailstone.post()` and `window.hailstone.onmessage`,
@@ -112,13 +112,21 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   refused and never sent, since the helper takes a message over its limit as a broken stream and quits (which a
   script could repeat until the client gave up on the browser). While 32 MB wait for the helper to read them
   (`BrowserHost::kSendBudget`), anything but the client's own Hello, Close, Shutdown and a restart's reopened tabs is
-  refused (an `eval`, `text`, `post`, `navigate` or `open` returns false; input is dropped); an empty queue takes any
+  refused (an `eval`, `text`, `post`, `navigate` or `open` returns false; the player's mouse, wheel, keys, focus and
+  back/forward/reload/stop always go, a few bytes each, so a release is never lost; a script's or plugin's
+  back/forward/reload/stop is refused like its other messages); an empty queue takes any
   message, so several large evals in one frame send the first and refuse the rest instead of piling up. A helper that
   takes none of what waits for 10 seconds (`kStallMs`) has stopped reading: it is ended and restarted as a dead one
   is. `HelperProcess` also ends one whose queue would pass 128 MB (`kMaxPending`), which the budget keeps out of
   reach. A script or plugin holds at most
   16 tabs (`WebService::kMaxTabsPerOwner`), closed ones included until it closes them; a closed tab's images are let
-  go when it closes.
+  go when it closes. A paint larger than 64 MB (a 4096x4096 tab's full frame is just over) goes from the helper as
+  several Frames (`web::split_frame`: rectangles grouped, a too large one cut into bands of rows), so the protocol
+  and its version are unchanged.
+- **Rules that change.** The helper keeps a tab's sites for its life, so once a frame (`WebService::recheck`) a
+  script's or plugin's tab is closed as Refused, its owner told why (`state().why`), when the owner no longer has
+  `web` or the server's `[web] allow` is not the one the tab was opened with (the server's `hailstone.cfg` arriving
+  at the zone-in after provisional rules, say). The owner may open it again under the new rules.
 
 ### The helper (`tools/hailstone-web`)
 

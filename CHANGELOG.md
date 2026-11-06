@@ -77,6 +77,21 @@
 - An add-on install or removal cut off at the wrong moment now puts the add-on list back with the files, so the add-on shows its real version and can be updated again
 - For add-on authors and release builders: `tools/make_addon.py` and `tools/make_update.py` take in a linked folder's files instead of leaving them out, and stop at a link that loops
 - For server owners: `hailstone.lua` reads its `hailstone:<name>` data buckets at most every 10 seconds instead of at every packet, looks at a client file's time once until the list is next made instead of at every first-piece request, and limits each character's file-list, guild and settings requests
+- In-game browser: a mouse button or key let go while a script's large message was still on its way to the browser is no longer lost (the page used to keep the button or key held)
+- A server's web link no longer opens a page on your own computer or home network (a router's admin page, for example), keeps its cookies apart from the pages you open yourself, and a link never takes over a tab you have browsed on from
+- In-game browser: a page shown at the largest size (4096x4096, or a browser window stretched past it on an 8K display) no longer makes the client restart the browser until it gives up on it for the session
+- In-game browser: a script's or plugin's page is closed (it is told why) when the server's `[web] allow` changes or the script loses the `web` permission, for example when the server's `hailstone.cfg` arrives at the first zone-in; it used to keep the sites it was opened with for the rest of the session
+- For plugin authors: `web_message(host, tab, NULL, 0)` gives the next page message's length and leaves it queued, so a plugin can make room for a long one; given a buffer the message is still taken, cut or not
+- A server (or a quest looping on `SendWebLink`) can no longer open hundreds of browser pages or system-browser tabs: the same link again within 10 seconds is not opened again, at most 5 open a minute, and once 4 such pages are open the newest is reused
+- A compiled plugin that keeps running with fewer permissions (the server's `hailstone.cfg` arriving at the zone-in, a lowered add-on ceiling) no longer goes on seeing packets, chat lines, spawn events or typed command lines it lost the permission for
+- The developer Plugins & Lua window no longer reads and hashes every plugin file on every frame while it is open (once a second now)
+- Add-ons: installing an add-on again while it is still downloading or waiting to be installed is refused with a message, instead of unpacking into the folder the waiting install is moving files out of
+- Add-ons: an add-on installed from one repository is no longer replaced by another of the same name from another repository or signing key when both were installed at about the same time
+- Add-ons: an update in which a folder became a file of the same name installs, instead of failing and being rolled back at every login screen; an update that would put a file where you keep your own files in a folder stops and leaves them alone
+- Updates: when the record of the installed update cannot be saved first (disk full, a file in the way), the update stops before moving anything, instead of deleting that record if it later had to be rolled back
+- Windows: quitting while an update check or an add-on download waits on a network that has stopped answering no longer keeps hailstone.exe running for up to a minute after its window closes
+- Bug reports: a Linux crash report whose last log line was chat keeps its stack trace in the report (taking the chat out used to take the stack with it)
+- Bug reports: a report still being written when the window is opened again keeps its own screenshot (it could get none, a broken one or the next one), and a report sent while an earlier one is written says where you were and what you targeted when you sent it, not when its turn came
 
 ## 0.5.0-beta (2026-11-05)
 

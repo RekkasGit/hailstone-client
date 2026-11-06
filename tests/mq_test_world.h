@@ -166,7 +166,9 @@ struct World {
     }
 
     void add(std::uint32_t id, const std::string& name, bool npc, int level, glm::vec3 pos) {
-        auto& s = net::GameConnectionTestAccess::world(*conn).spawns[id];
+        auto& w = net::GameConnectionTestAccess::world(*conn);
+        if (!w.spawns.contains(id)) ++w.spawn_set_serial; // as GameConnection::apply_spawn
+        auto& s = w.spawns[id];
         s.id = id;
         s.name = name;
         s.is_npc = npc;

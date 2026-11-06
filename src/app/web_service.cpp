@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <optional>
 
 #include "plugin/policy.h"
 #include "ui/web_textures.h"
@@ -146,6 +147,24 @@ std::uint32_t WebService::open(const std::string& owner, std::uint32_t caps, con
     return b->open(address(url), std::move(o), why);
 }
 
+std::uint32_t WebService::open_server_link(const std::string& url, std::string* why) {
+    web::BrowserHost* b = host();
+    if (!b || !b->available()) {
+        if (why) *why = b && !b->last_error().empty() ? b->last_error() : "the in-game browser is not installed";
+        return 0;
+    }
+    web::TabOptions o;
+    if (env_.profile) o.profile = server_link_profile(env_.profile());
+    return b->open(url, std::move(o), why);
+}
+
+std::string WebService::server_link_profile(const std::string& base) {
+    if (base.empty()) return base;
+    std::string out = base;
+    if (out.back() != '/' && out.back() != '\\') out += '/';
+    return out + "server-links";
+}
+
 bool WebService::navigate(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& url,
                           std::string* why) {
     if (!may(owner, caps, why)) return false;
@@ -164,8 +183,7 @@ bool WebService::nav(const std::string& owner, std::uint32_t caps, std::uint32_t
     else if (action == "reload") a = web::NavAction::Reload;
     else if (action == "stop") a = web::NavAction::Stop;
     else return false;
-    host()->nav(tab, a);
-    return true;
+    return host()->nav(tab, a, owner.empty());
 }
 
 void WebService::close(const std::string& owner, std::uint32_t tab) {
@@ -197,6 +215,13 @@ std::optional<std::string> WebService::take_message(const std::string& owner, st
     return b->take_message(tab);
 }
 
+std::optional<std::size_t> WebService::next_message_size(const std::string& owner, std::uint32_t tab) {
+    web::BrowserHost* b = host();
+    const web::Tab* t = b ? b->tab(tab) : nullptr;
+    if (!t || owner.empty() || t->options.owner != owner || t->messages.empty()) return std::nullopt;
+    return t->messages.front().size();
+}
+
 std::optional<plugin::WebState> WebService::state(const std::string& owner, std::uint32_t tab) {
     web::BrowserHost* b = host();
     const web::Tab* t = b ? b->tab(tab) : nullptr;
@@ -226,6 +251,26 @@ void WebService::close_owner(const std::string& owner) {
     if (!b) return;
     for (std::uint32_t id : tabs(owner)) {
         b->close(id);
+        if (focused_ == id) focused_ = 0;
+    }
+}
+
+void WebService::recheck(const std::function<std::uint32_t(const std::string&)>& caps_of) {
+    web::BrowserHost* b = host();
+    if (!b) return;
+    std::optional<std::vector<std::string>> allow; // read once, and only with a script's tab open
+    for (std::uint32_t id : b->tabs()) {
+        const web::Tab* t = b->tab(id);
+        if (!t || t->closed || t->options.owner.empty()) continue;
+        std::string why;
+        if (!(caps_of(t->options.owner) & plugin::kCapWeb)) {
+            why = "it no longer has the server's 'web' permission";
+        } else {
+            if (!allow) allow = env_.allow ? env_.allow() : std::vector<std::string>{};
+            if (t->options.allow != *allow) why = "the server changed the sites scripts may open";
+        }
+        if (why.empty()) continue;
+        b->refuse(id, std::move(why));
         if (focused_ == id) focused_ = 0;
     }
 }
@@ -263,12 +308,17 @@ bool WebService::view(const std::string& owner, std::uint32_t caps, std::uint32_
         }
 
     const ImGuiIO& io = ImGui::GetIO();
-    const auto x = static_cast<std::int32_t>(io.MousePos.x - p0.x), y = static_cast<std::int32_t>(io.MousePos.y - p0.y);
+    // With no mouse (it left the game's window) ImGui's position is -FLT_MAX, which no int holds: the last one the
+    // page had stands in, and every position is held to a range an int32 takes.
+    const bool valid = ImGui::IsMousePosValid();
+    const float mx = valid ? io.MousePos.x : last_x_, my = valid ? io.MousePos.y : last_y_;
+    auto page = [](float v) { return static_cast<std::int32_t>(std::clamp(v, -65536.0f, 65536.0f)); };
+    const std::int32_t x = page(mx - p0.x), y = page(my - p0.y);
     const std::uint32_t mods = mods_now();
     if (hovered || ImGui::IsItemActive()) {
-        if (io.MousePos.x != last_x_ || io.MousePos.y != last_y_) b.mouse({tab, web::MouseKind::Move, {}, 1, x, y, mods});
-        last_x_ = io.MousePos.x;
-        last_y_ = io.MousePos.y;
+        if (valid && (mx != last_x_ || my != last_y_)) b.mouse({tab, web::MouseKind::Move, {}, 1, x, y, mods});
+        last_x_ = mx;
+        last_y_ = my;
         hovered_ = tab;
         ImGui::SetMouseCursor(imgui_cursor(t.cursor));
         constexpr web::MouseButton kButtons[] = {web::MouseButton::Left, web::MouseButton::Right, web::MouseButton::Middle};

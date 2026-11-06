@@ -482,6 +482,7 @@ add_library(nmsc_engine STATIC
   src/app/lua_eq_stats.cpp
   src/app/lua_eq_web.cpp
   src/app/web_service.cpp
+  src/app/server_links.cpp
   src/app/lua_eq_misc.cpp
   src/app/lua_eq_notes.cpp
   src/app/lua_eq_gamepad.cpp
@@ -941,6 +942,7 @@ if(NMSC_BUILD_TESTS)
     tests/notice_packets_test.cpp
     tests/web_url_test.cpp
     tests/browser_host_test.cpp
+    tests/server_links_test.cpp
     tests/swept_sphere_test.cpp
     tests/eq_strings_test.cpp
     tests/distance_test.cpp
