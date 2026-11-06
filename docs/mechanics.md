@@ -1232,3 +1232,8 @@ The sheet's stored HP (profile +0x3394 BaseHP, which current HP adds the HP bonu
 (`LiveState::hp`), as OP_HPUpdate's value is stored there for the local player. Left at 0, current HP read 0 and the
 weight calculation's low-health slowdown applied: AGI halved (a level-60 cleric's max endurance 1614 for the
 server's 1668) and the movement frame's weight factor 0.5.
+
+The windows' own HP (labels 17, 18, 19 and 70, gauge 1, and the player's HP percent wherever a spawn's is shown) is
+OP_HPUpdate's points plus the item sum (`DerivedStats::hp_bonus`), as Cur_HP and Max_HP add it: EQEmu sends the
+player its own HP without the items' HP. A server extension's vitals (`CharacterVitals`) are the whole value and get
+nothing added (app/lua_eq_values.cpp `own_hp`).

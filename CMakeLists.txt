@@ -907,6 +907,7 @@ if(NMSC_BUILD_TESTS)
     tests/parcel_money_ui_test.cpp
     tests/trader_shop_test.cpp
     tests/blocked_buffs_ui_test.cpp
+    tests/own_hp_test.cpp
     tests/stats_ui_test.cpp
     tests/spell_sets_test.cpp
     tests/hot_button_sets_test.cpp
