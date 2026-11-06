@@ -43,8 +43,10 @@ local function savedReport(win, x0, y0, w, intro)
     T.draw(x0, y, left, C.dim)
     y = y + T.px(34)
   end
-  return G.wrapped("Post it in the bug report forum on Discord: paste the summary (Copy Summary) and attach the file "
-    .. "from the bug-reports folder (Open Folder).", x0, y + T.px(8), w, C.dim, 3) + T.px(16)
+  y = G.wrapped("Post it in the bug report forum on Discord: paste the summary (Copy Summary) and attach the file "
+    .. "from the bug-reports folder (Open Folder).", x0, y + T.px(8), w, C.dim, 3) + T.px(8)
+  return G.wrapped("It holds the report, your logs, settings and screenshots. Chat, your account names and your home "
+    .. "folder are taken out.", x0, y, w, C.dim, 2) + T.px(16)
 end
 
 -- A form with one long text: the fields drawn by body() (it returns the text field's clicked), the keys in their

@@ -81,7 +81,7 @@ void ClientApp::add_private_names(BugReport& r) const {
     r.home = platform::home_dir();
 }
 
-std::optional<SavedBugReport> ClientApp::save_bug_report(BugReport r) {
+std::future<std::optional<SavedBugReport>> ClientApp::save_bug_report(BugReport r) {
     r.time = std::time(nullptr);
     std::vector<std::pair<std::string, std::string>> facts = {
         {"Build", std::string("Hailstone ") + build_version()},
@@ -124,9 +124,8 @@ std::optional<SavedBugReport> ClientApp::save_bug_report(BugReport r) {
     r.capture = bug_capture_;
     r.screenshots = platform::screenshots_dir();
     add_private_names(r);
-    auto saved = app::save_bug_report(r, platform::bug_reports_dir());
-    if (!saved) log::error("could not save the bug report in {}", platform::bug_reports_dir().string());
-    return saved;
+    // The facts are the client's state now; the files are copied, cleaned and packed on a thread of their own.
+    return save_bug_report_async(std::move(r), platform::bug_reports_dir());
 }
 
 void ClientApp::report_last_crash() {

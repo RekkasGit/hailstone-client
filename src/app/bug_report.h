@@ -6,11 +6,13 @@
 // the build, the system, the character and where it stood), summary.md (a forum post to paste), the crash report,
 // the logs, hailstone.ini and the screenshots (the one taken when the window opened, then the player's own from the
 // minutes before), cut to fit Discord's upload limit: what did not fit is named in report.txt. Every text in it
-// has the player's account names and home folder taken out (redact_private()), since the report is posted in public.
+// has the player's account names and home folder taken out (redact_private()), and the logs the words of every chat
+// line (redact_chat(): tells, guild and group chat), since the report is posted in public.
 
 #include <cstddef>
 #include <ctime>
 #include <filesystem>
+#include <future>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -58,6 +60,11 @@ struct SavedBugReport {
 std::optional<SavedBugReport> save_bug_report(const BugReport& report, const std::filesystem::path& dir,
                                               std::size_t limit = kBugReportLimit);
 
+// save_bug_report() on a thread of its own, for a caller that must not wait (the bug report window): `report` is
+// already complete, and nothing of the caller's is touched.
+std::future<std::optional<SavedBugReport>> save_bug_report_async(BugReport report, std::filesystem::path dir,
+                                                                 std::size_t limit = kBugReportLimit);
+
 // The pieces, for tests.
 // "hailstone-bug-YYYYMMDD-HHMMSS.zip" ("hailstone-crash-..." for a crash), local time; -<n> for n > 1.
 std::string bug_report_file_name(bool crash, const std::tm& local, int n = 1);
@@ -73,6 +80,8 @@ std::string scrub_settings(std::string_view text);
 // separator) written ~, and home's own name, as a folder name elsewhere (/run/media/<name>/), written <user>.
 std::string redact_private(std::string_view text, const std::vector<std::string>& accounts,
                            const std::filesystem::path& home);
+// `text` (a log) with the words of each chat line ("[info] chat: ...") taken out, the line itself kept.
+std::string redact_chat(std::string_view text);
 // Deletes all but the newest `keep` hailstone-*.zip in `dir`.
 void prune_bug_reports(const std::filesystem::path& dir, std::size_t keep = kBugReportsKept);
 // The crash reports in `logs` not bundled yet (crash-*.txt, oldest first).

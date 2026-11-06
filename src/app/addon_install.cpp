@@ -76,6 +76,29 @@ public:
         if (ec && error) *error = "cannot move " + from.string() + " to " + to.string() + ": " + ec.message();
         return !ec;
     }
+    // Saves installed.txt as it is to installed.prev.txt, then writes that to the journal: an install cut off after
+    // installed.txt is rewritten puts the old one back with the old files. "none" when there was no installed.txt.
+    bool registry(std::string* error) {
+        const fs::path dir = addons_dir(data_dir_);
+        std::error_code ec;
+        const bool had = fs::exists(dir / "installed.txt", ec);
+        bool saved = true;
+        if (had) {
+            auto text = read_text_file(dir / "installed.txt");
+            saved = text && write_file_atomic(dir / "installed.prev.txt", *text);
+        } else {
+            fs::remove(dir / "installed.prev.txt", ec);
+        }
+        if (saved) {
+            out_ << "registry\t" << (had ? "saved" : "none") << "\n";
+            out_.flush();
+        }
+        if (!saved || !out_) {
+            if (error) *error = "cannot save addons/installed.txt before changing it";
+            return false;
+        }
+        return true;
+    }
     void done() {
         out_ << "done\n";
         out_.flush();
@@ -93,14 +116,20 @@ void remove_quietly(const fs::path& path) {
     if (ec) log::warn("Add-ons: cannot remove {}: {}", path.string(), ec.message());
 }
 
-// Undoes the journal's moves, last first.
+// Undoes the journal's moves, last first, and puts back installed.txt as it was when the journal saved it.
 void undo_journal(const fs::path& data_dir) {
-    auto text = read_text_file(addons_dir(data_dir) / "journal.txt");
+    const fs::path dir = addons_dir(data_dir);
+    auto text = read_text_file(dir / "journal.txt");
     if (!text) return;
     std::vector<std::pair<std::string, std::string>> moves;
+    std::string registry; // "saved", "none" or empty (installed.txt was not changed)
     std::istringstream in(*text);
     for (std::string line; std::getline(in, line);) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line == "registry\tsaved" || line == "registry\tnone") {
+            registry = line.substr(9);
+            continue;
+        }
         const auto t1 = line.find('\t');
         const auto t2 = t1 == std::string::npos ? std::string::npos : line.find('\t', t1 + 1);
         if (line.substr(0, t1) != "move" || t2 == std::string::npos) continue;
@@ -119,6 +148,14 @@ void undo_journal(const fs::path& data_dir) {
         fs::rename(data_dir / rel(to), data_dir / rel(from), ec);
         if (ec) log::warn("Add-ons: undoing a cut-off install: cannot move {} back: {}", to, ec.message());
     }
+    std::error_code ec;
+    if (registry == "saved" && fs::exists(dir / "installed.prev.txt", ec)) {
+        fs::rename(dir / "installed.prev.txt", dir / "installed.txt", ec);
+        if (ec) log::warn("Add-ons: undoing a cut-off install: cannot put installed.txt back: {}", ec.message());
+    } else if (registry == "none") {
+        fs::remove(dir / "installed.txt", ec);
+    }
+    fs::remove(dir / "installed.prev.txt", ec);
 }
 
 bool journal_done(const fs::path& data_dir) {
@@ -498,10 +535,12 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     std::erase_if(all, [&](const InstalledAddon& a) { return iequal(a.name, addon.name); });
     all.push_back(std::move(entry));
     std::sort(all.begin(), all.end(), [](const auto& a, const auto& b) { return lower(a.name) < lower(b.name); });
+    if (!journal.registry(&why)) return undo(why);
     if (!write_installed_addons(data_dir, all)) return undo("cannot write addons/installed.txt");
     journal.done();
     journal.close();
     remove_quietly(dir / "journal.txt");
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(prev);
     remove_quietly(src);
     remove_empty_dirs(target, false);
@@ -537,6 +576,7 @@ bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* 
         }
     }
     std::erase_if(all, [&](const InstalledAddon& a) { return iequal(a.name, addon.name); });
+    if (ok && !journal.registry(&why)) ok = false;
     if (ok && !write_installed_addons(data_dir, all)) {
         ok = false;
         why = "cannot write addons/installed.txt";
@@ -552,6 +592,7 @@ bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* 
     journal.done();
     journal.close();
     remove_quietly(dir / "journal.txt");
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(prev);
     remove_empty_dirs(target, true);
     log::info("Add-ons: {} removed", addon.name);
@@ -583,6 +624,7 @@ void addons_at_start(const fs::path& data_dir) {
         }
         remove_quietly(dir / "journal.txt");
     }
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(dir / "previous");
     remove_quietly(dir / "new");
 }

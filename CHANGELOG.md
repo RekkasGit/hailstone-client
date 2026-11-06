@@ -30,6 +30,12 @@
 - Uncommon GPUs and drivers: doors and ground objects are drawn where they are on a driver whose memory needs flushing, and a GPU without a plain 32-bit depth format uses its depth-and-stencil one correctly
 - A long stay in a busy zone (the Bazaar, the Plane of Knowledge) no longer keeps every armour look ever seen in memory: a look nobody has worn for five minutes is freed, and dressed again if it comes back
 - Music no longer makes the game hitch: the zone's and the global music (combat, death) are read ahead when you enter a zone, and the game no longer waits for the music to decode
+- Bug reports no longer carry what was said in chat: the words of every chat line (tells, guild, group and channel chat) are taken out of the logs and the crash report in the zip, and the report window says what the file holds and what was taken out
+- Saving a bug report no longer freezes the game for a moment with large logs: the report is written in the background
+- An update cut off at the wrong moment no longer loses the file it was about to replace, and an update no longer writes over an add-on installed into a plugin's folder after the update downloaded
+- An add-on install or removal cut off at the wrong moment now puts the add-on list back with the files, so the add-on shows its real version and can be updated again
+- For add-on authors and release builders: `tools/make_addon.py` and `tools/make_update.py` take in a linked folder's files instead of leaving them out, and stop at a link that loops
+- For server owners: `hailstone.lua` reads its `hailstone:<name>` data buckets at most every 10 seconds instead of at every packet, looks at a client file's time once until the list is next made instead of at every first-piece request, and limits each character's file-list, guild and settings requests
 
 ## 0.5.0-beta (2026-11-05)
 

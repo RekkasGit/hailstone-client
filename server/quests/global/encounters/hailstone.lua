@@ -35,8 +35,8 @@
 -- global/script_init.lua loads it with eq.load_encounter("hailstone"). It registers its player event through the
 -- encounter, so it runs beside the server's own player scripts (Perl or Lua) instead of replacing them.
 
--- Settings. Edit them here, or override one live with a data bucket "hailstone:<name>" (#databuckets), which the
--- next zone-in picks up.
+-- Settings. Edit them here, or override one live with a data bucket "hailstone:<name>" (#databuckets), which each
+-- zone picks up within SETTINGS_REFRESH seconds (at once at #reloadquest).
 local settings = {
 	enabled                = 1,
 	guild_invites_world    = 1,  -- /guildinvite reaches players in other zones (Hailstone clients)
@@ -54,12 +54,23 @@ local function log(msg)
 	eq.debug("[hailstone] " .. msg)
 end
 
+-- EQEmu caches no bucket without a character, account, bot or zone (DataBucket::CanCache): each eq.get_data of these
+-- is a query on the zone's thread, and some are read at every packet. So each is read at most every
+-- SETTINGS_REFRESH seconds.
+local SETTINGS_REFRESH = 10
+local setting_cache = {} -- name -> { value (nil: the default), at }
+
 local function setting(name)
-	local v = tonumber(eq.get_data("hailstone:" .. name))
-	if v == nil then
+	local now = os.time()
+	local c   = setting_cache[name]
+	if c == nil or now - c.at >= SETTINGS_REFRESH then
+		c = { value = tonumber(eq.get_data("hailstone:" .. name)), at = now }
+		setting_cache[name] = c
+	end
+	if c.value == nil then
 		return settings[name]
 	end
-	return v
+	return c.value
 end
 
 local function clamp(v, lo, hi)
@@ -382,8 +393,20 @@ local function guild_answer(client, inviter, guild_id, response)
 	log(string.format("%s joined guild %d at rank %d", client:GetCleanName(), i.guild_id, i.rank))
 end
 
+-- A client sends its hello once a zone-in and an invitation or answer when the player acts: at most GUILD_MAX a
+-- character in GUILD_SECONDS are looked at, before any setting or table is read.
+local GUILD_MAX, GUILD_SECONDS = 10, 10
+local guild_limit = limiter(GUILD_SECONDS)
+
 local function on_guild_packet(client, packet)
 	if packet:GetSize() < GUILD_SIZE or packet:ReadInt32(0) ~= GUILD_MAGIC or packet:ReadInt16(4) ~= 1 then
+		return
+	end
+	local ok, first_over = allow(guild_limit, client:CharacterID(), GUILD_MAX)
+	if not ok then
+		if first_over then
+			log(string.format("%s sends guild packets too fast; the rest of %d s are dropped", client:GetCleanName(), GUILD_SECONDS))
+		end
 		return
 	end
 	local action = packet:ReadInt16(6)
@@ -797,15 +820,22 @@ local function send_files_chunk(client, id, index, offset, length)
 	-- A file rewritten since it was hashed would arrive with bytes that do not match its hash: at a file's first
 	-- piece the zone looks at its size and time, and at every piece at the size of what it has open. A change
 	-- makes the list again (the hashing is at most every FILES_RESCAN_MIN seconds) and tells the client, which
-	-- lists again.
+	-- lists again. The time is looked at once per file until the list is next made (files_rescan), for all players
+	-- (it costs a process): a client asking for the first piece again and again starts no more, and a rewrite of
+	-- the same size after that waits for the next list. A file found changed stays changed until then, so a client
+	-- asking again before the list is made again (within FILES_RESCAN_MIN) is told again, not sent the new bytes.
 	local f = open_client_file(e.path)
-	local changed = f ~= nil and f:seek("end") ~= e.size
-	if not changed and offset == 0 then
+	local changed = e.changed or (f ~= nil and f:seek("end") ~= e.size)
+	if not changed and offset == 0 and not e.statted then
+		e.statted = true
 		local size, mtime = stat_client_file(e.path)
 		changed = size ~= e.size or (mtime ~= nil and mtime ~= e.mtime)
 	end
 	if changed then
-		log("client_files: " .. e.path .. " changed since it was hashed")
+		if not e.changed then
+			log("client_files: " .. e.path .. " changed since it was hashed")
+		end
+		e.changed = true
 		close_open_file(e.path)
 		if os.time() - (files.built or 0) >= FILES_RESCAN_MIN then
 			build_client_files(true)
@@ -902,12 +932,26 @@ function event_timer(e)
 	guild_timer(e)
 end
 
+-- A client lists once a login, page after page, and again if the list changes while it comes (at most 3 times):
+-- FILES_LISTS whole lists a character in FILES_LIST_SECONDS are answered, more are dropped. A client never asks
+-- again for a page that does not come, so the limit is well above what one honest client asks for.
+local FILES_LISTS, FILES_LIST_SECONDS = 8, 60
+local list_limit = limiter(FILES_LIST_SECONDS)
+
 local function on_files_request(client, packet)
 	if packet:GetSize() < 12 or packet:ReadInt32(0) ~= FILES_MAGIC then
 		return
 	end
 	local action = packet:ReadInt16(6)
 	if action == 1 then
+		local pages = math.floor(#files.list / FILES_PAGE) + 1
+		local ok, first_over = allow(list_limit, client:CharacterID(), FILES_LISTS * pages)
+		if not ok then
+			if first_over then
+				log(string.format("%s asks for the file list too often; the rest of %d s are dropped", client:GetCleanName(), FILES_LIST_SECONDS))
+			end
+			return
+		end
 		local first = math.max(0, packet:ReadInt32(8))
 		if first == 0 and setting("client_files") ~= 0 then
 			build_client_files(false)
@@ -943,6 +987,10 @@ local function send_settings(client)
 	client:QueuePacket(p)
 end
 
+-- A client asks once a zone-in: at most SETTINGS_MAX a character in SETTINGS_SECONDS are answered.
+local SETTINGS_MAX, SETTINGS_SECONDS = 5, 10
+local settings_limit = limiter(SETTINGS_SECONDS)
+
 -- Every opcode the zone has no handler for comes here; only Hailstone's are ours.
 local function on_unhandled_opcode(e)
 	local packet = e.packet
@@ -966,11 +1014,19 @@ local function on_unhandled_opcode(e)
 		log(string.format("Hailstone request 0x%04x of size %d without the NMSP magic", op, packet:GetSize()))
 		return
 	end
+	local ok, first_over = allow(settings_limit, e.self:CharacterID(), SETTINGS_MAX)
+	if not ok then
+		if first_over then
+			log(string.format("%s asks for the settings too fast; the rest of %d s are dropped", e.self:GetCleanName(), SETTINGS_SECONDS))
+		end
+		return
+	end
 	send_settings(e.self)
 end
 
 function event_encounter_load(e)
 	encounter = e.encounter
+	setting_cache = {} -- #reloadquest: the buckets as they are now
 	if setting("client_files") ~= 0 then
 		build_client_files(true) -- the hashing is done before the first client asks
 	end

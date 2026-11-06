@@ -19,8 +19,8 @@ std::string script_path() {
 
 constexpr const char* kHarness = R"lua(
 package.config = "/\n;\n?\n!\n-\n" -- the script's Linux commands, whatever runs the test
-T = { now = 1000, finds = 0, stats = 0, opens = {}, open_now = 0, open_max = 0, messages = {}, data = {}, files = {},
-      mtimes = {}, handlers = {}, timers = {}, clients = {} }
+T = { now = 1000, finds = 0, stats = 0, gets = 0, opens = {}, open_now = 0, open_max = 0, messages = {}, data = {}, files = {},
+      mtimes = {}, handlers = {}, timers = {}, clients = {}, logs = {} }
 os.time = function() return T.now end
 
 local function bytes_packet(op, size)
@@ -45,8 +45,8 @@ Packet = function(op, size) return bytes_packet(op, size) end
 
 Event = { unhandled_opcode = 1, signal = 2 }
 eq = {
-  debug = function() end,
-  get_data = function(k) return T.data[k] end,
+  debug = function(s) T.logs[#T.logs + 1] = s end,
+  get_data = function(k) T.gets = T.gets + 1; return T.data[k] end,
   set_data = function(k, v) T.data[k] = v end,
   delete_data = function(k) T.data[k] = nil end,
   cross_zone_message_player_by_name = function(_, name, text) T.messages[#T.messages + 1] = name .. ": " .. text end,
@@ -150,6 +150,22 @@ function fire_timer(name)
   event_timer({ timer = name })
 end
 
+function guild_hello(c)
+  local before = #c.sent
+  local p = Packet(0x1422, 80)
+  p:WriteInt32(0, 0x47534d4e); p:WriteInt16(4, 1); p:WriteInt16(6, 0)
+  send(c, p)
+  return #c.sent > before
+end
+
+function settings_request(c)
+  local before = #c.sent
+  local p = Packet(0x1424, 6)
+  p:WriteInt32(0, 0x50534d4e); p:WriteInt16(4, 1)
+  send(c, p)
+  return #c.sent > before
+end
+
 function cancel_invite(c, inviter)
   local p = Packet(0x2a50, 152)
   p:WriteString(0, inviter); p:WriteString(64, c.name); p:WriteInt8(148, 3)
@@ -199,8 +215,8 @@ assert(T.finds == 1, "kept for 300 s: " .. T.finds)
 T.now = T.now + 1
 list_request(c, 0)
 assert(T.finds == 2, "listed again after 300 s")
-for _ = 1, 50 do list_request(c, 0) end
-assert(T.finds == 2, "asking again and again lists nothing more")
+for k = 1, 50 do list_request(client(100 + k, "C" .. k), 0) end
+assert(T.finds == 2, "asking again and again (many characters: one is limited) lists nothing more")
 T.data["hailstone:files_rescan"] = "0" -- never under 30 s, whatever the owner sets
 T.now = T.now + 29
 list_request(c, 0)
@@ -258,12 +274,12 @@ assert(#a.sent == 1 + 1025, "the next second: the request that waited (asked aga
 assert(T.timers["hailstone:files"] == nil, "nothing waits: the timer stops")
 assert(chunk_request(a, id, 0, 0) ~= nil, "and new ones go at once")
 T.data["hailstone:files_chunks_per_second"] = "3"
-T.now = T.now + 1
+T.now = T.now + 10 -- a bucket is read again within 10 s
 sent = 0
 for _ = 1, 10 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
 assert(sent == 3, "the owner's limit: " .. sent)
 T.data["hailstone:files_chunks_per_second"] = "0"
-T.now = T.now + 1
+T.now = T.now + 10
 fire_timer("hailstone:files")
 sent = 0
 for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
@@ -349,6 +365,36 @@ assert(T.finds == finds + 2, "not listed again within 30 s")
 )lua");
 }
 
+TEST_CASE("Server script: a same-size rewrite found within 30 s of a listing is reported at every request") {
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local id = list_request(a, 0):ReadInt32(8)
+-- Rewritten with the same size, a new time, soon after the zone's start made the list: it is not made again.
+T.files["client_files/f01.bin"] = string.rep("Z", 40000)
+T.mtimes["client_files/f01.bin"] = "1800000000.0"
+T.now = T.now + 5
+local finds = T.finds
+local r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "a new time: stale")
+assert(T.finds == finds, "within 30 s: not listed again")
+-- The client lists again and gets the same entry; its first piece is still stale, for every player.
+id = list_request(a, 0):ReadInt32(8)
+r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "asked again: still stale")
+r = chunk_request(b, list_request(b, 0):ReadInt32(8), 0, 32768)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "another player, a later piece: still stale")
+-- After 30 s the next request makes the list again and the new file goes out.
+T.now = T.now + 30
+r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3, "stale once more, and the list is made again")
+assert(T.finds == finds + 1, "listed again")
+id = list_request(a, 0):ReadInt32(8)
+assert(chunk_request(a, id, 0, 0):ReadInt16(6) == 2, "the new list's file is sent")
+)lua");
+}
+
 TEST_CASE("Server script: group declines passed on to another zone are limited per sender") {
     check_run(R"lua(
 load_script()
@@ -364,5 +410,77 @@ assert(#T.messages == 6, "still the same 10 s")
 T.now = T.now + 1
 cancel_invite(a, "Gamma")
 assert(#T.messages == 7, "the next 10 s")
+)lua");
+}
+
+TEST_CASE("Server script: the settings' buckets are read at most every 10 s, not at every packet") {
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local a = client(1, "Alpha")
+local id = list_request(a, 0):ReadInt32(8)
+local gets = T.gets
+for _ = 1, 200 do chunk_request(a, id, 0, 32768) end
+assert(T.gets - gets <= 1, "200 pieces, at most one read for the limit: " .. (T.gets - gets))
+for _ = 1, 3 do settings_request(a); guild_hello(a) end
+gets = T.gets
+for _ = 1, 3 do T.now = T.now + 1; settings_request(a) end
+assert(T.gets == gets, "settings within 10 s: no read")
+T.data["hailstone:enabled"] = "0"
+T.now = T.now + 10
+assert(not settings_request(a), "the bucket's 0 is seen within 10 s")
+event_encounter_load({ encounter = {} })
+T.data["hailstone:enabled"] = "1"
+assert(settings_request(a), "#reloadquest reads them at once")
+)lua");
+}
+
+TEST_CASE("Server script: a file's first piece asked for again and again looks at the file once") {
+    check_run(R"lua(
+add_files(2, 40000)
+load_script()
+local a = client(1, "Alpha")
+local id = list_request(a, 0):ReadInt32(8)
+for _ = 1, 500 do chunk_request(a, id, 0, 0) end
+assert(T.stats == 1, "one find for the file, not one a request: " .. T.stats)
+chunk_request(a, id, 1, 0)
+assert(T.stats == 2, "the other file: its own")
+-- A new list looks again.
+T.now = T.now + 300
+id = list_request(a, 0):ReadInt32(8)
+chunk_request(a, id, 0, 0)
+assert(T.stats == 3, "after the next listing: " .. T.stats)
+)lua");
+}
+
+TEST_CASE("Server script: list, guild and settings requests are limited per character") {
+    check_run(R"lua(
+add_files(1, 100)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local pages = 0
+for _ = 1, 20 do
+  local before = #a.sent
+  list_request(a, 0)
+  if #a.sent > before then pages = pages + 1 end
+end
+assert(pages == 8, "8 whole lists a minute: " .. pages)
+assert(list_request(b, 0) ~= nil and #b.sent == 1, "another character is not held back")
+T.now = T.now + 60
+local before = #a.sent
+list_request(a, 0)
+assert(#a.sent == before + 1, "the next minute")
+
+local hellos = 0
+for _ = 1, 15 do if guild_hello(a) then hellos = hellos + 1 end end
+assert(hellos == 10, "10 guild packets in 10 s: " .. hellos)
+local answers = 0
+for _ = 1, 8 do if settings_request(a) then answers = answers + 1 end end
+assert(answers == 5, "5 settings requests in 10 s: " .. answers)
+local dropped = 0
+for _, l in ipairs(T.logs) do if l:find("asks for the settings too fast", 1, true) then dropped = dropped + 1 end end
+assert(dropped == 1, "the first dropped settings request is logged once: " .. dropped)
+T.now = T.now + 10
+assert(guild_hello(a) and settings_request(a), "the next 10 s")
 )lua");
 }

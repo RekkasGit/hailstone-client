@@ -9,8 +9,9 @@ usage: tools/make_update.py --version 0.2.0-alpha --platform linux-x64 --dist di
 
 The whole folder, the browser and the plugins included, becomes one zip, hailstone-<version>-<platform>.zip: the
 download a player unpacks into a folder of their own, and the manifest's one package (`core`) the updater installs.
-Its names have no top folder, as the updater wants them. A symbolic link is stored as the file it points to. The
-zip is made the same way each time (sorted, dated 1980-01-01, the files' Unix permissions).
+Its names have no top folder, as the updater wants them. A symbolic link is stored as the file or folder it points
+to (a link to a folder holding it stops the tool). The zip is made the same way each time (sorted, dated
+1980-01-01, the files' Unix permissions).
 Existing package lines of other platforms in --out/hailstone-update.txt are kept; this platform's are replaced.
 """
 import argparse
@@ -37,16 +38,25 @@ def is_player_path(name):
 
 
 def files_under(root, top=""):
-    """Every file under root/top, as '/'-separated names relative to root, sorted."""
+    """Every file under root/top, as '/'-separated names relative to root, sorted. A link to a folder is walked as
+    the folder it points to; one that leads back into a folder holding it stops the tool."""
     out = []
-    base = os.path.join(root, top) if top else root
-    for folder, dirs, files in os.walk(base):
-        dirs.sort()
-        for f in files:
-            full = os.path.join(folder, f)
+
+    def walk(folder, holding):
+        real = os.path.realpath(folder)
+        if real in holding:
+            sys.exit(f"{folder}: a link to a folder that holds it")
+        holding = holding | {real}
+        for name in sorted(os.listdir(folder)):
+            full = os.path.join(folder, name)
+            if os.path.isdir(full):
+                walk(full, holding)
+                continue
             if os.path.islink(full) and not os.path.isfile(full):
                 sys.exit(f"{full}: a link to no file")
             out.append(os.path.relpath(full, root).replace(os.sep, "/"))
+
+    walk(os.path.join(root, top) if top else root, frozenset())
     return sorted(out)
 
 

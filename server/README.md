@@ -60,7 +60,8 @@ names the files a client will refuse. Players get changes at their next login.
 ## Settings
 
 At the top of `hailstone.lua`. Any of them can also be overridden live with a data bucket `hailstone:<name>`
-(`#databuckets`), picked up at the next zone-in.
+(`#databuckets`). Each zone reads a bucket at most every 10 seconds (EQEmu caches no bucket without a character,
+so each read is a database query), and at once after `#reloadquest`.
 
 | Setting | Default | |
 |---|---|---|
@@ -87,10 +88,13 @@ setting says. Adding or changing files needs no restart: players who zone in get
 once after `#reloadquest`, which hashes the folder again. The first start after adding a large folder takes a few
 seconds per gigabyte in that zone.
 
-A file changed in place within those five minutes is not sent with its old hash: at the first piece of a file the
-zone looks at its size and modification time (one `find` for that file; on Windows the size only, as a PowerShell
-start per file would be too slow), and at every piece at the size of the file it has open. A change makes the zone
-hash the folder again (at most every 30 s) and tells the client, which lists the files again. A file changed on
+A file changed in place within those five minutes is not sent with its old hash: the first time any player asks
+for a file's first piece, the zone looks at its size and modification time (one `find` for that file; on Windows the
+size only, as a PowerShell start per file would be too slow), and at every piece at the size of the file it has
+open. That first look is made once per file until the zone next makes the list (`files_rescan`), for all players
+together, so a rewrite that keeps the size after it goes unnoticed until then. A change makes the zone hash the
+folder again (at most every 30 s) and tells the client, which lists the files again; until the folder is hashed
+again, every request for that file is told the same. A file changed on
 Windows without changing its size can still go with its old hash until the next listing; the client then finds the
 hash wrong and keeps its old files until the next login.
 
@@ -106,7 +110,11 @@ files open for this, so players fetching different files do not make it reopen t
 ask for `files_chunks_per_second` pieces a second (1024, 32 MB/s, about twice what one download was measured at);
 a client asking faster than that has its requests wait, up to 64 of them, and served in order on a 100 ms timer
 (`eq.set_timer` on the script's encounter) as the limit allows; what waits for a player who leaves the zone is
-dropped. The client asks again for a piece that does not come. A first download of a
+dropped. The client asks again for a piece that does not come.
+
+Every Hailstone request is limited per character before the zone does any work for it: eight whole file lists a
+minute, ten guild packets and five settings requests in 10 seconds, five group declines in 10 seconds. An honest
+client asks for each once a zone-in; what is over the limit is dropped, with one line in the zone's log. A first download of a
 gigabyte took about 70 seconds on one machine; a player who has the files only gets the list. Compressing the
 files would not help: EQEmu already compresses the zone stream (`Network:CompressZoneStream`), and zone and model
 archives are compressed inside.

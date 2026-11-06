@@ -31,6 +31,8 @@ local function savedReport(win, s, intro)
   ui.Dummy(0, 4 * s)
   ui.TextWrapped("To post it: open the bug report forum on Discord, start a post, paste the summary (Copy Summary) "
     .. "and attach the file (Open Folder).")
+  ui.TextWrapped("The file holds the report, your logs, hailstone.ini and screenshots. What was said in chat, your "
+    .. "account names and your home folder are taken out; anything else in your logs or screenshots is posted too.")
 end
 
 local WINDOW_OPTS = {

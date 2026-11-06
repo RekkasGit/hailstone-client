@@ -8,6 +8,7 @@
 #include <fstream>
 #include <map>
 
+#include "app/addon_install.h"
 #include "app/update_install.h"
 #include "app/updater.h"
 #include "core/atomic_file.h"
@@ -367,6 +368,41 @@ TEST_CASE("update install: refusals leave the folder as it was") {
     CHECK(!fs::exists(inst / "update/state.txt"));
 }
 
+TEST_CASE("update install: an optional plugin package is left out when an add-on took its folder since") {
+    test::ScratchDir dir("updater_addon_folder");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    put(inst / "plugins/extra/extra.so", "the add-on's");
+    std::vector<UpdatePackage> staged;
+    auto add = [&](const std::string& component, const std::string& file, const std::string& zip) {
+        put(inst / "update/download" / file, zip);
+        UpdatePackage p;
+        p.component = component;
+        p.file = file;
+        p.size = zip.size();
+        p.sha256 = sha256(zip);
+        staged.push_back(p);
+    };
+    add("core", "core.zip", zip_of({{"hailstone", "new"}}));
+    add("plugin-extra", "extra.zip", zip_of({{"plugins/extra/extra.so", "the release's"}}));
+    REQUIRE(stage_update(inst, "0.2.0", staged, nullptr));
+    // Installed after the download, while the update waited for the client to quit.
+    InstalledAddon a;
+    a.name = "extra";
+    a.kind = AddonKind::Plugin;
+    a.source = "owner/extra";
+    a.version = "1.0.0";
+    REQUIRE(write_installed_addons(inst, {a}));
+
+    REQUIRE(install_staged_update(inst, "0.1.0").ok);
+    CHECK(get(inst / "hailstone") == "new");
+    CHECK(get(inst / "plugins/extra/extra.so") == "the add-on's");
+    const InstalledUpdate now = read_installed_update(inst);
+    CHECK(now.components.count("core") == 1);
+    CHECK(now.components.count("plugin-extra") == 0);
+    CHECK(now.files.count("plugin-extra") == 0);
+}
+
 TEST_CASE("update install: a cut-off install and a version that does not start are rolled back") {
     test::ScratchDir dir("updater_rollback");
     const fs::path inst = dir.path();
@@ -395,6 +431,15 @@ TEST_CASE("update install: a cut-off install and a version that does not start a
         CHECK(get(inst / "shaders/a.spv") == "old a");
         CHECK(!fs::exists(inst / "icons/n.png"));
         CHECK(!fs::exists(inst / "update/installed.txt"));
+    }
+    SUBCASE("cut off between a journal line and its move") {
+        // The journal names a move to previous/ that never happened: the file in place is the original and stays.
+        put(inst / "update/journal.txt", "moved hailstone\nremoved shaders/a.spv\n");
+        REQUIRE(write_file_atomic(inst / "update/state.txt", "installing 0.2.0 0.1.0\n"));
+        update_at_start(inst, "0.1.0");
+        update_at_start(inst, "0.1.0"); // the next start empties the trash
+        CHECK(get(inst / "hailstone") == "old");
+        CHECK(get(inst / "shaders/a.spv") == "old a");
     }
     SUBCASE("does not start") {
         stage();

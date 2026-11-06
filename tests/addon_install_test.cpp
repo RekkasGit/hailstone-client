@@ -176,11 +176,16 @@ TEST_CASE("addon_install: install, update and remove keep the player's own files
     all = read_installed_addons(dir.path());
     REQUIRE(all.size() == 1);
     CHECK(all[0].version == "2.0.0");
+    // The registry saved before installed.txt was rewritten is gone once the update is done.
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.prev.txt"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
 
     // Removal takes the add-on's files and its record; the player's file and the folder holding it stay.
     std::string why;
     REQUIRE_MESSAGE(remove_addon(dir.path(), "AUTOLOOT", &why), why);
     CHECK(read_installed_addons(dir.path()).empty());
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.prev.txt"));
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
     CHECK_FALSE(fs::exists(folder / "init.lua"));
     CHECK_FALSE(fs::exists(folder / "sub"));
     CHECK(read_file(folder / "my-notes.txt") == "mine\n");
@@ -213,6 +218,26 @@ TEST_CASE("addon_install: an install cut off is undone at the next start") {
     CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "journal.txt"));
     CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "previous"));
     CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "new"));
+
+    // Cut off after installed.txt was rewritten for the new version: the old registry comes back with the old files.
+    put_file(prev / "init.lua", "-- v1\n");
+    put_file(folder / "init.lua", "-- v2\n");
+    put_file(addons_dir(dir.path()) / "installed.prev.txt", registry);
+    put_file(addons_dir(dir.path()) / "installed.txt", "hailstone-addons 1\n\naddon autoloot script\nversion 2.0.0\n");
+    put_file(addons_dir(dir.path()) / "journal.txt",
+             "move\tscripts/autoloot/init.lua\taddons/previous/autoloot/init.lua\n"
+             "move\taddons/new/autoloot/init.lua\tscripts/autoloot/init.lua\n"
+             "registry\tsaved\n");
+    addons_at_start(dir.path());
+    CHECK(read_file(folder / "init.lua") == "-- v1\n");
+    CHECK(read_file(addons_dir(dir.path()) / "installed.txt") == registry);
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.prev.txt"));
+    // The first add-on's install, cut off the same way: there was no registry before it.
+    const std::string with_v1 = read_file(addons_dir(dir.path()) / "installed.txt");
+    put_file(addons_dir(dir.path()) / "journal.txt", "registry\tnone\n");
+    addons_at_start(dir.path());
+    CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "installed.txt"));
+    put_file(addons_dir(dir.path()) / "installed.txt", with_v1);
 
     // One that finished ("done") is left as it is.
     put_file(folder / "init.lua", "-- v2\n");

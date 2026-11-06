@@ -198,6 +198,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] The in-game browser (docs/browser.md "Milestones"; the messages, pipes, tab host, the Linux helper, the window in both packs and the scripts' and plugins' tabs are done): the helper on macOS (app bundles) and checked on Windows and Linux arm64 (CI), Chromium's sandbox on Windows and macOS.
 - [x] Scripts' and plugins' pages held tighter (docs/browser.md "Rules", "Profiles", "Sizes"): a cookie store per add-on, frames and requests on the allowed sites, never this computer or a private network, console lines and page messages bounded in bytes (unit tests; the CEF helper's frame and request refusals in its test).
 - [ ] Scripts' and plugins' pages: a public host name whose DNS answer is a private address is not refused (it would need the helper to check the address it connects to); whether CEF hands WebSocket handshakes to `OnBeforeResourceLoad` was not checked.
+- [ ] The other local-time calls outside `src/platform/` go through `platform::local_time` (`localtime_r` / `localtime_s` in `net/game_connection_social.cpp` and `mq/tlo_game.cpp`; `std::localtime`, which shares one buffer between threads, in several `app/lua_eq_*.cpp`, `market_ui.cpp`, `client_app_info.cpp` and `net/game_connection_market.cpp`). Bug reports already do.
 
 ## Navigation (docs/navigation.md)
 - [x] Navigation meshes built from the zone's collision on worker threads, cached per server and zone; areas from the regions (water, lava, zone lines, PvP).
