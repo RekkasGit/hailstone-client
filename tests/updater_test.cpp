@@ -64,7 +64,8 @@ struct Feed {
     int fetches = 0;
     UpdateFetch fetch() {
         return [this](const std::string& url, const std::function<bool(std::span<const std::byte>)>& sink,
-                      const std::function<bool(std::uint64_t, std::uint64_t)>& progress) {
+                      const std::function<bool(std::uint64_t, std::uint64_t)>& progress,
+                      const std::function<bool()>&) {
             ++fetches;
             platform::HttpGetResult r;
             auto it = files.find(url);

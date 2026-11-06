@@ -43,6 +43,7 @@ AddonSettings addon_settings(const Config& config);
 
 // One GET (platform::http_get, or the tests' own); the manager keeps every download on GitHub
 // (addon_download_allowed) through `allow_url`. `keep_going` turns false when the manager stops: the transfer ends.
+// It may be asked from any thread (http_get's HttpGetOptions::cancelled, which ends a call waiting on the network).
 using AddonFetch = std::function<platform::HttpGetResult(
     const std::string& url, const std::function<bool(std::string_view)>& allow_url,
     const std::function<bool(std::span<const std::byte>)>& sink, const std::function<bool()>& keep_going)>;

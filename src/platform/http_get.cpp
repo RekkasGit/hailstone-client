@@ -9,6 +9,10 @@
 #endif
 #include <windows.h>
 #include <winhttp.h>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <vector>
 #else
 #include <SDL3/SDL_loadso.h>
@@ -67,6 +71,50 @@ struct Handle {
     ~Handle() {
         if (h) WinHttpCloseHandle(h);
     }
+};
+
+// Ends a blocking WinHTTP call once `cancelled` says so: closing the request handle from another thread is how
+// WinHTTP cancels a synchronous request (the call it was in fails). The handle is then the watcher's to have closed,
+// so the request's Handle lets it be.
+class Canceller {
+public:
+    Canceller(Handle& request, const std::function<bool()>& cancelled) : request_(request) {
+        if (!cancelled) return;
+        thread_ = std::thread([this, &cancelled] {
+            std::unique_lock lock(mutex_);
+            while (!finished_) {
+                if (cancelled()) {
+                    WinHttpCloseHandle(request_.h);
+                    closed_ = true;
+                    return;
+                }
+                cv_.wait_for(lock, std::chrono::milliseconds(100));
+            }
+        });
+    }
+    Canceller(const Canceller&) = delete;
+    Canceller& operator=(const Canceller&) = delete;
+    ~Canceller() { finish(); }
+    // Stops watching; true when it closed the request (the transfer was cancelled).
+    bool finish() {
+        if (thread_.joinable()) {
+            {
+                std::lock_guard lock(mutex_);
+                finished_ = true;
+            }
+            cv_.notify_all();
+            thread_.join();
+            if (closed_) request_.h = nullptr;
+        }
+        return closed_;
+    }
+
+private:
+    Handle& request_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    bool finished_ = false, closed_ = false;
+    std::thread thread_;
 };
 
 } // namespace
@@ -130,25 +178,34 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
         r.error = win_error("WinHttpOpenRequest");
         return r;
     }
+    Canceller watch(request, options.cancelled);
+    // Whatever failed once the watcher closed the request failed because it did.
+    auto done = [&](HttpGetResult res) {
+        if (watch.finish()) {
+            res.ok = false;
+            res.error = "cancelled";
+        }
+        return res;
+    };
     // WinHTTP follows redirects itself and by default never from https to http (WINHTTP_OPTION_REDIRECT_POLICY).
     if (!WinHttpSendRequest(request.h, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
         r.error = win_error("WinHttpSendRequest");
-        return r;
+        return done(r);
     }
     if (!WinHttpReceiveResponse(request.h, nullptr)) {
         r.error = win_error("WinHttpReceiveResponse");
-        return r;
+        return done(r);
     }
     DWORD status = 0, size = sizeof(status);
     if (!WinHttpQueryHeaders(request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                              WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX)) {
         r.error = win_error("WinHttpQueryHeaders");
-        return r;
+        return done(r);
     }
     r.status = static_cast<int>(status);
     if (!is_2xx(r.status)) {
         r.error = status_error(r.status);
-        return r;
+        return done(r);
     }
     if (options.allow_url) {
         // The address the redirects ended on.
@@ -169,7 +226,7 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
         }
         if (narrow.empty() || !options.allow_url(narrow)) {
             r.error = "the download was sent to an address it may not come from";
-            return r;
+            return done(r);
         }
     }
     // The length is a 64-bit number as text (the numeric query is only 32 bits).
@@ -183,38 +240,38 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
     }
     if (options.max_bytes && total > options.max_bytes) {
         r.error = "the answer is larger than allowed";
-        return r;
+        return done(r);
     }
 
     std::vector<std::byte> buffer(64 * 1024);
     std::uint64_t received = 0;
     if (progress && !progress(0, total)) {
         r.error = "cancelled";
-        return r;
+        return done(r);
     }
     for (;;) {
         DWORD got = 0;
         if (!WinHttpReadData(request.h, buffer.data(), static_cast<DWORD>(buffer.size()), &got)) {
             r.error = win_error("WinHttpReadData");
-            return r;
+            return done(r);
         }
         if (got == 0) break;
         received += got;
         if (options.max_bytes && received > options.max_bytes) {
             r.error = "the answer is larger than allowed";
-            return r;
+            return done(r);
         }
         if (!sink(std::span<const std::byte>(buffer.data(), got)) || (progress && !progress(received, total))) {
             r.error = "cancelled";
-            return r;
+            return done(r);
         }
     }
     if (total && received != total) {
         r.error = "the answer ended early";
-        return r;
+        return done(r);
     }
     r.ok = true;
-    return r;
+    return done(r);
 }
 
 #else // libcurl
@@ -354,6 +411,11 @@ std::size_t on_write(char* data, std::size_t size, std::size_t count, void* user
 
 int on_progress(void* user, std::int64_t total, std::int64_t now, std::int64_t, std::int64_t) {
     auto& t = *static_cast<Transfer*>(user);
+    // libcurl calls this about once a second even while the transfer waits, so a stop needs no watcher here.
+    if (t.options->cancelled && t.options->cancelled()) {
+        t.cancelled = true;
+        return 1;
+    }
     if (t.options->max_bytes && total > 0 && static_cast<std::uint64_t>(total) > t.options->max_bytes) {
         t.too_large = true;
         return 1;

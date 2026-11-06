@@ -56,9 +56,11 @@ void ClientApp::start_updater() {
     env.skip = update_settings_.skip;
     const std::string agent = std::string("Hailstone/") + release_version();
     env.fetch = [agent](const std::string& url, const std::function<bool(std::span<const std::byte>)>& sink,
-                        const std::function<bool(std::uint64_t, std::uint64_t)>& progress) {
+                        const std::function<bool(std::uint64_t, std::uint64_t)>& progress,
+                        const std::function<bool()>& cancelled) {
         platform::HttpGetOptions options;
         options.user_agent = agent;
+        options.cancelled = cancelled;
         return platform::http_get(url, options, sink, progress);
     };
     log::info("Updates: checking {} for a release newer than {}", env.feed, env.version);

@@ -48,9 +48,11 @@ std::string default_project_page();
 // folder's CMakeCache.txt beside it), or no release key in this build.
 std::string updates_off_reason(const std::filesystem::path& install_dir);
 
+// One GET; `cancelled` (safe from any thread: http_get's HttpGetOptions::cancelled) turns true when the updater
+// stops, so quitting does not wait out a fetch stalled on the network.
 using UpdateFetch = std::function<platform::HttpGetResult(
     const std::string& url, const std::function<bool(std::span<const std::byte>)>& sink,
-    const std::function<bool(std::uint64_t, std::uint64_t)>& progress)>;
+    const std::function<bool(std::uint64_t, std::uint64_t)>& progress, const std::function<bool()>& cancelled)>;
 
 struct UpdaterEnv {
     std::filesystem::path install_dir;

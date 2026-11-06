@@ -95,6 +95,7 @@ void ClientApp::start_addons() {
         platform::HttpGetOptions options;
         options.user_agent = agent;
         options.allow_url = allow_url;
+        options.cancelled = [&keep_going] { return !keep_going(); }; // quitting does not wait out a stalled fetch
         return platform::http_get(url, options, sink,
                                   [&keep_going](std::uint64_t, std::uint64_t) { return keep_going(); });
     };
