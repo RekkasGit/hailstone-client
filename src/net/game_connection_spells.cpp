@@ -4,10 +4,12 @@
 // sends OP_CastSpell; the server decides everything else and ends every cast
 // with OP_ManaChange, then sends OP_MemorizeSpell(3) with the real recast.
 
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <optional>
 
 #include "core/log.h"
 #include "game/coords.h"
@@ -174,9 +176,26 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
     live.now_ms = now_ms();
     live.vitals = server_ext().character_vitals(*this);
     live.focus_classes = focus_class_mask();
-    game::mechanics::CharacterSheet sheet = game::mechanics::build_sheet(*profile_, inventory_, spells_, live, nullptr, &world_);
-    sheet.abilities = alt_adv_.sheet_abilities();
-    game::mechanics::Character ch(sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
+    // Built every frame (update_usable_gems), so into the last call's sheet; a call from inside `fn` uses its own.
+    std::optional<game::mechanics::CharacterSheet> nested;
+    game::mechanics::CharacterSheet* sheet = nullptr;
+    if (character_sheet_busy_) {
+        sheet = &nested.emplace();
+    } else {
+        if (!character_sheet_) character_sheet_ = std::make_unique<game::mechanics::CharacterSheet>();
+        sheet = character_sheet_.get();
+    }
+    struct Busy {
+        bool& flag;
+        bool was;
+        ~Busy() { flag = was; }
+    } busy{character_sheet_busy_, character_sheet_busy_};
+    character_sheet_busy_ = true;
+    game::mechanics::build_sheet_into(
+        *sheet, *profile_, inventory_, spells_, live,
+        [this](std::vector<game::mechanics::SheetAbility>& out) { alt_adv_.sheet_abilities_into(out); }, nullptr,
+        &world_);
+    game::mechanics::Character ch(*sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
     fn(ch);
 }
 
@@ -187,10 +206,11 @@ class MemorizeCallees final : public game::mechanics::gems::MemorizeQueries {
 public:
     using Send = std::function<bool(const game::mechanics::gems::MemorizePacket&)>;
     using LevelNeeded = std::function<std::uint8_t(const game::SpellData&, std::uint32_t)>;
+    // `stat`: 0 CalcDEX, 1 CalcINT, 2 the meditate skill (GetAdjustedSkill(31)).
     MemorizeCallees(const game::SpellTable& spells, std::int32_t level, std::function<std::int32_t(int)> stat,
-                    std::int32_t meditate, bool aa286, Send send, LevelNeeded level_needed)
-        : spells_(spells), level_(level), stat_(std::move(stat)), meditate_(meditate), aa286_(aa286),
-          send_(std::move(send)), level_needed_(std::move(level_needed)) {}
+                    bool aa286, Send send, LevelNeeded level_needed)
+        : spells_(spells), level_(level), stat_(std::move(stat)), aa286_(aa286), send_(std::move(send)),
+          level_needed_(std::move(level_needed)) {}
     std::uint8_t spell_level_needed(std::int32_t id, std::uint8_t class_id) override {
         // EQ_Spell::GetSpellLevelNeeded (a missing record: 255), through the NMS patch's detour on an NMS server:
         // GetSpellMemTicksLeft is not hooked, but its first step asks for the profile class's level, which the
@@ -202,7 +222,7 @@ public:
     std::int32_t level() override { return level_; }
     std::int32_t calc_dex() override { return stat_(0); }
     std::int32_t calc_int() override { return stat_(1); }
-    std::int32_t adjusted_skill(std::int32_t) override { return meditate_; }
+    std::int32_t adjusted_skill(std::int32_t) override { return stat_(2); }
     bool has_alternate_ability(std::int32_t) override { return aa286_; }
     void push_pending_reason() override {}
     bool send(const game::mechanics::gems::MemorizePacket& p) override { return send_(p); }
@@ -214,7 +234,6 @@ private:
     const game::SpellTable& spells_;
     std::int32_t level_;
     std::function<std::int32_t(int)> stat_;
-    std::int32_t meditate_;
     bool aa286_;
     Send send_;
     LevelNeeded level_needed_;
@@ -263,17 +282,22 @@ void GameConnection::memorize_tick(std::int64_t now) {
     w.now = static_cast<std::uint32_t>(now); // eq_time()'s clock
     w.last_tick = spells_.memorize_last_tick;
     w.item_pending = spells_.pending;
-    std::int32_t meditate = 0;
-    with_character([&](game::mechanics::Character& ch) { meditate = ch.adjusted_skill(31); });
-    auto stat = [this](int which) {
-        std::int32_t v = 0;
-        with_character([&](game::mechanics::Character& ch) {
-            ch.process_all_stats(); // CalcDEX / CalcINT read the item totals ProcessAllStats keeps
-            v = which == 0 ? ch.calc_dex(true) : ch.calc_int(true);
-        });
-        return v;
+    // DEX, INT and meditate from one sheet, built only on a tick whose interval has passed (the others ask for none).
+    // Meditate is read before ProcessAllStats, as it was on a sheet of its own; all three see the same state.
+    std::optional<std::array<std::int32_t, 3>> stats;
+    auto stat = [this, &stats](int which) {
+        if (!stats) {
+            auto& v = stats.emplace(std::array<std::int32_t, 3>{});
+            with_character([&](game::mechanics::Character& ch) {
+                v[2] = ch.adjusted_skill(31);
+                ch.process_all_stats(); // CalcDEX / CalcINT read the item totals ProcessAllStats keeps
+                v[0] = ch.calc_dex(true);
+                v[1] = ch.calc_int(true);
+            });
+        }
+        return (*stats)[static_cast<std::size_t>(which)];
     };
-    MemorizeCallees q(*spell_table_, pstatus_.level, stat, meditate, alt_adv_.has(gems::kAaMemorizeBoost),
+    MemorizeCallees q(*spell_table_, pstatus_.level, stat, alt_adv_.has(gems::kAaMemorizeBoost),
                       [this](const gems::MemorizePacket& p) {
                           MemorizeSpell req;
                           req.slot = static_cast<std::uint32_t>(p.slot);
@@ -301,22 +325,36 @@ void GameConnection::memorize_tick(std::int64_t now) {
 void GameConnection::update_usable_gems() {
     namespace gems = game::mechanics::gems;
     std::int32_t aa = 0, buff = 0, item = 0;
-    with_character([&](game::mechanics::Character& ch) {
-        aa = ch.cached_aa(gems::kSpaSpellSlots, 0);
-        buff = ch.cached_buff(gems::kSpaSpellSlots, 0);
-        item = ch.cached_item(gems::kSpaSpellSlots, 0);
-    });
-    gems::SpellSlotTotals totals{[&] { return aa; }, [&] { return buff; }, [&] { return item; }};
+    bool totals_known = false;
+    // The SPA 326 totals, built only when CanUseMemorizedSpellSlot asks for them (a server extension that answers
+    // every gem needs no character).
+    auto known = [&] {
+        if (totals_known) return;
+        totals_known = true;
+        with_character([&](game::mechanics::Character& ch) {
+            aa = ch.cached_aa(gems::kSpaSpellSlots, 0);
+            buff = ch.cached_buff(gems::kSpaSpellSlots, 0);
+            item = ch.cached_item(gems::kSpaSpellSlots, 0);
+        });
+    };
+    gems::SpellSlotTotals totals{[&] { known(); return aa; }, [&] { known(); return buff; },
+                                 [&] { known(); return item; }};
     int n = 0;
     // CanUseMemorizedSpellSlot, or the server extension's (the NMS patch's detour: gem < 12, from level 1).
     const game::ServerExtension& ext = server_ext();
+    bool stock = false; // a gem the server extension did not answer
     auto usable = [&](int gem) {
         if (auto v = ext.can_use_gem(*this, gem)) return *v;
+        stock = true;
         return gems::can_use_memorized_spell_slot(profile_.has_value(), 0, gem, totals);
     };
     while (n < game::kSpellGems && usable(n)) ++n;
-    if (n != usable_gems_)
+    if (n != usable_gems_ && !stock)
+        log::info("spells: {} gems usable (the server's rule)", n);
+    else if (n != usable_gems_ && totals_known && profile_)
         log::info("spells: {} gems usable (SPA 326: AA {}, buffs {}, items {})", n, aa, buff, item);
+    else if (n != usable_gems_)
+        log::info("spells: {} gems usable", n);
     usable_gems_ = n;
 }
 

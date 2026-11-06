@@ -88,8 +88,14 @@ public:
     const std::vector<std::string>& channels() const { return channels_; }
     void disconnect();
 
+    // The host's name is being looked up (on a thread of its own: a slow or failing DNS must not stop the frame).
+    bool resolving() const { return resolving_ != nullptr; }
+
 private:
+    struct Resolve; // the lookup's result, shared with its thread
+    void start_session(const std::string& address, std::uint16_t port);
     std::unique_ptr<Session> session_;
+    std::shared_ptr<Resolve> resolving_;
     ChatServerInfo info_;
     bool logged_in_ = false;
     std::deque<ChatServerEvent> events_;

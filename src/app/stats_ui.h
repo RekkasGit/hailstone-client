@@ -46,6 +46,7 @@ private:
     // Character keeps a reference to its sheet, so both live here.
     std::unique_ptr<game::mechanics::CharacterSheet> sheet_;
     std::unique_ptr<game::mechanics::Character> character_;
+    std::unique_ptr<game::mechanics::CharacterSheet> class_sheet_; // the per-class comparison's copy, reused
     bool open_ = false;
     std::int64_t warned_hp_[2] = {-1, -1};   // computed, server: the last mismatch logged
     std::int64_t warned_mana_[2] = {-1, -1};

@@ -240,7 +240,8 @@ while it downloads what `servers/<profile>/` lacks (`net/server_files.h`): it do
 spawns (`OP_ReqClientSpawn`) nor load the zone, and the zone keeps the character connecting meanwhile. The loading
 screen says **Downloading server files** with the files and megabytes done and the speed, so a long first zone-in is
 not taken for a hang. The files come into `.download/` a piece at a time (32 KB, 32 pieces asked ahead), each checked
-against its hash, and only when all have come are they moved into place; the files a former list brought that
+against its hash (as its pieces come; a file with a piece asked for again is read back from `.download/` 16 MB a
+frame once all have come), and only when all have come are they moved into place; the files a former list brought that
 the server no longer lists are deleted then. A broken-off download keeps the files that came complete for the next
 try, and leaves the folder as it was. Once something in `assets/` changed the client reads its files again (`GameDir::rescan`, the
 connection's strings, spells and race data, then what `reload_server_files` reads) before the zone loads.
@@ -252,7 +253,9 @@ refused on every platform; `core/windows_names.h`, which the zip reader of updat
 `.dll`, `.so`, `.lua` ...) are refused, except Lua and data in `scripts/` and this platform's libraries and data in
 `plugins/` (other platforms' are skipped). What those may do is the server's `hailstone.cfg`'s (docs/plugins.md).
 Files the player added by hand stay unless the server lists the same name; one that matches
-the server's hash is kept as is. A server without the script does not answer, and after 5 s (30 s for a server that
+the server's hash is kept as is. Checking those (a file of the right size that `server_files.txt` does not vouch for,
+or one left complete in `.download/`) means hashing it: that is done 16 MB a frame, so a folder of large files copied
+in by hand keeps the loading screen drawing (**Checking the server's files**, with the files done) instead of freezing it. A server without the script does not answer, and after 5 s (30 s for a server that
 sent files before, whose zone may be hashing new ones) the zone-in goes on with what is there.
 
 On a live asset folder a RoF2 server's `client_files/` needs the RoF2 files live lacks or changed (above): the five
@@ -311,7 +314,7 @@ formats:
 | `GuildNotes.txt` | the guild window's personal notes ("%08X %s %s" lines) |
 | `chat.ini` | chat filters and user colours |
 | `options.ini` | the game options (Options window, /lootnodrop, /trackplayers, /log ...) |
-| `<name>.txt` | the chat log (/log; `eqlog` unless named) |
+| `<name>.txt` | the chat log (/log; `eqlog` unless named). Kept open while logging, each line written through at once; `/log off` closes it |
 
 The asset folder's `defaults.ini`, `eqclient.ini` and `UI_<name>_<server>.ini` are read as the defaults under these
 files and never written; so are its `userdata/AddressBook.txt` and `userdata/IgnoreList.txt`, the books a character

@@ -327,8 +327,9 @@ void ClientApp::update_player(float dt) {
         if (game::mechanics::is_movement_command(e.command)) movement_command(e.command, e.down, accept);
     mk.move_down = actions_ui_->keymap().held(game::KeyCommand::CMD_MOVE_DOWN);
     // CastSpell's line of sight test (PlayerBase::CanSee) against the zone's collision.
-    if (los_conn_ != conn_.get()) {
-        los_conn_ = conn_.get();
+    // Each new connection is given its hooks once. (Not a test on the connection's address: a new connection can be
+    // allocated where the freed one was, after /camp or a return to character select.)
+    if (!conn_->has_line_of_sight()) {
         conn_->set_line_of_sight([this](const glm::vec3& a, const glm::vec3& b) {
             return !collision_ || collision_->line_of_sight(a, b);
         });

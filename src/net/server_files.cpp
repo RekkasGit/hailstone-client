@@ -73,19 +73,6 @@ bool is_safe_path_shape(std::string_view path) {
     return true;
 }
 
-std::optional<Sha256Digest> hash_file(const fs::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return std::nullopt;
-    Sha256 h;
-    std::vector<char> buf(1 << 16);
-    while (in) {
-        in.read(buf.data(), static_cast<std::streamsize>(buf.size()));
-        auto n = static_cast<std::size_t>(in.gcount());
-        if (n) h.update(std::string_view(buf.data(), n));
-    }
-    return h.finish();
-}
-
 constexpr std::string_view kRecordHeader = "# hailstone server files 2";
 
 std::string megabytes(std::uint64_t bytes) {
@@ -175,6 +162,10 @@ ServerFileSync::~ServerFileSync() = default;
 
 void ServerFileSync::start(Clock::time_point now) {
     state_ = State::Listing;
+    checks_.clear();
+    next_check_ = 0;
+    hashing_.reset();
+    rehash_.clear();
     list_.clear();
     list_id_ = total_ = 0;
     last_reply_ = now;
@@ -189,6 +180,8 @@ void ServerFileSync::fail(std::string message) {
     state_ = State::Failed;
     incoming_.clear(); // closes the files; what came stays in .download/ for the next try
     asks_.clear();
+    hashing_.reset();
+    rehash_.clear();
 }
 
 void ServerFileSync::handle(const ServerFilesReply& reply, Clock::time_point now) {
@@ -267,6 +260,7 @@ void ServerFileSync::handle(const ServerFilesReply& reply, Clock::time_point now
     bytes_done_ += want;
     rate_bytes_ += want;
     if (in.received == e.size) received_file(chunk.index);
+    if (state_ == State::Downloading && !rehash_.empty()) rehash();
     // The server answers in the order asked: the pieces asked before this one that have not come were skipped.
     while (state_ == State::Downloading && !asks_.empty() && asks_.begin()->first < number)
         ask_again(asks_.begin()->first);
@@ -297,16 +291,37 @@ void ServerFileSync::received_file(std::uint32_t index) {
     Incoming& in = *node.mapped();
     const ServerFileEntry& e = list_[index];
     in.out.close();
-    fs::path staged = staging_dir() / dest_[index];
-    std::optional<Sha256Digest> got = in.in_order ? std::optional(in.hash.finish()) : hash_file(staged);
+    if (!in.in_order) {
+        // A piece came again after later ones: the file is hashed from .download/ by update(), kHashBytesPerUpdate
+        // a call, not all at once here (a large file would stop the frame).
+        rehash_.push_back(index);
+        return;
+    }
+    checked_file(index, in.hash.finish());
+}
+
+void ServerFileSync::checked_file(std::uint32_t index, const std::optional<Sha256Digest>& got) {
+    const ServerFileEntry& e = list_[index];
     if (!got || *got != e.sha256) {
         std::error_code ec;
-        fs::remove(staged, ec);
+        fs::remove(staging_dir() / dest_[index], ec);
         return fail(e.path + " arrived damaged (its SHA-256 does not match the server's list)");
     }
     ready_.push_back(index);
     staged_[index] = true;
     if (ready_.size() == needed_.size()) commit();
+}
+
+void ServerFileSync::rehash() {
+    std::vector<char> buf;
+    std::uint64_t budget = hash_budget_;
+    while (state_ == State::Downloading && !rehash_.empty() && budget > 0) {
+        std::optional<Sha256Digest> got;
+        if (!hash_more(staging_dir() / dest_[rehash_.front()], budget, buf, got)) return;
+        const std::uint32_t index = rehash_.front();
+        rehash_.erase(rehash_.begin());
+        checked_file(index, got);
+    }
 }
 
 void ServerFileSync::load_record() {
@@ -355,8 +370,14 @@ void ServerFileSync::plan(Clock::time_point now) {
     bytes_total_ = bytes_done_ = 0;
     std::unordered_map<std::string, fs::path> present = present_files();
     std::error_code ec;
-    std::unordered_map<std::string, bool> listed;
-    std::size_t refused = 0, skipped = 0;
+    std::unordered_map<std::string, bool>& listed = listed_;
+    listed.clear();
+    std::size_t& refused = refused_;
+    std::size_t& skipped = skipped_;
+    refused = skipped = 0;
+    checks_.clear();
+    next_check_ = 0;
+    hashing_.reset();
     dest_.assign(list_.size(), std::string());
     for (std::uint32_t i = 0; i < list_.size(); ++i) {
         const ServerFileEntry& e = list_[i];
@@ -375,22 +396,93 @@ void ServerFileSync::plan(Clock::time_point now) {
         std::string key = lower(*dest);
         if (listed.contains(key)) continue; // the same place twice (another case, or assets/x and x): the first
         listed[key] = true;
+        Check c;
+        c.index = i;
+        c.key = key;
         if (auto p = present.find(key); p != present.end() && fs::file_size(p->second, ec) == e.size && !ec) {
             auto r = record_.find(key);
             if (r != record_.end() && r->second.sha256 == e.sha256 && r->second.size == e.size) continue;
-            if (hash_file(p->second) == e.sha256) {
-                record_[key] = Recorded{*dest, e.size, e.sha256}; // the player's copy is the server's
-                continue;
-            }
+            c.present = p->second;
         }
         fs::path staged = staging_dir() / *dest;
-        if (fs::exists(staged, ec) && fs::file_size(staged, ec) == e.size && hash_file(staged) == e.sha256) {
-            ready_.push_back(i); // came complete in an earlier download
-            staged_[i] = true;
-        }
-        needed_.push_back(i);
-        bytes_total_ += e.size;
+        if (fs::exists(staged, ec) && fs::file_size(staged, ec) == e.size) c.staged = staged;
+        checks_.push_back(std::move(c));
     }
+    // The hashing, kHashBytesPerUpdate at a time: a folder of large files the record does not know (deleted, or
+    // copied in by hand) would otherwise stop the frame for as long as reading them takes.
+    if (!verify()) {
+        state_ = State::Verifying;
+        return;
+    }
+    finish_plan(now);
+}
+
+bool ServerFileSync::hash_more(const fs::path& path, std::uint64_t& budget, std::vector<char>& buf,
+                               std::optional<Sha256Digest>& got) {
+    if (!hashing_) {
+        hashing_ = std::make_unique<Hashing>();
+        hashing_->in.open(path, std::ios::binary);
+    }
+    got.reset();
+    if (hashing_->in) {
+        if (buf.empty()) buf.resize(1 << 16);
+        while (hashing_->in && budget > 0) {
+            const auto want = static_cast<std::size_t>(std::min<std::uint64_t>(buf.size(), budget));
+            hashing_->in.read(buf.data(), static_cast<std::streamsize>(want));
+            auto n = static_cast<std::size_t>(hashing_->in.gcount());
+            if (n) hashing_->hash.update(std::string_view(buf.data(), n));
+            budget -= std::min<std::uint64_t>(budget, std::max<std::size_t>(n, 1));
+        }
+        if (hashing_->in) return false; // more to read
+        got = hashing_->hash.finish();
+    }
+    hashing_.reset();
+    return true;
+}
+
+bool ServerFileSync::verify() {
+    std::vector<char> buf;
+    std::uint64_t budget = hash_budget_;
+    while (next_check_ < checks_.size()) {
+        Check& c = checks_[next_check_];
+        const ServerFileEntry& e = list_[c.index];
+        if (c.step == 0 && c.present.empty()) c.step = 1;
+        if (c.step == 1 && c.staged.empty()) c.step = 2;
+        if (c.step == 2) {
+            needed_.push_back(c.index);
+            ++next_check_;
+            continue;
+        }
+        std::optional<Sha256Digest> got;
+        if (!hash_more(c.step == 0 ? c.present : c.staged, budget, buf, got)) return false; // the next call goes on
+        const bool match = got && *got == e.sha256;
+        if (c.step == 0) {
+            if (match) {
+                record_[c.key] = Recorded{dest_[c.index], e.size, e.sha256}; // the player's copy is the server's
+                ++next_check_;
+            } else {
+                c.step = 1;
+            }
+            continue;
+        }
+        if (match) {
+            ready_.push_back(c.index); // came complete in an earlier download
+            staged_[c.index] = true;
+        }
+        c.step = 2;
+    }
+    return true;
+}
+
+void ServerFileSync::finish_plan(Clock::time_point now) {
+    checks_.clear();
+    next_check_ = 0;
+    const std::unordered_map<std::string, bool>& listed = listed_;
+    const std::size_t refused = refused_, skipped = skipped_;
+    // Checked in the list's order whether hashed at once or over several calls.
+    std::sort(needed_.begin(), needed_.end());
+    std::sort(ready_.begin(), ready_.end());
+    for (std::uint32_t i : needed_) bytes_total_ += list_[i].size;
     for (const auto& [key, r] : record_)
         if (!listed.contains(key)) remove_.push_back(key);
     for (std::uint32_t i : ready_) bytes_done_ += list_[i].size;
@@ -403,6 +495,7 @@ void ServerFileSync::plan(Clock::time_point now) {
         return;
     }
     state_ = State::Downloading;
+    last_reply_ = now; // the chunk timeout counts from here, not from the list's last page before the hashing
     download_started_ = Clock::now();
     next_file_ = 0;
     next_offset_ = 0;
@@ -508,10 +601,19 @@ std::vector<ServerFileSync::Installed> ServerFileSync::installed() {
 }
 
 void ServerFileSync::update(Clock::time_point now) {
+    if (state_ == State::Verifying) {
+        if (verify()) finish_plan(now);
+        return;
+    }
     if (state_ == State::Listing && now - last_reply_ > list_timeout_) {
         log::info("server files: no answer (a server without Hailstone's script)");
         state_ = State::NoAnswer;
-    } else if (state_ == State::Downloading && now - last_reply_ > kChunkTimeout) {
+    }
+    if (state_ == State::Downloading && !rehash_.empty()) {
+        rehash();
+        if (asks_.empty()) last_reply_ = now; // nothing asked for: the hashing is what is left, not a silent server
+    }
+    if (state_ == State::Downloading && now - last_reply_ > kChunkTimeout) {
         fail("the server stopped sending its files");
     } else if (state_ == State::Downloading && !asks_.empty() && now - last_piece_ >= kChunkRetry) {
         // Nothing for kChunkRetry: what is outstanding was lost (the last requests, with none after them to show
@@ -536,6 +638,8 @@ void ServerFileSync::update(Clock::time_point now) {
 std::string ServerFileSync::status() const {
     switch (state_) {
     case State::Listing: return "Checking the server's files";
+    case State::Verifying:
+        return std::format("Checking the server's files ({} of {})", next_check_, checks_.size());
     case State::Downloading:
         return std::format("{} of {} files, {} of {} MB{}", ready_.size(), needed_.size(), megabytes(bytes_done_),
                            megabytes(bytes_total_), rate_ > 0 ? std::format(" ({} MB/s)", megabytes(static_cast<std::uint64_t>(rate_))) : "");

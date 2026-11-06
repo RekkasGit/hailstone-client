@@ -321,6 +321,16 @@ TEST_CASE("aa: reuse timers translate the server's clock; readiness subtracts SP
     REQUIRE(sheet.size() == 1);
     CHECK(sheet[0].effects[0].spa == 262);
     CHECK(sheet[0].class_mask == a.classes);
+    // Into a list that held more and other ranks: the same list, its old entries gone.
+    std::vector<game::mechanics::SheetAbility> into(3);
+    into[0].id = 1;
+    into[0].effects = {{1, 2, 3}, {4, 5, 6}};
+    s.sheet_abilities_into(into);
+    REQUIRE(into.size() == 1);
+    CHECK(into[0].id == sheet[0].id);
+    REQUIRE(into[0].effects.size() == 1);
+    CHECK(into[0].effects[0].spa == 262);
+    CHECK(into[0].class_mask == a.classes);
 }
 
 TEST_CASE("training: OP_GMTraining both ways, OP_GMTrainSkill, OP_GMEndTraining, the confirmation") {

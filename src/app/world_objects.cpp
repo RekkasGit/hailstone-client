@@ -315,20 +315,26 @@ std::shared_ptr<const assets::PfsArchive> WorldObjects::archive(const std::strin
 }
 
 void WorldObjects::place(Placed& p, const glm::mat4& transform, float scale) {
-    p.transform = transform;
-    p.inverse = glm::inverse(transform);
+    // Doors and placed items are placed again each update; most have not moved.
+    if (!p.inverted || p.transform != transform) {
+        p.transform = transform;
+        p.inverse = glm::inverse(transform);
+        p.inverted = true;
+    }
     p.scale = scale;
     p.center = glm::vec3(transform[3]);
     p.bound = p.model ? p.model->shape.radius * scale : 0.0f;
 }
 
 void WorldObjects::update(const net::GameConnection& conn) {
+    // What a list no longer holds goes: each entry found this update is marked with its serial (no seen-sets to
+    // build every frame).
+    const std::uint32_t serial = ++update_serial_;
     // Doors.
-    std::unordered_map<std::uint8_t, bool> seen;
     for (const auto& d : conn.doors()) {
-        seen[d.id] = true;
         auto [it, fresh] = doors_.try_emplace(d.id);
         Placed& p = it->second;
+        p.seen = serial;
         if (fresh || !p.model) {
             p.model = game::door_has_actor(d) ? model_for(d.name) : nullptr;
             p.visible = !game::door_is_invisible(d);
@@ -343,14 +349,13 @@ void WorldObjects::update(const net::GameConnection& conn) {
         glm::mat4 t = game::door_transform(d);
         place(p, t, d.scale());
     }
-    std::erase_if(doors_, [&](const auto& kv) { return !seen.contains(kv.first); });
+    std::erase_if(doors_, [&](const auto& kv) { return kv.second.seen != serial; });
 
     // Ground objects.
-    std::unordered_map<std::uint32_t, bool> seen_objects;
     for (const auto& o : conn.ground_objects()) {
-        seen_objects[o.drop_id] = true;
         auto [it, fresh] = objects_.try_emplace(o.drop_id);
         Placed& p = it->second;
+        p.seen = serial;
         if (fresh) {
             // The OP_GroundSpawn handler (@0x4d050f) creates the actor with CreateActor's fallbacks on: a model it
             // lacks shows as IT63 (or RED_BLOB). Every definition in the table is named "..._ACTORDEF", so a long
@@ -364,17 +369,16 @@ void WorldObjects::update(const net::GameConnection& conn) {
             place(p, t, std::isfinite(o.size) && o.size > 0.0f ? o.size : 1.0f);
         }
     }
-    std::erase_if(objects_, [&](const auto& kv) { return !seen_objects.contains(kv.first); });
+    std::erase_if(objects_, [&](const auto& kv) { return kv.second.seen != serial; });
 
     // Placed real estate objects (0x1045 / 0x2a9e, game/placement.h): EQPlacedItem_CreateActor's model by
     // CreateActor's rules with its fallbacks, solid unless +0x98 (and never for NPC items, which are spawns: their
     // creature draws as one; the placed record only names it).
-    std::unordered_map<std::uint64_t, bool> seen_placed;
     for (const auto& o : conn.real_estate().placed_items()) {
         std::uint64_t key = (std::uint64_t{o.re} << 32) | o.item_id;
-        seen_placed[key] = true;
         auto [it, fresh] = placed_.try_emplace(key);
         Placed& p = it->second;
+        p.seen = serial;
         if (fresh || placed_tags_[key] != o.tag) {
             placed_tags_[key] = o.tag;
             p.model = o.npc_item ? nullptr : placed_model(o.tag);
@@ -385,8 +389,9 @@ void WorldObjects::update(const net::GameConnection& conn) {
         // follows the data (whether the original's actor moves is not traced: docs/unknowns.md).
         place(p, game::placed_transform(o), std::isfinite(o.scale) && o.scale > 0.0f ? o.scale : 1.0f);
     }
-    std::erase_if(placed_, [&](const auto& kv) { return !seen_placed.contains(kv.first); });
-    std::erase_if(placed_tags_, [&](const auto& kv) { return !seen_placed.contains(kv.first); });
+    std::erase_if(placed_, [&](const auto& kv) { return kv.second.seen != serial; });
+    if (placed_tags_.size() != placed_.size())
+        std::erase_if(placed_tags_, [&](const auto& kv) { return !placed_.contains(kv.first); });
     // The placement ghost (BeginPlacement's copy of the object, actor type 5).
     if (conn.placement().active() && !conn.placement().ghost().npc_item) {
         const net::RePlacedItem& g = conn.placement().ghost();

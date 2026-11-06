@@ -61,3 +61,17 @@ TEST_CASE("The zone dword carries the player profile's instance: a summon inside
     c.set_profile_for_test(pp);
     CHECK(c.current_zone_dword() == 89u);
 }
+
+TEST_CASE("A new connection has none of the app's hooks, even where the freed one was allocated") {
+    // The app gives each connection its line of sight, teleport and slash-command hooks once, when the connection
+    // has none (client_app_player.cpp): a test on the connection's address skipped a new one put where the old was.
+    // This checks only the condition the app tests; the installation in ClientApp::update_player is not unit-tested
+    // (ClientApp needs a window).
+    mq_test::World w("nmsc_zone_change_request_hooks_test");
+    CHECK_FALSE(w.conn->has_line_of_sight());
+    w.conn->set_line_of_sight([](const glm::vec3&, const glm::vec3&) { return true; });
+    CHECK(w.conn->has_line_of_sight());
+    w.conn.reset();
+    w.conn = std::make_unique<net::GameConnection>(*w.game, net::ConnectionOptions{});
+    CHECK_FALSE(w.conn->has_line_of_sight());
+}

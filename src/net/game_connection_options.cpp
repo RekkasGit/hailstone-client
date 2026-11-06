@@ -200,6 +200,7 @@ void GameConnection::log_command(const std::string& args) {
                                client_options_.on(game::ClientOption::Log));
     client_options_.set(game::ClientOption::Log, c.on ? 1 : 0);
     open_chat_log(c.name);
+    if (!c.on) close_chat_log();
     system(c.on ? game::kStrLogOn : game::kStrLogOff, {c.name}, 0x111);
     save_client_option(game::ClientOption::Log);
 }
@@ -227,10 +228,21 @@ void GameConnection::write_chat_log(const std::string& text) {
         clean += link ? link->text : tag;
         at = b + 1;
     }
-    std::error_code ec;
-    std::filesystem::create_directories(chat_log_path_.parent_path(), ec);
-    std::ofstream out(chat_log_path_, std::ios::app | std::ios::binary);
-    if (out) out << game::log_line(std::time(nullptr), clean);
+    if (!chat_log_ || !*chat_log_ || chat_log_open_path_ != chat_log_path_) {
+        // (A stream that failed is opened again: the folder may have gone, or the disk filled.)
+        chat_log_.reset();
+        std::error_code ec;
+        std::filesystem::create_directories(chat_log_path_.parent_path(), ec);
+        chat_log_ = std::make_unique<std::ofstream>(chat_log_path_, std::ios::app | std::ios::binary);
+        chat_log_open_path_ = chat_log_path_;
+    }
+    // Flushed each line, as the closing write was: a log parser reading the file sees the line at once.
+    if (*chat_log_) *chat_log_ << game::log_line(std::time(nullptr), clean) << std::flush;
+}
+
+void GameConnection::close_chat_log() {
+    chat_log_.reset();
+    chat_log_open_path_.clear();
 }
 
 // ---------------------------------------------------------------- /netstats
