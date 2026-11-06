@@ -1403,7 +1403,14 @@ int h_web_text(void* h, std::uint32_t tab, const char* text) {
 int h_web_message(void* h, std::uint32_t tab, char* out, std::size_t out_size) {
     Loaded& l = Loaded::of(h);
     WebAccess* w = web_of(l, "web_message");
-    auto m = w ? w->take_message(web_owner(l), tab) : std::nullopt;
+    if (!w) return -1;
+    // No buffer: the length only, left queued, so the plugin can make room for it (one given takes it, cut or not:
+    // a loop with a fixed buffer never sees the same message twice).
+    if (!out || out_size == 0) {
+        auto n = w->next_message_size(web_owner(l), tab);
+        return n ? static_cast<int>(*n) : -1;
+    }
+    auto m = w->take_message(web_owner(l), tab);
     return m ? copy_out(*m, out, out_size) : -1;
 }
 int h_web_state(void* h, std::uint32_t tab, NmscWebState* out) {

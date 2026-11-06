@@ -198,6 +198,13 @@ std::optional<std::string> WebService::take_message(const std::string& owner, st
     return b->take_message(tab);
 }
 
+std::optional<std::size_t> WebService::next_message_size(const std::string& owner, std::uint32_t tab) {
+    web::BrowserHost* b = host();
+    const web::Tab* t = b ? b->tab(tab) : nullptr;
+    if (!t || owner.empty() || t->options.owner != owner || t->messages.empty()) return std::nullopt;
+    return t->messages.front().size();
+}
+
 std::optional<plugin::WebState> WebService::state(const std::string& owner, std::uint32_t tab) {
     web::BrowserHost* b = host();
     const web::Tab* t = b ? b->tab(tab) : nullptr;

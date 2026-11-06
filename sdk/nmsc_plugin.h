@@ -552,7 +552,9 @@ typedef struct NmscHost {
     int (*web_eval)(void* host, uint32_t tab, const char* script);
     int (*web_post)(void* host, uint32_t tab, const char* message);
     int (*web_text)(void* host, uint32_t tab, const char* text);
-    /* The page's next window.hailstone.post(): its full length (cut to fit out, NUL-terminated), -1 for none. */
+    /* The page's next window.hailstone.post(): its full length (cut to fit out, NUL-terminated), -1 for none. Given
+     * a buffer it is taken off the queue, even when cut; with out NULL (or out_size 0) only its length comes back
+     * and it stays queued, so call that first to make room for a long one (at most 1 MB). */
     int (*web_message)(void* host, uint32_t tab, char* out, size_t out_size);
     /* Set `out->size` first (the client fills what both know, as with the structs above); 0 for no such tab. */
     int (*web_state)(void* host, uint32_t tab, NmscWebState* out);

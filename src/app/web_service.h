@@ -45,6 +45,7 @@ public:
     bool post(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& message) override;
     bool text(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& text) override;
     std::optional<std::string> take_message(const std::string& owner, std::uint32_t tab) override;
+    std::optional<std::size_t> next_message_size(const std::string& owner, std::uint32_t tab) override;
     std::optional<plugin::WebState> state(const std::string& owner, std::uint32_t tab) override;
     std::vector<std::uint32_t> tabs(const std::string& owner) override;
     bool view(const std::string& owner, std::uint32_t caps, std::uint32_t tab, float width, float height) override;

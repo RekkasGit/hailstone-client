@@ -42,6 +42,8 @@ public:
     virtual bool text(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& text) = 0;
     // The page's next window.hailstone.post(); never for the player's tabs.
     virtual std::optional<std::string> take_message(const std::string& owner, std::uint32_t tab) = 0;
+    // The next one's length, left queued; nullopt for none (as take_message).
+    virtual std::optional<std::size_t> next_message_size(const std::string& owner, std::uint32_t tab) = 0;
     virtual std::optional<WebState> state(const std::string& owner, std::uint32_t tab) = 0;
     virtual std::vector<std::uint32_t> tabs(const std::string& owner) = 0;
     // Inside an ImGui window: draws the page width x height (the tab takes that size) and gives it the mouse, and the

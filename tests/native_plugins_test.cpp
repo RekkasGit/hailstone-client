@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <deque>
 #include <fstream>
 #include <thread>
 
@@ -560,7 +561,17 @@ struct OneTab : plugin::WebAccess {
     bool eval(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
     bool post(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
     bool text(const std::string&, std::uint32_t, std::uint32_t, const std::string&) override { return false; }
-    std::optional<std::string> take_message(const std::string&, std::uint32_t) override { return std::nullopt; }
+    std::deque<std::string> messages; // tab 1's
+    std::optional<std::string> take_message(const std::string& owner, std::uint32_t tab) override {
+        if (owner != "plugin:HostProbe" || tab != 1 || messages.empty()) return std::nullopt;
+        std::string m = messages.front();
+        messages.pop_front();
+        return m;
+    }
+    std::optional<std::size_t> next_message_size(const std::string& owner, std::uint32_t tab) override {
+        if (owner != "plugin:HostProbe" || tab != 1 || messages.empty()) return std::nullopt;
+        return messages.front().size();
+    }
     std::optional<plugin::WebState> state(const std::string& owner, std::uint32_t tab) override {
         if (owner != "plugin:HostProbe" || tab != 1) return std::nullopt;
         plugin::WebState s;
@@ -588,4 +599,23 @@ TEST_CASE("native plugins: web_state fills what a shorter NmscWebState holds, as
     CHECK(h.printed_line("[Probe] state 1, size " + std::to_string(shorter) + ", url https://example.org/, title untouched"));
     h.run("/probestate 2"); // not even its size
     CHECK(h.printed_line("[Probe] state 0, size 2, url -, title untouched"));
+}
+
+// web_message's length with no buffer leaves the message queued, so a plugin can make room for one too long for
+// its buffer; given a buffer the message is taken, cut or not (a loop with a fixed buffer still drains the queue).
+TEST_CASE("native plugins: web_message with no buffer gives the length and keeps the message") {
+    OneTab web;
+    web.messages = {"a long message of thirty-two byte", "next"};
+    Host h(false, &web, NMSC_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probemessage 0");
+    CHECK(h.printed_line("[Probe] message 33, -"));
+    CHECK(web.messages.size() == 2);
+    h.run("/probemessage 64");
+    CHECK(h.printed_line("[Probe] message 33, a long message of thirty-two byte"));
+    h.run("/probemessage 5");
+    CHECK(h.printed_line("[Probe] message 4, next"));
+    h.run("/probemessage 0");
+    CHECK(h.printed_line("[Probe] message -1, -"));
 }
