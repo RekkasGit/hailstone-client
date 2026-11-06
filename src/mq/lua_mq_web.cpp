@@ -18,6 +18,7 @@
 #include <lua.hpp>
 
 #include <string>
+#include <string_view>
 
 #include "mq/lua_script.h"
 #include "plugin/policy.h"
@@ -33,12 +34,15 @@ struct Caller {
     std::uint32_t caps;
 };
 
-// The script's browser: a Lua error without 'web' or a browser.
-Caller caller(lua_State* L, const char* what) {
-    Script& s = Script::of(L);
-    if ((s.caps & plugin::kCapWeb) == 0)
-        luaL_error(L, "%s needs the server's '%s' permission", what, plugin::caps_text(plugin::kCapWeb).c_str());
-    if (!s.host->env.web) luaL_error(L, "%s: this client has no browser", what);
+// The script's browser: a Lua error without 'web' or a browser. Asked before the arguments are read, as before.
+void check(lua_State* L, const char* what) {
+    need_caps(L, plugin::kCapWeb, what);
+    if (!Script::of(L).host->env.web) luaL_error(L, "%s: this client has no browser", what);
+}
+
+// Made only once every argument is read: Lua is built as C, so an argument error longjmps past C++ objects.
+Caller caller(lua_State* L) {
+    const Script& s = Script::of(L);
     return {*s.host->env.web, "script:" + s.name, s.caps};
 }
 
@@ -54,14 +58,19 @@ int l_available(lua_State* L) {
 }
 
 int l_open(lua_State* L) {
-    Caller c = caller(L, "mq.web.open");
-    const std::string url = luaL_checkstring(L, 1);
+    check(L, "mq.web.open");
+    const char* url = luaL_checkstring(L, 1);
     const int w = static_cast<int>(luaL_optinteger(L, 2, 800)), h = static_cast<int>(luaL_optinteger(L, 3, 600));
-    std::string why;
-    const std::uint32_t id = c.web.open(c.owner, c.caps, url, w, h, &why);
+    std::uint32_t id = 0;
+    {
+        std::string why;
+        Caller c = caller(L);
+        id = c.web.open(c.owner, c.caps, url, w, h, &why);
+        if (!id) lua_pushstring(L, why.c_str());
+    }
     if (!id) {
         lua_pushnil(L);
-        lua_pushstring(L, why.c_str());
+        lua_insert(L, -2);
         return 2;
     }
     lua_pushinteger(L, id);
@@ -69,60 +78,70 @@ int l_open(lua_State* L) {
 }
 
 int l_navigate(lua_State* L) {
-    Caller c = caller(L, "mq.web.navigate");
+    check(L, "mq.web.navigate");
     const std::uint32_t tab = tab_arg(L, 1);
-    const std::string url = luaL_checkstring(L, 2);
-    std::string why;
-    const bool ok = c.web.navigate(c.owner, c.caps, tab, url, &why);
-    lua_pushboolean(L, ok);
-    if (ok) return 1;
-    lua_pushstring(L, why.c_str());
-    return 2;
+    const char* url = luaL_checkstring(L, 2);
+    bool ok = false;
+    {
+        std::string why;
+        Caller c = caller(L);
+        ok = c.web.navigate(c.owner, c.caps, tab, url, &why);
+        lua_pushboolean(L, ok);
+        if (!ok) lua_pushstring(L, why.c_str());
+    }
+    return ok ? 1 : 2;
 }
 
 int l_nav(lua_State* L) {
-    Caller c = caller(L, "mq.web.nav");
+    check(L, "mq.web.nav");
     const std::uint32_t tab = tab_arg(L, 1);
-    const std::string what = luaL_checkstring(L, 2);
+    const std::string_view what = luaL_checkstring(L, 2);
     if (what != "back" && what != "forward" && what != "reload" && what != "stop")
         return luaL_argerror(L, 2, "back, forward, reload or stop");
-    c.web.nav(c.owner, c.caps, tab, what);
+    Caller c = caller(L);
+    c.web.nav(c.owner, c.caps, tab, std::string(what));
     return 0;
 }
 
 int l_close(lua_State* L) {
-    Caller c = caller(L, "mq.web.close");
-    c.web.close(c.owner, tab_arg(L, 1));
+    check(L, "mq.web.close");
+    const std::uint32_t tab = tab_arg(L, 1);
+    Caller c = caller(L);
+    c.web.close(c.owner, tab);
     return 0;
 }
 
 int l_eval(lua_State* L) {
-    Caller c = caller(L, "mq.web.eval");
+    check(L, "mq.web.eval");
     const std::uint32_t tab = tab_arg(L, 1);
-    const std::string script = luaL_checkstring(L, 2);
+    const char* script = luaL_checkstring(L, 2);
+    Caller c = caller(L);
     lua_pushboolean(L, c.web.eval(c.owner, c.caps, tab, script));
     return 1;
 }
 
 int l_post(lua_State* L) {
-    Caller c = caller(L, "mq.web.post");
+    check(L, "mq.web.post");
     const std::uint32_t tab = tab_arg(L, 1);
-    const std::string message = luaL_checkstring(L, 2);
+    const char* message = luaL_checkstring(L, 2);
+    Caller c = caller(L);
     lua_pushboolean(L, c.web.post(c.owner, c.caps, tab, message));
     return 1;
 }
 
 int l_text(lua_State* L) {
-    Caller c = caller(L, "mq.web.text");
+    check(L, "mq.web.text");
     const std::uint32_t tab = tab_arg(L, 1);
-    const std::string text = luaL_checkstring(L, 2);
+    const char* text = luaL_checkstring(L, 2);
+    Caller c = caller(L);
     lua_pushboolean(L, c.web.text(c.owner, c.caps, tab, text));
     return 1;
 }
 
 int l_messages(lua_State* L) {
-    Caller c = caller(L, "mq.web.messages");
+    check(L, "mq.web.messages");
     const std::uint32_t tab = tab_arg(L, 1);
+    Caller c = caller(L);
     lua_newtable(L);
     lua_Integer n = 0;
     while (auto m = c.web.take_message(c.owner, tab)) {
@@ -133,8 +152,10 @@ int l_messages(lua_State* L) {
 }
 
 int l_state(lua_State* L) {
-    Caller c = caller(L, "mq.web.state");
-    auto st = c.web.state(c.owner, tab_arg(L, 1));
+    check(L, "mq.web.state");
+    const std::uint32_t tab = tab_arg(L, 1);
+    Caller c = caller(L);
+    auto st = c.web.state(c.owner, tab);
     if (!st) {
         lua_pushnil(L);
         return 1;
@@ -158,7 +179,8 @@ int l_state(lua_State* L) {
 }
 
 int l_tabs(lua_State* L) {
-    Caller c = caller(L, "mq.web.tabs");
+    check(L, "mq.web.tabs");
+    Caller c = caller(L);
     lua_newtable(L);
     lua_Integer n = 0;
     for (std::uint32_t id : c.web.tabs(c.owner)) {
@@ -169,9 +191,10 @@ int l_tabs(lua_State* L) {
 }
 
 int l_view(lua_State* L) {
-    Caller c = caller(L, "mq.web.view");
+    check(L, "mq.web.view");
     const std::uint32_t tab = tab_arg(L, 1);
     const auto w = static_cast<float>(luaL_checknumber(L, 2)), h = static_cast<float>(luaL_checknumber(L, 3));
+    Caller c = caller(L);
     lua_pushboolean(L, c.web.view(c.owner, c.caps, tab, w, h));
     return 1;
 }

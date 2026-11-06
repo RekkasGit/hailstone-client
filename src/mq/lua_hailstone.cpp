@@ -516,7 +516,7 @@ int l_set_flag(lua_State* L) {
         {"aa_train_all", NMSC_FLAG_AA_TRAIN_ALL},       {"augment_classes", NMSC_FLAG_AUGMENT_CLASSES},
         {"research_classes", NMSC_FLAG_RESEARCH_CLASSES}, {"focus_classes", NMSC_FLAG_FOCUS_CLASSES},
         {"backstab_either_hand", NMSC_FLAG_BACKSTAB_EITHER_HAND}};
-    std::string name = luaL_checkstring(L, 1);
+    const std::string_view name = luaL_checkstring(L, 1);
     const bool on = lua_isnone(L, 2) || lua_toboolean(L, 2) != 0;
     Script& s = Script::of(L);
     for (const auto& [n, bit] : kFlags)
@@ -526,7 +526,7 @@ int l_set_flag(lua_State* L) {
             ensure_extension(s);
             return 0;
         }
-    return luaL_error(L, "hailstone.set_flag: no switch named '%s'", name.c_str());
+    return luaL_error(L, "hailstone.set_flag: no switch named '%s'", lua_tostring(L, 1));
 }
 
 int l_set_player_classes(lua_State* L) {
@@ -603,7 +603,7 @@ int l_set_vitals(lua_State* L) {
 // ---------------------------------------------------------------- packets
 
 plugin::Stream stream_arg(lua_State* L, int i) {
-    std::string v = luaL_checkstring(L, i);
+    const std::string_view v = luaL_checkstring(L, i); // no std::string: luaL_error longjmps (Lua is built as C)
     if (v == "world") return plugin::Stream::World;
     if (v == "zone") return plugin::Stream::Zone;
     luaL_error(L, "stream must be 'world' or 'zone'");
@@ -615,7 +615,7 @@ plugin::Stream stream_arg(lua_State* L, int i) {
 int l_on_packet(lua_State* L) {
     need_cap(L, plugin::kCapPackets, "hailstone.on_packet");
     const plugin::Stream stream = stream_arg(L, 1);
-    std::string d = luaL_checkstring(L, 2);
+    const std::string_view d = luaL_checkstring(L, 2);
     if (d != "in" && d != "out") return luaL_error(L, "direction must be 'in' or 'out'");
     const auto opcode = static_cast<std::uint16_t>(luaL_checkinteger(L, 3));
     luaL_checktype(L, 4, LUA_TFUNCTION);
@@ -672,10 +672,11 @@ int l_send_packet(lua_State* L) {
 // back (plain values and tables).
 int l_ui_function(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.ui_function");
-    std::string name = luaL_checkstring(L, 1);
+    const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     Script& s = Script::of(L);
     if (!s.host->env.ui) return 0;
+    std::string name = given;
     lua_pushvalue(L, 2);
     const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     Script* sp = &s;
@@ -741,7 +742,8 @@ int l_option(lua_State* L) {
 int l_menu(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.menu");
     Script& s = Script::of(L);
-    std::string label = luaL_checkstring(L, 1), command = luaL_checkstring(L, 2);
+    const char* label = luaL_checkstring(L, 1);
+    const char* command = luaL_checkstring(L, 2);
     if (s.host->env.ui) s.host->env.ui->add_menu({s.name, label, command, plugin::UiBridge::Kind::Script});
     s.registered = true;
     return 0;
@@ -946,9 +948,10 @@ int l_server(lua_State* L) {
 
 // hailstone.chat(text [, color]): a chat line in one of the game's chat colours (15 yellow, ...; 0 the default).
 int l_chat(lua_State* L) {
-    std::string text = luaL_checkstring(L, 1);
+    const char* given = luaL_checkstring(L, 1);
     const auto color = static_cast<std::uint32_t>(luaL_optinteger(L, 2, 0));
     Script& s = Script::of(L);
+    std::string text = given;
     if (net::GameConnection* c = writable(s)) c->ui_message(std::move(text), 0, color);
     else if (s.host->env.print) s.host->env.print(text);
     return 0;
@@ -989,8 +992,8 @@ int l_hold_autoskill(lua_State* L) {
 // (the Ability Book's path, so the game's and the server's rules hold); false when the player has none such.
 int l_use_ability(lua_State* L) {
     need_cap(L, plugin::kCapActions, "hailstone.use_ability");
-    const std::string kind = luaL_checkstring(L, 1);
-    const std::string name = luaL_checkstring(L, 2);
+    const std::string_view kind = luaL_checkstring(L, 1);
+    const char* name = luaL_checkstring(L, 2);
     std::optional<AbilityKind> k;
     if (kind == "skill") k = AbilityKind::Skill;
     else if (kind == "disc") k = AbilityKind::Discipline;

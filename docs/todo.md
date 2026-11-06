@@ -150,6 +150,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.pickle`: a script without every capability gets `scripts/config/<script>/` (tests/mq_lua_test.cpp).
 - [x] Scripts' tables cannot have `__gc` (a finalizer at the close registered hooks as the client's own, keeping the freed script); nothing is registered while a state closes (tests/mq_lua_test.cpp).
 - [x] A Lua social's dry run does nothing but note its commands and waits; `eq.LuaSocialDryRun` needs `commands` and `actions` from a plugin (tests/mq_lua_test.cpp, tests/plugin_ui_sandbox_test.cpp).
+- [x] The Lua bridge checks its arguments before it makes C++ strings (an error longjmps past them: Lua is built as C).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `NmscWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).

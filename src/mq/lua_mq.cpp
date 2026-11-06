@@ -507,19 +507,18 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
     --s.busy;
 }
 
-// mq.bind(cmd, fn): a command of the script's own (the 'commands' capability). The client's own commands (the game's,
-// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command); a name another
-// script or plugin bound is taken over, as in MQ, until this one unbinds.
-int l_bind(lua_State* L) {
-    need(L, plugin::kCapCommands, "mq.bind");
-    Script& s = Script::of(L);
-    const char* given = luaL_checkstring(L, 1);
-    luaL_checktype(L, 2, LUA_TFUNCTION);
+// mq.bind's work once its arguments are checked; false with the error's text on the stack. Its strings are gone
+// before l_bind raises the error (Lua is built as C: an error longjmps past C++ objects).
+bool bind_command(lua_State* L, Script& s, const char* given) {
     std::string cmd = given;
     if (cmd.empty() || cmd.front() != '/') cmd.insert(cmd.begin(), '/');
     cmd = lower(cmd);
-    if (s.host->env.hooks->reserved_command(cmd))
-        return luaL_error(L, "mq.bind: %s is the client's own command", cmd.c_str());
+    if (s.host->env.hooks->reserved_command(cmd)) {
+        luaL_where(L, 1);
+        lua_pushfstring(L, "mq.bind: %s is the client's own command", cmd.c_str());
+        lua_concat(L, 2);
+        return false;
+    }
     if (auto it = s.binds.find(cmd); it != s.binds.end()) {
         luaL_unref(L, LUA_REGISTRYINDEX, it->second);
         s.binds.erase(it);
@@ -539,6 +538,18 @@ int l_bind(lua_State* L) {
         }
         start_thread(*sp, ref, words);
     });
+    return true;
+}
+
+// mq.bind(cmd, fn): a command of the script's own (the 'commands' capability). The client's own commands (the game's,
+// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command); a name another
+// script or plugin bound is taken over, as in MQ, until this one unbinds.
+int l_bind(lua_State* L) {
+    need(L, plugin::kCapCommands, "mq.bind");
+    Script& s = Script::of(L);
+    const char* given = luaL_checkstring(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (!bind_command(L, s, given)) return lua_error(L);
     return 0;
 }
 
