@@ -11,6 +11,16 @@
 #include "core/log.h"
 #include "game/mouse_look.h"
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace nmsc::platform {
 
 namespace {
@@ -658,6 +668,12 @@ void Window::set_title(const std::string& title) { SDL_SetWindowTitle(window_, t
 bool Window::set_icon(int width, int height, std::span<const std::uint8_t> rgba) {
     const auto w = static_cast<std::size_t>(width), h = static_cast<std::size_t>(height);
     if (width <= 0 || height <= 0 || rgba.size() != w * h * 4) return false;
+#ifdef _WIN32
+    // An .exe with its own icon (cmake/windows/hailstone.rc) keeps it: SDL has made it the window class's, and
+    // Windows takes the size each place needs from it. One image set here would stand for every size instead.
+    if (FindResourceW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(14) /* RT_GROUP_ICON */))
+        return true;
+#endif
     // SDL_PIXELFORMAT_RGBA32 is R, G, B, A in memory whatever the byte order.
     SDL_Surface* s = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA32);
     if (!s) return false;

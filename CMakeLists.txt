@@ -618,8 +618,11 @@ endif()
 # getenv and path::string() hold any name instead of '?' or an exception (cmake/utf8.manifest). MSVC-style linkers
 # take a .manifest source; MinGW would need a resource file.
 set(NMSC_WIN_MANIFEST "")
+set(NMSC_WIN_CLIENT_RESOURCES "")
 if(MSVC)
   set(NMSC_WIN_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/utf8.manifest)
+  # The client's icon in the .exe (cmake/windows/hailstone.rc).
+  set(NMSC_WIN_CLIENT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/windows/hailstone.rc)
 endif()
 
 nmsc_add_shaders(nmsc_shaders
@@ -705,8 +708,14 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/projecttriune/CMakeLists.txt)
   set(NMSC_HAS_TRIUNE ON)
 endif()
 
-add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${NMSC_WIN_MANIFEST})
+add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${NMSC_WIN_MANIFEST} ${NMSC_WIN_CLIENT_RESOURCES})
 target_compile_options(hailstone PRIVATE ${NMSC_WARNINGS})
+# Windows: a Release (or MinSizeRel) client is a GUI program, so no console window opens beside it; main() stays the
+# entry point. Other builds keep the console for the log. Errors that stop a start are shown in a dialog either way
+# (app/startup_error.h), and the log is in logs/hailstone.log.
+if(MSVC)
+  target_link_options(hailstone PRIVATE $<$<CONFIG:Release,MinSizeRel>:/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup>)
+endif()
 if(NMSC_CLANG_TIDY)
   set_target_properties(hailstone PROPERTIES CXX_CLANG_TIDY "${NMSC_TIDY_COMMAND}")
 endif()

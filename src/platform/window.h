@@ -133,7 +133,8 @@ public:
     bool minimized() const;
     void set_title(const std::string& title);
     // The icon the title bar and the taskbar show: RGBA8, top row first, width * height * 4 bytes. False when the
-    // pixels are the wrong size or the system refused them (the window keeps the system's icon).
+    // pixels are the wrong size or the system refused them (the window keeps the system's icon). On Windows a
+    // program with an icon of its own keeps that one, and this does nothing.
     bool set_icon(int width, int height, std::span<const std::uint8_t> rgba);
     // Text input (SDL's text events) on for something that is not an ImGui text field: the in-game browser's page.
     // Off again only if this turned it on (ImGui's own fields switch it themselves).

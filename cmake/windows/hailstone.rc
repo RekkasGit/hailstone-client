@@ -1,0 +1,4 @@
+// hailstone.exe's resources: its icon (from icons/hailstone.png, tools/gen_windows_icon.py). Explorer, the taskbar
+// and Alt+Tab show the program's first icon, and SDL gives it to the window class (SDL_RegisterApp), so Windows
+// picks the size each place needs.
+1 ICON "hailstone.ico"
