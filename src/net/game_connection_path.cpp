@@ -127,9 +127,12 @@ void GameConnection::request_quiet_path(std::uint32_t spawn_id) {
 void GameConnection::path_reply(const AppPacket& p) {
     auto points = decode_find_person_reply(p);
     if (!points) return;
-    // Each request gets one reply, in order: a quiet one and a shown find in flight together must not swap. A request
-    // EQEmu does not answer (a find of a trader warps the player instead, SendPath) would leave every later reply
-    // one off, so one waiting longer than kFindReplyWaitMs is taken as never answered.
+    // Each request gets one reply, and the oldest waiting takes it. EQEmu does not promise the order: Client::SendPath
+    // sends an empty reply (no target, no route, a partial one) at once, but builds a full path in a task on the
+    // thread pool (SendPathPacket, CullPoints) and sends it when that ends. So a quiet request for a long path then a
+    // /find that fails can still swap (docs/unknowns.md, Navigation). A request EQEmu does not answer at all (a find of
+    // a trader warps the player instead) would leave every later reply one off, so one waiting longer than
+    // kFindReplyWaitMs, our own number, is taken as never answered.
     constexpr std::int64_t kFindReplyWaitMs = 10000;
     const std::int64_t now = now_ms();
     while (!find_requests_.empty() && now - find_requests_.front().second > kFindReplyWaitMs) find_requests_.pop_front();

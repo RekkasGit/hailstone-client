@@ -31,7 +31,7 @@
 - A broken or hostile server can no longer freeze the client with an expedition member list of millions of names
 - A broken or hostile server can no longer freeze the client with real estate records whose parents form a loop or whose child lists name themselves or repeat
 - Buying a stack whose total cost is more than 2^31 copper (about 2.1 million platinum) at a merchant or trader is refused with the can't-afford message instead of being sent
-- A `/find` and the navigator's own path request made at the same moment no longer swap their replies (the navigator walked the `/find`'s path and the navigator's was drawn)
+- A `/find` and the navigator's own path request made at the same moment mostly no longer swap their replies (the navigator walked the `/find`'s path and the navigator's was drawn); a fast empty reply can still overtake a slow full path on stock EQEmu
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
 - Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame
