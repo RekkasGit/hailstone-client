@@ -204,6 +204,16 @@ std::string npc_owner_line(const Spawn& s, bool pet_owner_names);
 // a guild id other than -1 (and 0, EQEmu's none in a spawn record), bGuildShowAnim (the spawn's guild_show) and the
 // player not anonymous (Anon 0, or the roleplaying bit 2 set).
 bool name_sprite_shows_guild(const Spawn& s, int show_names);
+// Whether a spawn has a name sprite by the name switches (unk_PlayerClient_UpdateNameSprite @0x58f050 skips PCs and
+// NPCs whose name sprites are switched off, and the local player while its model is hidden in first person). The
+// local player's has a switch of its own, Hailstone's (display.own_name; the original has none): pc_names and
+// own_name both on.
+struct NameSpriteSwitches {
+    bool pc_names = true;  // CDisplay::ToggleCharacterNameSprites (/shownames off, display.pc_names)
+    bool npc_names = true; // CDisplay::ToggleNpcNameSprites (display.npc_names); corpses too
+    bool own_name = true;  // Hailstone: the player's own name over its head
+};
+bool name_sprite_switched_on(const Spawn& s, bool local_player, bool model_hidden, const NameSpriteSwitches& on);
 // The leadership marks around a non-player's name (SetNameSpriteState's NPC branch, with Gates of Discord):
 // "[>> ][mark - ]name[ - hp%][ <<]": ">> " / " <<" around a main assist's target (the group's or the raid's, OP_
 // SetGroupTarget), the group mark (OP_MarkNPC) or the raid mark (OP_MarkRaidNPC, which wins) as "%d - ", and an NPC's
