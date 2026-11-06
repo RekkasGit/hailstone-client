@@ -193,18 +193,33 @@ std::string redact_private(std::string_view text, const std::vector<std::string>
 
 std::string redact_chat(std::string_view text) {
     // GameConnection::chat logs each line as "[info] chat: <the line>" (core/log.h), the crash report's last lines
-    // the same way: tells, guild and group chat are other players' words, and the report is posted in public.
+    // the same way: tells, guild and group chat are other players' words, and the report is posted in public. A
+    // chat text with a newline in it (a server's or a plugin's can have one) goes on over lines with no level's tag:
+    // those go too, up to the next tagged line.
     static constexpr std::string_view kMark = "] chat: ";
     static constexpr std::string_view kWith = "(chat taken out of the report)";
+    // Where a line's level tag ("[info]") ends, npos when it does not start with one.
+    auto tag_end = [](std::string_view line) {
+        const std::size_t close = line.starts_with('[') ? line.find("] ") : std::string_view::npos;
+        if (close == std::string_view::npos || line.substr(1, close - 1).find_first_of("[] ") != std::string_view::npos)
+            return std::string_view::npos;
+        return close;
+    };
     std::string out;
     out.reserve(text.size());
+    bool in_chat = false;
     while (!text.empty()) {
         const std::size_t end = text.find('\n');
         const std::string_view line = text.substr(0, end == std::string_view::npos ? text.size() : end + 1);
         text.remove_prefix(line.size());
-        const std::size_t close = line.starts_with('[') ? line.find(kMark) : std::string_view::npos;
-        // The level's tag only ("[info]"): a line that merely holds "] chat: " further in stays.
-        if (close != std::string_view::npos && line.substr(1, close - 1).find_first_of("[] ") == std::string_view::npos) {
+        const std::size_t close = tag_end(line);
+        if (close == std::string_view::npos) {
+            if (!in_chat) out.append(line);
+            continue;
+        }
+        // The level's tag only: a line that merely holds "] chat: " further in stays.
+        in_chat = line.substr(close).starts_with(kMark);
+        if (in_chat) {
             out.append(line.substr(0, close + kMark.size()));
             out += kWith;
             out += line.ends_with("\r\n") ? "\r\n" : line.ends_with('\n') ? "\n" : "";

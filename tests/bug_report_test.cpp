@@ -237,6 +237,11 @@ TEST_CASE("bug report: chat lines' words taken out of the logs and the crash rep
     // Only the level's tag before it: a line that holds the words later stays.
     CHECK(app::redact_chat("[info] loaded [x] chat: y\n") == "[info] loaded [x] chat: y\n");
     CHECK(app::redact_chat("chat: no tag\n") == "chat: no tag\n");
+    // A chat text with newlines in it: its other lines (no level's tag) go too, up to the next tagged line.
+    CHECK(app::redact_chat("[info] chat: Soandso tells you, 'one\ntwo\r\nthree'\n[info] zone in\nfour\n") ==
+          "[info] chat: (chat taken out of the report)\n[info] zone in\nfour\n");
+    CHECK(app::redact_chat("what: signal 11\nlast log lines:\n[info] chat: a\nb") ==
+          "what: signal 11\nlast log lines:\n[info] chat: (chat taken out of the report)\n");
 
     test::ScratchDir tmp("bugreport-chat");
     const fs::path log = tmp.path() / "hailstone.log", crash = tmp.path() / "crash-2.txt";
