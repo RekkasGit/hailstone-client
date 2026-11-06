@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A robe on a Luclin model now covers the arms with its sleeves, in the robe's colour; the upper arms and forearms showed bare skin (or the arms' own armour)
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
