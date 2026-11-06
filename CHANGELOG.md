@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
+- Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
 
 ## 0.5.0-beta (2026-11-05)
 
