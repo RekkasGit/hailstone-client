@@ -150,6 +150,7 @@ What the client does not implement yet, or implements with an approximation it c
 - Reverb is simplified (no Miles DSP); music synthesis uses TinySoundFont rather than a DLS synthesiser, ignoring sysex and branch controllers.
 - Duplicate sound names across archives resolve to the highest-numbered archive.
 - A NaN or infinite volume, level, send or reverb parameter (an EMT gain of "nan" read with strtof) is 0, and a non-finite sample (an IEEE-float WAV's) is silence; what Miles does with them is not known. Ours: they would otherwise stay in the reverb for the session.
+- Decoded waves not asked for over two zone changes are freed (`SoundLibrary::drop_idle_waves`; the global waves stay), so a freed wave's next play is skipped while it decodes again, as any wave's first play is. The original's wave cache policy is not traced.
 
 ## UI
 

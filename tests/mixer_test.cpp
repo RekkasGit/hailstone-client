@@ -549,3 +549,34 @@ TEST_CASE("SoundLibrary: a music file that failed to read is not read again") {
     std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "readable now";
     CHECK_FALSE(library.file("theme.mp3")); // remembered, not read
 }
+
+TEST_CASE("SoundLibrary: decoded waves not asked for over two zone changes are dropped, unless pinned or playing") {
+    test::ScratchDir dir("sound_trim");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    auto wav = wav16(22050, {1, 2, 3, 4});
+    for (const char* n : {"old.wav", "global.wav", "held.wav", "used.wav"})
+        std::ofstream(dir.path() / "sounds" / n, std::ios::binary)
+            .write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    library.preload({"old.wav", "global.wav", "held.wav", "used.wav"});
+    library.wait_idle();
+    REQUIRE(library.cached_waves() == 4);
+    auto held = library.wave("held.wav"); // a voice still playing it
+    REQUIRE(held);
+    library.drop_idle_waves({"global.wav"}); // into a zone: everything was asked for in the last one
+    CHECK(library.cached_waves() == 4);
+    CHECK(library.wave("used.wav"));
+    held = library.wave("held.wav");
+    library.drop_idle_waves({"global.wav"}); // the next zone: old.wav was not asked for in the one before
+    CHECK(library.cached_waves() == 3);
+    library.drop_idle_waves({"global.wav"});
+    // used.wav is idle now too; held.wav still plays, global.wav is pinned.
+    CHECK(library.cached_waves() == 2);
+    CHECK(library.wave("global.wav"));
+    CHECK(library.wave("held.wav") == held);
+    // A dropped wave asked for again is decoded again.
+    CHECK_FALSE(library.wave("old.wav"));
+    library.wait_idle();
+    CHECK(library.wave("old.wav"));
+}

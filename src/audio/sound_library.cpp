@@ -125,7 +125,10 @@ std::optional<std::vector<std::byte>> SoundLibrary::read(const std::string& name
 std::shared_ptr<const Pcm> SoundLibrary::wave(const std::string& name) {
     std::string key = lower_case(name);
     std::lock_guard lock(mutex_);
-    if (auto it = cache_.find(key); it != cache_.end()) return it->second;
+    if (auto it = cache_.find(key); it != cache_.end()) {
+        it->second.used = generation_;
+        return it->second.pcm;
+    }
     if (failed_.contains(key)) return nullptr;
     if (queued_.contains(key)) {
         // Wanted now: one still waiting behind the preloads moves to the front.
@@ -145,11 +148,37 @@ void SoundLibrary::preload(const std::vector<std::string>& names) {
     std::lock_guard lock(mutex_);
     for (const auto& n : names) {
         std::string key = lower_case(n);
-        if (cache_.contains(key) || failed_.contains(key) || queued_.contains(key)) continue;
+        if (auto it = cache_.find(key); it != cache_.end()) {
+            it->second.used = generation_;
+            continue;
+        }
+        if (failed_.contains(key) || queued_.contains(key)) continue;
         queued_.insert(key);
         preload_queue_.push_back(std::move(key));
     }
     cv_.notify_all();
+}
+
+void SoundLibrary::drop_idle_waves(const std::vector<std::string>& pinned) {
+    std::unordered_set<std::string> keep;
+    for (const auto& n : pinned) keep.insert(lower_case(n));
+    std::vector<std::shared_ptr<const Pcm>> dropped; // freed after the lock is released
+    std::lock_guard lock(mutex_);
+    ++generation_;
+    for (auto it = cache_.begin(); it != cache_.end();) {
+        const bool idle = static_cast<std::uint32_t>(generation_ - it->second.used) >= 2;
+        if (idle && it->second.pcm.use_count() == 1 && !keep.contains(it->first)) {
+            dropped.push_back(std::move(it->second.pcm));
+            it = cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+std::size_t SoundLibrary::cached_waves() const {
+    std::lock_guard lock(mutex_);
+    return cache_.size();
 }
 
 void SoundLibrary::set_resident_files(const std::vector<std::string>& names) {
@@ -254,7 +283,7 @@ void SoundLibrary::worker() {
         std::lock_guard lock(mutex_);
         queued_.erase(key);
         if (pcm) {
-            cache_[key] = std::move(pcm);
+            cache_[key] = Cached{std::move(pcm), generation_};
         } else {
             failed_.insert(key);
             log::debug("audio: no sound {}", key);

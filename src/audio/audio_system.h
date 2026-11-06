@@ -166,6 +166,7 @@ private:
     std::unordered_map<std::string, std::vector<assets::XmiSequence>> xmi_; // .xmi files, parsed on first use
     // The global music entries' files: with the zone's, read ahead on the sound library's worker (play_music).
     std::vector<std::string> global_music_files_;
+    std::vector<std::string> global_wave_files_; // LoadGlobalWaves' (kept by SoundLibrary::drop_idle_waves)
     MusicManager music_;
     RoomPresets rooms_;
     std::int32_t environment_ = kEnvironmentOutside;

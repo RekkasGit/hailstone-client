@@ -102,6 +102,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     add(0x50f, 0x514);
     add(0xe6f, 0xe6f);
     library_->preload(global);
+    global_wave_files_ = std::move(global);
     // LoadGlobalMusic @0x4aa860: entries 1..15, the combat theme picked by rand() after srand(Util::FastTime()).
     CrtRand rand(static_cast<std::uint32_t>(std::time(nullptr)));
     for (const MusicSetCall& c : load_global_music([this](const std::string& f) { return library_->exists(f); }, rand())) {
@@ -252,6 +253,8 @@ void AudioSystem::set_zone(const std::string& short_name) {
     loops_.clear();
     placed_.clear();
     zone_name_ = short_name;
+    // The waves of the zones before the last go, the global ones stay (LoadGlobalWaves keeps those for the session).
+    library_->drop_idle_waves(global_wave_files_);
     if (short_name.empty()) return;
 
     auto exists = [this](const std::string& f) { return library_->exists(f); };

@@ -50,6 +50,12 @@ public:
     std::shared_ptr<const Pcm> wave(const std::string& name);
     // Queues the decodes behind every wave() and music file; a later wave() of one moves it to the front.
     void preload(const std::vector<std::string>& names);
+    // At a zone change: the decoded waves not asked for (wave() or preload()) since the zone change before this one
+    // are dropped, unless `pinned` names them or a voice still plays one; one asked for again is decoded again. The
+    // cache otherwise kept every wave decoded in the session.
+    void drop_idle_waves(const std::vector<std::string>& pinned);
+    // How many decoded waves are held (tests).
+    std::size_t cached_waves() const;
     // The files to hold as bytes (the zone's and the global music): each one not held yet is read on the worker,
     // and one held that is not named is dropped.
     void set_resident_files(const std::vector<std::string>& names);
@@ -88,7 +94,12 @@ private:
     bool stop_ = false;
     std::deque<std::string> queue_, preload_queue_; // wanted now; preload(), behind the music files
     std::unordered_set<std::string> queued_, failed_; // queued_: in either queue or decoding
-    std::unordered_map<std::string, std::shared_ptr<const Pcm>> cache_;
+    struct Cached {
+        std::shared_ptr<const Pcm> pcm;
+        std::uint32_t used = 0; // generation_ when last asked for
+    };
+    std::unordered_map<std::string, Cached> cache_;
+    std::uint32_t generation_ = 0; // drop_idle_waves calls
     std::deque<std::string> file_queue_;
     std::unordered_set<std::string> resident_names_, missing_files_; // lower case
     std::unordered_map<std::string, std::shared_ptr<const std::vector<std::byte>>> resident_;
