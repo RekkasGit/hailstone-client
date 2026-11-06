@@ -14,6 +14,7 @@
 #include "app/client_app.h"
 #include "app/input_script.h"
 #include "app/zone_settle.h"
+#include "app/server_links.h"
 
 #include <algorithm>
 #include <array>
@@ -1117,7 +1118,10 @@ private:
     // The in-game browser (docs/browser.md): its tab host, made on first use when browser/hailstone-web is installed
     // (null without it: pages go to the system's browser); open_web_page opens one in its window (true), else there.
     web::BrowserHost* browser();
-    bool open_web_page(const std::string& url);
+    // `tab`: the tab it opened, 0 when it went to the system's browser.
+    bool open_web_page(const std::string& url, std::uint32_t* tab = nullptr);
+    ServerLinks server_links_; // OP_Weblink's limits (app/server_links.h)
+    void open_server_link(const std::string& url);
     // Closes the tabs of scripts that stopped and plugins that unloaded (once a frame).
     void close_orphan_tabs();
     // The item previews' subjects (app/item_preview_view.h) from the connection's last replies, before the UI draws:

@@ -43,10 +43,12 @@ void ClientApp::close_orphan_tabs() {
     web_service_->recheck([this](const std::string& owner) { return automation_->plugin_caps(owner); });
 }
 
-bool ClientApp::open_web_page(const std::string& url) {
+bool ClientApp::open_web_page(const std::string& url, std::uint32_t* tab) {
+    if (tab) *tab = 0;
     if (web_service_ && web_service_->available() && eq_api_) {
         std::string why;
-        if (web_service_->open("", plugin::kCapAll, url, 800, 600, &why)) {
+        if (const std::uint32_t id = web_service_->open("", plugin::kCapAll, url, 800, 600, &why)) {
+            if (tab) *tab = id;
             eq_api_->show("BrowserWnd", true);
             return true;
         }
@@ -54,6 +56,39 @@ bool ClientApp::open_web_page(const std::string& url) {
     }
     platform::open_url(url);
     return false;
+}
+
+void ClientApp::open_server_link(const std::string& url) {
+    // OP_Weblink: the original opens it at once in an in-game HTML window (WebManager_CreateHtmlWnd); here the
+    // browser window (docs/browser.md). Without the helper, a deliberate difference: the system's browser, with the
+    // original's /url line (4095 "Opening %1") to say why one opened. Only http(s) pages (what the original lets
+    // through is not traced: docs/unknowns.md "OP_Weblink"), and no more than app/server_links.h lets through.
+    if (!web::url_allowed(url, {})) {
+        log::warn("OP_Weblink: not an http(s) page, not opened: {}", url);
+        return;
+    }
+    const auto now_ms = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+    const ServerLinks::Decision d = server_links_.admit(url, now_ms, [this](std::uint32_t id) {
+        const web::Tab* t = browser_ ? browser_->tab(id) : nullptr;
+        return t && !t->closed;
+    });
+    if (d.action == ServerLinks::Action::Drop) {
+        if (d.first_drop) log::warn("OP_Weblink: the server sends pages faster than they are opened: {} not opened", url);
+        return;
+    }
+    if (d.action == ServerLinks::Action::Reuse && web_service_ && eq_api_) {
+        std::string why;
+        if (web_service_->navigate("", plugin::kCapAll, d.tab, url, &why)) {
+            eq_api_->show("BrowserWnd", true);
+            return;
+        }
+        log::warn("web: {}", why);
+    }
+    std::uint32_t tab = 0;
+    if (!open_web_page(url, &tab)) conn_->show_with_line_breaks(conn_->strings().format(4095, std::vector<std::string>{url}));
+    server_links_.opened(tab);
 }
 
 } // namespace nmsc::app::client_internal
