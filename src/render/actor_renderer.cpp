@@ -582,10 +582,8 @@ void ActorRenderer::stop_dresser() {
 void ActorRenderer::evict_idle_looks() {
     if (static_cast<std::uint32_t>(now_ms_ - last_look_sweep_ms_) < kLookSweepMs) return;
     last_look_sweep_ms_ = now_ms_;
-    // A look a spawn wears stays; this frame's draws are all of those (last_draws_ holds no other mesh).
-    std::unordered_set<const assets::CharacterMesh*> worn;
-    for (const auto& kv : spawns_)
-        if (kv.second.mesh) worn.insert(kv.second.mesh.get());
+    // A look a spawn's state wears stays, a hidden spawn's too (worn_meshes).
+    const auto worn = worn_meshes(spawns_);
     const std::uint64_t frame = vk_.frames_begun();
     std::size_t evicted = 0;
     for (auto it = looks_.begin(); it != looks_.end();) {
@@ -1131,10 +1129,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         // Otherwise it is as if it were gone: its dressing is dropped and it comes back as a new state.
         auto keep = [&] {
             auto it = spawns_.find(id);
-            if (it == spawns_.end()) return;
-            it->second.seen = true;
-            if (it->second.hidden) return;
-            it->second.hidden = true;
+            if (it == spawns_.end() || !hide_spawn_state(it->second)) return;
             if (dresser_) dresser_->cancel(id);
             ready_.erase(id);
         };
@@ -1161,7 +1156,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
 
         auto& st = spawns_[id];
         st.seen = true;
-        if (st.model != model || st.hidden) st = SpawnState{model};
+        if (spawn_state_fresh(st, model)) st = SpawnState{model};
         st.seen = true;
         // Appearance: rebuilt when it changes (WearChange, Illusion), on the worker; until it is ready (and applied
         // within the frame's budget) the previous one stays. One applied before for the same model and look is
