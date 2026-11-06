@@ -22,8 +22,10 @@
 #include <bit>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <map>
 #include <optional>
+#include <system_error>
 #include <string>
 #include <vector>
 
@@ -1257,8 +1259,13 @@ int shadow_step_fixed_points() {
 
 TEST_CASE("HitBySpell: a shadow step (SPA 379) whose float distance cannot shrink ends") {
     const int raised = shadow_step_fixed_points();
-    if (!nmsc::test::vector_dir()) MESSAGE("no vectors (NMSC_VECTORS_DIR); nothing checked");
-    else CHECK(raised > 0);
+    // An empty NMSC_VECTORS_DIR gives a directory with no files in it: the file itself decides.
+    const auto dir = nmsc::test::vector_dir();
+    std::error_code ec;
+    if (!dir || !std::filesystem::is_regular_file(*dir / "HitBySpell_Moves.jsonl", ec))
+        MESSAGE("no vectors (NMSC_VECTORS_DIR); nothing checked");
+    else
+        CHECK(raised > 0);
 }
 
 TEST_CASE("HitBySpell vectors: validation") { run_file("HitBySpell_Validation.jsonl", kEarly, 0x7e41, early_tweak); }
