@@ -1,6 +1,7 @@
 #include "audio/pcm.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include <dr_mp3.h>
@@ -19,6 +20,9 @@ std::optional<Pcm> decode_wav(std::span<const std::byte> data) {
         out->rate = rate;
         out->channels = channels;
         out->samples.assign(p, p + frames * channels);
+        // An IEEE-float WAV may hold NaN or infinities, which dr_wav passes through: they are silence.
+        for (float& x : out->samples)
+            if (!std::isfinite(x)) x = 0.0f;
     }
     drwav_free(p, nullptr);
     return out;

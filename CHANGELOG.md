@@ -14,6 +14,7 @@
 - After five minutes or more in first person, switching to a third-person camera no longer shows your character undressed for a moment
 - A damaged shader file in the client's folder is reported as such instead of being read past its buffer
 - The first cast of a new spell effect no longer hitches the frame while its particle textures are read and decoded; they are loaded in the background and the particles show once they are ready
+- A zone sound file with a "nan" or "inf" volume, or a damaged float WAV, no longer silences or garbles all sound for the rest of the session
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
