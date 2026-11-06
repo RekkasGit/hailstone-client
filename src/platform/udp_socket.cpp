@@ -39,6 +39,10 @@ using NativeSocket = SOCKET;
 const NativeSocket kInvalid = INVALID_SOCKET;
 using SockLen = int;
 
+// Set at exit when a lookup was still in getaddrinfo and was left to run (resolve_async): Winsock is not shut down
+// under it; the process's end frees it.
+std::atomic<bool> lookups_left_running{false};
+
 struct WinsockInit {
     bool ok = false;
     WinsockInit() {
@@ -46,7 +50,7 @@ struct WinsockInit {
         ok = WSAStartup(MAKEWORD(2, 2), &data) == 0;
     }
     ~WinsockInit() {
-        if (ok) WSACleanup();
+        if (ok && !lookups_left_running.load()) WSACleanup();
     }
 };
 
@@ -68,6 +72,7 @@ const NativeSocket kInvalid = -1;
 using SockLen = socklen_t;
 
 bool ensure_init() { return true; }
+std::atomic<bool> lookups_left_running{false};
 int last_socket_error() { return errno; }
 bool would_block(int e) { return e == EAGAIN || e == EWOULDBLOCK; }
 bool transient(int e) { return e == ECONNREFUSED || e == EINTR; }
@@ -200,9 +205,12 @@ std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t 
 
 namespace {
 
-// resolve_async's threads. Joined, not detached: one still in getaddrinfo when the program exits would otherwise
-// run on while static destructors do, WinsockInit's WSACleanup among them. ensure_init() is called before this is
-// first made, so this is destroyed first. A finished thread is joined when the next lookup starts.
+// resolve_async's threads. A finished thread is joined when the next lookup starts, and at exit. One still in
+// getaddrinfo at exit cannot be cut off and may wait out the resolver's timeout (tens of seconds with an unreachable
+// name server), so it is not waited for: it is detached and left to the process's end, and WinsockInit then skips
+// WSACleanup so the socket library is not shut down under it. Its `done` must own what it touches (a shared_ptr), as
+// it may run after the caller is gone. ensure_init() is called before this is first made, so this is destroyed
+// first.
 class Lookups {
 public:
     ~Lookups() {
@@ -211,8 +219,15 @@ public:
             std::lock_guard lock(mutex_);
             all.swap(entries_);
         }
-        for (auto& e : all)
-            if (e.thread.joinable()) e.thread.join();
+        for (auto& e : all) {
+            if (!e.thread.joinable()) continue;
+            if (e.done->load()) {
+                e.thread.join();
+            } else {
+                lookups_left_running.store(true);
+                e.thread.detach();
+            }
+        }
     }
     void start(std::function<void()> fn) {
         std::lock_guard lock(mutex_);

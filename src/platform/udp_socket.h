@@ -41,7 +41,8 @@ std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::
 std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t port);
 
 // resolve() on a thread of its own; `done` is called on that thread with its result. A lookup still running when
-// the program exits is waited for before the socket library shuts down (it is never cut off inside the resolver).
+// the program exits is not waited for (getaddrinfo cannot be cut off, and an unreachable name server holds it for
+// tens of seconds): it is left to the process's end, so `done` must own what it uses, and may never be called.
 void resolve_async(std::string host, std::uint16_t port,
                    std::function<void(std::vector<Endpoint> endpoints, std::string error)> done);
 
