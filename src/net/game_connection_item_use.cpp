@@ -179,9 +179,11 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
         system(drink ? (vowel ? 8502 : 12078) : (vowel ? 8501 : 12075), {item->name}, kChatFood);
         // FoodDuration x 100 / 2 in the original's 32 bits (imul, then idiv): a duration past 2^31 / 100 wraps as it
         // does there, written with wrapped_div so that no compiler folds it as if nothing wrapped (AGENTS.md).
-        const std::int32_t gain =
-            core::wrapped_div(static_cast<std::uint32_t>(item->cast_time_) * 100u, 2); // |gain| <= 2^30
-        level = static_cast<std::uint32_t>(std::min(kFull, static_cast<std::int32_t>(level) + gain));
+        // The add wraps in 32 bits too: the level is whatever the server last sent (OP_Stamina can carry any u32),
+        // so it is done unsigned, never as a signed add that could overflow.
+        const std::int32_t gain = core::wrapped_div(static_cast<std::uint32_t>(item->cast_time_) * 100u, 2);
+        const auto sum = static_cast<std::int32_t>(level + static_cast<std::uint32_t>(gain));
+        level = static_cast<std::uint32_t>(std::min(kFull, sum));
         if (drink) wave(0x95);
         system(drink ? 12079 : 12076, {}, kChatFood);
         send_zone(encode_consume_reply(slot, drink));

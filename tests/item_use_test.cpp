@@ -107,6 +107,23 @@ TEST_CASE("item use: a food duration past 2^31 / 100 wraps as the original's 32-
     CHECK(conn.spell_state().hunger == static_cast<std::uint32_t>(5999 - 469762048));
 }
 
+TEST_CASE("item use: the meal's add wraps in 32 bits from any level the server sent") {
+    // OP_Stamina sets the hunger to 0x80000000 (INT_MIN as the signed level the original compares): the wrapping
+    // FoodDuration's -469762048 takes it to 0x64000000 in 32 bits, so the meter caps at 6000, with no signed overflow.
+    MockConfig config = with_items({});
+    config.characters[0].inventory[1].cast_time_ = 0x02000000;
+    Rig rig(config);
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    ByteWriter st;
+    st.le<std::uint32_t>(0x80000000u);
+    st.le<std::uint32_t>(6000);
+    conn.receive_zone_packet_for_test(AppPacket(to_wire(Op::Stamina), st.take()));
+    REQUIRE(conn.spell_state().hunger == 0x80000000u);
+    conn.receive_zone_packet_for_test(encode(ItemVerifyReply{ItemSlot::possessions(23), 0, 0}));
+    CHECK(conn.spell_state().hunger == 6000);
+}
+
 TEST_CASE("item use: a bag toggles its container, the bank and corpse paths send no request") {
     Item bag = make_item(1003, "Backpack", 24);
     bag.item_class = 1;
