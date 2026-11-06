@@ -147,6 +147,24 @@ std::uint32_t WebService::open(const std::string& owner, std::uint32_t caps, con
     return b->open(address(url), std::move(o), why);
 }
 
+std::uint32_t WebService::open_server_link(const std::string& url, std::string* why) {
+    web::BrowserHost* b = host();
+    if (!b || !b->available()) {
+        if (why) *why = b && !b->last_error().empty() ? b->last_error() : "the in-game browser is not installed";
+        return 0;
+    }
+    web::TabOptions o;
+    if (env_.profile) o.profile = server_link_profile(env_.profile());
+    return b->open(url, std::move(o), why);
+}
+
+std::string WebService::server_link_profile(const std::string& base) {
+    if (base.empty()) return base;
+    std::string out = base;
+    if (out.back() != '/' && out.back() != '\\') out += '/';
+    return out + "server-links";
+}
+
 bool WebService::navigate(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& url,
                           std::string* why) {
     if (!may(owner, caps, why)) return false;

@@ -414,6 +414,17 @@ TEST_CASE("web service: each script and plugin has a cookie folder of its own; t
     CHECK(opens[0].profile == base);
     CHECK(opens[1].profile == s1);
     CHECK(opens[2].profile == p1);
+
+    // A server's link (OP_Weblink): the player's tab, in a folder of its own, not the player's sign-ins.
+    const std::uint32_t link = web.open_server_link("https://example.org/");
+    REQUIRE(link != 0);
+    CHECK(web.tabs("") == std::vector<std::uint32_t>{r.helper.sent_of<Open>()[0].tab, link});
+    opens = r.helper.sent_of<Open>();
+    REQUIRE(opens.size() == 4);
+    CHECK(opens[3].profile == base + "/server-links");
+    CHECK_FALSE(opens[3].restricted);
+    CHECK(opens[3].profile != s1);
+    CHECK(WebService::server_link_profile(base + "/") == base + "/server-links");
 }
 
 TEST_CASE("browser host: a script's tab that lands off its sites is closed") {

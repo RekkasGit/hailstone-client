@@ -4,6 +4,7 @@
 #include "app/client_app_internal.h"
 #include "app/lua_eq.h"
 #include "platform/open_folder.h"
+#include "web/page_rules.h"
 
 namespace nmsc::app::client_internal {
 
@@ -63,16 +64,24 @@ void ClientApp::open_server_link(const std::string& url) {
     // browser window (docs/browser.md). Without the helper, a deliberate difference: the system's browser, with the
     // original's /url line (4095 "Opening %1") to say why one opened. Only http(s) pages (what the original lets
     // through is not traced: docs/unknowns.md "OP_Weblink"), and no more than app/server_links.h lets through.
+    // The tab is the player's (the original's CHtmlWnd is a browser the player uses), so it is not held to a
+    // script's rules, but a server's link never opens this computer or the player's own network (a router's page),
+    // and its tab has a cookie folder of its own (WebService::open_server_link).
     if (!web::url_allowed(url, {})) {
         log::warn("OP_Weblink: not an http(s) page, not opened: {}", url);
+        return;
+    }
+    if (!web::script_url_allowed(url, {})) {
+        log::warn("OP_Weblink: a page on this computer or its network, not opened: {}", url);
         return;
     }
     const auto now_ms = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
             .count());
-    const ServerLinks::Decision d = server_links_.admit(url, now_ms, [this](std::uint32_t id) {
+    const ServerLinks::Decision d = server_links_.admit(url, now_ms, [this](std::uint32_t id) -> std::optional<std::string> {
         const web::Tab* t = browser_ ? browser_->tab(id) : nullptr;
-        return t && !t->closed;
+        if (!t || t->closed || !t->options.owner.empty()) return std::nullopt;
+        return t->url;
     });
     if (d.action == ServerLinks::Action::Drop) {
         if (d.first_drop) log::warn("OP_Weblink: the server sends pages faster than they are opened: {} not opened", url);
@@ -81,14 +90,24 @@ void ClientApp::open_server_link(const std::string& url) {
     if (d.action == ServerLinks::Action::Reuse && web_service_ && eq_api_) {
         std::string why;
         if (web_service_->navigate("", plugin::kCapAll, d.tab, url, &why)) {
+            server_links_.opened(d.tab, url);
             eq_api_->show("BrowserWnd", true);
             return;
         }
         log::warn("web: {}", why);
     }
     std::uint32_t tab = 0;
-    if (!open_web_page(url, &tab)) conn_->show_with_line_breaks(conn_->strings().format(4095, std::vector<std::string>{url}));
-    server_links_.opened(tab);
+    if (web_service_ && web_service_->available() && eq_api_) {
+        std::string why;
+        tab = web_service_->open_server_link(url, &why);
+        if (tab) eq_api_->show("BrowserWnd", true);
+        else log::warn("web: {}", why);
+    }
+    if (!tab) {
+        platform::open_url(url);
+        conn_->show_with_line_breaks(conn_->strings().format(4095, std::vector<std::string>{url}));
+    }
+    server_links_.opened(tab, url);
 }
 
 } // namespace nmsc::app::client_internal
