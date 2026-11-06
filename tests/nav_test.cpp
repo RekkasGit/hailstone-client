@@ -933,6 +933,16 @@ TEST_CASE("nav: /nav's destinations, options and controls") {
     CHECK(h.nav.calls.back().what == "stop");
     h.run("/nav id 9999");
     CHECK(h.printed.back() == "[Nav] No such spawn.");
+    // An id or door number no spawn or door can have is none, not a wrapped one (300 is not door 44).
+    for (const char* line : {"/nav id -1", "/nav id 1e300", "/nav id nan"}) {
+        h.run(line);
+        CHECK(h.printed.back() == "[Nav] No such spawn.");
+    }
+    const std::size_t calls = h.nav.calls.size();
+    h.run("/nav door id 300");
+    h.run("/nav loc 1e300 0 0");
+    h.run("/nav loc nan 0 0");
+    CHECK(h.nav.calls.size() == calls);
     h.run("/nav bogus");
     CHECK(h.printed.back() == "[Nav] Unknown /nav command: bogus (/nav help)");
 }

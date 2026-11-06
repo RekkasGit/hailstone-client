@@ -7,6 +7,8 @@
 #include <cstring>
 #include <format>
 
+#include "core/float_chars.h"
+
 namespace nmsc::mq {
 
 namespace {
@@ -65,7 +67,7 @@ bool parse_int(std::string_view text, std::int64_t& out) {
 bool parse_float(std::string_view text, double& out) {
     text = trim(text);
     if (text.empty()) return false;
-    auto [p, ec] = std::from_chars(text.data(), text.data() + text.size(), out);
+    auto [p, ec] = float_from_chars(text.data(), text.data() + text.size(), out); // (core/float_chars.h: Xcode 15)
     return ec == std::errc() && p == text.data() + text.size();
 }
 

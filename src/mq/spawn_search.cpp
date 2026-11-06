@@ -6,6 +6,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "core/saturate.h"
 #include "game/coords.h"
 #include "game/eq_names.h"
 #include "game/group.h"
@@ -69,20 +70,25 @@ SpawnSearch parse_spawn_search(std::string_view text) {
         else if (k == "mercenary" || k == "merc") s.kind = SpawnSearch::Kind::Mercenary;
         else if (k == "any") s.kind = SpawnSearch::Kind::Any;
         else if (k == "id") {
-            if (next(a)) s.id = static_cast<std::uint32_t>(a);
+            // An id no spawn can have (negative, past 32 bits, NaN) matches nothing.
+            if (next(a)) {
+                if (auto id = in_range<std::uint32_t>(a)) s.id = *id;
+                else s.none = true;
+            }
         } else if (k == "notid") {
-            if (next(a)) s.not_ids.push_back(static_cast<std::uint32_t>(a));
+            if (next(a))
+                if (auto id = in_range<std::uint32_t>(a)) s.not_ids.push_back(*id);
         } else if (k == "radius") {
-            if (next(a)) s.radius = static_cast<float>(a);
+            if (next(a)) s.radius = in_range<float>(a).value_or(0.0f); // (NaN or huge: no limit)
         } else if (k == "zradius") {
-            if (next(a)) s.zradius = static_cast<float>(a);
+            if (next(a)) s.zradius = in_range<float>(a).value_or(0.0f);
         } else if (k == "range") {
             if (next(a) && next(b)) {
-                s.min_level = static_cast<int>(a);
-                s.max_level = static_cast<int>(b);
+                s.min_level = saturate_cast<int>(a);
+                s.max_level = saturate_cast<int>(b);
             }
         } else if (k == "level") {
-            if (next(a)) s.min_level = s.max_level = static_cast<int>(a);
+            if (next(a)) s.min_level = s.max_level = saturate_cast<int>(a);
         } else if (k == "class") {
             if (i + 1 < w.size()) s.class_name = w[++i];
         } else if (k == "race") {
@@ -92,7 +98,9 @@ SpawnSearch parse_spawn_search(std::string_view text) {
             if (next(a) && next(b)) {
                 double z = 0;
                 next(z);
-                s.loc = game::server_to_world({static_cast<float>(a), static_cast<float>(b), static_cast<float>(z)});
+                const auto x = in_range<float>(a), y = in_range<float>(b), zz = in_range<float>(z);
+                if (x && y && zz) s.loc = game::server_to_world({*x, *y, *zz});
+                else s.none = true; // no place to measure from
             }
         } else if (k == "named") s.named = true;
         else if (k == "targetable") s.targetable = true;
@@ -133,6 +141,7 @@ glm::vec3 spawn_position(const game::Spawn& s) { return s.display_valid ? s.disp
 
 std::vector<const game::Spawn*> search_spawns(const SpawnSearch& q, const game::WorldState& world,
                                               const game::GroupState* group) {
+    if (q.none) return {};
     glm::vec3 origin{0.0f};
     if (q.loc) origin = *q.loc;
     else if (const game::Spawn* me = world.player()) origin = spawn_position(*me);

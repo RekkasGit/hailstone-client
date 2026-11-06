@@ -30,6 +30,7 @@ struct SpawnSearch {
     bool named = false, targetable = false, group = false, nopet = false, gm = false, trader = false, buyer = false,
          afk = false, lfg = false, linkdead = false;
     std::optional<glm::vec3> loc; // world coordinates (game/coords.h) the distances are from; none = the player
+    bool none = false;            // an id or loc no spawn can match (out of range, NaN): nothing is found
 };
 
 SpawnSearch parse_spawn_search(std::string_view text);

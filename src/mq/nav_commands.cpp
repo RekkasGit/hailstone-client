@@ -36,10 +36,18 @@ std::string join(const std::vector<std::string>& w, std::size_t from) {
     return s;
 }
 
+// A distance or coordinate: nullopt for no number, NaN, an infinity or one beyond float.
 std::optional<float> number(const std::vector<std::string>& w, std::size_t i) {
     double d = 0;
     if (i >= w.size() || !parse_float(w[i], d)) return std::nullopt;
-    return static_cast<float>(d);
+    return in_range<float>(d);
+}
+
+// A spawn id or door number: nullopt for one no spawn or door can have (negative, too large, NaN).
+template <typename T> std::optional<T> id_number(const std::vector<std::string>& w, std::size_t i) {
+    double d = 0;
+    if (i >= w.size() || !parse_float(w[i], d)) return std::nullopt;
+    return in_range<T>(d);
 }
 
 const game::Spawn* find_spawn(const net::GameConnection& conn, std::string_view search) {
@@ -74,7 +82,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 std::string_view tv = t;
                 if (istarts_with(tv, "distance=") || istarts_with(tv, "dist=")) {
                     double d = 0;
-                    if (parse_float(tv.substr(tv.find('=') + 1), d)) distance = static_cast<float>(d);
+                    if (parse_float(tv.substr(tv.find('=') + 1), d)) distance = in_range<float>(d).value_or(0.0f);
                 } else {
                     w.push_back(std::move(t));
                 }
@@ -180,9 +188,9 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
             if (iequals(sub, "id") || iequals(sub, "target") || iequals(sub, "spawn")) {
                 const game::Spawn* s = nullptr;
                 if (iequals(sub, "id")) {
-                    auto id = number(w, 1);
+                    auto id = id_number<std::uint32_t>(w, 1);
                     if (id) {
-                        auto it = conn->world().spawns.find(static_cast<std::uint32_t>(*id));
+                        auto it = conn->world().spawns.find(*id);
                         if (it != conn->world().spawns.end()) s = &it->second;
                     }
                 } else if (iequals(sub, "target")) {
@@ -219,7 +227,7 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
                 if (click) w.pop_back();
                 const game::Door* door = nullptr;
                 if (w.size() >= 3 && iequals(w[1], "id")) {
-                    if (auto id = number(w, 2)) door = conn->door(static_cast<std::uint8_t>(*id));
+                    if (auto id = id_number<std::uint8_t>(w, 2)) door = conn->door(*id);
                 } else if (w.size() >= 2) {
                     // The nearest door whose name contains the text.
                     std::string name = join(w, 1);
@@ -288,9 +296,9 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
             }
             const game::Spawn* s = nullptr;
             if (iequals(w[0], "id")) {
-                auto id = w.size() >= 2 ? number(w, 1) : std::optional<float>(static_cast<float>(conn->world().target_id));
+                auto id = w.size() >= 2 ? id_number<std::uint32_t>(w, 1) : std::optional<std::uint32_t>(conn->world().target_id);
                 if (id) {
-                    auto it = conn->world().spawns.find(static_cast<std::uint32_t>(*id));
+                    auto it = conn->world().spawns.find(*id);
                     if (it != conn->world().spawns.end() && it->first != conn->world().player_id) s = &it->second;
                 }
             }
@@ -322,8 +330,8 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
             for (std::size_t i = 0; i < w.size(); ++i) {
                 if (iequals(w[i], "behind")) {
                     opt.behind = true;
-                } else if (iequals(w[i], "id") && number(w, i + 1)) {
-                    id = static_cast<std::uint32_t>(*number(w, ++i));
+                } else if (iequals(w[i], "id") && id_number<std::uint32_t>(w, i + 1)) {
+                    id = *id_number<std::uint32_t>(w, ++i);
                 } else if (auto d = number(w, i); d && *d > 0.0f) {
                     opt.distance = *d;
                 } else {
