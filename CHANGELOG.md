@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
+- While connecting, a session reply from another address than the server's is ignored (one from another port of the server's address is still taken, for NAT), so someone who sees the connect code cannot take over the connection
 
 ## 0.5.0-beta (2026-11-05)
 

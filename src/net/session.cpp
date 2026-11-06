@@ -489,10 +489,13 @@ private:
 
         if (state_ == SessionState::Connecting) {
             if (!protocol || opcode != soe::op::SessionResponse) return;
+            // The reply may come from another port than the one addressed (NAT, OpenEQ stream.rs), but not from
+            // another address: the connect code went out in clear, so anyone who sees it could otherwise answer
+            // first and take the session (and the login that follows) to a host of their own.
+            if (from.family != peer_.family || from.address != peer_.address) return;
             auto r = soe::parse_session_response(d);
             if (!r || r->connect_code != connect_code_) return;
             if (opt_.trace) opt_.trace(false, d);
-            // The reply may come from another port than the one addressed (NAT, OpenEQ stream.rs).
             if (!(from == peer_)) {
                 log::debug("session: response came from {}, using it", from.to_string());
                 peer_ = from;

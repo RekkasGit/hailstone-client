@@ -5,11 +5,15 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
 #include <memory>
+#include <thread>
 
 #include "mock_server/harness.h"
 #include "net/game_connection.h"
 #include "net/session.h"
+#include "net/session_codec.h"
+#include "platform/udp_socket.h"
 
 using namespace nmsc;
 using namespace nmsc::net;
@@ -435,4 +439,51 @@ TEST_CASE("mock session: a first fragment without its total length ends the sess
     CHECK(rig.session->error().find("without its total length") != std::string::npos);
     CHECK(rig.got.size() == 1);
     REQUIRE(rig.until([&] { return rig.server.client_disconnected(); }));
+}
+
+TEST_CASE("mock session: a SessionResponse from another address is ignored; from another port of the server it is taken") {
+    // A raw stand-in for the server on 127.0.0.1, and a second host on 127.0.0.2 that has seen the connect code.
+    std::string error;
+    platform::UdpSocket server, other_port, other_host;
+    const auto here = platform::Endpoint::v4(127, 0, 0, 1, 0);
+    REQUIRE(server.open(platform::Endpoint::Family::V4, error, &here));
+    REQUIRE(other_port.open(platform::Endpoint::Family::V4, error, &here));
+    const auto there = platform::Endpoint::v4(127, 0, 0, 2, 0);
+    if (!other_host.open(platform::Endpoint::Family::V4, error, &there)) {
+        MESSAGE("127.0.0.2 cannot be bound here (" << error << "): the other-address half is not checked");
+    }
+    auto session = Session::create(SessionRig::quick());
+    session->connect("127.0.0.1", server.local_endpoint()->port);
+
+    std::array<std::byte, 2048> buf{};
+    platform::Endpoint client;
+    std::optional<std::size_t> got;
+    REQUIRE(pump([&] { session->update(); got = server.recv_from(buf, client); }, [&] { return got.has_value(); }, 5s));
+    REQUIRE(*got >= 14);
+    ByteReader req(std::span<const std::byte>(buf.data(), *got));
+    req.skip(6);
+    const std::uint32_t code = req.be<std::uint32_t>();
+    auto response = [&] {
+        ByteWriter w;
+        w.le<std::uint8_t>(0);
+        w.le<std::uint8_t>(soe::op::SessionResponse);
+        w.be<std::uint32_t>(code);
+        w.be<std::uint32_t>(0x11223344u);
+        w.le<std::uint8_t>(2);
+        w.le<std::uint8_t>(0);
+        w.le<std::uint8_t>(0);
+        w.be<std::uint32_t>(512);
+        return w.take();
+    };
+    if (other_host.is_open()) {
+        REQUIRE(other_host.send_to(client, response()));
+        for (int i = 0; i < 50; ++i) {
+            session->update();
+            std::this_thread::sleep_for(1ms);
+        }
+        CHECK(session->state() == SessionState::Connecting);
+    }
+    // The server's own address, another port (NAT): adopted.
+    REQUIRE(other_port.send_to(client, response()));
+    CHECK(pump([&] { session->update(); }, [&] { return session->state() == SessionState::Connected; }, 5s));
 }
