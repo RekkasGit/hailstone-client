@@ -130,12 +130,8 @@ void GameConnection::handle_door(Op op, const AppPacket& p) {
         // world container's item in that slot (FUN_0065ca80, a slot below the container's count), anything else
         // removes every slot (FUN_0065ca40: RefPtrArray_RemoveAt for each of ItemBase_GetSlots). EQEmu sends
         // clear 1 after a combine emptied the container and when it closes one; the window stays open.
-        if (p.data.size() >= 8) {
-            ByteReader r(p.data);
-            auto clear = r.le<std::uint8_t>();
-            r.skip(3);
-            auto slot = r.le<std::int32_t>();
-            if (clear == 0) inventory_.take(ItemSlot{kInvWorld, static_cast<std::int16_t>(slot), -1, -1, 0, 0});
+        if (auto c = decode_clear_object(p)) {
+            if (c->clear == 0) inventory_.take(ItemSlot{kInvWorld, static_cast<std::int16_t>(c->slot), -1, -1, 0, 0});
             else
                 for (std::int16_t i = 0; i < 10; ++i) inventory_.take(ItemSlot{kInvWorld, i, -1, -1, 0, 0});
         }

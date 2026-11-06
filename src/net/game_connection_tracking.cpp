@@ -5,6 +5,7 @@
 
 #include "core/log.h"
 #include "game/combat.h"
+#include "net/ability_packets.h"
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
@@ -99,14 +100,12 @@ void GameConnection::track_filter_all() {
 }
 
 void GameConnection::handle_track_reply(const AppPacket& p) {
-    const auto* d = reinterpret_cast<const std::uint8_t*>(p.data.data());
-    if (p.data.size() >= 4 &&
-        (static_cast<std::uint32_t>(d[0]) | static_cast<std::uint32_t>(d[1]) << 8 | static_cast<std::uint32_t>(d[2]) << 16 |
-         static_cast<std::uint32_t>(d[3]) << 24) == game::kTrackReplyTimer) {
+    if (decode_track_reply_header(p) == game::kTrackReplyTimer) {
         log::debug("track: the reply is a timer, not a list");
         return;
     }
     const bool ranger = profile_ && profile_->class_ == 4;
+    const auto* d = reinterpret_cast<const std::uint8_t*>(p.data.data());
     game::set_tracking_list(tracking_.list, std::span<const std::uint8_t>(d, p.data.size()), ranger,
                             tracking_.sort_order, &trim_name);
     track_filter_all();

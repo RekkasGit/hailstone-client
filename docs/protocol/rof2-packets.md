@@ -329,7 +329,7 @@ The client decides locally whether a skill may be used and sends one request; th
 | CancelSneakHide | Z→C | 0x0927 | empty: hide and sneak are over |
 | SpawnAppearance (sneak / hide) | both | 0x0971 | type 15 (sneak) parameter 0/1 from the server sets the player's sneak flag; the client sends {me, 15, 0} to stop sneaking and {me, 3, 0} to unhide before a disarm |
 | SkillUpdate | Z→C | 0x004c | 12 B: u32 skill, u32 value, 4 unknown bytes; the value goes into the profile's skills |
-| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (not decoded yet) |
+| Track | both | 0x17e5 | C→Z empty (the tracking window asks for the list); Z→C the list (`game::set_tracking_list`); a first u32 of 0xff8b344f (`decode_track_reply_header`) is the tracking timer, not a list |
 
 ### Doors and ground objects (`net/door_packets.h`, `GameConnection` in `net/game_connection_doors.cpp`, rules in `game/doors.{h,cpp}`, drawing and collision in `app/world_objects.{h,cpp}`)
 
@@ -344,7 +344,7 @@ The client decides locally whether a skill may be used and sends one request; th
 | ClickObject | both | 0x4aa1 | 8 B: u32 drop id, u32 player spawn id. C→Z: pick up / open (LMouseUp, under 20 units). Z→C: the object is gone (picked up by someone, decayed); the item itself comes as an item packet of type 0x67 to the cursor |
 | ClickObjectAction | Z→C | 0x0c1e | 92 B: u32 drop id (0xffffffff: someone else is using it), i32 -1, i32 -1, u32 container type, u32 0x0a, u32 icon, u32, `char[64]` name: a tradeskill container opened; its contents follow as item packets of type 0x6b (slot type 4, World) |
 | ClickObjectAction | C→Z | 0x0c1e | empty: close the container (EQEmu `Object::Close`, which answers OP_ClearObject) |
-| ClearObject | Z→C | 0x7a11 | 8 B: u8 clear, 3 B, u32 slot. Clear 0 removes the world container's item in that slot; anything else empties every slot of the world container, which EQEmu sends when it closes a container and after a combine emptied it; the window stays open |
+| ClearObject | Z→C | 0x7a11 | 8 B (`decode_clear_object`): u8 clear, 3 B, u32 slot. Clear 0 removes the world container's item in that slot; anything else empties every slot of the world container, which EQEmu sends when it closes a container and after a combine emptied it; the window stays open |
 | TradeSkillCombine | C→Z | 0x579a | 24 B: container slot (12 B InventorySlot; a world container is type 4, slot -1 = SLOT_TRADESKILL_EXPERIMENT_COMBINE), guild-tribute slot (all -1) |
 | RecipesFavorite / RecipesSearch | C→Z | 0x71b1 / 0x6290 | 2008 B {u32 container type, u32 bag item id (0 world), 500 × u32 recipe ids} / 80 B {type, id, u32 min trivial, u32 max trivial, `char[56]` partial name, u32 0x300, u32}; one RecipeReply each |
 | RecipeReply | Z→C | 0x1db6 | 84 B: type, id, u32 component count, u32 recipe id, u32 trivial, `char[64]` name |

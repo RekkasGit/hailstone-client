@@ -1253,3 +1253,24 @@ TEST_CASE("OP_InspectBuffs minutes: the original's 32-bit arithmetic") {
     CHECK(inspect_buff_minutes(0x7fffffff) == 0);
 }
 
+#include "net/ability_packets.h"
+
+TEST_CASE("the OP_Track reply's header and OP_ClearObject decoders") {
+    using namespace nmsc::net;
+    auto bytes = [](std::initializer_list<std::uint8_t> v) {
+        std::vector<std::byte> out;
+        for (auto b : v) out.push_back(std::byte{b});
+        return out;
+    };
+    const auto track = to_wire(Op::Track);
+    CHECK_FALSE(decode_track_reply_header(AppPacket(track, {})));
+    CHECK_FALSE(decode_track_reply_header(AppPacket(track, bytes({0x4f, 0x34, 0x8b}))));
+    CHECK(decode_track_reply_header(AppPacket(track, bytes({0x4f, 0x34, 0x8b, 0xff, 1}))) == 0xff8b344fu);
+
+    auto c = decode_clear_object(encode(ClearObject{0, 7}));
+    REQUIRE(c);
+    CHECK(c->clear == 0);
+    CHECK(c->slot == 7);
+    CHECK(encode(ClearObject{1, -1}).data.size() == kClearObjectSize);
+    CHECK_FALSE(decode_clear_object(AppPacket(to_wire(Op::ClearObject), bytes({1, 0, 0, 0, 2, 0, 0}))));
+}
