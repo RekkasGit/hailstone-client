@@ -460,6 +460,10 @@ private:
             lua_insert(l, -2);
             lua_pushstring(l, name);
             if (!call_script(*s_, 2, 1)) return false;
+            if (!usable(*s_)) { // the __index stopped its own script (mq.exit, /lua stop): nothing more of it runs
+                lua_pop(l, 1);
+                return false;
+            }
         } else {
             raw_field(l, name);
             lua_remove(l, -2);

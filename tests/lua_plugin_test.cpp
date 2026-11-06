@@ -451,6 +451,21 @@ hailstone.hooks(setmetatable({}, {__index = function(t, k) if k == 'is_spellcast
         h.scripts->pulse();
         CHECK_FALSE(h.scripts->running("bad"));
     }
+    {
+        Host h; // an __index that stops its own script and still gives the hook: the hook is not called
+        h.write("quit.lua", R"(
+hailstone.hooks(setmetatable({}, {__index = function(t, k)
+  mq.cmd('/lua stop quit')
+  return function() print('hook ran') return true end
+end}))
+)");
+        REQUIRE(h.scripts->run("quit", {}));
+        h.scripts->pulse();
+        CHECK_FALSE(h.chain.is_spellcaster(*h.world.conn));
+        CHECK_FALSE(h.printed_part("hook ran"));
+        h.scripts->pulse();
+        CHECK_FALSE(h.scripts->running("quit"));
+    }
 }
 
 TEST_CASE("Lua plugin: a script restarted by another during pulse keeps the UI it registers") {
