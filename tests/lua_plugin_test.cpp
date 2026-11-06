@@ -417,3 +417,15 @@ print('[more] camera ' .. math.floor(hs.max_camera_distance()))
     n.scripts->pulse();
     CHECK(n.printed_part("needs the server's 'actions' permission"));
 }
+
+TEST_CASE("Lua plugin: after_combat_ability gets the spell id and whether it was used") {
+    Host h;
+    h.write("aca.lua", "hailstone.hooks{ after_combat_ability = function(id, used) print('aca', id, used) end }\n");
+    REQUIRE(h.scripts->run("aca", {}));
+    h.scripts->pulse();
+    game::SpellData spell;
+    spell.id = 717;
+    h.chain.after_combat_ability(*h.world.conn, spell, true);
+    CHECK(h.printed_part("aca 717 true"));
+    CHECK(h.scripts->running("aca"));
+}

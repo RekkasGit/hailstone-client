@@ -329,7 +329,7 @@ public:
         if (!hook("after_combat_ability")) return;
         lua_pushinteger(L(), s.id);
         lua_pushboolean(L(), used);
-        if (run(1)) lua_pop(L(), 1);
+        if (run(2)) lua_pop(L(), 1);
     }
     std::optional<std::string> combat_effect_label(const net::GameConnection&) const override {
         return hook("combat_effect_label") && run(0) ? string_result() : std::nullopt;

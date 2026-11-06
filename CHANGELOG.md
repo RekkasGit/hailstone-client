@@ -13,6 +13,7 @@
 - A Lua script's window whose function never returns is stopped after 5 seconds, as the rest of a script is, instead of freezing the game
 - Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
 - For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
+- For script authors: `hailstone.hooks{after_combat_ability = function(id, used) ... end}` is called with both values; it used to end the script with "attempt to call a number value"
 - For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
 - For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
 - For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced
