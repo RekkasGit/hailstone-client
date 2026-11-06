@@ -102,6 +102,18 @@ TEST_CASE("JPEG pictures decode to RGBA8") {
     CHECK_FALSE(decode_jpeg(png, &error));
     // A JPEG cut short is refused, not read past its end.
     CHECK_FALSE(decode_jpeg(bytes.first(40), &error));
+
+    // A frame header declaring a side past the other decoders' 16384 is refused before stb allocates it.
+    std::vector<std::byte> wide(bytes.begin(), bytes.end());
+    for (std::size_t i = 0; i + 8 < wide.size(); ++i)
+        if (wide[i] == std::byte{0xff} && wide[i + 1] == std::byte{0xc0}) {
+            wide[i + 7] = std::byte{20000 >> 8}; // width, big-endian
+            wide[i + 8] = std::byte{20000 & 0xff};
+            break;
+        }
+    error.clear();
+    CHECK_FALSE(decode_jpeg(wide, &error));
+    CHECK(error == "JPEG: image too large");
 }
 
 TEST_CASE("Screen pictures: a server's own folder replaces the client's") {

@@ -257,4 +257,10 @@ TEST_CASE("icon grid cells: down each column first when vertical, across rows ot
     CHECK(c->y == 24);
     CHECK_FALSE(ui::grid_index_cell(100, 1, 256, 256, 24, 24, false));
     CHECK_FALSE(ui::grid_index_cell(-1, 1, 256, 256, 24, 24, false));
+    // XML sizes whose cell count passes int are refused, not overflowed.
+    CHECK_FALSE(ui::grid_index_cell(5, 1, 100000, 100000, 1, 1, false));
+    // Within int per sheet, but not times the frames: 46340^2 cells, 2 frames.
+    c = ui::grid_index_cell(2147395600, 2, 46340, 46340, 1, 1, false);
+    REQUIRE(c);
+    CHECK(c->sheet == 2);
 }

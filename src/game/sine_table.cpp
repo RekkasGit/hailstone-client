@@ -52,12 +52,17 @@ float cmath_cos_interp(float x) {
     return interp(tables().cos, i, x - static_cast<float>(i));
 }
 
-float cmath_sin(float x) {
-    return tables().sin[static_cast<std::size_t>(static_cast<int>(std::trunc(x)) & 511)];
+namespace {
+// (int)x & 511. A NaN, an infinity or a value past int32 is not cast (undefined in C++): the original's cvttss2si
+// gives INT_MIN for those, which is entry 0.
+std::size_t table_index(float x) {
+    if (!(std::fabs(x) < 2147483648.0f)) return 0;
+    return static_cast<std::size_t>(static_cast<int>(std::trunc(x)) & 511);
 }
+} // namespace
 
-float cmath_cos(float x) {
-    return tables().cos[static_cast<std::size_t>(static_cast<int>(std::trunc(x)) & 511)];
-}
+float cmath_sin(float x) { return tables().sin[table_index(x)]; }
+
+float cmath_cos(float x) { return tables().cos[table_index(x)]; }
 
 } // namespace nmsc::game

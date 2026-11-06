@@ -22,8 +22,10 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string_view>
 
+#include "audio/environment_presets.h"
 #include "game/mechanics/fpu.h"
 
 namespace nmsc::audio {
@@ -51,8 +53,9 @@ struct RoomPresets {
         return environment == kEnvironmentLow ? low : environment == kEnvironmentHigh ? high : outside;
     }
 };
-// SetCurrentZone's table (case-insensitive name match), else the defaults.
-RoomPresets zone_room_presets(std::string_view zone_short_name);
+// SetCurrentZone's table (case-insensitive name match, the first that matches), else the defaults. The table is
+// read from the player's eqgame.exe (audio/environment_presets.h); empty, every zone has the defaults.
+RoomPresets zone_room_presets(std::span<const ZoneRoomPreset> table, std::string_view zone_short_name);
 
 // Miles' parameters for a room type (mss32.dll's table at 0x2114d070: 26 rows of {level, decay time (s), damping,
 // predelay (s)}, the EAX 1 environments; room 0 has level 0, no reverb). Out of range: room 0.

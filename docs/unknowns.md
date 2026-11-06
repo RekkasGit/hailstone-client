@@ -124,6 +124,11 @@ What the client does not implement yet, or implements with an approximation it c
 - Eye height of new-style models uses the classic rule.
 - The Half Elf, Troll, Ogre, Iksar and Froglok height fix-up is applied once per spawn when the model has a tunic point.
 - Forged numbers in asset text (zone-line region tags, `_environmentemitters.txt`, weather.ini cloud counts) past an integer field's range are clamped to it (`core/saturate.h`); the original converts with atoi / float casts whose overflow is undefined, so what it does with them is not known. An ATP tag's zone point is clamped to 214748364 before it is multiplied by 10.
+- PFS archives: a member may declare at most 256 MiB (the largest stock one, theater.eqg's, is about 37 MB) and the name table 16 MiB, limits of ours; what the original does past them is not known. A name the name table lists twice is one member (no stock archive does it).
+- A ZON that lists a `.ter` twice loads it once (no stock zone does it; what the original does is not known).
+- weather.ini clouds: at most 256 patches per cloud (`kMaxCloudPatches`, a limit of ours; stock files ask for at most 80). The original's limit is not known.
+- JPEG UI art: at most 16384 a side and 8192 x 8192 texels, as PNG and DDS (a limit of ours).
+- EQG models: one model's clips together get at most 8M resampled bone poses (`kMaxModelPoses`, a limit of ours; the most a stock model has is about 400,000); a clip past it is left out.
 
 ## World rendering
 
@@ -146,6 +151,8 @@ What the client does not implement yet, or implements with an approximation it c
 
 - Reverb is simplified (no Miles DSP); music synthesis uses TinySoundFont rather than a DLS synthesiser, ignoring sysex and branch controllers.
 - Duplicate sound names across archives resolve to the highest-numbered archive.
+- A NaN or infinite volume, level, send or reverb parameter (an EMT gain of "nan" read with strtof) is 0, and a non-finite sample (an IEEE-float WAV's) is silence; what Miles does with them is not known. Ours: they would otherwise stay in the reverb for the session.
+- Decoded waves not asked for over two zone changes are freed (`SoundLibrary::drop_idle_waves`; the global waves stay), so a freed wave's next play is skipped while it decodes again, as any wave's first play is. The original's wave cache policy is not traced.
 
 ## UI
 

@@ -128,11 +128,15 @@ void append_pieces(const MeshFile& mesh, const std::vector<std::size_t>& pieces,
 
 // The most frames a resampled clip gets; a longer clip is cut there.
 inline constexpr std::uint32_t kMaxClipFrames = 4096;
+// The most resampled poses (bone x frame) one model's clips get together; a clip that would pass it is left out.
+// Many clips of many bones at kMaxClipFrames each would otherwise take gigabytes.
+inline constexpr std::size_t kMaxModelPoses = std::size_t{8} << 20;
 // Builds a model: skeleton with inverse bind matrices, the default pieces
 // (select_pieces(.., 0, 0)), and clips resampled to fixed frames (at most
-// kMaxClipFrames).
+// kMaxClipFrames each, and max_poses bone poses in all: a clip past that is left out).
 CharacterModel build_model(const MeshFile& mesh, std::string_view code,
-                           const std::vector<std::pair<std::string, AnimationFile>>& animations);
+                           const std::vector<std::pair<std::string, AnimationFile>>& animations,
+                           std::size_t max_poses = kMaxModelPoses);
 
 } // namespace eqg_character
 

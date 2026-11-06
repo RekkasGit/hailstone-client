@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
+- A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
+- A zone that lists its terrain thousands of times no longer loads it thousands of times
+- A model with thousands of material names no longer stalls the zone load
+- A weather.ini cloud that asks for billions of patches gets at most 256
+- A JPEG in the UI art that claims an enormous size is refused instead of taking gigabytes of memory
+- An EQG model with hundreds of long animations no longer takes gigabytes of memory when it is first shown
+- Numbers past 32 bits in a zone's detail-texture scales and in GlobalLoad.txt's load order now read the same on Windows, Linux and macOS
+- Numbers past 32 bits in sound files (sound ids, emitter delays) now read the same on Windows, Linux and macOS
+- After five minutes or more in first person, switching to a third-person camera no longer shows your character undressed for a moment
+- A damaged shader file in the client's folder is reported as such instead of being read past its buffer
+- The first cast of a new spell effect no longer hitches the frame while its particle textures are read and decoded; they are loaded in the background and the particles show once they are ready
+- A zone sound file with a "nan" or "inf" volume, or a damaged float WAV, no longer silences or garbles all sound for the rest of the session
+- A sound archive named like `snd99999999999.pfs` (in the game folder or a server's assets) no longer stops the client at start or login
+- A music file that cannot be read is no longer read again (and logged) every frame while you stand in its area
+- Long sessions use less memory for sound: decoded sounds from zones you left a while ago are freed (the always-loaded ones stay)
+- The per-zone sound rooms (the reverb a zone uses indoors and out) are now read from your own `eqgame.exe` when the client starts, instead of from a copy inside Hailstone. With no `eqgame.exe` in the game folder, or a different build of it, every zone uses the default rooms (and the log says so once)
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)

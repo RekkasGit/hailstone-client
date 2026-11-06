@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 
 #include "assets/pfs.h"
 #include "core/log.h"
@@ -27,8 +28,12 @@ SoundLibrary::SoundLibrary(const GameDir& game) : game_(game) {
         std::string name = lower_case(entry.name);
         if (name.size() > 7 && name.starts_with("snd") && name.ends_with(".pfs")) {
             std::string digits = name.substr(3, name.size() - 7);
-            if (!digits.empty() && std::all_of(digits.begin(), digits.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); }))
-                found.emplace_back(std::stoi(digits), entry.path);
+            // A number past int (snd99999999999.pfs) is not an archive of the set; std::stoi threw out of here.
+            int n = 0;
+            const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), n);
+            const bool all_digits = std::all_of(digits.begin(), digits.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); });
+            if (!digits.empty() && all_digits && ec == std::errc{} && end == digits.data() + digits.size())
+                found.emplace_back(n, entry.path);
         }
     }
     std::sort(found.begin(), found.end());
@@ -120,7 +125,10 @@ std::optional<std::vector<std::byte>> SoundLibrary::read(const std::string& name
 std::shared_ptr<const Pcm> SoundLibrary::wave(const std::string& name) {
     std::string key = lower_case(name);
     std::lock_guard lock(mutex_);
-    if (auto it = cache_.find(key); it != cache_.end()) return it->second;
+    if (auto it = cache_.find(key); it != cache_.end()) {
+        it->second.used = generation_;
+        return it->second.pcm;
+    }
     if (failed_.contains(key)) return nullptr;
     if (queued_.contains(key)) {
         // Wanted now: one still waiting behind the preloads moves to the front.
@@ -140,11 +148,37 @@ void SoundLibrary::preload(const std::vector<std::string>& names) {
     std::lock_guard lock(mutex_);
     for (const auto& n : names) {
         std::string key = lower_case(n);
-        if (cache_.contains(key) || failed_.contains(key) || queued_.contains(key)) continue;
+        if (auto it = cache_.find(key); it != cache_.end()) {
+            it->second.used = generation_;
+            continue;
+        }
+        if (failed_.contains(key) || queued_.contains(key)) continue;
         queued_.insert(key);
         preload_queue_.push_back(std::move(key));
     }
     cv_.notify_all();
+}
+
+void SoundLibrary::drop_idle_waves(const std::vector<std::string>& pinned) {
+    std::unordered_set<std::string> keep;
+    for (const auto& n : pinned) keep.insert(lower_case(n));
+    std::vector<std::shared_ptr<const Pcm>> dropped; // freed after the lock is released
+    std::lock_guard lock(mutex_);
+    ++generation_;
+    for (auto it = cache_.begin(); it != cache_.end();) {
+        const bool idle = static_cast<std::uint32_t>(generation_ - it->second.used) >= 2;
+        if (idle && it->second.pcm.use_count() == 1 && !keep.contains(it->first)) {
+            dropped.push_back(std::move(it->second.pcm));
+            it = cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+std::size_t SoundLibrary::cached_waves() const {
+    std::lock_guard lock(mutex_);
+    return cache_.size();
 }
 
 void SoundLibrary::set_resident_files(const std::vector<std::string>& names) {
@@ -174,6 +208,8 @@ std::shared_ptr<const std::vector<std::byte>> SoundLibrary::file(const std::stri
         std::unique_lock lock(mutex_);
         cv_.wait(lock, [&] { return stop_ || file_in_flight_ != key; });
         if (auto it = resident_.find(key); it != resident_.end()) return it->second;
+        // Failed before: a music emitter in range asks again every frame, which re-read (and logged) it each time.
+        if (missing_files_.contains(key)) return nullptr;
         // Still queued: read here, so it is not read twice.
         if (auto it = std::find(file_queue_.begin(), file_queue_.end(), key); it != file_queue_.end())
             file_queue_.erase(it);
@@ -181,7 +217,7 @@ std::shared_ptr<const std::vector<std::byte>> SoundLibrary::file(const std::stri
     auto bytes = read(key);
     std::lock_guard lock(mutex_);
     if (!bytes) {
-        if (resident_names_.contains(key)) missing_files_.insert(key);
+        missing_files_.insert(key);
         return nullptr;
     }
     auto shared = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
@@ -247,7 +283,7 @@ void SoundLibrary::worker() {
         std::lock_guard lock(mutex_);
         queued_.erase(key);
         if (pcm) {
-            cache_[key] = std::move(pcm);
+            cache_[key] = Cached{std::move(pcm), generation_};
         } else {
             failed_.insert(key);
             log::debug("audio: no sound {}", key);

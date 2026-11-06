@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -79,6 +80,7 @@ std::string MaterialDef::texture(std::string_view property) const {
 
 const MaterialDef* ModelFile::material_for(std::uint32_t ordinal) const {
     if (ordinal >= materials.size()) return nullptr;
+    if (first_material.size() == materials.size()) return &materials[first_material[ordinal]];
     const auto& name = materials[ordinal].name;
     for (const auto& m : materials)
         if (m.name == name) return &m;
@@ -161,6 +163,10 @@ ModelFile parse_model(std::span<const std::byte> data, bool terrain) {
             for (auto& uv : m.uvs2) uv = vec2(r);
         }
     }
+    std::unordered_map<std::string_view, std::uint32_t> first;
+    m.first_material.reserve(m.materials.size());
+    for (std::uint32_t i = 0; i < m.materials.size(); ++i)
+        m.first_material.push_back(first.emplace(m.materials[i].name, i).first->second);
     return m;
 }
 

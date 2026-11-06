@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
@@ -37,8 +39,13 @@ std::optional<GridCell> gem_icon_cell(std::int32_t icon) {
 std::optional<GridCell> grid_index_cell(int index, int frames, int frame_w, int frame_h, int cell_w, int cell_h,
                                         bool vertical) {
     if (cell_w <= 0 || cell_h <= 0 || index < 0) return std::nullopt;
-    const int cols = frame_w / cell_w, rows = frame_h / cell_h, per = cols * rows;
-    if (per <= 0 || index >= per * frames) return std::nullopt;
+    // In 64 bits: the sizes come from the XML (a server's assets may replace it), and 100000 x 100000 one-unit
+    // cells overflowed int.
+    const int cols = frame_w / cell_w, rows = frame_h / cell_h;
+    const std::int64_t per64 = std::int64_t{cols} * rows;
+    if (cols <= 0 || rows <= 0 || per64 > std::numeric_limits<int>::max() || index >= per64 * std::max(frames, 0))
+        return std::nullopt;
+    const int per = static_cast<int>(per64);
     GridCell c;
     c.sheet = index / per + 1;
     const int cell = index % per;
@@ -377,7 +384,8 @@ std::optional<int> UiTextures::grid_cells(std::string_view name) {
     const Grid& g = it->second;
     const Frame& f = g.frames.front();
     if (g.cell_w <= 0 || g.cell_h <= 0) return 0;
-    return (f.w / g.cell_w) * (f.h / g.cell_h) * static_cast<int>(g.frames.size());
+    const std::int64_t cells = std::int64_t{f.w / g.cell_w} * (f.h / g.cell_h) * static_cast<std::int64_t>(g.frames.size());
+    return static_cast<int>(std::clamp<std::int64_t>(cells, 0, std::numeric_limits<int>::max()));
 }
 
 std::optional<UiTextures::Cell> UiTextures::grid_cell(std::string_view name, int index) {
@@ -393,10 +401,11 @@ std::optional<UiTextures::Cell> UiTextures::grid_cell(std::string_view name, int
     if (!t || t->width <= 0 || t->height <= 0) return std::nullopt;
     Cell out;
     out.id = t->id;
-    out.u0 = static_cast<float>(f.x + c->x) / static_cast<float>(t->width);
-    out.v0 = static_cast<float>(f.y + c->y) / static_cast<float>(t->height);
-    out.u1 = static_cast<float>(f.x + c->x + g.cell_w) / static_cast<float>(t->width);
-    out.v1 = static_cast<float>(f.y + c->y + g.cell_h) / static_cast<float>(t->height);
+    // The sums in double: an XML offset near INT_MAX plus the cell's overflowed int.
+    out.u0 = static_cast<float>((static_cast<double>(f.x) + c->x) / t->width);
+    out.v0 = static_cast<float>((static_cast<double>(f.y) + c->y) / t->height);
+    out.u1 = static_cast<float>((static_cast<double>(f.x) + c->x + g.cell_w) / t->width);
+    out.v1 = static_cast<float>((static_cast<double>(f.y) + c->y + g.cell_h) / t->height);
     return out;
 }
 

@@ -80,6 +80,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     }
     mp3index_ = assets::parse_mp3_index(text_of(game_.read("mp3index.txt")));
     race_ids_ = assets::parse_race_sounds(text_of(game_.read("racedata.txt")));
+    zone_rooms_ = load_zone_room_presets(game_);
     waves_.global = &global_waves_;
     std::uint32_t rate = 48000;
     mixer_ = std::make_unique<Mixer>(rate);
@@ -102,6 +103,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     add(0x50f, 0x514);
     add(0xe6f, 0xe6f);
     library_->preload(global);
+    global_wave_files_ = std::move(global);
     // LoadGlobalMusic @0x4aa860: entries 1..15, the combat theme picked by rand() after srand(Util::FastTime()).
     CrtRand rand(static_cast<std::uint32_t>(std::time(nullptr)));
     for (const MusicSetCall& c : load_global_music([this](const std::string& f) { return library_->exists(f); }, rand())) {
@@ -244,7 +246,7 @@ void AudioSystem::set_zone(const std::string& short_name) {
     std::erase_if(xmi_, [&](const auto& kv) { return kv.first == zone_xmi_; });
     zone_xmi_.clear();
     // SetCurrentZone: the room presets back to their defaults, then the zone's row of the table.
-    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(short_name);
+    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(zone_rooms_, short_name);
     apply_room();
     waves_.zone.clear();
     for (auto& [id, l] : loops_)
@@ -252,6 +254,8 @@ void AudioSystem::set_zone(const std::string& short_name) {
     loops_.clear();
     placed_.clear();
     zone_name_ = short_name;
+    // The waves of the zones before the last go, the global ones stay (LoadGlobalWaves keeps those for the session).
+    library_->drop_idle_waves(global_wave_files_);
     if (short_name.empty()) return;
 
     auto exists = [this](const std::string& f) { return library_->exists(f); };
@@ -352,6 +356,9 @@ std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
     // The zone's and the global music are read ahead on the library's worker (set_resident_files), ahead of the
     // zone's wave preloads; one asked for before that read is done is read here (or its read on the worker waited
     // for), as it always was.
+    // A voice the mixer would refuse (an EMT row's gain of 0) is not built: its decoder was made and thrown away
+    // every frame the emitter is in range.
+    if (!(volume > 0.0f) || !std::isfinite(volume)) return 0;
     auto bytes_of = [&] { return library_->file(entry.file); };
     std::unique_ptr<Source> src;
     if (ends_with_nocase(entry.file, ".mp3")) {

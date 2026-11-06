@@ -1,5 +1,6 @@
 #include "assets/sky_weather.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "core/game_dir.h"
@@ -24,7 +25,9 @@ CloudDefinition parse_cloud_definition(const IniFile& w, std::string_view name) 
     std::string s = "Cloud-" + c.name;
     c.texture = w.get_string(s, "Texture");
     c.color_set = w.get_string(s, "ColorSet");
-    c.desired_count = saturate_cast<std::int32_t>(number(w, s, "DesiredCount"));
+    // The original's limit is not known (docs/unknowns.md); stock files ask for at most 80, and every patch is
+    // allocated and drawn, so a forged count is capped.
+    c.desired_count = std::min(saturate_cast<std::int32_t>(number(w, s, "DesiredCount")), kMaxCloudPatches);
     c.spawn_interval_min = number(w, s, "SpawnIntervalMin");
     c.spawn_interval_max = number(w, s, "SpawnIntervalMax");
     c.size_min = number(w, s, "SizeMin");

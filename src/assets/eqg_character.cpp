@@ -424,7 +424,8 @@ void append_pieces(const MeshFile& mesh, const std::vector<std::size_t>& pieces,
 }
 
 CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
-                           const std::vector<std::pair<std::string, AnimationFile>>& animations) {
+                           const std::vector<std::pair<std::string, AnimationFile>>& animations,
+                           std::size_t max_poses) {
     std::string code = upper(code_view);
     CharacterModel m;
     m.code = code;
@@ -477,6 +478,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
     // keep the bind pose.
     std::unordered_map<std::string, std::size_t> by_name;
     for (std::size_t i = 0; i < n; ++i) by_name.emplace(upper(m.bone_names[i]), i);
+    std::size_t poses = 0; // resampled across all clips, against kMaxModelPoses
     for (const auto& [clip_name, file] : animations) {
         if (m.clips.contains(clip_name)) continue;
         std::uint32_t duration = 0, step = 0;
@@ -495,6 +497,15 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
         AnimationClip a;
         a.frame_ms = step;
         a.frame_count = std::max<std::uint32_t>(1, duration / step + 1);
+        std::size_t matched = 0;
+        for (const auto& t : file.tracks)
+            if (!t.poses.empty() && by_name.contains(upper(t.bone))) ++matched;
+        if (matched * a.frame_count > max_poses - poses) {
+            log::debug("EQG model {}: clip {} skipped, the model's clips are past {} poses", code, clip_name,
+                       max_poses);
+            continue;
+        }
+        poses += matched * a.frame_count;
         a.tracks = rest.tracks;
         bool any = false;
         for (const auto& t : file.tracks) {

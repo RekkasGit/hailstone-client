@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <condition_variable>
 #include <cstring>
 #include <filesystem>
@@ -448,4 +450,133 @@ TEST_CASE("Audio settings: SoundMixAhead (SoundManager::SetMixAhead's 4..96 frag
     Config out;
     store_audio_settings(s, out);
     CHECK(out.get_int("audio.mix_ahead", 0) == 20);
+}
+
+TEST_CASE("Mixer: a NaN or infinite volume or sample never reaches the reverb or the device") {
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    std::vector<float> out(2 * 4800);
+    auto all_finite = [&] { return std::all_of(out.begin(), out.end(), [](float x) { return std::isfinite(x); }); };
+    Mixer m(48000, 8);
+    m.set_reverb(0.5f, 1.0f, 0.5f, 0.01f);
+    // An EMT gain of "nan" or "inf" (strtof): refused, with or without a fade.
+    const float levels[2] = {1.0f, 1.0f};
+    CHECK(m.play(constant(48000, 4800, 0.5f), nan, 0, 0, Bus::Effects, levels) == 0);
+    CHECK(m.play(constant(48000, 4800, 0.5f), inf, 0, 0, Bus::Effects, levels) == 0);
+    CHECK(m.play(constant(48000, 4800, 0.5f), nan, 100, 0, Bus::Effects, levels) == 0);
+    // A playing positional voice with a send, its volume, levels and send set non-finite: silent, not NaN.
+    auto id = m.play(constant(48000, 4800, 0.5f), 1.0f, 0, 0, Bus::Effects, levels);
+    REQUIRE(id != 0);
+    m.set_send(id, nan);
+    m.set_levels(id, inf, nan);
+    m.set_volume(id, inf, 50);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    m.stop_all();
+    // A NaN sample (an IEEE-float WAV): it does not poison the reverb, so a later voice still sounds.
+    auto bad = std::make_shared<Pcm>();
+    bad->rate = 48000;
+    bad->channels = 1;
+    bad->samples.assign(480, nan);
+    id = m.play(bad, 1.0f, 0, 1, Bus::Effects, levels);
+    REQUIRE(id != 0);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    id = m.play(constant(48000, 4800, 0.5f), 1.0f, 0, 0, Bus::Effects, levels);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    CHECK(out[2 * 4000] != 0.0f);
+    // A reverb configured from non-finite numbers stays finite.
+    m.set_reverb(0.5f, nan, inf, nan);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+}
+
+TEST_CASE("WAV decoding: an IEEE-float WAV's NaN and infinite samples are silence") {
+    const float samples[4] = {0.25f, std::numeric_limits<float>::quiet_NaN(), -std::numeric_limits<float>::infinity(),
+                              -0.5f};
+    std::vector<std::byte> d;
+    auto put = [&](const void* p, std::size_t n) {
+        auto b = static_cast<const std::byte*>(p);
+        d.insert(d.end(), b, b + n);
+    };
+    auto u32 = [&](std::uint32_t v) {
+        for (int i = 0; i < 4; ++i) d.push_back(static_cast<std::byte>(v >> (8 * i)));
+    };
+    auto u16 = [&](std::uint16_t v) {
+        d.push_back(static_cast<std::byte>(v & 0xff));
+        d.push_back(static_cast<std::byte>(v >> 8));
+    };
+    put("RIFF", 4);
+    u32(36 + 16);
+    put("WAVEfmt ", 8);
+    u32(16);
+    u16(3); // WAVE_FORMAT_IEEE_FLOAT
+    u16(1);
+    u32(22050);
+    u32(22050 * 4);
+    u16(4);
+    u16(32);
+    put("data", 4);
+    u32(16);
+    for (float s : samples) {
+        std::uint32_t bits;
+        std::memcpy(&bits, &s, 4);
+        u32(bits);
+    }
+    auto pcm = decode_wav(d);
+    REQUIRE(pcm);
+    CHECK(pcm->samples == std::vector<float>{0.25f, 0.0f, 0.0f, -0.5f});
+}
+
+TEST_CASE("SoundLibrary: a snd<N>.pfs whose number does not fit an int is not one of the set, and does not throw") {
+    test::ScratchDir dir("sound_bignum");
+    std::ofstream(dir.path() / "snd99999999999.pfs", std::ios::binary) << "x";
+    std::ofstream(dir.path() / "snd-1.pfs", std::ios::binary) << "x";
+    GameDir game(dir.path());
+    CHECK_NOTHROW(SoundLibrary{game});
+}
+
+TEST_CASE("SoundLibrary: a music file that failed to read is not read again") {
+    // A music emitter in range asks for its file every frame while no voice plays it.
+    test::ScratchDir dir("sound_missing");
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "x";
+    GameDir game(dir.path()); // indexed with the file
+    SoundLibrary library(game);
+    std::filesystem::remove(dir.path() / "theme.mp3");
+    CHECK_FALSE(library.file("theme.mp3"));
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "readable now";
+    CHECK_FALSE(library.file("theme.mp3")); // remembered, not read
+}
+
+TEST_CASE("SoundLibrary: decoded waves not asked for over two zone changes are dropped, unless pinned or playing") {
+    test::ScratchDir dir("sound_trim");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    auto wav = wav16(22050, {1, 2, 3, 4});
+    for (const char* n : {"old.wav", "global.wav", "held.wav", "used.wav"})
+        std::ofstream(dir.path() / "sounds" / n, std::ios::binary)
+            .write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    library.preload({"old.wav", "global.wav", "held.wav", "used.wav"});
+    library.wait_idle();
+    REQUIRE(library.cached_waves() == 4);
+    auto held = library.wave("held.wav"); // a voice still playing it
+    REQUIRE(held);
+    library.drop_idle_waves({"global.wav"}); // into a zone: everything was asked for in the last one
+    CHECK(library.cached_waves() == 4);
+    CHECK(library.wave("used.wav"));
+    held = library.wave("held.wav");
+    library.drop_idle_waves({"global.wav"}); // the next zone: old.wav was not asked for in the one before
+    CHECK(library.cached_waves() == 3);
+    library.drop_idle_waves({"global.wav"});
+    // used.wav is idle now too; held.wav still plays, global.wav is pinned.
+    CHECK(library.cached_waves() == 2);
+    CHECK(library.wave("global.wav"));
+    CHECK(library.wave("held.wav") == held);
+    // A dropped wave asked for again is decoded again.
+    CHECK_FALSE(library.wave("old.wav"));
+    library.wait_idle();
+    CHECK(library.wave("old.wav"));
 }

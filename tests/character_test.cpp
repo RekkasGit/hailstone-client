@@ -324,6 +324,40 @@ TEST_CASE("EQG clips: key times 0 and 0xFFFFFFFF resample to at most kMaxClipFra
     CHECK(near(good->tracks[0].back().translation, {0, 0, 1}));
 }
 
+TEST_CASE("EQG clips: the model's clips together stop at the pose budget; a clip past it is left out") {
+    eqg_character::MeshFile mesh;
+    for (int i = 0; i < 4; ++i) {
+        eqg_character::Bone bone;
+        bone.name = "TST_B" + std::to_string(i);
+        mesh.bones.push_back(bone);
+    }
+    mesh.materials.push_back({"M", "Opaque_MaxCB1.fx", "none"});
+    eqg_character::Piece piece;
+    piece.name = "TST";
+    piece.vertices.resize(3);
+    piece.triangles.push_back({0, 1, 2});
+    piece.triangle_materials.push_back(0);
+    mesh.pieces.push_back(piece);
+    // Each clip: the four bones at kMaxClipFrames frames (key times 0 and 0xFFFFFFFF).
+    eqg_character::AnimationFile file;
+    for (int i = 0; i < 4; ++i) {
+        eqg_character::Track t;
+        t.bone = "tst_b" + std::to_string(i);
+        t.times_ms = {0, 0xFFFFFFFFu};
+        t.poses.resize(2);
+        file.tracks.push_back(t);
+    }
+    std::vector<std::pair<std::string, eqg_character::AnimationFile>> clips;
+    for (const char* name : {"C01", "C02", "C03", "C04", "C05"}) clips.emplace_back(name, file);
+    const std::size_t per_clip = 4 * eqg_character::kMaxClipFrames;
+    auto m = eqg_character::build_model(mesh, "TST", clips, per_clip * 3);
+    CHECK(m.clip("C01"));
+    CHECK(m.clip("C03"));
+    CHECK_FALSE(m.clip("C04"));
+    CHECK_FALSE(m.clip("C05"));
+    CHECK(eqg_character::kMaxModelPoses >= per_clip * 100); // stock models stay far below it
+}
+
 TEST_CASE("live hero's forge pieces: IT27104 is IT19814 with GENERIC_CHAIN_BLUE_V1's textures") {
     // Runs with a live install in EQ_LIVE_DIR; RoF2's genericchainblue.eqg has IT27104 itself.
     const char* live_dir = std::getenv("EQ_LIVE_DIR");
@@ -398,4 +432,18 @@ TEST_CASE("append_wld_mesh: vertex pieces must cover the vertices before their b
     CHECK(refused.vertices.empty());
     md.vertex_pieces = {{{2, 0}}};
     CHECK_THROWS_WITH(detail::append_wld_mesh(w, f, 2, -1, refused), doctest::Contains("do not cover"));
+}
+
+TEST_CASE("GlobalLoad.txt: a phase past int32 wraps as the original's atoi, the same on every platform") {
+    test::ScratchDir dir("globalload_phase");
+    std::filesystem::create_directories(dir.path() / "Resources");
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt", std::ios::binary)
+        << "99999999999999999999,0,AAAAC,first_chr.s3d,x\r\n2,0,AAAAC,second_chr.s3d,x\r\n";
+    std::ofstream(dir.path() / "first_chr.s3d") << "x";
+    std::ofstream(dir.path() / "second_chr.s3d") << "x";
+    auto out = global_character_archives(GameDir(dir.path()));
+    // 99999999999999999999 wraps to 1661992959, so phase 2 loads first (glibc's atoi made it -1).
+    REQUIRE(out.size() >= 2);
+    CHECK(out[0] == "second_chr.s3d");
+    CHECK(out[1] == "first_chr.s3d");
 }

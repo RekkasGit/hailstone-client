@@ -46,18 +46,7 @@ std::string lower(std::string s) {
 }
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * 4;
-    info.pCode = code.data();
-    VkShaderModule module;
-    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
-    return module;
+    return create_shader_module(device, path);
 }
 
 float approach(float value, float target, float up_per_second, float down_per_second, float dt) {

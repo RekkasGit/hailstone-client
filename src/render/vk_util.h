@@ -1,10 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
 #include <volk.h>
+
+#include "render/spirv_file.h"
 
 namespace nmsc::render {
 
@@ -21,6 +24,17 @@ inline constexpr VkFrontFace opposite(VkFrontFace f) {
 
 inline void vk_check(VkResult r, const char* what) {
     if (r != VK_SUCCESS) throw std::runtime_error(std::string(what) + " failed: VkResult " + std::to_string(r));
+}
+
+// A shader module from a .spv file (read_spirv_file's checks).
+inline VkShaderModule create_shader_module(VkDevice device, const std::filesystem::path& path) {
+    const auto code = read_spirv_file(path);
+    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    info.codeSize = code.size() * 4;
+    info.pCode = code.data();
+    VkShaderModule module;
+    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
+    return module;
 }
 
 inline VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect,

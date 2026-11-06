@@ -148,6 +148,7 @@ TEST_CASE("XMI sequencer: a loop that takes no time ends instead of spinning") {
     audio::XmiSequencer counted(seq, 1000000);
     run(counted, 2);
     CHECK(counted.finished());
+    CHECK_FALSE(counted.overran());
 }
 
 TEST_CASE("XMI sequencer: nested counted loops that take no time end within the tick") {
@@ -165,7 +166,8 @@ TEST_CASE("XMI sequencer: nested counted loops that take no time end within the 
     CHECK(nested.finished());
     REQUIRE_FALSE(t[0].empty());
     CHECK(t[0].back().kind == Ev::Kind::End);
-    CHECK(t[0].size() < 8192);
+    CHECK(t[0].size() <= audio::XmiSequencer::kMaxTickOutput); // what the source reserves
+    CHECK(nested.overran()); // logged by the source on the game thread, not from tick()
     // Two loops of 3 around a note that takes time still play every pass.
     seq = parse_xmi(xmi_file({bytes({0xb0, 116, 3, 0xb0, 116, 3, 0x90, 60, 100, 1, 1, 0xb0, 117, 127, 0xb0, 117, 127,
                                       0xff, 0x2f, 0})}))[0];

@@ -66,6 +66,13 @@ TEST_CASE("BMINFO names: three or more are a palette map and its entries, x 18")
     CHECK(m.detail_layers[2].uv_scale == doctest::Approx(36.0f));
     CHECK(m.detail_layers[3].texture.empty()); // keeps its place, draws nothing
 
+    // A scale past int32 wraps as the original's 32-bit atoi does, the same on every platform (glibc's atoi
+    // saturated it to -1 here, MSVC's to INT_MAX).
+    Material wide;
+    wld::apply_detail_names({"A.DDS", "APAL.BMP", "1, 99999999999999999999, 2, X.DDS"}, wide);
+    REQUIRE(wide.detail_layers.size() == 1);
+    CHECK(wide.detail_layers[0].uv_scale == doctest::Approx(1661992959.0f * 18.0f));
+
     // Seventeen names: the loader keeps only the diffuse.
     std::vector<std::string> many{"A.DDS", "APAL.BMP"};
     for (int i = 0; i < 15; ++i) many.push_back("1, 1, 1, X.DDS");
