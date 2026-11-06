@@ -40,11 +40,12 @@ struct EditorState {
     bool accept = false;
     bool hovered = false; // the names' window had the mouse last frame (a click there takes the box's focus)
     ImGuiID input = 0;
-    int seen = 0; // the frame it was last drawn
+    int seen = 0;  // the frame it was last drawn
+    int made = -1; // the frame it was first drawn
 };
 
 // An editor not drawn for this many frames is forgotten; past kMaxEditors (ids made from changing text) every one
-// not drawn this frame is. The map is C++ memory, outside every Lua memory limit.
+// not drawn last frame is (the sweep runs before this frame's first editor: those drawn last frame stay). The map is C++ memory, outside every Lua memory limit.
 constexpr int kForgetFrames = 3600;
 constexpr std::size_t kMaxEditors = 256;
 
@@ -63,7 +64,7 @@ void forget_editors(int frame) {
     const bool over = e.size() > kMaxEditors;
     std::erase_if(e, [&](const auto& kv) {
         const int seen = kv.second.seen;
-        return seen > frame || frame - seen > (over ? 0 : kForgetFrames); // (a new ImGui context counts from 0)
+        return seen > frame || frame - seen > (over ? 1 : kForgetFrames); // (a new ImGui context counts from 0)
     });
 }
 
@@ -146,6 +147,13 @@ struct Placer {
 
 std::size_t code_editors_kept() { return editors().size(); }
 
+int code_editors_oldest() {
+    int oldest = -1;
+    for (const auto& [key, st] : editors())
+        if (oldest < 0 || st.made < oldest) oldest = st.made;
+    return oldest;
+}
+
 int CodeEditor(lua_State* L) {
     const char* id = luaL_checkstring(L, 1);
     std::size_t len = 0;
@@ -174,6 +182,7 @@ int CodeEditor(lua_State* L) {
     forget_editors(ImGui::GetFrameCount());
     EditorState& st = editors()[key];
     st.seen = ImGui::GetFrameCount();
+    if (st.made < 0) st.made = st.seen;
     const bool showing = !st.names.empty();
 
     // Ctrl+Up / Ctrl+Down move the highlight (ImGui's box only scrolls on them, and it never scrolls: see above).

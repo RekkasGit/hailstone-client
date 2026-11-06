@@ -2,10 +2,13 @@
 // ui.DrawText's font size, which the server windows of the Triune plugin use.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -712,6 +715,7 @@ TEST_CASE("Lua UI: a completion list whose __len raises is read raw, not left to
 
 TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept for the session") {
     std::size_t kept = 0;
+    int oldest_at_10 = -1, oldest = -1;
     CHECK(run_pack_frames("lua_ui_api_editors_test",
                           "local frame = 0\n"
                           "ui.window('C', function()\n"
@@ -723,8 +727,14 @@ TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept f
                           "  done = true\n"
                           "end)\n",
                           400, [&](int i) {
-                              if (i == 399) kept = nmsc::ui::lua::code_editors_kept();
+                              if (i == 10) oldest_at_10 = nmsc::ui::lua::code_editors_oldest();
+                              if (i == 399) {
+                                  kept = nmsc::ui::lua::code_editors_kept();
+                                  oldest = nmsc::ui::lua::code_editors_oldest();
+                              }
                           }));
     CHECK(kept > 0);
     CHECK(kept <= 258); // past 256, those not drawn last frame go
+    REQUIRE(oldest_at_10 >= 0);
+    CHECK(oldest == oldest_at_10); // the one drawn every frame was never forgotten
 }

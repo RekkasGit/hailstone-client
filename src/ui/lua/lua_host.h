@@ -15,6 +15,7 @@
 #include <string_view>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct lua_State;
@@ -62,6 +63,8 @@ void raise_guarded_windows();
 bool pack_code(lua_State* L);
 // How many ui.CodeEditor states (lua_code_editor.cpp) are kept now; for the tests.
 std::size_t code_editors_kept();
+// The frame the longest-kept of them was first drawn in (-1 with none); for the tests.
+int code_editors_oldest();
 inline constexpr const char* kPackStateKey = "nmsc.ui.pack";
 // A plugin sees the pack's shared tables through views (lua_host.cpp); a C function that reads a table raw
 // (lua_rawgeti, lua_next, lua_rawlen) calls this first on its argument: a view at idx is replaced by its table (only
