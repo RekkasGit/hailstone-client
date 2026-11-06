@@ -805,6 +805,10 @@ teleport index request and wait 300, do-teleport-B 2000, zone player to bind 120
   own 29 s camp timer has run (a GM's at once); a logout before that is a disconnect, and the character stays in the
   zone link dead for `Zone:ClientLinkdeadMS` (90 s by default). The client itself goes to the camp's destination
   at once either way.
+  Deliberate difference (always on): the original refuses /camp on a mount ("You must dismount and be sitting":
+  12291, or 12292 when already sitting). Hailstone camps a mounted player from the saddle without sitting; the camp
+  holds while the player stays mounted, and getting off cancels it (12683). A stock EQEmu zone's `Handle_OP_Camp`
+  checks neither sitting nor a mount.
 - Saves (`Save` @0x52ae60): refused while interacting or with an item request pending, which sets the save counter
   to 300; DoPassageOfTime's 6 s tick counts it up and saves (kind 0xf) above 300, about every half hour.
 - Position history (`game/position_tracker.*`, OP_FloatListThing 0x46c6, which EQEmu's cheat checks expect at least
