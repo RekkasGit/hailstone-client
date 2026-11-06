@@ -999,6 +999,7 @@ if(NMSC_BUILD_TESTS)
     tests/spell_gems_vectors_test.cpp
     tests/usable_gems_test.cpp
     tests/zone_change_request_test.cpp
+    tests/spawn_hook_events_test.cpp
     tests/cast_spell_vectors_test.cpp
     tests/sound_files_test.cpp
     tests/xmi_test.cpp

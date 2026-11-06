@@ -2772,6 +2772,7 @@ private:
     int hook_game_state_ = 0;              // the game state last raised (plugin::kGameState*; 0 none yet)
     ConnectionState hook_state_ = ConnectionState::Idle;
     std::vector<std::uint32_t> hook_spawns_; // the spawn ids last raised, sorted
+    std::vector<std::uint32_t> hook_spawns_scratch_; // raise_hook_events' buffer for the next list
     ConnectionState state_ = ConnectionState::Idle;
     std::string error_;
     std::string status_;

@@ -392,14 +392,20 @@ void GameConnection::raise_hook_events() {
         hook_spawns_.clear();
         return;
     }
-    std::vector<std::uint32_t> now;
+    // Unchanged (the usual frame): as many spawns as last time and every one raised still there. That costs a lookup a
+    // spawn and no allocation; only a change builds the sorted list again.
+    if (hook_spawns_.size() == world_.spawns.size() &&
+        std::all_of(hook_spawns_.begin(), hook_spawns_.end(), [&](std::uint32_t id) { return world_.spawns.contains(id); }))
+        return;
+    std::vector<std::uint32_t>& now = hook_spawns_scratch_; // the last list's buffer, kept to be filled again
+    now.clear();
     now.reserve(world_.spawns.size());
     for (const auto& [id, s] : world_.spawns) now.push_back(id);
     std::sort(now.begin(), now.end());
     std::vector<std::uint32_t> gone, added;
     std::set_difference(hook_spawns_.begin(), hook_spawns_.end(), now.begin(), now.end(), std::back_inserter(gone));
     std::set_difference(now.begin(), now.end(), hook_spawns_.begin(), hook_spawns_.end(), std::back_inserter(added));
-    hook_spawns_ = std::move(now);
+    hook_spawns_.swap(now);
     for (auto id : gone) hooks->spawn(id, false);
     for (auto id : added) hooks->spawn(id, true);
 }
