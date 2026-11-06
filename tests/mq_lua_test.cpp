@@ -1099,6 +1099,7 @@ print('int', mq._delay_ms(math.maxinteger), mq._delay_ms(1500), mq._delay_ms('2s
 print('nan', pcall(mq._delay_ms, 0/0))
 print('nantext', pcall(mq._delay_ms, 'nan'))
 print('inftext', mq._delay_ms('inf'))
+print('tloint', mq.TLO.Int('nan')(), mq.TLO.Int('1e300')(), mq.TLO.Int('-inf')(), mq.TLO.Int('7.9')())
 mq.delay(math.huge)
 print('never')
 )");
@@ -1109,6 +1110,7 @@ print('never')
     CHECK(printed_part(h, "nan false"));
     CHECK(printed_part(h, "nantext false"));
     CHECK(h.printed_line("inftext 9000000000000000"));
+    CHECK(h.printed_line("tloint nil nil nil 7"));
     CHECK_FALSE(h.printed_line("never"));
     CHECK(h.scripts->running("d"));
 }

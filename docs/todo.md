@@ -153,6 +153,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The Lua bridge checks its arguments before it makes C++ strings (an error longjmps past them: Lua is built as C).
 - [x] `mq.imgui` windows held to the 5 s runaway limit, also after a hook ran; a window that destroys windows no longer reads past the list (tests/mq_lua_test.cpp).
 - [x] `mq.delay` and the hooks' number answers defined for NaN, infinities and huge numbers (tests/mq_lua_test.cpp, tests/lua_plugin_test.cpp).
+- [x] `${Int[...]}` and `float.Int` defined for NaN, infinities and huge numbers (tests/mq_tlo_test.cpp, tests/mq_lua_test.cpp).
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
 - [x] `mq.event` patterns matched in linear time with the regex's own results (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp checks it against the regex on random patterns).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).

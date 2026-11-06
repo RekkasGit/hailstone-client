@@ -69,6 +69,11 @@ bool parse_float(std::string_view text, double& out) {
     return ec == std::errc() && p == text.data() + text.size();
 }
 
+std::optional<std::int64_t> whole_number(double d) {
+    if (!(d >= -0x1p63 && d < 0x1p63)) return std::nullopt; // NaN fails both
+    return static_cast<std::int64_t>(d);
+}
+
 Registry::Registry() {
     // MQ's pure types and their common members.
     Type& t_int = type("int");
@@ -88,7 +93,8 @@ Registry::Registry() {
         return Value::integer((u >> 24) | ((u >> 8) & 0xff00) | ((u << 8) & 0xff0000) | (u << 24));
     };
     t_float.members["Int"] = [](const Context&, const Value& v, std::string_view) {
-        return Value::integer(static_cast<std::int64_t>(v.f));
+        const auto n = whole_number(v.f);
+        return n ? Value::integer(*n) : Value::nil();
     };
     t_float.members["Deci"] = [](const Context&, const Value& v, std::string_view) {
         return Value::string(std::format("{:.1f}", v.f));

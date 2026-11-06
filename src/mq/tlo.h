@@ -171,6 +171,9 @@ std::vector<std::string> split_index(std::string_view index);
 // A whole-number index ("3"), or nullopt-like -1 when the text is not one.
 bool parse_int(std::string_view text, std::int64_t& out);
 bool parse_float(std::string_view text, double& out);
+// A number cut to a whole one (toward zero), as ${Int[...]} and float.Int give it; nullopt for NaN, an infinity or one
+// past int64 (std::from_chars reads "nan", "inf" and 1e300, and a cast of those is undefined).
+std::optional<std::int64_t> whole_number(double d);
 bool iequals(std::string_view a, std::string_view b);
 // Case-insensitive substring.
 bool icontains(std::string_view haystack, std::string_view needle);
