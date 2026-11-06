@@ -508,3 +508,58 @@ end)
     }
     ImGui::DestroyContext(ctx);
 }
+
+// The table calls ImGui does not guard: TableNextRow and the header row with no current table read through a null
+// table, and a column or freeze set up after the first row asserts. The bindings refuse them; inside a table they
+// work as before.
+TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, are refused") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_table_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "t.lua") << "ui.window('T', function()\n"
+                                    "  ui.Begin('T')\n"
+                                    "  ui.TableNextRow()\n"
+                                    "  outside = ui.TableHeadersRowClicked()\n"
+                                    "  ui.TableSetupColumn('x', 0, 0)\n"
+                                    "  ui.TableSetupScrollFreeze(1, 1)\n"
+                                    "  if ui.BeginTable('tab', 2, ui.TableFlags.ScrollY, 200, 100) then\n"
+                                    "    ui.TableSetupColumn('A')\n"
+                                    "    ui.TableSetupColumn('B')\n"
+                                    "    ui.TableSetupScrollFreeze(-5, 100000)\n"
+                                    "    inside = ui.TableHeadersRowClicked()\n"
+                                    "    ui.TableSetupColumn('late')\n"
+                                    "    ui.TableSetupScrollFreeze(1, 1)\n"
+                                    "    ui.TableNextRow()\n"
+                                    "    ui.TableNextColumn() ui.Text('a')\n"
+                                    "    ui.EndTable()\n"
+                                    "  end\n"
+                                    "  ui.TableNextRow()\n"
+                                    "  done = true\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "done");
+        CHECK(lua_toboolean(L, -1));
+        lua_getglobal(L, "outside");
+        CHECK(lua_tointeger(L, -1) == -1);
+        lua_getglobal(L, "inside");
+        CHECK(lua_tointeger(L, -1) == -1);
+        lua_pop(L, 3);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}

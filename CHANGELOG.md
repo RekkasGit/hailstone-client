@@ -11,6 +11,7 @@
 - Modern UI: the raid leader can move players between groups in the raid window again: drag a player onto another group (or onto Not in a group), or select one and use Move here. The game only allows moves while the raid is locked, so a move in an unlocked raid locks it first, and a strip above the groups says so, with Lock and Unlock. A full group refuses the drop. The groups show their empty slots, head count and average level; leaders, the raid's main assists and markers have tags, and a player's note shows when you point at them
 - Gamepad UI: in an unlocked raid, the leader's Move to a group locks the raid first instead of being greyed out
 - A UI script or plugin can no longer add lines to the UI settings file: `ui.SetSetting` refuses (and returns false for) a key with `=` or a line break, or a value with a line break. A plugin could use one to set the pack's own keys, which click windows' buttons at the next start
+- A UI script that calls `ui.TableNextRow` or the table header row outside a table (for example when `ui.BeginTable` returned false) no longer crashes the client; a table column or freeze set up after the first row is ignored
 
 ## 0.4.0-alpha (2026-11-05)
 
