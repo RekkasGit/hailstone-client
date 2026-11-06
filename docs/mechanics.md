@@ -52,6 +52,10 @@ ack-all: the resend timeout min(1.25 rtt + 300, 8000) ms), and the UI rules the 
   the compiler from fusing operations. Example: drunkenness 64 and INT 150 give 102 at 24 bits and 101 at 53 bits.
 - `tests/mechanics_vectors_test.cpp` checks every vector record (callees mocked; the hooks replay those callees), at
   each record's precision.
+- A deliberate difference where the original never ends: shadow step (SPA 379) walks its distance down by 2 as a
+  float while it is above 5; from 2^25 up `distance - 2` can round back to `distance`, and the original's loop runs
+  for ever on that spell. Hailstone stops at the first step that leaves the distance unchanged (the loop depends on
+  the distance alone, so every base that ends in the original ends at the same step here).
 
 Vectors without a mocked-callee list (movement animation selection, old-style animation speed) are checked in
 `tests/anim_vectors_test.cpp`. The hit-by-spell vectors (`tests/hit_by_spell_vectors_test.cpp`) record every mocked

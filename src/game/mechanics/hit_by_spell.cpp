@@ -784,8 +784,13 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                         }
                         // 0x440860: fld d / fsub 2 / fst d / fcomp 5.
                         double next = o.sub(Ops::ld(distance), Ops::mem(kTwo));
+                        const std::uint32_t before = distance;
                         distance = Ops::store(next);
                         more = next > static_cast<double>(as_float(kFive));
+                        // A deliberate difference: from 2^25 up a float's d - 2 can round back to d, and the
+                        // original then loops here for ever (the distance alone decides the loop). Stop instead;
+                        // every base that ends in the original ends here at the same step (docs/mechanics.md).
+                        if (distance == before) more = false;
                     } while (more);
                 }
                 break;

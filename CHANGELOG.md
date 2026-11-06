@@ -10,6 +10,7 @@
 - A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
 - After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
 - A server teleport far outside the zone, or a script's `${LineOfSight[...]}` with a huge or not-a-number coordinate, no longer freezes the game for seconds at each line-of-sight test (a spell cast, /say to a target, /follow); `LineOfSight` is NULL for such a point
+- A modded or broken spell file whose shadow step (SPA 379) has a distance of 33 million or more no longer freezes the game when the spell lands (the original client hangs there)
 - A Lua script's `/keypress` of a hot button, target or ability key now works while you are typing in the chat (only movement keys did)
 - A Lua script's window whose function never returns is stopped after 5 seconds, as the rest of a script is, instead of freezing the game
 - Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
