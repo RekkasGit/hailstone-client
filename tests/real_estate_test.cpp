@@ -308,6 +308,30 @@ TEST_CASE("real estate: occupancy follows the root, the areas, then the house, y
     CHECK(empty.occupancy().current == game::kReNone);
 }
 
+TEST_CASE("real estate: a crate search over child lists that repeat and name themselves ends") {
+    // FUN_005b45b0 walks the child lists depth first, 10 deep. A plot listing itself 1000 times branched 1000 ways
+    // at every level (1000^10 calls, a frozen client); each record's children are walked once per depth now.
+    RealEstateManager m = town();
+    m.set_areas({box(7, {100, 100, 0}, {86, 86, 350})});
+    ReRecord loop = rec(2, 1, 20, std::vector<std::uint32_t>(1000, 2));
+    m.add_record(loop);
+    m.process(1000, true, {120, 90, 0});
+    m.process(2000, true, {120, 90, 0});
+    CHECK(m.occupancy().yard == 2);
+    CHECK(m.occupancy().crate == game::kReNone);
+    // The crate after the repeats is still the one found, as before.
+    loop.children.push_back(4);
+    m.add_record(loop);
+    m.process(3000, true, {120, 90, 0});
+    CHECK(m.occupancy().crate == 4);
+    // A chain of records each listing the next many times.
+    for (std::uint32_t id = 50; id < 60; ++id) m.add_record(rec(id, id - 1, 30, std::vector<std::uint32_t>(300, id + 1)));
+    loop.children = {50};
+    m.add_record(loop);
+    m.process(4000, true, {120, 90, 0});
+    CHECK(m.occupancy().crate == game::kReNone);
+}
+
 TEST_CASE("real estate: the pending latch lets go after 5 s") {
     RealEstateManager m;
     m.set_pending(100);
