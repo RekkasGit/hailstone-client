@@ -11,9 +11,12 @@ namespace nmsc::audio {
 
 namespace {
 // The most events one tick may run. Counted loops nest four deep with counts up to 127, so a body that takes no time
-// could run ~127^4 events in one tick on the audio thread, under the mixer lock. A real track plays a handful a tick
-// (32 note slots), so a guard of ours far above that ends such a sequence instead (not the Miles sequencer's rule).
+// could run ~127^4 events in one tick on the audio thread. A real track plays a handful a tick (32 note slots), so a
+// guard of ours far above that ends such a sequence instead (not the Miles sequencer's rule).
 constexpr std::size_t kMaxEventsPerTick = 4096;
+// The most one tick appends: one per event run, plus the 32 slots' note-offs for the durations and for each of at
+// most three restarts (two in the loop, one in stop()), plus End.
+static_assert(XmiSequencer::kMaxTickOutput == kMaxEventsPerTick + 32 * 4 + 1);
 } // namespace
 
 std::shared_ptr<SoundFont> SoundFont::load(std::span<const std::byte> sf2) {
@@ -52,8 +55,8 @@ void XmiSequencer::tick(std::vector<Event>& out) {
     if (wait_ > 0) --wait_;
     // Every event this loop runs is at the same tick. A second restart of the
     // track, or a second jump of an endless loop (CC117 on a count of 0), in
-    // one tick means the body takes no time and would spin forever under the
-    // mixer lock: a guard of ours ends the sequence there instead.
+    // one tick means the body takes no time and would spin forever on the
+    // audio thread: a guard of ours ends the sequence there instead.
     bool restarted = false, jumped = false;
     auto stop = [&] {
         restart(out);
@@ -63,8 +66,8 @@ void XmiSequencer::tick(std::vector<Event>& out) {
     std::size_t steps = 0;
     while (wait_ == 0 && !finished_) {
         if (++steps > kMaxEventsPerTick) {
-            log::warn("music: an XMI sequence ran over {} events in one tick (loops that take no time); stopped",
-                      kMaxEventsPerTick);
+            // Logged by the source's owner (~XmiSource, on the game thread): the log writes and flushes a file.
+            overran_ = true;
             stop();
             return;
         }
@@ -157,11 +160,17 @@ public:
         synth_ = tsf_copy(font_->get());
         if (synth_) {
             tsf_set_max_voices(synth_, 128);
+            // All 16 channels made here at their defaults (8192 is the centre of the pitch wheel): TinySoundFont
+            // grows its channel array to the highest one used, which on the audio thread would reallocate.
+            tsf_channel_set_pitchwheel(synth_, 15, 8192);
             tsf_channel_set_bank_preset(synth_, 9, 128, 0);
         }
-        events_.reserve(64);
+        events_.reserve(XmiSequencer::kMaxTickOutput);
     }
     ~XmiSource() override {
+        if (seq_.overran())
+            log::warn("music: an XMI sequence ran over {} events in one tick (loops that take no time); stopped",
+                      kMaxEventsPerTick);
         if (synth_) tsf_close(synth_);
     }
 
