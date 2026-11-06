@@ -89,7 +89,8 @@ public:
     // in one burst) overflowed a 128 KiB socket buffer and stalled on EQEmu's backed-off resends, and Linux caps
     // the buffer platform/udp_socket.cpp asks for at net.core.rmem_max (often ~200 KiB).
     static constexpr int kWindow = 32;
-    // The bytes hashed in one handle() or update() call while verifying (a few tens of ms).
+    // The bytes hashed in one handle() or update() call while verifying, or while downloading a file whose pieces
+    // came out of order (a few tens of ms).
     static constexpr std::uint64_t kHashBytesPerUpdate = std::uint64_t{16} << 20;
 
     // profile_dir: servers/<id>/.
@@ -147,6 +148,13 @@ private:
     void ask(std::uint32_t index, std::uint32_t offset, std::uint32_t length, int tries);
     void ask_again(std::uint64_t number);
     void received_file(std::uint32_t index);
+    // A downloaded file's hash against the list's: ready, or the sync fails.
+    void checked_file(std::uint32_t index, const std::optional<Sha256Digest>& got);
+    // Hashes rehash_'s files from .download/, at most hash_budget_ bytes.
+    void rehash();
+    // Hashes `path` into hashing_, at most `budget` bytes of it; true when done, with `got` (empty: unreadable).
+    bool hash_more(const std::filesystem::path& path, std::uint64_t& budget, std::vector<char>& buf,
+                   std::optional<Sha256Digest>& got);
     void commit();
     void load_record();
     void save_record() const;
@@ -194,7 +202,9 @@ private:
         std::ifstream in;
         Sha256 hash;
     };
-    std::unique_ptr<Hashing> hashing_; // the file being hashed across calls
+    std::unique_ptr<Hashing> hashing_; // the file being hashed across calls (verify(), or rehash() while downloading)
+    // Files whose pieces all came but out of order (one asked for again): hashed from disk by update(), in order.
+    std::vector<std::uint32_t> rehash_;
     std::unordered_map<std::string, bool> listed_; // plan(): the places the list names
     std::size_t refused_ = 0, skipped_ = 0;
     std::uint64_t hash_budget_ = kHashBytesPerUpdate;

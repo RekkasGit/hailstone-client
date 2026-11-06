@@ -235,7 +235,8 @@ while it downloads what `servers/<profile>/` lacks (`net/server_files.h`): it do
 spawns (`OP_ReqClientSpawn`) nor load the zone, and the zone keeps the character connecting meanwhile. The loading
 screen says **Downloading server files** with the files and megabytes done and the speed, so a long first zone-in is
 not taken for a hang. The files come into `.download/` a piece at a time (32 KB, 32 pieces asked ahead), each checked
-against its hash, and only when all have come are they moved into place; the files a former list brought that
+against its hash (as its pieces come; a file with a piece asked for again is read back from `.download/` 16 MB a
+frame once all have come), and only when all have come are they moved into place; the files a former list brought that
 the server no longer lists are deleted then. A broken-off download keeps the files that came complete for the next
 try, and leaves the folder as it was. Once something in `assets/` changed the client reads its files again (`GameDir::rescan`, the
 connection's strings, spells and race data, then what `reload_server_files` reads) before the zone loads.
