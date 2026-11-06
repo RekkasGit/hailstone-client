@@ -2,6 +2,7 @@
 // the server's rules allow it, its MQ callbacks on the hook bus, held to its capabilities.
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <thread>
@@ -472,9 +473,13 @@ TEST_CASE("native plugins: web pages of the plugin's own (ABI 3), under 'web', c
         REQUIRE(tabs.size() == 1);
         CHECK(h.printed_line("[MQ2Example] page " + std::to_string(tabs[0]) + " open"));
         h.run("/webexample post ping");
-        for (int i = 0; i < 3000 && !h.printed_line("[MQ2Example] page: echo:ping"); ++i) {
+        // Up to 10 s of real time (a real process answers through real pipes), not a count of polls: on a loaded
+        // machine 3000 polls without a pause passed before the helper was scheduled.
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (!h.printed_line("[MQ2Example] page: echo:ping") && std::chrono::steady_clock::now() < until) {
             browser.poll(0);
             h.hooks.pulse();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         CHECK(h.printed_line("[MQ2Example] page: echo:ping"));
         CHECK(web.tabs("").empty()); // not the player's
