@@ -37,6 +37,9 @@ struct Endpoint {
 // Returns an empty list and sets error on failure.
 std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::string& error);
 
+// `host` as a numeric IPv4 or IPv6 address, without asking a name server (so it never waits); nullopt for a name.
+std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t port);
+
 // resolve() on a thread of its own; `done` is called on that thread with its result. A lookup still running when
 // the program exits is waited for before the socket library shuts down (it is never cut off inside the resolver).
 void resolve_async(std::string host, std::uint16_t port,

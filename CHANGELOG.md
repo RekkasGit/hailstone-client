@@ -21,6 +21,7 @@
 - Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
 - With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
 - Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
+- Connecting to a login, world or zone server given by name, and a plugin's `tcp_open` of a name, no longer freeze the game while the name is looked up; a name that does not answer within the connect timeout ends the connect with "cannot resolve"
 - A server-file download no longer fails with "the server's files keep changing" when the server owner changes a file in `client_files/` during it: the files are listed again once and the download finishes
 - A hostile server can no longer make the map editor overwrite or read `.txt` files outside Hailstone's maps folders (the game folder's included) by sending a zone name that is a path; such a name is not used
 - Cycling the extended targets no longer freezes the game after the server shrinks the list below the slot last cycled to

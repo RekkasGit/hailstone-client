@@ -489,3 +489,33 @@ TEST_CASE("mock session: a SessionResponse with the connect code is taken from a
     REQUIRE((other_host.is_open() ? other_host : other_port).send_to(client, response()));
     CHECK(pump([&] { session->update(); }, [&] { return session->state() == SessionState::Connected; }, 5s));
 }
+
+TEST_CASE("mock session: a host name is looked up off the caller's thread, and the session connects after it") {
+    // connect() is called from the frame (login, world, zone): it returns at once, Connecting, and the lookup's
+    // answer starts the handshake. "localhost" comes from the hosts file, with no name server.
+    SessionRig rig;
+    rig.session->connect("localhost", rig.server.port());
+    CHECK(rig.session->state() == SessionState::Connecting);
+    REQUIRE(rig.until([&] { return rig.session->state() == SessionState::Connected; }, 10s));
+    rig.session->send(app(0x1234, 7));
+    REQUIRE(rig.until([&] { return !rig.server.inbox.empty(); }));
+    CHECK(rig.server_tags() == Tags{7});
+}
+
+TEST_CASE("mock session: a lookup still running when the connect times out ends the connect") {
+    // The connect timeout counts the lookup too. A name that never answers is stood in for by a clock that jumps
+    // past the timeout before the lookup can have come back.
+    SessionOptions opt = SessionRig::quick();
+    opt.service_interval = 0ms; // update() alone services it
+    opt.connect_timeout = 100ms;
+    ManualClock clock;
+    opt.clock = clock.source();
+    auto session = Session::create(opt);
+    clock.hold();
+    session->connect("localhost", 9);
+    clock.advance(200ms);
+    session->update();
+    // Either the lookup came back first (then the SessionRequest went out and the timeout ended it) or not yet.
+    CHECK(session->state() == SessionState::Disconnected);
+    CHECK_FALSE(session->error().empty());
+}

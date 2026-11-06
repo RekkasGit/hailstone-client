@@ -147,7 +147,9 @@ std::string Endpoint::to_string() const {
     return std::format("[{}]:{}", address_string(), port);
 }
 
-std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::string& error) {
+namespace {
+
+std::vector<Endpoint> lookup(const std::string& host, std::uint16_t port, std::string& error, bool numeric_only) {
     std::vector<Endpoint> out;
     if (!ensure_init()) {
         error = "socket library initialisation failed";
@@ -157,6 +159,7 @@ std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
+    if (numeric_only) hints.ai_flags = AI_NUMERICHOST; // never asks a name server
     addrinfo* result = nullptr;
     int rc = getaddrinfo(host.c_str(), nullptr, &hints, &result);
     if (rc != 0 || !result) {
@@ -179,6 +182,20 @@ std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::
     std::stable_partition(out.begin(), out.end(), [](const Endpoint& e) { return e.family == Endpoint::Family::V4; });
     if (out.empty()) error = std::format("no usable address for {}", host);
     return out;
+}
+
+} // namespace
+
+std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::string& error) {
+    return lookup(host, port, error, false);
+}
+
+std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t port) {
+    if (host.empty()) return std::nullopt;
+    std::string error;
+    auto out = lookup(host, port, error, true);
+    if (out.empty()) return std::nullopt;
+    return out.front();
 }
 
 namespace {
