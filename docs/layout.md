@@ -9,7 +9,8 @@ to `hailstone.ini` or to the character's files under `servers/`.
 hailstone/
   hailstone(.exe)            the binary
   shaders/                   shipped; an update replaces it
-  icons/                     shipped: hailstone.png, the window and taskbar icon (hailstone-crest.png, the full crest)
+  icons/                     shipped: hailstone.png, the window and taskbar icon (hailstone-crest.png, the full crest;
+                             on Windows the icon is built into hailstone.exe instead, cmake/windows/hailstone.ico)
   pictures/                  shipped: the default picture behind the pre-game and loading screens, shown when
                              neither the server nor ui/loadingbackgrounds/ has any
   CHANGELOG.md               shipped: the release notes; the login screen's What's new shows this version's part

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
+- Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page
