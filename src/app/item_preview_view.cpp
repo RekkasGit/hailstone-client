@@ -10,6 +10,7 @@
 #include "game/view_distance.h"
 #include "render/actor_renderer.h"
 #include "render/vk_util.h"
+#include "ui/imgui_vk_textures.h"
 
 namespace nmsc::app {
 
@@ -52,7 +53,7 @@ ItemPreviewView::ItemPreviewView(render::VkContext& vk, std::shared_ptr<const as
 ItemPreviewView::~ItemPreviewView() {
     vk_.wait_idle();
     for (auto& t : targets_) {
-        if (t.set) ImGui_ImplVulkan_RemoveTexture(t.set);
+        if (t.set) ui::remove_imgui_texture(t.set);
         destroy_images(t);
     }
     if (sampler_) vkDestroySampler(vk_.device(), sampler_, nullptr);
@@ -97,7 +98,7 @@ void ItemPreviewView::make_target(Target& t, int width, int height) {
     t.width = width;
     t.height = height;
     if (!t.set) {
-        t.set = ImGui_ImplVulkan_AddTexture(sampler_, t.out_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        t.set = ui::add_imgui_texture(sampler_, t.out_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     } else {
         VkDescriptorImageInfo info{sampler_, t.out_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};

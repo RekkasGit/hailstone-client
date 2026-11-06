@@ -10,6 +10,7 @@
 #include "imgui_internal.h" // stack sizes, to refuse pops and ends that ImGui would only assert on
 #include "ui/imgui_layer.h"
 #include "ui/lua/lua_host.h"
+#include "ui/texture_ids.h"
 
 #include <lua.hpp>
 
@@ -294,9 +295,15 @@ int TreePop(lua_State *) {
 }
 
 // --- images ---
+// A texture argument: only a light userdata the client handed out and has not freed (ui/texture_ids.h); anything
+// else (an mq.TLO value, a freed icon sheet) would reach the Vulkan backend as a descriptor set, so it is none.
+ImTextureID TextureArg(lua_State *L, int i) {
+	void *p = lua_type(L, i) == LUA_TLIGHTUSERDATA ? lua_touserdata(L, i) : nullptr;
+	return texture_id_live(p) ? reinterpret_cast<ImTextureID>(p) : ImTextureID{};
+}
 // ui.Image(texture, w, h [, u0, v0, u1, v1 [, r, g, b, a]])
 int Image(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 1));
+	ImTextureID tex = TextureArg(L, 1);
 	if (!tex) {
 		ImGui::Dummy(ImVec2(F(L, 2), F(L, 3)));
 		return 0;
@@ -306,7 +313,7 @@ int Image(lua_State *L) {
 }
 // clicked = ui.ImageButton(id, texture, w, h [, u0, v0, u1, v1])
 int ImageButton(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 2));
+	ImTextureID tex = TextureArg(L, 2);
 	ImVec2 size(F(L, 3), F(L, 4));
 	if (!tex) {
 		return Ret(L, ImGui::Button(S(L, 1), size));
@@ -835,7 +842,7 @@ int CaptureKeyboard(lua_State *) {
 }
 // ui.DrawImage(texture, x0, y0, x1, y1 [, u0, v0, u1, v1 [, r, g, b, a]])   -- screen coordinates
 int DrawImage(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 1));
+	ImTextureID tex = TextureArg(L, 1);
 	if (tex) {
 		DrawTarget()->AddImage(tex, ImVec2(F(L, 2), F(L, 3)), ImVec2(F(L, 4), F(L, 5)),
 			ImVec2(F(L, 6, 0), F(L, 7, 0)), ImVec2(F(L, 8, 1), F(L, 9, 1)), ImGui::GetColorU32(Color(L, 10)));

@@ -11,6 +11,7 @@
 #include <lua.hpp>
 
 #include "ui/lua/lua_host.h"
+#include "ui/texture_ids.h"
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
@@ -561,5 +562,68 @@ TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, a
         lua_pop(L, 3);
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
     }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.Image, ui.ImageButton and ui.DrawImage draw only a texture the client handed out (ui/texture_ids.h): other
+// userdata (a full userdata such as an mq.TLO value, a light one never made a texture, one since freed) is none, as
+// nil is, and never reaches the draw list, which the Vulkan backend would bind as a descriptor set.
+TEST_CASE("Lua UI: images draw only live textures the client handed out") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_image_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "i.lua") << "ui.window('I', function()\n"
+                                    "  ui.Begin('I')\n"
+                                    "  for _, t in ipairs({ FULL, STRANGER, FREED, LIVE }) do\n"
+                                    "    ui.Image(t, 8, 8)\n"
+                                    "    ui.ImageButton('b' .. tostring(_), t, 8, 8)\n"
+                                    "    local x, y = ui.GetCursorScreenPos()\n"
+                                    "    ui.DrawImage(t, x, y, x + 8, y + 8)\n"
+                                    "  end\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    static int live = 0, stranger = 0, freed = 0;
+    nmsc::ui::texture_id_added(&live);
+    nmsc::ui::texture_id_added(&freed);
+    nmsc::ui::texture_id_removed(&freed);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        lua_newuserdatauv(L, 16, 0);
+        lua_setglobal(L, "FULL");
+        lua_pushlightuserdata(L, &stranger);
+        lua_setglobal(L, "STRANGER");
+        lua_pushlightuserdata(L, &freed);
+        lua_setglobal(L, "FREED");
+        lua_pushlightuserdata(L, &live);
+        lua_setglobal(L, "LIVE");
+        int live_draws = 0, other_draws = 0;
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+            live_draws = other_draws = 0;
+            const ImTextureID font = ImGui::GetIO().Fonts->TexID;
+            const ImDrawData* data = ImGui::GetDrawData();
+            for (const ImDrawList* list : data->CmdLists)
+                for (const ImDrawCmd& cmd : list->CmdBuffer) {
+                    if (cmd.ElemCount == 0) continue;
+                    const ImTextureID id = cmd.GetTexID();
+                    if (id == reinterpret_cast<ImTextureID>(&live)) ++live_draws;
+                    else if (id != font) ++other_draws;
+                }
+        }
+        CHECK(live_draws > 0);
+        CHECK(other_draws == 0);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    nmsc::ui::texture_id_removed(&live);
     ImGui::DestroyContext(ctx);
 }

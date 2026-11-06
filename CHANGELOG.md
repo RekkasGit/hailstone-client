@@ -12,6 +12,7 @@
 - Gamepad UI: in an unlocked raid, the leader's Move to a group locks the raid first instead of being greyed out
 - A UI script or plugin can no longer add lines to the UI settings file: `ui.SetSetting` refuses (and returns false for) a key with `=` or a line break, or a value with a line break. A plugin could use one to set the pack's own keys, which click windows' buttons at the next start
 - A UI script that calls `ui.TableNextRow` or the table header row outside a table (for example when `ui.BeginTable` returned false) no longer crashes the client; a table column or freeze set up after the first row is ignored
+- `ui.Image`, `ui.ImageButton` and `ui.DrawImage` draw only textures the client handed out and has not freed: any other value (an `mq.TLO` value, for example) is drawn as nothing instead of reaching the graphics driver
 
 ## 0.4.0-alpha (2026-11-05)
 
