@@ -236,6 +236,8 @@ TEST_CASE("TLO: numbers from text out of range, NaN or infinite are no id, loc o
     CHECK(mq::in_range<std::uint8_t>(300.0) == std::nullopt);
     CHECK(mq::in_range<std::uint8_t>(44.9) == std::uint8_t{44});
     CHECK(mq::in_range<std::uint32_t>(-0.5) == 0u); // cut toward zero, as a cast
-    CHECK(mq::in_range<float>(1e300) == std::nullopt);
+    // Read at run time, as the parsers' numbers are: MSVC folds a constant 1e300 into the guarded cast (C4756).
+    const double huge = std::stod("1e300");
+    CHECK(mq::in_range<float>(huge) == std::nullopt);
     CHECK(mq::in_range<float>(std::numeric_limits<double>::quiet_NaN()) == std::nullopt);
 }
