@@ -93,7 +93,7 @@
 - Approving an add-on's update approves what you were shown: if the add-on's repository asks for more (or offers another version) by the time you click, nothing is installed and you are asked to review it again
 - A Lua script started by another script or a plugin gets no more permissions than the one that started it, and the settings files scripts write under `scripts/config/` can no longer be run as scripts
 - For server owners: Hailstone's server script looks at `client_files/` again at most every 5 minutes when a player asks (the new `files_rescan` setting; `#reloadquest` picks changes up at once), holds each player to 1024 file pieces a second (`files_chunks_per_second`), keeps up to eight files open so players fetching different files no longer make the zone reopen them at every piece, and passes on at most 5 group declines a player in 10 s
-- A new server on the login screen starts with an empty address instead of a private network address (192.168.12.250) left over from development; type your server's address
+- A new server on the login screen starts with an empty address instead of a development address left in by mistake; type your server's address
 - Zoning or quitting while a neighbour zone (the distant zone past a zone line, modern lighting) is still loading no longer waits for the whole load to finish
 - On a system whose window surface reports a size other than the window's (some scaled or tiling desktops), the graphics are no longer set up again every frame
 - A graphics driver whose window images cannot be copied no longer gets an invalid copy for a screenshot: the screenshot is refused with a chat line and a log line instead
