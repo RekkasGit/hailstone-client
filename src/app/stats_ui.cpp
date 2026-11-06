@@ -28,6 +28,7 @@ StatsUi::~StatsUi() = default;
 void StatsUi::forget() {
     character_.reset();
     sheet_.reset();
+    class_sheet_.reset();
 }
 
 namespace {
@@ -59,11 +60,13 @@ void StatsUi::draw(net::GameConnection& conn) {
     LiveState live = conn.live_state();
     // ProcessAllStats' first loop: the worn items' stats-disabled bytes (FUN_007b28a0) before the sums read them.
     conn.refresh_worn_stats_disabled();
+    // Rebuilt every frame (movement, the hot buttons and the windows read this player), into the last frame's sheet:
+    // its items, buffs and abilities reuse their storage, so an unchanged inventory is copied without allocating.
     character_.reset();
-    sheet_ = std::make_unique<CharacterSheet>(
-        build_sheet(*profile, conn.inventory(), conn.spell_state(), live,
-                    conn.zone_info() ? &*conn.zone_info() : nullptr, &conn.world()));
-    sheet_->abilities = conn.aa_sheet_abilities(); // the owned AA ranks' effects (CacheAAEffects)
+    if (!sheet_) sheet_ = std::make_unique<CharacterSheet>();
+    build_sheet_into(*sheet_, *profile, conn.inventory(), conn.spell_state(), live,
+                     conn.zone_info() ? &*conn.zone_info() : nullptr, &conn.world());
+    conn.aa_sheet_abilities_into(sheet_->abilities); // the owned AA ranks' effects (CacheAAEffects)
     sheet_->prestige_limit = conn.game_feature(0x13); // GetGameFeature(UseItem): the membership's (-1 none)
     const CharacterSheet& sheet = *sheet_;
     character_ = std::make_unique<Character>(sheet, *tables_, spell_lookup(conn.spell_table()));
@@ -84,8 +87,10 @@ void StatsUi::draw(net::GameConnection& conn) {
     const bool several = vitals_classes.size() != 1 || vitals_classes[0] != sheet.class_id;
     if ((open_ || now >= next_check_) && (several || patched)) {
         best_hp = best_mana = best_end = 0;
+        if (!class_sheet_) class_sheet_ = std::make_unique<CharacterSheet>();
         for (std::uint8_t c : vitals_classes) {
-            CharacterSheet as = sheet;
+            CharacterSheet& as = *class_sheet_;
+            as = sheet; // copy-assigned: the last copy's storage is reused
             as.class_id = c;
             as.vitals = {};
             Character cc(as, *tables_, spell_lookup(conn.spell_table()));

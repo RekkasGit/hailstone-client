@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include "game/alt_adv.h"
+#include "game/mechanics/character.h"
 #include "mq_test_world.h"
 
 using namespace nmsc;
@@ -49,4 +50,24 @@ TEST_CASE("a stock server's character has 8 gems, and 8 + SPA 326 as Mnemonic Re
     aa.clear_owned(); // OP_ClearAA
     A::update_usable_gems(c);
     CHECK(c.usable_gems() == 8);
+}
+
+TEST_CASE("with_character: the reused sheet follows the inventory, and a call from inside a call has its own") {
+    // with_character builds into one kept sheet (no per-frame copy of every item's storage); a nested call must not
+    // rebuild the sheet the outer character is reading.
+    mq_test::World w("nmsc_usable_gems_nested_test");
+    net::GameConnection& c = *w.conn;
+    net::Item ring;
+    ring.name = "Ring of the Test";
+    REQUIRE(A::inventory(c).put(net::ItemSlot::possessions(15), ring));
+    int outer_seen = 0, inner_seen = 0;
+    A::with_character(c, [&](game::mechanics::Character& outer) {
+        A::inventory(c).take(net::ItemSlot::possessions(15));
+        A::with_character(c, [&](game::mechanics::Character& inner) { inner_seen = inner.sheet().item(15) ? 1 : 2; });
+        outer_seen = outer.sheet().item(15) && outer.sheet().item(15)->name == "Ring of the Test" ? 1 : 2;
+    });
+    CHECK(inner_seen == 2); // the ring is gone for the inner one
+    CHECK(outer_seen == 1); // the outer one's sheet is as it was built
+    A::with_character(c, [&](game::mechanics::Character& ch) { outer_seen = ch.sheet().item(15) ? 1 : 2; });
+    CHECK(outer_seen == 2); // the kept sheet, built again, has no ring
 }

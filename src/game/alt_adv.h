@@ -161,6 +161,9 @@ struct AltAdvState {
     // The ranks the abilities' effects come from, for CharacterZoneClient_CacheAAEffects @0x4385d0
     // (one SheetAbility per owned rank the table knows).
     std::vector<mechanics::SheetAbility> sheet_abilities() const;
+    // The same into `out`, reusing its elements' storage (the per-frame character: no allocation while the owned
+    // list stays as it is).
+    void sheet_abilities_into(std::vector<mechanics::SheetAbility>& out) const;
     // AltAdvManager::CanSeeAbility @0x4a40f0 (a normal profile): the first rank of an ability not
     // owned, the rank after an owned one, or the owned last rank.
     bool can_see(const AltAbility& a, std::uint8_t class_id) const;

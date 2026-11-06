@@ -174,9 +174,24 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
     live.now_ms = now_ms();
     live.vitals = server_ext().character_vitals(*this);
     live.focus_classes = focus_class_mask();
-    game::mechanics::CharacterSheet sheet = game::mechanics::build_sheet(*profile_, inventory_, spells_, live, nullptr, &world_);
-    sheet.abilities = alt_adv_.sheet_abilities();
-    game::mechanics::Character ch(sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
+    // Built every frame (update_usable_gems), so into the last call's sheet; a call from inside `fn` uses its own.
+    std::optional<game::mechanics::CharacterSheet> nested;
+    game::mechanics::CharacterSheet* sheet = nullptr;
+    if (character_sheet_busy_) {
+        sheet = &nested.emplace();
+    } else {
+        if (!character_sheet_) character_sheet_ = std::make_unique<game::mechanics::CharacterSheet>();
+        sheet = character_sheet_.get();
+    }
+    struct Busy {
+        bool& flag;
+        bool was;
+        ~Busy() { flag = was; }
+    } busy{character_sheet_busy_, character_sheet_busy_};
+    character_sheet_busy_ = true;
+    game::mechanics::build_sheet_into(*sheet, *profile_, inventory_, spells_, live, nullptr, &world_);
+    alt_adv_.sheet_abilities_into(sheet->abilities);
+    game::mechanics::Character ch(*sheet, no_tables, game::mechanics::spell_lookup(*spell_table_));
     fn(ch);
 }
 
@@ -301,12 +316,20 @@ void GameConnection::memorize_tick(std::int64_t now) {
 void GameConnection::update_usable_gems() {
     namespace gems = game::mechanics::gems;
     std::int32_t aa = 0, buff = 0, item = 0;
-    with_character([&](game::mechanics::Character& ch) {
-        aa = ch.cached_aa(gems::kSpaSpellSlots, 0);
-        buff = ch.cached_buff(gems::kSpaSpellSlots, 0);
-        item = ch.cached_item(gems::kSpaSpellSlots, 0);
-    });
-    gems::SpellSlotTotals totals{[&] { return aa; }, [&] { return buff; }, [&] { return item; }};
+    bool totals_known = false;
+    // The SPA 326 totals, built only when CanUseMemorizedSpellSlot asks for them (a server extension that answers
+    // every gem needs no character).
+    auto known = [&] {
+        if (totals_known) return;
+        totals_known = true;
+        with_character([&](game::mechanics::Character& ch) {
+            aa = ch.cached_aa(gems::kSpaSpellSlots, 0);
+            buff = ch.cached_buff(gems::kSpaSpellSlots, 0);
+            item = ch.cached_item(gems::kSpaSpellSlots, 0);
+        });
+    };
+    gems::SpellSlotTotals totals{[&] { known(); return aa; }, [&] { known(); return buff; },
+                                 [&] { known(); return item; }};
     int n = 0;
     // CanUseMemorizedSpellSlot, or the server extension's (the NMS patch's detour: gem < 12, from level 1).
     const game::ServerExtension& ext = server_ext();
@@ -315,8 +338,10 @@ void GameConnection::update_usable_gems() {
         return gems::can_use_memorized_spell_slot(profile_.has_value(), 0, gem, totals);
     };
     while (n < game::kSpellGems && usable(n)) ++n;
-    if (n != usable_gems_)
+    if (n != usable_gems_ && totals_known)
         log::info("spells: {} gems usable (SPA 326: AA {}, buffs {}, items {})", n, aa, buff, item);
+    else if (n != usable_gems_)
+        log::info("spells: {} gems usable (the server's rule)", n);
     usable_gems_ = n;
 }
 

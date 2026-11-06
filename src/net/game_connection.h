@@ -1911,6 +1911,9 @@ public:
     void set_aa_percent(std::uint32_t percent);
     // The owned ranks' effects for the character sheet (TotalEffect's AA part).
     std::vector<game::mechanics::SheetAbility> aa_sheet_abilities() const { return alt_adv_.sheet_abilities(); }
+    void aa_sheet_abilities_into(std::vector<game::mechanics::SheetAbility>& out) const {
+        alt_adv_.sheet_abilities_into(out);
+    }
 
     // Training at a guildmaster (game/training.h). A right click on a guildmaster (class 20..35):
     // eqstr 1467 for another class's guild, else OP_GMTraining; the answer opens training().
@@ -2554,6 +2557,10 @@ private:
     void update_usable_gems();
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
+    // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged
+    // inventory); a nested call builds its own.
+    mutable std::unique_ptr<game::mechanics::CharacterSheet> character_sheet_;
+    mutable bool character_sheet_busy_ = false;
     void update_merchant();
     void update_barter();
     void update_bank();

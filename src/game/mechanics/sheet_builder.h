@@ -43,6 +43,12 @@ struct LiveState {
 CharacterSheet build_sheet(const net::PlayerProfile& profile, const Inventory& inventory, const SpellState& spells,
                            const LiveState& live, const net::NewZone* zone = nullptr,
                            const WorldState* world = nullptr);
+// The same into `s`, which it resets first, but reusing the storage of its items, buffs and abilities: a sheet
+// built every frame copies the possessions (bags and their contents) without allocating while they stay the same.
+// The abilities are left as they are (the caller sets them: AltAdvState::sheet_abilities_into).
+void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& profile, const Inventory& inventory,
+                      const SpellState& spells, const LiveState& live, const net::NewZone* zone = nullptr,
+                      const WorldState* world = nullptr);
 
 } // namespace mechanics
 } // namespace nmsc::game

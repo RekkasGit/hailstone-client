@@ -19,6 +19,23 @@ SpellLookup spell_lookup(const SpellTable& table) {
 CharacterSheet build_sheet(const net::PlayerProfile& p, const Inventory& inventory, const SpellState& spells,
                            const LiveState& live, const net::NewZone* zone, const WorldState* world) {
     CharacterSheet s;
+    build_sheet_into(s, p, inventory, spells, live, zone, world);
+    return s;
+}
+
+void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inventory& inventory,
+                      const SpellState& spells, const LiveState& live, const net::NewZone* zone,
+                      const WorldState* world) {
+    {
+        // Everything back to its default, but the containers keep their storage.
+        auto possessions = std::move(s.possessions);
+        auto buffs = std::move(s.buffs);
+        auto abilities = std::move(s.abilities);
+        s = CharacterSheet{};
+        s.possessions = std::move(possessions);
+        s.buffs = std::move(buffs);
+        s.abilities = std::move(abilities);
+    }
     s.race = p.race;
     s.class_id = p.class_;
     s.class_mask = live.class_mask;
@@ -74,11 +91,17 @@ CharacterSheet build_sheet(const net::PlayerProfile& p, const Inventory& invento
     s.drink = static_cast<std::int32_t>(live.thirst);
     s.drunkenness = static_cast<std::int32_t>(p.intoxication);
 
-    for (int slot = 0; slot < kPossessionSlots; ++slot)
-        if (const net::Item* item = inventory.at(net::ItemSlot::possessions(static_cast<std::int16_t>(slot))))
-            s.possessions[static_cast<std::size_t>(slot)] = *item;
+    for (int slot = 0; slot < kPossessionSlots; ++slot) {
+        auto& kept = s.possessions[static_cast<std::size_t>(slot)];
+        if (const net::Item* item = inventory.at(net::ItemSlot::possessions(static_cast<std::int16_t>(slot)))) {
+            if (kept) *kept = *item; // copy-assigned: its strings and bag contents reuse what they hold
+            else kept.emplace(*item);
+        } else {
+            kept.reset();
+        }
+    }
 
-    s.buffs.resize(kPlayerBuffSlots);
+    s.buffs.assign(kPlayerBuffSlots, SheetBuff{});
     for (std::size_t i = 0; i < s.buffs.size() && i < spells.buffs.size(); ++i) {
         const BuffSlot& b = spells.buffs[i];
         if (b.empty()) continue;
@@ -129,7 +152,6 @@ CharacterSheet build_sheet(const net::PlayerProfile& p, const Inventory& invento
     // The server's PvP rule set (global 0xdcee70, OP_LogServer +4): CacheBuffSlotEffects scales a player's
     // negative SPA 46..50 / 370 by 1.5 under any rule set (rof2decomp batch 265).
     s.pvp_ruleset = live.pvp_rules != 0;
-    return s;
 }
 
 } // namespace nmsc::game::mechanics

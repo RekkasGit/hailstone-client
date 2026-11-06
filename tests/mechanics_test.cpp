@@ -445,6 +445,89 @@ TEST_CASE("build_sheet: the profile's fist values, the buff timer hold and the b
     CHECK_FALSE(s.buffs[1].caster_distance);
 }
 
+TEST_CASE("build_sheet_into: a sheet built again in place is the sheet build_sheet makes") {
+    // The per-frame character (StatsUi, GameConnection::with_character) is rebuilt into the last frame's sheet so
+    // its items reuse their storage; nothing of the last state may stay.
+    net::PlayerProfile p;
+    p.race = 1;
+    p.class_ = 1;
+    p.level = 60;
+    p.str = 90;
+    auto possession = [](int slot) { return net::ItemSlot::possessions(static_cast<std::int16_t>(slot)); };
+    Inventory before;
+    net::Item helm;
+    helm.name = "A helm with a name long enough to live on the heap";
+    helm.ac = 10;
+    helm.equip_slots = 1u << 2;
+    REQUIRE(before.put(possession(2), helm));
+    net::Item bag;
+    bag.name = "Large Sewn Sack";
+    bag.item_class = 1;
+    bag.bag_slots = 10;
+    REQUIRE(before.put(possession(24), bag));
+    net::Item gem;
+    gem.name = "Flawed Emerald";
+    REQUIRE(before.put({net::kInvPossessions, 24, 3, -1, 0, 0}, gem));
+    net::Item ring;
+    ring.name = "Ring";
+    REQUIRE(before.put(possession(15), ring));
+    SpellState spells_before;
+    spells_before.buffs[0].spell = 300;
+    spells_before.buffs[3].spell = 301;
+    spells_before.buff_timers_on_hold = true;
+    LiveState live_before;
+    live_before.level = 60;
+    live_before.hp = 500;
+    live_before.sitting = true;
+
+    CharacterSheet reused;
+    build_sheet_into(reused, p, before, spells_before, live_before);
+    reused.prestige_limit = 7;
+    reused.extra_items[0] = ring;
+
+    // Now: the helm changed, the sack holds something else, the ring is gone, one buff less, standing.
+    Inventory now;
+    helm.name = "A shorter helm";
+    helm.ac = 4;
+    REQUIRE(now.put(possession(2), helm));
+    REQUIRE(now.put(possession(24), bag));
+    gem.name = "Ruby";
+    REQUIRE(now.put({net::kInvPossessions, 24, 5, -1, 0, 0}, gem));
+    SpellState spells_now;
+    spells_now.buffs[0].spell = 302;
+    LiveState live_now;
+    live_now.level = 61;
+    live_now.hp = 700;
+    build_sheet_into(reused, p, now, spells_now, live_now);
+    CharacterSheet fresh = build_sheet(p, now, spells_now, live_now);
+
+    CHECK(reused.level == fresh.level);
+    CHECK(reused.stored_hp == fresh.stored_hp);
+    CHECK(reused.sitting == fresh.sitting);
+    CHECK(reused.buff_timers_on_hold == fresh.buff_timers_on_hold);
+    CHECK(reused.prestige_limit == fresh.prestige_limit);
+    CHECK_FALSE(reused.extra_items[0]);
+    for (int slot = 0; slot < kPossessionSlots; ++slot) {
+        CAPTURE(slot);
+        const net::Item* a = reused.item(slot);
+        const net::Item* b = fresh.item(slot);
+        REQUIRE((a == nullptr) == (b == nullptr));
+        if (!a) continue;
+        CHECK(a->name == b->name);
+        CHECK(a->ac == b->ac);
+        REQUIRE(a->contents.size() == b->contents.size());
+        for (std::size_t i = 0; i < a->contents.size(); ++i) {
+            CHECK(a->contents[i].index == b->contents[i].index);
+            CHECK(a->contents[i].item.name == b->contents[i].item.name);
+        }
+    }
+    REQUIRE(reused.buffs.size() == fresh.buffs.size());
+    for (std::size_t i = 0; i < reused.buffs.size(); ++i) {
+        CHECK(reused.buffs[i].spell_id == fresh.buffs[i].spell_id);
+        CHECK(reused.buffs[i].type == fresh.buffs[i].type);
+    }
+}
+
 TEST_CASE("A server extension's vitals answer Max / Cur HP, mana and endurance (the NMS patch's detours)") {
     // The level-60 cleric of the stored-HP case. Stock: no CharacterVitals, the formulas.
     GameTables tables;

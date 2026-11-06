@@ -118,18 +118,25 @@ void AltAdvState::set_owned(std::uint32_t spent_points, const std::array<std::ui
 
 std::vector<mechanics::SheetAbility> AltAdvState::sheet_abilities() const {
     std::vector<mechanics::SheetAbility> out;
+    sheet_abilities_into(out);
+    return out;
+}
+
+void AltAdvState::sheet_abilities_into(std::vector<mechanics::SheetAbility>& out) const {
+    std::size_t n = 0;
     for (const OwnedAbility& o : owned) {
         const AltAbility* a = o.id ? get(o.id) : nullptr;
         if (!a) continue;
-        mechanics::SheetAbility s;
+        if (n == out.size()) out.emplace_back();
+        mechanics::SheetAbility& s = out[n++];
         s.id = static_cast<std::int32_t>(a->id);
         s.class_mask = a->classes;
         s.required_level = a->level_req;
         s.ignores_level = a->ignores_level != 0;
+        s.effects.clear();
         for (const AltAbilityEffect& e : a->effects) s.effects.push_back({e.spa, e.base, e.limit});
-        out.push_back(std::move(s));
     }
-    return out;
+    out.resize(n);
 }
 
 // AltAdvManager::CanSeeAbility @0x4a40f0 for a normal (non-monster) profile.

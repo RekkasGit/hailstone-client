@@ -7,28 +7,7 @@
 - With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
 - Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
-
-## Unreleased
-
-- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
-- Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
-- With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
-- Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
-
-## Unreleased
-
-- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
-- Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
-- With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
-
-## Unreleased
-
-- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
-- Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
-
-## Unreleased
-
-- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
+- Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame
 
 ## 0.5.0-beta (2026-11-05)
 
