@@ -392,8 +392,9 @@ qualifies, the error names each GPU and what it lacks (`render/gpu_requirements.
 
 Bug reports are zips for the player to post in the bug report forum (`app/bug_report.h`), in `bug-reports/`. The bug
 report window (`/bugreport`) hides for the frame it opens on, so its screenshot shows what the player saw; Send gives the
-server its copy (`OP_Bug`, as the original) and saves `hailstone-bug-<YYYYMMDD>-<HHMMSS>.zip` (local time), after which
-the window offers Open Folder and Copy Summary. The start after a crash bundles the crash report into
+server its copy (`OP_Bug`, as the original) and saves `hailstone-bug-<YYYYMMDD>-<HHMMSS>.zip` (local time) on a
+thread of its own, so a large log does not stall the game (the window says it is being saved), after which the window
+offers Open Folder and Copy Summary and says what the file holds and what was taken out. The start after a crash bundles the crash report into
 `hailstone-crash-<...>.zip` with the log of the run that crashed (`<name>.1.log` once this start moved it) and shows
 the crash report window (over the login screen too), where a note can be added. A zip holds `report.txt` (the player's
 words, the build, system, GPU and driver, display, UI, server, world, character, zone, place and target),
@@ -405,7 +406,9 @@ Discord's 10 MiB upload limit: what does not fit (the screenshots first, then a 
 `summary.md`, the player's words too) has the login account names saved for any server, and the one played, written
 `<account>` (a whole word, any case), the home folder (`platform::home_dir()`) written `~`, and the home folder's
 name, which on Linux is the system account name, written `<user>` where it is a folder name elsewhere
-(`/run/media/<user>/`). A Windows `.dmp` is binary and goes in unchanged (it carries no heap, see above); screenshots are not touched.
+(`/run/media/<user>/`). The logs and the crash report also have the words of every chat line (`[info] chat: ...`:
+tells, guild, group and channel chat, other players' words) taken out; the line itself stays, for its time and
+order. A Windows `.dmp` is binary and goes in unchanged (it carries no heap, see above); screenshots are not touched.
 
 On Windows the programs carry a manifest that makes UTF-8 their ANSI code page (Windows 10 1903 and later; MSVC-style
 linkers, `cmake/utf8.manifest`), so a data or install folder with any characters in its name works; the folder

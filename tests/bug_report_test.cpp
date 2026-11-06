@@ -194,6 +194,9 @@ TEST_CASE("bug report: account names and the home folder taken out") {
           "/run/media/<user>/Games /home/alicex alice");
     CHECK(app::redact_private("/home/alice/x", {}, "/home/alice/") == "~/x");
     CHECK(app::redact_private("nothing here", {}, {}) == "nothing here");
+    // All of them in one text, the account named like the home folder's owner.
+    CHECK(app::redact_private("/home/alice/x alice ALICE /mnt/Alice/y bob", {"alice", "bob"}, home) ==
+          "~/x <account> <account> /mnt/<user>/y <account>");
 
     test::ScratchDir tmp("bugreport-redact");
     const fs::path log = tmp.path() / "hailstone.log", ini = tmp.path() / "hailstone.ini",
@@ -224,6 +227,31 @@ TEST_CASE("bug report: account names and the home folder taken out") {
     }
     CHECK(files["report.txt"].find("<account>'s bags vanish") != std::string::npos);
     CHECK(files["report.txt"].find("Install:     ~/hailstone") != std::string::npos);
+}
+
+TEST_CASE("bug report: chat lines' words taken out of the logs and the crash report") {
+    CHECK(app::redact_chat("[info] chat: Soandso tells you, 'my secret'\n[info] zone in\n") ==
+          "[info] chat: (chat taken out of the report)\n[info] zone in\n");
+    CHECK(app::redact_chat("[info] chat: last line") == "[info] chat: (chat taken out of the report)");
+    CHECK(app::redact_chat("[warn] chat: a\r\n") == "[warn] chat: (chat taken out of the report)\r\n");
+    // Only the level's tag before it: a line that holds the words later stays.
+    CHECK(app::redact_chat("[info] loaded [x] chat: y\n") == "[info] loaded [x] chat: y\n");
+    CHECK(app::redact_chat("chat: no tag\n") == "chat: no tag\n");
+
+    test::ScratchDir tmp("bugreport-chat");
+    const fs::path log = tmp.path() / "hailstone.log", crash = tmp.path() / "crash-2.txt";
+    write_text(log, "[info] chat: Soandso tells you, 'meet at the docks'\n[info] zoning\n");
+    write_text(crash, "what: signal 11\n[info] chat: Guildie tells the guild, 'hi'\n");
+    app::BugReport r;
+    r.time = 1791115200; // noon UTC, 2026-10-04
+    r.logs = {log};
+    r.crash_files = {crash};
+    auto saved = app::save_bug_report_async(r, tmp.path() / "bug-reports").get();
+    REQUIRE(saved);
+    auto files = unzip(read_bytes(saved->zip));
+    CHECK(files["logs/hailstone.log"] == "[info] chat: (chat taken out of the report)\n[info] zoning\n");
+    CHECK(files["crash/crash-2.txt"] == "what: signal 11\n[info] chat: (chat taken out of the report)\n");
+    CHECK(files["report.txt"].find("(2026-10-04 12:00:00 UTC)") != std::string::npos);
 }
 
 TEST_CASE("bug report: crash reports found once") {

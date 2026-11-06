@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <chrono>
 #include <cstdlib>
 #include <format>
+#include <future>
 #include <optional>
 #include <string>
 #include <utility>
@@ -565,7 +567,8 @@ bool saved_report_click(const SavedBugReport& saved, std::string_view id) {
 // BugReportWindow (/bugreport; CBugReportWnd is not decoded, this follows its XML over EQEmu's OP_Bug): the category,
 // the report, the location (taken when the window opens and on Update Location), the optional flags and the target.
 // Send gives the server its copy (OP_Bug) and saves the full report for the player to post (app/bug_report.h): the
-// window then shows the saved file (SavedName ...) with Open Folder, Copy Summary and Done. The frame the window
+// window then shows the saved file (SavedName ...) with Open Folder, Copy Summary and Done (SavedName says it is being
+// saved while a worker writes it, so a large log does not stall the frame). The frame the window
 // opens it stays hidden while the report's screenshot is taken, so the picture shows what the player saw.
 class BugReportWindow : public StockWindow {
 public:
@@ -582,6 +585,15 @@ public:
             }
         }
         if (!open) saved_.reset();
+        // The report Send started, once it is written: nothing written closes the window, as before.
+        if (saving_.valid() && saving_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            auto saved = saving_.get();
+            if (open && saved) saved_ = std::move(saved);
+            else if (open && host.conn) {
+                host.conn->set_bug_report_open(false);
+                open = false;
+            }
+        }
         was_open_ = open;
         return open && ImGui::GetFrameCount() != capture_frame_;
     }
@@ -591,6 +603,7 @@ public:
     void child(EqHost& host, std::string_view id, Child& out) override {
         if (!host.conn) return;
         if (saved_) saved_report_child(*saved_, id, out);
+        else if (saving_.valid() && id == "SavedName") out.text = "(being saved)";
         if (id == "Edit") out.text = text_;
         else if (id == "LocX") out.text = std::format("{:.0f}", loc_.x);
         else if (id == "LocY") out.text = std::format("{:.0f}", loc_.y);
@@ -634,10 +647,10 @@ public:
         else if (id == "SendButton") {
             const auto category = static_cast<std::uint32_t>(std::max(categories_.selected, 0));
             host.conn->send_bug_report(category, flags_, text_);
-            if (host.save_bug_report) saved_ = host.save_bug_report(report(category));
+            if (host.save_bug_report && !saving_.valid()) saving_ = host.save_bug_report(report(category));
             text_.clear();
             flags_ = 0;
-            if (!saved_) host.conn->set_bug_report_open(false);
+            if (!saving_.valid()) host.conn->set_bug_report_open(false);
         } else if (id == "CancelButton" || id == "DoneButton") host.conn->set_bug_report_open(false);
         else return false;
         return true;
@@ -667,6 +680,7 @@ private:
     bool was_open_ = false;
     int capture_frame_ = -1;
     std::optional<SavedBugReport> saved_;
+    std::future<std::optional<SavedBugReport>> saving_; // Send's report, while it is written
 };
 
 // CrashReportWindow (Hailstone's own): shown at the start after a crash, over any screen, with the report the client

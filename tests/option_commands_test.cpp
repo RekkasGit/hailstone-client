@@ -319,7 +319,7 @@ TEST_CASE("option commands: /hotbutton's social store (FUN_004ea9f0)") {
     CHECK(store.social(2).name == "AVeryLongSocial");
 }
 
-TEST_CASE("local time: platform::local_time breaks a time down; ctime_text and task_ctime_text format it") {
+TEST_CASE("local time: platform::local_time and utc_time break a time down; ctime_text and task_ctime_text format it") {
     // Noon UTC on 2026-10-04 is that date in every time zone (UTC-12 to UTC+14).
     const std::time_t t = 1791115200;
     auto tm = nmsc::platform::local_time(t);
@@ -329,6 +329,13 @@ TEST_CASE("local time: platform::local_time breaks a time down; ctime_text and t
     CHECK(tm->tm_mday == 4);
     std::tm copy = *tm;
     CHECK(std::mktime(&copy) == t);
+    auto utc = nmsc::platform::utc_time(t);
+    REQUIRE(utc);
+    CHECK(utc->tm_year == 126);
+    CHECK(utc->tm_mon == 9);
+    CHECK(utc->tm_mday == 4);
+    CHECK(utc->tm_hour == 12);
+    CHECK(utc->tm_min == 0);
     const std::string line = nmsc::game::ctime_text(t);
     CHECK(line.starts_with("Sun Oct  4 "));
     CHECK(line.ends_with(" 2026"));

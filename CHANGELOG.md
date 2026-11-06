@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bug reports no longer carry what was said in chat: the words of every chat line (tells, guild, group and channel chat) are taken out of the logs and the crash report in the zip, and the report window says what the file holds and what was taken out
+- Saving a bug report no longer freezes the game for a moment with large logs: the report is written in the background
 - An update cut off at the wrong moment no longer loses the file it was about to replace, and an update no longer writes over an add-on installed into a plugin's folder after the update downloaded
 - An add-on install or removal cut off at the wrong moment now puts the add-on list back with the files, so the add-on shows its real version and can be updated again
 - For add-on authors and release builders: `tools/make_addon.py` and `tools/make_update.py` take in a linked folder's files instead of leaving them out, and stop at a link that loops
