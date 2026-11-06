@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Broken or hostile game files (in your game folder or a server's assets folder) can no longer make the client claim gigabytes of memory, hang on zone load or crash: an archive member that claims a huge size, an animation whose key times run for days, an endless chain of hero's forge layers, an absurdly scaled or misplaced flame, and a light colour out of range
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page

@@ -27,6 +27,40 @@ constexpr std::array<std::uint32_t, 256> make_crc_table() {
     return t;
 }
 constexpr auto kCrcTable = make_crc_table();
+
+// Appends one zlib stream of exactly `size` bytes to `out`, growing it with what zlib really writes (64 KB, then
+// doubling) rather than zero-filling `size` up front: the ratio check lets ~4 MB of junk declare 4 GB. Throws on error.
+void inflate_append(std::span<const std::byte> in, std::size_t size, std::vector<std::byte>& out) {
+    constexpr std::size_t kFirstChunk = 64 * 1024;
+    z_stream z{};
+    z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(in.data()));
+    z.avail_in = static_cast<uInt>(in.size());
+    if (inflateInit(&z) != Z_OK) throw std::runtime_error("inflateInit failed");
+    const std::size_t start = out.size();
+    std::size_t produced = 0;
+    int r = Z_OK;
+    while (r == Z_OK) {
+        std::size_t chunk = std::min(size - produced, std::max(kFirstChunk, produced));
+        // At the declared size, a spare byte shows whether the stream ends there or runs on.
+        std::byte spare{};
+        Bytef* to = reinterpret_cast<Bytef*>(&spare);
+        if (chunk > 0) {
+            out.resize(start + produced + chunk);
+            to = reinterpret_cast<Bytef*>(out.data() + start + produced);
+        }
+        z.next_out = to;
+        z.avail_out = chunk > 0 ? static_cast<uInt>(chunk) : 1u;
+        r = inflate(&z, Z_NO_FLUSH);
+        std::size_t wrote = (chunk > 0 ? chunk : 1u) - z.avail_out;
+        if (chunk == 0 && wrote > 0) r = Z_DATA_ERROR; // more than declared
+        if (chunk == 0 && r == Z_OK) r = Z_DATA_ERROR; // no end at the declared size
+        if (chunk > 0) produced += wrote;
+        if (r == Z_OK && wrote == 0 && chunk > 0) r = Z_BUF_ERROR; // input ran out
+    }
+    inflateEnd(&z);
+    out.resize(start + produced);
+    if (r != Z_STREAM_END || produced != size) throw std::runtime_error("zlib block did not inflate to its declared size");
+}
 } // namespace
 
 std::uint32_t pfs_name_crc(std::string_view name) {
@@ -115,7 +149,7 @@ std::optional<std::vector<std::byte>> PfsArchive::read(std::string_view name) co
 std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {
     // The block headers are walked before anything is allocated, so the size a file declares is trusted only as far
     // as its compressed bytes back it: each block expands by at most kMaxDeflateRatio, and the blocks add up to
-    // exactly the file's size. (Otherwise a 2 MB archive declaring a 2 GB file allocates 2 GB.)
+    // exactly the file's size.
     ByteReader r(data_);
     r.seek(e.offset);
     for (std::uint64_t total = 0; total < e.size;) {
@@ -127,14 +161,14 @@ std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {
         r.skip(deflated);
         total += inflated;
     }
-    std::vector<std::byte> out(e.size);
+    // Even within the ratio, ~4 MB of compressed junk can declare 4 GB, so memory follows the bytes zlib writes.
+    std::vector<std::byte> out;
+    out.reserve(std::min<std::size_t>(e.size, std::size_t{16} << 20));
     r.seek(e.offset);
-    std::size_t filled = 0;
-    while (filled < out.size()) {
+    while (out.size() < e.size) {
         auto deflated = r.le<std::uint32_t>();
         auto inflated = r.le<std::uint32_t>();
-        zlib_inflate(r.bytes(deflated), std::span(out).subspan(filled, inflated));
-        filled += inflated;
+        inflate_append(r.bytes(deflated), inflated, out);
     }
     return out;
 }

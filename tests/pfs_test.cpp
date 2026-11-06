@@ -87,3 +87,54 @@ TEST_CASE("PfsArchive refuses a file size its compressed blocks cannot back, bef
     CHECK_THROWS_WITH(PfsArchive::from_memory(bomb).read("a.txt"),
                       doctest::Contains("larger than its compressed bytes"));
 }
+
+TEST_CASE("PfsArchive: memory follows the bytes zlib writes, not the size a block declares") {
+    using namespace nmsc::test::pfs_fixtures;
+    // Within the 1032:1 ratio, 100 KB of junk deflate may declare 103 MB; it used to be zero-filled before zlib
+    // failed on the first byte. The guard throws HugeAllocation for any request above 64 MB.
+    constexpr std::uint32_t kJunk = 100000;
+    constexpr std::uint32_t kDeclared = kJunk * 1032;
+    nmsc::ByteWriter body;
+    body.le<std::uint32_t>(kJunk);
+    body.le<std::uint32_t>(kDeclared);
+    body.bytes(std::vector<std::byte>(kJunk, std::byte{0x11}));
+    nmsc::ByteWriter names;
+    names.le<std::uint32_t>(1);
+    names.le<std::uint32_t>(6);
+    names.fixed_string("a.txt", 6);
+    auto table = deflate_blocks(names.data(), 3000);
+    nmsc::ByteWriter w;
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(12 + body.size() + table.size()));
+    w.le<std::uint32_t>(0x20534650);
+    w.le<std::uint32_t>(0x20000);
+    w.bytes(body.data());
+    w.bytes(table);
+    w.le<std::uint32_t>(2);
+    w.le<std::uint32_t>(nmsc::assets::pfs_name_crc("a.txt"));
+    w.le<std::uint32_t>(12);
+    w.le<std::uint32_t>(kDeclared);
+    w.le<std::uint32_t>(0x61580ac9u);
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(12 + body.size()));
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(names.size()));
+    auto a = PfsArchive::from_memory(w.take());
+    REQUIRE(a.contains("a.txt"));
+    nmsc::fuzz::arm_allocation_guard(true);
+    bool refused = false, allocated = false;
+    try {
+        (void)a.read("a.txt");
+    } catch (const nmsc::fuzz::HugeAllocation&) {
+        allocated = true;
+    } catch (const std::exception&) {
+        refused = true;
+    }
+    nmsc::fuzz::arm_allocation_guard(false);
+    CHECK(refused);
+    CHECK_FALSE(allocated);
+
+    // Real data still reads whole: a 1 MB block (the growing buffer's several steps) and 8 KB blocks.
+    std::vector<std::byte> text(1 << 20);
+    for (std::size_t i = 0; i < text.size(); ++i) text[i] = static_cast<std::byte>((i * 7) ^ (i >> 9));
+    CHECK(PfsArchive::from_memory(make_pfs({{"b.bin", text}}, 1 << 20)).read("b.bin").value() == text);
+    CHECK(PfsArchive::from_memory(make_pfs({{"b.bin", text}}, 8192)).read("b.bin").value() == text);
+    CHECK(PfsArchive::from_memory(make_pfs({{"e.bin", {}}})).read("e.bin").value().empty());
+}
