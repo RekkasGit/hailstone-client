@@ -433,3 +433,17 @@ TEST_CASE("append_wld_mesh: vertex pieces must cover the vertices before their b
     md.vertex_pieces = {{{2, 0}}};
     CHECK_THROWS_WITH(detail::append_wld_mesh(w, f, 2, -1, refused), doctest::Contains("do not cover"));
 }
+
+TEST_CASE("GlobalLoad.txt: a phase past int32 wraps as the original's atoi, the same on every platform") {
+    test::ScratchDir dir("globalload_phase");
+    std::filesystem::create_directories(dir.path() / "Resources");
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt", std::ios::binary)
+        << "99999999999999999999,0,AAAAC,first_chr.s3d,x\r\n2,0,AAAAC,second_chr.s3d,x\r\n";
+    std::ofstream(dir.path() / "first_chr.s3d") << "x";
+    std::ofstream(dir.path() / "second_chr.s3d") << "x";
+    auto out = global_character_archives(GameDir(dir.path()));
+    // 99999999999999999999 wraps to 1661992959, so phase 2 loads first (glibc's atoi made it -1).
+    REQUIRE(out.size() >= 2);
+    CHECK(out[0] == "second_chr.s3d");
+    CHECK(out[1] == "first_chr.s3d");
+}

@@ -8,6 +8,9 @@
 #include <iterator>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
+
+#include "core/msvc_atoi.h"
 
 namespace nmsc::assets::wld {
 
@@ -36,7 +39,8 @@ DetailLayer palette_layer(const std::string& entry) {
     if (c2 == std::string::npos) return layer;
     std::size_t c3 = entry.find(',', c2 + 1);
     if (c3 == std::string::npos) return layer;
-    layer.uv_scale = palette_uv_scale(static_cast<float>(std::atoi(entry.substr(c1 + 1, c2 - c1 - 1).c_str())));
+    const auto scale = core::msvc_atoi(std::string_view(entry).substr(c1 + 1, c2 - c1 - 1));
+    layer.uv_scale = palette_uv_scale(static_cast<float>(scale));
     if (c3 + 2 <= entry.size()) layer.texture = entry.substr(c3 + 2);
     return layer;
 }

@@ -22,6 +22,7 @@
 
 #include "assets/eqg_character.h"
 #include "core/game_dir.h"
+#include "core/msvc_atoi.h"
 #include "core/log.h"
 #include "game/appearance_data.h"
 #include "game/race_models.h"
@@ -372,7 +373,7 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
             bool equipment = f[2].size() >= 5 && (f[2][4] == 'E' || f[2][4] == 'e');
             if (file.find(".eqg") != std::string::npos) continue;
             if (file.find("_chr") == std::string::npos && !equipment) continue;
-            entries.emplace_back(std::atoi(f[0].c_str()), file);
+            entries.emplace_back(core::msvc_atoi(f[0]), file);
         }
         std::stable_sort(entries.begin(), entries.end(),
                          [](const auto& a, const auto& b) { return a.first < b.first; });
