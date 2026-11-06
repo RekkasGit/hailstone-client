@@ -25,7 +25,8 @@ python3 server/install.py <server dir>      # the folder with eqemu_config.json
 
 Then restart the zones (or `#reloadquest`). The script copies `quests/` to `<server dir>/hailstone/quests` and adds
 it to `quest_paths` in `eqemu_config.json`, after the server's own quests. `install.py <server dir> --remove` undoes
-it.
+it. The edited `eqemu_config.json` keeps its permissions (it holds the database password) and, when the script runs
+as root, its owner.
 
 **By hand**, or on servers too old for `quest_paths`: copy `quests/global/encounters/hailstone.lua` into the
 server's `quests/global/encounters/`, and add this line to its `quests/global/script_init.lua` (create the file if

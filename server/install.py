@@ -16,6 +16,35 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def write_like(path, text):
+    """Replaces path with text, keeping its mode and, where allowed, its owner: eqemu_config.json holds the
+    database password, and a file made at the umask's mode (often world-readable) would lose an owner's 0600."""
+    st = os.stat(path)
+    tmp = path + ".tmp"
+    try:
+        os.remove(tmp)
+    except FileNotFoundError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, st.st_mode & 0o777)
+    try:
+        with os.fdopen(fd, "w") as f:
+            if hasattr(os, "fchmod"):
+                os.fchmod(f.fileno(), st.st_mode & 0o777)  # os.open's mode is cut by the umask
+            if hasattr(os, "fchown"):
+                try:
+                    os.fchown(f.fileno(), st.st_uid, st.st_gid)
+                except PermissionError:
+                    pass  # not root: the file is the runner's, still at the old mode
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     remove = "--remove" in sys.argv
@@ -40,10 +69,7 @@ def main():
         paths.append(ours)
     dirs["quest_paths"] = paths
 
-    with open(config_path + ".tmp", "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
-    os.replace(config_path + ".tmp", config_path)
+    write_like(config_path, json.dumps(config, indent=2) + "\n")
     print(f"quest_paths: {paths}")
     print("Restart the zones (or #reloadquest) to load it.")
     return 0

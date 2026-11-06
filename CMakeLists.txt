@@ -795,6 +795,7 @@ if(NMSC_BUILD_TESTS)
     tests/byte_io_test.cpp
     tests/private_file_test.cpp
     tests/server_script_test.cpp
+    tests/server_tools_test.cpp
     tests/float_chars_test.cpp
     tests/screen_pictures_test.cpp
     tests/window_icon_test.cpp
