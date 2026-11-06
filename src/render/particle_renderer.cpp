@@ -252,8 +252,14 @@ void ParticleRenderer::prepare(const game::ParticleSystem& particles) {
         if (reader_) zone_bytes = reader_(name);
         loading_.insert(name);
         const GameDir* game = &game_;
+        // A job that throws would hand back no result, and the name would stay in loading_ for the session, its
+        // emitters never drawn; failing here, it comes back empty and is drawn with slot 0 like a missing texture.
         loader_->submit(name, [name, bytes = std::move(zone_bytes), game]() mutable {
-            return load_particle_texture(name, std::move(bytes), *game);
+            try {
+                return load_particle_texture(name, std::move(bytes), *game);
+            } catch (...) {
+                return LoadedParticleTexture{};
+            }
         });
     }
     if (done.empty()) return;
