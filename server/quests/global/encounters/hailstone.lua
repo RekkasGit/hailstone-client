@@ -820,17 +820,22 @@ local function send_files_chunk(client, id, index, offset, length)
 	-- A file rewritten since it was hashed would arrive with bytes that do not match its hash: at a file's first
 	-- piece the zone looks at its size and time, and at every piece at the size of what it has open. A change
 	-- makes the list again (the hashing is at most every FILES_RESCAN_MIN seconds) and tells the client, which
-	-- lists again. The time is looked at once for each file of a list (it costs a process): a client asking for the
-	-- first piece again and again starts no more, and a rewrite of the same size after that waits for the next list.
+	-- lists again. The time is looked at once per file until the list is next made (files_rescan), for all players
+	-- (it costs a process): a client asking for the first piece again and again starts no more, and a rewrite of
+	-- the same size after that waits for the next list. A file found changed stays changed until then, so a client
+	-- asking again before the list is made again (within FILES_RESCAN_MIN) is told again, not sent the new bytes.
 	local f = open_client_file(e.path)
-	local changed = f ~= nil and f:seek("end") ~= e.size
+	local changed = e.changed or (f ~= nil and f:seek("end") ~= e.size)
 	if not changed and offset == 0 and not e.statted then
 		e.statted = true
 		local size, mtime = stat_client_file(e.path)
 		changed = size ~= e.size or (mtime ~= nil and mtime ~= e.mtime)
 	end
 	if changed then
-		log("client_files: " .. e.path .. " changed since it was hashed")
+		if not e.changed then
+			log("client_files: " .. e.path .. " changed since it was hashed")
+		end
+		e.changed = true
 		close_open_file(e.path)
 		if os.time() - (files.built or 0) >= FILES_RESCAN_MIN then
 			build_client_files(true)
@@ -1009,7 +1014,11 @@ local function on_unhandled_opcode(e)
 		log(string.format("Hailstone request 0x%04x of size %d without the NMSP magic", op, packet:GetSize()))
 		return
 	end
-	if not allow(settings_limit, e.self:CharacterID(), SETTINGS_MAX) then
+	local ok, first_over = allow(settings_limit, e.self:CharacterID(), SETTINGS_MAX)
+	if not ok then
+		if first_over then
+			log(string.format("%s asks for the settings too fast; the rest of %d s are dropped", e.self:GetCleanName(), SETTINGS_SECONDS))
+		end
 		return
 	end
 	send_settings(e.self)

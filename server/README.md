@@ -88,11 +88,13 @@ setting says. Adding or changing files needs no restart: players who zone in get
 once after `#reloadquest`, which hashes the folder again. The first start after adding a large folder takes a few
 seconds per gigabyte in that zone.
 
-A file changed in place within those five minutes is not sent with its old hash: the first time a player asks for
-a file's first piece after a listing, the zone looks at its size and modification time (one `find` for that file;
-on Windows the size only, as a PowerShell start per file would be too slow), and at every piece at the size of the
-file it has open. A rewrite that keeps the size after that first look waits for the next listing. A change makes the zone
-hash the folder again (at most every 30 s) and tells the client, which lists the files again. A file changed on
+A file changed in place within those five minutes is not sent with its old hash: the first time any player asks
+for a file's first piece, the zone looks at its size and modification time (one `find` for that file; on Windows the
+size only, as a PowerShell start per file would be too slow), and at every piece at the size of the file it has
+open. That first look is made once per file until the zone next makes the list (`files_rescan`), for all players
+together, so a rewrite that keeps the size after it goes unnoticed until then. A change makes the zone hash the
+folder again (at most every 30 s) and tells the client, which lists the files again; until the folder is hashed
+again, every request for that file is told the same. A file changed on
 Windows without changing its size can still go with its old hash until the next listing; the client then finds the
 hash wrong and keeps its old files until the next login.
 

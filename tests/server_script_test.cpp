@@ -20,7 +20,7 @@ std::string script_path() {
 constexpr const char* kHarness = R"lua(
 package.config = "/\n;\n?\n!\n-\n" -- the script's Linux commands, whatever runs the test
 T = { now = 1000, finds = 0, stats = 0, gets = 0, opens = {}, open_now = 0, open_max = 0, messages = {}, data = {}, files = {},
-      mtimes = {}, handlers = {}, timers = {}, clients = {} }
+      mtimes = {}, handlers = {}, timers = {}, clients = {}, logs = {} }
 os.time = function() return T.now end
 
 local function bytes_packet(op, size)
@@ -45,7 +45,7 @@ Packet = function(op, size) return bytes_packet(op, size) end
 
 Event = { unhandled_opcode = 1, signal = 2 }
 eq = {
-  debug = function() end,
+  debug = function(s) T.logs[#T.logs + 1] = s end,
   get_data = function(k) T.gets = T.gets + 1; return T.data[k] end,
   set_data = function(k, v) T.data[k] = v end,
   delete_data = function(k) T.data[k] = nil end,
@@ -365,6 +365,36 @@ assert(T.finds == finds + 2, "not listed again within 30 s")
 )lua");
 }
 
+TEST_CASE("Server script: a same-size rewrite found within 30 s of a listing is reported at every request") {
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local id = list_request(a, 0):ReadInt32(8)
+-- Rewritten with the same size, a new time, soon after the zone's start made the list: it is not made again.
+T.files["client_files/f01.bin"] = string.rep("Z", 40000)
+T.mtimes["client_files/f01.bin"] = "1800000000.0"
+T.now = T.now + 5
+local finds = T.finds
+local r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "a new time: stale")
+assert(T.finds == finds, "within 30 s: not listed again")
+-- The client lists again and gets the same entry; its first piece is still stale, for every player.
+id = list_request(a, 0):ReadInt32(8)
+r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "asked again: still stale")
+r = chunk_request(b, list_request(b, 0):ReadInt32(8), 0, 32768)
+assert(r:ReadInt16(6) == 3 and r:ReadInt32(16) == 1, "another player, a later piece: still stale")
+-- After 30 s the next request makes the list again and the new file goes out.
+T.now = T.now + 30
+r = chunk_request(a, id, 0, 0)
+assert(r:ReadInt16(6) == 3, "stale once more, and the list is made again")
+assert(T.finds == finds + 1, "listed again")
+id = list_request(a, 0):ReadInt32(8)
+assert(chunk_request(a, id, 0, 0):ReadInt16(6) == 2, "the new list's file is sent")
+)lua");
+}
+
 TEST_CASE("Server script: group declines passed on to another zone are limited per sender") {
     check_run(R"lua(
 load_script()
@@ -447,6 +477,9 @@ assert(hellos == 10, "10 guild packets in 10 s: " .. hellos)
 local answers = 0
 for _ = 1, 8 do if settings_request(a) then answers = answers + 1 end end
 assert(answers == 5, "5 settings requests in 10 s: " .. answers)
+local dropped = 0
+for _, l in ipairs(T.logs) do if l:find("asks for the settings too fast", 1, true) then dropped = dropped + 1 end end
+assert(dropped == 1, "the first dropped settings request is logged once: " .. dropped)
 T.now = T.now + 10
 assert(guild_hello(a) and settings_request(a), "the next 10 s")
 )lua");
