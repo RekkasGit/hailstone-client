@@ -659,6 +659,13 @@ find affect slot 1600). Each record is replayed call for call against the record
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.
 - No stacking is checked before a cast: find_affect_slot's only caller is the hit-by-spell path, so the client
   predicts where a buff lands when OP_Action 231 arrives and the server's OP_Buff overwrites the slot.
+- Feign death by spell (SPA 74: Imitate Death, Death Peace): HitBySpell calls
+  CharacterZoneClient_StopCastAndFeignDeath @0x433b80, which ignores the spell and its base. With the spawn it clears
+  the bard twist, stops the cast (StopSpellCast(0, the casting spell)) and calls ChangePosition(0x73), which lies the
+  player down, stops auto attack and sends OP_SpawnAppearance {me, 14, 115}. The landing reports it
+  (`HitLandingResult::feigned`) and `GameConnection::land_spell_on_me` does the rest. EQEmu's SE_FeignDeath only rolls
+  the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
+  for everyone (`tests/feign_death_spell_test.cpp`).
 
 ## Using items
 
