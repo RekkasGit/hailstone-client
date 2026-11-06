@@ -272,6 +272,23 @@ TEST_CASE("buying: PcClient_TakeMoney takes the smallest coins first") {
     CHECK(game::take_money(r, 0));
 }
 
+TEST_CASE("buying: a coin count of 2^31 or more counts as negative, as the original's signed counts") {
+    // The purse is checked as the loop spends it: signed. An unsigned check let 0xFFFFFFFF copper (-1) through, and
+    // the loop then had nothing to take from and never ended.
+    Coins c{0, 0, 0, 0xFFFFFFFFu};
+    CHECK_FALSE(game::take_money(c, 100));
+    CHECK(c.copper == 0xFFFFFFFFu);
+    Coins s{0, 0, 0xFFFFFFFFu, 0};
+    CHECK_FALSE(game::take_money(s, 100));
+    Coins g{0, 0x80000000u, 0, 0};
+    CHECK_FALSE(game::take_money(g, 100));
+    // A negative count beside enough others: taken from the others, and the loop ends.
+    Coins m{1, 0, 0, 0xFFFFFFFFu};
+    CHECK(game::take_money(m, 100));
+    CHECK(static_cast<std::int32_t>(m.platinum) * 1000 + static_cast<std::int32_t>(m.gold) * 100 +
+              static_cast<std::int32_t>(m.silver) * 10 + static_cast<std::int32_t>(m.copper) == 999 - 100);
+}
+
 TEST_CASE("FormatMoneyWords") {
     CHECK(game::money_words(302) == " 3 gold 2 copper");
     CHECK(game::money_words(1001) == " 1 platinum 1 copper");
