@@ -263,12 +263,17 @@ bool WebService::view(const std::string& owner, std::uint32_t caps, std::uint32_
         }
 
     const ImGuiIO& io = ImGui::GetIO();
-    const auto x = static_cast<std::int32_t>(io.MousePos.x - p0.x), y = static_cast<std::int32_t>(io.MousePos.y - p0.y);
+    // With no mouse (it left the game's window) ImGui's position is -FLT_MAX, which no int holds: the last one the
+    // page had stands in, and every position is held to a range an int32 takes.
+    const bool valid = ImGui::IsMousePosValid();
+    const float mx = valid ? io.MousePos.x : last_x_, my = valid ? io.MousePos.y : last_y_;
+    auto page = [](float v) { return static_cast<std::int32_t>(std::clamp(v, -65536.0f, 65536.0f)); };
+    const std::int32_t x = page(mx - p0.x), y = page(my - p0.y);
     const std::uint32_t mods = mods_now();
     if (hovered || ImGui::IsItemActive()) {
-        if (io.MousePos.x != last_x_ || io.MousePos.y != last_y_) b.mouse({tab, web::MouseKind::Move, {}, 1, x, y, mods});
-        last_x_ = io.MousePos.x;
-        last_y_ = io.MousePos.y;
+        if (valid && (mx != last_x_ || my != last_y_)) b.mouse({tab, web::MouseKind::Move, {}, 1, x, y, mods});
+        last_x_ = mx;
+        last_y_ = my;
         hovered_ = tab;
         ImGui::SetMouseCursor(imgui_cursor(t.cursor));
         constexpr web::MouseButton kButtons[] = {web::MouseButton::Left, web::MouseButton::Right, web::MouseButton::Middle};

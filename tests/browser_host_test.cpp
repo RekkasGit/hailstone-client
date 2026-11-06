@@ -2,9 +2,12 @@
 // an in-memory helper, and against the stand-in helper program (tests/mock_web_helper.cpp) over real pipes.
 #include <doctest/doctest.h>
 
+#include <cfloat>
 #include <chrono>
 #include <deque>
 #include <thread>
+
+#include <imgui.h>
 
 #include "app/web_service.h"
 #include "fuzz_support.h"
@@ -587,6 +590,51 @@ TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
     REQUIRE(r.host.tab(id));
     REQUIRE(r.host.tab(id)->view.width == 4096);
     CHECK(r.host.tab(id)->view.bgra.back() == std::byte{0x11});
+}
+
+// ImGui's position with no mouse is -FLT_MAX, which no int32 holds: the page is told it left at the last place it
+// had, not at a converted -FLT_MAX.
+TEST_CASE("web service: the mouse leaving the game's window leaves the page at its last place") {
+    Rig r;
+    app::WebServiceEnv env;
+    env.browser = [&] { return &r.host; };
+    app::WebService web(env);
+    const auto id = web.open("", plugin::kCapAll, "https://example.org/", 200, 100);
+    REQUIRE(id);
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int fw = 0, fh = 0;
+    io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh);
+    auto frame = [&](float x, float y) {
+        io.DisplaySize = ImVec2(800, 600);
+        io.DeltaTime = 1.0f / 60.0f;
+        io.AddMousePosEvent(x, y);
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(400, 300));
+        ImGui::Begin("Page", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration);
+        web.view("", plugin::kCapAll, id, 200, 100);
+        ImGui::End();
+        ImGui::Render();
+    };
+    frame(50, 40);
+    frame(60, 45);
+    frame(-FLT_MAX, -FLT_MAX);
+    frame(-FLT_MAX, -FLT_MAX);
+    ImGui::DestroyContext(ctx);
+    const auto mice = r.helper.sent_of<Mouse>();
+    REQUIRE(mice.size() >= 2);
+    const Mouse& leave = mice.back();
+    CHECK(leave.kind == MouseKind::Leave);
+    const Mouse& move = mice[mice.size() - 2];
+    CHECK(move.kind == MouseKind::Move);
+    CHECK(leave.x == move.x);
+    CHECK(leave.y == move.y);
+    CHECK(leave.x > -1000);
 }
 
 // The player's input is never refused for a script's large message still draining: a lost button or key release
