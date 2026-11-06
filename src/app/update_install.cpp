@@ -8,6 +8,7 @@
 #include <sstream>
 #include <system_error>
 
+#include "app/addon_install.h"
 #include "core/atomic_file.h"
 #include "core/log.h"
 #include "core/zip_read.h"
@@ -154,10 +155,17 @@ void roll_back(const fs::path& install_dir) {
     for (const auto& line : lines) {
         auto [what, name] = split(line);
         const fs::path target = install_dir / rel(name);
-        trash(install_dir, target);
         if (what == "moved" || what == "removed") {
+            // The line is written before its move: with no saved copy the move never happened, and the file at
+            // `target` is still the original, so it stays.
+            const fs::path saved = dir / "previous" / rel(name);
+            std::error_code ec;
+            if (!fs::exists(saved, ec)) continue;
+            trash(install_dir, target);
             std::string why;
-            if (!move_file(dir / "previous" / rel(name), target, &why)) log::warn("Update: rolling back: {}", why);
+            if (!move_file(saved, target, &why)) log::warn("Update: rolling back: {}", why);
+        } else {
+            trash(install_dir, target);
         }
     }
     std::error_code ec;
@@ -290,7 +298,16 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
     remove_quietly(dir / "new");
     std::map<std::string, std::vector<std::string>> new_files;
     std::set<std::string> all_new; // lower-cased: one file of two components, or of two cases, is refused
+    std::set<std::string> skipped;
     for (const auto& p : staged->packages) {
+        const std::string only = p.component.starts_with("plugin-") ? "plugins/" + p.component.substr(7) + "/" : "";
+        // An add-on installed into the plugin's folder since the download (docs/addons.md) owns it now: the release's
+        // copy would overwrite it. The updater checks this when it downloads; the player may have installed one since.
+        if (!only.empty() && addon_owns_folder(install_dir, std::string_view(only).substr(0, only.size() - 1))) {
+            log::info("Update: {} is left out: an add-on owns {}", p.component, only);
+            skipped.insert(p.component);
+            continue;
+        }
         const fs::path zip = dir / "download" / p.file;
         if (!package_file_matches(zip, p.size, p.sha256)) {
             r.error = p.file + " is missing or changed since it was downloaded";
@@ -303,7 +320,6 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
             remove_quietly(dir / "new");
             return r;
         }
-        const std::string only = p.component.starts_with("plugin-") ? "plugins/" + p.component.substr(7) + "/" : "";
         auto& files = new_files[p.component];
         for (const auto& e : reader.entries()) {
             if (e.is_directory()) continue;
@@ -329,7 +345,14 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
     remove_quietly(dir / "journal.txt");
     std::error_code ec;
     fs::remove(dir / "installed.prev.txt", ec);
-    if (fs::exists(dir / "installed.txt", ec)) fs::copy_file(dir / "installed.txt", dir / "installed.prev.txt", ec);
+    // Saved before anything moves: a roll-back without installed.prev.txt takes it there was no registry and
+    // deletes installed.txt, which still describes the files it puts back.
+    if (fs::exists(dir / "installed.txt", ec) &&
+        !fs::copy_file(dir / "installed.txt", dir / "installed.prev.txt", ec)) {
+        r.error = "cannot save " + (dir / "installed.txt").string() + (ec ? ": " + ec.message() : std::string());
+        remove_quietly(dir / "new");
+        return r;
+    }
     if (!write_state(install_dir, {"installing", staged->version, running, 0})) {
         r.error = "cannot write " + (dir / "state.txt").string();
         remove_quietly(dir / "new");
@@ -381,6 +404,7 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
 
     InstalledUpdate now = old;
     for (const auto& p : staged->packages) {
+        if (skipped.count(p.component)) continue;
         now.components[p.component] = p.sha256;
         now.files[p.component] = new_files[p.component];
     }

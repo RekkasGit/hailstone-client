@@ -449,7 +449,9 @@ void ClientApp::update_login() {
                     login_view_.worlds = names;
                     for (const auto& a : login_view_.accounts)
                         for (const auto& c : a.characters)
-                            if (std::find(names.begin(), names.end(), c.world) == names.end()) {
+                            if (std::none_of(names.begin(), names.end(), [&](const std::string& n) {
+                                    return n == c.world || saved_character_key_part(n) == c.world;
+                                })) {
                                 login_view_.worlds.push_back(c.world);
                                 names.push_back(c.world);
                             }
@@ -474,7 +476,7 @@ void ClientApp::update_login() {
                 std::string last = !box_world_.empty() ? box_world_
                                                        : config_.get_string("login.last_world." + server_profile_.id);
                 for (const auto& s : servers_)
-                    if (!last.empty() && s.name == last) world = &s;
+                    if (!last.empty() && (s.name == last || saved_character_key_part(s.name) == last)) world = &s;
             }
             login_->request_play(world->id);
         }

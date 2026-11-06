@@ -23,8 +23,11 @@ from pathlib import Path
 DIRS = ("src", "sdk", "ui")
 C_EXT = {".c", ".cc", ".cpp", ".h", ".hpp", ".inc"}
 LUA_EXT = {".lua"}
-# "nms" as a word or a word's start (kOpNms, encode_nms), but not "nmsc" or "nms-client" (any case).
-NAME = re.compile(r"(?<![A-Za-z0-9])[Nn][Mm][Ss](?![Cc]|-client)|(?<=[a-z0-9])(?:Nms|NMS)(?![Cc])")
+# "nms" as a word or a word's start (kOpNms, encode_nms)...
+NAME = re.compile(r"(?<![A-Za-z0-9])[Nn][Mm][Ss]|(?<=[a-z0-9])(?:Nms|NMS)")
+# ...unless it is one of the old names in its own spelling: nmsc / nmsc_ / nmsc::, NMSC / NMSC_, the SDK's camel-case
+# Nmsc<Word> (NmscHook), or nms-client. Any other C after it is a word of its own: NMSChat, kNmsCombatOp, nmsCursor.
+OLD_NAME = re.compile(r"nmsc(?![a-z0-9])|NMSC(?![A-Za-z0-9])|Nmsc(?![a-z])|[Nn][Mm][Ss]-client")
 
 # File -> pattern a whole (stripped) line must match to be let through. Keep this narrow: one table of data.
 ALLOWED = {
@@ -58,11 +61,18 @@ def strip_c(text: str) -> str:
 
 
 def strip_lua(text: str) -> str:
-    """Blanks -- and --[[ ]] comments, keeps strings and line numbers."""
+    """Blanks -- and --[[ ]] comments, keeps strings (long [[ ]] / [=[ ]=] ones too) and line numbers."""
     out, i, n = [], 0, len(text)
     while i < n:
         c = text[i]
-        if c in "\"'":
+        long_string = re.match(r"\[(=*)\[", text[i:i + 64]) if c == "[" else None
+        if long_string:
+            close = "]" + long_string.group(1) + "]"
+            j = text.find(close, i + len(long_string.group(0)))
+            j = n if j < 0 else j + len(close)
+            out.append(text[i:j])
+            i = j
+        elif c in "\"'":
             j = i + 1
             while j < n and text[j] != c and text[j] != "\n":
                 j += 2 if text[j] == "\\" else 1
@@ -85,6 +95,10 @@ def strip_lua(text: str) -> str:
     return "".join(out)
 
 
+def names_nms(line: str) -> bool:
+    return any(not OLD_NAME.match(line, m.start()) for m in NAME.finditer(line))
+
+
 def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
     found = 0
@@ -101,7 +115,7 @@ def main() -> int:
             for number, line in enumerate(code.splitlines(), 1):
                 if allowed and allowed.fullmatch(line.strip()):
                     continue
-                if NAME.search(line):
+                if names_nms(line):
                     print(f"{path.relative_to(root)}:{number}: {line.strip()}")
                     found += 1
     if found:

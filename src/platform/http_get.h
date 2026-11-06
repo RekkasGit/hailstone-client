@@ -23,6 +23,10 @@ struct HttpGetOptions {
     // before any of the body is passed on; a refused one is an error. Empty: any (the add-on manager keeps its
     // downloads on GitHub with it, docs/addons.md).
     std::function<bool(std::string_view url)> allow_url;
+    // Asked from another thread (about every 100 ms) while the transfer runs, so a stop ends a call that is waiting
+    // on the network too, not only between reads (WinHTTP's calls block until their timeouts): true ends it as
+    // cancelled. Empty: only `sink` and `progress` cancel. It must be safe to call from any thread (an atomic flag).
+    std::function<bool()> cancelled;
 };
 
 struct HttpGetResult {

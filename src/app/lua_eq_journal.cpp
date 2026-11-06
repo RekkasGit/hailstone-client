@@ -567,13 +567,19 @@ void JournalNpcWindow::save(EqHost&) {
     std::uint64_t now = static_cast<std::uint64_t>(std::time(nullptr)) * 1000;
     if (write_backups_ && next_backup_ms_ < now) {
         std::error_code ec;
+        // <base><n><ext> joined as a path (base_.string() throws on Windows for a name outside the ANSI code page).
+        auto file = [&](const std::string& n, const char* ext) {
+            fs::path p = base_;
+            p += n + ext;
+            return p;
+        };
         std::string to = std::to_string(kBackups);
-        fs::remove(base_.string() + to + ".txt", ec);
-        fs::remove(base_.string() + to + ".hdr", ec);
+        fs::remove(file(to, ".txt"), ec);
+        fs::remove(file(to, ".hdr"), ec);
         for (int i = kBackups - 1; i >= 0; --i) {
             std::string from = i == 0 ? std::string() : std::to_string(i);
-            fs::rename(base_.string() + from + ".txt", base_.string() + to + ".txt", ec);
-            fs::rename(base_.string() + from + ".hdr", base_.string() + to + ".hdr", ec);
+            fs::rename(file(from, ".txt"), file(to, ".txt"), ec);
+            fs::rename(file(from, ".hdr"), file(to, ".hdr"), ec);
             to = from;
         }
         next_backup_ms_ = now + static_cast<std::uint64_t>(kBackupMinutes) * 60000;

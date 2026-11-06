@@ -88,9 +88,13 @@ breaks its signature, so a bundle keeps its data in `~/Library/Application Suppo
 `HAILSTONE_DATA_DIR` to keep them elsewhere.
 
 `hailstone.ini`, `server.ini` and the characters' files are written through a temporary file renamed over the old
-one, so a crash never leaves half a file. A save that fails is logged; on Windows, where the replace is refused while
-another program has the file open, it is tried a few more times first. Two clients may share `hailstone.ini`: when the file changed since a client
-read it, that client writes only the keys it changed over the other's (`core/config.h`).
+one, so a crash never leaves half a file. Names that reach these files from a server (a world's or a character's
+name, kept as a `char:<name>@<world>` key in `server.ini`) cannot add lines of their own: in a key a line break or
+`=` becomes `_` (also a leading `;`, `#` or `[`), and in a section name a line break or `]` (`core/ini_file.h`). A
+world or character name is compared with the saved list in that form, so such a world keeps one set of characters.
+A save that fails is logged; on Windows, where the replace is refused while another program has the file open, it
+is tried a few more times first. Two clients may share `hailstone.ini`: when the file changed since a client read
+it, that client writes only the keys it changed over the other's (`core/config.h`).
 
 Scripts and plugins are also looked for in the install's own `scripts/` and `plugins/` when the data folder is
 elsewhere (a macOS app bundle, `HAILSTONE_DATA_DIR`), so an install can ship some.
@@ -122,7 +126,8 @@ The check (`core/asset_folder.h`) names what is missing. Required: `spells_us.tx
 `uifiles/default/EQUI_Animations.xml`. Only RoF2 has `Resources/OnDemandResources.txt`,
 `Resources/SpellRequirementAssociations.txt`, `Resources/PlayerCustomization.txt` and `spellsnew.edd`, so without
 them the folder is an older client or incomplete. A missing game executable is only a warning: it is read for the login
-checksum alone. A current install passes the same check.
+checksum and for the per-zone sound room table (docs/formats/audio.md, Room), and only read; without it every zone
+uses the default rooms. A current install passes the same check.
 
 ### RoF2 or live
 
@@ -213,6 +218,12 @@ too (Display > Interface > Map Pack in the modern pack, Interface > Map pack in 
 character in the character's `UI.ini` with the map window's other settings. The list is read again each time
 Options starts showing it, so a pack dropped into `maps/` during play shows up without a restart.
 
+The layer files are named from the zone's short name, which the server sends (OP_NewZone). A name that is not
+letters, digits and `_` (stock short names are lower case alphanumerics and `_`), or that is a Windows device name,
+is not used: the connection drops it at OP_NewZone (the zone then loads without scenery), and the map reads and
+writes no file for it (`core/zone_name.h`), so a hostile server's `../` or absolute name cannot reach files outside
+these folders.
+
 ## Servers
 
 The login screen lists the saved servers (`core/server_profile.h`, `ui/dev_screens.h`). The last one used
@@ -236,7 +247,8 @@ while it downloads what `servers/<profile>/` lacks (`net/server_files.h`): it do
 spawns (`OP_ReqClientSpawn`) nor load the zone, and the zone keeps the character connecting meanwhile. The loading
 screen says **Downloading server files** with the files and megabytes done and the speed, so a long first zone-in is
 not taken for a hang. The files come into `.download/` a piece at a time (32 KB, 32 pieces asked ahead), each checked
-against its hash, and only when all have come are they moved into place; the files a former list brought that
+against its hash (as its pieces come; a file with a piece asked for again is read back from `.download/` 16 MB a
+frame once all have come, however many pieces of other files the frame takes in), and only when all have come are they moved into place; the files a former list brought that
 the server no longer lists are deleted then. A broken-off download keeps the files that came complete for the next
 try, and leaves the folder as it was. Once something in `assets/` changed the client reads its files again (`GameDir::rescan`, the
 connection's strings, spells and race data, then what `reload_server_files` reads) before the zone loads.
@@ -248,7 +260,9 @@ refused on every platform; `core/windows_names.h`, which the zip reader of updat
 `.dll`, `.so`, `.lua` ...) are refused, except Lua and data in `scripts/` and this platform's libraries and data in
 `plugins/` (other platforms' are skipped). What those may do is the server's `hailstone.cfg`'s (docs/plugins.md).
 Files the player added by hand stay unless the server lists the same name; one that matches
-the server's hash is kept as is. A server without the script does not answer, and after 5 s (30 s for a server that
+the server's hash is kept as is. Checking those (a file of the right size that `server_files.txt` does not vouch for,
+or one left complete in `.download/`) means hashing it: that is done 16 MB a frame, so a folder of large files copied
+in by hand keeps the loading screen drawing (**Checking the server's files**, with the files done) instead of freezing it. A server without the script does not answer, and after 5 s (30 s for a server that
 sent files before, whose zone may be hashing new ones) the zone-in goes on with what is there.
 
 On a live asset folder a RoF2 server's `client_files/` needs the RoF2 files live lacks or changed (above): the five
@@ -264,7 +278,9 @@ without), 32 pieces are asked ahead, and the socket's receive buffer is 2 MiB so
 A piece that does not come is asked for again (`ServerFileSync::kChunkRetry`, `kChunkRetries`): at once when one
 asked after it has come (the script answers in order, so it skipped it, as an older script over its limit did), or
 after 3 s with nothing; after 5 requests for the same piece the sync fails and the zone-in goes on with the old
-files.
+files. When the server's files change during a download (its list id moves on), the script answers each piece asked
+for with a stale error: the first one lists the files again and the download goes on with the new list; the others,
+for the old list, are left (more than three such restarts in one sync fail it).
 
 The OS window's title is the picked server's name ("Hailstone" before one is picked), and in the world
 `<server> - <character>` (`client_window_title`). A character with several classes (multiclass, set by the
@@ -307,7 +323,7 @@ formats:
 | `GuildNotes.txt` | the guild window's personal notes ("%08X %s %s" lines) |
 | `chat.ini` | chat filters and user colours |
 | `options.ini` | the game options (Options window, /lootnodrop, /trackplayers, /log ...) |
-| `<name>.txt` | the chat log (/log; `eqlog` unless named) |
+| `<name>.txt` | the chat log (/log; `eqlog` unless named). Kept open while logging, each line written through at once; `/log off` closes it |
 
 The asset folder's `defaults.ini`, `eqclient.ini` and `UI_<name>_<server>.ini` are read as the defaults under these
 files and never written; so are its `userdata/AddressBook.txt` and `userdata/IgnoreList.txt`, the books a character
@@ -393,8 +409,9 @@ qualifies, the error names each GPU and what it lacks (`render/gpu_requirements.
 
 Bug reports are zips for the player to post in the bug report forum (`app/bug_report.h`), in `bug-reports/`. The bug
 report window (`/bugreport`) hides for the frame it opens on, so its screenshot shows what the player saw; Send gives the
-server its copy (`OP_Bug`, as the original) and saves `hailstone-bug-<YYYYMMDD>-<HHMMSS>.zip` (local time), after which
-the window offers Open Folder and Copy Summary. The start after a crash bundles the crash report into
+server its copy (`OP_Bug`, as the original) and saves `hailstone-bug-<YYYYMMDD>-<HHMMSS>.zip` (local time) on a
+thread of its own, so a large log does not stall the game (the window says it is being saved), after which the window
+offers Open Folder and Copy Summary and says what the file holds and what was taken out. The start after a crash bundles the crash report into
 `hailstone-crash-<...>.zip` with the log of the run that crashed (`<name>.1.log` once this start moved it) and shows
 the crash report window (over the login screen too), where a note can be added. A zip holds `report.txt` (the player's
 words, the build, system, GPU and driver, display, UI, server, world, character, zone, place and target),
@@ -406,7 +423,9 @@ Discord's 10 MiB upload limit: what does not fit (the screenshots first, then a 
 `summary.md`, the player's words too) has the login account names saved for any server, and the one played, written
 `<account>` (a whole word, any case), the home folder (`platform::home_dir()`) written `~`, and the home folder's
 name, which on Linux is the system account name, written `<user>` where it is a folder name elsewhere
-(`/run/media/<user>/`). A Windows `.dmp` is binary and goes in unchanged (it carries no heap, see above); screenshots are not touched.
+(`/run/media/<user>/`). The logs and the crash report also have the words of every chat line (`[info] chat: ...`:
+tells, guild, group and channel chat, other players' words) taken out; the line itself stays, for its time and
+order. A Windows `.dmp` is binary and goes in unchanged (it carries no heap, see above); screenshots are not touched.
 
 On Windows the programs carry a manifest that makes UTF-8 their ANSI code page (Windows 10 1903 and later; MSVC-style
 linkers, `cmake/utf8.manifest`), so a data or install folder with any characters in its name works; the folder

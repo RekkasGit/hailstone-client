@@ -289,19 +289,23 @@ addons/
   download/       packages, by their SHA-256; each goes once it is installed
   new/<name>/     a package unpacked and checked, before anything moves
   previous/<name>/ what an install or a removal is moving out, until it has finished
-  journal.txt     an install's or a removal's moves, one a line
+  journal.txt     an install's or a removal's moves, one a line, and a line once installed.txt is saved
+  installed.prev.txt installed.txt as it was before an install or a removal rewrote it, until that has finished
 scripts/<name>/   an installed script
 plugins/<name>/   an installed plugin
 ```
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
   not is taken out. The player's other files there stay: a plugin's settings beside it (`nmsc->config_dir`), notes.
+  So do empty folders, other than those the update emptied and an empty folder where a file now goes (a folder that
+  still holds the player's files stops the update).
 - **A removal** takes out the add-on's files and its record. The player's files in its folder stay, and the folder
   goes once it is empty.
 - **A cut-off install or removal** (the client died between its moves) is undone at the next start from the journal.
-  One that wrote `done` is left as it is.
+  `installed.txt` is saved as `installed.prev.txt` before it is rewritten, and put back with the old files, so the
+  list matches what is on disk. One that wrote `done` is left as it is.
 - **The core updater** (docs/updater.md) never writes `addons/`, and skips its optional plugin package of a folder an
-  add-on installed. `scripts/` is the player's to it already. Its `core` package, though, is not yet kept out of an
+  add-on installed, both when it downloads and again when it installs (an add-on installed in between wins). `scripts/` is the player's to it already. Its `core` package, though, is not yet kept out of an
   add-on's plugin folder: a release that shipped a plugin of an installed add-on's name would write over it.
 
 ## Settings (`hailstone.ini`)

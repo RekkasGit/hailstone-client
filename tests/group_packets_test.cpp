@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -354,4 +355,13 @@ TEST_CASE("leadership: the toggle, a purchase, the rank and experience updates, 
     CHECK(game::leadership_ability(5).name.empty());
     CHECK(game::leadership_next_cost(24, 4) == 10);
     CHECK(game::leadership_ability(40).name.empty());
+}
+
+TEST_CASE("leadership gauge: the server's f64 experience is clamped before it becomes an int") {
+    CHECK(game::leadership_gauge(250.0, game::kGroupLeadershipExpPerPoint) == 250);
+    CHECK(game::leadership_gauge(1999.0, game::kRaidLeadershipExpPerPoint) == 999);
+    CHECK(game::leadership_gauge(-5.0, 1000.0) == 0);
+    CHECK(game::leadership_gauge(1e300, 1000.0) == 1000); // was INT_MIN on x86 (undefined), so an empty gauge
+    CHECK(game::leadership_gauge(std::numeric_limits<double>::infinity(), 1000.0) == 1000);
+    CHECK(game::leadership_gauge(std::numeric_limits<double>::quiet_NaN(), 1000.0) == 0);
 }

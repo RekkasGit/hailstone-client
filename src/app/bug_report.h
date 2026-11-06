@@ -6,11 +6,13 @@
 // the build, the system, the character and where it stood), summary.md (a forum post to paste), the crash report,
 // the logs, hailstone.ini and the screenshots (the one taken when the window opened, then the player's own from the
 // minutes before), cut to fit Discord's upload limit: what did not fit is named in report.txt. Every text in it
-// has the player's account names and home folder taken out (redact_private()), since the report is posted in public.
+// has the player's account names and home folder taken out (redact_private()), and the logs the words of every chat
+// line (redact_chat(): tells, guild and group chat), since the report is posted in public.
 
 #include <cstddef>
 #include <ctime>
 #include <filesystem>
+#include <future>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -39,6 +41,9 @@ struct BugReport {
     std::vector<std::filesystem::path> logs;         // most wanted first
     std::vector<std::filesystem::path> settings;     // hailstone.ini ...: password, token and secret lines blanked
     std::filesystem::path capture;                   // the screenshot taken when the window opened (may be empty)
+    // That screenshot's bytes, read at Send: when set, `capture` is not read (the file is the next window's to
+    // delete and write again while this report is still being saved).
+    std::optional<std::string> capture_png;
     std::filesystem::path screenshots;               // the player's screenshots folder (may be empty)
     // Taken out of every text in the archive (redact_private()): the player's login account names, and the home
     // folder (on Linux, its name is the player's system account name).
@@ -58,6 +63,11 @@ struct SavedBugReport {
 std::optional<SavedBugReport> save_bug_report(const BugReport& report, const std::filesystem::path& dir,
                                               std::size_t limit = kBugReportLimit);
 
+// save_bug_report() on a thread of its own, for a caller that must not wait (the bug report window): `report` is
+// already complete, and nothing of the caller's is touched.
+std::future<std::optional<SavedBugReport>> save_bug_report_async(BugReport report, std::filesystem::path dir,
+                                                                 std::size_t limit = kBugReportLimit);
+
 // The pieces, for tests.
 // "hailstone-bug-YYYYMMDD-HHMMSS.zip" ("hailstone-crash-..." for a crash), local time; -<n> for n > 1.
 std::string bug_report_file_name(bool crash, const std::tm& local, int n = 1);
@@ -73,6 +83,11 @@ std::string scrub_settings(std::string_view text);
 // separator) written ~, and home's own name, as a folder name elsewhere (/run/media/<name>/), written <user>.
 std::string redact_private(std::string_view text, const std::vector<std::string>& accounts,
                            const std::filesystem::path& home);
+// `text` (a log) with the words of each chat line ("[info] chat: ...") taken out, the line itself kept.
+std::string redact_chat(std::string_view text);
+// A crash report (platform/crash_log.cpp) with redact_chat() on its last log lines only: the stack written after
+// them ("\nstack:\n" and the frames, no level's tag) is never taken for a chat line's continuation.
+std::string redact_crash_report(std::string_view text);
 // Deletes all but the newest `keep` hailstone-*.zip in `dir`.
 void prune_bug_reports(const std::filesystem::path& dir, std::size_t keep = kBugReportsKept);
 // The crash reports in `logs` not bundled yet (crash-*.txt, oldest first).

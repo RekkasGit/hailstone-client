@@ -16,6 +16,9 @@ namespace nmsc { class GameDir; class IniFile; }
 
 namespace nmsc::assets {
 
+// The most patches one cloud definition makes (DesiredCount is capped to it).
+inline constexpr std::int32_t kMaxCloudPatches = 256;
+
 struct CloudDefinition {
     std::string name;    // the section after "Cloud-"
     std::string texture; // Resources/Sky/Cloud-<Texture>.dds

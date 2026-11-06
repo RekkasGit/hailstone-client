@@ -126,10 +126,17 @@ std::optional<std::vector<std::int32_t>> part_bone_parents(const MeshFile& mesh)
 // Appends pieces as parts grouped by material.
 void append_pieces(const MeshFile& mesh, const std::vector<std::size_t>& pieces, CharacterMesh& out);
 
+// The most frames a resampled clip gets; a longer clip is cut there.
+inline constexpr std::uint32_t kMaxClipFrames = 4096;
+// The most resampled poses (bone x frame) one model's clips get together; a clip that would pass it is left out.
+// Many clips of many bones at kMaxClipFrames each would otherwise take gigabytes.
+inline constexpr std::size_t kMaxModelPoses = std::size_t{8} << 20;
 // Builds a model: skeleton with inverse bind matrices, the default pieces
-// (select_pieces(.., 0, 0)), and clips resampled to fixed frames.
+// (select_pieces(.., 0, 0)), and clips resampled to fixed frames (at most
+// kMaxClipFrames each, and max_poses bone poses in all: a clip past that is left out).
 CharacterModel build_model(const MeshFile& mesh, std::string_view code,
-                           const std::vector<std::pair<std::string, AnimationFile>>& animations);
+                           const std::vector<std::pair<std::string, AnimationFile>>& animations,
+                           std::size_t max_poses = kMaxModelPoses);
 
 } // namespace eqg_character
 
@@ -154,6 +161,8 @@ public:
     // EQGM entry ("IT14162", hero's forge pieces), else a live client's
     // layered part (layered_part). Cached; nullptr if none.
     std::shared_ptr<const eqg_character::MeshFile> part_mesh(std::string_view name);
+    // How many layered rows part_mesh follows to a base mesh before giving up.
+    static constexpr std::uint32_t kMaxLayerDepth = 8;
     // The live client ships each colour of a hero's forge piece as a base
     // mesh plus a texture layer rather than its own .mod (RoF2's IT27104 is
     // IT19814 with GENERIC_CHAIN_BLUE_V1's textures): Resources/Layers/*.txt
@@ -173,6 +182,7 @@ private:
     std::shared_ptr<const PfsArchive> archive(const std::string& name);
     std::optional<Source> mesh_source(const std::string& code);
     void open_texture_owner(std::string_view name);
+    std::shared_ptr<const eqg_character::MeshFile> part_mesh(std::string_view name, std::uint32_t depth);
     std::vector<std::pair<std::string, Source>> animation_sources(const std::string& code); // clip name, source
 
     GameDir game_;

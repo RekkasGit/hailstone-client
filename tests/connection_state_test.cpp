@@ -248,6 +248,18 @@ TEST_CASE("decode_xtarget_response: the max, the entries, and a cut packet keeps
     CHECK_FALSE(decode_xtarget_response(AppPacket(to_wire(Op::XTargetResponse), std::vector<std::byte>(3))));
 }
 
+TEST_CASE("encode_xtarget_request: one slot, its slot number, type and NUL-terminated name") {
+    auto p = encode_xtarget_request(4, 3, "a_rat00");
+    CHECK(p.opcode == to_wire(Op::XTargetRequest));
+    ByteReader r(p.data);
+    CHECK(r.le<std::uint32_t>() == 1u);
+    CHECK(r.le<std::uint32_t>() == 4u);
+    CHECK(r.le<std::uint32_t>() == 3u);
+    CHECK(r.cstring() == "a_rat00");
+    CHECK(r.remaining() == 0);
+    CHECK(encode_xtarget_request(0, 1, "").data.size() == 13);
+}
+
 TEST_CASE("decode_guild_update reads what CGuildMgmtWnd writes") {
     auto perm = decode_guild_update(encode_guild_rank_permission(2, 7, true));
     REQUIRE(perm);

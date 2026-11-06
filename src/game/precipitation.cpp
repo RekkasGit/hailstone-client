@@ -98,7 +98,6 @@ std::uint32_t blend_precipitation_colour(std::uint32_t a, std::uint32_t b, float
 }
 
 PrecipitationField::PrecipitationField(std::uint32_t count) : particles_(count) {
-    free_.reserve(count);
     for (std::uint32_t i = 0; i < count; ++i) free_.push_back(i);
 }
 
@@ -171,10 +170,10 @@ bool PrecipitationField::spawn_new(const Frame& f) {
     std::uint32_t index;
     if (!free_.empty()) {
         index = free_.front();
-        free_.erase(free_.begin());
+        free_.pop_front();
     } else if (!cached_.empty()) {
         index = cached_.front();
-        cached_.erase(cached_.begin());
+        cached_.pop_front();
     } else {
         return false;
     }
@@ -222,7 +221,7 @@ bool PrecipitationField::spawn_column(const Frame& f) {
     if (cached_.empty()) return false;
     const float rise = unit(f);
     std::uint32_t index = cached_.front();
-    cached_.erase(cached_.begin());
+    cached_.pop_front();
     active_.push_back(index);
     PrecipitationParticle& p = particles_[index];
     std::int32_t falling, splash;
@@ -292,18 +291,17 @@ void PrecipitationField::update(const Frame& f) {
 
     // 0x10080f10: the dead ones go to the landed columns, or with a stale ground to the free list; columns more
     // than 200 units from the camera are let go.
-    std::vector<std::uint32_t> still;
-    still.reserve(active_.size());
+    still_.clear();
     for (std::uint32_t index : active_) {
         const PrecipitationParticle& p = particles_[index];
         if (p.state != PrecipitationParticle::Dead)
-            still.push_back(index);
+            still_.push_back(index);
         else if (p.stale)
             free_.push_back(index);
         else
             cached_.push_back(index);
     }
-    active_ = std::move(still);
+    active_.swap(still_);
     std::erase_if(cached_, [&](std::uint32_t index) {
         glm::vec3 d = particles_[index].position - f.camera;
         if (glm::dot(d, d) <= kColumnReach * kColumnReach) return false;

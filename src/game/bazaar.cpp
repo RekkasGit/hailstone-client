@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <format>
 
+#include "core/msvc_atoi.h"
+
 namespace nmsc::game {
 
 std::string trader_price_key(const net::Item& item) {
@@ -24,7 +26,7 @@ bool TraderPrices::save() const { return !path_.empty() && ini_.save(path_); }
 std::optional<std::uint32_t> TraderPrices::get(const net::Item& item) const {
     auto v = ini_.get("ItemToSell", trader_price_key(item));
     if (!v || v->empty() || (*v)[0] == '*') return std::nullopt;
-    return static_cast<std::uint32_t>(std::atoi(v->c_str()));
+    return static_cast<std::uint32_t>(core::msvc_atoi(*v));
 }
 
 void TraderPrices::set(const net::Item& item, std::uint32_t copper) {

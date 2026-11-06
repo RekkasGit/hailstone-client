@@ -5,6 +5,7 @@
 #include <format>
 
 #include "core/ini_file.h"
+#include "core/msvc_atoi.h"
 
 namespace nmsc::game {
 
@@ -66,7 +67,7 @@ std::uint32_t group_search_error_eqstr(int code) {
     }
 }
 
-int group_search_int(std::string_view text) { return std::atoi(std::string(text).c_str()); }
+int group_search_int(std::string_view text) { return core::msvc_atoi(text); }
 
 int group_search_query_lock(std::uint32_t now_ms, std::uint32_t last_ms) {
     std::uint32_t s = (now_ms - last_ms) / 1000;

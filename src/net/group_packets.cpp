@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "core/byte_io.h"
+#include "core/wrap_math.h"
 #include "net/packet_io.h"
 
 namespace nmsc::net {
@@ -344,6 +345,10 @@ AppPacket encode_mark_npc(Op op, const MarkNpc& v) {
     return make_packet(op, std::move(w));
 }
 
+std::int32_t inspect_buff_minutes(std::int32_t ticks) {
+    return core::wrapped_div((static_cast<std::uint32_t>(ticks) * 3u + 15u) * 2u, 60);
+}
+
 std::optional<InspectBuffs> decode_inspect_buffs(const AppPacket& p) {
     if (p.data.size() < 336) return std::nullopt;
     return decode_with(p, [](ByteReader& r) {
@@ -388,6 +393,15 @@ std::optional<XTargetResponse> decode_xtarget_response(const AppPacket& p) {
         // Cut short: the entries before the cut stand.
     }
     return v;
+}
+
+AppPacket encode_xtarget_request(std::uint32_t slot, std::uint32_t type, std::string_view name) {
+    ByteWriter w;
+    w.le<std::uint32_t>(1);
+    w.le(slot);
+    w.le(type);
+    w.fixed_string(name, name.size() + 1); // NUL-terminated
+    return make_packet(Op::XTargetRequest, std::move(w));
 }
 
 } // namespace nmsc::net

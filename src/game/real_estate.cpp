@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <unordered_map>
+
+#include "core/saturate.h"
 
 namespace nmsc::game {
 
@@ -205,14 +208,37 @@ const net::ReRecord* RealEstateManager::find_up(const net::ReRecord* r, std::uin
     return nullptr;
 }
 
+namespace {
+
+// find_down's walk. `failed`: a record whose children were all walked from `depth` without a hit, while every record
+// below could match (skip <= 1). Walked again from that depth or deeper they reach a subset of the same records, so
+// they are not walked again: the server's child lists can name a record itself or repeat one, and the walk would
+// otherwise branch (children per level)^10 times. The first hit, in the same order, is the same.
+const net::ReRecord* find_down_in(const RealEstateManager& m, const net::ReRecord* r, std::uint32_t mask, int skip,
+                                  int depth, std::unordered_map<const net::ReRecord*, int>& failed) {
+    if (!r) return nullptr;
+    if (skip < 1 && (mask & re_type_bit(m.definition_type(r->definition)))) return r;
+    if (depth > 9) return nullptr;
+    const bool all_below_match = skip <= 1;
+    if (all_below_match) {
+        auto it = failed.find(r);
+        if (it != failed.end() && depth >= it->second) return nullptr;
+    }
+    for (auto child : r->children)
+        if (const net::ReRecord* hit = find_down_in(m, m.record(child), mask, skip - 1, depth + 1, failed)) return hit;
+    if (all_below_match) {
+        auto [it, added] = failed.try_emplace(r, depth);
+        if (!added) it->second = std::min(it->second, depth);
+    }
+    return nullptr;
+}
+
+} // namespace
+
 const net::ReRecord* RealEstateManager::find_down(const net::ReRecord* r, std::uint32_t mask, int skip, int depth) const {
     // FUN_005b45b0: depth first through the child lists, `skip` levels left out, at most 10 deep.
-    if (!r) return nullptr;
-    if (skip < 1 && (mask & re_type_bit(definition_type(r->definition)))) return r;
-    if (depth > 9) return nullptr;
-    for (auto child : r->children)
-        if (const net::ReRecord* hit = find_down(record(child), mask, skip - 1, depth + 1)) return hit;
-    return nullptr;
+    std::unordered_map<const net::ReRecord*, int> failed;
+    return find_down_in(*this, r, mask, skip, depth, failed);
 }
 
 void RealEstateManager::process(std::uint32_t now_ms, bool has_player, const glm::vec3& server_pos) {
@@ -387,8 +413,9 @@ std::string re_format_time_left(double days) {
     // and "%dd" (the days past the weeks), "<1d" under a day.
     if (days < 0) return "Unlimited";
     if (days == 0) return "Expired";
-    auto weeks = static_cast<long long>(days / 7.0);
-    auto whole = static_cast<long long>(days);
+    // The days come from the server's f64 balance: saturated, as a NaN or a value past long long would be undefined.
+    auto weeks = saturate_cast<long long>(days / 7.0);
+    auto whole = saturate_cast<long long>(days);
     if (weeks == 0 && whole % 7 == 0) return "<1d";
     std::string s;
     if (weeks != 0) s = std::to_string(weeks) + "w ";

@@ -432,6 +432,10 @@ TEST_CASE("fuzz: EQG models, ZON, heightmap, ECO, TOG, water and character files
               (void)eqg::parse_water_file(d);
               (void)eqg::parse_water_sheets(d);
           });
+    sweep("light_definition_color", {text_bytes("*COLOR 4294934528\n*INTENSITY 1.5\n")}, 4, 300,
+          [](std::span<const std::byte> d) {
+              (void)eqg::light_definition_color(std::string_view(reinterpret_cast<const char*>(d.data()), d.size()));
+          });
     // Character meshes and animations: only a magic is known here, so random data behind "EQGS"/"EQGM" and "EQGA".
     Rng rng(9);
     std::vector<Bytes> mesh_seeds, anim_seeds;

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <optional>
 
+#include "core/msvc_atoi.h"
 #include "game/mechanics/character.h"
 #include "game/spells.h"
 
@@ -17,17 +18,6 @@ constexpr const char* kError = "#ERR";            // 0xa10228
 
 using Ctx = SpellDescriptionContext;
 
-// MSVC atoi.
-std::int32_t atoi_msvc(std::string_view s) {
-    std::size_t i = 0;
-    while (i < s.size() && (s[i] == ' ' || (s[i] >= '\t' && s[i] <= '\r'))) ++i;
-    bool negative = false;
-    if (i < s.size() && (s[i] == '-' || s[i] == '+')) negative = s[i++] == '-';
-    std::uint32_t v = 0;
-    for (; i < s.size() && s[i] >= '0' && s[i] <= '9'; ++i) v = v * 10u + static_cast<std::uint32_t>(s[i] - '0');
-    return static_cast<std::int32_t>(negative ? 0u - v : v);
-}
-
 // "%d" of |value| (cdq / xor / sub: INT_MIN stays negative).
 std::string number(std::int32_t value) {
     auto sign = static_cast<std::uint32_t>(value >> 31);
@@ -38,7 +28,7 @@ std::string number(std::int32_t value) {
 // The slot of a "#n" / "$n" / "@n" token: n - 1; none for n - 1 < 0 or (the
 // original's bounds check) 12 and up.
 std::optional<std::uint32_t> slot_of(std::string_view token) {
-    auto slot = static_cast<std::uint32_t>(atoi_msvc(token)) - 1u;
+    auto slot = static_cast<std::uint32_t>(core::msvc_atoi(token)) - 1u;
     if (static_cast<std::int32_t>(slot) < 0 || slot >= 12) return std::nullopt;
     return slot;
 }

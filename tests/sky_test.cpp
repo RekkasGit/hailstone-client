@@ -16,6 +16,8 @@ TEST_CASE("Sky colour entries follow the dome height") {
     CHECK(sky_color_entry(0.0078f) == 16); // below 1/128
     CHECK(sky_color_entry(0.0860f) == 5);  // LAYER11's top: 16 - 11
     CHECK(sky_color_entry(0.125f) == 0);
+    CHECK(sky_color_entry(-1e30f) == 16); // past INT_MIN: not cast
+    CHECK(sky_color_entry(-0.001f) == 16);
     CHECK(sky_color_entry(0.5f) == 0);
 }
 
@@ -119,6 +121,9 @@ TEST_CASE("procedural sky clouds: weather.ini definitions and patch motion") {
         CHECK(x.desired_count == -2147483647 - 1);
         CHECK(x.subdivision_x == 2147483647);
         CHECK(x.subdivision_y == 0);
+        nmsc::IniFile big;
+        big.parse("[Cloud-X]\nDesiredCount=2000000000\n");
+        CHECK(nmsc::assets::parse_cloud_definition(big, "X").desired_count == nmsc::assets::kMaxCloudPatches);
     }
 
     // rand() / 32767 x (max - min) + min.

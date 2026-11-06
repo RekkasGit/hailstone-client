@@ -10,6 +10,7 @@
 
 #include "core/log.h"
 #include "core/zip_write.h"
+#include "platform/local_time.h"
 
 namespace nmsc::app {
 
@@ -21,25 +22,11 @@ constexpr std::size_t kLogTail = 24u << 20;
 // Held back for report.txt and summary.md, which go in last (they name what did not fit).
 constexpr std::size_t kTextReserve = 64u << 10;
 
-std::tm local_time(std::time_t t) {
-    std::tm local{};
-#if defined(_WIN32)
-    localtime_s(&local, &t);
-#else
-    localtime_r(&t, &local);
-#endif
-    return local;
-}
-
 std::string format_time(std::time_t t, bool utc) {
-    std::tm tm{};
-#if defined(_WIN32)
-    if (utc) gmtime_s(&tm, &t); else localtime_s(&tm, &t);
-#else
-    if (utc) gmtime_r(&t, &tm); else localtime_r(&t, &tm);
-#endif
+    const auto tm = utc ? platform::utc_time(t) : platform::local_time(t);
+    if (!tm) return "(unknown time)";
     char buf[64];
-    std::strftime(buf, sizeof buf, utc ? "%Y-%m-%d %H:%M:%S UTC" : "%Y-%m-%d %H:%M:%S %z", &tm);
+    std::strftime(buf, sizeof buf, utc ? "%Y-%m-%d %H:%M:%S UTC" : "%Y-%m-%d %H:%M:%S %z", &*tm);
     return buf;
 }
 
@@ -97,23 +84,6 @@ bool word_char(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c
 bool name_char(char c) { return word_char(c) || c == '-' || c == '.'; }
 bool separator(char c) { return c == '/' || c == '\\'; }
 
-// `text` with each `needle` (any case) for which `fits(at)` holds written `with`.
-template <class Fits>
-std::string replace_where(std::string_view text, std::string_view needle, std::string_view with, Fits fits) {
-    if (needle.empty()) return std::string(text);
-    const std::string low = lower(text), low_needle = lower(needle);
-    std::string out;
-    std::size_t done = 0;
-    for (std::size_t at = low.find(low_needle); at != std::string::npos; at = low.find(low_needle, at + 1)) {
-        if (at < done || !fits(at)) continue;
-        out.append(text.substr(done, at - done));
-        out += with;
-        done = at + needle.size();
-    }
-    out.append(text.substr(done));
-    return out;
-}
-
 std::string first_line(std::string_view text, std::size_t max) {
     std::size_t start = text.find_first_not_of(" \t\r\n");
     if (start == std::string_view::npos) return {};
@@ -159,36 +129,133 @@ std::string scrub_settings(std::string_view text) {
 }
 
 std::string redact_private(std::string_view text, const std::vector<std::string>& accounts, const fs::path& home) {
-    std::string out(text);
+    // Every name is looked for in one pass over one lowered copy: a report's logs run to tens of MB.
+    enum class Rule { Folder, FolderName, Word };
+    struct Needle {
+        std::string low;
+        std::string_view with;
+        Rule rule;
+    };
+    std::vector<Needle> needles;
     std::string h = home.string();
     while (h.size() > 1 && separator(h.back())) h.pop_back();
     if (h.size() > 1) {
         // The folder itself, then its name: /home/<name> is the usual, but the name also shows in other folders.
         std::string other = h;
         for (char& c : other) if (separator(c)) c = c == '/' ? '\\' : '/';
-        for (const std::string& form : {h, other})
-            out = replace_where(out, form, "~", [&](std::size_t at) {
-                const std::size_t end = at + form.size();
-                return end == out.size() || !name_char(out[end]);
-            });
+        needles.push_back({lower(h), "~", Rule::Folder});
+        if (other != h) needles.push_back({lower(other), "~", Rule::Folder});
         const std::string name = home.filename().string();
-        if (!name.empty() && name != "." && name != "..")
-            out = replace_where(out, name, "<user>", [&](std::size_t at) {
-                const std::size_t end = at + name.size();
-                return at > 0 && separator(out[at - 1]) && (end == out.size() || !name_char(out[end]));
-            });
+        if (!name.empty() && name != "." && name != "..") needles.push_back({lower(name), "<user>", Rule::FolderName});
     }
     // The longest first, so a name holding another goes whole.
     std::vector<std::string> names;
     for (const std::string& a : accounts)
-        if (!a.empty()) names.push_back(a);
-    std::sort(names.begin(), names.end(), [](const auto& a, const auto& b) { return a.size() > b.size(); });
-    for (const std::string& name : names)
-        out = replace_where(out, name, "<account>", [&](std::size_t at) {
-            const std::size_t end = at + name.size();
-            return (at == 0 || !word_char(out[at - 1])) && (end == out.size() || !word_char(out[end]));
-        });
+        if (!a.empty()) names.push_back(lower(a));
+    std::stable_sort(names.begin(), names.end(), [](const auto& a, const auto& b) { return a.size() > b.size(); });
+    for (std::string& n : names) needles.push_back({std::move(n), "<account>", Rule::Word});
+    if (needles.empty()) return std::string(text);
+
+    const std::string low = lower(text);
+    auto fits = [&](const Needle& n, std::size_t at) {
+        const std::size_t end = at + n.low.size();
+        switch (n.rule) {
+        case Rule::Folder: return end == text.size() || !name_char(text[end]);
+        case Rule::FolderName:
+            return at > 0 && separator(text[at - 1]) && (end == text.size() || !name_char(text[end]));
+        case Rule::Word:
+            return (at == 0 || !word_char(text[at - 1])) && (end == text.size() || !word_char(text[end]));
+        }
+        return false;
+    };
+    std::string out;
+    out.reserve(text.size());
+    std::size_t done = 0;
+    for (std::size_t at = 0; at < low.size();) {
+        const Needle* hit = nullptr;
+        for (const Needle& n : needles)
+            if (low[at] == n.low[0] && std::string_view(low).substr(at, n.low.size()) == n.low && fits(n, at)) {
+                hit = &n;
+                break;
+            }
+        if (!hit) {
+            ++at;
+            continue;
+        }
+        out.append(text.substr(done, at - done));
+        out += hit->with;
+        at += hit->low.size();
+        done = at;
+    }
+    out.append(text.substr(done));
     return out;
+}
+
+std::string redact_chat(std::string_view text) {
+    // GameConnection::chat logs each line as "[info] chat: <the line>" (core/log.h), the crash report's last lines
+    // the same way: tells, guild and group chat are other players' words, and the report is posted in public. A
+    // chat text with a newline in it (a server's or a plugin's can have one) goes on over lines with no level's tag:
+    // those go too, up to the next tagged line.
+    static constexpr std::string_view kMark = "] chat: ";
+    static constexpr std::string_view kWith = "(chat taken out of the report)";
+    // Where a line's level tag ("[info]") ends, npos when it does not start with one.
+    auto tag_end = [](std::string_view line) {
+        const std::size_t close = line.starts_with('[') ? line.find("] ") : std::string_view::npos;
+        if (close == std::string_view::npos || line.substr(1, close - 1).find_first_of("[] ") != std::string_view::npos)
+            return std::string_view::npos;
+        return close;
+    };
+    std::string out;
+    out.reserve(text.size());
+    bool in_chat = false;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        const std::string_view line = text.substr(0, end == std::string_view::npos ? text.size() : end + 1);
+        text.remove_prefix(line.size());
+        const std::size_t close = tag_end(line);
+        if (close == std::string_view::npos) {
+            if (!in_chat) out.append(line);
+            continue;
+        }
+        // The level's tag only: a line that merely holds "] chat: " further in stays.
+        in_chat = line.substr(close).starts_with(kMark);
+        if (in_chat) {
+            out.append(line.substr(0, close + kMark.size()));
+            out += kWith;
+            out += line.ends_with("\r\n") ? "\r\n" : line.ends_with('\n') ? "\n" : "";
+        } else {
+            out.append(line);
+        }
+    }
+    return out;
+}
+
+std::string redact_crash_report(std::string_view text) {
+    // crash_log.cpp's stack, written after the last log lines and only on builds with backtrace(): its marker, then
+    // backtrace_symbols_fd's frames ("/opt/hailstone(+0x1a) [0x5555...]") to the end. Neither Windows nor a build
+    // without it writes one, so a chat line's continuation that reads "stack:" is told apart by what follows it.
+    static constexpr std::string_view kStack = "\nstack:\n";
+    static constexpr std::string_view kLog = "last log lines:\n";
+    auto frames_only = [](std::string_view rest) {
+        while (!rest.empty()) {
+            const std::size_t end = rest.find('\n');
+            std::string_view line = rest.substr(0, end);
+            rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
+            if (line.ends_with('\r')) line.remove_suffix(1);
+            const std::size_t open = line.rfind(" [0x");
+            if (line.empty()) continue;
+            if (open == std::string_view::npos || !line.ends_with(']')) return false;
+            for (char c : line.substr(open + 4, line.size() - open - 5))
+                if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
+        }
+        return true;
+    };
+    const std::size_t log = text.find(kLog);
+    const std::size_t at = text.rfind(kStack);
+    if (at == std::string_view::npos || (log != std::string_view::npos && at < log) ||
+        !frames_only(text.substr(at + kStack.size())))
+        return redact_chat(text);
+    return redact_chat(text.substr(0, at)) + std::string(text.substr(at));
 }
 
 std::string bug_report_text(const BugReport& r, const std::vector<std::string>& included,
@@ -265,7 +332,7 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
     for (auto& fact : r.facts) fact.second = clean(fact.second);
     std::error_code ec;
     fs::create_directories(dir, ec);
-    const std::tm local = local_time(r.time);
+    const std::tm local = platform::local_time(r.time).value_or(std::tm{});
     SavedBugReport saved;
     saved.zip = r.file;
     for (int n = 1; saved.zip.empty(); ++n)
@@ -287,7 +354,8 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
         if (const std::size_t at = name.find(".reported."); at != std::string::npos) name.erase(at, 9);
         // A Windows minidump is binary: a changed length would break it, so it goes in as it is.
         const bool binary = lower(f.extension().string()) == ".dmp";
-        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(*text))) saved.left_out.push_back(name);
+        if (auto text = read_file(f); text && !put(name, binary ? *text : clean(redact_crash_report(*text))))
+            saved.left_out.push_back(name);
     }
     for (const fs::path& f : r.settings)
         if (auto text = read_file(f))
@@ -297,11 +365,13 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
         auto text = read_file(f, kLogTail);
         if (!text) continue;
         // Too big even packed: the last part only.
-        if (!put(name, clean(*text)) && !((text = read_file(f, 2u << 20)) && put(name, clean(*text))))
+        if (!put(name, clean(redact_chat(*text))) &&
+            !((text = read_file(f, 2u << 20)) && put(name, clean(redact_chat(*text)))))
             saved.left_out.push_back(name);
     }
-    if (!r.capture.empty())
-        if (auto png = read_file(r.capture); png && !put("screenshots/at-report.png", *png))
+    if (r.capture_png || !r.capture.empty())
+        if (auto png = r.capture_png ? r.capture_png : read_file(r.capture); png && !png->empty() &&
+                                                                              !put("screenshots/at-report.png", *png))
             saved.left_out.push_back("screenshots/at-report.png");
     for (const fs::path& f : recent_screenshots(r.screenshots, r.time)) {
         const std::string name = "screenshots/" + f.filename().string();
@@ -317,6 +387,14 @@ std::optional<SavedBugReport> save_bug_report(const BugReport& report, const fs:
               saved.left_out.empty() ? "" : ", some files left out to fit");
     prune_bug_reports(saved.zip.parent_path());
     return saved;
+}
+
+std::future<std::optional<SavedBugReport>> save_bug_report_async(BugReport report, fs::path dir, std::size_t limit) {
+    return std::async(std::launch::async, [report = std::move(report), dir = std::move(dir), limit] {
+        auto saved = save_bug_report(report, dir, limit);
+        if (!saved) log::error("could not save the bug report in {}", dir.string());
+        return saved;
+    });
 }
 
 void prune_bug_reports(const fs::path& dir, std::size_t keep) {

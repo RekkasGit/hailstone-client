@@ -179,6 +179,9 @@ struct WorldState {
     // so it is not stepped.
     std::uint32_t driven_id = 0;
     std::unordered_map<std::uint32_t, Spawn> spawns;
+    // Grows each time a spawn is added to `spawns` or taken out (not when one changes): a plugin's next_spawn walk
+    // keeps a sorted copy of the ids and makes it again when this moves. Whatever adds or removes one bumps it.
+    std::uint64_t spawn_set_serial = 0;
     // racedata.txt and moddat.ini for SetHeights (null: the defaults, as without a RaceManager).
     std::shared_ptr<const HeightTables> height_tables;
     // Dword 0xddfba4 (NewZone +0x2b4): 1 from the startup defaults until the first OP_NewZone, which copies it.

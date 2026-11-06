@@ -2,6 +2,8 @@
 // emitters, and the zone's flames merged and lit.
 #include <doctest/doctest.h>
 
+#include <limits>
+
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "assets/zone.h"
@@ -114,6 +116,26 @@ TEST_CASE("merged fires: one standing in another's flame goes") {
     bool blue = false;
     for (const auto& f : all) blue |= f.hue == FlameHue::Blue;
     CHECK(blue);
+}
+
+TEST_CASE("merged fires: a non-finite or absurdly scaled flame is dropped, not searched around") {
+    // A placement at scale 1e15 made a flame ~1e15 wide: every later fire's search walked (1e14)^2 grid cells. NaN
+    // and infinite positions cast to int64 (undefined) and broke the sort's ordering.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    std::vector<ZoneFire> meshes = {{{0, 0, 0}, 1e15f, 1e15f},   {{nan, 0, 0}, 1.0f, 2.0f}, {{inf, 0, 0}, 1.0f, 2.0f},
+                                    {{0, 0, 0}, nan, 2.0f},      {{0, 0, 0}, 1.0f, inf},    {{10, 0, 0}, 1.0f, 2.0f},
+                                    {{1e30f, -1e30f, 0}, 1.0f, 2.0f}};
+    std::vector<ZoneFire> clouds = {{{20, 0, 0}, 0.8f, 1.5f}};
+    auto all = merge_fires(meshes, clouds);
+    REQUIRE(all.size() == 3);
+    CHECK(all[0].base.x == doctest::Approx(10.0f));
+    CHECK(all[1].base.x == doctest::Approx(1e30f));
+    CHECK(all[2].base.x == doctest::Approx(20.0f));
+
+    Zone zone;
+    zone.lights.push_back({{inf, nan, 0}, {1, 1, 1}, 100.0f});
+    CHECK(add_fire_lights(zone, all) == 2); // the fire at 10 lights the one at 20
 }
 
 TEST_CASE("fire lights: only for flames with no light near") {

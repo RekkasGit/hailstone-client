@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
@@ -17,6 +19,7 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 #include "render/vk_util.h"
+#include "ui/imgui_vk_textures.h"
 #include "ui/item_windows.h"
 #include "ui/spell_windows.h"
 
@@ -36,8 +39,13 @@ std::optional<GridCell> gem_icon_cell(std::int32_t icon) {
 std::optional<GridCell> grid_index_cell(int index, int frames, int frame_w, int frame_h, int cell_w, int cell_h,
                                         bool vertical) {
     if (cell_w <= 0 || cell_h <= 0 || index < 0) return std::nullopt;
-    const int cols = frame_w / cell_w, rows = frame_h / cell_h, per = cols * rows;
-    if (per <= 0 || index >= per * frames) return std::nullopt;
+    // In 64 bits: the sizes come from the XML (a server's assets may replace it), and 100000 x 100000 one-unit
+    // cells overflowed int.
+    const int cols = frame_w / cell_w, rows = frame_h / cell_h;
+    const std::int64_t per64 = std::int64_t{cols} * rows;
+    if (cols <= 0 || rows <= 0 || per64 > std::numeric_limits<int>::max() || index >= per64 * std::max(frames, 0))
+        return std::nullopt;
+    const int per = static_cast<int>(per64);
     GridCell c;
     c.sheet = index / per + 1;
     const int cell = index % per;
@@ -199,7 +207,7 @@ UiTextures::~UiTextures() {
     for (auto* map : {&files_, &pictures_})
         for (auto& [name, e] : *map) {
             if (!e) continue;
-            if (e->set) ImGui_ImplVulkan_RemoveTexture(e->set);
+            if (e->set) ui::remove_imgui_texture(e->set);
             e->texture.destroy(vk_.device(), vk_.allocator());
         }
     if (sampler_) vkDestroySampler(vk_.device(), static_cast<VkSampler>(sampler_), nullptr);
@@ -253,7 +261,7 @@ std::unique_ptr<UiTextures::Entry> UiTextures::make(std::span<const std::byte> d
     render::UploadBatch batch(vk_);
     e->texture = batch.texture(rgba);
     batch.submit();
-    e->set = ImGui_ImplVulkan_AddTexture(static_cast<VkSampler>(sampler_), e->texture.view,
+    e->set = ui::add_imgui_texture(static_cast<VkSampler>(sampler_), e->texture.view,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if (!e->set) {
         log::warn("ui art: no descriptor left for {}", what);
@@ -276,7 +284,7 @@ const UiTextures::Texture* UiTextures::picture(const std::filesystem::path& file
             auto it = pictures_.find(picture_order_.front());
             if (it != pictures_.end()) {
                 if (it->second) {
-                    if (it->second->set) ImGui_ImplVulkan_RemoveTexture(it->second->set);
+                    if (it->second->set) ui::remove_imgui_texture(it->second->set);
                     it->second->texture.destroy(vk_.device(), vk_.allocator());
                 }
                 pictures_.erase(it);
@@ -376,7 +384,8 @@ std::optional<int> UiTextures::grid_cells(std::string_view name) {
     const Grid& g = it->second;
     const Frame& f = g.frames.front();
     if (g.cell_w <= 0 || g.cell_h <= 0) return 0;
-    return (f.w / g.cell_w) * (f.h / g.cell_h) * static_cast<int>(g.frames.size());
+    const std::int64_t cells = std::int64_t{f.w / g.cell_w} * (f.h / g.cell_h) * static_cast<std::int64_t>(g.frames.size());
+    return static_cast<int>(std::clamp<std::int64_t>(cells, 0, std::numeric_limits<int>::max()));
 }
 
 std::optional<UiTextures::Cell> UiTextures::grid_cell(std::string_view name, int index) {
@@ -392,10 +401,11 @@ std::optional<UiTextures::Cell> UiTextures::grid_cell(std::string_view name, int
     if (!t || t->width <= 0 || t->height <= 0) return std::nullopt;
     Cell out;
     out.id = t->id;
-    out.u0 = static_cast<float>(f.x + c->x) / static_cast<float>(t->width);
-    out.v0 = static_cast<float>(f.y + c->y) / static_cast<float>(t->height);
-    out.u1 = static_cast<float>(f.x + c->x + g.cell_w) / static_cast<float>(t->width);
-    out.v1 = static_cast<float>(f.y + c->y + g.cell_h) / static_cast<float>(t->height);
+    // The sums in double: an XML offset near INT_MAX plus the cell's overflowed int.
+    out.u0 = static_cast<float>((static_cast<double>(f.x) + c->x) / t->width);
+    out.v0 = static_cast<float>((static_cast<double>(f.y) + c->y) / t->height);
+    out.u1 = static_cast<float>((static_cast<double>(f.x) + c->x + g.cell_w) / t->width);
+    out.v1 = static_cast<float>((static_cast<double>(f.y) + c->y + g.cell_h) / t->height);
     return out;
 }
 

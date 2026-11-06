@@ -80,6 +80,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     }
     mp3index_ = assets::parse_mp3_index(text_of(game_.read("mp3index.txt")));
     race_ids_ = assets::parse_race_sounds(text_of(game_.read("racedata.txt")));
+    zone_rooms_ = load_zone_room_presets(game_);
     waves_.global = &global_waves_;
     std::uint32_t rate = 48000;
     mixer_ = std::make_unique<Mixer>(rate);
@@ -102,6 +103,7 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     add(0x50f, 0x514);
     add(0xe6f, 0xe6f);
     library_->preload(global);
+    global_wave_files_ = std::move(global);
     // LoadGlobalMusic @0x4aa860: entries 1..15, the combat theme picked by rand() after srand(Util::FastTime()).
     CrtRand rand(static_cast<std::uint32_t>(std::time(nullptr)));
     for (const MusicSetCall& c : load_global_music([this](const std::string& f) { return library_->exists(f); }, rand())) {
@@ -114,8 +116,12 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
         e.fade_in_ms = c.fade_in_ms;
         e.crossfade_ms = c.fade_out_replaced_ms;
         e.fade_out_ms = c.fade_out_stopped_ms;
+        if (!e.file.empty() && std::find(global_music_files_.begin(), global_music_files_.end(), e.file) ==
+                                   global_music_files_.end())
+            global_music_files_.push_back(e.file);
         music_.set(std::move(e));
     }
+    library_->set_resident_files(global_music_files_);
     // LoadGlobalEmitters @0x4a9df0: the rain (+0xfd8, wave 159) and wind (+0xfdc, wave 158) emitters, created
     // disabled: SoundEmitter::Init's defaults (gain 1, echo 1, any environment and time, not user-disableable) with
     // delays, loop count, range and distances 0 (always in range, looping, 2D), fades 2000 / 3000 and gain 0.5.
@@ -240,7 +246,7 @@ void AudioSystem::set_zone(const std::string& short_name) {
     std::erase_if(xmi_, [&](const auto& kv) { return kv.first == zone_xmi_; });
     zone_xmi_.clear();
     // SetCurrentZone: the room presets back to their defaults, then the zone's row of the table.
-    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(short_name);
+    rooms_ = short_name.empty() ? RoomPresets{} : zone_room_presets(zone_rooms_, short_name);
     apply_room();
     waves_.zone.clear();
     for (auto& [id, l] : loops_)
@@ -248,6 +254,8 @@ void AudioSystem::set_zone(const std::string& short_name) {
     loops_.clear();
     placed_.clear();
     zone_name_ = short_name;
+    // The waves of the zones before the last go, the global ones stay (LoadGlobalWaves keeps those for the session).
+    library_->drop_idle_waves(global_wave_files_);
     if (short_name.empty()) return;
 
     auto exists = [this](const std::string& f) { return library_->exists(f); };
@@ -269,6 +277,10 @@ void AudioSystem::set_zone(const std::string& short_name) {
         if (!e.wave.empty()) preload.push_back(e.wave);
     for (const auto& [id, name] : waves_.zone) preload.push_back(name);
     library_->preload(preload);
+    std::vector<std::string> music_files = global_music_files_;
+    for (const auto& m : set.music)
+        if (!m.file.empty()) music_files.push_back(m.file);
+    library_->set_resident_files(music_files);
     log::info("audio: {}: {} emitters, {} music entries", short_name, set.emitters.size(), set.music.size());
     zone_ = ZoneEmitters(std::move(set));
     zone_.set_music_manager(&music_, *this);
@@ -341,14 +353,21 @@ void AudioSystem::release(std::uint32_t voice, std::int32_t fade_ms) { mixer_->s
 bool AudioSystem::alive(std::uint32_t voice) { return mixer_->alive(voice); }
 
 std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
+    // The zone's and the global music are read ahead on the library's worker (set_resident_files), ahead of the
+    // zone's wave preloads; one asked for before that read is done is read here (or its read on the worker waited
+    // for), as it always was.
+    // A voice the mixer would refuse (an EMT row's gain of 0) is not built: its decoder was made and thrown away
+    // every frame the emitter is in range.
+    if (!(volume > 0.0f) || !std::isfinite(volume)) return 0;
+    auto bytes_of = [&] { return library_->file(entry.file); };
     std::unique_ptr<Source> src;
     if (ends_with_nocase(entry.file, ".mp3")) {
-        if (auto bytes = library_->read(entry.file)) src = make_mp3_source(std::move(*bytes), entry.loops);
+        if (auto bytes = bytes_of()) src = make_mp3_source(std::move(bytes), entry.loops);
     } else if (ends_with_nocase(entry.file, ".xmi")) {
         auto it = xmi_.find(entry.file);
         if (it == xmi_.end()) {
             it = xmi_.emplace(entry.file, std::vector<assets::XmiSequence>{}).first;
-            if (auto bytes = library_->read(entry.file)) {
+            if (auto bytes = bytes_of()) {
                 try {
                     it->second = assets::parse_xmi(*bytes);
                 } catch (const std::exception& e) {

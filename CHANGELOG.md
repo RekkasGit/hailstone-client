@@ -2,9 +2,100 @@
 
 ## Unreleased
 
+- A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
+- A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
+- A zone that lists its terrain thousands of times no longer loads it thousands of times
+- A model with thousands of material names no longer stalls the zone load
+- A weather.ini cloud that asks for billions of patches gets at most 256
+- A JPEG in the UI art that claims an enormous size is refused instead of taking gigabytes of memory
+- An EQG model with hundreds of long animations no longer takes gigabytes of memory when it is first shown
+- Numbers past 32 bits in a zone's detail-texture scales and in GlobalLoad.txt's load order now read the same on Windows, Linux and macOS
+- Numbers past 32 bits in sound files (sound ids, emitter delays) now read the same on Windows, Linux and macOS
+- After five minutes or more in first person, switching to a third-person camera no longer shows your character undressed for a moment
+- A damaged shader file in the client's folder is reported as such instead of being read past its buffer
+- The first cast of a new spell effect no longer hitches the frame while its particle textures are read and decoded; they are loaded in the background and the particles show once they are ready
+- A zone sound file with a "nan" or "inf" volume, or a damaged float WAV, no longer silences or garbles all sound for the rest of the session
+- A sound archive named like `snd99999999999.pfs` (in the game folder or a server's assets) no longer stops the client at start or login
+- A music file that cannot be read is no longer read again (and logged) every frame while you stand in its area
+- Long sessions use less memory for sound: decoded sounds from zones you left a while ago are freed (the always-loaded ones stay)
+- The per-zone sound rooms (the reverb a zone uses indoors and out) are now read from your own `eqgame.exe` when the client starts, instead of from a copy inside Hailstone. With no `eqgame.exe` in the game folder, or a different build of it, every zone uses the default rooms (and the log says so once)
+- For server owners: Hailstone's server script sends one player at most 768 file pieces a second (24 MB/s; it was 1024), and all of a zone's players together at most 1024 (the new `files_chunks_per_second_zone`), shared in turn between the players downloading at once. A modified client, or several characters, asking for pieces and never acknowledging them can make the zone hold at most about 1 GB of unsent data at the defaults (it was unbounded with alts); lower `files_chunks_per_second_zone` on a small host
+- For server owners: `server/install.py` keeps `eqemu_config.json`'s permissions and owner; it rewrote the file with the default ones, which could make the database password readable by every user of the machine
+- For server owners: on a Windows server, a file in `client_files/` whose name has characters outside ASCII is left out with a line in the zone's log naming it, instead of "could not hash" and a mangled name
+- For server owners: a `client_files` folder that is a link to a folder elsewhere is served on Linux; the server script listed nothing there, so players were sent no files and no `hailstone.cfg`, and no server rules applied
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)
+- A world or character name sent by a server can no longer add lines of its own to the saved server's `server.ini` (for example a `[Server] host=` that would send the next login elsewhere): line breaks and `=` in such names are saved as `_`
+- A broken or hostile server can no longer freeze or crash the client with a mercenary list that claims billions of entries, a barter search or buyer list that claims thousands of empty rows, or an inventory that claims thousands of items in a few bytes
+- After zoning, the first `/find` is no longer swallowed when the navigator had asked the old zone for a path that never came
+- A server teleport far outside the zone, or a script's `${LineOfSight[...]}` with a huge or not-a-number coordinate, no longer freezes the game for seconds at each line-of-sight test (a spell cast, /say to a target, /follow); `LineOfSight` is NULL for such a point
+- A modded or broken spell file whose shadow step (SPA 379) has a distance of 33 million or more no longer freezes the game when the spell lands (the original client hangs there)
+- Numbers past 32 bits typed into slash commands and hot buttons (`/memspellset`, `/pause`, `/doability`, `/xtarget`) or read from the client's own text files mean the same on Linux and Windows
+- Slightly less work every frame and movement step in zone: the developer spawn list is built only while its window is open, a boat's collision is placed again only when it moved, and rain and snow no longer shift their whole particle pool for every drop
+- A Lua script's `/keypress` of a hot button, target or ability key now works while you are typing in the chat (only movement keys did)
+- A Lua script's window whose function never returns is stopped after 5 seconds, as the rest of a script is, instead of freezing the game
+- Lua socials: Dry run in the editor no longer really does what the code says beyond its commands (an item click, a bind, a saved file): those now stop the dry run with "does nothing in a dry run"
+- For script authors: a table's `__gc` finalizer is refused (`setmetatable` gives an error)
+- Lua scripts: a launcher window whose buttons start or stop other scripts (`mq.cmd('/lua run ...')`, `/lua stop ...`) no longer crashes the game
+- Lua scripts: a bind that runs its own command again stops the script with an error after 16 levels, instead of crashing the game; a script that fills its 256 MB, an error in a `hailstone.hooks` table's `__index`, or a Lua social that gives `button` a metatable stops the script (or reports the error) instead of closing the game
+- Lua scripts: a launcher that stops and runs a script again in one go (`/lua stop x`, then `/lua run x`) no longer leaves the restarted script without the `hailstone` UI functions, options and menu entries it registered; a script started by another first runs on the next frame, and two scripts that restart each other no longer freeze the game
+- For script authors: a command of more than 1000 words for a bind is refused with a line in the chat instead of ending the script
+- For script authors: `hailstone.hooks{after_combat_ability = function(id, used) ... end}` is called with both values; it used to end the script with "attempt to call a number value"
+- For script authors: a `coroutine.wrap` generator or a coroutine of the script's own is no longer interrupted by the frame's 3 ms pause (it used to return early with no values); long work inside one is now limited only by the 5 s stop
+- For script and UI pack authors: `ui.Begin` and `ui.BeginChild` ignore ImGui's internal window flags (Popup, Tooltip, Modal, ChildMenu, ChildWindow), and a stray `ui.EndMenu`, `ui.EndPopup`, `ui.EndCombo` or `ui.EndTooltip` outside its menu, popup, combo or tooltip does nothing, where they could crash the game
+- For script authors: an id, door number or coordinate that no spawn or door can have (`/nav door id 300`, `${Spawn[id -5]}`, NaN, 1e300) finds nothing instead of a wrapped number (door 300 was door 44), and `${Heading[nan]}` is NULL
+- The Lua social editor stays smooth with a long script: its colours are placed in one pass over the text instead of once per word
+- The Lua UI's window settings are saved through a new file that replaces the old one, so a crash or a full disk while saving no longer loses every window's layout
+- For script authors: `mq.delay(math.huge)` waits for good, and `mq.delay(0/0)` is an error
+- For script authors: `${Int[...]}` and a float's `.Int` are NULL for NaN, an infinity or a number past a 64-bit integer, instead of an undefined value
+- For script authors: `getmetatable` on an `mq.TLO` value gives `"mq.TLO"`, not the shared table, so its finalizer cannot be replaced
+- `mq.event` patterns with several `#n#` no longer stall the game on long chat lines
+- For add-on authors: `eq.LuaSocialDryRun` needs the `commands` and `actions` capabilities in a plugin's window, as `eq.SetLuaSocial` does
+- After /camp or a return to character select, the next character sometimes lost the zone's line of sight for spells (targets behind walls could be cast on), a #goto or summon inside the zone reloaded the zone instead of moving you, and /doability, /bodytint, /facepick and /stopsocial did nothing, until the next login
+- Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
+- With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
+- Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
+- Connecting to a login, world or zone server given by name, and a plugin's `tcp_open` of a name, no longer freeze the game while the name is looked up; a name that does not answer within the connect timeout ends the connect with "cannot resolve"
+- Quitting soon after zoning in no longer leaves the client running, with no window, for up to tens of seconds when the chat server's name lookup is stuck
+- A server-file download no longer fails with "the server's files keep changing" when the server owner changes a file in `client_files/` during it: the files are listed again once and the download finishes
+- A hostile server can no longer make the map editor overwrite or read `.txt` files outside Hailstone's maps folders (the game folder's included) by sending a zone name that is a path; such a name is not used
+- Cycling the extended targets no longer freezes the game after the server shrinks the list below the slot last cycled to
+- A server that sends a coin count of 2^31 or more no longer freezes the game at the next purchase, tribute or market buy
+- A plugin that streams a lot of data with `tcp_send` over a busy link no longer keeps every byte it ever sent in memory
+- A broken or hostile server can no longer freeze the client with an expedition member list of millions of names
+- A broken or hostile server can no longer freeze the client with real estate records whose parents form a loop or whose child lists name themselves or repeat
+- Buying a stack whose total cost is more than 2^31 copper (about 2.1 million platinum) at a merchant or trader is refused with the can't-afford message instead of being sent
+- A `/find` and the navigator's own path request made at the same moment mostly no longer swap their replies (the navigator walked the `/find`'s path and the navigator's was drawn); a fast empty reply can still overtake a slow full path on stock EQEmu
+- A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
+- A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
+- Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame
+- Broken or hostile game files (in your game folder or a server's assets folder) can no longer make the client claim gigabytes of memory, hang on zone load or crash: an archive member that claims a huge size, an animation whose key times run for days, an endless chain of hero's forge layers, an absurdly scaled or misplaced flame, and a light colour out of range
+- Classic zones whose object archive repeats the zone's textures load a little faster: each shared texture is compared once, not once per object
+- Uncommon GPUs and drivers: doors and ground objects are drawn where they are on a driver whose memory needs flushing, and a GPU without a plain 32-bit depth format uses its depth-and-stencil one correctly
+- A long stay in a busy zone (the Bazaar, the Plane of Knowledge) no longer keeps every armour look ever seen in memory: a look nobody has worn for five minutes is freed, and dressed again if it comes back
+- Music no longer makes the game hitch: the zone's and the global music (combat, death) are read ahead when you enter a zone, and the game no longer waits for the music to decode
+- Bug reports no longer carry what was said in chat: the words of every chat line (tells, guild, group and channel chat) are taken out of the logs and the crash report in the zip, and the report window says what the file holds and what was taken out
+- Saving a bug report no longer freezes the game for a moment with large logs: the report is written in the background
+- An update cut off at the wrong moment no longer loses the file it was about to replace, and an update no longer writes over an add-on installed into a plugin's folder after the update downloaded
+- An add-on install or removal cut off at the wrong moment now puts the add-on list back with the files, so the add-on shows its real version and can be updated again
+- For add-on authors and release builders: `tools/make_addon.py` and `tools/make_update.py` take in a linked folder's files instead of leaving them out, and stop at a link that loops
+- For server owners: `hailstone.lua` reads its `hailstone:<name>` data buckets at most every 10 seconds instead of at every packet, looks at a client file's time once until the list is next made instead of at every first-piece request, and limits each character's file-list, guild and settings requests
+- In-game browser: a mouse button or key let go while a script's large message was still on its way to the browser is no longer lost (the page used to keep the button or key held)
+- A server's web link no longer opens a page on your own computer or home network (a router's admin page, for example), keeps its cookies apart from the pages you open yourself, and a link never takes over a tab you have browsed on from
+- In-game browser: a page shown at the largest size (4096x4096, or a browser window stretched past it on an 8K display) no longer makes the client restart the browser until it gives up on it for the session
+- In-game browser: a script's or plugin's page is closed (it is told why) when the server's `[web] allow` changes or the script loses the `web` permission, for example when the server's `hailstone.cfg` arrives at the first zone-in; it used to keep the sites it was opened with for the rest of the session
+- For plugin authors: `web_message(host, tab, NULL, 0)` gives the next page message's length and leaves it queued, so a plugin can make room for a long one; given a buffer the message is still taken, cut or not
+- A server (or a quest looping on `SendWebLink`) can no longer open hundreds of browser pages or system-browser tabs: the same link again within 10 seconds is not opened again, at most 5 open a minute, and once 4 such pages are open the newest is reused
+- A compiled plugin that keeps running with fewer permissions (the server's `hailstone.cfg` arriving at the zone-in, a lowered add-on ceiling) no longer goes on seeing packets, chat lines, spawn events or typed command lines it lost the permission for
+- The developer Plugins & Lua window no longer reads and hashes every plugin file on every frame while it is open (once a second now)
+- Add-ons: installing an add-on again while it is still downloading or waiting to be installed is refused with a message, instead of unpacking into the folder the waiting install is moving files out of
+- Add-ons: an add-on installed from one repository is no longer replaced by another of the same name from another repository or signing key when both were installed at about the same time
+- Add-ons: an update in which a folder became a file of the same name installs, instead of failing and being rolled back at every login screen; an update that would put a file where you keep your own files in a folder stops and leaves them alone
+- Updates: when the record of the installed update cannot be saved first (disk full, a file in the way), the update stops before moving anything, instead of deleting that record if it later had to be rolled back
+- Windows: quitting while an update check or an add-on download waits on a network that has stopped answering no longer keeps hailstone.exe running for up to a minute after its window closes
+- Bug reports: a Linux crash report whose last log line was chat keeps its stack trace in the report (taking the chat out used to take the stack with it)
+- Bug reports: a report still being written when the window is opened again keeps its own screenshot (it could get none, a broken one or the next one), and a report sent while an earlier one is written says where you were and what you targeted when you sent it, not when its turn came
 
 ## 0.5.0-beta (2026-11-05)
 
@@ -16,6 +107,11 @@
 - `/raidwindow` (and short forms such as `/raidwin`) opens and closes the raid window, as the raid key does; it opened an old built-in window instead
 - Modern UI: the raid leader can move players between groups in the raid window again: drag a player onto another group (or onto Not in a group), or select one and use Move here. The game only allows moves while the raid is locked, so a move in an unlocked raid locks it first, and a strip above the groups says so, with Lock and Unlock. A full group refuses the drop. The groups show their empty slots, head count and average level; leaders, the raid's main assists and markers have tags, and a player's note shows when you point at them
 - Gamepad UI: in an unlocked raid, the leader's Move to a group locks the raid first instead of being greyed out
+- A UI script or plugin can no longer add lines to the UI settings file: `ui.SetSetting` refuses (and returns false for) a key with `=` or a line break, or a value with a line break. A plugin could use one to set the pack's own keys, which click windows' buttons at the next start
+- A UI script that calls `ui.TableNextRow` or the table header row outside a table (for example when `ui.BeginTable` returned false) no longer crashes the client; a table column or freeze set up after the first row is ignored
+- `ui.Image`, `ui.ImageButton` and `ui.DrawImage` draw only textures the client handed out and has not freed: any other value (an `mq.TLO` value, for example) is drawn as nothing instead of reaching the graphics driver
+- For script and plugin authors: the in-game browser refuses an `eval`, `text` or `post` too long to send (and an address over 2 MB) instead of sending it, which made the browser helper quit and, repeated, turned the in-game browser off for the session; a `post` is at most 1 MB, as the page's own messages are. While 32 MB wait for the browser helper, further calls return false instead of queueing (several large evals in one frame no longer end the helper and close the player's tabs), and a helper that stops reading its input is restarted after 10 seconds. A script or plugin holds at most 16 tabs at once, and a closed tab's image is freed at once
+- A broken font file in the system or user font folder no longer makes the font option allocate up to 4 GB
 
 ## 0.4.0-alpha (2026-11-05)
 
@@ -92,7 +188,7 @@
 - Approving an add-on's update approves what you were shown: if the add-on's repository asks for more (or offers another version) by the time you click, nothing is installed and you are asked to review it again
 - A Lua script started by another script or a plugin gets no more permissions than the one that started it, and the settings files scripts write under `scripts/config/` can no longer be run as scripts
 - For server owners: Hailstone's server script looks at `client_files/` again at most every 5 minutes when a player asks (the new `files_rescan` setting; `#reloadquest` picks changes up at once), holds each player to 1024 file pieces a second (`files_chunks_per_second`), keeps up to eight files open so players fetching different files no longer make the zone reopen them at every piece, and passes on at most 5 group declines a player in 10 s
-- A new server on the login screen starts with an empty address instead of a private network address (192.168.12.250) left over from development; type your server's address
+- A new server on the login screen starts with an empty address instead of a development address left in by mistake; type your server's address
 - Zoning or quitting while a neighbour zone (the distant zone past a zone line, modern lighting) is still loading no longer waits for the whole load to finish
 - On a system whose window surface reports a size other than the window's (some scaled or tiling desktops), the graphics are no longer set up again every frame
 - A graphics driver whose window images cannot be copied no longer gets an invalid copy for a screenshot: the screenshot is refused with a chat line and a log line instead

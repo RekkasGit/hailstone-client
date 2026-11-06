@@ -3,6 +3,8 @@
 // pointers are returned instead (value, changed = ui.Checkbox("x", value)). Colours are r, g, b, a in 0..1.
 // Textures (for example item icons from eq.ItemIcon) are light userdata.
 #include <algorithm>
+#include <cfloat>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -10,6 +12,7 @@
 #include "imgui_internal.h" // stack sizes, to refuse pops and ends that ImGui would only assert on
 #include "ui/imgui_layer.h"
 #include "ui/lua/lua_host.h"
+#include "ui/texture_ids.h"
 
 #include <lua.hpp>
 
@@ -22,7 +25,13 @@ int GetClipboardText(lua_State* L);
 
 namespace {
 
-float F(lua_State *L, int i, float def = 0.0f) { return static_cast<float>(luaL_optnumber(L, i, def)); }
+// A double beyond float's range is undefined behaviour to convert: it is held to +-FLT_MAX (NaN and the infinities
+// convert as they are).
+float to_float(double v) {
+	constexpr double kMax = FLT_MAX;
+	return static_cast<float>(std::isfinite(v) ? std::clamp(v, -kMax, kMax) : v);
+}
+float F(lua_State *L, int i, float def = 0.0f) { return to_float(luaL_optnumber(L, i, def)); }
 int I(lua_State *L, int i, int def = 0) { return static_cast<int>(luaL_optinteger(L, i, def)); }
 const char *S(lua_State *L, int i) { return luaL_checkstring(L, i); }
 bool B(lua_State *L, int i, bool def = false) { return lua_isnoneornil(L, i) ? def : lua_toboolean(L, i) != 0; }
@@ -55,11 +64,14 @@ bool guarded(const ImGuiWindow *w) {
 }
 
 // --- windows ---
+// A script's window flags: ImGui's public ones. From 1 << 24 they are its own (ChildWindow, Tooltip, Popup, Modal,
+// ChildMenu: "Don't use!"); Popup without an open popup indexes OpenPopupStack out of bounds.
+int WindowFlags(lua_State *L, int i) { return I(L, i) & ((1 << 24) - 1); }
 // visible, open = ui.Begin(title [, open [, flags]])   open: nil = no close button
 int Begin(lua_State *L) {
 	bool hasOpen = !lua_isnoneornil(L, 2);
 	bool open = B(L, 2, true);
-	bool visible = ImGui::Begin(S(L, 1), hasOpen ? &open : nullptr, I(L, 3));
+	bool visible = ImGui::Begin(S(L, 1), hasOpen ? &open : nullptr, WindowFlags(L, 3));
 	if (g_guard && g_guardLuaFrame == ImGui::GetFrameCount() && LuaUi::drawing_window() == g_guardLuaWindow &&
 		pack_code(L))
 		guard(ImGui::GetCurrentWindow());
@@ -68,7 +80,7 @@ int Begin(lua_State *L) {
 	return 2;
 }
 int End(lua_State *) { ImGui::End(); return 0; }
-int BeginChild(lua_State *L) { return Ret(L, ImGui::BeginChild(S(L, 1), ImVec2(F(L, 2), F(L, 3)), B(L, 4) ? ImGuiChildFlags_Borders : 0, I(L, 5))); }
+int BeginChild(lua_State *L) { return Ret(L, ImGui::BeginChild(S(L, 1), ImVec2(F(L, 2), F(L, 3)), B(L, 4) ? ImGuiChildFlags_Borders : 0, WindowFlags(L, 5))); }
 int EndChild(lua_State *) { ImGui::EndChild(); return 0; }
 int SetNextWindowSize(lua_State *L) { ImGui::SetNextWindowSize(ImVec2(F(L, 1), F(L, 2)), I(L, 3, ImGuiCond_FirstUseEver)); return 0; }
 int SetNextWindowPos(lua_State *L) { ImGui::SetNextWindowPos(ImVec2(F(L, 1), F(L, 2)), I(L, 3, ImGuiCond_FirstUseEver)); return 0; }
@@ -192,7 +204,7 @@ int InputTextMultiline(lua_State *L) {
 	const char *cur = luaL_optlstring(L, 2, "", &len);
 	int cap = I(L, 3, 4096);
 	cap = cap < 1 ? 1 : cap > 65535 ? 65535 : cap;
-	float w = static_cast<float>(luaL_optnumber(L, 4, 0)), h = static_cast<float>(luaL_optnumber(L, 5, 0));
+	float w = to_float(luaL_optnumber(L, 4, 0)), h = to_float(luaL_optnumber(L, 5, 0));
 	ImGuiInputTextFlags flags = I(L, 6, 0) & (ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_AutoSelectAll);
 	std::string buf(cur, len);
 	buf.resize(static_cast<size_t>(cap) + 1);
@@ -271,8 +283,18 @@ int InputTextWithHint(lua_State *L) {
 }
 // open = ui.BeginCombo(label, preview [, flags]) ... ui.EndCombo()
 int BeginCombo(lua_State *L) { return Ret(L, ImGui::BeginCombo(S(L, 1), S(L, 2), I(L, 3, 0))); }
+// The popup BeginPopup, BeginCombo or BeginMenu began is the current window: what EndPopup, EndCombo and EndMenu
+// need (unchecked in a release build; EndMenu reads a null ParentWindow in a top-level window).
+bool InPopup(ImGuiWindowFlags also = 0) {
+	const ImGuiContext &g = *GImGui;
+	const ImGuiWindow *w = g.CurrentWindow;
+	return w && (w->Flags & ImGuiWindowFlags_Popup) && (w->Flags & also) == also && g.BeginPopupStack.Size > 0 &&
+		   g.BeginPopupStack.back().Window == w;
+}
 int EndCombo(lua_State *) {
-	ImGui::EndCombo();
+	if (InPopup() && GImGui->BeginComboDepth > 0) {
+		ImGui::EndCombo();
+	}
 	return 0;
 }
 int SetItemDefaultFocus(lua_State *) {
@@ -294,9 +316,15 @@ int TreePop(lua_State *) {
 }
 
 // --- images ---
+// A texture argument: only a light userdata the client handed out and has not freed (ui/texture_ids.h); anything
+// else (an mq.TLO value, a freed icon sheet) would reach the Vulkan backend as a descriptor set, so it is none.
+ImTextureID TextureArg(lua_State *L, int i) {
+	void *p = lua_type(L, i) == LUA_TLIGHTUSERDATA ? lua_touserdata(L, i) : nullptr;
+	return texture_id_live(p) ? reinterpret_cast<ImTextureID>(p) : ImTextureID{};
+}
 // ui.Image(texture, w, h [, u0, v0, u1, v1 [, r, g, b, a]])
 int Image(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 1));
+	ImTextureID tex = TextureArg(L, 1);
 	if (!tex) {
 		ImGui::Dummy(ImVec2(F(L, 2), F(L, 3)));
 		return 0;
@@ -306,7 +334,7 @@ int Image(lua_State *L) {
 }
 // clicked = ui.ImageButton(id, texture, w, h [, u0, v0, u1, v1])
 int ImageButton(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 2));
+	ImTextureID tex = TextureArg(L, 2);
 	ImVec2 size(F(L, 3), F(L, 4));
 	if (!tex) {
 		return Ret(L, ImGui::Button(S(L, 1), size));
@@ -441,7 +469,15 @@ int BeginTable(lua_State *L) {
 	return Ret(L, ImGui::BeginTable(S(L, 1), columns, I(L, 3), ImVec2(F(L, 4), F(L, 5))));
 }
 int EndTable(lua_State *) { ImGui::EndTable(); return 0; }
-int TableNextRow(lua_State *) { ImGui::TableNextRow(); return 0; }
+// The calls below refuse what ImGui would dereference or only assert on: TableNextRow (and so the header row) with
+// no current table reads through a null table, and a column or freeze set up after the first row asserts.
+bool TableLayoutOpen() { return GImGui->CurrentTable && !GImGui->CurrentTable->IsLayoutLocked; }
+int TableNextRow(lua_State *) {
+	if (GImGui->CurrentTable) {
+		ImGui::TableNextRow();
+	}
+	return 0;
+}
 int TableNextColumn(lua_State *L) { return Ret(L, ImGui::TableNextColumn()); }
 // BeginDisabled(disabled) / EndDisabled(): greys out and blocks the items between; ends without a begin this frame
 // are ignored (ImGui asserts on them).
@@ -466,13 +502,27 @@ int TableGetHoveredColumn(lua_State *L) { // 0-based column under the mouse in t
 	lua_pushinteger(L, ImGui::GetCurrentContext()->CurrentTable ? ImGui::TableGetHoveredColumn() : -1);
 	return 1;
 }
-int TableSetupColumn(lua_State *L) { ImGui::TableSetupColumn(S(L, 1), I(L, 2), F(L, 3)); return 0; }
+int TableSetupColumn(lua_State *L) {
+	const char *label = S(L, 1);
+	// The status bits are ImGui's own to set (passing them asserts); ImGui clears them each frame regardless.
+	const int flags = I(L, 2) & ~ImGuiTableColumnFlags_StatusMask_;
+	const float width = F(L, 3);
+	ImGuiTable *table = GImGui->CurrentTable;
+	if (TableLayoutOpen() && table->DeclColumnsCount < table->ColumnsCount) {
+		ImGui::TableSetupColumn(label, flags, width);
+	}
+	return 0;
+}
 int TableHeadersRow(lua_State *) { ImGui::TableHeadersRow(); return 0; }
 // column = TableHeadersRowClicked(): the header row, as TableHeadersRow draws it; the column (0-based) clicked this
 // frame, else -1 (a stock list's header click: CListWnd's notification 0xf).
 int TableHeadersRowClicked(lua_State *L) {
-	ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
 	int clicked = -1;
+	if (!GImGui->CurrentTable) {
+		lua_pushinteger(L, clicked);
+		return 1;
+	}
+	ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
 	for (int c = 0, n = ImGui::TableGetColumnCount(); c < n; ++c) {
 		if (!ImGui::TableSetColumnIndex(c)) continue;
 		ImGui::PushID(c);
@@ -483,7 +533,13 @@ int TableHeadersRowClicked(lua_State *L) {
 	lua_pushinteger(L, clicked);
 	return 1;
 }
-int TableSetupScrollFreeze(lua_State *L) { ImGui::TableSetupScrollFreeze(I(L, 1), I(L, 2)); return 0; }
+int TableSetupScrollFreeze(lua_State *L) {
+	const int columns = I(L, 1), rows = I(L, 2);
+	if (TableLayoutOpen()) {
+		ImGui::TableSetupScrollFreeze(std::clamp(columns, 0, IMGUI_TABLE_MAX_COLUMNS - 1), std::clamp(rows, 0, 127));
+	}
+	return 0;
+}
 // column, ascending = ui.TableGetSortSpecs()   -- after the headers of a Sortable table: the column sorted on
 // (0-based) and its direction while the sort changed this frame, else nil
 int TableGetSortSpecs(lua_State *L) {
@@ -519,7 +575,12 @@ int EndTabItem(lua_State *) {
 
 // --- tooltips, popups ---
 int BeginTooltip(lua_State *L) { return Ret(L, ImGui::BeginTooltip()); }
-int EndTooltip(lua_State *) { ImGui::EndTooltip(); return 0; }
+int EndTooltip(lua_State *) {
+	if (GImGui->CurrentWindow && (GImGui->CurrentWindow->Flags & ImGuiWindowFlags_Tooltip)) {
+		ImGui::EndTooltip();
+	}
+	return 0;
+}
 int SetTooltip(lua_State *L) { ImGui::SetTooltip("%s", S(L, 1)); return 0; }
 int OpenPopup(lua_State *L) { ImGui::OpenPopup(S(L, 1)); return 0; }
 int BeginPopup(lua_State *L) { return Ret(L, ImGui::BeginPopup(S(L, 1))); }
@@ -529,12 +590,19 @@ int BeginPopupContextWindow(lua_State *L) {
 	return Ret(L, ImGui::BeginPopupContextWindow(lua_isnoneornil(L, 1) ? nullptr : S(L, 1),
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems));
 }
-int EndPopup(lua_State *) { ImGui::EndPopup(); return 0; }
+int EndPopup(lua_State *) {
+	if (InPopup()) {
+		ImGui::EndPopup();
+	}
+	return 0;
+}
 int CloseCurrentPopup(lua_State *) { ImGui::CloseCurrentPopup(); return 0; }
 // open = ui.BeginMenu(label [, enabled])   -- a submenu inside a popup or menu; ui.EndMenu() when it returned true
 int BeginMenu(lua_State *L) { return Ret(L, ImGui::BeginMenu(S(L, 1), B(L, 2, true))); }
 int EndMenu(lua_State *) {
-	ImGui::EndMenu();
+	if (InPopup(ImGuiWindowFlags_ChildMenu)) {
+		ImGui::EndMenu();
+	}
 	return 0;
 }
 // clicked = ui.MenuItem(label [, selected [, enabled [, shortcut]]])
@@ -683,9 +751,17 @@ int PushStyleVar(lua_State *L) {
 // The value at list[i] as a number, or def when it is not one.
 float ListNumber(lua_State *L, int list, lua_Integer i, float def) {
 	lua_rawgeti(L, list, i);
-	const float v = lua_isnumber(L, -1) ? static_cast<float>(lua_tonumber(L, -1)) : def;
+	const float v = lua_isnumber(L, -1) ? to_float(lua_tonumber(L, -1)) : def;
 	lua_pop(L, 1);
 	return v;
+}
+// list[i] as an index below `count`, or -1: checked as a number before it is made an int (NaN or a huge value
+// would be undefined behaviour to convert).
+int ListIndex(lua_State *L, int list, lua_Integer i, int count) {
+	lua_rawgeti(L, list, i);
+	const double v = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : -1.0;
+	lua_pop(L, 1);
+	return v >= 0.0 && v < count ? static_cast<int>(v) : -1;
 }
 // n = ui.PushStyleColors(list)   -- many PushStyleColor in one call (lib/style.lua pushes its whole look for every
 // window): list = { idx, r, g, b, a, idx, r, g, b, a, ... }. An index out of range is skipped; returns how many were
@@ -696,8 +772,8 @@ int PushStyleColors(lua_State *L) {
 	const lua_Integer len = static_cast<lua_Integer>(lua_rawlen(L, 1));
 	int pushed = 0;
 	for (lua_Integer i = 1; i + 4 <= len; i += 5) {
-		const int idx = static_cast<int>(ListNumber(L, 1, i, -1));
-		if (idx < 0 || idx >= ImGuiCol_COUNT) continue;
+		const int idx = ListIndex(L, 1, i, ImGuiCol_COUNT);
+		if (idx < 0) continue;
 		ImGui::PushStyleColor(idx, ImVec4(ListNumber(L, 1, i + 1, 1), ListNumber(L, 1, i + 2, 1), ListNumber(L, 1, i + 3, 1),
 		                                  ListNumber(L, 1, i + 4, 1)));
 		++pushed;
@@ -713,12 +789,12 @@ int PushStyleVars(lua_State *L) {
 	const lua_Integer len = static_cast<lua_Integer>(lua_rawlen(L, 1));
 	int pushed = 0;
 	for (lua_Integer i = 1; i + 2 <= len; i += 3) {
-		const int idx = static_cast<int>(ListNumber(L, 1, i, -1));
-		if (idx < 0 || idx >= ImGuiStyleVar_COUNT) continue;
+		const int idx = ListIndex(L, 1, i, ImGuiStyleVar_COUNT);
+		if (idx < 0) continue;
 		const float x = ListNumber(L, 1, i + 1, 0);
 		lua_rawgeti(L, 1, i + 2);
 		const bool pair = lua_isnumber(L, -1) != 0;
-		const float y = pair ? static_cast<float>(lua_tonumber(L, -1)) : 0.0f;
+		const float y = pair ? to_float(lua_tonumber(L, -1)) : 0.0f;
 		lua_pop(L, 1);
 		if (pair) {
 			ImGui::PushStyleVar(idx, ImVec2(x, y));
@@ -809,7 +885,7 @@ int CaptureKeyboard(lua_State *) {
 }
 // ui.DrawImage(texture, x0, y0, x1, y1 [, u0, v0, u1, v1 [, r, g, b, a]])   -- screen coordinates
 int DrawImage(lua_State *L) {
-	ImTextureID tex = reinterpret_cast<ImTextureID>(lua_touserdata(L, 1));
+	ImTextureID tex = TextureArg(L, 1);
 	if (tex) {
 		DrawTarget()->AddImage(tex, ImVec2(F(L, 2), F(L, 3)), ImVec2(F(L, 4), F(L, 5)),
 			ImVec2(F(L, 6, 0), F(L, 7, 0)), ImVec2(F(L, 8, 1), F(L, 9, 1)), ImGui::GetColorU32(Color(L, 10)));

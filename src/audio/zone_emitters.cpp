@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace nmsc::audio {
@@ -14,6 +16,16 @@ constexpr float kPriorityBase = 10000.0f;      // music priority = int(range + 1
 constexpr float kNegativeRadius = 10000.0f;    // a negative EFF radius becomes 10000 (and an environment)
 constexpr std::int32_t kCrossfadeMs = 1500;    // 0x5dc
 constexpr std::int32_t kMaxEffFadeOutMs = 20000;
+
+// (int)x as the original converts (cvttss2si / _ftol): a NaN or a value past int32, which C++ leaves undefined,
+// gives INT_MIN there.
+std::int32_t ftol(float x) {
+    return std::fabs(x) < 2147483648.0f ? static_cast<std::int32_t>(x) : std::numeric_limits<std::int32_t>::min();
+}
+// a + b with the original's 32-bit wrap (a signed overflow is undefined in C++).
+std::int32_t add32(std::int32_t a, std::int32_t b) {
+    return static_cast<std::int32_t>(static_cast<std::uint32_t>(a) + static_cast<std::uint32_t>(b));
+}
 
 bool contains_nocase(const std::string& s, const char* what) {
     std::string a(s), b(what);
@@ -56,7 +68,7 @@ ZoneSoundSet emitters_from_emt(const std::vector<assets::EmtRow>& rows,
             m.file = r.file;
             m.track = r.xmi_track;
             m.volume = r.gain;
-            m.priority = static_cast<std::int32_t>(r.range + kPriorityBase);
+            m.priority = ftol(r.range + kPriorityBase);
             m.fade_in_ms = r.fade_in;
             m.crossfade_ms = kCrossfadeMs;
             m.fade_out_ms = r.fade_out;
@@ -101,7 +113,7 @@ std::optional<Emitter> old_emitter(ZoneSoundSet& set, std::uint8_t kind, const g
                                    const std::function<bool(const std::string&)>& exists) {
     std::int32_t environment = 0;
     if (radius < 0.0f) {
-        environment = static_cast<std::int32_t>(-radius);
+        environment = ftol(-radius);
         radius = kNegativeRadius;
     }
     Emitter e;
@@ -129,7 +141,7 @@ std::optional<Emitter> old_emitter(ZoneSoundSet& set, std::uint8_t kind, const g
         }
         fade_out = std::min(fade_out, kMaxEffFadeOutMs);
         m.volume = 1.0f;
-        m.priority = static_cast<std::int32_t>(radius + kPriorityBase);
+        m.priority = ftol(radius + kPriorityBase);
         m.fade_in_ms = param;
         m.crossfade_ms = kCrossfadeMs;
         m.fade_out_ms = fade_out;
@@ -138,7 +150,7 @@ std::optional<Emitter> old_emitter(ZoneSoundSet& set, std::uint8_t kind, const g
         e.loop_count = level;
         e.gain = 1.0f;
         e.delay_min = cooldown;
-        e.delay_max = cooldown + random;
+        e.delay_max = add32(cooldown, random);
         e.min_distance = e.max_distance = 0.0f;
         e.fade_in_ms = param;
         e.fade_out_ms = fade_out;
@@ -161,8 +173,8 @@ std::optional<Emitter> old_emitter(ZoneSoundSet& set, std::uint8_t kind, const g
     } else {
         e.loop_count = 1;
         if (random > 0) {
-            e.delay_min = cooldown + 500;
-            e.delay_max = cooldown + 500 + random;
+            e.delay_min = add32(cooldown, 500);
+            e.delay_max = add32(e.delay_min, random);
         } else {
             e.delay_min = e.delay_max = cooldown;
         }
@@ -248,7 +260,12 @@ void ZoneEmitters::reset_timer(std::size_t i, std::uint32_t now_ms) {
     const Emitter& e = set_.emitters[i];
     s.anchor = now_ms;
     s.delay = e.delay_min;
-    if (e.delay_min < e.delay_max) s.delay += rand_() % (e.delay_max - e.delay_min);
+    // max - min wraps in 32 bits as the original's sub (-2e9 .. 2e9 from a forged file overflows int32); it is not 0
+    // here, and the remainder of a non-negative rand() by it is defined whatever its sign.
+    if (e.delay_min < e.delay_max) {
+        const std::int32_t span = add32(e.delay_max, static_cast<std::int32_t>(0u - static_cast<std::uint32_t>(e.delay_min)));
+        s.delay = add32(s.delay, static_cast<std::int32_t>(static_cast<std::int64_t>(rand_()) % span));
+    }
 }
 
 void ZoneEmitters::update(const glm::vec3& listener, std::uint32_t now_ms, float effects_volume, float music_volume,

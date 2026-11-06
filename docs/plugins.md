@@ -130,6 +130,11 @@ Each running file carries a set of capability bits: every one for the server's f
 manager installed gets no more than its manifest's `caps`, whatever the server allows (docs/addons.md "Capabilities":
 `plugin::Policy::set_ceilings`, by the file's hash).
 
+The bits are checked again whenever they change (the server's `hailstone.cfg` arriving at the zone-in after a first
+visit's provisional rules, a lowered ceiling): a compiled plugin that stays loaded with fewer of them gets no more
+packets (`OnPacket`), chat lines (`OnIncomingChat`, `OnFilterChat`), spawn events or command lines (the server
+extension's `command_line`) from the moment it lost the bit, and its web tabs close.
+
 | Bit | Name | Lets a script or plugin |
 |---|---|---|
 | 1 | `read` | read game state: `mq.TLO`, `${...}`, `mq.parse`, `ParseMacroData`, spawn events |
@@ -158,7 +163,17 @@ Only Lua scripts are supported. MQ's old `.mac` macro language is not.
 A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQuest uses. Each script gets its own Lua
 5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
-cannot freeze the client. One that cannot pause for 5 s is stopped. Each script's memory is capped at 256 MB.
+cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
+pause, is stopped the same way. Only the script's own run and its binds are paused: a coroutine the script made itself
+(`coroutine.create`, `coroutine.wrap`) is never yielded by the pause, which would hand its `coroutine.resume` an
+early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. A bind
+whose function runs commands that start binds of the same script again (`mq.bind('/x', function() mq.cmd('/x')
+end)`) ends the script once they nest 16 deep; a command of more than 1000 words for a bind is refused (a line in
+the chat) and the script runs on. Each script's memory is capped at 256 MB: past it the script's own
+code gets "not enough memory", and a script that ends that way is stopped with its error. A script's tables cannot have a `__gc`
+finalizer (`setmetatable` refuses one): Lua runs finalizers with no way to stop them, and the last at the script's
+end, after what it registered is taken back. For the same reason an `mq.TLO` value's metatable is locked
+(`getmetatable` gives `"mq.TLO"`).
 
 ### The `mq` module
 
@@ -166,8 +181,8 @@ cannot freeze the client. One that cannot pause for 5 s is stopped. Each script'
 |---|---|
 | `mq.TLO.<Name>...` | MQ's TLOs (below). Call with no arguments for the plain value (`mq.TLO.Me.PctHPs()`, `nil` for NULL). Call with arguments for an indexed member (`mq.TLO.Me.Buff(1).Duration.TotalSeconds()`, `mq.TLO.Spawn('npc radius 50').ID()`). Values also work with `tostring`, `..`, `==`, `<` and `<=`. |
 | `mq.cmd(line)`, `mq.cmd.<name>(args...)`, `mq.cmdf(fmt, ...)` | a command line, with `${...}` parsed |
-| `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true |
-| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: `#*#` matches any text; `#1#`, `#2#`, ... are passed to `fn(line, arg1, ...)` |
+| `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true. A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
+| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: the whole line must match; `#*#` matches any text (as much as it can); `#1#`, `#2#`, ... (as little as they can) are passed to `fn(line, arg1, ...)` in their number's order; neither takes a line break; any other `#` is literal (`mq/event_pattern.h`) |
 | `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`. The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either), `/lua`, `/plugin` and MQ's (`/echo`, ...). A name another script or plugin bound is taken over until this one unbinds, as in MQ |
 | `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui` |
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
@@ -196,7 +211,8 @@ The data types use MQ's member names and inheritance:
 - `character` → `spawn`, `buff` → `spell`, `groupmember` → `spawn`.
 - `class`, `race`, `heading` (`Degrees`, `ShortName`, ...), `timestamp` (`TotalSeconds`, `TimeHMS`, ...), `item`.
 - MQ's pure types: `int`, `float` (`Deci`, `Precision`, `Int`), `string` (`Length`, `Upper`, `Left`, `Mid`,
-  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`.
+  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`. `Int[...]` and `float.Int` cut toward zero, and are NULL for NaN, an
+  infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
 
 For example `Me.PctHPs`, `Me.Buff[n|name].Duration`, `Me.Gem[n|name]`, `Me.SpellReady[n|name]`, `Me.Casting`,
 `Me.Combat`, `Me.XTarget[n]`, `Me.FreeInventory`, `Me.Inventory[mainhand|pack1|23]`, and on spawns `Target.Distance`,
@@ -215,7 +231,7 @@ For a script that fights:
   (22), `.Feared` (23), `.Rooted` (99), `.Snared` (3, negative), `.Slowed` (11, under 100%).
 - Line of sight: `Spawn.LineOfSight` (the player's eyes to the spawn through the zone's collision, the check the
   client's own abilities make), `LineOfSight[y,x,z:y,x,z]` (two points in MQ's order); NULL before the zone's
-  collision is loaded.
+  collision is loaded, and for a coordinate that is not a finite number below 1000000 in size.
 - `/stick` and the `Stick` TLO (`docs/navigation.md`).
 
 Spawn searches use MQ's words:
@@ -256,7 +272,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 
 | | |
 |---|---|
-| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`) |
+| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`). A hooks table with a metatable is read through it, in a protected call: an error in its `__index` ends the script |
 | `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand` (`extend`) |
 | `set_player_classes(mask)`, `set_character_classes(name, mask)`, `set_pet_list{{spawn =, class =}}`, `set_vitals{max_hp =, ...}` | what the server knows (`extend`) |
 | `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. With Lua's `string.pack` / `string.unpack` a script reads and writes any layout (`packets`) |
@@ -286,7 +302,9 @@ To start one: the server lists it in its `hailstone.cfg` `[scripts] run`; the pl
 window, or runs it there or with `/lua run <name>`. With the `login` capability it starts at the world login
 (above). A script that another script or a plugin starts (`mq.cmd('/lua run x')`, a plugin's command) gets no more
 capabilities than its starter has at that moment, whatever its own file would get; one its starter can give nothing
-does not start. Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
+does not start. It first runs on the next frame. A script stopped and run again in one go (`/lua stop x` then
+`/lua run x`) is closed before the new one starts, so the new one keeps the UI functions, options and menu entries it
+registers; a script that stops itself and runs itself again from its own code is refused ("is still stopping"). Nothing under `scripts/config/` (`mq.configDir`, where `mq.pickle` writes) runs as a script or loads
 as a module: those files are data. That holds for the folder in any case and with trailing dots or spaces
 (`Config/`, `config./`), as Windows and macOS would open it, and through links. A script or module name is a path
 inside the script folders: an absolute one (`/lua run /home/x/evil`, `require('/x')`) or one whose file is a link
@@ -343,7 +361,9 @@ return {label = hp and (hp .. '%') or 'Heal', enabled = hp ~= nil}
 - The editor colours the Lua and completes `mq.TLO` paths from the live game (Tab takes a name, Ctrl+Up / Ctrl+Down
   choose one), as well as `mq.` and `button.`. It marks the line of an error.
 - **Dry run** runs the press with the chosen modifiers and lists the commands it would send, with any the server
-  would block. Nothing is sent and waits are not waited. A dry run works even on a server without Lua socials.
+  would block. Nothing is sent and waits are not waited. Reading works; anything else that would act or stay
+  (`mq.bind`, `mq.event`, `mq.imgui`, `mq.pickle`, `mq.web`, the `hailstone` module's actions and hooks) is an error
+  that ends the dry run ("does nothing in a dry run"). A dry run works even on a server without Lua socials.
 - **Put on cursor** puts the social on the cursor, ready to drop on a hot bar.
 - **Copy share text** / **Paste** share a social as one line (`hailstone-social:1:...`).
 - Pressing a Lua social again while its Lua still runs (full mode) stops it, and so does a right click.
@@ -490,7 +510,7 @@ own and works the same on every platform. Nothing waits on the network:
 
 | Function | What |
 |---|---|
-| `tcp_open(address, port)` | looks the name up (that can take a moment) and starts connecting: a handle above 0, or 0 (no such host, no `net`, already `NMSC_TCP_MAX` = 8 open) |
+| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `NMSC_TCP_MAX` = 8 open). A name is looked up in the background, the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why |
 | `tcp_state(handle)` | 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the other side) |
 | `tcp_send(handle, data, size)` | takes every byte (what the system cannot take yet waits in the client and goes out at the next `tcp_*` call) and returns the count, or -1 once closed |
 | `tcp_recv(handle, out, size)` | what has arrived: the count, 0 for nothing yet, -1 once closed with nothing left |
@@ -619,7 +639,9 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
 - keeps settings of its own: `ui.SetSetting(key, v)` writes `plugin.<owner>.<key>` in the pack's settings file (a
   window's place under `hud.` is the character's, as the pack's are), `ui.GetSetting(key)` reads that, else the
   pack's own key of that name (the palette, the place of a window it took over), and neither reaches the pack's test
-  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys;
+  hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys
+  (`ui.SetSetting` refuses, and returns false for, a key with `=` or a line break or a value with a line break, since
+  the file is one `key=value` a line and such text would be read back as other keys);
   `ui.DisableWindow(name)` turns off only its own window of that name;
 - runs for at most a second at a time (a window's draw, its file's load, a function of its that the pack calls) and
   the pack's own code for five: code that runs longer is stopped with an error, which a `pcall` of its own cannot
@@ -641,7 +663,7 @@ a line in the log once.
 |---|---|
 | nothing | everything that reads or draws (`eq.Item`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below) |
 | `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
-| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` needs `commands` too) |
+| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 
 What stays shared: a plugin can still write into the tables the pack keeps in its globals (that is how its windows
@@ -683,12 +705,19 @@ or a private network (`localhost`, `192.168.x.x`, `10.x.x.x` and the like), even
 script and plugin has a cookie store of its own, apart from the player's and from each other's. A script or plugin sees
 and changes only its own tabs; the player's are not theirs, and theirs are not in the player's browser window. They
 close when it stops (a script whose main chunk has returned is stopped: keep it running, as for a window) or unloads.
-Without the helper (macOS, or not installed) `open` gives nil and why.
+Without the helper (macOS, or not installed) `open` gives nil and why. A script or plugin holds at most 16 tabs at
+once (`WebService::kMaxTabsPerOwner`), those the helper or the rules closed included until it closes them: a 17th
+`open` gives nil and why. An address is at most 2 MB, a `post` to the page at most 1 MB, and an `eval` or `text` at
+most what one message to the helper holds (64 MB): a longer one is refused (false; `navigate` with why) and nothing
+is sent. While 32 MB still wait for the helper to read them, `open`, `navigate`, `eval`, `text` and `post` are refused
+the same way; try again a frame or so later. An empty queue takes the largest message.
 
 The page and its owner talk through `window.hailstone`: the page's `hailstone.post(text)` is queued for the owner
 (`mq.web.messages(tab)`, `eq.WebMessages(tab)`, `web_message`; a message is at most 1 MB, and at most 256 and 8 MB
-wait, the oldest going first), and the owner's `post` calls
-the page's `hailstone.onmessage(text)` when it set one. A page cannot run commands or read the game itself; what a
+wait, the oldest going first; `web_message` with a buffer takes the message off the queue even when it is cut, and
+with `out` NULL gives only its length and leaves it queued, so a plugin can make room for a long one first), and the
+owner's `post` calls the page's `hailstone.onmessage(text)` when it set one. A tab is closed (Refused, with why)
+when its owner loses `web` or the server's `[web] allow` changes (docs/browser.md "Rules that change"). A page cannot run commands or read the game itself; what a
 message does is up to its owner, within the owner's own permissions.
 
 | | Lua scripts and Lua plugins | A plugin's windows (UI pack) | Compiled plugins (ABI 3) |

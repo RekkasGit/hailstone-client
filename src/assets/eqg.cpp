@@ -8,7 +8,10 @@
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -77,6 +80,7 @@ std::string MaterialDef::texture(std::string_view property) const {
 
 const MaterialDef* ModelFile::material_for(std::uint32_t ordinal) const {
     if (ordinal >= materials.size()) return nullptr;
+    if (first_material.size() == materials.size()) return &materials[first_material[ordinal]];
     const auto& name = materials[ordinal].name;
     for (const auto& m : materials)
         if (m.name == name) return &m;
@@ -159,6 +163,10 @@ ModelFile parse_model(std::span<const std::byte> data, bool terrain) {
             for (auto& uv : m.uvs2) uv = vec2(r);
         }
     }
+    std::unordered_map<std::string_view, std::uint32_t> first;
+    m.first_material.reserve(m.materials.size());
+    for (std::uint32_t i = 0; i < m.materials.size(); ++i)
+        m.first_material.push_back(first.emplace(m.materials[i].name, i).first->second);
     return m;
 }
 
@@ -820,6 +828,24 @@ assets::RegionBox dat_region_box(const HeightmapRegion& g, const HeightmapTile& 
     box.angles = {g.rotation.z * k512, g.rotation.y * k512, g.rotation.x * k512};
     box.extents = g.size * 0.5f;
     return box;
+}
+
+std::optional<glm::vec3> light_definition_color(std::string_view view) {
+    const std::string text(view); // strtod needs the terminator
+    auto value = [&](std::string_view key) -> std::optional<double> {
+        auto at = text.find(key);
+        if (at == std::string::npos) return std::nullopt;
+        return std::strtod(text.c_str() + at + key.size(), nullptr);
+    };
+    auto c = value("*COLOR");
+    if (!c) return std::nullopt;
+    // "1e400" or "nan" in a broken file: casting those to an integer is undefined, so they saturate.
+    auto argb = static_cast<std::uint32_t>(saturate_cast<std::int64_t>(*c));
+    auto k = static_cast<float>(value("*INTENSITY").value_or(1.0));
+    if (!std::isfinite(k)) k = 1.0f;
+    return glm::vec3(static_cast<float>((argb >> 16) & 255), static_cast<float>((argb >> 8) & 255),
+                     static_cast<float>(argb & 255)) /
+           255.0f * k;
 }
 
 } // namespace nmsc::assets::eqg

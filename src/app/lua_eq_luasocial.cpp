@@ -82,14 +82,12 @@ void push_rules(lua_State* L, const plugin::ButtonRules& r) {
     set_bool(L, "faces", r.faces);
 }
 
-// A string field of the table at `i` ("" when missing).
-std::string field(lua_State* L, int i, const char* key) {
-    lua_getfield(L, i, key);
+// The string at stack index i ("" for any other value). For fields read onto the stack first: lua_getfield runs a
+// table's __index, whose error would longjmp past any std::string alive then (Lua is built as C).
+std::string string_at(lua_State* L, int i) {
     std::size_t n = 0;
-    const char* p = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &n) : "";
-    std::string out(p, n);
-    lua_pop(L, 1);
-    return out;
+    const char* p = lua_type(L, i) == LUA_TSTRING ? lua_tolstring(L, i, &n) : "";
+    return std::string(p, n);
 }
 
 void push_file(lua_State* L, const game::LuaSocialFile& f) {
@@ -139,11 +137,13 @@ int SetLuaSocial(lua_State* L) {
     int n = social_arg(L, 1);
     luaL_checktype(L, 2, LUA_TTABLE);
     if (n < 0) return 0;
-    std::string name = field(L, 2, "name");
-    lua_getfield(L, 2, "color");
-    int color = static_cast<int>(lua_tointeger(L, -1));
-    lua_pop(L, 1);
-    game::LuaSocial lua{field(L, 2, "press"), field(L, 2, "face")};
+    // Every field onto the stack before any std::string exists.
+    const int base = lua_gettop(L);
+    for (const char* k : {"name", "color", "press", "face"}) lua_getfield(L, 2, k);
+    std::string name = string_at(L, base + 1);
+    int color = static_cast<int>(lua_tointeger(L, base + 2));
+    game::LuaSocial lua{string_at(L, base + 3), string_at(L, base + 4)};
+    lua_settop(L, base);
     game::Social& s = h.hot_buttons->social(n);
     if (name.empty()) {
         s = game::Social{};
@@ -191,21 +191,34 @@ int LuaSocialDryRun(lua_State* L) {
     int n = social_arg(L, 1);
     if (n < 0 || !h.scripts) return 0;
     const game::Social& s = h.hot_buttons->social(n);
+    // The caller's fields are read (their __index may raise) before the ButtonPress and its strings exist.
+    const bool edited = lua_istable(L, 2);
+    const int base = lua_gettop(L);
+    if (edited) {
+        lua_getfield(L, 2, "press");
+        lua_getfield(L, 2, "face");
+    }
+    bool mods[3] = {};
+    if (lua_istable(L, 3)) {
+        int i = 0;
+        for (const char* key : {"shift", "ctrl", "alt"}) {
+            lua_getfield(L, 3, key);
+            mods[i++] = lua_toboolean(L, -1) != 0;
+            lua_pop(L, 1);
+        }
+    }
     mq::ButtonPress p;
     p.social = n;
     p.name = s.name.empty() ? "new" : s.name;
     p.lua = s.lua;
-    if (lua_istable(L, 2)) {
-        p.lua = {field(L, 2, "press"), field(L, 2, "face")};
+    if (edited) {
+        p.lua = {string_at(L, base + 1), string_at(L, base + 2)};
         p.state = kEditorState + n; // unsaved code: not the social's own state
     }
-    if (lua_istable(L, 3)) {
-        for (auto [key, flag] : {std::pair{"shift", &p.shift}, {"ctrl", &p.ctrl}, {"alt", &p.alt}}) {
-            lua_getfield(L, 3, key);
-            *flag = lua_toboolean(L, -1) != 0;
-            lua_pop(L, 1);
-        }
-    }
+    lua_settop(L, base);
+    p.shift = mods[0];
+    p.ctrl = mods[1];
+    p.alt = mods[2];
     mq::ButtonDryRun d = h.scripts->dry_run_button(p);
     lua_createtable(L, 0, 4);
     set_bool(L, "ok", d.ok);

@@ -16,12 +16,16 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/glm.hpp>
 
+#include "core/latest_jobs.h"
 #include "render/gpu.h"
+#include "render/particle_textures.h"
 #include "render/vk_context.h"
 
 namespace nmsc { class GameDir; }
@@ -98,7 +102,8 @@ public:
     // WLD clouds (a flame texture's tail then points up); the spell particles
     // keep the first row at the top until that is checked against them.
     void set_rows_bottom_up(bool on) { rows_bottom_up_ = on; }
-    // Loads the textures the live emitters need; call outside a frame.
+    // Asks for the textures the live emitters need, and puts up those the loader thread has finished (a frame or
+    // more later: until then their particles are not drawn); call outside a frame.
     void prepare(const game::ParticleSystem& particles);
     // `glow` scales the additive particles' light (the modern lighting's HDR: above 1 they bloom). The emitters
     // whose entry in `hidden` (by emitter index, when given) is non-zero are left out. With `modern` (the frame's
@@ -133,6 +138,11 @@ private:
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline pipelines_[4]{}; // bit 0: additive, bit 1: no depth write
     VkPipeline modern_pipeline_ = VK_NULL_HANDLE; // premultiplied: both kinds in one sorted stream, no depth write
+
+    // Textures asked for and not put up yet (lower case), and the thread reading and decoding them
+    // (load_particle_texture). Last, so it stops first: its jobs use game_.
+    std::unordered_set<std::string> loading_;
+    std::unique_ptr<core::LatestJobs<std::string, LoadedParticleTexture>> loader_;
 };
 
 } // namespace nmsc::render

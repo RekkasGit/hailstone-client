@@ -3,7 +3,9 @@
 GitHub Actions runs checks only (`.github/workflows/ci.yml`), on every push to `main`, `cloud/**` or `claude/**`
 and on pull requests to `main`:
 
-- `core-names`: `tools/check_core_names.py`, the client's sources name no server outside comments. Its one
+- `core-names`: `tools/check_core_names.py`, the client's sources name no server outside comments (Lua long
+  strings count as code). The old names pass only in their own spellings (`nmsc`, `nmsc_`, `nmsc::`, `NMSC_`, the
+  SDK's `Nmsc<Word>`, `nms-client`), so `NMSChat` or `kNmsCombatOp` fails; tests/server_tools_test.cpp checks both. Its one
   exception is the updater's table of files old releases shipped under `plugins/nms/` (path, size, SHA-256;
   `retired_release_files()` in `src/app/update_install.cpp`), let through by file and exact line shape.
 
@@ -41,6 +43,7 @@ and Apple Clang: the portability rules in AGENTS.md still hold.
 | MSVC | `nmsc_tests.exe` exits with 0xc0000135: `SDL3.dll` is not next to it (Windows has no rpath) | post-build copy of `$<TARGET_RUNTIME_DLLS:...>` for `nmsc_tests` and `hailstone` |
 | MSVC under Wine (19.44, /O2) | Recorded vectors Social_Stop and GetFocusCastingTimeModifier: a 32-bit product that wraps, divided by a constant (`static_cast<std::int32_t>(a * b) / k`), folded as if it had not wrapped | `core/wrap_math.h` `wrapped_div` at every such division (game mechanics, option commands, the reliable channel), and `wrapped_mul_div` where a helper (`mul`, `wrap_mul`) made the product: once inlined, `mul(a, b) / k` is the same pattern |
 | MSVC under Wine | Recorded vectors CSpellBookWnd::GetSpellMemTicksLeft: `calc_dex() + calc_int()` called INT first | the calls as separate statements, in the original's order; the other query calls an operator or argument list ordered too |
+| MSVC under Wine | "http_get: cancelled ends a transfer stalled waiting for the answer" takes about 21 s: Wine's WinHTTP does not end a synchronous call when another thread closes the request handle, as Windows does | not a client fault: under Wine the test's time is a doctest WARN, not a failure; the cancel still reports "cancelled". Only a run on Windows checks that the close ends the call at once |
 | Linux, Windows | CI set-up only (SDL3 dev packages; the glslang asset name and executable name) | see the workflow |
 
 Behaviour is unchanged by all of these.

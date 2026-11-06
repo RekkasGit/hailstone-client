@@ -525,10 +525,11 @@ typedef struct NmscHost {
 
     /* ---- ABI 2: the plugin's own TCP connections (NMSC_CAP_NET; docs/plugins.md "Connections") ----
      * For a service the server runs beside the game (a card game's, say): the client owns the sockets, so the plugin
-     * needs no socket code of its own. Nothing waits for the network. tcp_open looks the name up (this can take a
-     * moment) and starts connecting: a handle above 0, or 0 when it cannot (no such host, no permission, already
-     * NMSC_TCP_MAX open). tcp_state: 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the peer;
-     * tcp_error says why, as eqstr returns). tcp_send takes every byte and returns the count, or -1 once closed: what
+     * needs no socket code of its own. Nothing waits for the network. tcp_open starts connecting: a handle above 0,
+     * or 0 when it cannot (no permission, already NMSC_TCP_MAX open). A name is looked up in the background while the
+     * handle counts as connecting; one that does not resolve closes it (tcp_state -1, tcp_error says why). tcp_state:
+     * 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the peer; tcp_error says why, as eqstr
+     * returns). tcp_send takes every byte and returns the count, or -1 once closed: what
      * the system cannot take at once waits in the client and goes out at the next tcp_* call. tcp_recv gives what has
      * arrived: the count, 0 for nothing yet, -1 once closed with nothing left. tcp_close ends one; unloading the plugin
      * closes its others. */
@@ -552,7 +553,9 @@ typedef struct NmscHost {
     int (*web_eval)(void* host, uint32_t tab, const char* script);
     int (*web_post)(void* host, uint32_t tab, const char* message);
     int (*web_text)(void* host, uint32_t tab, const char* text);
-    /* The page's next window.hailstone.post(): its full length (cut to fit out, NUL-terminated), -1 for none. */
+    /* The page's next window.hailstone.post(): its full length (cut to fit out, NUL-terminated), -1 for none. Given
+     * a buffer it is taken off the queue, even when cut; with out NULL (or out_size 0) only its length comes back
+     * and it stays queued, so call that first to make room for a long one (at most 1 MB). */
     int (*web_message)(void* host, uint32_t tab, char* out, size_t out_size);
     /* Set `out->size` first (the client fills what both know, as with the structs above); 0 for no such tab. */
     int (*web_state)(void* host, uint32_t tab, NmscWebState* out);

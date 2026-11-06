@@ -62,18 +62,7 @@ bool scatters_light(const std::string& texture) {
 }
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * 4;
-    info.pCode = code.data();
-    VkShaderModule module;
-    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
-    return module;
+    return create_shader_module(device, path);
 }
 
 std::string lower(std::string s) {
@@ -220,6 +209,7 @@ ParticleRenderer::ParticleRenderer(VkContext& vk, const GameDir& game, const std
 }
 
 ParticleRenderer::~ParticleRenderer() {
+    if (loader_) loader_->stop();
     VkDevice d = vk_.device();
     vk_.wait_idle();
     for (VkPipeline p : pipelines_)
@@ -244,39 +234,43 @@ glm::vec3 ParticleRenderer::texture_color(const std::string& name) const {
 }
 
 void ParticleRenderer::prepare(const game::ParticleSystem& particles) {
+    // Read, decoded and averaged on the loader (they were in the frame: a new effect's first cast hitched); put up
+    // here, in one submission. A zone's own copy is taken from its archives here, in memory: the reader is the zone's
+    // and goes with it.
+    std::vector<std::pair<std::string, LoadedParticleTexture>> done;
+    if (loader_) done = loader_->take();
     std::vector<std::string> wanted;
     for (const auto& e : particles.emitters()) {
         std::string name = lower(particles.definitions()[e.definition].texture);
-        if (!name.empty() && !slots_.contains(name) &&
+        if (!name.empty() && !slots_.contains(name) && !loading_.contains(name) &&
             std::find(wanted.begin(), wanted.end(), name) == wanted.end())
             wanted.push_back(name);
     }
-    if (wanted.empty()) return;
-    UploadBatch upload(vk_);
-    for (const auto& name : wanted) {
-        std::uint32_t slot = 0;
-        for (const char* dir : {"", "SpellEffects/", "EnvEmitterEffects/", "ActorEffects/"}) {
-            // "" is the texture reader (the zone's archives), when there is one.
-            std::optional<std::vector<std::byte>> data;
-            if (*dir) data = game_.read(std::string(dir) + name);
-            else if (reader_) data = reader_(name);
-            if (!data) continue;
-            if (auto image = assets::decode_game_texture(name, data); image && textures_.size() < max_textures_) {
-                // Its colour: the mean of rgb x alpha, scaled so the brightest channel is 1.
-                assets::Image rgba = assets::to_rgba8(*image);
-                glm::dvec3 sum(0.0);
-                const auto& px = rgba.mips[0];
-                for (std::size_t i = 0; i + 3 < px.size(); i += 4) {
-                    double a = std::to_integer<int>(px[i + 3]) / 255.0;
-                    sum += glm::dvec3(std::to_integer<int>(px[i]), std::to_integer<int>(px[i + 1]),
-                                      std::to_integer<int>(px[i + 2])) * a;
-                }
-                double top = std::max({sum.r, sum.g, sum.b});
-                colors_[name] = top > 0.0 ? glm::vec3(sum / top) : glm::vec3(1.0f);
-                slot = static_cast<std::uint32_t>(textures_.size());
-                textures_.push_back(upload.texture(*image, TextureUse::Color));
+    if (!wanted.empty() && !loader_) loader_ = std::make_unique<core::LatestJobs<std::string, LoadedParticleTexture>>();
+    for (auto& name : wanted) {
+        std::optional<std::vector<std::byte>> zone_bytes;
+        if (reader_) zone_bytes = reader_(name);
+        loading_.insert(name);
+        const GameDir* game = &game_;
+        // A job that throws would hand back no result, and the name would stay in loading_ for the session, its
+        // emitters never drawn; failing here, it comes back empty and is drawn with slot 0 like a missing texture.
+        loader_->submit(name, [name, bytes = std::move(zone_bytes), game]() mutable {
+            try {
+                return load_particle_texture(name, std::move(bytes), *game);
+            } catch (...) {
+                return LoadedParticleTexture{};
             }
-            break;
+        });
+    }
+    if (done.empty()) return;
+    UploadBatch upload(vk_);
+    for (auto& [name, t] : done) {
+        loading_.erase(name);
+        std::uint32_t slot = 0;
+        if (t.image && textures_.size() < max_textures_) {
+            colors_[name] = t.color;
+            slot = static_cast<std::uint32_t>(textures_.size());
+            textures_.push_back(upload.texture(*t.image, TextureUse::Color));
         }
         if (slot == 0) log::debug("particle texture {} not found", name);
         slots_.emplace(name, slot);
@@ -334,13 +328,14 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
     // them, every frame).
     const Frustum frustum = frustum_from(view_proj);
     // The definitions' texture slots and flipbook grids, looked up once a frame rather than once a particle.
-    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; };
+    // `loading`: its texture is not up yet (prepare), so its particles are not drawn rather than drawn white.
+    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; bool loading = false; };
     std::vector<DefinitionLook> looks(particles.definitions().size());
     auto look = [&](std::size_t definition) -> const DefinitionLook& {
         DefinitionLook& l = looks[definition];
         if (!l.known) {
             const auto& d = particles.definitions()[definition];
-            l = {texture_slot(d.texture), game::flipbook_grid(d.frames), true};
+            l = {texture_slot(d.texture), game::flipbook_grid(d.frames), true, loading_.contains(lower(d.texture))};
         }
         return l;
     };
@@ -366,6 +361,7 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
         const ParticleLight scene_light(*modern);
         for (const Item& item : order) {
             const auto& e = particles.emitters()[item.emitter];
+            if (look(e.definition).loading) continue;
             const auto& d = particles.definitions()[e.definition];
             const auto& p = e.particles[item.particle];
             ParticleHaze h = haze_at(*modern, p.position);
@@ -389,6 +385,7 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
             if (ei < hidden.size() && hidden[ei]) continue;
             const auto& d = particles.definitions()[e.definition];
             const DefinitionLook& dl = look(e.definition);
+            if (dl.loading) continue;
             const std::uint32_t tex = dl.tex;
             const glm::uvec2 grid = dl.grid;
             const glm::vec4 shade(glm::vec3(d.additive ? glow : 1.0f), 0.0f);

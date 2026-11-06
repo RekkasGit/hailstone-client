@@ -32,7 +32,9 @@ std::optional<std::uint32_t> particle_material_alias(std::uint32_t handle) {
 
 float particle_tan(float angle) {
     // _ftol truncates; the index is masked to the first quarter turn, so 128
-    // (a right angle) wraps to 0 rather than reaching the pole.
+    // (a right angle) wraps to 0 rather than reaching the pole. A NaN, an infinity or a value past int32 is not cast
+    // (undefined in C++); _ftol's integer indefinite masks to index 0, so it gives tan(0).
+    if (!(std::fabs(angle) < 2147483648.0f)) return 0.0f;
     auto i = static_cast<std::int32_t>(angle) & 0x7f;
     return static_cast<float>(std::tan(static_cast<double>(i) * 2.0 * std::numbers::pi / 512.0));
 }

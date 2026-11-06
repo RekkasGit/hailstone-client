@@ -2,6 +2,8 @@
 
 #include <array>
 #include <chrono>
+#include <future>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string_view>
@@ -607,4 +609,22 @@ TEST_CASE("session loopback: the service thread acks while the owner is busy; sm
     }
     CHECK(session->state() == SessionState::Disconnected);
     CHECK(quick->state() == SessionState::Disconnected);
+}
+
+TEST_CASE("platform::resolve_async: a numeric address on the lookup thread, several lookups one after another") {
+    // ChatServer::connect looks the chat server's name up this way. Each lookup's thread is kept (joined at exit,
+    // never cut off inside the resolver); finished ones are joined as the next starts.
+    for (int i = 0; i < 3; ++i) {
+        auto result = std::make_shared<std::promise<std::pair<std::vector<platform::Endpoint>, std::string>>>();
+        auto got = result->get_future();
+        platform::resolve_async("127.0.0.1", static_cast<std::uint16_t>(9000 + i),
+                                [result](std::vector<platform::Endpoint> endpoints, std::string error) {
+                                    result->set_value({std::move(endpoints), std::move(error)});
+                                });
+        REQUIRE(got.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+        auto [endpoints, error] = got.get();
+        CHECK(error.empty());
+        REQUIRE(endpoints.size() == 1);
+        CHECK(endpoints[0] == platform::Endpoint::v4(127, 0, 0, 1, static_cast<std::uint16_t>(9000 + i)));
+    }
 }

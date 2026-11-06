@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "core/byte_io.h"
+#include "core/msvc_atoi.h"
 
 namespace nmsc::assets {
 
@@ -50,10 +51,9 @@ public:
         pos_ = end + 1;
         return f;
     }
-    std::int32_t next_int() {
-        std::string s(next());
-        return static_cast<std::int32_t>(std::strtol(s.c_str(), nullptr, 10));
-    }
+    // 32-bit atoi (core/msvc_atoi.h), not strtol: its long is 64 bits on Linux and macOS and 32 on Windows, so a
+    // number past int32 came out differently on each.
+    std::int32_t next_int() { return core::msvc_atoi(next()); }
     float next_float() {
         std::string s(next());
         return std::strtof(s.c_str(), nullptr);

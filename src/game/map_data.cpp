@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "core/zone_name.h"
+
 namespace nmsc::game {
 
 namespace {
@@ -187,6 +189,7 @@ MapLayerParse parse_map_layer(std::string_view text, int layer, std::string& lab
 }
 
 std::string map_layer_file_name(std::string_view zone, int layer) {
+    if (!is_zone_short_name(zone)) return {}; // a path from the server, not a zone (core/zone_name.h)
     std::string name(zone);
     if (layer != 0) name += "_" + std::to_string(layer);
     return name + ".txt";

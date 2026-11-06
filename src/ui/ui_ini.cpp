@@ -5,24 +5,39 @@
 #include <string>
 #include <system_error>
 
+#include "core/wrap_math.h"
+
 namespace nmsc::ui {
 
 namespace fs = std::filesystem;
 
+namespace {
+
+// The original's 32-bit int sums, which wrap: a UI.ini value near the int limits (hand-edited or broken) gives what
+// the original gives, without a signed overflow here.
+int add(int a, int b) {
+    return static_cast<int>(core::wrapped_value(static_cast<std::uint32_t>(a) + static_cast<std::uint32_t>(b)));
+}
+int sub(int a, int b) {
+    return static_cast<int>(core::wrapped_value(static_cast<std::uint32_t>(a) - static_cast<std::uint32_t>(b)));
+}
+
+} // namespace
+
 int convert_to_res(int pos, int extent, int from, int to) {
     // Off screen at `from` (left of 1 or past the right edge): not pulled back onto the new screen.
-    bool off = pos < 1 || from <= pos + extent;
+    bool off = pos < 1 || from <= add(pos, extent);
     if (from != to) {
         int half = from / 2;
-        if (half < pos) pos = pos - from + to;                  // right of the middle: same gap to the right edge
-        else if (half < pos + extent) pos = to / 2 - half + pos; // over the middle: same offset from the middle
+        if (half < pos) pos = add(sub(pos, from), to); // right of the middle: same gap to the right edge
+        else if (half < add(pos, extent)) pos = add(sub(to / 2, half), pos); // over the middle: same offset from it
     }
     if (!off) {
         if (pos < 0) pos = 0;
-        if (to < pos + extent) pos = to - extent;
+        if (to < add(pos, extent)) pos = sub(to, extent);
     }
-    if (pos + extent < 0) pos = 0;
-    if (to < pos) pos = to - extent;
+    if (add(pos, extent) < 0) pos = 0;
+    if (to < pos) pos = sub(to, extent);
     return pos;
 }
 
@@ -132,7 +147,7 @@ WindowRect UiIni::place(const WindowIniInfo& info, WindowRect r, int sw, int sh,
                 *pos = convert_to_res(*v, extent, ref, screen);
             if (auto v = to_int(read(info.section, std::string(key) + "Windowed", ui, true)))
                 *pos = convert_to_res(*v, extent, kWindowedRes, screen);
-            if (screen - *pos < 4) *pos = screen - 4; // at least 4 pixels stay on screen
+            if (sub(screen, *pos) < 4) *pos = screen - 4; // at least 4 pixels stay on screen
         }
     }
     return r;

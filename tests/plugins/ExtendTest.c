@@ -5,6 +5,7 @@
  * Built twice: ExtendTest (ABI 2) and, with NMSC_TEST_ABI1, ExtendTestV1, a plugin as an ABI 1 client built it (no
  * hook table, the old host table), which must still load. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "nmsc_plugin.h"
@@ -83,6 +84,17 @@ static int map_spawn(const NmscSpawn* s, NmscMapSpawn* out) {
     out->color = 0x00aa00;
     out->layer = 1;
     return 1;
+}
+
+/* /extnext <id>: next_spawn after that id. */
+static void ext_next(void* user, const char* args) {
+    NmscSpawn s;
+    (void)user;
+    s.size = sizeof s;
+    if (nmsc->next_spawn(nmsc->host, (uint32_t)strtoul(args ? args : "0", NULL, 10), &s))
+        WriteChatf("[next] %u", (unsigned)s.id);
+    else
+        WriteChatf("[next] none");
 }
 
 /* /extread: the readers, printed. */
@@ -244,6 +256,7 @@ NMSC_EXPORT void InitializePlugin(void) {
     AddCommand("/extoff", ext_off, 0);
     AddCommand("/extread", ext_read, 0);
     AddCommand("/extmore", ext_more, 0);
+    AddCommand("/extnext", ext_next, 0);
     nmsc->add_ui_function(nmsc->host, "info", ui_info, 0);
     nmsc->add_option(nmsc->host, "mode", "Mode", 0, 3, get_mode, set_mode, 0);
     nmsc->add_menu(nmsc->host, "Ext Window", "/exton");
@@ -254,5 +267,6 @@ NMSC_EXPORT void ShutdownPlugin(void) {
     RemoveCommand("/extoff");
     RemoveCommand("/extread");
     RemoveCommand("/extmore");
+    RemoveCommand("/extnext");
 }
 #endif

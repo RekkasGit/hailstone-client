@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -328,9 +329,13 @@ struct EqHost {
     std::function<std::shared_ptr<const assets::CharacterModel>(const game::Spawn&)> model_for;
     game::CharCreateLook* char_create_look = nullptr;
     // Bug reports (app/bug_report.h). The screenshot for one, taken this frame (the bug report window hides for it);
-    // a report saved with the client's own facts, logs and screenshots added (nullopt: it could not be written).
+    // a report saved with the client's own facts, logs and screenshots added (nullopt: it could not be written). The
+    // report is written on a thread of its own (its logs run to tens of MB): the future is ready once it is.
+    // `bug_report_now` fills a report at its Send (the facts: zone, place, target; the screenshot's bytes), so a
+    // Send that waits its turn to be written still says what was so when it was made (null: save_bug_report does).
     std::function<void()> bug_report_capture;
-    std::function<std::optional<SavedBugReport>(BugReport report)> save_bug_report;
+    std::function<void(BugReport& report)> bug_report_now;
+    std::function<std::future<std::optional<SavedBugReport>>(BugReport report)> save_bug_report;
     // The report made at this start from the last run's crash (null: none, or the player closed its window), a note
     // added to it (the report is written again), and the window closed.
     const SavedBugReport* crash_report = nullptr;

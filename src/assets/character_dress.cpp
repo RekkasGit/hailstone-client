@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdio>
 #include <stdexcept>
 #include <unordered_set>
@@ -471,7 +472,9 @@ std::optional<Image> CharacterLibrary::layered_texture(std::string_view key, std
     std::string_view body = key.substr(7);
     std::uint32_t tint = 0;
     if (auto hash = body.rfind('#'); hash != std::string_view::npos) {
-        tint = static_cast<std::uint32_t>(std::strtoul(std::string(body.substr(hash + 1)).c_str(), nullptr, 16));
+        // Hex, at most 32 bits (strtoul's long differs by platform); a bad or longer tint is 0.
+        auto hex = body.substr(hash + 1);
+        if (std::from_chars(hex.data(), hex.data() + hex.size(), tint, 16).ec != std::errc{}) tint = 0;
         body = body.substr(0, hash);
     }
     std::vector<Image> layers;

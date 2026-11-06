@@ -42,19 +42,7 @@ struct PushConstants {
 static_assert(sizeof(PushConstants) <= 128);
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    if (size == 0 || size % 4 != 0) throw std::runtime_error("bad SPIR-V size in " + path.string());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * 4;
-    info.pCode = code.data();
-    VkShaderModule module;
-    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
-    return module;
+    return create_shader_module(device, path);
 }
 
 } // namespace
@@ -327,6 +315,8 @@ void ObjectRenderer::prepare(const FrameInfo& frame, std::span<const Instance> i
         prepared_.push_back({&g, static_cast<std::uint32_t>(i), transform_sphere(instances[i].transform, g.bounds),
                              instances[i].transform});
     }
+    // VMA may place the buffer in host-visible memory that is not coherent; a no-op where it is.
+    if (count) vmaFlushAllocation(vk_.allocator(), instances_[frame.frame_slot].allocation, 0, sizeof(glm::mat4) * count);
 }
 
 void ObjectRenderer::draw_prepared(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,

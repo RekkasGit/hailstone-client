@@ -1,8 +1,16 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <condition_variable>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #include "audio/audio_system.h"
 #include "audio/mixer.h"
@@ -11,6 +19,8 @@
 #include "audio/sound_library.h"
 #include "core/config.h"
 #include "game_files.h"
+#include "pfs_fixtures.h"
+#include "scratch_dir.h"
 
 using namespace nmsc;
 using namespace nmsc::audio;
@@ -99,6 +109,28 @@ TEST_CASE("WAV decoding: 16-bit mono at 22000 Hz") {
     REQUIRE(pcm->frames() == 4);
     CHECK(pcm->samples[1] == doctest::Approx(0.5).epsilon(0.001));
     CHECK_FALSE(decode_wav(std::vector<std::byte>(10)));
+}
+
+TEST_CASE("WAV encoding: little-endian header and samples, read back as written") {
+    const std::vector<float> stereo = {0.0f, 0.5f, -0.5f, 1.0f, 2.0f, -2.0f};
+    const auto wav = encode_wav16(stereo, 48000, 2);
+    REQUIRE(wav.size() == 44 + stereo.size() * 2);
+    auto byte = [&](std::size_t i) { return std::to_integer<unsigned>(wav[i]); };
+    CHECK(byte(4) == ((36 + 12) & 0xff)); // the RIFF size's low byte first, whatever the host's order
+    CHECK(byte(24) == 0x80);              // 48000 = 0xbb80
+    CHECK(byte(25) == 0xbb);
+    CHECK(byte(32) == 4);                 // block align: 2 channels x 2 bytes
+    CHECK(byte(46) == 0x00);              // the second sample, 0.5 -> 16384 = 0x4000, low byte first
+    CHECK(byte(47) == 0x40);
+    auto pcm = decode_wav(wav);
+    REQUIRE(pcm);
+    CHECK(pcm->rate == 48000);
+    CHECK(pcm->channels == 2);
+    REQUIRE(pcm->samples.size() == stereo.size());
+    CHECK(pcm->samples[1] == doctest::Approx(0.5).epsilon(0.001));
+    CHECK(pcm->samples[2] == doctest::Approx(-0.5).epsilon(0.001));
+    CHECK(pcm->samples[4] == doctest::Approx(1.0).epsilon(0.001)); // clamped
+    CHECK(pcm->samples[5] == doctest::Approx(-1.0).epsilon(0.001));
 }
 
 TEST_CASE("Mixer: volume, buses, loops and fades") {
@@ -209,6 +241,74 @@ TEST_CASE("Mixer: a long render is mixed in blocks, as several short ones would 
     CHECK(same);
 }
 
+namespace {
+// A stream whose render waits (at most two seconds, so a regression fails rather than hangs) for the test to let it
+// go: an MP3 decode or a synthesizer taking its time on the audio thread.
+struct GateSource final : Source {
+    std::mutex* m = nullptr;
+    std::condition_variable* cv = nullptr;
+    bool* entered = nullptr;
+    bool* released = nullptr;
+    bool* saw_release = nullptr;
+    bool* destroyed = nullptr;
+    ~GateSource() override { *destroyed = true; }
+    std::size_t render(float* out, std::size_t frames, std::uint32_t) override {
+        std::unique_lock lock(*m);
+        *entered = true;
+        cv->notify_all();
+        *saw_release = cv->wait_for(lock, std::chrono::seconds(2), [&] { return *released; });
+        std::fill(out, out + frames * 2, 0.5f);
+        return frames;
+    }
+};
+} // namespace
+
+TEST_CASE("Mixer: the game thread's calls do not wait for a source rendering on the audio thread") {
+    std::mutex gate;
+    std::condition_variable cv;
+    bool entered = false, released = false, saw_release = false, destroyed = false;
+    Mixer m(48000, 8);
+    auto src = std::make_unique<GateSource>();
+    src->m = &gate;
+    src->cv = &cv;
+    src->entered = &entered;
+    src->released = &released;
+    src->saw_release = &saw_release;
+    src->destroyed = &destroyed;
+    auto stream = m.play_source(std::move(src), 1.0f, 0, Bus::Music);
+    REQUIRE(stream != 0);
+    auto sound = m.play(constant(48000, 10000, 0.25f), 1.0f, 0, 1, Bus::Effects);
+    std::vector<float> out(512 * 2);
+    std::thread audio([&] { m.render(out.data(), 512); });
+    {
+        std::unique_lock lock(gate);
+        cv.wait(lock, [&] { return entered; });
+    }
+    // While the source renders: these used to wait on the mixer's lock until it was done.
+    CHECK(m.alive(stream));
+    m.set_levels(sound, 0.5f, 0.5f);
+    m.set_volume(sound, 0.8f, 0);
+    CHECK(m.voice_count() == 2);
+    // Stopping everything does not destroy the source under the audio thread.
+    m.stop_all();
+    CHECK_FALSE(destroyed);
+    CHECK(m.play(constant(48000, 100, 0.25f), 1.0f, 0, 1, Bus::Effects) != 0);
+    CHECK_FALSE(destroyed);
+    {
+        std::lock_guard lock(gate);
+        released = true;
+    }
+    cv.notify_all();
+    audio.join();
+    CHECK(saw_release);
+    CHECK_FALSE(m.alive(stream));
+    // Stopped before its block was mixed: only the sound played meanwhile (0.25) is in it, not the stream's 0.5.
+    CHECK(std::all_of(out.begin(), out.end(), [](float v) { return v <= 0.25f; }));
+    // The next add reaps it, outside the lock.
+    CHECK(m.play(constant(48000, 100, 0.25f), 1.0f, 0, 1, Bus::Effects) != 0);
+    CHECK(destroyed);
+}
+
 TEST_CASE("Mixer: voice limit and resampling") {
     Mixer m(2000, 2);
     CHECK(m.play(constant(1000, 10, 1.0f), 1.0f, 0, 0, Bus::Effects) != 0);
@@ -222,6 +322,72 @@ TEST_CASE("Mixer: voice limit and resampling") {
     CHECK(m.alive(id));
     m.render(out.data(), 2);
     CHECK_FALSE(m.alive(id));
+}
+
+TEST_CASE("SoundLibrary: music files are read ahead on the worker, loose or in a snd*.pfs, and dropped when unnamed") {
+    test::ScratchDir dir("sound_resident");
+    auto bytes = [](const char* text) {
+        std::vector<std::byte> b;
+        for (const char* c = text; *c; ++c) b.push_back(static_cast<std::byte>(*c));
+        return b;
+    };
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "loose mp3 bytes";
+    auto pfs = test::pfs_fixtures::make_pfs({{"zone.xmi", bytes("archived xmi bytes")}});
+    std::ofstream(dir.path() / "snd3.pfs", std::ios::binary)
+        .write(reinterpret_cast<const char*>(pfs.data()), static_cast<std::streamsize>(pfs.size()));
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    library.set_resident_files({"theme.mp3", "ZONE.XMI", "missing.mp3"});
+    library.wait_idle();
+    auto theme = library.resident_file("THEME.mp3");
+    REQUIRE(theme);
+    CHECK(*theme == bytes("loose mp3 bytes"));
+    auto zone = library.resident_file("zone.xmi");
+    REQUIRE(zone);
+    CHECK(*zone == bytes("archived xmi bytes"));
+    CHECK_FALSE(library.resident_file("missing.mp3"));
+    CHECK_FALSE(library.resident_file("other.mp3"));
+    // The next zone's list: what it does not name goes, what it keeps is not read again.
+    library.set_resident_files({"theme.mp3"});
+    library.wait_idle();
+    CHECK(library.resident_file("theme.mp3") == theme);
+    CHECK_FALSE(library.resident_file("zone.xmi"));
+}
+
+TEST_CASE("SoundLibrary: a music file is read ahead of a zone's preloads, behind a wave wanted now") {
+    test::ScratchDir dir("sound_priority");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    for (int i = 0; i < 20; ++i) std::ofstream(dir.path() / "sounds" / ("wave" + std::to_string(i) + ".wav")) << "x";
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "loose mp3 bytes";
+    std::ofstream(dir.path() / "other.mp3", std::ios::binary) << "other mp3 bytes";
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    std::vector<std::string> jobs;
+    library.hold_worker(true);
+    library.set_job_log(&jobs);
+    // set_zone's order: the bulk preload, then the music files; a wave played meanwhile; a preload played.
+    std::vector<std::string> preload;
+    for (int i = 0; i < 20; ++i) preload.push_back("WAVE" + std::to_string(i) + ".wav");
+    library.preload(preload);
+    library.set_resident_files({"theme.mp3", "other.mp3"});
+    library.set_resident_files({"theme.mp3", "other.mp3"}); // named again before it is read: queued once
+    CHECK_FALSE(library.wave("wave7.wav"));
+    // A queued file asked for now is read on the asking thread, not again on the worker.
+    auto other = library.file("OTHER.mp3");
+    REQUIRE(other);
+    CHECK(library.resident_file("other.mp3") == other);
+    library.hold_worker(false);
+    library.wait_idle();
+    library.set_job_log(nullptr);
+    REQUIRE(jobs.size() == 21);
+    CHECK(jobs[0] == "wave7.wav");
+    CHECK(jobs[1] == "theme.mp3");
+    CHECK(jobs[2] == "wave0.wav");
+    CHECK(std::count(jobs.begin(), jobs.end(), "wave7.wav") == 1);
+    CHECK(std::count(jobs.begin(), jobs.end(), "other.mp3") == 0);
+    CHECK(library.resident_file("theme.mp3"));
+    CHECK(library.file("theme.mp3") == library.resident_file("theme.mp3"));
 }
 
 TEST_CASE("Audio system without a device: zone emitters and sounds from the game") {
@@ -306,4 +472,133 @@ TEST_CASE("Audio settings: SoundMixAhead (SoundManager::SetMixAhead's 4..96 frag
     Config out;
     store_audio_settings(s, out);
     CHECK(out.get_int("audio.mix_ahead", 0) == 20);
+}
+
+TEST_CASE("Mixer: a NaN or infinite volume or sample never reaches the reverb or the device") {
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    std::vector<float> out(2 * 4800);
+    auto all_finite = [&] { return std::all_of(out.begin(), out.end(), [](float x) { return std::isfinite(x); }); };
+    Mixer m(48000, 8);
+    m.set_reverb(0.5f, 1.0f, 0.5f, 0.01f);
+    // An EMT gain of "nan" or "inf" (strtof): refused, with or without a fade.
+    const float levels[2] = {1.0f, 1.0f};
+    CHECK(m.play(constant(48000, 4800, 0.5f), nan, 0, 0, Bus::Effects, levels) == 0);
+    CHECK(m.play(constant(48000, 4800, 0.5f), inf, 0, 0, Bus::Effects, levels) == 0);
+    CHECK(m.play(constant(48000, 4800, 0.5f), nan, 100, 0, Bus::Effects, levels) == 0);
+    // A playing positional voice with a send, its volume, levels and send set non-finite: silent, not NaN.
+    auto id = m.play(constant(48000, 4800, 0.5f), 1.0f, 0, 0, Bus::Effects, levels);
+    REQUIRE(id != 0);
+    m.set_send(id, nan);
+    m.set_levels(id, inf, nan);
+    m.set_volume(id, inf, 50);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    m.stop_all();
+    // A NaN sample (an IEEE-float WAV): it does not poison the reverb, so a later voice still sounds.
+    auto bad = std::make_shared<Pcm>();
+    bad->rate = 48000;
+    bad->channels = 1;
+    bad->samples.assign(480, nan);
+    id = m.play(bad, 1.0f, 0, 1, Bus::Effects, levels);
+    REQUIRE(id != 0);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    id = m.play(constant(48000, 4800, 0.5f), 1.0f, 0, 0, Bus::Effects, levels);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+    CHECK(out[2 * 4000] != 0.0f);
+    // A reverb configured from non-finite numbers stays finite.
+    m.set_reverb(0.5f, nan, inf, nan);
+    m.render(out.data(), 4800);
+    CHECK(all_finite());
+}
+
+TEST_CASE("WAV decoding: an IEEE-float WAV's NaN and infinite samples are silence") {
+    const float samples[4] = {0.25f, std::numeric_limits<float>::quiet_NaN(), -std::numeric_limits<float>::infinity(),
+                              -0.5f};
+    std::vector<std::byte> d;
+    auto put = [&](const void* p, std::size_t n) {
+        auto b = static_cast<const std::byte*>(p);
+        d.insert(d.end(), b, b + n);
+    };
+    auto u32 = [&](std::uint32_t v) {
+        for (int i = 0; i < 4; ++i) d.push_back(static_cast<std::byte>(v >> (8 * i)));
+    };
+    auto u16 = [&](std::uint16_t v) {
+        d.push_back(static_cast<std::byte>(v & 0xff));
+        d.push_back(static_cast<std::byte>(v >> 8));
+    };
+    put("RIFF", 4);
+    u32(36 + 16);
+    put("WAVEfmt ", 8);
+    u32(16);
+    u16(3); // WAVE_FORMAT_IEEE_FLOAT
+    u16(1);
+    u32(22050);
+    u32(22050 * 4);
+    u16(4);
+    u16(32);
+    put("data", 4);
+    u32(16);
+    for (float s : samples) {
+        std::uint32_t bits;
+        std::memcpy(&bits, &s, 4);
+        u32(bits);
+    }
+    auto pcm = decode_wav(d);
+    REQUIRE(pcm);
+    CHECK(pcm->samples == std::vector<float>{0.25f, 0.0f, 0.0f, -0.5f});
+}
+
+TEST_CASE("SoundLibrary: a snd<N>.pfs whose number does not fit an int is not one of the set, and does not throw") {
+    test::ScratchDir dir("sound_bignum");
+    std::ofstream(dir.path() / "snd99999999999.pfs", std::ios::binary) << "x";
+    std::ofstream(dir.path() / "snd-1.pfs", std::ios::binary) << "x";
+    GameDir game(dir.path());
+    CHECK_NOTHROW(SoundLibrary{game});
+}
+
+TEST_CASE("SoundLibrary: a music file that failed to read is not read again") {
+    // A music emitter in range asks for its file every frame while no voice plays it.
+    test::ScratchDir dir("sound_missing");
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "x";
+    GameDir game(dir.path()); // indexed with the file
+    SoundLibrary library(game);
+    std::filesystem::remove(dir.path() / "theme.mp3");
+    CHECK_FALSE(library.file("theme.mp3"));
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "readable now";
+    CHECK_FALSE(library.file("theme.mp3")); // remembered, not read
+}
+
+TEST_CASE("SoundLibrary: decoded waves not asked for over two zone changes are dropped, unless pinned or playing") {
+    test::ScratchDir dir("sound_trim");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    auto wav = wav16(22050, {1, 2, 3, 4});
+    for (const char* n : {"old.wav", "global.wav", "held.wav", "used.wav"})
+        std::ofstream(dir.path() / "sounds" / n, std::ios::binary)
+            .write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    GameDir game(dir.path());
+    SoundLibrary library(game);
+    library.preload({"old.wav", "global.wav", "held.wav", "used.wav"});
+    library.wait_idle();
+    REQUIRE(library.cached_waves() == 4);
+    auto held = library.wave("held.wav"); // a voice still playing it
+    REQUIRE(held);
+    library.drop_idle_waves({"global.wav"}); // into a zone: everything was asked for in the last one
+    CHECK(library.cached_waves() == 4);
+    CHECK(library.wave("used.wav"));
+    held = library.wave("held.wav");
+    library.drop_idle_waves({"global.wav"}); // the next zone: old.wav was not asked for in the one before
+    CHECK(library.cached_waves() == 3);
+    library.drop_idle_waves({"global.wav"});
+    // used.wav is idle now too; held.wav still plays, global.wav is pinned.
+    CHECK(library.cached_waves() == 2);
+    CHECK(library.wave("global.wav"));
+    CHECK(library.wave("held.wav") == held);
+    // A dropped wave asked for again is decoded again.
+    CHECK_FALSE(library.wave("old.wav"));
+    library.wait_idle();
+    CHECK(library.wave("old.wav"));
 }

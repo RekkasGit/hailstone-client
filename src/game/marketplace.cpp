@@ -6,6 +6,7 @@
 #include <cstring>
 #include <format>
 
+#include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 
 namespace nmsc::game {
@@ -114,7 +115,7 @@ std::optional<std::uint32_t> marketplace_link_entry(std::string_view link) {
     if (at == std::string_view::npos) return std::nullopt;
     std::string_view rest = link.substr(at + 9);
     rest = rest.substr(0, rest.find('&'));
-    return static_cast<std::uint32_t>(std::atoi(std::string(rest).c_str()));
+    return static_cast<std::uint32_t>(core::msvc_atoi(rest));
 }
 
 // ---------------------------------------------------------------- the window's model

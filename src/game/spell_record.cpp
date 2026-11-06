@@ -1,5 +1,6 @@
 #include "game/spell_record.h"
 
+#include <bit>
 #include <charconv>
 #include <cstring>
 
@@ -9,22 +10,23 @@ namespace nmsc::game {
 
 namespace {
 
+// The image is little-endian, as the original's (its CRC goes to the server): stored byte by byte, not as a host
+// value.
 struct Record {
     SpellRecord bytes{};
-    void i32(std::uint32_t off, std::int32_t v) { std::memcpy(bytes.data() + off, &v, 4); }
+    void le(std::uint32_t off, std::uint32_t v, std::uint32_t n) {
+        for (std::uint32_t i = 0; i < n; ++i) bytes[off + i] = static_cast<std::uint8_t>(v >> (8 * i));
+    }
+    void i32(std::uint32_t off, std::int32_t v) { le(off, static_cast<std::uint32_t>(v), 4); }
     void u8(std::uint32_t off, std::uint8_t v) { bytes[off] = v; }
-    void f32(std::uint32_t off, float v) { std::memcpy(bytes.data() + off, &v, 4); }
-    void u16(std::uint32_t off, std::uint16_t v) { std::memcpy(bytes.data() + off, &v, 2); }
-    std::int32_t get_i32(std::uint32_t off) const {
-        std::int32_t v;
-        std::memcpy(&v, bytes.data() + off, 4);
-        return v;
+    void f32(std::uint32_t off, float v) { le(off, std::bit_cast<std::uint32_t>(v), 4); }
+    void u16(std::uint32_t off, std::uint16_t v) { le(off, v, 2); }
+    std::uint32_t get_u32(std::uint32_t off) const {
+        return static_cast<std::uint32_t>(bytes[off]) | static_cast<std::uint32_t>(bytes[off + 1]) << 8 |
+               static_cast<std::uint32_t>(bytes[off + 2]) << 16 | static_cast<std::uint32_t>(bytes[off + 3]) << 24;
     }
-    float get_f32(std::uint32_t off) const {
-        float v;
-        std::memcpy(&v, bytes.data() + off, 4);
-        return v;
-    }
+    std::int32_t get_i32(std::uint32_t off) const { return static_cast<std::int32_t>(get_u32(off)); }
+    float get_f32(std::uint32_t off) const { return std::bit_cast<float>(get_u32(off)); }
     void text(std::uint32_t off, std::string_view s) { std::memcpy(bytes.data() + off, s.data(), s.size()); }
 };
 

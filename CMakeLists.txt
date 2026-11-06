@@ -98,10 +98,12 @@ add_library(nmsc_engine STATIC
   src/mq/parse.cpp
   src/mq/commands.cpp
   src/mq/nav_commands.cpp
+  src/mq/event_pattern.cpp
   src/mq/lua_mq.cpp
   src/mq/lua_mq_web.cpp
   src/mq/lua_hailstone.cpp
   src/plugin/native_plugins.cpp
+  src/plugin/plugin_tcp.cpp
   src/plugin/ui_bridge.cpp
   src/plugin/lua_value.cpp
   src/game/conversation_journal.cpp
@@ -480,6 +482,7 @@ add_library(nmsc_engine STATIC
   src/app/lua_eq_stats.cpp
   src/app/lua_eq_web.cpp
   src/app/web_service.cpp
+  src/app/server_links.cpp
   src/app/lua_eq_misc.cpp
   src/app/lua_eq_notes.cpp
   src/app/lua_eq_gamepad.cpp
@@ -500,6 +503,8 @@ add_library(nmsc_engine STATIC
   src/net/movement_packets.cpp
   src/net/notice_packets.cpp
   src/render/spawn_renderer.cpp
+  src/render/spirv_file.cpp
+  src/render/particle_textures.cpp
   src/render/actor_renderer.cpp
   src/render/actor_layers.cpp
   src/render/object_renderer.cpp
@@ -522,6 +527,7 @@ add_library(nmsc_engine STATIC
   src/audio/zone_emitters.cpp
   src/audio/music_manager.cpp
   src/audio/listener.cpp
+  src/audio/environment_presets.cpp
   src/audio/audio_system.cpp
   src/app/sound_events.cpp
   src/app/actor_emitters.cpp
@@ -776,7 +782,8 @@ if(NMSC_BROWSER)
 endif()
 
 # Command-line tools.
-foreach(tool pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+set(NMSC_TOOLS pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+foreach(tool ${NMSC_TOOLS})
   add_executable(${tool} tools/${tool}.cpp ${NMSC_WIN_MANIFEST})
   target_compile_options(${tool} PRIVATE ${NMSC_WARNINGS})
   if(NMSC_CLANG_TIDY)
@@ -794,6 +801,7 @@ if(NMSC_BUILD_TESTS)
     tests/byte_io_test.cpp
     tests/private_file_test.cpp
     tests/server_script_test.cpp
+    tests/server_tools_test.cpp
     tests/float_chars_test.cpp
     tests/screen_pictures_test.cpp
     tests/window_icon_test.cpp
@@ -807,7 +815,9 @@ if(NMSC_BUILD_TESTS)
     tests/addon_install_test.cpp
     tests/addon_manager_test.cpp
     tests/bug_report_test.cpp
+    tests/bug_report_window_test.cpp
     tests/startup_error_test.cpp
+    tests/look_eviction_test.cpp
     tests/plugin_hooks_test.cpp
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp
@@ -815,6 +825,7 @@ if(NMSC_BUILD_TESTS)
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
+    tests/mq_event_pattern_test.cpp
     tests/lua_social_test.cpp
     tests/code_syntax_test.cpp
     tests/native_plugins_test.cpp
@@ -864,6 +875,8 @@ if(NMSC_BUILD_TESTS)
     ${NMSC_TRIUNE_TESTS}
     ${NMSC_TRIUNE_LOGIC}
     tests/tcp_socket_test.cpp
+    tests/plugin_tcp_test.cpp
+    tests/merchant_buy_test.cpp
     tests/ascii_case_test.cpp
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
@@ -931,6 +944,7 @@ if(NMSC_BUILD_TESTS)
     tests/notice_packets_test.cpp
     tests/web_url_test.cpp
     tests/browser_host_test.cpp
+    tests/server_links_test.cpp
     tests/swept_sphere_test.cpp
     tests/eq_strings_test.cpp
     tests/distance_test.cpp
@@ -1008,8 +1022,12 @@ if(NMSC_BUILD_TESTS)
     tests/spell_gems_vectors_test.cpp
     tests/usable_gems_test.cpp
     tests/zone_change_request_test.cpp
+    tests/spawn_hook_events_test.cpp
     tests/cast_spell_vectors_test.cpp
     tests/sound_files_test.cpp
+    tests/spirv_file_test.cpp
+    tests/environment_presets_test.cpp
+    tests/particle_textures_test.cpp
     tests/xmi_test.cpp
     tests/zone_emitters_test.cpp
     tests/sound_rules_test.cpp
@@ -1138,7 +1156,7 @@ endif()
 # Windows has no rpath: the shared dependencies' DLLs (SDL3) next to each tool too (hailstone and nmsc_tests have
 # their own copy steps above).
 if(WIN32)
-  foreach(exe pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check)
+  foreach(exe ${NMSC_TOOLS})
     add_custom_command(TARGET ${exe} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${exe}> $<TARGET_FILE_DIR:${exe}>
       COMMAND_EXPAND_LISTS)

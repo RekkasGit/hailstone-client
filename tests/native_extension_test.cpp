@@ -196,6 +196,45 @@ TEST_CASE("plugin server extension: setters, switches and hooks through the chai
     CHECK(h.printed_part("[read] eqstr -1"));
     CHECK(h.printed_part("[read] old 1 size 8"));
 
+    // next_spawn walks in id order from its sorted list, and a spawn gone or come since is seen.
+    {
+        std::vector<std::string> ids;
+        std::string after = "0";
+        for (int n = 0; n < 10; ++n) {
+            h.printed.clear();
+            h.run("/extnext " + after);
+            REQUIRE(h.printed.size() == 1);
+            if (h.printed[0] == "[next] none") break;
+            after = h.printed[0].substr(7);
+            ids.push_back(after);
+        }
+        CHECK(ids.size() == 5);
+        CHECK(std::is_sorted(ids.begin(), ids.end(), [](const std::string& a, const std::string& b) {
+            return std::stoul(a) < std::stoul(b);
+        }));
+        h.run("/extnext 0");
+        const std::uint32_t second = static_cast<std::uint32_t>(std::stoul(ids[1]));
+        net::GameConnectionTestAccess::world(*h.world.conn).spawns.erase(second);
+        h.printed.clear();
+        h.run("/extnext " + ids[0]);
+        CHECK(h.printed == std::vector<std::string>{"[next] " + ids[2]});
+        h.world.add(second, "back_again", true, 1, {});
+        h.printed.clear();
+        h.run("/extnext " + ids[0]);
+        CHECK(h.printed == std::vector<std::string>{"[next] " + ids[1]});
+        // A walk resumed from a saved id, after one spawn came and another went (the same count, and the id it
+        // had next still there), sees the new one.
+        h.run("/extnext 0");
+        auto& world = net::GameConnectionTestAccess::world(*h.world.conn);
+        REQUIRE(ids.front() == "1");
+        REQUIRE(world.spawns.erase(13) == 1);
+        ++world.spawn_set_serial; // as OP_DeleteSpawn
+        h.world.add(5, "newcomer", true, 1, {});
+        h.printed.clear();
+        h.run("/extnext 2");
+        CHECK(h.printed == std::vector<std::string>{"[next] 5"});
+    }
+
     // The rest of the host: folders, zone names, actions, the camera.
     h.world.conn->set_window_pet(300);
     net::GameConnectionTestAccess::profile(c)->skills.assign(100, 0);

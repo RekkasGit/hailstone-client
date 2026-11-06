@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "core/byte_io.h"
+#include "core/msvc_atoi.h"
 
 namespace nmsc::game {
 
@@ -35,7 +36,7 @@ bool repop_clears_coin(std::int32_t pvp_rules, std::int32_t level, bool virtual_
 std::string atp_teleport_text(std::string_view region_name) {
     std::string rest = region_name.size() > 4 ? std::string(region_name.substr(4)) : std::string();
     char text[64];
-    std::snprintf(text, sizeof(text), "DRNTP00255%05d000000000000000", std::atoi(rest.c_str()));
+    std::snprintf(text, sizeof(text), "DRNTP00255%05d000000000000000", core::msvc_atoi(rest));
     return text;
 }
 
@@ -55,7 +56,7 @@ ResolvedTeleport resolve_teleport_index(std::string_view text, std::int32_t inde
             if (len > 15) {
                 std::string f = field(text, 10, 6);
                 r.x = static_cast<float>(std::strtod(f.c_str(), nullptr));
-                r.zone_point = std::atoi(f.c_str());
+                r.zone_point = core::msvc_atoi(f);
                 if (len > 21) {
                     r.y = static_cast<float>(std::strtod(field(text, 16, 6).c_str(), nullptr));
                     if (len > 27) {

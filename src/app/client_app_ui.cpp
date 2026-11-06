@@ -271,10 +271,14 @@ void ClientApp::draw_ui(float fps) {
         hud.fps = fps;
         hud.connected = conn_->state() == net::ConnectionState::InZone || conn_->state() == net::ConnectionState::Camping;
         hud.connection = conn_->state() == net::ConnectionState::Camping ? "Camping" : "Connected";
+        // Only spawn_list_window reads it: not built (a name string per spawn) while that window is closed.
         game_view_.spawns.spawns.clear();
-        for (const auto& [id, s] : world.spawns) {
-            if (id == world.player_id) continue;
-            game_view_.spawns.spawns.push_back({id, game::display_name(s.name), s.level, glm::distance(s.position, camera_.position)});
+        if (game_view_.dev_windows && game_view_.show_spawns) {
+            for (const auto& [id, s] : world.spawns) {
+                if (id == world.player_id) continue;
+                game_view_.spawns.spawns.push_back(
+                    {id, game::display_name(s.name), s.level, glm::distance(s.position, camera_.position)});
+            }
         }
         const auto& ps = conn_->player_status();
         auto& pv = game_view_.player;
@@ -360,18 +364,7 @@ void ClientApp::draw_ui(float fps) {
         conn_->set_spellbook_open(conn_->spell_book_open()); // /book's flag follows the book (it closes itself)
         for (int tip : conn_->take_context_tips()) // the connection's events' context tips
             if (eq_api_) eq_api_->activate_tip(tip);
-        for (const std::string& url : conn_->take_web_links()) {
-            // OP_Weblink: the original opens it at once in an in-game HTML window (WebManager_CreateHtmlWnd); here
-            // the browser window (docs/browser.md). Without the helper, a deliberate difference: the system's browser,
-            // with the original's /url line (4095 "Opening %1") to say why one opened. Only http(s) pages (what the
-            // original lets through is not traced: docs/unknowns.md "OP_Weblink").
-            if (!web::url_allowed(url, {})) {
-                log::warn("OP_Weblink: not an http(s) page, not opened: {}", url);
-                continue;
-            }
-            if (!open_web_page(url))
-                conn_->show_with_line_breaks(conn_->strings().format(4095, std::vector<std::string>{url}));
-        }
+        for (const std::string& url : conn_->take_web_links()) open_server_link(url);
         social_ui_.draw(*conn_);
         if (spell_ui_) {
             spell_ui_->draw(*conn_, stats_ui_ ? stats_ui_->character() : nullptr);

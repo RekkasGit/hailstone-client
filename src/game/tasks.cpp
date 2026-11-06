@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <string_view>
 
+#include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 #include "game/mechanics/tables.h"
 
@@ -73,7 +74,7 @@ template <typename F> std::string join_ids(std::string_view list, F&& name_of) {
         std::string_view token = list.substr(0, end);
         list = end == std::string_view::npos ? std::string_view() : list.substr(end + 1);
         if (token.empty()) continue; // strtok skips empty tokens
-        std::string name = name_of(std::atoi(std::string(token).c_str()));
+        std::string name = name_of(core::msvc_atoi(token));
         if (name.empty()) continue;
         if (!out.empty()) out += " or ";
         out += name;
@@ -127,7 +128,7 @@ std::string task_description_text(const Task& task, const std::function<std::str
             std::size_t comma = d.find(',', p);
             std::string field = d.substr(p, comma == std::string::npos ? std::string::npos : comma - p);
             p = comma == std::string::npos ? d.size() : comma + 1;
-            int n = std::atoi(field.c_str());
+            int n = core::msvc_atoi(field);
             if (n == 0) {
                 s.steps.push_back(1000);
                 p = start;

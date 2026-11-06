@@ -5,6 +5,7 @@
 #include "net/settings_packets.h"
 
 #include <algorithm>
+#include <fstream>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
+#include "core/zone_name.h"
 #include "core/log.h"
 #include "game/appearance.h"
 #include "game/boats.h"
@@ -396,14 +398,20 @@ void GameConnection::raise_hook_events() {
         hook_spawns_.clear();
         return;
     }
-    std::vector<std::uint32_t> now;
+    // Unchanged (the usual frame): as many spawns as last time and every one raised still there. That costs a lookup a
+    // spawn and no allocation; only a change builds the sorted list again.
+    if (hook_spawns_.size() == world_.spawns.size() &&
+        std::all_of(hook_spawns_.begin(), hook_spawns_.end(), [&](std::uint32_t id) { return world_.spawns.contains(id); }))
+        return;
+    std::vector<std::uint32_t>& now = hook_spawns_scratch_; // the last list's buffer, kept to be filled again
+    now.clear();
     now.reserve(world_.spawns.size());
     for (const auto& [id, s] : world_.spawns) now.push_back(id);
     std::sort(now.begin(), now.end());
     std::vector<std::uint32_t> gone, added;
     std::set_difference(hook_spawns_.begin(), hook_spawns_.end(), now.begin(), now.end(), std::back_inserter(gone));
     std::set_difference(now.begin(), now.end(), hook_spawns_.begin(), hook_spawns_.end(), std::back_inserter(added));
-    hook_spawns_ = std::move(now);
+    hook_spawns_.swap(now);
     for (auto id : gone) hooks->spawn(id, false);
     for (auto id : added) hooks->spawn(id, true);
 }
@@ -523,6 +531,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         world_drop_pending_ = true;
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
         world_.spawns.clear();
+        ++world_.spawn_set_serial;
         world_.player_id = 0;
         world_.controlled_id = 0;
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
@@ -578,6 +587,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_player_for_zone();
         reset_market_for_zone();
         path_.stop();
+        // Finds asked in the old zone and never answered there: the new zone's first /find reply is not theirs.
+        find_requests_.clear();
+        quiet_path_.reset();
         expedition_.compass.clear();
         // NPC windows close with the zone (a guild bank deposit outside the guild hall would lose the item).
         reset_real_estate_for_zone();
@@ -736,7 +748,9 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
 
 void GameConnection::apply_spawn(const Spawn& s) {
+    const std::size_t had = world_.spawns.size();
     game::Spawn& out = world_.spawns[s.spawn_id];
+    if (world_.spawns.size() != had) ++world_.spawn_set_serial;
     out.id = s.spawn_id;
     out.name = s.name;
     out.last_name = s.last_name;
@@ -1142,6 +1156,14 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     case Op::NewZone:
         new_zone_ = decode_new_zone(p);
+        if (new_zone_ && !is_zone_short_name(new_zone_->zone_short_name)) {
+            // It names the zone's files (archives, map layers, the navmesh cache): a path here could reach outside
+            // their folders. Stock short names are letters, digits and '_' (core/zone_name.h); this one is dropped
+            // and the zone loads without scenery.
+            log::warn("zone: OP_NewZone's short name ({} bytes) is not a zone name; it is not used",
+                      new_zone_->zone_short_name.size());
+            new_zone_->zone_short_name.clear();
+        }
         if (new_zone_) {
             world_.zone_short_name = new_zone_->zone_short_name;
             world_.zone_long_name = new_zone_->zone_long_name;
@@ -1179,7 +1201,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             // (CTradeWnd_CancelAndClose, which sends OP_CancelTrade). EQEmu tells only the player who left.
             if (trade_ && trade_->partner_id == *id) trade_cancel();
             spawn_leaving(*id);
-            world_.spawns.erase(*id);
+            if (world_.spawns.erase(*id)) ++world_.spawn_set_serial;
             forget_pet_spawn(*id);
             // msgEQRmPlayer @0x4b8380: the target leaving stops auto attack and clears the target (no OP_TargetMouse).
             // Hailstone, as after a death: attack_until_xtarget_clear keeps attacking while the extended target list

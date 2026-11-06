@@ -321,6 +321,16 @@ TEST_CASE("aa: reuse timers translate the server's clock; readiness subtracts SP
     REQUIRE(sheet.size() == 1);
     CHECK(sheet[0].effects[0].spa == 262);
     CHECK(sheet[0].class_mask == a.classes);
+    // Into a list that held more and other ranks: the same list, its old entries gone.
+    std::vector<game::mechanics::SheetAbility> into(3);
+    into[0].id = 1;
+    into[0].effects = {{1, 2, 3}, {4, 5, 6}};
+    s.sheet_abilities_into(into);
+    REQUIRE(into.size() == 1);
+    CHECK(into[0].id == sheet[0].id);
+    REQUIRE(into[0].effects.size() == 1);
+    CHECK(into[0].effects[0].spa == 262);
+    CHECK(into[0].class_mask == a.classes);
 }
 
 TEST_CASE("training: OP_GMTraining both ways, OP_GMTrainSkill, OP_GMEndTraining, the confirmation") {
@@ -413,6 +423,9 @@ TEST_CASE("training: rows, cost, checkLang and the train checks") {
     CHECK(game::training_cost(10) == 0);
     CHECK(game::training_cost(15) == 1);  // 125 / 100
     CHECK(game::training_cost(60) == 1250);
+    // A server's skill past 1301: the cube wraps in 32 bits, then the idiv (it overflowed).
+    CHECK(game::training_cost(1500) == -9870182); // 1490^3 = 0xc52b4bc8
+    CHECK(game::training_cost(INT32_MIN) == -10); // the sub wraps too: 0x7ffffff6^3 = 0xfffffc18
 
     CHECK_FALSE(game::check_train(who, rows[0]));
     auto r = game::check_train(who, rows[1]);

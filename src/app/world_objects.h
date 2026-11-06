@@ -166,6 +166,8 @@ private:
         glm::vec3 center{0.0f};       // world
         float bound = 0.0f;           // world bounding radius
         std::uint32_t pick_mask = 2;  // the actor's collision restriction mask
+        std::uint32_t seen = 0;       // the update that last found it in the connection's lists
+        bool inverted = false;        // `inverse` is transform's (computed again only when the transform changes)
     };
 
     const Model* model_for(const std::string& name);
@@ -196,6 +198,7 @@ private:
     std::unordered_map<std::uint64_t, std::string> placed_tags_;
     std::optional<Placed> ghost_;
     std::string ghost_tag_;
+    std::uint32_t update_serial_ = 0; // update()'s count, for Placed::seen
     const Model* placed_model(const std::string& tag);
     std::vector<render::ObjectRenderer::Instance> instances_;
     std::vector<MissileActor> missile_actors_;

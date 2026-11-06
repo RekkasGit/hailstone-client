@@ -202,7 +202,18 @@ bool ClientApp::touching_switch(std::uint8_t id) {
 // already moved this frame. They are taken again a few times a second, so a model's own animation (whatever its
 // clip moves) is in its collision; between two takes the pose stands still.
 void ClientApp::update_vehicles() {
+    // Each fixed step asks again; a hull whose take and pose have not changed is the last step's, and the others
+    // reuse its triangle storage, so a boat at the dock costs no allocation and no transform per step.
+    vehicles_spare_.swap(vehicles_);
     vehicles_.clear();
+    auto reuse = [&](std::uint32_t id) -> std::optional<ZoneMoveWorld::Vehicle> {
+        for (auto& v : vehicles_spare_)
+            if (v.id == id) {
+                v.id = 0;
+                return std::move(v);
+            }
+        return std::nullopt;
+    };
     if (!actor_renderer_ || !conn_) return;
     constexpr float kVehicleReach = 400.0f;
     constexpr auto kVehicleRefresh = std::chrono::milliseconds(200);
@@ -235,15 +246,22 @@ void ClientApp::update_vehicles() {
             }
         }
         if (m.triangles.empty()) continue;
-        ZoneMoveWorld::Vehicle v;
+        auto last = reuse(id);
+        ZoneMoveWorld::Vehicle v = last ? std::move(*last) : ZoneMoveWorld::Vehicle{};
         v.id = id;
-        v.center = game::boat_to_world(pose, m.center);
-        v.radius = m.radius;
-        v.triangles.reserve(m.triangles.size() / 3);
-        for (std::size_t i = 0; i + 2 < m.triangles.size(); i += 3)
-            v.triangles.push_back(game::CollisionTriangle::make(game::boat_to_world(pose, m.triangles[i]),
-                                                                game::boat_to_world(pose, m.triangles[i + 1]),
-                                                                game::boat_to_world(pose, m.triangles[i + 2]), 0));
+        if (!last || m.placed_taken != m.taken || m.placed_pose.position != pose.position ||
+            m.placed_pose.heading != pose.heading) {
+            v.center = game::boat_to_world(pose, m.center);
+            v.radius = m.radius;
+            v.triangles.clear();
+            v.triangles.reserve(m.triangles.size() / 3);
+            for (std::size_t i = 0; i + 2 < m.triangles.size(); i += 3)
+                v.triangles.push_back(game::CollisionTriangle::make(game::boat_to_world(pose, m.triangles[i]),
+                                                                    game::boat_to_world(pose, m.triangles[i + 1]),
+                                                                    game::boat_to_world(pose, m.triangles[i + 2]), 0));
+            m.placed_taken = m.taken;
+            m.placed_pose = pose;
+        }
         vehicles_.push_back(std::move(v));
     }
 }
@@ -327,8 +345,9 @@ void ClientApp::update_player(float dt) {
         if (game::mechanics::is_movement_command(e.command)) movement_command(e.command, e.down, accept);
     mk.move_down = actions_ui_->keymap().held(game::KeyCommand::CMD_MOVE_DOWN);
     // CastSpell's line of sight test (PlayerBase::CanSee) against the zone's collision.
-    if (los_conn_ != conn_.get()) {
-        los_conn_ = conn_.get();
+    // Each new connection is given its hooks once. (Not a test on the connection's address: a new connection can be
+    // allocated where the freed one was, after /camp or a return to character select.)
+    if (!conn_->has_line_of_sight()) {
         conn_->set_line_of_sight([this](const glm::vec3& a, const glm::vec3& b) {
             return !collision_ || collision_->line_of_sight(a, b);
         });
@@ -368,8 +387,9 @@ void ClientApp::update_player(float dt) {
     if (keys) {
         update_combat_input();
     } else {
-        // A window has the keyboard (typing in the chat): the pad is not the keyboard, its commands still act.
-        for (std::size_t i = pad_first; i < key_events_.size(); ++i) key_command(key_events_[i]);
+        // A window has the keyboard (typing in the chat): the scripts' /keypress and the pad are not the keyboard,
+        // their commands still act (a script's press would be lost otherwise: script_keys_ is not kept).
+        for (std::size_t i = player_keys; i < key_events_.size(); ++i) key_command(key_events_[i]);
     }
     update_placement();
     update_item_input();

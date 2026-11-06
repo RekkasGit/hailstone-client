@@ -2,15 +2,20 @@
 // ui.DrawText's font size, which the server windows of the Triune plugin use.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <lua.hpp>
 
 #include "ui/lua/lua_host.h"
+#include "ui/texture_ids.h"
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
@@ -506,5 +511,275 @@ end)
         CHECK(get("fast4") == "true");
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
     }
+    ImGui::DestroyContext(ctx);
+}
+
+// The table calls ImGui does not guard: TableNextRow and the header row with no current table read through a null
+// table, and a column or freeze set up after the first row asserts. The bindings refuse them; inside a table they
+// work as before.
+TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, are refused") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_table_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "t.lua") << "ui.window('T', function()\n"
+                                    "  ui.Begin('T')\n"
+                                    "  ui.TableNextRow()\n"
+                                    "  outside = ui.TableHeadersRowClicked()\n"
+                                    "  ui.TableSetupColumn('x', 0, 0)\n"
+                                    "  ui.TableSetupScrollFreeze(1, 1)\n"
+                                    "  if ui.BeginTable('tab', 2, ui.TableFlags.ScrollY, 200, 100) then\n"
+                                    "    ui.TableSetupColumn('A')\n"
+                                    "    ui.TableSetupColumn('B')\n"
+                                    "    ui.TableSetupScrollFreeze(-5, 100000)\n"
+                                    "    inside = ui.TableHeadersRowClicked()\n"
+                                    "    ui.TableSetupColumn('late')\n"
+                                    "    ui.TableSetupScrollFreeze(1, 1)\n"
+                                    "    ui.TableNextRow()\n"
+                                    "    ui.TableNextColumn() ui.Text('a')\n"
+                                    "    ui.EndTable()\n"
+                                    "  end\n"
+                                    "  ui.TableNextRow()\n"
+                                    "  done = true\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "done");
+        CHECK(lua_toboolean(L, -1));
+        lua_getglobal(L, "outside");
+        CHECK(lua_tointeger(L, -1) == -1);
+        lua_getglobal(L, "inside");
+        CHECK(lua_tointeger(L, -1) == -1);
+        lua_pop(L, 3);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.Image, ui.ImageButton and ui.DrawImage draw only a texture the client handed out (ui/texture_ids.h): other
+// userdata (a full userdata such as an mq.TLO value, a light one never made a texture, one since freed) is none, as
+// nil is, and never reaches the draw list, which the Vulkan backend would bind as a descriptor set.
+TEST_CASE("Lua UI: images draw only live textures the client handed out") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_image_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "i.lua") << "ui.window('I', function()\n"
+                                    "  ui.Begin('I')\n"
+                                    "  for _, t in ipairs({ FULL, STRANGER, FREED, LIVE }) do\n"
+                                    "    ui.Image(t, 8, 8)\n"
+                                    "    ui.ImageButton('b' .. tostring(_), t, 8, 8)\n"
+                                    "    local x, y = ui.GetCursorScreenPos()\n"
+                                    "    ui.DrawImage(t, x, y, x + 8, y + 8)\n"
+                                    "  end\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    static int live = 0, stranger = 0, freed = 0;
+    nmsc::ui::texture_id_added(&live);
+    nmsc::ui::texture_id_added(&freed);
+    nmsc::ui::texture_id_removed(&freed);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        lua_newuserdatauv(L, 16, 0);
+        lua_setglobal(L, "FULL");
+        lua_pushlightuserdata(L, &stranger);
+        lua_setglobal(L, "STRANGER");
+        lua_pushlightuserdata(L, &freed);
+        lua_setglobal(L, "FREED");
+        lua_pushlightuserdata(L, &live);
+        lua_setglobal(L, "LIVE");
+        int live_draws = 0, other_draws = 0;
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+            live_draws = other_draws = 0;
+            const ImTextureID font = ImGui::GetIO().Fonts->TexID;
+            const ImDrawData* data = ImGui::GetDrawData();
+            for (const ImDrawList* list : data->CmdLists)
+                for (const ImDrawCmd& cmd : list->CmdBuffer) {
+                    if (cmd.ElemCount == 0) continue;
+                    const ImTextureID id = cmd.GetTexID();
+                    if (id == reinterpret_cast<ImTextureID>(&live)) ++live_draws;
+                    else if (id != font) ++other_draws;
+                }
+        }
+        CHECK(live_draws > 0);
+        CHECK(other_draws == 0);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    nmsc::ui::texture_id_removed(&live);
+    ImGui::DestroyContext(ctx);
+}
+
+namespace {
+// Two frames of a pack with one script; the global `done` after them.
+bool run_pack_frames(const std::string& name, const std::string& script, int frames = 2,
+                     const std::function<void(int)>& before_frame = {}) {
+    nmsc::test::ScratchDir scratch(name);
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << script;
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    bool done = false;
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        for (int i = 0; i < frames; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            if (before_frame) before_frame(i);
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        }
+        lua_getglobal(L, "done");
+        done = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+    return done;
+}
+} // namespace
+
+TEST_CASE("Lua UI: ImGui's internal window flags are not a script's, and unbalanced ends are refused") {
+    CHECK(run_pack_frames("lua_ui_api_flags_test", "ui.window('F', function()\n"
+                                                   "  ui.Begin('F', nil, 1 << 26 | 1 << 27 | 1 << 28)\n"
+                                                   "  if ui.BeginChild('c', 50, 50, false, 1 << 26 | 1 << 24) then ui.Text('x') end\n"
+                                                   "  ui.EndChild()\n"
+                                                   "  ui.EndMenu() ui.EndPopup() ui.EndCombo() ui.EndTooltip()\n"
+                                                   "  ui.Text('still F')\n"
+                                                   "  ui.End()\n"
+                                                   "  done = true\n"
+                                                   "end)\n"));
+}
+
+TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing undefined") {
+    CHECK(run_pack_frames("lua_ui_api_style_nan_test",
+                          "ui.window('S', function()\n"
+                          "  local nc = ui.PushStyleColors({ 0/0, 1, 1, 1, 1, 1e300, 1, 1, 1, 1, -math.huge, 1, 1, 1, 1,\n"
+                          "                                  ui.Col.Text, 1e300, 0/0, 1, 1 })\n"
+                          "  local nv = ui.PushStyleVars({ 0/0, 1, false, math.huge, 1, 1, ui.StyleVar.Alpha, 1e300, false })\n"
+                          "  ui.PopStyleVar(nv) ui.PopStyleColor(nc)\n"
+                          "  done = nc == 1 and nv == 1\n"
+                          "end)\n"));
+}
+
+TEST_CASE("Lua UI: a completion list whose __len raises is read raw, not left to unwind the editor") {
+    CHECK(run_pack_frames("lua_ui_api_complete_len_test",
+                          "local frame = 0\n"
+                          "ui.window('E', function()\n"
+                          "  frame = frame + 1\n"
+                          "  ui.SetNextWindowPos(0, 0, ui.Cond.Always)\n"
+                          "  ui.SetNextWindowSize(300, 200, ui.Cond.Always)\n"
+                          "  ui.Begin('E')\n"
+                          "  local opts = { complete = function(before)\n"
+                          "    asked = true\n"
+                          "    return 1, setmetatable({ 'abc' }, { __len = function() error('len') end })\n"
+                          "  end }\n"
+                          "  local text, changed, cursor, active = ui.CodeEditor('code', 'a', 200, 100, opts)\n"
+                          "  ui.End()\n"
+                          "  if frame >= 4 then done = asked == true end\n"
+                          "end)\n",
+                          5, [](int i) { // a click in the box makes it active
+                              ImGui::GetIO().AddMousePosEvent(60, 70);
+                              if (i == 1) ImGui::GetIO().AddMouseButtonEvent(0, true);
+                              if (i == 2) ImGui::GetIO().AddMouseButtonEvent(0, false);
+                          }));
+}
+
+TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept for the session") {
+    std::size_t kept = 0;
+    int oldest_at_10 = -1, oldest = -1;
+    CHECK(run_pack_frames("lua_ui_api_editors_test",
+                          "local frame = 0\n"
+                          "ui.window('C', function()\n"
+                          "  frame = frame + 1\n"
+                          "  ui.Begin('C')\n"
+                          "  ui.CodeEditor('kept', 'x', 100, 50)\n"
+                          "  ui.CodeEditor('id ' .. frame, 'x', 100, 50)\n"
+                          "  ui.End()\n"
+                          "  done = true\n"
+                          "end)\n",
+                          400, [&](int i) {
+                              if (i == 10) oldest_at_10 = nmsc::ui::lua::code_editors_oldest();
+                              if (i == 399) {
+                                  kept = nmsc::ui::lua::code_editors_kept();
+                                  oldest = nmsc::ui::lua::code_editors_oldest();
+                              }
+                          }));
+    CHECK(kept > 0);
+    CHECK(kept <= 258); // past 256, those not drawn last frame go
+    REQUIRE(oldest_at_10 >= 0);
+    CHECK(oldest == oldest_at_10); // the one drawn every frame was never forgotten
+}
+
+TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's start does") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+    ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+    ImGui::NewFrame();
+    const float line_h = ImGui::GetFontSize();
+    auto expected = [&](const std::string& text, std::size_t to) {
+        to = std::min(to, text.size());
+        const std::size_t nl = to == 0 ? std::string::npos : text.rfind('\n', to - 1);
+        const std::size_t start = nl == std::string::npos ? 0 : nl + 1;
+        const auto line = static_cast<float>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(start), '\n'));
+        return std::pair<float, float>(ImGui::CalcTextSize(text.data() + start, text.data() + to).x, line * line_h);
+    };
+    const std::vector<std::string> texts = {
+        "local x = 1 -- a comment\nprint(x)\n",
+        "--[[ a long\ncomment over\nthree lines ]] local s = 'abc'\n\tif x then\n\t\treturn \"t\\tab\" end",
+        "caf\xc3\xa9 = '\xe2\x82\xac\xe2\x82\xac' -- multibyte\nna\xc3\xafve = 1\n\n\nlast",
+        "",
+    };
+    for (const auto& text : texts) {
+        CAPTURE(text);
+        // Increasing offsets one byte at a time (the spans' walk), then a caret before the last (a restart), past
+        // the end, and a few in no order.
+        std::vector<std::size_t> at;
+        for (std::size_t i = 0; i <= text.size(); ++i) at.push_back(i);
+        at.push_back(text.size() / 2);
+        at.push_back(text.size() + 5);
+        at.push_back(1);
+        at.push_back(text.size() / 3);
+        at.push_back(0);
+        const auto got = nmsc::ui::lua::code_editor_places(text, at);
+        REQUIRE(got.size() == at.size());
+        for (std::size_t i = 0; i < at.size(); ++i) {
+            CAPTURE(at[i]);
+            CHECK(got[i] == expected(text, at[i]));
+        }
+    }
+    ImGui::EndFrame();
     ImGui::DestroyContext(ctx);
 }

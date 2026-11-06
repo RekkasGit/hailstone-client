@@ -25,6 +25,7 @@
 #include "game/view_distance.h"
 #include "game/world_state.h"
 #include "render/culling.h"
+#include "render/look_eviction.h"
 #include "render/material_state.h"
 #include "render/vk_util.h"
 
@@ -60,19 +61,7 @@ struct PushConstants {
 static_assert(sizeof(PushConstants) <= 128);
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("cannot open shader " + path.string());
-    auto size = static_cast<std::size_t>(f.tellg());
-    if (size == 0 || size % 4 != 0) throw std::runtime_error("bad SPIR-V size in " + path.string());
-    std::vector<std::uint32_t> code(size / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * 4;
-    info.pCode = code.data();
-    VkShaderModule module;
-    vk_check(vkCreateShaderModule(device, &info, nullptr, &module), "vkCreateShaderModule");
-    return module;
+    return create_shader_module(device, path);
 }
 
 // Cross-fades: CBoneGroup::BlendToAnimation @0x1003fcc0 fades the new track
@@ -500,6 +489,8 @@ ActorRenderer::MeshPlan ActorRenderer::plan_mesh(const assets::CharacterMesh& mo
 const ActorRenderer::GpuModel* ActorRenderer::gpu_model(const assets::CharacterMesh& model, UploadBatch& upload) {
     if (auto it = models_.find(&model); it != models_.end()) {
         it->second.used = true;
+        it->second.last_frame = vk_.frames_begun();
+        it->second.last_ms = now_ms_;
         return &it->second;
     }
     MeshPlan plan = plan_mesh(model);
@@ -510,6 +501,8 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
                                                       UploadBatch& upload) {
     if (auto it = models_.find(&model); it != models_.end()) {
         it->second.used = true;
+        it->second.last_frame = vk_.frames_begun();
+        it->second.last_ms = now_ms_;
         return &it->second;
     }
     GpuModel g;
@@ -523,6 +516,8 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
     }
     std::stable_sort(g.parts.begin(), g.parts.end(), [](const Part& a, const Part& b) { return a.pass < b.pass; });
     g.used = true;
+    g.last_frame = vk_.frames_begun();
+    g.last_ms = now_ms_;
     g.vertices = upload.buffer(plan.vertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     g.indices = upload.buffer(std::as_bytes(std::span(model.indices)), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     stats_.models = models_.size() + 1;
@@ -582,6 +577,35 @@ void ActorRenderer::stop_dresser() {
     if (dresser_) dresser_->stop();
     dresser_.reset();
     ready_.clear();
+}
+
+void ActorRenderer::evict_idle_looks() {
+    if (static_cast<std::uint32_t>(now_ms_ - last_look_sweep_ms_) < kLookSweepMs) return;
+    last_look_sweep_ms_ = now_ms_;
+    // A look a spawn's state wears stays, a hidden spawn's too (worn_meshes).
+    const auto worn = worn_meshes(spawns_);
+    const std::uint64_t frame = vk_.frames_begun();
+    std::size_t evicted = 0;
+    for (auto it = looks_.begin(); it != looks_.end();) {
+        std::erase_if(it->second.looks, [&](const auto& look) {
+            const assets::CharacterMesh* mesh = look.second.get();
+            if (!mesh || worn.contains(mesh)) return false; // a null look (the default geometry) costs nothing
+            if (auto g = models_.find(mesh); g != models_.end()) {
+                if (!look_idle(g->second.last_frame, g->second.last_ms, frame, now_ms_, VkContext::kFramesInFlight))
+                    return false;
+                free_model(g->second);
+                models_.erase(g);
+            }
+            mesh_refs_.erase(mesh);
+            ++evicted;
+            return true;
+        });
+        it = it->second.looks.empty() ? looks_.erase(it) : std::next(it);
+    }
+    if (evicted) {
+        stats_.models = models_.size();
+        log::debug("freed {} idle appearances ({} meshes on the GPU)", evicted, models_.size());
+    }
 }
 
 const std::shared_ptr<const assets::CharacterMesh>* ActorRenderer::applied_look(const assets::CharacterModel& model,
@@ -1100,8 +1124,21 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         if (s.mount_id) order.push_back(id);
     for (std::uint32_t id : order) {
         const game::Spawn& s = world.spawns.at(id);
-        if (id == hide_id) continue;
+        // A spawn hidden on purpose (the player in first person, a market-hidden one) keeps its state, and so the
+        // look it wears: evict_idle_looks frees only looks no state holds, so it is drawn again in that look at once.
+        // Otherwise it is as if it were gone: its dressing is dropped and it comes back as a new state.
+        auto keep = [&] {
+            auto it = spawns_.find(id);
+            if (it == spawns_.end() || !hide_spawn_state(it->second)) return;
+            if (dresser_) dresser_->cancel(id);
+            ready_.erase(id);
+        };
+        if (id == hide_id) {
+            keep();
+            continue;
+        }
         if (hidden_ && hidden_->contains(id)) {
+            keep();
             empty_ids_.push_back(id);
             continue;
         }
@@ -1119,7 +1156,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
 
         auto& st = spawns_[id];
         st.seen = true;
-        if (st.model != model) st = SpawnState{model};
+        if (spawn_state_fresh(st, model)) st = SpawnState{model};
         st.seen = true;
         // Appearance: rebuilt when it changes (WearChange, Illusion), on the worker; until it is ready (and applied
         // within the frame's budget) the previous one stays. One applied before for the same model and look is
@@ -1341,6 +1378,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         ready_.erase(kv.first);
         return true;
     });
+    evict_idle_looks();
     prepare(frame, draws, upload);
     if (stats_.dressed)
         log::debug("dressed {} spawns in {:.2f} ms, uploaded in {:.2f} ms ({} meshes on the GPU, {} waiting)",
@@ -1353,7 +1391,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
 
 std::optional<bool> ActorRenderer::jump_animation_playing(std::uint32_t id) const {
     auto it = spawns_.find(id);
-    if (it == spawns_.end() || !it->second.anim.started) return std::nullopt;
+    if (it == spawns_.end() || it->second.hidden || !it->second.anim.started) return std::nullopt;
     return game::mechanics::is_jump_animation(it->second.anim.anim, it->second.new_style);
 }
 

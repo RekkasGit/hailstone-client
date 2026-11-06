@@ -13,6 +13,7 @@
 // they use the triangles that are neither passable nor transparent
 // (translucent and additive surfaces: water, glass, effects), as before.
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -104,6 +105,14 @@ private:
     static constexpr float kCell = 64.0f;
     static std::int64_t cell_key(std::int32_t x, std::int32_t y) {
         return (static_cast<std::int64_t>(x) << 32) ^ static_cast<std::uint32_t>(y);
+    }
+    // The grid column or row holding coordinate c. A coordinate past +-6.4e10 (a hostile teleport, a script's
+    // LineOfSight) or NaN is clamped instead of overflowing the int32 cast; no triangle is listed there.
+    static std::int32_t cell_of(float c) {
+        const float f = std::floor(c / kCell);
+        if (!(f > -1.0e9f)) return -1000000000; // NaN too
+        if (f > 1.0e9f) return 1000000000;
+        return static_cast<std::int32_t>(f);
     }
     void index();
     // fn(index) for every triangle the swept sphere's box touches, once each, then the huge ones.

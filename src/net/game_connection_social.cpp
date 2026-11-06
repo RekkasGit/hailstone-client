@@ -243,10 +243,13 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
     if (h == "Cmd_split") {
         // CEverQuest::Split @0x52b660: /split <platinum> <gold> <silver> <copper>.
         if (!group_.active) return system(12328), true;
-        long v[4];
-        for (int i = 0; i < 3; ++i) v[i] = std::atol(game::next_cmd_arg(rest).c_str());
-        v[3] = std::atol(std::string(rest).c_str());
-        if (v[0] + v[1] + v[2] + v[3] < 1) {
+        // The amounts are the original's 32-bit longs, and their sum is the 32-bit add it does (wrapping).
+        std::int32_t v[4];
+        for (int i = 0; i < 3; ++i) v[i] = game::cmd_atol(game::next_cmd_arg(rest));
+        v[3] = game::cmd_atol(rest);
+        std::uint32_t sum = 0;
+        for (std::int32_t x : v) sum += static_cast<std::uint32_t>(x);
+        if (static_cast<std::int32_t>(sum) < 1) {
             system(12329);
             system(12330);
             system(12331);
@@ -254,9 +257,9 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
         }
         const std::uint32_t have[4] = {coins_.platinum, coins_.gold, coins_.silver, coins_.copper};
         for (int i = 0; i < 4; ++i)
-            if (v[i] > static_cast<long>(have[i])) return system(12332 + static_cast<std::uint32_t>(i)), true;
+            if (v[i] > static_cast<std::int32_t>(have[i])) return system(12332 + static_cast<std::uint32_t>(i)), true;
         ByteWriter w;
-        for (long x : v) w.le<std::uint32_t>(static_cast<std::uint32_t>(std::max(0L, x)));
+        for (std::int32_t x : v) w.le<std::uint32_t>(static_cast<std::uint32_t>(std::max(0, x)));
         send_zone(make_packet(Op::Split, std::move(w)));
         return true;
     }

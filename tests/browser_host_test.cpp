@@ -2,9 +2,12 @@
 // an in-memory helper, and against the stand-in helper program (tests/mock_web_helper.cpp) over real pipes.
 #include <doctest/doctest.h>
 
+#include <cfloat>
 #include <chrono>
 #include <deque>
 #include <thread>
+
+#include <imgui.h>
 
 #include "app/web_service.h"
 #include "fuzz_support.h"
@@ -72,6 +75,10 @@ struct FakeHelper {
     std::deque<std::byte> to_client;
     bool alive = true, start_ok = true;
     int starts = 0;
+    // `hold`: what is sent waits (in `pending`) instead of reaching the helper; `taken` is what it has taken in all.
+    bool hold = false;
+    std::size_t pending = 0;
+    std::uint64_t taken = 0;
 
     void reply(const Message& m) {
         auto b = encode_message(m);
@@ -95,6 +102,10 @@ public:
         return h_.start_ok;
     }
     void send(std::span<const std::byte> bytes) override {
+        if (h_.hold) {
+            h_.pending += bytes.size();
+            return;
+        }
         reader_.feed(bytes);
         while (auto m = reader_.next()) h_.sent.push_back(*m);
     }
@@ -107,6 +118,8 @@ public:
         return n;
     }
     bool alive() override { return h_.alive; }
+    std::size_t pending() override { return h_.pending; }
+    std::uint64_t taken() override { return h_.taken; }
     void stop(int) override { h_.alive = false; }
 
 private:
@@ -401,6 +414,17 @@ TEST_CASE("web service: each script and plugin has a cookie folder of its own; t
     CHECK(opens[0].profile == base);
     CHECK(opens[1].profile == s1);
     CHECK(opens[2].profile == p1);
+
+    // A server's link (OP_Weblink): the player's tab, in a folder of its own, not the player's sign-ins.
+    const std::uint32_t link = web.open_server_link("https://example.org/");
+    REQUIRE(link != 0);
+    CHECK(web.tabs("") == std::vector<std::uint32_t>{r.helper.sent_of<Open>()[0].tab, link});
+    opens = r.helper.sent_of<Open>();
+    REQUIRE(opens.size() == 4);
+    CHECK(opens[3].profile == base + "/server-links");
+    CHECK_FALSE(opens[3].restricted);
+    CHECK(opens[3].profile != s1);
+    CHECK(WebService::server_link_profile(base + "/") == base + "/server-links");
 }
 
 TEST_CASE("browser host: a script's tab that lands off its sites is closed") {
@@ -421,6 +445,340 @@ TEST_CASE("browser host: a script's tab that lands off its sites is closed") {
     REQUIRE(t);
     CHECK(t->close_reason == CloseReason::Refused);
     CHECK(r.host.tab(id) == nullptr);
+}
+
+// The helper quits on a message over its limit (a broken stream), so the client never sends one: an Eval, Text or
+// Post (held to kMaxPostMessage, what the page may post back) too long, or an address over kMaxUrl, is refused and
+// the helper keeps running.
+TEST_CASE("browser host: messages too long for the helper are refused, not sent") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    const std::string huge(kMaxMessage, 'x');
+    CHECK_FALSE(r.host.eval(id, huge));
+    CHECK_FALSE(r.host.text(id, huge));
+    CHECK_FALSE(r.host.post(id, std::string(kMaxPostMessage + 1, 'x')));
+    CHECK(r.host.post(id, std::string(kMaxPostMessage, 'x')));
+    CHECK(r.host.eval(id, "1+1"));
+    CHECK(r.host.text(id, "hi"));
+    std::string why;
+    const std::string long_url = "https://example.org/" + std::string(kMaxUrl, 'a');
+    CHECK_FALSE(r.host.navigate(id, long_url, &why));
+    CHECK(why == "the address is too long");
+    CHECK(r.host.open(long_url, script(), &why) == 0);
+    CHECK(r.helper.sent_of<Eval>().size() == 1);
+    CHECK(r.helper.sent_of<Text>().size() == 1);
+    CHECK(r.helper.sent_of<Post>().size() == 1);
+    CHECK(r.helper.sent_of<Navigate>().empty());
+    CHECK(r.helper.sent_of<Open>().size() == 1);
+    CHECK_FALSE(r.host.tab(id)->closed);
+    CHECK(r.host.available());
+
+    // Through the service, as mq.web and eq.Web* reach it: false, and nothing sent.
+    app::WebService web({[&] { return &r.host; }, [] { return nullptr; }, [] { return std::string(); },
+                         [] { return std::vector<std::string>{}; }, [] {}});
+    auto mine = web.open("script:big", plugin::kCapWeb, "https://example.org/", 64, 64);
+    REQUIRE(mine != 0);
+    CHECK_FALSE(web.eval("script:big", plugin::kCapWeb, mine, huge));
+    CHECK_FALSE(web.post("script:big", plugin::kCapWeb, mine, huge));
+    CHECK(web.post("script:big", plugin::kCapWeb, mine, "ok"));
+    CHECK(r.helper.sent_of<Post>().size() == 2);
+}
+
+// While kSendBudget waits for the helper, what a script sends is refused (false), never queued until the queue's limit
+// ends a helper that is still reading; an empty queue takes even the largest message, and the client's own Close
+// always goes.
+TEST_CASE("browser host: a full queue refuses messages instead of ending the helper") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    r.helper.hold = true;
+    const std::string big(std::size_t{60} << 20, 'x');
+    CHECK(r.host.eval(id, big)); // the queue was empty
+    CHECK_FALSE(r.host.eval(id, big));
+    CHECK_FALSE(r.host.text(id, big));
+    std::string why;
+    CHECK_FALSE(r.host.navigate(id, "https://example.org/b", &why));
+    CHECK(why == "the browser helper is still taking earlier messages");
+    CHECK(r.host.tab(id)->url == "https://example.org/"); // not where it never went
+    CHECK(r.host.open("https://example.org/c", script(), &why) == 0);
+    CHECK(r.host.tabs().size() == 1); // no tab left loading for an Open never sent
+    r.host.resize(id, 100, 100);
+    CHECK(r.host.tab(id)->options.width == 800); // sent again at the next resize
+    const std::size_t held = r.helper.pending;
+    auto other = r.host.open("https://example.org/", script());
+    CHECK(other == 0);
+    r.host.close(id);
+    CHECK(r.helper.pending > held); // the Close went
+    // The helper takes it: messages go again, and nothing died.
+    r.helper.pending = 0;
+    r.helper.taken += std::size_t{60} << 20;
+    r.helper.hold = false;
+    auto again = r.host.open("https://example.org/", script());
+    REQUIRE(again != 0);
+    CHECK(r.host.eval(again, "1+1"));
+    r.host.poll(BrowserHost::kStallMs * 2);
+    CHECK(r.helper.starts == 1);
+    CHECK(r.helper.alive);
+    CHECK(r.host.last_error().empty());
+}
+
+// A paint larger than a message may be goes as several Frames: each fits, and together they draw the same image.
+TEST_CASE("browser protocol: split_frame cuts a large paint into frames that fit") {
+    Frame f;
+    f.tab = 3;
+    f.width = 10;
+    f.height = 9;
+    FrameRect big;
+    big.width = 10;
+    big.height = 9;
+    big.bgra.resize(10 * 9 * 4);
+    for (std::size_t i = 0; i < big.bgra.size(); ++i) big.bgra[i] = static_cast<std::byte>(i * 7);
+    FrameRect small;
+    small.x = 1;
+    small.y = 2;
+    small.width = small.height = 2;
+    small.bgra.assign(16, std::byte{0xee});
+    f.rects = {big, small};
+    const std::size_t max_body = 14 + 8 + 10 * 4 * 4; // four rows of the big one a frame
+    auto parts = split_frame(f, max_body);
+    REQUIRE(parts.size() == 3);
+    Image want, got;
+    Rig r;
+    auto id = r.host.open("https://example.org/", {});
+    r.helper.reply(Ready{});
+    r.helper.reply(f);
+    r.host.poll(0);
+    want = r.host.tab(id)->view;
+    for (const Frame& p : parts) {
+        CHECK(frame_body_size(p) <= max_body);
+        CHECK(encode_message(p).size() - 4 == frame_body_size(p));
+        CHECK(p.tab == 3);
+        CHECK(p.width == 10);
+        CHECK(p.height == 9);
+    }
+    CHECK(parts[0].rects.size() == 1);
+    CHECK(parts[0].rects[0].height == 4);
+    CHECK(parts[2].rects.size() == 2); // the last band and the small rect share a frame
+    Rig r2;
+    auto id2 = r2.host.open("https://example.org/", {});
+    r2.helper.reply(Ready{});
+    for (auto& p : parts) r2.helper.reply(p);
+    r2.host.poll(0);
+    got = r2.host.tab(id2)->view;
+    CHECK(got.bgra == want.bgra);
+    // One that fits stays one frame.
+    CHECK(split_frame(f).size() == 1);
+}
+
+// The largest tab (4096x4096) paints a body just over kMaxMessage; split, each part is read and the helper lives.
+TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
+    Frame f;
+    f.tab = 1;
+    f.width = f.height = 4096;
+    FrameRect all;
+    all.width = all.height = 4096;
+    all.bgra.assign(std::size_t{4096} * 4096 * 4, std::byte{0x11});
+    f.rects.push_back(std::move(all));
+    REQUIRE(frame_body_size(f) > kMaxMessage);
+    Rig r;
+    auto id = r.host.open("https://example.org/", {});
+    REQUIRE(id == 1);
+    r.helper.reply(Ready{});
+    auto parts = split_frame(std::move(f));
+    CHECK(parts.size() == 2);
+    for (auto& p : parts) {
+        CHECK(frame_body_size(p) <= kMaxMessage);
+        r.helper.reply(p);
+    }
+    parts.clear();
+    for (int i = 0; i < 1000 && !r.helper.to_client.empty(); ++i) r.host.poll(0); // kReadBudget a poll
+    CHECK(r.helper.to_client.empty());
+    CHECK(r.helper.alive);
+    CHECK(r.helper.starts == 1);
+    REQUIRE(r.host.tab(id));
+    REQUIRE(r.host.tab(id)->view.width == 4096);
+    CHECK(r.host.tab(id)->view.bgra.back() == std::byte{0x11});
+}
+
+// A script's tab is closed (Refused, the reason kept for its owner) once its owner lost 'web' or the server's
+// [web] allow changed from the one it opened with: the helper keeps a tab's sites for its life.
+TEST_CASE("web service: tabs whose owner lost 'web', or whose sites changed, are closed") {
+    Rig r;
+    std::vector<std::string> allow;
+    app::WebServiceEnv env;
+    env.browser = [&] { return &r.host; };
+    env.allow = [&] { return allow; };
+    app::WebService web(env);
+    const auto a = web.open("script:a", plugin::kCapAll, "https://example.org/", 100, 100);
+    const auto b = web.open("plugin:b", plugin::kCapAll, "https://example.org/", 100, 100);
+    const auto mine = web.open("", plugin::kCapAll, "https://example.org/", 100, 100);
+    REQUIRE((a && b && mine));
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    std::uint32_t b_caps = plugin::kCapAll;
+    auto caps_of = [&](const std::string& owner) { return owner == "plugin:b" ? b_caps : plugin::kCapAll; };
+    web.recheck(caps_of);
+    CHECK_FALSE(r.host.tab(a)->closed);
+    CHECK_FALSE(r.host.tab(b)->closed);
+    b_caps = plugin::kCapRead | plugin::kCapUi;
+    web.recheck(caps_of);
+    CHECK(r.host.tab(b)->closed);
+    CHECK(r.host.tab(b)->close_reason == CloseReason::Refused);
+    CHECK(web.state("plugin:b", b)->why == "it no longer has the server's 'web' permission");
+    CHECK_FALSE(r.host.tab(a)->closed);
+    allow = {"wiki.example.org"};
+    web.recheck(caps_of);
+    CHECK(r.host.tab(a)->closed);
+    CHECK(web.state("script:a", a)->why == "the server changed the sites scripts may open");
+    CHECK_FALSE(r.host.tab(mine)->closed); // the player's own are not the server's to limit
+    CHECK(r.helper.sent_of<Close>().size() == 2);
+}
+
+// ImGui's position with no mouse is -FLT_MAX, which no int32 holds: the page is told it left at the last place it
+// had, not at a converted -FLT_MAX.
+TEST_CASE("web service: the mouse leaving the game's window leaves the page at its last place") {
+    Rig r;
+    app::WebServiceEnv env;
+    env.browser = [&] { return &r.host; };
+    app::WebService web(env);
+    const auto id = web.open("", plugin::kCapAll, "https://example.org/", 200, 100);
+    REQUIRE(id);
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int fw = 0, fh = 0;
+    io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh);
+    auto frame = [&](float x, float y) {
+        io.DisplaySize = ImVec2(800, 600);
+        io.DeltaTime = 1.0f / 60.0f;
+        io.AddMousePosEvent(x, y);
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(400, 300));
+        ImGui::Begin("Page", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration);
+        web.view("", plugin::kCapAll, id, 200, 100);
+        ImGui::End();
+        ImGui::Render();
+    };
+    frame(50, 40);
+    frame(60, 45);
+    frame(-FLT_MAX, -FLT_MAX);
+    frame(-FLT_MAX, -FLT_MAX);
+    ImGui::DestroyContext(ctx);
+    const auto mice = r.helper.sent_of<Mouse>();
+    REQUIRE(mice.size() >= 2);
+    const Mouse& leave = mice.back();
+    CHECK(leave.kind == MouseKind::Leave);
+    const Mouse& move = mice[mice.size() - 2];
+    CHECK(move.kind == MouseKind::Move);
+    CHECK(leave.x == move.x);
+    CHECK(leave.y == move.y);
+    CHECK(leave.x > -1000);
+}
+
+// The player's input is never refused for a script's large message still draining: a lost button or key release
+// would leave the page holding it.
+TEST_CASE("browser host: input and focus messages go while the queue is over its budget") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    r.helper.hold = true;
+    REQUIRE(r.host.eval(id, std::string(std::size_t{40} << 20, 'x')));
+    REQUIRE(r.helper.pending > BrowserHost::kSendBudget);
+    std::size_t held = r.helper.pending;
+    auto went = [&] {
+        const bool grew = r.helper.pending > held;
+        held = r.helper.pending;
+        return grew;
+    };
+    r.host.mouse(Mouse{id, MouseKind::Up, MouseButton::Left, 1, 5, 5, 0});
+    CHECK(went());
+    r.host.key(Key{id, KeyKind::Up, 0x41, 0, 0});
+    CHECK(went());
+    r.host.wheel(Wheel{id, 5, 5, 0, -120, 0});
+    CHECK(went());
+    r.host.focus(id, false);
+    CHECK(went());
+    CHECK(r.host.nav(id, NavAction::Stop, true));
+    CHECK(went());
+    CHECK_FALSE(r.host.eval(id, "1+1")); // a script's message is still refused
+    CHECK_FALSE(r.host.nav(id, NavAction::Reload, false)); // and so is a script's nav
+    CHECK_FALSE(went());
+}
+
+// A helper with bytes waiting is ended only when it takes none of them for kStallMs: one still taking them, however
+// slowly, is left alone.
+TEST_CASE("browser host: a helper that takes nothing of its queue for a while is ended and restarted") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    r.helper.hold = true;
+    REQUIRE(r.host.eval(id, "1+1"));
+    r.host.poll(1'000);
+    r.helper.taken += 1; // slow, but reading
+    r.host.poll(1'000 + BrowserHost::kStallMs);
+    CHECK(r.helper.alive);
+    r.host.poll(1'000 + 2 * BrowserHost::kStallMs - 1);
+    CHECK(r.helper.alive);
+    r.host.poll(1'000 + 2 * BrowserHost::kStallMs);
+    CHECK_FALSE(r.helper.alive);
+    CHECK(r.host.last_error().find("stopped reading") != std::string::npos);
+    r.helper.hold = false;
+    r.helper.pending = 0;
+    r.host.poll(1'000 + 2 * BrowserHost::kStallMs + BrowserHost::kRestartDelayMs);
+    CHECK(r.helper.starts == 2);
+    CHECK(r.helper.sent_of<Open>().size() == 2); // the tab again
+    CHECK_FALSE(r.host.tab(id)->closed);
+}
+
+// A script or plugin holds at most kMaxTabsPerOwner tabs (closed ones included, until it closes them); the player's
+// own are not limited, and a closed tab's images are let go at once.
+TEST_CASE("web service: a script's tabs are capped; a closed tab gives up its images") {
+    using app::WebService;
+    Rig r;
+    WebService web({[&] { return &r.host; }, [] { return nullptr; }, [] { return std::string(); },
+                    [] { return std::vector<std::string>{}; }, [] {}});
+    std::vector<std::uint32_t> ids;
+    for (std::size_t i = 0; i < WebService::kMaxTabsPerOwner; ++i)
+        ids.push_back(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64));
+    for (auto id : ids) CHECK(id != 0);
+    std::string why;
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64, &why) == 0);
+    CHECK(why.find("at most") != std::string::npos);
+    CHECK(web.open("script:other", plugin::kCapWeb, "https://example.org/", 64, 64) != 0); // another owner's own
+    for (std::size_t i = 0; i <= WebService::kMaxTabsPerOwner; ++i)
+        CHECK(web.open("", 0, "https://example.org/", 64, 64) != 0); // the player's
+
+    // A frame, then the helper closes the tab: its image goes; it still counts until its owner closes it.
+    r.helper.reply(Ready{});
+    Frame f;
+    f.tab = ids[0];
+    f.width = 2;
+    f.height = 2;
+    FrameRect all;
+    all.width = all.height = 2;
+    all.bgra.assign(16, std::byte{1});
+    f.rects.push_back(all);
+    r.helper.reply(f);
+    r.host.poll(0);
+    CHECK(r.host.tab(ids[0])->view.bgra.size() == 16);
+    r.helper.reply(Closed{ids[0], CloseReason::Failed, "gone"});
+    r.host.poll(0);
+    REQUIRE(r.host.tab(ids[0]));
+    CHECK(r.host.tab(ids[0])->closed);
+    CHECK(r.host.tab(ids[0])->view.bgra.empty());
+    CHECK(r.host.tab(ids[0])->view.width == 0);
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64) == 0);
+    web.close("script:many", ids[0]);
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64) != 0);
 }
 
 TEST_CASE("browser host: a dead helper is restarted after a second with the tabs; after four deaths a minute, not") {
@@ -552,6 +910,29 @@ TEST_CASE("browser host: the stand-in helper over real pipes: a tab, a click, me
     host.shutdown();
 }
 
+// Several large evals in one frame (each under kMaxMessage, together past HelperProcess::kMaxPending): the first is
+// queued, the rest refused, and the helper, still reading, keeps running and answers afterwards.
+TEST_CASE("browser host: the stand-in helper: large evals in one frame leave it running") {
+    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER}); });
+    auto id = host.open("https://example.org/", script());
+    REQUIRE(id != 0);
+    REQUIRE(pump(host, 0, [&] { return host.tab(id)->view.width != 0; }));
+    const std::string big(std::size_t{60} << 20, 'x');
+    int sent = 0;
+    for (int i = 0; i < 3; ++i) sent += host.eval(id, big) ? 1 : 0;
+    CHECK(sent == 1);
+    REQUIRE(pump(host, 0, [&] { return host.post(id, "after"); }));
+    std::vector<std::string> got;
+    REQUIRE(pump(host, 0, [&] {
+        for (auto& m : host.take_messages(id)) got.push_back(m);
+        return !got.empty();
+    }));
+    CHECK(got == std::vector<std::string>{"echo:after"});
+    CHECK(host.last_error().empty());
+    CHECK_FALSE(host.tab(id)->closed);
+    host.shutdown();
+}
+
 TEST_CASE("helper process: Shutdown and the end of its input let it quit by itself") {
     platform::HelperProcess p;
     std::string error;
@@ -560,6 +941,25 @@ TEST_CASE("helper process: Shutdown and the end of its input let it quit by itse
     p.stop(false);
     CHECK(p.wait_exit(10'000));
     CHECK(p.exit_code() == 0);
+}
+
+// A helper that stops reading its input: what the client queues for it is held to a limit, past which the helper is
+// ended (and so, in a BrowserHost, seen to die and restarted) rather than the queue growing.
+TEST_CASE("helper process: a helper that does not read is ended once its queue is full") {
+    platform::HelperProcess p(std::size_t{1} << 20);
+    std::string error;
+    REQUIRE(p.start({NMSC_MOCK_WEB_HELPER, "--stall", "1"}, error));
+    const std::vector<std::byte> chunk(std::size_t{64} << 10, std::byte{0x55});
+    std::size_t written = 0;
+    // (Past the pipe's own buffer and the limit, a queue that is empty again is one the helper's end took.)
+    while (written < (std::size_t{64} << 20)) {
+        p.write(chunk);
+        written += chunk.size();
+        if (written > (std::size_t{2} << 20) && p.pending_write() == 0) break;
+    }
+    CHECK(written < (std::size_t{64} << 20));
+    CHECK(p.pending_write() == 0);
+    CHECK(p.wait_exit(10'000)); // ended
 }
 
 TEST_CASE("browser host: a helper of another version is given up on") {

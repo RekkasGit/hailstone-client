@@ -8,10 +8,18 @@
 
 namespace nmsc::audio {
 
+namespace {
+// A level, volume or send as the mixer keeps it: a NaN or infinity (an EMT gain of "nan" read with strtof) is 0, so
+// it never reaches the mix, where it would stay in the reverb's feedback lines for good.
+float sane_level(float x) { return std::isfinite(x) ? std::max(0.0f, x) : 0.0f; }
+// The most a wet sample may be: far past any mix of full-scale voices, short of overflowing the comb sums.
+constexpr float kMaxWet = 64.0f;
+} // namespace
+
 Mixer::Mixer(std::uint32_t rate, std::size_t max_voices) : rate_(rate), max_voices_(max_voices) {
     voices_.reserve(max_voices);
-    // The audio thread never allocates: render() mixes in blocks these hold.
-    scratch_.resize(kBlockFrames * 2);
+    // The audio thread never allocates: render() mixes in blocks these hold (and each source's own, play_source).
+    pending_.reserve(max_voices);
     wet_.resize(kBlockFrames);
 }
 
@@ -28,7 +36,7 @@ const Mixer::Voice* Mixer::find(std::uint32_t id) const {
 }
 
 void Mixer::ramp(Voice& v, float volume, std::int32_t fade_ms) const {
-    v.target = std::max(0.0f, volume);
+    v.target = sane_level(volume);
     if (fade_ms <= 0) {
         v.volume = v.target;
         v.step = 0.0f;
@@ -39,9 +47,21 @@ void Mixer::ramp(Voice& v, float volume, std::int32_t fade_ms) const {
     v.step = (v.target - v.volume) / std::max(frames, 1.0f);
 }
 
+void Mixer::reap(std::vector<Voice>& out) {
+    for (auto it = voices_.begin(); it != voices_.end();)
+        if (it->done && !it->rendering) {
+            out.push_back(std::move(*it));
+            it = voices_.erase(it);
+        } else {
+            ++it;
+        }
+}
+
 std::uint32_t Mixer::add(Voice v, float volume, std::int32_t fade_ms) {
+    std::vector<Voice> finished; // declared first: destroyed after the lock is released (freeing a stream's bytes)
     std::lock_guard lock(mutex_);
-    std::erase_if(voices_, [](const Voice& x) { return x.done; });
+    reap(finished);
+    volume = sane_level(volume);
     if (voices_.size() >= max_voices_ || volume <= 0.0f) return 0;
     v.id = next_id_++;
     if (next_id_ == 0) next_id_ = 1;
@@ -64,8 +84,8 @@ std::uint32_t Mixer::play(std::shared_ptr<const Pcm> pcm, float volume, std::int
     v.bus = bus;
     if (levels) {
         v.positional = true;
-        v.left = std::max(0.0f, levels[0]);
-        v.right = std::max(0.0f, levels[1]);
+        v.left = sane_level(levels[0]);
+        v.right = sane_level(levels[1]);
     }
     return add(std::move(v), volume, fade_ms);
 }
@@ -74,6 +94,7 @@ std::uint32_t Mixer::play_source(std::unique_ptr<Source> source, float volume, s
     if (!source) return 0;
     Voice v;
     v.source = std::move(source);
+    v.rendered.resize(kBlockFrames * 2);
     v.bus = bus;
     return add(std::move(v), volume, fade_ms);
 }
@@ -87,19 +108,19 @@ void Mixer::set_levels(std::uint32_t voice, float left, float right) {
     std::lock_guard lock(mutex_);
     if (Voice* v = find(voice)) {
         v->positional = true;
-        v->left = std::max(0.0f, left);
-        v->right = std::max(0.0f, right);
+        v->left = sane_level(left);
+        v->right = sane_level(right);
     }
 }
 
 void Mixer::set_send(std::uint32_t voice, float send) {
     std::lock_guard lock(mutex_);
-    if (Voice* v = find(voice)) v->send = std::max(0.0f, send);
+    if (Voice* v = find(voice)) v->send = sane_level(send);
 }
 
 void Mixer::set_reverb(float level, float decay_s, float damping, float predelay_s) {
     std::lock_guard lock(mutex_);
-    reverb_.level = std::max(0.0f, level);
+    reverb_.level = sane_level(level);
     if (reverb_.level > 0.0f) reverb_.configure(rate_, decay_s, damping, predelay_s);
 }
 
@@ -108,7 +129,10 @@ void Mixer::Reverb::configure(std::uint32_t rate, float decay_s, float damping, 
     static constexpr int kCombs[4] = {1116, 1188, 1277, 1356};
     static constexpr int kAllPasses[2] = {556, 441};
     double scale = static_cast<double>(rate) / 44100.0;
-    decay_s = std::max(decay_s, 0.05f);
+    // A NaN or infinity would make the feedback (or the pre-delay's length) undefined.
+    decay_s = std::isfinite(decay_s) ? std::clamp(decay_s, 0.05f, 60.0f) : 0.05f;
+    damping = std::isfinite(damping) ? std::max(damping, 0.0f) : 0.0f;
+    predelay_s = std::isfinite(predelay_s) ? std::clamp(predelay_s, 0.0f, 1.0f) : 0.0f;
     // A one-pole low-pass in each comb's loop: more damping, faster high-frequency decay.
     float damp = std::clamp(damping / (1.0f + damping), 0.0f, 0.95f);
     for (int c = 0; c < 2; ++c) {
@@ -125,7 +149,7 @@ void Mixer::Reverb::configure(std::uint32_t rate, float decay_s, float damping, 
             if (allpasses[c][k].line.size() != len) allpasses[c][k].line.assign(len, 0.0f);
         }
     }
-    auto pre = static_cast<std::size_t>(std::max(0.0f, predelay_s) * static_cast<float>(rate)) + 1;
+    auto pre = static_cast<std::size_t>(predelay_s * static_cast<float>(rate)) + 1;
     if (predelay.size() != pre) {
         predelay.assign(pre, 0.0f);
         predelay_at = 0;
@@ -135,7 +159,9 @@ void Mixer::Reverb::configure(std::uint32_t rate, float decay_s, float damping, 
 void Mixer::Reverb::process(const float* in, float* out, std::size_t frames) {
     for (std::size_t f = 0; f < frames; ++f) {
         float x = predelay[predelay_at];
-        predelay[predelay_at] = in[f];
+        // What goes into the feedback lines is finite and bounded (a NaN sample of a float WAV, or a huge one,
+        // would otherwise stay there and silence every later block).
+        predelay[predelay_at] = std::isfinite(in[f]) ? std::clamp(in[f], -kMaxWet, kMaxWet) : 0.0f;
         predelay_at = (predelay_at + 1) % predelay.size();
         for (int c = 0; c < 2; ++c) {
             float y = 0.0f;
@@ -163,8 +189,10 @@ bool Mixer::alive(std::uint32_t voice) const {
 }
 
 void Mixer::stop_all() {
+    std::vector<Voice> finished; // destroyed after the lock is released
     std::lock_guard lock(mutex_);
-    voices_.clear();
+    for (Voice& v : voices_) v.done = true;
+    reap(finished); // a source rendering now goes with the next add
 }
 
 void Mixer::set_bus_volume(Bus bus, float volume) {
@@ -197,10 +225,24 @@ void Mixer::render(float* out, std::size_t frames) {
 
 void Mixer::render_block(float* out, std::size_t frames) {
     std::fill(out, out + frames * 2, 0.0f);
-    std::lock_guard lock(mutex_);
+    // The sources decode or synthesize with the lock released: marked `rendering` under it, so no game-thread call
+    // destroys one meanwhile (a Voice may move in voices_, its source and buffer stay where they are).
+    std::unique_lock lock(mutex_);
+    pending_.clear();
+    for (Voice& v : voices_)
+        if (!v.done && v.source && v.rendered.size() >= frames * 2) {
+            v.rendering = true;
+            pending_.push_back({v.id, v.source.get(), v.rendered.data(), 0});
+        }
+    if (!pending_.empty()) {
+        lock.unlock();
+        for (Pending& p : pending_) p.got = p.source->render(p.out, frames, rate_);
+        lock.lock();
+    }
     const bool reverb = reverb_.level > 0.0f;
     if (reverb) std::fill(wet_.begin(), wet_.begin() + static_cast<std::ptrdiff_t>(frames), 0.0f);
     for (Voice& v : voices_) {
+        const bool rendered = std::exchange(v.rendering, false); // stopped meanwhile or not, it may go now
         if (v.done) continue;
         float bus = master_ * bus_[static_cast<int>(v.bus)];
         float left = v.left * bus;
@@ -209,10 +251,14 @@ void Mixer::render_block(float* out, std::size_t frames) {
         // The voice's gain from its volume: a 3D voice's goes through the provider's curve.
         float gain = v.positional ? miles_volume_curve(v.volume) : v.volume;
         if (v.source) {
-            std::size_t got = v.source->render(scratch_.data(), frames, rate_);
+            if (!rendered) continue; // added while the sources rendered: from the next block
+            std::size_t got = 0;
+            for (const Pending& p : pending_)
+                if (p.id == v.id) got = p.got;
+            const float* block = v.rendered.data();
             for (std::size_t f = 0; f < got && !v.done; ++f) {
-                out[f * 2] += scratch_[f * 2] * gain * left;
-                out[f * 2 + 1] += scratch_[f * 2 + 1] * gain * right;
+                out[f * 2] += block[f * 2] * gain * left;
+                out[f * 2 + 1] += block[f * 2 + 1] * gain * right;
                 if (v.step != 0.0f) {
                     v.volume += v.step;
                     if ((v.step < 0.0f && v.volume <= v.target) || (v.step > 0.0f && v.volume >= v.target)) {
@@ -276,7 +322,8 @@ void Mixer::render_block(float* out, std::size_t frames) {
     }
     if (reverb) reverb_.process(wet_.data(), out, frames);
     // Keep the sum in range; many emitters at once can add up past full scale.
-    for (std::size_t i = 0; i < frames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+    // A non-finite sample (a source's) is silence, not passed to the device.
+    for (std::size_t i = 0; i < frames * 2; ++i) out[i] = std::isfinite(out[i]) ? std::clamp(out[i], -1.0f, 1.0f) : 0.0f;
     if (swap_)
         for (std::size_t f = 0; f < frames; ++f) std::swap(out[f * 2], out[f * 2 + 1]);
 }

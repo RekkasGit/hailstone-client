@@ -1,5 +1,6 @@
 #include "web/browser_protocol.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -298,6 +299,70 @@ std::size_t max_message_size(std::uint8_t type) {
     if (type == index_of<Console>() + 1) return 1 + 4 + 1 + 4 + kMaxConsoleText;
     if (type == index_of<PageMessage>() + 1) return 1 + 4 + 4 + kMaxPageMessage;
     return kMaxMessage;
+}
+
+namespace {
+// A Frame's body before its rectangles: the type, tab, layer, width, height and count; then 8 bytes and the pixels
+// of each rectangle.
+constexpr std::size_t kFrameHead = 1 + 4 + 1 + 2 + 2 + 4;
+constexpr std::size_t kRectHead = 8;
+std::size_t rect_size(const FrameRect& r) { return kRectHead + r.bgra.size(); }
+} // namespace
+
+std::size_t frame_body_size(const Frame& f) {
+    std::size_t n = kFrameHead;
+    for (const FrameRect& r : f.rects) n += rect_size(r);
+    return n;
+}
+
+std::vector<Frame> split_frame(Frame f, std::size_t max_body) {
+    std::vector<Frame> out;
+    if (frame_body_size(f) <= max_body) {
+        out.push_back(std::move(f));
+        return out;
+    }
+    auto fresh = [&] {
+        Frame g;
+        g.tab = f.tab;
+        g.layer = f.layer;
+        g.width = f.width;
+        g.height = f.height;
+        return g;
+    };
+    Frame cur = fresh();
+    std::size_t size = kFrameHead;
+    auto add = [&](FrameRect r) {
+        if (!cur.rects.empty() && size + rect_size(r) > max_body) {
+            out.push_back(std::move(cur));
+            cur = fresh();
+            size = kFrameHead;
+        }
+        size += rect_size(r);
+        cur.rects.push_back(std::move(r));
+    };
+    for (FrameRect& r : f.rects) {
+        if (kFrameHead + rect_size(r) <= max_body) {
+            add(std::move(r));
+            continue;
+        }
+        // Bands of whole rows, each a frame of its own.
+        const std::size_t row = std::size_t{r.width} * 4;
+        const std::size_t rows = std::max<std::size_t>(1, (max_body - kFrameHead - kRectHead) / row);
+        for (std::size_t y = 0; y < r.height; y += rows) {
+            const std::size_t n = std::min<std::size_t>(rows, r.height - y);
+            FrameRect band;
+            band.x = r.x;
+            band.y = static_cast<std::uint16_t>(r.y + y);
+            band.width = r.width;
+            band.height = static_cast<std::uint16_t>(n);
+            const auto from = r.bgra.begin() + static_cast<std::ptrdiff_t>(y * row);
+            band.bgra.assign(from, from + static_cast<std::ptrdiff_t>(n * row));
+            add(std::move(band));
+        }
+        r.bgra = {};
+    }
+    if (!cur.rects.empty()) out.push_back(std::move(cur));
+    return out;
 }
 
 void cut_utf8(std::string& s, std::size_t max) {

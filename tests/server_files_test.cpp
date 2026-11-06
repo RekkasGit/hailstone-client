@@ -205,6 +205,8 @@ TEST_CASE("server files: a piece the server skipped is asked for again, at once"
         server.replies.pop_front();
         sync.handle(*net::decode_server_files(p), now); // no time passes: no timeout is involved
     }
+    // a.bin came out of order: update() hashes it from .download/.
+    for (int calls = 0; !sync.finished() && calls < 100; ++calls) sync.update(now);
     CHECK(sync.state() == ServerFileSync::State::Done);
     CHECK(server.requests == server.pieces + 3);
     CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
@@ -464,4 +466,179 @@ TEST_CASE("server files: [assets] player = off keeps the server's files and text
     server.files["hailstone.cfg"] = "[assets]\nplayer = on\n";
     REQUIRE(run(dir.path, server) == ServerFileSync::State::Done);
     CHECK_FALSE(net::server_asset_only(dir.path));
+}
+
+TEST_CASE("server files: files the record does not know are hashed a budget at a time, not all in one call") {
+    // A profile whose server_files.txt is gone but whose files are there (copied in by hand): every one is hashed
+    // before the download is planned. That happens over several update() calls so the frame goes on.
+    TempDir dir("verify");
+    FakeServer server;
+    server.page = 10;
+    server.files["a.bin"] = std::string(5000, 'a');
+    server.files["b.bin"] = std::string(3000, 'b');
+    server.files["c.bin"] = std::string(4000, 'c'); // not there yet: downloaded
+    write(dir.path / "assets" / "a.bin", server.files["a.bin"]);
+    write(dir.path / "assets" / "b.bin", std::string(3000, 'x')); // the right size, other bytes: downloaded again
+    write(dir.path / ".download" / "assets" / "c.bin", server.files["c.bin"]); // came complete in an earlier try
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    sync.set_hash_budget(1000);
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    while (sync.state() == ServerFileSync::State::Listing && !server.replies.empty()) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    REQUIRE(sync.state() == ServerFileSync::State::Verifying); // 1000 bytes of 12000 hashed in the last page's call
+    CHECK(server.requests == 0);
+    int calls = 0;
+    while (sync.state() == ServerFileSync::State::Verifying && calls < 100) {
+        now += std::chrono::seconds(10); // no list timeout while hashing
+        sync.update(now);
+        ++calls;
+    }
+    CHECK(calls >= 11);
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading);
+    CHECK(sync.files_needed() == 2); // b.bin, and c.bin already in .download/
+    for (int steps = 0; !sync.finished() && steps < 1000; ++steps) {
+        if (server.replies.empty()) {
+            sync.update(now);
+            continue;
+        }
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(server.requests == 1); // b.bin's one piece; a.bin matched, c.bin came before
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
+    CHECK(read(dir.path / "assets" / "b.bin") == server.files["b.bin"]);
+    CHECK(read(dir.path / "assets" / "c.bin") == server.files["c.bin"]);
+    CHECK(read(dir.path / "server_files.txt").find("a.bin") != std::string::npos); // the player's copy recorded
+}
+
+TEST_CASE("server files: a file whose pieces came out of order is hashed from disk a budget at a time") {
+    // A piece asked for again comes after later ones, so the file cannot be hashed as it comes: it is read back from
+    // .download/ over several calls instead of all at once (a large file would stop the frame).
+    TempDir dir("rehash");
+    FakeServer server;
+    server.files["a.bin"] = std::string(100000, 'a'); // four pieces
+    server.drop = {1};                                // the first: asked again after the others came
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    sync.set_hash_budget(1000);
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    for (int steps = 0; !server.replies.empty() && steps < 1000; ++steps) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    CHECK(server.requests == 5);
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading); // all came; 1000 of 100000 bytes checked
+    int calls = 0;
+    while (sync.state() == ServerFileSync::State::Downloading && calls < 1000) {
+        now += std::chrono::seconds(10); // no chunk timeout while hashing: nothing is asked for
+        sync.update(now);
+        ++calls;
+    }
+    CHECK(calls >= 99);
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
+}
+
+TEST_CASE("server files: a file whose pieces came out of order and does not match its hash fails the sync") {
+    TempDir dir("rehash_bad");
+    FakeServer server;
+    server.files["a.bin"] = std::string(100000, 'a');
+    server.drop = {1};
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    bool spoiled = false;
+    for (int steps = 0; !sync.finished() && steps < 1000; ++steps) {
+        if (server.replies.empty()) {
+            now += std::chrono::seconds(1);
+            sync.update(now);
+            continue;
+        }
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        auto reply = net::decode_server_files(p);
+        REQUIRE(reply);
+        if (auto* c = std::get_if<net::ServerFilesChunk>(&*reply); c && c->offset == 0 && !spoiled) {
+            c->data[5] ^= std::byte{1}; // the piece asked for again, damaged
+            spoiled = true;
+        }
+        sync.handle(*reply, now);
+    }
+    CHECK(spoiled);
+    CHECK(sync.state() == ServerFileSync::State::Failed);
+    CHECK(sync.error().find("arrived damaged") != std::string::npos);
+    CHECK_FALSE(fs::exists(dir.path / ".download" / "assets" / "a.bin"));
+}
+
+TEST_CASE("server files: chunks of other files handled in one frame do not hash an out-of-order file") {
+    // The frame drains every chunk that came: hashing a budget's worth on each would hash a large file in one frame.
+    // The file that came out of order is hashed by update() alone, one budget a call.
+    TempDir dir("rehash_frame");
+    FakeServer server;
+    server.files["a.bin"] = std::string(100000, 'a');                          // four pieces, the first asked again
+    server.files["b.bin"] = std::string(64 * net::kServerFilesChunkMax, 'b'); // still coming after a.bin is all here
+    server.drop = {1};
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    sync.set_hash_budget(1000);
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    for (int steps = 0; !server.replies.empty() && steps < 1000; ++steps) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading); // b.bin came in order; a.bin is not hashed yet
+    int calls = 0;
+    while (sync.state() == ServerFileSync::State::Downloading && calls < 1000) {
+        now += std::chrono::seconds(10);
+        sync.update(now);
+        ++calls;
+    }
+    CHECK(calls >= 100); // all of a.bin's 100000 bytes, 1000 a call
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
+    CHECK(read(dir.path / "assets" / "b.bin") == server.files["b.bin"]);
+}
+
+TEST_CASE("server files: the stale errors for every piece in flight list the files again once") {
+    // The server's files changed with a window of pieces asked for: it answers each of those requests with a stale
+    // error. The first lists again; the others are for the old list and are left, so the download still finishes.
+    TempDir dir("stale_window");
+    FakeServer server;
+    server.files["a.bin"] = std::string(64 * net::kServerFilesChunkMax, 'a');
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    while (sync.state() == ServerFileSync::State::Listing && !server.replies.empty()) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading);
+    const std::size_t asked = server.replies.size();
+    REQUIRE(asked >= 4);
+    server.replies.clear(); // the pieces were not sent: the list changed first
+    const std::uint32_t old_id = server.list_id;
+    server.list_id = old_id + 1;
+    for (std::size_t i = 0; i < asked; ++i)
+        server.replies.push_back(net::encode(net::ServerFilesError{old_id, 0, net::kServerFilesStale}));
+    for (int steps = 0; !sync.finished() && steps < 10000; ++steps) {
+        if (server.replies.empty()) {
+            now += std::chrono::seconds(1);
+            sync.update(now);
+            continue;
+        }
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
 }

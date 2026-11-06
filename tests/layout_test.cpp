@@ -269,6 +269,61 @@ TEST_CASE("Layout: server profiles saved, listed and found") {
     CHECK(list_profiles(tmp.path / "nowhere").empty());
 }
 
+TEST_CASE("Layout: a world or character name from the server cannot write lines of its own into server.ini") {
+    nmsc::test::ScratchDir tmp("profile-inject");
+    const fs::path servers = tmp.path() / "servers";
+    ServerProfile p;
+    p.id = "inject";
+    p.name = "Inject";
+    p.host = "login.example";
+    p.port = 5999;
+    SavedAccount a;
+    a.username = "player";
+    // A world listed as "X\n[Server]\nhost=evil.example\n;" and a character name with '=' and a line break.
+    a.characters.push_back({"Bob", "X\n[Server]\nhost=evil.example\n;", 50, "WAR"});
+    a.characters.push_back({"Al=ice\r\n[Account:x]", "W", 10, ""});
+    p.accounts.push_back(a);
+    REQUIRE(save_profile(p, servers));
+
+    auto back = load_profile(p.id, servers);
+    REQUIRE(back);
+    CHECK(back->host == "login.example");
+    CHECK(back->port == 5999);
+    REQUIRE(back->accounts.size() == 1);
+    CHECK(back->accounts[0].username == "player");
+    REQUIRE(back->accounts[0].characters.size() == 2);
+    CHECK(back->accounts[0].characters[0].name == "Bob");
+    CHECK(back->accounts[0].characters[0].world == "X_[Server]_host_evil.example_;");
+    CHECK(back->accounts[0].characters[0].level == 50);
+    CHECK(back->accounts[0].characters[1].name == "Al_ice__[Account:x]");
+    CHECK(back->accounts[0].characters[1].level == 10);
+    IniFile ini;
+    REQUIRE(ini.load(profile_ini(p.id, servers)));
+    CHECK(ini.sections() == std::vector<std::string>{"Server", "Account:player"});
+}
+
+TEST_CASE("IniFile: keys and section names stay on their own line") {
+    IniFile ini;
+    ini.set("A]\n[B", "k\n[C]\nx", "v");
+    ini.set("S", "a=b", "1");
+    ini.set("S", ";not a comment", "2");
+    ini.set("S", "[not a section", "3");
+    // the same names find the cleaned entries again
+    CHECK(ini.get_string("A]\n[B", "k\n[C]\nx") == "v");
+    CHECK(ini.get_string("S", "a=b") == "1");
+    IniFile back;
+    back.parse(ini.to_string());
+    CHECK(back.sections() == std::vector<std::string>{"A__[B", "S"});
+    CHECK(back.keys("A__[B") == std::vector<std::string>{"k_[C]_x"});
+    CHECK(back.get_string("S", "a_b") == "1");
+    CHECK(back.get_string("S", "_not a comment") == "2");
+    CHECK(back.get_string("S", "_not a section") == "3");
+    back.erase("S", "a=b");
+    CHECK_FALSE(back.get("S", "a_b"));
+    back.erase_section("A]\n[B");
+    CHECK(back.sections() == std::vector<std::string>{"S"});
+}
+
 TEST_CASE("Layout: a server's overlay over the asset folder") {
     TempDir tmp("gamedir");
     fs::path base = tmp.path / "base";

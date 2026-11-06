@@ -61,3 +61,20 @@ TEST_CASE("Conversation journal: NPCs by name and zone, an entry per text, categ
     CHECK(k.remove_npc("Guard Gehnus", 3));
     fs::remove_all(dir);
 }
+
+TEST_CASE("Conversation journal: the files open in a folder whose name is outside the ANSI code page") {
+    // The data folder sits under the user's profile, which may be named in any script; on Windows path::string()
+    // throws for such a name and a narrow fopen cannot open it.
+    nmsc::test::ScratchDir dir_scratch("journal_unicode_test");
+    const fs::path dir = dir_scratch.path() / fs::path(std::u8string(u8"Журнал 日記"));
+    fs::create_directories(dir);
+    game::ConversationJournal j;
+    j.add("Guard Gehnus", 2, 100, 1.0f, 2.0f, 3.0f, "Guard Gehnus says 'Hail'", -1);
+    REQUIRE(j.save(dir / "CJ") == 0);
+    CHECK(fs::exists(dir / "CJ.txt"));
+    CHECK(fs::exists(dir / "CJ.hdr"));
+    game::ConversationJournal k;
+    REQUIRE(k.load(dir / "CJ") == 0);
+    REQUIRE(k.npcs().size() == 1);
+    CHECK(k.text(k.npcs()[0]->entries[0]->text) == "Guard Gehnus says 'Hail'");
+}

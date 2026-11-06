@@ -86,7 +86,8 @@ signature <128 hex digits>
   whole (about 170 MB on Linux, 190 MB on Windows).
 - **Other components:** the format and the client also take several packages for a platform: `browser` for
   `browser/` alone, and `plugin-<name>` for a plugin's `plugins/<name>/`, whose last field marks it optional
-  (installed only where that folder exists, and never where an add-on installed it: docs/addons.md). A component whose package hash equals the one installed last
+  (installed only where that folder exists, and never where an add-on installed it, checked at the download and
+  again at the install: docs/addons.md). A component whose package hash equals the one installed last
   (`update/installed.txt`) is not downloaded again. Releases do not use them at present, to keep the release page
   to one download for each platform.
 - **Unknown records** are skipped, for later clients. A known record that does not parse refuses the whole manifest.
@@ -150,8 +151,9 @@ The install waits while the box set's other windows run (they use the same files
 
 `update_at_start`, the first thing `main` does:
 
-- **`installing`** (the client died mid-install): the journal is undone and the old version is back. If this binary
-  is the new one, the old one is started and this one quits.
+- **`installing`** (the client died mid-install): the journal is undone and the old version is back. A `moved` or
+  `removed` line with nothing in `previous/` is a move that never happened (the line is written first), so the file
+  in place, the original, stays. If this binary is the new one, the old one is started and this one quits.
 - **`pending`:** each start of the new version is counted, and reaching the login screen ends the count
   (`update_started_fine` removes `previous/`). If two starts never reached it, the third rolls the update back, writes
   `failed.txt`, starts the old version and quits; the old version shows why (`note.txt`).
@@ -183,7 +185,8 @@ The install waits while the box set's other windows run (they use the same files
 
    This writes `hailstone-0.2.0-alpha-linux-x64.zip` (the folder's files with no top folder; a player unpacks it
    into a folder of their own) and its line in `hailstone-update.txt`. The zip is made the same way each time
-   (sorted, dated 1980-01-01, the files' Unix permissions), and a symbolic link goes in as the file it points to.
+   (sorted, dated 1980-01-01, the files' Unix permissions), and a symbolic link goes in as the file or folder it
+   points to (a link that leads back into a folder holding it stops the tool).
 4. Sign the manifest:
 
    ```sh

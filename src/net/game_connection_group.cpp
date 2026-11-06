@@ -231,16 +231,7 @@ void GameConnection::auto_target_tick() {
 void GameConnection::xtarget_request(int slot, std::uint32_t type, const std::string& name) {
     if (!game::xtarget_set_slot(xtargets_, slot, type, name)) return;
     const auto& s = xtargets_.slots[static_cast<std::size_t>(slot)];
-    std::vector<std::byte> b;
-    auto put = [&b](std::uint32_t v) {
-        for (int i = 0; i < 4; ++i) b.push_back(static_cast<std::byte>((v >> (8 * i)) & 0xff));
-    };
-    put(1);
-    put(static_cast<std::uint32_t>(slot)); // ExtendedTargetList_SerializeSlot: slot, type, the slot's name
-    put(s.type);
-    for (char c : s.name) b.push_back(static_cast<std::byte>(c));
-    b.push_back(std::byte{0});
-    send_zone_packet(AppPacket(to_wire(Op::XTargetRequest), std::move(b)));
+    send_zone_packet(encode_xtarget_request(static_cast<std::uint32_t>(slot), s.type, s.name));
 }
 
 void GameConnection::set_xtarget_auto_haters(bool on) {
@@ -256,8 +247,11 @@ void GameConnection::select_xtarget(int slot) {
 void GameConnection::target_next_xtarget() {
     // The loop of ExtendedTargetList_TargetNextSlot: the cursor advances (wrapping to 0) until a slot with a spawn
     // id above 0 was seen and the cursor is not back at its start; then that slot's spawn, when it exists.
-    int start = xtargets_.current, at = start;
     int n = static_cast<int>(xtargets_.slots.size());
+    if (n == 0) return;
+    // A client guard: a cursor past a list the server shrank would never come back to its start (the loop would not
+    // end when no slot holds a spawn); it goes on from the last slot instead, so slot 0 is looked at first.
+    int start = std::clamp(xtargets_.current, 0, n - 1), at = start;
     bool seen = false;
     for (;;) {
         at = at + 1 >= n ? 0 : at + 1;
@@ -550,7 +544,13 @@ void GameConnection::handle_group(Op op, const AppPacket& p) {
         // an empty status turns a specific NPC slot (type 3) back into an auto hater (1).
         auto x = decode_xtarget_response(p);
         if (!x) break;
-        if (x->max <= 20) xtargets_.slots.resize(x->max);
+        if (x->max <= 20) {
+            xtargets_.slots.resize(x->max);
+            // A client guard: the cursors stay in the list (target_next_xtarget; the window's menu slot).
+            const int n = static_cast<int>(x->max);
+            if (xtargets_.current >= n) xtargets_.current = n > 0 ? n - 1 : 0;
+            if (xtargets_.selected >= n) xtargets_.selected = -1;
+        }
         for (auto& e : x->entries) {
             if (e.slot < 0 || e.slot >= static_cast<std::int32_t>(xtargets_.slots.size())) continue;
             auto& s = xtargets_.slots[static_cast<std::size_t>(e.slot)];
@@ -1324,7 +1324,7 @@ void GameConnection::handle_leadership_ability(Op op, const AppPacket& p) {
                 const game::SpellData* s = spell_table_ ? spell_table_->get(static_cast<std::uint32_t>(b->spells[i])) : nullptr;
                 if (!s) continue;
                 if (b->ticks[i] < 1) chat(ChatEvent::Kind::System, s->name, 0, 0x14a);
-                else line(0x225f, {s->name, std::to_string((b->ticks[i] * 3 + 15) * 2 / 60)});
+                else line(0x225f, {s->name, std::to_string(inspect_buff_minutes(b->ticks[i]))});
             }
         }
         break;

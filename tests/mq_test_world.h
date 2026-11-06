@@ -32,6 +32,13 @@ struct GameConnectionTestAccess {
     static ConnectionState& state(GameConnection& c) { return c.state_; }
     static game::AltAdvState& alt_adv(GameConnection& c) { return c.alt_adv_; }
     static void update_usable_gems(GameConnection& c) { c.update_usable_gems(); }
+    static void memorize_tick(GameConnection& c, std::int64_t now) { c.memorize_tick(now); }
+    static void raise_hook_events(GameConnection& c) { c.raise_hook_events(); }
+    static game::ClientOptions& client_options(GameConnection& c) { return c.client_options_; }
+    static void open_chat_log(GameConnection& c, const std::string& name) { c.open_chat_log(name); }
+    static void log_command(GameConnection& c, const std::string& args) { c.log_command(args); }
+    static std::ofstream* chat_log_stream(GameConnection& c) { return c.chat_log_.get(); }
+    static void chat(GameConnection& c, std::string text) { c.chat(ChatEvent::Kind::System, std::move(text)); }
     static std::string& safelock(GameConnection& c) { return c.safelock_; }
     static WorldTicket& ticket(GameConnection& c) { return c.ticket_; }
     static void set_server_rules(GameConnection& c, std::optional<plugin::Rules> r) {
@@ -159,7 +166,9 @@ struct World {
     }
 
     void add(std::uint32_t id, const std::string& name, bool npc, int level, glm::vec3 pos) {
-        auto& s = net::GameConnectionTestAccess::world(*conn).spawns[id];
+        auto& w = net::GameConnectionTestAccess::world(*conn);
+        if (!w.spawns.contains(id)) ++w.spawn_set_serial; // as GameConnection::apply_spawn
+        auto& s = w.spawns[id];
         s.id = id;
         s.name = name;
         s.is_npc = npc;

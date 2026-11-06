@@ -123,6 +123,7 @@ std::uint8_t sky_color_entry(float z) {
     // t3dInitSky: d = (int)((z + centre) * 16 * 8); d < 0 -> 16, d < 16 -> 16 - d, else 0.
     float scaled = z * 16.0f * 8.0f;
     if (!std::isfinite(scaled) || scaled >= 16.0f) return scaled >= 16.0f ? 0 : 16;
+    if (scaled < 0.0f) return 16; // d <= 0; a value past INT_MIN is not cast (cvttss2si gives INT_MIN: 16 too)
     auto d = static_cast<int>(scaled); // truncation, as cvttss2si
     if (d < 0) return 16;
     return static_cast<std::uint8_t>(16 - d);

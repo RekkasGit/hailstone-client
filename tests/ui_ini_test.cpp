@@ -28,6 +28,14 @@ TEST_CASE("convert_to_res: left, middle and right anchoring") {
     CHECK(ui::convert_to_res(1400, 200, 1280, 1280) == 1080);
 }
 
+// A UI.ini value near the int limits (hand-edited or broken): the sums wrap in 32 bits as the original's do, with no
+// signed overflow.
+TEST_CASE("convert_to_res: values near the int limits wrap as the original's 32-bit sums") {
+    CHECK(ui::convert_to_res(2147483600, 200, 4096, 1280) == 1080);
+    CHECK(ui::convert_to_res(2147483600, 200, 1280, 1280) == 0);
+    CHECK(ui::convert_to_res(-2147483600, -200, 4096, 1280) == 1480);
+}
+
 TEST_CASE("window_ini_info: the window classes' IniFlags and versions") {
     auto p = ui::window_ini_info("PlayerWindow");
     CHECK(p.flags == 0xffffffffu);

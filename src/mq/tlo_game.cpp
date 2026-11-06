@@ -34,6 +34,13 @@ struct Types {
 
 Types g; // set once by register_game_tlos (the types live in the registry that registered them)
 
+// Which of the 16 compass points (N, NNE, ...) a heading in degrees is nearest; N for NaN or an infinity.
+int heading_point(double deg) {
+    if (!std::isfinite(deg)) return 0;
+    const double t = std::fmod(std::fmod(deg + 11.25, 360.0) + 360.0, 360.0); // [0, 360)
+    return static_cast<int>(t / 22.5) % 16;
+}
+
 const game::Spawn* spawn_of(const Context& c, std::int64_t id) {
     if (!c.conn || id <= 0) return nullptr;
     const auto& spawns = c.conn->world().spawns;
@@ -842,7 +849,7 @@ void register_small_types() {
     auto short_name = [](double deg) {
         static const char* kNames[] = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                                        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
-        return kNames[static_cast<int>(std::fmod(deg + 11.25, 360.0) / 22.5) % 16];
+        return kNames[heading_point(deg)];
     };
     heading.to_value = [short_name](const Context&, const Value& v) { return V::string(short_name(v.f)); };
     add(g.heading, "Degrees", [](const Context&, const Value& v, std::string_view) { return V::number(v.f); });
@@ -855,7 +862,7 @@ void register_small_types() {
                                        "east", "east by southeast", "southeast", "south by southeast",
                                        "south", "south by southwest", "southwest", "west by southwest",
                                        "west", "west by northwest", "northwest", "north by northwest"};
-        return V::string(kNames[static_cast<int>(std::fmod(v.f + 11.25, 360.0) / 22.5) % 16]);
+        return V::string(kNames[heading_point(v.f)]);
     });
     add(g.heading, "Clock", [](const Context&, const Value& v, std::string_view) {
         int h = static_cast<int>(std::lround(v.f / 30.0)) % 12;
@@ -1217,11 +1224,12 @@ std::optional<glm::vec3> nav_destination(const Context& c, std::string_view inde
         i = j;
     }
     if (w.empty()) return std::nullopt;
-    auto num = [&](std::size_t i) -> std::optional<float> {
+    auto read = [&](std::size_t i) -> std::optional<double> {
         double d = 0;
         if (i >= w.size() || !parse_float(w[i], d)) return std::nullopt;
-        return static_cast<float>(d);
+        return d;
     };
+    auto num = [&](std::size_t i) { return read(i) ? in_range<float>(*read(i)) : std::nullopt; };
     const game::Spawn* s = nullptr;
     if (iequals(w[0], "loc") || iequals(w[0], "locyxz") || iequals(w[0], "locxyz")) {
         auto a = num(1), b = num(2), z = num(3);
@@ -1229,7 +1237,7 @@ std::optional<glm::vec3> nav_destination(const Context& c, std::string_view inde
         return game::server_to_world(iequals(w[0], "locxyz") ? glm::vec3(*a, *b, *z) : glm::vec3(*b, *a, *z));
     }
     if (iequals(w[0], "id")) {
-        if (auto id = num(1)) s = spawn_of(c, static_cast<std::int64_t>(*id));
+        if (auto id = read(1) ? in_range<std::uint32_t>(*read(1)) : std::nullopt) s = spawn_of(c, *id);
     } else if (iequals(w[0], "target")) {
         s = spawn_of(c, c.conn->world().target_id);
     } else {
@@ -1371,12 +1379,16 @@ void register_game_tlos(Registry& r) {
                 std::string_view part = text.substr(i, j - i);
                 while (!part.empty() && part.front() == ' ') part.remove_prefix(1);
                 while (!part.empty() && part.back() == ' ') part.remove_suffix(1);
-                if (!parse_float(part, v[n])) return std::nullopt;
+                // A point past the world (as nav_mesh bounds it), inf or nan has no sight line: nil.
+                if (!parse_float(part, v[n]) || !std::isfinite(v[n]) || std::abs(v[n]) >= 1.0e6) return std::nullopt;
                 ++n;
                 i = j + 1;
             }
             if (n != 3) return std::nullopt;
-            return game::server_to_world(glm::vec3(static_cast<float>(v[1]), static_cast<float>(v[0]), static_cast<float>(v[2])));
+            // Finite and within float (a cast past it is undefined; the collision grid takes no infinities).
+            const auto y = in_range<float>(v[0]), x = in_range<float>(v[1]), z = in_range<float>(v[2]);
+            if (!x || !y || !z) return std::nullopt;
+            return game::server_to_world(glm::vec3(*x, *y, *z));
         };
         const auto a = point(index.substr(0, colon)), b = point(index.substr(colon + 1));
         if (!a || !b) return V::nil();
@@ -1461,11 +1473,12 @@ void register_game_tlos(Registry& r) {
     r.add_tlo("EverQuest", [](const Context&, std::string_view) { return V::object(g.everquest, 0); });
     r.add_tlo("Heading", [](const Context&, std::string_view index) -> V {
         double d = 0;
-        return parse_float(index, d) ? heading_value(std::fmod(std::fmod(d, 360.0) + 360.0, 360.0)) : V::nil();
+        return parse_float(index, d) && std::isfinite(d) ? heading_value(std::fmod(std::fmod(d, 360.0) + 360.0, 360.0)) : V::nil();
     });
     r.add_tlo("Int", [](const Context&, std::string_view index) -> V {
         double d = 0;
-        return parse_float(index, d) ? V::integer(static_cast<std::int64_t>(d)) : V::nil();
+        const auto n = parse_float(index, d) ? whole_number(d) : std::nullopt;
+        return n ? V::integer(*n) : V::nil();
     });
     r.add_tlo("Float", [](const Context&, std::string_view index) -> V {
         double d = 0;

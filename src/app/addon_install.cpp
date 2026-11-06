@@ -64,6 +64,13 @@ public:
     bool ok() const { return static_cast<bool>(out_); }
     // Moves `from` to `to` (making its folder), written to the journal first.
     bool move(const fs::path& from, const fs::path& to, std::string* error) {
+        // Something already there (a folder holding the player's files, where a file goes now) stops it before the
+        // journal names the move: an undo would take that for the moved file and carry it off.
+        std::error_code in_way;
+        if (fs::exists(to, in_way)) {
+            if (error) *error = "cannot move " + from.string() + " to " + to.string() + ": something is there";
+            return false;
+        }
         out_ << "move\t" << journal_path(data_dir_, from) << "\t" << journal_path(data_dir_, to) << "\n";
         out_.flush();
         if (!out_) {
@@ -75,6 +82,29 @@ public:
         fs::rename(from, to, ec);
         if (ec && error) *error = "cannot move " + from.string() + " to " + to.string() + ": " + ec.message();
         return !ec;
+    }
+    // Saves installed.txt as it is to installed.prev.txt, then writes that to the journal: an install cut off after
+    // installed.txt is rewritten puts the old one back with the old files. "none" when there was no installed.txt.
+    bool registry(std::string* error) {
+        const fs::path dir = addons_dir(data_dir_);
+        std::error_code ec;
+        const bool had = fs::exists(dir / "installed.txt", ec);
+        bool saved = true;
+        if (had) {
+            auto text = read_text_file(dir / "installed.txt");
+            saved = text && write_file_atomic(dir / "installed.prev.txt", *text);
+        } else {
+            fs::remove(dir / "installed.prev.txt", ec);
+        }
+        if (saved) {
+            out_ << "registry\t" << (had ? "saved" : "none") << "\n";
+            out_.flush();
+        }
+        if (!saved || !out_) {
+            if (error) *error = "cannot save addons/installed.txt before changing it";
+            return false;
+        }
+        return true;
     }
     void done() {
         out_ << "done\n";
@@ -93,14 +123,20 @@ void remove_quietly(const fs::path& path) {
     if (ec) log::warn("Add-ons: cannot remove {}: {}", path.string(), ec.message());
 }
 
-// Undoes the journal's moves, last first.
+// Undoes the journal's moves, last first, and puts back installed.txt as it was when the journal saved it.
 void undo_journal(const fs::path& data_dir) {
-    auto text = read_text_file(addons_dir(data_dir) / "journal.txt");
+    const fs::path dir = addons_dir(data_dir);
+    auto text = read_text_file(dir / "journal.txt");
     if (!text) return;
     std::vector<std::pair<std::string, std::string>> moves;
+    std::string registry; // "saved", "none" or empty (installed.txt was not changed)
     std::istringstream in(*text);
     for (std::string line; std::getline(in, line);) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line == "registry\tsaved" || line == "registry\tnone") {
+            registry = line.substr(9);
+            continue;
+        }
         const auto t1 = line.find('\t');
         const auto t2 = t1 == std::string::npos ? std::string::npos : line.find('\t', t1 + 1);
         if (line.substr(0, t1) != "move" || t2 == std::string::npos) continue;
@@ -119,6 +155,14 @@ void undo_journal(const fs::path& data_dir) {
         fs::rename(data_dir / rel(to), data_dir / rel(from), ec);
         if (ec) log::warn("Add-ons: undoing a cut-off install: cannot move {} back: {}", to, ec.message());
     }
+    std::error_code ec;
+    if (registry == "saved" && fs::exists(dir / "installed.prev.txt", ec)) {
+        fs::rename(dir / "installed.prev.txt", dir / "installed.txt", ec);
+        if (ec) log::warn("Add-ons: undoing a cut-off install: cannot put installed.txt back: {}", ec.message());
+    } else if (registry == "none") {
+        fs::remove(dir / "installed.txt", ec);
+    }
+    fs::remove(dir / "installed.prev.txt", ec);
 }
 
 bool journal_done(const fs::path& data_dir) {
@@ -140,6 +184,18 @@ void remove_empty_dirs(const fs::path& root, bool self) {
     for (const auto& d : dirs)
         if (fs::is_empty(d, ec)) fs::remove(d, ec);
     if (self && fs::is_empty(root, ec)) fs::remove(root, ec);
+}
+
+// Removes `dir` while it is empty, then its parent the same way, up to `stop` (which stays).
+void remove_empty_parents(fs::path dir, const fs::path& stop) {
+    std::error_code ec;
+    const fs::path top = stop.lexically_normal();
+    for (dir = dir.lexically_normal(); dir != top && dir.has_relative_path(); dir = dir.parent_path()) {
+        const fs::path inside = dir.lexically_relative(top);
+        if (inside.empty() || *inside.begin() == "..") return;
+        if (!fs::is_directory(dir, ec) || !fs::is_empty(dir, ec)) return;
+        if (!fs::remove(dir, ec)) return;
+    }
 }
 
 std::string file_of(std::string_view path) {
@@ -485,10 +541,18 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     for (const auto& f : addon.files)
         if (std::find(out.begin(), out.end(), f.path) == out.end()) out.push_back(f.path);
     std::string why;
+    // Files only: a folder that is the name of a file now (lib/util.lua before, lib now) is left, emptied, and
+    // taken out below so the file can go there; one the player put files in stays, and the move into it fails.
+    std::vector<std::string> moved_out;
     for (const auto& p : out) {
-        if (!fs::exists(target / rel(p), ec)) continue;
+        if (!fs::exists(target / rel(p), ec) || fs::is_directory(target / rel(p), ec)) continue;
         if (!journal.move(target / rel(p), prev / rel(p), &why)) return undo(why);
+        moved_out.push_back(p);
     }
+    // Only the folders in a new file's way: any other empty folder (one a script made for its saves, or the
+    // player's) is not this install's to take.
+    for (const auto& f : addon.files)
+        if (fs::is_directory(target / rel(f.path), ec)) remove_empty_dirs(target / rel(f.path), true);
     for (const auto& f : addon.files)
         if (!journal.move(src / rel(f.path), target / rel(f.path), &why)) return undo(why);
     InstalledAddon entry = addon;
@@ -498,13 +562,16 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     std::erase_if(all, [&](const InstalledAddon& a) { return iequal(a.name, addon.name); });
     all.push_back(std::move(entry));
     std::sort(all.begin(), all.end(), [](const auto& a, const auto& b) { return lower(a.name) < lower(b.name); });
+    if (!journal.registry(&why)) return undo(why);
     if (!write_installed_addons(data_dir, all)) return undo("cannot write addons/installed.txt");
     journal.done();
     journal.close();
     remove_quietly(dir / "journal.txt");
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(prev);
     remove_quietly(src);
-    remove_empty_dirs(target, false);
+    // The earlier version's folders its files left empty, and only those.
+    for (const auto& p : moved_out) remove_empty_parents((target / rel(p)).parent_path(), target);
     log::info("Add-ons: {} {} installed into {}", addon.name, addon.version, target.string());
     return true;
 }
@@ -537,6 +604,7 @@ bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* 
         }
     }
     std::erase_if(all, [&](const InstalledAddon& a) { return iequal(a.name, addon.name); });
+    if (ok && !journal.registry(&why)) ok = false;
     if (ok && !write_installed_addons(data_dir, all)) {
         ok = false;
         why = "cannot write addons/installed.txt";
@@ -552,6 +620,7 @@ bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* 
     journal.done();
     journal.close();
     remove_quietly(dir / "journal.txt");
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(prev);
     remove_empty_dirs(target, true);
     log::info("Add-ons: {} removed", addon.name);
@@ -583,6 +652,7 @@ void addons_at_start(const fs::path& data_dir) {
         }
         remove_quietly(dir / "journal.txt");
     }
+    remove_quietly(dir / "installed.prev.txt");
     remove_quietly(dir / "previous");
     remove_quietly(dir / "new");
 }

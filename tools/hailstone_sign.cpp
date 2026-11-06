@@ -208,9 +208,11 @@ int try_update(const std::string& key_arg, const std::string& feed, const fs::pa
     env.platform = platform;
     env.key = *key;
     env.fetch = [](const std::string& url, const std::function<bool(std::span<const std::byte>)>& sink,
-                   const std::function<bool(std::uint64_t, std::uint64_t)>& progress) {
+                   const std::function<bool(std::uint64_t, std::uint64_t)>& progress,
+                   const std::function<bool()>& cancelled) {
         platform::HttpGetOptions options;
         options.user_agent = "hailstone_sign";
+        options.cancelled = cancelled;
         return platform::http_get(url, options, sink, progress);
     };
     app::Updater updater(env);

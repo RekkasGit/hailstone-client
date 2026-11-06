@@ -20,6 +20,7 @@
 #include <imgui_internal.h>
 #include <lua.hpp>
 
+#include "core/atomic_file.h"
 #include "core/frame_sections.h"
 #include "core/log.h"
 
@@ -199,11 +200,11 @@ struct LuaUi::Impl {
         }
         return out;
     }
+    // Atomically (core/atomic_file.h): a crash, a full disk or another client reading it never finds it half written.
     static void write_settings(const fs::path& file, const std::map<std::string, std::string>& values) {
-        std::error_code ec;
-        fs::create_directories(file.parent_path(), ec);
-        std::ofstream f(file, std::ios::trunc);
-        for (const auto& [k, v] : values) f << k << '=' << v << '\n';
+        std::string text;
+        for (const auto& [k, v] : values) text += k + '=' + v + '\n';
+        write_file_atomic(file, text);
     }
     void load_settings() { settings = read_settings(settings_file); }
     void save_settings_now() {
@@ -225,9 +226,16 @@ struct LuaUi::Impl {
         auto it = settings.find(key);
         return it == settings.end() ? nullptr : &it->second;
     }
-    void set_setting(const std::string& key, const std::string& value) {
+    // The file is one key=value a line: a key with '=' or a line break, or a value with a line break, would be read
+    // back as other keys (a plugin's value as the pack's test hooks), so it is refused.
+    static bool storable(std::string_view key, std::string_view value) {
+        return !key.empty() && key.find_first_of("=\r\n") == std::string_view::npos &&
+               value.find_first_of("\r\n") == std::string_view::npos;
+    }
+    bool set_setting(const std::string& key, const std::string& value) {
+        if (!storable(key, value)) return false;
         const std::string* now = get_setting(key);
-        if (now && *now == value) return;
+        if (now && *now == value) return true;
         if (per_character(key)) {
             character_settings[key] = value;
             character_dirty = true;
@@ -236,6 +244,7 @@ struct LuaUi::Impl {
             settings_dirty = true;
         }
         settings_changed = Clock::now();
+        return true;
     }
     // A plugin's window keeps its own switch (ui.DisableWindow): its key under the plugin's prefix.
     bool saved_enabled(const std::string& name, const std::string& tag = {}) const {
@@ -515,15 +524,24 @@ int lua_get_setting(lua_State* L) {
     return 1;
 }
 
-// ui.SetSetting(key, value)   -- saved (numbers and booleans as text). A plugin's code writes its own key
-// ("plugin.<tag>.<key>"; never test.*, which the pack's tests act on).
+// saved = ui.SetSetting(key, value)   -- saved (numbers and booleans as text). A plugin's code writes its own key
+// ("plugin.<tag>.<key>"; never test.*, which the pack's tests act on). Refused (false) for a key with '=' or a line
+// break, or a value with a line break: the file is one key=value a line.
 int lua_set_setting(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    const char* value = lua_isboolean(L, 2) ? (lua_toboolean(L, 2) ? "1" : "0") : luaL_tolstring(L, 2, nullptr);
+    std::size_t key_len = 0;
+    const char* key = luaL_checklstring(L, 1, &key_len);
+    std::size_t value_len = 1;
+    const char* value = lua_isboolean(L, 2) ? (lua_toboolean(L, 2) ? "1" : "0") : luaL_tolstring(L, 2, &value_len);
     auto& ui = LuaUi::Impl::of(L);
-    if (g_caller_tag.empty()) ui.set_setting(key, value);
-    else if (!std::string_view(key).starts_with("test.")) ui.set_setting(LuaUi::Impl::plugin_key(g_caller_tag, key), value);
-    return 0;
+    const std::string_view k(key, key_len), v(value, value_len);
+    // (A NUL would cut the text short: refused as the line breaks are.)
+    const bool nul = k.find('\0') != std::string_view::npos || v.find('\0') != std::string_view::npos;
+    bool saved = false;
+    if (!nul && g_caller_tag.empty()) saved = ui.set_setting(std::string(k), std::string(v));
+    else if (!nul && !k.starts_with("test."))
+        saved = ui.set_setting(LuaUi::Impl::plugin_key(g_caller_tag, k), std::string(v));
+    lua_pushboolean(L, saved);
+    return 1;
 }
 
 // ui.Log(text)   -- a line in the client's log (diagnostics from scripts)

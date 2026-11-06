@@ -8,7 +8,9 @@
 #include <fstream>
 #include <unordered_set>
 
+#include "core/msvc_atoi.h"
 #include "game/spell_record.h"
+#include "platform/process.h"
 
 namespace nmsc::game {
 
@@ -160,6 +162,14 @@ bool read_line(std::FILE* f, std::string& out, int max) {
     return true;
 }
 
+// <base><suffix> ("CJ" + ".txt"), joined as a path: path::string() throws on Windows for a name the ANSI code page
+// cannot show (the data folder under a user name in another script), and a narrow fopen cannot open it.
+std::filesystem::path with_suffix(const std::filesystem::path& base, const char* suffix) {
+    std::filesystem::path p = base;
+    p += suffix;
+    return p;
+}
+
 std::string strip_newline(std::string s) {
     if (!s.empty() && s.back() == '\n') s.pop_back();
     return s;
@@ -168,9 +178,9 @@ std::string strip_newline(std::string s) {
 } // namespace
 
 int ConversationJournal::load(const std::filesystem::path& base) {
-    std::FILE* txt = std::fopen((base.string() + ".txt").c_str(), "rt");
+    std::FILE* txt = platform::open_c_file(with_suffix(base, ".txt"), "rt");
     if (!txt) return -1; // "Warning: Unable to open journal, creating new file."
-    std::FILE* hdr = std::fopen((base.string() + ".hdr").c_str(), "rt");
+    std::FILE* hdr = platform::open_c_file(with_suffix(base, ".hdr"), "rt");
     if (!hdr) {
         std::fclose(txt);
         return -2; // "Error: Unable to open Journal."
@@ -188,7 +198,7 @@ int ConversationJournal::load(const std::filesystem::path& base) {
         if (line.rfind("+CAT", 0) == 0) { // FUN_0047ad30
             std::string id, name, desc;
             if (read_line(hdr, id, 0x7ff) && read_line(hdr, name, 0x7ff) && read_line(hdr, desc, 0x7ff))
-                set_category(strip_newline(name.substr(0, 0xf)), strip_newline(desc.substr(0, 0xff)), std::atoi(id.c_str()));
+                set_category(strip_newline(name.substr(0, 0xf)), strip_newline(desc.substr(0, 0xff)), core::msvc_atoi(id));
             while (!std::feof(hdr)) {
                 if (!read_line(hdr, line, 0xfff)) break;
                 if (line.rfind("+NPC", 0) == 0 || line.rfind("+CAT", 0) == 0) break;
@@ -203,7 +213,7 @@ int ConversationJournal::load(const std::filesystem::path& base) {
                         std::string l;
                         if (!read_line(hdr, l, 0x7ff) || l.rfind("-NPC", 0) == 0) break;
                     }
-                    n = npc(name, std::atoi(zone.c_str()), true);
+                    n = npc(name, core::msvc_atoi(zone), true);
                 }
             }
             while (!std::feof(hdr)) {
@@ -217,9 +227,9 @@ int ConversationJournal::load(const std::filesystem::path& base) {
                     std::uint32_t time = 0, text = 0;
                     std::sscanf(f[0].c_str(), "%x", &time);
                     std::sscanf(f[5].c_str(), "%x", &text);
-                    n->add_entry(static_cast<std::int32_t>(time), static_cast<float>(std::atoi(f[1].c_str())),
-                                 static_cast<float>(std::atoi(f[2].c_str())), static_cast<float>(std::atoi(f[3].c_str())), text,
-                                 std::atoi(f[4].c_str()));
+                    n->add_entry(static_cast<std::int32_t>(time), static_cast<float>(core::msvc_atoi(f[1])),
+                                 static_cast<float>(core::msvc_atoi(f[2])), static_cast<float>(core::msvc_atoi(f[3])), text,
+                                 core::msvc_atoi(f[4]));
                     while (!std::feof(hdr)) {
                         std::string l;
                         if (!read_line(hdr, l, 0x7ff) || l.rfind("-ENTRY", 0) == 0) break;
@@ -240,9 +250,9 @@ int ConversationJournal::load(const std::filesystem::path& base) {
 }
 
 int ConversationJournal::save(const std::filesystem::path& base) const {
-    std::FILE* txt = std::fopen((base.string() + ".txt").c_str(), "wt");
+    std::FILE* txt = platform::open_c_file(with_suffix(base, ".txt"), "wt");
     if (!txt) return -1;
-    std::FILE* hdr = std::fopen((base.string() + ".hdr").c_str(), "wt");
+    std::FILE* hdr = platform::open_c_file(with_suffix(base, ".hdr"), "wt");
     if (!hdr) {
         std::fclose(txt);
         return -1;

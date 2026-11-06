@@ -43,10 +43,12 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
+#include <random>
 #include <cstring>
 #include <set>
 #include <string>
 #include <thread>
+#include <utility>
 
 #include "assets/zone.h"
 #include "core/game_dir.h"
@@ -68,6 +70,7 @@
 #include "augment_probe.h"
 #include "game/server_ext_chain.h"
 #include "platform/paths.h"
+#include "platform/private_file.h"
 #include "plugin/hooks.h"
 #include "plugin/native_plugins.h"
 #include "plugin/policy.h"
@@ -77,6 +80,28 @@ using Clock = std::chrono::steady_clock;
 
 namespace {
 void tick() { std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+
+// A new folder only this user can open, under the temp folder with a name of this run's; empty if none could be made.
+std::filesystem::path private_scratch_dir() {
+    std::random_device rd;
+    for (int tries = 0; tries < 16; ++tries) {
+        const auto tag = (static_cast<std::uint64_t>(rd()) << 32) ^ rd();
+        const auto path = std::filesystem::temp_directory_path() / ("playprobe-" + std::to_string(tag));
+        if (platform::make_private_dir(path)) return path;
+    }
+    return {};
+}
+
+struct RemoveOnExit {
+    std::filesystem::path path;
+    explicit RemoveOnExit(std::filesystem::path p) : path(std::move(p)) {}
+    RemoveOnExit(const RemoveOnExit&) = delete;
+    RemoveOnExit& operator=(const RemoveOnExit&) = delete;
+    ~RemoveOnExit() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
 
 // The sample point (world, a feet position) nearest to `from` inside a
 // zone-line region that resolves to zone `want` (0 = any).
@@ -206,11 +231,18 @@ int main(int argc, char** argv) {
     copts.hooks = &hooks;
     copts.plugins = extensions;
     net::GameConnection conn(game, copts);
-    const std::filesystem::path plugin_data = std::filesystem::temp_directory_path() / "playprobe-plugins";
+    // The plugins' cache and config (the NMS plugin's auth_key): a new owner-only folder of this run's in the shared
+    // temp folder, removed at the end, never a fixed name another user could have made or linked first.
+    const std::filesystem::path plugin_data = private_scratch_dir();
+    if (plugin_data.empty()) { std::fprintf(stderr, "could not make a private folder in %s\n", std::filesystem::temp_directory_path().string().c_str()); return 1; }
+    const RemoveOnExit remove_plugin_data{plugin_data};
     if (!auth_key.empty()) {
         std::error_code ec;
         std::filesystem::create_directories(plugin_data / "config" / "nms", ec);
-        std::ofstream(plugin_data / "config" / "nms" / "nms.ini") << "[NMS]\nauth_key=" << auth_key << "\n";
+        if (ec || !platform::write_private_file(plugin_data / "config" / "nms" / "nms.ini", "[NMS]\nauth_key=" + auth_key + "\n")) {
+            std::fprintf(stderr, "could not write the auth key\n");
+            return 1;
+        }
     }
     plugin::NativeEnv ne;
     ne.hooks = &hooks;

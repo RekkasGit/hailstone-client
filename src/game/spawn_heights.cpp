@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/msvc_atoi.h"
 #include "game/mechanics/collision_movement.h"
 #include "game/race_models.h"
 
@@ -121,7 +122,7 @@ HeightTables parse_height_tables(std::string_view racedata, std::string_view mod
         if (fields.size() >= 48 && fields.size() < 86) {
             // The live client's layout: a line per race and gender (0, 1, or 2 for both), the heights at 46 and 47.
             auto& h = t.race_heights
-                          .try_emplace(std::atoi(fields[0].c_str()), std::array<float, 2>{kDefaultHeight, kDefaultHeight})
+                          .try_emplace(core::msvc_atoi(fields[0]), std::array<float, 2>{kDefaultHeight, kDefaultHeight})
                           .first->second;
             if (fields[1] != "1") h[0] = height(fields[46]);
             if (fields[1] != "0") h[1] = height(fields[47]);
@@ -129,12 +130,12 @@ HeightTables parse_height_tables(std::string_view racedata, std::string_view mod
                 int gender = fields[1] == "0" ? 0 : fields[1] == "1" ? 1 : 2;
                 std::string code = fields[50];
                 for (char& c : code) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-                t.racedata_codes[std::atoi(fields[0].c_str()) * 4 + gender] = std::move(code);
+                t.racedata_codes[core::msvc_atoi(fields[0]) * 4 + gender] = std::move(code);
             }
             continue;
         }
         if (fields.size() < 91) continue;
-        t.race_heights[std::atoi(fields[0].c_str())] = {height(fields[89]), height(fields[90])};
+        t.race_heights[core::msvc_atoi(fields[0])] = {height(fields[89]), height(fields[90])};
     }
     // moddat.ini as GetPrivateProfileString reads it: the first [section] of a name and its first ROffset /
     // FPCOffset key, both compared without case; the value is read with sscanf "%f" (the default when it does not

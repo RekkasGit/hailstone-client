@@ -6,9 +6,12 @@
 #include <condition_variable>
 #include <deque>
 #include <format>
+#include <memory>
 #include <mutex>
 #include <random>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "core/byte_io.h"
 #include "core/log.h"
@@ -74,18 +77,30 @@ public:
         stop_thread();
         std::lock_guard lock(mutex_);
         reset();
-        std::string err;
-        auto endpoints = platform::resolve(host, port, err);
-        if (endpoints.empty()) return fail(err);
-        peer_ = endpoints.front();
-        if (!socket_.open(peer_.family, err)) return fail(err);
         connect_code_ = static_cast<std::uint32_t>(rng_());
         state_ = SessionState::Connecting;
         auto now = now_();
         started_ = last_recv_ = last_stat_ = now;
         last_update_ = now;
-        send_session_request(now);
-        log::debug("session: connecting to {} ({})", peer_.to_string(), host);
+        host_ = host;
+        if (auto ep = platform::numeric_endpoint(host, port)) {
+            begin(*ep, now);
+        } else {
+            // A name is looked up on a thread of its own: getaddrinfo can wait out a slow name server for seconds,
+            // and connect() is called from the frame (login, world, zone). The session stays Connecting, and the
+            // connect timeout counts the lookup too. The thread owns `lookup` alone; a lookup that ends after
+            // another connect() or this session's end is not looked at.
+            auto lookup = std::make_shared<Lookup>();
+            lookup_ = lookup;
+            platform::resolve_async(host, port, [lookup](std::vector<platform::Endpoint> endpoints, std::string error) {
+                std::lock_guard l(lookup->mutex);
+                lookup->endpoints = std::move(endpoints);
+                lookup->error = std::move(error);
+                lookup->done = true;
+            });
+            log::debug("session: looking up {}", host);
+        }
+        if (state_ == SessionState::Disconnected) return;
         if (opt_.service_interval.count() > 0) {
             stop_ = false;
             thread_ = std::thread([this] { service_loop(); });
@@ -157,6 +172,43 @@ public:
     }
 
 private:
+    // A host name's lookup (connect()): filled on resolve_async's thread.
+    struct Lookup {
+        std::mutex mutex;
+        bool done = false;
+        std::vector<platform::Endpoint> endpoints;
+        std::string error;
+    };
+
+    // Opens the socket to `to` and sends the first SessionRequest.
+    void begin(const platform::Endpoint& to, Clock::time_point now) {
+        std::string err;
+        peer_ = to;
+        if (!socket_.open(peer_.family, err)) return fail(err);
+        send_session_request(now);
+        log::debug("session: connecting to {} ({})", peer_.to_string(), host_);
+    }
+
+    // While the host's name is looked up: begins once the addresses came. True while still waiting.
+    bool looking_up(Clock::time_point now) {
+        if (!lookup_) return false;
+        std::vector<platform::Endpoint> endpoints;
+        std::string error;
+        {
+            std::lock_guard l(lookup_->mutex);
+            if (!lookup_->done) return true;
+            endpoints = std::move(lookup_->endpoints);
+            error = std::move(lookup_->error);
+        }
+        lookup_.reset();
+        if (endpoints.empty()) {
+            fail(error.empty() ? std::format("cannot resolve {}", host_) : error);
+            return true;
+        }
+        begin(endpoints.front(), now);
+        return state_ == SessionState::Disconnected;
+    }
+
     // SessionOptions::clock, else the steady clock.
     Clock::time_point now_() const { return opt_.clock ? opt_.clock() : Clock::now(); }
 
@@ -185,6 +237,14 @@ private:
         auto now = now_();
 
         if (state_ == SessionState::Connecting) {
+            // The lookup's answer first: one that came back late still connects (or fails as no session response),
+            // and only a lookup still unanswered at the timeout is "cannot resolve".
+            if (looking_up(now)) {
+                if (lookup_ && now - started_ > opt_.connect_timeout)
+                    fail(std::format("cannot resolve {}: no answer after {:.1f} s", host_,
+                                     static_cast<double>(opt_.connect_timeout.count()) / 1000.0));
+                return;
+            }
             if (now - started_ > opt_.connect_timeout)
                 return fail(std::format("no session response from {} after {:.1f} s", peer_.to_string(),
                                         static_cast<double>(opt_.connect_timeout.count()) / 1000.0));
@@ -251,6 +311,8 @@ private:
 
     void reset() {
         socket_.close();
+        lookup_.reset();
+        peer_ = {};
         state_ = SessionState::Disconnected;
         error_.clear();
         params_ = {};
@@ -489,10 +551,13 @@ private:
 
         if (state_ == SessionState::Connecting) {
             if (!protocol || opcode != soe::op::SessionResponse) return;
+            // The reply may come from another port than the one addressed (NAT, OpenEQ stream.rs), or another address:
+            // EQEmu binds 0.0.0.0 and answers without IP_PKTINFO, so a host reached on a secondary address answers
+            // from the one its route picks. The connect code is what ties the reply to the request; it went out in
+            // clear, so one who sees it could answer first (docs/unknowns.md).
             auto r = soe::parse_session_response(d);
             if (!r || r->connect_code != connect_code_) return;
             if (opt_.trace) opt_.trace(false, d);
-            // The reply may come from another port than the one addressed (NAT, OpenEQ stream.rs).
             if (!(from == peer_)) {
                 log::debug("session: response came from {}, using it", from.to_string());
                 peer_ = from;
@@ -700,6 +765,8 @@ private:
     std::atomic<bool> stop_{false};
     platform::UdpSocket socket_;
     platform::Endpoint peer_;
+    std::string host_;               // as connect() was given it
+    std::shared_ptr<Lookup> lookup_; // while host_'s name is looked up
     SessionState state_ = SessionState::Disconnected;
     std::string error_;
     std::mt19937_64 rng_;

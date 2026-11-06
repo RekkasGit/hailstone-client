@@ -543,9 +543,15 @@ void swing_ready(const SkillContext& ctx, SkillState& state) {
 
 std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState& state, std::uint8_t class_id) {
     if (!state.hidden && state.activity != static_cast<std::int32_t>(skill::kHide)) return std::nullopt;
-    auto x = static_cast<std::int32_t>(ctx.me.y), y = static_cast<std::int32_t>(ctx.me.x);
-    auto z = static_cast<std::int32_t>(ctx.me.z);
-    bool moved = state.hide_x != x || state.hide_y != y || std::abs(state.hide_z - z) > 5;
+    // Truncated as save_position (use_skill.cpp) stored them, through __ftol2 (NaN and out of range: INT_MIN), and
+    // the z difference taken in 32 bits with its wrap and a cdq / xor / sub magnitude (INT_MIN stays negative), so a
+    // corrupt position is defined behaviour. For any position in the int range this is the plain cast and abs.
+    const std::int32_t x = Fpu::ftol(static_cast<double>(ctx.me.y)), y = Fpu::ftol(static_cast<double>(ctx.me.x));
+    const std::int32_t z = Fpu::ftol(static_cast<double>(ctx.me.z));
+    const auto dz = static_cast<std::uint32_t>(state.hide_z) - static_cast<std::uint32_t>(z);
+    const std::uint32_t sign = dz >> 31 ? 0xffffffffu : 0u;
+    const auto z_moved = static_cast<std::int32_t>((dz ^ sign) - sign);
+    bool moved = state.hide_x != x || state.hide_y != y || z_moved > 5;
     if (!moved || (class_id == 9 && state.sneaking)) return std::nullopt;
     if (state.activity == static_cast<std::int32_t>(skill::kHide)) state.activity = -1;
     state.hidden = false;

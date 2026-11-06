@@ -366,6 +366,31 @@ TEST_CASE("Login accounts: the worlds the login server listed, for the World lis
     CHECK(out.worlds == std::vector<std::string>{"Tunaria", "Old World"});
 }
 
+TEST_CASE("Server profile: a world name with '=' keeps one set of characters, written once") {
+    using namespace nmsc;
+    TempServers servers;
+    Config cfg;
+    ui::LoginView view;
+    ui::load_login_settings(view, cfg, servers.path);
+    view.name = "Odd";
+    view.host = "odd.example.org";
+    view.username = "me";
+    REQUIRE(ui::store_login_settings(view, cfg));
+    CHECK(saved_character_key_part("A=B\r\nC") == "A_B__C");
+    CHECK(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}, {"Two", "", 6, "CLR"}}, servers.path));
+    CHECK_FALSE(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}, {"Two", "", 6, "CLR"}},
+                                        servers.path)); // the same list: nothing written
+    // A character deleted on the server leaves the saved list.
+    CHECK(note_account_characters("odd", "me", "A=B", {{"One", "", 5, "WAR"}}, servers.path));
+    auto p = load_profile("odd", servers.path);
+    REQUIRE(p);
+    const SavedAccount* a = find_account(*p, "me");
+    REQUIRE(a);
+    REQUIRE(a->characters.size() == 1);
+    CHECK(a->characters[0].name == "One");
+    CHECK(a->characters[0].world == saved_character_key_part("A=B"));
+}
+
 TEST_CASE("Keyring keys: the address in lower case and the port") {
     CHECK(nmsc::platform::credential_server("Play.Example.ORG", 5999) == "play.example.org:5999");
 }
@@ -413,6 +438,18 @@ TEST_CASE("Character creation: stats start at the base with the class's points t
     for (int i = 0; i < 10; ++i) CHECK(create_stat_up(v, 0));
     CHECK_FALSE(create_stat_up(v, 0));
     CHECK(v.points_left == 15);
+    // A world server's absurd allocation: no signed overflow in the sum or the cap.
+    CreateOption huge = o;
+    huge.base.fill(0xffffffffu);
+    huge.points.fill(0x7fffffffu);
+    v.options = {huge};
+    v.option = 0;
+    create_reset_stats(v);
+    CHECK(v.stats[0] == 255);
+    CHECK(v.points_left == 7 * 255);
+    CHECK(create_stat_cap(v, 0) == 150);
+    CHECK_FALSE(create_stat_up(v, 0));
+    CHECK_FALSE(create_stat_down(v, 0));
 }
 
 TEST_CASE("Character creation: race and class stay among the options; a deity keeps the city that still goes with it") {

@@ -131,6 +131,16 @@ AppPacket encode(const ClickObjectAction& v); // tests and tools
 std::optional<ClickObjectAction> decode_click_object_action(const AppPacket& p);
 AppPacket encode_close_object();              // the empty client → zone packet
 
+// OP_ClearObject, zone → client (8 bytes, Handle_OP_ClearObject @0x4b6e20): u8 clear, 3 bytes, u32 slot. Clear 0
+// removes the world container's item in that slot, anything else every slot. Shorter packets are refused.
+struct ClearObject {
+    std::uint8_t clear = 0;
+    std::int32_t slot = 0;
+};
+inline constexpr std::size_t kClearObjectSize = 8;
+AppPacket encode(const ClearObject& v); // server direction, for tests
+std::optional<ClearObject> decode_clear_object(const AppPacket& p);
+
 // OP_TradeSkillCombine, client → zone (24 bytes, NewCombine_Struct): combine
 // the container in container_slot (a world container: type kInvWorld, slot
 // -1... see docs). guildtribute_slot is unused (all -1).

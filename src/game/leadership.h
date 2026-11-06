@@ -20,6 +20,10 @@ struct LeadershipAbility {
 };
 const LeadershipAbility& leadership_ability(int index);
 
+// The leadership window's experience gauge, 0..1000: `exp` of `per`. The experience is the server's f64, clamped
+// before it becomes an int (a NaN or a value past int's range would be undefined); NaN shows as 0.
+int leadership_gauge(double exp, double per);
+
 // How many ranks an ability has (its leading non-zero costs) and the cost of the next one (0: none).
 int leadership_max_rank(int index);
 std::uint32_t leadership_next_cost(int index, std::uint32_t rank);

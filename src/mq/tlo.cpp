@@ -7,6 +7,8 @@
 #include <cstring>
 #include <format>
 
+#include "core/float_chars.h"
+
 namespace nmsc::mq {
 
 namespace {
@@ -65,8 +67,13 @@ bool parse_int(std::string_view text, std::int64_t& out) {
 bool parse_float(std::string_view text, double& out) {
     text = trim(text);
     if (text.empty()) return false;
-    auto [p, ec] = std::from_chars(text.data(), text.data() + text.size(), out);
+    auto [p, ec] = float_from_chars(text.data(), text.data() + text.size(), out); // (core/float_chars.h: Xcode 15)
     return ec == std::errc() && p == text.data() + text.size();
+}
+
+std::optional<std::int64_t> whole_number(double d) {
+    if (!(d >= -0x1p63 && d < 0x1p63)) return std::nullopt; // NaN fails both
+    return static_cast<std::int64_t>(d);
 }
 
 Registry::Registry() {
@@ -88,7 +95,8 @@ Registry::Registry() {
         return Value::integer((u >> 24) | ((u >> 8) & 0xff00) | ((u << 8) & 0xff0000) | (u << 24));
     };
     t_float.members["Int"] = [](const Context&, const Value& v, std::string_view) {
-        return Value::integer(static_cast<std::int64_t>(v.f));
+        const auto n = whole_number(v.f);
+        return n ? Value::integer(*n) : Value::nil();
     };
     t_float.members["Deci"] = [](const Context&, const Value& v, std::string_view) {
         return Value::string(std::format("{:.1f}", v.f));

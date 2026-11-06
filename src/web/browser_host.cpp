@@ -29,6 +29,8 @@ public:
         return process_.read(out);
     }
     bool alive() override { return process_.running(); }
+    std::size_t pending() override { return process_.pending_write(); }
+    std::uint64_t taken() override { return process_.written(); }
     void stop(int grace_ms) override {
         process_.stop(false);
         if (grace_ms > 0 && process_.wait_exit(grace_ms)) return;
@@ -100,14 +102,34 @@ bool BrowserHost::ensure_started() {
     }
     reader_ = MessageReader();
     ready_ = false;
-    send(Hello{});
+    taken_ = 0;
+    stall_since_.reset();
+    send(Hello{}, true);
     return true;
 }
 
-void BrowserHost::send(const Message& m) {
-    if (!transport_) return;
+bool BrowserHost::send(const Message& m, bool always, std::string* why) {
+    if (!transport_) return true;
     std::vector<std::byte> bytes = encode_message(m);
+    // The helper takes a length over its limit as a broken stream and quits, so such a message is never sent.
+    const std::size_t limit = max_message_size(static_cast<std::uint8_t>(bytes[4]));
+    if (bytes.size() - 4 > limit) {
+        log::warn("web: not sending a message of {} bytes (at most {})", bytes.size() - 4, limit);
+        if (why) *why = "it is too long to send";
+        return false;
+    }
+    // Held back while the helper is still taking earlier messages: dropped here, not queued until the queue's
+    // limit ends a helper that is reading (a script sending several large evals in one frame).
+    const std::size_t pending = transport_->pending();
+    if (!always && pending != 0 && pending + bytes.size() > kSendBudget) {
+        if (!refusing_) log::warn("web: the browser helper is still taking {} bytes: messages refused meanwhile", pending);
+        refusing_ = true;
+        if (why) *why = "the browser helper is still taking earlier messages";
+        return false;
+    }
+    refusing_ = false;
     transport_->send(bytes);
+    return true;
 }
 
 Open BrowserHost::open_message(const Tab& t) const {
@@ -123,6 +145,10 @@ Open BrowserHost::open_message(const Tab& t) const {
 }
 
 std::uint32_t BrowserHost::open(const std::string& url, TabOptions options, std::string* why) {
+    if (url.size() > kMaxUrl) {
+        if (why) *why = "the address is too long";
+        return 0;
+    }
     if (!allowed(url, options)) {
         if (why) *why = refusal(url);
         return 0;
@@ -138,7 +164,10 @@ std::uint32_t BrowserHost::open(const std::string& url, TabOptions options, std:
     t.loading = true;
     const std::uint32_t id = t.id;
     auto& stored = tabs_.emplace(id, std::move(t)).first->second;
-    send(open_message(stored));
+    if (!send(open_message(stored), false, why)) { // a tab the helper never opened would load for ever
+        tabs_.erase(id);
+        return 0;
+    }
     return id;
 }
 
@@ -153,53 +182,66 @@ bool BrowserHost::navigate(std::uint32_t id, const std::string& url, std::string
         if (why) *why = "no such tab";
         return false;
     }
+    if (url.size() > kMaxUrl) {
+        if (why) *why = "the address is too long";
+        return false;
+    }
     if (!allowed(url, t->options)) {
         if (why) *why = refusal(url);
         return false;
     }
+    if (!send(Navigate{id, url}, false, why)) return false;
     t->url = url;
-    send(Navigate{id, url});
     return true;
 }
 
 void BrowserHost::resize(std::uint32_t id, std::uint16_t width, std::uint16_t height) {
     Tab* t = live(id);
     if (!t || width == 0 || height == 0 || (t->options.width == width && t->options.height == height)) return;
+    if (!send(Resize{id, width, height})) return; // the next resize sends it again
     t->options.width = width;
     t->options.height = height;
-    send(Resize{id, width, height});
 }
 
+// The player's input goes whatever the queue holds: a few bytes each, and a release or a focus change refused while
+// a script's large message drains would leave the page holding a button or key. Scripts and plugins can call nav
+// too (in a loop), so only the player's goes past the budget.
 void BrowserHost::mouse(const Mouse& m) {
-    if (live(m.tab)) send(m);
+    if (live(m.tab)) send(m, true);
 }
 void BrowserHost::wheel(const Wheel& w) {
-    if (live(w.tab)) send(w);
+    if (live(w.tab)) send(w, true);
 }
 void BrowserHost::key(const Key& k) {
-    if (live(k.tab)) send(k);
+    if (live(k.tab)) send(k, true);
 }
-void BrowserHost::text(std::uint32_t id, const std::string& s) {
-    if (live(id) && !s.empty()) send(Text{id, s});
+bool BrowserHost::text(std::uint32_t id, const std::string& s) {
+    if (!live(id)) return false;
+    return s.empty() || send(Text{id, s});
 }
 void BrowserHost::focus(std::uint32_t id, bool on) {
-    if (live(id)) send(Focus{id, on});
+    if (live(id)) send(Focus{id, on}, true);
 }
-void BrowserHost::nav(std::uint32_t id, NavAction action) {
-    if (live(id)) send(Nav{id, action});
+bool BrowserHost::nav(std::uint32_t id, NavAction action, bool player) {
+    return live(id) && send(Nav{id, action}, player);
 }
-void BrowserHost::eval(std::uint32_t id, const std::string& script) {
-    if (live(id)) send(Eval{id, script});
-}
-void BrowserHost::post(std::uint32_t id, const std::string& message) {
-    if (live(id)) send(Post{id, message});
+bool BrowserHost::eval(std::uint32_t id, const std::string& script) { return live(id) && send(Eval{id, script}); }
+bool BrowserHost::post(std::uint32_t id, const std::string& message) {
+    return live(id) && message.size() <= kMaxPostMessage && send(Post{id, message});
 }
 
 void BrowserHost::close(std::uint32_t id) {
     auto it = tabs_.find(id);
     if (it == tabs_.end()) return;
-    if (!it->second.closed) send(Close{id});
+    if (!it->second.closed) send(Close{id}, true);
     tabs_.erase(it);
+}
+
+void BrowserHost::refuse(std::uint32_t id, std::string detail) {
+    Tab* t = live(id);
+    if (!t) return;
+    send(Close{id}, true);
+    close_tab(*t, CloseReason::Refused, std::move(detail));
 }
 
 void BrowserHost::close_tab(Tab& t, CloseReason reason, std::string detail) {
@@ -208,6 +250,10 @@ void BrowserHost::close_tab(Tab& t, CloseReason reason, std::string detail) {
     t.close_reason = reason;
     t.close_detail = std::move(detail);
     t.loading = false;
+    // A closed tab is never drawn: its images go now (the textures follow), not when its owner forgets it.
+    t.view = Image{};
+    t.popup = Image{};
+    t.popup_shown = false;
 }
 
 void BrowserHost::handle(Message m) {
@@ -242,7 +288,7 @@ void BrowserHost::handle(Message m) {
                     // The helper refuses these itself; a tab that got there anyway goes.
                     if (!allowed(v.url, t->options)) {
                         log::warn("web: {}'s tab went to {}, outside its sites: closed", t->options.owner, v.url);
-                        send(Close{v.tab});
+                        send(Close{v.tab}, true);
                         close_tab(*t, CloseReason::Refused, refusal(v.url));
                     }
                 }
@@ -319,7 +365,7 @@ void BrowserHost::poll(std::uint64_t now_ms) {
         bool any = std::any_of(tabs_.begin(), tabs_.end(), [](const auto& e) { return !e.second.closed; });
         if (any && ensure_started())
             for (auto& [id, t] : tabs_)
-                if (!t.closed) send(open_message(t));
+                if (!t.closed) send(open_message(t), true);
     }
     if (!transport_) return;
     std::vector<std::byte> buf(std::size_t{1} << 16);
@@ -340,8 +386,21 @@ void BrowserHost::poll(std::uint64_t now_ms) {
     const bool alive = transport_->alive();
     drain(); // what it wrote before it exited too
     if (!transport_) return;
-    if (reader_.failed()) helper_died(now_ms, "sent a message this client cannot read");
-    else if (!alive) helper_died(now_ms, "exited");
+    if (reader_.failed()) {
+        helper_died(now_ms, "sent a message this client cannot read");
+        return;
+    }
+    if (!alive) {
+        helper_died(now_ms, "exited");
+        return;
+    }
+    // Alive, but taking none of what waits for it (its reader stuck): ended, so it restarts as a dead one does.
+    const std::uint64_t taken = transport_->taken();
+    const bool progress = taken != taken_;
+    taken_ = taken;
+    if (transport_->pending() == 0) stall_since_.reset();
+    else if (progress || !stall_since_) stall_since_ = now_ms;
+    else if (now_ms - *stall_since_ >= kStallMs) helper_died(now_ms, "stopped reading its input");
 }
 
 const Tab* BrowserHost::tab(std::uint32_t id) const {
@@ -393,7 +452,7 @@ std::optional<Tab> BrowserHost::take_closed(std::uint32_t id) {
 
 void BrowserHost::shutdown() {
     if (transport_) {
-        send(Shutdown{});
+        send(Shutdown{}, true);
         transport_->stop(kShutdownGraceMs);
         transport_.reset();
     }

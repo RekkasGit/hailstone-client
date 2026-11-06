@@ -1,6 +1,7 @@
 #include "net/dz_packets.h"
 
 #include <bit>
+#include <stdexcept>
 
 #include "core/byte_io.h"
 #include "net/opcodes.h"
@@ -127,6 +128,7 @@ std::optional<std::vector<DzMember>> decode_dz_members(const AppPacket& p) {
     return decode_with(p, [](ByteReader& r) {
         r.skip(4);
         std::uint32_t n = r.le<std::uint32_t>();
+        if (n > kDzMembersMax) throw std::length_error("dz member count");
         std::vector<DzMember> v;
         for (std::uint32_t i = 0; i < n; ++i) {
             DzMember m;

@@ -6,6 +6,8 @@
 // (see docs/mechanics.md "Inputs").
 
 #include <cstdint>
+#include <functional>
+#include <vector>
 
 #include "game/mechanics/character_sheet.h"
 
@@ -43,6 +45,14 @@ struct LiveState {
 CharacterSheet build_sheet(const net::PlayerProfile& profile, const Inventory& inventory, const SpellState& spells,
                            const LiveState& live, const net::NewZone* zone = nullptr,
                            const WorldState* world = nullptr);
+// The same into `s`, which it resets first, but reusing the storage of its items, buffs and abilities: a sheet
+// built every frame copies the possessions (bags and their contents) without allocating while they stay the same.
+// `abilities` sets the owned AA ranks into the last call's list, reusing its storage
+// (AltAdvState::sheet_abilities_into); an empty function leaves none. Nothing of the last call's list stays.
+using SheetAbilitiesInto = std::function<void(std::vector<SheetAbility>&)>;
+void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& profile, const Inventory& inventory,
+                      const SpellState& spells, const LiveState& live, const SheetAbilitiesInto& abilities,
+                      const net::NewZone* zone = nullptr, const WorldState* world = nullptr);
 
 } // namespace mechanics
 } // namespace nmsc::game

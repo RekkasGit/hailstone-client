@@ -25,6 +25,7 @@
 #include "mock_server/harness.h"
 #include "mq_test_world.h"
 #include "net/movement_packets.h"
+#include "net/world_packets.h"
 #include "nav/nav_mesh.h"
 #include "nav/path_follower.h"
 #include "nav/zone_nav.h"
@@ -932,6 +933,16 @@ TEST_CASE("nav: /nav's destinations, options and controls") {
     CHECK(h.nav.calls.back().what == "stop");
     h.run("/nav id 9999");
     CHECK(h.printed.back() == "[Nav] No such spawn.");
+    // An id or door number no spawn or door can have is none, not a wrapped one (300 is not door 44).
+    for (const char* line : {"/nav id -1", "/nav id 1e300", "/nav id nan"}) {
+        h.run(line);
+        CHECK(h.printed.back() == "[Nav] No such spawn.");
+    }
+    const std::size_t calls = h.nav.calls.size();
+    h.run("/nav door id 300");
+    h.run("/nav loc 1e300 0 0");
+    h.run("/nav loc nan 0 0");
+    CHECK(h.nav.calls.size() == calls);
     h.run("/nav bogus");
     CHECK(h.printed.back() == "[Nav] Unknown /nav command: bogus (/nav help)");
 }
@@ -2178,3 +2189,44 @@ TEST_CASE("nav: real zones: Lower Guk, walked from the undead side's entrance to
 }
 
 
+
+TEST_CASE("nav: a quiet path asked and not answered before a zone change does not take the next zone's /find reply") {
+    test::Rig rig(test::MockConfig::standard(), test::quick_options());
+    REQUIRE(rig.to_zone());
+    rig.conn.request_quiet_path(42);
+    // The zone change comes before the reply (the old zone's link dropped with it unanswered).
+    rig.conn.receive_world_packet_for_test(net::encode(net::ZoneServerInfo{"127.0.0.1", 7001}));
+    const auto finds = rig.conn.find_replies();
+    std::vector<glm::vec3> path{{0, 0, 0}, {10, 5, 0}};
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(path));
+    CHECK_FALSE(rig.conn.take_quiet_path()); // the reply is a /find's: the find window counts it
+    CHECK(rig.conn.find_replies() == finds + 1);
+}
+
+TEST_CASE("nav: a shown find and a quiet path in flight together each get their own reply, in order") {
+    // The server answers in the order asked: the find's reply first, then the navigation's. One flag for "the next
+    // reply is quiet" gave the find's path to the navigation and drew the navigation's.
+    test::Rig rig(test::MockConfig::standard(), test::quick_options());
+    REQUIRE(rig.to_zone());
+    rig.conn.find_map_location({30.0f, 40.0f, 0.0f}); // shown (the map's right click)
+    rig.conn.request_quiet_path(42);
+    const auto finds = rig.conn.find_replies();
+    std::vector<glm::vec3> shown{{0, 0, 0}, {30, 40, 0}};
+    std::vector<glm::vec3> quiet{{0, 0, 0}, {10, 5, 0}, {20, 5, 1}};
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(shown));
+    CHECK(rig.conn.find_replies() == finds + 1);
+    CHECK_FALSE(rig.conn.take_quiet_path());
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(quiet));
+    auto got = rig.conn.take_quiet_path();
+    REQUIRE(got);
+    CHECK(got->size() == 4);
+    CHECK(rig.conn.find_replies() == finds + 1);
+    // The other way round: the quiet one first.
+    rig.conn.request_quiet_path(42);
+    rig.conn.find_map_location({30.0f, 40.0f, 0.0f});
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(quiet));
+    CHECK(rig.conn.take_quiet_path());
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply(shown));
+    CHECK(rig.conn.find_replies() == finds + 2);
+    CHECK_FALSE(rig.conn.take_quiet_path());
+}

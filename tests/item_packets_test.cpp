@@ -674,3 +674,29 @@ TEST_CASE("bags: contents up to index 999 decode and are held; 1000 and above ar
     append(bad, serialize(over));
     CHECK_FALSE(decode_char_inventory(raw_packet(Op::CharInventory, bad)));
 }
+
+#include "fuzz_support.h"
+
+TEST_CASE("item serialization: a count the bytes cannot hold reserves nothing large before it is refused") {
+    using nmsc::net::Item;
+    // An empty item takes more than the 64 bytes the decoder assumes as the least one can take.
+    const auto one = nmsc::net::encode_char_inventory({Item{}});
+    REQUIRE(one.data.size() - 4 >= 64);
+
+    auto largest_while_decoding = [](const nmsc::net::AppPacket& p) {
+        nmsc::fuzz::reset_largest_allocation();
+        nmsc::fuzz::arm_allocation_guard(true);
+        auto got = nmsc::net::decode_char_inventory(p);
+        nmsc::fuzz::arm_allocation_guard(false);
+        CHECK(!got);
+        return nmsc::fuzz::largest_allocation();
+    };
+    // OP_CharInventory claiming 4096 items in a 4-byte packet: it used to reserve 4096 items (megabytes) first.
+    std::vector<std::byte> claim = {std::byte{0x00}, std::byte{0x10}, std::byte{0x00}, std::byte{0x00}};
+    CHECK(largest_while_decoding(nmsc::net::AppPacket(one.opcode, claim)) < 4096);
+    // One item whose bag claims 1000 contents with nothing after the count: no 1000-entry reserve either.
+    auto bag = one.data;
+    const std::uint32_t contents = 1000;
+    for (std::size_t i = 0; i < 4; ++i) bag[bag.size() - 4 + i] = static_cast<std::byte>(contents >> (8 * i));
+    CHECK(largest_while_decoding(nmsc::net::AppPacket(one.opcode, bag)) < 1000 * sizeof(nmsc::net::BagItem) / 4);
+}

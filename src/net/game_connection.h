@@ -17,6 +17,7 @@
 #include <deque>
 #include <filesystem>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <unordered_map>
 #include <memory>
@@ -1392,6 +1393,9 @@ public:
     }
     // PlayerBase::CanSee's zone test (the app's collision): true when nothing blocks the segment (world coordinates).
     void set_line_of_sight(std::function<bool(const glm::vec3&, const glm::vec3&)> los) { line_of_sight_ = std::move(los); }
+    // True once the app has given this connection its hooks (line of sight, teleport, app commands): the app installs
+    // them on each new connection, and a fresh one has none.
+    bool has_line_of_sight() const { return static_cast<bool>(line_of_sight_); }
     // OP_RequestClientZoneChange's DoTeleportB (the app's: the player's position and the zone's floor), given the
     // packet's zone dword (zone | instance << 16), its first float pair as world x / y, z, heading, the type as the
     // reason and its +4 dword; without one the client answers with OP_ZoneChange itself.
@@ -1907,6 +1911,9 @@ public:
     void set_aa_percent(std::uint32_t percent);
     // The owned ranks' effects for the character sheet (TotalEffect's AA part).
     std::vector<game::mechanics::SheetAbility> aa_sheet_abilities() const { return alt_adv_.sheet_abilities(); }
+    void aa_sheet_abilities_into(std::vector<game::mechanics::SheetAbility>& out) const {
+        alt_adv_.sheet_abilities_into(out);
+    }
 
     // Training at a guildmaster (game/training.h). A right click on a guildmaster (class 20..35):
     // eqstr 1467 for another class's guild, else OP_GMTraining; the answer opens training().
@@ -2550,6 +2557,10 @@ private:
     void update_usable_gems();
     // The stats port over the current profile, inventory, buffs and AAs (CharacterZoneClient's effect totals).
     void with_character(const std::function<void(game::mechanics::Character&)>& fn) const;
+    // with_character's sheet, rebuilt in place on each call (build_sheet_into: no allocation for an unchanged
+    // inventory); a nested call builds its own.
+    mutable std::unique_ptr<game::mechanics::CharacterSheet> character_sheet_;
+    mutable bool character_sheet_busy_ = false;
     void update_merchant();
     void update_barter();
     void update_bank();
@@ -2651,6 +2662,7 @@ private:
     void log_command(const std::string& args);
     void open_chat_log(const std::string& name);
     void write_chat_log(const std::string& text);
+    void close_chat_log();
     void netstats_command();
     void track_toggle_command(game::ClientOption id, const std::string& args);
     void tracking_from_options();
@@ -2658,6 +2670,10 @@ private:
     std::function<bool(std::string_view, const std::string&)> client_commands_;
     std::string safelock_;
     std::filesystem::path chat_log_path_;
+    // The open log and the path it was opened for: one open per file, not per line (a raid's hundreds of lines a
+    // second). Reopened when /log names another file; closed when /log goes off.
+    std::unique_ptr<std::ofstream> chat_log_;
+    std::filesystem::path chat_log_open_path_;
     bool seconds_log_ = false;
     float distance_to(std::uint32_t spawn_id) const;
     bool is_ignored(const std::string& name) const;
@@ -2763,6 +2779,7 @@ private:
     int hook_game_state_ = 0;              // the game state last raised (plugin::kGameState*; 0 none yet)
     ConnectionState hook_state_ = ConnectionState::Idle;
     std::vector<std::uint32_t> hook_spawns_; // the spawn ids last raised, sorted
+    std::vector<std::uint32_t> hook_spawns_scratch_; // raise_hook_events' buffer for the next list
     ConnectionState state_ = ConnectionState::Idle;
     std::string error_;
     std::string status_;
@@ -2920,7 +2937,10 @@ private:
 
     // Doors and ground objects.
     std::vector<game::Door> doors_;
-    bool quiet_path_pending_ = false;                     // the next OP_FindPersonReply is request_quiet_path's
+    // The OP_FindPersonRequests waiting for their reply, in the order sent (each reply goes to the oldest; EQEmu's
+    // order is not guaranteed, see path_reply): true for request_quiet_path's, false for a shown find's; with when
+    // each went out (now_ms).
+    std::deque<std::pair<bool, std::int64_t>> find_requests_;
     std::optional<std::vector<glm::vec3>> quiet_path_;
     game::SwitchClock switch_clock_;
     std::vector<game::GroundObject> ground_objects_;

@@ -78,6 +78,9 @@ struct ModelFile {
     // record, then the first record with the same name (OpenEQ
     // docs/EQG_MATERIAL_IDENTITY.md). nullptr for no or a bad ordinal.
     const MaterialDef* material_for(std::uint32_t ordinal) const;
+    // Each ordinal's first same-named record (parse_model fills it), so material_for is not a scan per triangle.
+    // Left empty (or out of step with materials), material_for scans.
+    std::vector<std::uint32_t> first_material;
 };
 
 // Throws std::runtime_error on bad magic or a truncated file.
@@ -186,6 +189,9 @@ struct HeightmapLight {
     glm::vec3 position{0.0f};
     float radius = 0.0f;
 };
+// A light's colour from its <definition>.def text: "*COLOR <ARGB as a number>" scaled by "*INTENSITY <k>" (1 when
+// absent), or nullopt without *COLOR. A number out of range saturates; a non-finite intensity counts as 1.
+std::optional<glm::vec3> light_definition_color(std::string_view text);
 
 struct Heightmap {
     HeightmapOptions options;

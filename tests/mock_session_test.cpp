@@ -5,11 +5,15 @@
 
 #include <doctest/doctest.h>
 
+#include <array>
 #include <memory>
+#include <thread>
 
 #include "mock_server/harness.h"
 #include "net/game_connection.h"
 #include "net/session.h"
+#include "net/session_codec.h"
+#include "platform/udp_socket.h"
 
 using namespace nmsc;
 using namespace nmsc::net;
@@ -435,4 +439,108 @@ TEST_CASE("mock session: a first fragment without its total length ends the sess
     CHECK(rig.session->error().find("without its total length") != std::string::npos);
     CHECK(rig.got.size() == 1);
     REQUIRE(rig.until([&] { return rig.server.client_disconnected(); }));
+}
+
+TEST_CASE("mock session: a SessionResponse with the connect code is taken from another address of the server") {
+    // A raw stand-in for the server on 127.0.0.1, its secondary address 127.0.0.2 (EQEmu binds 0.0.0.0 and answers
+    // from the address its route picks), and another port of 127.0.0.1. A reply without the connect code is ignored.
+    std::string error;
+    platform::UdpSocket server, other_port, other_host;
+    const auto here = platform::Endpoint::v4(127, 0, 0, 1, 0);
+    REQUIRE(server.open(platform::Endpoint::Family::V4, error, &here));
+    REQUIRE(other_port.open(platform::Endpoint::Family::V4, error, &here));
+    const auto there = platform::Endpoint::v4(127, 0, 0, 2, 0);
+    if (!other_host.open(platform::Endpoint::Family::V4, error, &there)) {
+        MESSAGE("127.0.0.2 cannot be bound here (" << error << "): the other-address half is not checked");
+    }
+    auto session = Session::create(SessionRig::quick());
+    session->connect("127.0.0.1", server.local_endpoint()->port);
+
+    std::array<std::byte, 2048> buf{};
+    platform::Endpoint client;
+    std::optional<std::size_t> got;
+    REQUIRE(pump([&] { session->update(); got = server.recv_from(buf, client); }, [&] { return got.has_value(); }, 5s));
+    REQUIRE(*got >= 14);
+    ByteReader req(std::span<const std::byte>(buf.data(), *got));
+    req.skip(6);
+    const std::uint32_t code = req.be<std::uint32_t>();
+    auto response = [&] {
+        ByteWriter w;
+        w.le<std::uint8_t>(0);
+        w.le<std::uint8_t>(soe::op::SessionResponse);
+        w.be<std::uint32_t>(code);
+        w.be<std::uint32_t>(0x11223344u);
+        w.le<std::uint8_t>(2);
+        w.le<std::uint8_t>(0);
+        w.le<std::uint8_t>(0);
+        w.be<std::uint32_t>(512);
+        return w.take();
+    };
+    // Another connect code: ignored, from any address.
+    auto wrong = response();
+    wrong[2] ^= std::byte{1};
+    REQUIRE(other_port.send_to(client, wrong));
+    for (int i = 0; i < 50; ++i) {
+        session->update();
+        std::this_thread::sleep_for(1ms);
+    }
+    CHECK(session->state() == SessionState::Connecting);
+    // The server's other address (or, where 127.0.0.2 cannot be bound, another port of its own): adopted.
+    REQUIRE((other_host.is_open() ? other_host : other_port).send_to(client, response()));
+    CHECK(pump([&] { session->update(); }, [&] { return session->state() == SessionState::Connected; }, 5s));
+}
+
+TEST_CASE("mock session: a host name is looked up off the caller's thread, and the session connects after it") {
+    // connect() is called from the frame (login, world, zone): it returns at once, Connecting, and the lookup's
+    // answer starts the handshake. "localhost" comes from the hosts file, with no name server.
+    SessionRig rig;
+    rig.session->connect("localhost", rig.server.port());
+    CHECK(rig.session->state() == SessionState::Connecting);
+    REQUIRE(rig.until([&] { return rig.session->state() == SessionState::Connected; }, 10s));
+    rig.session->send(app(0x1234, 7));
+    REQUIRE(rig.until([&] { return !rig.server.inbox.empty(); }));
+    CHECK(rig.server_tags() == Tags{7});
+}
+
+TEST_CASE("mock session: a lookup still running when the connect times out ends the connect") {
+    // The connect timeout counts the lookup too. A name that never answers is stood in for by a clock that jumps
+    // past the timeout before the lookup can have come back.
+    SessionOptions opt = SessionRig::quick();
+    opt.service_interval = 0ms; // update() alone services it
+    opt.connect_timeout = 100ms;
+    ManualClock clock;
+    opt.clock = clock.source();
+    auto session = Session::create(opt);
+    clock.hold();
+    session->connect("localhost", 9);
+    clock.advance(200ms);
+    session->update();
+    // Either the lookup came back first (then the SessionRequest went out and the timeout ended it) or not yet.
+    CHECK(session->state() == SessionState::Disconnected);
+    CHECK_FALSE(session->error().empty());
+}
+
+TEST_CASE("mock session: a lookup that came back after the timeout is not reported as a name that did not resolve") {
+    // The clock is held, so nothing times out while the lookup of "localhost" runs (on a thread of its own, so it is
+    // waited for in real time, without servicing the session). Then the clock jumps past the timeout: the answer is
+    // taken first, so the connect fails as no session response (nothing listens), not as "cannot resolve". A slow
+    // resolver leaves the lookup unfinished; each try waits longer.
+    std::string last_error;
+    for (auto wait : {50ms, 250ms, 1000ms, 3000ms}) {
+        SessionOptions opt = SessionRig::quick();
+        opt.service_interval = 0ms; // update() alone services it
+        opt.connect_timeout = 100ms;
+        ManualClock clock;
+        opt.clock = clock.source();
+        auto session = Session::create(opt);
+        clock.hold();
+        session->connect("localhost", 9);
+        std::this_thread::sleep_for(wait);
+        clock.advance(200ms);
+        session->update();
+        REQUIRE(session->state() == SessionState::Disconnected);
+        last_error = session->error();
+        if (!last_error.starts_with("cannot resolve")) break;
+    }
+    CHECK(last_error.starts_with("no session response"));
 }

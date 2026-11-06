@@ -70,7 +70,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ### Network and session
 - [x] Declining a group invite: the client handles 0x2a50; stock EQEmu maps it to nothing, so the server script relays it (`group_declines`, 5cf3f63).
 - [x] The updated server script deployed on the NMS test server (`install.py`, `#reload quest global`); the group decline checked live: the inviter sees "Nmscmistwo rejects your offer to join the group." (2026-10-29).
-- [ ] The server script's limits (files_rescan, files_chunks_per_second with the requests over it held on a timer, eight files kept open, a file changed since its hashing, 5 group declines a sender in 10 s; Lua tests against a stand-in for EQEmu's API, tests/server_script_test.cpp): check live on an EQEmu server, a first download of a large client_files/ with two players at once, and with a low files_chunks_per_second.
+- [ ] The server script's limits (files_rescan, files_chunks_per_second and files_chunks_per_second_zone with the requests over them held on a timer, eight files kept open, a file changed since its hashing, 5 group declines a sender in 10 s; Lua tests against a stand-in for EQEmu's API, tests/server_script_test.cpp): check live on an EQEmu server, a first download of a large client_files/ with two and three players at once (each served in turn under files_chunks_per_second_zone), and with a low files_chunks_per_second; and whether 768 pieces a second a player and 1024 a zone slow honest first downloads.
 - [x] Server files: a piece that does not come is asked for again (at once when a later one comes, after 3 s of silence otherwise; 5 tries), so one dropped request no longer fails the download (unit tests against the fake script).
 - [x] A refused duel is reported to the challenger (EQEmu's 12-byte OP_DuelDecline; checked live).
 - [x] The duel partner leaving or dying keeps the original's 8-byte OP_DuelDecline: EQEmu's handler would dereference the departed partner's missing entity, and ends the duel itself (mock test).
@@ -83,7 +83,9 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] The world and zone link-death timeout is the original's 180 s of silence (Params 0x12, UdpConnection +0x15c), not 15 s; 15 s is the keepalive delay (Params 0xe) and /offlinemode's exit window (0x3a98 @0x53ddc3). Login (14.8 s) and chat (44 s) keep the client's limits (docs/unknowns.md). Checked live on the NMS dev server (2026-10-31): a character idle in South Qeynos for 270 s stayed connected and camped out normally.
 - [x] rof2decomp notes: Params 0xe is the keepalive delay, not the no-data timeout (checked at 0x8c4197 / 0x8c61c4).
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
-- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md).
+- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
+- [ ] Whether the original checks the address a SessionResponse comes from (the client takes any with its connect code, as multi-homed EQEmu hosts need; unknowns.md).
+- [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
 
 ### Real estate (player housing, guild halls)
 - [x] The packets, the manager (catalog, records, access, item rows, owned lists, areas, placed objects, occupancy), result messages, upkeep time left; unit and mock-server tests.
@@ -150,6 +152,14 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Values between Lua and plugins: cycles refused, a budget of values and bytes (`plugin/lua_value.h`; tests/lua_eq_args_test.cpp).
 - [x] Script and module names stay inside the script folders (no absolute names, no links out); the config check canonical and case-insensitive (tests/mq_lua_test.cpp).
 - [x] `mq.pickle`: a script without every capability gets `scripts/config/<script>/` (tests/mq_lua_test.cpp).
+- [x] Scripts' tables cannot have `__gc` (a finalizer at the close registered hooks as the client's own, keeping the freed script); nothing is registered while a state closes (tests/mq_lua_test.cpp).
+- [x] A Lua social's dry run does nothing but note its commands and waits; `eq.LuaSocialDryRun` needs `commands` and `actions` from a plugin (tests/mq_lua_test.cpp, tests/plugin_ui_sandbox_test.cpp).
+- [x] The Lua bridge checks its arguments before it makes C++ strings (an error longjmps past them: Lua is built as C).
+- [x] `mq.imgui` windows held to the 5 s runaway limit, also after a hook ran; a window that destroys windows no longer reads past the list (tests/mq_lua_test.cpp).
+- [x] `mq.delay` and the hooks' number answers defined for NaN, infinities and huge numbers (tests/mq_lua_test.cpp, tests/lua_plugin_test.cpp).
+- [x] `${Int[...]}` and `float.Int` defined for NaN, infinities and huge numbers (tests/mq_tlo_test.cpp, tests/mq_lua_test.cpp).
+- [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
+- [x] `mq.event` patterns matched in linear time with the regex's own results (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp checks it against the regex on random patterns).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `NmscWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).
@@ -179,6 +189,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The item display's placeable, collectible, No Destroy, No Storage and trophy lines (stock EQEmu sends none of this data; unit tests).
 - [x] Context tips for experience, invites, consent, red-con target, world containers and more; the tip table's ids fixed (two missing entries shifted every tip from 0x38); OP_ConsentResponse / OP_DenyResponse handled (unit tests). Open: the tips listed in unknowns.md.
 - [x] The chat server's per-window channel state is saved (it already was; a test added).
+- [ ] The chat log (/log): trace `CEverQuest::OutputTextToLog` @0x5130c0's file handling (opened and closed per line, or held open) and match it; the client holds the file open while logging (docs/unknowns.md).
 - [x] Tracking window: the controls run the /track commands, auto update saved (modern checked live).
 - [x] Tracking in the gamepad pack's More window for characters with the skill (checked live).
 - [x] `/copylayout`, `/offlinemode`, `/bugreport` (f3c5c5d; `/offlinemode`'s yes path not seen live).
@@ -187,12 +198,14 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] The in-game browser (docs/browser.md "Milestones"; the messages, pipes, tab host, the Linux helper, the window in both packs and the scripts' and plugins' tabs are done): the helper on macOS (app bundles) and checked on Windows and Linux arm64 (CI), Chromium's sandbox on Windows and macOS.
 - [x] Scripts' and plugins' pages held tighter (docs/browser.md "Rules", "Profiles", "Sizes"): a cookie store per add-on, frames and requests on the allowed sites, never this computer or a private network, console lines and page messages bounded in bytes (unit tests; the CEF helper's frame and request refusals in its test).
 - [ ] Scripts' and plugins' pages: a public host name whose DNS answer is a private address is not refused (it would need the helper to check the address it connects to); whether CEF hands WebSocket handshakes to `OnBeforeResourceLoad` was not checked.
+- [ ] The other local-time calls outside `src/platform/` go through `platform::local_time` (`localtime_r` / `localtime_s` in `net/game_connection_social.cpp` and `mq/tlo_game.cpp`; `std::localtime`, which shares one buffer between threads, in several `app/lua_eq_*.cpp`, `market_ui.cpp`, `client_app_info.cpp` and `net/game_connection_market.cpp`). Bug reports already do.
 
 ## Navigation (docs/navigation.md)
 - [x] Navigation meshes built from the zone's collision on worker threads, cached per server and zone; areas from the regions (water, lava, zone lines, PvP).
 - [x] `/nav` (MQ2Nav's commands), `/moveto`, the `Navigation` TLO; the walk steers by the heading and the movement keys, gets unstuck, opens doors in its way, and asks the server's `/find` path while the mesh is building.
 - [x] Tried live on NMS Dev (ecommons): long walks, /moveto, a door, the TLO, the overlay, pause, cancelling with a key, an unreachable point.
 - [ ] Live: a moving spawn, a closed door clicked on the way, the server-path fallback, a stock EQEmu server.
+- [ ] Find replies: a quiet path request and a shown `/find` in flight together can still swap on stock EQEmu (an empty reply is sent at once, a full path later); the 10 s cut-off for an unanswered request is a guess (docs/unknowns.md).
 - [x] /follow helped by the mesh (round corners and walls, unstuck, a 400 leash), switchable with `nav.follow`.
 - [ ] /follow's help live (following a player round corners and through a doorway).
 - [ ] Lifts, jumps and safe drops as off-mesh links (drops checked against the fall-damage rules).
@@ -218,9 +231,17 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Augment appearance-slot gating: checked live on the NMS dev server (2026-10-31): with game feature 0x15 on (the client's setting for EQEmu accounts), a Tricorne Hat Ornament (aug type 21) into a Cloth Cap's type-21 socket was not refused (no 5485), went out as OP_AugmentItem and EQEmu stored it (`inventory.augment_six`); the client showed it in socket 6. The refusal with the feature off is unit-tested only (docs/unknowns.md).
 - [ ] OP_Weblink from a quest's `SendWebLink`, `/url` from a script, and the browser window (`/web`), in a live session (unit and window tests only).
 
+- [ ] Idle appearances freed during a zone (render/look_eviction.h, five minutes unworn): watch a busy hub for an hour (the log's "freed N idle appearances", the GPU memory), and a spawn coming back after its look went (dressed again on the worker). The rule is unit-tested; the renderer side was only built.
+- [ ] Free the texture slots of freed appearances too: a freed look keeps its textures (slots are shared between looks), so unique armour and illusion textures still build up over a long stay in a hub. Reference-count each slot by the GpuModels that read it and free one no live model reads, after kFramesInFlight.
+- [ ] A GPU without a sampleable D32_SFLOAT depth attachment (the D32_SFLOAT_S8_UINT / D24_UNORM_S8_UINT fallback, now with `separateDepthStencilLayouts`) under the validation layers; and ObjectRenderer's instance flush on a driver with non-coherent host memory. Neither was run on such hardware.
+
 - [ ] The 60 Hz game clock in a live session: jumps, falls and fall damage, /follow and the camera at 30, 60, 144 and uncapped; turning and strafing feel; a zone's load (a dropped stretch).
 - [ ] The cameras 1..5 (docs/mechanics.md "Cameras") in a live session: each one's place, the sweep against walls and doors, mouse look and the camera keys in each, riding and sitting (the tether's bone 0). Unit tests only so far.
 - [ ] The cameras the original switches to itself: the overhead view while knocked out (KnockedOut @0x5a3d1b, back with RestoreSavedCameraType on GetConscious), first person when drunk (70 and over), the missile camera (8) for the player's own arrow with its option (0xe635a9), and RestoreSavedCameraType after zoning.
+
+## Code health
+
+- [ ] The layer order (`app` -> `game` / ... -> `assets` / `net` / `web` -> `core` / `platform`, docs/plan.md and AGENTS.md) does not hold for `net` and `assets`: they include `game/` headers. In `net`: every `game_connection*.cpp` (GameConnection keeps the game state), and the packet codecs `zone_packets.cpp` (`game/mechanics/remote_spawns.h`: the bit-packed positions), `spell_packets.h` (`game::mechanics::cast::Packet`), `task_packets.h` (`game::Task`), `training_packets.h` (`game::kTrainSkills`, `kTrainLanguages`), `aa_packets.h` (`game/alt_adv.h`) and `ability_packets.h` (`game/mechanics/abilities.h`). In `assets`: `wld_zone.cpp` (`game/zone_names.h`), `model_points.cpp` (`game/sine_table.h`), `eqg_character.cpp` (`game/mechanics/anim_select.h`, `game/race_models.h`), `character.cpp`, `character_parts.cpp` and `character_dress.cpp` (`game/appearance*.h`, `game/actor_look.h`, `game/race_models.h`). Everything builds into the one `nmsc_engine` library, so nothing fails to link today, but the documented order is not what the code does, and no check enforces it. Either move the shared pieces down (the position unpacking, race and appearance tables, zone names and the sine table into `core/` or the layer that reads them, and the packet structs out of `game::` types), or write the real order into docs/plan.md and AGENTS.md (GameConnection above `game`; the tables `assets` reads as a lower part of `game`). Then add a check (a CI grep like the NMS one) so it stays true.
 
 ## Not planned
 

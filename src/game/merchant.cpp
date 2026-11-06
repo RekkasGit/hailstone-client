@@ -47,9 +47,16 @@ bool take_money(net::Coins& coins, std::int64_t amount) {
         coins.platinum = static_cast<std::uint32_t>(plat);
     };
     if (amount < 0) return false;
-    if (total_copper(coins) < amount) return false;
+    // BaseProfile_GetTotalMoneyInCopper: the counts are signed (as credit_copper reads them). Read unsigned, a count of
+    // 2^31 or more would pass here and spend as a negative one below.
+    const std::int64_t purse = static_cast<std::int64_t>(copper) + static_cast<std::int64_t>(silver) * 10 +
+                               static_cast<std::int64_t>(gold) * 100 + static_cast<std::int64_t>(plat) * 1000;
+    if (purse < amount) return false;
     if (amount <= 0) return true;
     do {
+        // A client guard: a purse that mixes negative and positive counts could still leave nothing to take from; the
+        // loop would never end. Nothing is taken then.
+        if (copper == 0 && silver == 0 && gold == 0 && plat == 0) return false;
         if (copper != 0) {
             std::int32_t take = static_cast<std::int64_t>(copper) <= amount ? copper : static_cast<std::int32_t>(amount);
             amount -= take;

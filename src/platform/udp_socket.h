@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -35,6 +36,15 @@ struct Endpoint {
 // Resolves host (a name or numeric address) to endpoints, IPv4 first.
 // Returns an empty list and sets error on failure.
 std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::string& error);
+
+// `host` as a numeric IPv4 or IPv6 address, without asking a name server (so it never waits); nullopt for a name.
+std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t port);
+
+// resolve() on a thread of its own; `done` is called on that thread with its result. A lookup still running when
+// the program exits is not waited for (getaddrinfo cannot be cut off, and an unreachable name server holds it for
+// tens of seconds): it is left to the process's end, so `done` must own what it uses, and may never be called.
+void resolve_async(std::string host, std::uint16_t port,
+                   std::function<void(std::vector<Endpoint> endpoints, std::string error)> done);
 
 class UdpSocket {
 public:

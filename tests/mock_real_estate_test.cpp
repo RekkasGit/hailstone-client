@@ -154,6 +154,22 @@ TEST_CASE("mock server: real estate arrives, occupancy follows the plot's area, 
     REQUIRE(rig.until([&] { return conn.real_estate().placed(2, 9) == nullptr; }));
 }
 
+TEST_CASE("mock server: a purchase check on a plot whose parents form a cycle ends") {
+    // Plot 5 under house 6 under plot 5: neither a guild plot nor a neighborhood, so both walks up used to loop.
+    Rig rig;
+    auto& conn = rig.conn;
+    auto& server = rig.server;
+    REQUIRE(rig.to_zone());
+    ReCatalog catalog;
+    catalog.definitions = {def(20, ReType::Plot), def(30, ReType::House)};
+    catalog.costs = {{100, {{1, {{0, 0, 50000}}}}}};
+    server.zone.send_reliable(encode(catalog));
+    server.zone.send_reliable(encode_re_record(kOpReRecord, rec(5, 6, 20)));
+    server.zone.send_reliable(encode_re_record(kOpReRecord, rec(6, 5, 30)));
+    REQUIRE(rig.until([&] { return conn.real_estate().record(6) != nullptr; }));
+    CHECK(conn.re_can_purchase(5, false));
+}
+
 TEST_CASE("mock server: the plot search window needs a neighborhood and asks for the plots when shown") {
     Rig rig;
     auto& conn = rig.conn;

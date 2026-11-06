@@ -55,6 +55,10 @@ TEST_CASE("spell sets: /memspellset's lookup") {
     CHECK(s.find("2") == 1);
     CHECK(s.find("3") == -1);   // not in use
     CHECK(s.find("11") == -1);
+    // A number past 32 bits is read the same on every platform (core::msvc_atoi; std::atoi gave Linux 1, Windows
+    // INT_MAX).
+    CHECK(s.find("4294967297") == 0);
+    CHECK(s.find("99999999999") == -1);
     CHECK(s.find("nuk") == 1);  // the start of the name, case ignored
     CHECK(s.find("Healingx") == -1);
     CHECK(s.find("") == -1);

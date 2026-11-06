@@ -495,3 +495,23 @@ TEST_CASE("barter windows: the inventory lists and what the player has") {
     CHECK(!game::barter_has_items(inv, 13073, 18));
     CHECK(!game::barter_has_items(inv, 5014, 1));
 }
+
+TEST_CASE("barter: a count with no data behind it makes no empty lines or buyers") {
+    // A search result that claims 10000 lines and carries none: nothing past the data (it used to give 10000 defaults).
+    auto m = decode_barter_search_results(packet(Op::BuyerItems, Buf().u32(1).str("").u32(9).u32(0).u32(0).u8(1).u32(10000).b));
+    REQUIRE(m);
+    CHECK(m->lines.empty());
+    auto list = decode_barter_buyer_list(packet(Op::BuyerItems, Buf().u32(0x19).u32(10000).b));
+    REQUIRE(list);
+    CHECK(list->empty());
+    // One real buyer, then the claimed rest is missing: the one is kept.
+    auto one = decode_barter_buyer_list(packet(Op::BuyerItems, Buf().u32(0x19).u32(500).u32(346).u32(7001).u32(42).str("Buyerbob").b));
+    REQUIRE(one);
+    CHECK(one->size() == 1);
+}
+
+TEST_CASE("barter: a buy-lines text length near 2^32 is refused") {
+    // The length check is written as n <= size - pos so that it cannot wrap where size_t is 32 bits.
+    CHECK(!decode_buy_lines_text(packet(Op::Barter, Buf().u32(kBuyerLinesText).u32(0xFFFFFFFCu).u8('a').b)));
+    CHECK(!decode_buy_lines_text(packet(Op::Barter, Buf().u32(kBuyerLinesText).u32(0xFFFFFFFFu).b)));
+}

@@ -6,8 +6,10 @@
 #include <cstring>
 #include <string>
 
+#include "core/byte_io.h"
 #include "net/dz_packets.h"
 #include "net/opcodes.h"
+#include "net/packet_io.h"
 
 using namespace nmsc;
 using namespace nmsc::net;
@@ -104,6 +106,26 @@ TEST_CASE("dz: lockouts, members and the switch list are counted string lists") 
     AppPacket bad = encode(m);
     bad.data[4] = std::byte{3};
     CHECK_FALSE(decode_dz_members(bad));
+}
+
+TEST_CASE("dz: a member list longer than kDzMembersMax fails the decode") {
+    // Millions of 2-byte members fit in a fragmented packet; each status update would match every name against the
+    // list. An expedition is a raid at most.
+    std::vector<DzMember> many(kDzMembersMax);
+    for (std::size_t i = 0; i < many.size(); ++i) many[i].name = "m" + std::to_string(i);
+    auto ok = decode_dz_members(encode(many, true));
+    REQUIRE(ok);
+    CHECK(ok->size() == kDzMembersMax);
+    many.push_back({"one_more", DzMemberStatus::Online});
+    CHECK_FALSE(decode_dz_members(encode(many, true)));
+    ByteWriter w;
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0x00200000u);
+    for (int i = 0; i < 0x00200000; ++i) {
+        w.le<std::uint8_t>(0); // an empty name
+        w.le<std::uint8_t>(1);
+    }
+    CHECK_FALSE(decode_dz_members(make_packet(Op::DzMemberListStatus, std::move(w))));
 }
 
 TEST_CASE("dz: the choose-zone reply is 52 bytes with the entry's ids") {

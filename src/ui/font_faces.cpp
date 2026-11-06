@@ -147,13 +147,16 @@ std::optional<FontFace> read_font_face(const std::filesystem::path& file) {
         if (u32(h, rec) != 0x6e616d65) continue;
         const std::uint32_t offset = u32(h, rec + 8), length = u32(h, rec + 12);
         if (length > (1u << 20)) return std::nullopt;
-        // A small image of the file: the directory as it is, the name table at its own offset.
-        std::vector<unsigned char> image(offset + length, 0);
-        std::copy(head.begin(), head.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(head.size(), image.size())),
-                  image.begin());
+        // A small image of the file: the directory as it is, then the name table, its record pointed there. (Not at
+        // its own offset: that is the file's word, up to 4 GB, and a broken font would have it all zero-filled.)
+        const std::size_t at = head.size();
+        std::vector<unsigned char> image(at + length, 0);
+        std::copy(head.begin(), head.end(), image.begin());
+        for (std::size_t k = 0; k < 4; ++k) image[rec + 8 + k] = static_cast<unsigned char>(at >> (24 - 8 * k));
         in.clear();
-        in.seekg(offset);
-        in.read(reinterpret_cast<char*>(image.data() + offset), length);
+        in.seekg(static_cast<std::streamoff>(offset));
+        if (!in) return std::nullopt;
+        in.read(reinterpret_cast<char*>(image.data() + at), static_cast<std::streamsize>(length));
         if (static_cast<std::uint32_t>(in.gcount()) != length) return std::nullopt;
         auto face = parse_font_face(image);
         if (face) face->file = file;

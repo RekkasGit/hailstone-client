@@ -3,6 +3,7 @@
 #include <chrono>
 #include <set>
 #include <format>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -50,6 +51,10 @@ struct Automation::Impl {
     bool had_policy = false;
     char run_name[128] = {};
     std::chrono::steady_clock::time_point consent_checked{};
+    // The dev window's compiled plugins: NativePlugins::list() reads and hashes every plugin file and reads the
+    // approvals file, so it is asked once a second (and at once after a button there), not every frame.
+    std::vector<plugin::NativePlugins::Info> dev_plugins;
+    std::optional<std::chrono::steady_clock::time_point> dev_plugins_at;
 
     net::GameConnection* conn() const { return env.connection ? env.connection() : nullptr; }
 
@@ -228,12 +233,9 @@ std::uint32_t Automation::plugin_caps(std::string_view tag) const {
     if (!owner) return 0;
     const std::string& name = owner->second;
     // Asked at every switch to a plugin's code in the Lua UI, many times a frame: the loaded plugin's own entry, not
-    // NativePlugins::list(), which reads and hashes every plugin file.
+    // NativePlugins::list(), which reads and hashes every plugin file; a script's, not ScriptHost::list().
     if (owner->first == plugin::UiBridge::Kind::Plugin) return impl_->plugins ? impl_->plugins->loaded_caps(name) : 0;
-    if (impl_->scripts)
-        for (const auto& s : impl_->scripts->list())
-            if (s.name == name && (s.status == "RUNNING" || s.status == "PAUSED")) return s.caps;
-    return 0;
+    return impl_->scripts ? impl_->scripts->caps_of(name) : 0;
 }
 
 bool Automation::web_owner_alive(const std::string& owner) const {
@@ -343,12 +345,21 @@ void Automation::Impl::dev_window() {
         ImGui::Text("Your own models and zones in the server's assets: %s", r.player_assets ? "allowed" : "not used");
     }
     if (ImGui::CollapsingHeader("Compiled plugins", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (const auto& i : plugins->list()) {
+        const auto now = std::chrono::steady_clock::now();
+        if (!dev_plugins_at || now - *dev_plugins_at >= std::chrono::seconds(1)) {
+            dev_plugins = plugins->list();
+            dev_plugins_at = now;
+        }
+        for (const auto& i : dev_plugins) {
             ImGui::PushID(i.name.c_str());
             if (i.loaded) {
-                if (!i.kept && ImGui::SmallButton("Unload")) plugins->unload(i.name);
+                if (!i.kept && ImGui::SmallButton("Unload")) {
+                    plugins->unload(i.name);
+                    dev_plugins_at.reset();
+                }
             } else if (ImGui::SmallButton("Load")) {
                 plugins->load(i.name);
+                dev_plugins_at.reset();
             }
             ImGui::SameLine();
             ImGui::Text("%s  [%s%s]", i.name.c_str(), i.loaded ? "loaded" : i.caps ? "allowed" : "not allowed",
@@ -366,6 +377,7 @@ void Automation::Impl::dev_window() {
                         if (auto h = parse_sha256(i.sha256)) hashes.push_back(*h);
                         plugin::forget_plugin_consent(policy.current()->dir, i.name, hashes);
                         recheck();
+                        dev_plugins_at.reset();
                     }
                 }
             }
