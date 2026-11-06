@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <limits>
+
 #include "game/scene_light.h"
 #include "render/zone_renderer.h"
 
@@ -15,6 +17,11 @@ TEST_CASE("CMath tables: exact quadrants, truncated and interpolated lookups") {
     CHECK(cmath_sin(511.9f) == cmath_sin(511.0f));
     CHECK(cmath_sin(-1.5f) == cmath_sin(511.0f));
     CHECK(cmath_sin(64.0f) == doctest::Approx(0.70710678));
+    // NaN, infinities and values past int32 (a forged .pts rotation) take entry 0, as cvttss2si's INT_MIN does.
+    CHECK(cmath_sin(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(cmath_cos(std::numeric_limits<float>::infinity()) == 1.0f);
+    CHECK(cmath_sin(-1e20f) == 0.0f);
+    CHECK(cmath_cos(3e9f) == 1.0f);
     // +0x00 interpolates; the last entry wraps to entry 0.
     CHECK(cmath_sin_interp(64.5f) == doctest::Approx((cmath_sin(64.0f) + cmath_sin(65.0f)) / 2.0));
     CHECK(cmath_sin_interp(511.5f) == doctest::Approx(cmath_sin(511.0f) / 2.0));

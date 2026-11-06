@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <limits>
+
 #include <cmath>
 #include <cstdint>
 #include <numbers>
@@ -216,6 +218,10 @@ TEST_CASE("particle_cloud_definition follows the DLL's 0x34 converter") {
 TEST_CASE("particle_tan: 512 per turn, truncated and masked to a quarter turn") {
     CHECK(particle_tan(0.0f) == 0.0f);
     CHECK(particle_tan(64.0f) == doctest::Approx(1.0f));
+    // A forged angle past int32 (or NaN) is not cast: index 0, as _ftol's integer indefinite gives.
+    CHECK(particle_tan(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(particle_tan(-1e30f) == 0.0f);
+    CHECK(particle_tan(std::numeric_limits<float>::infinity()) == 0.0f);
     CHECK(particle_tan(25.9f) == particle_tan(25.0f));
     CHECK(particle_tan(128.0f) == 0.0f);
     CHECK(particle_tan(15.0f) == doctest::Approx(std::tan(15.0 * 2.0 * std::numbers::pi / 512.0)));

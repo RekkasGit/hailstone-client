@@ -16,6 +16,8 @@ TEST_CASE("Sky colour entries follow the dome height") {
     CHECK(sky_color_entry(0.0078f) == 16); // below 1/128
     CHECK(sky_color_entry(0.0860f) == 5);  // LAYER11's top: 16 - 11
     CHECK(sky_color_entry(0.125f) == 0);
+    CHECK(sky_color_entry(-1e30f) == 16); // past INT_MIN: not cast
+    CHECK(sky_color_entry(-0.001f) == 16);
     CHECK(sky_color_entry(0.5f) == 0);
 }
 
