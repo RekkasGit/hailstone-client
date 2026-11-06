@@ -119,7 +119,9 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   is. `HelperProcess` also ends one whose queue would pass 128 MB (`kMaxPending`), which the budget keeps out of
   reach. A script or plugin holds at most
   16 tabs (`WebService::kMaxTabsPerOwner`), closed ones included until it closes them; a closed tab's images are let
-  go when it closes.
+  go when it closes. A paint larger than 64 MB (a 4096x4096 tab's full frame is just over) goes from the helper as
+  several Frames (`web::split_frame`: rectangles grouped, a too large one cut into bands of rows), so the protocol
+  and its version are unchanged.
 
 ### The helper (`tools/hailstone-web`)
 

@@ -511,6 +511,84 @@ TEST_CASE("browser host: a full queue refuses messages instead of ending the hel
     CHECK(r.host.last_error().empty());
 }
 
+// A paint larger than a message may be goes as several Frames: each fits, and together they draw the same image.
+TEST_CASE("browser protocol: split_frame cuts a large paint into frames that fit") {
+    Frame f;
+    f.tab = 3;
+    f.width = 10;
+    f.height = 9;
+    FrameRect big;
+    big.width = 10;
+    big.height = 9;
+    big.bgra.resize(10 * 9 * 4);
+    for (std::size_t i = 0; i < big.bgra.size(); ++i) big.bgra[i] = static_cast<std::byte>(i * 7);
+    FrameRect small;
+    small.x = 1;
+    small.y = 2;
+    small.width = small.height = 2;
+    small.bgra.assign(16, std::byte{0xee});
+    f.rects = {big, small};
+    const std::size_t max_body = 14 + 8 + 10 * 4 * 4; // four rows of the big one a frame
+    auto parts = split_frame(f, max_body);
+    REQUIRE(parts.size() == 3);
+    Image want, got;
+    Rig r;
+    auto id = r.host.open("https://example.org/", {});
+    r.helper.reply(Ready{});
+    r.helper.reply(f);
+    r.host.poll(0);
+    want = r.host.tab(id)->view;
+    for (const Frame& p : parts) {
+        CHECK(frame_body_size(p) <= max_body);
+        CHECK(encode_message(p).size() - 4 == frame_body_size(p));
+        CHECK(p.tab == 3);
+        CHECK(p.width == 10);
+        CHECK(p.height == 9);
+    }
+    CHECK(parts[0].rects.size() == 1);
+    CHECK(parts[0].rects[0].height == 4);
+    CHECK(parts[2].rects.size() == 2); // the last band and the small rect share a frame
+    Rig r2;
+    auto id2 = r2.host.open("https://example.org/", {});
+    r2.helper.reply(Ready{});
+    for (auto& p : parts) r2.helper.reply(p);
+    r2.host.poll(0);
+    got = r2.host.tab(id2)->view;
+    CHECK(got.bgra == want.bgra);
+    // One that fits stays one frame.
+    CHECK(split_frame(f).size() == 1);
+}
+
+// The largest tab (4096x4096) paints a body just over kMaxMessage; split, each part is read and the helper lives.
+TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
+    Frame f;
+    f.tab = 1;
+    f.width = f.height = 4096;
+    FrameRect all;
+    all.width = all.height = 4096;
+    all.bgra.assign(std::size_t{4096} * 4096 * 4, std::byte{0x11});
+    f.rects.push_back(std::move(all));
+    REQUIRE(frame_body_size(f) > kMaxMessage);
+    Rig r;
+    auto id = r.host.open("https://example.org/", {});
+    REQUIRE(id == 1);
+    r.helper.reply(Ready{});
+    auto parts = split_frame(std::move(f));
+    CHECK(parts.size() == 2);
+    for (auto& p : parts) {
+        CHECK(frame_body_size(p) <= kMaxMessage);
+        r.helper.reply(p);
+    }
+    parts.clear();
+    for (int i = 0; i < 1000 && !r.helper.to_client.empty(); ++i) r.host.poll(0); // kReadBudget a poll
+    CHECK(r.helper.to_client.empty());
+    CHECK(r.helper.alive);
+    CHECK(r.helper.starts == 1);
+    REQUIRE(r.host.tab(id));
+    REQUIRE(r.host.tab(id)->view.width == 4096);
+    CHECK(r.host.tab(id)->view.bgra.back() == std::byte{0x11});
+}
+
 // The player's input is never refused for a script's large message still draining: a lost button or key release
 // would leave the page holding it.
 TEST_CASE("browser host: input and focus messages go while the queue is over its budget") {
