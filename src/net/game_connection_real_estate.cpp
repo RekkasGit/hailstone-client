@@ -390,27 +390,18 @@ bool GameConnection::re_can_purchase(std::uint32_t re, bool verbose) {
         return false;
     };
     // FUN_005b5b60: under a guild plot the account needs 0x20000, else 0x10000 (the PC's vt+0x5c: the expansions).
-    bool guild_area = false;
-    for (const ReRecord* up = r; up; up = m.record(up->parent)) {
-        if (kGuildPlotMask & game::re_type_bit(m.definition_type(up->definition))) {
-            guild_area = true;
-            break;
-        }
-        if (up->parent == up->id) break;
-    }
+    // Both walks up go through find_up, at most 10 steps as the manager's others (FindChildAtPosition): a parent
+    // cycle from the server (A under B under A) would otherwise loop for ever. Whether FUN_005b5b60 / FUN_005b5130
+    // bound their own walks is not traced (docs/unknowns.md); a chain of at most 10 is walked the same.
+    const bool guild_area = m.find_up(r, kGuildPlotMask) != nullptr;
     if (!guild_area && !(world_expansions_ & kExpansionPlayerPlot)) return say(0x14c3);
     if (guild_area && !(world_expansions_ & kExpansionGuildPlot)) return say(0x1536);
     // FUN_005b5b90 (a guild plot under feature restriction 10) prints a line FUN_007dbc50 builds: not traced; such
     // accounts are refused by the server instead.
     if (m.already_owned(re)) return say(0x191b);
     // FUN_005b5130: the nearest neighborhood's guild, when it has one, must be the player's (5317).
-    for (const ReRecord* up = r; up; up = m.record(up->parent)) {
-        if (kNeighborhoodMask & game::re_type_bit(m.definition_type(up->definition))) {
-            if (up->guild_id != -1 && static_cast<std::uint32_t>(up->guild_id) != guild_.guild_id) return say(0x14c5);
-            break;
-        }
-        if (up->parent == up->id) break;
-    }
+    if (const ReRecord* up = m.find_up(r, kNeighborhoodMask))
+        if (up->guild_id != -1 && static_cast<std::uint32_t>(up->guild_id) != guild_.guild_id) return say(0x14c5);
     if (type != ReType::GuildPlot) return true;
     if (guild_.guild_id == 0xffffffffu) return say(0x2f3);
     if (has_guild_permission(kGuildPermBuyPlot)) return true;

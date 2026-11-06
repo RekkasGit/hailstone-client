@@ -122,10 +122,12 @@ public:
     // Everything forgotten (a zone change keeps nothing: the server sends it again on arrival).
     void reset();
 
+    // The record or the nearest parent whose type is in `mask`, within 10 steps (so a parent cycle ends); or null.
+    const net::ReRecord* find_up(const net::ReRecord* r, std::uint32_t mask) const;
+
 private:
     std::uint32_t area_estate(std::uint32_t area_id, std::uint32_t root) const;
     bool descends_from(std::uint32_t id, std::uint32_t ancestor) const;
-    const net::ReRecord* find_up(const net::ReRecord* r, std::uint32_t mask) const;
     const net::ReRecord* find_down(const net::ReRecord* r, std::uint32_t mask, int skip, int depth) const;
 
     net::ReCatalog catalog_;

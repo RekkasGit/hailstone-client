@@ -29,6 +29,7 @@
 - A server that sends a coin count of 2^31 or more no longer freezes the game at the next purchase, tribute or market buy
 - A plugin that streams a lot of data with `tcp_send` over a busy link no longer keeps every byte it ever sent in memory
 - A broken or hostile server can no longer freeze the client with an expedition member list of millions of names
+- A broken or hostile server can no longer freeze the client with real estate records whose parents form a loop
 - Buying a stack whose total cost is more than 2^31 copper (about 2.1 million platinum) at a merchant or trader is refused with the can't-afford message instead of being sent
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
