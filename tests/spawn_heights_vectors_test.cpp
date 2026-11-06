@@ -10,7 +10,9 @@
 #include <bit>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "game/mechanics/collision_movement.h"
 #include "game/race_models.h"
@@ -439,4 +441,82 @@ TEST_CASE("spawn heights: a race whose model is not loaded becomes a Human, exce
     CHECK(w.spawns[2].race == 216);
     CHECK(g::is_mount_race(732));
     CHECK_FALSE(g::is_mount_race(1));
+}
+
+TEST_CASE("elemental swap: UseLuclinElementals maps race 75 by texture to the typed elementals and back") {
+    // CreatePlayerActor 0x48f5bc..0x48f771: on, 0 earth 209, 1 fire 212, 2 water 211, any other air 210.
+    auto on = [](std::uint8_t tex) { return g::luclin_elemental_swap(75, tex, true); };
+    CHECK(on(0)->race == 209);
+    CHECK(on(1)->race == 212);
+    CHECK(on(2)->race == 211);
+    CHECK(on(3)->race == 210);
+    CHECK(on(0xff)->race == 210);
+    CHECK(on(1)->texture == 0);
+    CHECK_FALSE(g::luclin_elemental_swap(209, 0, true));
+    CHECK_FALSE(g::luclin_elemental_swap(1, 0, true));
+    // Off: the typed ones become race 75 with the matching skin.
+    CHECK(g::luclin_elemental_swap(209, 0, false)->texture == 0);
+    CHECK(g::luclin_elemental_swap(212, 0, false)->texture == 1);
+    CHECK(g::luclin_elemental_swap(211, 0, false)->texture == 2);
+    CHECK(g::luclin_elemental_swap(210, 0, false)->texture == 3);
+    CHECK(g::luclin_elemental_swap(210, 0, false)->race == 75);
+    CHECK_FALSE(g::luclin_elemental_swap(75, 1, false));
+    // GetEQClientIniBool: T, t or 1 is true; missing gives the default; empty is false.
+    CHECK(g::eqclient_ini_bool(std::nullopt, true));
+    CHECK(g::eqclient_ini_bool(std::string("true"), false));
+    CHECK(g::eqclient_ini_bool(std::string("1"), false));
+    CHECK_FALSE(g::eqclient_ini_bool(std::string("FALSE"), true));
+    CHECK_FALSE(g::eqclient_ini_bool(std::string(""), true));
+}
+
+TEST_CASE("elemental swap: make_actors draws a mage pet as the typed elemental, or ELE when that is not loaded") {
+    g::WorldState w;
+    g::Spawn pet;
+    pet.race = 75;
+    pet.gender = 2;
+    pet.appearance.texture = 1; // fire
+    pet.appearance.helm = 3;
+    w.spawns[1] = pet;
+    std::vector<std::uint16_t> asked;
+    w.make_actors([&](const g::Spawn& s) {
+        asked.push_back(s.race);
+        return std::optional(g::WorldState::ActorModel{false, false});
+    });
+    CHECK(asked == std::vector<std::uint16_t>{212});
+    CHECK(w.spawns[1].race == 212);
+    CHECK(w.spawns[1].appearance.texture == 0);
+    CHECK(w.spawns[1].appearance.helm == 0);
+    CHECK(w.spawns[1].actor_made);
+
+    // The typed model missing: back to race 75 with its skin.
+    w.spawns[2] = pet;
+    asked.clear();
+    w.make_actors([&](const g::Spawn& s) {
+        asked.push_back(s.race);
+        return std::optional(g::WorldState::ActorModel{false, s.race != 75});
+    });
+    CHECK(asked == std::vector<std::uint16_t>{212, 75});
+    CHECK(w.spawns[2].race == 75);
+    CHECK(w.spawns[2].appearance.texture == 1);
+    CHECK(w.spawns[2].appearance.helm == 3);
+    CHECK_FALSE(w.spawns[2].human_actor);
+
+    // No actor can be made yet: nothing changes.
+    w.spawns[3] = pet;
+    w.make_actors([](const g::Spawn&) { return std::optional<g::WorldState::ActorModel>(); });
+    CHECK(w.spawns[3].race == 75);
+    CHECK(w.spawns[3].appearance.texture == 1);
+    CHECK_FALSE(w.spawns[3].actor_made);
+
+    // UseLuclinElementals off: a typed elemental is drawn as ELE.
+    g::WorldState off;
+    off.luclin_elementals = false;
+    g::Spawn water = pet;
+    water.race = 211;
+    water.appearance.texture = 0;
+    off.spawns[1] = water;
+    off.make_actors([](const g::Spawn&) { return std::optional(g::WorldState::ActorModel{false, false}); });
+    CHECK(off.spawns[1].race == 75);
+    CHECK(off.spawns[1].appearance.texture == 2);
+    CHECK(off.spawns[1].appearance.helm == 3);
 }

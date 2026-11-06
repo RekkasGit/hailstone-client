@@ -105,6 +105,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Passable ladders (Cabilis's LADDERCB101, every polygon passable): clickable from the top as in the original, and climbed by walking or swimming into them by Hailstone's own rule, switched by `hailstone.cfg` `[movement] passable_ladders` (canal-ladder; unit tests, and the real Cabilis East zone with `EQ_GAME_DIR`). Not tried live.
 - [x] rof2decomp: the upper/lower naming in player_animation_{start,layers,play,rows}.cpp fixed, differential tests pass (uncommitted in rof2decomp).
 - [x] Luclin eye colours and `SwapFace` (e7a5849; model viewer). Open: one-texture Luclin materials' tint (female dwarf faces 2 and 3).
+- [x] Elementals: UseLuclinElementals (default on) draws race 75 as the typed Luclin elementals 209–212 by texture, and off draws those as race 75 (CreatePlayerActor's swap; unit tests and `chrdump` on the live asset folder, not seen live).
+- [ ] UseLuclinElementals off also skips loading `Global5_chr2`, `Global5_chr` and `frog_mount_chr` ("Global NPC Models", @0x492780); `global_character_archives` loads `global5_chr` either way.
 - [ ] Hero's forge pieces without bones on Luclin models: narrowed (bracers' UVs land on the mail fill; gloves beside the hands); needs the DLL's rigid attach traced (ChangeBoneAttachment @0x10042c60).
 - [x] Head items: the head's armour colour on helms (110650f); "keep head" has no effect in the original; the Velious helms beyond the table don't exist in the RoF2 files.
 Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-feel pass, not ports (user, 2026-10-29: "make it look good"); branches `look-atmosphere` and `look-surfaces`.
