@@ -28,6 +28,7 @@
 - Cycling the extended targets no longer freezes the game after the server shrinks the list below the slot last cycled to
 - A server that sends a coin count of 2^31 or more no longer freezes the game at the next purchase, tribute or market buy
 - A plugin that streams a lot of data with `tcp_send` over a busy link no longer keeps every byte it ever sent in memory
+- A broken or hostile server can no longer freeze the client with an expedition member list of millions of names
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
 - Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame

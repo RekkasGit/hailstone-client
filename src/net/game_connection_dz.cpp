@@ -120,14 +120,15 @@ void GameConnection::handle_dz(Op op, const AppPacket& p) {
                 auto it = std::find_if(e.members.begin(), e.members.end(),
                                        [&](const DzMember& x) { return same_name(x.name, m.name); });
                 if (it != e.members.end()) it->status = m.status;
-                else e.members.push_back(std::move(m));
+                else if (e.members.size() < kDzMembersMax) e.members.push_back(std::move(m));
             }
         break;
     case Op::DzMemberListName:
         if (auto v = decode_dz_member_name(p)) {
             auto it = std::find_if(e.members.begin(), e.members.end(),
                                    [&](const DzMember& x) { return same_name(x.name, v->name); });
-            if (v->add && it == e.members.end()) e.members.push_back(DzMember{v->name, DzMemberStatus::Unknown});
+            if (v->add && it == e.members.end() && e.members.size() < kDzMembersMax)
+                e.members.push_back(DzMember{v->name, DzMemberStatus::Unknown});
             else if (!v->add && it != e.members.end()) e.members.erase(it);
         }
         break;
