@@ -10,8 +10,8 @@ namespace nmsc::audio {
 
 Mixer::Mixer(std::uint32_t rate, std::size_t max_voices) : rate_(rate), max_voices_(max_voices) {
     voices_.reserve(max_voices);
-    // The audio thread never allocates: render() mixes in blocks these hold.
-    scratch_.resize(kBlockFrames * 2);
+    // The audio thread never allocates: render() mixes in blocks these hold (and each source's own, play_source).
+    pending_.reserve(max_voices);
     wet_.resize(kBlockFrames);
 }
 
@@ -39,9 +39,20 @@ void Mixer::ramp(Voice& v, float volume, std::int32_t fade_ms) const {
     v.step = (v.target - v.volume) / std::max(frames, 1.0f);
 }
 
+void Mixer::reap(std::vector<Voice>& out) {
+    for (auto it = voices_.begin(); it != voices_.end();)
+        if (it->done && !it->rendering) {
+            out.push_back(std::move(*it));
+            it = voices_.erase(it);
+        } else {
+            ++it;
+        }
+}
+
 std::uint32_t Mixer::add(Voice v, float volume, std::int32_t fade_ms) {
+    std::vector<Voice> finished; // declared first: destroyed after the lock is released (freeing a stream's bytes)
     std::lock_guard lock(mutex_);
-    std::erase_if(voices_, [](const Voice& x) { return x.done; });
+    reap(finished);
     if (voices_.size() >= max_voices_ || volume <= 0.0f) return 0;
     v.id = next_id_++;
     if (next_id_ == 0) next_id_ = 1;
@@ -74,6 +85,7 @@ std::uint32_t Mixer::play_source(std::unique_ptr<Source> source, float volume, s
     if (!source) return 0;
     Voice v;
     v.source = std::move(source);
+    v.rendered.resize(kBlockFrames * 2);
     v.bus = bus;
     return add(std::move(v), volume, fade_ms);
 }
@@ -163,8 +175,10 @@ bool Mixer::alive(std::uint32_t voice) const {
 }
 
 void Mixer::stop_all() {
+    std::vector<Voice> finished; // destroyed after the lock is released
     std::lock_guard lock(mutex_);
-    voices_.clear();
+    for (Voice& v : voices_) v.done = true;
+    reap(finished); // a source rendering now goes with the next add
 }
 
 void Mixer::set_bus_volume(Bus bus, float volume) {
@@ -197,10 +211,24 @@ void Mixer::render(float* out, std::size_t frames) {
 
 void Mixer::render_block(float* out, std::size_t frames) {
     std::fill(out, out + frames * 2, 0.0f);
-    std::lock_guard lock(mutex_);
+    // The sources decode or synthesize with the lock released: marked `rendering` under it, so no game-thread call
+    // destroys one meanwhile (a Voice may move in voices_, its source and buffer stay where they are).
+    std::unique_lock lock(mutex_);
+    pending_.clear();
+    for (Voice& v : voices_)
+        if (!v.done && v.source && v.rendered.size() >= frames * 2) {
+            v.rendering = true;
+            pending_.push_back({v.id, v.source.get(), v.rendered.data(), 0});
+        }
+    if (!pending_.empty()) {
+        lock.unlock();
+        for (Pending& p : pending_) p.got = p.source->render(p.out, frames, rate_);
+        lock.lock();
+    }
     const bool reverb = reverb_.level > 0.0f;
     if (reverb) std::fill(wet_.begin(), wet_.begin() + static_cast<std::ptrdiff_t>(frames), 0.0f);
     for (Voice& v : voices_) {
+        const bool rendered = std::exchange(v.rendering, false); // stopped meanwhile or not, it may go now
         if (v.done) continue;
         float bus = master_ * bus_[static_cast<int>(v.bus)];
         float left = v.left * bus;
@@ -209,10 +237,14 @@ void Mixer::render_block(float* out, std::size_t frames) {
         // The voice's gain from its volume: a 3D voice's goes through the provider's curve.
         float gain = v.positional ? miles_volume_curve(v.volume) : v.volume;
         if (v.source) {
-            std::size_t got = v.source->render(scratch_.data(), frames, rate_);
+            if (!rendered) continue; // added while the sources rendered: from the next block
+            std::size_t got = 0;
+            for (const Pending& p : pending_)
+                if (p.id == v.id) got = p.got;
+            const float* block = v.rendered.data();
             for (std::size_t f = 0; f < got && !v.done; ++f) {
-                out[f * 2] += scratch_[f * 2] * gain * left;
-                out[f * 2 + 1] += scratch_[f * 2 + 1] * gain * right;
+                out[f * 2] += block[f * 2] * gain * left;
+                out[f * 2 + 1] += block[f * 2 + 1] * gain * right;
                 if (v.step != 0.0f) {
                     v.volume += v.step;
                     if ((v.step < 0.0f && v.volume <= v.target) || (v.step > 0.0f && v.volume >= v.target)) {

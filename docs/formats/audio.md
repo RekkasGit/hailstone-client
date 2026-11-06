@@ -68,6 +68,7 @@ The timer starts on the first update, in range or not. Emitters of another perio
 - In range the entry becomes active; out of range it stops. The current entry is kept while it is active, else the active entry with the lowest priority (signed) is picked; ties keep the current one, then the first on the list. The old one fades over the cross-fade (or its fade-out when nothing replaces it). The new one starts (fade-in) only when its file is not still playing, so moving between two regions with the same music restarts it after the fade.
 - XMI sequences are selected by zero-based index; an index past the file's sequences plays nothing.
 - The zone's entries share the music manager with the global ones (`audio/music_manager.h`). A replaced entry fades out with its stop fade when nothing replaces it, else with its replace fade. With music on, the entry playing fades in to its volume when its start was requested and the volume is above 0; with music off every instance of its asset fades to 0. `Play(id)` selects an entry and requests its start (nothing for an unknown id); `Stop(id)` deselects it, then both select again.
+- The mixer renders a stream (an MP3's decoder, an XMI's synthesizer) with its lock released, so the game thread's per-frame voice calls do not wait on a decode; a finished voice is destroyed after the lock is released.
 
 ### Global music
 

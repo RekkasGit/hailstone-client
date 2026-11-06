@@ -1,8 +1,12 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #include "audio/audio_system.h"
 #include "audio/mixer.h"
@@ -207,6 +211,74 @@ TEST_CASE("Mixer: a long render is mixed in blocks, as several short ones would 
     bool same = true;
     for (std::size_t i = 0; i < whole.size(); ++i) same = same && whole[i] == doctest::Approx(pieces[i]).epsilon(1e-5);
     CHECK(same);
+}
+
+namespace {
+// A stream whose render waits (at most two seconds, so a regression fails rather than hangs) for the test to let it
+// go: an MP3 decode or a synthesizer taking its time on the audio thread.
+struct GateSource final : Source {
+    std::mutex* m = nullptr;
+    std::condition_variable* cv = nullptr;
+    bool* entered = nullptr;
+    bool* released = nullptr;
+    bool* saw_release = nullptr;
+    bool* destroyed = nullptr;
+    ~GateSource() override { *destroyed = true; }
+    std::size_t render(float* out, std::size_t frames, std::uint32_t) override {
+        std::unique_lock lock(*m);
+        *entered = true;
+        cv->notify_all();
+        *saw_release = cv->wait_for(lock, std::chrono::seconds(2), [&] { return *released; });
+        std::fill(out, out + frames * 2, 0.5f);
+        return frames;
+    }
+};
+} // namespace
+
+TEST_CASE("Mixer: the game thread's calls do not wait for a source rendering on the audio thread") {
+    std::mutex gate;
+    std::condition_variable cv;
+    bool entered = false, released = false, saw_release = false, destroyed = false;
+    Mixer m(48000, 8);
+    auto src = std::make_unique<GateSource>();
+    src->m = &gate;
+    src->cv = &cv;
+    src->entered = &entered;
+    src->released = &released;
+    src->saw_release = &saw_release;
+    src->destroyed = &destroyed;
+    auto stream = m.play_source(std::move(src), 1.0f, 0, Bus::Music);
+    REQUIRE(stream != 0);
+    auto sound = m.play(constant(48000, 10000, 0.25f), 1.0f, 0, 1, Bus::Effects);
+    std::vector<float> out(512 * 2);
+    std::thread audio([&] { m.render(out.data(), 512); });
+    {
+        std::unique_lock lock(gate);
+        cv.wait(lock, [&] { return entered; });
+    }
+    // While the source renders: these used to wait on the mixer's lock until it was done.
+    CHECK(m.alive(stream));
+    m.set_levels(sound, 0.5f, 0.5f);
+    m.set_volume(sound, 0.8f, 0);
+    CHECK(m.voice_count() == 2);
+    // Stopping everything does not destroy the source under the audio thread.
+    m.stop_all();
+    CHECK_FALSE(destroyed);
+    CHECK(m.play(constant(48000, 100, 0.25f), 1.0f, 0, 1, Bus::Effects) != 0);
+    CHECK_FALSE(destroyed);
+    {
+        std::lock_guard lock(gate);
+        released = true;
+    }
+    cv.notify_all();
+    audio.join();
+    CHECK(saw_release);
+    CHECK_FALSE(m.alive(stream));
+    // Stopped before its block was mixed: only the sound played meanwhile (0.25) is in it, not the stream's 0.5.
+    CHECK(std::all_of(out.begin(), out.end(), [](float v) { return v <= 0.25f; }));
+    // The next add reaps it, outside the lock.
+    CHECK(m.play(constant(48000, 100, 0.25f), 1.0f, 0, 1, Bus::Effects) != 0);
+    CHECK(destroyed);
 }
 
 TEST_CASE("Mixer: voice limit and resampling") {
