@@ -75,6 +75,11 @@ void PluginTcp::flush() {
     if (sent_ == pending_.size()) {
         pending_.clear();
         sent_ = 0;
+    } else if (sent_ >= pending_.size() / 2) {
+        // A link that is always a little behind never empties the queue: what it took goes, or the queue would keep
+        // every byte ever sent. Half or more taken, so each byte is moved at most once on average.
+        pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(sent_));
+        sent_ = 0;
     }
 }
 
