@@ -231,16 +231,7 @@ void GameConnection::auto_target_tick() {
 void GameConnection::xtarget_request(int slot, std::uint32_t type, const std::string& name) {
     if (!game::xtarget_set_slot(xtargets_, slot, type, name)) return;
     const auto& s = xtargets_.slots[static_cast<std::size_t>(slot)];
-    std::vector<std::byte> b;
-    auto put = [&b](std::uint32_t v) {
-        for (int i = 0; i < 4; ++i) b.push_back(static_cast<std::byte>((v >> (8 * i)) & 0xff));
-    };
-    put(1);
-    put(static_cast<std::uint32_t>(slot)); // ExtendedTargetList_SerializeSlot: slot, type, the slot's name
-    put(s.type);
-    for (char c : s.name) b.push_back(static_cast<std::byte>(c));
-    b.push_back(std::byte{0});
-    send_zone_packet(AppPacket(to_wire(Op::XTargetRequest), std::move(b)));
+    send_zone_packet(encode_xtarget_request(static_cast<std::uint32_t>(slot), s.type, s.name));
 }
 
 void GameConnection::set_xtarget_auto_haters(bool on) {

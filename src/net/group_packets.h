@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/opcodes.h"
@@ -233,5 +234,8 @@ struct XTargetResponse {
     std::vector<XTargetEntry> entries;
 };
 std::optional<XTargetResponse> decode_xtarget_response(const AppPacket& p);
+// OP_XTargetRequest, client → zone (ExtendedTargetList_SerializeSlot): u32 1 (one slot), u32 slot, u32 type, the
+// slot's name NUL-terminated.
+AppPacket encode_xtarget_request(std::uint32_t slot, std::uint32_t type, std::string_view name);
 
 } // namespace nmsc::net
