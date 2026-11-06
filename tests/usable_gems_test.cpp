@@ -1,5 +1,7 @@
 // The usable spell gems on a stock server (no server extension): CanUseMemorizedSpellSlot @0x433bc0 over the
 // connection's AA cache, re-evaluated as the owned AAs change (GameConnection::update_usable_gems).
+#include <algorithm>
+
 #include <doctest/doctest.h>
 
 #include "game/alt_adv.h"
@@ -70,4 +72,38 @@ TEST_CASE("with_character: the reused sheet follows the inventory, and a call fr
     CHECK(outer_seen == 1); // the outer one's sheet is as it was built
     A::with_character(c, [&](game::mechanics::Character& ch) { outer_seen = ch.sheet().item(15) ? 1 : 2; });
     CHECK(outer_seen == 2); // the kept sheet, built again, has no ring
+}
+
+TEST_CASE("memorize_tick: a bard's step takes DEX, INT and meditate from one character") {
+    // CSpellBookWnd::GetSpellMemTicksLeft @0x75db20: a bard steps (DEX + INT) / 30 + 1, then meditate / 10 + 2 more.
+    // memorize_tick reads all three from one sheet, built only on a tick whose interval has passed.
+    mq_test::World w("nmsc_memorize_tick_test");
+    net::GameConnection& c = *w.conn;
+    auto& prof = *A::profile(c);
+    prof.class_ = 8; // bard
+    prof.dex = 100;
+    prof.int_ = 80;
+    std::int32_t dex = 0, intel = 0, meditate = 0;
+    A::with_character(c, [&](game::mechanics::Character& ch) {
+        meditate = ch.adjusted_skill(31);
+        ch.process_all_stats();
+        dex = ch.calc_dex(true);
+        intel = ch.calc_int(true);
+    });
+    REQUIRE(dex > 0);
+    REQUIRE(intel > 0);
+    // Meditate reads 0 here (no skill-cap tables): it takes its floor of 10, so a mix-up with DEX or INT shows.
+    REQUIRE(meditate < 10);
+    const int step = std::max(meditate, 10) / 10 + (dex + intel) / 30 + 1 + 2;
+
+    game::SpellState& sp = A::spells(c);
+    sp.memorizing = game::Memorizing{0, 0, 200, 1000};
+    sp.memorize_last_tick = 0;
+    A::memorize_tick(c, 100000);
+    REQUIRE(sp.memorizing.has_value());
+    CHECK(sp.memorizing->ticks_left == 1000 - step);
+    CHECK(sp.memorize_last_tick == 100000);
+    // The same millisecond: not due, nothing taken.
+    A::memorize_tick(c, 100000);
+    CHECK(sp.memorizing->ticks_left == 1000 - step);
 }

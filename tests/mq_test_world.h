@@ -32,6 +32,7 @@ struct GameConnectionTestAccess {
     static ConnectionState& state(GameConnection& c) { return c.state_; }
     static game::AltAdvState& alt_adv(GameConnection& c) { return c.alt_adv_; }
     static void update_usable_gems(GameConnection& c) { c.update_usable_gems(); }
+    static void memorize_tick(GameConnection& c, std::int64_t now) { c.memorize_tick(now); }
     static void raise_hook_events(GameConnection& c) { c.raise_hook_events(); }
     static game::ClientOptions& client_options(GameConnection& c) { return c.client_options_; }
     static void open_chat_log(GameConnection& c, const std::string& name) { c.open_chat_log(name); }
