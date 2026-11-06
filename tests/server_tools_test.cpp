@@ -1,6 +1,7 @@
 // The Python tools beside the client: server/install.py (installs the server script into an EQEmu server's
 // eqemu_config.json) and tools/check_core_names.py (CI's check that the client's sources name no custom server).
-// Each is run with python3 -I in a scratch folder; without python3 (or on Windows) the cases check nothing.
+// Each is run with python3 -I in a scratch folder; without python3 (or on Windows) the cases check nothing, but a
+// script missing from the repository fails them.
 
 #include <doctest/doctest.h>
 
@@ -51,7 +52,9 @@ int run_python(const fs::path& script, const std::string& args, const fs::path& 
 } // namespace
 
 TEST_CASE("install.py keeps eqemu_config.json's mode: the database password stays private") {
-    if (!have_python() || !fs::exists(repo_root() / "server" / "install.py")) return;
+    // The scripts are in the repository: a path that misses them is a broken test, not a skip.
+    REQUIRE(fs::exists(repo_root() / "server" / "install.py"));
+    if (!have_python()) return;
     nmsc::test::ScratchDir dir("install_py");
     const fs::path config = dir.path() / "eqemu_config.json";
     std::ofstream(config) << R"({"server": {"database": {"password": "x"}, "directories": {"quests": "quests/"}}})";
@@ -72,7 +75,8 @@ TEST_CASE("install.py keeps eqemu_config.json's mode: the database password stay
 }
 
 TEST_CASE("check_core_names.py: a name with NMS then any C, and NMS in a Lua long string, are reported") {
-    if (!have_python() || !fs::exists(repo_root() / "tools" / "check_core_names.py")) return;
+    REQUIRE(fs::exists(repo_root() / "tools" / "check_core_names.py"));
+    if (!have_python()) return;
     nmsc::test::ScratchDir dir("core_names");
     const fs::path root = dir.path() / "repo";
     fs::create_directories(root / "src");
