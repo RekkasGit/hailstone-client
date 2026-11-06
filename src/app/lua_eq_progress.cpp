@@ -1151,7 +1151,7 @@ public:
         const auto& l = host.conn->leadership();
         auto gauge = [&](double exp, double per) {
             out.has_gauge = true;
-            out.gauge = std::clamp(static_cast<int>(exp / per * 1000.0), 0, 1000);
+            out.gauge = game::leadership_gauge(exp, per);
             out.gauge_text = std::format("{:.0f} / {:.0f}", exp, per);
         };
         if (id == "LEW_CurrentGroupCount") out.text = std::to_string(l.group_points);
