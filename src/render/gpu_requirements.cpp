@@ -15,6 +15,7 @@ std::vector<std::string> gpu_missing(const GpuSupport& gpu) {
     if (!gpu.nonuniform_sampled_image_indexing) missing.emplace_back("non-uniform sampled image indexing");
     if (!gpu.descriptor_binding_partially_bound) missing.emplace_back("partially bound descriptors");
     if (!gpu.descriptor_binding_variable_count) missing.emplace_back("variable descriptor counts");
+    if (!gpu.separate_depth_stencil_layouts) missing.emplace_back("separate depth and stencil layouts");
     if (!gpu.presents) missing.emplace_back("drawing to this window");
     return missing;
 }

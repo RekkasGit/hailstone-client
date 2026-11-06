@@ -31,7 +31,7 @@ Work in progress and known gaps are tracked in [docs/plan.md](docs/plan.md) and 
 | | Minimum |
 |---|---|
 | **Operating system** | Linux x64: Ubuntu 24.04 or a distribution of the same age or newer (the release is built against its glibc). Windows x64: Windows 10 version 1903 or later. macOS and arm64: build from source (no release packages yet). |
-| **Graphics** | A GPU and driver with Vulkan 1.3, dynamic rendering, synchronization2 and descriptor indexing (runtime descriptor arrays, non-uniform sampled image indexing, partially bound and variable-count bindings). On macOS, MoltenVK. |
+| **Graphics** | A GPU and driver with Vulkan 1.3, dynamic rendering, synchronization2 and descriptor indexing (runtime descriptor arrays, non-uniform sampled image indexing, partially bound and variable-count bindings), and separate depth and stencil layouts (every Vulkan 1.2 driver has them). On macOS, MoltenVK. |
 | **Game data** | Your own RoF2-compatible game folder. Hailstone reads it and never writes to it. |
 | **Server** | An EQEmu server that accepts RoF2 clients. |
 | **Network** | UDP to the login and world servers. Automatic updates need HTTPS: on Linux the system's libcurl. |

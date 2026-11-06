@@ -13,7 +13,9 @@ them; the classic path that exists stays as the `classic` look.
 
 1. `begin_frame_commands` starts the frame; the shadow cascades are drawn (`begin_shadow_cascade` ..
    `end_shadow_cascade`, depth only); `begin_scene` begins rendering into the scene target: RGBA16F colour,
-   multisampled when `display.msaa` > 1, with a depth buffer of the same sample count. Scene pipelines use
+   multisampled when `display.msaa` > 1, with a depth buffer of the same sample count (D32_SFLOAT, else a format with
+   stencil, D32_SFLOAT_S8_UINT or D24_UNORM_S8_UINT, whose barriers name the depth aspect alone: the device enables
+   `separateDepthStencilLayouts`, which every Vulkan 1.2 driver has and the GPU check requires). Scene pipelines use
    `scene_format()` and `scene_samples()`. (`begin_frame` is the two together, for callers without shadows.)
 2. `begin_overlay` ends the scene (the MSAA colour resolves into a single-sampled image and the depth's sample 0
    into a depth image as rendering ends), draws the ambient occlusion (`shaders/ao.frag`, into an R8 image) when the

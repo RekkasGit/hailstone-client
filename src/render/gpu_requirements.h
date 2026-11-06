@@ -20,6 +20,9 @@ struct GpuSupport {
     bool nonuniform_sampled_image_indexing = false;
     bool descriptor_binding_partially_bound = false;
     bool descriptor_binding_variable_count = false;
+    // Depth-only barriers on a depth/stencil fallback format (vk_context.cpp's depth format); required of every 1.2+
+    // device, checked all the same.
+    bool separate_depth_stencil_layouts = false;
     bool presents = false; // a queue family that draws and presents to the window
 };
 

@@ -322,6 +322,7 @@ void VkContext::pick_physical_device() {
         gpu.nonuniform_sampled_image_indexing = f12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
         gpu.descriptor_binding_partially_bound = f12.descriptorBindingPartiallyBound == VK_TRUE;
         gpu.descriptor_binding_variable_count = f12.descriptorBindingVariableDescriptorCount == VK_TRUE;
+        gpu.separate_depth_stencil_layouts = f12.separateDepthStencilLayouts == VK_TRUE;
 
         // A queue that does graphics and presents to our surface.
         std::uint32_t qcount = 0;
@@ -413,6 +414,9 @@ void VkContext::create_device() {
     f12.descriptorBindingPartiallyBound = VK_TRUE;
     f12.descriptorBindingVariableDescriptorCount = VK_TRUE;
     f12.descriptorBindingSampledImageUpdateAfterBind = caps_.update_after_bind ? VK_TRUE : VK_FALSE;
+    // The depth format may fall back to one with stencil (below); every barrier on the depth images names the depth
+    // aspect alone with DEPTH_ATTACHMENT_OPTIMAL, which on such a format is valid only with this feature.
+    f12.separateDepthStencilLayouts = VK_TRUE;
     VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
     f2.pNext = &f12;
     f2.features.textureCompressionBC = caps_.bc_textures ? VK_TRUE : VK_FALSE;
