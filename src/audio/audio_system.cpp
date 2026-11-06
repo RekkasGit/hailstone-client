@@ -352,6 +352,9 @@ std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
     // The zone's and the global music are read ahead on the library's worker (set_resident_files), ahead of the
     // zone's wave preloads; one asked for before that read is done is read here (or its read on the worker waited
     // for), as it always was.
+    // A voice the mixer would refuse (an EMT row's gain of 0) is not built: its decoder was made and thrown away
+    // every frame the emitter is in range.
+    if (!(volume > 0.0f) || !std::isfinite(volume)) return 0;
     auto bytes_of = [&] { return library_->file(entry.file); };
     std::unique_ptr<Source> src;
     if (ends_with_nocase(entry.file, ".mp3")) {

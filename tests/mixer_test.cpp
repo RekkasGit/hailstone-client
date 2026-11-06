@@ -537,3 +537,15 @@ TEST_CASE("SoundLibrary: a snd<N>.pfs whose number does not fit an int is not on
     GameDir game(dir.path());
     CHECK_NOTHROW(SoundLibrary{game});
 }
+
+TEST_CASE("SoundLibrary: a music file that failed to read is not read again") {
+    // A music emitter in range asks for its file every frame while no voice plays it.
+    test::ScratchDir dir("sound_missing");
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "x";
+    GameDir game(dir.path()); // indexed with the file
+    SoundLibrary library(game);
+    std::filesystem::remove(dir.path() / "theme.mp3");
+    CHECK_FALSE(library.file("theme.mp3"));
+    std::ofstream(dir.path() / "theme.mp3", std::ios::binary) << "readable now";
+    CHECK_FALSE(library.file("theme.mp3")); // remembered, not read
+}

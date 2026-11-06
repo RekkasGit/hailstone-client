@@ -16,6 +16,7 @@
 - The first cast of a new spell effect no longer hitches the frame while its particle textures are read and decoded; they are loaded in the background and the particles show once they are ready
 - A zone sound file with a "nan" or "inf" volume, or a damaged float WAV, no longer silences or garbles all sound for the rest of the session
 - A sound archive named like `snd99999999999.pfs` (in the game folder or a server's assets) no longer stops the client at start or login
+- A music file that cannot be read is no longer read again (and logged) every frame while you stand in its area
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original
 - Windows: hailstone.exe has the Hailstone icon in Explorer, on the taskbar and in Alt+Tab, sharp at every size and display scale
 - Windows: the release client no longer opens a console window beside the game (the log is still in `logs/hailstone.log`)

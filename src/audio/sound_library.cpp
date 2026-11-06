@@ -179,6 +179,8 @@ std::shared_ptr<const std::vector<std::byte>> SoundLibrary::file(const std::stri
         std::unique_lock lock(mutex_);
         cv_.wait(lock, [&] { return stop_ || file_in_flight_ != key; });
         if (auto it = resident_.find(key); it != resident_.end()) return it->second;
+        // Failed before: a music emitter in range asks again every frame, which re-read (and logged) it each time.
+        if (missing_files_.contains(key)) return nullptr;
         // Still queued: read here, so it is not read twice.
         if (auto it = std::find(file_queue_.begin(), file_queue_.end(), key); it != file_queue_.end())
             file_queue_.erase(it);
@@ -186,7 +188,7 @@ std::shared_ptr<const std::vector<std::byte>> SoundLibrary::file(const std::stri
     auto bytes = read(key);
     std::lock_guard lock(mutex_);
     if (!bytes) {
-        if (resident_names_.contains(key)) missing_files_.insert(key);
+        missing_files_.insert(key);
         return nullptr;
     }
     auto shared = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));

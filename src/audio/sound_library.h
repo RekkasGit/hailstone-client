@@ -56,7 +56,8 @@ public:
     // A resident file's bytes once the worker has read them, else nullptr (not named, not read yet, or missing).
     std::shared_ptr<const std::vector<std::byte>> resident_file(const std::string& name) const;
     // The file's bytes now: a resident one's; one the worker is reading is waited for, one still queued is read here
-    // (and kept resident) instead of on the worker; any other is read here. nullptr when it cannot be read.
+    // (and kept resident) instead of on the worker; any other is read here. nullptr when it cannot be read, and
+    // from then on (it is not read again).
     std::shared_ptr<const std::vector<std::byte>> file(const std::string& name);
     // Blocks until the queue is empty (tests and tools).
     void wait_idle();
