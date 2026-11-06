@@ -25,6 +25,7 @@
 #include "game/view_distance.h"
 #include "game/world_state.h"
 #include "render/culling.h"
+#include "render/look_eviction.h"
 #include "render/material_state.h"
 #include "render/vk_util.h"
 
@@ -500,6 +501,8 @@ ActorRenderer::MeshPlan ActorRenderer::plan_mesh(const assets::CharacterMesh& mo
 const ActorRenderer::GpuModel* ActorRenderer::gpu_model(const assets::CharacterMesh& model, UploadBatch& upload) {
     if (auto it = models_.find(&model); it != models_.end()) {
         it->second.used = true;
+        it->second.last_frame = vk_.frames_begun();
+        it->second.last_ms = now_ms_;
         return &it->second;
     }
     MeshPlan plan = plan_mesh(model);
@@ -510,6 +513,8 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
                                                       UploadBatch& upload) {
     if (auto it = models_.find(&model); it != models_.end()) {
         it->second.used = true;
+        it->second.last_frame = vk_.frames_begun();
+        it->second.last_ms = now_ms_;
         return &it->second;
     }
     GpuModel g;
@@ -523,6 +528,8 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
     }
     std::stable_sort(g.parts.begin(), g.parts.end(), [](const Part& a, const Part& b) { return a.pass < b.pass; });
     g.used = true;
+    g.last_frame = vk_.frames_begun();
+    g.last_ms = now_ms_;
     g.vertices = upload.buffer(plan.vertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     g.indices = upload.buffer(std::as_bytes(std::span(model.indices)), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     stats_.models = models_.size() + 1;
@@ -582,6 +589,37 @@ void ActorRenderer::stop_dresser() {
     if (dresser_) dresser_->stop();
     dresser_.reset();
     ready_.clear();
+}
+
+void ActorRenderer::evict_idle_looks() {
+    if (static_cast<std::uint32_t>(now_ms_ - last_look_sweep_ms_) < kLookSweepMs) return;
+    last_look_sweep_ms_ = now_ms_;
+    // A look a spawn wears stays; this frame's draws are all of those (last_draws_ holds no other mesh).
+    std::unordered_set<const assets::CharacterMesh*> worn;
+    for (const auto& kv : spawns_)
+        if (kv.second.mesh) worn.insert(kv.second.mesh.get());
+    const std::uint64_t frame = vk_.frames_begun();
+    std::size_t evicted = 0;
+    for (auto it = looks_.begin(); it != looks_.end();) {
+        std::erase_if(it->second.looks, [&](const auto& look) {
+            const assets::CharacterMesh* mesh = look.second.get();
+            if (!mesh || worn.contains(mesh)) return false; // a null look (the default geometry) costs nothing
+            if (auto g = models_.find(mesh); g != models_.end()) {
+                if (!look_idle(g->second.last_frame, g->second.last_ms, frame, now_ms_, VkContext::kFramesInFlight))
+                    return false;
+                free_model(g->second);
+                models_.erase(g);
+            }
+            mesh_refs_.erase(mesh);
+            ++evicted;
+            return true;
+        });
+        it = it->second.looks.empty() ? looks_.erase(it) : std::next(it);
+    }
+    if (evicted) {
+        stats_.models = models_.size();
+        log::debug("freed {} idle appearances ({} meshes on the GPU)", evicted, models_.size());
+    }
 }
 
 const std::shared_ptr<const assets::CharacterMesh>* ActorRenderer::applied_look(const assets::CharacterModel& model,
@@ -1341,6 +1379,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         ready_.erase(kv.first);
         return true;
     });
+    evict_idle_looks();
     prepare(frame, draws, upload);
     if (stats_.dressed)
         log::debug("dressed {} spawns in {:.2f} ms, uploaded in {:.2f} ms ({} meshes on the GPU, {} waiting)",

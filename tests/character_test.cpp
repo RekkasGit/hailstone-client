@@ -17,6 +17,7 @@
 #include "game/appearance.h"
 #include "game/race_models.h"
 #include "game_files.h"
+#include "scratch_dir.h"
 #include "wld_fixtures.h"
 
 using namespace nmsc;
@@ -270,6 +271,57 @@ TEST_CASE("live hero's forge pieces: Resources/Layers rows name a base mesh and 
     CHECK(store.part_mesh("IT27104") == nullptr);
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+TEST_CASE("hero's forge layered parts: a long chain of distinct names stops at kMaxLayerDepth") {
+    // P0 on P1 on P2 ... with no mesh anywhere: each link used to recurse once, overflowing the stack.
+    test::ScratchDir dir("layers_chain");
+    std::filesystem::create_directories(dir.path() / "Resources" / "Layers");
+    {
+        std::ofstream out(dir.path() / "Resources" / "Layers" / "chain.txt", std::ios::binary);
+        for (int i = 0; i < 200000; ++i) out << "P" << i << "^P" << i + 1 << "^L\r\n";
+    }
+    EqgCharacterStore store{GameDir(dir.path())};
+    CHECK(store.layered_part("P0") == std::pair<std::string, std::string>{"P1", "L"});
+    CHECK(store.part_mesh("P0") == nullptr);
+    CHECK(store.part_mesh("P5") == nullptr); // cached on the way down
+}
+
+TEST_CASE("EQG clips: key times 0 and 0xFFFFFFFF resample to at most kMaxClipFrames frames") {
+    eqg_character::MeshFile mesh;
+    eqg_character::Bone bone;
+    bone.name = "TST_TRACK";
+    mesh.bones.push_back(bone);
+    mesh.materials.push_back({"M", "Opaque_MaxCB1.fx", "none"});
+    eqg_character::Piece piece;
+    piece.name = "TST";
+    piece.vertices.resize(3);
+    piece.triangles.push_back({0, 1, 2});
+    piece.triangle_materials.push_back(0);
+    mesh.pieces.push_back(piece);
+
+    eqg_character::Track track;
+    track.bone = "tst_track";
+    track.times_ms = {0, 0xFFFFFFFFu};
+    track.poses.resize(2);
+    track.poses[1].translation = glm::vec3(0, 0, 1);
+    eqg_character::Track normal = track;
+    normal.times_ms = {0, 1000};
+    std::vector<std::pair<std::string, eqg_character::AnimationFile>> clips = {
+        {"L01", eqg_character::AnimationFile{{track}}}, {"P01", eqg_character::AnimationFile{{normal}}}};
+    auto m = eqg_character::build_model(mesh, "TST", clips);
+
+    const AnimationClip* bad = m.clip("L01");
+    REQUIRE(bad);
+    CHECK(bad->frame_ms == 200);
+    CHECK(bad->frame_count == eqg_character::kMaxClipFrames);
+    CHECK(bad->tracks[0].size() == eqg_character::kMaxClipFrames);
+    // A stock-length clip is untouched: 1000 ms at the mean key spacing (clamped to 200 ms) is six frames.
+    const AnimationClip* good = m.clip("P01");
+    REQUIRE(good);
+    CHECK(good->frame_ms == 200);
+    CHECK(good->frame_count == 6);
+    CHECK(near(good->tracks[0].back().translation, {0, 0, 1}));
 }
 
 TEST_CASE("live hero's forge pieces: IT27104 is IT19814 with GENERIC_CHAIN_BLUE_V1's textures") {

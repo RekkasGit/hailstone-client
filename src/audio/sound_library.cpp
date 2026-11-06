@@ -121,7 +121,15 @@ std::shared_ptr<const Pcm> SoundLibrary::wave(const std::string& name) {
     std::string key = lower_case(name);
     std::lock_guard lock(mutex_);
     if (auto it = cache_.find(key); it != cache_.end()) return it->second;
-    if (failed_.contains(key) || queued_.contains(key)) return nullptr;
+    if (failed_.contains(key)) return nullptr;
+    if (queued_.contains(key)) {
+        // Wanted now: one still waiting behind the preloads moves to the front.
+        if (auto it = std::find(preload_queue_.begin(), preload_queue_.end(), key); it != preload_queue_.end()) {
+            preload_queue_.erase(it);
+            queue_.push_back(key);
+        }
+        return nullptr;
+    }
     queued_.insert(key);
     queue_.push_back(key);
     cv_.notify_all();
@@ -129,12 +137,74 @@ std::shared_ptr<const Pcm> SoundLibrary::wave(const std::string& name) {
 }
 
 void SoundLibrary::preload(const std::vector<std::string>& names) {
-    for (const auto& n : names) wave(n);
+    std::lock_guard lock(mutex_);
+    for (const auto& n : names) {
+        std::string key = lower_case(n);
+        if (cache_.contains(key) || failed_.contains(key) || queued_.contains(key)) continue;
+        queued_.insert(key);
+        preload_queue_.push_back(std::move(key));
+    }
+    cv_.notify_all();
+}
+
+void SoundLibrary::set_resident_files(const std::vector<std::string>& names) {
+    std::lock_guard lock(mutex_);
+    std::unordered_set<std::string> keep;
+    for (const auto& n : names)
+        if (!n.empty()) keep.insert(lower_case(n));
+    std::erase_if(resident_, [&](const auto& kv) { return !keep.contains(kv.first); });
+    std::erase_if(file_queue_, [&](const std::string& n) { return !keep.contains(n); });
+    for (const auto& n : keep)
+        if (!resident_.contains(n) && !missing_files_.contains(n) && n != file_in_flight_ &&
+            std::find(file_queue_.begin(), file_queue_.end(), n) == file_queue_.end())
+            file_queue_.push_back(n);
+    resident_names_ = std::move(keep);
+    cv_.notify_all();
+}
+
+std::shared_ptr<const std::vector<std::byte>> SoundLibrary::resident_file(const std::string& name) const {
+    std::lock_guard lock(mutex_);
+    auto it = resident_.find(lower_case(name));
+    return it == resident_.end() ? nullptr : it->second;
+}
+
+std::shared_ptr<const std::vector<std::byte>> SoundLibrary::file(const std::string& name) {
+    std::string key = lower_case(name);
+    {
+        std::unique_lock lock(mutex_);
+        cv_.wait(lock, [&] { return stop_ || file_in_flight_ != key; });
+        if (auto it = resident_.find(key); it != resident_.end()) return it->second;
+        // Still queued: read here, so it is not read twice.
+        if (auto it = std::find(file_queue_.begin(), file_queue_.end(), key); it != file_queue_.end())
+            file_queue_.erase(it);
+    }
+    auto bytes = read(key);
+    std::lock_guard lock(mutex_);
+    if (!bytes) {
+        if (resident_names_.contains(key)) missing_files_.insert(key);
+        return nullptr;
+    }
+    auto shared = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+    if (resident_names_.contains(key)) resident_[key] = shared;
+    return shared;
 }
 
 void SoundLibrary::wait_idle() {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [&] { return stop_ || (index_ready_ && queue_.empty() && !busy_); });
+    cv_.wait(lock, [&] {
+        return stop_ || (index_ready_ && queue_.empty() && file_queue_.empty() && preload_queue_.empty() && !busy_);
+    });
+}
+
+void SoundLibrary::hold_worker(bool held) {
+    std::lock_guard lock(mutex_);
+    held_ = held;
+    cv_.notify_all();
+}
+
+void SoundLibrary::set_job_log(std::vector<std::string>* log) {
+    std::lock_guard lock(mutex_);
+    job_log_ = log;
 }
 
 void SoundLibrary::worker() {
@@ -142,15 +212,33 @@ void SoundLibrary::worker() {
     build_index();
     for (;;) {
         std::string key;
+        bool file = false;
         {
             std::unique_lock lock(mutex_);
             busy_ = false;
             cv_.notify_all();
-            cv_.wait(lock, [&] { return stop_ || !queue_.empty(); });
+            cv_.wait(lock, [&] {
+                return stop_ || (!held_ && (!queue_.empty() || !file_queue_.empty() || !preload_queue_.empty()));
+            });
             if (stop_) return;
-            key = std::move(queue_.front());
-            queue_.pop_front();
+            // A wave wanted now first, then a music file (one may start on zone entry), then the preloads.
+            file = queue_.empty() && !file_queue_.empty();
+            std::deque<std::string>& from = file ? file_queue_ : !queue_.empty() ? queue_ : preload_queue_;
+            key = std::move(from.front());
+            from.pop_front();
+            if (file) file_in_flight_ = key;
+            if (job_log_) job_log_->push_back(key);
             busy_ = true;
+        }
+        if (file) {
+            std::optional<std::vector<std::byte>> bytes = read(key);
+            std::lock_guard lock(mutex_);
+            file_in_flight_.clear();
+            cv_.notify_all();
+            if (!resident_names_.contains(key)) continue; // dropped meanwhile (set_resident_files)
+            if (bytes) resident_[key] = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+            else missing_files_.insert(key);
+            continue;
         }
         std::shared_ptr<const Pcm> pcm;
         if (auto bytes = read(key)) {

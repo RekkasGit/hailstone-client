@@ -8,7 +8,10 @@
 // its volume on both channels (AIL_set_sample_volume_levels(v, v)); a 3D voice
 // plays volume^(5/3) times the two channel levels the Miles provider computes
 // every frame (audio/sound_control.h, miles_fast2d_levels). Thread-safe: the
-// device callback renders while the game thread adds and changes voices.
+// device callback renders while the game thread adds and changes voices. A
+// streamed source (an MP3's decoder, an XMI's synthesizer) renders with the
+// lock released, so the game thread's calls never wait on a decode, and a
+// finished voice is destroyed outside the lock.
 //
 // Reverb: the listener's room (Miles' digital master room type, which the
 // "Fast 2D Positional Audio" provider the original opens sets from
@@ -82,12 +85,23 @@ private:
         float send = 0.0f;
         Bus bus = Bus::Effects;
         bool done = false;
+        bool rendering = false;      // its source renders unlocked: not destroyed until the block is mixed
+        std::vector<float> rendered; // a source's block, kBlockFrames stereo frames (made by play_source)
+    };
+    // A source the audio thread renders with the lock released (render_block).
+    struct Pending {
+        std::uint32_t id = 0;
+        Source* source = nullptr;
+        float* out = nullptr;
+        std::size_t got = 0;
     };
     Voice* find(std::uint32_t id);
     const Voice* find(std::uint32_t id) const;
     std::uint32_t add(Voice v, float volume, std::int32_t fade_ms);
     void ramp(Voice& v, float volume, std::int32_t fade_ms) const;
     void render_block(float* out, std::size_t frames); // frames <= kBlockFrames
+    // Moves the finished voices not rendering into `out`, to be destroyed once the lock is released.
+    void reap(std::vector<Voice>& out);
 
     mutable std::mutex mutex_;
     std::uint32_t rate_;
@@ -97,7 +111,7 @@ private:
     float master_ = 1.0f;
     bool swap_ = false;
     float bus_[2] = {1.0f, 1.0f};
-    std::vector<float> scratch_;
+    std::vector<Pending> pending_; // the audio thread's; max_voices_ reserved
 
     struct Reverb {
         float level = 0.0f;

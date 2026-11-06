@@ -21,6 +21,7 @@ render::GpuSupport full_gpu(const char* name) {
     g.nonuniform_sampled_image_indexing = true;
     g.descriptor_binding_partially_bound = true;
     g.descriptor_binding_variable_count = true;
+    g.separate_depth_stencil_layouts = true;
     g.presents = true;
     return g;
 }
@@ -49,12 +50,14 @@ TEST_CASE("gpu_missing: each feature is named") {
     render::GpuSupport g = full_gpu("C");
     g.synchronization2 = false;
     g.descriptor_binding_variable_count = false;
+    g.separate_depth_stencil_layouts = false;
     g.presents = false;
     const auto missing = render::gpu_missing(g);
-    REQUIRE(missing.size() == 3);
+    REQUIRE(missing.size() == 4);
     CHECK(missing[0] == "synchronization2");
     CHECK(missing[1] == "variable descriptor counts");
-    CHECK(missing[2] == "drawing to this window");
+    CHECK(missing[2] == "separate depth and stencil layouts");
+    CHECK(missing[3] == "drawing to this window");
 }
 
 TEST_CASE("no_usable_gpu_text lists every GPU and what it lacks") {

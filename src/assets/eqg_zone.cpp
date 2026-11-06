@@ -1016,21 +1016,10 @@ void load_heightmap(Zone& zone, const Source& src, std::span<const std::byte> zo
         PointLight light;
         light.position = l.position;
         light.radius = l.radius;
-        if (auto def = src.archive->read(l.definition + ".def")) {
-            std::string text(reinterpret_cast<const char*>(def->data()), def->size());
-            auto value = [&](std::string_view key) -> std::optional<double> {
-                auto at = text.find(key);
-                if (at == std::string::npos) return std::nullopt;
-                return std::strtod(text.c_str() + at + key.size(), nullptr);
-            };
-            if (auto c = value("*COLOR")) {
-                auto argb = static_cast<std::uint32_t>(static_cast<std::int64_t>(*c));
-                auto k = static_cast<float>(value("*INTENSITY").value_or(1.0));
-                light.color = glm::vec3(static_cast<float>((argb >> 16) & 255), static_cast<float>((argb >> 8) & 255),
-                                        static_cast<float>(argb & 255)) /
-                              255.0f * k;
-            }
-        }
+        if (auto def = src.archive->read(l.definition + ".def"))
+            if (auto c = eqg::light_definition_color(
+                    std::string_view(reinterpret_cast<const char*>(def->data()), def->size())))
+                light.color = *c;
         zone.lights.push_back(light);
     }
 }

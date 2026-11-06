@@ -49,9 +49,13 @@ namespace {
 
 class Mp3Source final : public Source {
 public:
-    Mp3Source(std::vector<std::byte> file, std::int32_t loops) : file_(std::move(file)), loops_(loops) {
-        ok_ = drmp3_init_memory(&mp3_, file_.data(), file_.size(), nullptr) && mp3_.channels >= 1 &&
+    Mp3Source(std::shared_ptr<const std::vector<std::byte>> file, std::int32_t loops)
+        : file_(std::move(file)), loops_(loops) {
+        ok_ = file_ && drmp3_init_memory(&mp3_, file_->data(), file_->size(), nullptr) && mp3_.channels >= 1 &&
               mp3_.channels <= 2 && mp3_.sampleRate > 0;
+        // refill's buffers at their largest, made here: it runs on the audio thread, which does not allocate.
+        tmp_.reserve(kChunk * 2);
+        buf_.reserve((kChunk + 1) * 2);
     }
     ~Mp3Source() override {
         if (ok_) drmp3_uninit(&mp3_);
@@ -80,8 +84,8 @@ public:
 
 private:
     // Keeps the last frame and appends newly decoded ones (as stereo).
+    static constexpr std::size_t kChunk = 2048;
     bool refill() {
-        constexpr std::size_t kChunk = 2048;
         std::size_t keep = have_ > 0 ? 1 : 0;
         if (keep) {
             buf_[0] = buf_[(have_ - 1) * 2];
@@ -108,7 +112,7 @@ private:
         return true;
     }
 
-    std::vector<std::byte> file_;
+    std::shared_ptr<const std::vector<std::byte>> file_; // shared with SoundLibrary's resident files
     drmp3 mp3_{};
     bool ok_ = false;
     std::int32_t loops_;
@@ -120,6 +124,10 @@ private:
 } // namespace
 
 std::unique_ptr<Source> make_mp3_source(std::vector<std::byte> file, std::int32_t loops) {
+    return make_mp3_source(std::make_shared<const std::vector<std::byte>>(std::move(file)), loops);
+}
+
+std::unique_ptr<Source> make_mp3_source(std::shared_ptr<const std::vector<std::byte>> file, std::int32_t loops) {
     return std::make_unique<Mp3Source>(std::move(file), loops);
 }
 

@@ -143,7 +143,8 @@ struct FireGrid {
     static constexpr float kCell = 16.0f;
     std::unordered_map<std::int64_t, std::vector<std::uint32_t>> cells;
     static std::int64_t key(std::int64_t x, std::int64_t y) { return (x << 32) ^ (y & 0xffffffffLL); }
-    static std::int64_t at(float v) { return static_cast<std::int64_t>(std::floor(v / kCell)); }
+    // Saturated to 32 bits (the key's halves): a far or non-finite position must not cast out of range.
+    static std::int64_t at(float v) { return saturate_cast<std::int32_t>(std::floor(v / kCell)); }
     void add(const glm::vec3& p, std::uint32_t i) { cells[key(at(p.x), at(p.y))].push_back(i); }
     // Calls f(i) for everything within `r` of p's cell span.
     template <class F> void near(const glm::vec3& p, float r, F&& f) const {
@@ -156,8 +157,19 @@ struct FireGrid {
 
 } // namespace
 
+namespace {
+// The largest flame kept, in world units: stock flames stand a few units to a few tens; a placement scaled past this
+// (or a non-finite one) is a broken file, and its search span would walk billions of grid cells.
+constexpr float kMaxFireSize = 1000.0f;
+bool plausible(const ZoneFire& f) {
+    return std::isfinite(f.base.x) && std::isfinite(f.base.y) && std::isfinite(f.base.z) && std::isfinite(f.width) &&
+           std::isfinite(f.height) && std::abs(f.width) <= kMaxFireSize && std::abs(f.height) <= kMaxFireSize;
+}
+} // namespace
+
 std::vector<ZoneFire> merge_fires(std::vector<ZoneFire> a, const std::vector<ZoneFire>& b) {
     a.insert(a.end(), b.begin(), b.end());
+    std::erase_if(a, [](const ZoneFire& f) { return !plausible(f); });
     // The biggest first: each later one is kept unless it stands within a kept one's flame.
     std::stable_sort(a.begin(), a.end(),
                      [](const ZoneFire& x, const ZoneFire& y) { return x.width * x.height > y.width * y.height; });

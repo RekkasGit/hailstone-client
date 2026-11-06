@@ -327,6 +327,8 @@ void ObjectRenderer::prepare(const FrameInfo& frame, std::span<const Instance> i
         prepared_.push_back({&g, static_cast<std::uint32_t>(i), transform_sphere(instances[i].transform, g.bounds),
                              instances[i].transform});
     }
+    // VMA may place the buffer in host-visible memory that is not coherent; a no-op where it is.
+    if (count) vmaFlushAllocation(vk_.allocator(), instances_[frame.frame_slot].allocation, 0, sizeof(glm::mat4) * count);
 }
 
 void ObjectRenderer::draw_prepared(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,

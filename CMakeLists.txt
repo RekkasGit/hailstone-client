@@ -809,6 +809,7 @@ if(NMSC_BUILD_TESTS)
     tests/addon_manager_test.cpp
     tests/bug_report_test.cpp
     tests/startup_error_test.cpp
+    tests/look_eviction_test.cpp
     tests/plugin_hooks_test.cpp
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp

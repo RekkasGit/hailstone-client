@@ -13,7 +13,9 @@ them; the classic path that exists stays as the `classic` look.
 
 1. `begin_frame_commands` starts the frame; the shadow cascades are drawn (`begin_shadow_cascade` ..
    `end_shadow_cascade`, depth only); `begin_scene` begins rendering into the scene target: RGBA16F colour,
-   multisampled when `display.msaa` > 1, with a depth buffer of the same sample count. Scene pipelines use
+   multisampled when `display.msaa` > 1, with a depth buffer of the same sample count (D32_SFLOAT, else a format with
+   stencil, D32_SFLOAT_S8_UINT or D24_UNORM_S8_UINT, whose barriers name the depth aspect alone: the device enables
+   `separateDepthStencilLayouts`, which every Vulkan 1.2 driver has and the GPU check requires). Scene pipelines use
    `scene_format()` and `scene_samples()`. (`begin_frame` is the two together, for callers without shadows.)
 2. `begin_overlay` ends the scene (the MSAA colour resolves into a single-sampled image and the depth's sample 0
    into a depth image as rendering ends), draws the ambient occlusion (`shaders/ao.frag`, into an R8 image) when the
@@ -122,7 +124,9 @@ Not flames, though named like them: logs, coals and holders (`FIREWOOD`, `COALS`
 Takish's red crystal torches (`TAKTORCH01`), `YKFLAME01` (black; its fireplace's flame is the cloud on it), smoke, and
 `GENE01` sparkles. The flames from the different forms are merged, the bigger kept where one stands in another's flame
 (frozenshadow's emitters burn on its torches' meshes). A flame with none of the zone's lights within 30 units gets one
-of its own, in its hue (EQG zones such as argath and commonlands have flames and no lights).
+of its own, in its hue (EQG zones such as argath and commonlands have flames and no lights). A flame with a non-finite
+place or size, or one more than 1000 units wide or tall (a placement scaled absurdly in a broken zone file), is dropped
+before the merge: its neighbour search would walk billions of grid cells.
 
 Not yet: a torch held in a hand (its flame is a gequip particle cloud, which is not loaded) and particle clouds on
 server doors (never spawned) still show no flame.
@@ -201,7 +205,7 @@ across the view every 2.5 s (`--lighting modern`).
 
 The classic client leaves its loading screen only when everything it shows is built. Here the zone, its objects and doors, the sky and the flora are built before the zone-in ends (`load_zone`, on the
 main thread while the session's own thread keeps acknowledging), but some things are only built as the world is
-first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then), the
+first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then; a look no spawn has worn for five minutes is freed, mesh and GPU buffers but not its shared textures, so a hub's comings and goings do not keep every look until the zone changes: `render/look_eviction.h`), the
 light shadow cubes one a frame, and the UI pack's in-game windows and the data the server sends with the zone-in
 (buffs, stats, chat). Leaving the loading screen at the zone-in showed all of them arriving over the first second or
 three.
