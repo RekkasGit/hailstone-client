@@ -237,10 +237,14 @@ private:
         auto now = now_();
 
         if (state_ == SessionState::Connecting) {
-            if (lookup_ && now - started_ > opt_.connect_timeout)
-                return fail(std::format("cannot resolve {}: no answer after {:.1f} s", host_,
-                                        static_cast<double>(opt_.connect_timeout.count()) / 1000.0));
-            if (looking_up(now)) return;
+            // The lookup's answer first: one that came back late still connects (or fails as no session response),
+            // and only a lookup still unanswered at the timeout is "cannot resolve".
+            if (looking_up(now)) {
+                if (lookup_ && now - started_ > opt_.connect_timeout)
+                    fail(std::format("cannot resolve {}: no answer after {:.1f} s", host_,
+                                     static_cast<double>(opt_.connect_timeout.count()) / 1000.0));
+                return;
+            }
             if (now - started_ > opt_.connect_timeout)
                 return fail(std::format("no session response from {} after {:.1f} s", peer_.to_string(),
                                         static_cast<double>(opt_.connect_timeout.count()) / 1000.0));

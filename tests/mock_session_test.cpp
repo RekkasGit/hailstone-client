@@ -519,3 +519,28 @@ TEST_CASE("mock session: a lookup still running when the connect times out ends 
     CHECK(session->state() == SessionState::Disconnected);
     CHECK_FALSE(session->error().empty());
 }
+
+TEST_CASE("mock session: a lookup that came back after the timeout is not reported as a name that did not resolve") {
+    // The clock is held, so nothing times out while the lookup of "localhost" runs (on a thread of its own, so it is
+    // waited for in real time, without servicing the session). Then the clock jumps past the timeout: the answer is
+    // taken first, so the connect fails as no session response (nothing listens), not as "cannot resolve". A slow
+    // resolver leaves the lookup unfinished; each try waits longer.
+    std::string last_error;
+    for (auto wait : {50ms, 250ms, 1000ms, 3000ms}) {
+        SessionOptions opt = SessionRig::quick();
+        opt.service_interval = 0ms; // update() alone services it
+        opt.connect_timeout = 100ms;
+        ManualClock clock;
+        opt.clock = clock.source();
+        auto session = Session::create(opt);
+        clock.hold();
+        session->connect("localhost", 9);
+        std::this_thread::sleep_for(wait);
+        clock.advance(200ms);
+        session->update();
+        REQUIRE(session->state() == SessionState::Disconnected);
+        last_error = session->error();
+        if (!last_error.starts_with("cannot resolve")) break;
+    }
+    CHECK(last_error.starts_with("no session response"));
+}
