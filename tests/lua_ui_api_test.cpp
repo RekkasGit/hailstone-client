@@ -738,3 +738,48 @@ TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept f
     REQUIRE(oldest_at_10 >= 0);
     CHECK(oldest == oldest_at_10); // the one drawn every frame was never forgotten
 }
+
+TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's start does") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+    ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+    ImGui::NewFrame();
+    const float line_h = ImGui::GetFontSize();
+    auto expected = [&](const std::string& text, std::size_t to) {
+        to = std::min(to, text.size());
+        const std::size_t nl = to == 0 ? std::string::npos : text.rfind('\n', to - 1);
+        const std::size_t start = nl == std::string::npos ? 0 : nl + 1;
+        const auto line = static_cast<float>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(start), '\n'));
+        return std::pair<float, float>(ImGui::CalcTextSize(text.data() + start, text.data() + to).x, line * line_h);
+    };
+    const std::vector<std::string> texts = {
+        "local x = 1 -- a comment\nprint(x)\n",
+        "--[[ a long\ncomment over\nthree lines ]] local s = 'abc'\n\tif x then\n\t\treturn \"t\\tab\" end",
+        "caf\xc3\xa9 = '\xe2\x82\xac\xe2\x82\xac' -- multibyte\nna\xc3\xafve = 1\n\n\nlast",
+        "",
+    };
+    for (const auto& text : texts) {
+        CAPTURE(text);
+        // Increasing offsets one byte at a time (the spans' walk), then a caret before the last (a restart), past
+        // the end, and a few in no order.
+        std::vector<std::size_t> at;
+        for (std::size_t i = 0; i <= text.size(); ++i) at.push_back(i);
+        at.push_back(text.size() / 2);
+        at.push_back(text.size() + 5);
+        at.push_back(1);
+        at.push_back(text.size() / 3);
+        at.push_back(0);
+        const auto got = nmsc::ui::lua::code_editor_places(text, at);
+        REQUIRE(got.size() == at.size());
+        for (std::size_t i = 0; i < at.size(); ++i) {
+            CAPTURE(at[i]);
+            CHECK(got[i] == expected(text, at[i]));
+        }
+    }
+    ImGui::EndFrame();
+    ImGui::DestroyContext(ctx);
+}

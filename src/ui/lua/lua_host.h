@@ -65,6 +65,9 @@ bool pack_code(lua_State* L);
 std::size_t code_editors_kept();
 // The frame the longest-kept of them was first drawn in (-1 with none); for the tests.
 int code_editors_oldest();
+// Where ui.CodeEditor draws each byte offset of `at` (x, y from the text's start), asked in that order of one placer;
+// for the tests (an ImGui frame must be current).
+std::vector<std::pair<float, float>> code_editor_places(const std::string& text, const std::vector<std::size_t>& at);
 inline constexpr const char* kPackStateKey = "nmsc.ui.pack";
 // A plugin sees the pack's shared tables through views (lua_host.cpp); a C function that reads a table raw
 // (lua_rawgeti, lua_next, lua_rawlen) calls this first on its argument: a view at idx is replaced by its table (only

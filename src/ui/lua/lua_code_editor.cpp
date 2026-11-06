@@ -114,7 +114,9 @@ ImU32 token_color(CodeToken k) {
 
 // The line and the x of bytes of the text, as CalcTextSize from the line's start gives it. Asked in increasing order
 // (the spans are), each call walks on from the last, so a frame costs the text's length once, not its length for
-// every span; asked for an earlier byte, it starts again.
+// every span; asked for an earlier byte, it starts again. A byte inside a UTF-8 character (a non-ASCII byte outside a
+// string is a span of its own) is measured from its character's start and not walked past: the next call measures
+// that character whole. (In text that is not UTF-8 the sum may stray from CalcTextSize by the odd pixel.)
 struct Placer {
     const std::string& text;
     float line_h;
@@ -131,21 +133,41 @@ struct Placer {
         while (at < to) {
             const std::size_t nl = text.find('\n', at);
             if (nl == std::string::npos || nl >= to) {
-                x += ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, text.data() + at, text.data() + to).x;
-                at = to;
-                break;
+                std::size_t whole = to; // the start of the character `to` is in
+                while (whole > at && whole < text.size() && (static_cast<unsigned char>(text[whole]) & 0xC0) == 0x80)
+                    --whole;
+                x += width(at, whole);
+                at = whole;
+                const float part = whole < to ? width(whole, to) : 0.0f;
+                return round(x + part);
             }
             at = nl + 1;
             line += 1;
             x = 0;
         }
-        return ImVec2(x > 0 ? IM_TRUNC(x + 0.99999f) : 0.0f, line * line_h); // (CalcTextSize's rounding)
+        return round(x);
     }
+
+    float width(std::size_t from, std::size_t to) const {
+        if (from >= to) return 0.0f;
+        return ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, text.data() + from, text.data() + to).x;
+    }
+    ImVec2 round(float w) const { return ImVec2(w > 0 ? IM_TRUNC(w + 0.99999f) : 0.0f, line * line_h); } // (CalcTextSize's)
 };
 
 } // namespace
 
 std::size_t code_editors_kept() { return editors().size(); }
+
+std::vector<std::pair<float, float>> code_editor_places(const std::string& text, const std::vector<std::size_t>& at) {
+    Placer place{text, ImGui::GetFontSize()};
+    std::vector<std::pair<float, float>> out;
+    for (std::size_t to : at) {
+        const ImVec2 p = place(to);
+        out.emplace_back(p.x, p.y);
+    }
+    return out;
+}
 
 int code_editors_oldest() {
     int oldest = -1;
