@@ -271,7 +271,9 @@ without), 32 pieces are asked ahead, and the socket's receive buffer is 2 MiB so
 A piece that does not come is asked for again (`ServerFileSync::kChunkRetry`, `kChunkRetries`): at once when one
 asked after it has come (the script answers in order, so it skipped it, as an older script over its limit did), or
 after 3 s with nothing; after 5 requests for the same piece the sync fails and the zone-in goes on with the old
-files.
+files. When the server's files change during a download (its list id moves on), the script answers each piece asked
+for with a stale error: the first one lists the files again and the download goes on with the new list; the others,
+for the old list, are left (more than three such restarts in one sync fail it).
 
 The OS window's title is the picked server's name ("Hailstone" before one is picked), and in the world
 `<server> - <character>` (`client_window_title`). A character with several classes (multiclass, set by the

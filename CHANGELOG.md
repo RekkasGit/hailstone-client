@@ -22,6 +22,7 @@
 - Windows: the conversation journal loads and saves again when the Hailstone data folder's path has characters outside the system's code page (a user name in another script)
 - With /log on, a busy fight no longer costs the game a file open and close for every chat line: the log stays open while logging (each line is still written at once, for log parsers) and /log off closes it
 - Zoning in no longer freezes the game while the chat server's name is looked up: a slow or failing DNS used to stop the frame for seconds
+- A server-file download no longer fails with "the server's files keep changing" when the server owner changes a file in `client_files/` during it: the files are listed again once and the download finishes
 - A first zone-in on a server whose files are already there but not recorded (copied in by hand, or `server_files.txt` deleted) no longer freezes the loading screen while every file is checked: it shows **Checking the server's files** and goes on drawing
 - A server-file download that had to ask for a piece again no longer freezes the loading screen while that file is checked
 - Less work every frame in zone: the character built for the stats, the hot buttons and the spell gems no longer copies every item in your bags each time, and doors, ground items and placed furniture are no longer re-indexed every frame

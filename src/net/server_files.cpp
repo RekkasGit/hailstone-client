@@ -216,6 +216,9 @@ void ServerFileSync::handle(const ServerFilesReply& reply, Clock::time_point now
         return;
     }
     if (const auto* err = std::get_if<ServerFilesError>(&reply)) {
+        // The server answers each request it holds for an old list with this error, up to kWindow of them: only
+        // the first one for the current list lists again; the others, and any that come while listing, are left.
+        if (state_ != State::Downloading || err->list_id != list_id_) return;
         if (err->code == kServerFilesStale && ++restarts_ <= 3) {
             log::info("server files: the server's files changed during the download; listing them again");
             incoming_.clear();

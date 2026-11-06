@@ -606,3 +606,39 @@ TEST_CASE("server files: chunks of other files handled in one frame do not hash 
     CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
     CHECK(read(dir.path / "assets" / "b.bin") == server.files["b.bin"]);
 }
+
+TEST_CASE("server files: the stale errors for every piece in flight list the files again once") {
+    // The server's files changed with a window of pieces asked for: it answers each of those requests with a stale
+    // error. The first lists again; the others are for the old list and are left, so the download still finishes.
+    TempDir dir("stale_window");
+    FakeServer server;
+    server.files["a.bin"] = std::string(64 * net::kServerFilesChunkMax, 'a');
+    ServerFileSync sync(dir.path, [&](net::AppPacket p) { server.receive(p); });
+    auto now = ServerFileSync::Clock::now();
+    sync.start(now);
+    while (sync.state() == ServerFileSync::State::Listing && !server.replies.empty()) {
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    REQUIRE(sync.state() == ServerFileSync::State::Downloading);
+    const std::size_t asked = server.replies.size();
+    REQUIRE(asked >= 4);
+    server.replies.clear(); // the pieces were not sent: the list changed first
+    const std::uint32_t old_id = server.list_id;
+    server.list_id = old_id + 1;
+    for (std::size_t i = 0; i < asked; ++i)
+        server.replies.push_back(net::encode(net::ServerFilesError{old_id, 0, net::kServerFilesStale}));
+    for (int steps = 0; !sync.finished() && steps < 10000; ++steps) {
+        if (server.replies.empty()) {
+            now += std::chrono::seconds(1);
+            sync.update(now);
+            continue;
+        }
+        auto p = server.replies.front();
+        server.replies.pop_front();
+        sync.handle(*net::decode_server_files(p), now);
+    }
+    CHECK(sync.state() == ServerFileSync::State::Done);
+    CHECK(read(dir.path / "assets" / "a.bin") == server.files["a.bin"]);
+}
