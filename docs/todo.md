@@ -83,7 +83,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] The world and zone link-death timeout is the original's 180 s of silence (Params 0x12, UdpConnection +0x15c), not 15 s; 15 s is the keepalive delay (Params 0xe) and /offlinemode's exit window (0x3a98 @0x53ddc3). Login (14.8 s) and chat (44 s) keep the client's limits (docs/unknowns.md). Checked live on the NMS dev server (2026-10-31): a character idle in South Qeynos for 270 s stayed connected and camped out normally.
 - [x] rof2decomp notes: Params 0xe is the keepalive delay, not the no-data timeout (checked at 0x8c4197 / 0x8c61c4).
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
-- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md).
+- [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
 - [ ] Whether the original takes a SessionResponse from another address of the server (the client takes another port only; unknowns.md).
 
 ### Real estate (player housing, guild halls)
