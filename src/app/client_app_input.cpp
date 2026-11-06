@@ -205,8 +205,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
                     if (game::red_con_tip_due(target_manager_, t->first, me->level, t->second.level) && eq_api_ &&
                         eq_api_->activate_tip(0x20))
                         break;
-        conn_->toggle_auto_attack();
-        if (!was && conn_->auto_attack()) face_target();
+        if (conn_->toggle_auto_attack()) face_target();
         break;
     }
     case C::INVENTORY:

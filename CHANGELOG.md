@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
+
 ## 0.5.0-beta (2026-11-05)
 
 - The login screen's top left corner shows your Hailstone version and whether it is up to date (or the new version's download and Restart now), with What's new, which shows this version's release notes, and a GitHub button that opens Hailstone's page

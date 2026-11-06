@@ -505,7 +505,8 @@ public:
     bool auto_attack() const { return auto_attack_; }
     // The attack key / button (__ExecuteCmd AUTOPRIM): toggles with the
     // original's checks and messages. /attack [on|off] goes through send_command.
-    void toggle_auto_attack();
+    // True when it turned auto attack on and the player should turn to the target (face_on_attack).
+    bool toggle_auto_attack();
     void set_auto_attack(bool on);
     // Hailstone (option attack_until_xtarget_clear, off by default; docs/mechanics.md): when the target dies, auto
     // attack stays on while the extended target list still holds a living spawn (slots the server extension hides
@@ -521,6 +522,11 @@ public:
     // target dies. Clearing the target by hand holds until the next hit. The original never targets by itself.
     void set_auto_target_xtarget(bool on) { auto_target_xtarget_ = on; }
     bool auto_target_xtarget() const { return auto_target_xtarget_; }
+    // Option face_on_attack (on by default; docs/mechanics.md): the attack key and buttons (toggle_auto_attack)
+    // turn the player to the target when they turn auto attack on, as the original's AUTOPRIM does. Off, the
+    // heading is left alone. /attack never turns the player.
+    void set_face_on_attack(bool on) { face_on_attack_ = on; }
+    bool face_on_attack() const { return face_on_attack_; }
     // __Autofire (0xe635ab): ranged auto attack. The server shoots while it is on (OP_AutoFire); the client only
     // turns it on and off.
     bool auto_fire() const { return auto_fire_; }
@@ -2844,6 +2850,7 @@ private:
     bool fast_camp_ = false;
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
+    bool face_on_attack_ = true;
     std::vector<std::uint32_t> xtarget_attackers_; // NPCs that hit (or missed) the player this zone
     bool auto_target_due_ = false;                 // a hit or the target's death since the last pick
     std::uint32_t auto_target_prefer_ = 0;         // the latest attacker
