@@ -8,6 +8,7 @@
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
+using nmsc::platform::make_private_dir;
 using nmsc::platform::write_private_file;
 
 namespace {
@@ -31,4 +32,24 @@ TEST_CASE("Private file: written owner-only, never over a file already there") {
     CHECK_FALSE(write_private_file(key, "other\n"));
     CHECK(read_all(key) == "secret\n");
     CHECK_FALSE(write_private_file(dir.path() / "no-such-folder" / "k", "x"));
+}
+
+TEST_CASE("Private folder: made owner-only, never over a folder or link already there") {
+    nmsc::test::ScratchDir dir("private_dir");
+    const fs::path d = dir.path() / "scratch";
+    REQUIRE(make_private_dir(d));
+    CHECK(fs::is_directory(d));
+#if !defined(_WIN32)
+    CHECK((fs::status(d).permissions() & fs::perms::all) == fs::perms::owner_all);
+#endif
+    CHECK_FALSE(make_private_dir(d));
+    std::ofstream(dir.path() / "file") << "x";
+    CHECK_FALSE(make_private_dir(dir.path() / "file"));
+    CHECK_FALSE(make_private_dir(dir.path() / "no-such-folder" / "d"));
+#if !defined(_WIN32)
+    // A link someone planted at the name (to a folder of theirs) is not taken as the new folder.
+    fs::create_directory(dir.path() / "theirs");
+    fs::create_directory_symlink(dir.path() / "theirs", dir.path() / "planted");
+    CHECK_FALSE(make_private_dir(dir.path() / "planted"));
+#endif
 }
