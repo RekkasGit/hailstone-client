@@ -1,10 +1,13 @@
 #include "net/chat_server.h"
 
+#include <mutex>
+#include <thread>
 
 #include "core/byte_io.h"
 #include "core/log.h"
 #include "net/packet_io.h"
 #include "net/session.h"
+#include "platform/udp_socket.h"
 
 namespace nmsc::net {
 
@@ -135,12 +138,37 @@ std::optional<ChatServerEvent> decode_chat_server_packet(const AppPacket& p) {
     });
 }
 
+struct ChatServer::Resolve {
+    std::mutex mutex;
+    bool done = false;
+    std::vector<platform::Endpoint> endpoints;
+    std::string error;
+};
+
 ChatServer::ChatServer() = default;
 ChatServer::~ChatServer() { disconnect(); }
 
 void ChatServer::connect(const ChatServerInfo& info) {
     disconnect();
     info_ = info;
+    logged_in_ = false;
+    // CEverQuest::ChatServerConnect runs while the player is in the zone: the name (from OP_SetChatServer2) is looked
+    // up on a thread, and update() opens the session on its address. A lookup given up on (disconnect, another
+    // connect) finishes on its own and is dropped.
+    auto r = std::make_shared<Resolve>();
+    resolving_ = r;
+    std::thread([r, host = info.host, port = info.port] {
+        std::string error;
+        auto endpoints = platform::resolve(host, port, error);
+        std::lock_guard lock(r->mutex);
+        r->endpoints = std::move(endpoints);
+        r->error = std::move(error);
+        r->done = true;
+    }).detach();
+    log::info("chat server: connecting to {}:{} as {}.{}", info.host, info.port, info.server_short_name, info.character);
+}
+
+void ChatServer::start_session(const std::string& address, std::uint16_t port) {
     SessionOptions opt;
     opt.opcode_bytes = 1;
     // UniversalChatProxy_Connect @0x7f0040 builds its own UdpManager Params: the keepalive delay (+0x38, the
@@ -151,16 +179,33 @@ void ChatServer::connect(const ChatServerInfo& info) {
     opt.keepalive_interval = std::chrono::milliseconds(44000);
     opt.hold_time = std::chrono::milliseconds(50);
     session_ = Session::create(opt);
-    session_->connect(info.host, info.port);
-    logged_in_ = false;
-    log::info("chat server: connecting to {}:{} as {}.{}", info.host, info.port, info.server_short_name, info.character);
+    session_->connect(address, port); // a numeric address: no lookup on this thread
 }
 
 bool ChatServer::connected() const { return session_ && logged_in_ && session_->state() == SessionState::Connected; }
 
-bool ChatServer::failed() const { return !session_ || session_->state() == SessionState::Disconnected; }
+bool ChatServer::failed() const {
+    if (resolving_) return false;
+    return !session_ || session_->state() == SessionState::Disconnected;
+}
 
 void ChatServer::update() {
+    if (resolving_) {
+        std::vector<platform::Endpoint> endpoints;
+        std::string error;
+        {
+            std::lock_guard lock(resolving_->mutex);
+            if (!resolving_->done) return;
+            endpoints = std::move(resolving_->endpoints);
+            error = std::move(resolving_->error);
+        }
+        resolving_.reset();
+        if (endpoints.empty()) {
+            log::warn("chat server: {}", error);
+            return; // failed(): no session
+        }
+        start_session(endpoints.front().address_string(), endpoints.front().port);
+    }
     if (!session_) return;
     session_->update();
     if (!logged_in_ && session_->state() == SessionState::Connected) {
@@ -187,7 +232,7 @@ void ChatServer::update() {
 }
 
 void ChatServer::send_command(const std::string& text) {
-    if (!session_) return;
+    if (!session_ && !resolving_) return;
     if (!logged_in_) {
         pending_.push_back(encode_mail_command(text));
         return;
@@ -196,7 +241,7 @@ void ChatServer::send_command(const std::string& text) {
 }
 
 void ChatServer::send_mail_command(const std::string& text) {
-    if (!session_) return;
+    if (!session_ && !resolving_) return;
     if (!logged_in_) {
         pending_.push_back(encode_mail_bracket_command(text));
         return;
@@ -212,6 +257,7 @@ std::optional<ChatServerEvent> ChatServer::poll() {
 }
 
 void ChatServer::disconnect() {
+    resolving_.reset();
     if (!session_) return;
     session_->disconnect();
     for (int i = 0; i < 3; ++i) session_->update();

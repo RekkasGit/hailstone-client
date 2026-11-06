@@ -14,6 +14,7 @@
 #include "core/ini_file.h"
 #include "game/coords.h"
 #include "mock_server/harness.h"
+#include "net/chat_server.h"
 #include "net/door_packets.h"
 #include "net/packet_io.h"
 #include "platform/udp_socket.h"
@@ -796,6 +797,34 @@ TEST_CASE("mock server: the chat server named by OP_SetChatServer2 is connected 
     for (std::byte b : rig.server.ucs_log.front().data) text.push_back(static_cast<char>(std::to_integer<unsigned char>(b)));
     CHECK(text.find("mock.Gennro") != std::string::npos);
     CHECK(text.find("12345678") != std::string::npos);
+}
+
+TEST_CASE("chat server: the host is looked up off the frame; the connection is neither up nor failed meanwhile") {
+    // ChatServerConnect runs while the player is in the zone: a slow DNS must not stop the frame. connect() returns
+    // at once; update() opens the session once the lookup has answered.
+    net::ChatServer chat;
+    net::ChatServerInfo info;
+    info.host = "127.0.0.1";
+    info.port = 9; // nothing answers: the session stays Connecting
+    info.server_short_name = "mock";
+    info.character = "Gennro";
+    chat.connect(info);
+    CHECK(chat.resolving()); // until an update() has taken the answer, however fast it came
+    CHECK_FALSE(chat.failed());
+    CHECK_FALSE(chat.connected());
+    chat.send_command("join test"); // kept for the login
+    auto give_up = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (chat.resolving() && std::chrono::steady_clock::now() < give_up) {
+        chat.update();
+        std::this_thread::yield();
+    }
+    CHECK_FALSE(chat.resolving());
+    CHECK_FALSE(chat.failed()); // a session, connecting
+    // A lookup given up on is dropped: a new connect, then a disconnect before it answers.
+    chat.connect(info);
+    chat.disconnect();
+    CHECK_FALSE(chat.resolving());
+    CHECK(chat.failed());
 }
 
 // ---------------------------------------------------------------- lossy, duplicating, reordering links

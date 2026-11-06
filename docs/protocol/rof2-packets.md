@@ -472,7 +472,7 @@ Tried live: `/raidinvite <second player>` → the second player is told "invites
 
 ### Chat server (UCS; `net/chat_server.{h,cpp}`)
 
-World sends `OP_SetChatServer2` "host,port,short.Name,<type><key>" (`world_packets.h decode_chat_server`); after zone-in the client opens a second UDP session to it (one-byte opcodes, EQEmu `utils/patches/mail_opcodes.conf`). Every payload the client sends starts with one byte EQEmu skips.
+World sends `OP_SetChatServer2` "host,port,short.Name,<type><key>" (`world_packets.h decode_chat_server`); after zone-in the client opens a second UDP session to it (one-byte opcodes, EQEmu `utils/patches/mail_opcodes.conf`). The host's name is looked up on a thread of its own, so a slow or failing DNS does not stop the frame; commands typed meanwhile wait for the login. Every payload the client sends starts with one byte EQEmu skips.
 
 | Packet | Dir | Opcode | Layout |
 |---|---|---|---|
