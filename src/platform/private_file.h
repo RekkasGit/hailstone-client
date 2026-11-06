@@ -1,7 +1,8 @@
 #pragma once
 
-// A new file only its owner may read: a secret key (tools/hailstone_sign), or a folder for one (tools/playprobe). Made with that mode from the start, so
-// there is no moment when the umask's wider mode lets another user open it, and never over a file already there.
+// A new file only its owner may read: a secret key (tools/hailstone_sign), or a folder for one (tools/playprobe).
+// Made with that mode from the start, so there is no moment when the umask's wider mode lets another user open it,
+// and never over a file already there.
 
 #include <filesystem>
 #include <string_view>
