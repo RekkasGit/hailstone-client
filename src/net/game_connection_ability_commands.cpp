@@ -128,9 +128,12 @@ void GameConnection::melody_command(const std::string& args) {
             ++i;
             continue;
         }
-        std::int32_t gem = 0;
+        // The digits accumulate in 32 bits and wrap, as core::msvc_atoi reads the CRT's (a signed product would
+        // overflow, undefined, for ten digits or more).
+        std::uint32_t digits = 0;
         while (i < args.size() && std::isdigit(static_cast<unsigned char>(args[i])))
-            gem = gem * 10 + (args[i++] - '0');
+            digits = digits * 10u + static_cast<std::uint32_t>(args[i++] - '0');
+        const auto gem = static_cast<std::int32_t>(digits);
         if (gem > 0) bard_twist_.push_back(gem);
     }
     // The twist's first gem is clicked in the cast window (HandleSpellLeftClick(gem - 1) for gems 1..12).

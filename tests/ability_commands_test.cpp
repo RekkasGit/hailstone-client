@@ -126,6 +126,16 @@ TEST_CASE("/melody builds the bard twist and plays it in order") {
     CHECK(c.current_bard_twist_gem() == 0);
 }
 
+TEST_CASE("/melody: a gem number of ten digits or more wraps in 32 bits") {
+    // The digits accumulate as core::msvc_atoi's do; a signed product overflowed (undefined behaviour).
+    mq_test::World w("nmsc_melody_wrap_test");
+    auto& c = *w.conn;
+    A::profile(c)->class_ = 8;
+    // 4294967309 is 13 (no such gem: nothing is clicked), 2147483648 is negative and left out.
+    c.melody_command("4294967309 2147483648 99999999999");
+    CHECK(c.bard_twist() == std::vector<std::int32_t>{13, static_cast<std::int32_t>(99999999999ull % 4294967296ull)});
+}
+
 TEST_CASE("/autofire needs a target and swaps auto attack for auto fire") {
     mq_test::World w("nmsc_autofire_test");
     auto& c = *w.conn;
