@@ -106,7 +106,14 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   a page's `hailstone.post()` message is at most 1 MB (`kMaxPageMessage`: a longer one throws in the page), and its
   owner's queue holds at most 256 of them and 8 MB (`kMessageQueueBytes`), the oldest going first, with a log line
   once. The helper cuts and drops these itself; a Console or PageMessage longer than its limit is a broken message to
-  the client, seen from its first bytes, so a page cannot make the client hold gigabytes.
+  the client, seen from its first bytes, so a page cannot make the client hold gigabytes. The other way the client
+  holds itself to limits before it sends (`BrowserHost`): an address at most 2 MB (`kMaxUrl`, Chromium's own
+  limit), a Post at most 1 MB (`kMaxPostMessage`, as the page's), and any message at most 64 MB; a longer one is
+  refused and never sent, since the helper takes a message over its limit as a broken stream and quits (which a
+  script could repeat until the client gave up on the browser). A helper that stops reading its input is ended once
+  128 MB wait for it (`HelperProcess::kMaxPending`), and restarted as a dead one is. A script or plugin holds at most
+  16 tabs (`WebService::kMaxTabsPerOwner`), closed ones included until it closes them; a closed tab's images are let
+  go when it closes.
 
 ### The helper (`tools/hailstone-web`)
 

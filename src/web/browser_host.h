@@ -88,19 +88,21 @@ public:
     BrowserHost(const BrowserHost&) = delete;
     BrowserHost& operator=(const BrowserHost&) = delete;
 
-    // A new tab, 0 when it may not open (`why` says so): not an http(s) address, a host outside its allow list, or
-    // no helper.
+    // A new tab, 0 when it may not open (`why` says so): not an http(s) address, a host outside its allow list, an
+    // address longer than kMaxUrl, or no helper.
     std::uint32_t open(const std::string& url, TabOptions options, std::string* why = nullptr);
     bool navigate(std::uint32_t tab, const std::string& url, std::string* why = nullptr);
     void resize(std::uint32_t tab, std::uint16_t width, std::uint16_t height);
     void mouse(const Mouse& m);
     void wheel(const Wheel& w);
     void key(const Key& k);
-    void text(std::uint32_t tab, const std::string& text);
+    // False for a tab not live, or text too long to send (kMaxMessage; a Post kMaxPostMessage): never sent, since
+    // the helper quits on a message over its limit.
+    bool text(std::uint32_t tab, const std::string& text);
     void focus(std::uint32_t tab, bool on);
     void nav(std::uint32_t tab, NavAction action);
-    void eval(std::uint32_t tab, const std::string& script);
-    void post(std::uint32_t tab, const std::string& message);
+    bool eval(std::uint32_t tab, const std::string& script);
+    bool post(std::uint32_t tab, const std::string& message);
     // Closes and forgets it (the tabs the helper or the rules close stay until take_closed).
     void close(std::uint32_t tab);
 
@@ -122,7 +124,7 @@ public:
 
 private:
     bool ensure_started();
-    void send(const Message& m);
+    bool send(const Message& m); // false: too long to send (logged)
     void handle(Message m);
     void helper_died(std::uint64_t now_ms, const std::string& why);
     void close_tab(Tab& t, CloseReason reason, std::string detail);

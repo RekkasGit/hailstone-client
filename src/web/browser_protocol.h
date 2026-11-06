@@ -23,6 +23,11 @@ inline constexpr std::size_t kMaxMessage = std::size_t{64} << 20;
 // than these allow is a broken message (max_message_size).
 inline constexpr std::size_t kMaxConsoleText = 4096;
 inline constexpr std::size_t kMaxPageMessage = std::size_t{1} << 20;
+// What the client sends, held to limits of its own before it goes (BrowserHost): an address at most Chromium's own
+// limit (url::kMaxURLChars, 2 MB), a Post to the page at most what the page may post back, and any message at most
+// kMaxMessage, which the helper would take as a broken stream and quit on.
+inline constexpr std::size_t kMaxUrl = std::size_t{2} << 20;
+inline constexpr std::size_t kMaxPostMessage = kMaxPageMessage;
 
 // ---- client -> helper ----
 struct Hello {
@@ -157,7 +162,8 @@ using Message = std::variant<Hello, Open, Navigate, Resize, Mouse, Wheel, Key, T
                              Shutdown, Ready, Frame, Popup, Address, Title, Loading, CursorShape, Console, PageMessage,
                              Closed>;
 
-// One message with its length in front.
+// One message with its length in front. The sender checks the body against max_message_size before it sends it
+// (BrowserHost::send): a longer one is not to be sent.
 std::vector<std::byte> encode_message(const Message& m);
 // A message's bytes after the length; nullopt for an unknown type, a short message, bytes left over or values out
 // of range (a frame rectangle outside its image).

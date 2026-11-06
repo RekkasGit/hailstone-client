@@ -423,6 +423,87 @@ TEST_CASE("browser host: a script's tab that lands off its sites is closed") {
     CHECK(r.host.tab(id) == nullptr);
 }
 
+// The helper quits on a message over its limit (a broken stream), so the client never sends one: an Eval, Text or
+// Post (held to kMaxPostMessage, what the page may post back) too long, or an address over kMaxUrl, is refused and
+// the helper keeps running.
+TEST_CASE("browser host: messages too long for the helper are refused, not sent") {
+    Rig r;
+    auto id = r.host.open("https://example.org/", script());
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    const std::string huge(kMaxMessage, 'x');
+    CHECK_FALSE(r.host.eval(id, huge));
+    CHECK_FALSE(r.host.text(id, huge));
+    CHECK_FALSE(r.host.post(id, std::string(kMaxPostMessage + 1, 'x')));
+    CHECK(r.host.post(id, std::string(kMaxPostMessage, 'x')));
+    CHECK(r.host.eval(id, "1+1"));
+    CHECK(r.host.text(id, "hi"));
+    std::string why;
+    const std::string long_url = "https://example.org/" + std::string(kMaxUrl, 'a');
+    CHECK_FALSE(r.host.navigate(id, long_url, &why));
+    CHECK(why == "the address is too long");
+    CHECK(r.host.open(long_url, script(), &why) == 0);
+    CHECK(r.helper.sent_of<Eval>().size() == 1);
+    CHECK(r.helper.sent_of<Text>().size() == 1);
+    CHECK(r.helper.sent_of<Post>().size() == 1);
+    CHECK(r.helper.sent_of<Navigate>().empty());
+    CHECK(r.helper.sent_of<Open>().size() == 1);
+    CHECK_FALSE(r.host.tab(id)->closed);
+    CHECK(r.host.available());
+
+    // Through the service, as mq.web and eq.Web* reach it: false, and nothing sent.
+    app::WebService web({[&] { return &r.host; }, [] { return nullptr; }, [] { return std::string(); },
+                         [] { return std::vector<std::string>{}; }, [] {}});
+    auto mine = web.open("script:big", plugin::kCapWeb, "https://example.org/", 64, 64);
+    REQUIRE(mine != 0);
+    CHECK_FALSE(web.eval("script:big", plugin::kCapWeb, mine, huge));
+    CHECK_FALSE(web.post("script:big", plugin::kCapWeb, mine, huge));
+    CHECK(web.post("script:big", plugin::kCapWeb, mine, "ok"));
+    CHECK(r.helper.sent_of<Post>().size() == 2);
+}
+
+// A script or plugin holds at most kMaxTabsPerOwner tabs (closed ones included, until it closes them); the player's
+// own are not limited, and a closed tab's images are let go at once.
+TEST_CASE("web service: a script's tabs are capped; a closed tab gives up its images") {
+    using app::WebService;
+    Rig r;
+    WebService web({[&] { return &r.host; }, [] { return nullptr; }, [] { return std::string(); },
+                    [] { return std::vector<std::string>{}; }, [] {}});
+    std::vector<std::uint32_t> ids;
+    for (std::size_t i = 0; i < WebService::kMaxTabsPerOwner; ++i)
+        ids.push_back(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64));
+    for (auto id : ids) CHECK(id != 0);
+    std::string why;
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64, &why) == 0);
+    CHECK(why.find("at most") != std::string::npos);
+    CHECK(web.open("script:other", plugin::kCapWeb, "https://example.org/", 64, 64) != 0); // another owner's own
+    for (std::size_t i = 0; i <= WebService::kMaxTabsPerOwner; ++i)
+        CHECK(web.open("", 0, "https://example.org/", 64, 64) != 0); // the player's
+
+    // A frame, then the helper closes the tab: its image goes; it still counts until its owner closes it.
+    r.helper.reply(Ready{});
+    Frame f;
+    f.tab = ids[0];
+    f.width = 2;
+    f.height = 2;
+    FrameRect all;
+    all.width = all.height = 2;
+    all.bgra.assign(16, std::byte{1});
+    f.rects.push_back(all);
+    r.helper.reply(f);
+    r.host.poll(0);
+    CHECK(r.host.tab(ids[0])->view.bgra.size() == 16);
+    r.helper.reply(Closed{ids[0], CloseReason::Failed, "gone"});
+    r.host.poll(0);
+    REQUIRE(r.host.tab(ids[0]));
+    CHECK(r.host.tab(ids[0])->closed);
+    CHECK(r.host.tab(ids[0])->view.bgra.empty());
+    CHECK(r.host.tab(ids[0])->view.width == 0);
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64) == 0);
+    web.close("script:many", ids[0]);
+    CHECK(web.open("script:many", plugin::kCapWeb, "https://example.org/", 64, 64) != 0);
+}
+
 TEST_CASE("browser host: a dead helper is restarted after a second with the tabs; after four deaths a minute, not") {
     Rig r;
     auto id = r.host.open("https://example.org/", {});

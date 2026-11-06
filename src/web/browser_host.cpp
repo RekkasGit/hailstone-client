@@ -104,10 +104,16 @@ bool BrowserHost::ensure_started() {
     return true;
 }
 
-void BrowserHost::send(const Message& m) {
-    if (!transport_) return;
+bool BrowserHost::send(const Message& m) {
+    if (!transport_) return true;
     std::vector<std::byte> bytes = encode_message(m);
+    // The helper takes a length over its limit as a broken stream and quits, so such a message is never sent.
+    if (bytes.size() - 4 > max_message_size(static_cast<std::uint8_t>(bytes[4]))) {
+        log::warn("web: not sending a message of {} bytes (at most {})", bytes.size() - 4, kMaxMessage);
+        return false;
+    }
     transport_->send(bytes);
+    return true;
 }
 
 Open BrowserHost::open_message(const Tab& t) const {
@@ -123,6 +129,10 @@ Open BrowserHost::open_message(const Tab& t) const {
 }
 
 std::uint32_t BrowserHost::open(const std::string& url, TabOptions options, std::string* why) {
+    if (url.size() > kMaxUrl) {
+        if (why) *why = "the address is too long";
+        return 0;
+    }
     if (!allowed(url, options)) {
         if (why) *why = refusal(url);
         return 0;
@@ -153,6 +163,10 @@ bool BrowserHost::navigate(std::uint32_t id, const std::string& url, std::string
         if (why) *why = "no such tab";
         return false;
     }
+    if (url.size() > kMaxUrl) {
+        if (why) *why = "the address is too long";
+        return false;
+    }
     if (!allowed(url, t->options)) {
         if (why) *why = refusal(url);
         return false;
@@ -179,8 +193,9 @@ void BrowserHost::wheel(const Wheel& w) {
 void BrowserHost::key(const Key& k) {
     if (live(k.tab)) send(k);
 }
-void BrowserHost::text(std::uint32_t id, const std::string& s) {
-    if (live(id) && !s.empty()) send(Text{id, s});
+bool BrowserHost::text(std::uint32_t id, const std::string& s) {
+    if (!live(id)) return false;
+    return s.empty() || send(Text{id, s});
 }
 void BrowserHost::focus(std::uint32_t id, bool on) {
     if (live(id)) send(Focus{id, on});
@@ -188,11 +203,9 @@ void BrowserHost::focus(std::uint32_t id, bool on) {
 void BrowserHost::nav(std::uint32_t id, NavAction action) {
     if (live(id)) send(Nav{id, action});
 }
-void BrowserHost::eval(std::uint32_t id, const std::string& script) {
-    if (live(id)) send(Eval{id, script});
-}
-void BrowserHost::post(std::uint32_t id, const std::string& message) {
-    if (live(id)) send(Post{id, message});
+bool BrowserHost::eval(std::uint32_t id, const std::string& script) { return live(id) && send(Eval{id, script}); }
+bool BrowserHost::post(std::uint32_t id, const std::string& message) {
+    return live(id) && message.size() <= kMaxPostMessage && send(Post{id, message});
 }
 
 void BrowserHost::close(std::uint32_t id) {
@@ -208,6 +221,10 @@ void BrowserHost::close_tab(Tab& t, CloseReason reason, std::string detail) {
     t.close_reason = reason;
     t.close_detail = std::move(detail);
     t.loading = false;
+    // A closed tab is never drawn: its images go now (the textures follow), not when its owner forgets it.
+    t.view = Image{};
+    t.popup = Image{};
+    t.popup_shown = false;
 }
 
 void BrowserHost::handle(Message m) {

@@ -133,6 +133,10 @@ std::uint32_t WebService::open(const std::string& owner, std::uint32_t caps, con
         if (why) *why = b && !b->last_error().empty() ? b->last_error() : "the in-game browser is not installed";
         return 0;
     }
+    if (!owner.empty() && tabs(owner).size() >= kMaxTabsPerOwner) {
+        if (why) *why = std::format("at most {} tabs may be open at once: close one first", kMaxTabsPerOwner);
+        return 0;
+    }
     web::TabOptions o;
     o.width = static_cast<std::uint16_t>(std::clamp(width, 16, 4096));
     o.height = static_cast<std::uint16_t>(std::clamp(height, 16, 4096));
@@ -173,20 +177,17 @@ void WebService::close(const std::string& owner, std::uint32_t tab) {
 
 bool WebService::eval(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& script) {
     if (!may(owner, caps) || !mine(owner, tab)) return false;
-    host()->eval(tab, script);
-    return true;
+    return host()->eval(tab, script);
 }
 
 bool WebService::post(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& message) {
     if (!may(owner, caps) || !mine(owner, tab)) return false;
-    host()->post(tab, message);
-    return true;
+    return host()->post(tab, message);
 }
 
 bool WebService::text(const std::string& owner, std::uint32_t caps, std::uint32_t tab, const std::string& text) {
     if (!may(owner, caps) || !mine(owner, tab)) return false;
-    host()->text(tab, text);
-    return true;
+    return host()->text(tab, text);
 }
 
 std::optional<std::string> WebService::take_message(const std::string& owner, std::uint32_t tab) {

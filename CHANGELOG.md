@@ -13,6 +13,7 @@
 - A UI script or plugin can no longer add lines to the UI settings file: `ui.SetSetting` refuses (and returns false for) a key with `=` or a line break, or a value with a line break. A plugin could use one to set the pack's own keys, which click windows' buttons at the next start
 - A UI script that calls `ui.TableNextRow` or the table header row outside a table (for example when `ui.BeginTable` returned false) no longer crashes the client; a table column or freeze set up after the first row is ignored
 - `ui.Image`, `ui.ImageButton` and `ui.DrawImage` draw only textures the client handed out and has not freed: any other value (an `mq.TLO` value, for example) is drawn as nothing instead of reaching the graphics driver
+- For script and plugin authors: the in-game browser refuses an `eval`, `text` or `post` too long to send (and an address over 2 MB) instead of sending it, which made the browser helper quit and, repeated, turned the in-game browser off for the session; a `post` is at most 1 MB, as the page's own messages are. A script or plugin holds at most 16 tabs at once, and a closed tab's image is freed at once
 
 ## 0.4.0-alpha (2026-11-05)
 
