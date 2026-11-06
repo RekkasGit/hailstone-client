@@ -77,7 +77,21 @@ struct ScriptHost::Impl {
     void end(Script& s, const std::string& why);
     std::optional<fs::path> resolve(const std::string& name) const;
     void lua_command(std::string_view args);
+    // Closes and removes the stopped scripts and socials none of whose code runs; not while pulse() or imgui()
+    // walks the lists (Walk), whose Lua may start or stop scripts.
     void reap();
+    int walking = 0;
+    struct Walk {
+        Impl* m;
+        explicit Walk(Impl& im) : m(&im) { ++m->walking; }
+        void end() {
+            if (m) --m->walking;
+            m = nullptr;
+        }
+        ~Walk() { end(); }
+        Walk(const Walk&) = delete;
+        Walk& operator=(const Walk&) = delete;
+    };
     // A new script's Lua state with the libraries, the mq module and ImGui; false with the reason.
     bool open_state(Script& sc, std::string& why);
     // The character's autorun list (set_autorun_file): the file and its names, lower case, in file order.
@@ -133,6 +147,7 @@ struct Script {
     bool chat_hooked = false;
     std::deque<std::pair<std::string, std::vector<std::string>>> queued; // event name, {line, args...}
     std::vector<std::pair<std::string, int>> windows;                    // mq.imgui: name, draw function
+    std::vector<std::pair<std::string, int>> drawing;                    // the windows draw_windows draws now
     std::vector<std::pair<lua_State*, int>> threads;                     // binds still running: thread, its ref
     std::map<std::string, int> binds;                                    // command, function ref
 

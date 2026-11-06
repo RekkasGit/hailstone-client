@@ -53,10 +53,15 @@ std::string lower(std::string_view s) {
 
 } // namespace
 
+// The running one first: one stopped while pulse() or imgui() walked the list stays in it until reap().
 Script* ScriptHost::Impl::find(std::string_view name) const {
+    Script* stopped = nullptr;
     for (const auto& s : scripts)
-        if (iequals(s->name, name)) return s.get();
-    return nullptr;
+        if (iequals(s->name, name)) {
+            if (!s->stop_requested) return s.get();
+            if (!stopped) stopped = s.get();
+        }
+    return stopped;
 }
 
 namespace {
@@ -1237,6 +1242,7 @@ bool ScriptHost::running(std::string_view name) const {
 }
 
 void ScriptHost::Impl::reap() {
+    if (walking > 0) return; // pulse() or imgui() walks the lists: their own reap() comes after
     for (auto it = buttons.begin(); it != buttons.end();) {
         Script& s = *it->second;
         if (s.stop_requested && s.busy == 0) {
@@ -1260,6 +1266,7 @@ void ScriptHost::Impl::reap() {
 
 void ScriptHost::pulse() {
     Impl& m = *impl_;
+    Impl::Walk walk(m);
     for (std::size_t i = 0; i < m.scripts.size(); ++i) {
         Script& s = *m.scripts[i];
         if (s.stop_requested || s.status != Script::Status::Running || !s.co) continue;
@@ -1312,6 +1319,7 @@ void ScriptHost::pulse() {
         m.resume_threads(s);
         --s.busy;
     }
+    walk.end();
     m.reap();
 }
 
@@ -1339,10 +1347,14 @@ void ScriptHost::Impl::resume_threads(Script& s) {
     }
 }
 
+// A window's draw may start or stop scripts (mq.cmd('/lua run x')): the list is walked by index, and nothing is
+// removed from it (reap) until the walk ends.
 void ScriptHost::imgui() {
     Impl& m = *impl_;
-    for (auto& sp : m.scripts) m.draw_windows(*sp);
+    Impl::Walk walk(m);
+    for (std::size_t i = 0; i < m.scripts.size(); ++i) m.draw_windows(*m.scripts[i]);
     for (auto& [social, sp] : m.buttons) m.draw_windows(*sp);
+    walk.end();
     m.reap();
 }
 
@@ -1351,9 +1363,10 @@ void ScriptHost::Impl::draw_windows(Script& s) {
     ++s.busy;
     plugin::CallerScope scope(s.caps, s.name);
     // A draw function may destroy or make windows (its own too): this frame draws the ones there were, those still
-    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs.
-    const auto windows = s.windows;
-    for (const auto& w : windows) {
+    // there. The main state's preempt_hook (open_state) stops one that runs kRunawayMs. (The copy goes into the same
+    // vector each frame: its strings keep their buffers, so a frame allocates nothing.)
+    s.drawing = s.windows;
+    for (const auto& w : s.drawing) {
         if (s.stop_requested) break;
         if (std::find(s.windows.begin(), s.windows.end(), w) == s.windows.end()) continue;
         ImGuiErrorRecoveryState state;
@@ -1552,8 +1565,10 @@ void ScriptHost::Impl::lua_command(std::string_view args) {
     }
     if (verb == "list" || verb == "ps" || verb == "info") {
         reap();
-        if (scripts.empty()) say("[Lua] no scripts are running");
+        if (std::all_of(scripts.begin(), scripts.end(), [](const auto& s) { return s->stop_requested; }))
+            say("[Lua] no scripts are running");
         for (const auto& s : scripts) {
+            if (s->stop_requested) continue; // stopped while a window drew (reap waits for the walk)
             std::string st = s->status == Script::Status::Paused ? "paused" : "running";
             say(std::format("[Lua] {} ({}) - {}", s->name, st, plugin::caps_text(s->caps)));
         }

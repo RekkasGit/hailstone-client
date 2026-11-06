@@ -1190,3 +1190,40 @@ TEST_CASE("MQ Lua: caps_of is list()'s caps for a running or paused script, 0 fo
     h.scripts->stop("c");
     CHECK(h.scripts->caps_of("c") == 0u);
 }
+
+TEST_CASE("MQ Lua: a window that starts and stops other scripts while the list is drawn") {
+    ImGuiFrame frame;
+    Host h;
+    h.write("launch.lua", R"(
+local mq = require('mq')
+local frame = 0
+mq.imgui.init('L', function()
+  frame = frame + 1
+  if frame == 1 then mq.cmd('/lua stop b') end
+  if frame == 2 then mq.cmd('/lua run d') mq.cmd('/lua run e') end
+end)
+mq.delay(100000)
+)");
+    for (const char* n : {"b", "c", "d", "e"})
+        h.write(std::string(n) + ".lua", std::string("local mq = require('mq') mq.imgui.init('") + n +
+                                             "', function() print('drew " + n + "') end) mq.delay(100000)\n");
+    REQUIRE(h.scripts->run("launch", {}));
+    REQUIRE(h.scripts->run("b", {}));
+    REQUIRE(h.scripts->run("c", {}));
+    h.pulses(1);
+    h.scripts->imgui(); // the stop removes nothing from the list being drawn
+    CHECK_FALSE(h.scripts->running("b"));
+    CHECK(h.scripts->running("c"));
+    CHECK(h.printed_line("drew c"));
+    CHECK_FALSE(h.printed_line("drew b"));
+    std::size_t listed = 0;
+    for (const auto& i : h.scripts->list()) listed += i.name == "b";
+    CHECK(listed == 0); // reaped once the walk ended
+    h.scripts->imgui(); // two more scripts while the list is walked
+    CHECK(h.scripts->running("d"));
+    CHECK(h.scripts->running("e"));
+    h.pulses(1);
+    h.scripts->imgui();
+    CHECK(h.printed_line("drew d"));
+    CHECK(h.printed_line("drew e"));
+}
