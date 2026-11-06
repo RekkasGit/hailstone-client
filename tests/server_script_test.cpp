@@ -308,14 +308,14 @@ load_script()
 local a, b = client(1, "Alpha"), client(2, "Beta")
 local id = list_request(a, 0):ReadInt32(8)
 local sent = 0
-for _ = 1, 1100 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
-assert(sent == 1024, "1024 a second by default: " .. sent)
+for _ = 1, 600 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 512, "512 a second by default: " .. sent)
 assert(chunk_request(b, id, 0, 0) ~= nil, "another client is not held back")
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 1024, "the same second: what waits still waits")
+assert(#a.sent == 1 + 512, "the same second: what waits still waits")
 T.now = T.now + 1
 fire_timer("hailstone:files")
-assert(#a.sent == 1 + 1025, "the next second: the request that waited (asked again, held once)")
+assert(#a.sent == 1 + 513, "the next second: the request that waited (asked again, held once)")
 assert(T.timers["hailstone:files"] == nil, "nothing waits: the timer stops")
 assert(chunk_request(a, id, 0, 0) ~= nil, "and new ones go at once")
 T.data["hailstone:files_chunks_per_second"] = "3"
@@ -325,10 +325,49 @@ for _ = 1, 10 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
 assert(sent == 3, "the owner's limit: " .. sent)
 T.data["hailstone:files_chunks_per_second"] = "0"
 T.now = T.now + 10
+fire_timer("hailstone:files") -- the one held under the limit of 3 goes
+T.now = T.now + 1
+sent = 0
+for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
+assert(sent == 1024, "0: the zone's limit still holds: " .. sent)
+T.data["hailstone:files_chunks_per_second_zone"] = "0"
+T.now = T.now + 10
 fire_timer("hailstone:files")
 sent = 0
 for _ = 1, 2000 do if chunk_request(a, id, 0, 0) then sent = sent + 1 end end
-assert(sent == 2000, "0: no limit")
+assert(sent == 2000, "both 0: no limit")
+)lua");
+}
+
+TEST_CASE("Server script: all of a zone's clients together are held to files_chunks_per_second_zone") {
+    // Characters that ask and never acknowledge make EQEmu hold every piece for 30 s: alts must not add up.
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local cs = {}
+for k = 1, 5 do cs[k] = client(k, "C" .. k) end
+local id = list_request(cs[1], 0):ReadInt32(8)
+local sent = 0
+for k = 1, 5 do
+  for _ = 1, 600 do if chunk_request(cs[k], id, 0, k) then sent = sent + 1 end end
+end
+assert(sent == 1024, "1024 a second for the zone by default: " .. sent)
+assert(#cs[1].sent == 1 + 512 and #cs[2].sent == 512 and #cs[3].sent == 0, "the first two at their own limit")
+-- What waits is served as the zone's limit allows, never more in a second.
+local before = 0
+for k = 1, 5 do before = before + #cs[k].sent end
+T.now = T.now + 1
+fire_timer("hailstone:files")
+local after = 0
+for k = 1, 5 do after = after + #cs[k].sent end
+assert(after - before <= 1024 and after - before == 5, "each one's held request (asked again, held once): " .. (after - before))
+T.data["hailstone:files_chunks_per_second_zone"] = "100"
+T.now = T.now + 10
+sent = 0
+for k = 1, 5 do
+  for _ = 1, 50 do if chunk_request(cs[k], id, 0, 7) then sent = sent + 1 end end
+end
+assert(sent == 100, "the owner's zone limit: " .. sent)
 )lua");
 }
 
@@ -466,7 +505,7 @@ local a = client(1, "Alpha")
 local id = list_request(a, 0):ReadInt32(8)
 local gets = T.gets
 for _ = 1, 200 do chunk_request(a, id, 0, 32768) end
-assert(T.gets - gets <= 1, "200 pieces, at most one read for the limit: " .. (T.gets - gets))
+assert(T.gets - gets <= 2, "200 pieces, at most one read for each limit: " .. (T.gets - gets))
 for _ = 1, 3 do settings_request(a); guild_hello(a) end
 gets = T.gets
 for _ = 1, 3 do T.now = T.now + 1; settings_request(a) end

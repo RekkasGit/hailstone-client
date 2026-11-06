@@ -27,8 +27,9 @@
 -- sha256sum (GNU find and xargs; on Windows PowerShell's Get-FileHash) when the zone starts (and at #reloadquest),
 -- and again when a client asks and it is older than files_rescan seconds (300; never under 30); the hashes are kept
 -- in client_files/.hailstone-cache, so only new or changed files are hashed again. Names starting with '.' are not
--- sent. A client may ask for files_chunks_per_second pieces a second (1024, 32 MB/s); more wait their turn (a few
--- dozen per client, on a timer) and are served in order. A file that changed on disk since it was hashed (its size,
+-- sent. A client may ask for files_chunks_per_second pieces a second (512, 16 MB/s), and all of the zone's clients
+-- together for files_chunks_per_second_zone (1024, 32 MB/s); more wait their turn (a few dozen per client, on a
+-- timer) and are served in order. A file that changed on disk since it was hashed (its size,
 -- or its time where find can tell) makes the zone hash again and the client list again, instead of sending bytes
 -- that do not match the list.
 --
@@ -43,7 +44,8 @@ local settings = {
 	client_files           = 1,  -- send client_files/ to Hailstone clients (0: they get an empty list)
 	group_declines         = 1,  -- tell the inviter when a RoF2 client declines a group invitation
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
-	files_chunks_per_second = 1024, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
+	files_chunks_per_second = 512, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
+	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
 }
 
 local OP_SETTINGS_REQUEST = 0x1424
@@ -105,16 +107,6 @@ local function allow(l, id, max)
 	local r = window(l, id)
 	r.count = r.count + 1
 	return r.count <= max, r.count == max + 1
-end
-
--- Counts one request if the window has room for it (nothing counted otherwise).
-local function take(l, id, max)
-	local r = window(l, id)
-	if r.count >= max then
-		return false
-	end
-	r.count = r.count + 1
-	return true
 end
 
 -- Runs one statement; returns the statement (to fetch from) or nil. Servers older than the Lua Database class
@@ -518,7 +510,8 @@ local open_files  = {} -- path -> { handle, used }: several clients may be fetch
 local open_count  = 0
 local open_tick   = 0
 local chunk_limit = limiter(1)
--- Piece requests over files_chunks_per_second, by character id: { first, last, keys, [n] = {id, index, offset,
+local zone_chunk_limit = limiter(1) -- one id, 0: the whole zone
+-- Piece requests over the limits (take_piece), by character id: { first, last, keys, [n] = {id, index, offset,
 -- length} }, served in order from the FILES_TIMER timer as the limit allows.
 local waiting     = {}
 local files_timer = false
@@ -875,6 +868,23 @@ local function send_files_chunk(client, id, index, offset, length)
 	client:QueuePacket(p)
 end
 
+-- Counts one piece for `char_id` and for the zone if both limits have room for it (nothing counted otherwise).
+-- The zone cannot see what a client has received: EQEmu keeps every piece it sent until the client acknowledges it
+-- (or 30 s pass and the link is closed), so a client that asks and never acknowledges makes the zone hold what the
+-- limits let through in 30 s. The zone's limit bounds that whatever the number of characters (docs/unknowns.md).
+local function take_piece(char_id)
+	local limit = setting("files_chunks_per_second") or 0
+	local zone  = setting("files_chunks_per_second_zone") or 0
+	local r = limit > 0 and window(chunk_limit, char_id) or nil
+	local z = zone > 0 and window(zone_chunk_limit, 0) or nil
+	if (r and r.count >= limit) or (z and z.count >= zone) then
+		return false
+	end
+	if r then r.count = r.count + 1 end
+	if z then z.count = z.count + 1 end
+	return true
+end
+
 -- Holds a request over the limit. A request already held (the client asked again) is not held twice; past
 -- FILES_WAIT_MAX it is dropped, and the client asks again for a piece that does not come.
 local function hold_request(client, char_id, req)
@@ -906,14 +916,13 @@ end
 -- The FILES_TIMER timer: what the limit allows of each client's held requests, in order. A client that left
 -- loses its own; the timer stops when none are held.
 local function serve_waiting()
-	local limit = setting("files_chunks_per_second") or 0
 	local list  = eq.get_entity_list()
 	for char_id, q in pairs(waiting) do
 		local client = list:GetClientByCharID(char_id)
 		if client == nil or not client.valid then
 			waiting[char_id] = nil
 		else
-			while q.first <= q.last and (limit <= 0 or take(chunk_limit, char_id, limit)) do
+			while q.first <= q.last and take_piece(char_id) do
 				local req = q[q.first]
 				q[q.first] = nil
 				q.first = q.first + 1
@@ -967,12 +976,11 @@ local function on_files_request(client, packet)
 		end
 		send_files_page(client, first)
 	elseif action == 2 and packet:GetSize() >= 24 then
-		-- A client asks for at most 32 pieces at a time (its window), each when one comes. Beyond the limit a
+		-- A client asks for at most 32 pieces at a time (its window), each when one comes. Beyond the limits a
 		-- request waits its turn (serve_waiting), behind any that already wait, so the pieces go in the order asked.
-		local limit = setting("files_chunks_per_second") or 0
 		local char_id = client:CharacterID()
 		local req = { packet:ReadInt32(8), packet:ReadInt32(12), packet:ReadInt32(16), packet:ReadInt32(20) }
-		if limit > 0 and (waiting[char_id] ~= nil or not take(chunk_limit, char_id, limit)) then
+		if waiting[char_id] ~= nil or not take_piece(char_id) then
 			hold_request(client, char_id, req)
 			return
 		end

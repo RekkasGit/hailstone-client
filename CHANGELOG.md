@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- For server owners: Hailstone's server script sends one player at most 512 file pieces a second (16 MB/s; it was 1024), and all of a zone's players together at most 1024 (the new `files_chunks_per_second_zone`), so a modified client, or several characters, asking for pieces and never acknowledging them can no longer make the zone hold gigabytes of unsent data
 - For server owners: on a Windows server, a file in `client_files/` whose name has characters outside ASCII is left out with a line in the zone's log naming it, instead of "could not hash" and a mangled name
 - For server owners: a `client_files` folder that is a link to a folder elsewhere is served on Linux; the server script listed nothing there, so players were sent no files and no `hailstone.cfg`, and no server rules applied
 - Magician pets and other elementals use the newer Luclin elemental models (earth, fire, water and air), as the original client does by default; they were drawn with the old classic elemental. `UseLuclinElementals=FALSE` in eqclient.ini's `[Defaults]` brings the old one back, as in the original

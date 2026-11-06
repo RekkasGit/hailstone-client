@@ -70,7 +70,8 @@ so each read is a database query), and at once after `#reloadquest`.
 | `client_files` | 1 | send `client_files/` to Hailstone clients (0: they get an empty list) |
 | `group_declines` | 1 | tell the inviter when a RoF2 client declines a group invitation |
 | `files_rescan` | 300 | seconds the `client_files/` list is kept before a player's request looks at the folder again (never under 30) |
-| `files_chunks_per_second` | 1024 | file pieces (32 KB each) one player is sent in a second; more wait their turn (0: no limit) |
+| `files_chunks_per_second` | 512 | file pieces (32 KB each) one player is sent in a second; more wait their turn (0: no limit) |
+| `files_chunks_per_second_zone` | 1024 | file pieces all of the zone's players together are sent in a second; more wait their turn (0: no limit) |
 
 ## Client files
 
@@ -109,10 +110,15 @@ loading screen, until what changed has come; then it reads the files again and t
 the files from the zone they enter, a 32 KB piece at a time as the client asks (`OP_HsFilesRequest` 0x1426,
 `OP_HsFiles` 0x1427; the layout is in the client's `src/net/server_files_packets.h`). The zone keeps up to eight
 files open for this, so players fetching different files do not make it reopen them at every piece. A player may
-ask for `files_chunks_per_second` pieces a second (1024, 32 MB/s, about twice what one download was measured at);
-a client asking faster than that has its requests wait, up to 64 of them, and served in order on a 100 ms timer
-(`eq.set_timer` on the script's encounter) as the limit allows; what waits for a player who leaves the zone is
-dropped. The client asks again for a piece that does not come.
+ask for `files_chunks_per_second` pieces a second (512, 16 MB/s, a little over what one download was measured at),
+and all of a zone's players together for `files_chunks_per_second_zone` (1024, 32 MB/s, two first downloads at full
+speed at once); a client asking faster than that has its requests wait, up to 64 of them, and served in order on a 100 ms timer
+(`eq.set_timer` on the script's encounter) as the limits allow; what waits for a player who leaves the zone is
+dropped. The client asks again for a piece that does not come. EQEmu keeps every piece it sent until the client
+acknowledges it, for up to 30 seconds, and a quest script cannot see those acknowledgements: a modified client that
+asks and never acknowledges makes the zone hold what the limits let through in 30 seconds, about 1 GB at the
+defaults however many characters it uses. Lower `files_chunks_per_second_zone` to hold less, at the cost of slower
+first downloads.
 
 Every Hailstone request is limited per character before the zone does any work for it: eight whole file lists a
 minute, ten guild packets and five settings requests in 10 seconds, five group declines in 10 seconds. An honest
