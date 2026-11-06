@@ -592,6 +592,40 @@ TEST_CASE("browser host: a 4096x4096 full paint, split, reaches the tab") {
     CHECK(r.host.tab(id)->view.bgra.back() == std::byte{0x11});
 }
 
+// A script's tab is closed (Refused, the reason kept for its owner) once its owner lost 'web' or the server's
+// [web] allow changed from the one it opened with: the helper keeps a tab's sites for its life.
+TEST_CASE("web service: tabs whose owner lost 'web', or whose sites changed, are closed") {
+    Rig r;
+    std::vector<std::string> allow;
+    app::WebServiceEnv env;
+    env.browser = [&] { return &r.host; };
+    env.allow = [&] { return allow; };
+    app::WebService web(env);
+    const auto a = web.open("script:a", plugin::kCapAll, "https://example.org/", 100, 100);
+    const auto b = web.open("plugin:b", plugin::kCapAll, "https://example.org/", 100, 100);
+    const auto mine = web.open("", plugin::kCapAll, "https://example.org/", 100, 100);
+    REQUIRE((a && b && mine));
+    r.helper.reply(Ready{});
+    r.host.poll(0);
+    std::uint32_t b_caps = plugin::kCapAll;
+    auto caps_of = [&](const std::string& owner) { return owner == "plugin:b" ? b_caps : plugin::kCapAll; };
+    web.recheck(caps_of);
+    CHECK_FALSE(r.host.tab(a)->closed);
+    CHECK_FALSE(r.host.tab(b)->closed);
+    b_caps = plugin::kCapRead | plugin::kCapUi;
+    web.recheck(caps_of);
+    CHECK(r.host.tab(b)->closed);
+    CHECK(r.host.tab(b)->close_reason == CloseReason::Refused);
+    CHECK(web.state("plugin:b", b)->why == "it no longer has the server's 'web' permission");
+    CHECK_FALSE(r.host.tab(a)->closed);
+    allow = {"wiki.example.org"};
+    web.recheck(caps_of);
+    CHECK(r.host.tab(a)->closed);
+    CHECK(web.state("script:a", a)->why == "the server changed the sites scripts may open");
+    CHECK_FALSE(r.host.tab(mine)->closed); // the player's own are not the server's to limit
+    CHECK(r.helper.sent_of<Close>().size() == 2);
+}
+
 // ImGui's position with no mouse is -FLT_MAX, which no int32 holds: the page is told it left at the last place it
 // had, not at a converted -FLT_MAX.
 TEST_CASE("web service: the mouse leaving the game's window leaves the page at its last place") {

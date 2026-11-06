@@ -236,6 +236,13 @@ void BrowserHost::close(std::uint32_t id) {
     tabs_.erase(it);
 }
 
+void BrowserHost::refuse(std::uint32_t id, std::string detail) {
+    Tab* t = live(id);
+    if (!t) return;
+    send(Close{id}, true);
+    close_tab(*t, CloseReason::Refused, std::move(detail));
+}
+
 void BrowserHost::close_tab(Tab& t, CloseReason reason, std::string detail) {
     if (t.closed) return;
     t.closed = true;

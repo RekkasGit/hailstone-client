@@ -115,6 +115,8 @@ public:
     bool post(std::uint32_t tab, const std::string& message);
     // Closes and forgets it (the tabs the helper or the rules close stay until take_closed).
     void close(std::uint32_t tab);
+    // Closes a live tab as Refused, `detail` saying why: it stays (closed) until its owner takes it (take_closed).
+    void refuse(std::uint32_t tab, std::string detail);
 
     // Reads what the helper sent and restarts a dead one; once a frame. `now_ms` is any steady clock.
     void poll(std::uint64_t now_ms);

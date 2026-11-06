@@ -38,6 +38,7 @@
 - For server owners: `hailstone.lua` reads its `hailstone:<name>` data buckets at most every 10 seconds instead of at every packet, looks at a client file's time once until the list is next made instead of at every first-piece request, and limits each character's file-list, guild and settings requests
 - In-game browser: a mouse button or key let go while a script's large message was still on its way to the browser is no longer lost (the page used to keep the button or key held)
 - In-game browser: a page shown at the largest size (4096x4096, or a browser window stretched past it on an 8K display) no longer makes the client restart the browser until it gives up on it for the session
+- In-game browser: a script's or plugin's page is closed (it is told why) when the server's `[web] allow` changes or the script loses the `web` permission, for example when the server's `hailstone.cfg` arrives at the first zone-in; it used to keep the sites it was opened with for the rest of the session
 
 ## 0.5.0-beta (2026-11-05)
 

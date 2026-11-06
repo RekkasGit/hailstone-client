@@ -40,6 +40,7 @@ void ClientApp::close_orphan_tabs() {
         if (const web::Tab* t = browser_->tab(id); t && !automation_->web_owner_alive(t->options.owner))
             gone.push_back(t->options.owner);
     for (const std::string& owner : gone) web_service_->close_owner(owner);
+    web_service_->recheck([this](const std::string& owner) { return automation_->plugin_caps(owner); });
 }
 
 bool ClientApp::open_web_page(const std::string& url) {

@@ -122,6 +122,10 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   go when it closes. A paint larger than 64 MB (a 4096x4096 tab's full frame is just over) goes from the helper as
   several Frames (`web::split_frame`: rectangles grouped, a too large one cut into bands of rows), so the protocol
   and its version are unchanged.
+- **Rules that change.** The helper keeps a tab's sites for its life, so once a frame (`WebService::recheck`) a
+  script's or plugin's tab is closed as Refused, its owner told why (`state().why`), when the owner no longer has
+  `web` or the server's `[web] allow` is not the one the tab was opened with (the server's `hailstone.cfg` arriving
+  at the zone-in after provisional rules, say). The owner may open it again under the new rules.
 
 ### The helper (`tools/hailstone-web`)
 

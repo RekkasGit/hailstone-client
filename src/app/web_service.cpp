@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <optional>
 
 #include "plugin/policy.h"
 #include "ui/web_textures.h"
@@ -226,6 +227,26 @@ void WebService::close_owner(const std::string& owner) {
     if (!b) return;
     for (std::uint32_t id : tabs(owner)) {
         b->close(id);
+        if (focused_ == id) focused_ = 0;
+    }
+}
+
+void WebService::recheck(const std::function<std::uint32_t(const std::string&)>& caps_of) {
+    web::BrowserHost* b = host();
+    if (!b) return;
+    std::optional<std::vector<std::string>> allow; // read once, and only with a script's tab open
+    for (std::uint32_t id : b->tabs()) {
+        const web::Tab* t = b->tab(id);
+        if (!t || t->closed || t->options.owner.empty()) continue;
+        std::string why;
+        if (!(caps_of(t->options.owner) & plugin::kCapWeb)) {
+            why = "it no longer has the server's 'web' permission";
+        } else {
+            if (!allow) allow = env_.allow ? env_.allow() : std::vector<std::string>{};
+            if (t->options.allow != *allow) why = "the server changed the sites scripts may open";
+        }
+        if (why.empty()) continue;
+        b->refuse(id, std::move(why));
         if (focused_ == id) focused_ = 0;
     }
 }

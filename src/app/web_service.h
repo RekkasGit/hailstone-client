@@ -50,6 +50,11 @@ public:
     bool view(const std::string& owner, std::uint32_t caps, std::uint32_t tab, float width, float height) override;
     void close_owner(const std::string& owner) override;
 
+    // Once a frame: a script's or plugin's tab is closed (Refused) when its owner no longer has 'web' (`caps_of`, by
+    // owner) or the server's [web] allow is not the one it was opened with, since the helper keeps a tab's sites for
+    // its life. The owner sees why (state) and may open it again under the new rules.
+    void recheck(const std::function<std::uint32_t(const std::string&)>& caps_of);
+
     // What the player typed into an address bar: a bare host or path gets https://.
     static std::string address(std::string text);
     // The cookie and cache folder of `owner`'s tabs: the server's folder `base` for the player's own, a folder of its
