@@ -78,14 +78,20 @@ glm::vec4 wind_at(double seconds, float storm);
 // vanishes at today's resolutions, so the modern lighting stretches each upright streak over the distance it falls
 // in `streak_seconds` (a camera's motion blur), draws it at least `min_pixels` wide and has the precipitation
 // manager start `density` times as many (its spawn rate only: the pool and the columns are the original's).
+// The snowflakes (0.15 units, a thin outline in each frame of their atlas: about 8 % of a frame is opaque) shrink to
+// a pixel or two a few units off, where their texture's small mips average the outline away and the flakes all but
+// vanish: the modern style draws a facing particle at least `flake_pixels` across both ways, and below `dot_below`
+// pixels of its own size fades its texture into a soft round dot, as a flake that far off would look.
 // Not the original's look; docs/graphics.md, "Weather".
 struct PrecipitationStyle {
     float streak_seconds = 0.0f;
     float min_pixels = 1.0f;
     float density = 1.0f;
+    float flake_pixels = 0.0f; // 0: the facing particles are at least min_pixels wide and keep their height
+    float dot_below = 0.0f;    // 0: no dots
 };
 inline constexpr PrecipitationStyle kClassicPrecipitation{};
-inline constexpr PrecipitationStyle kModernPrecipitation{0.08f, 1.5f, 3.0f};
+inline constexpr PrecipitationStyle kModernPrecipitation{0.08f, 1.5f, 3.0f, 2.5f, 8.0f};
 
 class WeatherRenderer {
 public:

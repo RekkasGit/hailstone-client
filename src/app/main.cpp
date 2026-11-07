@@ -889,8 +889,9 @@ int main(int argc, char** argv) {
             if (const auto& map = weather_sky.current_map(); map && kind >= 0 && kind < 12)
                 f.colours = {game::colour_cell(*map, 4 + 2 * kind), game::colour_cell(*map, 5 + 2 * kind)};
             f.random = [&] { return std::uniform_int_distribution<std::int32_t>(0, 0x7fff)(weather_random); };
-            f.ground = [&](const glm::vec3& a, const glm::vec3& b) -> std::optional<game::PrecipitationHit> {
-                auto hit = weather_ground->first_hit(a, b, true);
+            f.ground = [&](const glm::vec3& a, const glm::vec3& b,
+                           bool back_faces) -> std::optional<game::PrecipitationHit> {
+                auto hit = weather_ground->first_hit(a, b, back_faces);
                 if (!hit) return std::nullopt;
                 return game::PrecipitationHit{hit->t, hit->normal.z};
             };

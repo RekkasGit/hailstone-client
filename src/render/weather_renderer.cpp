@@ -25,8 +25,9 @@ struct PushConstants {
     glm::mat4 view_proj;
     glm::vec4 camera;  // xyz, w: a pixel's size one unit in front of the camera
     glm::vec4 forward; // xyz the camera's direction, w: the light scale
+    glm::vec4 style;   // x a pixel's size one unit in front, y the facing ones' least pixels, z dot_below
 };
-static_assert(sizeof(PushConstants) <= 128);
+static_assert(sizeof(PushConstants) + 16 <= 128); // and the texture slot after it
 
 float srgb_to_linear(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
 
@@ -382,7 +383,8 @@ void WeatherRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, c
     }
     if (count == 0) return;
     vmaFlushAllocation(vk_.allocator(), instances_[frame.frame_slot].allocation, 0, sizeof(GpuDrop) * count);
-    PushConstants pc{view_proj, glm::vec4(camera, pixel * style.min_pixels), glm::vec4(forward, light)};
+    PushConstants pc{view_proj, glm::vec4(camera, pixel * style.min_pixels), glm::vec4(forward, light),
+                     glm::vec4(pixel, style.flake_pixels, style.dot_below, 0.0f)};
     VkDeviceSize offset = 0;
     vkCmdBindPipeline(frame.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
     vkCmdBindDescriptorSets(frame.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &set_, 0, nullptr);

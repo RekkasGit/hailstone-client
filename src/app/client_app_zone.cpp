@@ -267,9 +267,10 @@ void ClientApp::update_precipitation(float dt, float sky_hour) {
         f.colours = {game::colour_cell(*map, 4 + 2 * kind), game::colour_cell(*map, 5 + 2 * kind)};
     }
     f.random = [this] { return std::uniform_int_distribution<std::int32_t>(0, 0x7fff)(weather_random_); };
-    f.ground = [this](const glm::vec3& a, const glm::vec3& b) -> std::optional<game::PrecipitationHit> {
+    f.ground = [this](const glm::vec3& a, const glm::vec3& b,
+                      bool back_faces) -> std::optional<game::PrecipitationHit> {
         if (!collision_) return std::nullopt;
-        auto hit = collision_->first_hit(a, b, true); // roofs with nothing over them too
+        auto hit = collision_->first_hit(a, b, back_faces);
         if (!hit) return std::nullopt;
         return game::PrecipitationHit{hit->t, hit->normal.z};
     };
