@@ -3,8 +3,10 @@
 -- (optional) says how the button looks. What it may do is the server's choice (eq.LuaSocialRules): a note under the
 -- name says what, and a dry run lists the commands a press would send without sending them.
 --
--- It opens on a right click on a Lua social, from the social editor's socials when they are Lua, and with
--- /luasocial [1..120 | new] (eq.LuaSocialEditRequest). A resizable dialog: the social's place and whether it is
+-- It opens on a right click on a Lua social, from the social editor's socials when they are Lua, from the social
+-- editor's Commands / Lua switch, and with /luasocial [1..120 | new] (eq.LuaSocialEditRequest). A plain social's
+-- lines become mq.cmd calls, their waits mq.delay (lib/social_lines.lua); the same switch here turns a press made
+-- only of those back into command lines and opens the social editor on them. A resizable dialog: the social's place and whether it is
 -- running (with Stop), the name and its colour (the twenty social colours as swatches), the server's rules, the
 -- Press and Face code on tabs (ui.CodeEditor: Tab takes a completion, Ctrl+Up / Ctrl+Down choose one; a Lua
 -- error's line is marked), then Save / Dry run with the Shift, Ctrl and Alt a press is tried with, Revert, the
@@ -13,6 +15,7 @@
 local hud = dofile("lib/hud.lua")
 local S = dofile("lib/social.lua")
 local K = dofile("lib/dialogs_kit.lua")
+local SL = dofile("lib/social_lines.lua")
 local T = hud.T
 local C = T.color
 local KEY = "LuaSocialWnd" -- (no game window: the place and size are kept under this name)
@@ -74,16 +77,20 @@ local function load(n)
     press = s and s.press or "", face = s and s.face or "",
   }
   if s and not s.lua then
-    -- A plain social becomes a Lua one: its lines as mq.cmd calls.
-    local lines = {}
-    for _, l in ipairs(s.lines or {}) do
-      if l ~= "" then lines[#lines + 1] = string.format("mq.cmd(%q)", l) end
-    end
-    ed.press = table.concat(lines, "\n")
+    -- A plain social becomes a Lua one: its lines as mq.cmd calls, their waits as mq.delay.
+    ed.press = SL.ToLua(s.lines or {})
   end
   ed.saved = { name = ed.name, color = ed.color, press = ed.press, face = ed.face }
   result, message = nil, ""
   errors = { press = 0, face = 0 }
+  -- a Lua social pasted in the social editor (socialedit.lua): in the editor, not saved
+  local d = hailstone_social_draft
+  hailstone_social_draft = nil
+  if d and d.social == n then
+    ed.name = d.t.name ~= "" and d.t.name or ed.name
+    ed.color, ed.press, ed.face = d.t.color, d.t.press, d.t.face
+    message = "Pasted: save to keep it."
+  end
   open = true
 end
 
@@ -139,8 +146,22 @@ local function note(text, color, s)
   ui.Dummy(0, 0)
 end
 
-local function header(s)
+-- Back to command lines (a press of mq.cmd and mq.delay lines only): saved as such, then the social editor on it.
+local function toCommands()
+  local lines, why = SL.FromLua(ed.press, ed.face)
+  if not lines then
+    message = why
+    return
+  end
+  eq.SetLuaSocial(social, { name = ed.name ~= "" and ed.name or "Lua", color = ed.color, press = "", face = "",
+    lines = lines })
+  open = false
+  eq.OpenSocialEditor(social)
+end
+
+local function header(s, x, w)
   local st = eq.LuaSocial(social)
+  local _, hy = ui.GetCursorScreenPos()
   ui.TextColored(C.heading[1], C.heading[2], C.heading[3], 1, string.format("Social %d", social + 1))
   ui.SameLine()
   ui.TextColored(C.muted[1], C.muted[2], C.muted[3], 1,
@@ -151,6 +172,19 @@ local function header(s)
     ui.SameLine()
     if ui.SmallButton("Stop") then eq.StopLuaSocial(social) end
   end
+  local _, why = SL.FromLua(ed.press, ed.face)
+  local segW, segH = 156 * s, 24 * s
+  local after = { ui.GetCursorScreenPos() }
+  ui.SetCursorScreenPos(x + w - segW, hy - 2 * s)
+  if K.Segmented("##lsmode", { "Commands", "Lua" }, 2, segW, segH, s, {
+        why and ("Cannot go back to command lines: " .. why) or
+            "Turn this social back into command lines (saved now) and open the social editor on them.",
+        "Lua: runs the press code, and the face draws the button.",
+      }) == 1 then
+    toCommands()
+  end
+  ui.SetCursorScreenPos(after[1], after[2])
+  ui.Dummy(0, 0)
   return st
 end
 
@@ -259,6 +293,7 @@ local function actions(s)
     local t, why = eq.LuaSocialImport(ui.GetClipboardText())
     if t then
       ed.name, ed.color, ed.press, ed.face = t.name ~= "" and t.name or ed.name, t.color, t.press, t.face
+      if not t.lua then ed.press = SL.ToLua(t.lines or {}) end -- a plain social's lines, as Lua
       message = "Pasted: save to keep it."
     else
       message = why or "The clipboard holds no social."
@@ -317,7 +352,8 @@ local WINDOW_OPTS = {
   onClose = function() open = false end,
 }
 local function drawWindow(x, y, w, h, s)
-  local st = header(s)
+  local st = header(s, x, w)
+  if not open then return end
   nameAndColour(s)
   ui.Dummy(0, 2 * s)
   local text, color = rulesText(st and st.rules or eq.LuaSocialRules())

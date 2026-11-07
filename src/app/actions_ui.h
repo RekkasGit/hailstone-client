@@ -181,6 +181,10 @@ public:
     std::int32_t button_skill(const game::HotButton& b) const;
     // /stopsocial: Social_Stop(-1, 0).
     void stop_social() { game::social_stop(social_queue_, -1, false); }
+    // The social editor's Test: what a hot button's press of social 0..119 does (FUN_006143a0 queues it; a Lua
+    // social runs its Lua instead). The queued social, -1 none.
+    void press_social(std::int32_t social);
+    std::int32_t current_social() const { return social_queue_.current; }
     // The social editor changed a social: the socials are saved (SaveSocialsToIni).
     void socials_changed() { changed(); }
     // CharacterZoneClient::UseSkill, then the packets and messages.

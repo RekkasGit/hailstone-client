@@ -17,6 +17,7 @@ local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
 local CH = dofile("lib/child.lua")
 local AS = dofile("lib/assign.lua")
+local SL = dofile("lib/social_lines.lua")
 local C = T.C
 
 local TEMPLATES = {
@@ -84,16 +85,20 @@ local function load(n)
   local s = eq.LuaSocial(n)
   ed = { name = s and s.name or "Lua", color = s and s.color or 0, press = s and s.press or "", face = s and s.face or "" }
   if s and not s.lua then
-    -- A plain social becomes a Lua one: its lines as mq.cmd calls.
-    local out = {}
-    for _, l in ipairs(s.lines or {}) do
-      if l ~= "" then out[#out + 1] = string.format("mq.cmd(%q)", l) end
-    end
-    ed.press = table.concat(out, "\n")
+    -- A plain social becomes a Lua one: its lines as mq.cmd calls, their waits as mq.delay (lib/social_lines.lua).
+    ed.press = SL.ToLua(s.lines or {})
   end
   ed.saved = { name = ed.name, color = ed.color, press = ed.press, face = ed.face }
   result, message = nil, ""
   errors = { press = 0, face = 0 }
+  -- a Lua social pasted in the social editor (socialedit.lua): in the editor, not saved
+  local d = hailstone_social_draft
+  hailstone_social_draft = nil
+  if d and d.social == n then
+    ed.name = d.t.name ~= "" and d.t.name or ed.name
+    ed.color, ed.press, ed.face = d.t.color, d.t.press, d.t.face
+    message = "Pasted: save to keep it."
+  end
   open = true
   lines.press.focusNext, lines.press.offset = 1, 0
 end
@@ -353,6 +358,7 @@ ui.window("Lua Social", function()
           local t, why = eq.LuaSocialImport(ui.GetClipboardText())
           if t then
             ed.name, ed.color, ed.press, ed.face = t.name ~= "" and t.name or ed.name, t.color, t.press, t.face
+            if not t.lua then ed.press = SL.ToLua(t.lines or {}) end -- a plain social's lines, as Lua
             message = "Pasted: save to keep it."
           else
             message = why or "The clipboard holds no social."

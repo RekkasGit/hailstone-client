@@ -926,6 +926,7 @@ if(NMSC_BUILD_TESTS)
     tests/inventory_hot_button_test.cpp
     tests/pet_hot_buttons_test.cpp
     tests/lua_slot_info_test.cpp
+    tests/social_editor_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp

@@ -5,13 +5,16 @@
 //                                       press_commands, faces}
 //   eq.LuaSocial(n)                     {name, color, lines, lua, press, face, running, hash, rules = {mode, caps, press_commands, faces}}
 //                                       or nil for an empty social
-//   eq.SetLuaSocial(n, t)               t = {name, color, press, face}: saved; empty press and face make it a plain
-//                                       social again, an empty name clears it
+//   eq.SetLuaSocial(n, t)               t = {name, color, press, face [, lines]}: saved; empty press and face make it
+//                                       a plain social again (with `lines`, up to five, as its command lines), an
+//                                       empty name clears it
 //   eq.LuaSocialFace(n)                 {label, color = {r, g, b}, cooldown, overlay, enabled, tooltip, error} or nil
 //   eq.LuaSocialDryRun(n [, t [, mods]]) the commands the press would send: {ok, lines, error, mode}; t gives unsaved
 //                                       code, mods = {shift, ctrl, alt}
 //   eq.PressLuaSocial(n), eq.StopLuaSocial(n)
-//   eq.LuaSocialExport(n)               the share text; eq.LuaSocialImport(text) -> t or nil, why
+//   eq.LuaSocialExport(n [, t])         the share text of social n (Lua or plain), or of t = {name, color, press,
+//                                       face, lines} (an editor's unsaved social);
+//   eq.LuaSocialImport(text)            -> {name, color, press, face, lua, lines} or nil, why
 //   eq.LuaComplete(before)              completion for the editor at the end of `before`: start (1-based, where the
 //                                       word begins), {names}: mq.TLO paths, mq.*, button.*
 //   eq.LuaSocialEditRequest()           a social the editor was asked to open (a right click, /luasocial), or nil
@@ -19,6 +22,7 @@
 //   eq.SocialColors()                   the 20 social colours as {r, g, b} (the social editor's colour buttons)
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <optional>
 #include <span>
@@ -96,6 +100,16 @@ void push_file(lua_State* L, const game::LuaSocialFile& f) {
     set_int(L, "color", f.color);
     set_str(L, "press", f.lua.press);
     set_str(L, "face", f.lua.face);
+    set_bool(L, "lua", !f.lua.empty());
+    lua_createtable(L, game::kSocialLines, 0);
+    for (int i = 0; i < game::kSocialLines; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        const std::string empty;
+        const std::string& line = k < f.lines.size() ? f.lines[k] : empty;
+        lua_pushlstring(L, line.data(), line.size());
+        lua_rawseti(L, -2, i + 1);
+    }
+    lua_setfield(L, -2, "lines");
 }
 
 int LuaSocialRules(lua_State* L) {
@@ -139,10 +153,19 @@ int SetLuaSocial(lua_State* L) {
     if (n < 0) return 0;
     // Every field onto the stack before any std::string exists.
     const int base = lua_gettop(L);
-    for (const char* k : {"name", "color", "press", "face"}) lua_getfield(L, 2, k);
+    for (const char* k : {"name", "color", "press", "face", "lines"}) lua_getfield(L, 2, k);
     std::string name = string_at(L, base + 1);
     int color = static_cast<int>(lua_tointeger(L, base + 2));
     game::LuaSocial lua{string_at(L, base + 3), string_at(L, base + 4)};
+    std::optional<std::array<std::string, game::kSocialLines>> lines;
+    if (lua_istable(L, base + 5)) {
+        lines.emplace();
+        for (int i = 0; i < game::kSocialLines; ++i) {
+            lua_rawgeti(L, base + 5, i + 1); // (raw: no metamethod can raise past the strings)
+            (*lines)[static_cast<std::size_t>(i)] = string_at(L, -1).substr(0, 255); // the editor's limit
+            lua_pop(L, 1);
+        }
+    }
     lua_settop(L, base);
     game::Social& s = h.hot_buttons->social(n);
     if (name.empty()) {
@@ -152,6 +175,7 @@ int SetLuaSocial(lua_State* L) {
         s.color = color;
         s.lua = std::move(lua);
         if (s.is_lua()) s.lines = {};
+        else if (lines) s.lines = std::move(*lines);
     }
     if (h.actions) h.actions->social_changed(n);
     else if (h.scripts) h.scripts->forget_button(n);
@@ -258,7 +282,25 @@ int LuaSocialExport(lua_State* L) {
     int n = social_arg(L, 1);
     if (n < 0) return 0;
     const game::Social& s = h.hot_buttons->social(n);
-    std::string text = game::export_lua_social({s.name, s.color, s.lua});
+    if (lua_istable(L, 2)) {
+        // The editor's unsaved social: every field onto the stack before any std::string exists.
+        const int base = lua_gettop(L);
+        for (const char* k : {"name", "color", "press", "face", "lines"}) lua_getfield(L, 2, k);
+        game::LuaSocialFile f{string_at(L, base + 1), static_cast<int>(lua_tointeger(L, base + 2)),
+                              {string_at(L, base + 3), string_at(L, base + 4)}, {}};
+        if (lua_istable(L, base + 5))
+            for (int i = 0; i < game::kSocialLines; ++i) {
+                lua_rawgeti(L, base + 5, i + 1);
+                f.lines.push_back(string_at(L, -1));
+                lua_pop(L, 1);
+            }
+        lua_settop(L, base);
+        std::string text = game::export_lua_social(f);
+        lua_pushlstring(L, text.data(), text.size());
+        return 1;
+    }
+    std::string text = game::export_lua_social(
+        {s.name, s.color, s.lua, std::vector<std::string>(s.lines.begin(), s.lines.end())});
     lua_pushlstring(L, text.data(), text.size());
     return 1;
 }

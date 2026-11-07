@@ -5,8 +5,20 @@
 // saves the socials (SaveSocialsToIni) and closes; Clear (sub_007585e0) empties the name and the lines; a colour
 // button SEW_TC0..19Button gives the name box its text colour and becomes the social's colour.
 // CSocialEditWnd::GetSocialTextColor @0x758700: a colour button's text colour, 0xff606060 out of range.
+//
+// For the UI packs' editors (Hailstone's, not the original's):
+//   eq.SocialEditorSocial()   the social 0..119 the editor is open on, or nil
+//   eq.SocialLine(text)       a line as a press runs it (game::split_social_line): {pause = steps or nil,
+//                             timers = {tenths, ...}, command, kind = "empty" | "command" | "text" | "chatserver" |
+//                             "invalid", name = the command's ("/assist") for kind "command"}
+//   eq.SlashCommands(prefix)  the game's commands starting with prefix ("/as": {"/assist", ...}), in the order the
+//                             game tries them (its first is what the prefix runs); GM commands only for a GM. The
+//                             client's own and plugins' commands are not listed.
+//   eq.PressSocial(n)         a press of social n, as a hot button's (ActionsUi::press_social)
+//   eq.CurrentSocial()        the social a press queued and is running, or nil; eq.StopSocial(): /stopsocial
 
 #include <array>
+#include <cctype>
 #include <charconv>
 #include <cstdint>
 #include <memory>
@@ -19,7 +31,10 @@
 
 #include "app/actions_ui.h"
 #include "app/lua_eq_windows.h"
+#include "game/hot_button_press.h"
 #include "game/hotbuttons.h"
+#include "game/slash_commands.h"
+#include "net/game_connection.h"
 
 namespace nmsc::app {
 
@@ -45,6 +60,10 @@ public:
     SocialEditWindow() : StockWindow("SocialEditWnd", false) {}
 
     bool shown(EqHost& h) override { return open_ && h.in_game; }
+    void set_shown(EqHost& h, bool show) override {
+        open_ = show;
+        if (!show) h.social_editing = -1;
+    }
 
     // FUN_00758bb0: the social to edit, then FUN_00758730 and Show(1, 1, 1).
     bool activate(EqHost& h, int social) override {
@@ -54,6 +73,7 @@ public:
         color_ = 0;
         load(*h.hot_buttons);
         open_ = true;
+        h.social_editing = social;
         return true;
     }
 
@@ -122,6 +142,7 @@ private:
             if (h.actions) h.actions->socials_changed(); // SaveSocialsToIni(1)
         }
         open_ = false; // Deactivate
+        h.social_editing = -1;
     }
 
     int page_ = 0, button_ = 0, color_ = 0;
@@ -140,6 +161,96 @@ int OpenSocialEditor(lua_State* L) {
     return 0;
 }
 
+// eq.SocialEditorSocial(): the social the editor is open on, or nil.
+int SocialEditorSocial(lua_State* L) {
+    EqHost& h = *host_of(L);
+    if (h.social_editing < 0 || !h.in_game) return 0;
+    lua_pushinteger(L, h.social_editing);
+    return 1;
+}
+
+// eq.SocialLine(text): the line's waits and cooldowns, and what the interpreter makes of the rest (InterpretCmd's
+// split, game::parse_command_line; a plugin's or script's command reads as "invalid", as they are not the game's).
+int SocialLine(lua_State* L) {
+    EqHost& h = *host_of(L);
+    std::string text = luaL_checkstring(L, 1);
+    game::SocialLineParts parts = game::split_social_line(text);
+    const bool gm = h.conn && h.conn->profile() && h.conn->profile()->gm;
+    game::CommandLine cl = game::parse_command_line(parts.command, gm, h.conn ? &h.conn->strings() : nullptr);
+    lua_createtable(L, 0, 5);
+    if (parts.pause) {
+        lua_pushinteger(L, *parts.pause);
+        lua_setfield(L, -2, "pause");
+    }
+    lua_createtable(L, static_cast<int>(parts.timers.size()), 0);
+    for (std::size_t i = 0; i < parts.timers.size(); ++i) {
+        lua_pushinteger(L, parts.timers[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "timers");
+    lua_pushlstring(L, parts.command.data(), parts.command.size());
+    lua_setfield(L, -2, "command");
+    const char* kind = "empty";
+    switch (cl.kind) {
+    case game::CommandLine::Kind::Empty: kind = "empty"; break;
+    case game::CommandLine::Kind::ChatServer: kind = "chatserver"; break;
+    case game::CommandLine::Kind::Command: kind = "command"; break;
+    case game::CommandLine::Kind::Invalid: kind = "invalid"; break;
+    case game::CommandLine::Kind::Text: kind = "text"; break;
+    }
+    lua_pushstring(L, kind);
+    lua_setfield(L, -2, "kind");
+    if (cl.kind == game::CommandLine::Kind::Command) {
+        lua_pushstring(L, game::slash_commands()[cl.index].name);
+        lua_setfield(L, -2, "name");
+    }
+    return 1;
+}
+
+// eq.SlashCommands(prefix): the commands whose built-in name starts with prefix (case ignored), in table order.
+int SlashCommands(lua_State* L) {
+    EqHost& h = *host_of(L);
+    std::string prefix = luaL_checkstring(L, 1);
+    for (char& c : prefix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const bool gm = h.conn && h.conn->profile() && h.conn->profile()->gm;
+    lua_newtable(L);
+    lua_Integer n = 0;
+    for (const game::SlashCommand& c : game::slash_commands()) {
+        if (c.restriction > 0 && !gm) continue;
+        std::string_view name = c.name;
+        if (name.size() < prefix.size()) continue;
+        bool match = true;
+        for (std::size_t i = 0; i < prefix.size() && match; ++i)
+            match = std::tolower(static_cast<unsigned char>(name[i])) == static_cast<unsigned char>(prefix[i]);
+        if (!match) continue;
+        lua_pushlstring(L, name.data(), name.size());
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+
+int PressSocial(lua_State* L) {
+    EqHost& h = *host_of(L);
+    auto social = static_cast<std::int32_t>(luaL_checkinteger(L, 1));
+    if (!h.actions || !h.in_game || social < 0 || social >= game::kSocialPages * game::kSocialButtons) return 0;
+    h.actions->press_social(social);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int CurrentSocial(lua_State* L) {
+    EqHost& h = *host_of(L);
+    if (!h.actions || h.actions->current_social() < 0) return 0;
+    lua_pushinteger(L, h.actions->current_social());
+    return 1;
+}
+
+int StopSocial(lua_State* L) {
+    EqHost& h = *host_of(L);
+    if (h.actions) h.actions->stop_social();
+    return 0;
+}
+
 } // namespace
 
 Rgb social_text_color(int color) {
@@ -153,7 +264,14 @@ void add_socialedit_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
 }
 
 void register_socialedit_api(lua_State* L, EqHost& h) {
-    static const luaL_Reg fns[] = {{"OpenSocialEditor", OpenSocialEditor}, {nullptr, nullptr}};
+    static const luaL_Reg fns[] = {{"OpenSocialEditor", OpenSocialEditor},
+                                   {"SocialEditorSocial", SocialEditorSocial},
+                                   {"SocialLine", SocialLine},
+                                   {"SlashCommands", SlashCommands},
+                                   {"PressSocial", PressSocial},
+                                   {"CurrentSocial", CurrentSocial},
+                                   {"StopSocial", StopSocial},
+                                   {nullptr, nullptr}};
     lua_pushlightuserdata(L, &h);
     luaL_setfuncs(L, fns, 1);
 }
