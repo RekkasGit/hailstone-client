@@ -391,6 +391,7 @@ public:
     bool backstab_either_hand(const net::GameConnection&) const override {
         return flag(NMSC_FLAG_BACKSTAB_EITHER_HAND);
     }
+    bool solo_adventure(const net::GameConnection&) const override { return flag(NMSC_FLAG_SOLO_ADVENTURE); }
     std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const override {
         std::uint32_t mask = 0;
         if (hook("vitals_classes")) {
@@ -545,7 +546,7 @@ int l_set_active(lua_State* L) {
 }
 
 // hailstone.set_flag(name, on): wide_item_links, items_any_class, hide_any_class, aa_any_level, aa_train_all,
-// augment_classes, research_classes, focus_classes, backstab_either_hand.
+// augment_classes, research_classes, focus_classes, backstab_either_hand, solo_adventure.
 int l_set_flag(lua_State* L) {
     need_cap(L, plugin::kCapExtend, "hailstone.set_flag");
     static const std::pair<const char*, std::uint32_t> kFlags[] = {
@@ -553,7 +554,7 @@ int l_set_flag(lua_State* L) {
         {"hide_any_class", NMSC_FLAG_HIDE_ANY_CLASS},   {"aa_any_level", NMSC_FLAG_AA_ANY_LEVEL},
         {"aa_train_all", NMSC_FLAG_AA_TRAIN_ALL},       {"augment_classes", NMSC_FLAG_AUGMENT_CLASSES},
         {"research_classes", NMSC_FLAG_RESEARCH_CLASSES}, {"focus_classes", NMSC_FLAG_FOCUS_CLASSES},
-        {"backstab_either_hand", NMSC_FLAG_BACKSTAB_EITHER_HAND}};
+        {"backstab_either_hand", NMSC_FLAG_BACKSTAB_EITHER_HAND}, {"solo_adventure", NMSC_FLAG_SOLO_ADVENTURE}};
     const std::string_view name = luaL_checkstring(L, 1);
     const bool on = lua_isnone(L, 2) || lua_toboolean(L, 2) != 0;
     Script& s = Script::of(L);

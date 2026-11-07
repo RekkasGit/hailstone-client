@@ -1,8 +1,11 @@
 // game/light_list.h and render/scene_lighting.h: the enhanced lighting mode's lights and the block the shaders read.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 
+#include <glm/common.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/geometric.hpp>
 
 #include "assets/model.h"
@@ -20,6 +23,17 @@
 #include "render/weather_renderer.h"
 
 using namespace nmsc;
+
+// The shader's own kernel, compiled as C++ with GLM's float operations (shaders/ao_kernel.glsl).
+namespace ao_kernel_test {
+using glm::vec3;
+using glm::dot;
+using glm::min;
+using glm::max;
+using glm::clamp;
+using glm::inversesqrt;
+#include "../shaders/ao_kernel.glsl"
+}
 
 TEST_CASE("select_lights: dynamic lights first, then the zone's nearest, within range and the cap") {
     std::vector<assets::PointLight> zone{
@@ -655,4 +669,72 @@ TEST_CASE("classic_actor_light: the region shaders' light for the baked light wh
     // Full bright (the item preview, and the renderer before it has a scene light): the texture as it is.
     CHECK(render::classic_actor_light(render::classic_full_bright(), down) == glm::vec3(1.0f));
     CHECK(render::classic_full_bright().params.x == 0.0f);
+}
+
+TEST_CASE("ao kernel radius: the world radius far off, the pixels' own size capped close up") {
+    // Far off the 72 px cap never bites: 24 px, and the world radius comes back out.
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, 24.0f, 100.0f, 0.6f, 720.0f) == doctest::Approx(4.0f));
+    // Close up the cap governs: 1200 px cut to 72, the kernel shrinks to those pixels' world size.
+    float r_px = glm::min(4.0f / (2.0f * 0.6f) * 0.5f * 720.0f, 72.0f);
+    CHECK(r_px == doctest::Approx(72.0f));
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, r_px, 2.0f, 0.6f, 720.0f) == doctest::Approx(0.24f));
+    // The same view in more pixels: doubling both keeps the world radius.
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, 50.0f, 10.0f, 0.6f, 720.0f) ==
+          doctest::Approx(ao_kernel_test::ao_kernel_radius(4.0f, 100.0f, 10.0f, 0.6f, 1440.0f)));
+}
+
+TEST_CASE("ao sample: flat, convex and distant samples occlude nothing; a concave one does") {
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(1.0f, 0.0f, 0.0f), n, 4.0f, 0.01f) == 0.0f); // coplanar
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, -1.0f), n, 4.0f, 0.01f) == 0.0f); // behind
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 10.0f), n, 4.0f, 0.01f) == 0.0f); // past the radius
+    // Nearly coplanar facets must not acquire contact shadows from their tiny angle alone.
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(1.0f, 0.0f, 0.05f), n, 4.0f, 0.0f) == 0.0f);
+    float corner = ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 1.0f), n, 4.0f, 0.01f);
+    CHECK(corner > 0.0f);
+    CHECK(corner <= 1.0f);
+    // A zero offset stays finite, and more bias only takes occlusion away.
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f), n, 4.0f, 0.0f) == 0.0f);
+    CHECK(std::isfinite(ao_kernel_test::ao_sample(glm::vec3(0.0f), n, 4.0f, 0.01f)));
+    float biased = ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 1.0f), n, 4.0f, 0.5f);
+    CHECK(biased > 0.0f);
+    CHECK(biased < corner);
+}
+
+TEST_CASE("ao sample: dimensionless, so one shape at any scale occludes the same") {
+    const glm::vec3 n(0.0f, 0.0f, 1.0f), o(1.0f, 2.0f, 2.0f);
+    float a = ao_kernel_test::ao_sample(o, n, 6.0f, 0.06f);
+    CHECK(a > 0.0f);
+    CHECK(ao_kernel_test::ao_sample(o * 2.5f, n, 15.0f, 0.15f) == doctest::Approx(a));
+    CHECK(ao_kernel_test::ao_sample(o * 0.1f, n, 0.6f, 0.006f) == doctest::Approx(a));
+}
+
+TEST_CASE("ao sample: at the default intensity, a mid-range occluder shades about as the old kernel did") {
+    // The kernel before ao_kernel.glsl, with its own scale (intensity 4, x 5, normalised by r^6): its weight grew as
+    // 1/|v|, which blotched near samples black. Mid-range (1 to 3 units, 30 to 60 degrees above the surface), the
+    // bounded kernel at render::AoView's intensity must stay within a factor of two of it, or contact shadows fade.
+    const float radius = 4.0f, samples = 12.0f, intensity = render::AoView{}.intensity;
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    auto old_shade = [&](const glm::vec3& v) {
+        const float vv = glm::dot(v, v), f = std::max(radius * radius - vv, 0.0f);
+        return f * f * f * std::max(glm::dot(v, n) / (vv + 0.01f), 0.0f) * 4.0f * 5.0f /
+               (std::pow(radius, 6.0f) * samples);
+    };
+    for (float d : {1.0f, 2.0f, 3.0f})
+        for (float deg : {30.0f, 45.0f, 60.0f}) {
+            const float a = glm::radians(deg);
+            const glm::vec3 v(d * std::cos(a), 0.0f, d * std::sin(a));
+            const float shade = ao_kernel_test::ao_sample(v, n, radius, 0.0f) * intensity / samples;
+            CAPTURE(d);
+            CAPTURE(deg);
+            CHECK(shade > 0.5f * old_shade(v));
+            CHECK(shade < 2.0f * old_shade(v));
+        }
+}
+
+TEST_CASE("ao visibility: open, shaded and closed stay within [0, 1]") {
+    CHECK(ao_kernel_test::ao_visibility(0.0f, 4.0f, 12.0f) == doctest::Approx(1.0f));
+    float part = ao_kernel_test::ao_visibility(1.5f, 4.0f, 12.0f);
+    CHECK(part == doctest::Approx(0.5f));
+    CHECK(ao_kernel_test::ao_visibility(12.0f, 4.0f, 12.0f) == 0.0f);
 }

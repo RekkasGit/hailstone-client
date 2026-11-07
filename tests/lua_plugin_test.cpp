@@ -99,6 +99,7 @@ hs.set_pet_list({{spawn = 300, class = 13}, {spawn = 301, class = 13}})
 hs.set_flag('wide_item_links', true)
 hs.set_flag('research_classes', true)
 hs.set_flag('backstab_either_hand', true)
+hs.set_flag('solo_adventure', true)
 hs.set_vitals{max_hp = 1234}
 hs.hooks{
   is_spellcaster = function() return true end,
@@ -150,6 +151,7 @@ TEST_CASE("Lua plugin: the hailstone module's extension, packets, UI and readers
     CHECK(h.chain.research_classes(c));
     CHECK_FALSE(h.chain.focus_classes(c));
     CHECK(h.chain.backstab_either_hand(c));
+    CHECK(h.chain.solo_adventure(c));
     CHECK(h.chain.character_vitals(c).max_hp == 1234);
 
     // Hooks.

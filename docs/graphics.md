@@ -124,7 +124,9 @@ The flames are found in the zone's data (`assets/zone_fires.h`), in three forms 
 - An EQG zone's environment emitters, `<zone>_EnvironmentEmitters.txt` (`Name^EmitterDefIdx^X^Y^Z^[AlwaysVisible^]
   Lifespan`, positions in the zone's own frame) over `environmentemittersnew.edd`. `assets::load_zone` adds them to
   the zone's particle fixtures, pointing up, so both lightings draw them (they were not drawn at all before): torches,
-  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow, lavastorm).
+  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow). A
+  revamped zone loaded from its RoF2 `.s3d` (`assets::is_revamped_zone_name`: nektulos, arena...) takes none: the
+  file beside it is the live `.eqg`'s, and its torches and campfires would burn in mid-air in the old zone.
   Their flames are the definitions with a flame sprite (`FlameD.dds`, `new_flame.dds`, `new_fire.dds`, `fire01.dds`,
   `fire01_gray.dds`, `flamegray.dds`) and no "lava" in the name (nor an `mml_instance_flame` one); their hue comes from the definition's start colour
   (vald_bluetorch is FlameD.dds in 10, 10, 255), or for a grey one from its name (cob_brazier_green).
@@ -796,10 +798,15 @@ specks against the sky.
   sampled with a 1.5-texel normal offset and 3 x 3 hardware-filtered comparisons, fading out over the last 15 %. The
   sun term of the zone, character and object shaders is multiplied by it.
 
-- **Ambient occlusion** (`shaders/ao.frag`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
+- **Ambient occlusion** (`shaders/ao.frag`, `shaders/ao_kernel.glsl`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
   the resolved depth: view positions rebuilt from the reverse-Z projection terms, the normal from the nearer
   neighbour on each axis, 12 samples on a spiral within 4 world units (more smears the ground under characters) (at most a tenth of the screen height),
-  turned by a 4 x 4 ordered pattern; the post pass averages the 4 x 4 block weighted by depth and darkens the scene
+  turned by a 4 x 4 ordered pattern; each sample takes the bounded angular kernel (cubic distance falloff times the
+  sample's horizon above the surface), and at close range the kernel's world-space radius shrinks to the pixel cap's
+  own world size, so near samples cannot darken out of proportion. An angular bias of 0.1 keeps almost coplanar
+  samples from shadowing themselves. The samples' shade is scaled by AoView's intensity 12 over the 12 samples: the
+  bounded kernel weighs a mid-range sample less than the old one (whose weight grew as 1/|v|, which blotched the
+  near ones black), and 12 keeps a contact corner's shade near the old depth (tests/lighting_test.cpp). The post pass averages the 4 x 4 block weighted by depth and darkens the scene
   by it (strength 0.85) before the exposure. Applied to everything, not to the ambient alone (there is no depth
   prepass), so it is kept to contact shadows.
 
@@ -1003,6 +1010,12 @@ At run time:
   - the sun's and moon's GGX highlight from the roughness map, taken into 0.5..1.
 - `display.material_maps` (on by default) and the viewer's `--no-material-maps` turn the maps off.
 - Every viewer, the model viewer too, takes `--textures`.
+
+## Name plates
+
+NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the colour Hailstone's target plate already uses) instead of this client's yellow (255, 220, 120). Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the yellow for NPC names. The target keeps its consider colour in both settings.
+
+Neither colour is the original's: PlayerClient::SetNameSpriteTint gives every NPC but a mercenary one fixed tint (0xad, 0xb8, 0x17) and only flashes the target's toward white; the con-coloured target plate is Hailstone's look too (`draw_nameplates`). Which name sprites are drawn, and their parts: docs/mechanics.md "Name sprites".
 
 ## Settings
 

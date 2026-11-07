@@ -273,7 +273,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 | | |
 |---|---|
 | `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`). A hooks table with a metatable is read through it, in a protected call: an error in its `__index` ends the script |
-| `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand` (`extend`) |
+| `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand`, `solo_adventure` (`extend`) |
 | `set_player_classes(mask)`, `set_character_classes(name, mask)`, `set_pet_list{{spawn =, class =}}`, `set_vitals{max_hp =, ...}` | what the server knows (`extend`) |
 | `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. With Lua's `string.pack` / `string.unpack` a script reads and writes any layout (`packets`) |
 | `send_packet(stream, opcode, data)` | a packet to the server (`packets`) |
@@ -453,7 +453,9 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   (`augment_classes`), the research containers (`research_classes`) and focus effects (`focus_classes`: SPA 411,
   an AA's classes, and no Bard / pure melee focus filter), and Backstab with a piercer in either hand, not only the
   primary (`backstab_either_hand`, for a server whose backstab uses the better hand; a client older than the switch
-  ignores it).
+  ignores it), and an adventure recruiter's Request from a player in no group or raid (`solo_adventure`, for a server
+  that takes solo adventures; stock EQEmu drops such a request unanswered, so without the switch the client stops it
+  with its own line; an older client ignores the switch).
 - **tell the client what its server knows**:
   - `set_player_classes` and `set_character_classes`: multiclass masks, which the client shows as "War/Clr" in the
     window title, character select and the guild window;

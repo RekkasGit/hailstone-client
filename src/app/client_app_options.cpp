@@ -337,6 +337,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "news_last_read") return config_.get_int("news.last_read", 0);
     if (o == "news_automatic") return config_.get_bool("news.automatic", false) ? 1 : 0;
     if (o == "npc_names") return npc_names_ ? 1 : 0;
+    // Hailstone: NPC names in their consider colour, on by default (draw_nameplates).
+    if (o == "con_name_colour") return con_name_colour_ ? 1 : 0;
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -452,6 +454,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.save(config_path_);
         return;
     }
+    if (o == "con_name_colour") {
+        con_name_colour_ = v != 0;
+        config_.set_bool("display.con_name_colour", v != 0);
+        config_.save(config_path_);
+        return;
+    }
     if (o == "pc_names" || o == "npc_names") {
         (o == "pc_names" ? pc_names_ : npc_names_) = v != 0;
         config_.set_bool(o == "pc_names" ? "display.pc_names" : "display.npc_names", v != 0);
@@ -546,6 +554,7 @@ void ClientApp::apply_settings() {
     assets::texture_overrides().set_material_maps(config_.get_bool("display.material_maps", true));
     pc_names_ = config_.get_bool("display.pc_names", true);
     npc_names_ = config_.get_bool("display.npc_names", true);
+    con_name_colour_ = config_.get_bool("display.con_name_colour", true);
     own_name_ = config_.get_bool("display.own_name", true);
     player_menu_ = config_.get_bool("mouse.player_menu", true);
     // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.

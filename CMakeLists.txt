@@ -950,6 +950,7 @@ if(NMSC_BUILD_TESTS)
     tests/trade_ui_test.cpp
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
+    tests/adventure_request_test.cpp
     tests/dz_packets_test.cpp
     tests/guild_bank_packets_test.cpp
     tests/notice_packets_test.cpp

@@ -749,6 +749,8 @@ private:
     // Cameras 1..5: the spawn they follow (the player, as drawn this frame), and their update into camera_.
     game::CameraTarget camera_target(const glm::vec3& feet) const;
     void update_game_camera(const glm::vec3& feet);
+    // unk_EQCamera_SetPosition's sweep for the cameras 1..6 (game/cameras.h).
+    game::CameraSweep camera_sweep() const;
     // The player's eye: its z plus PlayerClient_GetEyeHeight (game/spawn_heights.h).
     glm::vec3 eye_position() const;
     void draw_ui(float fps);
@@ -1265,6 +1267,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
+    bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,

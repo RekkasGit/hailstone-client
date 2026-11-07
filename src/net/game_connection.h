@@ -441,6 +441,9 @@ public:
     // The local player's position (world coordinates, game/coords.h) and heading (0..512).
     // Sent as OP_ClientUpdate under the original client's rules.
     void set_player_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, bool moving);
+    // Where the local player (and the mount it rides) is drawn this frame: the camera's place between the game
+    // clock's steps (game::WorldState::set_local_drawn). Nothing is sent.
+    void set_player_drawn(const glm::vec3& position, float heading) { world_.set_local_drawn(position, heading); }
     // What set_player_motion last gave: whether the player is moving, and the heading (0..512).
     bool player_moving() const { return moving_; }
     float player_heading() const { return heading_; }

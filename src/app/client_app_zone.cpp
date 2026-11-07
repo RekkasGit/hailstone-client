@@ -413,6 +413,10 @@ void ClientApp::enter_zone() {
     }
     floor_offset_ = me->heights.avatar_height;
     feet_ = position - glm::vec3(0, 0, floor_offset_);
+    // The last zone's last step is not drawn across into this one: the body and camera are drawn between steps
+    // (update_player), and a frame before the first step here would offset them by it.
+    step_move_ = glm::vec3(0.0f);
+    step_turn_ = step_pitch_ = 0.0f;
     if (audio_ && music_dead_) {
         // The death music stops on the zone-in after it (MSG_READY / the repop).
         audio_->music_selection(audio::kMusicDeath, false);
