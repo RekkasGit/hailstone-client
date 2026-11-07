@@ -3,8 +3,10 @@
 #include <doctest/doctest.h>
 
 #include <string>
+#include <utility>
 
 #include <imgui.h>
+#include <lua.hpp>
 
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
@@ -107,6 +109,34 @@ TEST_CASE("player menu: the rows and what each sends") {
         REQUIRE(host.menus.size() == 1);
         CHECK(host.menus[0].x == 100.0f);
         CHECK(host.menus[0].rows[0].text == "Ann");
+        {
+            // eq.GameMenus(scale) measures the rows at that scale, for a pack that zooms its menus.
+            lua_State* L = luaL_newstate();
+            lua_newtable(L);
+            api.register_functions(L);
+            lua_setglobal(L, "eq");
+            ImGuiIO& io = ImGui::GetIO();
+            io.IniFilename = nullptr; // no imgui.ini in the working folder
+            unsigned char* px = nullptr;
+            int fw = 0, fh = 0;
+            io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh); // the default font, built
+            io.DisplaySize = ImVec2(1280, 800);
+            io.DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            auto size = [&](const char* call) {
+                REQUIRE(luaL_dostring(L, call) == LUA_OK);
+                double w = lua_tonumber(L, -2), h = lua_tonumber(L, -1);
+                lua_settop(L, 0);
+                return std::pair{w, h};
+            };
+            auto one = size("local m = eq.GameMenus()[1]; return m.w, m.h");
+            auto two = size("local m = eq.GameMenus(2)[1]; return m.w, m.h");
+            CHECK(two.first > one.first * 1.5);
+            CHECK(two.second > one.second * 1.5);
+            CHECK(size("local m = eq.GameMenus(1)[1]; return m.w, m.h") == one);
+            ImGui::EndFrame();
+            lua_close(L);
+        }
         host.menus.clear();
         conn.change_client_option(game::ClientOption::ContextMenus, 0);
         CHECK_FALSE(api.open_player_menu(4101, 100.0f, 120.0f));

@@ -115,6 +115,16 @@ std::string make_item_link(std::uint32_t item_id, std::string_view name, bool wi
 // hash of ItemBase_CalcItemLinkHash.
 std::string make_item_link(const net::Item& item, bool wide);
 
+// ItemBase_GetUnknown0x100Max @0x7b2180 with argument 1: 0 for an item whose Type (ItemDefinition +0x11a, EQEmu's
+// ItemClass) is not 0; else the highest BenefitFlag (+0x100) above 0 of the item and, the same way, of each item in
+// it (a common item's augments).
+std::int32_t benefit_flag_max(const net::Item& item);
+
+// CItemDisplayWnd::WndNotification @0x6ae870, a left click (1) on IconButton: the window's item goes as a link into
+// the active chat window's input (GetActiveChatWindow: the Always Chat Here one, else the current one;
+// CreateItemTagString, AddItemTag), which then has the focus; only while benefit_flag_max is 0.
+inline bool display_icon_links(const net::Item& item) { return benefit_flag_max(item) == 0; }
+
 // The loot window's Link All button (CLootWnd_LinkItemToChat @0x6bcf20) over the active chat window's input line:
 // the text typed when it was pressed is kept; each link is added at the end, ", " between links. When ", " does not
 // fit (CEditWnd::ReplaceSelection: the raw text, tags included, over MaxChars, 512 for the English client) the line

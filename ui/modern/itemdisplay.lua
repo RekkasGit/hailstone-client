@@ -320,6 +320,12 @@ local function body(win, w, h, s)
   local icon = 44 * s
   if tex == false then tex = nil end
   T.Icon(x, y, icon, s, tex, u0, v0, u1, v1, nil, RADIUS7)
+  -- the stock window's icon button: a click links the item into the chat window you last used (or the one set to
+  -- Always Chat Here)
+  ui.SetCursorScreenPos(x, y)
+  if ui.InvisibleButton("##linkicon", icon, icon) then eq.ClickChild(win, "IconButton", "left") end
+  T.HoverFx(x, y, x + icon, y + icon, s, 7)
+  if ui.IsItemHovered() then ui.SetTooltip("Click to link this item in chat") end
   local name = lines[1] or { eq.WindowTitle(win) or "", C.text }
   local tx = x + icon + 10 * s
   ui.SetCursorScreenPos(tx, y)

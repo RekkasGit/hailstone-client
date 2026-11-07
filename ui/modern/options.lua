@@ -198,6 +198,12 @@ local function generalTab()
     check("context_menus", "Allow Context Menus", "Right-clicking a window opens its menu.")
     check("player_menu", "Player Right-Click Menu",
       "Hailstone: right-clicking another player opens a menu (Send Tell, Invite to Group, Invite to Raid, Trade, Inspect) instead of inspecting them. Needs context menus allowed.")
+    -- menus.lua's menus.scale (this pack's look: the size its context menus draw at; Ctrl+wheel over a menu too)
+    row("Menu Size", "The size of right-click menus and their text. Ctrl+mouse wheel over a menu changes it too.", function()
+      local v = math.floor((tonumber(ui.GetSetting("menus.scale")) or 1.25) * 100 + 0.5)
+      local nv, changed = ui.SliderInt("##menus.scale", v, 75, 200, v .. " %%")
+      if changed then ui.SetSetting("menus.scale", string.format("%.2f", nv / 100)) end
+    end)
     check("pet_window_popup", "Pet Window Auto-Popup", "The pet window opens when you get a pet.")
     check("target_click_help", "Target Click Shows Help",
       "Show help text when you left click on a target object or player.")
@@ -208,6 +214,8 @@ local function generalTab()
       "Toggle whether you will let the game make you duck to fit into small spaces.")
     check("allow_auto_stand", "Allow Auto-stand",
       "Toggle whether moving forward automatically makes your character stand up if sitting.")
+    check("illusion_mounts", "Ride While Illusioned",
+      "Hailstone: an illusion does not stop you summoning and riding a mount. Off: as in the original, many illusions refuse the mount.")
     bit("click_through", 1, "Click Through Self", "Click through yourself.")
     bit("click_through", 2, "Click Through Pets", "Click through pets.")
     bit("click_through", 4, "Click Through Mercs", "Click through mercenaries.")
@@ -417,11 +425,6 @@ local function displayTab()
         if changed then ui.SetSetting("hud.snap.size", tostring(v)) end
       end)
     end
-    ui.TableNextRow()
-    ui.TableNextColumn()
-    ui.TableNextColumn()
-    if ui.Button("Video Modes", 0, 0) then eq.ShowWindow("VideoModesWindow", true) end
-    tip("Select your screen's resolution, color, and refresh rate settings.")
   end)
   section("Buffs and Songs", function()
     check("show_buff_timer", "Show Buff Timer", "Determines whether the buff timer is displayed on the buff.")

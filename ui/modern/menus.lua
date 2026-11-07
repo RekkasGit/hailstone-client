@@ -24,6 +24,15 @@ end
 
 local PAD_X, PAD_Y = 6, 5 -- the menus' padding (GameMenus measures the rows with the style in force when it runs)
 
+-- The context menus' zoom (menus.scale, 0.75..2; Options > Interface "Menu Size", or Ctrl+wheel over a menu): the
+-- text and padding at that size, a little larger than the EQ font by default. GameMenus measures at the same scale.
+local MENU_SCALE_MIN, MENU_SCALE_MAX, MENU_SCALE_DEFAULT = 0.75, 2.0, 1.25
+local function menuScale()
+  local v = tonumber(T.Setting("menus.scale"))
+  if not v then return MENU_SCALE_DEFAULT end
+  return math.max(MENU_SCALE_MIN, math.min(MENU_SCALE_MAX, v))
+end
+
 local function shadowPanel(x0, y0, x1, y1)
   ui.DrawRectFilled(x0 + 2, y0 + 4, x1 + 2, y1 + 6, 0, 0, 0, 0.30, 9)
 end
@@ -38,8 +47,9 @@ end
 local hovered = {}  -- menu number -> row whose hover was last sent to the game
 local shownBefore = false
 
-local function drawMenus(menus)
+local function drawMenus(menus, s)
   local overAny = false
+  local io = ui.GetIO()
   local flags = ui.WindowFlags.NoDecoration | ui.WindowFlags.NoMove | ui.WindowFlags.NoSavedSettings
   for m, menu in ipairs(menus) do
     ui.SetNextWindowPos(menu.x, menu.y, ui.Cond.Always)
@@ -47,6 +57,7 @@ local function drawMenus(menus)
     ui.SetNextWindowFocus() -- above every other window, like the game's menus
     if ui.Begin("##gamemenu" .. m, nil, flags) then
       ui.PushFont(2)
+      ui.SetWindowFontScale(s)
       for r, row in ipairs(menu.rows) do
         if row.separator then
           ui.Separator()
@@ -62,7 +73,7 @@ local function drawMenus(menus)
           if row.submenu then
             local x0, y0, x1, y1 = ui.GetItemRect()
             local open = hovered[m] == r
-            chevron(x1 - 6, (y0 + y1) / 2, 3.5, open and C.accent or C.muted, 1)
+            chevron(x1 - 6 * s, (y0 + y1) / 2, 3.5 * s, open and C.accent or C.muted, 1)
           end
           -- every row tells the game when the mouse gets to it (a submenu row opens its submenu; another row
           -- closes the submenus of this menu), as the stock list does
@@ -74,8 +85,14 @@ local function drawMenus(menus)
           ui.PopID()
         end
       end
+      ui.SetWindowFontScale(1)
       ui.PopFont()
       overAny = overAny or ui.IsWindowHovered()
+      -- Ctrl+wheel over a menu zooms the menus, as it zooms a dialog (the next frame measures at the new size)
+      if io.ctrl and (io.wheel or 0) ~= 0 and ui.IsWindowHovered() then
+        local ns = math.max(MENU_SCALE_MIN, math.min(MENU_SCALE_MAX, s * 1.1 ^ io.wheel))
+        ui.SetSetting("menus.scale", string.format("%.3f", ns))
+      end
     end
     ui.End()
   end
@@ -89,8 +106,9 @@ end
 ui.window("Game Menus", function()
   if not (eq.UiReady or eq.InGame)() then return end
   -- (the padding first: GameMenus measures the rows with it; nothing of style.Push changes what it measures)
-  ui.PushStyleVar(ui.StyleVar.WindowPadding, PAD_X, PAD_Y)
-  local got, menus = pcall(eq.GameMenus)
+  local s = menuScale()
+  ui.PushStyleVar(ui.StyleVar.WindowPadding, PAD_X * s, PAD_Y * s)
+  local got, menus = pcall(eq.GameMenus, s)
   if not got then
     ui.PopStyleVar()
     error(menus, 0)
@@ -101,7 +119,7 @@ ui.window("Game Menus", function()
     return
   end
   style.Push()
-  local ok, err = pcall(drawMenus, menus)
+  local ok, err = pcall(drawMenus, menus, s)
   style.Pop()
   ui.PopStyleVar()
   if not ok then error(err, 0) end

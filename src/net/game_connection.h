@@ -390,6 +390,8 @@ public:
     const std::optional<std::vector<std::int64_t>>& game_steps() const { return game_steps_; }
     // Hailstone (option ground_npcs): NPCs the server leaves in the air are drawn on the floor (WorldState::ground_npcs).
     void set_ground_npcs(bool on) { world_.ground_npcs = on; }
+    // Hailstone (option illusion_mounts): a rider under an illusion still rides (WorldState::illusion_mounts).
+    void set_illusion_mounts(bool on) { world_.illusion_mounts = on; }
     void reground() { world_.reground(); }
     // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
     void set_player_body_wet(std::uint8_t body_wet) {

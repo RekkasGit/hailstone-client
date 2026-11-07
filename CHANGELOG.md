@@ -3,6 +3,10 @@
 ## Unreleased
 
 - The target ring is now drawn on the ground: it follows slopes and steps, and characters, walls and the target's own legs hide it instead of it showing through them. It has a new look: a soft glowing band with turning dashes and a notch showing which way the target faces. It sweeps in when you change target and pulses while you auto attack (Options > Display "Target Ring" turns that off, lets the hidden part show faintly, and sets the ring's colour for each con, its opacity and its glow)
+- Clicking the icon in an item's details window links the item in chat: the link goes into the input of the chat window you last used, or of the one set to Always Chat Here, which then takes the keyboard. In the gamepad UI, X does it. As in the original, an item with a benefit flag (or an augment with one) is not linked
+- Right-click menus in the modern UI are a little larger, and their size can be changed: Options > Interface "Menu Size", or Ctrl+mouse wheel over a menu
+- Summoning a mount while under an illusion no longer fails with "You must have both the Horse Models and your current Luclin Character Model enabled to summon a mount." (the original client refuses many illusions). Options > General "Ride While Illusioned" turns this off
+- A robe on a Luclin model now covers the arms with its sleeves, in the robe's colour; the upper arms and forearms showed bare skin (or the arms' own armour)
 - The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
 - Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
 - Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off
@@ -16,6 +20,7 @@
 - Modern UI: every window that can be closed has "Close with Esc" in its right-click menu. Ticked, Escape closes it (the window opened or clicked last first, one per press); it is off for every window until you tick it
 - Modern UI: the AA window lists every ability in one list instead of four tabs. The search and the filters (now with a tab filter: General, Archetype, Class, Special) work across all of them, the list has columns for the tab, the era (the expansion an ability came with) and active or passive, and the window is more compact
 - The middle mouse button and up to five side buttons (shown as MOUS MID and MOUS AUX1..AUX5) can be bound to any command in Options > Keys, with or without Shift, Ctrl or Alt, as in the original client
+- Options > Display no longer has a Video Modes button: the Resolution list above it sets the same thing (the window still opens from the EQ menu)
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times

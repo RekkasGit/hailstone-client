@@ -2356,13 +2356,15 @@ int CascadeClose(lua_State* L) {
     return 0;
 }
 
-// menus = eq.GameMenus()   -- the open context menus: { x, y, w, h, rows = { { text, r, g, b, check, enabled,
-// separator, submenu } } } (EqHost::menus; sized for EQ font 2 as menus.lua draws them)
+// menus = eq.GameMenus([scale])   -- the open context menus: { x, y, w, h, rows = { { text, r, g, b, check,
+// enabled, separator, submenu } } } (EqHost::menus; sized for EQ font 2 at `scale`, 1 by default, 0.5..3, as
+// menus.lua draws them: a pack that zooms its menus draws the font at that scale)
 int GameMenus(lua_State* L) {
     auto& m = Impl::of(L);
+    const float scale = std::clamp(static_cast<float>(luaL_optnumber(L, 1, 1.0)), 0.5f, 3.0f);
     lua_newtable(L);
     ImFont* font = ui::eq_font(2);
-    float fs = font ? font->FontSize : ImGui::GetFontSize();
+    float fs = (font ? font->FontSize : ImGui::GetFontSize()) * scale;
     const ImGuiStyle& st = ImGui::GetStyle();
     int n = 0;
     for (auto& menu : m.host.menus) {
@@ -2374,7 +2376,7 @@ int GameMenus(lua_State* L) {
                 y += st.ItemSpacing.y + 1;
                 continue;
             }
-            float tw = font ? font->CalcTextSizeA(fs, FLT_MAX, 0.0f, r.text.c_str()).x : ImGui::CalcTextSize(r.text.c_str()).x;
+            float tw = font ? font->CalcTextSizeA(fs, FLT_MAX, 0.0f, r.text.c_str()).x : ImGui::CalcTextSize(r.text.c_str()).x * scale;
             w = std::max(w, tw);
             y += fs + st.ItemSpacing.y;
         }

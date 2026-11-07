@@ -13,12 +13,15 @@
 
 #include <imgui.h>
 
+#include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
 #include "core/log.h"
 #include "game/augments.h"
 #include "game/inventory.h"
 #include "game/item_display.h"
+#include "game/item_links.h"
 #include "game/mechanics/character.h"
+#include "game/server_ext.h"
 #include "game/spells.h"
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
@@ -245,6 +248,14 @@ public:
             modified_ = !modified_;
             cached_ = {};
             build_flags_ = 0;
+            return true;
+        }
+        if (id == "IconButton" && button == "left") {
+            // WndNotification @006ae870 (IconButton): the item as a link into the active chat window's input, which takes the
+            // focus (game::display_icon_links). One link through Link All's path adds nothing to a full input.
+            const net::Item* it = item(host);
+            if (it && host.conn && game::display_icon_links(*it))
+                request_chat_link_all({game::make_item_link(*it, host.conn->server_ext().wide_item_links(*host.conn))});
             return true;
         }
         if (id == "IDW_Appearance_Socket_Buy_Button")

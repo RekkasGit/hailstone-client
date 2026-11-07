@@ -238,6 +238,11 @@ struct WorldState {
     // leave some, is drawn on the floor. Only where it is drawn changes (display_position, so picking and the NPC
     // walls too); its position, which range and the other rules use, stays the server's.
     bool ground_npcs = false;
+    // Hailstone (option illusion_mounts, a deliberate difference; docs/mechanics.md "Riding while illusioned"): the
+    // rider's own model does not keep it off its mount. The original's PlayerClient_AttachRiderToMount refuses a rider
+    // whose model has no tunic point (FUN_0058dde0) or is a mount race drawn as the human fallback, which in practice
+    // means one under an illusion: the summon then fails with 5524. The mount's own dag is still needed to seat it.
+    bool illusion_mounts = false;
     // The floor smooth is given changed (a zone's collision loaded): every spawn is measured for ground_npcs again.
     // Spawns can come before the zone's floor (character select's scene is still loaded), and one that stands
     // still would keep what it was measured against then.
