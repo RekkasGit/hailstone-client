@@ -162,8 +162,9 @@ and the scripts' and plugins' frame (`mq.delay`, OnPulse), which runs once a dra
 
 Once a drawn frame, as before: the keys and clicks (a press is kept for the next step), the mouse look (it turns the
 heading directly), the camera. The camera is drawn between the last two steps (a share of the last step's move and
-turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body is drawn
-eased as before (game/world_state.cpp). Movement events (the jump, the landing sound, fall damage) of all the
+turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body, and the
+mount it rides, is drawn at that same place and heading (`WorldState::set_local_drawn`), not eased toward it as other
+spawns are: eased (a twelfth of a second), it trailed the camera behind the player. Movement events (the jump, the landing sound, fall damage) of all the
 frame's steps are gathered for its sounds.
 
 `game.fixed_step = 0` runs one step per drawn frame at its own time: the original's code as written, for comparing.
@@ -230,8 +231,10 @@ already bindable through those keys.
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead
 (1), chase (2), user 1 and 2 (3, 4) and tether (5), plus the wheel-follow camera (6), which is this client's own camera
-behind the player (its distance the mouse wheel's; its pull-in against scenery and the gamepad's stick its own). The
-player's model is drawn in every camera but first person.
+behind the player (its distance the mouse wheel's, the gamepad's stick its own). It stops against scenery as the
+cameras 1..5 do, where the 0.25 sphere swept from the eye stops (`wheel_follow_position`); it used to step its
+distance down by a fifth until the line behind was clear, which in a small room jumped between the steps as the
+player walked. The player's model is drawn in every camera but first person.
 
 | Camera | Where it stands (each frame, on the player as drawn) | Mouse look: sideways / up-down | Keys that act |
 |---|---|---|---|

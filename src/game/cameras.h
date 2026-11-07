@@ -75,6 +75,12 @@ void reset_camera_defaults(std::array<GameCamera, 6>& cameras);
 // The active camera's update (vtable +8) in game (GameState 5): cameras 1..5.
 CameraPose update_camera(int type, GameCamera& cam, const CameraTarget& target, const CameraSweep& sweep);
 
+// Hailstone's camera behind the player (6, the mouse wheel's): `distance` from `eye` along `back` (a unit vector),
+// stopped where unk_EQCamera_SetPosition's sweep (radius 0.25, the zone and its objects) stops, as cameras 1..5 are.
+// It used to step the distance down by a fifth until the line behind was clear, so in a small room it jumped between
+// those steps as the player moved. A refused sweep leaves the camera at the eye. Without a sweep: the full distance.
+glm::vec3 wheel_follow_position(const glm::vec3& eye, const glm::vec3& back, float distance, const CameraSweep& sweep);
+
 // CDisplay::ToggleView @0x494160 (not drunk): the camera after `type`: 0 -> 1 -> .. -> 5 -> 0, and the wheel-follow
 // camera (6) counts as 0.
 int toggle_view_next(int type);

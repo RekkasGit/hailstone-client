@@ -135,6 +135,8 @@
 - A character whose HP fell below the HP its gear gives is no longer treated as knocked out on stock EQEmu servers: mouse look and right-click menus work, Kick, Bash and the other skills no longer silently fail, and the client still saves your character
 - Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
 - Looking closely at a character no longer shades its face in dark polygon-shaped patches (modern lighting): the ambient occlusion gave very near samples too much weight at close range, so low-poly faces darkened in big triangles; near samples now fade with distance and count only by their angle above the surface
+- In the camera behind you, your character now moves and turns with the camera. It was drawn a little behind it, catching up a moment later, which showed most when strafing
+- The camera behind you no longer shakes in small rooms and halls: against a wall or ceiling it now stops smoothly where the scenery is, as the original's cameras do, instead of jumping between a few set distances as you walked. Doors and other objects stop it too
 
 ## 0.5.0-beta (2026-11-05)
 
