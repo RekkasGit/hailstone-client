@@ -116,6 +116,7 @@ TEST_CASE("player menu: the rows and what each sends") {
             api.register_functions(L);
             lua_setglobal(L, "eq");
             ImGuiIO& io = ImGui::GetIO();
+            io.IniFilename = nullptr; // no imgui.ini in the working folder
             unsigned char* px = nullptr;
             int fw = 0, fh = 0;
             io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh); // the default font, built
