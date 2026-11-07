@@ -1,0 +1,38 @@
+# Hailstone's own flora rules (assets/zone_flora.h, docs/graphics.md "Zone flora"). Shared: the built, wet and burnt
+# surfaces that stay bare whatever their colour (green roof tiles, mossy walls and cobbles, hedges, ship decks, water
+# and lava). Rules files include this before their grass lines.
+ground *roof* 0
+ground *wal* 0
+ground *wll* 0
+ground *ceil* 0
+ground *celing* 0
+ground *cling* 0
+ground *brick* 0
+ground *cob* 0
+ground *tile* 0
+ground *marb* 0
+ground *stair* 0
+ground *tower* 0
+ground *fence* 0
+ground *bridge* 0
+ground *arch* 0
+ground *ruin* 0
+ground *pil0* 0
+ground *plat* 0
+ground *hedge* 0
+ground *leav* 0
+ground *wood* 0
+ground *plank* 0
+ground *ship* 0
+ground *deck* 0
+ground *rail* 0
+ground *mast* 0
+ground *relief* 0
+ground *bone* 0
+ground *water* 0
+ground *wat0* 0
+ground *agua* 0
+ground *aqua* 0
+ground *falls* 0
+ground *lava* 0
+ground w?.* 0

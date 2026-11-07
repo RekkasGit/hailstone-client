@@ -1,5 +1,5 @@
-# East Commonlands (assets/zone_flora.h, docs/graphics.md "Zone flora"): the shared grass, and a few desert plants on
-# the sand and dirt.
+# Hailstone's own flora rules (assets/zone_flora.h, docs/graphics.md "Zone flora"). East Commonlands: the grassland
+# family, and a few desert plants on its sand and dirt.
 ground sand* 0.15 DesertPlant1 DesertPlant2 DesertPlant3
 ground dirt* 0.15 DesertPlant1 DesertPlant2 DesertPlant3
-include default
+include plains

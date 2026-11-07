@@ -69,7 +69,8 @@ ground bad x grass
 ground bad 1 grass:-1
 nonsense here
 )", &errors);
-    CHECK(rules.donor == "commonlands.eqg");
+    REQUIRE(rules.donors.size() == 1);
+    CHECK(rules.donors[0] == "commonlands.eqg");
     CHECK(rules.max_slope == 30.0f);
     CHECK(rules.min_scale == doctest::Approx(0.8f));
     CHECK(rules.max_scale == doctest::Approx(1.2f));
@@ -85,6 +86,30 @@ nonsense here
     CHECK(errors.size() == 3);
 }
 
+TEST_CASE("zone flora: several donors, and a kind by its donor") {
+    auto rules = parse_zone_flora_rules("donor commonlands.eqg\ndonor OldKithicor.eqg\ndonor commonlands.eqg\n");
+    REQUIRE(rules.donors.size() == 2); // in order, once each
+    CHECK(rules.donors[0] == "commonlands.eqg");
+    CHECK(rules.donors[1] == "oldkithicor.eqg");
+    CHECK(flora_kind_matches("fern", "oldkithicor/fern"));
+    CHECK(flora_kind_matches("FERN", "oldkithicor/fern"));
+    CHECK(flora_kind_matches("oldkithicor/fern", "oldkithicor/fern"));
+    CHECK_FALSE(flora_kind_matches("moors/fern", "oldkithicor/fern"));
+    CHECK_FALSE(flora_kind_matches("fern", "oldkithicor/fernA"));
+    CHECK(flora_kind_matches("grass", "grass")); // a definition of no donor (tests, an EQG zone's own)
+    // The first donor's definition of a plain name; another's by its donor.
+    std::vector<eqg::FloraDefinition> defs = {definition("commonlands/grass", 2.0f), definition("elddar/grass", 6.0f)};
+    Zone zone;
+    zone.terrain.push_back(square("grass.bmp", 100.0f));
+    ZoneFlora first, second;
+    place_zone_flora(zone, parse_zone_flora_rules("ground grass* 10 grass\n"), defs, first);
+    place_zone_flora(zone, parse_zone_flora_rules("ground grass* 10 elddar/grass\n"), defs, second);
+    REQUIRE(!first.instances.empty());
+    REQUIRE(!second.instances.empty());
+    CHECK(first.instances[0].definition == 0);
+    CHECK(second.instances[0].definition == 1);
+}
+
 TEST_CASE("zone flora: include reads another rules file in place") {
     auto include = [](std::string_view name) -> std::optional<std::string> {
         if (name == "default") return std::string("donor shared.eqg\nmax_slope 45\nground * 12 +green grass\n");
@@ -95,7 +120,8 @@ TEST_CASE("zone flora: include reads another rules file in place") {
     // The zone's own lines first: its exceptions win over the shared catch-all; a setting after the include wins.
     auto rules = parse_zone_flora_rules("ground road* 0\ninclude default\nmax_slope 30\n", &errors, include);
     CHECK(errors.empty());
-    CHECK(rules.donor == "shared.eqg");
+    REQUIRE(rules.donors.size() == 1);
+    CHECK(rules.donors[0] == "shared.eqg");
     CHECK(rules.max_slope == 30.0f);
     REQUIRE(rules.ground.size() == 2);
     CHECK(rules.ground[0].texture == "road*");
@@ -331,7 +357,7 @@ TEST_CASE("zone flora: East Commonlands' ground (game files)") {
 
     // The shipped rules: plants on the meadows, none in the water.
     REQUIRE(add_zone_flora(*game, zone, NMSC_SOURCE_DIR "/flora", true) > 500);
-    CHECK(zone.flora.textures);
+    CHECK(!zone.flora.donors.empty());
     REQUIRE(zone.flora.grower);
     std::vector<FloraInstance> plants;
     for (std::size_t t = 0; t < zone.flora.grower->tiles().size(); ++t) zone.flora.grower->grow(t, plants);

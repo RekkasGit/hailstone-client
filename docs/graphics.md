@@ -184,16 +184,23 @@ is not known.
 The EQG heightmap zones' grass, flowers and ferns (`assets/flora.h`, placed at load as docs/formats/eqg.md says) are
 drawn by `render::FloraRenderer` while ShowGrass is on (/showgrass, the Options window's Radial Flora): the plants
 within `kFloraReach` (400 units) of the camera, each one quad or two crossed ones standing on its foot (instanced, built
-in `shaders/flora.vert`), its picture cut out at half alpha, its top swaying by its definition's sway. They are lit per
-plant on the CPU as the smoke is (`render::particle_light`, the haze by `haze_at`; in the classic lighting the scene's
-ambient and half its sun), take the terrain's colour with `*INHERITVERTEXCOLOR`, write depth in the opaque part of the
-scene and shrink into the ground over the last fifth of the reach. They cast no shadows.
+in `shaders/flora.vert`), its picture cut out at half alpha, its top swaying by its definition's sway. In the modern
+lighting they are lit in the shaders as the zone around them is: per vertex the sky over the ground, the baked light
+of the place (the ambient probe) and the zone's point lights, per pixel the sun or moon through its shadow map (one
+filtered comparison: grass in a tree's shadow darkens with the ground), a little darker at the roots, then the haze.
+In the classic lighting each takes the scene's ambient and half its sun. They take the terrain's colour with
+`*INHERITVERTEXCOLOR`, write depth in the opaque part of the scene and shrink into the ground over the last fifth of
+the reach. They cast no shadows.
+
+**Bending** (Hailstone's own): a plant's top bends away from the feet of the spawns standing in it, out and down, the
+more the nearer (`FloraRenderer::set_pushers`: the eight spawns nearest the camera within 150 units, each round itself
+by 0.7 of its size, 3 to 12 units; a spawn more than 10 units above or below a plant does not bend it).
 
 The reach is Hailstone's Flora Distance (`display.flora_distance`, the Options window's slider, the gamepad pack's
 Grass distance): 400 to 1,200 units, 400 by default. Past 400 units a share of the plants is kept by the square of
 the distance (`render::flora_keep`: a quarter at 800, a ninth at 1,200), the same ones from frame to frame, so the
 far ring costs about what the near circle does. The tiles are filled nearest first, so when a frame reaches
-`FloraRenderer::kMaxPlants` it is far plants that are left out.
+`FloraRenderer::kMaxPlants` (262,144) it is far plants that are left out. A plant is 40 bytes to the GPU a frame.
 
 ## Zone flora
 
@@ -205,20 +212,38 @@ radial flora fills and are drawn the same way (above; /showgrass hides them, Flo
 `flora/default.txt` when the server calls it outdoor (OP_NewZone's time type 1, 2 or 5; PEQ marks some dungeons so,
 which the cover test below keeps bare). A rules file is read line by line, and the first matching ground line wins:
 - `donor <archive>`: an EQG archive in the player's game folder whose `RadialFloraDefs.rfd` and textures give the
-  plants' shapes and pictures. The default takes `commonlands.eqg`'s, the revamped Commonlands. Nothing is shipped;
-  without the donor no zone has this flora.
+  plants' shapes and pictures; several donor lines add up. The default takes `commonlands.eqg`'s, the revamped
+  Commonlands. Nothing is shipped; without its donors a zone has no flora, and a kind whose donor (or whose picture)
+  is missing is left out.
 - `ground <glob> <density> [+green|+greenish] <kind>[:<weight>]...`: plants per 100 square units on the ground
-  textures the glob matches, and their kinds by weight; 0 keeps a texture bare. The classic ground textures blend
+  textures the glob matches, and their kinds by weight (a definition of the first donor that has it, or one donor's
+  as `<archive stem>/<name>`); 0 keeps a texture bare. The classic ground textures blend
   grass into cliff, sand or a path within one picture, so `+green` keeps a plant only where the game's own texel
   under it is clearly green (`is_green_texel`: not the water's teal, mud's olive or a dungeon's near-black), and
   `+greenish` also takes dry and dark grass, for textures whose name says they are grass.
 - `max_slope` (degrees), `scale <min> <max>`, and `include <name>` (another file's lines in place: a zone file puts its
   own exceptions first, then `include default`; East Commonlands adds desert plants on its sand that way).
 
-The default turns down built and wet surfaces by name before anything else (roofs, walls, floors, cobbles, tiles,
-bridges, hedges, ship decks, water, lava; rock, stone and cliffs after the textures named as grass, so a grass and rock
-blend still grows on its grass), then takes grass-named textures with `+greenish` and anything else with `+green`.
-A `+green` texture with next to no green texels (`kMinGreenShare`) grows nothing at all.
+The shared files turn down built and wet surfaces by name before anything else (`bare.txt`: roofs, walls, cobbles,
+tiles, bridges, hedges, ship decks, water, lava), then take grass-named textures with `+greenish`, then turn down
+floors, rock, stone and cliffs (`stone.txt`, after the grass lines so a grass and rock blend still grows on its grass),
+then take anything else with `+green`. A `+green` texture with next to no green texels (`kMinGreenShare`) grows
+nothing at all.
+
+**Families.** Most zones take the shared Commonlands grass alone (`default.txt`). A zone of a climate with plants of
+its own includes a family file, the same lines with more kinds from more donors:
+
+| Family | Zones | Added, from |
+|---|---|---|
+| `forest` | the Faydarks, Kithicor, Nektulos, the Rathe Mountains, Misty Thicket, the Qeynos Hills, Jaggedpine, Toxxulia, Butcherblock, the Wakening Land, the Wakening's woods | ferns and small pines, `oldkithicor.eqg` |
+| `swamp` | Innothule, the Swamp of No Hope | ferns, `innothuleb.eqg`; cattails and swamp grass, `moors.eqg` |
+| `leafwoods` | the Feerrott | leafy bushes and ferns, `feerrott2.eqg` |
+| `jungle` | the Emerald Jungle, Trakanon's Teeth, Firiona Vie, Stonebrunt, the Burning Woods | jungle ferns, `arcstone.eqg`; bushes, `feerrott2.eqg` |
+| `plains` | the Karanas, the Commonlands, Lake Rathetear | flowering grass and wheat, `moors.eqg` |
+| `kunark` | the Field of Bone, the Overthere, the Frontier Mountains, the Dreadlands, Lake of Ill Omen | flowers and shrubs, `oldfieldofboneb.eqg` |
+| `luclin` | the Twilight Sea, the Grimling Forest, Tenebrous, Shadeweaver's, Hollowshade, Dawnshroud, the Maiden's Eye, Shar Vahl, Katta Castellum, Sanctus Seru | shrubs, plants and shade grass, `mistythicket.eqg` |
+| `growth` | the Plane of Growth | tall flowering grass and ferns, `arcstone.eqg`; flowering grass, `moors.eqg` |
+
 
 **Where.** On level ground (45 degrees by default) of a drawn, opaque or cut-out surface: not the invisible collision
 surfaces, nor the translucent water. Not in water, lava or a zone line, nor on the water's surface (the region just
