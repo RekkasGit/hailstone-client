@@ -110,9 +110,9 @@ int main(int argc, char** argv) {
                 std::printf("%s: no rules\n", name.c_str());
                 continue;
             }
-            auto donor = open_flora_donor(game, rules->donor);
+            auto donor = open_flora_donors(game, rules->donors);
             if (!donor) {
-                std::printf("%s: flora/%s.txt: donor %s missing\n", name.c_str(), source.c_str(), rules->donor.c_str());
+                std::printf("%s: flora/%s.txt: no donor opens\n", name.c_str(), source.c_str());
                 continue;
             }
             ZoneFlora flora;

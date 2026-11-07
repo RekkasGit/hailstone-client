@@ -14,7 +14,8 @@ hailstone/
   pictures/                  shipped: the default picture behind the pre-game and loading screens, shown when
                              neither the server nor ui/loadingbackgrounds/ has any
   flora/                     shipped: Hailstone's flora rules for zones without flora of their own (docs/graphics.md
-                             "Zone flora"): default.txt for every outdoor classic zone, <zone>.txt for one; replaced
+                             "Zone flora"): default.txt for every outdoor classic zone, <zone>.txt for one, the
+                             shared parts and climate families they include; replaced
                              by an update
   CHANGELOG.md               shipped: the release notes; the login screen's What's new shows this version's part
   ui/<pack>/                 UI packs (modern, gamepad), replaced by an update

@@ -1,0 +1,2 @@
+# Hailstone's own flora rules (assets/zone_flora.h, docs/graphics.md "Zone flora"). innothule: the swamp family.
+include swamp

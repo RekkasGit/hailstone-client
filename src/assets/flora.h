@@ -45,9 +45,10 @@ struct ZoneFlora {
     };
     std::vector<Tile> tiles;
     float tile_size = 0.0f;
-    // The archive the definitions' textures are read from when they are not the zone's own (assets/zone_flora.h:
-    // the donor EQG archive of a zone given flora by Hailstone's rules); null for an EQG zone's own flora.
-    std::shared_ptr<const PfsArchive> textures;
+    // The archives the definitions' textures are read from, in order, when they are not the zone's own
+    // (assets/zone_flora.h: the donor EQG archives of a zone given flora by Hailstone's rules); none for an EQG zone's
+    // own flora.
+    std::vector<std::shared_ptr<const PfsArchive>> donors;
     // Hailstone's zone flora (assets/zone_flora.h) grows its tiles on demand: then `tiles` lists the ones that may
     // grow plants (first and count unused) and `instances` is empty. Null for an EQG zone's own flora.
     std::shared_ptr<const ZoneFloraGrower> grower;

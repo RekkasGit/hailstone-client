@@ -183,7 +183,9 @@ void parse_into(ZoneFloraRules& rules, std::string_view text, std::vector<std::s
             if (!other) { fail("include: no rules named " + std::string(w[1])); continue; }
             parse_into(rules, *other, errors, include, depth + 1, w[1]);
         } else if (iequals(w[0], "donor") && w.size() == 2) {
-            rules.donor = lower(w[1]);
+            std::string donor = lower(w[1]);
+            if (std::find(rules.donors.begin(), rules.donors.end(), donor) == rules.donors.end())
+                rules.donors.push_back(std::move(donor));
         } else if (iequals(w[0], "max_slope") && w.size() == 2) {
             float v = 0.0f;
             if (!number(w[1], v)) { fail("max_slope: not a number"); continue; }
@@ -323,8 +325,9 @@ ZoneFloraGrower::ZoneFloraGrower(const Zone& zone, const ZoneFloraRules& rules,
     d.picks.resize(rules.ground.size());
     for (std::size_t g = 0; g < rules.ground.size(); ++g)
         for (const auto& k : rules.ground[g].kinds) {
-            auto it = std::find_if(d.definitions.begin(), d.definitions.end(),
-                                   [&](const eqg::FloraDefinition& def) { return iequals(def.name, k.definition); });
+            auto it = std::find_if(d.definitions.begin(), d.definitions.end(), [&](const eqg::FloraDefinition& def) {
+                return flora_kind_matches(k.definition, def.name);
+            });
             if (it == d.definitions.end()) {
                 log::debug("{}: zone flora: no definition {}", zone.name, k.definition);
                 continue;
@@ -586,6 +589,28 @@ std::optional<ZoneFloraRules> load_zone_flora_rules(const std::filesystem::path&
     return rules;
 }
 
+bool flora_kind_matches(std::string_view kind, std::string_view definition) {
+    if (kind.find('/') != std::string_view::npos) return iequals(kind, definition);
+    const auto slash = definition.find('/');
+    return iequals(kind, slash == std::string_view::npos ? definition : definition.substr(slash + 1));
+}
+
+std::optional<FloraDonors> open_flora_donors(const GameDir& game, std::span<const std::string> donors) {
+    FloraDonors out;
+    for (const auto& name : donors) {
+        auto one = open_flora_donor(game, name);
+        if (!one) continue;
+        std::string stem = name.substr(0, name.find_last_of('.'));
+        for (auto& def : one->definitions) {
+            def.name = stem + "/" + def.name;
+            out.definitions.push_back(std::move(def));
+        }
+        out.archives.push_back(one->archive);
+    }
+    if (out.archives.empty()) return std::nullopt;
+    return out;
+}
+
 std::optional<FloraDonor> open_flora_donor(const GameDir& game, std::string_view donor) {
     if (donor.empty()) return std::nullopt;
     auto found = game.find(donor);
@@ -614,11 +639,11 @@ std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesyste
     std::string source;
     auto rules = load_zone_flora_rules(rules_dir, zone.name, outdoor, &source);
     if (!rules) return 0;
-    if (rules->donor.empty()) {
+    if (rules->donors.empty()) {
         log::warn("flora/{}.txt: no donor archive", source);
         return 0;
     }
-    auto donor = open_flora_donor(game, rules->donor);
+    auto donor = open_flora_donors(game, rules->donors);
     if (!donor) return 0;
     const auto t0 = std::chrono::steady_clock::now();
     auto grower = std::make_shared<const ZoneFloraGrower>(zone, *rules, std::move(donor->definitions),
@@ -628,7 +653,7 @@ std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesyste
     zone.flora.definitions = grower->definitions();
     zone.flora.tile_size = kZoneFloraTile;
     for (const auto& corner : grower->tiles()) zone.flora.tiles.push_back({corner, 0, 0});
-    zone.flora.textures = donor->archive;
+    zone.flora.donors = donor->archives;
     const std::size_t tiles = grower->tiles().size();
     if (tiles == 0) {
         zone.flora = ZoneFlora{};
@@ -636,8 +661,8 @@ std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesyste
         return 0;
     }
     zone.flora.grower = std::move(grower);
-    log::info("{}: zone flora: {} tiles ({} pieces of ground) may grow plants by flora/{}.txt, from {}; {} ms",
-              zone.name, tiles, zone.flora.grower->triangles(), source, rules->donor, ms);
+    log::info("{}: zone flora: {} tiles ({} pieces of ground) may grow plants by flora/{}.txt, from {} and {} more; {} ms",
+              zone.name, tiles, zone.flora.grower->triangles(), source, rules->donors.front(), donor->archives.size() - 1, ms);
     return tiles;
 }
 

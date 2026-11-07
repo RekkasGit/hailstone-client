@@ -12,7 +12,6 @@
 #include "assets/zone.h"
 #include "assets/zone_flora.h"
 #include "core/log.h"
-#include "render/particle_renderer.h"
 #include "render/scene_lighting.h"
 #include "render/vk_util.h"
 
@@ -29,15 +28,23 @@ struct Push {
 };
 static_assert(sizeof(Push) <= 128);
 
-// One plant as the vertex shader takes it, per instance.
+// One plant as the vertex shader takes it, per instance (40 bytes: the light and haze are the shaders').
 struct GpuPlant {
     glm::vec4 position_turn; // xyz the foot, w its turn (radians)
     glm::vec4 size;          // x width, y height, z the sway's reach (fraction of the height), w its period (s; 0 none)
-    glm::vec4 uv;            // the picture's corner and size in the texture
-    glm::vec4 shade;         // rgb the light (linear, with the terrain's colour), w 1 for two crossed quads
-    glm::vec4 haze;          // rgb the haze in front of it (linear), w how much of it shows through
-    std::uint32_t texture = 0;
+    std::uint32_t color = 0x80808080u; // the ground's colour (RGBA8) for *INHERITVERTEXCOLOR, 0x80 neutral
+    std::uint32_t flags = 0;           // bits 0..7 the texture slot, 8..10 the quarter (4 the whole), 11 crossed
 };
+static_assert(sizeof(GpuPlant) == 40);
+
+// flora.vert / flora.frag's Frame buffer.
+struct FloraFrame {
+    glm::vec4 classic{0.0f}; // rgb the classic lighting's one light (linear), w 1 modern
+    glm::vec4 params{0.0f};  // x the pushers
+    std::array<glm::vec4, FloraRenderer::kMaxPushers> pushers{};
+};
+
+constexpr std::uint32_t kSets = VkContext::kFramesInFlight;
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
     return create_shader_module(device, path);
@@ -61,6 +68,10 @@ float flora_keep(float d) {
 
 void FloraRenderer::set_reach(float reach) { reach_ = std::clamp(reach, kFloraReach, kMaxFloraReach); }
 
+void FloraRenderer::set_pushers(std::span<const glm::vec4> pushers) {
+    pushers_.assign(pushers.begin(), pushers.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(pushers.size(), kMaxPushers)));
+}
+
 FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std::filesystem::path& shader_dir)
     : vk_(vk), zone_(zone) {
     VkDevice d = vk_.device();
@@ -79,7 +90,10 @@ FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std:
             if (it != loaded.end()) {
                 slot = it->second;
             } else if (textures_.size() < max_textures_) {
-                auto data = zone_.flora.textures ? zone_.flora.textures->read(def.texture) : zone_.read_file(def.texture);
+                std::optional<std::vector<std::byte>> data;
+                for (const auto& donor : zone_.flora.donors)
+                    if ((data = donor->read(def.texture))) break;
+                if (zone_.flora.donors.empty()) data = zone_.read_file(def.texture);
                 std::optional<std::span<const std::byte>> bytes;
                 if (data) bytes = std::span<const std::byte>(*data);
                 if (auto image = assets::decode_game_texture(def.texture, bytes, {.reads_alpha = true})) {
@@ -87,6 +101,9 @@ FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std:
                     textures_.push_back(upload.texture(*image, TextureUse::Color));
                 } else {
                     log::debug("flora texture {} not found", def.texture);
+                    // Hailstone's zone flora leaves out a donor's plant without its picture (elddar.eqg's flowers
+                    // name a texture it does not hold) rather than drawing it white; an EQG zone's own keeps slot 0.
+                    if (!zone_.flora.donors.empty()) slot = kNoTexture;
                 }
                 loaded.emplace_back(def.texture, slot);
             }
@@ -102,42 +119,64 @@ FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std:
     si.maxLod = VK_LOD_CLAMP_NONE;
     vk_check(vkCreateSampler(d, &si, nullptr, &sampler_), "vkCreateSampler (flora)");
 
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = max_textures_;
-    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | vk_.texture_array_binding_flags();
+    // 0 the lighting (render/scene_lighting.h), 1 the frame's FloraFrame, 2 the textures; per frame in flight.
+    VkDescriptorSetLayoutBinding bindings[3]{};
+    for (std::uint32_t k = 0; k < 2; ++k) {
+        bindings[k].binding = k;
+        bindings[k].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[k].descriptorCount = 1;
+        bindings[k].stageFlags = kPushStages;
+    }
+    bindings[2].binding = 2;
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[2].descriptorCount = max_textures_;
+    bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorBindingFlags flags[3] = {0, 0, VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | vk_.texture_array_binding_flags()};
     VkDescriptorSetLayoutBindingFlagsCreateInfo bf{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
-    bf.bindingCount = 1;
-    bf.pBindingFlags = &flags;
+    bf.bindingCount = 3;
+    bf.pBindingFlags = flags;
     VkDescriptorSetLayoutCreateInfo li{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     li.pNext = &bf;
     li.flags = vk_.texture_array_layout_flags();
-    li.bindingCount = 1;
-    li.pBindings = &binding;
+    li.bindingCount = 3;
+    li.pBindings = bindings;
     vk_check(vkCreateDescriptorSetLayout(d, &li, nullptr, &set_layout_), "vkCreateDescriptorSetLayout (flora)");
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures_};
+    VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * kSets},
+                                     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures_ * kSets}};
     VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pi.flags = vk_.texture_array_pool_flags();
-    pi.maxSets = 1;
-    pi.poolSizeCount = 1;
-    pi.pPoolSizes = &size;
+    pi.maxSets = kSets;
+    pi.poolSizeCount = 2;
+    pi.pPoolSizes = sizes;
     vk_check(vkCreateDescriptorPool(d, &pi, nullptr, &pool_), "vkCreateDescriptorPool (flora)");
-    VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    ai.descriptorPool = pool_;
-    ai.descriptorSetCount = 1;
-    ai.pSetLayouts = &set_layout_;
-    vk_check(vkAllocateDescriptorSets(d, &ai, &set_), "vkAllocateDescriptorSets (flora)");
+    lighting_buffers_ = std::make_unique<FrameBuffers>(vk_, sizeof(SceneLighting), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    frame_buffers_ = std::make_unique<FrameBuffers>(vk_, sizeof(FloraFrame), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     std::vector<VkDescriptorImageInfo> infos;
     for (const auto& t : textures_) infos.push_back({sampler_, t.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    w.dstSet = set_;
-    w.dstBinding = 0;
-    w.descriptorCount = static_cast<std::uint32_t>(infos.size());
-    w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    w.pImageInfo = infos.data();
-    vkUpdateDescriptorSets(d, 1, &w, 0, nullptr);
+    for (std::uint32_t i = 0; i < kSets; ++i) {
+        VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        ai.descriptorPool = pool_;
+        ai.descriptorSetCount = 1;
+        ai.pSetLayouts = &set_layout_;
+        vk_check(vkAllocateDescriptorSets(d, &ai, &sets_[i]), "vkAllocateDescriptorSets (flora)");
+        VkDescriptorBufferInfo buffers[2] = {{lighting_buffers_->buffer(i), 0, VK_WHOLE_SIZE},
+                                             {frame_buffers_->buffer(i), 0, VK_WHOLE_SIZE}};
+        VkWriteDescriptorSet w[3]{};
+        for (std::uint32_t k = 0; k < 3; ++k) {
+            w[k].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            w[k].dstSet = sets_[i];
+            w[k].dstBinding = k;
+        }
+        for (std::uint32_t k = 0; k < 2; ++k) {
+            w[k].descriptorCount = 1;
+            w[k].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            w[k].pBufferInfo = &buffers[k];
+        }
+        w[2].descriptorCount = static_cast<std::uint32_t>(infos.size());
+        w[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        w[2].pImageInfo = infos.data();
+        vkUpdateDescriptorSets(d, 3, w, 0, nullptr);
+    }
 
     for (std::size_t i = 0; i < instances_.size(); ++i) {
         VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -198,10 +237,6 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
     std::uint32_t count = 0;
     const float reach = reach_;
     const float reach2 = reach * reach;
-    // The classic lighting: the scene's ambient and half its sun (display values), the same for every plant.
-    const glm::vec3 classic_light =
-        to_linear(glm::min(glm::vec3(lighting.ambient) + glm::vec3(lighting.directional) * 0.5f, glm::vec3(1.0f)));
-    const ParticleLight modern_light(lighting); // the modern light, its frame's part worked out once
     // The tiles within reach of the camera (in the plane), nearest first, so the plants near the camera are never the
     // ones kMaxPlants leaves out.
     near_tiles_.clear();
@@ -243,40 +278,37 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
             // Into the ground over the last fifth of the reach.
             float fade = std::clamp((reach - std::sqrt(dist2)) / (reach * 0.2f), 0.0f, 1.0f);
             if (fade <= 0.0f) continue;
-            glm::vec4 uv(0.0f, 0.0f, 1.0f, 1.0f);
-            if (def.quad_texture) {
-                int q = std::clamp(def.texture_index, 0, 3);
-                uv = glm::vec4(static_cast<float>(q % 2) * 0.5f, static_cast<float>(q / 2) * 0.5f, 0.5f, 0.5f);
-            }
-            glm::vec3 tint(1.0f);
-            if (def.inherit_vertex_color) // the terrain's colour (RGBA bytes), 0x80 the neutral grey
-                tint = glm::vec3(static_cast<float>(p.color & 0xff), static_cast<float>(p.color >> 8 & 0xff),
-                                 static_cast<float>(p.color >> 16 & 0xff)) / 128.0f;
-            glm::vec3 light = classic_light;
-            glm::vec4 haze(0.0f, 0.0f, 0.0f, 1.0f);
-            if (modern) {
-                ParticleHaze h = haze_at(lighting, p.position);
-                light = modern_light.at(p.position + glm::vec3(0.0f, 0.0f, p.height * 0.5f)) * h.absorb;
-                haze = glm::vec4(h.color, h.through);
-            }
+            std::uint32_t quarter = 4;
+            if (def.quad_texture) quarter = static_cast<std::uint32_t>(std::clamp(def.texture_index, 0, 3));
             GpuPlant g;
             g.position_turn = glm::vec4(p.position, glm::radians(p.rotation));
             g.size = glm::vec4(p.width * fade, p.height * fade, def.sway ? def.sway_displacement : 0.0f,
                                def.sway ? std::max(def.sway_period, 0.1f) : 0.0f);
-            g.uv = uv;
-            g.shade = glm::vec4(light * tint, def.cross ? 1.0f : 0.0f);
-            g.haze = haze;
-            g.texture = p.definition < definition_slot_.size() ? definition_slot_[p.definition] : 0;
+            if (def.inherit_vertex_color) g.color = p.color; // the terrain's colour (RGBA bytes), 0x80 the neutral grey
+            const std::uint32_t slot = p.definition < definition_slot_.size() ? definition_slot_[p.definition] : 0;
+            if (slot == kNoTexture) continue;
+            g.flags = (slot & 0xffu) | quarter << 8 | (def.cross ? 0x800u : 0u);
             out[count++] = g;
         }
     }
     if (count == 0) return 0;
     vmaFlushAllocation(vk_.allocator(), instances_[frame.frame_slot].allocation, 0, sizeof(GpuPlant) * count);
+    // The light is the shaders' (flora.vert, flora.frag): the frame's lighting as the zone took it, and for the classic
+    // lighting the scene's ambient and half its sun (display values), the same for every plant.
+    lighting_buffers_->write(frame.frame_slot, &lighting, sizeof(SceneLighting));
+    FloraFrame ff;
+    ff.classic = glm::vec4(
+        to_linear(glm::min(glm::vec3(lighting.ambient) + glm::vec3(lighting.directional) * 0.5f, glm::vec3(1.0f))),
+        modern ? 1.0f : 0.0f);
+    ff.params.x = static_cast<float>(pushers_.size());
+    std::copy(pushers_.begin(), pushers_.end(), ff.pushers.begin());
+    frame_buffers_->write(frame.frame_slot, &ff, sizeof(ff));
     VkCommandBuffer cmd = frame.cmd;
     Push pc{view_proj, glm::vec4(static_cast<float>(std::fmod(seconds, 4096.0)), 0.0f, 0.0f, 0.0f)};
     VkDeviceSize offset = 0;
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &set_, 0, nullptr);
+    VkDescriptorSet sets[2] = {sets_[frame.frame_slot], vk_.shadow_set()};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
     vkCmdBindVertexBuffers(cmd, 0, 1, &instances_[frame.frame_slot].buffer, &offset);
     vkCmdPushConstants(cmd, layout_, kPushStages, 0, sizeof(pc), &pc);
     vkCmdDraw(cmd, 12, count, 0, 0);
@@ -286,9 +318,10 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
 void FloraRenderer::create_pipeline(const std::filesystem::path& shader_dir) {
     VkDevice d = vk_.device();
     VkPushConstantRange range{kPushStages, 0, sizeof(Push)};
+    VkDescriptorSetLayout set_layouts[2] = {set_layout_, vk_.shadow_set_layout()};
     VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    li.setLayoutCount = 1;
-    li.pSetLayouts = &set_layout_;
+    li.setLayoutCount = 2;
+    li.pSetLayouts = set_layouts;
     li.pushConstantRangeCount = 1;
     li.pPushConstantRanges = &range;
     vk_check(vkCreatePipelineLayout(d, &li, nullptr, &layout_), "vkCreatePipelineLayout (flora)");
@@ -302,15 +335,13 @@ void FloraRenderer::create_pipeline(const std::filesystem::path& shader_dir) {
     VkVertexInputAttributeDescription attrs[] = {
         {0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuPlant, position_turn)},
         {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuPlant, size)},
-        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuPlant, uv)},
-        {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuPlant, shade)},
-        {4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GpuPlant, haze)},
-        {5, 0, VK_FORMAT_R32_UINT, offsetof(GpuPlant, texture)},
+        {2, 0, VK_FORMAT_R32_UINT, offsetof(GpuPlant, color)},
+        {3, 0, VK_FORMAT_R32_UINT, offsetof(GpuPlant, flags)},
     };
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vi.vertexBindingDescriptionCount = 1;
     vi.pVertexBindingDescriptions = &binding;
-    vi.vertexAttributeDescriptionCount = 6;
+    vi.vertexAttributeDescriptionCount = 4;
     vi.pVertexAttributeDescriptions = attrs;
     VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

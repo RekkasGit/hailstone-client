@@ -9,20 +9,22 @@
 // sight or picking sees them.
 //
 // The rules file, one directive a line, '#' to the end of a line a comment:
-//   donor <archive>                  the EQG archive of the shapes and textures (commonlands.eqg)
+//   donor <archive>                  an EQG archive of the shapes and textures (commonlands.eqg); several donor lines
+//                                    add up, their definitions named <archive stem>/<name> (oldkithicor/fern)
 //   max_slope <degrees>              steeper ground grows nothing (default 40)
 //   scale <min> <max>                every plant's size times a random factor in the range (default 1 1)
 //   ground <glob> <density> [+green|+greenish] <kind>[:<weight>]...
 //                                    ground whose texture matches the glob (case-insensitive, '*' and '?') grows
 //                                    <density> plants per 100 square units, each one of the kinds (definition names
-//                                    of the donor's RadialFloraDefs.rfd) picked by weight (default 1); the first
+//                                    of the donors' RadialFloraDefs.rfd, the first donor's that has it, or one
+//                                    donor's as <archive stem>/<name>) picked by weight (default 1); the first
 //                                    matching line wins, and a density of 0 keeps a texture bare. With +green a plant
 //                                    grows only where the texel under it is green (is_green_texel): the classic
 //                                    zones' ground textures blend grass into cliff, sand or a path within one picture.
 //                                    +greenish (is_greenish_texel) also takes olive and dark grass: for a texture whose
 //                                    name already says it is grass, where only its paths and bare patches are to go
 //   include <name>                   reads flora/<name>.txt's lines here (default: the shared rules)
-// Lines apply in order: a later donor, max_slope or scale replaces an earlier one, and the first matching ground line
+// Lines apply in order: a later max_slope or scale replaces an earlier one, and the first matching ground line
 // wins, so a zone's own exceptions go before its include.
 // A zone without a file of its own takes flora/default.txt when the server calls it outdoor (time type 1, 2 or 5).
 // Plants grow only on opaque or cut-out surfaces (not the translucent water) and keep off water, lava and zone-line
@@ -34,6 +36,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -63,7 +66,7 @@ struct ZoneFloraRules {
         bool greenish = false;   // +greenish
         std::vector<Kind> kinds;
     };
-    std::string donor;
+    std::vector<std::string> donors; // in order
     float max_slope = 40.0f; // degrees
     float min_scale = 1.0f, max_scale = 1.0f;
     std::vector<Ground> ground;
@@ -157,6 +160,16 @@ struct FloraDonor {
     std::vector<eqg::FloraDefinition> definitions;
 };
 std::optional<FloraDonor> open_flora_donor(const GameDir& game, std::string_view donor);
+
+// The donors of a rules file, their definitions together, each named <archive stem>/<name>; nullopt when none opens.
+struct FloraDonors {
+    std::vector<std::shared_ptr<const PfsArchive>> archives;
+    std::vector<eqg::FloraDefinition> definitions;
+};
+std::optional<FloraDonors> open_flora_donors(const GameDir& game, std::span<const std::string> donors);
+// Whether a rules file's kind names the definition (as open_flora_donors names them): "fern" any donor's fern,
+// "oldkithicor/fern" that donor's alone.
+bool flora_kind_matches(std::string_view kind, std::string_view definition);
 
 // For a zone without flora of its own: takes its rules (load_zone_flora_rules), opens their donor archive from
 // `game` and sets zone.flora up to grow (ZoneFlora::grower). Returns how many tiles may grow plants (0 when the zone

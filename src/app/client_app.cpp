@@ -552,7 +552,27 @@ int ClientApp::run() {
                 world_objects_->draw(*f, vp, camera_.position, lit);
             }
             lap.mark("objects draw");
-            if (flora_renderer_ && grass_) flora_renderer_->set_reach(flora_reach_);
+            if (flora_renderer_ && grass_) {
+                flora_renderer_->set_reach(flora_reach_);
+                // The grass bends away from the spawns standing in it (Hailstone's own): the nearest to the camera
+                // within 150 units, by their feet, round them by their size.
+                std::vector<std::pair<float, glm::vec4>> near;
+                if (in_game)
+                    for (const auto& [id, s] : conn_->world().spawns) {
+                        const glm::vec3 at = s.display_valid ? s.display_position : s.position;
+                        const float d = glm::distance(glm::vec2(at), glm::vec2(camera_.position));
+                        if (d > 150.0f) continue;
+                        const glm::vec3 feet = at - glm::vec3(0.0f, 0.0f, s.heights.avatar_height);
+                        near.emplace_back(d, glm::vec4(feet, std::clamp(s.size * 0.7f, 3.0f, 12.0f)));
+                    }
+                std::sort(near.begin(), near.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                std::vector<glm::vec4> pushers;
+                for (const auto& [d, p] : near) {
+                    if (pushers.size() >= render::FloraRenderer::kMaxPushers) break;
+                    pushers.push_back(p);
+                }
+                flora_renderer_->set_pushers(pushers);
+            }
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
             const std::unordered_set<std::uint32_t>* modelled = nullptr;

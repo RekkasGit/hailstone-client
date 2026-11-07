@@ -1,0 +1,11 @@
+# Hailstone's own flora rules (assets/zone_flora.h, docs/graphics.md "Zone flora"). Shared: floors, rock and stone
+# stay bare however mossy (rkmt: Kunark's mountain rock). Rules files include this after the lines for ground named as
+# grass, so a grass and rock blend still grows on its grass.
+ground *floor* 0
+ground *flor* 0
+ground *flr* 0
+ground *rock* 0
+ground *rkmt* 0
+ground *mtnwa* 0
+ground *stone* 0
+ground *cliff* 0

@@ -10,6 +10,7 @@
 #include <numbers>
 #include <optional>
 #include <random>
+#include <span>
 #include <string>
 #include <system_error>
 
@@ -99,6 +100,7 @@ struct Options {
     bool no_fire = false;                         // --no-fire: the modern lighting without its flames (timing)
     bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
     float flora_distance = 400.0f;                // --flora-distance: how far the viewer draws the flora
+    std::optional<glm::vec3> flora_push;          // --flora-push: a foot the viewer's flora bends away from
     std::optional<std::string> textures; // --textures DIR: replacement textures (assets/texture_overrides.h)
     bool no_material_maps = false;       // --no-material-maps: a pack's colour without its normal and roughness maps
     int time_type = -1;           // viewer OP_NewZone time_type; -1: 1 with a sky, 0 without
@@ -239,6 +241,7 @@ void usage() {
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
         "                     viewer draws flora with --lighting modern only\n"
         "  --flora-distance U viewer: draw the flora U units round the camera (400 .. 1200; default 400)\n"
+        "  --flora-push X Y Z viewer: the flora bends away from a foot standing there, as from a spawn (testing)\n"
         "  --moon P           the moon's phase, 0 new .. 0.5 full .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --blood-moon B     the blood moon, 0 none .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --aurora A         the northern lights by night, 0 none .. 1 (--lighting modern; client: instead of the\n"
@@ -392,6 +395,11 @@ Options parse_args(int argc, char** argv) {
             o.view_distance = std::strtof(argv[++i], nullptr);
         } else if (arg("--no-grass")) {
             o.no_grass = true;
+        } else if (arg("--flora-push")) {
+            need(3);
+            o.flora_push = glm::vec3(std::strtof(argv[i + 1], nullptr), std::strtof(argv[i + 2], nullptr),
+                                     std::strtof(argv[i + 3], nullptr));
+            i += 3;
         } else if (arg("--flora-distance")) {
             need(1);
             o.flora_distance = std::strtof(argv[++i], nullptr);
@@ -790,9 +798,14 @@ int main(int argc, char** argv) {
         }
 
         std::unique_ptr<render::FloraRenderer> flora_renderer;
+        std::uint32_t flora_drawn = 0;
         if (zone && opts.modern && !opts.no_grass && !zone->flora.empty())
             flora_renderer = std::make_unique<render::FloraRenderer>(vk, *zone, shader_dir);
         if (flora_renderer) flora_renderer->set_reach(opts.flora_distance);
+        if (flora_renderer && opts.flora_push) {
+            const glm::vec4 push(*opts.flora_push, 6.0f);
+            flora_renderer->set_pushers(std::span<const glm::vec4>(&push, 1));
+        }
         std::unique_ptr<render::ZoneRenderer> zone_renderer;
         render::PointShadows point_shadows;
         render::CoverMapState cover_state, water_state; // what the cover and water maps last showed
@@ -1007,6 +1020,7 @@ int main(int argc, char** argv) {
                               "triangles in {} calls, {} into shadows in {} calls",
                               ms / (frame - timed_from), timed_from, frame - 1, 1000.0 * (frame - timed_from) / ms,
                               drawn.triangles, drawn.calls, drawn.shadow_triangles, drawn.shadow_calls);
+                if (flora_renderer) log::info("flora: the last frame drew {} plants", flora_drawn);
                 if (neighbours)
                     log::info("neighbour zones: {} loaded, the last frame drew {} triangles in {} calls, {:.3f} ms of CPU",
                               neighbours->loaded(), neighbours->drawn_triangles(), neighbours->drawn_calls(),
@@ -1281,7 +1295,7 @@ int main(int argc, char** argv) {
                     // The water reads the opaque world (VkContext::begin_translucent).
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
-                    if (flora_renderer) flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
+                    if (flora_renderer) flora_drawn = flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
