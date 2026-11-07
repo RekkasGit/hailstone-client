@@ -288,6 +288,7 @@ add_library(nmsc_engine STATIC
   src/assets/eqg.cpp
   src/assets/eqg_zone.cpp
   src/assets/flora.cpp
+  src/assets/zone_flora.cpp
   src/assets/character.cpp
   src/assets/character_dress.cpp
   src/assets/character_parts.cpp
@@ -749,6 +750,7 @@ add_custom_command(TARGET hailstone POST_BUILD
 add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/icons $<TARGET_FILE_DIR:hailstone>/icons
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/pictures $<TARGET_FILE_DIR:hailstone>/pictures
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/flora $<TARGET_FILE_DIR:hailstone>/flora
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md $<TARGET_FILE_DIR:hailstone>)
 
 # cmake --install build --prefix <dir> gives the same folder: <dir>/hailstone(.exe), shaders/, ui/, icons/, pictures/, CHANGELOG.md and the shared
@@ -766,6 +768,7 @@ install(DIRECTORY ${NMSC_SHADER_OUT}/ DESTINATION shaders FILES_MATCHING PATTERN
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ui/ DESTINATION ui)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
 if(WIN32)
   install(FILES $<TARGET_RUNTIME_DLLS:hailstone> DESTINATION .)
@@ -870,6 +873,7 @@ if(NMSC_BUILD_TESTS)
     tests/font_faces_test.cpp
     tests/process_test.cpp
     tests/flora_test.cpp
+    tests/zone_flora_test.cpp
     tests/client_info_commands_test.cpp
     tests/gameplay_commands_test.cpp
     tests/mouse_look_test.cpp

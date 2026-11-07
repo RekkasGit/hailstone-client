@@ -25,6 +25,7 @@
 #include "game/spells.h"
 #include "assets/sky.h"
 #include "assets/texture_overrides.h"
+#include "assets/zone_flora.h"
 #include "assets/zone.h"
 #include "audio/audio_system.h"
 #include "core/asset_folder.h"
@@ -38,6 +39,7 @@
 #include "render/fire_renderer.h"
 #include "render/spell_fx_renderer.h"
 #include "render/point_shadow_pass.h"
+#include "render/flora_renderer.h"
 #include "render/scene_lighting.h"
 #include "game/view_distance.h"
 #include "core/old_ui_settings.h"
@@ -95,6 +97,7 @@ struct Options {
     float aurora = -1.0f;       // --aurora A: the northern lights 0..1 (viewer default none)
     std::vector<nmsc::render::FireSource> fires; // --fire X Y Z H W: flames placed by hand (modern)
     bool no_fire = false;                         // --no-fire: the modern lighting without its flames (timing)
+    bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
     std::optional<std::string> textures; // --textures DIR: replacement textures (assets/texture_overrides.h)
     bool no_material_maps = false;       // --no-material-maps: a pack's colour without its normal and roughness maps
     int time_type = -1;           // viewer OP_NewZone time_type; -1: 1 with a sky, 0 without
@@ -232,6 +235,8 @@ void usage() {
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
+        "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
+        "                     viewer draws flora with --lighting modern only\n"
         "  --moon P           the moon's phase, 0 new .. 0.5 full .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --blood-moon B     the blood moon, 0 none .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --aurora A         the northern lights by night, 0 none .. 1 (--lighting modern; client: instead of the\n"
@@ -383,6 +388,8 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--view-distance")) {
             need(1);
             o.view_distance = std::strtof(argv[++i], nullptr);
+        } else if (arg("--no-grass")) {
+            o.no_grass = true;
         } else if (arg("--no-ao")) {
             o.scene.ambient_occlusion = false;
         } else if (arg("--weather-age")) {
@@ -742,6 +749,7 @@ int main(int argc, char** argv) {
             GameDir game = open_game_dir(opts.game_dir, opts.classic_dir);
             auto t0 = std::chrono::steady_clock::now();
             zone = assets::load_zone(game, opts.zone);
+            if (!opts.no_grass) assets::add_zone_flora(game, *zone, platform::flora_dir());
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0);
             log::info("loaded {}: {} terrain meshes, {} objects, {} placements, {} lights in {} ms; bounds {:.0f} {:.0f} "
                       "{:.0f} to {:.0f} {:.0f} {:.0f}",
@@ -773,6 +781,9 @@ int main(int argc, char** argv) {
             if (opts.modern && !opts.no_fire) fire_renderer = std::make_unique<render::FireRenderer>(vk, shader_dir);
         }
 
+        std::unique_ptr<render::FloraRenderer> flora_renderer;
+        if (zone && opts.modern && !opts.no_grass && !zone->flora.empty())
+            flora_renderer = std::make_unique<render::FloraRenderer>(vk, *zone, shader_dir);
         std::unique_ptr<render::ZoneRenderer> zone_renderer;
         render::PointShadows point_shadows;
         render::CoverMapState cover_state, water_state; // what the cover and water maps last showed
@@ -1261,6 +1272,7 @@ int main(int argc, char** argv) {
                     // The water reads the opaque world (VkContext::begin_translucent).
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
+                    if (flora_renderer) flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);

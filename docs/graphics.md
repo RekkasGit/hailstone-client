@@ -189,6 +189,25 @@ plant on the CPU as the smoke is (`render::particle_light`, the haze by `haze_at
 ambient and half its sun), take the terrain's colour with `*INHERITVERTEXCOLOR`, write depth in the opaque part of the
 scene and shrink into the ground over the last fifth of the reach. They cast no shadows.
 
+## Zone flora
+
+Hailstone's own, not the original's: the classic zones have no flora, and this gives a zone grass and plants without
+changing its files (`assets/zone_flora.h`, `display.zone_flora`). A zone that has a rules file, `flora/<zone>.txt` in
+the install folder (shipped; `flora/ecommons.txt` is the first), gets plants placed over its terrain as it loads, into
+the same `Zone::flora` the EQG zones' radial flora fills, and drawn the same way (above; /showgrass hides them). The
+rules file names:
+- a **donor**: an EQG archive in the player's game folder whose `RadialFloraDefs.rfd` and textures give the plants'
+  shapes and pictures. East Commonlands takes `commonlands.eqg`'s, the revamped Commonlands. Nothing is shipped;
+  without the donor the zone has no flora.
+- per **ground texture** (a glob, the first matching line winning): plants per 100 square units and their kinds by
+  weight. The classic ground textures blend grass into cliff, sand or a path within one picture (`cpg*`, `spg*`,
+  `cpath`), so `+green` keeps a plant only where the game's own texel under it is green.
+- a **slope** limit (40 degrees unless set) and a size range.
+
+Plants keep off water, lava and zone-line regions. Each terrain triangle's plants come from its own seeded sequence,
+so a zone grows the same plants at every load. They are looks only: collision, line of sight, the navigation mesh and
+picking do not see them. Not yet: ground under a roof, a bridge or a placed object still grows plants.
+
 ## Spell bolts and comets
 
 In the modern lighting a damaging spell is thrown, not just played on the target (`game/spell_projectiles.h`,
@@ -960,6 +979,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.vsync` | off, on, adaptive | on | the present mode: immediate (else mailbox), FIFO, FIFO relaxed; FIFO when the surface lacks one |
 | `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence |
 | `display.background_fps` | 0, 10 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`) |
+| `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides), read as each zone loads |
 | `display.fov` | fov units | none | the camera's field of view in 512ths of a circle (none: the classic 90, 63.3 degrees across below an aspect of 2); the Options window shows degrees, 45 .. 120 |
 | `ui.scale` | percent, 0 | 0 | the UI's scale (0: the display's); read at start-up; `--ui-scale` takes precedence |

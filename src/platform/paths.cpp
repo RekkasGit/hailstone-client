@@ -175,6 +175,7 @@ std::filesystem::path shaders_dir() { return install_dir() / "shaders"; }
 std::filesystem::path ui_packs_dir() { return install_dir() / "ui"; }
 std::filesystem::path icons_dir() { return install_dir() / "icons"; }
 std::filesystem::path pictures_dir() { return install_dir() / "pictures"; }
+std::filesystem::path flora_dir() { return install_dir() / "flora"; }
 
 std::filesystem::path config_file() { return data_dir() / "hailstone.ini"; }
 std::filesystem::path imgui_ini() { return data_dir() / "hailstone-windows.ini"; }

@@ -49,6 +49,7 @@ std::filesystem::path shaders_dir();  // install_dir()/shaders
 std::filesystem::path ui_packs_dir(); // install_dir()/ui, one folder with a ui.ini per pack
 std::filesystem::path icons_dir();    // install_dir()/icons, the window icon
 std::filesystem::path pictures_dir(); // install_dir()/pictures, the shipped pre-game and loading pictures
+std::filesystem::path flora_dir();    // install_dir()/flora, the zone flora rules (assets/zone_flora.h)
 
 // The writable files and folders, all under data_dir().
 std::filesystem::path config_file();                     // hailstone.ini, the client's settings

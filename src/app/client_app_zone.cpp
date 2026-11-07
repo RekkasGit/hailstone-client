@@ -10,6 +10,7 @@
 
 #include <SDL3/SDL_video.h>
 
+#include "assets/zone_flora.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "mq/lua_mq.h"
@@ -30,6 +31,8 @@ void ClientApp::load_zone(const std::string& short_name) {
     auto t0 = Clock::now();
     try {
         zone_ = assets::load_zone(game_, short_name);
+        // Hailstone's own flora for a zone without any (assets/zone_flora.h, display.zone_flora).
+        if (config_.get_bool("display.zone_flora", true)) assets::add_zone_flora(game_, *zone_, platform::flora_dir());
         zone_particles_ = std::make_unique<ZoneParticles>(vk_, game_, shader_dir_, *zone_);
         zone_particles_->set_density(environment_particle_density_);
         // PlayerClient::PostBuildInit makes the spawns' lights only with ShowDynamicLights (/dynamiclights: "takes

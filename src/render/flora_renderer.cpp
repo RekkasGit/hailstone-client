@@ -68,7 +68,7 @@ FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std:
             if (it != loaded.end()) {
                 slot = it->second;
             } else if (textures_.size() < max_textures_) {
-                auto data = zone_.read_file(def.texture);
+                auto data = zone_.flora.textures ? zone_.flora.textures->read(def.texture) : zone_.read_file(def.texture);
                 std::optional<std::span<const std::byte>> bytes;
                 if (data) bytes = std::span<const std::byte>(*data);
                 if (auto image = assets::decode_game_texture(def.texture, bytes, {.reads_alpha = true})) {

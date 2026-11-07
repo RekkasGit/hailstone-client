@@ -1,0 +1,17 @@
+# East Commonlands: Hailstone's own flora for the classic zone (assets/zone_flora.h, docs/graphics.md "Zone flora").
+# The shapes and pictures are the player's own commonlands.eqg's (the revamped Commonlands), read from the game folder.
+# Most ground textures here blend grass into cliff, sand or a path, so the grass lines take +green.
+donor commonlands.eqg
+max_slope 45
+scale 0.9 1.3
+
+ground pgrass* 12 +green grassblades:4 grass2:3 treeshade:1 treeshade2:1
+ground kwgras* 12 +green grassblades:4 grass2:3 treeshade:1 treeshade2:1
+ground cpath* 12 +green grassblades:4 grass2:3      # grass either side of the road
+ground pgd* 12 +green grassblades:4 grass2:3
+ground cpg* 12 +green grassblades:4 grass2:3
+ground spg* 12 +green grassblades:4 grass2:3
+ground kwpg* 12 +green grassblades:4 grass2:3
+ground mpg* 12 +green grassblades:4 grass2:3
+ground sand* 0.15 DesertPlant1 DesertPlant2 DesertPlant3
+ground dirt* 0.15 DesertPlant1 DesertPlant2 DesertPlant3
