@@ -813,8 +813,8 @@ int l_player(lua_State* L) {
     }
     set_int(L, "visible_class", c->visible_class());
     set_int(L, "class_mask", c->player_class_mask());
-    set_int(L, "cur_hp", ps.hp);
-    set_int(L, "max_hp", ps.max_hp);
+    set_int(L, "cur_hp", c->own_hp().cur); // the items' HP included (GameConnection::own_hp)
+    set_int(L, "max_hp", c->own_hp().max);
     set_int(L, "cur_mana", ps.mana);
     set_int(L, "max_mana", ps.max_mana);
     set_int(L, "cur_endurance", ps.endurance);

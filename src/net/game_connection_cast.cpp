@@ -69,7 +69,7 @@ public:
             s.spawn_id = c_.world_.player_id;
             s.stand_state = c_.pstatus_.stand_state;
             s.hide_mode = c_.hidden_ ? std::max<std::int32_t>(1, c_.invis_state_) : c_.invis_state_;
-            s.hp_max = static_cast<std::int32_t>(c_.pstatus_.max_hp);
+            s.hp_max = static_cast<std::int32_t>(c_.own_hp().max); // Max_HP: the items' HP included
             // FloorHeight and +0x11b4 for the mount's room check (SPA 113, 4067): the movement's last floor test and
             // the ceiling its CanIFitHere last found room under; without them (no collision, the open sky) it passes.
             s.floor_height = 0;

@@ -185,9 +185,11 @@ TEST_CASE("plugin server extension: setters, switches and hooks through the chai
     CHECK(h.chain.merchant_level(c, potion) == "L42");
     CHECK_FALSE(h.chain.merchant_level(c, other));
 
-    // The readers.
+    // The readers. The player's HP is Cur_HP / Max_HP, the items' HP included (GameConnection::own_hp): 750 from the
+    // server and 250 from the items; the plugin gave Max_HP whole above (set_vitals, 1234), so nothing is added to it.
+    c.set_own_hp_items(250, 0);
     h.run("/extread");
-    CHECK(h.printed_part("[read] player Tester 50 class 2 target 10 group 1"));
+    CHECK(h.printed_part("[read] player Tester 50 class 2 target 10 group 1 hp 1000/1234"));
     CHECK(h.printed_part("[read] spawns 5"));
     CHECK(h.printed_part("[read] spawn a_rat01 npc 1"));
     CHECK(h.printed_part("[read] spell Holy Armor cleric 3"));

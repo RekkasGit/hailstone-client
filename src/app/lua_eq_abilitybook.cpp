@@ -327,7 +327,8 @@ game::AutoskillWorld world(EqHost& h) {
     auto pct = [](std::uint64_t cur, std::uint64_t max) { return max ? static_cast<int>(cur * 100 / max) : 100; };
     w.endurance_pct = pct(ps.endurance, ps.max_endurance);
     w.mana_pct = pct(ps.mana, ps.max_mana);
-    w.hp_pct = ps.max_hp > 0 ? static_cast<int>(std::max<std::int64_t>(ps.hp, 0) * 100 / ps.max_hp) : 100;
+    const auto own = c.own_hp(); // the items' HP included, as the player window's
+    w.hp_pct = own.max > 0 ? static_cast<int>(std::max<std::int64_t>(own.cur, 0) * 100 / own.max) : 100;
     w.in_combat = c.in_combat();
     return w;
 }

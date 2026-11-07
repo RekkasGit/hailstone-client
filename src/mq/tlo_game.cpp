@@ -627,12 +627,13 @@ void register_character() {
     me_member("Deity", [](const Context&, const GameConnection& c, std::string_view) {
         return c.profile() ? V::integer(c.profile()->deity) : V::nil();
     });
+    // Cur_HP and Max_HP, the items' HP included (GameConnection::own_hp), as the windows show them.
     me_member("PctHPs", [](const Context&, const GameConnection& c, std::string_view) {
-        const auto& ps = c.player_status();
-        return V::integer(ps.max_hp > 0 ? ps.hp * 100 / ps.max_hp : 0);
+        const auto hp = c.own_hp();
+        return V::integer(hp.max > 0 ? hp.cur * 100 / hp.max : 0);
     });
-    me_member("CurrentHPs", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.player_status().hp); });
-    me_member("MaxHPs", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.player_status().max_hp); });
+    me_member("CurrentHPs", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.own_hp().cur); });
+    me_member("MaxHPs", [](const Context&, const GameConnection& c, std::string_view) { return V::integer(c.own_hp().max); });
     me_member("PctMana", [](const Context&, const GameConnection& c, std::string_view) {
         const auto& ps = c.player_status();
         return V::integer(ps.max_mana > 0 ? std::int64_t(ps.mana) * 100 / ps.max_mana : 0);

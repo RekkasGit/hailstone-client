@@ -126,6 +126,8 @@
 - Bug reports: a Linux crash report whose last log line was chat keeps its stack trace in the report (taking the chat out used to take the stack with it)
 - Bug reports: a report still being written when the window is opened again keeps its own screenshot (it could get none, a broken one or the next one), and a report sent while an earlier one is written says where you were and what you targeted when you sent it, not when its turn came
 - Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
+- Scripts and plugins now see the same HP as the windows: `Me.CurrentHPs`, `Me.MaxHPs` and `Me.PctHPs`, a Lua script's `player()` and a compiled plugin's player include the HP from your gear, so heal and rest scripts such as Auto Combat no longer think a geared character is far lower than it is. The ability book's HP percent and the developer group and stats windows do too, and the stats window no longer warns that its max HP differs from the server's on every character wearing HP gear. Targeting yourself shows the same percent
+- A character whose HP fell below the HP its gear gives is no longer treated as knocked out on stock EQEmu servers: mouse look and right-click menus work, Kick, Bash and the other skills no longer silently fail, and the client still saves your character
 - Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
 
 ## 0.5.0-beta (2026-11-05)

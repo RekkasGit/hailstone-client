@@ -284,8 +284,8 @@ void ClientApp::draw_ui(float fps) {
         auto& pv = game_view_.player;
         if (const auto* me = world.player()) pv.name = me->name;
         pv.level = ps.level;
-        pv.hp = ps.hp;
-        pv.max_hp = ps.max_hp;
+        pv.hp = conn_->own_hp().cur; // the items' HP included (GameConnection::own_hp)
+        pv.max_hp = conn_->own_hp().max;
         pv.mana = ps.mana;
         pv.max_mana = ps.max_mana;
         pv.endurance = ps.endurance;

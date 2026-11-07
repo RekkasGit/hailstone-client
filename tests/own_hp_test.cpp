@@ -1,12 +1,15 @@
-// The player's own HP in the windows (app/lua_eq_values.cpp own_hp): EQEmu's OP_HPUpdate for the player leaves out the
-// items' HP (SendHPUpdate: GetHP() - itembonuses.HP), which Cur_HP / Max_HP add back from the character's item sums;
-// a server extension's vitals are already the whole value. Against the mock server.
+// The player's own HP (net::GameConnection::own_hp, set by app/stats_ui.cpp share_own_hp_items): EQEmu's OP_HPUpdate
+// for the player leaves out the items' HP (SendHPUpdate: GetHP() - itembonuses.HP), which Cur_HP / Max_HP add back
+// from the character's item sums; a server extension's vitals are already the whole value. The windows read it here;
+// Me.CurrentHPs (mq_tlo_test), hailstone.player (lua_plugin_test) and NmscPlayer (native_extension_test) read the same.
+// Against the mock server.
 #include <doctest/doctest.h>
 
 #include <functional>
 
 #include "app/lua_eq.h"
 #include "app/lua_eq_values.h"
+#include "app/stats_ui.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/tables.h"
 #include "mock_server/harness.h"
@@ -76,6 +79,7 @@ TEST_CASE("Own HP: the windows add the items' HP that EQEmu's HP update leaves o
     CHECK(app::eq_label(host, 18).text == "200");
 
     host.character = &ch;
+    app::share_own_hp_items(conn, &ch); // as StatsUi::draw does each in-zone frame
     CHECK(app::eq_label(host, 17).text == "362"); // Cur_HP
     CHECK(app::eq_label(host, 18).text == "462"); // Max_HP
     CHECK(app::eq_label(host, 19).text == "78");  // 362 / 462
@@ -89,6 +93,12 @@ TEST_CASE("Own HP: the windows add the items' HP that EQEmu's HP update leaves o
     mech::Character ext(given, tables, no_spells);
     ext.process_all_stats();
     host.character = &ext;
+    app::share_own_hp_items(conn, &ext);
     CHECK(app::eq_label(host, 17).text == "100");
     CHECK(app::eq_label(host, 18).text == "200");
+
+    // Leaving the zone (no character): the server's points as they came.
+    app::share_own_hp_items(conn, nullptr);
+    CHECK(conn.own_hp().cur == 100);
+    CHECK(conn.own_hp().max == 200);
 }

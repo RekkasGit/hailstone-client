@@ -470,6 +470,22 @@ public:
     bool zone_change_pending() const { return zone_change_pending_; }
     // ---- combat (game/combat.h) ----
     const PlayerStatus& player_status() const { return pstatus_; }
+    // The player's own HP as Cur_HP / Max_HP give it. EQEmu's SendHPUpdate sends the player's own points without the
+    // items' HP (GetHP() - itembonuses.HP, GetMaxHP() - itembonuses.HP), which the original adds back from its own
+    // item sums (CharacterBase +0x24, DerivedStats::hp_bonus). The app sets what to add from the player's character
+    // each in-zone frame (app/stats_ui.cpp share_own_hp_items): nothing for a value a server extension gives whole
+    // (CharacterVitals), and nothing before the first in-zone frame. Everything that shows, reports or tests the
+    // player's current HP reads this (docs/mechanics.md), not player_status()'s hp and max_hp, which are the packet's
+    // and go below 1 while a geared player still stands. While the player is dead (the own death sets the HP to 0)
+    // nothing is added to the current HP.
+    struct OwnHp {
+        std::int64_t cur = 0, max = 0;
+    };
+    OwnHp own_hp() const {
+        return {pstatus_.dead ? pstatus_.hp : pstatus_.hp + own_hp_items_.cur, pstatus_.max_hp + own_hp_items_.max};
+    }
+    // Also sets the player's own spawn's HP percent again (SetSpawnHP's, from own_hp()) when the items' HP changed.
+    void set_own_hp_items(std::int64_t cur, std::int64_t max);
     std::uint32_t target() const { return world_.target_id; }
     // Sets the target and tells the server (OP_TargetMouse, as the original
     // does on every target change); 0 clears it.
@@ -2150,8 +2166,8 @@ public:
     // Cur_HP below 1, or the PC's state (its virtual base +0x104) 3 or 4: knocked out (PlayerZoneClient::KnockedOut)
     // or dead and waiting to respawn (the local repop). __ProcessMouseEvents @0x539e60 then keeps the mouse from the
     // world and FUN_00761f10 (CContextMenuManager::PopupMenu's test) opens no context menu. Here the own death, or
-    // the HP once the server sent the maximum.
-    bool player_down() const { return pstatus_.dead || (pstatus_.max_hp > 0 && pstatus_.hp < 1); }
+    // Cur_HP (own_hp(): the items' HP included) once the server sent the maximum.
+    bool player_down() const { return pstatus_.dead || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
     void send_server_filter();
     // Byte 0xddf70d: set by opcode 0x150e and cleared by 0x1f65 (each carrying the player's name); while it
     // is set the chat commands and socials send nothing.
@@ -2878,6 +2894,8 @@ private:
 
     // Combat.
     PlayerStatus pstatus_;
+    OwnHp own_hp_items_; // what own_hp() adds to pstatus_ (set_own_hp_items)
+    void set_own_spawn_hp(); // the player's spawn's HP percent from own_hp() (SetSpawnHP)
     bool auto_attack_ = false;
     bool attack_until_xtarget_clear_ = false;
     bool fast_camp_ = false;

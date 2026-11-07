@@ -1332,7 +1332,16 @@ The sheet's stored HP (profile +0x3394 BaseHP, which current HP adds the HP bonu
 weight calculation's low-health slowdown applied: AGI halved (a level-60 cleric's max endurance 1614 for the
 server's 1668) and the movement frame's weight factor 0.5.
 
-The windows' own HP (labels 17, 18, 19 and 70, gauge 1, and the player's HP percent wherever a spawn's is shown) is
-OP_HPUpdate's points plus the item sum (`DerivedStats::hp_bonus`), as Cur_HP and Max_HP add it: EQEmu sends the
-player its own HP without the items' HP. A server extension's vitals (`CharacterVitals`) are the whole value and get
-nothing added (app/lua_eq_values.cpp `own_hp`).
+The player's own HP is OP_HPUpdate's points plus the item sum (`DerivedStats::hp_bonus`), as Cur_HP and Max_HP add
+it: EQEmu sends the player its own HP without the items' HP. A server extension's vitals (`CharacterVitals`) are the
+whole value and get nothing added, and nothing is added to the current HP while the player is dead. The app tells
+the connection the item sum each in-zone frame (app/stats_ui.cpp `share_own_hp_items`; kept through the camp
+countdown, gone out of the zone), and everything that shows, reports or tests the player's current HP reads
+`net::GameConnection::own_hp`: the windows (labels 17, 18, 19 and 70, gauge 1, the ability book's HP percent, the
+developer group window's own row), the player's own spawn's HP percent (SetSpawnHP's, so `Spawn[...].PctHPs`, a self
+target and a plugin's spawn), `Me.CurrentHPs`, `Me.MaxHPs` and `Me.PctHPs`, `hailstone.player()`'s `cur_hp` /
+`max_hp`, a plugin's `NmscPlayer`, the knocked-out test (`player_down`: the mouse and the context menu, OP_Save),
+UseSkill's Cur_HP check, the fall damage report's knock-out floor, the caster's Max_HP in CastSpell and the hit
+sound's HP. The bare packet value goes below 1 while a geared player still stands, which is why none of these read
+it. The developer stats window compares its computed Max_HP with that sum. The regeneration ticks and the sheet's
+stored HP keep the packet's value (Cur_HP adds the item sum to it).

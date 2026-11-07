@@ -85,6 +85,31 @@ GameConnection::GameConnection(const GameDir& game, ConnectionOptions options) :
     reload_game_files();
 }
 
+namespace {
+
+// SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (fild, fmul, fdiv, __ftol2: truncated), so nothing wraps; the
+// 64-bit integer quotient is the same for every int32 pair. A spawn still alive (cur >= 1) shows at least 1%; at or
+// below 0 it keeps that value (here 0, the percentage being unsigned).
+std::uint8_t spawn_hp_percent(std::int64_t cur, std::int64_t max) {
+    std::int64_t pct = cur < 1 ? 0 : std::max<std::int64_t>(1, cur * 100 / max);
+    return static_cast<std::uint8_t>(std::min<std::int64_t>(pct, 100));
+}
+
+} // namespace
+
+void GameConnection::set_own_spawn_hp() {
+    const OwnHp hp = own_hp();
+    if (hp.max <= 0) return;
+    if (auto it = world_.spawns.find(world_.player_id); it != world_.spawns.end())
+        it->second.hp_percent = spawn_hp_percent(hp.cur, hp.max);
+}
+
+void GameConnection::set_own_hp_items(std::int64_t cur, std::int64_t max) {
+    if (own_hp_items_.cur == cur && own_hp_items_.max == max) return;
+    own_hp_items_ = {cur, max};
+    if (pstatus_.max_hp > 0) set_own_spawn_hp();
+}
+
 void GameConnection::reload_game_files() {
     strings_.load(game_);
     tables_.reset();
@@ -2300,14 +2325,9 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
             if (id == me || h->spawn_id == -1) {
                 pstatus_.hp = static_cast<std::int32_t>(h->cur_hp);
                 pstatus_.max_hp = h->max_hp;
-            }
-            // SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (fild, fmul, fdiv, __ftol2: truncated), so nothing
-            // wraps; the 64-bit integer quotient is the same for every int32 pair. A spawn still alive (cur >= 1)
-            // shows at least 1%; at or below 0 it keeps that value (here 0, the percentage being unsigned).
-            if (auto* s = spawn(id); s && h->max_hp > 0) {
-                std::int64_t cur = std::int64_t{static_cast<std::int32_t>(h->cur_hp)};
-                std::int64_t pct = cur < 1 ? 0 : std::max<std::int64_t>(1, cur * 100 / h->max_hp);
-                s->hp_percent = static_cast<std::uint8_t>(std::min<std::int64_t>(pct, 100));
+                set_own_spawn_hp(); // the player's own: Cur_HP / Max_HP, the items' HP included (own_hp)
+            } else if (auto* s = spawn(id); s && h->max_hp > 0) {
+                s->hp_percent = spawn_hp_percent(std::int64_t{static_cast<std::int32_t>(h->cur_hp)}, h->max_hp);
             }
         }
         break;
