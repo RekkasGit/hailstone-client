@@ -776,6 +776,8 @@ private:
     // Cameras 1..5: the spawn they follow (the player, as drawn this frame), and their update into camera_.
     game::CameraTarget camera_target(const glm::vec3& feet) const;
     void update_game_camera(const glm::vec3& feet);
+    // unk_EQCamera_SetPosition's sweep for the cameras 1..6 (game/cameras.h).
+    game::CameraSweep camera_sweep() const;
     // The player's eye: its z plus PlayerClient_GetEyeHeight (game/spawn_heights.h).
     glm::vec3 eye_position() const;
     void draw_ui(float fps);

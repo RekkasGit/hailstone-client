@@ -215,8 +215,10 @@ HOT1_1 .. HOT10_12 press bar (command - 37) / 12's buttons and HOTPAGE1_1 .. HOT
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead
 (1), chase (2), user 1 and 2 (3, 4) and tether (5), plus the wheel-follow camera (6), which is this client's own camera
-behind the player (its distance the mouse wheel's; its pull-in against scenery and the gamepad's stick its own). The
-player's model is drawn in every camera but first person.
+behind the player (its distance the mouse wheel's, the gamepad's stick its own). It stops against scenery as the
+cameras 1..5 do, where the 0.25 sphere swept from the eye stops (`wheel_follow_position`); it used to step its
+distance down by a fifth until the line behind was clear, which in a small room jumped between the steps as the
+player walked. The player's model is drawn in every camera but first person.
 
 | Camera | Where it stands (each frame, on the player as drawn) | Mouse look: sideways / up-down | Keys that act |
 |---|---|---|---|

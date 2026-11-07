@@ -924,13 +924,8 @@ void ClientApp::update_player(float dt) {
     if (camera_type_ > game::kCameraFirstPerson && camera_type_ < game::kCameraWheelFollow) {
         update_game_camera(feet_ - behind * step_move_);
     } else if (camera_distance_ > 0.0f) {
-        // Behind and above the player; pulled in when scenery is in the way.
-        float dist = camera_distance_;
-        glm::vec3 back = -camera_.forward();
-        if (collision_) {
-            for (; dist > 1.0f && !collision_->line_of_sight(eye, eye + back * (dist + 1.0f)); dist *= 0.8f) {}
-        }
-        camera_.position = eye + back * dist;
+        // Behind and above the player; stopped where scenery is in the way, as the cameras 1..5 are.
+        camera_.position = game::wheel_follow_position(eye, -camera_.forward(), camera_distance_, camera_sweep());
     }
     if (opts_.watch.starts_with("object:")) {
         // Testing: look at ground object N from --camera-distance.

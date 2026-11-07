@@ -4,6 +4,7 @@
 
 - Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
 - In the camera behind you, your character now moves and turns with the camera. It was drawn a little behind it, catching up a moment later, which showed most when strafing
+- The camera behind you no longer shakes in small rooms and halls: against a wall or ceiling it now stops smoothly where the scenery is, as the original's cameras do, instead of jumping between a few set distances as you walked. Doors and other objects stop it too
 
 ## 0.5.0-beta (2026-11-05)
 
