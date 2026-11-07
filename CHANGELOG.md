@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Tab (and F8, and the other NPC target keys) now targets only NPCs you can see: NPCs behind walls, floors or hills are skipped. Options > Interface "Tab Needs Line of Sight" turns this off
 - Modern UI: the Alternate Advancement list starts sorted by name, A to Z. Click a column's heading to sort by it (again to reverse it; Era sorts by expansion, in release order), and drag a heading to move its column; both are remembered. The window's text is also one size larger
 - Classic lighting: characters and NPCs take the light of the place they stand in, by day and by night. After dark they were drawn nearly black against the lit walls of zones such as the Bazaar
 - Client settings are now kept for each character: graphics, frame rate caps, sound, mouse, keys, gamepad and the game options you change while playing a character apply to that character only, so you can turn the graphics down on the characters you run in a second or third client. A character starts with the shared settings the first time it enters the world, and keeps its own from then on. Settings changed on the login screen are the shared ones. The asset folder, add-ons, updates, the window's size, place and mode, anti-aliasing (MSAA), the UI and its scale stay shared

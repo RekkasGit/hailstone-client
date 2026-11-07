@@ -175,7 +175,7 @@ local PAGES = {
     if r then rows[#rows + 1] = r end
     for _, o in ipairs({ { "Player names", "pc_names" }, { "My name", "own_name" }, { "NPC names", "npc_names" }, { "Target ring", "show_target_ring" },
         { "Target ring cues", "target_ring_cues" }, { "Target ring through models", "target_ring_xray" },
-        { "Target skips pets", "tab_skip_pets" }, { "Buff timers", "show_buff_timer" }, { "Song timers", "show_song_timer" },
+        { "Target skips pets", "tab_skip_pets" }, { "Target needs sight", "tab_line_of_sight" }, { "Buff timers", "show_buff_timer" }, { "Song timers", "show_song_timer" },
         { "Context menus", "context_menus" }, { "Player right-click menu", "player_menu" }, { "More hot button states", "hotbutton_extras" },
         { "Offer layouts to new characters", "offer_layout_copy" } }) do
       local x = optionRow(o[1], o[2], "bool")

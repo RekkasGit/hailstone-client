@@ -128,7 +128,8 @@ bool is_player_pet(const WorldState& world, const Spawn& s) {
 
 std::vector<CycleCandidate> cycle_candidates(const WorldState& world, std::int32_t mode, const glm::vec3& eye,
                                              float range, bool skip_pets,
-                                             const std::function<bool(const Spawn&)>& invisible) {
+                                             const std::function<bool(const Spawn&)>& invisible,
+                                             const std::function<bool(const Spawn&)>& in_sight) {
     std::vector<CycleCandidate> out;
     for (const auto& [id, s] : world.spawns) {
         if (id == world.player_id || (world.controlled_id != 0 && id == world.controlled_id)) continue;
@@ -144,6 +145,7 @@ std::vector<CycleCandidate> cycle_candidates(const WorldState& world, std::int32
         glm::vec3 p = s.display_valid ? s.display_position : s.position;
         float d = glm::distance(p, eye);
         if (!(d <= range)) continue;
+        if (mode == 1 && in_sight && !in_sight(s)) continue; // Hailstone: tab_line_of_sight, after the cheap tests
         CycleCandidate c;
         c.id = id;
         c.distance = d;
@@ -201,7 +203,7 @@ std::optional<std::uint32_t> target_key_command(TargetManager& tm, int command, 
     }
     std::uint32_t id =
         get_next_cycle_target(tm, mode, restart,
-                              cycle_candidates(world, mode, eye, kCycleRange, tm.skip_pets, tm.invisible));
+                              cycle_candidates(world, mode, eye, kCycleRange, tm.skip_pets, tm.invisible, tm.in_sight));
     if (id == 0) return std::nullopt;
     if (current != 0) tm.previous = current;
     std::uint32_t target = id;
@@ -219,7 +221,7 @@ std::optional<std::uint32_t> target_previous_npc(TargetManager& tm, const WorldS
     const std::uint32_t current = world.target_id;
     std::uint32_t id =
         get_previous_cycle_target(tm, 1, current,
-                                  cycle_candidates(world, 1, eye, kCycleRange, tm.skip_pets, tm.invisible));
+                                  cycle_candidates(world, 1, eye, kCycleRange, tm.skip_pets, tm.invisible, tm.in_sight));
     if (id == 0 || id == current) return std::nullopt;
     if (current != 0) tm.previous = current;
     return id;

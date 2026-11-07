@@ -802,6 +802,7 @@ private:
     void player_customization_key();
     AbilityView ability_view() const;
     std::optional<bool> can_see_spawn(std::uint32_t id) const;
+    void prepare_target_cycle();
     std::optional<float> melee_range_to(std::uint32_t id) const;
     void abilities_test(MovementKeys& mk);
     void melee_test(MovementKeys& mk);

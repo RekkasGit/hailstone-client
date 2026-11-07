@@ -2,6 +2,7 @@
 // rof2decomp batch 247) and the targeting commands (game/targeting.h).
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <utility>
 
 #include "game/mechanics/controls.h"
@@ -304,4 +305,31 @@ TEST_CASE("Hailstone: the NPC cycle skips players' pets and mercenaries unless s
     orig.skip_pets = false;
     w.target_id = 0;
     CHECK(*target_key_command(orig, 32, w, eye) == 11u);
+}
+
+TEST_CASE("Hailstone: the NPC cycle takes only the NPCs in sight when in_sight is set") {
+    using namespace nmsc::game;
+    WorldState w = world_with({{10, 5.0f, true, false}, {11, 8.0f, true, false}, {12, 12.0f, true, false},
+                               {20, 3.0f, false, false}});
+    glm::vec3 eye(0.0f);
+    TargetManager tm;
+    CHECK_FALSE(tm.in_sight); // unset: every NPC, as the original
+    CHECK(*target_key_command(tm, 32, w, eye) == 10u);
+    // 10 and 12 behind a wall; the player 20 is not asked about (the PC cycle is not filtered).
+    std::vector<std::uint32_t> asked;
+    tm.in_sight = [&](const Spawn& s) {
+        asked.push_back(s.id);
+        return s.id == 11;
+    };
+    w.target_id = 0;
+    CHECK(*target_key_command(tm, 32, w, eye) == 11u);
+    w.target_id = 11;
+    CHECK_FALSE(target_key_command(tm, 33, w, eye)); // the only one in sight is the target already
+    CHECK_FALSE(target_previous_npc(tm, w, eye));
+    CHECK(std::find(asked.begin(), asked.end(), 20u) == asked.end());
+    CHECK(*target_key_command(tm, 30, w, eye) == 20u);
+    // Nobody in sight: the target stays.
+    tm.in_sight = [](const Spawn&) { return false; };
+    w.target_id = 0;
+    CHECK_FALSE(target_key_command(tm, 32, w, eye));
 }

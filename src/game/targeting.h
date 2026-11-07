@@ -58,6 +58,10 @@ struct TargetManager {
     // PlayerZoneClient::IsInvisible for another spawn (FUN_005c58c0's test for the PC and NPC cycles): the traders
     // Hide Traders hides and the buyers Hide Buyers hides (GameConnection::market_hidden). Unset: none.
     std::function<bool(const Spawn&)> invisible;
+    // Hailstone (option tab_line_of_sight, on by default; docs/mechanics.md): the NPC cycle takes only the NPCs this
+    // says the player can see (the zone's collision between the eyes and the spawn). Unset: every NPC, as the
+    // original's cycle as ported here.
+    std::function<bool(const Spawn&)> in_sight;
 };
 
 // A spawn the scene graph offers to TargetManager_CycleCandidateCallback.
@@ -90,10 +94,12 @@ bool is_banner_race(std::uint32_t race);
 bool is_player_pet(const WorldState& world, const Spawn& s);
 
 // The spawns the client offers for a cycle mode (see the header comment); `skip_pets` leaves players' pets and
-// mercenaries out of mode 1, `invisible` (modes 0 and 1) the spawns IsInvisible hides.
+// mercenaries out of mode 1, `invisible` (modes 0 and 1) the spawns IsInvisible hides, `in_sight` (mode 1) the
+// spawns it says are out of sight.
 std::vector<CycleCandidate> cycle_candidates(const WorldState& world, std::int32_t mode, const glm::vec3& eye,
                                              float range = 500.0f, bool skip_pets = false,
-                                             const std::function<bool(const Spawn&)>& invisible = {});
+                                             const std::function<bool(const Spawn&)>& invisible = {},
+                                             const std::function<bool(const Spawn&)>& in_sight = {});
 
 // The red con context tip's test (tip 0x20), shared by __ExecuteCmd's AUTOPRIM (0x4d8d91: turning auto attack on) and
 // CharacterZoneClient::DoPassageOfTime (0x45dc80: the target changed while attacking): the player at level 10 or
