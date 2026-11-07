@@ -700,3 +700,35 @@ TEST_CASE("item serialization: a count the bytes cannot hold reserves nothing la
     for (std::size_t i = 0; i < 4; ++i) bag[bag.size() - 4 + i] = static_cast<std::byte>(contents >> (8 * i));
     CHECK(largest_while_decoding(nmsc::net::AppPacket(one.opcode, bag)) < 1000 * sizeof(nmsc::net::BagItem) / 4);
 }
+
+TEST_CASE("item links: the item display's icon links only without a BenefitFlag (ItemBase_GetUnknown0x100Max)") {
+    net::Item it;
+    it.id = 1001;
+    CHECK(game::benefit_flag_max(it) == 0);
+    CHECK(game::display_icon_links(it));
+    it.benefit_flag = 4;
+    CHECK(game::benefit_flag_max(it) == 4);
+    CHECK_FALSE(game::display_icon_links(it));
+    // The highest of the item and its augments, each read the same way.
+    it.benefit_flag = 2;
+    net::BagItem aug;
+    aug.index = 1;
+    aug.item.benefit_flag = 7;
+    it.contents.push_back(aug);
+    CHECK(game::benefit_flag_max(it) == 7);
+    it.benefit_flag = 0;
+    it.contents[0].item.item_class = 1; // a content whose Type is not 0 counts 0
+    CHECK(game::benefit_flag_max(it) == 0);
+    // Above 0 only: the field is read as a signed int.
+    it.contents.clear();
+    it.benefit_flag = 0xffffffffu;
+    CHECK(game::benefit_flag_max(it) == 0);
+    // A container (Type 1) or a book (2) is 0 whatever it and its contents hold.
+    it.benefit_flag = 5;
+    it.item_class = 1;
+    aug.item.item_class = 0;
+    it.contents.push_back(aug);
+    CHECK(game::benefit_flag_max(it) == 0);
+    it.item_class = 2;
+    CHECK(game::display_icon_links(it));
+}

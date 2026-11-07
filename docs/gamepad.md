@@ -209,7 +209,8 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   set's twelve slots from the whole book, LB / RB its pages, without memorizing anything: A on a spell then A on a
   slot, or A on an empty slot then the spell; X empties a slot, Y saves; `test.book.view=sets|edit<n>|editnew`),
   loot (A loots the item, X takes it, Y its details, LB Loot All, RB Link All: every
-  item's link in the chat input), merchant, the chat log (read only, with a quick-chat list and an on-screen
+  item's link in the chat input), item details (X links the item in the chat input, as a click on its icon
+  does; B closes), merchant, the chat log (read only, with a quick-chat list and an on-screen
   keyboard: digits, letters, `' , . ?` and a row of `/ # @ % : - ! ( ) +` for slash commands, #commands, %t and the
   like; shift gives capitals and the keys' second characters, `! @ # $ % ^ & * ( )` over the digits; the windows'
   smaller keyboards, lib/keyboard.lua, have the same keys), confirmation dialogs (A / B), and Options > Gamepad (the bindings, dead zone, camera speed and

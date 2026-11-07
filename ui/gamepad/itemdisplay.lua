@@ -1,6 +1,6 @@
 -- Item details (gamepad pack): stands in for ItemDisplayWindow (Y on an item, or the held right button). The text
 -- is the stock window's, as the game builds it (CItemDisplayWnd: the info lines, the stat grid, the description),
--- laid out in one readable column. B closes it.
+-- laid out in one readable column. X links the item into chat (the stock icon button); B closes it.
 local T = dofile("lib/theme.lua")
 local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
@@ -65,7 +65,7 @@ for r = 1, 26 do
     VALUE_IDS[r][c] = "IDW_Row" .. r .. "Col" .. c .. "Value"
   end
 end
-local HINTS = { { "b", "Close" } }
+local HINTS = { { "x", "Link in chat" }, { "b", "Close" } }
 
 ui.window("Item Details", function()
   if not W.shown(IDW) then return end
@@ -81,7 +81,10 @@ ui.window("Item Details", function()
     if type(tex) == "userdata" then
       T.rect(x0, y, x0 + s, y + s, C.raised, 1, T.px(12))
       T.icon(tex, u0, v0, u1, v1, x0 + T.px(6), y + T.px(6), x0 + s - T.px(6), y + s - T.px(6))
+      ui.SetCursorScreenPos(x0, y)
+      if ui.InvisibleButton("##linkicon", s, s) then eq.ClickChild(IDW, "IconButton", "left") end
     end
+    if W.pressed("x") then eq.ClickChild(IDW, "IconButton", "left") end
     T.font(20)
     local _, lh = ui.CalcTextSize("Ag")
     -- the info lines (flags, class / race, slots, ...) beside the icon
