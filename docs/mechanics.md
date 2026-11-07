@@ -728,7 +728,10 @@ not both: marking one clears the other.
   ftol(max(0, 270 - Alcohol Tolerance) x (1/270)f x 30 + 10) up to 200, OP_DeleteItem {slot, -1, -1}, 12079, one
   item less (else 12080); poison (42) runs `apply_poison` (below). Then the click effect (the reply's spell, else the
   item's): unless a charm's stat scale is below 1, cast with CastSpell(gem 12, the item) when nothing is being cast
-  or the profile class is Bard (potions play wave 0x95); a retarget of CastSpell's is undone. CastSpell's item checks
+  or the profile class is Bard (potions play wave 0x95); a retarget of CastSpell's is undone. That CastSpell sends
+  nothing (its send argument is 0, @0x4bff60): it sets the item's recast timer or starts the cast bar locally, while
+  the server has already cast the item on OP_ItemVerifyRequest (a second OP_CastSpell would cast an instant clicky
+  twice on EQEmu). CastSpell's item checks
   refuse with no message for an item cast: click level (block 0 +4, the wire's level2) above the level (136), an
   Attuneable item whose NoDropFlag (the header's inst_nodrop) is clear (7586), click type 4 not in a worn slot 0..22
   (179), and for types 4 and 5 CanUseItem(item, 1): class, deity, required level, race (the server extension's "all

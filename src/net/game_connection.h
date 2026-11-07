@@ -2645,8 +2645,9 @@ private:
     void handle_channel_message(const ChannelMessage& m);
     void handle_special_message(const SpecialMessage& m);
     // `keep_target`: the target CastSpell would change (a pet or owner spell) stays (Handle_OP_ItemVerifyReply's
-    // dispatch restores pinstTarget).
-    void cast_spell_slot(int gem, std::uint32_t spell, const ItemSlot* item_slot = nullptr, bool keep_target = false);
+    // dispatch restores pinstTarget). `send`: CastSpell's sixth argument, whether OP_CastSpell goes out.
+    void cast_spell_slot(int gem, std::uint32_t spell, const ItemSlot* item_slot = nullptr, bool keep_target = false,
+                         bool send = true);
     void handle_item_verify_reply(const ItemVerifyReply& r);
     void apply_poison_tick();                          // DoPassageOfTime's poison block
     void handle_apply_poison(const ApplyPoison& r);    // Handle_OP_ApplyPoison

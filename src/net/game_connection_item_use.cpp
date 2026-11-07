@@ -216,11 +216,15 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
         break;
     }
     // The click effect: the reply's spell, else the item's (block 0). A charm scaled below 1 % does not cast.
+    // CastSpell(12, spell, &item, slot, 0, 0, 1, 0, 0) @0x4bff71: the sixth argument, OP_CastSpell's gate
+    // (@0x43c7b3: CMP byte [esp+0xb0],0), is 0. The cast runs locally (the recast timer, the cast bar) and
+    // nothing is sent: the server cast the item when it took OP_ItemVerifyRequest (EQEmu's
+    // Handle_OP_ItemVerifyRequest), and a second OP_CastSpell would cast an instant clicky again.
     if (spell == 0) spell = item->effects[kEffectClick].effect;
     if (spell > 0 && spell_table_->get(static_cast<std::uint32_t>(spell))) {
         const bool charm_off = item->charm_file_id != 0 && static_cast<std::int32_t>(item->scaled_value) < 1;
         if ((!spells_.casting.casting() || visible_class() == 8) && !charm_off) {
-            cast_spell_slot(kCastItemSlot, static_cast<std::uint32_t>(spell), &slot, true);
+            cast_spell_slot(kCastItemSlot, static_cast<std::uint32_t>(spell), &slot, true, false);
             if (type == kItemTypePotion) wave(0x95);
         }
     }
