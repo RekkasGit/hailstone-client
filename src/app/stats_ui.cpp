@@ -25,6 +25,15 @@ StatsUi::StatsUi(const GameDir& game) : tables_(std::make_unique<GameTables>()) 
 
 StatsUi::~StatsUi() = default;
 
+void share_own_hp_items(net::GameConnection& conn, const Character* ch) {
+    if (!ch) {
+        conn.set_own_hp_items(0, 0);
+        return;
+    }
+    const std::int64_t items = ch->stats().hp_bonus;
+    conn.set_own_hp_items(ch->sheet().vitals.cur_hp ? 0 : items, ch->sheet().vitals.max_hp ? 0 : items);
+}
+
 void StatsUi::forget() {
     character_.reset();
     sheet_.reset();
@@ -52,6 +61,9 @@ void StatsUi::draw(net::GameConnection& conn) {
     const auto& profile = conn.profile();
     if (!profile || conn.state() != net::ConnectionState::InZone) {
         forget();
+        // Out of the zone the items' HP goes; the camp countdown keeps the last frame's (the character is not rebuilt
+        // then, and the items do not change).
+        if (conn.state() != net::ConnectionState::Camping) share_own_hp_items(conn, nullptr);
         return;
     }
 
@@ -73,6 +85,7 @@ void StatsUi::draw(net::GameConnection& conn) {
     character_ = std::make_unique<Character>(sheet, *tables_, spell_lookup(conn.spell_table()));
     Character& ch = *character_;
     ch.process_all_stats();
+    share_own_hp_items(conn, &ch);
     const DerivedStats& d = ch.stats();
     std::int32_t max_hp = ch.max_hp();
     std::int32_t max_mana = ch.max_mana();
@@ -106,6 +119,8 @@ void StatsUi::draw(net::GameConnection& conn) {
     // when the client uses the stock formulas; under a patch that answers with the server's values nothing in the
     // client reads the formulas, so it is only information (what a client without the patch would show).
     const auto& ps = conn.player_status();
+    // The server's HP with the items' HP its own HP update leaves out (net::GameConnection::own_hp), as Max_HP has it.
+    const net::GameConnection::OwnHp own = conn.own_hp();
     if (now >= next_check_) {
         next_check_ = now + std::chrono::seconds(1);
         auto report = [patched](std::string_view what, std::int64_t computed, std::int64_t server) {
@@ -115,10 +130,10 @@ void StatsUi::draw(net::GameConnection& conn) {
             else
                 log::warn("stats: max {} computed {}, server says {}", what, computed, server);
         };
-        if (ps.max_hp > 0 && ps.max_hp != best_hp && (warned_hp_[0] != best_hp || warned_hp_[1] != ps.max_hp)) {
+        if (ps.max_hp > 0 && own.max != best_hp && (warned_hp_[0] != best_hp || warned_hp_[1] != own.max)) {
             warned_hp_[0] = best_hp;
-            warned_hp_[1] = ps.max_hp;
-            report("HP", best_hp, ps.max_hp);
+            warned_hp_[1] = own.max;
+            report("HP", best_hp, own.max);
         }
         if (ps.max_mana > 0 && static_cast<std::int64_t>(ps.max_mana) != best_mana &&
             (warned_mana_[0] != best_mana || warned_mana_[1] != ps.max_mana)) {
@@ -158,7 +173,7 @@ void StatsUi::draw(net::GameConnection& conn) {
             if (server > 0) s += server == computed ? "  (server: same)" : "  (server: " + std::to_string(server) + ")";
             return s;
         };
-        row("HP", vs(ps.hp, max_hp, ps.max_hp));
+        row("HP", vs(own.cur, max_hp, ps.max_hp > 0 ? own.max : 0));
         row("Mana", vs(ps.mana, max_mana, ps.max_mana));
         row("Endurance", vs(ps.endurance, max_end, ps.max_endurance));
         if (several || patched) {

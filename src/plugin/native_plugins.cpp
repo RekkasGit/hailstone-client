@@ -985,8 +985,8 @@ int h_get_player(void* h, NmscPlayer* out) {
     }
     v.visible_class = c->visible_class();
     v.class_mask = c->player_class_mask();
-    v.cur_hp = ps.hp;
-    v.max_hp = ps.max_hp;
+    v.cur_hp = c->own_hp().cur; // the items' HP included (GameConnection::own_hp)
+    v.max_hp = c->own_hp().max;
     v.cur_mana = ps.mana;
     v.max_mana = ps.max_mana;
     v.cur_endurance = ps.endurance;

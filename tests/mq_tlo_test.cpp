@@ -27,6 +27,40 @@ struct Fixture {
 
 } // namespace
 
+TEST_CASE("TLO: Me's HP is Cur_HP / Max_HP, the items' HP EQEmu's HP update leaves out included") {
+    Fixture f;
+    // 750 / 1000 from the server; the player's items add 250 (app/stats_ui.cpp share_own_hp_items).
+    f.world.conn->set_own_hp_items(250, 250);
+    CHECK(f.p("${Me.CurrentHPs}/${Me.MaxHPs}") == "1000/1250");
+    CHECK(f.p("${Me.PctHPs}") == "80");
+    // The player's own spawn (Spawn[...].PctHPs, a self target's Target.PctHPs, a plugin's spawn) shows the same.
+    net::GameConnection& c = *f.world.conn;
+    REQUIRE(c.world().player());
+    CHECK(c.world().player()->hp_percent == 80);
+    // A server extension that gives Max_HP whole: only Cur_HP gets the items' HP.
+    c.set_own_hp_items(250, 0);
+    CHECK(f.p("${Me.CurrentHPs}/${Me.MaxHPs}") == "1000/1000");
+    CHECK(c.world().player()->hp_percent == 100);
+
+    // A geared player below its items' HP: EQEmu's own HP update is below 1 while the player still stands.
+    auto& ps = net::GameConnectionTestAccess::status(c);
+    ps.hp = -100;
+    c.set_own_hp_items(260, 260);
+    CHECK(f.p("${Me.CurrentHPs}/${Me.MaxHPs}") == "160/1260");
+    CHECK(c.world().player()->hp_percent == 12);
+    CHECK_FALSE(c.player_down());
+    c.set_own_hp_items(0, 0);
+    CHECK(c.player_down()); // without the items' HP: down, as the packet's value says
+
+    // Dead: nothing added to the current HP.
+    c.set_own_hp_items(250, 250);
+    ps.dead = true;
+    ps.hp = 0;
+    CHECK(f.p("${Me.CurrentHPs}") == "0");
+    CHECK(f.p("${Me.PctHPs}") == "0");
+    CHECK(c.player_down());
+}
+
 TEST_CASE("TLO: Me's own state") {
     Fixture f;
     CHECK(f.p("${Me}") == "Tester");

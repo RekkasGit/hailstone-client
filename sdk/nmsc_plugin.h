@@ -202,7 +202,7 @@ typedef struct NmscPlayer {
     uint32_t class_id;      /* the profile's */
     uint32_t visible_class; /* what the client's checks see (a plugin's cast_class) */
     uint32_t class_mask;    /* the player's classes: the multiclass mask, else the profile's class */
-    int64_t cur_hp, max_hp;
+    int64_t cur_hp, max_hp; /* Cur_HP / Max_HP: the items' HP included, which EQEmu's own HP update leaves out */
     uint32_t cur_mana, max_mana, cur_endurance, max_endurance;
     uint32_t target_id;
     uint32_t zone_id;

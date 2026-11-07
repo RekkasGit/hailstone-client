@@ -112,7 +112,7 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
                 game::HitInput in;
                 in.damage = c.damage;
                 in.defender_is_me = local;
-                in.defender_hp = static_cast<std::int32_t>(conn.player_status().hp);
+                in.defender_hp = static_cast<std::int32_t>(conn.own_hp().cur); // Cur_HP, the items' HP included
                 in.defender_level = d->level;
                 in.defender_corpse = d->is_corpse;
                 in.environment = c.environment;

@@ -98,8 +98,9 @@ void GroupUi::draw(net::GameConnection& conn) {
                 v.targeted = s->id == world.target_id && world.target_id != 0;
                 if (v.self) {
                     const auto& ps = conn.player_status();
-                    v.hp_percent = ps.max_hp > 0 ? static_cast<int>(std::clamp<std::int64_t>(ps.hp * 100 / ps.max_hp, 0, 100))
-                                                 : s->hp_percent;
+                    const auto own = conn.own_hp(); // the items' HP included, as the player window's
+                    v.hp_percent = own.max > 0 ? static_cast<int>(std::clamp<std::int64_t>(own.cur * 100 / own.max, 0, 100))
+                                               : s->hp_percent;
                     if (ps.max_mana > 0) v.mana_percent = static_cast<int>(ps.mana * 100 / ps.max_mana);
                     if (ps.max_endurance > 0) v.endurance_percent = static_cast<int>(ps.endurance * 100 / ps.max_endurance);
                 } else {

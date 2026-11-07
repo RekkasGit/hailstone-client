@@ -254,6 +254,19 @@ TEST_CASE("Lua plugin: the hailstone module's extension, packets, UI and readers
     CHECK_FALSE(line(s7));
 }
 
+TEST_CASE("Lua plugin: hailstone.player's HP is Cur_HP / Max_HP, the items' HP included") {
+    Host h;
+    // 750 / 1000 from the server; the player's items add 250 (net::GameConnection::own_hp).
+    h.world.conn->set_own_hp_items(250, 250);
+    h.write("hp.lua", R"lua(
+local p = require('hailstone').player()
+print('[hp] ' .. p.cur_hp .. '/' .. p.max_hp)
+)lua");
+    REQUIRE(h.scripts->run("hp", {}));
+    h.scripts->pulse();
+    CHECK(h.printed_part("[hp] 1000/1250"));
+}
+
 TEST_CASE("Lua plugin: held to its capabilities; an error or a runaway in a hook ends it") {
     {
         Host h;

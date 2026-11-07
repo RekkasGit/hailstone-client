@@ -116,8 +116,8 @@ static void ext_read(void* user, const char* args) {
     (void)args;
     p.size = sizeof p;
     if (nmsc->get_player(nmsc->host, &p))
-        WriteChatf("[read] player %s %u class %u target %u group %d", p.name, (unsigned)p.level, (unsigned)p.class_id,
-                   (unsigned)p.target_id, (int)p.in_group);
+        WriteChatf("[read] player %s %u class %u target %u group %d hp %lld/%lld", p.name, (unsigned)p.level,
+                   (unsigned)p.class_id, (unsigned)p.target_id, (int)p.in_group, (long long)p.cur_hp, (long long)p.max_hp);
     s.size = sizeof s;
     while (nmsc->next_spawn(nmsc->host, id, &s)) {
         id = s.id;

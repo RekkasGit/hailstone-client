@@ -338,7 +338,8 @@ mech::SkillContext ActionsUi::context(net::GameConnection& conn, const mech::Cha
     ctx.pvp_ruleset = static_cast<std::uint8_t>(conn.pvp_rules());
     ctx.tracking_window_open = conn.tracking().open;
     ctx.stand_state = ps.stand_state;
-    ctx.cur_hp = ps.dead ? 0 : (ps.max_hp > 0 ? static_cast<std::int32_t>(ps.hp) : 1);
+    // Cur_HP, the items' HP included (GameConnection::own_hp).
+    ctx.cur_hp = ps.dead ? 0 : (ps.max_hp > 0 ? static_cast<std::int32_t>(conn.own_hp().cur) : 1);
     if (ch.sheet().vitals.cur_hp) ctx.cur_hp = ch.cur_hp(true, 0); // Cur_HP as a server's client patch answers it
     ctx.casting = conn.spell_state().casting.casting();
     ctx.is_bard = ch.sheet().class_id == 8;

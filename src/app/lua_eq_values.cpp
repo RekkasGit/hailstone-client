@@ -98,28 +98,11 @@ std::uint32_t gem_spell(const net::GameConnection& c, int gem) {
     return c.spell_state().gems[static_cast<std::size_t>(gem)].spell;
 }
 
-// The player's own HP as Cur_HP / Max_HP give it. EQEmu's SendHPUpdate sends the player's own points without the
-// items' HP (GetHP() - itembonuses.HP, GetMaxHP() - itembonuses.HP), and the original adds them back from its own
-// item sums (CharacterBase +0x24, DerivedStats::hp_bonus). A server extension's value (CharacterVitals) is already
-// the whole value. Without the player's sheet (before the first in-zone frame), the server's points as they are.
-struct OwnHp {
-    std::int64_t cur = 0, max = 0;
-};
-OwnHp own_hp(const EqHost& host, const net::GameConnection& c) {
-    const auto& ps = c.player_status();
-    OwnHp v{ps.hp, ps.max_hp};
-    if (const auto* ch = host.character) {
-        const std::int64_t items = ch->stats().hp_bonus;
-        if (!ch->sheet().vitals.cur_hp) v.cur += items;
-        if (!ch->sheet().vitals.max_hp) v.max += items;
-    }
-    return v;
-}
-
-// A spawn's HP percent as the original stores it for others (HPCurrent of 100), or the player's own points.
-int spawn_hp_percent(const EqHost& host, const net::GameConnection& c, const game::Spawn& s) {
+// A spawn's HP percent as the original stores it for others (HPCurrent of 100), or the player's own points (Cur_HP /
+// Max_HP, the items' HP included: net::GameConnection::own_hp).
+int spawn_hp_percent(const EqHost&, const net::GameConnection& c, const game::Spawn& s) {
     if (s.id == c.world().player_id) {
-        const OwnHp hp = own_hp(host, c);
+        const auto hp = c.own_hp();
         return eq_percent(hp.cur, hp.max);
     }
     return eq_percent(s.hp_percent, 100);
@@ -366,14 +349,14 @@ LabelValue stock_label(const EqHost& host, int type) {
         }
         return int_value(std::max(0, pct), 0, false, 100);
     }
-    case 17: return int_value(own_hp(host, c).cur);           // case 0x10: Cur_HP
+    case 17: return int_value(c.own_hp().cur);                // case 0x10: Cur_HP
     case 18: {                                                // case 0x11: Max_HP vs Max_HP minus HP buffs
-        const std::int64_t max = own_hp(host, c).max;
+        const std::int64_t max = c.own_hp().max;
         std::int64_t buffs = host.character ? host.character->total_effect(0) + host.character->total_effect(0x45) : 0;
         return int_value(max, max - buffs, host.character != nullptr);
     }
     case 19: {                                                // case 0x12
-        const OwnHp hp = own_hp(host, c);
+        const auto hp = c.own_hp();
         return int_value(std::max(0, eq_percent(hp.cur, hp.max)), 0, false, 100);
     }
     case 20: return int_value(eq_percent(ps.mana, max_mana(host, c)), 0, false, 100);       // case 0x13
@@ -427,7 +410,7 @@ LabelValue stock_label(const EqHost& host, int type) {
         return int_value(std::max(0, spawn_hp_percent(host, c, *p)), 0, false, 100);
     }
     case 70: {                                                // case 0x23: "cur/max" HP, green when buffed
-        const OwnHp hp = own_hp(host, c);
+        const auto hp = c.own_hp();
         LabelValue v{std::format("{}/{}", hp.cur, hp.max), std::nullopt};
         std::int64_t buffs = host.character ? host.character->total_effect(0) + host.character->total_effect(0x45) : 0;
         v.argb = compare_color(buffs, 0);
@@ -637,7 +620,7 @@ GaugeValue stock_gauge(const EqHost& host, int type) {
     const auto& world = c.world();
     switch (type) {
     case 1: { // the player's HP; the name ("name\nlast name") over it
-        const OwnHp hp = own_hp(host, c);
+        const auto hp = c.own_hp();
         GaugeValue g{eq_percent(hp.cur, hp.max) * 10, {}};
         const auto* me = world.player();
         std::string name = me ? me->name : my_name(c);

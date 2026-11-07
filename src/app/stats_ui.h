@@ -23,6 +23,11 @@ class Character;
 
 namespace nmsc::app {
 
+// Tells the connection what its player's own HP leaves out (net::GameConnection::own_hp): the character's items' HP
+// (DerivedStats::hp_bonus) for each of Cur_HP and Max_HP a server extension does not give whole; nothing without a
+// character.
+void share_own_hp_items(net::GameConnection& conn, const game::mechanics::Character* ch);
+
 class StatsUi {
 public:
     explicit StatsUi(const GameDir& game);

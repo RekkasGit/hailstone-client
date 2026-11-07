@@ -351,8 +351,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     // Hailstone: with no target, an NPC on the extended target list that attacks the player becomes the target
     // (net::GameConnection::set_auto_target_xtarget), on by default.
     if (o == "auto_target_xtarget") return config_.get_bool("combat.auto_target_xtarget", true) ? 1 : 0;
-    // The attack key and buttons turn the player to the target (net::GameConnection::set_face_on_attack), on by
-    // default.
+    // Hailstone: off, the attack key and buttons leave the player's heading alone; on (the default) they turn the
+    // player to the target as the original does (net::GameConnection::set_face_on_attack).
     if (o == "face_on_attack") return config_.get_bool("combat.face_on_attack", true) ? 1 : 0;
     // Hailstone: a camp logs out at once (net::GameConnection::set_fast_camp), off by default.
     if (o == "fast_camp") return config_.get_bool("game.fast_camp", false) ? 1 : 0;

@@ -24,7 +24,7 @@ void GameConnection::report_env_damage(std::uint32_t damage, std::uint8_t type) 
     // sounds and the animation.
     std::int32_t below = 0;
     with_character([&](game::mechanics::Character& ch) { below = ch.total_effect(0x148, true, 0, true, true); });
-    if (pstatus_.hp <= -10 - static_cast<std::int64_t>(below)) return;
+    if (own_hp().cur <= -10 - static_cast<std::int64_t>(below)) return; // Cur_HP: the items' HP included
     CombatDamage hit;
     hit.target = static_cast<std::uint16_t>(world_.player_id);
     hit.type = type;
