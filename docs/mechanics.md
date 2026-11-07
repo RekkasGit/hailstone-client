@@ -741,6 +741,17 @@ Vectors in `tests/picking_vectors_test.cpp` (pick actor at point 2000, left-clic
   zone of the zone point numbered by its parameter has a `.s3d` or `.eqg`, or the door has an adventure id, a
   dynamic zone id or a script flag (EQEmu sends none of these and parameter -1, so its touch pads never fire);
   type 0x32 is used closed and put back to closed past its repop time. Checked live with a spear trap (30 damage).
+- Right click on a player (CEverQuest::RightClickedOnPlayer @0x536d80): a trader opens its shop and a buyer its
+  barter window; any other player is inspected with /toggleinspect on. Hailstone adds a menu in its place (a
+  deliberate difference, `game::opens_player_menu`, `app::player_menu_rows`): a mouse right click on another player
+  who is not a trader or a buyer targets them and opens a menu at the click with their name, Send Tell, Invite to
+  Group, Invite to Raid, Trade and Inspect. The rows run what the commands run (a tell begun as a click on a name
+  in chat; `/invite` and `/raidinvite` on the target, with their checks and messages; the trade request a click
+  without an item sends, an item on the cursor going into the trade; `/inspect`'s request, whatever /toggleinspect
+  says), and do nothing once the player has left. Invite to Group is greyed while we have a group invitation of our
+  own (`/invite` would accept it). Options > Interface "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`,
+  on by default) switches it off; with context menus off (the ContextMenus option, or the player down) the
+  original's right click happens instead. The gamepad's Interact keeps the original's.
 - Clicked switch: trap types use the adjusted Disarm Traps (17) with key -1; a common item of type 12 is the key with
   the adjusted Pick Lock (35); any other cursor item is the key with skill 0.
 

@@ -2829,6 +2829,9 @@ void EqApi::actions_key(int page) {
 }
 
 void EqApi::right_click_item(const net::ItemSlot& slot) { item_right_click(impl_->host, slot); }
+bool EqApi::open_player_menu(std::uint32_t spawn_id, float x, float y) {
+    return app::open_player_menu(impl_->host, spawn_id, x, y);
+}
 void EqApi::open_all_bags() { app::open_all_bags(impl_->host); }
 void EqApi::close_all_bags() { app::close_all_bags(impl_->host); }
 void EqApi::toggle_all_bags() { app::toggle_all_bags(impl_->host); }

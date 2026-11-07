@@ -1068,6 +1068,7 @@ if(NMSC_BUILD_TESTS)
     tests/spell_book_swap_test.cpp
     tests/feign_death_spell_test.cpp
     tests/loot_test.cpp
+    tests/player_menu_test.cpp
     tests/connection_state_test.cpp
   )
   target_include_directories(nmsc_tests PRIVATE tests sdk)
