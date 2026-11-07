@@ -1416,6 +1416,62 @@ private:
 
 } // namespace
 
+// Hailstone's player menu (a deliberate difference; game::opens_player_menu). The rows' words are this client's own:
+// the original has no such menu to take them from.
+std::vector<EqHost::MenuRow> player_menu_rows(EqHost& host, std::uint32_t spawn_id) {
+    std::vector<EqHost::MenuRow> rows;
+    if (!host.conn) return rows;
+    const auto& world = host.conn->world();
+    auto it = world.spawns.find(spawn_id);
+    if (it == world.spawns.end() || !game::opens_player_menu(it->second, spawn_id == world.player_id)) return rows;
+    const std::string name = it->second.name;
+    EqHost::MenuRow title; // the player's name first, as the real estate item menu shows its item's
+    title.text = game::display_name(name);
+    title.rgb = 0x00ff00;
+    title.enabled = false;
+    rows.push_back(std::move(title));
+    // A row acts only while the player is still here; the invites go through the target, as /invite and /raidinvite
+    // without a name do, so their checks (an NPC, ourselves, the other deity team) all apply.
+    auto on_player = [&host, spawn_id](std::function<void(net::GameConnection&)> fn) {
+        return [&host, spawn_id, fn = std::move(fn)] {
+            if (host.conn && host.conn->world().spawns.count(spawn_id)) fn(*host.conn);
+        };
+    };
+    auto add = [&rows](const char* text, std::function<void()> act, bool enabled = true) {
+        EqHost::MenuRow r;
+        r.text = text;
+        r.enabled = enabled;
+        if (!enabled) r.rgb = EqHost::kMenuDisabledRgb;
+        else r.act = std::move(act);
+        rows.push_back(std::move(r));
+    };
+    add("Send Tell", [&host, spawn_id, name] {
+        if (host.conn && host.conn->world().spawns.count(spawn_id)) chat_open_tell(name);
+    });
+    // While we are invited ourselves /invite accepts that invitation; the menu does not offer it then.
+    add("Invite to Group", on_player([spawn_id](net::GameConnection& c) {
+            c.set_target(spawn_id);
+            c.group_invite();
+        }),
+        host.conn->group().inviter.empty());
+    add("Invite to Raid", on_player([spawn_id](net::GameConnection& c) {
+        c.set_target(spawn_id);
+        c.raid_invite("");
+    }));
+    // As a left click on the player: a trade request (an item on the cursor goes into the trade when it opens).
+    add("Trade", on_player([spawn_id](net::GameConnection& c) { c.give_to(spawn_id); }));
+    // Whatever /toggleinspect says: it is asked for here.
+    add("Inspect", on_player([spawn_id](net::GameConnection& c) { c.inspect(spawn_id); }));
+    return rows;
+}
+
+bool open_player_menu(EqHost& host, std::uint32_t spawn_id, float x, float y) {
+    auto rows = player_menu_rows(host, spawn_id);
+    if (rows.empty() || !host.context_menus()) return false;
+    host.open_menu(x, y, std::move(rows));
+    return !host.menus.empty();
+}
+
 void add_player_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<TitleWindow>());
     out.push_back(std::make_unique<PotionBeltWindow>());

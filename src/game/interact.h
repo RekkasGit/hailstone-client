@@ -77,4 +77,12 @@ inline constexpr std::array<std::int16_t, 4> kBandolierSlots{13, 14, 11, 22};
 // (PcZoneClient::BandolierSwap @0x585aa0).
 inline int bandolier_set_count(std::int32_t spa363) { return std::min(4 + spa363, kBandolierSets); }
 
+struct Spawn;
+// Hailstone (a deliberate difference, switchable: Options > Interface "Player Right-Click Menu"): a mouse right click
+// on another player opens a menu of Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original has no
+// such menu: CEverQuest::RightClickedOnPlayer @0x536d80 inspects the player (with /toggleinspect on). Only a plain
+// player has it; a trader or a buyer still opens its shop or barter window, and the player's own spawn, NPCs and
+// corpses keep the original's right click.
+bool opens_player_menu(const Spawn& sp, bool self);
+
 } // namespace nmsc::game
