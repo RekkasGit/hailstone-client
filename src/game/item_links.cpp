@@ -235,6 +235,13 @@ ItemLinkHashInput item_link_hash_input(const net::Item& item) {
     return in;
 }
 
+std::int32_t benefit_flag_max(const net::Item& item) {
+    if (item.item_class != 0) return 0;
+    std::int32_t m = std::max(0, static_cast<std::int32_t>(item.benefit_flag));
+    for (const auto& c : item.contents) m = std::max(m, benefit_flag_max(c.item));
+    return m;
+}
+
 std::string make_item_link(const net::Item& item, bool wide) {
     std::array<std::uint32_t, 6> augs{};
     if (item.item_class == 0)

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Clicking the icon in an item's details window links the item in chat: the link goes into the input of the chat window you last used, or of the one set to Always Chat Here, which then takes the keyboard. In the gamepad UI, X does it. As in the original, an item with a benefit flag (or an augment with one) is not linked
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times

@@ -14,6 +14,8 @@
 
 #include "app/lua_eq.h"
 #include "game/chat_windows.h"
+#include "game/item_links.h"
+#include "game/server_ext.h"
 #include "game/social.h"
 #include "ui/ui_ini.h"
 #include "core/game_dir.h"
@@ -618,5 +620,85 @@ TEST_CASE("Chat windows: the chat history keeps each line's time; a version 1 fi
         CHECK(lua.run(stamped) == "0/2");
         CHECK(lua.run("local _, l = eq.ChatText(1) return (l[1]:gsub('<[^>]*>', ''))") == "old line");
     });
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Item display: a click on the icon links the item into the active chat window's input "
+          "(CItemDisplayWnd::WndNotification, IconButton)") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    nmsc::test::ScratchDir dir_scratch("item_icon_link_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    std::ofstream(dir / "game" / "eqstr_us.txt") << "EQST0002\n6623 Main Chat\n6624 Chat\n15009 Always Chat Here\n"
+                                                  << "15010 Chat here off\n15011 Chat here on\n";
+    GameDir game(dir / "game");
+    {
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        std::vector<net::Item> displays(1);
+        std::vector<std::uint64_t> ids{1};
+        net::Item& item = displays[0];
+        item.id = 1001;
+        item.name = "Cloth Cap";
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        host.item_displays = &displays;
+        host.item_display_ids = &ids;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        const std::string link = game::make_item_link(item, conn.server_ext().wide_item_links(conn));
+        auto take = [&](int slot) {
+            return lua.run(std::format("local t, r = eq.ChatTakeFocus({}); return tostring(t) .. '|' .. tostring(r)",
+                                       slot));
+        };
+        const char* click = "return eq.ClickChild('ItemDisplayWindow', 'IconButton', 'left')";
+
+        // The current window (the main one) gets the link after what is typed there.
+        CHECK(lua.run("return eq.ChatNewWindow()") == "2");
+        CHECK(lua.run(click) == "true");
+        CHECK(take(2) == "nil|nil");
+        CHECK(take(1) == link + "|false");
+        CHECK(take(1) == "nil|nil"); // once
+
+        // The window last used: the second, once its input had the focus.
+        lua.run("eq.ChatActivate(2)");
+        lua.run(click);
+        CHECK(take(1) == "nil|nil");
+        CHECK(take(2) == link + "|false");
+
+        // Always Chat Here on the main window: it gets the link whichever window was used last.
+        lua.run("eq.ChatMenu(1)");
+        REQUIRE(host.menus.size() == 1);
+        auto here = std::find_if(host.menus[0].rows.begin(), host.menus[0].rows.end(),
+                                 [](const app::EqHost::MenuRow& r) { return r.text == "Always Chat Here"; });
+        REQUIRE(here != host.menus[0].rows.end());
+        here->act();
+        lua.run("eq.ChatActivate(2)");
+        lua.run(click);
+        CHECK(take(2) == "nil|nil");
+        CHECK(take(1) == link + "|false");
+
+        // An item, or an augment in it, with a BenefitFlag: no link (ItemBase_GetUnknown0x100Max(1) != 0).
+        item.benefit_flag = 1;
+        CHECK(lua.run(click) == "true");
+        CHECK(take(1) == "nil|nil");
+        item.benefit_flag = 0;
+        net::BagItem aug;
+        aug.index = 0;
+        aug.item.id = 2002;
+        aug.item.benefit_flag = 3;
+        item.contents.push_back(aug);
+        lua.run(click);
+        CHECK(take(1) == "nil|nil");
+        item.contents.clear();
+
+        // A right click is not the icon's.
+        CHECK(lua.run("return eq.ClickChild('ItemDisplayWindow', 'IconButton', 'right')") == "false");
+        CHECK(take(1) == "nil|nil");
+    }
     ImGui::DestroyContext(ctx);
 }
