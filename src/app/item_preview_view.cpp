@@ -278,7 +278,7 @@ void ItemPreviewView::record(const render::FrameInfo& frame, float dt) {
     a.scale = scale_;
     a.clip = &model_->first_clip({"P01", "O01"}); // standing (the preview actor's idle)
     a.time = time_;
-    actors_->set_brightness(1.0f);
+    actors_->set_lighting(render::classic_full_bright());
     actors_->draw(frame, proj * view, eye, no_fog, std::span<const render::ActorDraw>(&a, 1));
     vkCmdEndRendering(cmd);
 

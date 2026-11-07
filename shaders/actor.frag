@@ -10,7 +10,7 @@ layout(push_constant) uniform Push {
     mat4 view_proj;
     vec4 fog_color; // a: fog density
     vec4 fog; // start, end, alpha_ref, opacity
-    vec4 camera_pos; // w: time-of-day brightness
+    vec4 camera_pos; // w: unused
     uint texture_index;
     uint bone_offset;
     uint tint; // 0xAARRGGBB; high byte 0 = none
@@ -109,7 +109,23 @@ void main() {
                                    lighting.to_light, lighting.light, lighting.haze_color.rgb, lighting.time.x,
                                    caustic_hash(gl_FragCoord.xy));
     } else {
-        color = min(base * v_light, vec3(1.0)) * pc.camera_pos.w;
+        // Classic (render::classic_actor_light, its mirror; not the original's, which is not traced): the region
+        // shaders' vertex light for the zone's baked light where the player stands, so a character takes the light of
+        // the walls round it; v_light shapes the body.
+        float len = length(v_normal);
+        vec3 n = len > 1e-6 ? v_normal / len : vec3(0.0, 0.0, 1.0);
+        vec3 baked = vec3(0.0);
+        float share = 1.0;
+        if (lighting.probe.w > 0.5) {
+            baked = lighting.probe.rgb;
+            share = lighting.probe.w - 1.0;
+        }
+        vec3 dn = lighting.direction.xyz;
+        vec3 light = baked + lighting.special_ambient.rgb +
+                     share * (lighting.ambient.rgb + lighting.bounce.rgb * max(dot(n, dn), 0.0) +
+                              lighting.directional.rgb * max(dot(n, -dn), 0.0));
+        light = clamp(light, vec3(0.25), vec3(1.0)); // render::kClassicActorFloor
+        color = min(base * light * v_light, vec3(1.0));
         color = to_linear(mix(pc.fog_color.rgb, color, v_fog));
     }
     o_color = vec4(color, out_alpha);

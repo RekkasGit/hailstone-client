@@ -52,9 +52,9 @@ void main() {
     vec3 n = mat3(bone) * in_normal;
     float len = length(n);
     n = len > 1e-6 ? n / len : vec3(0.0, 0.0, 1.0);
-    // Zones are drawn full-bright for now (docs/unknowns.md); a soft key light
-    // keeps the bodies readable without darkening them much.
-    v_light = 0.8 + 0.25 * dot(n, normalize(vec3(0.4, 0.3, 0.85)));
+    // The classic lighting's shape (actor.frag): a soft key light from above, so a body lit by a flat ambient
+    // still reads as round (0.7 .. 1).
+    v_light = 0.85 + 0.15 * dot(n, normalize(vec3(0.4, 0.3, 0.85)));
     v_normal = n;
     v_uv = in_uv;
     v_world = world.xyz;
