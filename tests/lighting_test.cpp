@@ -1,9 +1,11 @@
 // game/light_list.h and render/scene_lighting.h: the enhanced lighting mode's lights and the block the shaders read.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include <glm/common.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/geometric.hpp>
 
 #include "assets/model.h"
@@ -705,6 +707,29 @@ TEST_CASE("ao sample: dimensionless, so one shape at any scale occludes the same
     CHECK(a > 0.0f);
     CHECK(ao_kernel_test::ao_sample(o * 2.5f, n, 15.0f, 0.15f) == doctest::Approx(a));
     CHECK(ao_kernel_test::ao_sample(o * 0.1f, n, 0.6f, 0.006f) == doctest::Approx(a));
+}
+
+TEST_CASE("ao sample: at the default intensity, a mid-range occluder shades about as the old kernel did") {
+    // The kernel before ao_kernel.glsl, with its own scale (intensity 4, x 5, normalised by r^6): its weight grew as
+    // 1/|v|, which blotched near samples black. Mid-range (1 to 3 units, 30 to 60 degrees above the surface), the
+    // bounded kernel at render::AoView's intensity must stay within a factor of two of it, or contact shadows fade.
+    const float radius = 4.0f, samples = 12.0f, intensity = render::AoView{}.intensity;
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    auto old_shade = [&](const glm::vec3& v) {
+        const float vv = glm::dot(v, v), f = std::max(radius * radius - vv, 0.0f);
+        return f * f * f * std::max(glm::dot(v, n) / (vv + 0.01f), 0.0f) * 4.0f * 5.0f /
+               (std::pow(radius, 6.0f) * samples);
+    };
+    for (float d : {1.0f, 2.0f, 3.0f})
+        for (float deg : {30.0f, 45.0f, 60.0f}) {
+            const float a = glm::radians(deg);
+            const glm::vec3 v(d * std::cos(a), 0.0f, d * std::sin(a));
+            const float shade = ao_kernel_test::ao_sample(v, n, radius, 0.0f) * intensity / samples;
+            CAPTURE(d);
+            CAPTURE(deg);
+            CHECK(shade > 0.5f * old_shade(v));
+            CHECK(shade < 2.0f * old_shade(v));
+        }
 }
 
 TEST_CASE("ao visibility: open, shaded and closed stay within [0, 1]") {
