@@ -195,6 +195,8 @@ local function generalTab()
   end)
   section("Interface", function()
     check("context_menus", "Allow Context Menus", "Right-clicking a window opens its menu.")
+    check("player_menu", "Player Right-Click Menu",
+      "Hailstone: right-clicking another player opens a menu (Send Tell, Invite to Group, Invite to Raid, Trade, Inspect) instead of inspecting them. Needs context menus allowed.")
     check("pet_window_popup", "Pet Window Auto-Popup", "The pet window opens when you get a pet.")
     check("target_click_help", "Target Click Shows Help",
       "Show help text when you left click on a target object or player.")

@@ -2051,6 +2051,8 @@ public:
     void answer_guild_invite(bool accept);
     // The zone answered OP_HailstoneGuild's hello: /guildinvite reaches players in other zones (net/social_packets.h).
     bool guild_world_invites() const { return guild_world_invites_; }
+    // /raidinvite [name] (Cmd_raidinvite @0x4de470): invites the name or, without one, the targeted player.
+    void raid_invite(const std::string& args);
     // CRaid::SendInviteResponse @0x47d700: /raidaccept and /raiddecline.
     void answer_raid_invite(bool accept);
     // /raiddisband and the raid window's Leave: leave the raid, or for its leader remove the raid target (OP_RaidInvite
@@ -2635,7 +2637,6 @@ private:
     void follow_command();
     void reply_command(const std::string& args);
     void guild_command(std::string_view handler, const std::string& args);
-    void raid_invite(const std::string& args);
     void set_raid_ability_ranks(const std::array<std::uint32_t, 64>& block);
     void friends_command(const std::string& args);
     void ignore_command(const std::string& args);

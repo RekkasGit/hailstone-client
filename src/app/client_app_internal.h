@@ -397,6 +397,7 @@ public:
         pc_names_ = config_.get_bool("display.pc_names", true);
         npc_names_ = config_.get_bool("display.npc_names", true);
         own_name_ = config_.get_bool("display.own_name", true);
+        player_menu_ = config_.get_bool("mouse.player_menu", true);
         // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.
         show_names_ = config_.get_int("display.show_names", 4);
         if (show_names_ < 0 || show_names_ > 6) show_names_ = 4;
@@ -1258,6 +1259,7 @@ private:
     // hailstone.ini display.*): the name sprites by kind, and the zone's fog for the view distance.
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
+    bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,

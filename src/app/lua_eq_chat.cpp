@@ -1756,6 +1756,8 @@ void restore_chat_history(EqHost& host, const std::filesystem::path& file) {
 
 } // namespace
 
+void chat_open_tell(const std::string& name) { open_tell(name); }
+
 void save_chat_history(bool ending) {
     ChatState& s = state();
     EqHost* h = s.host;
