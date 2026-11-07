@@ -1015,7 +1015,7 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
     PushConstants pc{};
     pc.view_proj = view_proj;
     pc.fog_color = glm::vec4(view.fog_color, view.fog_density); // a: the exp2 fog's density
-    pc.camera_pos = glm::vec4(camera_pos, brightness_);
+    pc.camera_pos = glm::vec4(camera_pos, 0.0f);
     bool bound_set = false;
     int bound_pipeline = -1;
     // Only what can show in this view (posed for a shadow is not seen), tested once for the three passes.

@@ -190,6 +190,19 @@ void set_shadows(SceneLighting& lighting, const ShadowCascades& cascades, std::u
 SceneLighting make_scene_lighting(const game::SceneLight& scene, std::span<const game::LightSource> lights,
                                   std::size_t dynamic, LightingMode mode, const Daylight& daylight = {});
 
+// The classic lighting of a character (shaders/actor.frag), this client's own: how the original lights its skinned
+// models (SkinMeshOld's `lit`) is not traced (docs/unknowns.md). It is the region shaders' vertex light
+// (shaders/zone.vert) for a vertex whose colour is the zone's baked light where the player stands (the probe; none:
+// black with the sky's full share), so a character takes the light of the walls round it, by day and by night:
+//   rgb = C.rgb + C.a (Ambient + Bounce max(N.Dn, 0) + Directional max(N.-Dn, 0)) + SpecialAmbient,
+// kept between kClassicActorFloor and 1, so nobody turns into a silhouette.
+inline constexpr float kClassicActorFloor = 0.25f;
+glm::vec3 classic_actor_light(const SceneLighting& lighting, const glm::vec3& normal);
+
+// A classic scene light that leaves the characters' textures as they are (ambient 1): the item preview's, and the
+// actor renderer's until it is given one.
+SceneLighting classic_full_bright();
+
 // One host-visible, mapped buffer per frame in flight.
 class FrameBuffers {
 public:

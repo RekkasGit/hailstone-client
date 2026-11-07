@@ -56,6 +56,15 @@ first, then the blended and additive draws.
 The scene target holds linear colour. The classic lighting computes in display (sRGB) values as the classic renderer does
 and converts at the end of each shader; the modern lighting computes in linear HDR.
 
+The classic lighting lights the characters with the zone's scene light (`render::classic_actor_light`, mirrored in
+`shaders/actor.frag`): the region shaders' vertex formula, with the zone's baked light where the player stands (the
+modern mode's ambient probe, `render/ambient_probe.h`) as the vertex colour and its alpha as the sky's share; none, black
+with the full share. The result stays between `kClassicActorFloor` (0.25) and 1, and a soft key light from above shapes
+the body (0.7 .. 1). This is the client's own: how the original lights its skinned models is not traced. Before, the
+characters had a fixed key light dimmed by the hour (down to 0.3 at night) whatever the zone looked like, and stood out
+nearly black against the bright baked walls of zones such as the Bazaar after dark. The doors and ground objects keep
+that hour factor.
+
 In the modern lighting, things that give off light are drawn past white so they bloom: additive particles (spells,
 fires) x `render::kParticleGlow` (2.5), lava's own light x 2.5 (`shaders/zone.frag` `emit`), the sun and moon x 4.
 

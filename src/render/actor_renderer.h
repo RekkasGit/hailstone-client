@@ -242,15 +242,12 @@ public:
     std::unique_ptr<Kept> release_kept();
 
     const ActorRenderStats& stats() const { return stats_; }
-    // Time-of-day light multiplier (1 = unchanged; push constants' camera_pos.w).
-    void set_brightness(float b) { brightness_ = b; }
-    // The scene light and point lights (render/scene_lighting.h); the shaders use it in the modern mode.
+    // The scene light and point lights (render/scene_lighting.h), classic or modern; classic_full_bright until set.
     void set_lighting(const SceneLighting& l) { lighting_ = l; }
     const assets::CharacterLibrary& library() const { return *library_; }
 
 private:
     enum class Pass : std::uint8_t { Opaque, Blended, Additive };
-    float brightness_ = 1.0f;
     struct Part {
         std::uint32_t first_index = 0;
         std::uint32_t index_count = 0;
@@ -404,7 +401,7 @@ private:
     std::vector<std::uint32_t> prepared_ids_; // prepare_spawns' spawns, for draw_prepared
 
     VkContext& vk_;
-    SceneLighting lighting_{};
+    SceneLighting lighting_ = classic_full_bright();
     std::unique_ptr<FrameBuffers> lighting_buffers_; // the SceneLighting per frame in flight (binding 2)
     std::shared_ptr<const assets::CharacterLibrary> library_;
     // The world's racedata tables, kept from prepare_spawns for choose_model's live model codes.

@@ -626,3 +626,33 @@ TEST_CASE("ambient probe: the baked light of the place, nearest surfaces first; 
     CHECK(step.w < 1.9f);
     CHECK(blend.update(probe.sample(glm::vec3(1000.0f)), 0.1f) == blend.update(probe.sample(glm::vec3(1000.0f)), 0.1f));
 }
+
+TEST_CASE("classic_actor_light: the region shaders' light for the baked light where the player stands") {
+    render::SceneLighting l;
+    l.ambient = glm::vec4(0.2f, 0.2f, 0.2f, 0.0f);
+    l.special_ambient = glm::vec4(0.05f, 0.05f, 0.05f, 0.0f);
+    l.directional = glm::vec4(0.5f, 0.5f, 0.5f, 0.0f);
+    l.direction = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f); // from straight above
+    const glm::vec3 up(0.0f, 0.0f, 1.0f), down(0.0f, 0.0f, -1.0f);
+
+    // No probe: no baked light, the sky's full share.
+    glm::vec3 top = render::classic_actor_light(l, up);
+    CHECK(top.x == doctest::Approx(0.75f));
+    // Facing away from the sun: the ambients, raised to the floor.
+    l.ambient = glm::vec4(0.1f, 0.1f, 0.1f, 0.0f);
+    CHECK(render::classic_actor_light(l, down).x == doctest::Approx(render::kClassicActorFloor));
+
+    // A bright baked place at night (the Bazaar's walls): the baked colour carries it, the sky only by its share.
+    l.directional = glm::vec4(0.0f);
+    l.probe = glm::vec4(0.7f, 0.6f, 0.5f, 1.5f);
+    glm::vec3 lit = render::classic_actor_light(l, up);
+    CHECK(lit.x == doctest::Approx(0.7f + 0.05f + 0.5f * 0.1f));
+    CHECK(lit.z == doctest::Approx(0.5f + 0.05f + 0.5f * 0.1f));
+    // Never past 1.
+    l.probe = glm::vec4(1.0f, 1.0f, 1.0f, 2.0f);
+    CHECK(render::classic_actor_light(l, up) == glm::vec3(1.0f));
+
+    // Full bright (the item preview, and the renderer before it has a scene light): the texture as it is.
+    CHECK(render::classic_actor_light(render::classic_full_bright(), down) == glm::vec3(1.0f));
+    CHECK(render::classic_full_bright().params.x == 0.0f);
+}

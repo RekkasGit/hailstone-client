@@ -366,6 +366,16 @@ int ClientApp::run() {
                     cover_ = render::fit_cover_map(camera_.position, vk_.shadow_size());
                     render::set_cover(lighting, cover_, covering, watering);
                 }
+                {
+                    // The light of the place the player stands in, for the characters (and in the modern mode the
+                    // doors) round them, in either mode; before the game, of the place the model stands in.
+                    glm::vec3 probe_at = camera_.position;
+                    if (in_game) probe_at = feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 3.0f);
+                    else if (pre_game)
+                        if (auto it = pre_game_world_->spawns.find(kModelPlayerId); it != pre_game_world_->spawns.end())
+                            probe_at = it->second.position + glm::vec3(0.0f, 0.0f, 3.0f);
+                    lighting.probe = probe_blend_.update(ambient_probe_.sample(probe_at), dt);
+                }
                 if (modern) {
                     lighting.wind = render::wind_at(t, weather_look_.storm);
                     // A storm closes the distance in; under water, the water does.
@@ -377,14 +387,6 @@ int ClientApp::run() {
                     render::set_screen(lighting, camera_.ao_view(width, height, lit.far_plane).near_plane, lit.far_plane,
                                        f->extent.width, f->extent.height, t);
                     render::set_weather(lighting, weather_look_);
-                    // The light of the place the player stands in, for the characters and doors round them; before
-                    // the game, of the place the model stands in.
-                    glm::vec3 probe_at = camera_.position;
-                    if (in_game) probe_at = feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 3.0f);
-                    else if (pre_game)
-                        if (auto it = pre_game_world_->spawns.find(kModelPlayerId); it != pre_game_world_->spawns.end())
-                            probe_at = it->second.position + glm::vec3(0.0f, 0.0f, 3.0f);
-                    lighting.probe = probe_blend_.update(ambient_probe_.sample(probe_at), dt);
                     horizon_haze = glm::vec4(glm::vec3(lighting.haze_color), 1.0f);
                 }
                 // The lights' shadows: which lights have a cube (the zone's, the carried light, the spells'), before the
@@ -538,7 +540,6 @@ int ClientApp::run() {
             // Where no sky is drawn, the modern haze fills the background as it fills the distance (with the sun's glow
             // in it), not the plain fog colour; under water, the water.
             if (zone_renderer_ && (under_water || (modern && !sky_drawn))) zone_renderer_->draw_backdrop(*f, vp);
-            if (actor_renderer_) actor_renderer_->set_brightness(brightness);
             // The modern water reads the opaque world: the zone's other draws wait for VkContext::begin_translucent.
             const render::ZonePhase first = modern ? render::ZonePhase::Opaque : render::ZonePhase::All;
             if (zone_renderer_) zone_renderer_->draw(*f, vp, camera_.position, lit, t, first);

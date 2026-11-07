@@ -125,6 +125,26 @@ glm::vec3 cloud_light(const Daylight& d) {
     return d.sky * 1.5f + sun * 0.3f + glm::vec3(0.004f, 0.005f, 0.008f);
 }
 
+glm::vec3 classic_actor_light(const SceneLighting& l, const glm::vec3& n) {
+    glm::vec3 baked(0.0f);
+    float share = 1.0f;
+    if (l.probe.w > 0.5f) {
+        baked = glm::vec3(l.probe);
+        share = l.probe.w - 1.0f;
+    }
+    const glm::vec3 dn(l.direction);
+    glm::vec3 rgb = baked + glm::vec3(l.special_ambient) +
+                    share * (glm::vec3(l.ambient) + glm::vec3(l.bounce) * std::max(glm::dot(n, dn), 0.0f) +
+                             glm::vec3(l.directional) * std::max(glm::dot(n, -dn), 0.0f));
+    return glm::clamp(rgb, glm::vec3(kClassicActorFloor), glm::vec3(1.0f));
+}
+
+SceneLighting classic_full_bright() {
+    SceneLighting out;
+    out.ambient = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+    return out;
+}
+
 SceneLighting make_scene_lighting(const game::SceneLight& scene, std::span<const game::LightSource> lights,
                                   std::size_t dynamic, LightingMode mode, const Daylight& daylight) {
     SceneLighting out;
