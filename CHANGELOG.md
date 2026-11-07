@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Right-click menus in the modern UI are a little larger, and their size can be changed: Options > Interface "Menu Size", or Ctrl+mouse wheel over a menu
 - A robe on a Luclin model now covers the arms with its sleeves, in the robe's colour; the upper arms and forearms showed bare skin (or the arms' own armour)
 - The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
 - Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
