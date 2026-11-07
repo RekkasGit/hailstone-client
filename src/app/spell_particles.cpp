@@ -56,7 +56,7 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
                             const render::ActorRenderer* actors, float dt) {
     clock_ += dt;
     for (const auto& cue : cues) {
-        Held h{clock_ + cue.delay, cue.stage, cue.caster, cue.target, cue.spell, cue.duration_ms};
+        Held h{clock_ + cue.delay, cue.stage, cue.caster, cue.target, cue.spell, cue.source, cue.duration_ms};
         if (cue.delay > 0.0) held_.push_back(h);
         else play(conn, h, actors);
     }
@@ -205,13 +205,26 @@ void SpellParticles::play(net::GameConnection& conn, const Held& cue, const rend
     };
     const game::SpellData* sp = conn.spell_table().get(cue.spell);
     if (!sp || sp->spell_anim < 1 || static_cast<std::size_t>(sp->spell_anim) >= effects_.size()) return;
+    // Hailstone: the Options window's density for whose spell it is (the impact stage's caster is the cue's source).
+    auto is_npc = [&](std::uint32_t id) -> std::optional<bool> {
+        auto it = world.spawns.find(id);
+        if (id == 0 || it == world.spawns.end()) return std::nullopt;
+        return it->second.is_npc;
+    };
+    const std::uint32_t cast_by = cue.stage == 2 ? cue.source : cue.caster;
+    const game::SpellFxSource source =
+        game::spell_fx_source(cast_by, cue.target != 0 ? cue.target : cue.caster, world.player_id, is_npc(cast_by),
+                              is_npc(cue.target != 0 ? cue.target : cue.caster));
+    game::SpellParticleSettings settings = settings_;
+    settings.density *= source_density(source);
+    if (settings.density <= 0.0f) return;
     auto caster = actor(cue.caster);
     auto target = actor(cue.target);
     glm::vec3 point = caster ? caster->position : target ? target->position : glm::vec3(0.0f);
     std::int32_t longest = 0;
     for (const auto& r : game::spawn_stage_emitters(effects_[static_cast<std::size_t>(sp->spell_anim)], cue.stage,
                                                      cue.spell, caster ? &*caster : nullptr,
-                                                     target ? &*target : nullptr, point, cue.duration_ms, settings_))
+                                                     target ? &*target : nullptr, point, cue.duration_ms, settings))
         longest = std::max(longest, particles_.create(r));
     log::debug("spell {} stage {}: effect {} ({} ms)", cue.spell, cue.stage, sp->spell_anim, longest);
 }

@@ -114,6 +114,18 @@ std::uint8_t dik_from_sdl_scancode(int sdl_scancode) {
     return 0;
 }
 
+std::uint8_t dik_from_sdl_mouse_button(int sdl_button) {
+    switch (sdl_button) {
+    case SDL_BUTTON_MIDDLE: return 0xf0;
+    case SDL_BUTTON_X1: return 0xf1;
+    case SDL_BUTTON_X2: return 0xf2;
+    case SDL_BUTTON_X2 + 1: return 0xf3;
+    case SDL_BUTTON_X2 + 2: return 0xf4;
+    case SDL_BUTTON_X2 + 3: return 0xf5;
+    default: return 0;
+    }
+}
+
 Window::Window(const WindowDesc& desc) {
     if (desc.pad_input_in_background) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     // Two warps to the middle with the system's cursor hidden (the UI drawing the pad's or the window's own cursor)
@@ -208,6 +220,12 @@ bool Window::poll_events() {
     input_.pad.released.fill(false);
     pointer_.wheel = 0.0f;
     bool activity = false;
+    auto key_event = [this](std::uint8_t code, bool down, bool repeat) {
+        input_.key_events.push_back({code, down, repeat});
+        if (down && !repeat && !input_.key_down[code]) input_.key_pressed[code] = true;
+        if (!down && input_.key_down[code]) input_.key_released[code] = true;
+        input_.key_down[code] = down;
+    };
 
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -309,19 +327,18 @@ bool Window::poll_events() {
             }
             // A click shorter than a frame is up again by the time the button state is read (low frame rates).
             if (ev.button.button == SDL_BUTTON_RIGHT) input_.right_clicked = true;
+            if (std::uint8_t code = dik_from_sdl_mouse_button(ev.button.button)) key_event(code, true, false);
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (std::uint8_t code = dik_from_sdl_mouse_button(ev.button.button)) key_event(code, false, false);
             break;
         case SDL_EVENT_MOUSE_WHEEL:
             input_.wheel += ev.wheel.y;
             break;
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
-            if (std::uint8_t code = dik_from_sdl_scancode(static_cast<int>(ev.key.scancode))) {
-                bool down = ev.type == SDL_EVENT_KEY_DOWN;
-                input_.key_events.push_back({code, down, ev.key.repeat});
-                if (down && !ev.key.repeat && !input_.key_down[code]) input_.key_pressed[code] = true;
-                if (!down && input_.key_down[code]) input_.key_released[code] = true;
-                input_.key_down[code] = down;
-            }
+            if (std::uint8_t code = dik_from_sdl_scancode(static_cast<int>(ev.key.scancode)))
+                key_event(code, ev.type == SDL_EVENT_KEY_DOWN, ev.key.repeat);
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             // Keys released while unfocused never report: let them all go.

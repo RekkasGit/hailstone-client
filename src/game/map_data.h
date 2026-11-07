@@ -123,11 +123,14 @@ public:
     bool current_zone = false;                       // +0x2c0: the map shows the zone the player is in
 
     // Auto Z, a client extension (the original has only the height filter above, which hides): lines, labels and
-    // marks fade by their height from the player's feet. Within `auto_z_range` of the feet a thing is drawn whole;
-    // past it, it fades linearly to kAutoZFloor at three times the range. Kept as the UI ini's AutoZ / AutoZRange.
+    // marks fade by their height from the player's feet. A thing above the feet is drawn whole within
+    // `auto_z_above` of them, one below within `auto_z_below`; past its side's range it fades linearly to kAutoZFloor
+    // at three times that range. Kept as the UI ini's AutoZ / AutoZAbove / AutoZBelow (each 1..kAutoZMaxRange).
     static constexpr float kAutoZFloor = 0.15f;
+    static constexpr int kAutoZMaxRange = 1000;
     bool auto_z = false;
-    int auto_z_range = 30;
+    int auto_z_above = 30;
+    int auto_z_below = 30;
 
     // MapViewMap::SetZoneExtents @0x6c7b40 (min x, max x, min y, max y).
     void set_zone_extents(int min_x, int max_x, int min_y, int max_y);
@@ -155,7 +158,7 @@ public:
     bool line_shown(const MapLine& l, std::optional<float> feet) const;
     bool label_shown(const MapLabel& l, std::optional<float> feet) const;
     // Auto Z's opacity (kAutoZFloor..1) for a thing spanning heights a..b: 1 with Auto Z off or no feet, and while
-    // the feet are within the range of the span (a ramp whose span holds the feet is whole).
+    // the span is within its side's range of the feet (a ramp whose span holds the feet is whole).
     float z_fade(float a, float b, std::optional<float> feet) const;
     float z_fade(float z, std::optional<float> feet) const { return z_fade(z, z, feet); }
 

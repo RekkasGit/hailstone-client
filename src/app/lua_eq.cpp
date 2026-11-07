@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <imgui.h>
@@ -349,6 +350,7 @@ struct EqApi::Impl {
         add_customization_windows(windows);
         add_ability_windows(windows);
         add_ability_book_window(windows);
+        add_inventory_manager_window(windows);
         add_socialedit_windows(windows);
         host.open_social_editor = [this](std::int32_t social) {
             // A Lua social opens in the Lua social editor (app/lua_eq_luasocial.cpp) instead.
@@ -2483,6 +2485,11 @@ int TakeWindowMenu(lua_State* L) {
     lua_pushboolean(L, yes);
     return 1;
 }
+// yes = eq.TakeCloseTopWindow()   -- the close-top-window key (Escape) went down this frame and is the caller's (once)
+int TakeCloseTopWindow(lua_State* L) {
+    lua_pushboolean(L, std::exchange(Impl::of(L).host.close_top_window, false));
+    return 1;
+}
 int ReturnFalse(lua_State* L) {
     lua_pushboolean(L, false);
     return 1;
@@ -2829,6 +2836,9 @@ void EqApi::actions_key(int page) {
 }
 
 void EqApi::right_click_item(const net::ItemSlot& slot) { item_right_click(impl_->host, slot); }
+bool EqApi::open_player_menu(std::uint32_t spawn_id, float x, float y) {
+    return app::open_player_menu(impl_->host, spawn_id, x, y);
+}
 void EqApi::open_all_bags() { app::open_all_bags(impl_->host); }
 void EqApi::close_all_bags() { app::close_all_bags(impl_->host); }
 void EqApi::toggle_all_bags() { app::toggle_all_bags(impl_->host); }
@@ -2839,6 +2849,7 @@ void register_gamepad_api(lua_State* L, EqHost& host); // app/lua_eq_gamepad.cpp
 void register_spellbook_api(lua_State* L, EqHost& host); // app/lua_eq_spellbook.cpp
 void register_abilities_api(lua_State* L, EqHost& host); // app/lua_eq_abilities.cpp
 void register_ability_book_api(lua_State* L, EqHost& host); // app/lua_eq_abilitybook.cpp
+void register_inventory_manager_api(lua_State* L, EqHost& host); // app/lua_eq_inventory_manager.cpp
 void register_exchange_api(lua_State* L, EqHost& host);  // app/lua_eq_exchange.cpp
 void register_social_api(lua_State* L, EqHost& host);    // app/lua_eq_social.cpp
 void register_stats_api(lua_State* L, EqHost& host);     // app/lua_eq_stats.cpp
@@ -2855,6 +2866,7 @@ void EqApi::register_functions(lua_State* L) {
     register_spellbook_api(L, impl_->host);
     register_abilities_api(L, impl_->host);
     register_ability_book_api(L, impl_->host);
+    register_inventory_manager_api(L, impl_->host);
     register_exchange_api(L, impl_->host);
     register_social_api(L, impl_->host);
     register_stats_api(L, impl_->host);
@@ -2897,7 +2909,8 @@ void EqApi::register_functions(lua_State* L) {
         {"CascadeMenus", CascadeMenus}, {"CascadeClick", CascadeClick}, {"CascadeHover", CascadeHover},
         {"CascadeClose", CascadeClose}, {"GameMenus", GameMenus}, {"GameMenuClick", GameMenuClick},
         {"GameMenuHover", GameMenuHover}, {"GameMenuClose", GameMenuClose},
-        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu}, {"ContextMenus", ContextMenus},
+        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu},
+        {"TakeCloseTopWindow", TakeCloseTopWindow}, {"ContextMenus", ContextMenus},
         {"WindowShown", WindowShown},
         {nullptr, nullptr}};
     lua_pushlightuserdata(L, impl_.get());

@@ -672,12 +672,14 @@ end)
 
 // The modern AA window as a library (ui/modern/lib/aa.lua): a window of the same name that calls it with a row part,
 // a details part and a banner gets each called, the row's with the ability's name, ranks and cost, and draws cleanly.
+// Its one list (AAWindow's ModernList) holds every tab's abilities, with the tab, era and activated columns.
 TEST_CASE("UI packs (modern): lib/aa.lua takes a script's part on each AA row, in the details and as a banner") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
     nmsc::test::ScratchDir dir_scratch("ui_pack_aa_lib_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
-    std::ofstream(dir / "game" / "dbstr_us.txt") << "9001^1^Innate Strength^0^\n9002^1^Mystical Shielding^0^\n";
+    std::ofstream(dir / "game" / "dbstr_us.txt")
+        << "9001^1^Innate Strength^0^\n9002^1^Mystical Shielding^0^\n5^20^The Planes of Power^0^\n7^19^Defense^0^\n";
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
     fs::create_directories(dir / "plug");
     std::ofstream(dir / "plug" / "aa_cover.lua") << R"lua(
@@ -715,14 +717,28 @@ end)
             a.cost = cost;
             a.level_req = 10;
             a.classes = 1u << 2;
-            a.type = 1;
+            a.type = id == 100 ? 1 : 3; // General, Class
             a.title_sid = title;
+            if (id == 200) {
+                a.spell = 1234; // activated
+                a.refresh = 60;
+                a.expansion = 5;
+                a.category = 7;
+            }
             a.prereq_groups = {0};
             a.prereq_ranks = {0};
             s.conn.receive_zone_packet_for_test(net::encode_send_aa_table(a));
         }
         s.lua.set_folders({{"plug", dir / "plug"}});
         lua_State* L = s.lua.state();
+        // the one list: both tabs' abilities, each with its tab, era and activated
+        REQUIRE(luaL_dostring(L, R"lua(
+local out = {}
+for _, t in ipairs(eq.WindowList('AAWindow', 'ModernList') or {}) do out[#out + 1] = table.concat(t, '|') end
+return table.concat(out, ';'))lua") == LUA_OK);
+        CHECK(std::string(lua_tostring(L, -1)) ==
+              "Innate Strength|0/3|2||1||0;Mystical Shielding|0/3|5|Defense|3|The Planes of Power|1");
+        lua_settop(L, 0);
         REQUIRE(luaL_dostring(L, "eq.ShowWindow('AAWindow', true)") == LUA_OK);
         s.frames(3);
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
@@ -737,10 +753,18 @@ end)
         CHECK(lua_tointeger(L, -2) >= 2);
         CHECK(lua_tointeger(L, -1) >= 1);
         lua_settop(L, 0);
-        // A selected ability brings the details part.
-        REQUIRE(luaL_dostring(L, "eq.ListClick('AAWindow', 'List1', 0, 'left')") == LUA_OK);
+        // A selected ability brings the details part; a row of the one list selects that ability (the second row:
+        // the Class tab's), and the list and the stock tab's list both show it selected.
+        REQUIRE(luaL_dostring(L, "eq.ListClick('AAWindow', 'ModernList', 1, 'left')") == LUA_OK);
         s.frames(2);
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(luaL_dostring(L, "local _, _, a = eq.ListInfo('AAWindow', 'ModernList') local _, _, b = "
+                                 "eq.ListInfo('AAWindow', 'List3') return a, b, (eq.WindowText('AAWindow', "
+                                 "'ModernSelected'))") == LUA_OK);
+        CHECK(lua_tointeger(L, -3) == 1);
+        CHECK(lua_tointeger(L, -2) == 0);
+        CHECK(std::string(lua_tostring(L, -1)).starts_with("200\tMystical Shielding\t"));
+        lua_settop(L, 0);
         REQUIRE(luaL_loadstring(L, "return details") == LUA_OK);
         s.lua.push_folder_env_for_test("plug");
         lua_setupvalue(L, -2, 1);

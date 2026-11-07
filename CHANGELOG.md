@@ -3,8 +3,19 @@
 ## Unreleased
 
 - A robe on a Luclin model now covers the arms with its sleeves, in the robe's colour; the upper arms and forearms showed bare skin (or the arms' own armour)
+- The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
+- Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
+- Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off
+- You can now /camp while riding a mount, without getting off and sitting first (the original client refused). Getting off during the 30 seconds cancels the camp
+- New Advanced Inventory window (EQ menu > Inventory, or the button at the bottom of the inventory window): everything you wear, carry and have in the bank and shared bank in one list or grid, with search, filters (place, kind, marks, usable by you, magic, lore, no trade, temporary, stackable, sellable), sorting and each item's value and weight. Its icons work like a bag's slots: pick up, drop, swap, right-click to use, hold to inspect, drag to a hot bar (bank items while the bank is open)
+- Items can be marked Keep or Sell in the Advanced Inventory (one at a time, or everything shown at once). A kept item cannot be destroyed, dropped, traded, given to an NPC, sold or sent by parcel until you take the mark off; the merchant's "Sell marked" (formerly "Sell junk") sells what is marked Sell. Keep marks are saved per character
+- The inventory window's search field, Stack / Sort buttons and ... menu moved to the Advanced Inventory; the inventory window has an Advanced Inventory button instead
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
+- The Options window's Particles section can set your own spells', other players' and NPCs' spell particles to Off, Low, Medium or High
+- Modern UI: every window that can be closed has "Close with Esc" in its right-click menu. Ticked, Escape closes it (the window opened or clicked last first, one per press); it is off for every window until you tick it
+- Modern UI: the AA window lists every ability in one list instead of four tabs. The search and the filters (now with a tab filter: General, Archetype, Class, Special) work across all of them, the list has columns for the tab, the era (the expansion an ability came with) and active or passive, and the window is more compact
+- The middle mouse button and up to five side buttons (shown as MOUS MID and MOUS AUX1..AUX5) can be bound to any command in Options > Keys, with or without Shift, Ctrl or Alt, as in the original client
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times

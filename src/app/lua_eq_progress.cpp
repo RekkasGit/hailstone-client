@@ -263,6 +263,7 @@ public:
     AAWindow() : StockWindow("AAWindow", false) {}
 
     const ListData* list(EqHost& host, std::string_view id) override {
+        if (id == "ModernList") return host.conn ? &modern_list(host) : nullptr;
         int tab = index_of(id);
         if (tab < 0 || !host.conn) return nullptr;
         const auto& c = *host.conn;
@@ -286,10 +287,48 @@ public:
         }
         return &d;
     }
-    bool list_click(EqHost&, std::string_view id, int row, bool, int) override {
+    // Not in the stock layout: the four tabs' lists as one, for the Modern UI's AA window (ui/modern/lib/aa.lua),
+    // each tab's rows in the stock order. The columns are the stock lists' (title, cur/max, cost, category) and then
+    // the tab (the ability's type, 1..4), the expansion it came with (dbstr 0x14, "" none) and "1" for an activated
+    // ability ("0" passive). The category here is dbstr 0x13 alone: the stock column's fallback to the expansion is
+    // the expansion column of its own.
+    const ListData& modern_list(EqHost& host) {
+        const auto& c = *host.conn;
+        const auto& aa = c.alt_adv();
+        ListData& d = modern_;
+        d = {};
+        modern_ids_.clear();
+        d.columns = 7;
+        d.labels = {"Title", "Cur/Max", "Cost", "Category", "Tab", "Era", "Activated"};
+        d.widths = {210, 50, 40, 120, 60, 100, 40};
+        for (int tab = 1; tab <= 4; ++tab)
+            for (const game::AltAbility* a : c.aa_list(tab, filter_)) {
+                int cur = aa.has(a->id) ? a->rank : a->rank - 1;
+                ListRow r;
+                r.texts = {c.aa_name(*a),
+                           std::format("{}/{}", cur, a->max_rank),
+                           cur < a->max_rank ? std::to_string(a->cost) : "",
+                           a->category > 0 ? c.strings().db_string(static_cast<std::uint32_t>(a->category), 0x13) : "",
+                           std::to_string(tab),
+                           a->expansion != 0 ? c.strings().db_string(static_cast<std::uint32_t>(a->expansion), 0x14) : "",
+                           a->activated() ? "1" : "0"};
+                r.color = c.aa_can_train(a->id) ? Rgb{1, 1, 1} : argb_to_rgb(0xffc0c0c0);
+                d.rows.push_back(std::move(r));
+                modern_ids_.push_back(a->id);
+                if (a->id == selected_) d.selected = static_cast<int>(d.rows.size()) - 1;
+            }
+        return d;
+    }
+    // The ids of a list's rows (the combined list's or a tab's), nullptr for another child.
+    const std::vector<std::uint32_t>* row_ids(std::string_view id) const {
+        if (id == "ModernList") return &modern_ids_;
         int tab = index_of(id);
-        if (tab < 0) return false;
-        const auto& ids = ids_[static_cast<std::size_t>(tab)];
+        return tab < 0 ? nullptr : &ids_[static_cast<std::size_t>(tab)];
+    }
+    bool list_click(EqHost&, std::string_view id, int row, bool, int) override {
+        const auto* list = row_ids(id);
+        if (!list) return false;
+        const auto& ids = *list;
         if (row >= 0 && row < static_cast<int>(ids.size())) selected_ = ids[static_cast<std::size_t>(row)];
         return true;
     }
@@ -297,9 +336,9 @@ public:
     // DoHotButton queues as /alt activate (game/hot_button_press.h kSocialCount), labelled with its name.
     std::optional<game::HotButton> pick_up(EqHost& host, std::string_view id, int row) override {
         if (id == "HotButton") return aa_button(host, selected_); // the Hotkey button dragged
-        int tab = index_of(id);
-        if (tab < 0 || !host.conn) return std::nullopt;
-        const auto& ids = ids_[static_cast<std::size_t>(tab)];
+        const auto* list = row_ids(id);
+        if (!list || !host.conn) return std::nullopt;
+        const auto& ids = *list;
         if (row < 0 || row >= static_cast<int>(ids.size())) return std::nullopt;
         return aa_button(host, ids[static_cast<std::size_t>(row)]);
     }
@@ -442,6 +481,8 @@ private:
     }
     std::array<ListData, 4> lists_;
     std::array<std::vector<std::uint32_t>, 4> ids_;
+    ListData modern_;
+    std::vector<std::uint32_t> modern_ids_;
     std::uint32_t selected_ = 0;
     int page_ = 0;
     game::AAFilter filter_;

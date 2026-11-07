@@ -475,7 +475,8 @@ struct MapState {
         put_int("HeightHigh", view.max_z);
         // Not the original's: Auto Z (MapView::auto_z).
         put_bool("AutoZ", view.auto_z);
-        put_int("AutoZRange", view.auto_z_range);
+        put_int("AutoZAbove", view.auto_z_above);
+        put_int("AutoZBelow", view.auto_z_below);
     }
 
     // CMapViewWnd::LoadIniInfo @0x6c9aa0 (each key's default is the current value).
@@ -505,7 +506,10 @@ struct MapState {
         view.min_z = parse_int(ini->get(s, "HeightLow"), view.min_z);
         view.max_z = parse_int(ini->get(s, "HeightHigh"), view.max_z);
         view.auto_z = parse_bool(ini->get(s, "AutoZ"), view.auto_z);
-        view.auto_z_range = std::clamp(parse_int(ini->get(s, "AutoZRange"), view.auto_z_range), 1, 1000);
+        // AutoZRange: the single range of earlier versions, the default for both sides.
+        const int range = parse_int(ini->get(s, "AutoZRange"), view.auto_z_above);
+        view.auto_z_above = std::clamp(parse_int(ini->get(s, "AutoZAbove"), range), 1, game::MapView::kAutoZMaxRange);
+        view.auto_z_below = std::clamp(parse_int(ini->get(s, "AutoZBelow"), range), 1, game::MapView::kAutoZMaxRange);
         min_z_text = std::to_string(view.min_z);
         max_z_text = std::to_string(view.max_z);
         view.relayout = true;
@@ -1714,19 +1718,26 @@ int GameTime(lua_State* L) {
     return 2;
 }
 
-// on, range = eq.MapAutoZ([on [, range]])   -- Auto Z (MapView::auto_z, not the original's): with arguments sets it
-// (range in world units, 1..1000) and stores the map's settings; returns the setting either way.
+// on, above, below = eq.MapAutoZ([on [, above [, below]]])   -- Auto Z (MapView::auto_z, not the original's): with
+// arguments sets it and stores the map's settings; `above` and `below` are how far above and below the feet things
+// stay whole (world units, 1..1000), and `above` alone sets both. Returns the setting either way.
 int MapAutoZ(lua_State* L) {
     MapState& s = *state_of(L);
     if (!lua_isnoneornil(L, 1)) {
+        auto range = [L](int i) {
+            return static_cast<int>(std::clamp<lua_Integer>(luaL_checkinteger(L, i), 1, game::MapView::kAutoZMaxRange));
+        };
         s.view.auto_z = lua_toboolean(L, 1) != 0;
-        if (!lua_isnoneornil(L, 2))
-            s.view.auto_z_range = static_cast<int>(std::clamp<lua_Integer>(luaL_checkinteger(L, 2), 1, 1000));
+        if (!lua_isnoneornil(L, 2)) {
+            s.view.auto_z_above = range(2);
+            s.view.auto_z_below = lua_isnoneornil(L, 3) ? s.view.auto_z_above : range(3);
+        }
         s.store_ini();
     }
     lua_pushboolean(L, s.view.auto_z);
-    lua_pushinteger(L, s.view.auto_z_range);
-    return 2;
+    lua_pushinteger(L, s.view.auto_z_above);
+    lua_pushinteger(L, s.view.auto_z_below);
+    return 3;
 }
 
 bool drawn_now(const MapState& s) { return s.drawn; }

@@ -25,6 +25,13 @@ SpellParticleSettings spell_particle_settings(std::optional<float> density, std:
     return s;
 }
 
+SpellFxSource spell_fx_source(std::uint32_t caster, std::uint32_t struck, std::uint32_t me,
+                              std::optional<bool> caster_is_npc, std::optional<bool> struck_is_npc) {
+    if (me != 0 && (caster == me || struck == me)) return SpellFxSource::Self;
+    std::optional<bool> npc = caster_is_npc ? caster_is_npc : struck_is_npc;
+    return npc.value_or(false) ? SpellFxSource::Npcs : SpellFxSource::Players;
+}
+
 std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect& effect, int stage,
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
