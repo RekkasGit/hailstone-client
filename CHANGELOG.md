@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
 - Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
 - Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off
 - You can now /camp while riding a mount, without getting off and sitting first (the original client refused). Getting off during the 30 seconds cancels the camp

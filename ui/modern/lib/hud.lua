@@ -289,6 +289,22 @@ local function menu(window, title, opts)
   ui.TextDisabled("Alt+right-click always opens this menu")
 end
 
+-- Auto Z's switch and its two ranges (eq.MapAutoZ), for a menu or popup: how far above (+) and below (-) the
+-- player's feet the map's lines and labels stay whole before they fade. Shared by the map and the minimap.
+local AUTOZ_MAX = 300
+function hud.AutoZControls(s)
+  local on, above, below = eq.MapAutoZ()
+  if ui.MenuItem("Auto Z", on) then eq.MapAutoZ(not on) end
+  if ui.IsItemHovered() then ui.SetTooltip("Fade what is well above or below you") end
+  if not on then ui.BeginDisabled() end
+  ui.SetNextItemWidth(180 * (s or 1))
+  local a, ca = ui.SliderInt("##autozabove", above, 1, AUTOZ_MAX, string.format("+%d above you", above))
+  ui.SetNextItemWidth(180 * (s or 1))
+  local b, cb = ui.SliderInt("##autozbelow", below, 1, AUTOZ_MAX, string.format("-%d below you", below))
+  if not on then ui.EndDisabled() end
+  if ca or cb then eq.MapAutoZ(on, a, b) end
+end
+
 -- An X button of this UI's own (a frame's close box): size x size at x, y; onClose() when it is clicked.
 function hud.CloseX(id, x, y, size, onClose)
   local clicked = T.Hit(id, x, y, x + size, y + size)
