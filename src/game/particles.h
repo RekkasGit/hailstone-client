@@ -27,6 +27,7 @@
 // OpenEQ's field descriptions.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -46,6 +47,19 @@ struct SpellParticleSettings {
 };
 // From the ini values (missing -> 1.0), clamped to [0, 1].
 SpellParticleSettings spell_particle_settings(std::optional<float> density, std::optional<float> opacity);
+
+// Hailstone (not in the original): whose a spell effect stage is, for the Options window's per-source spell
+// particle densities, which scale SpellParticleDensity. The original has one density and an "On For" filter
+// (SpellParticleCastFilter, FUN_00514bd0: self, group, raid, all players, and NPCs as a bit); this client offers the
+// three densities instead and does not read the filter.
+enum class SpellFxSource : std::uint8_t { Self = 0, Players = 1, Npcs = 2 };
+inline constexpr std::size_t kSpellFxSourceCount = 3;
+// `caster` cast the spell and `struck` is the spawn it lands on (the caster again for the cast stage); `me` the
+// player. A spell the player cast, or one that lands on the player, is Self (as FUN_00514bd0 always shows those). Any
+// other is the caster's kind: NPCs (pets and mercenaries included), else Players. Without a known caster, the struck
+// spawn's kind; without either, Players.
+SpellFxSource spell_fx_source(std::uint32_t caster, std::uint32_t struck, std::uint32_t me,
+                              std::optional<bool> caster_is_npc, std::optional<bool> struck_is_npc);
 
 // CreateSpellEmitter's arguments (eqgame's order; see the table in the notes).
 struct SpellEmitterRequest {

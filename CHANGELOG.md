@@ -6,6 +6,7 @@
 - Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
+- The Options window's Particles section can set your own spells', other players' and NPCs' spell particles to Off, Low, Medium or High
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times

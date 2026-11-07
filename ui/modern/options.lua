@@ -407,6 +407,13 @@ local function displayTab()
   section("Particles", function()
     local DENSITIES = { "Off", "Low", "Medium", "High" }
     combo("spell_particle_density", "Spell Particle Density", DENSITIES, "How many particles spells give off.")
+    -- Hailstone: whose spells, each on top of the spell density (the original's "On For" filter is not offered).
+    combo("spell_particles_self", "Your Spell Particles", DENSITIES,
+      "Spells you cast and spells that land on you, on top of the spell particle density.")
+    combo("spell_particles_players", "Other Players' Spell Particles", DENSITIES,
+      "Spells other players cast, on top of the spell particle density.")
+    combo("spell_particles_npcs", "NPC Spell Particles", DENSITIES,
+      "Spells NPCs cast, pets and mercenaries included, on top of the spell particle density.")
     combo("environment_particle_density", "Environment Particle Density", DENSITIES,
       "How many particles the zone's clouds give off: torches, braziers, smoke and mist (/particledensity).")
     combo("actor_particle_density", "Actor Particle Density", DENSITIES,
