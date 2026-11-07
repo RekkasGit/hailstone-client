@@ -19,7 +19,7 @@ hailstone/
                              character starts from (no ui.ini, so not a pack: a build or update leaves it alone;
                              ui-settings/ before 2026-11, moved here at start-up by move_old_ui_settings)
   browser/                   the in-game browser's helper and CEF's files (docs/browser.md); replaced by an update
-  hailstone.ini              the client's settings (core/config.h)
+  hailstone.ini              the client's settings (core/config.h); a character in the world has its own (below)
   hailstone-windows.ini      Dear ImGui's own window positions
   plugins/                   compiled plugins: plugins/<name>.so, or plugins/<name>/ with the binary and its settings;
                              plugins/<name>/ui/<pack>/ holds its Lua windows for each UI pack (docs/plugins.md)
@@ -42,6 +42,7 @@ hailstone/
                              UI.ini, hotbuttons.ini, BZR.ini, BART.ini (buy lines), btrlog.txt (barter
                              log), AddressBook.txt, IgnoreList.txt, GuildNotes.txt, chat.ini, options.ini,
                              scripts.ini (the Lua scripts started for this character: the Scripts window's Autorun);
+                             hailstone.ini, the client's settings for this character ("A character's settings" below);
                              kept_items.txt (the items marked Keep in the Advanced Inventory window, one
                              "<item id> <name>" a line; game/kept_items.h);
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
@@ -97,6 +98,24 @@ world or character name is compared with the saved list in that form, so such a 
 A save that fails is logged; on Windows, where the replace is refused while another program has the file open, it
 is tried a few more times first. Two clients may share `hailstone.ini`: when the file changed since a client read
 it, that client writes only the keys it changed over the other's (`core/config.h`).
+
+### A character's settings
+
+From the entry into the world until it leaves (camp, logout, a lost connection), a character plays with its own
+client settings: `servers/<profile>/characters/<world>/<character>/hailstone.ini` (`Config::attach_character`,
+`ClientApp::use_character_settings`). The first time a character enters, that file is made from `hailstone.ini`'s keys
+as they are then; after that it is the character's, and a change to `hailstone.ini` (on the login screen, or by another
+character's client) does not reach it. While the character plays, every setting it changes goes to its file, so
+clients run at once can play with different graphics, frame caps, sound, keys and so on. When it leaves, the client
+takes `hailstone.ini`'s settings again and applies them.
+
+Some keys stay in `hailstone.ini` whoever plays (`Config::is_shared_key`): the client's own (`assets.*`, `addons.*`,
+`update.*`, `news.*`, `browser.*`, `plugins.*`, `scripts.*`), the login screen's (`login.*`, `audio.pregame_music`),
+the window's place and mode (`window.*`, `display.window_mode`, `display.resolution`: one window, so it does not jump
+when a character enters), and what is taken only at start (`display.msaa`, `ui.name`, `ui.scale`, `ui.cpp_windows`,
+`ui.dev_windows`, `ui.perf_*`, `game.fixed_step`, `audio.enabled`, `audio.soundfont`, `audio.mix_ahead`,
+`nav.threads`, `nav.prebuild`). The UI packs' script settings (`ui/settings/<pack>.txt`) stay shared too; the window
+layout was the character's already (`ui-<pack>.txt`).
 
 Scripts and plugins are also looked for in the install's own `scripts/` and `plugins/` when the data folder is
 elsewhere (a macOS app bundle, `HAILSTONE_DATA_DIR`), so an install can ship some.

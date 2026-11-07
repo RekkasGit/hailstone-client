@@ -420,6 +420,7 @@ void ClientApp::enter_zone() {
     // The character's own files: servers/<profile>/characters/<world>/<name>/ (core/character_files.h).
     std::string profile = files_profile();
     CharacterFiles files = character_files(profile, char_view_.server_name, game::display_name(me->name));
+    use_character_settings(files.dir); // (taken over at the entry into the world: the same, unless the name differs)
     actions_ui_->enter_zone(files.hot_buttons());
     // The character's autorun scripts (the Scripts window; the same file at each zone-in starts nothing again).
     if (automation_) automation_->scripts().set_autorun_file(files.scripts_ini());

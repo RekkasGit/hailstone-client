@@ -21,7 +21,9 @@ std::optional<PadMode> pad_mode_by_name(std::string_view name) {
     return std::nullopt;
 }
 
-Gamepad::Gamepad(Config& config, std::filesystem::path path) : config_(config), path_(std::move(path)) {
+Gamepad::Gamepad(Config& config, std::filesystem::path path) : config_(config), path_(std::move(path)) { reload(); }
+
+void Gamepad::reload() {
     settings_.load(config_);
     bindings_.load(config_);
 }

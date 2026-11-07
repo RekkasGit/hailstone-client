@@ -71,6 +71,8 @@ public:
     ~ActionsUi();
 
     game::KeyMap& keymap() { return keymap_; }
+    // The key bindings read again (a character's settings took over, Config::attach_character).
+    void reload_keymap();
     // The options window's Keys page (COptionsWnd::KeyboardPageWndNotification / sub_0070abc0): the next key pressed
     // goes to the command's bank (0 Keypress, 1 Alternate); with escape_clears, Escape unbinds it (the original
     // attaches an empty combo for Escape). The binding is saved; a reserved key changes nothing.

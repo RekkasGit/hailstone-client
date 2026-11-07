@@ -421,6 +421,7 @@ void ClientApp::leave_character() {
     // The character's UI settings are saved and let go: the next login's character writes its own, never these.
     ui_character_dir_.clear();
     if (lua_ui_) lua_ui_->set_character_settings({});
+    use_character_settings({}); // hailstone.ini's settings again
     eq_host_.drop_session_dialogs();
     pre_game_failed_ = false;
 }
@@ -594,11 +595,7 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
     // scene is tried again.
     asset_rules_serial_ = 0;
     pre_game_failed_ = false;
-    conn_->set_attack_until_xtarget_clear(config_.get_bool("combat.attack_until_xtarget_clear", false));
-    conn_->set_auto_target_xtarget(config_.get_bool("combat.auto_target_xtarget", true));
-    conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
-    conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
-    conn_->set_illusion_mounts(config_.get_bool("game.illusion_mounts", true));
+    apply_connection_settings();
     conn_->set_client_commands([this](std::string_view h, const std::string& args) { return client_command(h, args); });
     // The UI ini's [ChatManager] (/autojoin and the chat server's auto join) and the chat windows' text (/report).
     conn_->set_ui_ini(
@@ -849,6 +846,9 @@ void ClientApp::update_connection() {
     case S::EnteringWorld:
     case S::ZoneConnecting:
     case S::ZoneEntering:
+        // Hailstone: the character's own settings from here (before its first zone loads), until it leaves.
+        if (!conn_->character_name().empty())
+            use_character_settings(character_files(files_profile(), char_view_.server_name, conn_->character_name()).dir);
         if (music_select_ && audio_) {
             // CEverQuest::DoCharacterSelection: the character enters the world.
             audio_->music_selection(audio::kMusicCharacterSelect, false);
