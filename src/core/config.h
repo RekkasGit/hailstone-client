@@ -4,8 +4,15 @@
 // keys keep their insertion order when saved. Values are stored as text.
 // Two clients may run at once with the same hailstone.ini: when the file changed on disk since this Config read or
 // wrote it, save() keeps the other program's keys and writes only the keys set or erased here over them.
+//
+// Hailstone: a character's own settings. While a character layer is attached (attach_character()), every key but the
+// shared ones (is_shared_key: the asset folder, add-ons, updates, the login, the window ...) is read from and written
+// to the character's file, never hailstone.ini; the file starts as a copy of hailstone.ini's keys the first time the
+// character enters. So clients run at once can each play with settings of their own (a lower render scale on a
+// second character's client, say).
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,13 +44,28 @@ public:
     void set_bool(std::string_view key, bool value) { set(key, value ? "1" : "0"); }
     void erase(std::string_view key);
 
-    const std::vector<std::pair<std::string, std::string>>& entries() const { return entries_; }
+    // The keys as get() sees them: with a character layer, hailstone.ini's shared keys and the character's others.
+    std::vector<std::pair<std::string, std::string>> entries() const;
+
+    // The character's settings file over this one (empty `path`: none, as detach_character()). Its keys are read; when
+    // it cannot be read (the character's first entry), it starts with this config's keys that are not shared, and is
+    // written at once. Saving the character's keys is save()'s, whatever path it is given. Returns false when the
+    // file could not be read or written (the layer is attached all the same).
+    bool attach_character(const std::filesystem::path& path);
+    void detach_character() { layer_.reset(); layer_path_.clear(); }
+    const std::filesystem::path& character_path() const { return layer_path_; }
+    // The keys that stay in hailstone.ini with a character layer: those of the client, the login and the window, and
+    // those taken only at start.
+    static bool is_shared_key(std::string_view key);
 
 private:
+    Config* layer_for(std::string_view key) const;
     std::vector<std::pair<std::string, std::string>> entries_;
     std::vector<std::string> changed_;   // keys set (to a new value) or erased since the last load or save
     std::filesystem::path disk_path_;    // the file last read or written
     std::optional<std::string> disk_text_; // what it held then
+    std::unique_ptr<Config> layer_;        // the character's settings (attach_character), none when no character
+    std::filesystem::path layer_path_;
 };
 
 // The settings file of the client: hailstone.ini in the data folder (platform::config_file()).

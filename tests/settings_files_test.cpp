@@ -12,6 +12,7 @@
 #include "core/config.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "scratch_dir.h"
 
 namespace fs = std::filesystem;
 using namespace nmsc;
@@ -108,6 +109,91 @@ TEST_CASE("Settings files: two clients with one hailstone.ini keep each other's 
     REQUIRE(fresh.save(file));
     REQUIRE(disk.load(file));
     CHECK(disk.entries().size() == 1);
+}
+
+TEST_CASE("Settings files: a character's settings over hailstone.ini") {
+    test::ScratchDir tmp("character_settings");
+    const fs::path shared_file = tmp.path() / "hailstone.ini";
+    const fs::path one = tmp.path() / "servers" / "s" / "characters" / "w" / "One" / "hailstone.ini";
+    const fs::path two = tmp.path() / "servers" / "s" / "characters" / "w" / "Two" / "hailstone.ini";
+    Config c;
+    c.set("display.render_scale", "100");
+    c.set("assets.path", "/eq");
+    c.set("window.width", "1280");
+    c.set("gamepad.bind.a", "jump");
+    REQUIRE(c.save(shared_file));
+
+    // The first entry: the character's file starts as a copy of the settings that are not shared.
+    REQUIRE(c.attach_character(one));
+    CHECK(c.character_path() == one);
+    REQUIRE(fs::exists(one));
+    Config disk;
+    REQUIRE(disk.load(one));
+    CHECK(disk.get_string("display.render_scale") == "100");
+    CHECK(disk.get_string("gamepad.bind.a") == "jump");
+    CHECK_FALSE(disk.get("assets.path"));
+    CHECK_FALSE(disk.get("window.width"));
+
+    // While it plays, its settings change only its file; the shared keys still go to hailstone.ini.
+    c.set("display.render_scale", "50");
+    c.erase("gamepad.bind.a");
+    c.set("assets.path", "/rof2");
+    c.set("window.width", "800");
+    REQUIRE(c.save(shared_file));
+    CHECK(c.get_string("display.render_scale") == "50");
+    CHECK_FALSE(c.get("gamepad.bind.a"));
+    REQUIRE(disk.load(one));
+    CHECK(disk.get_string("display.render_scale") == "50");
+    CHECK_FALSE(disk.get("gamepad.bind.a"));
+    CHECK_FALSE(disk.get("assets.path"));
+    REQUIRE(disk.load(shared_file));
+    CHECK(disk.get_string("display.render_scale") == "100");
+    CHECK(disk.get_string("gamepad.bind.a") == "jump");
+    CHECK(disk.get_string("assets.path") == "/rof2");
+    CHECK(disk.get_string("window.width") == "800");
+    // entries() is what get() sees: the shared keys and the character's.
+    std::vector<std::string> keys;
+    for (const auto& e : c.entries()) keys.push_back(e.first);
+    CHECK(keys == std::vector<std::string>{"assets.path", "window.width", "display.render_scale"});
+
+    // Back to the login: hailstone.ini's settings again.
+    c.detach_character();
+    CHECK(c.character_path().empty());
+    CHECK(c.get_string("display.render_scale") == "100");
+    CHECK(c.get_string("gamepad.bind.a") == "jump");
+
+    // A second character starts from the shared settings, not the first one's.
+    c.set("display.render_scale", "75");
+    REQUIRE(c.save(shared_file));
+    REQUIRE(c.attach_character(two));
+    CHECK(c.get_string("display.render_scale") == "75");
+    // The first one keeps its own when it comes back; a later change to the shared ones does not reach it.
+    REQUIRE(c.attach_character(one));
+    CHECK(c.get_string("display.render_scale") == "50");
+    CHECK_FALSE(c.get("gamepad.bind.a"));
+
+    // A save with only the character's keys changed leaves hailstone.ini alone (another client's changes stay).
+    Config other;
+    REQUIRE(other.load(shared_file));
+    other.set("update.skip", "1.0");
+    REQUIRE(other.save(shared_file));
+    c.set("display.render_scale", "60");
+    REQUIRE(c.save(shared_file));
+    REQUIRE(disk.load(shared_file));
+    CHECK(disk.get_string("update.skip") == "1.0");
+    REQUIRE(disk.load(one));
+    CHECK(disk.get_string("display.render_scale") == "60");
+}
+
+TEST_CASE("Settings files: the keys a character's settings leave in hailstone.ini") {
+    for (const char* key : {"assets.path", "addons.index", "update.skip", "login.profile", "login.last_world.x",
+                            "window.x", "display.window_mode", "display.resolution", "display.msaa", "ui.name",
+                            "ui.scale", "audio.pregame_music", "plugins.autoload", "scripts.autoload", "news.last_read"})
+        CHECK_MESSAGE(Config::is_shared_key(key), key);
+    for (const char* key : {"display.render_scale", "display.shadows", "display.max_fps", "display.clip_plane",
+                            "audio.master", "mouse.sensitivity", "KEYMAPPING_JUMP_1", "gamepad.deadzone",
+                            "combat.auto_target_xtarget", "ui.font_face", "game.fast_camp"})
+        CHECK_MESSAGE(!Config::is_shared_key(key), key);
 }
 
 TEST_CASE("Settings files: the log keeps the earlier runs' files") {

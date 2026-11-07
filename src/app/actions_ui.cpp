@@ -90,6 +90,10 @@ std::string seconds_text(std::uint32_t ms) {
 
 ActionsUi::ActionsUi(Config& config, std::filesystem::path config_path)
     : config_(config), config_path_(std::move(config_path)) {
+    reload_keymap();
+}
+
+void ActionsUi::reload_keymap() {
     keymap_.reset_defaults(config_.get_bool("UseWASDDefault", true));
     keymap_.load(config_);
 }

@@ -36,6 +36,8 @@ class Gamepad {
 public:
     // The settings and bindings are hailstone.ini's gamepad.* keys of `config`, saved to `path` as they change.
     Gamepad(Config& config, std::filesystem::path path);
+    // The settings and bindings read again (a character's settings took over, Config::attach_character).
+    void reload();
 
     // The pad as the window read it this frame (platform::InputState::pad).
     void set_state(const platform::GamepadState* state) { state_ = state ? state : &none_; }

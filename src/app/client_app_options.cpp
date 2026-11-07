@@ -127,13 +127,16 @@ bool ClientApp::set_video_option(std::string_view name, int value) {
     return true;
 }
 
-void ClientApp::apply_video_options() {
+void ClientApp::apply_frame_options() {
     vk_.set_vsync(static_cast<render::VkContext::Vsync>(
         index_of(kVsyncModes, 3, config_.get_string("display.vsync", "on"), 1)));
-    if (opts_.max_fps <= 0) opts_.max_fps = std::max(0, config_.get_int("display.max_fps", 0)); // --max-fps first
+    opts_.max_fps = max_fps_arg_ ? *max_fps_arg_ : std::max(0, config_.get_int("display.max_fps", 0)); // --max-fps first
     background_fps_ = std::max(0, config_.get_int("display.background_fps", 0));
     float fov = config_float("display.fov", 0.0f);
     camera_.fov_units = fov > 0.0f ? fov : game::kStockFovUnits;
+}
+
+void ClientApp::apply_video_options() {
     int mode = index_of(kWindowModes, 3, config_.get_string("display.window_mode", "windowed"), 0);
     // Screenshot runs stay in a window of the size asked for.
     if (mode != 0 && opts_.screenshot.empty())
@@ -511,6 +514,78 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (audio_) audio_->set_settings(s);
     audio::store_audio_settings(s, config_);
     config_.save(config_path_);
+}
+
+void ClientApp::apply_settings() {
+    // display.lighting = modern (docs/graphics.md) | classic (the original's look); /lighting switches.
+    lighting_mode_ = render::parse_lighting_mode(config_.get_string("display.lighting", "modern"))
+                         .value_or(render::LightingMode::Modern);
+    apply_scene_options();
+    // display.view_distance: the modern mode draws this many times further than the original (render::modern_view).
+    view_distance_ = std::strtof(config_.get_string("display.view_distance", "2.5").c_str(), nullptr);
+    // display.texture_folder: replacement textures (assets/texture_overrides.h), read as each zone loads.
+    std::filesystem::path textures =
+        assets::texture_folder_setting(config_.get_string("display.texture_folder", ""), platform::textures_dir());
+    if (textures != assets::texture_overrides().folder() || !settings_applied_) assets::texture_overrides().set_folder(textures);
+    assets::texture_overrides().set_material_maps(config_.get_bool("display.material_maps", true));
+    pc_names_ = config_.get_bool("display.pc_names", true);
+    npc_names_ = config_.get_bool("display.npc_names", true);
+    own_name_ = config_.get_bool("display.own_name", true);
+    player_menu_ = config_.get_bool("mouse.player_menu", true);
+    // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.
+    show_names_ = config_.get_int("display.show_names", 4);
+    if (show_names_ < 0 || show_names_ > 6) show_names_ = 4;
+    spell_effects_ = config_.get_bool("display.spell_effects", true);
+    grass_ = config_.get_bool("display.grass", true);
+    neighbour_zones_ = config_.get_bool("display.neighbour_zones", true);
+    ring_cues_ = config_.get_bool("display.target_ring_cues", true);
+    ring_xray_ = config_.get_bool("display.target_ring_xray", false);
+    load_ring_colors();
+    shadow_clip_plane_ = std::clamp(config_.get_int("display.shadow_clip_plane", game::kDefaultShadowClipPlane), 0, 100);
+    viewport_.reset();
+    if (auto text = config_.get("display.viewport")) viewport_ = game::parse_viewport(*text);
+    apply_font_face();
+    actor_clip_plane_ = std::max(config_.get_int("display.actor_clip_plane", game::kDefaultActorClipPlane), 0);
+    mouse_invert_y_ = config_.get_bool("mouse.invert_y", false);
+    mouse_wheel_zoom_ = config_.get_bool("mouse.wheel_zoom", true);
+    max_camera_distance_ = static_cast<float>(
+        std::clamp(config_.get_int("display.max_camera_distance", static_cast<int>(kMaxCameraDistance)),
+                   kMinCameraZoomSetting, kMaxCameraZoomSetting));
+    camera_distance_ = std::min(camera_distance_, max_camera_distance_);
+    mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
+    {
+        // loadOptions: MousePointerSpeedMod 0..10, anything else 0.
+        int speed = config_.get_int("mouse.pointer_speed", 0);
+        set_pointer_speed(speed < 0 || speed > 10 ? 0 : speed);
+    }
+    apply_frame_options();
+    opts_.clip_plane = clip_plane_arg_ ? *clip_plane_arg_ : std::clamp(config_.get_int("display.clip_plane", 15), 0, 20);
+    settings_applied_ = true;
+    // What the start makes later reads its settings as it is made (the renderers, sound, keys, gamepad, connection).
+    if (!spell_particles_) return;
+    view_ = game::compute_view_distance(zone_fog_, opts_.clip_plane);
+    apply_particle_densities();
+    if (audio_) audio_->set_settings(audio::load_audio_settings(config_));
+    if (actions_ui_) actions_ui_->reload_keymap();
+    if (gamepad_) gamepad_->reload();
+    if (conn_) apply_connection_settings();
+}
+
+void ClientApp::apply_connection_settings() {
+    conn_->set_attack_until_xtarget_clear(config_.get_bool("combat.attack_until_xtarget_clear", false));
+    conn_->set_auto_target_xtarget(config_.get_bool("combat.auto_target_xtarget", true));
+    conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
+    conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
+    conn_->set_illusion_mounts(config_.get_bool("game.illusion_mounts", true));
+}
+
+void ClientApp::use_character_settings(const std::filesystem::path& character_dir) {
+    std::filesystem::path file = character_dir.empty() ? std::filesystem::path() : CharacterFiles{character_dir}.settings();
+    if (file == config_.character_path()) return;
+    if (!config_.attach_character(file)) log::warn("settings: {} could not be read or written", file.string());
+    if (!file.empty()) log::info("settings: the character's, {}", file.string());
+    else log::info("settings: hailstone.ini's");
+    apply_settings();
 }
 
 } // namespace client_internal

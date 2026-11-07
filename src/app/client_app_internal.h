@@ -346,22 +346,17 @@ public:
         shader_dir_ = platform::shaders_dir();
         config_path_ = default_config_path();
         config_.load(config_path_);
+        if (opts_.clip_plane != 15) clip_plane_arg_ = opts_.clip_plane;
+        if (opts_.max_fps > 0) max_fps_arg_ = opts_.max_fps;
         // The asset folder: --game-dir or EQ_GAME_DIR, else hailstone.ini assets.path, else the picker asks.
         if (!choose_asset_folder()) {
             quit_ = true;
             return;
         }
         apply_classic_folder();
-        // display.lighting = modern (docs/graphics.md) | classic (the original's look); /lighting switches.
-        lighting_mode_ = render::parse_lighting_mode(config_.get_string("display.lighting", "modern"))
-                             .value_or(render::LightingMode::Modern);
-        apply_scene_options(); // before the renderers: their pipelines take the sample count
-        // display.view_distance: the modern mode draws this many times further than the original (render::modern_view).
-        view_distance_ = std::strtof(config_.get_string("display.view_distance", "2.5").c_str(), nullptr);
-        // display.texture_folder: replacement textures (assets/texture_overrides.h), read as each zone loads.
-        assets::texture_overrides().set_folder(
-            assets::texture_folder_setting(config_.get_string("display.texture_folder", ""), platform::textures_dir()));
-        assets::texture_overrides().set_material_maps(config_.get_bool("display.material_maps", true));
+        // The settings (hailstone.ini's until a character enters, then the character's: apply_settings), before the
+        // renderers: their pipelines take the sample count.
+        apply_settings();
         // The saved servers (core/server_profile.h), the last one used picked (--server another); the old
         // login.host/port/username keys become the first.
         // The saved passwords (the system keyring); test logins never read or write them.
@@ -395,36 +390,7 @@ public:
         eq_host_.copy_ui_layout = [this](const std::filesystem::path& dir) {
             if (lua_ui_) lua_ui_->copy_character_layout(CharacterFiles{dir}.ui_settings(ui_name_));
         };
-        pc_names_ = config_.get_bool("display.pc_names", true);
-        npc_names_ = config_.get_bool("display.npc_names", true);
-        own_name_ = config_.get_bool("display.own_name", true);
-        player_menu_ = config_.get_bool("mouse.player_menu", true);
-        // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.
-        show_names_ = config_.get_int("display.show_names", 4);
-        if (show_names_ < 0 || show_names_ > 6) show_names_ = 4;
-        spell_effects_ = config_.get_bool("display.spell_effects", true);
-        grass_ = config_.get_bool("display.grass", true);
-        neighbour_zones_ = config_.get_bool("display.neighbour_zones", true);
-        ring_cues_ = config_.get_bool("display.target_ring_cues", true);
-        ring_xray_ = config_.get_bool("display.target_ring_xray", false);
-        load_ring_colors();
-        shadow_clip_plane_ = std::clamp(config_.get_int("display.shadow_clip_plane", game::kDefaultShadowClipPlane), 0, 100);
-        if (auto text = config_.get("display.viewport")) viewport_ = game::parse_viewport(*text);
-        apply_font_face();
-        actor_clip_plane_ = std::max(config_.get_int("display.actor_clip_plane", game::kDefaultActorClipPlane), 0);
-        mouse_invert_y_ = config_.get_bool("mouse.invert_y", false);
-        mouse_wheel_zoom_ = config_.get_bool("mouse.wheel_zoom", true);
-        max_camera_distance_ = static_cast<float>(
-            std::clamp(config_.get_int("display.max_camera_distance", static_cast<int>(kMaxCameraDistance)),
-                       kMinCameraZoomSetting, kMaxCameraZoomSetting));
-        mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
-        {
-            // loadOptions: MousePointerSpeedMod 0..10, anything else 0.
-            int speed = config_.get_int("mouse.pointer_speed", 0);
-            set_pointer_speed(speed < 0 || speed > 10 ? 0 : speed);
-        }
         apply_video_options();
-        if (opts_.clip_plane == 15) opts_.clip_plane = std::clamp(config_.get_int("display.clip_plane", 15), 0, 20);
         game_view_.dev_windows = config_.get_bool("ui.dev_windows", false);
         lua_ui_->set_show_control(game_view_.dev_windows);
         eq_api_ = std::make_unique<EqApi>(eq_host_);
@@ -870,7 +836,10 @@ private:
     // and as the Options window changes them.
     std::optional<int> video_option(std::string_view name) const;
     bool set_video_option(std::string_view name, int value);
+    // The window's mode at start (display.window_mode, display.resolution: shared, so only then).
     void apply_video_options();
+    // Vertical sync, the frame caps and the field of view (apply_settings).
+    void apply_frame_options();
     // Sets game_'s base folder (core/asset_folder_choice.h), running the asset-folder picker when nothing usable is
     // known; false when the player quit it (app/client_app_options.cpp).
     bool choose_asset_folder();
@@ -894,6 +863,19 @@ private:
     // added, and the report made at the start from the last run's crash.
     void wire_bug_reports(EqHost& h);
     void leave_character(); // the connection gone (camp, logout, link death): the character's state let go
+    // The settings read into the client and applied: at start, and again when a character's settings take over from
+    // hailstone.ini or give way to it (use_character_settings). The settings taken only at start are shared
+    // (Config::is_shared_key), so they are not read again.
+    void apply_settings();
+    // Hailstone: the character's settings (its hailstone.ini, Config::attach_character) over the shared ones from
+    // the entry into the world; an empty folder goes back to the shared ones. Nothing happens for the folder in use.
+    void use_character_settings(const std::filesystem::path& character_dir);
+    // What the command line set, which the saved settings do not change (apply_settings).
+    std::optional<int> clip_plane_arg_, max_fps_arg_;
+    bool settings_applied_ = false; // apply_settings has run once
+    // The connection's settings (the combat and camp switches, ground_npcs, illusion_mounts): as it is made, and again
+    // with a character's settings.
+    void apply_connection_settings();
     std::future<std::optional<SavedBugReport>> save_bug_report(BugReport report);
     // The client's facts, files and the screenshot's bytes into a report, as they are now (at its Send).
     void fill_bug_report(BugReport& report);
