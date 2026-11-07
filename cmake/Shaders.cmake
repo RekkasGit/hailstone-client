@@ -12,6 +12,7 @@ set(NMSC_SHADER_OUT ${CMAKE_BINARY_DIR}/shaders)
 set(NMSC_SHADER_RUN ${CMAKE_BINARY_DIR}/hailstone/shaders)
 # Files the shaders #include (GL_GOOGLE_include_directive): a change rebuilds every shader.
 set(NMSC_SHADER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lighting.glsl
+                          ${CMAKE_CURRENT_SOURCE_DIR}/shaders/ao_kernel.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/coverage.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/weather.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_a.h

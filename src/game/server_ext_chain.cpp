@@ -222,6 +222,10 @@ bool ExtensionChain::backstab_either_hand(const net::GameConnection& c) const {
     return each(c, [&](const ServerExtension& e) { return e.backstab_either_hand(c); });
 }
 
+bool ExtensionChain::solo_adventure(const net::GameConnection& c) const {
+    return each(c, [&](const ServerExtension& e) { return e.solo_adventure(c); });
+}
+
 std::vector<std::uint8_t> ExtensionChain::max_vitals_classes(const net::GameConnection& c,
                                                              std::uint8_t class_id) const {
     const std::vector<std::uint8_t> stock{class_id};

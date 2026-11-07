@@ -156,7 +156,18 @@ void PrecipitationField::launch(PrecipitationParticle& p, const glm::vec3& at, f
     p.acceleration = acceleration;
     // The ground: CollideLineSegment from 1200 units up the wind to 500 down it; the clamp point stops 0.001 short.
     glm::vec3 from = at + wind_ * kFrom, delta = wind_ * kProbe;
-    std::optional<PrecipitationHit> hit = f.ground ? f.ground(from, from + delta) : std::nullopt;
+    std::optional<PrecipitationHit> hit = f.ground ? f.ground(from, from + delta, false) : std::nullopt;
+    // Not the original's: a back face below the particle stops it too, so a roof that is only a ceiling seen from
+    // above (the East Commonlands tunnel's, under a mountain with no top) keeps the rain off the floor under it. Only
+    // below it: a zone's ceiling (East Commonlands' at z 719, facing down) would be every drop's ground otherwise,
+    // above the drop, which then lands as it starts and none is ever seen.
+    if (f.ground) {
+        const float start = -kFrom / kProbe; // the particle's place along the probe
+        if (auto under = f.ground(at, from + delta, true)) {
+            const float t = start + under->t * (1.0f - start);
+            if (!hit || t < hit->t) hit = PrecipitationHit{t, under->normal_z};
+        }
+    }
     float t = hit ? hit->t : 1.0f;
     if (hit && !(hit->normal_z > kFlatEnough)) p.may_splash = false;
     glm::vec3 v = delta * t;

@@ -422,6 +422,7 @@ public:
     bool backstab_either_hand(const net::GameConnection&) const override {
         return flag(NMSC_FLAG_BACKSTAB_EITHER_HAND);
     }
+    bool solo_adventure(const net::GameConnection&) const override { return flag(NMSC_FLAG_SOLO_ADVENTURE); }
     std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const override {
         std::uint32_t mask = l_ && h().vitals_classes ? run(h().vitals_classes, class_id) : 0;
         if (!mask) return {class_id};

@@ -126,6 +126,8 @@ enum { NMSC_IN = 0, NMSC_OUT = 1 };
                                           * melee classes are no longer left without spell and AA focus */
 #define NMSC_FLAG_BACKSTAB_EITHER_HAND 0x100u /* Backstab takes a piercer in the secondary hand too, not only the
                                                * primary (an older client ignores the bit) */
+#define NMSC_FLAG_SOLO_ADVENTURE 0x200u /* an adventure recruiter takes a request from a player in no group or raid
+                                         * (an older client ignores the bit) */
 
 /* One of the player's pets (set_pet_list). */
 typedef struct NmscPet {
