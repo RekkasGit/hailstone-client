@@ -1103,9 +1103,9 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   order. Players' pets, corpses and untargetable spawns are skipped. Clearing the target by hand holds until the
   next hit, and nothing is picked while the player is dead.
 - The attack key (AUTOPRIM) and the attack buttons turn the player to the target when they turn auto attack on, as
-  the original does; `/attack` never turns the player. Option `face_on_attack` (hailstone.ini
-  `combat.face_on_attack`, Options > General "Face Target On Attack", on by default) leaves the heading alone when
-  off (`GameConnection::toggle_auto_attack` returns whether to turn).
+  the original does; `/attack` never turns the player. Enhancement (option `face_on_attack`, hailstone.ini
+  `combat.face_on_attack`, Options > General "Face Target On Attack", on by default): off, the heading is left
+  alone, which the original cannot do (`GameConnection::toggle_auto_attack` returns whether to turn).
 - XTarget role sets (the character ini's `TargetSet<n>`, CExtendedTargetWnd_ApplyRoleSetString @0x54a990): each
   listed slot is requested again, then auto hater for the slots not listed. Deliberate difference: the original
   follows the string's count however large; the client stops at the window's 20 rows.

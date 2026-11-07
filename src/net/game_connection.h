@@ -526,9 +526,9 @@ public:
     // target dies. Clearing the target by hand holds until the next hit. The original never targets by itself.
     void set_auto_target_xtarget(bool on) { auto_target_xtarget_ = on; }
     bool auto_target_xtarget() const { return auto_target_xtarget_; }
-    // Option face_on_attack (on by default; docs/mechanics.md): the attack key and buttons (toggle_auto_attack)
-    // turn the player to the target when they turn auto attack on, as the original's AUTOPRIM does. Off, the
-    // heading is left alone. /attack never turns the player.
+    // Hailstone (option face_on_attack, on by default; docs/mechanics.md): the attack key and buttons
+    // (toggle_auto_attack) turn the player to the target when they turn auto attack on, as the original's AUTOPRIM
+    // does. Off, the heading is left alone, which the original cannot do. /attack never turns the player.
     void set_face_on_attack(bool on) { face_on_attack_ = on; }
     bool face_on_attack() const { return face_on_attack_; }
     // __Autofire (0xe635ab): ranged auto attack. The server shoots while it is on (OP_AutoFire); the client only

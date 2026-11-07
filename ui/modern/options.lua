@@ -149,7 +149,7 @@ local function generalTab()
     check("auto_target_xtarget", "Auto Target XTarget Attackers",
       "Hailstone: when you have no target, an NPC on your extended target list that attacks you becomes your target, as does one still attacking you when your target dies.")
     check("face_on_attack", "Face Target On Attack",
-      "On: the attack key and the attack buttons turn you to face your target when they turn auto attack on, as the original client does. Off: you keep facing where you were. /attack never turns you.")
+      "Hailstone: on, the attack key and the attack buttons turn you to face your target when they turn auto attack on, as the original client does. Off: you keep facing where you were. /attack never turns you.")
   end)
   section("Social", function()
     check("guild_invites", "Receive Guild Invites", "Off: guild invitations are declined for you.")
