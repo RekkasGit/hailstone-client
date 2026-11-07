@@ -598,6 +598,7 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
     conn_->set_auto_target_xtarget(config_.get_bool("combat.auto_target_xtarget", true));
     conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
     conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
+    conn_->set_illusion_mounts(config_.get_bool("game.illusion_mounts", true));
     conn_->set_client_commands([this](std::string_view h, const std::string& args) { return client_command(h, args); });
     // The UI ini's [ChatManager] (/autojoin and the chat server's auto join) and the chat windows' text (/report).
     conn_->set_ui_ini(

@@ -909,6 +909,17 @@ collision loads (spawns come before it, while character select's scene is still 
 frame until there is one. Only `display_position` is lowered, so the model, name, target ring, picking and the NPC
 walls follow the drawn body; `position`, which range, melee and the other rules use, keeps the server's z.
 
+Riding while illusioned (a deliberate difference, Hailstone's option `illusion_mounts`: hailstone.ini
+`game.illusion_mounts`, Options > General "Ride While Illusioned", on by default): the original's
+PlayerClient_AttachRiderToMount (game/mounts.cpp) refuses a rider whose current model has no tunic point (FUN_0058dde0;
+races 1, 367 and 522 always pass) or is a mount race drawn as the human fallback. A playable race's model passes, so in
+practice it refuses a player under an illusion: the summon mount spell lands, then fails with 5524 ("You must have both
+the Horse Models and your current Luclin Character Model enabled to summon a mount.") and the mount buff is removed.
+With the option on, the rider's model is not checked, for the local player and for other riders alike. The mount's
+model must still have a seat for the rider (`<rider code>_MOUNT01`, `CHEST03_MOUNT01` or a `RIDER` dag; the
+Skystriders' `mpg.eqg` has `CHEST03_MOUNT01`), since that is where the rider is drawn. EQEmu does not check the rider's
+race. Off, the original's checks apply.
+
 ## Name sprites
 
 `draw_nameplates` (app) with `game::name_sprite_switched_on`, `name_sprite_shows_guild` and `npc_owner_line`

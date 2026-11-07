@@ -53,12 +53,13 @@ bool is_npc_type(const Spawn& s) { return s.is_npc && !s.is_corpse; } // PlayerB
 
 // PlayerClient_AttachRiderToMount @0x58fcd0 for a rider not yet on `mount`: both need actors; with point -1 the
 // mount must be a mount race, the rider able to ride and the mount's model must have the dag. Then the rider's model
-// hangs from the mount's dag 0xe (the renderer draws it there from the link).
-bool attach_rider(const Spawn& rider, const Spawn& mount, std::int32_t point, MountQueries& q) {
+// hangs from the mount's dag 0xe (the renderer draws it there from the link). With `illusion_mounts` (Hailstone, a
+// deliberate difference: WorldState::illusion_mounts) the rider's own model is not checked.
+bool attach_rider(const Spawn& rider, const Spawn& mount, std::int32_t point, MountQueries& q, bool illusion_mounts) {
     if (!rider.actor_made || !mount.actor_made) return false;
     if (point == -1) {
         if (!is_mount_race(mount.race)) return false;
-        if (riding_blocked(rider) || human_actor_mount(rider)) return false;
+        if (!illusion_mounts && (riding_blocked(rider) || human_actor_mount(rider))) return false;
         if (!q.mount_point(rider, mount)) return false;
     }
     return true;
@@ -154,7 +155,7 @@ void do_stand(WorldState& w, Spawn& rider, Spawn* mount, MountQueries& q, MountE
     } else {
         point = 3;
     }
-    if (!attach_rider(rider, *mount, point, q)) {
+    if (!attach_rider(rider, *mount, point, q, w.illusion_mounts)) {
         if (local) {
             ev.messages.push_back(kStrCannotRide);
             ev.remove_mount_affect = true;

@@ -4,6 +4,7 @@
 
 - Clicking the icon in an item's details window links the item in chat: the link goes into the input of the chat window you last used, or of the one set to Always Chat Here, which then takes the keyboard. In the gamepad UI, X does it. As in the original, an item with a benefit flag (or an augment with one) is not linked
 - Right-click menus in the modern UI are a little larger, and their size can be changed: Options > Interface "Menu Size", or Ctrl+mouse wheel over a menu
+- Summoning a mount while under an illusion no longer fails with "You must have both the Horse Models and your current Luclin Character Model enabled to summon a mount." (the original client refuses many illusions). Options > General "Ride While Illusioned" turns this off
 - A robe on a Luclin model now covers the arms with its sleeves, in the robe's colour; the upper arms and forearms showed bare skin (or the arms' own armour)
 - The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
 - Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
