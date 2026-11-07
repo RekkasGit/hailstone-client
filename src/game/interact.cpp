@@ -1,5 +1,7 @@
 #include "game/interact.h"
 
+#include "game/world_state.h"
+
 namespace nmsc::game {
 
 DuelRequestOutcome duel_request(DuelState& s, std::uint32_t challenger, bool ignored) {
@@ -39,6 +41,10 @@ DuelCommandOutcome duel_command(DuelState& s, std::uint32_t target, bool target_
     if (s.challenger != 0) return {K::Message, 13253};
     s.challenged = target;
     return {K::Challenge, 13254};
+}
+
+bool opens_player_menu(const Spawn& sp, bool self) {
+    return !self && !sp.is_npc && !sp.is_corpse && !sp.trader && !sp.buyer;
 }
 
 } // namespace nmsc::game

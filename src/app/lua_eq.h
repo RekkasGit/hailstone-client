@@ -377,6 +377,8 @@ public:
     void toggle(std::string_view screen);
     // A right click on an inventory item: a bag opens or closes its container window, anything else is inspected.
     void right_click_item(const net::ItemSlot& slot);
+    // Hailstone's menu on another player at x, y (app::open_player_menu); false when it did not open.
+    bool open_player_menu(std::uint32_t spawn_id, float x, float y);
     // The OPEN_INV_BAGS / CLOSE_INV_BAGS / TOGGLE_INV_BAGS keys: every bag in the general slots opens or closes.
     void open_all_bags();
     void close_all_bags();

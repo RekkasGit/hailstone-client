@@ -419,6 +419,16 @@ std::uint32_t default_user_color_rgb(int index);
 void set_user_color(EqHost& host, int index, std::uint32_t rgb);
 std::string stml_escape(std::string_view text);
 
+// A tell to `name` begun as a click on a name in chat begins one: its tell window up with tell windows on, else
+// "/tell <name> " in the input line (app/lua_eq_chat.cpp).
+void chat_open_tell(const std::string& name);
+// Hailstone's right-click menu on another player (game::opens_player_menu; app/lua_eq_player.cpp): the player's
+// name, then Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. A row acts on the spawn while it is still
+// in the zone, through the same commands as /tell, /invite, /raidinvite, a click with nothing on the cursor and
+// /inspect, so each keeps their checks and messages.
+std::vector<EqHost::MenuRow> player_menu_rows(EqHost& host, std::uint32_t spawn_id);
+// Opens it at x, y. False when it did not open: not such a player, or context menus off (EqHost::context_menus).
+bool open_player_menu(EqHost& host, std::uint32_t spawn_id, float x, float y);
 // A right click on an item (CInvSlot::HandleRButtonUp): a bag opens or closes its container window, anything else
 // shows its information (app/lua_eq_items.cpp).
 void item_right_click(EqHost& host, const net::ItemSlot& slot);
