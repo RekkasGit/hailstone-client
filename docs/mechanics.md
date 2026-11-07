@@ -158,8 +158,9 @@ and the scripts' and plugins' frame (`mq.delay`, OnPulse), which runs once a dra
 
 Once a drawn frame, as before: the keys and clicks (a press is kept for the next step), the mouse look (it turns the
 heading directly), the camera. The camera is drawn between the last two steps (a share of the last step's move and
-turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body is drawn
-eased as before (game/world_state.cpp). Movement events (the jump, the landing sound, fall damage) of all the
+turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body, and the
+mount it rides, is drawn at that same place and heading (`WorldState::set_local_drawn`), not eased toward it as other
+spawns are: eased (a twelfth of a second), it trailed the camera behind the player. Movement events (the jump, the landing sound, fall damage) of all the
 frame's steps are gathered for its sounds.
 
 `game.fixed_step = 0` runs one step per drawn frame at its own time: the original's code as written, for comparing.

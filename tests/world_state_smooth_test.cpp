@@ -45,3 +45,41 @@ TEST_CASE("smooth: a spawn place that is not a number keeps the last drawn place
     CHECK(s.display_position.x > 10.0f);
     CHECK(s.display_position.x < 12.0f);
 }
+
+TEST_CASE("smooth: the local player is drawn where it is, not eased") {
+    WorldState w;
+    w.player_id = 7;
+    Spawn& me = add(w, 7, {10.0f, 20.0f, 0.0f});
+    me.is_npc = false;
+    me.heading = 100.0f;
+    Spawn& other = add(w, 5, {10.0f, 20.0f, 0.0f});
+    w.smooth(0.016f, 1.0);
+    me.position = other.position = {12.0f, 20.0f, 0.0f};
+    me.heading = other.heading = 140.0f;
+    w.smooth(0.016f, 1.0);
+    CHECK(me.display_position == glm::vec3(12.0f, 20.0f, 0.0f));
+    CHECK(me.display_heading == 140.0f);
+    CHECK(other.display_position.x < 12.0f); // others still ease
+}
+
+TEST_CASE("smooth: set_local_drawn places the player and its mount, and smooth keeps it for that frame") {
+    WorldState w;
+    w.player_id = 7;
+    w.controlled_id = 9;
+    Spawn& me = add(w, 7, {12.0f, 20.0f, 0.0f});
+    Spawn& mount = add(w, 9, {12.0f, 20.0f, 0.0f});
+    w.smooth(0.016f, 1.0);
+    // Between two steps: the camera's place is short of the last step's.
+    w.set_local_drawn({11.5f, 20.0f, 0.0f}, 30.0f);
+    CHECK(me.display_position == glm::vec3(11.5f, 20.0f, 0.0f));
+    CHECK(mount.display_heading == 30.0f);
+    w.smooth(0.016f, 1.0);
+    CHECK(me.display_position == glm::vec3(11.5f, 20.0f, 0.0f));
+    CHECK(mount.display_position == glm::vec3(11.5f, 20.0f, 0.0f));
+    // A frame without the call (update_player did not run): drawn at the position.
+    w.smooth(0.016f, 1.0);
+    CHECK(me.display_position == glm::vec3(12.0f, 20.0f, 0.0f));
+    // A place that is not a number is not taken.
+    w.set_local_drawn({kNaN, 20.0f, 0.0f}, 30.0f);
+    CHECK(me.display_position == glm::vec3(12.0f, 20.0f, 0.0f));
+}

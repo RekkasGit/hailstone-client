@@ -140,6 +140,15 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
         }
         // A position that is not a number (a bad update) is not followed: the spawn stays drawn where it last was.
         if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) continue;
+        // The local player and its mount are drawn where the camera puts them (set_local_drawn), else where they are.
+        if (id != 0 && (id == player_id || id == controlled_id)) {
+            if (!local_drawn || !s.display_valid) {
+                s.display_position = target;
+                s.display_heading = s.heading;
+                s.display_valid = true;
+            }
+            continue;
+        }
         // Teleports and new spawns snap, as does a drawn place or heading that is not a number (the test is written so
         // NaN fails it), so it recovers at the next good update.
         if (!s.display_valid || !(glm::distance(s.display_position, target) <= 50.0f) ||
@@ -165,6 +174,22 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
         s.display_position = m->second.display_position;
         s.display_heading = m->second.display_heading;
         s.display_valid = m->second.display_valid;
+    }
+    local_drawn = false;
+}
+
+void WorldState::set_local_drawn(const glm::vec3& position, float heading) {
+    if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
+        !std::isfinite(heading))
+        return;
+    for (std::uint32_t id : {player_id, controlled_id}) {
+        if (id == 0) continue;
+        auto it = spawns.find(id);
+        if (it == spawns.end()) continue;
+        it->second.display_position = position;
+        it->second.display_heading = heading;
+        it->second.display_valid = true;
+        local_drawn = true;
     }
 }
 

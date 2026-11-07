@@ -913,6 +913,10 @@ void ClientApp::update_player(float dt) {
     // per-frame mode alpha is 1: where the step left it.
     const float behind = 1.0f - step_clock_.alpha();
     const bool seated = conn_->world().player() && conn_->world().player()->mount_id; // the eye follows the mount
+    // The body (and the mount it rides) is drawn there too, not eased toward it as other spawns are: eased, it trailed
+    // the camera by a twelfth of a second, which showed most when strafing in the camera behind the player.
+    conn_->set_player_drawn(feet_ + glm::vec3(0.0f, 0.0f, floor_offset_) - behind * step_move_,
+                            game::yaw_to_heading(yaw_ - behind * step_turn_));
     camera_.yaw = yaw_ - behind * step_turn_ + (camera_type_ == game::kCameraWheelFollow ? chase_heading_ : 0.0f);
     camera_.pitch = std::clamp(pitch_ - behind * step_pitch_, -1.5f, 1.5f);
     glm::vec3 eye = eye_position() - (seated ? glm::vec3(0.0f) : behind * step_move_);
