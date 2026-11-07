@@ -1,6 +1,7 @@
 // ClientApp: Item input (loot, inventory), auto-scribe and the item windows.
 
 #include "app/client_app_internal.h"
+#include "game/interact.h"
 
 namespace nmsc::app::client_internal {
 
@@ -25,7 +26,20 @@ void ClientApp::update_item_input() {
     if (picked.kind == PickTarget::Kind::Spawn && conn_->re_npc_item(picked.id) &&
         conn_->re_request_npc_item_menu(picked.id, sx, sy))
         return;
-    if (picked.kind == PickTarget::Kind::Spawn) right_click_spawn(picked.id);
+    if (picked.kind != PickTarget::Kind::Spawn) return;
+    // Hailstone (a deliberate difference, game::opens_player_menu): another player's menu over them, where the
+    // original inspects; with the switch off, context menus off or the player down, the original's right click.
+    // The gamepad's Interact keeps the original's (right_click_spawn).
+    if (player_menu_ && eq_api_) {
+        const auto& world = conn_->world();
+        auto it = world.spawns.find(picked.id);
+        if (it != world.spawns.end() && game::opens_player_menu(it->second, picked.id == world.player_id) &&
+            eq_api_->open_player_menu(picked.id, right_down_pos_.x, right_down_pos_.y)) {
+            conn_->set_target(picked.id);
+            return;
+        }
+    }
+    right_click_spawn(picked.id);
 }
 
 bool ClientApp::right_click_spawn(std::uint32_t id) {

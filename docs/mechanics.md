@@ -208,6 +208,18 @@ in the first person, overhead and chase cameras and the camera behind the player
 HOT1_1 .. HOT10_12 press bar (command - 37) / 12's buttons and HOTPAGE1_1 .. HOTPAGE10_10 turn bar
 (command - 157) / 10's page.
 
+## Mouse buttons as keys
+
+The middle button and the buttons past right (DirectInput's 2..7: middle, X1, X2 and three more) are keys. Each
+frame, at the end of __ProcessMouseEvents, FUN_0051a770 compares them with the last frame and sends a press as key
+code 0xf0 + n through HandleKeyDownEvent (the held Shift / Ctrl / Alt join it, as for a key) and a release through
+HandleKeyUpEvent, so they bind like any key and show as "MOUS MID" and "MOUS AUX1".."MOUS AUX5". FUN_0051a770
+itself checks for no window under the cursor. Hailstone passes them to the key map with the keys, so whatever holds
+the keys back (an edit box, a modal dialog, the loading screen) holds them back too. The left and right buttons are
+never keys. Hailstone reads SDL's buttons 2, 4, 5, 6, 7 and 8 as these
+(`platform::dik_from_sdl_mouse_button`). A mouse whose extra buttons its own software sends as keyboard keys was
+already bindable through those keys.
+
 ## Cameras
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead
@@ -667,6 +679,27 @@ find affect slot 1600). Each record is replayed call for call against the record
   the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
   for everyone (`tests/feign_death_spell_test.cpp`).
 
+## Kept items: Hailstone's Keep mark
+
+A deliberate difference, with no counterpart in the original: the Advanced Inventory window (Hailstone's own,
+`InventoryManagerWnd`, `ui/modern/inventorymanager.lua`; the EQ menu's row after Inventory and the inventory window's
+button) marks items Keep or Sell, by item id, so every copy of an item has the mark. Sell is the marks the merchant
+window's Sell marked sells (`eq.SellJunk`; called junk in the code and the settings). Keep is the client's own
+(`game/kept_items.h`, `GameConnection::set_item_kept`), kept per character in `kept_items.txt` in the character's
+folder. While an item is kept, or a bag holds one, the client refuses, with a line in the chat saying why and the item
+left where it is:
+
+- destroying it (the inventory window's Destroy, before its confirmation, and `destroy_cursor`);
+- dropping it on the ground (`request_drop_cursor`, before CanDrop and its confirmation, and `drop_cursor_on_ground`);
+- putting it in a trade, with a player or an NPC (`trade_drop_cursor`, which a give to an NPC goes through);
+- selling it to a merchant, a point merchant or an adventure merchant (`merchant_sell`, `point_merchant_sell`,
+  `adventure_merchant_sell`); Sell marked leaves kept items out;
+- sending it by parcel (`send_parcel`).
+
+Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing. Not
+covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
+not both: marking one clears the other.
+
 ## Using items
 
 `net/game_connection_item_use.cpp` (no vectors; `tests/item_use_test.cpp` runs it against the mock server):
@@ -741,6 +774,17 @@ Vectors in `tests/picking_vectors_test.cpp` (pick actor at point 2000, left-clic
   zone of the zone point numbered by its parameter has a `.s3d` or `.eqg`, or the door has an adventure id, a
   dynamic zone id or a script flag (EQEmu sends none of these and parameter -1, so its touch pads never fire);
   type 0x32 is used closed and put back to closed past its repop time. Checked live with a spear trap (30 damage).
+- Right click on a player (CEverQuest::RightClickedOnPlayer @0x536d80): a trader opens its shop and a buyer its
+  barter window; any other player is inspected with /toggleinspect on. Hailstone adds a menu in its place (a
+  deliberate difference, `game::opens_player_menu`, `app::player_menu_rows`): a mouse right click on another player
+  who is not a trader or a buyer targets them and opens a menu at the click with their name, Send Tell, Invite to
+  Group, Invite to Raid, Trade and Inspect. The rows run what the commands run (a tell begun as a click on a name
+  in chat; `/invite` and `/raidinvite` on the target, with their checks and messages; the trade request a click
+  without an item sends, an item on the cursor going into the trade; `/inspect`'s request, whatever /toggleinspect
+  says), and do nothing once the player has left. Invite to Group is greyed while we have a group invitation of our
+  own (`/invite` would accept it). Options > Interface "Player Right-Click Menu" (hailstone.ini `mouse.player_menu`,
+  on by default) switches it off; with context menus off (the ContextMenus option, or the player down) the
+  original's right click happens instead. The gamepad's Interact keeps the original's.
 - Clicked switch: trap types use the adjusted Disarm Traps (17) with key -1; a common item of type 12 is the key with
   the adjusted Pick Lock (35); any other cursor item is the key with skill 0.
 
@@ -805,6 +849,10 @@ teleport index request and wait 300, do-teleport-B 2000, zone player to bind 120
   own 29 s camp timer has run (a GM's at once); a logout before that is a disconnect, and the character stays in the
   zone link dead for `Zone:ClientLinkdeadMS` (90 s by default). The client itself goes to the camp's destination
   at once either way.
+  Deliberate difference (always on): the original refuses /camp on a mount ("You must dismount and be sitting":
+  12291, or 12292 when already sitting). Hailstone camps a mounted player from the saddle without sitting; the camp
+  holds while the player stays mounted, and getting off cancels it (12683). A stock EQEmu zone's `Handle_OP_Camp`
+  checks neither sitting nor a mount.
 - Saves (`Save` @0x52ae60): refused while interacting or with an item request pending, which sets the save counter
   to 300; DoPassageOfTime's 6 s tick counts it up and saves (kind 0xf) above 300, about every half hour.
 - Position history (`game/position_tracker.*`, OP_FloatListThing 0x46c6, which EQEmu's cheat checks expect at least
@@ -895,6 +943,12 @@ Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle
   (LastTell_CycleIndex), only while the chat input has the keys and holds a "?tell" or "?rtarget" line
   (`game::cycle_reply`). Here they are the chat input's own Tab and Shift+Tab (the default keys; another key bound to
   them does not reach the input).
+- The active chat window (GetActiveChatWindow) is the Always Chat Here window when there is one (the chat menu's
+  item 0x2b, kept as `LockedActiveWindow`), else the one clicked last; a click into another window's input still
+  types there. A Hailstone difference: the original has no locked window until one is ticked, and unticking drops
+  it. Here the main window is locked by default (no `LockedActiveWindow` key, the locked window closed, another
+  window unticked), so Enter and '/' start a line in the main window; unticking the main window itself gives the
+  original's last-clicked behaviour (`LockedActiveWindow=-1`, kept).
 - PvP rule set (OP_LogServer +4): con levels (rules 1 / 2 / 4: below -4 / -8 / -5 levels 1, from 5 / 9 / 6 levels 7,
   else 5; every rule but 0 then clamps levels up to 5), who may attack whom (see `attack_rules.*`), CastSpell 210,
   hit-by-spell, resist debuffs x 1.5, steal, bind wound 145, invites by deity team under rule 4, the death coin rule.
