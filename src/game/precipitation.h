@@ -17,7 +17,8 @@
 //
 // The particles fall along the wind (0, 0, -1) from a point the camera's way, onto the first surface a line from
 // 1200 units above them to 500 below meets (transparent surfaces ignored, passable ones hit, back faces ignored):
-// so they stop on roofs, ledges and tree tops, as in the original.
+// so they stop on roofs, ledges and tree tops, as in the original. Hailstone also stops them on a back face below
+// the particle (a roof with nothing over it); not above it, where a zone's ceiling would catch every drop.
 
 #include <array>
 #include <cstdint>
@@ -104,7 +105,9 @@ struct PrecipitationHit {
     float t = 1.0f;
     float normal_z = 1.0f;
 };
-using PrecipitationGround = std::function<std::optional<PrecipitationHit>(const glm::vec3& from, const glm::vec3& to)>;
+// The first surface from `from` to `to`; with `back_faces`, a triangle's back face counts as well as its front.
+using PrecipitationGround =
+    std::function<std::optional<PrecipitationHit>(const glm::vec3& from, const glm::vec3& to, bool back_faces)>;
 
 class PrecipitationField {
 public:
@@ -148,7 +151,9 @@ public:
         // 4 + 2 kind and 5 + 2 kind), 0xAARRGGBB; each particle takes a random blend of the two.
         std::array<std::uint32_t, 2> colours{0xffffffffu, 0xffffffffu};
         std::function<std::int32_t()> random; // rand(): 0..0x7fff
-        PrecipitationGround ground;           // CCollision +0 (CollideLineSegment) with the precipitation filter
+        // CCollision +0 (CollideLineSegment) with the precipitation filter, front faces over the whole probe (the
+        // original's); back faces only from the particle down (Hailstone's, see launch).
+        PrecipitationGround ground;
     };
     void update(const Frame& frame);
 

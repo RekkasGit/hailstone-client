@@ -501,8 +501,10 @@ intensity; updated every frame, in every zone type, with or without a sky):
   up to 128/512 (three quarters of them) or 128 to 256/512 the rest, at (1 - r1)^2 of MaxSpeed. Its ground is the first
   surface a line from 1200 units above it to 500 below meets (`CollisionMesh::first_hit`: transparent surfaces
   ignored, passable ones hit, back faces skipped), so drops stop on roofs and tree tops and never reach the ground
-  under them. Here back faces are hit too (unlike the classic client): a roof with nothing over it, such as the East
-  Commonlands tunnel's under a mountain with no top, would otherwise let the rain through to the floor. A drop that lands on ground whose normal z is at most 0.8 never splashes again. Landed columns farther
+  under them. Here back faces below the drop are hit too (unlike the classic client): a roof with nothing over it, such
+  as the East Commonlands tunnel's under a mountain with no top, would otherwise let the rain through to the floor.
+  Only below it: a zone's ceiling facing down over the sky (East Commonlands' at z 719) would otherwise be the ground
+  of every drop, which would land as it started, and no rain or snow would be seen at all. A drop that lands on ground whose normal z is at most 0.8 never splashes again. Landed columns farther
   than 200 units from the camera are let go. p is the server's intensity x 0.01 (1..10 gives 0.01..0.10), moving at
   0.25 a second, so intensity 5 is 375 drops a second.
 - **Colour:** each particle a random blend of the sky's two precipitation colours for its kind (CSky +0x38: the
@@ -516,7 +518,11 @@ intensity; updated every frame, in every zone type, with or without a sky):
   shows the rain plainly. The modern lighting stretches each upright streak over the distance its drop falls in
   0.08 s (about 5 units at full speed, as a camera's motion blur), draws it at least 1.5 pixels wide, and has the
   precipitation manager start three times as many drops (its spawn rate; the 7500-particle pool and the column reuse
-  are the original's). The classic lighting keeps the original's.
+  are the original's). The snowflakes, 0.15 units across and in each frame of their atlas a thin outline (about 8 %
+  of it opaque), are a pixel or two a few units off, where the texture's small mips average the outline away: the
+  modern style draws a facing particle at least 2.5 pixels across both ways, and below 8 pixels of its own size fades
+  it into a soft round dot (fully a dot at 4), so the falling snow shows as specks. The classic lighting keeps the
+  original's.
 
 - **The world (modern, `WeatherLook`):**
   - **Transitions:** the original's precipitation reaches the server's intensity within a second; the look eases it.
