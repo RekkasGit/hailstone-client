@@ -269,6 +269,9 @@ struct EqHost {
     // A menu row that opens the window's own menu (the stock "Window" submenu: CContextMenuManager's default menu,
     // which this client's window menu stands for): sidl.lua opens it for `window_menu` (eq.TakeWindowMenu).
     std::string window_menu;
+    // CLOSE_TOP_WINDOW (Escape) went down and no window of the client's own took it: the UI pack may close one of
+    // its windows (eq.TakeCloseTopWindow, once). Cleared after each UI frame, so a press nothing took is not kept.
+    bool close_top_window = false;
     // CHelpWnd::SetFile(page) and Activate: the help window on help\\<page> (a tip page's WndNotify 1000 link).
     std::function<void(const std::string& page)> open_help;
     // The help window's Tips button: CTipWnd::Activate(pinstCTipWnd_1, -1, 1) (EqApi::activate_tip_of_day).
@@ -377,6 +380,8 @@ public:
     void toggle(std::string_view screen);
     // A right click on an inventory item: a bag opens or closes its container window, anything else is inspected.
     void right_click_item(const net::ItemSlot& slot);
+    // Hailstone's menu on another player at x, y (app::open_player_menu); false when it did not open.
+    bool open_player_menu(std::uint32_t spawn_id, float x, float y);
     // The OPEN_INV_BAGS / CLOSE_INV_BAGS / TOGGLE_INV_BAGS keys: every bag in the general slots opens or closes.
     void open_all_bags();
     void close_all_bags();

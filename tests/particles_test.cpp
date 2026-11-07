@@ -185,6 +185,25 @@ TEST_CASE("SpellEffect_SpawnStageEmitters: slots, levels, locations and settings
     CHECK(full[0].density == 1.0f);
 }
 
+TEST_CASE("Spell particle sources: self, other players and NPCs") {
+    using game::SpellFxSource;
+    const std::uint32_t me = 5;
+    // The player's own cast, and any spell landing on the player, whoever cast it.
+    CHECK(game::spell_fx_source(5, 5, me, false, false) == SpellFxSource::Self);
+    CHECK(game::spell_fx_source(5, 40, me, false, true) == SpellFxSource::Self);
+    CHECK(game::spell_fx_source(40, 5, me, true, false) == SpellFxSource::Self);
+    CHECK(game::spell_fx_source(41, 5, me, false, false) == SpellFxSource::Self);
+    // Another player's spell on an NPC is the players' (the caster's kind, not the struck spawn's).
+    CHECK(game::spell_fx_source(41, 40, me, false, true) == SpellFxSource::Players);
+    CHECK(game::spell_fx_source(40, 41, me, true, false) == SpellFxSource::Npcs);
+    CHECK(game::spell_fx_source(40, 40, me, true, true) == SpellFxSource::Npcs);
+    // An unknown caster: the struck spawn's kind, else the players'.
+    CHECK(game::spell_fx_source(99, 40, me, std::nullopt, true) == SpellFxSource::Npcs);
+    CHECK(game::spell_fx_source(99, 98, me, std::nullopt, std::nullopt) == SpellFxSource::Players);
+    // Before the player's id is known, nothing is the player's.
+    CHECK(game::spell_fx_source(0, 0, 0, std::nullopt, std::nullopt) == SpellFxSource::Players);
+}
+
 TEST_CASE("SpellEffect_SpawnStageEmitters: the attach ids and their spell point fallbacks") {
     auto run = [](std::int32_t attach, std::uint16_t points) {
         assets::SpellEffect fx;

@@ -15,6 +15,7 @@
 //   ui-<pack>.txt     Hailstone: the UI's window layout for this character (ui::lua::LuaUi::set_character_settings;
 //                     the UI's other settings are shared, ui/settings/<pack>.txt)
 //   scripts.ini       Hailstone: the Lua scripts started for this character ([Autorun]; mq/lua_mq.h set_autorun_file)
+//   kept_items.txt    Hailstone: the items marked Keep in the Advanced Inventory window (game/kept_items.h)
 //   options.ini       the Options window's game options (eqclient.ini [Options] / [Defaults], the UI ini's [Main]
 //                     ContextMenus and UseTellWindows, the character ini's [MailOptions]; game/client_options.h)
 // The asset folder is only read: its eqclient.ini gives the chat settings' and the options' defaults, and chat.ini and
@@ -58,6 +59,7 @@ struct CharacterFiles {
     std::filesystem::path options_ini() const { return file("options.ini"); }
     std::filesystem::path chat_history() const { return file("chat_history.txt"); } // Hailstone: the last chat lines
     std::filesystem::path scripts_ini() const { return file("scripts.ini"); } // Hailstone: the scripts' autorun list
+    std::filesystem::path kept_items() const { return file("kept_items.txt"); } // Hailstone: the Keep marks
     // Hailstone: the UI pack's window layout for this character
     std::filesystem::path ui_settings(std::string_view pack) const {
         return dir.empty() ? std::filesystem::path() : dir / ("ui-" + std::string(pack) + ".txt");

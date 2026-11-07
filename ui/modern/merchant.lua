@@ -392,9 +392,9 @@ local function body(x, y, w, h, s)
         SELLING_OPTS) then eq.StopItemJob() end
   else
     local n = tools.JunkCarried()
-    if T.Button("##selljunk", jx, fy, jx + junkW, fy + btnH, s, n > 0 and ("Sell junk (" .. n .. ")") or "Sell junk",
-        { enabled = n > 0, tooltip = tools.Note() or (n > 0 and "Sell every item you marked as junk"
-          or "Mark junk in the inventory's ... menu first") }) then tools.SellJunk() end
+    if T.Button("##selljunk", jx, fy, jx + junkW, fy + btnH, s, n > 0 and ("Sell marked (" .. n .. ")") or "Sell marked",
+        { enabled = n > 0, tooltip = tools.Note() or (n > 0 and "Sell every item you marked to sell"
+          or "Mark items to sell in the Advanced Inventory first") }) then tools.SellJunk() end
   end
   ui.SetCursorScreenPos(fx + fw - 90 * s, fy)
   W.Button(WINDOW, "MW_Done_Button", "Done", { width = 90 * s, height = btnH })

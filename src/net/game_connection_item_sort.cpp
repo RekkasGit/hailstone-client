@@ -80,7 +80,8 @@ std::string GameConnection::start_sell_job(const std::vector<std::uint32_t>& ids
     ItemJob job;
     auto take = [&](const ItemSlot& at) {
         const Item* it = inventory_.at(at);
-        if (it && !it->is_bag() && std::find(ids.begin(), ids.end(), it->id) != ids.end() && game::sell_refusal(*it) == 0)
+        if (it && !it->is_bag() && std::find(ids.begin(), ids.end(), it->id) != ids.end() && game::sell_refusal(*it) == 0 &&
+            !kept_items_.kept(it->id)) // Hailstone: a kept item is never sold (game/kept_items.h)
             job.clicks.push_back({at, it->id});
     };
     for (int s = kSlotGeneral1; s <= kSlotGeneral10; ++s) {
@@ -93,7 +94,7 @@ std::string GameConnection::start_sell_job(const std::vector<std::uint32_t>& ids
         }
         for (int i = 0; i < it->bag_slots; ++i) take(ItemSlot::possessions(static_cast<std::int16_t>(s), static_cast<std::int16_t>(i)));
     }
-    if (job.clicks.empty()) return "You carry nothing marked as junk that this merchant buys.";
+    if (job.clicks.empty()) return "You carry nothing marked to sell that this merchant buys.";
     job.status = {0, job.clicks.size(), ItemJobMode::Sell, ItemJobScope::Inventory};
     item_job_ = std::move(job);
     return {};

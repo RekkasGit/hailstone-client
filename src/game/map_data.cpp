@@ -381,8 +381,9 @@ bool MapView::label_shown(const MapLabel& l, std::optional<float> feet) const {
 float MapView::z_fade(float a, float b, std::optional<float> feet) const {
     if (!auto_z || !feet) return 1.0f;
     const float lo = std::min(a, b), hi = std::max(a, b);
-    const float d = *feet < lo ? lo - *feet : hi < *feet ? *feet - hi : 0.0f;
-    const float r = static_cast<float>(std::max(auto_z_range, 1));
+    const bool above = *feet < lo;
+    const float d = above ? lo - *feet : hi < *feet ? *feet - hi : 0.0f;
+    const float r = static_cast<float>(std::max(above ? auto_z_above : auto_z_below, 1));
     if (d <= r) return 1.0f;
     return std::max(kAutoZFloor, 1.0f - (1.0f - kAutoZFloor) * (d - r) / (2.0f * r));
 }

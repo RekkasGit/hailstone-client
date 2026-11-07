@@ -1,9 +1,11 @@
 -- Item search, Sort, Stack and Tidy for the bag, inventory and bank windows, and the marks they keep (Hailstone;
 -- eq.SortItems, eq.SellJunk, eq.ItemJob, eq.FindItems):
 --   a bag's filter (a kind of item: Sort fills the bag with it first, Tidy moves it there; after looting too when
---   "Tidy after looting" is on), locked slots (Sort, Stack and Tidy leave them alone), junk (items, by id, that the
---   merchant's Sell junk sells). They are kept per server and character in the UI settings ("items.<name>.*",
---   the character's own settings file).
+--   "Tidy after looting" is on), locked slots (Sort, Stack and Tidy leave them alone), Sell (items, by id, that the
+--   merchant's Sell marked sells; "junk" in the settings and the code). They are kept per server and character in the
+--   UI settings ("items.<name>.*", the character's own settings file).
+--   Keep (items, by id, the client will not destroy, drop, trade, give, sell or send: eq.SetItemKept, kept by the
+--   client in the character's kept_items.txt, game/kept_items.h). An item is marked Keep or Sell, not both.
 -- The searches are kept in one global table so a bag window dims what the search of the inventory or bank it is in
 -- does not match. Places are eq.FindItems' ("i:<slot>[:<sub>]" carried, "b:<slot>[:<sub>]" banked).
 local T = dofile("lib/theme.lua")
@@ -76,6 +78,52 @@ end
 
 function M.Locked(place) return prefs().locks[place] == true end
 function M.Junk(item) return item ~= nil and prefs().junk[item.id] == true end
+
+-- The Keep marks, read again only when the client says they changed (eq.ItemsRevision's second count), at most once
+-- a frame: asked for per slot drawn.
+local kept = { frame = -1, rev = -1, ids = {} }
+local function keptIds()
+  local frame = ui.GetFrameCount()
+  if kept.frame == frame then return kept.ids end
+  kept.frame = frame
+  local _, rev = eq.ItemsRevision()
+  if rev ~= kept.rev then
+    kept.rev, kept.ids = rev, {}
+  end
+  return kept.ids
+end
+function M.Kept(item)
+  if not item then return false end
+  local ids = keptIds()
+  local v = ids[item.id]
+  if v == nil then
+    v = eq.ItemKept(item.id) == true
+    ids[item.id] = v
+  end
+  return v
+end
+-- Keep and Sell: one mark or the other (on = false clears it).
+function M.SetKeep(item, on)
+  if not item then return end
+  if on and M.Junk(item) then
+    prefs().junk[item.id] = nil
+    save("junk")
+  end
+  eq.SetItemKept(item.id, item.name or "", on)
+  kept.frame = -1
+end
+function M.SetSell(item, on)
+  if not item then return end
+  if on and M.Kept(item) then M.SetKeep(item, false) end
+  prefs().junk[item.id] = on or nil
+  save("junk")
+end
+function M.ClearSell()
+  prefs().junk = {}
+  save("junk")
+end
+-- The marks' change count (a window's cache of filtered rows).
+function M.MarksStamp() return S.junkStamp or 0 end
 function M.Filter(bagPlace) return prefs().filters[bagPlace] or "" end
 function M.SetFilter(bagPlace, cat)
   prefs().filters[bagPlace] = cat ~= "" and cat or nil
@@ -123,7 +171,8 @@ local function options()
 end
 
 -- ---------------------------------------------------------------- the marking modes
--- While one is on, a left click on a slot marks instead of picking up: "lock" a bag slot, "junk" an item.
+-- While one is on, a left click on a slot marks instead of picking up: "lock" a bag slot, "junk" (Sell) or "keep" an
+-- item.
 function M.Mode() return S.mode end
 
 -- From a slot's click: true when the mode took it.
@@ -136,9 +185,9 @@ function M.Intercept(place, item, button)
     p.locks[place] = (not p.locks[place]) or nil
     save("locks")
   elseif S.mode == "junk" and item then
-    local p = prefs()
-    p.junk[item.id] = (not p.junk[item.id]) or nil
-    save("junk")
+    M.SetSell(item, not M.Junk(item))
+  elseif S.mode == "keep" and item then
+    M.SetKeep(item, not M.Kept(item))
   end
   return true
 end
@@ -164,12 +213,24 @@ local function padlock(x, y, s)
   ui.DrawRect(x + 2 * s, y, x + 7 * s, y + 6 * s, c[1], c[2], c[3], 0.95, 2.5 * s, 1.5 * s)
 end
 
--- Over a slot just drawn: its marks (locked, junk).
+-- A small shield (the Keep mark) with its top left at x, y, `h` high.
+function M.Shield(x, y, h, color, alpha)
+  local c = color or C.good
+  local a = alpha or 1
+  local w = h * 0.8
+  local cx = x + w / 2
+  ui.DrawRectFilled(x, y, x + w, y + h * 0.55, c[1], c[2], c[3], a, h * 0.12)
+  ui.DrawTriangleFilled(x, y + h * 0.5, x + w, y + h * 0.5, cx, y + h, c[1], c[2], c[3], a)
+end
+
+-- Over a slot just drawn: its marks (locked, Sell, Keep).
 function M.Marks(x, y, size, s, item, place)
   if place and M.Locked(place) then padlock(x + 3 * s, y + 3 * s, s) end
   if M.Junk(item) then
     ui.DrawRectFilled(x, y, x + size, y + size, C.danger[1], C.danger[2], C.danger[3], 0.18, 6 * s)
-    T.Text(x + size - 3 * s, y + 2 * s, "junk", C.danger, T.font.tiny, "right")
+    T.Text(x + size - 3 * s, y + 2 * s, "sell", C.danger, T.font.tiny, "right")
+  elseif M.Kept(item) then
+    M.Shield(x + size - 11 * s, y + 3 * s, 10 * s, C.good)
   end
 end
 
@@ -241,9 +302,10 @@ function M.Toolbar(id, x1, y, s, where, left, more)
     local mx0 = x1 - 24 * s
     local active = S.mode ~= nil
     if T.Button(id .. "more", mx0, y, x1, y + h, s, "...",
-        { primary = active, tooltip = "Mark junk, lock slots, tidy" }) then ui.OpenPopup(id .. "menu") end
+        { primary = active, tooltip = "Mark to sell or keep, lock slots, tidy" }) then ui.OpenPopup(id .. "menu") end
     if ui.BeginPopup(id .. "menu") then
-      if ui.MenuItem("Mark junk (click items)", S.mode == "junk") then S.mode = S.mode ~= "junk" and "junk" or nil end
+      if ui.MenuItem("Mark to sell (click items)", S.mode == "junk") then S.mode = S.mode ~= "junk" and "junk" or nil end
+      if ui.MenuItem("Mark to keep (click items)", S.mode == "keep") then S.mode = S.mode ~= "keep" and "keep" or nil end
       if ui.MenuItem("Lock slots (click bag slots)", S.mode == "lock") then S.mode = S.mode ~= "lock" and "lock" or nil end
       ui.Separator()
       if ui.MenuItem("Tidy: items into their filtered bags") then M.Run(where, "tidy") end
@@ -253,7 +315,7 @@ function M.Toolbar(id, x1, y, s, where, left, more)
         ui.SetSetting(p.key .. "tidyLoot", p.tidyLoot and "1" or "0")
       end
       ui.Separator()
-      if ui.MenuItem("Clear junk marks") then p.junk = {}; save("junk") end
+      if ui.MenuItem("Clear sell marks") then M.ClearSell() end
       if ui.MenuItem("Clear locks") then p.locks = {}; save("locks") end
       ui.TextDisabled("A bag's filter: the button at its top left")
       ui.EndPopup()
@@ -286,7 +348,8 @@ end
 -- A banner while a marking mode is on, across x0..x1 at y (20 high); a click on it ends the mode. Returns its height.
 function M.ModeBanner(id, x0, x1, y, s)
   if not S.mode then return 0 end
-  local text = S.mode == "junk" and "Marking junk: click items (again to unmark). Click here when done"
+  local text = S.mode == "junk" and "Marking to sell: click items (again to unmark). Click here when done"
+    or S.mode == "keep" and "Marking to keep: click items (again to unmark). Click here when done"
     or "Locking slots: click bag slots (again to unlock). Click here when done"
   if T.Hit(id .. "banner", x0, y, x1, y + 20 * s) then S.mode = nil end
   ui.DrawRectFilled(x0, y, x1, y + 20 * s, C.gold[1], C.gold[2], C.gold[3], 0.16, 5 * s)

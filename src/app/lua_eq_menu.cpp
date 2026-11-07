@@ -78,6 +78,7 @@ const char* toggle_command_window(int command) {
     for (auto [c, screen] : kToggles)
         if (command == static_cast<int>(c)) return screen;
     if (command == kAbilityBookCommand) return "AbilityBookWnd";
+    if (command == kInventoryManagerCommand) return "InventoryManagerWnd";
     return nullptr;
 }
 
@@ -241,12 +242,15 @@ void CascadeMenu::load_text(std::string_view file, std::uint32_t expansions, std
             left_out.push_back(text);
             continue;
         }
-        // Hailstone: the Ability Book after Combat Abilities, with its icon, when the UI pack draws it.
+        // Hailstone: the Ability Book after Combat Abilities and the Advanced Inventory after Inventory, with their
+        // icons, when the UI pack draws them.
         auto add_row = [&](std::vector<Item>& items) {
             items.push_back({1, icon, text, command, -1});
             if (command == static_cast<int>(game::KeyCommand::CMD_TOGGLE_COMBAT_ABILITY_WIN) &&
                 (!offered || offered(kAbilityBookCommand)))
                 items.push_back({1, icon, "Ability Book", kAbilityBookCommand, -1});
+            if (command == static_cast<int>(game::KeyCommand::INVENTORY) && (!offered || offered(kInventoryManagerCommand)))
+                items.push_back({1, icon, "Advanced Inventory", kInventoryManagerCommand, -1});
         };
         switch (kind) {
         case 1: add_row(menus_[0].items); break;
