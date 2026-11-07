@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview
 - Rain and snow fall again. In zones with a ceiling over the sky, such as East Commonlands, every drop and flake used to land the moment it appeared, so none were ever seen. Snowflakes in the modern lighting now show as specks in the distance instead of fading to nothing
 - For server plugins: a new switch, `solo_adventure`, lets an adventure recruiter's Request go out when you are in no group or raid, for servers that take solo adventures (Project Triune's add-on turns it on). Without it the client still says "You must be in a group or raid to request an adventure." and sends nothing, since a stock server ignores a solo request
 - Nektulos Forest and the Arena no longer show stray flames and smoke floating in mid-air: they were the torches and campfires of the live client's revamped zone of the same name, placed in the old one

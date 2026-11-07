@@ -937,6 +937,7 @@ if(NMSC_BUILD_TESTS)
     tests/auto_inventory_ui_test.cpp
     tests/inventory_bags_key_test.cpp
     tests/parcel_money_ui_test.cpp
+    tests/point_merchant_inspect_ui_test.cpp
     tests/trader_shop_test.cpp
     tests/blocked_buffs_ui_test.cpp
     tests/own_hp_test.cpp

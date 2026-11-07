@@ -280,8 +280,8 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   tracking.lua; shared pieces in `lib/markets.lua`): the bazaar trader (wares as slots, the price as coin buttons,
   begin / end trading, add / remove, the activity text), the bazaar search (filters as keyboard fields and pickers,
   results where A buys and Y inspects) and its purchase confirmation; the barter buyer (item, offer and buy-line
-  pages), a buyer's window and the barter search; the point and adventure merchants (buy, and a sell page with your
-  bags); the mercenary merchant, manager and info; the guild bank (bank and deposits pages, with your bags to
+  pages), a buyer's window and the barter search; the point and adventure merchants (buy, Y inspects a good, and a sell
+  page with your bags); the mercenary merchant, manager and info; the guild bank (bank and deposits pages, with your bags to
   deposit from); a guildmaster's training (X trains, Y changes the order); and tracking (con filters, options, A
   tracks). A stock edit box is a button that opens the on-screen keyboard, a drop-down a button that opens a list
   of its choices. The main menu's **Bazaar** tile opens the bazaar search. Testing: `test.show=<screen>,...`
