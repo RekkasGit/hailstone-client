@@ -575,8 +575,8 @@ end)
 The Modern pack's AA window is a library as well (`ui/modern/lib/aa.lua`): `aa.window{row = {width = n, draw =
 fn(r, x0, y0, x1, y1, s), style = fn(r)}, details = fn(sel, x, y, w, s), banner = fn(x, y, w, s)}`. `row` works as
 the extended target window's (`style` can outline a row or put a small label after its name); `r` has the ability's
-`name`, `rank`, `max`, `cost` (the next rank's, as text), `category`, `trainable`, `maxed` and `page` (the tab,
-0-based). `details` draws a part under the selected ability's requirements (`sel`: `id`, `name`, `rank`, `max`,
+`name`, `rank`, `max`, `cost` (the next rank's, as text), `category`, `trainable`, `maxed` and `page` (the
+ability's tab, 0-based: the window lists every tab's abilities as one list). `details` draws a part under the selected ability's requirements (`sel`: `id`, `name`, `rank`, `max`,
 `cost`) and `banner` a strip under the header; each returns the height it took. Rows carry no ability id: match `r.name`
 to `hailstone.alt_abilities()`'s names (an ability's ranks share theirs). A window named "Alternate Advancement" that
 calls it covers the pack's, as above.
