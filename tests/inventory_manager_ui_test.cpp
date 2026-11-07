@@ -35,7 +35,7 @@ void frame(ui::lua::LuaUi& lua) {
     ImGui::Render();
 }
 
-std::string read_file(const fs::path& p) {
+std::string file_text(const fs::path& p) {
     std::ifstream in(p, std::ios::binary);
     std::ostringstream ss;
     ss << in.rdbuf();
@@ -149,7 +149,7 @@ TEST_CASE("Kept items: not destroyed or dropped, and kept per character in kept_
         conn.set_item_kept(1002, "Rations", true);
         fs::path file = conn.own_files().kept_items();
         REQUIRE(fs::exists(file));
-        CHECK(read_file(file).find("\n1002 Rations\n") != std::string::npos);
+        CHECK(file_text(file).find("\n1002 Rations\n") != std::string::npos);
 
         // the whole stack onto the cursor
         conn.click_slot(net::ItemSlot::possessions(net::kSlotGeneral1), true);
