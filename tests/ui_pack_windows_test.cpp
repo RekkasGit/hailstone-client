@@ -737,7 +737,7 @@ local out = {}
 for _, t in ipairs(eq.WindowList('AAWindow', 'ModernList') or {}) do out[#out + 1] = table.concat(t, '|') end
 return table.concat(out, ';'))lua") == LUA_OK);
         CHECK(std::string(lua_tostring(L, -1)) ==
-              "Innate Strength|0/3|2||1||0;Mystical Shielding|0/3|5|Defense|3|The Planes of Power|1");
+              "Innate Strength|0/3|2||1||0|0;Mystical Shielding|0/3|5|Defense|3|The Planes of Power|1|5");
         lua_settop(L, 0);
         REQUIRE(luaL_dostring(L, "eq.ShowWindow('AAWindow', true)") == LUA_OK);
         s.frames(3);
@@ -771,6 +771,116 @@ return table.concat(out, ';'))lua") == LUA_OK);
         REQUIRE(lua_pcall(L, 0, 1, 0) == LUA_OK);
         CHECK(lua_tointeger(L, -1) >= 1);
         lua_settop(L, 0);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// The modern AA window's list starts sorted by name, A to Z (not the game's order); a click on a column's head sorts
+// by that column and a second click the other way; dragging a head moves the column. Both are kept as settings.
+TEST_CASE("UI packs (modern): the AA list sorts by name, by a clicked head, and a head drags to move its column") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    nmsc::test::ScratchDir dir_scratch("ui_pack_aa_sort_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    std::ofstream(dir / "game" / "dbstr_us.txt") << "9001^1^Innate Strength^0^\n9002^1^Mystical Shielding^0^\n";
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    fs::create_directories(dir / "plug");
+    // the row part records the rows in the order drawn, the part's left edge and the first row's top
+    std::ofstream(dir / "plug" / "aa_sort.lua") << R"lua(
+local aa = dofile("lib/aa.lua")
+drawn, px, top = {}, 0, 1e9
+ui.window("Alternate Advancement", function()
+  drawn, top = {}, 1e9
+  aa.window({ row = { width = 20, draw = function(r, x0, y0)
+    drawn[#drawn + 1] = r.name
+    px, top = x0, math.min(top, y0)
+  end } })
+end)
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* pixels = nullptr;
+    int tw = 0, th = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &tw, &th);
+    {
+        Session s(dir, "modern");
+        net::PlayerProfile pp;
+        pp.class_ = 2;
+        pp.level = 60;
+        s.conn.set_profile_for_test(pp);
+        // the game's order: Mystical Shielding (General) before Innate Strength (Class)
+        for (auto [id, title, cost, type] : {std::tuple{100u, 9002, 2, 1}, std::tuple{200u, 9001, 5, 3}}) {
+            game::AltAbility a;
+            a.id = id;
+            a.group = static_cast<std::int32_t>(id / 10);
+            a.rank = 1;
+            a.max_rank = 3;
+            a.cost = cost;
+            a.level_req = 10;
+            a.classes = 1u << 2;
+            a.type = type;
+            a.title_sid = title;
+            a.prereq_groups = {0};
+            a.prereq_ranks = {0};
+            s.conn.receive_zone_packet_for_test(net::encode_send_aa_table(a));
+        }
+        s.lua.set_folders({{"plug", dir / "plug"}});
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('AAWindow', true)") == LUA_OK);
+        s.frames(3);
+        REQUIRE(ImGui::FindWindowByName("UI errors") == nullptr);
+        auto read = [&](double& part_x, double& top_y) {
+            REQUIRE(luaL_loadstring(L, "return table.concat(drawn, ','), px, top") == LUA_OK);
+            s.lua.push_folder_env_for_test("plug");
+            lua_setupvalue(L, -2, 1);
+            REQUIRE(lua_pcall(L, 0, 3, 0) == LUA_OK);
+            std::string out = lua_tostring(L, -3) ? lua_tostring(L, -3) : "";
+            part_x = lua_tonumber(L, -2);
+            top_y = lua_tonumber(L, -1);
+            lua_settop(L, 0);
+            return out;
+        };
+        // (the window is the script's, so its settings are the script's own: "plugin.<tag>.<key>")
+        auto setting = [&](const char* key) {
+            REQUIRE(luaL_dostring(L, (std::string("return ui.GetSetting('plugin.plug.") + key + "') or ''").c_str()) ==
+                    LUA_OK);
+            std::string v = lua_tostring(L, -1);
+            lua_settop(L, 0);
+            return v;
+        };
+        double part_x = 0, top_y = 0;
+        CHECK(read(part_x, top_y) == "Innate Strength,Mystical Shielding");
+        // the cost head: right-aligned at the rows' right (short of the part), its text over the rows' first line
+        const float cost_x = static_cast<float>(part_x) - 8.0f - 19.0f;
+        const float head_y = static_cast<float>(top_y) - 10.0f;
+        auto click = [&](float x, float y) {
+            ImGui::GetIO().AddMousePosEvent(x, y);
+            s.frames(1);
+            ImGui::GetIO().AddMouseButtonEvent(0, true);
+            s.frames(1);
+            ImGui::GetIO().AddMouseButtonEvent(0, false);
+            s.frames(2);
+        };
+        click(cost_x, head_y);
+        CHECK(setting("aa.sort") == "cost:asc");
+        CHECK(read(part_x, top_y) == "Mystical Shielding,Innate Strength");
+        click(cost_x, head_y);
+        CHECK(setting("aa.sort") == "cost:desc");
+        CHECK(read(part_x, top_y) == "Innate Strength,Mystical Shielding");
+        // dragged left of every head, the cost column goes first; the drag does not sort
+        ImGui::GetIO().AddMousePosEvent(cost_x, head_y);
+        s.frames(1);
+        ImGui::GetIO().AddMouseButtonEvent(0, true);
+        s.frames(1);
+        for (int i = 1; i <= 10; ++i) {
+            ImGui::GetIO().AddMousePosEvent(cost_x - static_cast<float>(i) * 60.0f, head_y);
+            s.frames(1);
+        }
+        ImGui::GetIO().AddMouseButtonEvent(0, false);
+        s.frames(2);
+        CHECK(setting("aa.columns").starts_with("cost,name,"));
+        CHECK(setting("aa.sort") == "cost:desc");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);
 }
