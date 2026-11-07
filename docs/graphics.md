@@ -662,10 +662,13 @@ specks against the sky.
   sampled with a 1.5-texel normal offset and 3 x 3 hardware-filtered comparisons, fading out over the last 15 %. The
   sun term of the zone, character and object shaders is multiplied by it.
 
-- **Ambient occlusion** (`shaders/ao.frag`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
+- **Ambient occlusion** (`shaders/ao.frag`, `shaders/ao_kernel.glsl`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
   the resolved depth: view positions rebuilt from the reverse-Z projection terms, the normal from the nearer
   neighbour on each axis, 12 samples on a spiral within 4 world units (more smears the ground under characters) (at most a tenth of the screen height),
-  turned by a 4 x 4 ordered pattern; the post pass averages the 4 x 4 block weighted by depth and darkens the scene
+  turned by a 4 x 4 ordered pattern; each sample takes the bounded angular kernel (cubic distance falloff times the
+  sample's horizon above the surface), and at close range the kernel's world-space radius shrinks to the pixel cap's
+  own world size, so near samples cannot darken out of proportion. An angular bias of 0.1 keeps almost coplanar
+  samples from shadowing themselves; the post pass averages the 4 x 4 block weighted by depth and darkens the scene
   by it (strength 0.85) before the exposure. Applied to everything, not to the ambient alone (there is no depth
   prepass), so it is kept to contact shadows.
 

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
+- Looking closely at a character no longer shades its face in dark polygon-shaped patches (modern lighting): the ambient occlusion gave very near samples too much weight at close range, so low-poly faces darkened in big triangles; near samples now fade with distance and count only by their angle above the surface
 
 ## 0.5.0-beta (2026-11-05)
 

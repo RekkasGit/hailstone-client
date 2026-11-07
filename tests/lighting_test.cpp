@@ -3,6 +3,7 @@
 
 #include <cmath>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
 #include "assets/model.h"
@@ -20,6 +21,17 @@
 #include "render/weather_renderer.h"
 
 using namespace nmsc;
+
+// The shader's own kernel, compiled as C++ with GLM's float operations (shaders/ao_kernel.glsl).
+namespace ao_kernel_test {
+using glm::vec3;
+using glm::dot;
+using glm::min;
+using glm::max;
+using glm::clamp;
+using glm::inversesqrt;
+#include "../shaders/ao_kernel.glsl"
+}
 
 TEST_CASE("select_lights: dynamic lights first, then the zone's nearest, within range and the cap") {
     std::vector<assets::PointLight> zone{
@@ -625,4 +637,49 @@ TEST_CASE("ambient probe: the baked light of the place, nearest surfaces first; 
     CHECK(step.w > 1.0f);
     CHECK(step.w < 1.9f);
     CHECK(blend.update(probe.sample(glm::vec3(1000.0f)), 0.1f) == blend.update(probe.sample(glm::vec3(1000.0f)), 0.1f));
+}
+
+TEST_CASE("ao kernel radius: the world radius far off, the pixels' own size capped close up") {
+    // Far off the 72 px cap never bites: 24 px, and the world radius comes back out.
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, 24.0f, 100.0f, 0.6f, 720.0f) == doctest::Approx(4.0f));
+    // Close up the cap governs: 1200 px cut to 72, the kernel shrinks to those pixels' world size.
+    float r_px = glm::min(4.0f / (2.0f * 0.6f) * 0.5f * 720.0f, 72.0f);
+    CHECK(r_px == doctest::Approx(72.0f));
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, r_px, 2.0f, 0.6f, 720.0f) == doctest::Approx(0.24f));
+    // The same view in more pixels: doubling both keeps the world radius.
+    CHECK(ao_kernel_test::ao_kernel_radius(4.0f, 50.0f, 10.0f, 0.6f, 720.0f) ==
+          doctest::Approx(ao_kernel_test::ao_kernel_radius(4.0f, 100.0f, 10.0f, 0.6f, 1440.0f)));
+}
+
+TEST_CASE("ao sample: flat, convex and distant samples occlude nothing; a concave one does") {
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(1.0f, 0.0f, 0.0f), n, 4.0f, 0.01f) == 0.0f); // coplanar
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, -1.0f), n, 4.0f, 0.01f) == 0.0f); // behind
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 10.0f), n, 4.0f, 0.01f) == 0.0f); // past the radius
+    // Nearly coplanar facets must not acquire contact shadows from their tiny angle alone.
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(1.0f, 0.0f, 0.05f), n, 4.0f, 0.0f) == 0.0f);
+    float corner = ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 1.0f), n, 4.0f, 0.01f);
+    CHECK(corner > 0.0f);
+    CHECK(corner <= 1.0f);
+    // A zero offset stays finite, and more bias only takes occlusion away.
+    CHECK(ao_kernel_test::ao_sample(glm::vec3(0.0f), n, 4.0f, 0.0f) == 0.0f);
+    CHECK(std::isfinite(ao_kernel_test::ao_sample(glm::vec3(0.0f), n, 4.0f, 0.01f)));
+    float biased = ao_kernel_test::ao_sample(glm::vec3(0.0f, 0.0f, 1.0f), n, 4.0f, 0.5f);
+    CHECK(biased > 0.0f);
+    CHECK(biased < corner);
+}
+
+TEST_CASE("ao sample: dimensionless, so one shape at any scale occludes the same") {
+    const glm::vec3 n(0.0f, 0.0f, 1.0f), o(1.0f, 2.0f, 2.0f);
+    float a = ao_kernel_test::ao_sample(o, n, 6.0f, 0.06f);
+    CHECK(a > 0.0f);
+    CHECK(ao_kernel_test::ao_sample(o * 2.5f, n, 15.0f, 0.15f) == doctest::Approx(a));
+    CHECK(ao_kernel_test::ao_sample(o * 0.1f, n, 0.6f, 0.006f) == doctest::Approx(a));
+}
+
+TEST_CASE("ao visibility: open, shaded and closed stay within [0, 1]") {
+    CHECK(ao_kernel_test::ao_visibility(0.0f, 4.0f, 12.0f) == doctest::Approx(1.0f));
+    float part = ao_kernel_test::ao_visibility(1.5f, 4.0f, 12.0f);
+    CHECK(part == doctest::Approx(0.5f));
+    CHECK(ao_kernel_test::ao_visibility(12.0f, 4.0f, 12.0f) == 0.0f);
 }
