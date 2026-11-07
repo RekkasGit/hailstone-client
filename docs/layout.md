@@ -42,6 +42,8 @@ hailstone/
                              UI.ini, hotbuttons.ini, BZR.ini, BART.ini (buy lines), btrlog.txt (barter
                              log), AddressBook.txt, IgnoreList.txt, GuildNotes.txt, chat.ini, options.ini,
                              scripts.ini (the Lua scripts started for this character: the Scripts window's Autorun);
+                             kept_items.txt (the items marked Keep in the Advanced Inventory window, one
+                             "<item id> <name>" a line; game/kept_items.h);
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
                              opacity, locks: the `hud.*` settings);
                              eqlog.txt (or /log on <name>: <name>.txt), the chat log; plugin-config/<plugin>/ a

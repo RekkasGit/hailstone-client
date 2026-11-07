@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New Advanced Inventory window (EQ menu > Inventory, or the button at the bottom of the inventory window): everything you wear, carry and have in the bank and shared bank in one list or grid, with search, filters (place, kind, marks, usable by you, magic, lore, no trade, temporary, stackable, sellable), sorting and each item's value and weight. Its icons work like a bag's slots: pick up, drop, swap, right-click to use, hold to inspect, drag to a hot bar (bank items while the bank is open)
+- Items can be marked Keep or Sell in the Advanced Inventory (one at a time, or everything shown at once). A kept item cannot be destroyed, dropped, traded, given to an NPC, sold or sent by parcel until you take the mark off; the merchant's "Sell marked" (formerly "Sell junk") sells what is marked Sell. Keep marks are saved per character
+- The inventory window's search field, Stack / Sort buttons and ... menu moved to the Advanced Inventory; the inventory window has an Advanced Inventory button instead
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times

@@ -50,8 +50,8 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
     const auto& world = conn_->world();
     const game::mechanics::Character* ch = stats_ui_ ? stats_ui_->character() : nullptr;
     int cmd = e.command;
-    if (cmd == kAbilityBookCommand) { // the EQ menu's Ability Book (Hailstone's own)
-        if (eq_api_) eq_api_->toggle("AbilityBookWnd");
+    if (cmd == kAbilityBookCommand || cmd == kInventoryManagerCommand) { // the EQ menu's windows of Hailstone's own
+        if (eq_api_) eq_api_->toggle(toggle_command_window(cmd));
         return;
     }
     if (cmd >= game::kChatKeyFirst) {
