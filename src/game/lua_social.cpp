@@ -11,6 +11,8 @@ namespace {
 constexpr std::string_view kHeader = "-- Hailstone Lua social";
 constexpr std::string_view kPress = "-- [press]";
 constexpr std::string_view kFace = "-- [face]";
+constexpr std::string_view kLines = "-- [lines]";
+constexpr std::size_t kMaxLines = 5, kMaxLine = 255; // the social editor's
 
 std::string normalise(std::string_view text) {
     std::string out;
@@ -81,6 +83,20 @@ std::string format_lua_social(const LuaSocialFile& f) {
     std::string out;
     out += kHeader;
     out += "\n-- name: " + f.name + "\n-- color: " + std::to_string(f.color) + "\n";
+    std::size_t last = 0;
+    for (std::size_t i = 0; i < f.lines.size() && i < kMaxLines; ++i)
+        if (!f.lines[i].empty()) last = i + 1;
+    if (f.lua.empty() && last > 0) {
+        out += kLines;
+        out += '\n';
+        for (std::size_t i = 0; i < last; ++i) {
+            std::string line = normalise(f.lines[i].substr(0, kMaxLine));
+            for (char& c : line)
+                if (c == '\n') c = ' '; // (a line holds no line end)
+            out += line + '\n';
+        }
+        return out;
+    }
     out += kPress;
     out += '\n';
     std::string press = std::string(trim_end(normalise(f.lua.press)));
@@ -98,6 +114,7 @@ std::optional<LuaSocialFile> parse_lua_social(std::string_view given) {
     std::string text = normalise(given);
     LuaSocialFile f;
     std::string* into = nullptr;
+    bool lines = false; // in the "-- [lines]" section
     bool any = false;
     std::size_t at = 0;
     while (at <= text.size()) {
@@ -108,10 +125,19 @@ std::optional<LuaSocialFile> parse_lua_social(std::string_view given) {
         std::string_view t = trim(line);
         if (t == kPress) {
             into = &f.lua.press;
+            lines = false;
             any = true;
         } else if (t == kFace) {
             into = &f.lua.face;
+            lines = false;
             any = true;
+        } else if (t == kLines) {
+            into = nullptr;
+            lines = true;
+            any = true;
+        } else if (lines) {
+            if (end == text.size() && line.empty()) break; // (the end after the last line's line end)
+            f.lines.emplace_back(line.substr(0, kMaxLine));
         } else if (into) {
             *into += line;
             *into += '\n';
@@ -124,6 +150,9 @@ std::optional<LuaSocialFile> parse_lua_social(std::string_view given) {
         if (end == text.size()) break;
     }
     if (!any) return std::nullopt;
+    while (!f.lines.empty() && f.lines.back().empty()) f.lines.pop_back();
+    if (f.lines.size() > kMaxLines) f.lines.resize(kMaxLines);
+    if (!f.lua.empty()) f.lines.clear();
     f.lua.press = std::string(trim_end(f.lua.press));
     f.lua.face = std::string(trim_end(f.lua.face));
     if (f.name.size() > 15) f.name.resize(15);

@@ -168,7 +168,7 @@ bool HotButtonStore::save_lua(const std::filesystem::path& dir) const {
             std::filesystem::remove(path, ec);
             continue;
         }
-        std::string text = format_lua_social({s.name, s.color, s.lua});
+        std::string text = format_lua_social({s.name, s.color, s.lua, {}});
         std::ifstream in(path, std::ios::binary);
         if (in && std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()) == text) continue;
         in.close();

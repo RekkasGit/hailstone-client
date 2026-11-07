@@ -179,6 +179,30 @@ std::string from(const std::string& text, char what) {
 
 } // namespace
 
+SocialLineParts split_social_line(const std::string& text) {
+    SocialLineParts out;
+    std::string cmd = text;
+    for (;;) {
+        if (cmd.empty()) break;
+        if (starts_with_nocase(cmd, "/pause")) {
+            cmd = from(cmd, ' ');
+            std::int32_t n = core::msvc_atoi(cmd);
+            out.pause = n > 600 ? 600 : (n < 1 ? 1 : n);
+        } else if (starts_with_nocase(cmd, "/timer")) {
+            cmd = from(cmd, ' ');
+            std::int32_t n = core::msvc_atoi(cmd);
+            out.timers.push_back(n > 360000 ? 360000 : (n < 0 ? 0 : n));
+        } else {
+            break;
+        }
+        cmd = from(cmd, ',');
+        if (cmd.empty()) break;
+        if (cmd.size() > 1) cmd = cmd.substr(1);
+    }
+    out.command = std::move(cmd);
+    return out;
+}
+
 void social_passage_of_time(SocialQueue& s, std::uint32_t now_ms, SocialRunQueries& q) {
     if (now_ms - s.last_tick <= 100) return;
     s.last_tick = now_ms;
@@ -203,27 +227,11 @@ void social_passage_of_time(SocialQueue& s, std::uint32_t now_ms, SocialRunQueri
         while (line < 5 && text(line).empty()) ++line;
         pause = s.pause;
         if (line < 5) {
-            pause = 1;
-            std::string cmd = text(line);
-            for (;;) {
-                if (cmd.empty()) break;
-                if (starts_with_nocase(cmd, "/pause")) {
-                    cmd = from(cmd, ' ');
-                    std::int32_t n = core::msvc_atoi(cmd);
-                    pause = n > 600 ? 600 : (n < 1 ? 1 : n);
-                } else if (starts_with_nocase(cmd, "/timer")) {
-                    cmd = from(cmd, ' ');
-                    std::int32_t n = core::msvc_atoi(cmd);
-                    n = n > 360000 ? 360000 : (n < 0 ? 0 : n);
-                    if (n * 100 > 0 && !q.cooldown_running(social)) q.start_cooldown(social, n * 100);
-                } else {
-                    break;
-                }
-                cmd = from(cmd, ',');
-                if (cmd.empty()) break;
-                if (cmd.size() > 1) cmd = cmd.substr(1);
-            }
-            if (!cmd.empty()) q.interpret(cmd);
+            SocialLineParts parts = split_social_line(text(line));
+            pause = parts.pause.value_or(1);
+            for (std::int32_t n : parts.timers)
+                if (n * 100 > 0 && !q.cooldown_running(social)) q.start_cooldown(social, n * 100);
+            if (!parts.command.empty()) q.interpret(parts.command);
             ++line;
         }
     } else {

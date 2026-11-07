@@ -978,6 +978,8 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   nothing; then by type (see the header). Types 2 / 3 hold an index into the Actions window's [CombatSkills] /
   [Abilities] lists, type 9 a skill id. A social (4) is only queued: the periodic update runs one line per step (after
   a line one step waits; /pause N waits N, /timer N starts the display cooldown), 120 + n runs /alternateadv act n.
+  Only the comma after a prefix is skipped, so a second prefix follows it with no space (`/timer 600,/pause 10, /cast
+  1`); after `, ` the rest is the command (`game::split_social_line`, which the social editor reads lines with too).
 - The hotbutton's mouse and menu (`game/hot_button_menu.*`): a left or quick right click on an empty button opens
   the menu unless the cursor holds something; a quick right click (on release) of a filled one activates it except on
   items; the right button held 500 ms opens it on any button. Its rows are shown or hidden by the button (not

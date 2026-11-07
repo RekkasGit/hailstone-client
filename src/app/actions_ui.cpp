@@ -100,6 +100,15 @@ void ActionsUi::reload_keymap() {
 
 ActionsUi::~ActionsUi() { save_character(); }
 
+void ActionsUi::press_social(std::int32_t social) {
+    if (social < 0 || social >= game::kSocialCount) return;
+    if (store_.social(social).is_lua()) {
+        if (hooks_.press_lua_social) hooks_.press_lua_social(social, -1, -1);
+        return;
+    }
+    social_queue_.current = social; // (the line and pause counters stay, as a hot button's press leaves them)
+}
+
 std::vector<game::KeyMap::Event> ActionsUi::process_keys(const platform::InputState& in, bool keyboard_free) {
     std::vector<game::KeyMap::Event> out;
     auto combo = [&](std::uint8_t code) {

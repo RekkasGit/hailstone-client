@@ -266,7 +266,9 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   ui/settings/gamepad.txt.
 - **Social and other windows** standing in for their stock windows child by child (lib/child.lua: buttons, check
   boxes as toggles, drop-downs as a list of their choices, edit boxes typed on the on-screen keyboard, lists as
-  W.list): inspect, leadership and group mentoring, Looking for Guild (LB / RB pages), the social editor and
+  W.list): inspect, leadership and group mentoring, Looking for Guild (LB / RB pages), the social editor (each line's
+  field says what its command is; Wait after picks its /pause; More: the cooldown, Copy / Paste share text, Edit as
+  Lua; Test, which saves and presses it, Stop while it runs; Hot bar, through the slot picker) and
   Hailstone's Lua social editor (the code as lines: A types one with a row of code keys, X adds, Y deletes; or the
   text editor for a real keyboard), the address book and the ignore list (X adds a name to an open message's To;
   the mail windows' Address Book opens it), raid options, the combat abilities list (Make Hotkey goes through the

@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace nmsc::game {
 
@@ -154,6 +155,17 @@ public:
     virtual bool cooldown_running(std::int32_t social) = 0;
     virtual void start_cooldown(std::int32_t social, std::int32_t length_ms) = 0;
 };
+// A social line as DoPassageOfTime reads it: any number of leading "/pause N" and "/timer N" (case-insensitive),
+// each followed by the rest of the line after a comma, then the command for the interpreter. A line's wait is the
+// last /pause (1..600 steps; 1 without one), each /timer starts the cooldown (0..360000 tenths of a second) unless
+// one is running. The social editor shows a line this way too.
+struct SocialLineParts {
+    std::optional<std::int32_t> pause;
+    std::vector<std::int32_t> timers;
+    std::string command; // empty: the line runs nothing (it may still wait)
+};
+SocialLineParts split_social_line(const std::string& text);
+
 // CharacterZoneClient::DoPassageOfTime's social step, run when more than 100 ms passed since the last one: an
 // ability as "/alternateadv act <group>"; a social one line per step (empty lines skipped), after which one step
 // waits; "/pause N" waits N steps (1..600) and "/timer N" starts the cooldown of N tenths of a second

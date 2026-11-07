@@ -141,6 +141,7 @@ struct EqHost {
     std::function<bool()> autoskill_held;
     // The social editor (SocialEditWnd, FUN_00758bb0) on social 0..119; EqApi sets it.
     std::function<void(std::int32_t social)> open_social_editor;
+    int social_editing = -1; // the social SocialEditWnd is open on (0..119), -1 while it is closed
     // Lua socials (app/lua_eq_luasocial.cpp): the script host they run in, MQ's TLOs for the editor's completion, and
     // a request to open the Lua social editor on social 0..119 (-1 none; the editor window takes it).
     mq::ScriptHost* scripts = nullptr;

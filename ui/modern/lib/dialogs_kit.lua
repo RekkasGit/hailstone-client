@@ -1,6 +1,6 @@
 -- Small pieces the modern dialogs share (confirmations, the server's text dialogs, text entry, books and notes, the
 -- alarm, tints and the colour picker, the bug report, claims): a text box over an STML or plain-text child, colour
--- swatches over a child's decal tint, the footer's button height and a centred first place. Like lib/widgets.lua,
+-- swatches over a child's decal tint, a mode switch (K.Segmented), the footer's button height and a centred first place. Like lib/widgets.lua,
 -- what they show is the original child's and their clicks go to it.
 --
 --   local K = dofile("lib/dialogs_kit.lua")
@@ -89,6 +89,32 @@ end
 function K.Hex(r, g, b)
   local function p(v) return math.floor(math.max(0, math.min(1, v)) * 255 + 0.5) end
   return string.format("#%02X%02X%02X", p(r), p(g), p(b))
+end
+
+-- Two or more buttons as one control (a mode switch): `selected` lit; returns the index clicked, nil for none or the
+-- selected one. tips: a tooltip for each.
+function K.Segmented(id, items, selected, w, h, s, tips)
+  local hit = nil
+  local x, y = ui.GetCursorScreenPos()
+  local bw = w / #items
+  local a = C.accent
+  ui.DrawRectFilled(x, y, x + w, y + h, C.inset[1], C.inset[2], C.inset[3], C.inset[4] or 1, 6 * s)
+  for i, label in ipairs(items) do
+    local bx = x + (i - 1) * bw
+    ui.SetCursorScreenPos(bx, y)
+    if ui.InvisibleButton(id .. i, bw, h) and i ~= selected then hit = i end
+    local hovered = ui.IsItemHovered()
+    if i == selected then
+      ui.DrawRectFilled(bx + 2 * s, y + 2 * s, bx + bw - 2 * s, y + h - 2 * s, a[1], a[2], a[3], 0.35, 5 * s)
+    elseif hovered then
+      ui.DrawRectFilled(bx + 2 * s, y + 2 * s, bx + bw - 2 * s, y + h - 2 * s, C.text[1], C.text[2], C.text[3], 0.07,
+        5 * s)
+    end
+    local tw, th = T.TextSize(label, T.font.small)
+    T.Text(bx + (bw - tw) / 2, y + (h - th) / 2, label, i == selected and C.text or C.muted, T.font.small)
+    if hovered and tips and tips[i] then ui.SetTooltip(tips[i]) end
+  end
+  return hit
 end
 
 -- A label in the muted caption colour.

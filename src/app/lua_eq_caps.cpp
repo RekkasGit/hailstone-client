@@ -61,6 +61,7 @@ constexpr Entry kCalls[] = {
     {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
     {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},
     {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"LuaSocialEditRequest", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
+    {"SocialEditorSocial", 0}, {"SocialLine", 0}, {"SlashCommands", 0}, {"CurrentSocial", 0},
     {"gamepad.connected", 0}, {"gamepad.type", 0}, {"gamepad.down", 0}, {"gamepad.pressed", 0},
     {"gamepad.released", 0}, {"gamepad.axis", 0}, {"gamepad.mode", 0}, {"gamepad.cross_set", 0},
     {"gamepad.cross_slot", 0}, {"gamepad.glyph", 0}, {"gamepad.binding", 0}, {"gamepad.setting", 0},
@@ -105,7 +106,8 @@ constexpr Entry kCalls[] = {
     {"ClaimAllParcels", kCapActions}, {"AbilityBookUse", kCapActions}, {"AbilityBookAutoskillEnable", kCapActions},
     {"UseSkill", kCapActions}, {"SpellBookClick", kCapActions}, {"SpellBookMemorize", kCapActions},
     {"SpellBookSwap", kCapActions}, {"MemorizeSpellSet", kCapActions}, {"SocialToCursor", kCapActions},
-    {"PressLuaSocial", kCapActions}, {"gamepad.drop_cursor", kCapActions},
+    {"PressLuaSocial", kCapActions}, {"PressSocial", kCapActions}, {"StopSocial", kCapActions},
+    {"gamepad.drop_cursor", kCapActions},
     // A social's Lua is code the player's key press runs later; a dry run runs the code it is given, with the server's
     // Lua social capabilities
     {"SetLuaSocial", kCapCommands | kCapActions}, {"LuaSocialDryRun", kCapCommands | kCapActions},
