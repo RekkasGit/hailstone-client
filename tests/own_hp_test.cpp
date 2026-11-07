@@ -56,7 +56,8 @@ TEST_CASE("Own HP: the windows add the items' HP that EQEmu's HP update leaves o
     tables.class_levels.parse(kBaseData);
     tables.skill_caps.parse(kSkillCaps);
     mech::SpellLookup no_spells = [](std::int32_t) -> const game::SpellData* { return nullptr; };
-    mech::Character ch(warrior_with(262), tables, no_spells);
+    mech::CharacterSheet sheet = warrior_with(262); // Character keeps a reference to its sheet
+    mech::Character ch(sheet, tables, no_spells);
     ch.process_all_stats();
     REQUIRE(ch.stats().hp_bonus == 262);
 
