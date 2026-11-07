@@ -289,18 +289,19 @@ public:
     }
     // Not in the stock layout: the four tabs' lists as one, for the Modern UI's AA window (ui/modern/lib/aa.lua),
     // each tab's rows in the stock order. The columns are the stock lists' (title, cur/max, cost, category) and then
-    // the tab (the ability's type, 1..4), the expansion it came with (dbstr 0x14, "" none) and "1" for an activated
-    // ability ("0" passive). The category here is dbstr 0x13 alone: the stock column's fallback to the expansion is
-    // the expansion column of its own.
+    // the tab (the ability's type, 1..4), the expansion it came with (dbstr 0x14, "" none), "1" for an activated
+    // ability ("0" passive) and the expansion's number (0 none: the era column sorts by it, in release order). The
+    // category here is dbstr 0x13 alone: the stock column's fallback to the expansion is the expansion column of its
+    // own.
     const ListData& modern_list(EqHost& host) {
         const auto& c = *host.conn;
         const auto& aa = c.alt_adv();
         ListData& d = modern_;
         d = {};
         modern_ids_.clear();
-        d.columns = 7;
-        d.labels = {"Title", "Cur/Max", "Cost", "Category", "Tab", "Era", "Activated"};
-        d.widths = {210, 50, 40, 120, 60, 100, 40};
+        d.columns = 8;
+        d.labels = {"Title", "Cur/Max", "Cost", "Category", "Tab", "Era", "Activated", "Expansion"};
+        d.widths = {210, 50, 40, 120, 60, 100, 40, 40};
         for (int tab = 1; tab <= 4; ++tab)
             for (const game::AltAbility* a : c.aa_list(tab, filter_)) {
                 int cur = aa.has(a->id) ? a->rank : a->rank - 1;
@@ -311,7 +312,8 @@ public:
                            a->category > 0 ? c.strings().db_string(static_cast<std::uint32_t>(a->category), 0x13) : "",
                            std::to_string(tab),
                            a->expansion != 0 ? c.strings().db_string(static_cast<std::uint32_t>(a->expansion), 0x14) : "",
-                           a->activated() ? "1" : "0"};
+                           a->activated() ? "1" : "0",
+                           std::to_string(a->expansion)};
                 r.color = c.aa_can_train(a->id) ? Rgb{1, 1, 1} : argb_to_rgb(0xffc0c0c0);
                 d.rows.push_back(std::move(r));
                 modern_ids_.push_back(a->id);

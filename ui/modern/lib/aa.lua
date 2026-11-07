@@ -2,13 +2,14 @@
 -- experience and the share of experience that goes to it (- / +); one list of every ability on the game's four tabs
 -- (General, Archetype, Class, Special: AAWindow's ModernList, app/lua_eq_progress.cpp), with a search and filters over
 -- all of it (the tab, the category, owned / not owned and the game's own "trainable only"), and columns for the tab,
--- the era (the expansion the ability came with), activated or passive, the rank and the next rank's cost; and the
--- selected ability at the side: its rank, the next rank's cost, the level and the abilities it needs, its reuse
--- time, the game's description, Train (and "all ranks" where the server allows it) and Hotkey. A deliberate
--- difference: the stock window shows one tab's list at a time. Rows are the game's (eq.ListClick selects the
--- ability, so Train and Hotkey act on it; dragging a row puts the ability's hot button on the cursor, as on the stock
--- list); an ability greyed is one the game will not train now. The requirements come from the window's Modern*
--- children.
+-- the era (the expansion the ability came with), activated or passive, the rank and the next rank's cost (a head's
+-- click sorts by it, its drag moves the column; sorted by name to start with, the text a size up from other
+-- windows'); and the selected ability at the side: its rank, the next rank's cost, the level and the abilities it
+-- needs, its reuse time, the game's description, Train (and "all ranks" where the server allows it) and Hotkey.
+-- Deliberate differences: the stock window shows one tab's list at a time, in the game's order. Rows are the game's
+-- (eq.ListClick selects the ability, so Train and Hotkey act on it; dragging a row puts the ability's hot button on
+-- the cursor, as on the stock list); an ability greyed is one the game will not train now. The requirements come from
+-- the window's Modern* children.
 --
 -- A library (as lib/xtarget.lua is), so that a script's window named "Alternate Advancement" can be this one with
 -- parts of its own: dofile("lib/aa.lua").window(opts) draws the whole window; opts (all optional):
@@ -30,6 +31,8 @@ local W = dofile("lib/widgets.lua")
 local P = dofile("lib/progress.lua")
 local T = hud.T
 local C = T.color
+-- The window's text, one size up from the other windows' (EQ UI fonts 3 and 4: 13 and 14 pixels for 12 and 13).
+local F = { tiny = T.font.tiny + 1, small = T.font.small + 1 }
 local WINDOW = "AAWindow"
 local TABS = { "General", "Archetype", "Class", "Special" } -- the stock tabs (the ability's type 1..4)
 local TAB_KEYS = { "1", "2", "3", "4" }                      -- ModernList's tab column
@@ -114,17 +117,17 @@ local function header(x, y, w, s)
   local gx = x + 2 * tileW + 16 * s
   local gw = w - (gx - x)
   local frac, text = eq.Gauge(5)
-  T.Text(gx, y + 3 * s, "AA experience", C.muted, T.font.small)
-  local ew = T.TextSize("AA experience", T.font.small)
+  T.Text(gx, y + 3 * s, "AA experience", C.muted, F.small)
+  local ew = T.TextSize("AA experience", F.small)
   T.Text(gx + ew + 8 * s, y + 3 * s, frac and string.format("%.1f%%", frac * 100) or (text or ""), C.text,
-    T.font.small)
+    F.small)
   local bw, pctW = 22 * s, 42 * s
   local bx = gx + gw - (2 * bw + pctW)
-  T.Text(bx - 6 * s, y + 3 * s, "To AA", C.faint, T.font.small, "right")
+  T.Text(bx - 6 * s, y + 3 * s, "To AA", C.faint, F.small, "right")
   ui.SetCursorScreenPos(bx, y + 1 * s)
   LESS_BUTTON.width, LESS_BUTTON.height = bw, 18 * s
   W.Button(WINDOW, "LessExpButton", "-", LESS_BUTTON)
-  T.Text(bx + bw + pctW / 2, y + 3 * s, W.Text(WINDOW, "ExpCount"), C.aa, T.font.small, "center")
+  T.Text(bx + bw + pctW / 2, y + 3 * s, W.Text(WINDOW, "ExpCount"), C.aa, F.small, "center")
   ui.SetCursorScreenPos(bx + bw + pctW, y + 1 * s)
   MORE_BUTTON.width, MORE_BUTTON.height = bw, 18 * s
   W.Button(WINDOW, "MoreExpButton", "+", MORE_BUTTON)
@@ -178,7 +181,7 @@ local catIndex = {}
 local function filters(w, s, rows)
   local seen, cats = categories(rows)
   if category and not seen[category] then category = nil end
-  local checkW = T.TextSize(CAN_PURCHASE_LABEL, T.font.small) + 30 * s
+  local checkW = T.TextSize(CAN_PURCHASE_LABEL, F.small) + 30 * s
   local gap = 6 * s
   local tabW, catW, viewW = math.min(100 * s, w * 0.16), math.min(130 * s, w * 0.2), math.min(110 * s, w * 0.17)
   local searchW = w - tabW - catW - viewW - checkW - 4 * gap
@@ -202,60 +205,259 @@ local function filters(w, s, rows)
   W.Check(WINDOW, "CanPurchaseFilter", CAN_PURCHASE_LABEL, CAN_PURCHASE)
 end
 
-local function accepts(_, texts)
+local opts = nil    -- this frame's window options (M.window)
+local hookRow = {}  -- the row as opts.row's functions see it (kept)
+
+-- ---------------------------------------------------------------- the columns
+-- Each column: its head, its width (design pixels; the name's is what the others leave), how its text and head line
+-- up, and its sort key from a row's texts (one type per column). A head's click sorts by that column (again: the
+-- other way), its drag moves the column; both are kept (settings aa.columns, aa.sort). Narrow, the category goes
+-- first, then the tab. The list starts sorted by name, A to Z.
+local COLUMNS = {
+  name = { head = "ABILITY", tip = "Sort by name; drag to move the column" },
+  category = { head = "CATEGORY", w = 110, drop = 1 },
+  tab = { head = "TAB", w = 62, drop = 2 },
+  era = { head = "ERA", w = 104, tip = "Sort by expansion, in release order; drag to move the column" },
+  kind = { head = "TYPE", w = 52, tip = "Sort activated, then passive; drag to move the column" },
+  rank = { head = "RANK", w = 44, align = "center" },
+  cost = { head = "COST", w = 38, align = "right",
+    tip = "Sort by the next rank's cost (maxed last); drag to move the column" },
+}
+local DEFAULT_ORDER = { "name", "category", "tab", "era", "kind", "rank", "cost" }
+for i, key in ipairs(DEFAULT_ORDER) do
+  local c = COLUMNS[key]
+  c.key, c.home = key, i
+  c.tip = c.tip or ("Sort by " .. c.head:lower() .. "; drag to move the column")
+end
+
+local order = nil         -- the columns' keys, left to right
+local sortKey, sortAsc = "name", true
+local orderVersion = 0    -- bumped when the order changes (the kept layout is then worked out again)
+
+local function loadColumns()
+  order = {}
+  local have = {}
+  for key in (ui.GetSetting("aa.columns") or ""):gmatch("[^,]+") do
+    if COLUMNS[key] and not have[key] then order[#order + 1] = key; have[key] = true end
+  end
+  for _, key in ipairs(DEFAULT_ORDER) do -- (a column the setting does not name: at its default place)
+    if not have[key] then table.insert(order, math.min(#order + 1, COLUMNS[key].home), key) end
+  end
+  local k, dir = (ui.GetSetting("aa.sort") or ""):match("^(%w+):(%a+)$")
+  if k and COLUMNS[k] then sortKey, sortAsc = k, dir ~= "desc" end
+end
+
+local function saveOrder()
+  ui.SetSetting("aa.columns", table.concat(order, ","))
+  orderVersion = orderVersion + 1
+end
+
+local function saveSort()
+  ui.SetSetting("aa.sort", sortKey .. ":" .. (sortAsc and "asc" or "desc"))
+end
+
+-- The columns shown from x0 to x1 (the script's part already taken off), left to right in the chosen order; each
+-- { def, x0, x1 }. Kept: the heads and every row read the same layout while the width and the order stay the same.
+local lay = { n = 0 }
+local layKey0, layKey1, layS, layVersion = nil, nil, nil, -1
+local function columns(x0, x1, s)
+  if x0 == layKey0 and x1 == layKey1 and s == layS and layVersion == orderVersion then return lay end
+  layKey0, layKey1, layS, layVersion = x0, x1, s, orderVersion
+  local pad, gap = 8 * s, 6 * s
+  local hide1, hide2 = false, false
+  local function fixed()
+    local t = 0
+    for _, key in ipairs(order) do
+      local c = COLUMNS[key]
+      if c.w and not (c.drop == 1 and hide1) and not (c.drop == 2 and hide2) then t = t + c.w * s + gap end
+    end
+    return t
+  end
+  local room = (x1 - pad) - (x0 + pad)
+  if room - fixed() < 150 * s then hide1 = true end
+  if room - fixed() < 130 * s then hide2 = true end
+  local nameW = math.max(40 * s, room - fixed())
+  local x, n = x0 + pad, 0
+  for _, key in ipairs(order) do
+    local c = COLUMNS[key]
+    if not (c.drop == 1 and hide1) and not (c.drop == 2 and hide2) then
+      n = n + 1
+      local e = lay[n]
+      if not e then e = {}; lay[n] = e end
+      local w = c.w and c.w * s or nameW
+      e.def, e.x0, e.x1 = c, x, x + w
+      x = x + w + gap
+    end
+  end
+  for k = n + 1, #lay do lay[k] = nil end
+  lay.n = n
+  return lay
+end
+
+-- the x a column's text starts at (left), centres on or ends at (right)
+local function anchor(e)
+  local a = e.def.align
+  if a == "center" then return (e.x0 + e.x1) / 2, a end
+  if a == "right" then return e.x1, a end
+  return e.x0, nil
+end
+
+-- A head: a click sorts by it, a drag moves it (dropped between the two heads nearest the mouse).
+local dragging = nil -- the key of the column being dragged
+local function columnHeads(x0, y, x1, s)
+  local L = columns(x0, x1, s)
+  local f, k = F.tiny, C.faint
+  local _, hh = T.TextSize("Ag", f)
+  local released = nil
+  for i = 1, L.n do
+    local e = L[i]
+    local c = e.def
+    local clicked = T.Hit("##aahead" .. c.key, e.x0 - 3 * s, y - 2 * s, e.x1 + 3 * s, y + hh + 2 * s)
+    local hovered, active = ui.IsItemHovered(), ui.IsItemActive()
+    if active and ui.IsMouseDragging(ui.Mouse.Left) then dragging = c.key end
+    if dragging == c.key and not active then released = c.key end
+    if clicked and dragging ~= c.key then
+      if sortKey == c.key then sortAsc = not sortAsc else sortKey, sortAsc = c.key, true end
+      saveSort()
+    end
+    if hovered and not dragging then ui.SetTooltip(c.tip) end
+    local on = sortKey == c.key
+    if hovered or dragging == c.key then
+      ui.DrawRectFilled(e.x0 - 3 * s, y - 2 * s, e.x1 + 3 * s, y + hh + 2 * s, C.ink[1], C.ink[2], C.ink[3], 0.06,
+        4 * s)
+    end
+    local ax, align = anchor(e)
+    local tw = T.TextSize(c.head, f)
+    local tc = on and C.text or k
+    -- the sort arrow beside the head's text, on the side away from the column's edge
+    local aw = 7 * s
+    local tx = align == "right" and ax - aw - 3 * s or (align == "center" and ax - aw / 2 - 2 * s or ax)
+    T.Text(tx, y, c.head, tc, f, align)
+    if on then
+      local axl = align == "right" and ax - aw or (align == "center" and tx + tw / 2 + 3 * s or tx + tw + 4 * s)
+      local my = y + hh / 2
+      local a = C.accent
+      local d = (sortAsc and 2.5 or -2.5) * s -- (up for A to Z, down the other way)
+      ui.DrawTriangleFilled(axl, my + d, axl + aw, my + d, axl + aw / 2, my - d, a[1], a[2], a[3], 1)
+    end
+  end
+  if dragging then
+    -- where it would go: the gap before the first head whose middle is right of the mouse
+    local mx = ui.GetMousePos()
+    local at = L.n + 1
+    for i = 1, L.n do
+      if mx < (L[i].x0 + L[i].x1) / 2 then at = i; break end
+    end
+    local gx = at <= L.n and L[at].x0 - 3 * s or L[L.n].x1 + 3 * s
+    local a = C.accent
+    ui.DrawLine(gx, y - 3 * s, gx, y + hh + 3 * s, a[1], a[2], a[3], 1, 2 * s)
+    if released then
+      -- the drop place in the whole order (a column hidden while narrow keeps its place before its neighbour)
+      local target = at <= L.n and L[at].def.key or nil
+      local from = nil
+      for i, key in ipairs(order) do if key == released then from = i end end
+      if from and target ~= released then
+        table.remove(order, from)
+        local to = #order + 1
+        if target then
+          for i, key in ipairs(order) do if key == target then to = i end end
+        end
+        table.insert(order, to, released)
+        saveOrder()
+      end
+      dragging = nil
+    elseif not ui.IsMouseDown(ui.Mouse.Left) then
+      dragging = nil
+    end
+  end
+end
+
+-- ---------------------------------------------------------------- the sort
+-- Each listed row's key for the sort column and its name (lower case), worked out once a frame in the filter, so
+-- that the sort compares only kept values. Ties go by name, then by the game's order.
+local keys, names = {}, {}
+local function keyOf(texts, cur, max)
+  if sortKey == "name" then return lowerOf(texts[1] or "") end
+  if sortKey == "category" then return lowerOf(texts[4] or "") end
+  if sortKey == "tab" then return tonumber(texts[5]) or 0 end
+  if sortKey == "era" then return tonumber(texts[8]) or 0 end
+  if sortKey == "kind" then return texts[7] == "1" and 0 or 1 end
+  if sortKey == "rank" then return math.max(cur, 0) * 1000 + max end
+  if max > 0 and cur >= max then return math.huge end -- (cost: maxed after every price, either way)
+  return tonumber(texts[3]) or 0
+end
+
+local function sortRows(a, b)
+  local ka, kb = keys[a.row], keys[b.row]
+  if ka ~= kb then
+    if sortAsc then return ka < kb end
+    return ka > kb
+  end
+  local na, nb = names[a.row], names[b.row]
+  if na ~= nb then return na < nb end
+  return a.row < b.row
+end
+
+local function accepts(row, texts)
   if tab and texts[5] ~= TAB_KEYS[tab] then return false end
-  if needle ~= "" and not lowerOf(texts[1] or ""):find(needle, 1, true) then return false end
+  local lname = lowerOf(texts[1] or "")
+  if needle ~= "" and not lname:find(needle, 1, true) then return false end
   if category and (texts[4] or "") ~= category then return false end
   local cur, max = ranks(texts)
   if view == 2 and cur <= 0 then return false end
   if view == 3 and cur > 0 then return false end
   if view == 4 and cur >= max then return false end
+  keys[row], names[row] = keyOf(texts, cur, max), lname
   return true
 end
 
-local opts = nil    -- this frame's window options (M.window)
-local hookRow = {}  -- the row as opts.row's functions see it (kept)
+-- the row as each cell sees it (kept)
+local cell = {}
 
--- The columns of a row from x0 to x1 (the script's part already taken off), right to left: the cost, the rank,
--- activated or passive, the era, the tab and the category; the name has what is left. Narrow, the category goes
--- first, then the tab. (Kept: the header and every row read the same table.)
-local col = {}
-local function columns(x0, x1, s)
-  local pad = 8 * s
-  local x = x1 - pad
-  col.cost = x
-  x = x - 34 * s
-  col.rank1, col.rank0 = x, x - 40 * s
-  x = col.rank0 - 6 * s
-  col.kind1, col.kind0 = x, x - 46 * s
-  x = col.kind0 - 6 * s
-  col.era1, col.era0 = x, x - 96 * s
-  x = col.era0 - 6 * s
-  local room = x - (x0 + pad)
-  col.tab0, col.cat0 = nil, nil
-  if room - 66 * s >= 130 * s then
-    col.tab0, col.tab1 = x - 60 * s, x
-    x = col.tab0 - 6 * s
-    room = x - (x0 + pad)
-    if room - 106 * s >= 150 * s then
-      col.cat0, col.cat1 = x - 100 * s, x
-      x = col.cat0 - 6 * s
-    end
+local CELLS = {}
+function CELLS.name(e, texts, ty, tiny, s)
+  local nameW = e.x1 - e.x0
+  local name = texts[1] or ""
+  local tag = cell.style and cell.style.tag
+  local color = cell.trainable and C.text or C.muted
+  if tag then
+    local tw = T.TextSize(tag[1], F.tiny) + 10 * s
+    local fitted = T.Fit(name, nameW - tw - 6 * s, F.small)
+    T.Text(e.x0, ty, fitted, color, F.small)
+    local nx = e.x0 + T.TextSize(fitted, F.small) + 6 * s
+    local _, tt = T.TextSize("Ag", F.tiny)
+    local tc = tag[2] or C.accent
+    ui.DrawRectFilled(nx, tiny - 1 * s, nx + tw, tiny + tt + 1 * s, tc[1], tc[2], tc[3], 0.18, 4 * s)
+    T.Text(nx + 5 * s, tiny, tag[1], tc, F.tiny)
+  else
+    T.Text(e.x0, ty, T.Fit(name, nameW, F.small), color, F.small)
   end
-  col.name0, col.name1 = x0 + pad, x
-  return col
 end
-
-local function columnHeads(x0, y, x1, s)
-  local c = columns(x0, x1, s)
-  local f, k = T.font.tiny, C.faint
-  T.Text(c.name0, y, "ABILITY", k, f)
-  if c.cat0 then T.Text(c.cat0, y, "CATEGORY", k, f) end
-  if c.tab0 then T.Text(c.tab0, y, "TAB", k, f) end
-  T.Text(c.era0, y, "ERA", k, f)
-  T.Text(c.kind0, y, "TYPE", k, f)
-  T.Text((c.rank0 + c.rank1) / 2, y, "RANK", k, f, "center")
-  T.Text(c.cost, y, "COST", k, f, "right")
+function CELLS.category(e, texts, _, tiny)
+  T.Text(e.x0, tiny, T.Fit(texts[4] or "", e.x1 - e.x0, F.tiny), C.faint, F.tiny)
+end
+function CELLS.tab(e, _, _, tiny)
+  T.Text(e.x0, tiny, T.Fit(TABS[cell.page + 1] or "", e.x1 - e.x0, F.tiny), C.muted, F.tiny)
+end
+function CELLS.era(e, texts, _, tiny)
+  local era = texts[6] or ""
+  T.Text(e.x0, tiny, era ~= "" and T.Fit(era, e.x1 - e.x0, F.tiny) or "-", C.faint, F.tiny)
+end
+function CELLS.kind(e, texts, _, tiny)
+  local active = texts[7] == "1"
+  T.Text(e.x0, tiny, active and "Active" or "Passive", active and C.accent or C.faint, F.tiny)
+end
+function CELLS.rank(e, _, _, tiny)
+  T.Text((e.x0 + e.x1) / 2, tiny, string.format("%d/%d", math.max(cell.cur, 0), cell.max),
+    cell.maxed and C.aa or C.muted, F.tiny, "center")
+end
+function CELLS.cost(e, texts, ty, tiny)
+  local cost = texts[3] or ""
+  if cell.maxed then
+    T.Text(e.x1, tiny, "MAX", C.aa, F.tiny, "right")
+  elseif cost ~= "" then
+    T.Text(e.x1, ty, cost, cell.trainable and C.gold or C.faint, F.small, "right")
+  end
 end
 
 local function drawRow(_, texts, x0, y0, x1, y1, s, st)
@@ -280,39 +482,17 @@ local function drawRow(_, texts, x0, y0, x1, y1, s, st)
       x1 = px
     end
   end
-  local c = columns(x0, x1, s)
-  local _, th = T.TextSize("Ag", T.font.small)
-  local _, tt = T.TextSize("Ag", T.font.tiny)
+  cell.cur, cell.max, cell.maxed, cell.trainable, cell.page, cell.style = cur, max, maxed, trainable, page, style
+  local L = columns(x0, x1, s)
+  local _, th = T.TextSize("Ag", F.small)
+  local _, tt = T.TextSize("Ag", F.tiny)
   local ty = (y0 + y1 - th) / 2
   local tiny = (y0 + y1 - tt) / 2
-  local nameW = c.name1 - c.name0
-  local name = texts[1] or ""
-  local tag = style and style.tag
-  if tag then
-    local tw = T.TextSize(tag[1], T.font.tiny) + 10 * s
-    local fitted = T.Fit(name, nameW - tw - 6 * s, T.font.small)
-    T.Text(c.name0, ty, fitted, trainable and C.text or C.muted, T.font.small)
-    local nx = c.name0 + T.TextSize(fitted, T.font.small) + 6 * s
-    local tc = tag[2] or C.accent
-    ui.DrawRectFilled(nx, tiny - 1 * s, nx + tw, tiny + tt + 1 * s, tc[1], tc[2], tc[3], 0.18, 4 * s)
-    T.Text(nx + 5 * s, tiny, tag[1], tc, T.font.tiny)
-  else
-    T.Text(c.name0, ty, T.Fit(name, nameW, T.font.small), trainable and C.text or C.muted, T.font.small)
+  for i = 1, L.n do
+    local e = L[i]
+    CELLS[e.def.key](e, texts, ty, tiny, s)
   end
-  if c.cat0 then T.Text(c.cat0, tiny, T.Fit(texts[4] or "", c.cat1 - c.cat0, T.font.tiny), C.faint, T.font.tiny) end
-  if c.tab0 then T.Text(c.tab0, tiny, TABS[page + 1] or "", C.muted, T.font.tiny) end
-  local era = texts[6] or ""
-  T.Text(c.era0, tiny, era ~= "" and T.Fit(era, c.era1 - c.era0, T.font.tiny) or "-", C.faint, T.font.tiny)
-  local active = texts[7] == "1"
-  T.Text(c.kind0, tiny, active and "Active" or "Passive", active and C.accent or C.faint, T.font.tiny)
-  T.Text((c.rank0 + c.rank1) / 2, tiny, string.format("%d/%d", math.max(cur, 0), max), maxed and C.aa or C.muted,
-    T.font.tiny, "center")
-  local cost = texts[3] or ""
-  if maxed then
-    T.Text(c.cost, tiny, "MAX", C.aa, T.font.tiny, "right")
-  elseif cost ~= "" then
-    T.Text(c.cost, ty, cost, trainable and C.gold or C.faint, T.font.small, "right")
-  end
+  cell.style = nil
 end
 
 -- ---------------------------------------------------------------- the selected ability
@@ -340,8 +520,8 @@ local function details(x, y, w, h, s)
   elseif cur > 0 then P.Chip(ix + cw + 4 * s, yy, s, "Owned", C.pet) end
   yy = yy + 22 * s
   -- rank
-  T.Text(ix, yy, "Rank", C.muted, T.font.small)
-  T.Text(ix + iw, yy, string.format("%d of %d", math.max(cur, 0), max), C.text, T.font.small, "right")
+  T.Text(ix, yy, "Rank", C.muted, F.small)
+  T.Text(ix + iw, yy, string.format("%d of %d", math.max(cur, 0), max), C.text, F.small, "right")
   yy = yy + 18 * s
   T.Bar("aa.selrank", ix, yy, ix + iw, yy + 6 * s, s, max > 0 and math.max(cur, 0) / max or 0, C.aa, NO_TRAIL)
   yy = yy + 14 * s
@@ -350,29 +530,29 @@ local function details(x, y, w, h, s)
   local _, levelMet = W.State(WINDOW, "ModernLevel")
   local tw = (iw - 8 * s) / 3
   P.Tile("##aacost", ix, yy, tw, 36 * s, s, "NEXT RANK", cost ~= "" and (cost .. " pt") or "-",
-    { color = cost ~= "" and C.gold or C.faint, font = T.font.small })
+    { color = cost ~= "" and C.gold or C.faint, font = F.small })
   P.Tile("##aalevel", ix + tw + 4 * s, yy, tw, 36 * s, s, "LEVEL", level ~= "" and level or "-",
-    { color = (level ~= "" and levelMet == false) and C.danger or C.text, font = T.font.small,
+    { color = (level ~= "" and levelMet == false) and C.danger or C.text, font = F.small,
       tooltip = level ~= "" and (levelMet == false and "You are below the level this rank needs"
         or "The level this rank needs") or nil })
   local reuseText = activated and seconds(reuse[1]) or "-"
   local left = tonumber(reuse[2]) or 0
   P.Tile("##aareuse", ix + 2 * (tw + 4 * s), yy, tw, 36 * s, s, left > 0 and "READY IN" or "REUSE",
-    left > 0 and seconds(left) or reuseText, { color = left > 0 and C.hpLow or C.text, font = T.font.small,
+    left > 0 and seconds(left) or reuseText, { color = left > 0 and C.hpLow or C.text, font = F.small,
       tooltip = activated and ("Reuse time " .. reuseText) or "A passive ability" })
   yy = yy + 42 * s
   -- prerequisites
   local prereqs = W.Text(WINDOW, "ModernPrereqs")
   if prereqs ~= "" then
-    T.Text(ix, yy, "Requires", C.muted, T.font.small)
+    T.Text(ix, yy, "Requires", C.muted, F.small)
     yy = yy + 18 * s
     for line in (prereqs .. "\n"):gmatch("(.-)\n") do
       local p = split(line, "\t")
       local met = p[3] == "1"
       local c = met and C.pet or C.danger
       ui.DrawCircleFilled(ix + 4 * s, yy + 7 * s, 3 * s, c[1], c[2], c[3], 1)
-      T.Text(ix + 14 * s, yy, T.Fit(p[1] or "", iw - 70 * s, T.font.small), met and C.text or C.muted, T.font.small)
-      T.Text(ix + iw, yy, "rank " .. (p[2] or "1"), met and C.faint or C.danger, T.font.tiny, "right")
+      T.Text(ix + 14 * s, yy, T.Fit(p[1] or "", iw - 70 * s, F.small), met and C.text or C.muted, F.small)
+      T.Text(ix + iw, yy, "rank " .. (p[2] or "1"), met and C.faint or C.danger, F.tiny, "right")
       yy = yy + 18 * s
     end
     yy = yy + 4 * s
@@ -391,7 +571,7 @@ local function details(x, y, w, h, s)
   yy = yy + 6 * s
   local descH = math.max(30 * s, y + h - pad - foot - yy)
   ui.SetCursorScreenPos(ix, yy)
-  ui.PushFont(T.font.small)
+  ui.PushFont(F.small)
   W.Stml(WINDOW, "Description", iw, descH)
   ui.PopFont()
   ui.SetCursorScreenPos(ix, y + h - pad - foot + 4 * s)
@@ -420,7 +600,7 @@ local DIALOG = {
   keepTitle = true,
 }
 
-local ROWS = { rowH = 24, drag = true, filter = accepts, draw = drawRow }
+local ROWS = { rowH = 24, drag = true, filter = accepts, sort = sortRows, draw = drawRow }
 
 local function body(x, y, w, h, s)
   header(x, y, w, s)
@@ -445,10 +625,10 @@ local function body(x, y, w, h, s)
   local lx, ly = ui.GetCursorScreenPos()
   local reserve = opts and opts.row and opts.row.width or nil
   local innerW = ROWS.innerW or listW -- (the rows' width last frame: less the scroll bar when it shows)
-  local _, hh = T.TextSize("Ag", T.font.tiny)
+  local _, hh = T.TextSize("Ag", F.tiny)
   columnHeads(lx, ly, lx + innerW - (reserve or 0) * s, s)
   ui.SetCursorScreenPos(lx, ly + hh + 4 * s)
-  local _, lh = T.TextSize("Ag", T.font.tiny)
+  local _, lh = T.TextSize("Ag", F.tiny)
   ROWS.rows = rows -- (P.Rows reads the list itself where it does not take these)
   ROWS.reserve = reserve
   ROWS.empty = #rows == 0 and "No abilities" or "No ability matches"
@@ -457,7 +637,7 @@ local function body(x, y, w, h, s)
   local fx, fy = ui.GetCursorScreenPos()
   local count = shown == total and string.format("%d abilities", total)
       or string.format("%d of %d abilities", shown, total)
-  T.Text(fx, fy + 2 * s, count .. "   -   drag a row to make a hot button", C.faint, T.font.tiny)
+  T.Text(fx, fy + 2 * s, count .. "   -   drag a row to make a hot button", C.faint, F.tiny)
   ui.EndChild()
   -- the details
   local dx, dy = stacked and cx or (cx + listW + 8 * s), stacked and (listBottom + 6 * s) or cy
@@ -471,6 +651,7 @@ local M = {}
 function M.window(o)
   if not eq.InGame() then return end
   opts = o
+  if not order then loadColumns() end
   -- testing: test.open.AAWindow.class=<s> shows the Class tab's abilities
   P.TestOpen(TEST_CLASS, testClass)
   hud.Dialog(WINDOW, "Alternate Advancement", DIALOG, body)
