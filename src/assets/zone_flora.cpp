@@ -1,8 +1,10 @@
 #include "assets/zone_flora.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <unordered_map>
@@ -57,6 +59,98 @@ std::string_view texture_of(const Material& m) {
 
 float unit(MsvcRand& rand) { return static_cast<float>(rand()) / 32767.0f; }
 
+// The zone's terrain seen from below: whether any of its triangles lies over a point (a dungeon's ceiling, a roof, a
+// bridge, an overhang). The placed objects (trees, tents) are not in it, so grass still grows under a tree; nor are
+// the surfaces never drawn (BlendMode::Invisible: the outdoor zones' collision ceiling some 750 units up and their
+// invisible cloud layers) or that only glow (Additive).
+bool casts_cover(const Material& m) { return m.blend != BlendMode::Invisible && m.blend != BlendMode::Additive; }
+
+class CoverGrid {
+public:
+    explicit CoverGrid(const Zone& zone) {
+        glm::vec2 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
+        for (const auto& mesh : zone.terrain)
+            for (const auto& part : mesh.parts) {
+                if (part.material >= mesh.materials.size() || !casts_cover(mesh.materials[part.material])) continue;
+                const std::size_t end =
+                    std::min<std::size_t>(std::size_t{part.first_index} + part.index_count, mesh.indices.size());
+                for (std::size_t i = part.first_index; i + 3 <= end; i += 3) {
+                    Tri t;
+                    bool ok = true;
+                    for (int k = 0; k < 3; ++k) {
+                        const std::uint32_t v = mesh.indices[i + static_cast<std::size_t>(k)];
+                        if (v >= mesh.vertices.size()) {
+                            ok = false;
+                            break;
+                        }
+                        t.p[k] = mesh.vertices[v].position;
+                    }
+                    if (!ok) continue;
+                    const float area2 = (t.p[1].x - t.p[0].x) * (t.p[2].y - t.p[0].y) -
+                                        (t.p[2].x - t.p[0].x) * (t.p[1].y - t.p[0].y);
+                    if (std::abs(area2) < 1e-4f) continue; // a wall seen from above covers nothing
+                    tris_.push_back(t);
+                    for (const auto& q : t.p) {
+                        lo = glm::min(lo, glm::vec2(q));
+                        hi = glm::max(hi, glm::vec2(q));
+                    }
+                }
+            }
+        if (tris_.empty()) return;
+        origin_ = lo;
+        nx_ = std::min<std::int32_t>(static_cast<std::int32_t>((hi.x - lo.x) / kCell) + 1, 4096);
+        ny_ = std::min<std::int32_t>(static_cast<std::int32_t>((hi.y - lo.y) / kCell) + 1, 4096);
+        std::vector<std::uint32_t> counts(static_cast<std::size_t>(nx_) * static_cast<std::size_t>(ny_) + 1, 0);
+        auto each_cell = [&](const Tri& t, auto&& fn) {
+            glm::vec2 a = glm::min(glm::min(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
+            glm::vec2 b = glm::max(glm::max(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
+            const std::int32_t x0 = cell(a.x - origin_.x, nx_), x1 = cell(b.x - origin_.x, nx_);
+            const std::int32_t y0 = cell(a.y - origin_.y, ny_), y1 = cell(b.y - origin_.y, ny_);
+            for (std::int32_t y = y0; y <= y1; ++y)
+                for (std::int32_t x = x0; x <= x1; ++x)
+                    fn(static_cast<std::size_t>(y) * static_cast<std::size_t>(nx_) + static_cast<std::size_t>(x));
+        };
+        for (const auto& t : tris_) each_cell(t, [&](std::size_t c) { ++counts[c + 1]; });
+        for (std::size_t c = 1; c < counts.size(); ++c) counts[c] += counts[c - 1];
+        start_ = counts;
+        index_.resize(counts.back());
+        for (std::uint32_t i = 0; i < tris_.size(); ++i) each_cell(tris_[i], [&](std::size_t c) { index_[counts[c]++] = i; });
+    }
+
+    // Whether a triangle lies more than kClearance over `p` (straight up).
+    bool covered(const glm::vec3& p) const {
+        if (tris_.empty()) return false;
+        const std::int32_t x = cell(p.x - origin_.x, nx_), y = cell(p.y - origin_.y, ny_);
+        const std::size_t c = static_cast<std::size_t>(y) * static_cast<std::size_t>(nx_) + static_cast<std::size_t>(x);
+        for (std::uint32_t k = start_[c]; k < start_[c + 1]; ++k) {
+            const Tri& t = tris_[index_[k]];
+            // Barycentric in the plane; the height there.
+            const glm::vec2 a(t.p[0]), b(t.p[1]), q(t.p[2]), pt(p);
+            const float d = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y);
+            const float u = ((pt.x - a.x) * (q.y - a.y) - (q.x - a.x) * (pt.y - a.y)) / d;
+            const float v = ((b.x - a.x) * (pt.y - a.y) - (pt.x - a.x) * (b.y - a.y)) / d;
+            if (u < 0.0f || v < 0.0f || u + v > 1.0f) continue;
+            const float z = t.p[0].z + (t.p[1].z - t.p[0].z) * u + (t.p[2].z - t.p[0].z) * v;
+            if (z > p.z + kClearance) return true;
+        }
+        return false;
+    }
+
+private:
+    static constexpr float kCell = 64.0f;
+    static constexpr float kClearance = 1.0f; // the ground's own triangle, and a decal over it, are not cover
+    struct Tri {
+        glm::vec3 p[3];
+    };
+    std::int32_t cell(float d, std::int32_t n) const {
+        return std::clamp(static_cast<std::int32_t>(std::floor(d / kCell)), 0, n - 1);
+    }
+    std::vector<Tri> tris_;
+    glm::vec2 origin_{0.0f};
+    std::int32_t nx_ = 0, ny_ = 0;
+    std::vector<std::uint32_t> start_, index_;
+};
+
 // A triangle's own sequence (Hailstone's own seed, so it grows the same plants at every load).
 std::uint32_t triangle_seed(std::size_t mesh, std::size_t triangle) {
     return static_cast<std::uint32_t>(mesh) * 2654435761u ^ static_cast<std::uint32_t>(triangle) * 40503u ^
@@ -64,11 +158,16 @@ std::uint32_t triangle_seed(std::size_t mesh, std::size_t triangle) {
 }
 } // namespace
 
-ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::string>* errors) {
-    ZoneFloraRules rules;
+namespace {
+
+// Reads `text`'s lines into `rules` in order; an include reads the named file's in its place.
+void parse_into(ZoneFloraRules& rules, std::string_view text, std::vector<std::string>* errors,
+                const ZoneFloraInclude& include, int depth, std::string_view source) {
     std::size_t line_no = 0;
     auto fail = [&](std::string_view why) {
-        if (errors) errors->push_back("line " + std::to_string(line_no) + ": " + std::string(why));
+        if (errors)
+            errors->push_back((source.empty() ? std::string() : std::string(source) + " ") + "line " +
+                              std::to_string(line_no) + ": " + std::string(why));
     };
     while (!text.empty()) {
         ++line_no;
@@ -78,7 +177,12 @@ ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::st
         if (auto hash = line.find('#'); hash != std::string_view::npos) line = line.substr(0, hash);
         auto w = words(line);
         if (w.empty()) continue;
-        if (iequals(w[0], "donor") && w.size() == 2) {
+        if (iequals(w[0], "include") && w.size() == 2) {
+            if (depth >= kMaxFloraIncludeDepth) { fail("include: nested too deep"); continue; }
+            std::optional<std::string> other = include ? include(w[1]) : std::nullopt;
+            if (!other) { fail("include: no rules named " + std::string(w[1])); continue; }
+            parse_into(rules, *other, errors, include, depth + 1, w[1]);
+        } else if (iequals(w[0], "donor") && w.size() == 2) {
             rules.donor = lower(w[1]);
         } else if (iequals(w[0], "max_slope") && w.size() == 2) {
             float v = 0.0f;
@@ -98,8 +202,9 @@ ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::st
             for (std::size_t i = 3; i < w.size(); ++i) {
                 ZoneFloraRules::Kind k;
                 std::string_view s = w[i];
-                if (iequals(s, "+green")) {
+                if (iequals(s, "+green") || iequals(s, "+greenish")) {
                     g.green_only = true;
+                    g.greenish = iequals(s, "+greenish");
                     continue;
                 }
                 if (auto colon = s.find(':'); colon != std::string_view::npos) {
@@ -116,47 +221,159 @@ ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::st
             fail("not understood");
         }
     }
+}
+
+} // namespace
+
+ZoneFloraRules parse_zone_flora_rules(std::string_view text, std::vector<std::string>* errors,
+                                      const ZoneFloraInclude& include) {
+    ZoneFloraRules rules;
+    parse_into(rules, text, errors, include, 0, {});
     return rules;
 }
 
-bool is_green_texel(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+bool is_greenish_texel(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     const int R = r, G = g, B = b;
-    return G >= 24 && G * 100 > R * 104 && G * 100 > B * 115;
+    return G >= 24 && G * 100 > R * 100 && G * 100 > B * 115;
 }
 
-void place_zone_flora(const Zone& zone, const ZoneFloraRules& rules, std::vector<eqg::FloraDefinition> definitions,
-                      ZoneFlora& out, const TexelLookup& texel) {
-    out = ZoneFlora{};
-    out.definitions = std::move(definitions);
-    out.tile_size = kZoneFloraTile;
+bool is_green_texel(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    // Green clearly over red (not the olive of mud and moss-dark rock) and well over blue (not the classic water's
+    // teal), and bright enough to tell (not a dungeon's near-black stone).
+    const int R = r, G = g, B = b;
+    return G >= 32 && G * 100 > R * 106 && G * 100 > B * 125;
+}
 
-    // Each ground rule's kinds as definition indices with their running weight.
+struct ZoneFloraGrower::Data {
+    using Tri = Piece;
+    // A ground rule's kinds as definition indices with their running weight.
     struct Pick {
         std::vector<std::pair<float, std::uint32_t>> cumulative;
         float total = 0.0f;
     };
-    std::vector<Pick> picks(rules.ground.size());
+    ZoneFloraRules rules;
+    std::vector<eqg::FloraDefinition> definitions;
+    std::vector<Pick> picks;
+    // A ground texture as +green and the tint read it: level 0 scaled down to at most kSampleSize a side, as
+    // 0x00BBGGRR; empty when it could not be read.
+    struct Ground {
+        std::vector<std::uint32_t> rgb;
+        std::uint32_t width = 0, height = 0;
+        std::optional<std::uint32_t> at(glm::vec2 uv) const {
+            if (rgb.empty()) return std::nullopt;
+            auto wrap = [](float f, std::uint32_t n) {
+                const float t = f - std::floor(f);
+                return std::min(static_cast<std::uint32_t>(t * static_cast<float>(n)), n - 1);
+            };
+            return rgb[std::size_t{wrap(uv.y, height)} * width + wrap(uv.x, width)];
+        }
+    };
+    static constexpr std::uint32_t kSampleSize = 128;
+    std::vector<std::string> textures;
+    std::vector<Ground> grounds; // by texture
+    std::vector<Tri> tris;
+    std::vector<glm::vec2> tiles;
+    std::vector<std::uint32_t> tile_start, tile_tris; // tile t's triangles: tile_tris[tile_start[t] .. tile_start[t+1])
+    ZoneRegions regions;
+    std::optional<CoverGrid> cover;
+};
+
+namespace {
+
+// A triangle larger than a quarter tile is split into four (by its edges' midpoints), again until it is not: a tile
+// then walks only the plants of the ground near it, not every plant of a sea floor's one triangle across the zone.
+constexpr float kMaxGrowArea = kZoneFloraTile * kZoneFloraTile / 4.0f;
+constexpr int kMaxSplits = 10; // 4^10 pieces at most, for a damaged mesh's triangle across the world
+
+void add_split(std::vector<ZoneFloraGrower::Piece>& out, const ZoneFloraGrower::Piece& t, int depth) {
+    if (t.area <= kMaxGrowArea || depth >= kMaxSplits) {
+        out.push_back(t);
+        return;
+    }
+    glm::vec3 mp[3];
+    glm::vec2 muv[3];
+    for (int k = 0; k < 3; ++k) {
+        mp[k] = (t.p[k] + t.p[(k + 1) % 3]) * 0.5f;
+        muv[k] = (t.uv[k] + t.uv[(k + 1) % 3]) * 0.5f;
+    }
+    // Corners k, mid k, mid k-1; and the middle one.
+    const glm::vec3 cp[4][3] = {{t.p[0], mp[0], mp[2]}, {mp[0], t.p[1], mp[1]}, {mp[2], mp[1], t.p[2]}, {mp[0], mp[1], mp[2]}};
+    const glm::vec2 cuv[4][3] = {
+        {t.uv[0], muv[0], muv[2]}, {muv[0], t.uv[1], muv[1]}, {muv[2], muv[1], t.uv[2]}, {muv[0], muv[1], muv[2]}};
+    for (std::uint32_t c = 0; c < 4; ++c) {
+        ZoneFloraGrower::Piece q = t;
+        for (int k = 0; k < 3; ++k) {
+            q.p[k] = cp[c][k];
+            q.uv[k] = cuv[c][k];
+        }
+        q.area = t.area * 0.25f;
+        q.seed = (t.seed ^ 0x9e3779b9u) * 2654435761u + c * 40503u + 1u;
+        add_split(out, q, depth + 1);
+    }
+}
+
+} // namespace
+
+ZoneFloraGrower::ZoneFloraGrower(const Zone& zone, const ZoneFloraRules& rules,
+                                 std::vector<eqg::FloraDefinition> definitions, const GroundTextures& textures)
+    : d_(std::make_unique<Data>()) {
+    Data& d = *d_;
+    d.rules = rules;
+    d.definitions = std::move(definitions);
+    d.picks.resize(rules.ground.size());
     for (std::size_t g = 0; g < rules.ground.size(); ++g)
         for (const auto& k : rules.ground[g].kinds) {
-            auto it = std::find_if(out.definitions.begin(), out.definitions.end(),
-                                   [&](const eqg::FloraDefinition& d) { return iequals(d.name, k.definition); });
-            if (it == out.definitions.end()) {
+            auto it = std::find_if(d.definitions.begin(), d.definitions.end(),
+                                   [&](const eqg::FloraDefinition& def) { return iequals(def.name, k.definition); });
+            if (it == d.definitions.end()) {
                 log::debug("{}: zone flora: no definition {}", zone.name, k.definition);
                 continue;
             }
             if (k.weight <= 0.0f) continue;
-            picks[g].total += k.weight;
-            picks[g].cumulative.emplace_back(picks[g].total,
-                                             static_cast<std::uint32_t>(it - out.definitions.begin()));
+            d.picks[g].total += k.weight;
+            d.picks[g].cumulative.emplace_back(d.picks[g].total, static_cast<std::uint32_t>(it - d.definitions.begin()));
         }
 
+    // The triangles that may grow plants: their texture's rule grows some, level enough, on a drawn surface.
     const float min_up = std::cos(glm::radians(rules.max_slope));
-    std::vector<FloraInstance> plants;
     std::unordered_map<std::string, int> rule_by_texture; // lower-case texture -> ground rule (-1 none)
+    std::unordered_map<std::string, std::uint32_t> texture_index;
+    std::vector<bool> barren; // by texture: +green finds (almost) no grass in it, so its ground grows nothing
+    // A texture read once, scaled down, and how much of it +green (or +greenish) takes.
+    auto read_ground = [&](const std::string& tex, const ZoneFloraRules::Ground& rule) {
+        Data::Ground g;
+        std::optional<Image> image = textures ? textures(tex) : std::nullopt;
+        std::size_t green = 0;
+        if (image && image->format == PixelFormat::RGBA8 && !image->mips.empty() && image->width > 0 && image->height > 0 &&
+            image->mips[0].size() >= std::size_t{image->width} * image->height * 4) {
+            g.width = std::min(image->width, Data::kSampleSize);
+            g.height = std::min(image->height, Data::kSampleSize);
+            g.rgb.resize(std::size_t{g.width} * g.height);
+            const auto& px = image->mips[0];
+            for (std::uint32_t y = 0; y < g.height; ++y)
+                for (std::uint32_t x = 0; x < g.width; ++x) {
+                    const std::size_t sx = std::size_t{x} * image->width / g.width, sy = std::size_t{y} * image->height / g.height;
+                    const std::size_t at = (sy * image->width + sx) * 4;
+                    const auto r = static_cast<std::uint8_t>(px[at]), gr = static_cast<std::uint8_t>(px[at + 1]),
+                               b = static_cast<std::uint8_t>(px[at + 2]);
+                    g.rgb[std::size_t{y} * g.width + x] = std::uint32_t{r} | std::uint32_t{gr} << 8 | std::uint32_t{b} << 16;
+                    if (rule.greenish ? is_greenish_texel(r, gr, b) : is_green_texel(r, gr, b)) ++green;
+                }
+        }
+        // +green on a texture that cannot be read, or that holds next to no grass, grows nothing there.
+        const bool none = rule.green_only && (g.rgb.empty() || static_cast<float>(green) <
+                                                                   kMinGreenShare * static_cast<float>(g.rgb.size()));
+        return std::pair<Data::Ground, bool>(std::move(g), none);
+    };
     for (std::size_t mi = 0; mi < zone.terrain.size(); ++mi) {
         const Mesh& mesh = zone.terrain[mi];
         for (const auto& part : mesh.parts) {
             if (part.material >= mesh.materials.size()) continue;
+            // Plants grow on solid ground: an opaque or cut-out surface. Not on one that is never drawn (the invisible
+            // collision floors and ceilings), nor on a translucent one (the classic water and its falls).
+            if (const BlendMode blend = mesh.materials[part.material].blend;
+                blend != BlendMode::Opaque && blend != BlendMode::Masked)
+                continue;
             std::string tex = lower(texture_of(mesh.materials[part.material]));
             if (tex.empty()) continue;
             auto found = rule_by_texture.find(tex);
@@ -167,9 +384,16 @@ void place_zone_flora(const Zone& zone, const ZoneFloraRules& rules, std::vector
                 found = rule_by_texture.emplace(tex, rule).first;
             }
             if (found->second < 0) continue;
-            const auto& ground = rules.ground[static_cast<std::size_t>(found->second)];
-            const Pick& pick = picks[static_cast<std::size_t>(found->second)];
-            if (ground.density <= 0.0f || pick.total <= 0.0f) continue;
+            const auto rule = static_cast<std::uint32_t>(found->second);
+            if (rules.ground[rule].density <= 0.0f || d.picks[rule].total <= 0.0f) continue;
+            auto [ti, added] = texture_index.emplace(tex, static_cast<std::uint32_t>(d.textures.size()));
+            if (added) {
+                d.textures.push_back(tex);
+                auto [ground, none] = read_ground(tex, rules.ground[rule]);
+                d.grounds.push_back(std::move(ground));
+                barren.push_back(none);
+            }
+            if (barren[ti->second]) continue;
             const std::uint32_t end = std::min<std::uint32_t>(part.first_index + part.index_count,
                                                               static_cast<std::uint32_t>(mesh.indices.size()));
             for (std::uint32_t i = part.first_index; i + 3 <= end; i += 3) {
@@ -183,137 +407,238 @@ void place_zone_flora(const Zone& zone, const ZoneFloraRules& rules, std::vector
                 // The face's side from its vertex normals (the lit side), whatever the winding.
                 if (glm::dot(n, a.normal + b.normal + c.normal) < 0.0f) n = -n;
                 if (n.z < min_up) continue;
-                const float area = len * 0.5f;
-                MsvcRand rand{triangle_seed(mi, i / 3)};
-                const float expected = area * ground.density / 100.0f;
-                auto count = static_cast<std::uint32_t>(expected);
-                if (unit(rand) < expected - static_cast<float>(count)) ++count;
-                for (std::uint32_t k = 0; k < count; ++k) {
-                    if (plants.size() >= kMaxZoneFlora) break;
-                    float u = unit(rand), v = unit(rand);
-                    if (u + v > 1.0f) {
-                        u = 1.0f - u;
-                        v = 1.0f - v;
-                    }
-                    const float w = 1.0f - u - v;
-                    const glm::vec3 p = a.position * w + b.position * u + c.position * v;
-                    // The ground's colour under the plant: the classic zones' outdoor vertices carry no colour
-                    // (black), so the plant takes its ground texel's for *INHERITVERTEXCOLOR, 0x80 a neutral grey.
-                    std::optional<std::uint32_t> under;
-                    if (texel) under = texel(tex, a.uv * w + b.uv * u + c.uv * v);
-                    if (ground.green_only && under) {
-                        if (!is_green_texel(static_cast<std::uint8_t>(*under & 0xff),
-                                            static_cast<std::uint8_t>(*under >> 8 & 0xff),
-                                            static_cast<std::uint8_t>(*under >> 16 & 0xff))) {
-                            // The rest of this plant's draws (kind, scale, width, height, turn), so the plants
-                            // after it stay where they were whatever the mask keeps.
-                            for (int skip = 0; skip < 5; ++skip) rand();
-                            continue;
-                        }
-                    }
-                    const float choose = unit(rand) * pick.total;
-                    std::uint32_t def = pick.cumulative.back().second;
-                    for (const auto& [upto, index] : pick.cumulative)
-                        if (choose <= upto) {
-                            def = index;
-                            break;
-                        }
-                    const auto& d = out.definitions[def];
-                    const float scale = rules.min_scale + (rules.max_scale - rules.min_scale) * unit(rand);
-                    FloraInstance plant;
-                    plant.position = p;
-                    plant.width = (d.min_width + (d.max_width - d.min_width) * unit(rand)) * scale;
-                    plant.height = (d.min_height + (d.max_height - d.min_height) * unit(rand)) * scale;
-                    plant.rotation = static_cast<float>(rand() % 360);
-                    plant.color = under ? 0xff000000u | (*under & 0xffffffu) : 0xff808080u;
-                    plant.definition = def;
-                    if (!zone.regions.empty()) {
-                        const RegionInfo r = zone.regions.lookup(p + glm::vec3(0.0f, 0.0f, 1.0f));
-                        if (r.is_water() || r.is_lava() || r.is_zone_line()) continue;
-                    }
-                    plants.push_back(plant);
-                }
+                Data::Tri t;
+                t.p[0] = a.position;
+                t.p[1] = b.position;
+                t.p[2] = c.position;
+                t.uv[0] = a.uv;
+                t.uv[1] = b.uv;
+                t.uv[2] = c.uv;
+                t.seed = triangle_seed(mi, i / 3);
+                t.texture = ti->second;
+                t.rule = rule;
+                t.area = len * 0.5f;
+                add_split(d.tris, t, 0);
             }
         }
     }
+    if (d.tris.empty()) return;
 
-    // Binned into tiles, in a stable order.
-    auto key = [](const glm::vec3& p) {
-        return std::pair<std::int32_t, std::int32_t>(static_cast<std::int32_t>(std::floor(p.x / kZoneFloraTile)),
-                                                     static_cast<std::int32_t>(std::floor(p.y / kZoneFloraTile)));
-    };
-    std::map<std::pair<std::int32_t, std::int32_t>, std::vector<std::uint32_t>> tiles;
-    for (std::uint32_t i = 0; i < plants.size(); ++i) tiles[key(plants[i].position)].push_back(i);
-    out.instances.reserve(plants.size());
-    for (const auto& [k, list] : tiles) {
-        ZoneFlora::Tile t;
-        t.min = glm::vec2(static_cast<float>(k.first), static_cast<float>(k.second)) * kZoneFloraTile;
-        t.first = static_cast<std::uint32_t>(out.instances.size());
-        t.count = static_cast<std::uint32_t>(list.size());
-        for (auto i : list) out.instances.push_back(plants[i]);
-        out.tiles.push_back(t);
+    // Binned by the tiles their bounds touch (a plant belongs to the tile its foot is in).
+    auto tile_of = [](float v) { return static_cast<std::int32_t>(std::floor(v / kZoneFloraTile)); };
+    std::map<std::pair<std::int32_t, std::int32_t>, std::vector<std::uint32_t>> bins;
+    for (std::uint32_t i = 0; i < d.tris.size(); ++i) {
+        const auto& t = d.tris[i];
+        const glm::vec2 lo = glm::min(glm::min(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
+        const glm::vec2 hi = glm::max(glm::max(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
+        for (std::int32_t y = tile_of(lo.y); y <= tile_of(hi.y); ++y)
+            for (std::int32_t x = tile_of(lo.x); x <= tile_of(hi.x); ++x) bins[{x, y}].push_back(i);
+    }
+    d.tile_start.push_back(0);
+    for (const auto& [k, list] : bins) {
+        d.tiles.emplace_back(static_cast<float>(k.first) * kZoneFloraTile, static_cast<float>(k.second) * kZoneFloraTile);
+        d.tile_tris.insert(d.tile_tris.end(), list.begin(), list.end());
+        d.tile_start.push_back(static_cast<std::uint32_t>(d.tile_tris.size()));
+    }
+    d.regions = zone.regions;
+    d.cover.emplace(zone);
+}
+
+ZoneFloraGrower::~ZoneFloraGrower() = default;
+
+const std::vector<eqg::FloraDefinition>& ZoneFloraGrower::definitions() const { return d_->definitions; }
+const std::vector<glm::vec2>& ZoneFloraGrower::tiles() const { return d_->tiles; }
+std::size_t ZoneFloraGrower::triangles() const { return d_->tris.size(); }
+
+void ZoneFloraGrower::grow(std::size_t tile, std::vector<FloraInstance>& out,
+                           std::unordered_map<std::string, std::size_t>* by_texture) const {
+    const Data& d = *d_;
+    if (tile >= d.tiles.size()) return;
+    const glm::vec2 lo = d.tiles[tile], hi = lo + glm::vec2(kZoneFloraTile);
+    const std::size_t first = out.size();
+    for (std::uint32_t k = d.tile_start[tile]; k < d.tile_start[tile + 1]; ++k) {
+        const Data::Tri& t = d.tris[d.tile_tris[k]];
+        const auto& ground = d.rules.ground[t.rule];
+        const Data::Pick& pick = d.picks[t.rule];
+        const std::string& tex = d.textures[t.texture];
+        const Data::Ground& texels = d.grounds[t.texture];
+        MsvcRand rand{t.seed};
+        const float expected = t.area * ground.density / 100.0f;
+        auto count = static_cast<std::uint32_t>(std::min(expected, 1.0e6f));
+        if (unit(rand) < expected - static_cast<float>(count)) ++count;
+        for (std::uint32_t n = 0; n < count; ++n) {
+            // Every plant takes all its draws (spot, kind, scale, width, height, turn) whatever is kept, so the
+            // plants after it stay where they were: the same in every tile the triangle crosses.
+            float u = unit(rand), v = unit(rand);
+            const float choose = unit(rand) * pick.total;
+            const float scale_draw = unit(rand), width_draw = unit(rand), height_draw = unit(rand);
+            const auto turn = static_cast<float>(rand() % 360);
+            if (u + v > 1.0f) {
+                u = 1.0f - u;
+                v = 1.0f - v;
+            }
+            const float w = 1.0f - u - v;
+            const glm::vec3 p = t.p[0] * w + t.p[1] * u + t.p[2] * v;
+            if (p.x < lo.x || p.x >= hi.x || p.y < lo.y || p.y >= hi.y) continue; // another tile's
+            // The ground's colour under the plant: the classic zones' outdoor vertices carry no colour (black), so the
+            // plant takes its ground texel's for *INHERITVERTEXCOLOR, 0x80 a neutral grey.
+            const std::optional<std::uint32_t> under = texels.at(t.uv[0] * w + t.uv[1] * u + t.uv[2] * v);
+            // A texture that cannot be read grows nothing with +green: no telling grass from stone.
+            if (ground.green_only) {
+                if (!under) continue;
+                const auto r = static_cast<std::uint8_t>(*under & 0xff), g = static_cast<std::uint8_t>(*under >> 8 & 0xff),
+                           b = static_cast<std::uint8_t>(*under >> 16 & 0xff);
+                if (!(ground.greenish ? is_greenish_texel(r, g, b) : is_green_texel(r, g, b))) continue;
+            }
+            if (!d.regions.empty()) {
+                // In the water or lava, or standing on its surface (the region just under the foot), or in a zone line.
+                const RegionInfo r = d.regions.lookup(p + glm::vec3(0.0f, 0.0f, 1.0f));
+                if (r.is_water() || r.is_lava() || r.is_zone_line()) continue;
+                const RegionInfo below = d.regions.lookup(p - glm::vec3(0.0f, 0.0f, 1.0f));
+                if (below.is_water() || below.is_lava()) continue;
+            }
+            if (d.cover && d.cover->covered(p)) continue;
+            std::uint32_t def = pick.cumulative.back().second;
+            for (const auto& [upto, index] : pick.cumulative)
+                if (choose <= upto) {
+                    def = index;
+                    break;
+                }
+            const auto& fd = d.definitions[def];
+            const float scale = d.rules.min_scale + (d.rules.max_scale - d.rules.min_scale) * scale_draw;
+            FloraInstance plant;
+            plant.position = p;
+            plant.width = (fd.min_width + (fd.max_width - fd.min_width) * width_draw) * scale;
+            plant.height = (fd.min_height + (fd.max_height - fd.min_height) * height_draw) * scale;
+            plant.rotation = turn;
+            plant.color = under ? 0xff000000u | (*under & 0xffffffu) : 0xff808080u;
+            plant.definition = def;
+            out.push_back(plant);
+            if (by_texture) ++(*by_texture)[tex];
+            if (out.size() - first >= kMaxTileFlora) return;
+        }
     }
 }
 
-std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesystem::path& rules_dir) {
-    if (!zone.flora.empty()) return 0;
-    const auto path = rules_dir / (lower(zone.name) + ".txt");
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return 0;
+void place_zone_flora(const Zone& zone, const ZoneFloraRules& rules, std::vector<eqg::FloraDefinition> definitions,
+                      ZoneFlora& out, const GroundTextures& textures,
+                      std::unordered_map<std::string, std::size_t>* by_texture) {
+    ZoneFloraGrower grower(zone, rules, std::move(definitions), textures);
+    out = ZoneFlora{};
+    out.definitions = grower.definitions();
+    out.tile_size = kZoneFloraTile;
+    for (std::size_t t = 0; t < grower.tiles().size(); ++t) {
+        ZoneFlora::Tile tile;
+        tile.min = grower.tiles()[t];
+        tile.first = static_cast<std::uint32_t>(out.instances.size());
+        grower.grow(t, out.instances, by_texture);
+        tile.count = static_cast<std::uint32_t>(out.instances.size()) - tile.first;
+        if (tile.count > 0) out.tiles.push_back(tile);
+    }
+}
+
+std::optional<Image> zone_ground_texture(const Zone& zone, std::string_view name) {
+    std::optional<Image> image;
+    if (auto data = zone.read_file(name)) image = decode_texture(*data, {.wld_bmp_rows = true});
+    if (image && image->format != PixelFormat::RGBA8) image = to_rgba8(*image); // DDS ground in Luclin zones
+    if (image && (image->format != PixelFormat::RGBA8 || image->mips.empty() || image->width == 0 ||
+                  image->height == 0 || image->mips[0].size() < std::size_t{image->width} * image->height * 4))
+        image.reset();
+    return image;
+}
+
+GroundTextures zone_ground_textures(const Zone& zone) {
+    return [&zone](std::string_view name) { return zone_ground_texture(zone, name); };
+}
+
+namespace {
+
+std::optional<std::string> read_rules(const std::filesystem::path& dir, std::string_view name) {
+    // A rules name is a zone's short name or a shared file's ("default"): letters, digits, '_' and '-' only, so it
+    // cannot reach outside the folder.
+    if (name.empty() || name.size() > 64) return std::nullopt;
+    for (char ch : name)
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-'))
+            return std::nullopt;
+    std::ifstream in(dir / (lower(name) + ".txt"), std::ios::binary);
+    if (!in) return std::nullopt;
     std::stringstream ss;
     ss << in.rdbuf();
+    return ss.str();
+}
+
+} // namespace
+
+std::optional<ZoneFloraRules> load_zone_flora_rules(const std::filesystem::path& rules_dir, std::string_view zone,
+                                                    bool outdoor, std::string* source) {
+    std::string name = lower(zone);
+    std::optional<std::string> text = read_rules(rules_dir, name);
+    if (!text && outdoor) {
+        name = "default";
+        text = read_rules(rules_dir, name);
+    }
+    if (!text) return std::nullopt;
+    if (source) *source = name;
     std::vector<std::string> errors;
-    ZoneFloraRules rules = parse_zone_flora_rules(ss.str(), &errors);
-    for (const auto& e : errors) log::warn("{}: {}", path.string(), e);
-    if (rules.donor.empty()) {
-        log::warn("{}: no donor archive", path.string());
-        return 0;
-    }
-    auto found = game.find(rules.donor);
+    ZoneFloraRules rules = parse_zone_flora_rules(*text, &errors,
+                                                  [&](std::string_view other) { return read_rules(rules_dir, other); });
+    for (const auto& e : errors) log::warn("flora/{}.txt: {}", name, e);
+    return rules;
+}
+
+std::optional<FloraDonor> open_flora_donor(const GameDir& game, std::string_view donor) {
+    if (donor.empty()) return std::nullopt;
+    auto found = game.find(donor);
     if (!found) {
-        log::info("{}: zone flora: the donor {} is not in the game folder", zone.name, rules.donor);
-        return 0;
+        log::info("zone flora: the donor {} is not in the game folder", donor);
+        return std::nullopt;
     }
-    std::shared_ptr<const PfsArchive> donor;
+    FloraDonor out;
     try {
-        donor = std::make_shared<const PfsArchive>(PfsArchive::open(*found));
+        out.archive = std::make_shared<const PfsArchive>(PfsArchive::open(*found));
     } catch (const std::exception& e) {
-        log::warn("{}: zone flora: {}: {}", zone.name, rules.donor, e.what());
-        return 0;
+        log::warn("zone flora: {}: {}", donor, e.what());
+        return std::nullopt;
     }
-    auto rfd = donor->read("radialfloradefs.rfd");
+    auto rfd = out.archive->read("radialfloradefs.rfd");
     if (!rfd) {
-        log::info("{}: zone flora: {} has no radialfloradefs.rfd", zone.name, rules.donor);
+        log::info("zone flora: {} has no radialfloradefs.rfd", donor);
+        return std::nullopt;
+    }
+    out.definitions = eqg::parse_radial_flora(*rfd);
+    return out;
+}
+
+std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesystem::path& rules_dir, bool outdoor) {
+    if (!zone.flora.empty()) return 0;
+    std::string source;
+    auto rules = load_zone_flora_rules(rules_dir, zone.name, outdoor, &source);
+    if (!rules) return 0;
+    if (rules->donor.empty()) {
+        log::warn("flora/{}.txt: no donor archive", source);
         return 0;
     }
-    // +green reads the game's own ground textures (not a texture pack's), each decoded once.
-    std::unordered_map<std::string, std::optional<Image>> decoded;
-    TexelLookup texel = [&](std::string_view name, glm::vec2 uv) -> std::optional<std::uint32_t> {
-        auto it = decoded.find(std::string(name));
-        if (it == decoded.end()) {
-            std::optional<Image> image;
-            if (auto data = zone.read_file(name)) image = decode_texture(*data, {.wld_bmp_rows = true});
-            if (image && (image->format != PixelFormat::RGBA8 || image->mips.empty() || image->width == 0 ||
-                          image->height == 0 || image->mips[0].size() < std::size_t{image->width} * image->height * 4))
-                image.reset();
-            it = decoded.emplace(std::string(name), std::move(image)).first;
-        }
-        if (!it->second) return std::nullopt;
-        const Image& im = *it->second;
-        auto wrap = [](float f, std::uint32_t n) {
-            float t = f - std::floor(f);
-            return std::min(static_cast<std::uint32_t>(t * static_cast<float>(n)), n - 1);
-        };
-        const std::size_t at = (std::size_t{wrap(uv.y, im.height)} * im.width + wrap(uv.x, im.width)) * 4;
-        const auto& px = im.mips[0];
-        return static_cast<std::uint32_t>(px[at]) | static_cast<std::uint32_t>(px[at + 1]) << 8 |
-               static_cast<std::uint32_t>(px[at + 2]) << 16;
-    };
-    place_zone_flora(zone, rules, eqg::parse_radial_flora(*rfd), zone.flora, texel);
-    zone.flora.textures = donor;
-    log::info("{}: zone flora: {} plants on {} tiles, from {}", zone.name, zone.flora.instances.size(),
-              zone.flora.tiles.size(), rules.donor);
-    return zone.flora.instances.size();
+    auto donor = open_flora_donor(game, rules->donor);
+    if (!donor) return 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    auto grower = std::make_shared<const ZoneFloraGrower>(zone, *rules, std::move(donor->definitions),
+                                                          zone_ground_textures(zone));
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    zone.flora = ZoneFlora{};
+    zone.flora.definitions = grower->definitions();
+    zone.flora.tile_size = kZoneFloraTile;
+    for (const auto& corner : grower->tiles()) zone.flora.tiles.push_back({corner, 0, 0});
+    zone.flora.textures = donor->archive;
+    const std::size_t tiles = grower->tiles().size();
+    if (tiles == 0) {
+        zone.flora = ZoneFlora{};
+        log::info("{}: zone flora: nothing grows by flora/{}.txt", zone.name, source);
+        return 0;
+    }
+    zone.flora.grower = std::move(grower);
+    log::info("{}: zone flora: {} tiles ({} pieces of ground) may grow plants by flora/{}.txt, from {}; {} ms",
+              zone.name, tiles, zone.flora.grower->triangles(), source, rules->donor, ms);
+    return tiles;
 }
 
 } // namespace nmsc::assets

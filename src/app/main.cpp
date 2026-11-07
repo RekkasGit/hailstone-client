@@ -754,7 +754,10 @@ int main(int argc, char** argv) {
             GameDir game = open_game_dir(opts.game_dir, opts.classic_dir);
             auto t0 = std::chrono::steady_clock::now();
             zone = assets::load_zone(game, opts.zone);
-            if (!opts.no_grass) assets::add_zone_flora(game, *zone, platform::flora_dir());
+            if (!opts.no_grass) {
+                const int tt = opts.time_type >= 0 ? opts.time_type : (opts.sky > 0 ? 1 : 0); // as the fog below
+                assets::add_zone_flora(game, *zone, platform::flora_dir(), tt == 1 || tt == 2 || tt == 5);
+            }
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0);
             log::info("loaded {}: {} terrain meshes, {} objects, {} placements, {} lights in {} ms; bounds {:.0f} {:.0f} "
                       "{:.0f} to {:.0f} {:.0f} {:.0f}",

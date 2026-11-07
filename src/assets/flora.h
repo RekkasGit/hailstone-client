@@ -23,6 +23,8 @@
 
 namespace nmsc::assets {
 
+class ZoneFloraGrower;
+
 // One plant: its foot, its turn (degrees about the vertical), its size, the terrain's colour under it (ARGB, for
 // *INHERITVERTEXCOLOR) and its definition (index into ZoneFlora::definitions).
 struct FloraInstance {
@@ -46,7 +48,10 @@ struct ZoneFlora {
     // The archive the definitions' textures are read from when they are not the zone's own (assets/zone_flora.h:
     // the donor EQG archive of a zone given flora by Hailstone's rules); null for an EQG zone's own flora.
     std::shared_ptr<const PfsArchive> textures;
-    bool empty() const { return instances.empty(); }
+    // Hailstone's zone flora (assets/zone_flora.h) grows its tiles on demand: then `tiles` lists the ones that may
+    // grow plants (first and count unused) and `instances` is empty. Null for an EQG zone's own flora.
+    std::shared_ptr<const ZoneFloraGrower> grower;
+    bool empty() const { return instances.empty() && !grower; }
 };
 
 // MSVC's rand() (FUN_1011060e): 0..32767.

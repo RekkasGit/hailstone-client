@@ -1,0 +1,64 @@
+# The shared flora for the outdoor classic zones (assets/zone_flora.h, docs/graphics.md "Zone flora"): Hailstone's own.
+# A zone without a file of its own takes these when the server calls it outdoor. Grass grows on level, open ground
+# where the texel under it is green, so sand, snow, rock, roads, water and lava stay bare; each plant takes the
+# ground's colour. The shapes and pictures are the player's own commonlands.eqg's, read from the game folder.
+# The first matching line wins.
+donor commonlands.eqg
+max_slope 45
+scale 0.9 1.3
+
+# Built, wet and burnt surfaces stay bare whatever their colour: green roof tiles, mossy walls, floors and cobbles,
+# hedges, ship decks, water and lava.
+ground *roof* 0
+ground *wal* 0
+ground *wll* 0
+ground *ceil* 0
+ground *celing* 0
+ground *cling* 0
+ground *brick* 0
+ground *cob* 0
+ground *tile* 0
+ground *marb* 0
+ground *stair* 0
+ground *tower* 0
+ground *fence* 0
+ground *bridge* 0
+ground *arch* 0
+ground *ruin* 0
+ground *pil0* 0
+ground *plat* 0
+ground *hedge* 0
+ground *leav* 0
+ground *wood* 0
+ground *plank* 0
+ground *ship* 0
+ground *deck* 0
+ground *rail* 0
+ground *mast* 0
+ground *relief* 0
+ground *bone* 0
+ground *water* 0
+ground *wat0* 0
+ground *agua* 0
+ground *aqua* 0
+ground *falls* 0
+ground *lava* 0
+ground w?.* 0
+
+# Ground named as grass (jungle floors too): its olive and dark grass as well, only its paths and bare patches not.
+ground *jung* 12 +greenish grassblades:4 grass2:3 treeshade:1 treeshade2:1
+ground *grass* 12 +greenish grassblades:4 grass2:3 treeshade:1 treeshade2:1
+ground *gras* 12 +greenish grassblades:4 grass2:3 treeshade:1 treeshade2:1
+
+# Floors, rock and stone stay bare however mossy (rkmt: Kunark's mountain rock).
+ground *floor* 0
+ground *flor* 0
+ground *flr* 0
+ground *rock* 0
+ground *rkmt* 0
+ground *mtnwa* 0
+ground *stone* 0
+ground *cliff* 0
+
+# Anything else that is clearly green.
+ground * 12 +green grassblades:4 grass2:3 treeshade:1 treeshade2:1

@@ -790,7 +790,7 @@ if(NMSC_BROWSER)
 endif()
 
 # Command-line tools.
-set(NMSC_TOOLS pfsdump texdump texpack wlddump chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+set(NMSC_TOOLS pfsdump texdump texpack wlddump florascan chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
 foreach(tool ${NMSC_TOOLS})
   add_executable(${tool} tools/${tool}.cpp ${NMSC_WIN_MANIFEST})
   target_compile_options(${tool} PRIVATE ${NMSC_WARNINGS})

@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Options > Graphics "Flora Distance" draws the grass up to three times further (400 to 1,200 units; the gamepad UI's Display page has Grass and Grass distance). Past the usual distance the grass thins out, so it costs less than it would at full density
-- East Commonlands has grass: with Show Grass on, grass and small plants now grow on its meadows, with the shapes and pictures of your game folder's revamped Commonlands. The roads, sand, cliffs and water stay bare. More classic zones can follow the same way; Hailstone's own, as the original zone has none
+- The classic outdoor zones have grass: with Show Grass on, grass grows on the meadows, forests, swamps and jungles of every outdoor zone of the original world, Kunark, Velious, Luclin and the Planes, with the shapes and pictures of your game folder's revamped Commonlands and the colour of the ground it stands on. Roads, sand, snow, rock, water, roofs and dungeon floors stay bare, and East Commonlands has a few desert plants on its sand. Hailstone's own: the original zones have none
 - Tab (and F8, and the other NPC target keys) now targets only NPCs you can see: NPCs behind walls, floors or hills are skipped. Options > Interface "Tab Needs Line of Sight" turns this off
 - Modern UI: the Alternate Advancement list starts sorted by name, A to Z. Click a column's heading to sort by it (again to reverse it; Era sorts by expansion, in release order), and drag a heading to move its column; both are remembered. The window's text is also one size larger
 - Classic lighting: characters and NPCs take the light of the place they stand in, by day and by night. After dark they were drawn nearly black against the lit walls of zones such as the Bazaar
