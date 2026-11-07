@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The target ring is now drawn on the ground: it follows slopes and steps, and characters, walls and the target's own legs hide it instead of it showing through them. It has a new look: a soft glowing band with turning dashes and a notch showing which way the target faces. It sweeps in when you change target and pulses while you auto attack (Options > Display "Target Ring" turns that off, lets the hidden part show faintly, and sets the ring's colour for each con, its opacity and its glow)
 - The map's Auto Z now has separate ranges above and below you: two sliders, under the arrow beside the map's Auto Z button and in the minimap's menu (Alt+right-click), set how far above (+) and below (-) you lines and labels stay whole before they fade
 - Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
 - Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off

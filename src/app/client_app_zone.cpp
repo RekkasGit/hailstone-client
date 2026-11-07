@@ -647,6 +647,11 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
     // Hailstone: NPCs the server leaves in the air are drawn on the floor (game::WorldState::ground_npcs), on by default.
     if (name == "ground_npcs") return config_.get_bool("display.ground_npcs", true) ? 1 : 0;
+    // Hailstone: the target ring's cues (the sweep on a new target, the pulse while attacking), on by default, and its
+    // hidden part showing faintly through what stands in front, off by default (app/target_ring.cpp).
+    if (name == "target_ring_cues") return ring_cues_ ? 1 : 0;
+    if (name == "target_ring_xray") return ring_xray_ ? 1 : 0;
+    if (auto r = ring_option(name)) return r;
     if (name == "shadows") {
         int size = config_.get_int("display.shadows", 2048);
         int best = 0;
@@ -690,6 +695,13 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.set_bool("display.ground_npcs", value != 0);
         config_.save(config_path_);
         if (conn_) conn_->set_ground_npcs(value != 0);
+        return true;
+    }
+    if (set_ring_option(name, value)) return true;
+    if (name == "target_ring_cues" || name == "target_ring_xray") {
+        (name == "target_ring_cues" ? ring_cues_ : ring_xray_) = value != 0;
+        config_.set_bool("display." + std::string(name), value != 0);
+        config_.save(config_path_);
         return true;
     }
     if (name == "shadow_clip_plane") {

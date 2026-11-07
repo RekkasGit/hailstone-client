@@ -29,7 +29,7 @@ them; the classic path that exists stays as the `classic` look.
 The 3D view can take a rectangle of the window (/viewport, `VkContext::set_scene_rect`): the scene targets are made at
 its size (`FrameInfo::extent`, with its place in `FrameInfo::offset`), the post pass draws into that rectangle (its
 push constant's offset gives the scene texel under each pixel) and clears the rest of the image to black; the UI still
-covers the whole window, and the app maps the nameplates, the target ring and mouse picking onto the rectangle
+covers the whole window, and the app maps the nameplates and mouse picking onto the rectangle
 (`ClientApp::view_area_`).
 
 The scene can be drawn below the view's size and upscaled (`display.render_scale`, `SceneOptions::render_scale`,
@@ -213,6 +213,34 @@ sends them; most of these spells have no projectile in the classic client at all
 
 The spell's cast and impact particles still play. Viewer: `--spell-bolt ID` throws a spell's projectile
 across the view every 2.5 s (`--lighting modern`).
+
+## The target ring
+
+The ring at the current target's feet (`render/target_ring_renderer.h`, `shaders/target_ring.frag`; its rules in
+`game/target_indicator.h`). Which ring shows, its colour and alpha (the default UI's TargetIndicator.ini section for
+the target's con) and its radius follow the original; how it is drawn and how it moves are Hailstone's own (the
+original turns four UV-animated circles).
+
+It is a decal on the scene's depth, drawn just after `VkContext::begin_translucent` (the classic lighting, which has
+no other use for the depth copy, takes it for the ring when there is one). A box round the ring, from 1 + 0.6 radii
+below the feet to as far above, is drawn without culling or depth test; the fragment shader keeps its far faces and
+rebuilds each pixel's scene point from the depth copy. A surface less than 60 degrees from level within that height of
+the feet takes the ring, so it follows the ground, slopes and steps, and anything standing in front of it hides it: a
+leg or a wall is not level, a head is out of range. Elsewhere the ring is a level one at the feet, shown where it lies
+in front of the scene (a target swimming or in the air, the part reaching over a ledge); behind the scene it shows only
+with **Target Ring Through Models** (`display.target_ring_xray`, off by default), at a fifth of its strength.
+
+The look: a soft band (half width 6 % of the radius, 0.15 to 0.5 units) with a wider halo, its core past 1 by the
+**Glow** (`display.target_ring_glow`, 0 .. 100, default 50: up to 1.4 past, 0.7 by default) so the bloom finds it; dashes on an inner track, about one per unit and a half of radius (12 to 48), turning slowly; a
+chevron outside the band where the target faces. With **Target Ring Cues** (`display.target_ring_cues`, on by
+default) a second ring sweeps in from 1.6 radii over 0.35 s when the target changes, and while the player's auto
+attack is on the dashes turn about four times as fast and the band pulses at 1.25 Hz. The haze fades it with distance
+as it does the spell bolts.
+
+Options > Display "Target Ring" also sets the colour for each con, Gray to Red, in the colour picker
+(`display.target_ring_color.<Section>`, RRGGBB, the ini's section names; Default Colors erases them and the ini's
+colours come back), and the **Opacity**, 25 .. 200 % of the section's alpha (`display.target_ring_opacity`, at most
+opaque). The free-target sections are not the player's to colour (`game::apply_ring_colors`).
 
 ## Loading screen
 
@@ -907,6 +935,11 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.ao` | 0, 1 | 1 | screen-space ambient occlusion; modern only; viewer `--no-ao` |
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.neighbour_zones` | 0, 1 | 1 | the zone past an outdoor zone line drawn in the distance (Neighbour zones); modern only; `/neighbourzones [on \| off]` |
+| `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |
+| `display.target_ring_xray` | 0, 1 | 0 | the target ring's hidden part showing faintly through what stands in front (Target Ring Through Models) |
+| `display.target_ring_color.<Section>` | RRGGBB | (TargetIndicator.ini's) | the target ring's colour for a con, Trivial .. Deadly (Target Ring) |
+| `display.target_ring_opacity` | 25 .. 200 | 100 | the target ring's alpha, in % of its con's |
+| `display.target_ring_glow` | 0 .. 100 | 50 | how bright the target ring's core shines |
 | `display.bloom` | 0 .. 1 | 0.5 | bright light spreading into its surroundings; modern only; viewer `--bloom N` |
 | `display.brightness` | -0.2 .. 0.2 | 0 | added after the tonemap, in display values (the UI is not graded) |
 | `display.contrast` | 0.5 .. 1.5 | 1 | around mid grey, after the tonemap |

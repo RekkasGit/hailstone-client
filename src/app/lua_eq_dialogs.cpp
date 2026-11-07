@@ -23,6 +23,7 @@
 #include "game/quantity_dialog.h"
 #include "game/spell_display.h"
 #include "game/spells.h"
+#include "game/target_indicator.h"
 #include "net/game_connection.h"
 #include "net/spell_packets.h"
 #include "platform/open_folder.h"
@@ -223,6 +224,25 @@ public:
             if (color_row_ < 0 || color_row_ >= static_cast<int>(color_data_.size())) return true;
             int index = color_data_[static_cast<std::size_t>(color_row_)];
             host.pick_color(sample_rgb(index), [&host, index](std::uint32_t c) { set_user_color(host, index, c & 0xffffff); });
+            return true;
+        }
+        if (id.starts_with("TargetRingColor")) {
+            // Hailstone's Target Ring rows (ClientApp ring options): TargetRingColor<n> opens the colour picker on con
+            // section n's colour and keeps the answer; TargetRingColorDefault puts every section back to the ini's.
+            if (!host.find_option || !host.set_option) return true;
+            std::string_view rest = id.substr(std::string_view("TargetRingColor").size());
+            if (rest == "Default") {
+                for (int i = 0; i < game::kTargetRingConSections; ++i)
+                    host.set_option(std::format("target_ring_color_{}", i), -1);
+                return true;
+            }
+            if (rest.size() != 1 || rest[0] < '0' || rest[0] >= '0' + game::kTargetRingConSections) return true;
+            std::string name = std::format("target_ring_color_{}", rest);
+            std::optional<int> now = host.find_option(name);
+            if (!now) return true;
+            host.pick_color(static_cast<std::uint32_t>(*now), [&host, name](std::uint32_t argb) {
+                host.set_option(name, static_cast<int>(argb & 0xffffffu));
+            });
             return true;
         }
         if (id == "UserColorDefault") {

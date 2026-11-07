@@ -1,7 +1,10 @@
 #include "game/target_indicator.h"
 
 #include <algorithm>
+#include <cmath>
+#include <charconv>
 #include <cstdlib>
+#include <format>
 #include <string>
 
 #include "core/ini_file.h"
@@ -41,6 +44,51 @@ std::optional<int> target_ring_section(Con con) {
 float target_ring_radius(float avatar_height, float actor_scale, bool has_actor) {
     float r = has_actor ? avatar_height * actor_scale : avatar_height;
     return std::max(r, 2.0f);
+}
+
+std::optional<std::uint32_t> parse_ring_rgb(std::string_view text) {
+    if (!text.empty() && text.front() == '#') text.remove_prefix(1);
+    if (text.size() != 6) return std::nullopt;
+    std::uint32_t v = 0;
+    auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), v, 16);
+    if (ec != std::errc() || end != text.data() + text.size()) return std::nullopt;
+    return v;
+}
+
+std::string format_ring_rgb(std::uint32_t rgb) { return std::format("{:06x}", rgb & 0xffffffu); }
+
+TargetRingStyle apply_ring_colors(const TargetRingStyle& ini, int section, const TargetRingColors& colors) {
+    TargetRingStyle out = ini;
+    if (section >= 0 && section < kTargetRingConSections)
+        if (auto rgb = colors.rgb[static_cast<std::size_t>(section)]) {
+            out.red = static_cast<std::uint8_t>((*rgb >> 16) & 0xff);
+            out.green = static_cast<std::uint8_t>((*rgb >> 8) & 0xff);
+            out.blue = static_cast<std::uint8_t>(*rgb & 0xff);
+        }
+    int opacity = std::clamp(colors.opacity, kTargetRingOpacityMin, kTargetRingOpacityMax);
+    out.alpha = static_cast<std::uint8_t>(std::min(255, (static_cast<int>(ini.alpha) * opacity + 50) / 100));
+    return out;
+}
+
+float target_ring_core_boost(int glow) { return static_cast<float>(std::clamp(glow, 0, 100)) * 0.014f; }
+
+float target_ring_width(float radius) { return std::clamp(radius * 0.06f, 0.15f, 0.5f); }
+
+float target_ring_spin_rate(bool attacking, bool cues) {
+    return cues && attacking ? kTargetRingSpinAttack : kTargetRingSpinIdle;
+}
+
+TargetRingLook target_ring_look(float radius, double seconds, double since_change, bool attacking, bool cues) {
+    TargetRingLook out;
+    out.width = target_ring_width(radius);
+    if (!cues) return out;
+    if (attacking) {
+        double turn = std::fmod(seconds * kTargetRingPulseHz, 1.0);
+        out.pulse = static_cast<float>(0.5 - 0.5 * std::cos(turn * 2.0 * 3.14159265358979323846));
+    }
+    if (since_change >= 0.0 && since_change < kTargetRingFlashSeconds)
+        out.flash = 1.0f - static_cast<float>(since_change) / kTargetRingFlashSeconds;
+    return out;
 }
 
 } // namespace nmsc::game
