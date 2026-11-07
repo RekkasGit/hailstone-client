@@ -553,10 +553,11 @@ void CharacterLibrary::dress_luclin(const CharacterModel& model, const game::App
     look.luclin_model = true;
     game::find_eye_materials(look, env); // UpdateDAGPointers, when the actor is made
     // ActorClient::SwapAllBodyMaterials @0x40bf80: every body slot from
-    // material 0, untinted with a hero's forge piece.
+    // material 0, untinted with a hero's forge piece. Under a robe the sleeves
+    // are the chest's (game::luclin_armor_slot).
     if (a.texture == game::kNoTexture)
         for (std::int32_t slot = 1; slot <= 6; ++slot) {
-            auto s = static_cast<std::size_t>(slot);
+            auto s = static_cast<std::size_t>(game::luclin_armor_slot(a, look.race, slot));
             game::swap_body_material(look, env, slot, 0, static_cast<std::int32_t>(a.material[s]), a.tint[s], 0,
                                      a.class_id, a.hero_forge[s] != 0 ? 1u : 0u);
         }

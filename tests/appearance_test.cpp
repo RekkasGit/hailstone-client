@@ -76,6 +76,17 @@ TEST_CASE("OP_WearChange follows the client's slot rules") {
     CHECK(game::effective_material(robe, 4) == 0);
     CHECK(game::is_robe(10));
     CHECK_FALSE(game::is_robe(17));
+
+    // Luclin models (HandleMaterialEx): arms and wrists take the chest's armour under a robe, a Froglok's legs too.
+    CHECK(game::luclin_armor_slot(robe, 5, game::kSlotArms) == game::kSlotChest);
+    CHECK(game::luclin_armor_slot(robe, 5, game::kSlotWrists) == game::kSlotChest);
+    CHECK(game::luclin_armor_slot(robe, 5, game::kSlotHands) == game::kSlotHands);
+    CHECK(game::luclin_armor_slot(robe, 5, game::kSlotLegs) == game::kSlotLegs);
+    CHECK(game::luclin_armor_slot(robe, 330, game::kSlotLegs) == game::kSlotChest);
+    CHECK(game::luclin_armor_slot(robe, 5, game::kSlotChest) == game::kSlotChest);
+    game::Appearance tunic;
+    tunic.material[1] = 3;
+    CHECK(game::luclin_armor_slot(tunic, 5, game::kSlotArms) == game::kSlotArms);
 }
 
 TEST_CASE("OP_WearChange round trip") {
