@@ -16,6 +16,7 @@
 local style = dofile("lib/style.lua")
 local T = dofile("lib/theme.lua")
 local snap = dofile("lib/snap.lua")
+local esc = dofile("lib/escape.lua")
 local C = T.color
 local WINDOW = "OptionsWindow"
 
@@ -777,6 +778,7 @@ ui.window("Options", function()
   local w, b = C.window, C.frameBorder
   ui.PushStyleColor(ui.Col.WindowBg, w[1], w[2], w[3], w[4])
   local visible, open = ui.Begin("Options##nmsc", true, ui.WindowFlags.NoCollapse)
+  if esc.Frame(WINDOW) then open = false end
   -- the controls' outline (inside the window only: its own edge keeps the hairline)
   ui.PushStyleColor(ui.Col.Border, b[1], b[2], b[3], b[4])
   ui.PushStyleVar(ui.StyleVar.FrameBorderSize, 1)
@@ -786,6 +788,7 @@ ui.window("Options", function()
   ui.PopStyleColor()
   if visible and ui.BeginPopupContextWindow("##optionsmenu") then -- a right click on an empty spot
     if ui.MenuItem("Close") then open = false end
+    esc.MenuItem(WINDOW)
     ui.EndPopup()
   end
   ui.End()

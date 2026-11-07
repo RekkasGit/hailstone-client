@@ -125,7 +125,10 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
             if (auto id = game::target_key_command(target_manager_, cmd, world, eye_position()))
                 conn_->set_target(*id);
         break;
-    case C::CLOSE_TOP_WINDOW: actions_ui_->close_top_window(); break;
+    case C::CLOSE_TOP_WINDOW:
+        // The client's own windows first, then the UI pack's (a window with "Close with Esc" ticked: eq.TakeCloseTopWindow).
+        if (!actions_ui_->close_top_window()) eq_host_.close_top_window = true;
+        break;
     case C::REPLY: reply_to_last_tell(); break; // __ExecuteCmd case 0x23 (default key R)
     case C::CLEAR_TARGET:
         // Escape while placing ends the placement (this client's: the original's cancel paths are not traced).

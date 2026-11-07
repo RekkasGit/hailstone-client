@@ -269,6 +269,9 @@ struct EqHost {
     // A menu row that opens the window's own menu (the stock "Window" submenu: CContextMenuManager's default menu,
     // which this client's window menu stands for): sidl.lua opens it for `window_menu` (eq.TakeWindowMenu).
     std::string window_menu;
+    // CLOSE_TOP_WINDOW (Escape) went down and no window of the client's own took it: the UI pack may close one of
+    // its windows (eq.TakeCloseTopWindow, once). Cleared after each UI frame, so a press nothing took is not kept.
+    bool close_top_window = false;
     // CHelpWnd::SetFile(page) and Activate: the help window on help\\<page> (a tip page's WndNotify 1000 link).
     std::function<void(const std::string& page)> open_help;
     // The help window's Tips button: CTipWnd::Activate(pinstCTipWnd_1, -1, 1) (EqApi::activate_tip_of_day).

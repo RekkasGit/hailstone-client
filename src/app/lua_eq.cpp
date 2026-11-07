@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <imgui.h>
@@ -2483,6 +2484,11 @@ int TakeWindowMenu(lua_State* L) {
     lua_pushboolean(L, yes);
     return 1;
 }
+// yes = eq.TakeCloseTopWindow()   -- the close-top-window key (Escape) went down this frame and is the caller's (once)
+int TakeCloseTopWindow(lua_State* L) {
+    lua_pushboolean(L, std::exchange(Impl::of(L).host.close_top_window, false));
+    return 1;
+}
 int ReturnFalse(lua_State* L) {
     lua_pushboolean(L, false);
     return 1;
@@ -2900,7 +2906,8 @@ void EqApi::register_functions(lua_State* L) {
         {"CascadeMenus", CascadeMenus}, {"CascadeClick", CascadeClick}, {"CascadeHover", CascadeHover},
         {"CascadeClose", CascadeClose}, {"GameMenus", GameMenus}, {"GameMenuClick", GameMenuClick},
         {"GameMenuHover", GameMenuHover}, {"GameMenuClose", GameMenuClose},
-        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu}, {"ContextMenus", ContextMenus},
+        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu},
+        {"TakeCloseTopWindow", TakeCloseTopWindow}, {"ContextMenus", ContextMenus},
         {"WindowShown", WindowShown},
         {nullptr, nullptr}};
     lua_pushlightuserdata(L, impl_.get());

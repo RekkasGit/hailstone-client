@@ -51,7 +51,7 @@ constexpr Entry kCalls[] = {
     {"HoldingButton", 0}, {"CursorAttachment", 0}, {"SlotItem", 0}, {"BagInfo", 0}, {"BagSlotItem", 0},
     {"FindItems", 0}, {"InventorySpace", 0}, {"Parcels", 0}, {"DebugScreens", 0}, {"DebugTree", 0}, {"VoiceChat", 0},
     {"CascadeMenus", 0}, {"CascadeHover", 0}, {"CascadeClose", 0}, {"GameMenus", 0}, {"GameMenuHover", 0},
-    {"GameMenuClose", 0}, {"ContextMenus", 0}, {"WindowContextMenu", 0}, {"TakeWindowMenu", 0}, {"CompassStrips", 0},
+    {"GameMenuClose", 0}, {"ContextMenus", 0}, {"WindowContextMenu", 0}, {"TakeWindowMenu", 0}, {"TakeCloseTopWindow", 0}, {"CompassStrips", 0},
     {"CompassMarkers", 0}, {"AbilityBook", 0}, {"AbilityBookState", 0}, {"Disciplines", 0}, {"UsableSkills", 0},
     {"BankItem", 0}, {"CursorCoin", 0}, {"TradeState", 0}, {"IconSelectionIcons", 0}, {"IconSelectionIcon", 0},
     {"HotBarMenu", 0}, {"ChatWindows", 0}, {"ChatText", 0}, {"ChatHistory", 0}, {"ChatInfo", 0}, {"ChatFilters", 0},
