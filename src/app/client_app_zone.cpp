@@ -2,6 +2,7 @@
 
 #include "app/client_app_internal.h"
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -557,6 +558,9 @@ const SliderRange* slider_range(std::string_view name) {
 constexpr std::uint32_t kShadowSizes[] = {0, 1024, 2048, 4096}; // Off, Low, Medium, High
 constexpr int kMsaaSamples[] = {1, 2, 4, 8};
 constexpr const char* kTonemaps[] = {"auto", "none", "agx", "aces"};
+// The per-source spell particle options, in game::SpellFxSource's order (config display.<name>).
+constexpr std::array<std::string_view, game::kSpellFxSourceCount> kSpellFxSourceOptions = {
+    "spell_particles_self", "spell_particles_players", "spell_particles_npcs"};
 
 } // namespace
 
@@ -613,6 +617,13 @@ void ClientApp::apply_particle_densities() {
         std::string key = std::format("display.{}_particle_density", kind);
         if (config_.get(key)) set_particle_density(kind, std::clamp(config_float(key, 1.0f), 0.0f, 1.0f));
     }
+    // Hailstone: the per-source spell particle densities (display.spell_particles_self / _players / _npcs, the
+    // choice 0..3; High when unset).
+    if (spell_particles_)
+        for (std::size_t i = 0; i < kSpellFxSourceOptions.size(); ++i) {
+            int choice = std::clamp(config_.get_int(std::format("display.{}", kSpellFxSourceOptions[i]), 3), 0, 3);
+            spell_particles_->set_source_density(static_cast<game::SpellFxSource>(i), game::particle_density_value(choice));
+        }
 }
 
 std::optional<int> ClientApp::display_option(std::string_view name) const {
@@ -623,6 +634,9 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     for (std::string_view kind : {"spell", "environment", "actor"})
         if (name.starts_with(kind) && name.substr(kind.size()) == "_particle_density")
             return game::particle_density_choice(particle_density(kind));
+    for (std::size_t i = 0; i < kSpellFxSourceOptions.size(); ++i)
+        if (name == kSpellFxSourceOptions[i])
+            return std::clamp(config_.get_int(std::format("display.{}", name), 3), 0, 3);
     if (const auto* r = slider_range(name))
         return std::clamp(static_cast<int>(std::lround((config_float(r->key, r->fallback) - r->at_zero) / r->per_tick)), 0, 20);
     if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
@@ -689,6 +703,16 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         if (name.starts_with(kind) && name.substr(kind.size()) == "_particle_density") {
             // SetDensity: choices 0..3 are 0, 0.25, 0.5, 1; others leave it.
             if (value >= 0 && value <= 3) set_particle_density(kind, game::particle_density_value(value));
+            config_.save(config_path_);
+            return true;
+        }
+    for (std::size_t i = 0; i < kSpellFxSourceOptions.size(); ++i)
+        if (name == kSpellFxSourceOptions[i]) {
+            // Hailstone: Off / Low / Medium / High, on top of the spell particle density.
+            int choice = std::clamp(value, 0, 3);
+            config_.set_int(std::format("display.{}", name), choice);
+            if (spell_particles_)
+                spell_particles_->set_source_density(static_cast<game::SpellFxSource>(i), game::particle_density_value(choice));
             config_.save(config_path_);
             return true;
         }

@@ -174,6 +174,7 @@ void GameConnection::merchant_sell(const ItemSlot& slot, std::uint32_t quantity)
     if (!merchant_ || !merchant_->open || merchant_->trader || quantity < 1 || slot.type != kInvPossessions) return;
     const Item* item = inventory_.at(slot);
     if (!item) return;
+    if (refuse_kept(item, "sell")) return; // Hailstone: game/kept_items.h
     if (merchant_->pending > 0) {
         chat(ChatEvent::Kind::System, strings_.format(12063, std::vector<std::string>{merchant_->name})); // one thing at a time
         return;
@@ -215,6 +216,7 @@ std::string GameConnection::send_parcel(const ItemSlot& slot, std::uint32_t quan
     if (slot.type != kInvPossessions || !item || slot.slot == kSlotCursor || (slot.sub < 0 && slot.slot < kSlotGeneral1))
         return "Pick an item from your bags to send.";
     if (item->no_trade()) return "That item cannot be sent.";
+    if (kept_items_.holds_kept(*item)) return "That item is marked Keep: unmark it in the Advanced Inventory window first.";
     ParcelSend s;
     s.npc_id = merchant_->npc_id;
     s.slot = slot.slot;
@@ -359,6 +361,7 @@ void GameConnection::trade_drop_cursor() {
     if (!trade_ || !trade_->open) return;
     Item* held = inventory_.at(ItemSlot::possessions(kSlotCursor));
     if (!held) return;
+    if (refuse_kept(held, trade_->with_npc ? "give" : "trade")) return; // Hailstone: game/kept_items.h
     if (!trade_->with_npc && !game::is_droppable(*held)) {
         chat(ChatEvent::Kind::System, strings_.format(12921, std::vector<std::string>{held->name}));
         return;
@@ -779,7 +782,7 @@ void GameConnection::point_merchant_sell() {
     auto& m = point_merchant_;
     if (state_ != ConnectionState::InZone || !m.npc || !m.quote || m.quote->cost == 0) return;
     const Item* item = inventory_.at(m.quoted);
-    if (!item) return;
+    if (!item || refuse_kept(item, "sell")) return; // Hailstone: game/kept_items.h
     send_zone(encode_alt_currency_sell(m.npc, m.quoted.slot, m.quoted.sub, item->stackable() ? item->stack_count : 1,
                                        m.quote->cost));
     m.quote.reset();
@@ -859,6 +862,7 @@ bool GameConnection::adventure_merchant_sell(const ItemSlot& slot) {
     const Item* item = inventory_.at(slot);
     // EQEmu takes no sales from Discord merchants (nor does the client).
     if (state_ != ConnectionState::InZone || !m.npc || !item || m.type == 2) return false;
+    if (refuse_kept(item, "sell")) return false; // Hailstone: game/kept_items.h
     if (!adventure_sell_price(item->ldon_price, item->ldon_sellback_rate, item->ldon_sold)) return false;
     send_zone(encode_adventure_merchant_sell(m.npc, slot.slot, slot.sub, item->stackable() ? item->stack_count : 1));
     return true;

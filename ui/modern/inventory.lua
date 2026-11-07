@@ -1,7 +1,7 @@
 -- Inventory: replaces the game's InventoryWindow. The worn slots as a grid with the weapons apart, the character's
 -- numbers beside them (the game's own labels by EQType, in the colours the game gives them), the ten carried slots,
--- coins, and the game's buttons. Over the carried slots (Hailstone): a search of everything carried (the slots
--- and bags holding a match ringed, the rest dimmed, in the bags' windows too) and Stack / Sort of all the bags. The Stats page has every number the game gives (each attribute and resist as
+-- coins, and the game's buttons, with Advanced Inventory (Hailstone: inventorymanager.lua, where the search of
+-- everything you have, Stack / Sort and the item marks are). The Stats page has every number the game gives (each attribute and resist as
 -- total, base, heroic and cap; the item bonuses; regeneration and the pools without buffs: eq.CharacterStats), the
 -- Bandolier page the game's BandolierWnd (Hailstone: the stock inventory has no such page; lib/bandolier.lua, as the
 -- Bandolier window draws it), the Alt. Currency page the alternate currencies. Slots are the game's (lib/items.lua).
@@ -35,8 +35,7 @@ local STATS_W = 220
 local W = LEFT_W + 18 + STATS_W
 local HEADER_H, TABS_H = 46, 28
 local BODY_H = 4 * (SLOT + GAP) + 10 + SLOT + 14
-local TOOLS_H = 32
-local FOOT_H = TOOLS_H + SLOT + 12 + 34 + 34
+local FOOT_H = SLOT + 12 + 34 + 2 * 32 + 2
 local H = HEADER_H + TABS_H + BODY_H + FOOT_H
 
 local page = "character" -- character, stats, bandolier, currency
@@ -364,69 +363,17 @@ local function statsPage(x, y, s)
   ui.EndChild()
 end
 
--- Where a search result is (eq.FindItems' place and bag).
-local function placeText(r)
-  local kind, slot, sub = r.place:match("^(%a):(%d+):?(%d*)$")
-  slot = tonumber(slot)
-  local bank = kind == "b"
-  local top = bank and ("Bank slot " .. (slot + 1)) or ("Carried slot " .. (slot - GENERAL_FIRST + 1))
-  if sub ~= "" then
-    return (bank and "Bank: " or "") .. (r.bag or "Bag") .. ", slot " .. (tonumber(sub) + 1)
-  end
-  return top
-end
-
--- The search's results, carried and banked, over the page: a click picks one up (a banked one with the bank open),
--- a right click opens its bag.
-local function resultsPage(x, y, s)
-  local text = tools.Search("inventory")
-  local count, _, list = eq.FindItems("all", text)
-  local wx, wy = ui.GetWindowPos()
-  ui.SetCursorPos(x - wx, y - wy)
-  ui.BeginChild("##results", W * s, BODY_H * s - 10 * s, false)
-  local cx, cy = ui.GetCursorScreenPos()
-  local cw = ui.GetContentRegionAvail()
-  local _, th = T.TextSize("Ag", T.font.small)
-  T.Text(cx, cy, count == 0 and ("Nothing called \"" .. text .. "\"") or
-    (count == 1 and "1 item found" or (count .. " items found")), C.muted, T.font.small)
-  T.Text(cx + cw, cy, "Click: pick up    Right-click: open its bag", C.faint, T.font.tiny, "right")
-  local rh, isz = 34 * s, 28 * s
-  local ry = cy + th + 8 * s
-  local bankOpen = eq.WindowShown("BankWnd") or eq.WindowShown("BigBankWnd")
-  for k, r in ipairs(list or {}) do
-    local it = r.item
-    local banked = r.place:sub(1, 1) == "b"
-    local hit = T.Hit("##res" .. k, cx, ry, cx + cw, ry + rh - 2 * s)
-    local hov = ui.IsItemHovered()
-    if hov then ui.DrawRectFilled(cx, ry, cx + cw, ry + rh - 2 * s, C.ink[1], C.ink[2], C.ink[3], 0.06, 5 * s) end
-    local tex, u0, v0, u1, v1 = eq.ItemIcon(it.icon)
-    T.Icon(cx + 3 * s, ry + (rh - isz) / 2 - 1 * s, isz, s, tex, u0, v0, u1, v1, nil, { radius = 5 })
-    local nx = cx + isz + 12 * s
-    local name = it.name .. ((it.stackable and it.count > 1) and ("  x" .. it.count) or "")
-    T.Text(nx, ry + 3 * s, T.Fit(name, cw - isz - 20 * s, T.font.small), it.magic and C.magic or C.text, T.font.small)
-    T.Text(nx, ry + 3 * s + th, placeText(r), banked and C.gold or C.faint, T.font.tiny)
-    if hit then
-      if banked and not bankOpen then tools.state.note, tools.state.noteAt = "That is in your bank: open the bank first.", ui.GetTime()
-      else eq.PlaceClick(r.place, "left") end
-    elseif hov and ui.IsMouseClicked(ui.Mouse.Right) then
-      if banked and not bankOpen then tools.state.note, tools.state.noteAt = "That is in your bank: open the bank first.", ui.GetTime()
-      else eq.PlaceClick(r.place, "open") end
-      T.TakeRightClick()
-    end
-    ry = ry + rh
-  end
-  ui.SetCursorScreenPos(cx, ry)
-  ui.Dummy(cw, 4 * s)
-  ui.EndChild()
-end
-
 local PAGES = { { "character", "Character" }, { "stats", "Stats" }, { "bandolier", "Bandolier" },
   { "currency", "Alt. Currency" } }
+-- In two rows of three. Advanced Inventory is Hailstone's (InventoryManagerWnd).
 local BUTTONS = {
   { "IW_Skills", "Skills" }, { "IW_AltAdvBtn", "Alt. Advancement" },
+  { "Hailstone_AdvancedInventory", "Advanced Inventory", window = "InventoryManagerWnd",
+    tooltip = "Everything you have, worn, carried and banked: search, filters, and Keep and Sell marks" },
   { "Hailstone_AutoInventory", "Auto-Inventory", tooltip = "Put the item on your cursor into your inventory" },
   { "IW_Destroy", "Destroy", danger = true }, { "IW_DoneButton", "Done", primary = true },
 }
+local BUTTONS_PER_ROW = 3
 local NO_TRAIL = { noTrail = true }
 local SLOT_NUMBERS = {}
 for i = 0, 9 do SLOT_NUMBERS[i] = tostring(i + 1) end
@@ -483,43 +430,24 @@ local function body(x, y, w, h, s)
   if eq.TabPage(WINDOW, "IW_Subwindows") ~= gamePage then eq.SetTabPage(WINDOW, "IW_Subwindows", gamePage) end
   local by = ty + TABS_H * s + 4 * s
   tools.ModeBanner("##inv", math.max(tx, x + 260 * s), x + w, ty, s) -- after the tabs
-  if tools.Search("inventory") ~= "" then resultsPage(x, by, s)
-  elseif page == "stats" then statsPage(x, by, s)
+  if page == "stats" then statsPage(x, by, s)
   elseif page == "bandolier" then bandolierPage(x, by, s)
   elseif page == "currency" then currencyPage(x, by, s)
   else characterPage(x, by, s) end
 
-  -- the search and Stack / Sort, then the carried slots
-  local ty0 = y + (HEADER_H + TABS_H + BODY_H) * s
-  ui.DrawLine(x, ty0 - 8 * s, x + w, ty0 - 8 * s, C.ink[1], C.ink[2], C.ink[3], 0.06, 1)
-  local wx, wy = ui.GetWindowPos()
-  ui.SetCursorPos(x - wx, ty0 - wy)
-  local note = tools.Note()
-  ui.SetNextItemWidth(w - tools.ToolbarWidth(s, true) - 10 * s)
-  tools.state.search.inventory = ui.InputTextWithHint("##invsearch", note or "Find an item (carried or banked)",
-    tools.state.search.inventory, 64)
-  tools.Toolbar("##inv", x + w, ty0, s, "inventory", nil, true)
-  local text = tools.Search("inventory")
-  local found, slotsFound = 0, {}
-  if text ~= "" then found, slotsFound = eq.FindItems("inventory", text) end
-  local fy = ty0 + TOOLS_H * s
+  -- the carried slots
+  local fy = y + (HEADER_H + TABS_H + BODY_H) * s
+  ui.DrawLine(x, fy - 8 * s, x + w, fy - 8 * s, C.ink[1], C.ink[2], C.ink[3], 0.06, 1)
   local sz = SLOT * s
   local gap = (w - 10 * sz) / 9
   for i = 0, 9 do
-    local slot = GENERAL_FIRST + i
-    local sx = x + i * (sz + gap)
-    local it = items.InvSlot(slot, nil, sx, fy, sz, s, SLOT_NUMBERS[i]) -- (the item it drew)
-    if it and text ~= "" then tools.SearchMark(sx, fy, sz, s, it, "inventory", (slotsFound[slot] or 0) > 0) end
+    items.InvSlot(GENERAL_FIRST + i, nil, x + i * (sz + gap), fy, sz, s, SLOT_NUMBERS[i])
   end
-  if text ~= "" then
-    local note = found == 0 and "None carried" or (found == 1 and "1 carried" or (found .. " carried"))
-    T.Text(x + w, fy + sz + 1 * s, note, found == 0 and C.faint or C.muted, T.font.tiny, "right")
-  else
-    local free, total = eq.InventorySpace()
-    local low = free <= 5
-    T.Text(x + w, fy + sz + 1 * s, string.format("%d / %d free", free, total), low and C.danger or C.faint,
-      T.font.tiny, "right")
-  end
+  local free, total = eq.InventorySpace()
+  local low = free <= 5
+  local note = tools.Note() -- (a refusal of Sort / Stack started from a bag's window or the Advanced Inventory)
+  T.Text(x + w, fy + sz + 1 * s, note or string.format("%d / %d free", free, total),
+    (note or low) and C.danger or C.faint, T.font.tiny, "right")
   -- coins, then the buttons
   local cy = fy + sz + 12 * s
   local plat, gold, silver, copper = eq.Money()
@@ -553,14 +481,20 @@ local function body(x, y, w, h, s)
   end
 
   local btnY = cy + 34 * s
-  local buttons = BUTTONS
-  local bw = (w - (#buttons - 1) * 6 * s) / #buttons
-  for k, b in ipairs(buttons) do
-    local bx0 = x + (k - 1) * (bw + 6 * s)
-    local enabled = eq.ChildState(WINDOW, b[1])
+  local per = BUTTONS_PER_ROW
+  local bw = (w - (per - 1) * 6 * s) / per
+  for k, b in ipairs(BUTTONS) do
+    local col, rowN = (k - 1) % per, (k - 1) // per
+    local bx0 = x + col * (bw + 6 * s)
+    local by0 = btnY + rowN * 32 * s
+    local enabled = b.window and true or eq.ChildState(WINDOW, b[1])
     if b.danger and not cursor then enabled = false end
-    if T.Button("##" .. b[1], bx0, btnY, bx0 + bw, btnY + 26 * s, s, b[2], { enabled = enabled ~= false, primary = b.primary, tooltip = b.tooltip }) then
-      if b[1] == "IW_DoneButton" then eq.ShowWindow(WINDOW, false) else eq.ClickChild(WINDOW, b[1], "left") end
+    local open = b.window and eq.WindowShown(b.window) == true
+    if T.Button("##" .. b[1], bx0, by0, bx0 + bw, by0 + 26 * s, s, b[2],
+        { enabled = enabled ~= false, primary = b.primary or open, tooltip = b.tooltip }) then
+      if b.window then eq.ShowWindow(b.window, not open)
+      elseif b[1] == "IW_DoneButton" then eq.ShowWindow(WINDOW, false)
+      else eq.ClickChild(WINDOW, b[1], "left") end
     end
   end
 end

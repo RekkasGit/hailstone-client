@@ -5,7 +5,8 @@
 --   * dragging pans, a double click centres there;
 --   * markers of your own, kept per zone (ui/settings/modern.txt, map.markers.<zone>): right-click the map to put
 --     one there, or "Mark my spot"; the list at the right centres on one, renames or removes it;
---   * Auto Z (eq.MapAutoZ): lines and labels well above or below you fade, here and on the minimap;
+--   * Auto Z (eq.MapAutoZ): lines and labels well above or below you fade, here and on the minimap; the arrow
+--     beside its button sets how far above (+) and below (-) you they stay whole;
 --   * the cursor's location (as /loc gives it) and its distance from you, under the map.
 -- The map's own editing (lines, labels, layers) is the classic map toolbar's: "Edit" opens it.
 local hud = dofile("lib/hud.lua")
@@ -205,7 +206,13 @@ local function body(x, y, w, h, s)
   tx = tx + 84 * s
   local autoZ = eq.MapAutoZ()
   if toolButton("##autoz", tx, y, 64 * s, s, "Auto Z", autoZ, "Fade what is above or below you") then eq.MapAutoZ(not autoZ) end
-  tx = tx + 68 * s
+  tx = tx + 66 * s
+  if toolButton("##autozrange", tx, y, 22 * s, s, "v", false, "How far above and below you") then ui.OpenPopup("##autozmenu") end
+  if ui.BeginPopup("##autozmenu") then
+    hud.AutoZControls(s)
+    ui.EndPopup()
+  end
+  tx = tx + 26 * s
   if toolButton("##edit", tx, y, 54 * s, s, "Edit", false, "The map toolbar (lines, labels, layers)") then
     eq.ShowWindow("MapToolbarWnd", true)
   end

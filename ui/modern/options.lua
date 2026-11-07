@@ -16,6 +16,7 @@
 local style = dofile("lib/style.lua")
 local T = dofile("lib/theme.lua")
 local snap = dofile("lib/snap.lua")
+local esc = dofile("lib/escape.lua")
 local C = T.color
 local WINDOW = "OptionsWindow"
 
@@ -195,6 +196,8 @@ local function generalTab()
   end)
   section("Interface", function()
     check("context_menus", "Allow Context Menus", "Right-clicking a window opens its menu.")
+    check("player_menu", "Player Right-Click Menu",
+      "Hailstone: right-clicking another player opens a menu (Send Tell, Invite to Group, Invite to Raid, Trade, Inspect) instead of inspecting them. Needs context menus allowed.")
     check("pet_window_popup", "Pet Window Auto-Popup", "The pet window opens when you get a pet.")
     check("target_click_help", "Target Click Shows Help",
       "Show help text when you left click on a target object or player.")
@@ -407,6 +410,13 @@ local function displayTab()
   section("Particles", function()
     local DENSITIES = { "Off", "Low", "Medium", "High" }
     combo("spell_particle_density", "Spell Particle Density", DENSITIES, "How many particles spells give off.")
+    -- Hailstone: whose spells, each on top of the spell density (the original's "On For" filter is not offered).
+    combo("spell_particles_self", "Your Spell Particles", DENSITIES,
+      "Spells you cast and spells that land on you, on top of the spell particle density.")
+    combo("spell_particles_players", "Other Players' Spell Particles", DENSITIES,
+      "Spells other players cast, on top of the spell particle density.")
+    combo("spell_particles_npcs", "NPC Spell Particles", DENSITIES,
+      "Spells NPCs cast, pets and mercenaries included, on top of the spell particle density.")
     combo("environment_particle_density", "Environment Particle Density", DENSITIES,
       "How many particles the zone's clouds give off: torches, braziers, smoke and mist (/particledensity).")
     combo("actor_particle_density", "Actor Particle Density", DENSITIES,
@@ -770,6 +780,7 @@ ui.window("Options", function()
   local w, b = C.window, C.frameBorder
   ui.PushStyleColor(ui.Col.WindowBg, w[1], w[2], w[3], w[4])
   local visible, open = ui.Begin("Options##nmsc", true, ui.WindowFlags.NoCollapse)
+  if esc.Frame(WINDOW) then open = false end
   -- the controls' outline (inside the window only: its own edge keeps the hairline)
   ui.PushStyleColor(ui.Col.Border, b[1], b[2], b[3], b[4])
   ui.PushStyleVar(ui.StyleVar.FrameBorderSize, 1)
@@ -779,6 +790,7 @@ ui.window("Options", function()
   ui.PopStyleColor()
   if visible and ui.BeginPopupContextWindow("##optionsmenu") then -- a right click on an empty spot
     if ui.MenuItem("Close") then open = false end
+    esc.MenuItem(WINDOW)
     ui.EndPopup()
   end
   ui.End()

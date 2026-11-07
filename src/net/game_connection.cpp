@@ -700,6 +700,7 @@ void GameConnection::enter_world(const std::string& name, bool return_home) {
     }
     load_chat_filters(); // the character's chat.ini over eqclient.ini's
     load_client_options(); // and options.ini
+    load_kept_items();     // Hailstone: the Keep marks (kept_items.txt)
     EnterWorld e;
     e.name = name;
     // DoCharacterSelection @0x53aac0: byte 0x44 is the Return Home flag and byte 0x45 is set with it (or with the

@@ -1,0 +1,116 @@
+// Hailstone's right-click menu on another player (game::opens_player_menu, app::player_menu_rows,
+// app::open_player_menu): which spawns have it, and what each row sends, against the mock server.
+#include <doctest/doctest.h>
+
+#include <string>
+
+#include <imgui.h>
+
+#include "app/lua_eq.h"
+#include "app/lua_eq_windows.h"
+#include "game/interact.h"
+#include "mock_server/harness.h"
+
+using namespace nmsc;
+using namespace nmsc::net;
+using namespace nmsc::test;
+
+namespace {
+
+std::uint32_t add_player(GameConnection& conn, std::uint32_t id, const std::string& name) {
+    auto& w = conn.world_for_test();
+    const game::Spawn* me = w.player();
+    REQUIRE(me);
+    game::Spawn pc;
+    pc.id = id;
+    pc.name = name;
+    pc.position = me->position + glm::vec3(3.0f, 0.0f, 0.0f);
+    pc.heights.avatar_height = 6.0f;
+    w.spawns[pc.id] = pc;
+    return id;
+}
+
+} // namespace
+
+TEST_CASE("player menu: only another plain player has it") {
+    game::Spawn pc;
+    CHECK(game::opens_player_menu(pc, false));
+    CHECK_FALSE(game::opens_player_menu(pc, true)); // the player's own spawn
+    game::Spawn s = pc;
+    s.is_npc = true;
+    CHECK_FALSE(game::opens_player_menu(s, false));
+    s = pc;
+    s.is_corpse = true;
+    CHECK_FALSE(game::opens_player_menu(s, false));
+    s = pc;
+    s.trader = true; // its shop, as the original
+    CHECK_FALSE(game::opens_player_menu(s, false));
+    s = pc;
+    s.buyer = true; // its barter window
+    CHECK_FALSE(game::opens_player_menu(s, false));
+}
+
+TEST_CASE("player menu: the rows and what each sends") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        // Its own servers folder: the ContextMenus change below is saved to the character's options.ini.
+        EmptyGameDir servers;
+        ConnectionOptions options = quick_options();
+        options.profile_id = "test-server";
+        options.servers_dir = servers.path();
+        Rig rig(MockConfig::standard(), options);
+        auto& conn = rig.conn;
+        REQUIRE(rig.to_zone());
+        app::EqHost host;
+        app::EqApi api{host};
+        host.in_game = host.ui_ready = true;
+        host.conn = &conn;
+        const std::uint32_t bob = add_player(conn, 4100, "Bob");
+
+        auto rows = app::player_menu_rows(host, bob);
+        REQUIRE(rows.size() == 6);
+        CHECK(rows[0].text == "Bob");
+        CHECK_FALSE(rows[0].enabled);
+        CHECK(rows[1].text == "Send Tell");
+        CHECK(rows[2].text == "Invite to Group");
+        CHECK(rows[3].text == "Invite to Raid");
+        CHECK(rows[4].text == "Trade");
+        CHECK(rows[5].text == "Inspect");
+        for (std::size_t i = 1; i < rows.size(); ++i) {
+            CHECK(rows[i].enabled);
+            CHECK(static_cast<bool>(rows[i].act));
+        }
+        // Not for the player's own spawn.
+        CHECK(app::player_menu_rows(host, conn.world().player_id).empty());
+
+        auto count = [&](Op op) { return MockEqServer::count(rig.server.zone_log, op); };
+        rows[2].act();
+        REQUIRE(rig.until([&] { return count(Op::GroupInvite) == 1; }));
+        CHECK(conn.world().target_id == bob);
+        rows[3].act();
+        REQUIRE(rig.until([&] { return count(Op::RaidInvite) == 1; }));
+        rows[5].act();
+        REQUIRE(rig.until([&] { return count(Op::InspectRequest) == 1; }));
+        conn.destroy_cursor();
+        rows[4].act();
+        REQUIRE(rig.until([&] { return count(Op::TradeRequest) == 1; }));
+
+        // A row does nothing once the player has gone.
+        conn.world_for_test().spawns.erase(bob);
+        rows[5].act();
+        rig.run_for(std::chrono::milliseconds(100));
+        CHECK(count(Op::InspectRequest) == 1);
+
+        // It opens as a game menu, and not with context menus switched off (EqHost::context_menus).
+        add_player(conn, 4101, "Ann");
+        CHECK(api.open_player_menu(4101, 100.0f, 120.0f));
+        REQUIRE(host.menus.size() == 1);
+        CHECK(host.menus[0].x == 100.0f);
+        CHECK(host.menus[0].rows[0].text == "Ann");
+        host.menus.clear();
+        conn.change_client_option(game::ClientOption::ContextMenus, 0);
+        CHECK_FALSE(api.open_player_menu(4101, 100.0f, 120.0f));
+        CHECK(host.menus.empty());
+    }
+    ImGui::DestroyContext(ctx);
+}

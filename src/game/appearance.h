@@ -56,6 +56,13 @@ inline bool is_robe(std::uint32_t chest_material) { return chest_material >= 10 
 // The head is bare unless show_helm (SwapHead @00594210).
 std::uint32_t effective_material(const Appearance& a, int slot);
 
+// PlayerClient::HandleMaterialEx @0x594e50 (RefreshEquipSlot) on a Luclin
+// model: under a robe (chest +0xf44 10..16) the arms and wrists, and a
+// Froglok's (330) legs, are dressed with the chest's material, its tint
+// (+0xf00) and its hero's forge flag. The slot whose armour body slot `slot`
+// (1-6) is dressed with.
+int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot);
+
 // FUN_0040a5b0 (ActorBase, @0x40a5b0): the head material ids 0xf0 / 0xf1 of
 // the old models by the actor's race and gender (female: gender 1): 0xf0 is a
 // per-race helm item, 0xf1 the head 3 (Ogres a helm, Barbarians the 0xf0 one);

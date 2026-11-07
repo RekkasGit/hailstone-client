@@ -45,6 +45,12 @@ std::uint32_t effective_material(const Appearance& a, int slot) {
     return a.material[s];
 }
 
+int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot) {
+    if (!is_robe(a.material[kSlotChest])) return slot;
+    if (slot == kSlotArms || slot == kSlotWrists || (slot == kSlotLegs && race == 330)) return kSlotChest;
+    return slot;
+}
+
 std::uint32_t map_head_material(std::uint32_t race, std::uint8_t gender, std::uint32_t id) {
     const bool female = gender != 0;
     if (id == 0xf0) {

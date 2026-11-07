@@ -157,6 +157,19 @@ An EQG model's emitters started by an animation (`.prt` trigger 1; docs/formats/
 starts or loops round on the actor (`ActorRenderer::drawn_playing`), after the entry's delay, and emit for about one
 play (at most 1.5 s): the run dust at the feet, swings, casts.
 
+A spell's stages play for every caster: the cast stage when OP_BeginCast arrives, the impact stage when OP_Action 231
+lands the spell, on players and NPCs alike. Stock EQEmu sends the landing only to players within `Range:SpellMessages`
+(75 units) of the struck spawn, but the begin cast within `Range:BeginCast` (200), so between the two a bystander sees
+the caster's cast stage and no impact; the original client gets no more from the server. A server owner who wants
+the impact seen from further raises that rule.
+
+Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client
+does not read): the Options window's Particles section has three more Off / Low / Medium / High choices, each scaling
+the spell particle density for the stages played from then on (`game::spell_fx_source`, `display.spell_particles_self`,
+`_players`, `_npcs`; High when unset). Your spells are the ones you cast and the ones that land on you; other
+players' and NPCs' (pets and mercenaries included) go by the caster's kind, or by the struck spawn's when the caster
+is not known.
+
 ## Radial flora
 
 The EQG heightmap zones' grass, flowers and ferns (`assets/flora.h`, placed at load as docs/formats/eqg.md says) are

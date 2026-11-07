@@ -213,6 +213,7 @@ TEST_CASE("Chat windows: lines go to the window of their colour's channel (Chann
         CHECK(ini->get("ChatManager", "HitMode0") == "2");
         // /channel on a chat server channel (Cmd_channel: ChatChannel 0x14, its name at +0x234 and its index at
         // +0x230) is kept too: the exe's "%s_ChatChannel" / "%s_TellTarget" / "%s_DefaultChannel" keys
+        lua.run("eq.ChatSetAlwaysHere(1, false)"); // (the main window's lock first: the last-clicked window)
         lua.run("eq.ChatActivate(2)");
         REQUIRE(app::set_active_chat_default(0x14, "nmsguild", 1));
         api.save_layout();
@@ -556,6 +557,7 @@ TEST_CASE("Chat windows: the chat keys fill the active window's input (TELL, CMD
         CHECK(lua.run("return eq.ChatPage(2)") == "nil");
         CHECK(lua.run("return eq.ChatPage(1)") == "-1");
         CHECK(lua.run("return eq.ChatPage(1)") == "nil");
+        lua.run("eq.ChatSetAlwaysHere(1, false)");
         lua.run("eq.ChatActivate(2)");
         app::chat_page_key(1);
         CHECK(lua.run("return eq.ChatPage(2)") == "1");
@@ -572,6 +574,85 @@ TEST_CASE("Chat windows: the chat keys fill the active window's input (TELL, CMD
         REQUIRE(submitted.size() >= 3);
         CHECK(std::vector<std::string>(submitted.end() - 3, submitted.end()) ==
               std::vector<std::string>{":waves", "'hi", "/gsay inc"});
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Chat windows: Always Chat Here takes the chat keys; the main window has it by default") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    nmsc::test::ScratchDir dir_scratch("chat_here_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game(dir / "game");
+    auto takes = [](Lua& lua, int slot) {
+        return lua.run(std::format("local t = eq.ChatTakeFocus({}); return tostring(t)", slot));
+    };
+    const char* here = "local s = '' for i = 1, 3 do s = s .. tostring(select(5, eq.ChatInfo(i))):sub(1, 1) end return s";
+    {
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        CHECK(lua.run("return eq.ChatNewWindow()") == "2");
+        CHECK(lua.run("return eq.ChatNewWindow()") == "3");
+        CHECK(lua.run(here) == "tff"); // a new character: the main window's
+        // Another window clicked: the keys still start a line in the main window.
+        lua.run("eq.ChatActivate(2)");
+        app::tell_key();
+        CHECK(takes(lua, 2) == "nil");
+        CHECK(takes(lua, 1) == "/tell ");
+        CHECK(lua.run("return tostring(select(2, eq.ChatInfo(1)))") == "true");
+
+        // Ticked on window 3: it takes the keys (and says so in itself).
+        std::string before = lua.run("return lines(3)");
+        lua.run("eq.ChatSetAlwaysHere(3, true)");
+        CHECK(lua.run(here) == "fft");
+        CHECK(lua.run("return lines(3)") != before);
+        app::tell_key();
+        CHECK(takes(lua, 1) == "nil");
+        CHECK(takes(lua, 3) == "/tell ");
+        api.save_layout();
+        ui::UiIni* ini = app::chat_ui_ini();
+        REQUIRE(ini);
+        CHECK(ini->get("ChatManager", "LockedActiveWindow") == "2");
+
+        // Unticked there: back to the main window.
+        lua.run("eq.ChatSetAlwaysHere(3, false)");
+        CHECK(lua.run(here) == "tff");
+        // Window 2 locked and closed: the main window again.
+        lua.run("eq.ChatSetAlwaysHere(2, true)");
+        lua.run("eq.ChatCloseWindow(2)");
+        CHECK(lua.run("return tostring(select(5, eq.ChatInfo(1)))") == "true");
+        // Unticked on the main window: no lock, the last-clicked window has the keys (the original's way).
+        lua.run("eq.ChatSetAlwaysHere(1, false)");
+        CHECK(lua.run("return tostring(select(5, eq.ChatInfo(1)))") == "false");
+        lua.run("eq.ChatActivate(3)");
+        app::tell_key();
+        CHECK(takes(lua, 3) == "/tell ");
+        api.save_layout();
+        CHECK(ini->get("ChatManager", "LockedActiveWindow") == "-1");
+    }
+    {
+        // The next session keeps "no lock".
+        net::GameConnection conn(game);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        CHECK(lua.run("return tostring(select(5, eq.ChatInfo(1)))") == "false");
     }
     ImGui::DestroyContext(ctx);
 }

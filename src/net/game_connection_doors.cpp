@@ -252,6 +252,7 @@ bool GameConnection::request_drop_cursor() {
     if (state_ != ConnectionState::InZone) return false;
     const Item* item = inventory_.cursor();
     if (!item) return false;
+    if (refuse_kept(item, "drop")) return false; // Hailstone: a kept item stays on the cursor (game/kept_items.h)
     // LMouseUp's CanDrop(1, 1, 0, 1) @0x538b73 first: a no trade item (or one holding one, or a real estate item)
     // says why (colour 15) and stays on the cursor. The FV rules: the rule set 6 (0xddfd34 is not known here).
     if (auto r = game::can_drop(*item, pvp_rules_ == 6, true, true); r != game::CanDropResult::Droppable) {
@@ -282,6 +283,7 @@ std::string GameConnection::drop_confirm_text() const {
 bool GameConnection::drop_cursor_on_ground(bool announce) {
     if (state_ != ConnectionState::InZone) return false;
     const Item* item = inventory_.cursor();
+    if (refuse_kept(item, "drop")) return false;
     game::DropInput in;
     in.announce = announce;
     in.cursor_item = item != nullptr;

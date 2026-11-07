@@ -38,6 +38,8 @@ struct CascadeMenuView {
 // Hailstone's own key command (not in the original's table): the Ability Book (AbilityBookWnd, game/ability_book.h).
 // The EQ menu offers it after Combat Abilities.
 inline constexpr int kAbilityBookCommand = 1000;
+// Hailstone's own: the Advanced Inventory (InventoryManagerWnd, game/kept_items.h), offered after Inventory.
+inline constexpr int kInventoryManagerCommand = 1001;
 
 // The stock window a key command shows and hides (the window keys and EQ menu rows of the Lua windows:
 // ClientApp::key_command toggles it when the UI pack replaces it), nullptr for other commands.

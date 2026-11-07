@@ -319,6 +319,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "own_name") return own_name_ ? 1 : 0;
     // Hailstone: a rider under an illusion still rides (game::WorldState::illusion_mounts), on by default.
     if (o == "illusion_mounts") return config_.get_bool("game.illusion_mounts", true) ? 1 : 0;
+    // Hailstone: the right-click menu on other players (game::opens_player_menu), on by default.
+    if (o == "player_menu") return player_menu_ ? 1 : 0;
     if (o == "font_face") {
         // The face's place in option_choices("font_face"): 0 the default, -1 one not in the list.
         std::string face = config_.get_string("ui.font_face", "");
@@ -447,6 +449,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.set_bool("game.illusion_mounts", v != 0);
         config_.save(config_path_);
         if (conn_) conn_->set_illusion_mounts(v != 0);
+        return;
+    }
+    if (o == "player_menu") {
+        player_menu_ = v != 0;
+        config_.set_bool("mouse.player_menu", player_menu_);
+        config_.save(config_path_);
         return;
     }
     if (o == "mouse_invert_y" || o == "mouse_wheel_zoom") {

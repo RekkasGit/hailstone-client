@@ -154,6 +154,7 @@ int ClientApp::run() {
             eq_api_->begin_frame();
             lap.mark("eq api begin_frame");
             lua_ui_->frame();
+            eq_host_.close_top_window = false; // (a press no window took this frame)
             lap.mark("Lua UI frame");
         }
         window_.set_text_input(std::exchange(web_text_input_, false)); // a page that has the keys (app/lua_eq_web.cpp)

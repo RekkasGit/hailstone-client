@@ -308,7 +308,7 @@ TEST_CASE("Map Auto Z: what is far above or below the feet fades, a span holding
     MapView m;
     CHECK(m.z_fade(500.0f, 0.0f) == 1.0f); // off
     m.auto_z = true;
-    m.auto_z_range = 30;
+    m.auto_z_above = m.auto_z_below = 30;
     CHECK(m.z_fade(500.0f, std::nullopt) == 1.0f); // no feet
     CHECK(m.z_fade(30.0f, 0.0f) == 1.0f);           // within the range
     CHECK(m.z_fade(-30.0f, 0.0f) == 1.0f);
@@ -321,6 +321,20 @@ TEST_CASE("Map Auto Z: what is far above or below the feet fades, a span holding
     m.z_filter = true;
     MapLine l{glm::vec3(0, 0, 200), glm::vec3(10, 0, 200), 0xff000000, 0};
     CHECK_FALSE(m.line_shown(l, 0.0f));
+}
+
+TEST_CASE("Map Auto Z: the ranges above and below the feet are set apart") {
+    MapView m;
+    m.auto_z = true;
+    m.auto_z_above = 10;
+    m.auto_z_below = 50;
+    CHECK(m.z_fade(10.0f, 0.0f) == 1.0f);
+    CHECK(m.z_fade(20.0f, 0.0f) == doctest::Approx(1.0f - 0.85f * 0.5f)); // halfway to three times 10
+    CHECK(m.z_fade(30.0f, 0.0f) == doctest::Approx(MapView::kAutoZFloor));
+    CHECK(m.z_fade(-50.0f, 0.0f) == 1.0f);
+    CHECK(m.z_fade(-100.0f, 0.0f) == doctest::Approx(1.0f - 0.85f * 0.5f)); // halfway to three times 50
+    CHECK(m.z_fade(-150.0f, 0.0f) == doctest::Approx(MapView::kAutoZFloor));
+    CHECK(m.z_fade(-20.0f, 20.0f, 0.0f) == 1.0f); // a span holding the feet
 }
 
 TEST_CASE("Map zoom to fit: the selected label's box") {

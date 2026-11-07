@@ -107,6 +107,7 @@ end
 --   opts.tooltip(row, texts)          a tooltip for a hovered row
 --   opts.reserve     unscaled pixels at each row's right that its click and drag leave alone (a part drawn there
 --                                     takes its own clicks)
+-- Sets opts.innerW to the rows' width (the child's, less its scroll bar), for a column header drawn above next frame.
 -- Returns the original's row count, the selected row (0-based, -1 none) and how many rows are shown.
 local rowPools = {} -- [win][id] = { entries = { { row, texts } ... }, order = {}, state = {...} } (reused each frame)
 local function rowPool(win, id)
@@ -162,6 +163,7 @@ function P.Rows(win, id, w, h, opts)
   local rowH = opts.rowH and opts.rowH * s or (th + 10 * s)
   ui.BeginChild("##rows" .. id, w or 0, h or 0, false)
   local cw, ch = ui.GetContentRegionAvail()
+  if opts ~= NO_OPTS then opts.innerW = cw end
   if #order == 0 then
     P.Empty(cw, math.max(ch, 40 * s), opts.empty or "Nothing to show.", opts.emptySub)
     ui.EndChild()

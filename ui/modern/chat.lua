@@ -5,8 +5,8 @@
 -- what the game's input holds here (eq.ChatTakeFocus), item links open the item display, Up / Down walk the
 -- history, Tab / Shift+Tab on a /tell line step through the players to reply to (eq.ChatCycleReply). A player's
 -- name in a line is a link: a click opens a tell to them (their tell window with Use Tell Windows, else
--- "/tell <name> " in the input). Right-click: the chat menu (windows, tabs, filters, default channel, font, tell
--- windows, timestamps, clear).
+-- "/tell <name> " in the input). Right-click: the chat menu (windows, tabs, Always Chat Here, filters, default channel,
+-- font, tell windows, timestamps, clear).
 -- Unlocked (any frame's menu), a chat window is moved by dragging and resized from its corner.
 local hud = dofile("lib/hud.lua")
 local stml = dofile("lib/stml.lua")
@@ -106,6 +106,9 @@ local function menu(slot, c, w)
     if ui.MenuItem("Rename Tab...") then c.rename = w.title or ""; c.renameOpen = true end
     if #w.tabs > 1 and ui.MenuItem("Close Tab") then eq.ChatCloseTab(slot, w.tab) end
     if not w.main and ui.MenuItem("Close Window") then eq.ChatCloseWindow(slot) end
+    -- (Enter and '/' start a line in this window, whichever was clicked last; the main window's by default)
+    local _, _, _, _, here = eq.ChatInfo(slot)
+    if ui.MenuItem("Always Chat Here", here) then eq.ChatSetAlwaysHere(slot, not here) end
     ui.Separator()
     filtersMenu(slot)
     local _, _, current = eq.ChatInfo(slot)
