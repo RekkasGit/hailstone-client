@@ -350,6 +350,7 @@ struct EqApi::Impl {
         add_customization_windows(windows);
         add_ability_windows(windows);
         add_ability_book_window(windows);
+        add_inventory_manager_window(windows);
         add_socialedit_windows(windows);
         host.open_social_editor = [this](std::int32_t social) {
             // A Lua social opens in the Lua social editor (app/lua_eq_luasocial.cpp) instead.
@@ -2848,6 +2849,7 @@ void register_gamepad_api(lua_State* L, EqHost& host); // app/lua_eq_gamepad.cpp
 void register_spellbook_api(lua_State* L, EqHost& host); // app/lua_eq_spellbook.cpp
 void register_abilities_api(lua_State* L, EqHost& host); // app/lua_eq_abilities.cpp
 void register_ability_book_api(lua_State* L, EqHost& host); // app/lua_eq_abilitybook.cpp
+void register_inventory_manager_api(lua_State* L, EqHost& host); // app/lua_eq_inventory_manager.cpp
 void register_exchange_api(lua_State* L, EqHost& host);  // app/lua_eq_exchange.cpp
 void register_social_api(lua_State* L, EqHost& host);    // app/lua_eq_social.cpp
 void register_stats_api(lua_State* L, EqHost& host);     // app/lua_eq_stats.cpp
@@ -2864,6 +2866,7 @@ void EqApi::register_functions(lua_State* L) {
     register_spellbook_api(L, impl_->host);
     register_abilities_api(L, impl_->host);
     register_ability_book_api(L, impl_->host);
+    register_inventory_manager_api(L, impl_->host);
     register_exchange_api(L, impl_->host);
     register_social_api(L, impl_->host);
     register_stats_api(L, impl_->host);

@@ -4,7 +4,11 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <format>
+#include <fstream>
+#include <sstream>
 
+#include "core/atomic_file.h"
 #include "core/log.h"
 #include "game/appearance.h"
 #include "game/bag_move.h"
@@ -503,6 +507,7 @@ void GameConnection::destroy_cursor() {
         }
         return;
     }
+    if (refuse_kept(inventory_.cursor(), "destroy")) return; // Hailstone: a kept item stays (game/kept_items.h)
     // DestroyHeldItemOrMoney @005862f0: OP_MoveItem {cursor, nowhere, 0}.
     MoveItem m;
     m.from = cursor_slot();
@@ -515,6 +520,7 @@ void GameConnection::destroy_held() {
     // CInventoryWnd::DestroyHeld @0x692340 (game/item_options.h).
     if (state_ != ConnectionState::InZone || !profile_) return;
     const Item* held = inventory_.cursor();
+    if (refuse_kept(held, "destroy")) return; // Hailstone: before the confirmation, not after it
     game::DestroyInput in;
     in.item = held != nullptr;
     in.money = std::any_of(cursor_coins_.begin(), cursor_coins_.end(), [](std::uint32_t c) { return c != 0; });
@@ -1058,6 +1064,41 @@ void GameConnection::auto_consume() {
                 return;
             }
     }
+}
+
+// ---------------------------------------------------------------- kept items (Hailstone; game/kept_items.h)
+
+void GameConnection::load_kept_items() {
+    kept_items_.clear();
+    ++kept_revision_;
+    std::filesystem::path path = own_files().kept_items();
+    if (path.empty()) return;
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return;
+    std::ostringstream text;
+    text << in.rdbuf();
+    kept_items_.parse(text.str());
+}
+
+void GameConnection::set_item_kept(std::uint32_t id, std::string_view name, bool on) {
+    if (!kept_items_.set(id, name, on)) return;
+    ++kept_revision_;
+    std::filesystem::path path = own_files().kept_items();
+    if (path.empty()) return; // no character yet: kept for this session only
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (!write_file_atomic(path, kept_items_.format())) log::warn("cannot write {}", path.string());
+}
+
+bool GameConnection::refuse_kept(const Item* item, std::string_view verb) {
+    if (!item || !kept_items_.holds_kept(*item)) return false;
+    const bool inside = !kept_items_.kept(item->id); // a bag holding a kept item
+    chat(ChatEvent::Kind::System,
+         inside ? std::format("Your {} holds an item marked Keep: unmark it in the Advanced Inventory window to {} the bag.",
+                              item->name, verb)
+                : std::format("Your {} is marked Keep: unmark it in the Advanced Inventory window to {} it.", item->name,
+                              verb));
+    return true;
 }
 
 } // namespace nmsc::net

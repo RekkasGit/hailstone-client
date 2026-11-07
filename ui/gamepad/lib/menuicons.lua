@@ -242,6 +242,12 @@ local ICONS = {
     arc(0, -0.35, 0.38, 180, 360)
     line(-0.75, 0.15, 0.75, 0.15)
   end,
+  advinventory = function() -- the bag, and a lens over its corner (the Advanced Inventory)
+    rect(-0.85, -0.35, 0.45, 0.75, 0.25)
+    arc(-0.2, -0.35, 0.34, 180, 360)
+    circle(0.42, 0.42, 0.3)
+    line(0.63, 0.63, 0.9, 0.9)
+  end,
   options = function()
     circle(0, 0, 0.45)
     disc(0, 0, 0.12)
@@ -415,7 +421,7 @@ local BY_TEXT = {
   ["Alternate Advancement"] = "aa", ["Buffs"] = "buffs", ["Short Duration Buffs"] = "shortbuffs",
   ["Leadership"] = "leadership", ["Skills"] = "skills", ["Blocked Buffs"] = "blocked",
   ["Blocked Pet Buffs"] = "blockedpet", ["Auras"] = "auras", ["Character"] = "character",
-  ["Inventory"] = "inventory", ["Options"] = "options", ["Camp & Quit"] = "camp",
+  ["Inventory"] = "inventory", ["Advanced Inventory"] = "advinventory", ["Options"] = "options", ["Camp & Quit"] = "camp",
   ["Report a Bug"] = "bug", ["Web Browser"] = "globe", ["Lua Scripts"] = "script", ["Ability Book"] = "abilitybook", ["Aggro Meter"] = "aggro",
   ["Help"] = "help", ["Everquest Help"] = "help", ["Mail"] = "mail", ["Mercenaries"] = "mercenary",
   ["NPC Journal"] = "npcjournal", ["PvP Stats"] = "pvp", ["Storyline"] = "story", ["Tribute"] = "tribute",

@@ -365,6 +365,7 @@ add_library(nmsc_engine STATIC
   src/game/item_preview.cpp
   src/game/item_moves.cpp
   src/game/item_sort.cpp
+  src/game/kept_items.cpp
   src/game/item_links.cpp
   src/game/keymap.cpp
   src/game/hotbuttons.cpp
@@ -466,6 +467,7 @@ add_library(nmsc_engine STATIC
   src/app/lua_eq_spellbook.cpp
   src/app/lua_eq_abilities.cpp
   src/app/lua_eq_abilitybook.cpp
+  src/app/lua_eq_inventory_manager.cpp
   src/app/lua_eq_button_state.cpp
   src/app/lua_eq_socialedit.cpp
   src/app/lua_eq_luasocial.cpp
@@ -1037,6 +1039,8 @@ if(NMSC_BUILD_TESTS)
     tests/rows3_vectors_test.cpp
     tests/item_moves_vectors_test.cpp
     tests/item_sort_test.cpp
+    tests/kept_items_test.cpp
+    tests/inventory_manager_ui_test.cpp
     tests/audio_vectors_test.cpp
     tests/melee_vectors_test.cpp
     tests/spawn_heights_vectors_test.cpp

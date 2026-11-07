@@ -48,6 +48,7 @@
 #include "game/interact.h"
 #include "game/item_moves.h"
 #include "game/item_sort.h"
+#include "game/kept_items.h"
 #include "game/inventory.h"
 #include "game/item_links.h"
 #include "game/mail.h"
@@ -1502,6 +1503,17 @@ public:
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
     bool auto_inventory();
+    // Hailstone: the items marked Keep (game/kept_items.h; the Advanced Inventory window), kept per character in
+    // kept_items.txt (read at enter_world, written at each change). A kept item, or a bag holding one, is not
+    // destroyed, dropped on the ground, put in a trade or a give, sold to a merchant or sent by parcel: each of those
+    // says why in the chat and leaves it where it is.
+    const game::KeptItems& kept_items() const { return kept_items_; }
+    bool item_kept(const Item& item) const { return kept_items_.holds_kept(item); }
+    void set_item_kept(std::uint32_t id, std::string_view name, bool on);
+    // Counts the changes to the marks (a window's cache of them).
+    std::uint64_t kept_items_revision() const { return kept_revision_; }
+    // CharacterZoneClient::CanUseItem(item, 1, 0) for our character, quietly (the Advanced Inventory's "usable").
+    bool item_usable(const Item& item) const { return can_use_item_full(item); }
     // A click on the inventory window's doll (CInventoryWnd::HandleLButtonUp @0x692ec0, IW_CharacterView): an item on
     // the cursor is auto-inventoried (sound 0x92), or, when it stays, "There are no open slots for the held item in
     // your inventory." (5290, colour 0xd; not for Krono); coin on the cursor goes back to the inventory as the same
@@ -2916,6 +2928,11 @@ private:
 
     // Items.
     game::Inventory inventory_;
+    game::KeptItems kept_items_;  // Hailstone: the Keep marks (kept_items.txt)
+    std::uint64_t kept_revision_ = 0;
+    void load_kept_items();
+    // A kept item (or a bag holding one) about to be `verb`ed ("destroy", "drop", ...): says so, and true.
+    bool refuse_kept(const Item* item, std::string_view verb);
     net::Coins coins_;
     net::Coins pending_split_; // opcode 0x3ed4's coin (0xddfcd4..0xddfce0), credited by process_cursor_queue
     std::optional<LootSession> loot_;

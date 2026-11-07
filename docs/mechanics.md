@@ -679,6 +679,27 @@ find affect slot 1600). Each record is replayed call for call against the record
   the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
   for everyone (`tests/feign_death_spell_test.cpp`).
 
+## Kept items: Hailstone's Keep mark
+
+A deliberate difference, with no counterpart in the original: the Advanced Inventory window (Hailstone's own,
+`InventoryManagerWnd`, `ui/modern/inventorymanager.lua`; the EQ menu's row after Inventory and the inventory window's
+button) marks items Keep or Sell, by item id, so every copy of an item has the mark. Sell is the marks the merchant
+window's Sell marked sells (`eq.SellJunk`; called junk in the code and the settings). Keep is the client's own
+(`game/kept_items.h`, `GameConnection::set_item_kept`), kept per character in `kept_items.txt` in the character's
+folder. While an item is kept, or a bag holds one, the client refuses, with a line in the chat saying why and the item
+left where it is:
+
+- destroying it (the inventory window's Destroy, before its confirmation, and `destroy_cursor`);
+- dropping it on the ground (`request_drop_cursor`, before CanDrop and its confirmation, and `drop_cursor_on_ground`);
+- putting it in a trade, with a player or an NPC (`trade_drop_cursor`, which a give to an NPC goes through);
+- selling it to a merchant, a point merchant or an adventure merchant (`merchant_sell`, `point_merchant_sell`,
+  `adventure_merchant_sell`); Sell marked leaves kept items out;
+- sending it by parcel (`send_parcel`).
+
+Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing. Not
+covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
+not both: marking one clears the other.
+
 ## Using items
 
 `net/game_connection_item_use.cpp` (no vectors; `tests/item_use_test.cpp` runs it against the mock server):

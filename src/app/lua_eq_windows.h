@@ -372,6 +372,7 @@ void add_ability_windows(std::vector<std::unique_ptr<StockWindow>>& out);      /
 bool combat_ability_listed(const net::GameConnection& c, int n);
 std::optional<game::HotButton> combat_ability_button(const net::GameConnection& c, int n);
 void add_ability_book_window(std::vector<std::unique_ptr<StockWindow>>& out);  // app/lua_eq_abilitybook.cpp
+void add_inventory_manager_window(std::vector<std::unique_ptr<StockWindow>>& out); // app/lua_eq_inventory_manager.cpp
 void add_socialedit_windows(std::vector<std::unique_ptr<StockWindow>>& out);   // app/lua_eq_socialedit.cpp
 void add_group_search_windows(std::vector<std::unique_ptr<StockWindow>>& out); // app/lua_eq_group_search.cpp
 // CSocialEditWnd::GetSocialTextColor: social colour 0..19 as its colour button's text colour, else 0xff606060.
