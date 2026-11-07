@@ -998,6 +998,10 @@ At run time:
 - `display.material_maps` (on by default) and the viewer's `--no-material-maps` turn the maps off.
 - Every viewer, the model viewer too, takes `--textures`.
 
+## Name plates
+
+NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the same colour the target's name has in the original) instead of the stock yellow. Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the stock yellow for NPC names. The target keeps its consider colour in both settings.
+
 ## Settings
 
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and

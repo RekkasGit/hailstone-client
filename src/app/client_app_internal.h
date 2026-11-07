@@ -1265,6 +1265,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
+    bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,
