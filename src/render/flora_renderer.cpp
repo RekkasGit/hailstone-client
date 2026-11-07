@@ -1,6 +1,8 @@
 #include "render/flora_renderer.h"
 
 #include <algorithm>
+#include <chrono>
+#include <span>
 #include <cmath>
 #include <fstream>
 #include <stdexcept>
@@ -8,6 +10,7 @@
 #include "assets/texture.h"
 #include "assets/texture_overrides.h"
 #include "assets/zone.h"
+#include "assets/zone_flora.h"
 #include "core/log.h"
 #include "render/particle_renderer.h"
 #include "render/scene_lighting.h"
@@ -164,6 +167,29 @@ FloraRenderer::~FloraRenderer() {
     for (auto& b : instances_) b.destroy(vk_.allocator());
 }
 
+void FloraRenderer::grow_tiles(const glm::vec3& camera) {
+    const auto& flora = zone_.flora;
+    // Let go of the tiles well out of reach (a tile's width past it), so the memory follows the reach.
+    const float keep = reach_ + flora.tile_size * 2.0f;
+    const glm::vec2 c(camera);
+    for (auto it = grown_.begin(); it != grown_.end();) {
+        const auto& tile = flora.tiles[it->first];
+        glm::vec2 nearest = glm::clamp(c, tile.min, tile.min + glm::vec2(flora.tile_size));
+        if (glm::dot(nearest - c, nearest - c) > keep * keep) it = grown_.erase(it);
+        else ++it;
+    }
+    // Grow the missing ones nearest first, for at most kGrowBudget a frame (a zone-in grows its first ring over a few
+    // frames; walking grows a tile now and then).
+    const auto start = std::chrono::steady_clock::now();
+    for (const auto& [d2, t] : near_tiles_) {
+        if (grown_.contains(t)) continue;
+        std::vector<assets::FloraInstance> plants;
+        flora.grower->grow(t, plants);
+        grown_.emplace(t, std::move(plants));
+        if (std::chrono::steady_clock::now() - start > kGrowBudget) break;
+    }
+}
+
 std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera,
                                   double seconds, const SceneLighting& lighting, bool modern) {
     const auto& flora = zone_.flora;
@@ -187,11 +213,22 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
         if (d2 <= reach2) near_tiles_.emplace_back(d2, t);
     }
     std::sort(near_tiles_.begin(), near_tiles_.end());
+    if (flora.grower) grow_tiles(camera);
     for (const auto& [tile_d2, t] : near_tiles_) {
         const auto& tile = flora.tiles[t];
         if (count >= kMaxPlants) break;
-        for (std::uint32_t i = tile.first; i < tile.first + tile.count && count < kMaxPlants; ++i) {
-            const auto& p = flora.instances[i];
+        // A grown zone's tile (assets::ZoneFloraGrower), or the zone's own plants.
+        std::span<const assets::FloraInstance> plants;
+        if (flora.grower) {
+            auto it = grown_.find(t);
+            if (it == grown_.end()) continue; // not grown yet: next frame
+            plants = it->second;
+        } else {
+            plants = std::span<const assets::FloraInstance>(flora.instances).subspan(tile.first, tile.count);
+        }
+        for (std::uint32_t j = 0; j < plants.size() && count < kMaxPlants; ++j) {
+            const auto& p = plants[j];
+            const std::uint32_t i = flora.grower ? t * 65537u + j : tile.first + j; // the plant's own key
             glm::vec3 d = p.position - camera;
             float dist2 = glm::dot(d, d);
             if (dist2 > reach2) continue;

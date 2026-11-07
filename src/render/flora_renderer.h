@@ -8,12 +8,15 @@
 // plants shrink into the ground over the last fifth of the reach, as the original draws flora only round the camera.
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
 
+#include "assets/flora.h"
 #include "render/gpu.h"
 #include "render/vk_context.h"
 
@@ -56,8 +59,13 @@ public:
 private:
     void create_pipeline(const std::filesystem::path& shader_dir);
 
+    // Hailstone's zone flora (assets::ZoneFloraGrower): drops the tiles out of reach, grows the missing ones within it.
+    void grow_tiles(const glm::vec3& camera);
+    static constexpr std::chrono::microseconds kGrowBudget{3000};
+
     VkContext& vk_;
     float reach_ = kFloraReach;
+    std::unordered_map<std::uint32_t, std::vector<assets::FloraInstance>> grown_; // by index into ZoneFlora::tiles
     std::vector<std::pair<float, std::uint32_t>> near_tiles_; // per draw: tiles in reach by distance
     std::uint32_t max_textures_ = 0; // kMaxTextures, within DeviceCaps::max_sampled_images
     const assets::Zone& zone_;

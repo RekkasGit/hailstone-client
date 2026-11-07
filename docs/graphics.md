@@ -197,22 +197,46 @@ far ring costs about what the near circle does. The tiles are filled nearest fir
 
 ## Zone flora
 
-Hailstone's own, not the original's: the classic zones have no flora, and this gives a zone grass and plants without
-changing its files (`assets/zone_flora.h`, `display.zone_flora`). A zone that has a rules file, `flora/<zone>.txt` in
-the install folder (shipped; `flora/ecommons.txt` is the first), gets plants placed over its terrain as it loads, into
-the same `Zone::flora` the EQG zones' radial flora fills, and drawn the same way (above; /showgrass hides them). The
-rules file names:
-- a **donor**: an EQG archive in the player's game folder whose `RadialFloraDefs.rfd` and textures give the plants'
-  shapes and pictures. East Commonlands takes `commonlands.eqg`'s, the revamped Commonlands. Nothing is shipped;
-  without the donor the zone has no flora.
-- per **ground texture** (a glob, the first matching line winning): plants per 100 square units and their kinds by
-  weight. The classic ground textures blend grass into cliff, sand or a path within one picture (`cpg*`, `spg*`,
-  `cpath`), so `+green` keeps a plant only where the game's own texel under it is green.
-- a **slope** limit (40 degrees unless set) and a size range.
+Hailstone's own, not the original's: the classic zones have no flora, and this gives them grass without changing
+their files (`assets/zone_flora.h`, `display.zone_flora`). Their plants join the same `Zone::flora` the EQG zones'
+radial flora fills and are drawn the same way (above; /showgrass hides them, Flora Distance sets their reach).
 
-Plants keep off water, lava and zone-line regions. Each terrain triangle's plants come from its own seeded sequence,
-so a zone grows the same plants at every load. They are looks only: collision, line of sight, the navigation mesh and
-picking do not see them. Not yet: ground under a roof, a bridge or a placed object still grows plants.
+**Which rules.** A zone takes `flora/<zone>.txt` from the install folder (shipped) when there is one, else
+`flora/default.txt` when the server calls it outdoor (OP_NewZone's time type 1, 2 or 5; PEQ marks some dungeons so,
+which the cover test below keeps bare). A rules file is read line by line, and the first matching ground line wins:
+- `donor <archive>`: an EQG archive in the player's game folder whose `RadialFloraDefs.rfd` and textures give the
+  plants' shapes and pictures. The default takes `commonlands.eqg`'s, the revamped Commonlands. Nothing is shipped;
+  without the donor no zone has this flora.
+- `ground <glob> <density> [+green|+greenish] <kind>[:<weight>]...`: plants per 100 square units on the ground
+  textures the glob matches, and their kinds by weight; 0 keeps a texture bare. The classic ground textures blend
+  grass into cliff, sand or a path within one picture, so `+green` keeps a plant only where the game's own texel
+  under it is clearly green (`is_green_texel`: not the water's teal, mud's olive or a dungeon's near-black), and
+  `+greenish` also takes dry and dark grass, for textures whose name says they are grass.
+- `max_slope` (degrees), `scale <min> <max>`, and `include <name>` (another file's lines in place: a zone file puts its
+  own exceptions first, then `include default`; East Commonlands adds desert plants on its sand that way).
+
+The default turns down built and wet surfaces by name before anything else (roofs, walls, floors, cobbles, tiles,
+bridges, hedges, ship decks, water, lava; rock, stone and cliffs after the textures named as grass, so a grass and rock
+blend still grows on its grass), then takes grass-named textures with `+greenish` and anything else with `+green`.
+A `+green` texture with next to no green texels (`kMinGreenShare`) grows nothing at all.
+
+**Where.** On level ground (45 degrees by default) of a drawn, opaque or cut-out surface: not the invisible collision
+surfaces, nor the translucent water. Not in water, lava or a zone line, nor on the water's surface (the region just
+under the foot). Not where the zone's own drawn terrain lies overhead: a dungeon's ceiling, a roof, a bridge, an
+overhang. The outdoor zones' invisible collision ceiling and cloud layers do not count, and neither do the placed
+objects, so grass grows under the trees. Each plant takes the colour of the ground texel it stands on (the classic
+outdoor vertices carry none).
+
+**When.** The zone keeps the ground triangles that may grow plants, split into pieces of at most a quarter tile, binned
+by 128-unit tile (`assets::ZoneFloraGrower`); the renderer grows the tiles within reach as they come into it, nearest
+first and for at most 3 ms a frame, and lets go of those well past it. Each piece's plants come from its own seeded
+sequence, so a tile grows the same plants every time and a zone costs memory by the reach, not by its size (South
+Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load.
+
+They are looks only: collision, line of sight, the navigation mesh and picking do not see them.
+`tools/florascan GAME_DIR flora ZONE...` lists, per zone, the rules it takes and the plants on each ground texture
+(`--masks DIR` writes each texture with what `+green` turns down darkened, `--sample N` some plants' feet for the
+viewer's `--pos`): the way to check a rules change over every zone.
 
 ## Spell bolts and comets
 

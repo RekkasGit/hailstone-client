@@ -13,8 +13,9 @@ hailstone/
                              on Windows the icon is built into hailstone.exe instead, cmake/windows/hailstone.ico)
   pictures/                  shipped: the default picture behind the pre-game and loading screens, shown when
                              neither the server nor ui/loadingbackgrounds/ has any
-  flora/<zone>.txt           shipped: Hailstone's flora rules for zones without flora of their own (docs/graphics.md
-                             "Zone flora"), replaced by an update
+  flora/                     shipped: Hailstone's flora rules for zones without flora of their own (docs/graphics.md
+                             "Zone flora"): default.txt for every outdoor classic zone, <zone>.txt for one; replaced
+                             by an update
   CHANGELOG.md               shipped: the release notes; the login screen's What's new shows this version's part
   ui/<pack>/                 UI packs (modern, gamepad), replaced by an update
   ui/settings/<pack>.txt     each UI pack's script settings shared by every character, and the window layout a
