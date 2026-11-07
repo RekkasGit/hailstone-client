@@ -124,7 +124,9 @@ The flames are found in the zone's data (`assets/zone_fires.h`), in three forms 
 - An EQG zone's environment emitters, `<zone>_EnvironmentEmitters.txt` (`Name^EmitterDefIdx^X^Y^Z^[AlwaysVisible^]
   Lifespan`, positions in the zone's own frame) over `environmentemittersnew.edd`. `assets::load_zone` adds them to
   the zone's particle fixtures, pointing up, so both lightings draw them (they were not drawn at all before): torches,
-  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow, lavastorm).
+  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow). A
+  revamped zone loaded from its RoF2 `.s3d` (`assets::is_revamped_zone_name`: nektulos, arena...) takes none: the
+  file beside it is the live `.eqg`'s, and its torches and campfires would burn in mid-air in the old zone.
   Their flames are the definitions with a flame sprite (`FlameD.dds`, `new_flame.dds`, `new_fire.dds`, `fire01.dds`,
   `fire01_gray.dds`, `flamegray.dds`) and no "lava" in the name (nor an `mml_instance_flame` one); their hue comes from the definition's start colour
   (vald_bluetorch is FlameD.dds in 10, 10, 255), or for a grey one from its name (cob_brazier_green).
