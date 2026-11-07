@@ -214,11 +214,13 @@ local PAGES = {
       optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x", "8x" }),
       optionRow("Render scale", "render_scale", { 50, 100, 5, " %" }),
       optionRow("Ambient occlusion", "ao", "bool"),
+      optionRow("Grass", "grass", "bool"),
+      optionRow("Grass distance", "flora_distance", { 400, 1200, 100, " units" }),
       optionRow("Lighting", "lighting", { "Modern", "Classic" }),
       optionRow("Max camera zoom", "max_camera_distance", { 10, 150, 10, " units" }),
       optionRow("Ground floating NPCs", "ground_npcs", "bool"),
     }
-    for i = 1, 9 do if list[i] then rows[#rows + 1] = list[i] end end
+    for i = 1, 11 do if list[i] then rows[#rows + 1] = list[i] end end
     return rows
   end },
   { "Audio", function()

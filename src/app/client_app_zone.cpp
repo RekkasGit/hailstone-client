@@ -634,6 +634,8 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     // The advanced display window's shadow clip plane slider (0..100) and Radial Flora box (ShowGrass).
     if (name == "shadow_clip_plane") return shadow_clip_plane_;
     if (name == "grass") return grass_ ? 1 : 0;
+    // Hailstone: how far the flora is drawn, in units (render::FloraRenderer::set_reach).
+    if (name == "flora_distance") return static_cast<int>(std::lround(flora_reach_));
     // The Options window's particle density combos (SyncDisplayPage's DensityChoice).
     for (std::string_view kind : {"spell", "environment", "actor"})
         if (name.starts_with(kind) && name.substr(kind.size()) == "_particle_density")
@@ -685,6 +687,12 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         // CAdvancedDisplayOptionsWnd's +0x22c: ShowGrass, the scene's flora (virtual +0xb8), saved.
         grass_ = value != 0;
         config_.set_bool("display.grass", grass_);
+        config_.save(config_path_);
+        return true;
+    }
+    if (name == "flora_distance") {
+        flora_reach_ = std::clamp(static_cast<float>(value), render::kFloraReach, render::kMaxFloraReach);
+        config_.set_int("display.flora_distance", static_cast<int>(std::lround(flora_reach_)));
         config_.save(config_path_);
         return true;
     }

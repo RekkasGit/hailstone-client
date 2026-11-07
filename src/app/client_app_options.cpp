@@ -553,6 +553,8 @@ void ClientApp::apply_settings() {
     if (show_names_ < 0 || show_names_ > 6) show_names_ = 4;
     spell_effects_ = config_.get_bool("display.spell_effects", true);
     grass_ = config_.get_bool("display.grass", true);
+    flora_reach_ = std::clamp(static_cast<float>(config_.get_int("display.flora_distance", static_cast<int>(render::kFloraReach))),
+                              render::kFloraReach, render::kMaxFloraReach);
     neighbour_zones_ = config_.get_bool("display.neighbour_zones", true);
     ring_cues_ = config_.get_bool("display.target_ring_cues", true);
     ring_xray_ = config_.get_bool("display.target_ring_xray", false);

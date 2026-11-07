@@ -50,6 +50,14 @@ glm::vec3 to_linear(const glm::vec3& c) {
 
 } // namespace
 
+float flora_keep(float d) {
+    if (d <= kFloraReach) return 1.0f;
+    const float r = kFloraReach / d;
+    return r * r;
+}
+
+void FloraRenderer::set_reach(float reach) { reach_ = std::clamp(reach, kFloraReach, kMaxFloraReach); }
+
 FloraRenderer::FloraRenderer(VkContext& vk, const assets::Zone& zone, const std::filesystem::path& shader_dir)
     : vk_(vk), zone_(zone) {
     VkDevice d = vk_.device();
@@ -162,27 +170,41 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
     if (flora.empty() || !pipeline_) return 0;
     auto* out = static_cast<GpuPlant*>(mapped_[frame.frame_slot]);
     std::uint32_t count = 0;
-    const float reach2 = kFloraReach * kFloraReach;
+    const float reach = reach_;
+    const float reach2 = reach * reach;
     // The classic lighting: the scene's ambient and half its sun (display values), the same for every plant.
     const glm::vec3 classic_light =
         to_linear(glm::min(glm::vec3(lighting.ambient) + glm::vec3(lighting.directional) * 0.5f, glm::vec3(1.0f)));
     const ParticleLight modern_light(lighting); // the modern light, its frame's part worked out once
-    for (const auto& tile : flora.tiles) {
-        // The tile's square within reach of the camera (in the plane).
-        glm::vec2 c(camera);
+    // The tiles within reach of the camera (in the plane), nearest first, so the plants near the camera are never the
+    // ones kMaxPlants leaves out.
+    near_tiles_.clear();
+    const glm::vec2 c(camera);
+    for (std::uint32_t t = 0; t < flora.tiles.size(); ++t) {
+        const auto& tile = flora.tiles[t];
         glm::vec2 nearest = glm::clamp(c, tile.min, tile.min + glm::vec2(flora.tile_size));
-        if (glm::dot(nearest - c, nearest - c) > reach2) continue;
+        float d2 = glm::dot(nearest - c, nearest - c);
+        if (d2 <= reach2) near_tiles_.emplace_back(d2, t);
+    }
+    std::sort(near_tiles_.begin(), near_tiles_.end());
+    for (const auto& [tile_d2, t] : near_tiles_) {
+        const auto& tile = flora.tiles[t];
+        if (count >= kMaxPlants) break;
         for (std::uint32_t i = tile.first; i < tile.first + tile.count && count < kMaxPlants; ++i) {
             const auto& p = flora.instances[i];
             glm::vec3 d = p.position - camera;
             float dist2 = glm::dot(d, d);
             if (dist2 > reach2) continue;
+            // Past kFloraReach, a share of the plants by distance, the same ones from frame to frame (by index).
+            if (dist2 > kFloraReach * kFloraReach &&
+                static_cast<float>((i * 2654435761u) >> 8 & 0xffffu) / 65536.0f >= flora_keep(std::sqrt(dist2)))
+                continue;
             // Behind the camera, out of reach of the view.
             glm::vec4 clip = view_proj * glm::vec4(p.position + glm::vec3(0.0f, 0.0f, p.height * 0.5f), 1.0f);
             if (clip.w < -std::max(p.width, p.height)) continue;
             const auto& def = flora.definitions[p.definition];
             // Into the ground over the last fifth of the reach.
-            float fade = std::clamp((kFloraReach - std::sqrt(dist2)) / (kFloraReach * 0.2f), 0.0f, 1.0f);
+            float fade = std::clamp((reach - std::sqrt(dist2)) / (reach * 0.2f), 0.0f, 1.0f);
             if (fade <= 0.0f) continue;
             glm::vec4 uv(0.0f, 0.0f, 1.0f, 1.0f);
             if (def.quad_texture) {
