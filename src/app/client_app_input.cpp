@@ -118,9 +118,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
     case C::TOGGLETWOTARGETS:
         // __ExecuteCmd's target keys (game/targeting.h): Tab swaps between yourself and the remembered target;
         // the others cycle the spawns within 500 units, nearest first. A frozen player's keys are refused.
-        // Hailstone: the NPC cycle skips players' pets and mercenaries unless the option tab_skip_pets is off.
-        target_manager_.skip_pets = option_value("tab_skip_pets").value_or(1) != 0;
-        target_manager_.invisible = [this](const game::Spawn& s) { return conn_->market_hidden(s); };
+        prepare_target_cycle();
         if (conn_->player_status().stand_state != net::kStandFreeze)
             if (auto id = game::target_key_command(target_manager_, cmd, world, eye_position()))
                 conn_->set_target(*id);
@@ -458,6 +456,18 @@ std::optional<bool> ClientApp::can_see_spawn(std::uint32_t id) const {
     if (!collision_ || it == world.spawns.end()) return std::nullopt;
     glm::vec3 to = (it->second.display_valid ? it->second.display_position : it->second.position) + glm::vec3(0, 0, 1.0f);
     return collision_->line_of_sight(eye_position(), to);
+}
+
+// The target keys' filters, set before each press. Hailstone: the NPC cycle skips players' pets and mercenaries
+// unless the option tab_skip_pets is off, and takes only the NPCs in sight (can_see_spawn: the eyes to a point 1 over
+// the spawn) unless tab_line_of_sight is off; without the zone's collision every NPC counts as in sight.
+void ClientApp::prepare_target_cycle() {
+    target_manager_.skip_pets = option_value("tab_skip_pets").value_or(1) != 0;
+    target_manager_.invisible = [this](const game::Spawn& s) { return conn_->market_hidden(s); };
+    if (option_value("tab_line_of_sight").value_or(1) != 0)
+        target_manager_.in_sight = [this](const game::Spawn& s) { return can_see_spawn(s.id).value_or(true); };
+    else
+        target_manager_.in_sight = nullptr;
 }
 
 // --abilities-test: 6 s after zoning in walk up to the target (--auto-target picks one), then press hot buttons

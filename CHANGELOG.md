@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Tab (and F8, and the other NPC target keys) now targets only NPCs you can see: NPCs behind walls, floors or hills are skipped. Options > Interface "Tab Needs Line of Sight" turns this off
 - Modern UI: the Alternate Advancement list starts sorted by name, A to Z. Click a column's heading to sort by it (again to reverse it; Era sorts by expansion, in release order), and drag a heading to move its column; both are remembered. The window's text is also one size larger
 - Classic lighting: characters and NPCs take the light of the place they stand in, by day and by night. After dark they were drawn nearly black against the lit walls of zones such as the Bazaar
 - The target ring is now drawn on the ground: it follows slopes and steps, and characters, walls and the target's own legs hide it instead of it showing through them. It has a new look: a soft glowing band with turning dashes and a notch showing which way the target faces. It sweeps in when you change target and pulses while you auto attack (Options > Display "Target Ring" turns that off, lets the hidden part show faintly, and sets the ring's colour for each con, its opacity and its glow)

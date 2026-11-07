@@ -354,6 +354,8 @@ local function displayTab()
     check("show_target_ring", "Show 3D Target Ring", "A colored ring appears around your current target's feet.")
     check("tab_skip_pets", "Tab Skips Pets",
       "Hailstone: the NPC target keys (Tab, F8) skip players' pets and mercenaries.")
+    check("tab_line_of_sight", "Tab Needs Line of Sight",
+      "Hailstone: the NPC target keys (Tab, F8) skip NPCs you cannot see, behind walls or the ground.")
     check("hotbutton_extras", "More Hot Button States",
       "Hailstone: hot buttons of the Actions window's skills show their timers, Melee Attack lights while auto attack is on, Sit while sitting.")
     check("offer_layout_copy", "Offer Layouts to New Characters",

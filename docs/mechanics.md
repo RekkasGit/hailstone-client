@@ -1077,7 +1077,11 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   bTargetCyclable set; it has no owner check, so by default it cycles pets and mercenaries too. Enhancement (option
   `tab_skip_pets`, hailstone.ini `target.skip_pets`, Options > Interface "Tab Skips Pets", on by default): the NPC
   cycle (and the pad's backward cycle) leaves out a spawn whose MasterID is the local player or another player, and
-  mercenaries; an NPC's own pet stays.
+  mercenaries; an NPC's own pet stays. Enhancement (option `tab_line_of_sight`, hailstone.ini `target.line_of_sight`,
+  Options > Interface "Tab Needs Line of Sight", on by default): the NPC cycle (and the pad's backward cycle) takes
+  only the NPCs the player can see, a clear segment through the zone's collision from the player's eyes to a point 1
+  over the spawn (the abilities' and Spawn.LineOfSight's test); without the zone's collision every NPC counts as seen.
+  The PC and corpse cycles are not filtered.
 - The target's death (OP_Death, DeathReport) clears the target and turns auto attack and auto fire off. Enhancement
   (option `attack_until_xtarget_clear`, hailstone.ini `combat.attack_until_xtarget_clear`, Options > General
   "Attack Until XTarget Is Clear", off by default): auto attack stays on while the extended target list still holds
