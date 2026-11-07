@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(hailstone VERSION 0.5.0 LANGUAGES C CXX)
+project(hailstone VERSION 0.6.0 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
 set(NMSC_VERSION_LABEL "beta")
