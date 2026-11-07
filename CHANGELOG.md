@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Chat windows have Always Chat Here on their right-click menu: Enter and '/' start a line in that window whichever window you clicked last. The main window has it by default; untick it there to type in the window you clicked last, as before
 - Right-clicking another player opens a menu over them: Send Tell, Invite to Group, Invite to Raid, Trade and Inspect. The original client inspects them instead; Options > Interface "Player Right-Click Menu" turns the menu off
 - Feign death from a spell or AA (Imitate Death, Death Peace and the like) now lies your character down, stops your cast and auto attack, and shows you lying down to other players, as the Feign Death skill already did
 - Your own name now shows over your character in the third-person views, as the original client shows it, with your title and guild tag below it at the `/shownames` levels that show them for other players (3 and 4 for the guild). Options > Display "Show My Name" turns it off
