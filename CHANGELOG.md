@@ -134,6 +134,7 @@
 - Scripts and plugins now see the same HP as the windows: `Me.CurrentHPs`, `Me.MaxHPs` and `Me.PctHPs`, a Lua script's `player()` and a compiled plugin's player include the HP from your gear, so heal and rest scripts such as Auto Combat no longer think a geared character is far lower than it is. The ability book's HP percent and the developer group and stats windows do too, and the stats window no longer warns that its max HP differs from the server's on every character wearing HP gear. Targeting yourself shows the same percent
 - A character whose HP fell below the HP its gear gives is no longer treated as knocked out on stock EQEmu servers: mouse look and right-click menus work, Kick, Bash and the other skills no longer silently fail, and the client still saves your character
 - Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
+- Looking closely at a character no longer shades its face in dark polygon-shaped patches (modern lighting): the ambient occlusion gave very near samples too much weight at close range, so low-poly faces darkened in big triangles; near samples now fade with distance and count only by their angle above the surface
 
 ## 0.5.0-beta (2026-11-05)
 
