@@ -2169,7 +2169,8 @@ public:
     // The chat server's joined channels, in /1../10 order.
     std::vector<std::string> chat_channels() const;
     // Send_OP_Camp @0x5317a0: nothing while out of control (stand state 0x66); a second /camp cancels the camp
-    // (12290); refused under SPA 31 (12368); sits (12291 when it cannot), saves (Save(0, 1, 0x21): OP_Save), sends
+    // (12290); refused under SPA 31 (12368); sits (12291 when it cannot; Hailstone camps a mounted player without
+    // sitting, where the original refuses with 12291 or 12292), saves (Save(0, 1, 0x21): OP_Save), sends
     // OP_Camp {the camp kind} and starts a 30 s timer (12293; 12684 every 5 s); sitting up through ChangePosition
     // or GetConscious cancels it (12290), standing by other means too (12683). The camp kind is camp_command's.
     void camp();
