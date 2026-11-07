@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@
 #include <glm/glm.hpp>
 
 #include "assets/eqg.h"
+#include "assets/pfs.h"
 
 namespace nmsc::assets {
 
@@ -41,6 +43,9 @@ struct ZoneFlora {
     };
     std::vector<Tile> tiles;
     float tile_size = 0.0f;
+    // The archive the definitions' textures are read from when they are not the zone's own (assets/zone_flora.h:
+    // the donor EQG archive of a zone given flora by Hailstone's rules); null for an EQG zone's own flora.
+    std::shared_ptr<const PfsArchive> textures;
     bool empty() const { return instances.empty(); }
 };
 
