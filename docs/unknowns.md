@@ -67,7 +67,7 @@ What the client does not implement yet, or implements with an approximation it c
 - Buff caster ids (DoT stacking, the distance modifier of effect values) are taken from the server's buff packets; the original keeps only the ones its own landing prediction wrote.
 - Combat line filters: a temporary pet of the player's (bTempPet) is not recognised as the player's pet, so its lines are filtered like anybody's.
 - `/dismount`, buff removal by the client and the toggled pet commands send packets that EQEmu may drop (a pet command targeting the pet itself is ignored by the server).
-- Hot buttons: ranged attack, the AA window on right click and the key-map text placement differ slightly; the bar is always horizontal.
+- Hot buttons: ranged attack, the AA window on right click and the key-map text placement differ slightly.
 - Hot buttons: an item link (type 12) finds its item by the item's serial and, when no item has it, by the first with its item id (`game::hot_button_item_slot`). How the original fills the record's item (+8) from the saved GUID and id is not traced, and EQEmu gives items new serials in each zone, so the id fallback is this client's. Settled by tracing the writes of the record's +8 and trying a saved link after zoning in the original against EQEmu.
 - Hot buttons: the modern pack also makes an inventory slot's hotbutton when the left button drags off the slot, not only on the half-second hold (CInvSlotWnd::HandleLButtonHeld); the hold's length is taken as the right button's 500 ms. The original's left button released off the slot (not held) is taken as the click on the slot pressed.
 - Not implemented: `/gems` (the Gems mini-game window).

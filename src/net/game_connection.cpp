@@ -2147,21 +2147,22 @@ bool GameConnection::allowed_to_attack(std::uint32_t target, std::int32_t spell)
     return game::allowed_to_attack(in);
 }
 
-void GameConnection::toggle_auto_attack() {
-    if (state_ != ConnectionState::InZone || pstatus_.dead) return;
+bool GameConnection::toggle_auto_attack() {
+    if (state_ != ConnectionState::InZone || pstatus_.dead) return false;
     auto say = [&](std::uint32_t id) { chat(ChatEvent::Kind::System, strings_.format(id, {})); };
     // __ExecuteCmd case 10 (AUTOPRIM).
     if (pstatus_.stand_state == 100) {
         if (!auto_attack_ && world_.target_id == world_.player_id && world_.player_id) {
             say(12696); // Try attacking someone other than yourself...
-            return;
+            return false;
         }
     } else if (!auto_attack_) {
         say(pstatus_.stand_state == 102 ? 12368 : 12369); // You must be standing to attack!
-        return;
+        return false;
     }
     set_auto_attack(!auto_attack_);
     say(auto_attack_ ? 12370 : 12371); // Auto attack is on. / off.
+    return auto_attack_ && face_on_attack_;
 }
 
 void GameConnection::attack_command(const std::string& args) {

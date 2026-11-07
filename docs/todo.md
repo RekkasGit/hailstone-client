@@ -132,8 +132,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 ### Updates (docs/updater.md)
 - [x] The updater: the signed manifest from the release feed, the download (core, browser and the installed plugins as their own packages, an unchanged one skipped), the install at quit with Restart now, the rollback of a cut-off install or of a version that does not start, and the notice in both packs' login screens and the client's own. Unit tests; a real run on Linux against a local HTTP server (`hailstone_sign try`: packages from `make_update.py`, signed, downloaded with the system's libcurl, installed over a copy of an install).
 - [x] The login screen's corner: this build, whether it is up to date, What's new (this version's part of the shipped CHANGELOG.md) and the GitHub page, in both packs and the client's own (tests/changelog_test.cpp, tests/lua_eq_pregame_test.cpp, tests/ui_pack_windows_test.cpp, tests/dev_ui_test.cpp). Open: seen with a real update check (only test runs and unit tests so far).
-- [ ] The repository (or a public one for releases) has to be public: GitHub answers 404 to the client for a private one's releases.
-- [ ] A release key (`hailstone_sign keygen`, the public half in `update-key.pub`); until then builds have no updates.
+- [x] The repository (or a public one for releases) has to be public: GitHub answers 404 to the client for a private one's releases. Public from 0.5.0-beta (AGENTS.md "Git workflow").
+- [x] A release key (`hailstone_sign keygen`, the public half in `update-key.pub`); until then builds have no updates.
 - [ ] The updater on Windows: WinHTTP and the install's renames of the running `hailstone.exe` and its DLLs (compiles; not run).
 - [ ] A release job in CI (packages, manifest, signature, upload), and macOS (an app bundle's own install and code signing).
 - [ ] Downloads that resume (HTTP range requests) instead of starting over.
@@ -218,7 +218,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Walks across zones (`/travel <zone>`) over the zone lines and zone points.
 - [x] `/stick` (distance, behind, id; the `Stick` TLO), the `LineOfSight` TLO and `Spawn.LineOfSight` (the abilities' own check). Unit tests on a built mesh; not tried live.
 - [ ] Tactical queries for bots (a kite point; `/stick`'s pin, `!front`, `moveback`, `uw`, and following a changed target without `hold`).
-- [ ] Auto Combat (a script with its own window; `scripts/autocombat/`): Manual (full and partial), Hunter (roam and camp) and Assist modes, Spells and Abilities pages of rows with conditions. Its client side is done: `Me.AbilityReady` / `CombatAbilityReady` / `AltAbilityReady` and timers, `Target.Buff` and the rest from OP_TargetBuffs, `/stick`, line of sight, `hailstone.server_rule`, `hailstone.hold_autoskill` and `autoskill_list`.
+- [ ] Auto Combat (a script with its own window, an add-on in a repository of its own): Manual (full and partial), Hunter (roam and camp) and Assist modes, Spells and Abilities pages of rows with conditions. Its client side is done: `Me.AbilityReady` / `CombatAbilityReady` / `AltAbilityReady` and timers, `Target.Buff` and the rest from OP_TargetBuffs, `/stick`, line of sight, `hailstone.server_rule`, `hailstone.hold_autoskill` and `autoskill_list`.
 - [ ] Auto AA (an add-on of its own, projecthailstone/hailstone-autoaaspend): its client side is done (`hailstone.alt_abilities`, `hailstone.train_aa`, the Modern pack's `lib/aa.lua` with a part on each row, in the details and under the header). Open: the Gamepad pack's AA window as a library a script can extend the same way; a purchase checked live against EQEmu.
 - [ ] Waypoints and an in-client mesh editor (areas and links in a shareable per-zone file).
 - [x] Swimming: water surfaces in the mesh, the look pitch steered while swimming (breath, diving, climbing out).

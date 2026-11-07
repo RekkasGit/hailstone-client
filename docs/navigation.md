@@ -143,7 +143,7 @@ and the step into the lair. Without the links the walk stopped about 850 units s
 ### When it is built
 
 At the zone-in only when the zone has a cache file, or with `nav.prebuild=1` in `hailstone.ini`. Otherwise it is built
-when first wanted: a `/nav` or the overlay. The tiles are built on worker threads (`nav.threads`, default 2, at most
+when first wanted: a `/nav`, the overlay or the Navigation TLO's path questions. The tiles are built on worker threads (`nav.threads`, default 2, at most
 8), nearest the player first, and a walk asked for meanwhile starts when its tiles are there. A walk to a spawn asks
 the server for its path meanwhile, when there is no mesh under the player yet: the same `OP_FindPersonRequest` as
 `/find`, but quiet (`GameConnection::request_quiet_path`: no path drawn, no sound, no chat line). A stock EQEmu server
@@ -271,8 +271,8 @@ new paths with no corner reached it stops with "Navigation stuck going to ...".
 | `distance=<n>` (`dist=<n>`) | anywhere on the line: stop this close |
 | `/nav stop` / `pause` | stop; pause or go on |
 | `/nav status` | the mesh's tiles and the walk |
-| `/nav ui` | the mesh (green ground, blue water, red lava, purple zone lines, yellow PvP), its links (orange drops, light blue swims) and the path, over the 3D view |
-| `/nav reload` | build the zone's mesh again, ignoring the cache |
+| `/nav ui` (`overlay`) | the mesh (green ground, blue water, red lava, purple zone lines, yellow PvP), its links (orange drops, light blue swims) and the path, over the 3D view |
+| `/nav reload` (`rebuild`) | build the zone's mesh again, ignoring the cache |
 | `/nav option water\|lava\|pvp\|zonelines\|doors\|passdoors\|follow on\|off` | swim (on), cross lava (off), enter PvP areas (on), walk through zone lines (off), open doors (on), walk through doors that are not shut (on), help /follow (on) |
 | `/nav option clearance <0..6>` | how much further than the mesh's margin a path's bends keep from walls (2.5; 0: hug the margin) |
 
@@ -300,7 +300,7 @@ Not yet: MQ2MoveUtils' `pin`, `!front`, `moveback`, `uw` and percent distances.
 
 `${Navigation}` (TRUE while walking), `.Active`, `.Paused`, `.MeshLoaded`, `.PathExists[<dest>]`,
 `.PathLength[<dest>]` (-1 without a path). Hailstone's own: `.MeshComplete`, `.TilesBuilt`, `.TilesTotal`,
-`.Destination`, `.Remaining`. A destination is `id <#>`, `target`, `loc <y> <x> <z>`, `locxyz <x> <y> <z>` or a spawn
+`.Destination`, `.Remaining`. A destination is `id <#>`, `target`, `loc <y> <x> <z>` (`locyxz`), `locxyz <x> <y> <z>` or a spawn
 search. Lua reads it as `mq.TLO.Navigation.Active()`; plugins with the SDK's `parse` and run `/nav` with
 `do_command`.
 
@@ -310,4 +310,3 @@ search. Lua reads it as `mq.TLO.Navigation.Active()`; plugins with the SDK's `pa
   and boats are not handled.
 - Lifts, and jumps up onto ledges, as links between parts of the mesh; walks across zones (`/travel`); tactical queries (a spot
   in range with line of sight, behind a mob); a mesh editor and waypoints; several characters in one process.
-- `/stick` and the `LineOfSight` TLO.

@@ -125,6 +125,8 @@
 - Windows: quitting while an update check or an add-on download waits on a network that has stopped answering no longer keeps hailstone.exe running for up to a minute after its window closes
 - Bug reports: a Linux crash report whose last log line was chat keeps its stack trace in the report (taking the chat out used to take the stack with it)
 - Bug reports: a report still being written when the window is opened again keeps its own screenshot (it could get none, a broken one or the next one), and a report sent while an earlier one is written says where you were and what you targeted when you sent it, not when its turn came
+- Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
+- Options has Face Target On Attack, under Combat (on by default). Turn it off and the attack key and attack buttons start auto attack without turning you to face your target. `/attack` never turned you
 
 ## 0.5.0-beta (2026-11-05)
 

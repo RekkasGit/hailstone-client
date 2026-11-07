@@ -152,6 +152,9 @@ uses the default rooms. A current install passes the same check.
 
 ### RoF2 or live
 
+Either way the files are EverQuest's, Daybreak Game Company's work, which Hailstone does not ship. We highly
+encourage anyone who plays on them to subscribe to [EverQuest](https://www.everquest.com) and support the game.
+
 The asset folder may be a RoF2 install or a current live one, so that a player needs no RoF2 files. `is_live_asset_folder` tells them apart by `spells_us_str.txt`, which only the
 live client ships. The archive formats are the same versions in both (PFS, WLD v15500, EQGM/EQGT/EQGL/EQGA/EQGS); live
 adds BC7 textures under a DX10 header, which the texture loader already reads. What the live files change:
@@ -366,14 +369,15 @@ stay in `build/`.
 `browser/` (about 390 MB on Linux with `libcef.so` stripped), and
 the shared libraries the build made (SDL3 when it was fetched), which the binary finds through an rpath of its own
 folder. The example plugin is a separate component (`--component examples`), and so are the server plugins when
-checked out (`--component nms`, `--component projecttriune`). A release includes no server plugin. An update installs over the same folder
-and so replaces only `shaders/` and the shipped UI packs; the player's files beside them stay. The updater
+checked out (`--component nms`, `--component projecttriune`). A release includes no server plugin. An install over the same folder
+replaces only the shipped parts (the binary, `shaders/`, the shipped UI packs ...); the player's files beside them stay. The updater
 (docs/updater.md) installs a release the same way, from zips that hold only the shipped parts, and refuses any
 package that would write one of the player's files or folders (`app::is_player_path`: `hailstone.ini`, `servers/`,
 `logs/`, `maps/`, `scripts/`, `textures/`, `ui/settings/`, `ui/loadingbackgrounds/` ...). A folder that has a
 CMakeCache.txt beside it (a dev build's `build/hailstone/`) never updates itself.
 
-CI uploads the installed folder of each leg as an artefact (`hailstone-<leg>`), without the server plugins.
+CI builds nothing (docs/ci.md); a release's folder is installed and packed locally (docs/updater.md "Making a
+release"), without the server plugins.
 
 ## The first start
 
@@ -417,7 +421,8 @@ what happened, the log's path and its last 16 lines, then the stack where glibc 
 (`platform/crash_log.h`). The minidump holds the threads' stacks and registers and the module list, enough for a
 symbolised stack, and no heap: the memory the stacks point at (a password, the session key, a plugin's `auth_key`) is
 left out, since the dump goes into bug reports unchanged. The log itself is flushed line by line, so it holds the rest. A stack overflow is reported
-on the main thread and on the threads that make a `CrashStack` (the network session's and the sound loader's). After
+on the main thread and on the threads that make a `CrashStack` (the network session's, the sound loader's, navigation's,
+the add-on manager's, the updater's, the neighbour zones' and the appearances' workers, `core/latest_jobs.h`). After
 the report the handler that was there before runs: the default one (a core dump, the crash exit status), a sanitizer's
 report, or on Windows the C++ runtime's, which turns an uncaught C++ exception into `std::terminate` so its message is
 in the report.

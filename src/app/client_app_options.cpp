@@ -351,6 +351,9 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     // Hailstone: with no target, an NPC on the extended target list that attacks the player becomes the target
     // (net::GameConnection::set_auto_target_xtarget), on by default.
     if (o == "auto_target_xtarget") return config_.get_bool("combat.auto_target_xtarget", true) ? 1 : 0;
+    // The attack key and buttons turn the player to the target (net::GameConnection::set_face_on_attack), on by
+    // default.
+    if (o == "face_on_attack") return config_.get_bool("combat.face_on_attack", true) ? 1 : 0;
     // Hailstone: a camp logs out at once (net::GameConnection::set_fast_camp), off by default.
     if (o == "fast_camp") return config_.get_bool("game.fast_camp", false) ? 1 : 0;
     if (o == "clip_plane") return opts_.clip_plane;
@@ -429,6 +432,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.set_bool("combat.auto_target_xtarget", v != 0);
         config_.save(config_path_);
         if (conn_) conn_->set_auto_target_xtarget(v != 0);
+        return;
+    }
+    if (o == "face_on_attack") {
+        config_.set_bool("combat.face_on_attack", v != 0);
+        config_.save(config_path_);
+        if (conn_) conn_->set_face_on_attack(v != 0);
         return;
     }
     if (o == "fast_camp") {
@@ -581,6 +590,7 @@ void ClientApp::apply_settings() {
 void ClientApp::apply_connection_settings() {
     conn_->set_attack_until_xtarget_clear(config_.get_bool("combat.attack_until_xtarget_clear", false));
     conn_->set_auto_target_xtarget(config_.get_bool("combat.auto_target_xtarget", true));
+    conn_->set_face_on_attack(config_.get_bool("combat.face_on_attack", true));
     conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
     conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
     conn_->set_illusion_mounts(config_.get_bool("game.illusion_mounts", true));

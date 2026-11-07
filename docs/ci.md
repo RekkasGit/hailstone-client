@@ -8,6 +8,8 @@ and on pull requests to `main`:
   SDK's `Nmsc<Word>`, `nms-client`), so `NMSChat` or `kNmsCombatOp` fails; tests/server_tools_test.cpp checks both. Its one
   exception is the updater's table of files old releases shipped under `plugins/nms/` (path, size, SHA-256;
   `retired_release_files()` in `src/app/update_install.cpp`), let through by file and exact line shape.
+- `wiki`: `tools/sync_wiki.py --check`, every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
+  wiki page and no link points at a missing file (docs/wiki.md).
 
 Builds and tests run on the developer's machine, to save Actions minutes. The build legs (linux-gcc and
 windows-msvc, and before them Linux Clang, macOS arm64, Linux arm64, a sanitizer leg and clang-tidy) were dropped
@@ -66,7 +68,7 @@ xwin --accept-license --arch x86_64 splat --output ~/.xwin      # once, about 1 
 cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/clang-cl-xwin.cmake
 cmake --build build-windows
-cmake --install build-windows --prefix dist/hailstone            # the client's folder, as CI's artefact
+cmake --install build-windows --prefix dist/hailstone            # the client's folder, as a release has it
 ```
 
 It needs clang-cl, lld-link, llvm-lib, llvm-rc and llvm-mt (an LLVM install has them) and the build machine's
@@ -98,7 +100,7 @@ docker run --rm -v ~/opt:/opt/host hailstone-linux-build:24.04 bash -c "apt-get 
        --with-asan no --with-atl no --dest /opt/host/msvc && chown -R $(id -u):$(id -g) /opt/host/msvc"
 docker run --rm --user $(id -u):$(id -g) -e HOME=$HOME/opt/msvc-home -v $HOME/opt:$HOME/opt hailstone-msvc-build:24.04 \
     $HOME/opt/msvc-wine-src/install.sh $HOME/opt/msvc
-# a build: Release like CI, in build-msvc/ (add -DNMSC_BROWSER=ON for the browser helper, as CI does)
+# a build: Release, in build-msvc/ (the browser helper too: NMSC_BROWSER is on by default)
 docker run --rm --cpus 20 --user $(id -u):$(id -g) -e HOME=$HOME/opt/msvc-home -e MSVC_DIR=$HOME/opt/msvc \
     -v $HOME/opt:$HOME/opt -v "$PWD:$PWD" -w "$PWD" hailstone-msvc-build:24.04 tools/docker/msvc_build.sh . build-msvc
 WINEDEBUG=-all EQ_GAME_DIR= NMSC_TEST_TRACE=1 wine build-msvc/nmsc_tests.exe

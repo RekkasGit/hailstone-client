@@ -2,7 +2,7 @@
 
 Code: `src/assets/sky.{h,cpp}` (loading, tables), `src/render/sky_renderer.{h,cpp}` and `shaders/sky.{vert,frag}` (drawing), `src/game/sky_clock.h` (game clock).
 
-RoF2 draws a procedural sky from `Resources/Sky/sky.ini` and `weather.ini`. Most of it (colour maps, satellites, rings, stars) is not decoded, so this client keeps the classic `sky.s3d` layers and adds the procedural sky's moving cloud patches (section "Cloud patches").
+RoF2 draws a procedural sky from `Resources/Sky/sky.ini` and `weather.ini`. Its geometry (dome, satellites, rings, stars) is not decoded, so this client keeps the classic `sky.s3d` layers and adds the procedural sky's moving cloud patches (section "Cloud patches"). Its colour maps are read (`src/game/sky_colours.{h,cpp}`), but only the rain and snow take their colours from them ("Ambient and fog per frame").
 
 ## sky.s3d / sky.wld
 
@@ -39,7 +39,7 @@ Render methods: the dome and cloud materials use 0x8000000d ("diffuse skydome") 
 
 Order: the dome, the sun/moon skeleton, then the cloud layer only when the "double layer" sky option is on (the options are "3D SKY OFF", "SINGLE LAYER", "DOUBLE LAYER").
 
-**RoF2 does not load sky.s3d at all**: it draws a procedural sky from `Resources/Sky/sky.ini` and `weather.ini` (dome, rings, cloud patches, sun/moon satellites, stars, colour maps). That is not decoded yet, so this client keeps the classic layers.
+**RoF2 does not load sky.s3d at all**: it draws a procedural sky from `Resources/Sky/sky.ini` and `weather.ini` (dome, rings, cloud patches, sun/moon satellites, stars, colour maps). Its geometry is not decoded, so this client keeps the classic layers.
 
 This client draws all three, first in the frame, around the camera (view rotation only), with depth test and write off and `gl_Position.z = 0` (the far plane in reverse Z), no culling and no fog (fog off, culling off). Materials follow the legacy render-method table: 0x8000000d opaque, 0x8000000f translucent at alpha 0x80, so sky 1's clouds (0xd) cover its dome (0xf). The sun and moon (0x80000010) add. Colour bytes convert with x 1/255. The sky is drawn whenever OP_NewZone's sky byte is set, whatever the time type. The layers do not scroll: RoF2's sky layers have no UV scroll.
 
@@ -95,7 +95,7 @@ Every frame (`game/fog.h`, `game/scene_fog.h`):
 - The fog colour per channel max(trunc(trunc(A·K)·avg(A)·P), trunc(trunc(S·K)·avg(S))), K by the camera's region type: water 240/570/370, slime 57/57/0, lava 2550/0/0, 8: 0/0/125, 9: 49/52/62, 10: 179/193/227, else the zone's NewZone fog colour. The fog is then set to it (clamped 1..255) for outdoor time types and in regions 5..10; indoor time types use the zone's colour as sent. A lightning flash instead sets white ambient and fog bytes max(light × 255, the stored colour).
 - The sky flag: set with the Sky option, a sky or zone name and the sky byte; cleared, with fog on, when the fog end is below 101 or the camera's region type is 5 or more. This client draws the sky only while it is set.
 
-The procedural sky's ambient and colour (which, with the Sky option and the sky drawn, also replaces the fog colour's RGB) are not decoded: this client always takes the no-procedural-sky path, so outdoor fog at night is the hour tables' dark blue-black.
+The procedural sky's ambient and colour (which, with the Sky option and the sky drawn, also replaces the fog colour's RGB) are not applied: its colour maps are read (`game::SkyState`, `game/sky_colours.h`) only for the precipitation's colours, and this client always takes the no-procedural-sky path for the ambient and fog, so outdoor fog at night is the hour tables' dark blue-black.
 
 ## Viewer
 

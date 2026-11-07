@@ -28,3 +28,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check src/, sdk/ and ui/
         run: python3 tools/check_core_names.py
+
+  # The wiki is built from docs/ (docs/wiki.md): every document has a page and no link points at a missing file.
+  wiki:
+    name: docs build into the wiki
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check docs/, CONTRIBUTING.md and server/README.md
+        run: python3 tools/sync_wiki.py --check

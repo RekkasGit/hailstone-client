@@ -47,7 +47,7 @@ Stored formats (the `[...]` column of `texdump`):
 | DDS A8L8 (luminance flag, 16-bit) | 1 | RGBA8 |
 | DDS `CxV8U8` (D3DFORMAT 117) | 1 | RGBA8, biased, derived Z |
 
-Not found in the corpus: BMP RLE8/RLE4, 1-bit BMP, OS/2 core headers, top-down BMPs, colour-mapped or greyscale TGA, DX10 DDS headers, volume textures. The decoder still supports all of them except DX10 headers. The synthetic tests cover RLE8 and top-down BMPs.
+Not found in the corpus: BMP RLE8/RLE4, 1-bit BMP, OS/2 core headers, top-down BMPs, colour-mapped or greyscale TGA, DX10 DDS headers, volume textures. The decoder still supports all of them; a DX10 header is read for R8G8B8A8 and BC1–BC5 and BC7 (sRGB or not), the formats texture packs use, and other DXGI formats are refused. The synthetic tests cover RLE8 and top-down BMPs.
 
 Mip levels: 112,296 DDS files have one level. The rest carry full or partial chains of 4 to 11 levels. Every DDS mip count in the corpus matches the data present, so the clamp described below never applies. 92 textures have dimensions that are not powers of two, the largest 1108 pixels on a side. The largest texture overall is 1024×1024.
 
@@ -64,11 +64,11 @@ They are reported and skipped.
 
 Layout, from Microsoft "DDS_HEADER" / "DDS_PIXELFORMAT": `"DDS "`, a 124-byte header (height at +12, width at +16, mip count at +28, pixel format at +76: size 32, flags, FourCC, bit count, R/G/B/A masks, caps2 at +112), then the levels, largest first. Each level is tightly packed.
 
-- DXT1/DXT2/DXT3/DXT4/DXT5 are kept compressed as BC1/BC2/BC2/BC3/BC3 (DXT2 and DXT4 are the premultiplied variants; none occur). A level holds `ceil(w/4)·ceil(h/4)` blocks, each 8 bytes (BC1) or 16 bytes, so sizes that are not multiples of 4 are rounded up to whole blocks.
+- DXT1/DXT2/DXT3/DXT4/DXT5 are kept compressed as BC1/BC2/BC2/BC3/BC3 (DXT2 and DXT4 are the premultiplied variants; none occur). `ATI1`/`BC4U` and `ATI2`/`BC5U` are kept as BC4 and BC5, and a DX10 header's BC formats likewise (BC7 too); none occur in the game's files, they are for texture packs. A level holds `ceil(w/4)·ceil(h/4)` blocks, each 8 bytes (BC1, BC4) or 16 bytes, so sizes that are not multiples of 4 are rounded up to whole blocks.
 - The mip count is `max(1, dwMipMapCount)`, clamped to the length of the full chain (`bit_width(max(w,h))`). Levels the data does not completely hold are dropped. A truncated level 0 is an error.
 - Uncompressed formats (`DDPF_RGB`, `DDPF_LUMINANCE`, `DDPF_ALPHA`, 8/16/24/32 bits) are converted through their channel masks to RGBA8. Each field is scaled to 0–255 with rounding. The alpha mask is used only when `DDPF_ALPHAPIXELS`/`DDPF_ALPHA` is set, so X8R8G8B8 gets alpha 255. Luminance copies its value to R, G and B.
 - Signed normal-map formats whose D3DFORMAT number is stored in the FourCC field: `Q8W8V8U8` (63) and `CxV8U8` (117). Each signed byte is stored plus 128 (`x ^ 0x80`), the usual unsigned normal-map encoding. For CxV8U8, B = `128 + 127·sqrt(1 − u² − v²)`, following the D3D9 definition of the format. The Q8W8V8U8 files hold real signed data (for example U=0x30, V=0x40, W=0x7d). The one CxV8U8 file (`clz.eqg` `wtr_zero_n.dds`) is all `0x80` bytes. That reads as −1 under the signed interpretation and decodes to (0,0,128). Its name suggests the author meant "zero" in a biased encoding.
-- Cube maps (`DDSCAPS2_CUBEMAP`): only the first face (+X) and its mip chain are returned. `Image` has no faces yet. For volume textures only slice 0 of level 0 is returned. Cube maps occur only in water/environment textures (`water_e.dds`, `water_noswap_e.dds`, …).
+- Cube maps (`DDSCAPS2_CUBEMAP`): `decode_texture` returns only the first face (+X) and its mip chain; `Image` has no faces. `decode_cube_as_octahedral` reads all six faces into one octahedral RGBA8 image. For volume textures only slice 0 of level 0 is returned. Cube maps occur only in water/environment textures (`water_e.dds`, `water_noswap_e.dds`, …).
 
 ### BC decoding (`to_rgba8`)
 
@@ -79,6 +79,7 @@ From Microsoft "Opaque and 1-Bit Alpha Textures" (D3D9) and "Texture Block Compr
 - BC2/BC3 colour blocks always use the four-colour palette, whatever the endpoint order.
 - BC2 alpha: 64 bits, 4 bits per texel (low nibble first), value × 17.
 - BC3 alpha: endpoints a0 and a1, then 48 bits of 3-bit selectors. If `a0 > a1` the palette is a0, a1 and six interpolants `((7−i)a0 + i·a1)/7`. Otherwise it is a0, a1, four interpolants `((5−i)a0 + i·a1)/5`, then 0 and 255.
+- BC4 is one BC3 alpha block (red), BC5 two (red, green); BC7 blocks are decoded by bcdec (THIRD_PARTY.md).
 - Interpolation uses integer division on the expanded 8-bit values. GPUs may differ by about one step. The renderer uploads BCn directly when the device supports it, so this CPU path serves GPUs without BC support and tools.
 
 ## BMP

@@ -329,9 +329,7 @@ void ClientApp::draw_ui(float fps) {
             for (auto& [text, color] : actions_ui_->take_messages())
                 game_view_.chat.add(color == 0xd ? ui::ChatChannel::Error : ui::ChatChannel::System, text, 0, color);
             if (actions_ui_->take_attack_toggle()) {
-                bool was = conn_->auto_attack();
-                conn_->toggle_auto_attack();
-                if (!was && conn_->auto_attack()) face_target();
+                if (conn_->toggle_auto_attack()) face_target();
             }
         }
         group_ui_.draw(*conn_);
@@ -403,9 +401,7 @@ void ClientApp::draw_ui(float fps) {
         if (actions.toggle_sit) conn_->sit_toggle();
         if (actions.respawn) conn_->choose_respawn(*actions.respawn);
         if (actions.toggle_attack) {
-            bool was = conn_->auto_attack();
-            conn_->toggle_auto_attack();
-            if (!was && conn_->auto_attack()) face_target();
+            if (conn_->toggle_auto_attack()) face_target();
         }
         if (actions.camp) conn_->camp();
         if (actions.disconnect) back_to_login("Disconnected.", false);

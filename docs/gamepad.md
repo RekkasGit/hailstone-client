@@ -129,7 +129,7 @@ With the Gamepad UI the login, server select, character select and character cre
 docs/dev-ui.md); the above is the client's
 ImGui screens, which show with a pack that does not draw them. The pack's login starts on the character tiles of
 Continue as (A plays one; one with no saved password asks for it first), LB / RB change the server, Y opens More
-options (the box set, game files, music, Quit), Start logs in (or opens the keys on the first empty field) and B goes
+options (the box set, game files, the add-ons, About Hailstone with What's new, music, Quit), Start logs in (or opens the keys on the first empty field) and B goes
 back from a page. At the server select A plays the focused world, Y marks it a favourite (or unmarks it) and B goes back; at character select the focused
 character is the one the scene shows, A or Start enters the world, X creates, Y deletes (asked first) and B goes back.
 At character creation the rows are stepped in place (gender, race, class, deity, start city: D-pad left / right, or
@@ -137,7 +137,7 @@ A); A on the name opens the keys, X asks the server for a random name, A on Stat
 takes a point back or spends one, X spends all it can take, LB resets them), Y opens Appearance, Start creates once
 every point is spent and the name has 4 letters or more, and B cancels. The box under the rows shows the game's
 description of the race, class, deity, city or stat focused.
-Testing: `test.login = server | more | keys | servers` in `ui/settings/gamepad.txt` opens that page once.
+Testing: `test.login = server | more | notes | addons | keys | servers` in `ui/settings/gamepad.txt` opens that page once.
 
 ## 5. Lua API (`eq.gamepad`)
 
@@ -194,11 +194,12 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
 - **Cross hotbar** (bottom centre): the three sets as two diamonds (D-pad, face buttons) each, shown in the pad's
   glyphs. The held set is enlarged and the others dimmed. Each slot shows its icon, its cooldown and whether it is
   usable.
-- **Main menu** (Start): a tiled, focus-driven menu with Inventory, Spells, Abilities, AA, Skills, Map, Group,
-  Guild, Friends, Who, Bazaar, Quests, Options, More (the game's other windows: help, the storyline, the NPC journal,
-  adventures, expeditions, PvP, the zone guide, alerts, trophies, the display and the user
-  interface; Tracking for a character with the Tracking skill, which uses the skill as its hot button does
-  (`eq.UseSkill(53)`: the skill opens the tracking window)), Camp and Exit. Each tile opens the gamepad window, or, where there is none
+- **Main menu** (Start, `mainmenu.lua`): a tiled, focus-driven menu with Inventory, Spells, Abilities, AA, Skills,
+  Map, Group, Pet, Raid, Guild, Friends, Who, Bazaar, Quests, Mail, Chat, Options, All Windows (every window of the
+  EQ menu), More (`system.lua`, the game's other windows: help, a bug report, the storyline, the NPC journal,
+  adventures, expeditions, PvP, the zone guide, alerts, trophies, the display and the user interface, the notes, the
+  Lua scripts, the web browser; Tracking for a character with the Tracking skill, which uses the skill as its hot
+  button does (`eq.UseSkill(53)`: the skill opens the tracking window)), Hot Bars and Camp. Each tile opens the gamepad window, or, where there is none
   yet, the C++ window in cursor mode.
 - **Gamepad windows**: inventory and equipment (a slot grid, A picks up and moves an item, Y shows its details;
   holding an item, X puts it away, LB destroys it and RB drops it on the ground; with nothing held LB puts the focused
@@ -273,7 +274,7 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   text editor for a real keyboard), the address book and the ignore list (X adds a name to an open message's To;
   the mail windows' Address Book opens it), raid options, the combat abilities list (Make Hotkey goes through the
   slot picker), group search and its filters, the fellowship, the bandolier, blocked spells (yours and your pet's)
-  and the NMS waypoint window. Testing: `test.show = <ScreenID>,...` in ui/settings/gamepad.txt shows those stock
+  and the NMS plugin's waypoint window. Testing: `test.show = <ScreenID>,...` in ui/settings/gamepad.txt shows those stock
   windows 10 s after zoning in, `test.luasocial = <n>` opens the Lua social editor on social n.
 - **Markets and services** (bazaar.lua, barter.lua, pointmerchant.lua, mercenary.lua, guildbank.lua, train.lua,
   tracking.lua; shared pieces in `lib/markets.lua`): the bazaar trader (wares as slots, the price as coin buttons,
