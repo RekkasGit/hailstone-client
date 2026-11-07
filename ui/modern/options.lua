@@ -237,6 +237,12 @@ local BG_FPS_NAMES = { "Same as above", "10", "15", "30", "60" }
 local SCALES = { 0, 75, 100, 125, 150, 175, 200, 250 }
 local SCALE_NAMES = { "Automatic (display)", "75 %", "100 %", "125 %", "150 %", "175 %", "200 %", "250 %" }
 
+-- The target ring's con sections (game::kTargetIndicatorSections 0..6): the row's label and the tooltip's con.
+local RING_CONS = {
+  { "Gray Con", "gray (trivial)" }, { "Green Con", "green" }, { "Light Blue Con", "light blue" },
+  { "Dark Blue Con", "dark blue" }, { "White Con", "white (even)" }, { "Yellow Con", "yellow" }, { "Red Con", "red" },
+}
+
 local function displayTab()
   section("Window", function()
     combo("window_mode", "Display Mode", { "Windowed", "Borderless Fullscreen", "Fullscreen" },
@@ -352,6 +358,32 @@ local function displayTab()
       "Hailstone: hot buttons of the Actions window's skills show their timers, Melee Attack lights while auto attack is on, Sit while sitting.")
     check("offer_layout_copy", "Offer Layouts to New Characters",
       "Hailstone: a character's first time in the world opens Copy Layout, to start from another character's windows, hot buttons and settings.")
+  end)
+  -- Hailstone's target ring settings (app/target_ring.cpp; docs/graphics.md "The target ring"): its colour for each
+  -- con (the colour picker, eq.ClickChild TargetRingColor<n>), how opaque and how bright it is, and its cues.
+  section("Target Ring", function()
+    check("target_ring_cues", "Cues",
+      "Hailstone: the ring sweeps in when you change target, and turns faster and pulses while you auto attack.")
+    check("target_ring_xray", "Through Models",
+      "Hailstone: the part of the ring hidden behind characters and walls shows faintly through them.")
+    slider("target_ring_opacity", "Opacity", 25, 200, pct, "How solid the ring is, against the con colour's own.")
+    slider("target_ring_glow", "Glow", 0, 100, pct, "How brightly the ring's core shines (with the bloom).")
+    for i, con in ipairs(RING_CONS) do
+      local rgb = eq.Option("target_ring_color_" .. (i - 1))
+      if rgb then
+        row(con[1], "Hailstone: the ring's colour for a target that cons " .. con[2] .. ". Click to change it.", function()
+          local r, g, b = (rgb >> 16 & 0xff) / 255, (rgb >> 8 & 0xff) / 255, (rgb & 0xff) / 255
+          ui.PushStyleColor(ui.Col.Button, r, g, b, 1)
+          ui.PushStyleColor(ui.Col.ButtonHovered, r, g, b, 0.85)
+          ui.PushStyleColor(ui.Col.ButtonActive, r, g, b, 0.7)
+          if ui.Button("##ringcolor" .. i, 60 * U, 0) then eq.ClickChild(WINDOW, "TargetRingColor" .. (i - 1)) end
+          ui.PopStyleColor(3)
+        end)
+      end
+    end
+    row("", nil, function()
+      if ui.Button("Default Colors") then eq.ClickChild(WINDOW, "TargetRingColorDefault") end
+    end)
   end)
   -- The original's window fade sliders (COptionsWnd::WndNotification, CXWndManager::SetGlobal*): they set every
   -- window's value at once and keep it in the UI ini's [Main].

@@ -91,6 +91,7 @@
 #include "render/cover_map.h"
 #include "render/fire_renderer.h"
 #include "render/flora_renderer.h"
+#include "render/target_ring_renderer.h"
 #include "render/point_shadow_pass.h"
 #include "render/actor_renderer.h"
 #include "render/sky_renderer.h"
@@ -404,6 +405,9 @@ public:
         spell_effects_ = config_.get_bool("display.spell_effects", true);
         grass_ = config_.get_bool("display.grass", true);
         neighbour_zones_ = config_.get_bool("display.neighbour_zones", true);
+        ring_cues_ = config_.get_bool("display.target_ring_cues", true);
+        ring_xray_ = config_.get_bool("display.target_ring_xray", false);
+        load_ring_colors();
         shadow_clip_plane_ = std::clamp(config_.get_int("display.shadow_clip_plane", game::kDefaultShadowClipPlane), 0, 100);
         if (auto text = config_.get("display.viewport")) viewport_ = game::parse_viewport(*text);
         apply_font_face();
@@ -791,9 +795,24 @@ private:
     void register_eq_api(lua_State* L);
     void trace_spawn(float dt);
     void draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent);
-    // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet.
-    void draw_target_ring(const glm::mat4& view_proj, VkExtent2D extent);
-    std::optional<game::TargetIndicatorSettings> target_indicator_; // TargetIndicator.ini, read on first use
+    // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet, drawn
+    // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent; the classic
+    // lighting, which has no other use for it, takes the depth copy here when there is a ring to draw.
+    void draw_target_ring(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
+                          double seconds);
+    mutable std::optional<game::TargetIndicatorSettings> target_indicator_; // TargetIndicator.ini, read on first use
+    // Hailstone's look (game::target_ring_look): the target it last showed and since when, the dashes' turn.
+    std::uint32_t ring_target_ = 0;
+    double ring_target_since_ = -1.0;
+    double ring_last_seconds_ = -1.0;
+    float ring_spin_ = 0.0f;
+    bool ring_cues_ = true;  // display.target_ring_cues: the sweep on a new target, the pulse while attacking
+    bool ring_xray_ = false; // display.target_ring_xray: the hidden part shows faintly through
+    game::TargetRingColors ring_colors_; // display.target_ring_color.*, _opacity, _glow (Options > Display "Target Ring")
+    void load_ring_colors();
+    const game::TargetIndicatorSettings& target_indicator() const; // read on first use
+    std::optional<int> ring_option(std::string_view name) const;
+    bool set_ring_option(std::string_view name, int value);
     void draw_text_overlay();
     void update_combat_input();
     // The gamepad (app/client_app_gamepad.cpp; docs/gamepad.md, a client extension), once a frame before the UI
@@ -1228,6 +1247,7 @@ private:
     render::SceneLighting frame_lighting_{}; // this frame's lighting, for the flames' haze and depth terms
     std::unique_ptr<SpellParticles> spell_particles_;       // spell stage particles (app/spell_particles.h)
     std::unique_ptr<SpellBolts> spell_bolts_;               // the modern lighting's bolts and comets (app/spell_bolts.h)
+    std::unique_ptr<render::TargetRingRenderer> target_ring_renderer_; // the target ring, made on first use
     std::unique_ptr<ActorEmitters> actor_emitters_;         // the models' and held items' own (app/actor_emitters.h)
     std::vector<ActorEmitters::Actor> actor_emitter_list_;  // this frame's actors that have some
     game::Weather weather_;                                 // OP_Weather played out (game/weather.h)

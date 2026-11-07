@@ -564,6 +564,9 @@ int ClientApp::run() {
                     zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
                 if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
             }
+            // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
+            // weather and particles. Character select draws no target.
+            if (in_game) draw_target_ring(*f, vp, lit.far_plane, modern, t);
             // Rain or snow: the precipitation manager's particles. The original draws them in every zone type,
             // with or without a sky (CRender's scene, 0x10097420).
             if (weather_renderer_ && in_game) {
@@ -589,7 +592,6 @@ int ClientApp::run() {
                                        particle_lighting);
             lap.mark("translucent, weather, particles");
             if (in_game) { // character select draws no target, names or picking
-                draw_target_ring(vp, f->extent);
                 if (nav_ && nav_->overlay())
                     nav_->draw_overlay(ImGui::GetBackgroundDrawList(), vp,
                                        glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h));

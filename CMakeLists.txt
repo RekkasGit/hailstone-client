@@ -320,6 +320,7 @@ add_library(nmsc_engine STATIC
   src/render/fire_renderer.cpp
   src/render/flora_renderer.cpp
   src/render/spell_fx_renderer.cpp
+  src/render/target_ring_renderer.cpp
   src/game/view_distance.cpp
   src/game/fog.cpp
   src/game/scaled_ambient.cpp
@@ -656,6 +657,8 @@ nmsc_add_shaders(nmsc_shaders
   shaders/fire.frag
   shaders/spell_fx.vert
   shaders/spell_fx.frag
+  shaders/target_ring.vert
+  shaders/target_ring.frag
   shaders/underwater.vert
   shaders/underwater.frag
   shaders/zone_shadow.vert

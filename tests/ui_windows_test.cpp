@@ -6,8 +6,10 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
@@ -430,6 +432,35 @@ TEST_CASE("Options window: the Colors page saves a user colour to the character'
         CHECK(std::string(std::istreambuf_iterator<char>(in), {}) == eqclient);
     }
     fs::remove_all(root);
+}
+
+TEST_CASE("Options window: the target ring's colour buttons pick a con's colour and put them all back") {
+    // No game files needed: an empty folder of its own.
+    nmsc::test::ScratchDir root_scratch("ui_windows_ring");
+    fs::create_directories(root_scratch.path());
+    GameDir game(root_scratch.path());
+    Harness t(game);
+    std::map<std::string, int, std::less<>> options;
+    for (int i = 0; i < 7; ++i) options[std::format("target_ring_color_{}", i)] = 0x112233;
+    t.host.find_option = [&](std::string_view o) -> std::optional<int> {
+        auto it = options.find(o);
+        return it == options.end() ? std::nullopt : std::optional<int>(it->second);
+    };
+    t.host.set_option = [&](std::string_view o, int v) { options[std::string(o)] = v; };
+
+    CHECK(t.api->click_child("OptionsWindow", "TargetRingColor3"));
+    REQUIRE(t.host.color_pick);
+    CHECK(t.host.color_pick->rgb == 0x112233u); // starts from the con's colour
+    t.host.color_pick->done(0xfff07f00u);
+    CHECK(options["target_ring_color_3"] == 0xf07f00); // the alpha byte dropped
+    CHECK(options["target_ring_color_2"] == 0x112233);
+
+    t.host.color_pick.reset();
+    CHECK(t.api->click_child("OptionsWindow", "TargetRingColor7")); // not a con section: nothing to pick
+    CHECK_FALSE(t.host.color_pick);
+
+    CHECK(t.api->click_child("OptionsWindow", "TargetRingColorDefault"));
+    for (int i = 0; i < 7; ++i) CHECK(options[std::format("target_ring_color_{}", i)] == -1);
 }
 
 TEST_CASE("Extended target window: its context menu (rows, a submenu, an option)") {
