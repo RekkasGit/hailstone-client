@@ -153,6 +153,10 @@ public:
     // secondary, for a server whose backstab takes the better hand (the NMS server source does when multiclassing
     // is on). Stock and the Project Triune patch check the primary alone, so this is a deliberate difference.
     virtual bool backstab_either_hand(const net::GameConnection&) const { return false; }
+    // An adventure recruiter's Request goes out from a player in no group or raid, for a server that takes solo
+    // adventures (the Project Triune client's patch sets the adventure group size to 1). Stock EQEmu drops such a
+    // request unanswered, so the client stops it with its own line.
+    virtual bool solo_adventure(const net::GameConnection&) const { return false; }
     // The classes whose max HP / mana / endurance formulas the server takes the best of (the stats window's
     // comparison); stock: the profile's class.
     virtual std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const {
