@@ -120,7 +120,7 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
         ImVec2 size = ImGui::CalcTextSize(label.c_str());
         ImU32 color = s.is_corpse ? IM_COL32(170, 170, 170, 255) : s.is_npc ? IM_COL32(255, 220, 120, 255) : IM_COL32(140, 190, 255, 255);
         // Hailstone (option con_name_colour, a deliberate difference; docs/graphics.md "Name plates"): an NPC's name takes
-        // its consider colour, as the target's always has. Off: the stock yellow.
+        // its consider colour, as the target plate below does. Off: this client's yellow (neither is the original's tint).
         if (auto rgb = game::npc_name_colour(s, conn_->player_status().level, conn_->pvp_rules(), con_name_colour_))
             color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
         // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) gets (0x11, 0xb5, 0xe1).

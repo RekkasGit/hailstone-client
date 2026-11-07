@@ -709,7 +709,11 @@ TEST_CASE("npc_name_colour: an NPC's name takes its consider colour, and only wi
     rat.gender = 2;
     // The rat is white to a level 1 character (see the consider test above).
     CHECK(game::npc_name_colour(rat, 1, 0, true) == game::con_rgb(game::Con::White));
-    CHECK(game::npc_name_colour(rat, 1, 0, true) != std::optional<std::uint32_t>(0xffff00u)); // not the stock yellow
+    // Each con gives its own colour: a rat far above the player cons red.
+    game::Spawn big = rat;
+    big.level = 20;
+    CHECK(game::npc_name_colour(big, 1, 0, true) == game::con_rgb(game::con_level(big, 1, 0)));
+    CHECK(game::npc_name_colour(big, 1, 0, true) != game::npc_name_colour(rat, 1, 0, true));
     // The option off keeps the stock colours.
     CHECK_FALSE(game::npc_name_colour(rat, 1, 0, false).has_value());
     // Players and corpses are not NPC names: the caller keeps their colours.

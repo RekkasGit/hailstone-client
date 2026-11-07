@@ -1003,7 +1003,9 @@ At run time:
 
 ## Name plates
 
-NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the same colour the target's name has in the original) instead of the stock yellow. Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the stock yellow for NPC names. The target keeps its consider colour in both settings.
+NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the colour Hailstone's target plate already uses) instead of this client's yellow (255, 220, 120). Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the yellow for NPC names. The target keeps its consider colour in both settings.
+
+Neither colour is the original's: PlayerClient::SetNameSpriteTint gives every NPC but a mercenary one fixed tint (0xad, 0xb8, 0x17) and only flashes the target's toward white; the con-coloured target plate is Hailstone's look too (`draw_nameplates`). Which name sprites are drawn, and their parts: docs/mechanics.md "Name sprites".
 
 ## Settings
 

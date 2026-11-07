@@ -941,6 +941,8 @@ race. Off, the original's checks apply.
   person, where the model is hidden. Hailstone adds a switch for it alone (a deliberate difference: Options > Display
   "Show My Name", hailstone.ini `display.own_name`, on by default); "Show Player Names" off hides it too. Not done:
   the original shows the title window's chosen title and suffix on the player's own sprite while that window is open.
+- Their colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
+  (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
 
 ## Chat keys, the PvP rule set, trade and group invites
 
