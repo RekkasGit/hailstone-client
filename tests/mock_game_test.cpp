@@ -571,9 +571,9 @@ TEST_CASE("mock server: fast camp sends OP_Logout right after OP_Camp and ends t
     CHECK(!conn.link_death());
 }
 
-TEST_CASE("mock server: /camp on a mount: refused (12291 standing, 12292 sitting)") {
-    // Send_OP_Camp @0x5317a0: not sitting, CEverQuest::Sit, which a mount refuses (12291); already sitting on a
-    // mount, 12292. Nothing is sent either way.
+TEST_CASE("mock server: /camp on a mount camps from the saddle; getting off cancels it") {
+    // Send_OP_Camp @0x5317a0 refuses a mounted player (12291 standing, 12292 sitting). Hailstone's deliberate
+    // difference (docs/mechanics.md "Camp"): the camp goes ahead on a mount without sitting, and holds while mounted.
     Rig rig;
     auto& conn = rig.conn;
     auto& server = rig.server;
@@ -590,18 +590,30 @@ TEST_CASE("mock server: /camp on a mount: refused (12291 standing, 12292 sitting
     horse.rider_id = me;
     w.spawns[me].mount_id = 9000;
     conn.camp();
-    CHECK(conn.state() == ConnectionState::InZone);
+    CHECK(conn.state() == ConnectionState::Camping);
     CHECK(!conn.sitting());
-    CHECK(has_line(rig.chat(), "[12291]"));
-    conn.set_sitting(false);
+    REQUIRE(rig.until([&] { return server.camp_requests == 1; }));
+    CHECK(in_order(server.zone_log, {Op::Save, Op::Camp}));
+    CHECK(MockEqServer::count(server.zone_log, Op::SpawnAppearance) == 0); // no sit
+    CHECK(has_line(rig.chat(), "CAMPING")); // eqstr 12293
+    CHECK_FALSE(has_line(rig.chat(), "[12291]"));
+    // Still mounted and standing: the camp tick keeps it.
+    rig.step();
+    CHECK(conn.state() == ConnectionState::Camping);
+    // Off the mount, standing: cancelled as any other stand (12683).
     w.spawns[me].mount_id = 0;
+    rig.step();
+    CHECK(conn.state() == ConnectionState::InZone);
+    CHECK(has_line(rig.chat(), "[12683]"));
+
+    // Sitting, then mounted (12292 in the original): camps too.
     conn.set_sitting(true);
     REQUIRE(conn.sitting());
     w.spawns[me].mount_id = 9000;
     conn.camp();
-    CHECK(conn.state() == ConnectionState::InZone);
-    CHECK(has_line(rig.chat(), "[12292]"));
-    CHECK(server.camp_requests == 0);
+    CHECK(conn.state() == ConnectionState::Camping);
+    REQUIRE(rig.until([&] { return server.camp_requests == 2; }));
+    CHECK_FALSE(has_line(rig.chat(), "[12292]"));
 }
 
 TEST_CASE("mock server: on a boat the position goes out in its frame; a right click asks for the helm") {

@@ -24,6 +24,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Ranged attacks do not turn the player in the original either.
 - [x] Held buffs seen live (a SPA 436 buff freezes Courage's countdown). Melee checked by hand.
 - [ ] Distance-scaled spell effects live (needs a spell with a distance modifier cast at range). Buff caster ids and temporary pets in the line filters are in unknowns.md.
+- [ ] Spell particles: which spawn is the impact stage's caster (the struck spawn here, the packet's source in rof2decomp; unknowns.md).
 - [x] Commands: `/discipline`, `/doability`, `/stopdisc`, `/memspellset`, `/spellscribe`, `/targetgroupbuff` / `/tgb`, `/autofire`, `/melody`, `/dismount`, `/aggrometer`, `/buyer`, `/claim` (f3c5c5d).
 - [ ] `/gems`: the Gems mini-game (CGemsGameWnd, 0x6705f0 to 0x6734e0), a port of its own.
 - [x] (358bf04, checked live: /discipline now runs the NMS reuse timers; the empty list after login matches the original) A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet); the reuse list is empty after zone-in until the server sends timers.

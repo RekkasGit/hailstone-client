@@ -314,13 +314,13 @@ void GameConnection::camp() {
     std::int32_t mez = 0; // TotalEffect(31, 1, 0, 1, 1)
     with_character([&](game::mechanics::Character& ch) { mez = ch.total_effect(31, true, 0, true, true); });
     if (mez != 0) return system(12368);
-    // Not sitting: CEverQuest::Sit, and 12291 when the player is still not sitting (a mounted player cannot sit).
-    // Already sitting: refused on a mount (EQPlayer::GetMount, 12292).
-    if (!sitting()) {
+    // Not sitting: CEverQuest::Sit, and 12291 when the player is still not sitting. The original refuses a mounted
+    // player (Sit fails on a mount: 12291; already sitting on one, EQPlayer::GetMount: 12292). Hailstone (a deliberate
+    // difference, docs/mechanics.md "Camp"): on a mount the camp goes ahead from the saddle, without sitting. A stock
+    // EQEmu zone's Handle_OP_Camp checks neither sitting nor a mount.
+    if (!mount_id() && !sitting()) {
         set_sitting(true);
         if (!sitting()) return system(12291);
-    } else if (mount_id()) {
-        return system(12292);
     }
     send_save(0x21); // Save(0, 1, 0x21)
     send_zone(encode_camp(camp_kind_));
@@ -341,7 +341,8 @@ void GameConnection::cancel_camp(std::uint32_t eqstr) {
 void GameConnection::camp_tick() {
     // DoPassageOfTime: 12684 every 5 s; standing by any other means than ChangePosition cancels with 12683.
     if (state_ != ConnectionState::Camping || camp_started_ == Clock::time_point{}) return;
-    if (pstatus_.stand_state != kStandSitting) {
+    // Hailstone: a camp made on a mount (above) holds while the player stays mounted; getting off cancels it.
+    if (pstatus_.stand_state != kStandSitting && !mount_id()) {
         cancel_camp(12683);
         return;
     }

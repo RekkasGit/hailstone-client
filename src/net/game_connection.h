@@ -2063,6 +2063,8 @@ public:
     void answer_guild_invite(bool accept);
     // The zone answered OP_HailstoneGuild's hello: /guildinvite reaches players in other zones (net/social_packets.h).
     bool guild_world_invites() const { return guild_world_invites_; }
+    // /raidinvite [name] (Cmd_raidinvite @0x4de470): invites the name or, without one, the targeted player.
+    void raid_invite(const std::string& args);
     // CRaid::SendInviteResponse @0x47d700: /raidaccept and /raiddecline.
     void answer_raid_invite(bool accept);
     // /raiddisband and the raid window's Leave: leave the raid, or for its leader remove the raid target (OP_RaidInvite
@@ -2179,7 +2181,8 @@ public:
     // The chat server's joined channels, in /1../10 order.
     std::vector<std::string> chat_channels() const;
     // Send_OP_Camp @0x5317a0: nothing while out of control (stand state 0x66); a second /camp cancels the camp
-    // (12290); refused under SPA 31 (12368); sits (12291 when it cannot), saves (Save(0, 1, 0x21): OP_Save), sends
+    // (12290); refused under SPA 31 (12368); sits (12291 when it cannot; Hailstone camps a mounted player without
+    // sitting, where the original refuses with 12291 or 12292), saves (Save(0, 1, 0x21): OP_Save), sends
     // OP_Camp {the camp kind} and starts a 30 s timer (12293; 12684 every 5 s); sitting up through ChangePosition
     // or GetConscious cancels it (12290), standing by other means too (12683). The camp kind is camp_command's.
     void camp();
@@ -2647,7 +2650,6 @@ private:
     void follow_command();
     void reply_command(const std::string& args);
     void guild_command(std::string_view handler, const std::string& args);
-    void raid_invite(const std::string& args);
     void set_raid_ability_ranks(const std::array<std::uint32_t, 64>& block);
     void friends_command(const std::string& args);
     void ignore_command(const std::string& args);

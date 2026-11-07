@@ -8,6 +8,7 @@
 // eqclient.ini [Defaults] SpellParticleDensity and SpellParticleOpacity.
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -50,6 +51,12 @@ public:
     void set_density(float density) { settings_.density = std::clamp(density, 0.0f, 1.0f); }
     float density() const { return settings_.density; }
     float eqclient_density() const { return eqclient_density_; }
+    // Hailstone: the Options window's per-source densities (game::spell_fx_source), each scaling the density above
+    // for the stages played from now on; 1 (High) by default.
+    void set_source_density(game::SpellFxSource source, float density) {
+        source_density_[static_cast<std::size_t>(source)] = std::clamp(density, 0.0f, 1.0f);
+    }
+    float source_density(game::SpellFxSource source) const { return source_density_[static_cast<std::size_t>(source)]; }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
 
@@ -66,6 +73,7 @@ private:
     game::ParticleSystem particles_;
     game::SpellParticleSettings settings_;
     float eqclient_density_ = 1.0f;
+    std::array<float, game::kSpellFxSourceCount> source_density_{1.0f, 1.0f, 1.0f};
     std::unique_ptr<render::ParticleRenderer> renderer_;
     std::optional<std::size_t> path_definition_; // the line's texture as a definition of particles_
     std::vector<std::uint32_t> path_movers_;     // the movers' serials whose emitters exist
@@ -74,6 +82,7 @@ private:
         double at;
         int stage;
         std::uint32_t caster, target, spell;
+        std::uint32_t source; // the impact stage's caster (the cue's source)
         std::int32_t duration_ms;
     };
     std::vector<Held> held_;

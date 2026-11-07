@@ -575,8 +575,8 @@ end)
 The Modern pack's AA window is a library as well (`ui/modern/lib/aa.lua`): `aa.window{row = {width = n, draw =
 fn(r, x0, y0, x1, y1, s), style = fn(r)}, details = fn(sel, x, y, w, s), banner = fn(x, y, w, s)}`. `row` works as
 the extended target window's (`style` can outline a row or put a small label after its name); `r` has the ability's
-`name`, `rank`, `max`, `cost` (the next rank's, as text), `category`, `trainable`, `maxed` and `page` (the tab,
-0-based). `details` draws a part under the selected ability's requirements (`sel`: `id`, `name`, `rank`, `max`,
+`name`, `rank`, `max`, `cost` (the next rank's, as text), `category`, `trainable`, `maxed` and `page` (the
+ability's tab, 0-based: the window lists every tab's abilities as one list). `details` draws a part under the selected ability's requirements (`sel`: `id`, `name`, `rank`, `max`,
 `cost`) and `banner` a strip under the header; each returns the height it took. Rows carry no ability id: match `r.name`
 to `hailstone.alt_abilities()`'s names (an ability's ranks share theirs). A window named "Alternate Advancement" that
 calls it covers the pack's, as above.
@@ -661,7 +661,7 @@ a line in the log once.
 
 | Needs | `eq` functions |
 |---|---|
-| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below) |
+| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
 | `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
 | `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, `eq.SetItemKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |

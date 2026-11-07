@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <imgui.h>
@@ -2484,6 +2485,11 @@ int TakeWindowMenu(lua_State* L) {
     lua_pushboolean(L, yes);
     return 1;
 }
+// yes = eq.TakeCloseTopWindow()   -- the close-top-window key (Escape) went down this frame and is the caller's (once)
+int TakeCloseTopWindow(lua_State* L) {
+    lua_pushboolean(L, std::exchange(Impl::of(L).host.close_top_window, false));
+    return 1;
+}
 int ReturnFalse(lua_State* L) {
     lua_pushboolean(L, false);
     return 1;
@@ -2830,6 +2836,9 @@ void EqApi::actions_key(int page) {
 }
 
 void EqApi::right_click_item(const net::ItemSlot& slot) { item_right_click(impl_->host, slot); }
+bool EqApi::open_player_menu(std::uint32_t spawn_id, float x, float y) {
+    return app::open_player_menu(impl_->host, spawn_id, x, y);
+}
 void EqApi::open_all_bags() { app::open_all_bags(impl_->host); }
 void EqApi::close_all_bags() { app::close_all_bags(impl_->host); }
 void EqApi::toggle_all_bags() { app::toggle_all_bags(impl_->host); }
@@ -2900,7 +2909,8 @@ void EqApi::register_functions(lua_State* L) {
         {"CascadeMenus", CascadeMenus}, {"CascadeClick", CascadeClick}, {"CascadeHover", CascadeHover},
         {"CascadeClose", CascadeClose}, {"GameMenus", GameMenus}, {"GameMenuClick", GameMenuClick},
         {"GameMenuHover", GameMenuHover}, {"GameMenuClose", GameMenuClose},
-        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu}, {"ContextMenus", ContextMenus},
+        {"WindowContextMenu", WindowContextMenu}, {"TakeWindowMenu", TakeWindowMenu},
+        {"TakeCloseTopWindow", TakeCloseTopWindow}, {"ContextMenus", ContextMenus},
         {"WindowShown", WindowShown},
         {nullptr, nullptr}};
     lua_pushlightuserdata(L, impl_.get());

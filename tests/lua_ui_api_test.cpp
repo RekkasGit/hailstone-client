@@ -783,3 +783,93 @@ TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's s
     ImGui::EndFrame();
     ImGui::DestroyContext(ctx);
 }
+
+// The modern pack's "Close with Esc" (ui/modern/lib/escape.lua): off until ticked; one press closes one ticked window,
+// the one opened or clicked last.
+TEST_CASE("Modern UI libs: Close with Esc closes the frontmost ticked window, one a press") {
+    nmsc::test::ScratchDir scratch("lua_ui_modern_escape_test");
+    const fs::path dir = scratch.path() / "pack";
+    const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
+    REQUIRE(fs::exists(lib / "escape.lua"));
+    fs::create_directories(dir);
+    fs::copy(lib, dir / "lib", fs::copy_options::recursive);
+    std::ofstream(dir / "esc.lua") << R"lua(
+PRESS = false
+eq = { TakeCloseTopWindow = function() local p = PRESS; PRESS = false; return p end }
+local esc = dofile("lib/escape.lua")
+OPEN = { A = true, B = false, C = false }
+local place = { A = 0, B = 200, C = 400 }
+for _, name in ipairs({ "A", "B", "C" }) do
+  ui.window(name, function()
+    if not OPEN[name] then return end
+    ui.SetNextWindowPos(place[name], 0, ui.Cond.Always)
+    ui.SetNextWindowSize(150, 100, ui.Cond.Always)
+    ui.Begin(name)
+    if esc.Frame(name) then OPEN[name] = false end
+    ui.End()
+  end)
+end
+function tick(name) ui.SetSetting("hud.esc." .. name, "1") end
+function open() return (OPEN.A and "A" or "") .. (OPEN.B and "B" or "") .. (OPEN.C and "C" or "") end
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto lua_do = [&](const char* code) {
+            REQUIRE(luaL_dostring(L, code) == LUA_OK);
+            std::string out = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return out;
+        };
+        auto press = [&] {
+            lua_do("PRESS = true");
+            frames(3);
+        };
+        frames(2);
+        lua_do("OPEN.B = true");
+        frames(2);
+        lua_do("OPEN.C = true");
+        frames(2);
+        REQUIRE(lua_do("return open()") == "ABC");
+        // nothing ticked: the press closes nothing, and is not kept for later
+        press();
+        CHECK(lua_do("return open()") == "ABC");
+        lua_do("tick('A') tick('B')");
+        frames(2);
+        CHECK(lua_do("return open()") == "ABC");
+        // C opened last but is not ticked: B, the ticked one opened last, goes; then A
+        press();
+        CHECK(lua_do("return open()") == "AC");
+        press();
+        CHECK(lua_do("return open()") == "C");
+        press();
+        CHECK(lua_do("return open()") == "C");
+        // a click brings a window to the front: B opened after A, A clicked after that
+        lua_do("OPEN.A, OPEN.B = true, true");
+        frames(2);
+        ImGui::GetIO().AddMousePosEvent(50, 50);
+        frames(1);
+        ImGui::GetIO().AddMouseButtonEvent(0, true);
+        frames(1);
+        ImGui::GetIO().AddMouseButtonEvent(0, false);
+        frames(1);
+        press();
+        CHECK(lua_do("return open()") == "BC");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
