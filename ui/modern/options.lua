@@ -552,7 +552,10 @@ local function graphicsTab()
       ticks("sharpness", "Upscale Sharpening", function(t) return pct(t * 5) end,
         "How much FSR 1 sharpens the upscaled picture.")
     end
-    check("grass", "Radial Flora", "Grass, flowers and ferns on the newer zones' open ground (/showgrass).")
+    check("grass", "Radial Flora",
+      "Grass, flowers and ferns on the newer zones' open ground, and Hailstone's grass on classic zones such as East Commonlands (/showgrass).")
+    slider("flora_distance", "Flora Distance", 400, 1200, function(v) return string.format("%d units", v) end,
+      "How far round the camera the grass is drawn. Past 400 units it thins out with distance. Further is slower.")
     check("ao", "Ambient Occlusion", "Soft contact shadows where surfaces meet (modern lighting).")
     check("distance_blur", "Distance Blur", "Softens the far distance a little (modern lighting).")
     check("neighbour_zones", "Neighbour Zones",
@@ -593,6 +596,7 @@ local function graphicsTab()
     if eq.Option("render_scale") ~= nil then eq.SetOption("render_scale", 100) end
     if eq.Option("sharpness") ~= nil then eq.SetOption("sharpness", 10) end
     eq.SetOption("max_camera_distance", 60)
+    if eq.Option("flora_distance") ~= nil then eq.SetOption("flora_distance", 400) end
   end
 end
 

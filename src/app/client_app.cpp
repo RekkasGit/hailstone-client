@@ -552,6 +552,7 @@ int ClientApp::run() {
                 world_objects_->draw(*f, vp, camera_.position, lit);
             }
             lap.mark("objects draw");
+            if (flora_renderer_ && grass_) flora_renderer_->set_reach(flora_reach_);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
             const std::unordered_set<std::uint32_t>* modelled = nullptr;

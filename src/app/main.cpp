@@ -98,6 +98,7 @@ struct Options {
     std::vector<nmsc::render::FireSource> fires; // --fire X Y Z H W: flames placed by hand (modern)
     bool no_fire = false;                         // --no-fire: the modern lighting without its flames (timing)
     bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
+    float flora_distance = 400.0f;                // --flora-distance: how far the viewer draws the flora
     std::optional<std::string> textures; // --textures DIR: replacement textures (assets/texture_overrides.h)
     bool no_material_maps = false;       // --no-material-maps: a pack's colour without its normal and roughness maps
     int time_type = -1;           // viewer OP_NewZone time_type; -1: 1 with a sky, 0 without
@@ -237,6 +238,7 @@ void usage() {
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
         "                     viewer draws flora with --lighting modern only\n"
+        "  --flora-distance U viewer: draw the flora U units round the camera (400 .. 1200; default 400)\n"
         "  --moon P           the moon's phase, 0 new .. 0.5 full .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --blood-moon B     the blood moon, 0 none .. 1 (--lighting modern; client: instead of the calendar)\n"
         "  --aurora A         the northern lights by night, 0 none .. 1 (--lighting modern; client: instead of the\n"
@@ -390,6 +392,9 @@ Options parse_args(int argc, char** argv) {
             o.view_distance = std::strtof(argv[++i], nullptr);
         } else if (arg("--no-grass")) {
             o.no_grass = true;
+        } else if (arg("--flora-distance")) {
+            need(1);
+            o.flora_distance = std::strtof(argv[++i], nullptr);
         } else if (arg("--no-ao")) {
             o.scene.ambient_occlusion = false;
         } else if (arg("--weather-age")) {
@@ -784,6 +789,7 @@ int main(int argc, char** argv) {
         std::unique_ptr<render::FloraRenderer> flora_renderer;
         if (zone && opts.modern && !opts.no_grass && !zone->flora.empty())
             flora_renderer = std::make_unique<render::FloraRenderer>(vk, *zone, shader_dir);
+        if (flora_renderer) flora_renderer->set_reach(opts.flora_distance);
         std::unique_ptr<render::ZoneRenderer> zone_renderer;
         render::PointShadows point_shadows;
         render::CoverMapState cover_state, water_state; // what the cover and water maps last showed

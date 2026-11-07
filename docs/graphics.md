@@ -189,6 +189,12 @@ plant on the CPU as the smoke is (`render::particle_light`, the haze by `haze_at
 ambient and half its sun), take the terrain's colour with `*INHERITVERTEXCOLOR`, write depth in the opaque part of the
 scene and shrink into the ground over the last fifth of the reach. They cast no shadows.
 
+The reach is Hailstone's Flora Distance (`display.flora_distance`, the Options window's slider, the gamepad pack's
+Grass distance): 400 to 1,200 units, 400 by default. Past 400 units a share of the plants is kept by the square of
+the distance (`render::flora_keep`: a quarter at 800, a ninth at 1,200), the same ones from frame to frame, so the
+far ring costs about what the near circle does. The tiles are filled nearest first, so when a frame reaches
+`FloraRenderer::kMaxPlants` it is far plants that are left out.
+
 ## Zone flora
 
 Hailstone's own, not the original's: the classic zones have no flora, and this gives a zone grass and plants without
@@ -979,6 +985,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.vsync` | off, on, adaptive | on | the present mode: immediate (else mailbox), FIFO, FIFO relaxed; FIFO when the surface lacks one |
 | `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence |
 | `display.background_fps` | 0, 10 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`) |
+| `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides), read as each zone loads |
 | `display.fov` | fov units | none | the camera's field of view in 512ths of a circle (none: the classic 90, 63.3 degrees across below an aspect of 2); the Options window shows degrees, 45 .. 120 |

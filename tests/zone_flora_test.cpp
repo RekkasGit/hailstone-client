@@ -9,6 +9,7 @@
 #include "assets/flora.h"
 #include "assets/zone.h"
 #include "assets/zone_flora.h"
+#include "render/flora_renderer.h"
 #include "game_files.h"
 
 using namespace nmsc;
@@ -202,5 +203,18 @@ TEST_CASE("zone flora: East Commonlands' ground (game files)") {
         const auto& p = zone.flora.instances[i];
         MESSAGE("plant " << p.position.x << " " << p.position.y << " " << p.position.z << " colour " << std::hex
                          << p.color << std::dec);
+    }
+}
+
+TEST_CASE("flora distance: all the plants within kFloraReach, fewer by the square of the distance past it") {
+    CHECK(render::flora_keep(0.0f) == 1.0f);
+    CHECK(render::flora_keep(render::kFloraReach) == 1.0f);
+    CHECK(render::flora_keep(render::kFloraReach * 2.0f) == doctest::Approx(0.25f));
+    CHECK(render::flora_keep(render::kMaxFloraReach) == doctest::Approx(1.0f / 9.0f));
+    // Thinner the further out.
+    float last = 1.0f;
+    for (float d = render::kFloraReach; d <= render::kMaxFloraReach; d += 50.0f) {
+        CHECK(render::flora_keep(d) <= last);
+        last = render::flora_keep(d);
     }
 }

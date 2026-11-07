@@ -1224,6 +1224,8 @@ private:
     // Options window's Radial Flora; display.grass).
     std::unique_ptr<render::FloraRenderer> flora_renderer_;
     bool grass_ = true;
+    // Hailstone's Flora Distance (display.flora_distance): how far the flora is drawn, in units.
+    float flora_reach_ = render::kFloraReach;
     std::vector<render::FireSource> zone_fires_;
     std::vector<render::FireSource> zone_mesh_fires_; // the flame meshes' alone (no particle clouds)
     std::vector<render::FireSource> frame_fires_;
