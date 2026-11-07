@@ -334,6 +334,7 @@ local function displayTab()
     end
     check("pc_names", "Show Player Names", "The names over other players.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
+    check("con_name_colour", "Con-Coloured NPC Names", "NPC names take their consider colour (as the target's always has). Off keeps them yellow.")
     check("show_target_ring", "Show 3D Target Ring", "A colored ring appears around your current target's feet.")
     check("tab_skip_pets", "Tab Skips Pets",
       "Hailstone: the NPC target keys (Tab, F8) skip players' pets and mercenaries.")

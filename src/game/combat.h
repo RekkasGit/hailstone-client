@@ -61,6 +61,10 @@ std::uint32_t con_chat_color(Con con);
 Con con_from_server(std::uint32_t level);
 // Screen colour for UI (0xRRGGBB).
 std::uint32_t con_rgb(Con con);
+// The colour an NPC's name is drawn in when display.con_name_colour is on (a deliberate difference, docs/graphics.md
+// "Name plates"): its consider colour. nullopt for everything else, and for every spawn while the option is off, so
+// the caller keeps the stock colours.
+std::optional<std::uint32_t> npc_name_colour(const Spawn& s, int my_level, std::int32_t pvp_rules, bool enabled);
 
 // BuildConsiderMessage: "<name> <standing> -- <difficulty>". faction is the
 // server's (remapped) standing 1..9; short_form is Consider_Struct +16 (the

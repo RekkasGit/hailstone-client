@@ -328,6 +328,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "news_last_read") return config_.get_int("news.last_read", 0);
     if (o == "news_automatic") return config_.get_bool("news.automatic", false) ? 1 : 0;
     if (o == "npc_names") return npc_names_ ? 1 : 0;
+    // Hailstone: NPC names in their consider colour, on by default (draw_nameplates).
+    if (o == "con_name_colour") return con_name_colour_ ? 1 : 0;
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -433,6 +435,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "news_last_read" || o == "news_automatic") {
         if (o == "news_last_read") config_.set_int("news.last_read", v);
         else config_.set_bool("news.automatic", v != 0);
+        config_.save(config_path_);
+        return;
+    }
+    if (o == "con_name_colour") {
+        con_name_colour_ = v != 0;
+        config_.set_bool("display.con_name_colour", v != 0);
         config_.save(config_path_);
         return;
     }

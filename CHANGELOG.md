@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- NPC names are drawn in their consider colour (red, yellow, blue, ...), as the target's name always was. Turn it off with "Con-Coloured NPC Names" in Options > Display (`display.con_name_colour=0` in `hailstone.ini`).
 - Your HP in the player window, inventory, HP bar and group/target windows now includes the HP from your gear, as `#mystats` and the original client show it. EQEmu leaves item HP out of your own HP updates, so a character with a lot of item HP showed far too little
 
 ## 0.5.0-beta (2026-11-05)

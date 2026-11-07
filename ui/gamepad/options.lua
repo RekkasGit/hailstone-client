@@ -173,7 +173,8 @@ local PAGES = {
     local r = optionRow("UI scale", "ui_scale", { "Automatic", "75 %", "100 %", "125 %", "150 %", "175 %", "200 %", "250 %" },
       { 0, 75, 100, 125, 150, 175, 200, 250 })
     if r then rows[#rows + 1] = r end
-    for _, o in ipairs({ { "Player names", "pc_names" }, { "NPC names", "npc_names" }, { "Target ring", "show_target_ring" },
+    for _, o in ipairs({ { "Player names", "pc_names" }, { "NPC names", "npc_names" },
+        { "Con-coloured NPC names", "con_name_colour" }, { "Target ring", "show_target_ring" },
         { "Target skips pets", "tab_skip_pets" }, { "Buff timers", "show_buff_timer" }, { "Song timers", "show_song_timer" },
         { "Context menus", "context_menus" }, { "More hot button states", "hotbutton_extras" },
         { "Offer layouts to new characters", "offer_layout_copy" } }) do

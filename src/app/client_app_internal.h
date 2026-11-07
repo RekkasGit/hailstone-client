@@ -395,6 +395,7 @@ public:
         };
         pc_names_ = config_.get_bool("display.pc_names", true);
         npc_names_ = config_.get_bool("display.npc_names", true);
+        con_name_colour_ = config_.get_bool("display.con_name_colour", true);
         // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.
         show_names_ = config_.get_int("display.show_names", 4);
         if (show_names_ < 0 || show_names_ > 6) show_names_ = 4;
@@ -1251,6 +1252,7 @@ private:
     // The options window's Display page (eqclient.ini PCNames / NPCNames / ClipPlane in the original; here
     // hailstone.ini display.*): the name sprites by kind, and the zone's fog for the view distance.
     bool pc_names_ = true, npc_names_ = true;
+    bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,

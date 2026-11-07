@@ -126,6 +126,11 @@ Con con_from_server(std::uint32_t level) {
     }
 }
 
+std::optional<std::uint32_t> npc_name_colour(const Spawn& s, int my_level, std::int32_t pvp_rules, bool enabled) {
+    if (!enabled || !s.is_npc || s.is_corpse) return std::nullopt;
+    return con_rgb(con_level(s, my_level, pvp_rules));
+}
+
 std::uint32_t con_rgb(Con con) {
     switch (con) {
     case Con::Gray: return 0x9a9a9a;
