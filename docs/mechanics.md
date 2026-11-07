@@ -208,6 +208,18 @@ in the first person, overhead and chase cameras and the camera behind the player
 HOT1_1 .. HOT10_12 press bar (command - 37) / 12's buttons and HOTPAGE1_1 .. HOTPAGE10_10 turn bar
 (command - 157) / 10's page.
 
+## Mouse buttons as keys
+
+The middle button and the buttons past right (DirectInput's 2..7: middle, X1, X2 and three more) are keys. Each
+frame, at the end of __ProcessMouseEvents, FUN_0051a770 compares them with the last frame and sends a press as key
+code 0xf0 + n through HandleKeyDownEvent (the held Shift / Ctrl / Alt join it, as for a key) and a release through
+HandleKeyUpEvent, so they bind like any key and show as "MOUS MID" and "MOUS AUX1".."MOUS AUX5". FUN_0051a770
+itself checks for no window under the cursor. Hailstone passes them to the key map with the keys, so whatever holds
+the keys back (an edit box, a modal dialog, the loading screen) holds them back too. The left and right buttons are
+never keys. Hailstone reads SDL's buttons 2, 4, 5, 6, 7 and 8 as these
+(`platform::dik_from_sdl_mouse_button`). A mouse whose extra buttons its own software sends as keyboard keys was
+already bindable through those keys.
+
 ## Cameras
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead

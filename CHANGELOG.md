@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The middle mouse button and up to five side buttons (shown as MOUS MID and MOUS AUX1..AUX5) can be bound to any command in Options > Keys, with or without Shift, Ctrl or Alt, as in the original client
 - A game archive whose name table lists one file thousands of times no longer makes a zone load parse that file thousands of times
 - A game archive member made of valid compressed data that would grow to gigabytes is refused, as the junk-data kind already was
 - A zone that lists its terrain thousands of times no longer loads it thousands of times

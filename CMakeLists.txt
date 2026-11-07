@@ -1014,6 +1014,7 @@ if(NMSC_BUILD_TESTS)
     tests/item_display_test.cpp
     tests/game_vectors_test.cpp
     tests/key_commands_test.cpp
+    tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
     tests/gamepad_bindings_test.cpp
     tests/anim_vectors_test.cpp
