@@ -738,35 +738,42 @@ TEST_CASE("Item display: a click on the icon links the item into the active chat
         };
         const char* click = "return eq.ClickChild('ItemDisplayWindow', 'IconButton', 'left')";
 
-        // The current window (the main one) gets the link after what is typed there.
+        // By default the main window is the Always Chat Here one (Hailstone's default lock): it gets the link,
+        // added after what is typed there, whichever window was used last.
         CHECK(lua.run("return eq.ChatNewWindow()") == "2");
+        lua.run("eq.ChatActivate(2)");
         CHECK(lua.run(click) == "true");
         CHECK(take(2) == "nil|nil");
         CHECK(take(1) == link + "|false");
         CHECK(take(1) == "nil|nil"); // once
 
-        // The window last used: the second, once its input had the focus.
+        // Without a lock: the window used last.
+        lua.run("eq.ChatSetAlwaysHere(1, false)");
         lua.run("eq.ChatActivate(2)");
         lua.run(click);
         CHECK(take(1) == "nil|nil");
         CHECK(take(2) == link + "|false");
+        lua.run("eq.ChatActivate(1)");
+        lua.run(click);
+        CHECK(take(2) == "nil|nil");
+        CHECK(take(1) == link + "|false");
 
-        // Always Chat Here on the main window: it gets the link whichever window was used last.
-        lua.run("eq.ChatMenu(1)");
+        // Always Chat Here ticked on the second window (its menu row): it gets the link.
+        lua.run("eq.ChatMenu(2)");
         REQUIRE(host.menus.size() == 1);
         auto here = std::find_if(host.menus[0].rows.begin(), host.menus[0].rows.end(),
                                  [](const app::EqHost::MenuRow& r) { return r.text == "Always Chat Here"; });
         REQUIRE(here != host.menus[0].rows.end());
         here->act();
-        lua.run("eq.ChatActivate(2)");
+        lua.run("eq.ChatActivate(1)");
         lua.run(click);
-        CHECK(take(2) == "nil|nil");
-        CHECK(take(1) == link + "|false");
+        CHECK(take(1) == "nil|nil");
+        CHECK(take(2) == link + "|false");
 
         // An item, or an augment in it, with a BenefitFlag: no link (ItemBase_GetUnknown0x100Max(1) != 0).
         item.benefit_flag = 1;
         CHECK(lua.run(click) == "true");
-        CHECK(take(1) == "nil|nil");
+        CHECK(take(2) == "nil|nil");
         item.benefit_flag = 0;
         net::BagItem aug;
         aug.index = 0;
@@ -774,12 +781,12 @@ TEST_CASE("Item display: a click on the icon links the item into the active chat
         aug.item.benefit_flag = 3;
         item.contents.push_back(aug);
         lua.run(click);
-        CHECK(take(1) == "nil|nil");
+        CHECK(take(2) == "nil|nil");
         item.contents.clear();
 
         // A right click is not the icon's.
         CHECK(lua.run("return eq.ClickChild('ItemDisplayWindow', 'IconButton', 'right')") == "false");
-        CHECK(take(1) == "nil|nil");
+        CHECK(take(2) == "nil|nil");
     }
     ImGui::DestroyContext(ctx);
 }
