@@ -933,6 +933,10 @@ void ClientApp::update_player(float dt) {
     // per-frame mode alpha is 1: where the step left it.
     const float behind = 1.0f - step_clock_.alpha();
     const bool seated = conn_->world().player() && conn_->world().player()->mount_id; // the eye follows the mount
+    // The body (and the mount it rides) is drawn there too, not eased toward it as other spawns are: eased, it trailed
+    // the camera by a twelfth of a second, which showed most when strafing in the camera behind the player.
+    conn_->set_player_drawn(feet_ + glm::vec3(0.0f, 0.0f, floor_offset_) - behind * step_move_,
+                            game::yaw_to_heading(yaw_ - behind * step_turn_));
     camera_.yaw = yaw_ - behind * step_turn_ + (camera_type_ == game::kCameraWheelFollow ? chase_heading_ : 0.0f);
     camera_.pitch = std::clamp(pitch_ - behind * step_pitch_, -1.5f, 1.5f);
     glm::vec3 eye = eye_position() - (seated ? glm::vec3(0.0f) : behind * step_move_);
@@ -940,13 +944,8 @@ void ClientApp::update_player(float dt) {
     if (camera_type_ > game::kCameraFirstPerson && camera_type_ < game::kCameraWheelFollow) {
         update_game_camera(feet_ - behind * step_move_);
     } else if (camera_distance_ > 0.0f) {
-        // Behind and above the player; pulled in when scenery is in the way.
-        float dist = camera_distance_;
-        glm::vec3 back = -camera_.forward();
-        if (collision_) {
-            for (; dist > 1.0f && !collision_->line_of_sight(eye, eye + back * (dist + 1.0f)); dist *= 0.8f) {}
-        }
-        camera_.position = eye + back * dist;
+        // Behind and above the player; stopped where scenery is in the way, as the cameras 1..5 are.
+        camera_.position = game::wheel_follow_position(eye, -camera_.forward(), camera_distance_, camera_sweep());
     }
     if (opts_.watch.starts_with("object:")) {
         // Testing: look at ground object N from --camera-distance.

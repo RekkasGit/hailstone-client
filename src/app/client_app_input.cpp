@@ -365,11 +365,10 @@ game::CameraTarget ClientApp::camera_target(const glm::vec3& feet) const {
     return t;
 }
 
-void ClientApp::update_game_camera(const glm::vec3& feet) {
+game::CameraSweep ClientApp::camera_sweep() const {
     // unk_EQCamera_SetPosition's sweep: the zone and its objects, not spawns (filter 0x476410 lets a spawn collide
     // only as a vehicle; vehicles are not in this sweep). No collision: straight to the point.
-    const game::CameraSweep sweep = [this](const glm::vec3& from, const glm::vec3& to,
-                                           float radius) -> std::optional<glm::vec3> {
+    return [this](const glm::vec3& from, const glm::vec3& to, float radius) -> std::optional<glm::vec3> {
         if (!collision_) return to;
         game::SphereSweep s = game::SphereSweep::make(from, to, radius);
         if (!s.valid()) return std::nullopt;
@@ -377,7 +376,11 @@ void ClientApp::update_game_camera(const glm::vec3& feet) {
         if (world_objects_) world_objects_->sweep_sphere(s);
         return s.collided ? s.start + s.delta * s.t : to;
     };
-    const game::CameraPose pose = game::update_camera(camera_type_, cameras_[camera_type_], camera_target(feet), sweep);
+}
+
+void ClientApp::update_game_camera(const glm::vec3& feet) {
+    const game::CameraPose pose =
+        game::update_camera(camera_type_, cameras_[camera_type_], camera_target(feet), camera_sweep());
     camera_.position = pose.position;
     camera_.yaw = game::heading_to_yaw(pose.heading);
     // A look-at pitch below the horizon is 512 - the angle (CMath's arctangent).

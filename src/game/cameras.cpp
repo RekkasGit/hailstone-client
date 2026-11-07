@@ -171,6 +171,12 @@ void reset_camera_defaults(std::array<GameCamera, 6>& cameras) {
     u2.look_pitch = true;
 }
 
+glm::vec3 wheel_follow_position(const glm::vec3& eye, const glm::vec3& back, float distance, const CameraSweep& sweep) {
+    const glm::vec3 wanted = eye + back * distance;
+    if (!sweep) return wanted;
+    return sweep(eye, wanted, kSweepRadius).value_or(eye);
+}
+
 CameraPose update_camera(int type, GameCamera& cam, const CameraTarget& target, const CameraSweep& sweep) {
     switch (type) {
     case kCameraOverhead: return overhead(cam, target, sweep);
