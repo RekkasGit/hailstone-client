@@ -49,7 +49,8 @@ void main() {
 
     float radius = pc.params.x;
     float r_px = min(radius / (-P.z * pc.projection.y) * 0.5 * float(g_size.y), pc.params.z);
-    if (r_px < 1.0) {
+    float fade = ao_close_fade(-P.z);
+    if (r_px < 1.0 || fade <= 0.0) {
         o_ao = 1.0;
         return;
     }
@@ -68,5 +69,5 @@ void main() {
         vec3 v = view_pos(q) - P;
         sum += ao_sample(v, n, radius, bias);
     }
-    o_ao = ao_visibility(sum, pc.params.y, float(kSamples));
+    o_ao = mix(1.0, ao_visibility(sum, pc.params.y, float(kSamples)), fade);
 }

@@ -813,7 +813,10 @@ specks against the sky.
   turned by a 4 x 4 ordered pattern; each sample takes the bounded angular kernel (cubic distance falloff times the
   sample's horizon above the surface), and at close range the kernel's world-space radius shrinks to the pixel cap's
   own world size, so near samples cannot darken out of proportion. An angular bias of 0.1 keeps almost coplanar
-  samples from shadowing themselves. The samples' shade is scaled by AoView's intensity 12 over the 12 samples: the
+  samples from shadowing themselves. Within 12 units of the camera the AO fades out, to none at 4 (`ao_close_fade`):
+  there the capped kernel is only about a tenth of the depth across, small enough to find each fold of a low-poly
+  face (an erudite's brow groove, the cheeks and eye sockets) that its smoothed normals hide, which drew dark lines
+  over a face seen up close. Contact shading within arm's reach of the camera is lost with them. The samples' shade is scaled by AoView's intensity 12 over the 12 samples: the
   bounded kernel weighs a mid-range sample less than the old one (whose weight grew as 1/|v|, which blotched the
   near ones black), and 12 keeps a contact corner's shade near the old depth (tests/lighting_test.cpp). The post pass averages the 4 x 4 block weighted by depth and darkens the scene
   by it (strength 0.85) before the exposure. Applied to everything, not to the ambient alone (there is no depth
