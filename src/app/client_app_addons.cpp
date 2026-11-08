@@ -18,7 +18,7 @@
 #include "platform/open_folder.h"
 #include "plugin/consent.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -488,4 +488,4 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -3,7 +3,7 @@
 #include "net/packet_io.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 AppPacket encode_combat_ability(std::uint32_t target, std::uint32_t atk, std::uint32_t skill) {
     ByteWriter w;
@@ -146,4 +146,4 @@ std::optional<std::uint32_t> decode_track_reply_header(const AppPacket& p) {
     return detail::decode_with(p, [](ByteReader& r) { return r.le<std::uint32_t>(); });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

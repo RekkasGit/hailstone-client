@@ -2,7 +2,7 @@
 
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::int32_t ServerExtension::combat_ability_timer(const net::GameConnection&, const SpellData& s) const {
     return s.reuse_timer_index;
@@ -20,4 +20,4 @@ ServerExtension& stock_server_extension() {
     return stock;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

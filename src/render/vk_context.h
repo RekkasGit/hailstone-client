@@ -17,9 +17,9 @@
 #include "render/point_shadows.h"
 #include "render/shadows.h"
 
-namespace nmsc::platform { class Window; }
+namespace hailstone::platform { class Window; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // Optional device capabilities the renderers adapt to.
 struct DeviceCaps {
@@ -429,4 +429,4 @@ private:
     std::string gpu_name_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

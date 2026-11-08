@@ -41,7 +41,7 @@
 #include "mq/lua_mq.h"
 #include "mq/tlo.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -473,4 +473,4 @@ void register_luasocial_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

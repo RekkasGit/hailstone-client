@@ -18,9 +18,9 @@
 
 #include "platform/gamepad.h"
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using platform::GamepadState;
 using platform::PadAxis;
@@ -156,4 +156,4 @@ struct GamepadSettings {
 // Square, Triangle, L1 ..., and Nintendo's, whose face buttons are lettered the other way round (the bottom one is B).
 const char* pad_glyph(PadType type, PadButton b);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -20,7 +20,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 inline constexpr float kNoFloorHeight = -1e27f; // 0x9c5760
 
@@ -59,4 +59,4 @@ struct FloorWorld {
 double get_player_floor_height(FloorCache& cache, const std::array<float, 3>& position, bool clear,
                                float avatar_height, const FloorWorld& world, FloorQueries& q, const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

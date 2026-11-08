@@ -1,6 +1,6 @@
 // Dimensionless AO kernel. Also compiled by the CPU regression tests with GLM's float operations.
-#ifndef NMSC_AO_KERNEL_GLSL
-#define NMSC_AO_KERNEL_GLSL
+#ifndef HAILSTONE_AO_KERNEL_GLSL
+#define HAILSTONE_AO_KERNEL_GLSL
 
 float ao_kernel_radius(float radius, float pixel_radius, float view_depth, float tan_half_y, float height) {
     return min(radius, pixel_radius * 2.0f * view_depth * tan_half_y / height);

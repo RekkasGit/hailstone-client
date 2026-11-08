@@ -8,7 +8,7 @@
 
 struct SDL_Process;
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class ChildProcesses {
 public:
@@ -27,4 +27,4 @@ private:
     std::vector<SDL_Process*> children_;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

@@ -21,7 +21,7 @@
 #include "assets/eqg.h"
 #include "assets/pfs.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 class ZoneFloraGrower;
 
@@ -96,4 +96,4 @@ inline constexpr std::size_t kMaxFloraPerTile = 65536;
 void place_flora(const FloraTile& tile, std::span<const eqg::EcoFloraLayer> layers,
                  std::span<const eqg::FloraDefinition> definitions, MsvcRand& rand, std::vector<FloraInstance>& out);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

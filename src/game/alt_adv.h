@@ -18,7 +18,7 @@
 
 #include "game/mechanics/character_sheet.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // One effect of a rank (AA_Ability: SPA, base, limit, slot).
 struct AltAbilityEffect {
@@ -180,4 +180,4 @@ struct AltAdvState {
     void clear_owned() { owned.clear(); spent = 0; assigned = {}; } // OP_ClearAA
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

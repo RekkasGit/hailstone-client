@@ -26,9 +26,9 @@
 
 #include "game/swept_sphere.h"
 
-namespace nmsc::assets { struct Zone; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class CollisionMesh {
 public:
@@ -128,4 +128,4 @@ private:
     std::optional<std::pair<glm::vec3, glm::vec3>> bounds_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

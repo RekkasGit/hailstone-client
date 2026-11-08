@@ -17,7 +17,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 struct Json {
     enum class Type { Null, Bool, Number, String, Array, Object } type = Type::Null;
@@ -205,4 +205,4 @@ private:
 
 inline Json parse_json(std::string_view s) { return JsonParser(s).parse(); }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

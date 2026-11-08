@@ -16,7 +16,7 @@
 #include "net/merchant_packets.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -36,7 +36,7 @@ std::string run(lua_State* L, const std::string& code) {
 TEST_CASE("Alt. currency page: eq.ListClick selects by eq.AltCurrencies' order, the list never drawn") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("alt_currency_ui");
+        hailstone::test::ScratchDir scratch("alt_currency_ui");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         app::EqHost host;

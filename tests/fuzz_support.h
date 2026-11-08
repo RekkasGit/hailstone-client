@@ -17,7 +17,7 @@
 
 #include "core/log.h"
 
-namespace nmsc::fuzz {
+namespace hailstone::fuzz {
 
 using Bytes = std::vector<std::byte>;
 
@@ -157,4 +157,4 @@ template <typename F> bool run_case(const char* what, const Bytes& input, Throws
     return ok;
 }
 
-} // namespace nmsc::fuzz
+} // namespace hailstone::fuzz

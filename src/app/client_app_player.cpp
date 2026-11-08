@@ -4,7 +4,7 @@
 
 #include "game/boats.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::update_mouse_look() {
     const auto& in = window_.input();
@@ -1028,4 +1028,4 @@ void ClientApp::update_player(float dt) {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

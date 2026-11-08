@@ -19,9 +19,9 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kGroupRoleSets = 10;
 inline constexpr std::size_t kGroupRoleSetNameMax = 24; // the loader's 0x18 buffer
@@ -70,4 +70,4 @@ private:
     bool dirty_ = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

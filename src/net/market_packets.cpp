@@ -4,7 +4,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -949,4 +949,4 @@ std::optional<std::string> decode_buy_lines_text(const AppPacket& p) {
     return std::string(reinterpret_cast<const char*>(p.data.data() + r.pos), n);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

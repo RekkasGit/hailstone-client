@@ -17,7 +17,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 struct ZipEntry {
     std::string name;              // relative, '/' separators (is_safe_zip_path); a folder ends in '/'
@@ -72,4 +72,4 @@ private:
     std::string error_;
 };
 
-} // namespace nmsc
+} // namespace hailstone

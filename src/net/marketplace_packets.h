@@ -21,7 +21,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // C->S.
 inline constexpr std::uint16_t kOpMarketplaceRequestItems = 0x5148;   // 2 bytes: the catalog (list empty on open)
@@ -156,4 +156,4 @@ AppPacket encode_marketplace_hello();
 // sends 0 there and is answered on 0x7f80).
 AppPacket encode_marketplace_preview_request(std::uint32_t item_id);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

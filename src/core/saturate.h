@@ -8,7 +8,7 @@
 #include <concepts>
 #include <limits>
 
-namespace nmsc {
+namespace hailstone {
 
 // `v` truncated toward zero and clamped to I's range; NaN is 0.
 template <std::integral I, std::floating_point F> I saturate_cast(F v) {
@@ -22,4 +22,4 @@ template <std::integral I, std::floating_point F> I saturate_cast(F v) {
     return static_cast<I>(t);
 }
 
-} // namespace nmsc
+} // namespace hailstone

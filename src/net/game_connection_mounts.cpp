@@ -10,7 +10,7 @@
 #include "net/game_connection.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -140,4 +140,4 @@ void GameConnection::dismount_command() {
     mount_events(ev);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

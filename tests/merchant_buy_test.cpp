@@ -6,12 +6,12 @@
 #include "net/merchant_packets.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("merchant_buy: a price times quantity past 2^31 copper is not taken as affordable") {
     // 300,000 platinum each, 8 of them: a signed 32-bit product overflowed (undefined) and wrapped negative, so the
     // can-afford check passed and the purchase went out. In 64 bits it is refused with the can't-afford message.
-    mq_test::World w("nmsc_merchant_buy_cost_test");
+    mq_test::World w("hailstone_merchant_buy_cost_test");
     auto& c = *w.conn;
     auto& world = c.world_for_test();
     game::Spawn m = *world.player();

@@ -2,7 +2,7 @@
 
 #include "game/appearance_data.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void CharCreateLook::keep_actor_features(CustomizationActor& a) { pc_ = a.features(); }
 
@@ -51,4 +51,4 @@ void CharCreateLook::randomize_facial_features(CustomizationActor& a) {
     a.apply_facial_features();
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -7,7 +7,7 @@
 
 #include <glm/gtc/constants.hpp>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -428,4 +428,4 @@ bool slow_in_mode5(std::int32_t levitation_mode, double walk_speed, float speed_
     return levitation_mode == 5 && walk_speed >= static_cast<double>(speed_run);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

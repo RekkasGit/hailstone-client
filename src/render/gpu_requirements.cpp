@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 std::vector<std::string> gpu_missing(const GpuSupport& gpu) {
     std::vector<std::string> missing;
@@ -59,4 +59,4 @@ InstanceExtensions choose_instance_extensions(const std::vector<std::string>& wa
     return out;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -12,7 +12,7 @@
 #include "core/log.h"
 #include "core/saturate.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -294,4 +294,4 @@ std::size_t add_environment_emitters(const GameDir& game, Zone& zone) {
     return added;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

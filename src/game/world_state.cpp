@@ -13,7 +13,7 @@
 #include "game/coords.h"
 #include "game/race_models.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::string display_name(const std::string& name) {
     std::string out = name;
@@ -313,4 +313,4 @@ std::vector<std::uint32_t> WorldState::make_actors(const ActorModelFn& actor_mod
     return made;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

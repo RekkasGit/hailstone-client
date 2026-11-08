@@ -11,7 +11,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // EQEmu's AggroMeter::AggroTypes: 0 the player, 1 the secondary (the next on the hate list when we have aggro, else
 // the target's target), 2..6 the group (or raid group) in member order, 7..26 the extended targets.
@@ -36,4 +36,4 @@ AppPacket encode(const AggroUpdate& v); // server direction, for tests
 // OP_AggroMeterLockTarget (C→Z, 4 bytes): the spawn to lock the meter on (0 unlocks).
 AppPacket encode_aggro_lock(std::uint32_t spawn_id);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

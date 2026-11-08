@@ -24,7 +24,7 @@
 #include "plugin/policy.h"
 #include "plugin/web_access.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -212,4 +212,4 @@ void push_web_module(lua_State* L) {
     }
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

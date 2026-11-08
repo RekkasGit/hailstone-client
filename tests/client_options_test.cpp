@@ -7,7 +7,7 @@
 #include "core/ini_file.h"
 #include "game/client_options.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using game::ClientOption;
 
 TEST_CASE("client options: table order, names and defaults") {

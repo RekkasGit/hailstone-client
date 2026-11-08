@@ -11,7 +11,7 @@
 #include "core/png_write.h"
 #include "scratch_dir.h"
 
-using nmsc::app::read_window_icon;
+using hailstone::app::read_window_icon;
 
 namespace {
 std::vector<std::byte> pixels(std::uint32_t w, std::uint32_t h) {
@@ -22,20 +22,20 @@ std::vector<std::byte> pixels(std::uint32_t w, std::uint32_t h) {
 } // namespace
 
 TEST_CASE("window icon: a PNG reads back as RGBA8 with its pixels") {
-    nmsc::test::ScratchDir dir("window_icon");
+    hailstone::test::ScratchDir dir("window_icon");
     const auto px = pixels(32, 16);
-    REQUIRE(nmsc::write_png_rgba(dir.path() / "hailstone.png", px, 32, 16));
+    REQUIRE(hailstone::write_png_rgba(dir.path() / "hailstone.png", px, 32, 16));
     std::string why;
     auto img = read_window_icon(dir.path() / "hailstone.png", &why);
     REQUIRE_MESSAGE(img, why);
     CHECK(img->width == 32);
     CHECK(img->height == 16);
-    CHECK(img->format == nmsc::assets::PixelFormat::RGBA8);
+    CHECK(img->format == hailstone::assets::PixelFormat::RGBA8);
     CHECK(img->mips[0] == px);
 }
 
 TEST_CASE("window icon: a missing, broken or oversized file is refused") {
-    nmsc::test::ScratchDir dir("window_icon_bad");
+    hailstone::test::ScratchDir dir("window_icon_bad");
     std::string why;
     CHECK_FALSE(read_window_icon(dir.path() / "none.png", &why));
     CHECK(!why.empty());
@@ -45,15 +45,15 @@ TEST_CASE("window icon: a missing, broken or oversized file is refused") {
     CHECK_FALSE(read_window_icon(dir.path() / "text.png", &why));
     CHECK(!why.empty());
 
-    const std::uint32_t wide = nmsc::app::kMaxWindowIconSide + 1;
-    REQUIRE(nmsc::write_png_rgba(dir.path() / "wide.png", pixels(wide, 1), wide, 1));
+    const std::uint32_t wide = hailstone::app::kMaxWindowIconSide + 1;
+    REQUIRE(hailstone::write_png_rgba(dir.path() / "wide.png", pixels(wide, 1), wide, 1));
     why.clear();
     CHECK_FALSE(read_window_icon(dir.path() / "wide.png", &why));
     CHECK(why == "larger than 1024 pixels");
 }
 
 TEST_CASE("window icon: the shipped icon is a square RGBA image with transparent corners") {
-    const auto file = std::filesystem::path(NMSC_TEST_DATA_DIR).parent_path().parent_path() / "icons" / "hailstone.png";
+    const auto file = std::filesystem::path(HAILSTONE_TEST_DATA_DIR).parent_path().parent_path() / "icons" / "hailstone.png";
     std::string why;
     auto img = read_window_icon(file, &why);
     REQUIRE_MESSAGE(img, why);

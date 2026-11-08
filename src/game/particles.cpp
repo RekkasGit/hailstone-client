@@ -4,7 +4,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -389,4 +389,4 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
     });
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

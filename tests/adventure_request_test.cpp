@@ -9,7 +9,7 @@
 #include "game/server_ext.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -35,7 +35,7 @@ TEST_CASE("adventure: a solo request is stopped unless a server extension takes 
     auto ext = std::make_shared<Solo>();
     net::ConnectionOptions opts;
     opts.plugins = ext;
-    mq_test::World w("nmsc_adventure_request_test", opts);
+    mq_test::World w("hailstone_adventure_request_test", opts);
     solo_at_recruiter(w);
 
     w.conn->adventure_request(2, 1);
@@ -48,7 +48,7 @@ TEST_CASE("adventure: a solo request is stopped unless a server extension takes 
 }
 
 TEST_CASE("adventure: a grouped request goes out without the switch") {
-    mq_test::World w("nmsc_adventure_request_test");
+    mq_test::World w("hailstone_adventure_request_test");
     w.add(20, "Mannis_McGuyett000", true, 65, game::server_to_world({0, 10, 0}));
     net::GameConnectionTestAccess::world(*w.conn).spawns[20].class_id = 60;
     REQUIRE(w.conn->open_adventure_recruiter(20)); // the test world's player is in a group

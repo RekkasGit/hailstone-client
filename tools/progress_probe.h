@@ -33,7 +33,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class ProgressProbe {
 public:
@@ -451,4 +451,4 @@ private:
     std::uint32_t target_ = 0, object_id_ = 0;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

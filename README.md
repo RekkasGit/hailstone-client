@@ -73,7 +73,7 @@ Hailstone is portable: settings, per-server files, characters and logs live in t
 - `glslc` (shaderc) or `glslangValidator`
 - A Vulkan 1.3 driver (MoltenVK on macOS)
 
-Dependencies are fetched automatically unless the system already provides them. On Linux and Windows the in-game browser's helper is built on CEF, which is a few hundred MB to fetch; `-DNMSC_BROWSER=OFF` leaves it out, and pages then open in the system's browser. Run tests with `ctest --test-dir build` and see the client's options with `build/hailstone/hailstone --help`.
+Dependencies are fetched automatically unless the system already provides them. On Linux and Windows the in-game browser's helper is built on CEF, which is a few hundred MB to fetch; `-DHAILSTONE_BROWSER=OFF` leaves it out, and pages then open in the system's browser. Run tests with `ctest --test-dir build` and see the client's options with `build/hailstone/hailstone --help`.
 
 ## Documentation
 

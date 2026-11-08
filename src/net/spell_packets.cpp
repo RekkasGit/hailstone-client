@@ -6,7 +6,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -461,4 +461,4 @@ AppPacket encode(const AuraUpdate& v) {
     return make_packet(Op::UpdateAura, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

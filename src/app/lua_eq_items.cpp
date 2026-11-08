@@ -25,7 +25,7 @@
 #include "net/game_connection.h"
 #include "net/trade_packets.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1183,4 +1183,4 @@ void add_item_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<TradeWindow>("GiveWnd", true, "GVW_"));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

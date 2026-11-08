@@ -5,7 +5,7 @@
 #include "core/ini_file.h"
 #include "game/coords.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::draw_target_ring(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane,
                                  bool modern, double seconds) {
@@ -138,4 +138,4 @@ bool ClientApp::set_ring_option(std::string_view name, int value) {
     return true;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

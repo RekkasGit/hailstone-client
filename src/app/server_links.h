@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ServerLinks {
 public:
@@ -52,4 +52,4 @@ private:
     bool dropping_ = false;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

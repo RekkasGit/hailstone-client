@@ -17,7 +17,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 enum class PixelFormat : std::uint8_t {
     RGBA8, // 4 bytes per pixel, R G B A in memory order
@@ -103,4 +103,4 @@ glm::vec2 octahedral_uv(glm::vec3 d);
 // Byte size of one mip level of the given dimensions.
 std::size_t mip_size(PixelFormat format, std::uint32_t width, std::uint32_t height);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

@@ -13,7 +13,7 @@
 #include "game/inventory.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What kind of item it is, by its type (a bag's filter: Sort fills the bag with its kind first, Tidy moves its kind
 // into it). Lua names: food (and drink), tradeskill, spells (scrolls and books), weapons (arrows too), armor (shields,
@@ -54,4 +54,4 @@ std::optional<std::vector<SortClick>> plan_sort(const Inventory& inv, const std:
 // Each item of a kind some bag is filtered for, not in such a bag, into a free slot of one (when it has room).
 std::vector<SortClick> plan_tidy(const Inventory& inv, const std::vector<SortPosition>& positions);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

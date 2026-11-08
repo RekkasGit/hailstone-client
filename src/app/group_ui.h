@@ -10,9 +10,9 @@
 
 #include "ui/group_windows.h"
 
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class GroupUi {
 public:
@@ -32,4 +32,4 @@ private:
     std::chrono::steady_clock::time_point in_zone_since_{}, invite_seen_{}, last_command_{};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

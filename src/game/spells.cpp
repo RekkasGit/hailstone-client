@@ -15,7 +15,7 @@
 #include "core/log.h"
 #include "game/spell_record.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -509,4 +509,4 @@ std::string format_duration(std::uint64_t ms) {
     return std::to_string(m) + ":" + two(sec);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

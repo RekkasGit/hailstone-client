@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kGroupChatColor = 0x111;
 inline constexpr std::uint32_t kStrJoinedGroup = 1399, kStrLeftGroup = 12005, kStrYouAreLeader = 5040,
@@ -165,4 +165,4 @@ struct GroupInviteResult {
 // the inviter and the u32 at +0x94 kept, and OP_GroupInvite (0x6110) makes Follow answer with OP_GroupFollow.
 GroupInviteResult handle_group_invite(GroupInviteState& st, const GroupInviteInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

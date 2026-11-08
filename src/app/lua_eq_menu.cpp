@@ -10,7 +10,7 @@
 #include "core/log.h"
 #include "game/keymap.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -489,4 +489,4 @@ std::optional<int> CascadeMenu::click(int menu, int item) {
     return it.command;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

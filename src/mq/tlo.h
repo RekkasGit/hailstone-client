@@ -4,7 +4,7 @@
 // Spawn[...], Group, Zone, ...) gives a value; a value of a data type has members (Me.PctHPs, Target.Distance,
 // Me.Buff[1].Duration), each member taking an optional index (the text in [] or the Lua call's arguments). The
 // same evaluation serves MQ's ${...} text (mq/parse.h), Lua's mq.TLO (mq/lua_mq.h) and the compiled plugins'
-// host API (plugin/nmsc_plugin.h).
+// host API (plugin/hailstone_plugin.h).
 //
 // Names are MacroQuest's (docs: https://docs.macroquest.org/reference/top-level-objects/), case-insensitive as
 // in MQ; what is covered is in docs/plugins.md. An unknown TLO or member, or a member of nothing, is nil (MQ's
@@ -23,10 +23,10 @@
 #include <type_traits>
 #include <vector>
 
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::nav { class NavControl; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::nav { class NavControl; }
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 struct Type;
 struct Context;
@@ -199,4 +199,4 @@ bool icontains(std::string_view haystack, std::string_view needle);
 // Cursor, FindItem, FindItemCount, Window, Time, GameTime, EverQuest, Int, Float, Bool, String, Plugin, ...
 void register_game_tlos(Registry& r);
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

@@ -19,7 +19,7 @@
 #include "game/particles.h"
 #include "nav/zone_nav.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::load_zone(const std::string& short_name) {
     unload_zone();
@@ -893,4 +893,4 @@ void ClientApp::update_missiles() {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

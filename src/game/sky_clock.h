@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class SkyClock {
 public:
@@ -76,4 +76,4 @@ private:
     bool valid_ = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

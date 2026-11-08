@@ -11,7 +11,7 @@
 #include <string>
 #include <system_error>
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 inline std::filesystem::path unique_temp_path(const std::string& tag) {
     static const std::uint64_t run = [] {
@@ -20,7 +20,7 @@ inline std::filesystem::path unique_temp_path(const std::string& tag) {
     }();
     static std::atomic<unsigned> counter{0};
     return std::filesystem::temp_directory_path() /
-           ("nmsc_" + tag + "_" + std::to_string(run) + "_" + std::to_string(counter++));
+           ("hailstone_" + tag + "_" + std::to_string(run) + "_" + std::to_string(counter++));
 }
 
 class ScratchDir {
@@ -40,4 +40,4 @@ private:
     std::filesystem::path path_;
 };
 
-} // namespace nmsc::test
+} // namespace hailstone::test

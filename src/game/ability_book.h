@@ -25,7 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 enum class AbilityKind : std::uint8_t { AltAbility = 0, Discipline = 1, Skill = 2 };
 
@@ -127,4 +127,4 @@ private:
     std::unordered_map<std::string, Tried> tried_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

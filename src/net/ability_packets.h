@@ -11,7 +11,7 @@
 #include "game/mechanics/abilities.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_CombatAbility (12 bytes, CombatAbility_Struct {m_target, m_atk, m_skill}); atk is the attack slot (100 for a
 // combat skill, 11 for a ranged attack).
@@ -52,4 +52,4 @@ std::optional<AppPacket> encode_skill_send(const game::mechanics::SkillSend& s);
 // means the reply is the tracking timer, not a list; any other value starts the list (game::set_tracking_list).
 std::optional<std::uint32_t> decode_track_reply_header(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

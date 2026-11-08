@@ -9,7 +9,7 @@
 
 #include "ui/imgui_layer.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

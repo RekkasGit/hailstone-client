@@ -15,7 +15,7 @@
 #include "game/zone_names.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -462,4 +462,4 @@ void add_group_search_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<GroupSearchFiltersWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

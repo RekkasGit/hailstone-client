@@ -13,8 +13,8 @@
 #include "net/item_packets.h"
 #include "net/marketplace_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 

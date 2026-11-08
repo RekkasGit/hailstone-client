@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What SetChatInputMode / ToggleChatInputMode read.
 struct ChatInputWorld {
@@ -68,4 +68,4 @@ struct ChatKey {
 ChatKey chat_key(int slot);
 inline constexpr std::uint32_t kStrPreLuclinCustomization = 12377;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

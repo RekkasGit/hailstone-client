@@ -8,7 +8,7 @@
 #include "core/wrap_math.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -761,4 +761,4 @@ bool MovementController::swim_jump(bool jump, bool surface_clear, std::uint32_t 
     return j.jumped;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

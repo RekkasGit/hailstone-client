@@ -9,7 +9,7 @@
 #include "core/log.h"
 #include "platform/crash_log.h"
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 ZoneNav::ZoneNav(std::shared_ptr<const InputGeometry> geo, Config cfg, std::function<Area(const glm::vec3&)> classify)
     : geo_(std::move(geo)), cfg_(std::move(cfg)), classify_(std::move(classify)) {
@@ -155,4 +155,4 @@ void ZoneNav::finish() {
     for (const CachedTile& t : ready) add(t);
 }
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

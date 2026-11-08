@@ -33,11 +33,11 @@
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
 
-namespace nmsc::game { class ExtensionChain; }
-namespace nmsc::net { struct AppPacket; class GameConnection; }
-namespace nmsc::plugin { class UiBridge; class WebAccess; }
+namespace hailstone::game { class ExtensionChain; }
+namespace hailstone::net { struct AppPacket; class GameConnection; }
+namespace hailstone::plugin { class UiBridge; class WebAccess; }
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 struct ScriptEnv {
     plugin::Hooks* hooks = nullptr;
@@ -193,4 +193,4 @@ private:
 // The hex SHA-256 of a script file (for the developer window).
 std::optional<std::string> script_file_hash(const std::filesystem::path& file);
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

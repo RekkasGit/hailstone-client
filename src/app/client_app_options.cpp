@@ -3,7 +3,7 @@
 
 #include "app/client_app_internal.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -618,4 +618,4 @@ void ClientApp::use_character_settings(const std::filesystem::path& character_di
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

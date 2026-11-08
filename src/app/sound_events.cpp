@@ -11,7 +11,7 @@
 #include "game/world_state.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -211,4 +211,4 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
     std::erase_if(spawns_, [&](const auto& kv) { return !world.spawns.contains(kv.first); });
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -9,7 +9,7 @@
 #include "render/culling.h"
 #include "render/shadows.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 namespace {
 

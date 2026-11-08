@@ -22,7 +22,7 @@
 #include "game/mechanics/floor_height.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The spawn fields CanIFitHere reads (the cache it writes is FloorCache).
 struct FitSpawn {
@@ -70,4 +70,4 @@ struct StillSpawn {
 };
 bool must_collide_still(const StillSpawn& s);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

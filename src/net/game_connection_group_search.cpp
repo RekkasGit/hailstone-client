@@ -9,7 +9,7 @@
 #include "net/opcodes.h"
 #include "net/social_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -231,4 +231,4 @@ bool GameConnection::handle_group_search(const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -6,7 +6,7 @@
 #include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_timer.h>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 HelperProcess::~HelperProcess() {
     stop(true);
@@ -114,4 +114,4 @@ void HelperProcess::stop(bool kill) {
     if (kill && running()) SDL_KillProcess(process_, true);
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

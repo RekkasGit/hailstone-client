@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // A mouse button's press and release this frame, from its state (held now, held last frame) and whether it went down
 // in the frame's events. A click that is down and up inside one frame (common at low frame rates) is both.
@@ -77,4 +77,4 @@ inline constexpr std::uint32_t kLeftClickMaxHeldMs = 0x2ef;
 // CEverQuest::RMouseUp's: a right-button look held longer is not a right click.
 inline constexpr std::uint32_t kRightLookClickMaxHeldMs = 500;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

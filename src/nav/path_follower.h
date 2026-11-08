@@ -16,7 +16,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 enum class FollowState { Idle, Moving, Arrived, NeedsPath, Failed };
 
@@ -94,4 +94,4 @@ private:
     std::string failure_;
 };
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

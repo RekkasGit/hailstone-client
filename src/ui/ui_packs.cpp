@@ -5,7 +5,7 @@
 
 #include "core/config.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace fs = std::filesystem;
 
@@ -36,4 +36,4 @@ const UiPack* find_ui_pack(const std::vector<UiPack>& packs, std::string_view id
     return packs.empty() ? nullptr : &packs.front();
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

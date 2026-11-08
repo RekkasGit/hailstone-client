@@ -9,7 +9,7 @@
 
 #include "platform/tcp_socket.h"
 
-using namespace nmsc::platform;
+using namespace hailstone::platform;
 
 namespace {
 

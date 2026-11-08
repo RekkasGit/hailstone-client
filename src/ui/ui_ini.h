@@ -22,7 +22,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // CSidlScreenWnd::ConvertToRes @0x88bfa0: `pos` of a window `extent` wide, stored for a screen `from` wide, on a
 // screen `to` wide.
@@ -91,4 +91,4 @@ private:
     std::optional<std::chrono::steady_clock::time_point> last_save_;
 };
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

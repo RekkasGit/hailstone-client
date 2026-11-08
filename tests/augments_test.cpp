@@ -17,8 +17,8 @@
 #include "json_lite.h"
 #include "vector_files.h"
 
-using namespace nmsc;
-using nmsc::test::Json;
+using namespace hailstone;
+using hailstone::test::Json;
 
 namespace {
 
@@ -84,7 +84,7 @@ std::string check_fit(const Json& r) {
 } // namespace
 
 TEST_CASE("CanGemFitInSlot: the kept vector subset") {
-    std::ifstream f(std::string(NMSC_TEST_DATA_DIR) + "/ItemBase_CanGemFitInSlot.subset.jsonl");
+    std::ifstream f(std::string(HAILSTONE_TEST_DATA_DIR) + "/ItemBase_CanGemFitInSlot.subset.jsonl");
     REQUIRE(f);
     std::string line;
     int n = 0, bad = 0;
@@ -563,7 +563,7 @@ TEST_CASE("Augments travel as children; a type-0x67 packet refreshes displays of
 }
 
 TEST_CASE("stats-disabled bytes: FUN_007b28a0 and the stat sums' disabled children") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     net::Item host;
     host.item_class = 0;
     host.hp = 10;

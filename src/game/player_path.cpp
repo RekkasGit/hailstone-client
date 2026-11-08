@@ -8,7 +8,7 @@
 #include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -457,4 +457,4 @@ std::optional<glm::vec3> PlayerPath::mover_position(const Mover& m) const {
     return m.position;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

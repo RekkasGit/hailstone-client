@@ -6,7 +6,7 @@
 
 // Ladder_MountClickedLadder (game/mechanics/ladder.h) on the player's body.
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -79,4 +79,4 @@ bool PlayerMovement::mount_ladder(const mech::LadderSwitch& ladder, const MoveWo
     return true;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

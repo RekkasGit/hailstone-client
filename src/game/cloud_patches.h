@@ -19,7 +19,7 @@
 
 #include "assets/sky_weather.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct CloudPatch {
     float angle = 0.0f;    // radians about +Y (+0x38)
@@ -63,4 +63,4 @@ private:
 // One frame's patch motion (CCloudPatch_Update).
 void advance_cloud_patch(CloudPatch& p, float dt_ms);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -24,9 +24,9 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What a find looks for (+0x18; the request's first dword).
 enum class FindKind : std::uint32_t {
@@ -236,4 +236,4 @@ private:
     float twist_ = 0.0f, uv_ = 0.0f; // +0x120 / +0x190
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

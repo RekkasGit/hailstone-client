@@ -31,7 +31,7 @@
 
 #include "game/mechanics/hit_by_spell.h"
 
-namespace nmsc::game::mechanics::affect {
+namespace hailstone::game::mechanics::affect {
 
 using hit::Affect;
 using hit::Character;
@@ -87,4 +87,4 @@ std::int32_t open_effect_slot(Character* self, std::uint32_t short_only, std::ui
 // CharacterZoneClient::IsStackBlocked @0x4341e0 on the character's own effects.
 bool is_stack_blocked(Character* self, const Spell* spell, std::uint8_t caster_class, AffectQueries& q);
 
-} // namespace nmsc::game::mechanics::affect
+} // namespace hailstone::game::mechanics::affect

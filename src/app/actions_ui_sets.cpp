@@ -5,7 +5,7 @@
 #include "core/log.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -69,4 +69,4 @@ void ActionsUi::clear_hot_bar(net::GameConnection& conn, int bar) {
     messages_.emplace_back(conn.strings().format(game::kStrHbCleared, std::vector<std::string>{}), 0xf);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

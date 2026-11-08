@@ -1,6 +1,6 @@
 #pragma once
 
-// The game-side decoders of server data in tests/fuzz_decoders.inc (NMSC_FUZZ_GAME_DECODER): each takes the packet's
+// The game-side decoders of server data in tests/fuzz_decoders.inc (HAILSTONE_FUZZ_GAME_DECODER): each takes the packet's
 // bytes as the span or text it is declared with.
 
 #include <cstddef>
@@ -12,7 +12,7 @@
 #include "game/missiles.h"
 #include "game/zoning.h"
 
-namespace nmsc::fuzz_game {
+namespace hailstone::fuzz_game {
 
 template <typename R> void feed(R (*fn)(std::span<const std::byte>), std::span<const std::byte> d) { (void)fn(d); }
 
@@ -24,4 +24,4 @@ template <typename R> void feed(R (*fn)(std::string_view), std::span<const std::
     (void)fn(std::string_view(reinterpret_cast<const char*>(d.data()), d.size()));
 }
 
-} // namespace nmsc::fuzz_game
+} // namespace hailstone::fuzz_game

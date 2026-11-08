@@ -32,9 +32,9 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc { class GameDir; class IniFile; }
+namespace hailstone { class GameDir; class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The kinds, in the DLL's order (OP_Weather's kind indexes them: 0 rain, 1 snow; EQEmu's #weather 2 sends 2, hail).
 inline constexpr std::array<std::string_view, 7> kPrecipitationKindNames = {"Rain", "Snow",  "Hail", "Ice",
@@ -187,4 +187,4 @@ private:
 // FUN_1007ef70: a blended (1 - t) + b t per byte, alpha too, each rounded to the nearest.
 std::uint32_t blend_precipitation_colour(std::uint32_t a, std::uint32_t b, float t);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

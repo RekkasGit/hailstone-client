@@ -11,7 +11,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -447,4 +447,4 @@ glm::mat4 ground_object_transform(const GroundObject& o) {
     return glm::scale(m, glm::vec3(s));
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

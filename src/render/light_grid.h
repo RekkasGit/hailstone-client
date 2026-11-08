@@ -12,7 +12,7 @@
 
 #include "assets/model.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct LightGrid {
     glm::vec2 origin{0.0f};       // the world XY of cell (0, 0)'s corner
@@ -30,4 +30,4 @@ inline constexpr std::uint32_t kMaxLightsPerCell = 24;
 LightGrid build_light_grid(std::span<const assets::PointLight> lights, float cell = 64.0f,
                            std::uint32_t max_per_cell = kMaxLightsPerCell);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -11,7 +11,7 @@
 #include "net/game_connection.h"
 #include "render/actor_renderer.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir) {
     try {
@@ -250,4 +250,4 @@ std::vector<game::LightSource> SpellParticles::lights(std::size_t max) const {
         max);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

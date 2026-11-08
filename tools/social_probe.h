@@ -31,7 +31,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class SocialProbe {
 public:
@@ -344,4 +344,4 @@ private:
     Clock::time_point start_{Clock::now()}, since_{Clock::now()}, last_step_{Clock::now()}, wait_until_{}, sent_at_{};
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

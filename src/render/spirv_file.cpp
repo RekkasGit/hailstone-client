@@ -3,7 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 std::vector<std::uint32_t> read_spirv_file(const std::filesystem::path& path) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
@@ -17,4 +17,4 @@ std::vector<std::uint32_t> read_spirv_file(const std::filesystem::path& path) {
     return code;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

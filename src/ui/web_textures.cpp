@@ -9,7 +9,7 @@
 #include "ui/imgui_vk_textures.h"
 #include "web/browser_host.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -179,4 +179,4 @@ void WebTextures::record(const render::FrameInfo& frame, web::BrowserHost& host)
     }
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

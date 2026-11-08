@@ -18,7 +18,7 @@
 #include "render/swapchain_size.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -1786,4 +1786,4 @@ void VkContext::copy_point_shadow(const FrameInfo& frame, std::uint32_t from, st
                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -8,7 +8,7 @@
 #include "game/mechanics/character.h"
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -196,4 +196,4 @@ std::string spell_description_text(const SpellData& spell, std::string_view text
     return format_spell_description(text, spell_description_context(spell, character, player_level, player_class));
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

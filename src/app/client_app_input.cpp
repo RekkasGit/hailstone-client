@@ -4,8 +4,9 @@
 #include "app/lua_eq_menu.h"
 #include "game/mechanics/abilities.h"
 #include "game/boats.h"
+#include "core/env.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 // CanIFitHere and the room above for crouch to stand (unk_SetStandState): nothing between the feet and the
 // standing height.
@@ -712,11 +713,11 @@ void ClientApp::update_combat_input() {
     }
 }
 
-// NMSC_TRACE_SPAWN=name: log one spawn's server and drawn positions ten
+// HAILSTONE_TRACE_SPAWN=name: log one spawn's server and drawn positions ten
 // times a second (to check how smoothly spawns move).
 void ClientApp::trace_spawn(float dt) {
-    // NMSC_TRACE_VEHICLES: every vehicle spawn every 2 s (testing boats, game/boats.h).
-    static const bool vehicles = std::getenv("NMSC_TRACE_VEHICLES") != nullptr;
+    // HAILSTONE_TRACE_VEHICLES: every vehicle spawn every 2 s (testing boats, game/boats.h).
+    static const bool vehicles = hailstone::core::env("TRACE_VEHICLES") != nullptr;
     static float vehicle_timer = 0.0f;
     if (vehicles && conn_ && (vehicle_timer += dt) >= 2.0f) {
         vehicle_timer = 0.0f;
@@ -731,7 +732,7 @@ void ClientApp::trace_spawn(float dt) {
                                                    : "no triangles");
         }
     }
-    static const char* want = std::getenv("NMSC_TRACE_SPAWN");
+    static const char* want = hailstone::core::env("TRACE_SPAWN");
     static float timer = 0.0f;
     if (!want || !conn_ || (timer += dt) < 0.1f) return;
     timer = 0.0f;
@@ -761,4 +762,4 @@ void ClientApp::trace_spawn(float dt) {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

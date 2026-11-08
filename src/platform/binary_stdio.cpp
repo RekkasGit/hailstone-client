@@ -6,7 +6,7 @@
 #endif
 #include <cstdio>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 void binary_stdio() {
 #if defined(_WIN32)
@@ -15,4 +15,4 @@ void binary_stdio() {
 #endif
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

@@ -22,7 +22,7 @@
 #include <windows.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 namespace {
 constexpr SDL_Scancode kScancodes[] = {
@@ -800,4 +800,4 @@ PFN_vkGetInstanceProcAddr Window::bundled_vulkan_loader() const {
     return reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

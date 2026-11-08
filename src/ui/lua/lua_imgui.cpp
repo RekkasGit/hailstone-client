@@ -16,7 +16,7 @@
 
 #include <lua.hpp>
 
-namespace nmsc::ui::lua {
+namespace hailstone::ui::lua {
 
 // ui/lua/lua_code_editor.cpp
 int CodeEditor(lua_State* L);
@@ -1096,4 +1096,4 @@ void register_ui_api(lua_State *L) {
 	lua_setglobal(L, "ui");
 }
 
-} // namespace nmsc::ui::lua
+} // namespace hailstone::ui::lua

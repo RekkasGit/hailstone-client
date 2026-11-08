@@ -15,9 +15,9 @@
 #include "net/social_packets.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 using game::ClientOption;
 
 TEST_CASE("Cmd_anonymous / Cmd_roleplay: the anonymity flags, the lines and what is sent") {

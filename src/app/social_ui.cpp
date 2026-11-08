@@ -6,7 +6,7 @@
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -105,4 +105,4 @@ void SocialUi::draw(net::GameConnection& conn) {
     if (a.remove_ignore) conn.send_command("/ignore " + *a.remove_ignore);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

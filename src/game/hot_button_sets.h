@@ -43,9 +43,9 @@
 
 #include "game/hotbuttons.h"
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kHotButtonSets = 10;
 inline constexpr std::size_t kHotButtonSetNameMax = 24; // CTextEntryWnd::Activate(.., 1, 0x18, "")
@@ -105,4 +105,4 @@ void clear_hot_bar(HotButtonStore& store, int bar);
 // The set file's name in the character's folder (the original's userdata\HB_<n>_<name>_<server>.ini).
 std::string hot_button_set_file(std::int32_t file);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

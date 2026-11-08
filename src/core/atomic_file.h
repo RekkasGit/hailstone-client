@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc {
+namespace hailstone {
 
 // Writes `text` to `path` (creating its parent folder) through a temporary file in the same folder, renamed over
 // `path` once it is complete. False when anything fails (with a warning in the log); `path` is then as it was. On
@@ -18,4 +18,4 @@ bool write_file_atomic(const std::filesystem::path& path, std::string_view text)
 // The whole file as text, or nullopt when it cannot be read.
 std::optional<std::string> read_text_file(const std::filesystem::path& path);
 
-} // namespace nmsc
+} // namespace hailstone

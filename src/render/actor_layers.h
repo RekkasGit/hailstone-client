@@ -12,7 +12,7 @@
 
 #include "assets/character.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // One bone group's tracks.
 struct GroupTrack {
@@ -90,4 +90,4 @@ struct ActorLayers {
     bool split() const;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

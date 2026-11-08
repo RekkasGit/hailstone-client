@@ -11,10 +11,10 @@
 #include "assets/wld.h"
 #include "core/byte_io.h"
 
-namespace nmsc::test::wld_fixtures {
+namespace hailstone::test::wld_fixtures {
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 
 // Builds small WLD files: an encoded string table and framed fragments.
@@ -161,4 +161,4 @@ inline std::vector<std::byte> mesh_wld(bool new_format) {
     return b.build(new_format ? wld::kVersionNew : wld::kVersionOld);
 }
 
-} // namespace nmsc::test::wld_fixtures
+} // namespace hailstone::test::wld_fixtures

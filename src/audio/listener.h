@@ -28,7 +28,7 @@
 #include "audio/environment_presets.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 // Listener environments (EqSoundManager +0xff8; emitters with an environment only play in theirs).
 enum ListenerEnvironment : std::int32_t { kEnvironmentOutside = 1, kEnvironmentHigh = 2, kEnvironmentLow = 3 };
@@ -92,4 +92,4 @@ std::uint32_t x87_fcos(std::uint32_t operand);
 // race up to 12 (signed, so 0 and negatives count) and 128, 130, 330, 522.
 bool legal_player_race(std::int32_t race, std::int32_t spawn_race);
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

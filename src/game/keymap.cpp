@@ -7,16 +7,16 @@
 
 #include "core/config.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
 constexpr std::uint32_t kShift = 0x40000000u, kCtrl = 0x20000000u, kAlt = 0x10000000u;
 
 const char* const kNames[kKeyCommands] = {
-#define NMSC_KEY_COMMAND(index, name) #name,
+#define HAILSTONE_KEY_COMMAND(index, name) #name,
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_COMMAND
+#undef HAILSTONE_KEY_COMMAND
 };
 
 struct DefaultBinding {
@@ -24,9 +24,9 @@ struct DefaultBinding {
     std::uint32_t code;
 };
 constexpr DefaultBinding kDefaults[] = {
-#define NMSC_KEY_DEFAULT(set, bank, slot, code) {set, bank, slot, code},
+#define HAILSTONE_KEY_DEFAULT(set, bank, slot, code) {set, bank, slot, code},
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_DEFAULT
+#undef HAILSTONE_KEY_DEFAULT
 };
 
 struct CharKey {
@@ -34,9 +34,9 @@ struct CharKey {
     std::uint8_t code;
 };
 constexpr CharKey kCharKeys[] = {
-#define NMSC_KEY_CHAR(c, code) {c, code},
+#define HAILSTONE_KEY_CHAR(c, code) {c, code},
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_CHAR
+#undef HAILSTONE_KEY_CHAR
 };
 
 struct NamedKey {
@@ -44,9 +44,9 @@ struct NamedKey {
     const char* name;
 };
 constexpr NamedKey kNamedKeys[] = {
-#define NMSC_KEY_NAMED(code, name) {code, name},
+#define HAILSTONE_KEY_NAMED(code, name) {code, name},
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_NAMED
+#undef HAILSTONE_KEY_NAMED
 };
 
 struct KeyText {
@@ -54,9 +54,9 @@ struct KeyText {
     const char* text;
 };
 constexpr KeyText kKeyTexts[] = {
-#define NMSC_KEY_TEXT(code, text) {code, text},
+#define HAILSTONE_KEY_TEXT(code, text) {code, text},
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_TEXT
+#undef HAILSTONE_KEY_TEXT
 };
 
 struct Label {
@@ -64,9 +64,9 @@ struct Label {
     std::uint32_t eqstr, category;
 };
 constexpr Label kLabels[] = {
-#define NMSC_KEY_LABEL(command, eqstr, category) {command, eqstr, category},
+#define HAILSTONE_KEY_LABEL(command, eqstr, category) {command, eqstr, category},
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_LABEL
+#undef HAILSTONE_KEY_LABEL
 };
 
 bool iequal_prefix(std::string_view s, std::string_view prefix) {
@@ -325,4 +325,4 @@ void KeyMap::release_all(std::vector<Event>& out) {
         }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

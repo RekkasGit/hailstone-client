@@ -18,8 +18,8 @@
 #include "net/tribute_packets.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 namespace {
 

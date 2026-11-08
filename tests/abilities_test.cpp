@@ -18,9 +18,9 @@
 #include "net/ability_packets.h"
 #include "net/opcodes.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-using namespace nmsc::game::mechanics;
+using namespace hailstone;
+using namespace hailstone::game;
+using namespace hailstone::game::mechanics;
 
 namespace {
 

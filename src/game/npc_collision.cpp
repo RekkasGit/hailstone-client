@@ -10,7 +10,7 @@
 #include "game/race_models.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool is_swarm_pet(const Spawn& s) {
     // EQEmu's NPC::PetOnSpawn: a swarm pet of a player is sent with targetable_with_hotkey off and, by default
@@ -89,4 +89,4 @@ std::uint32_t sweep_npcs(SphereSweep& s, std::span<const NpcBody> bodies) {
     return stopped;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

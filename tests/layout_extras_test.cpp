@@ -24,14 +24,14 @@
 #include "render/pipeline_cache.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 struct TempDir {
     fs::path path;
     explicit TempDir(const char* tag) {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = fs::temp_directory_path() / (std::string("nmsc_extras_") + tag + "_" + std::to_string(stamp));
+        path = fs::temp_directory_path() / (std::string("hailstone_extras_") + tag + "_" + std::to_string(stamp));
         fs::create_directories(path);
     }
     ~TempDir() {
@@ -244,10 +244,10 @@ TEST_CASE("Crash log: the last log lines and the report file") {
 
 #ifndef _WIN32
 #if defined(__SANITIZE_ADDRESS__)
-#define NMSC_TEST_ASAN 1
+#define HAILSTONE_TEST_ASAN 1
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
-#define NMSC_TEST_ASAN 1
+#define HAILSTONE_TEST_ASAN 1
 #endif
 #endif
 
@@ -298,7 +298,7 @@ TEST_CASE("Crash log: after the report the handler that was there before still r
     CHECK(crash_files(tmp.path / "logs") == 1);
 }
 
-#ifndef NMSC_TEST_ASAN // AddressSanitizer reports a stack overflow its own way
+#ifndef HAILSTONE_TEST_ASAN // AddressSanitizer reports a stack overflow its own way
 TEST_CASE("Crash log: a stack overflow on a thread with a CrashStack is reported") {
     TempDir tmp("crash_thread");
     CHECK(crash_in_child(tmp.path / "logs", [] {

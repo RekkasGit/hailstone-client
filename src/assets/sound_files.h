@@ -23,7 +23,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // One 84-byte record of <zone>_sounds.eff. The record holds a "day" side
 // (first) and a "night" side (second); the loader collapses them into one
@@ -118,4 +118,4 @@ struct SpellEffectSounds {
 };
 std::vector<SpellEffectSounds> parse_spell_effect_sounds(std::span<const std::byte> data);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

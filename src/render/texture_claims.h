@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // Shared by the worker and the main thread.
 class TextureClaims {
@@ -89,4 +89,4 @@ private:
     std::vector<std::string> keys_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

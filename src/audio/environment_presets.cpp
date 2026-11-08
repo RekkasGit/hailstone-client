@@ -8,7 +8,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 
@@ -162,4 +162,4 @@ std::vector<ZoneRoomPreset> load_zone_room_presets(const GameDir& game) {
     return std::move(*table);
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

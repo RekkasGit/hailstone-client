@@ -16,7 +16,7 @@
 
 #include "game/group.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The slot types (EQEmu XTargetType): 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, 4 the target's target,
 // 5..10 the group's tank / assist / puller and their targets, 11..13 the group's marks, 14..19 the raid's assists
@@ -85,4 +85,4 @@ struct XTargetRoleSets {
     int slot_for_name(std::string_view name) const;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

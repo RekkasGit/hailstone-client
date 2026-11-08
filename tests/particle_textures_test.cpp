@@ -8,7 +8,7 @@
 #include "render/particle_textures.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 // A 2x1 24-bit BMP of two colours (B, G, R each).

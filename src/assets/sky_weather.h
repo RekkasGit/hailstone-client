@@ -12,9 +12,9 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc { class GameDir; class IniFile; }
+namespace hailstone { class GameDir; class IniFile; }
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // The most patches one cloud definition makes (DesiredCount is capped to it).
 inline constexpr std::int32_t kMaxCloudPatches = 256;
@@ -46,4 +46,4 @@ std::vector<CloudDefinition> weather_clouds(const IniFile& weather, std::string_
 // Both files from the game directory (empty when they are missing).
 std::vector<CloudDefinition> load_zone_clouds(const GameDir& game, std::string_view zone);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

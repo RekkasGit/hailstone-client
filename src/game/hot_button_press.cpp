@@ -6,7 +6,7 @@
 #include "core/msvc_atoi.h"
 #include "core/wrap_math.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -248,4 +248,4 @@ void social_passage_of_time(SocialQueue& s, std::uint32_t now_ms, SocialRunQueri
     s = {-1, 0, 0, s.last_tick};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -16,7 +16,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The spawn fields GetCollisionHeight reads.
 struct CollisionHeightSpawn {
@@ -85,4 +85,4 @@ struct RegionChange {
 RegionChange check_region_change(RegionSpawn& spawn, const RegionPoint& position, const RegionZone& zone,
                                  RegionQueries& q, const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

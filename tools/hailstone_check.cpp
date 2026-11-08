@@ -18,7 +18,7 @@
 #include "plugin/policy.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

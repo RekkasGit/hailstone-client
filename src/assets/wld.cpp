@@ -5,7 +5,7 @@
 #include "core/byte_io.h"
 #include "core/log.h"
 
-namespace nmsc::assets::wld {
+namespace hailstone::assets::wld {
 
 namespace {
 
@@ -509,4 +509,4 @@ std::string WldFile::string_at(Ref ref) const {
     return std::string(reinterpret_cast<const char*>(strings_.data() + start), end - start);
 }
 
-} // namespace nmsc::assets::wld
+} // namespace hailstone::assets::wld

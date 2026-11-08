@@ -23,7 +23,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 // A value between a plugin and Lua: nil, a boolean, an integer, a number, a string, an array (Lua's 1..n) or a
 // table of string keys.
@@ -115,4 +115,4 @@ private:
     std::vector<std::pair<std::string, std::filesystem::path>> folders_;
 };
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

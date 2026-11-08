@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ---------------------------------------------------------------- masks
 
@@ -179,4 +179,4 @@ SwitchClick clicked_switch(const SwitchClickInput& in, AdjustedSkill&& adjusted_
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

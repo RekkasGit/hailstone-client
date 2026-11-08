@@ -20,7 +20,7 @@
 #include "nav/nav_control.h"
 #include "net/game_connection.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -1506,4 +1506,4 @@ void register_game_tlos(Registry& r) {
     });
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

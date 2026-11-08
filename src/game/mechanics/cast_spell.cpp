@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace nmsc::game::mechanics::cast {
+namespace hailstone::game::mechanics::cast {
 
 namespace {
 
@@ -677,4 +677,4 @@ std::uint8_t cast_spell(State& s, const Args& a, Queries& q, std::optional<Packe
     return 1;
 }
 
-} // namespace nmsc::game::mechanics::cast
+} // namespace hailstone::game::mechanics::cast

@@ -11,7 +11,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc {
+namespace hailstone {
 
 using Ed25519PublicKey = std::array<std::uint8_t, 32>;
 using Ed25519SecretKey = std::array<std::uint8_t, 64>; // Monocypher's: the 32-byte seed, then the public key
@@ -33,4 +33,4 @@ template <std::size_t N> std::optional<std::array<std::uint8_t, N>> hex_decode(s
 extern template std::optional<std::array<std::uint8_t, 32>> hex_decode<32>(std::string_view);
 extern template std::optional<std::array<std::uint8_t, 64>> hex_decode<64>(std::string_view);
 
-} // namespace nmsc
+} // namespace hailstone

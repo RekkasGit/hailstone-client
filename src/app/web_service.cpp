@@ -11,7 +11,7 @@
 #include "ui/web_textures.h"
 #include "web/browser_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -355,4 +355,4 @@ bool WebService::view(const std::string& owner, std::uint32_t caps, std::uint32_
     return hovered;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

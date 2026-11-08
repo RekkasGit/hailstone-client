@@ -4,7 +4,7 @@
 #include <cctype>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -131,4 +131,4 @@ std::optional<ParsedPetCommand> parse_pet_command(const std::string& args) {
     return std::nullopt;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

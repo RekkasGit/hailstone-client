@@ -16,9 +16,9 @@
 #include "game/anim_layers.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
-namespace mech = nmsc::game::mechanics;
+namespace mech = hailstone::game::mechanics;
 
 namespace {
 
@@ -385,4 +385,4 @@ std::string action_clip(std::uint8_t action, const std::function<bool(std::strin
     return !alt.empty() && has_clip(alt) ? alt : std::string{};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

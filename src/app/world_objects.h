@@ -25,18 +25,18 @@
 #include "game/picking.h"
 #include "render/object_renderer.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets {
+namespace hailstone { class GameDir; }
+namespace hailstone::assets {
 class PfsArchive;
 struct Zone;
 struct Mesh;
 class CharacterLibrary;
 struct CharacterMesh;
 }
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::game { struct ViewDistance; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::game { struct ViewDistance; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class WorldObjects {
 public:
@@ -206,4 +206,4 @@ private:
     bool prepared_ = false; // prepare ran this frame (draw clears it)
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

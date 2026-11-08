@@ -8,7 +8,7 @@
 #include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -128,4 +128,4 @@ int SpellLoadouts::find(std::string_view arg) const {
     return -1;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

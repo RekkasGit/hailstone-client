@@ -16,7 +16,7 @@
 
 #include "core/asset_folder.h"
 
-namespace nmsc {
+namespace hailstone {
 
 class Config;
 
@@ -77,4 +77,4 @@ void remember_asset_folder(Config& config, const std::filesystem::path& folder);
 void request_asset_folder_pick(Config& config, bool pick);
 bool asset_folder_pick_requested(const Config& config);
 
-} // namespace nmsc
+} // namespace hailstone

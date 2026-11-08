@@ -13,7 +13,7 @@
 #include "core/zip_write.h"
 #include "platform/local_time.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 namespace fs = std::filesystem;
@@ -433,4 +433,4 @@ void mark_crash_reported(const fs::path& crash) {
     if (fs::exists(dump, ec)) fs::rename(dump, fs::path(stem.string() + ".reported.dmp"), ec);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

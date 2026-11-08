@@ -6,8 +6,8 @@
 #include "core/ini_file.h"
 #include "game/player_path.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 

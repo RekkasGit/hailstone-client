@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -317,4 +317,4 @@ std::uint32_t language_prefix_eqstr(std::uint32_t channel, std::uint8_t listener
     return listener_skill > 24 || channel == 14 || sender_gm ? 1411 : 1412;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

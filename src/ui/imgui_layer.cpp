@@ -20,7 +20,7 @@
 #include "render/vk_context.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -455,4 +455,4 @@ ImFont* eq_font(int index) {
                                                                          : nullptr;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

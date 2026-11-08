@@ -1,6 +1,6 @@
 # Mock EQEmu server (offline integration tests)
 
-An in-process, loopback-only EQEmu stand-in for tests that drive a real `LoginClient`, `GameConnection` or `Session`. No game files, no server, no network beyond `127.0.0.1`. Everything runs in the normal `nmsc_tests` binary (`tests/mock_*_test.cpp`, about 4 s together).
+An in-process, loopback-only EQEmu stand-in for tests that drive a real `LoginClient`, `GameConnection` or `Session`. No game files, no server, no network beyond `127.0.0.1`. Everything runs in the normal `hailstone_tests` binary (`tests/mock_*_test.cpp`, about 4 s together).
 
 | File | What it is |
 |---|---|

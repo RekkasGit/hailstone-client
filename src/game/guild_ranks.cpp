@@ -1,6 +1,6 @@
 #include "game/guild_ranks.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::int32_t guild_rank_compare(std::int32_t a, std::int32_t b) {
     auto ua = static_cast<std::uint32_t>(a), ub = static_cast<std::uint32_t>(b);
@@ -47,4 +47,4 @@ bool local_pc_has_guild_permission(bool have_character, bool is_gm, std::int32_t
     return table.has(rank, permission);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

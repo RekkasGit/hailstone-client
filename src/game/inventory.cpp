@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using net::Item;
 using net::ItemSlot;
@@ -232,4 +232,4 @@ std::string coin_amounts_text(std::uint32_t platinum, std::uint32_t gold, std::u
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

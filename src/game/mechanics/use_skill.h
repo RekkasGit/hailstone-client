@@ -32,7 +32,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics::useskill {
+namespace hailstone::game::mechanics::useskill {
 
 // The character objects UseSkill hands its callees as `this` or an argument.
 enum class Obj : std::uint8_t {
@@ -186,4 +186,4 @@ public:
 // hands the whole value to DoAttack).
 void use_skill(State& s, std::uint32_t skill, Queries& q);
 
-} // namespace nmsc::game::mechanics::useskill
+} // namespace hailstone::game::mechanics::useskill

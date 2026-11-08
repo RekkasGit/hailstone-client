@@ -1356,7 +1356,7 @@ countdown, gone out of the zone), and everything that shows, reports or tests th
 `net::GameConnection::own_hp`: the windows (labels 17, 18, 19 and 70, gauge 1, the ability book's HP percent, the
 developer group window's own row), the player's own spawn's HP percent (SetSpawnHP's, so `Spawn[...].PctHPs`, a self
 target and a plugin's spawn), `Me.CurrentHPs`, `Me.MaxHPs` and `Me.PctHPs`, `hailstone.player()`'s `cur_hp` /
-`max_hp`, a plugin's `NmscPlayer`, the knocked-out test (`player_down`: the mouse and the context menu, OP_Save),
+`max_hp`, a plugin's `HailstonePlayer`, the knocked-out test (`player_down`: the mouse and the context menu, OP_Save),
 UseSkill's Cur_HP check, the fall damage report's knock-out floor, the caster's Max_HP in CastSpell and the hit
 sound's HP. The bare packet value goes below 1 while a geared player still stands, which is why none of these read
 it. The developer stats window compares its computed Max_HP with that sum. The regeneration ticks and the sheet's

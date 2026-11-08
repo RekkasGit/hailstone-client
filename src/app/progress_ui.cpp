@@ -4,18 +4,19 @@
 #include <glm/geometric.hpp>
 #include <imgui.h>
 
+#include "core/env.h"
 #include "core/log.h"
 #include "game/world_state.h"
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 using Clock = std::chrono::steady_clock;
 
 ProgressUi::ProgressUi() {
-    if (const char* t = std::getenv("NMSC_PROGRESS_TEST")) test_ = t;
-    if (const char* w = std::getenv("NMSC_PROGRESS_WINDOWS")) panel_ = *w && *w != '0';
+    if (const char* t = hailstone::core::env("PROGRESS_TEST")) test_ = t;
+    if (const char* w = hailstone::core::env("PROGRESS_WINDOWS")) panel_ = *w && *w != '0';
 }
 
 void ProgressUi::draw(net::GameConnection& conn) {
@@ -258,4 +259,4 @@ void ProgressUi::drive_test(net::GameConnection& conn) {
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

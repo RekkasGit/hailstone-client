@@ -5,7 +5,7 @@
 #include "game/doors.h" // fix_heading
 #include "game/follow.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -212,4 +212,4 @@ CCreateResult char_create_camera_tick(UserCamera& cam, int customization_page, c
     return {};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

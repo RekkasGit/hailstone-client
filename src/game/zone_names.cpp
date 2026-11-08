@@ -5,7 +5,7 @@
 #include <cctype>
 #include <iterator>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 struct ZoneName {
@@ -16,9 +16,9 @@ struct ZoneName {
     std::uint32_t expansion;
 };
 constexpr ZoneName kZones[] = {
-#define NMSC_ZONE(id, short_name, long_name, flags, expansion) {id, short_name, long_name, flags, expansion},
+#define HAILSTONE_ZONE(id, short_name, long_name, flags, expansion) {id, short_name, long_name, flags, expansion},
 #include "game/zone_names.inc"
-#undef NMSC_ZONE
+#undef HAILSTONE_ZONE
 };
 
 const ZoneName* find(std::uint32_t id) {
@@ -66,4 +66,4 @@ bool is_newbie_zone(std::uint32_t zone_id) {
     return (zone_flags(zone_id) & 0x2) != 0;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

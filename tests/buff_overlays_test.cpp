@@ -6,7 +6,7 @@
 #include "game/buff_overlays.h"
 #include "game/spells.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

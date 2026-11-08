@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 struct SoundControl {
     float volume = 1.0f;          // +0x00
@@ -65,9 +65,9 @@ private:
     std::uint32_t state_;
 };
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 // PlayerClient::PlaySound @0x58b780: a spawn's sound at its position, Miles
 // distances height/2 and 12 x height, 0.8 volume and pool 3 for the local
@@ -107,4 +107,4 @@ inline SoundControl location_sound_control(const glm::vec3& position) {
     return c;
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

@@ -10,7 +10,7 @@
 #include "core/windows_names.h"
 #include "plugin/policy.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace fs = std::filesystem;
 
@@ -31,20 +31,20 @@ constexpr std::array kPlatforms{"windows-x64", "windows-arm64", "linux-x64", "li
 
 #if defined(_WIN32)
 constexpr std::string_view kLibrary = ".dll";
-#define NMSC_OS "windows"
+#define HAILSTONE_OS "windows"
 #elif defined(__APPLE__)
 constexpr std::string_view kLibrary = ".dylib";
-#define NMSC_OS "macos"
+#define HAILSTONE_OS "macos"
 #else
 constexpr std::string_view kLibrary = ".so";
-#define NMSC_OS "linux"
+#define HAILSTONE_OS "linux"
 #endif
 #if defined(__aarch64__) || defined(_M_ARM64)
-constexpr std::string_view kPlatform = NMSC_OS "-arm64";
+constexpr std::string_view kPlatform = HAILSTONE_OS "-arm64";
 #else
-constexpr std::string_view kPlatform = NMSC_OS "-x64";
+constexpr std::string_view kPlatform = HAILSTONE_OS "-x64";
 #endif
-#undef NMSC_OS
+#undef HAILSTONE_OS
 
 // The lower-cased name's extension when it is one of `list`'s, else "".
 template <std::size_t N> std::string_view ext_in(std::string_view name, const std::array<const char*, N>& list) {
@@ -655,4 +655,4 @@ float ServerFileSync::progress() const {
     return static_cast<float>(static_cast<double>(bytes_done_) / static_cast<double>(bytes_total_));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

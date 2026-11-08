@@ -23,7 +23,7 @@
 #include "net/game_connection.h"
 #include "ui/dev_screens.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1400,4 +1400,4 @@ void add_progress_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<GroupMentorWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

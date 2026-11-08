@@ -821,7 +821,7 @@ ui.window("Options", function()
   style.Push()
   local w, b = C.window, C.frameBorder
   ui.PushStyleColor(ui.Col.WindowBg, w[1], w[2], w[3], w[4])
-  local visible, open = ui.Begin("Options##nmsc", true, ui.WindowFlags.NoCollapse)
+  local visible, open = ui.Begin("Options##hailstone", true, ui.WindowFlags.NoCollapse)
   if esc.Frame(WINDOW) then open = false end
   -- the controls' outline (inside the window only: its own edge keeps the hairline)
   ui.PushStyleColor(ui.Col.Border, b[1], b[2], b[3], b[4])

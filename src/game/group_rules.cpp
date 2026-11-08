@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool group_add_member(GroupSlotsModel& g, int member, std::int16_t kind, bool name_in_group, int owner, GroupCalls& c) {
     if (member < 0) return false;
@@ -194,4 +194,4 @@ GroupInviteResult handle_group_invite(GroupInviteState& st, const GroupInviteInp
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

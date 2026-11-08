@@ -9,8 +9,8 @@
 #include "render/point_shadows.h"
 #include "render/scene_lighting.h"
 
-using namespace nmsc;
-using namespace nmsc::render;
+using namespace hailstone;
+using namespace hailstone::render;
 
 namespace {
 

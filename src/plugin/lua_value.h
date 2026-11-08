@@ -11,7 +11,7 @@
 
 struct lua_State;
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 // How deep tables go both ways; a deeper one is nil.
 inline constexpr int kMaxValueDepth = 16;
@@ -31,4 +31,4 @@ UiValue to_value(lua_State* L, int idx, int depth = 0);
 // kMaxValueBytes. Never raises a Lua error for the stack (lua_checkstack).
 void push_value(lua_State* L, const UiValue& v, int depth = 0);
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

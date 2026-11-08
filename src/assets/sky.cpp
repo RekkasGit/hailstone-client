@@ -11,7 +11,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -214,4 +214,4 @@ float sky_sweep_heading(float hour) {
     return wrap(448.0f + (hour * 60.0f - 540.0f) * 128.0f / 360.0f, 512.0f);
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

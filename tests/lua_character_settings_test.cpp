@@ -31,7 +31,7 @@ std::string read(const fs::path& p) {
 } // namespace
 
 TEST_CASE("Lua UI: the window layout per character, the other settings shared") {
-    using nmsc::ui::lua::LuaUi;
+    using hailstone::ui::lua::LuaUi;
     CHECK(LuaUi::character_setting("hud.pos.AAWindow"));
     CHECK(LuaUi::character_setting("hud.scale"));
     CHECK(LuaUi::character_setting("tasks.listw"));
@@ -42,7 +42,7 @@ TEST_CASE("Lua UI: the window layout per character, the other settings shared") 
     CHECK_FALSE(LuaUi::layout_setting("items.Anna.junk"));
     CHECK(LuaUi::layout_setting("hud.pos.AAWindow"));
 
-    nmsc::test::ScratchDir scratch("lua_character_settings_test");
+    hailstone::test::ScratchDir scratch("lua_character_settings_test");
     const fs::path pack = scratch.path() / "pack", shared = scratch.path() / "shared.txt";
     const fs::path anna = scratch.path() / "anna" / "ui-pack.txt", bob = scratch.path() / "bob" / "ui-pack.txt";
     fs::create_directories(pack);
@@ -86,8 +86,8 @@ TEST_CASE("Lua UI: the window layout per character, the other settings shared") 
 }
 
 TEST_CASE("Lua UI: item marks kept per server and character, and a layout copy leaves them") {
-    using nmsc::ui::lua::LuaUi;
-    nmsc::test::ScratchDir scratch("lua_character_items_test");
+    using hailstone::ui::lua::LuaUi;
+    hailstone::test::ScratchDir scratch("lua_character_items_test");
     const fs::path pack = scratch.path() / "pack", shared = scratch.path() / "shared.txt";
     // the same name on two servers: one file each (servers/<profile>/<character>/ui-<pack>.txt)
     const fs::path here = scratch.path() / "srvA" / "anna" / "ui-pack.txt";

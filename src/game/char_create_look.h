@@ -21,7 +21,7 @@
 
 #include "game/player_customization.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class CharCreateLook {
 public:
@@ -59,4 +59,4 @@ private:
     FacialFeatures pc_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -12,7 +12,7 @@
 #include "net/packet_io.h"
 #include "net/player_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 bool GameConnection::client_info_command(std::string_view h, const std::string& args) {
     if (h == "Cmd_help") {
@@ -198,4 +198,4 @@ void GameConnection::show_with_line_breaks(const std::string& text) {
     if (!line.empty()) show_chat(line);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

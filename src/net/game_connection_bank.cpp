@@ -19,7 +19,7 @@
 #include "net/game_connection.h"
 #include "net/trade_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -304,4 +304,4 @@ void GameConnection::auto_bank_cursor(bool stacks) {
     chat(ChatEvent::Kind::System, strings_.format(3485, std::vector<std::string>{})); // You have no room left in the bank.
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

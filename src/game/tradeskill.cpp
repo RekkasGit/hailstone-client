@@ -6,7 +6,7 @@
 
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool is_combine_container(std::uint32_t bag_type) {
     return bag_type > 8 && bag_type < 0x3a && bag_type != 0x33 && bag_type != 0x35;
@@ -270,4 +270,4 @@ std::uint32_t recipe_trivial_color(std::int32_t trivial, std::int32_t skill) {
     return 0xffff0000;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

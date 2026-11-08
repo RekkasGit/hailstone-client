@@ -10,7 +10,7 @@
 #include "game/slash_commands.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -190,4 +190,4 @@ bool GameConnection::dz_command(std::string_view h, const std::string& args) {
     return false;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

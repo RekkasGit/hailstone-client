@@ -21,7 +21,7 @@
 #include "net/game_connection.h"
 #include "ui/ui_ini.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -462,4 +462,4 @@ void register_hotbar_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

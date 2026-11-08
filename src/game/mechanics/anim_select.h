@@ -28,7 +28,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The animation-start call both objects end in (their slot 0xc: anim,
 // play_once, reverse, speed, replay, 0xff, 0). The flags are the low bytes
@@ -253,4 +253,4 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
 double old_model_anim_speed(std::int32_t anim, float speed, std::int32_t race, std::int32_t gender, bool new_model,
                             bool display_129, const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

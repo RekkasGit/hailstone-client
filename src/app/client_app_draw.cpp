@@ -11,7 +11,7 @@
 
 #include "mq/lua_mq.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::draw_text_overlay() {
     // CTextOverlay::Draw @0x41f610 (game/text_overlay.h): the line wrapped in {x0 + W/4, y0 + 0.33 H, x0 + 3W/4, y1},
@@ -444,4 +444,4 @@ void ClientApp::lua_social_command(std::string_view args) {
     eq_host_.lua_social_edit = social;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

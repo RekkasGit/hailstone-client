@@ -2,7 +2,7 @@
 
 #include <bit>
 
-namespace nmsc {
+namespace hailstone {
 
 Sha1Digest sha1(std::string_view data) {
     std::uint32_t h[5] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0};
@@ -42,4 +42,4 @@ std::string to_hex(const Sha1Digest& d) {
     return s;
 }
 
-} // namespace nmsc
+} // namespace hailstone

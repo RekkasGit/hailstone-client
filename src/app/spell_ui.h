@@ -10,13 +10,13 @@
 
 #include "ui/spell_windows.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::render { class VkContext; }
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::game { struct SpellData; class EqStrings; }
-namespace nmsc::game::mechanics { class Character; }
+namespace hailstone { class GameDir; }
+namespace hailstone::render { class VkContext; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::game { struct SpellData; class EqStrings; }
+namespace hailstone::game::mechanics { class Character; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class SpellUi {
 public:
@@ -53,4 +53,4 @@ std::string spell_tooltip(const game::SpellData& spell, const game::EqStrings& s
 std::string spell_description(const game::SpellData& spell, const game::EqStrings& strings,
                               const DescriptionPlayer& player = {});
 
-} // namespace nmsc::app
+} // namespace hailstone::app

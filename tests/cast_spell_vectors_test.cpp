@@ -31,9 +31,9 @@
 #include "net/spell_packets.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
-namespace cs = nmsc::game::mechanics::cast;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
+namespace cs = hailstone::game::mechanics::cast;
 
 namespace {
 
@@ -635,7 +635,7 @@ std::string check_inputs(const Json& in) {
     auto f = [](const Json& j, uint32_t bits) {
         float v = std::bit_cast<float>(bits);
         if (v != v) return true; // NaN: the writer's text form
-        return nmsc::test::f32_bits(j) == bits;
+        return hailstone::test::f32_bits(j) == bits;
     };
     if (in["slot"].i64() != static_cast<uint8_t>(g.slot) || in["spell_id_arg"].i32() != g.spellIdArg ||
         in["has_item"].truthy() != g.hasItem || in["item_cast_type"].i32() != g.itemCastType ||
@@ -1037,7 +1037,7 @@ std::string check_outputs(const World& w, const Replay& r, const Json& out, uint
     for (const auto& [k, v] : out["caster_written"].fields) {
         bool is_float = k == "casting_y" || k == "casting_x" || k.rfind("casting_target_", 0) == 0;
         if (k == "casting_target_id") is_float = false;
-        want[k] = is_float ? static_cast<int64_t>(nmsc::test::f32_bits(v)) : v.i64();
+        want[k] = is_float ? static_cast<int64_t>(hailstone::test::f32_bits(v)) : v.i64();
     }
     if (got != want) {
         std::string d = "caster fields:";
@@ -1068,7 +1068,7 @@ std::string check_outputs(const World& w, const Replay& r, const Json& out, uint
     if (sent->position_set) {
         const char* keys[] = {"y", "x", "z"};
         for (std::size_t k = 0; k < 3; ++k)
-            if (nmsc::test::f32_bits(p[keys[k]]) != sent->position[k]) return std::string("packet position ") + keys[k];
+            if (hailstone::test::f32_bits(p[keys[k]]) != sent->position[k]) return std::string("packet position ") + keys[k];
     }
     // The bytes the client sends for these fields: net::encode(CastSpell) against the record's payload.
     std::array<uint8_t, 0x2c> want_bytes{};
@@ -1082,12 +1082,12 @@ std::string check_outputs(const World& w, const Replay& r, const Json& out, uint
     put32(0x18, p["crc"].u32());
     want_bytes[0x1c] = static_cast<uint8_t>(p["has_position"].i64());
     if (p["position_set"].truthy()) {
-        put32(0x20, nmsc::test::f32_bits(p["y"]));
-        put32(0x24, nmsc::test::f32_bits(p["x"]));
-        put32(0x28, nmsc::test::f32_bits(p["z"]));
+        put32(0x20, hailstone::test::f32_bits(p["y"]));
+        put32(0x24, hailstone::test::f32_bits(p["x"]));
+        put32(0x28, hailstone::test::f32_bits(p["z"]));
     }
-    nmsc::net::CastSpell n = nmsc::net::cast_spell_packet(*sent);
-    nmsc::net::AppPacket ap = nmsc::net::encode(n);
+    hailstone::net::CastSpell n = hailstone::net::cast_spell_packet(*sent);
+    hailstone::net::AppPacket ap = hailstone::net::encode(n);
     if (ap.opcode != 0x1287 || ap.data.size() != want_bytes.size()) return "encoded OP_CastSpell size";
     for (std::size_t i = 0; i < want_bytes.size(); ++i) {
         if (i >= 0x1d && i < 0x20) continue; // never written by the original
@@ -1116,7 +1116,7 @@ std::string run_record(const Json& rec) {
 
 void check_file(const char* file, uint32_t focus, uint32_t seed) {
     Rng rng(seed);
-    nmsc::test::each_vector(file, [&](const Json& rec) {
+    hailstone::test::each_vector(file, [&](const Json& rec) {
         Randomize(rng, focus);
         return run_record(rec);
     });

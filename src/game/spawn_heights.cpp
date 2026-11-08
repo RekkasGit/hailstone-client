@@ -8,7 +8,7 @@
 #include "game/mechanics/collision_movement.h"
 #include "game/race_models.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using mechanics::X87;
 using mechanics::x87_add;
@@ -338,4 +338,4 @@ std::optional<float> actor_height_fixup(std::int32_t race, float height) {
     return std::nullopt;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

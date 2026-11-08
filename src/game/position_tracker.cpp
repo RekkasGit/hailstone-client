@@ -2,7 +2,7 @@
 
 #include "core/byte_io.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void PositionTracker::enable() {
     if (!enabled_) flush();
@@ -53,4 +53,4 @@ void PositionTracker::flush() {
     sequence_ = entries_;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

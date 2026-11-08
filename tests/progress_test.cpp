@@ -21,8 +21,8 @@
 #include "net/training_packets.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 

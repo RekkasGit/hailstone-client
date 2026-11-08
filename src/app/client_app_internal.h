@@ -140,7 +140,7 @@
 #include "ui/asset_picker.h"
 #include "core/asset_folder_choice.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -983,7 +983,7 @@ private:
     void draw_world_container();
     void drive_auto_door(MovementKeys& mk);
     void drive_auto_board();
-    Clock::time_point auto_board_zone_{}; // the zone-in NMSC_AUTO_BOARD last boarded after
+    Clock::time_point auto_board_zone_{}; // the zone-in HAILSTONE_AUTO_BOARD last boarded after
     bool auto_board_helm_ = false;
     // PlayerZoneClient::DoTeleport for a zone-line region's teleport text (game/zoning.h).
     void region_teleport(const std::string& text);
@@ -1440,4 +1440,4 @@ private:
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

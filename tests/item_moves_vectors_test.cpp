@@ -13,10 +13,10 @@
 #include "net/item_packets.h"
 #include "vector_files.h"
 
-using nmsc::test::each_vector;
-using nmsc::test::Json;
-namespace game = nmsc::game;
-namespace net = nmsc::net;
+using hailstone::test::each_vector;
+using hailstone::test::Json;
+namespace game = hailstone::game;
+namespace net = hailstone::net;
 
 namespace {
 

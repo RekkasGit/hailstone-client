@@ -22,7 +22,7 @@
 
 #include "core/ed25519.h"
 
-namespace nmsc {
+namespace hailstone {
 
 struct AddonIndexAddon {
     std::string name;   // addon_name_ok
@@ -58,4 +58,4 @@ std::vector<AddonIndexMatch> addon_index_matches(const AddonIndex& index, std::s
 // The index's file name (where the client fetches it: app/updater.h default_addon_index()).
 inline constexpr std::string_view kAddonIndexName = "hailstone-addon-index.txt";
 
-} // namespace nmsc
+} // namespace hailstone

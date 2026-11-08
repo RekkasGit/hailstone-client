@@ -7,7 +7,7 @@
 
 #include "render/caster_bounds.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 TEST_CASE("caster bounds: the sphere round a model's points is centred on their box and holds them all") {
     // A door slab 2 x 12 x 20, hinged at the origin.

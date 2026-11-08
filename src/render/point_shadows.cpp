@@ -6,7 +6,7 @@
 #include "assets/model.h"
 #include "render/scene_lighting.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -181,4 +181,4 @@ void PointShadows::apply(SceneLighting& lighting, std::span<const assets::PointL
                                              kPointShadowFaceScale, kPointShadowNear);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

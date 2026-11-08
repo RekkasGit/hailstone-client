@@ -7,7 +7,7 @@
 #include <limits>
 #include <optional>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 
@@ -354,4 +354,4 @@ void ZoneEmitters::clear(EmitterSink& sink) {
     if (music_) music.select(sink); // a global entry may take over
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

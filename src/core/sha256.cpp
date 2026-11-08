@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -125,4 +125,4 @@ std::optional<Sha256Digest> parse_sha256(std::string_view hex) {
     return d;
 }
 
-} // namespace nmsc
+} // namespace hailstone

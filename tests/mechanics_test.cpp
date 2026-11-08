@@ -22,9 +22,9 @@
 #include "game_files.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-using namespace nmsc::game::mechanics;
+using namespace hailstone;
+using namespace hailstone::game;
+using namespace hailstone::game::mechanics;
 
 namespace {
 

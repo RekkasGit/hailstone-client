@@ -9,9 +9,9 @@
 #include "net/des.h"
 #include "net/packet_io.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
-using namespace nmsc::net;
+using namespace hailstone::net;
 using soe::Bytes;
 
 namespace {
@@ -633,4 +633,4 @@ void MockEqServer::request_zone_change(std::uint16_t zone_id, float x, float y, 
     zone.send_reliable(make_packet(Op::RequestClientZoneChange, std::move(w)));
 }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

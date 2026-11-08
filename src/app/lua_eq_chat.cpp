@@ -34,7 +34,7 @@
 #include "ui/dev_screens.h"
 #include "ui/ui_ini.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 std::uint32_t chat_index_rgb(int index);
 std::uint32_t user_color_rgb(int index);
@@ -2044,4 +2044,4 @@ void register_chat_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -8,7 +8,7 @@
 #include "game/mechanics/fpu.h"
 #include "game/zone_ladders.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -388,4 +388,4 @@ bool CollisionMesh::touches_passable_ladder(const SphereSweep& s) const {
     return touched;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

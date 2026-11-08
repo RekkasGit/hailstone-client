@@ -5,7 +5,7 @@
 
 #include "game/mechanics/movement.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -536,4 +536,4 @@ bool execute_movement_command(ControlsState& s, int command, bool down, bool acc
     }
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

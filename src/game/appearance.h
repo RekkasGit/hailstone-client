@@ -10,7 +10,7 @@
 
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // Visible equipment slots (WearChange / spawn order).
 enum EquipSlot : std::uint8_t {
@@ -81,4 +81,4 @@ struct HeadModel {
 };
 HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t material, std::uint32_t hero_forge = 0);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 // The player's RoF2 installation. EQ treats file names case-insensitively,
 // so lookups go through a lower-cased index of the directory tree, which
@@ -121,4 +121,4 @@ private:
 
 std::optional<std::vector<std::byte>> read_file(const std::filesystem::path& path);
 
-} // namespace nmsc
+} // namespace hailstone

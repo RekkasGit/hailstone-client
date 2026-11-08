@@ -9,7 +9,7 @@
 #include "game/sine_table.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -210,4 +210,4 @@ std::uint32_t sweep_hulls(SphereSweep& s, std::span<const VehicleHull> hulls, fl
     return stopped;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

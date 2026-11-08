@@ -32,11 +32,11 @@
 #include "render/texture_claims.h"
 #include "render/vk_context.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 struct ViewDistance;
 }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // One model to draw.
 struct ActorDraw {
@@ -473,4 +473,4 @@ public:
     };
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

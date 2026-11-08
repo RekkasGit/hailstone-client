@@ -6,7 +6,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -103,4 +103,4 @@ int GroupRoleSets::free_slot() const {
     return -1;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

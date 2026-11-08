@@ -27,7 +27,7 @@
 
 #include "assets/model.h"
 
-namespace nmsc::assets::wld {
+namespace hailstone::assets::wld {
 
 // Fills m.detail_layers and m.detail_palette from one BMINFO's names (the diffuse first), as the loader types them.
 // A later call (a later frame of the sprite) replaces an earlier one, as ResolveTransparency's frame loop does.
@@ -69,4 +69,4 @@ struct DetailBatch {
 // across in x and in y, else a new one. Batches come newest first, as the builder draws them.
 std::vector<DetailBatch> detail_batches(const Mesh& mesh, std::uint32_t material, const PaletteMap* map);
 
-} // namespace nmsc::assets::wld
+} // namespace hailstone::assets::wld

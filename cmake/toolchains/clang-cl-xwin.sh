@@ -5,7 +5,7 @@
 # flags a target sets: CEF's wrapper library (tools/hailstone-web) builds with /WX, and clang-cl reports what MSVC
 # does not (/MP it ignores, missing field initializers, an undefined variable template).
 set -euo pipefail
-xwin="${NMSC_XWIN_DIR:-$HOME/.xwin}"
+xwin="${HAILSTONE_XWIN_DIR:-$HOME/.xwin}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pre=(--target=x86_64-pc-windows-msvc
      "/imsvc$xwin/crt/include" "/imsvc$xwin/sdk/include/ucrt" "/imsvc$xwin/sdk/include/um"

@@ -10,10 +10,10 @@
 
 #include <volk.h>
 
-namespace nmsc::platform { class Window; }
-namespace nmsc::render { class VkContext; struct FrameInfo; }
+namespace hailstone::platform { class Window; }
+namespace hailstone::render { class VkContext; struct FrameInfo; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct ImGuiLayerDesc {
     float font_size = 15.0f;          // in points at 100% display scale
@@ -114,4 +114,4 @@ bool keyboard_for_ui(int requested);
 // program, so a Ctrl-click means the same in a window as in the game.
 void configure_keys();
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

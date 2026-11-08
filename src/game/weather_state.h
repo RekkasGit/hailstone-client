@@ -28,7 +28,7 @@
 #include "game/mechanics/fpu.h"
 #include "game/precipitation.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct WeatherState {
     std::int32_t kind = 0xff;           // +0
@@ -194,4 +194,4 @@ private:
     std::uint32_t state_ = 1;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

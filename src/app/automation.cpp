@@ -20,7 +20,7 @@
 #include "plugin/ui_bridge.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -304,7 +304,7 @@ void Automation::Impl::consent_window() {
                             ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(0.95f);
     bool open = true;
-    ImGui::Begin("Allow this server's plugin?##nmsc_plugin_consent", &open,
+    ImGui::Begin("Allow this server's plugin?##hailstone_plugin_consent", &open,
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
     ui::lua::guard_current_window();
     ImGui::Text("%s wants to run %s on your computer:", server.c_str(),
@@ -410,4 +410,4 @@ void Automation::Impl::dev_window() {
     ImGui::End();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

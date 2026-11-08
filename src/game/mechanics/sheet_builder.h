@@ -11,12 +11,12 @@
 
 #include "game/mechanics/character_sheet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 struct PlayerProfile;
 struct NewZone;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 class Inventory;
 struct SpellState;
 struct WorldState;
@@ -55,4 +55,4 @@ void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& profile, cons
                       const net::NewZone* zone = nullptr, const WorldState* world = nullptr);
 
 } // namespace mechanics
-} // namespace nmsc::game
+} // namespace hailstone::game

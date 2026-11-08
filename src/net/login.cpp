@@ -17,7 +17,7 @@
 // counter and pending list, the BaseMessage header, CSPlayerLogin's DES block and the replies' layouts. EQEmu's
 // loginserver (client.cpp, login_types.h) was the earlier source and still the server it is checked against.
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace login_codec {
 
@@ -588,4 +588,4 @@ std::optional<WorldTicket> LoginClient::ticket() const {
     return t;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

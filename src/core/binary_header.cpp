@@ -7,7 +7,7 @@
 
 #include "core/byte_io.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -155,4 +155,4 @@ std::string_view plugin_extension(std::string_view platform) {
     return {};
 }
 
-} // namespace nmsc
+} // namespace hailstone

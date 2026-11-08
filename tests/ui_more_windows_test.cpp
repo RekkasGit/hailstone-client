@@ -22,14 +22,14 @@
 #include "ui/dev_screens.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Harness {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch{"ui_more_windows_test"};
+    hailstone::test::ScratchDir dir_scratch{"ui_more_windows_test"};
     fs::path dir = dir_scratch.path();
     net::GameConnection conn;
     app::EqHost host;

@@ -6,14 +6,14 @@
 #include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
 constexpr SlashCommand kCommands[] = {
-#define NMSC_SLASH(name, eqstr, handler, restriction, category, flags) {name, eqstr, handler, restriction, category, flags},
+#define HAILSTONE_SLASH(name, eqstr, handler, restriction, category, flags) {name, eqstr, handler, restriction, category, flags},
 #include "game/slash_commands.inc"
-#undef NMSC_SLASH
+#undef HAILSTONE_SLASH
 };
 
 char lower(char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
@@ -110,4 +110,4 @@ CommandLine parse_command_line(std::string_view line, bool gm, const EqStrings* 
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

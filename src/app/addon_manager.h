@@ -29,9 +29,9 @@
 #include "platform/http_get.h"
 #include "plugin/consent.h"
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // hailstone.ini's addons.* keys.
 struct AddonSettings {
@@ -240,4 +240,4 @@ struct ManualAddon {
 std::vector<ManualAddon> manual_addons(const std::vector<std::filesystem::path>& dirs,
                                        const std::vector<InstalledAddon>& installed);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

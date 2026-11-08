@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The client mercenary states (state block +4, manager +0x110). 3 and 4 only come from OP_MercenaryTimer +0xc.
 inline constexpr std::uint32_t kMercDead = 0, kMercSuspended = 1, kMercSuspendedHere = 2, kMercActive = 5;
@@ -343,4 +343,4 @@ std::vector<MercOwnedRow> merc_owned_rows(const MercManager& m, Description&& de
     return rows;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

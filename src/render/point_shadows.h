@@ -27,9 +27,9 @@
 
 #include "game/light_list.h"
 
-namespace nmsc::assets { struct PointLight; }
+namespace hailstone::assets { struct PointLight; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct SceneLighting;
 
@@ -137,4 +137,4 @@ private:
     std::uint32_t total_ = 0;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

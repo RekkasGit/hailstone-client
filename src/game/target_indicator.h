@@ -19,11 +19,11 @@
 
 #include "game/combat.h"
 
-namespace nmsc {
+namespace hailstone {
 class IniFile;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // One section's colour (LoadIndicatorSettings: Alpha default 0xc0, Red / Green / Blue default 0xff, each kept as a
 // byte) and FloorOffset (default 1.0).
@@ -92,4 +92,4 @@ float target_ring_spin_rate(bool attacking, bool cues);
 // `seconds` a running clock, `since_change` the time since the target changed (negative: unknown, no sweep).
 TargetRingLook target_ring_look(float radius, double seconds, double since_change, bool attacking, bool cues);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

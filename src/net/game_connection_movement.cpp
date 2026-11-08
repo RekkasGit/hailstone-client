@@ -4,7 +4,7 @@
 #include "net/game_connection.h"
 #include "net/movement_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 void GameConnection::report_jump(std::int32_t endurance_cost) {
     if (state_ != ConnectionState::InZone) return;
@@ -44,4 +44,4 @@ void GameConnection::set_running(bool running) {
     if (state_ == ConnectionState::InZone) send_zone(encode_set_run_mode(running));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

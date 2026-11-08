@@ -10,9 +10,9 @@
 #include "assets/wld.h"
 #include "game/neighbour_zones.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-namespace wld = nmsc::assets::wld;
+using namespace hailstone;
+using namespace hailstone::game;
+namespace wld = hailstone::assets::wld;
 
 namespace {
 

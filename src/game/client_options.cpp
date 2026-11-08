@@ -8,7 +8,7 @@
 #include "core/msvc_atoi.h"
 #include "game/option_commands.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -143,4 +143,4 @@ void ClientOptions::store(ClientOption id, IniFile& ini) const {
     ini.set_int(o.section, o.key, v);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

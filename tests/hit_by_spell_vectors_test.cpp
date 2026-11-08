@@ -32,9 +32,9 @@
 #include "game/mechanics/hit_by_spell.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using namespace nmsc::game::mechanics::hit;
-using nmsc::test::Json;
+using namespace hailstone::game::mechanics;
+using namespace hailstone::game::mechanics::hit;
+using hailstone::test::Json;
 
 namespace {
 
@@ -1021,7 +1021,7 @@ struct Compare {
         }
     }
     void i(const char* what, const Json& rec, std::int64_t got) { u(what, static_cast<std::uint32_t>(got), rec.u32()); }
-    void f(const char* what, const Json& rec, std::uint32_t got) { u(what, got, nmsc::test::f32_bits(rec)); }
+    void f(const char* what, const Json& rec, std::uint32_t got) { u(what, got, hailstone::test::f32_bits(rec)); }
     void name(const char* what, const Json& rec, const Names& n, const void* p) {
         if (!error.empty()) return;
         Named v = n.of(reinterpret_cast<std::uintptr_t>(p));
@@ -1191,7 +1191,7 @@ void run_file(const char* file, const Family& family, std::uint32_t seed, void (
     static World world; // large; one per run
     Rng rng(seed);
     int it = 0;
-    nmsc::test::each_vector(file, [&](const Json& r) -> std::string {
+    hailstone::test::each_vector(file, [&](const Json& r) -> std::string {
         World& w = world;
         Rng local(rng.Next());
         make_world(w, local, family, static_cast<std::uint32_t>(it) * 7);
@@ -1223,7 +1223,7 @@ int shadow_step_fixed_points() {
     static World world;
     Rng rng(0x7e44);
     int it = 0, raised = 0;
-    nmsc::test::each_vector("HitBySpell_Moves.jsonl", [&](const Json& r) -> std::string {
+    hailstone::test::each_vector("HitBySpell_Moves.jsonl", [&](const Json& r) -> std::string {
         World& w = world;
         Rng local(rng.Next());
         make_world(w, local, kMoves, static_cast<std::uint32_t>(it) * 7);
@@ -1259,11 +1259,11 @@ int shadow_step_fixed_points() {
 
 TEST_CASE("HitBySpell: a shadow step (SPA 379) whose float distance cannot shrink ends") {
     const int raised = shadow_step_fixed_points();
-    // An empty NMSC_VECTORS_DIR gives a directory with no files in it: the file itself decides.
-    const auto dir = nmsc::test::vector_dir();
+    // An empty HAILSTONE_VECTORS_DIR gives a directory with no files in it: the file itself decides.
+    const auto dir = hailstone::test::vector_dir();
     std::error_code ec;
     if (!dir || !std::filesystem::is_regular_file(*dir / "HitBySpell_Moves.jsonl", ec))
-        MESSAGE("no vectors (NMSC_VECTORS_DIR); nothing checked");
+        MESSAGE("no vectors (HAILSTONE_VECTORS_DIR); nothing checked");
     else
         CHECK(raised > 0);
 }
@@ -1296,52 +1296,52 @@ std::string landing_spell_line(std::initializer_list<std::pair<int, std::string>
 } // namespace
 
 TEST_CASE("A spell landing on the player: its push, and SPA 123 immunity") {
-    nmsc::game::SpellTable table;
+    hailstone::game::SpellTable table;
     std::string text = landing_spell_line({{0, "300"}, {1, "Shove"}, {11, "10"}, {12, "2"}, {83, "0"}, {98, "5"}}) +
                        "\n" + landing_spell_line({{0, "301"}, {1, "Immune"}, {20, "5"}, {86, "123"}, {83, "0"}});
     REQUIRE(table.parse(text) == 2);
-    nmsc::game::WorldState world;
+    hailstone::game::WorldState world;
     world.player_id = 1;
     world.spawns[1].id = 1;
     world.spawns[1].level = 10;
     world.spawns[2].id = 2;
     world.spawns[2].is_npc = true;
-    nmsc::game::SpellState state;
-    nmsc::game::HitLandingContext ctx;
+    hailstone::game::SpellState state;
+    hailstone::game::HitLandingContext ctx;
     ctx.spells = &table;
     ctx.world = &world;
     ctx.spell_state = &state;
     ctx.level = 10;
     // Pushed toward heading 128: SpeedY += cos * 10 (table entry 0), SpeedX += sin * 10, SpeedZ += 2.
-    auto r = nmsc::game::land_spell(nmsc::game::hit_record(2, 0, 1.0f, 128.0f, 0, 0, 300, 10), ctx);
+    auto r = hailstone::game::land_spell(hailstone::game::hit_record(2, 0, 1.0f, 128.0f, 0, 0, 300, 10), ctx);
     CHECK(r.value == 1);
-    CHECK(r.velocity_change.x == nmsc::game::cmath_cos(128.0f) * 10.0f);
+    CHECK(r.velocity_change.x == hailstone::game::cmath_cos(128.0f) * 10.0f);
     CHECK(r.velocity_change.y == doctest::Approx(10.0f));
     CHECK(r.velocity_change.z == 2.0f);
     // A detrimental SPA 123 with a non-negative change is refused (message 0x30a0).
-    r = nmsc::game::land_spell(nmsc::game::hit_record(2, 0, 1.0f, 0.0f, 0, 0, 301, 10), ctx);
+    r = hailstone::game::land_spell(hailstone::game::hit_record(2, 0, 1.0f, 0.0f, 0, 0, 301, 10), ctx);
     CHECK(r.value == 0);
     CHECK(r.velocity_change == glm::vec3(0.0f));
 }
 
 TEST_CASE("A spell landing on the player: SPA 74 feigns death (StopCastAndFeignDeath)") {
-    nmsc::game::SpellTable table;
+    hailstone::game::SpellTable table;
     // Imitate Death's shape: a beneficial self spell whose first slot is SPA 74 (base 100), and a spell without it.
     std::string text = landing_spell_line({{0, "400"}, {1, "Feign"}, {20, "100"}, {86, "74"}, {83, "1"}}) + "\n" +
                        landing_spell_line({{0, "401"}, {1, "Shove"}, {11, "10"}, {83, "0"}, {98, "5"}});
     REQUIRE(table.parse(text) == 2);
-    nmsc::game::WorldState world;
+    hailstone::game::WorldState world;
     world.player_id = 1;
     world.spawns[1].id = 1;
     world.spawns[1].level = 10;
-    nmsc::game::SpellState state;
-    nmsc::game::HitLandingContext ctx;
+    hailstone::game::SpellState state;
+    hailstone::game::HitLandingContext ctx;
     ctx.spells = &table;
     ctx.world = &world;
     ctx.spell_state = &state;
     ctx.level = 10;
-    auto r = nmsc::game::land_spell(nmsc::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 400, 10), ctx);
+    auto r = hailstone::game::land_spell(hailstone::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 400, 10), ctx);
     CHECK(r.feigned);
-    r = nmsc::game::land_spell(nmsc::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 401, 10), ctx);
+    r = hailstone::game::land_spell(hailstone::game::hit_record(1, 0, 1.0f, 0.0f, 0, 0, 401, 10), ctx);
     CHECK_FALSE(r.feigned);
 }

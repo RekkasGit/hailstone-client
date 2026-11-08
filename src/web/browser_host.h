@@ -18,7 +18,7 @@
 
 #include "web/browser_protocol.h"
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 // The pipe to the helper (ProcessTransport; tests use their own).
 class Transport {
@@ -162,4 +162,4 @@ private:
     std::string last_error_;
 };
 
-} // namespace nmsc::web
+} // namespace hailstone::web

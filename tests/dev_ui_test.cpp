@@ -17,7 +17,7 @@
 #include "ui/dev_screens.h"
 
 TEST_CASE("Race and class names") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     CHECK(race_name(1) == "Human");
     CHECK(race_name(128) == "Iksar");
     CHECK(race_name(130) == "Vah Shir");
@@ -46,7 +46,7 @@ struct TempServers {
     std::filesystem::path path;
     TempServers() {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = std::filesystem::temp_directory_path() / ("nmsc_dev_ui_servers_" + std::to_string(stamp));
+        path = std::filesystem::temp_directory_path() / ("hailstone_dev_ui_servers_" + std::to_string(stamp));
         std::filesystem::create_directories(path);
     }
     ~TempServers() {
@@ -57,7 +57,7 @@ struct TempServers {
 } // namespace
 
 TEST_CASE("Login profiles: saved and picked again, never the password") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     ui::LoginView in;
@@ -128,7 +128,7 @@ TEST_CASE("Login profiles: saved and picked again, never the password") {
 }
 
 TEST_CASE("Login profiles: each server keeps its own user interface") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     cfg.set("ui.name", "modern");
@@ -165,7 +165,7 @@ TEST_CASE("Login profiles: each server keeps its own user interface") {
 }
 
 TEST_CASE("Login profiles: the old login keys become the first profile") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     cfg.set("login.host", "10.0.0.9");
@@ -192,7 +192,7 @@ TEST_CASE("Login profiles: the old login keys become the first profile") {
 }
 
 TEST_CASE("Login profiles: a test login's server is never saved") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     ui::LoginView view;
@@ -206,12 +206,12 @@ TEST_CASE("Login profiles: a test login's server is never saved") {
     CHECK(p.host == "127.0.0.1");
     CHECK_FALSE(ui::store_login_settings(view, cfg));
     CHECK(ui::selected_assets_dir(view).empty());
-    CHECK(nmsc::list_profiles(servers.path).empty());
+    CHECK(hailstone::list_profiles(servers.path).empty());
     CHECK_FALSE(cfg.get("login.profile"));
 }
 
 TEST_CASE("Login accounts: kept per server, passwords only in the keyring, the box set") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     platform::MemoryCredentials keyring;
@@ -337,7 +337,7 @@ TEST_CASE("Login accounts: kept per server, passwords only in the keyring, the b
 }
 
 TEST_CASE("Login accounts: the worlds the login server listed, for the World lists") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     ui::LoginView view;
@@ -367,7 +367,7 @@ TEST_CASE("Login accounts: the worlds the login server listed, for the World lis
 }
 
 TEST_CASE("Server profile: a world name with '=' keeps one set of characters, written once") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     Config cfg;
     ui::LoginView view;
@@ -392,24 +392,24 @@ TEST_CASE("Server profile: a world name with '=' keeps one set of characters, wr
 }
 
 TEST_CASE("Keyring keys: the address in lower case and the port") {
-    CHECK(nmsc::platform::credential_server("Play.Example.ORG", 5999) == "play.example.org:5999");
+    CHECK(hailstone::platform::credential_server("Play.Example.ORG", 5999) == "play.example.org:5999");
 }
 
 TEST_CASE("Folder URLs for the file manager") {
-    using nmsc::platform::file_url;
+    using hailstone::platform::file_url;
     CHECK(file_url("/home/me/hailstone/servers/a b/assets") == "file:///home/me/hailstone/servers/a%20b/assets");
     CHECK(file_url("/tmp/100%") == "file:///tmp/100%25");
     CHECK(file_url(std::filesystem::path("C:/EQ/servers")) == "file:///C:/EQ/servers");
 }
 
 TEST_CASE("Login: the Game files row names a folder RoF2, Live or not usable") {
-    CHECK(nmsc::ui::game_folder_label({"/games/EQ RoF2", false, true}) == "RoF2: EQ RoF2");
-    CHECK(nmsc::ui::game_folder_label({"/games/EverQuest/", true, true}) == "Live: EverQuest");
-    CHECK(nmsc::ui::game_folder_label({"/mnt/old", true, false}) == "Not usable: old");
+    CHECK(hailstone::ui::game_folder_label({"/games/EQ RoF2", false, true}) == "RoF2: EQ RoF2");
+    CHECK(hailstone::ui::game_folder_label({"/games/EverQuest/", true, true}) == "Live: EverQuest");
+    CHECK(hailstone::ui::game_folder_label({"/mnt/old", true, false}) == "Not usable: old");
 }
 
 TEST_CASE("Character creation: stats start at the base with the class's points to spend") {
-    using namespace nmsc::ui;
+    using namespace hailstone::ui;
     CharacterCreateView v;
     CreateOption o{1, 1, 201, 2, {}, {}};
     o.base = {75, 75, 75, 75, 75, 75, 75};
@@ -453,7 +453,7 @@ TEST_CASE("Character creation: stats start at the base with the class's points t
 }
 
 TEST_CASE("Character creation: race and class stay among the options; a deity keeps the city that still goes with it") {
-    using namespace nmsc::ui;
+    using namespace hailstone::ui;
     CharacterCreateView v;
     // race 1 class 1: deity 201 starts in zones 2 and 9, deity 202 only in 9; race 2 has class 5 alone
     auto opt = [](std::uint32_t race, std::uint32_t cls, std::uint32_t deity, std::uint32_t zone, std::uint32_t pts) {
@@ -507,7 +507,7 @@ TEST_CASE("Character creation: race and class stay among the options; a deity ke
 }
 
 TEST_CASE("Login: the client's own screen draws the corner, What's new's button and the add-on store") {
-    using namespace nmsc;
+    using namespace hailstone;
     TempServers servers;
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;

@@ -9,7 +9,7 @@
 #include "core/msvc_atoi.h"
 #include "game/eq_strings.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool marketplace_can_buy(const net::MarketplaceEntry& e, std::uint32_t wallet) {
     return e.kind == 4 || e.kind == 6 || e.price <= wallet;
@@ -487,4 +487,4 @@ void MarketplaceWindow::sync_shelf(const Catalog& c, bool in_game) {
     highlight = nf ? 0u : 1u;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

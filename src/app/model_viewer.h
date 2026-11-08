@@ -11,7 +11,7 @@
 
 #include "render/vk_context.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct ModelViewerOptions {
     std::string game_dir;
@@ -42,4 +42,4 @@ struct ModelViewerOptions {
 
 int run_model_viewer(const ModelViewerOptions& options);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

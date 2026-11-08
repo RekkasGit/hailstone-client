@@ -13,7 +13,7 @@
 
 #include "nav/nav_mesh.h"
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 struct NavStatus {
     bool mesh_loaded = false; // some of the zone's mesh is there
@@ -62,4 +62,4 @@ public:
     virtual bool overlay() const = 0;
 };
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

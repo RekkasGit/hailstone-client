@@ -20,7 +20,7 @@
 // place and back (reproduced in a nested KWin driven through libei). So taking the cursor first warps it to where
 // it is, which moves nothing and makes the hint this look's place; the frame drawn before the release commits it.
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class MouseCapture {
 public:
@@ -53,4 +53,4 @@ private:
     float x_ = 0.0f, y_ = 0.0f;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

@@ -5,7 +5,7 @@
 
 #include "core/byte_io.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -116,4 +116,4 @@ std::vector<SpellEffect> parse_spell_effects(std::span<const std::byte> data) {
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

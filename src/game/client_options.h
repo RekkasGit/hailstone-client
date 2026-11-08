@@ -16,11 +16,11 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc {
+namespace hailstone {
 class IniFile;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 enum class ClientOption : std::uint8_t {
     // General page
@@ -157,4 +157,4 @@ private:
     std::array<int, kClientOptionCount> values_{};
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

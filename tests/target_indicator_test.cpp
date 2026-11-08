@@ -4,7 +4,7 @@
 #include "core/ini_file.h"
 #include "game/target_indicator.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using game::Con;
 
 TEST_CASE("target indicator: the con picks the section, con 0 hides the ring") {

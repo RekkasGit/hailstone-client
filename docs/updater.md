@@ -13,7 +13,7 @@ a separate patcher before the game started. The code is `src/app/updater.*` (che
   "Could not check for updates" (offline, no manifest yet: the reason is only logged) or "Updates are off: <why>" (a
   development build, `update.check=0`, no HTTPS, a test run). Under it: **What's new**, a popup with this version's
   part of the `CHANGELOG.md` shipped with the client (`core/changelog.h`; the button is greyed when the file or the
-  section is missing), and **GitHub**, which opens Hailstone's page (CMake `NMSC_PROJECT_PAGE`) in the system browser.
+  section is missing), and **GitHub**, which opens Hailstone's page (CMake `HAILSTONE_PROJECT_PAGE`) in the system browser.
   The Modern pack draws it as a small card; the Gamepad pack shows the two lines there and puts What's new (a page)
   and the GitHub link under More, About Hailstone; the client's own ImGui screen draws a small window.
 - When a newer release is out, the corner says so in a sentence ("Hailstone 0.2.0-alpha is out (this
@@ -47,7 +47,7 @@ Updates are off, whatever the settings say, in these cases (the log says why):
 
 ## The release feed
 
-The feed is the newest GitHub release's `hailstone-update.txt`. CMake's `NMSC_UPDATE_FEED` defaults to
+The feed is the newest GitHub release's `hailstone-update.txt`. CMake's `HAILSTONE_UPDATE_FEED` defaults to
 `https://github.com/projecthailstone/hailstone-client/releases/latest/download/hailstone-update.txt`, and GitHub
 redirects that link to the newest release that is neither a draft nor a pre-release. It is a plain download, not
 the REST API, so the API's limit of 60 requests an hour for each address does not apply. The client sends no
@@ -92,14 +92,14 @@ signature <128 hex digits>
   to one download for each platform.
 - **Unknown records** are skipped, for later clients. A known record that does not parse refuses the whole manifest.
 - **Versions** are SemVer and are compared by its precedence (`core/version.h`): `0.1.0-alpha` is older than
-  `0.1.0-beta`, which is older than `0.1.0`. The build's own version is `project(VERSION)` plus `NMSC_VERSION_LABEL`
+  `0.1.0-beta`, which is older than `0.1.0`. The build's own version is `project(VERSION)` plus `HAILSTONE_VERSION_LABEL`
   in `CMakeLists.txt` (`release_version()`), so a release has to change both.
 
 ### The release key
 
 The manifest is signed with Ed25519 (RFC 8032, through Monocypher). The signature covers every byte before the
 `signature` line. The client holds the key's public half (`update-key.pub` at the top of the tree, or CMake's
-`NMSC_UPDATE_KEY`) and checks the signature before it trusts anything in the manifest; each package is then checked
+`HAILSTONE_UPDATE_KEY`) and checks the signature before it trusts anything in the manifest; each package is then checked
 against the manifest's size and SHA-256 twice, once after the download and again before the install.
 
 - **TLS and GitHub's own asset digests** prove only that a file came from GitHub. The signature proves it came from
@@ -161,15 +161,15 @@ The install waits while the box set's other windows run (they use the same files
 
 ## Making a release
 
-1. Set the version (`project(VERSION)`, `NMSC_VERSION_LABEL`) and build each platform's Release, with
-   `-DNMSC_BROWSER=ON`, on a clean checkout of the release commit (docs/ci.md):
+1. Set the version (`project(VERSION)`, `HAILSTONE_VERSION_LABEL`) and build each platform's Release, with
+   `-DHAILSTONE_BROWSER=ON`, on a clean checkout of the release commit (docs/ci.md):
    - Linux x64 in the `hailstone-linux-build:24.04` container (`tools/docker/linux.Dockerfile`), so it runs on
      Ubuntu 24.04 and newer;
    - Windows x64 with MSVC under Wine (`tools/docker/msvc_build.sh`, docs/ci.md "MSVC under Wine");
    - macOS arm64 by the macOS workflow, started on the release commit (`gh workflow run macos.yml -f ref=<commit>`,
      docs/ci.md "macOS arm64"). It builds, tests, installs and signs ad hoc; its artifact is step 2's folder.
 
-   Run each platform's `nmsc_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
+   Run each platform's `hailstone_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
 2. Install each platform's client (without the server plugins, which are released as add-ons by their own
    repositories' `tools/release.sh`):
 

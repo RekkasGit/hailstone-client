@@ -21,7 +21,7 @@
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 // A fresh folder under the system temp folder, removed again at the end of the test.
@@ -29,7 +29,7 @@ struct TempDir {
     fs::path path;
     explicit TempDir(const char* tag) {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = fs::temp_directory_path() / (std::string("nmsc_layout_") + tag + "_" + std::to_string(stamp));
+        path = fs::temp_directory_path() / (std::string("hailstone_layout_") + tag + "_" + std::to_string(stamp));
         fs::create_directories(path);
     }
     ~TempDir() {
@@ -287,7 +287,7 @@ TEST_CASE("Layout: server profiles saved, listed and found") {
 }
 
 TEST_CASE("Layout: a world or character name from the server cannot write lines of its own into server.ini") {
-    nmsc::test::ScratchDir tmp("profile-inject");
+    hailstone::test::ScratchDir tmp("profile-inject");
     const fs::path servers = tmp.path() / "servers";
     ServerProfile p;
     p.id = "inject";
@@ -494,7 +494,7 @@ TEST_CASE("Layout: the asset-folder check") {
 
 TEST_CASE("Layout: the asset-folder check passes on the real install") {
     // CI sets EQ_GAME_DIR to empty: no game files there, so nothing to check (as tests/game_files.h does).
-    const auto* game = nmsc::test::game_dir();
+    const auto* game = hailstone::test::game_dir();
     if (!game) return;
     auto check = validate_asset_folder(*game);
     INFO(describe(check));
@@ -567,4 +567,29 @@ TEST_CASE("Layout: ui-settings/ moves under ui/") {
     CHECK_FALSE(fs::exists(tmp.path / "ui-settings"));
     CHECK(move_old_ui_settings() == 0);
     platform::set_data_dir_for_tests({});
+}
+
+// The client's windows were "##nmsc..." up to 0.6: their saved places are renamed to "##hailstone...", only in the
+// [Window] sections, and only in a file no newer client has written.
+TEST_CASE("Layout: old window names in hailstone-windows.ini are renamed") {
+    const std::string old_ini = "[Window][Inventory##nmsc_inv]\nPos=10,20\nSize=300,400\n\n"
+                                "[Window][Bag##nmsc_bag3]\nPos=1,2\n\n"
+                                "[Window][Debug##Default]\nPos=60,60\n\n"
+                                "[Table][0x1234]\nColumn 0  Width=40 ##nmsc\n";
+    const std::string want = "[Window][Inventory##hailstone_inv]\nPos=10,20\nSize=300,400\n\n"
+                             "[Window][Bag##hailstone_bag3]\nPos=1,2\n\n"
+                             "[Window][Debug##Default]\nPos=60,60\n\n"
+                             "[Table][0x1234]\nColumn 0  Width=40 ##nmsc\n";
+    CHECK(rename_old_window_ids(old_ini) == want);
+    CHECK(rename_old_window_ids(want) == want);
+    const std::string both = old_ini + "[Window][Inventory##hailstone_inv]\nPos=5,5\n";
+    CHECK(rename_old_window_ids(both) == both); // a newer client wrote it: left as it is
+    CHECK(rename_old_window_ids("[Window][A##nmsc][Window]##nmsc") == "[Window][A##hailstone][Window]##hailstone");
+
+    TempDir tmp("window_ids_rename");
+    write(tmp.path / "hailstone-windows.ini", old_ini);
+    CHECK(rename_old_window_ids_in(tmp.path / "hailstone-windows.ini"));
+    CHECK(read(tmp.path / "hailstone-windows.ini") == want);
+    CHECK_FALSE(rename_old_window_ids_in(tmp.path / "hailstone-windows.ini"));
+    CHECK_FALSE(rename_old_window_ids_in(tmp.path / "missing.ini"));
 }

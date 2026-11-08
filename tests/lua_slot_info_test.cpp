@@ -25,7 +25,7 @@
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -130,7 +130,7 @@ end
 TEST_CASE("Lua slot reads: eq.HotButtonInfo, eq.GemInfo and eq.BuffSlot's overlays give what the separate calls do") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("lua_slot_info");
+        hailstone::test::ScratchDir scratch("lua_slot_info");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         conn.set_spell_table_for_test(spells());
@@ -228,7 +228,7 @@ TEST_CASE("Lua slot reads: both packs' hot bars, spell gems and buff trays draw 
     namespace fs = std::filesystem;
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
-        nmsc::test::ScratchDir scratch("lua_slot_info_packs");
+        hailstone::test::ScratchDir scratch("lua_slot_info_packs");
         const fs::path dir = scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack, fs::copy_options::recursive);
@@ -315,7 +315,7 @@ TEST_CASE("Lua slot reads: both packs' hot bars, spell gems and buff trays draw 
 TEST_CASE("Lua socials: eq.SetLuaSocial reads a table's fields, metamethods included, before building the social") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("lua_set_social");
+        hailstone::test::ScratchDir scratch("lua_set_social");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         game::HotButtonStore store;

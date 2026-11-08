@@ -30,7 +30,7 @@
 #include "net/pet_packets.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -66,7 +66,7 @@ net::AppPacket respawn_packet() {
 
 struct Harness {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch{"ui_windows_test"};
+    hailstone::test::ScratchDir dir_scratch{"ui_windows_test"};
     fs::path dir = dir_scratch.path();
     net::GameConnection conn;
     app::EqHost host;
@@ -407,7 +407,7 @@ TEST_CASE("Options window: the Colors page saves a user colour to the character'
     const GameDir* real = test::game_dir();
     if (!real) return;
     // A game folder of its own with the real strings and an eqclient.ini, which must stay as it is.
-    nmsc::test::ScratchDir root_scratch("ui_windows_game");
+    hailstone::test::ScratchDir root_scratch("ui_windows_game");
     fs::path root = root_scratch.path();
     fs::create_directories(root);
     if (auto s = real->find("eqstr_us.txt")) fs::create_symlink(*s, root / "eqstr_us.txt");
@@ -436,7 +436,7 @@ TEST_CASE("Options window: the Colors page saves a user colour to the character'
 
 TEST_CASE("Options window: the target ring's colour buttons pick a con's colour and put them all back") {
     // No game files needed: an empty folder of its own.
-    nmsc::test::ScratchDir root_scratch("ui_windows_ring");
+    hailstone::test::ScratchDir root_scratch("ui_windows_ring");
     fs::create_directories(root_scratch.path());
     GameDir game(root_scratch.path());
     Harness t(game);
@@ -523,7 +523,7 @@ TEST_CASE("Several pets (a server's plugin's list): the pet window's Pet 2 / Pet
 }
 
 TEST_CASE("Bazaar purchase window: the voucher cost by To Me (BZC_TokenLabel) from the search replies' u16") {
-    nmsc::test::ScratchDir game_scratch("ui_windows_bazaar");
+    hailstone::test::ScratchDir game_scratch("ui_windows_bazaar");
     GameDir game(game_scratch.path());
     Harness t(game);
     // EQEmu's search results: u32 0, u16 (its trader zone id), u32 trader, u32 count, the entries.
@@ -559,7 +559,7 @@ TEST_CASE("Bazaar purchase window: the voucher cost by To Me (BZC_TokenLabel) fr
 }
 
 TEST_CASE("Bazaar search: the row's own Buy button, Find Trader and Hide Traders (CBazaarSearchWnd @0x635990)") {
-    nmsc::test::ScratchDir game_scratch("ui_windows_bazaar_find");
+    hailstone::test::ScratchDir game_scratch("ui_windows_bazaar_find");
     GameDir game(game_scratch.path());
     Harness t(game);
     const char* W = "BazaarSearchWnd";
@@ -646,7 +646,7 @@ TEST_CASE("Loot window: Link All, Loot All and Done without a loot session do no
 }
 
 TEST_CASE("Tracking window: its controls run the /track commands, auto update kept (CTrackingWnd::WndNotification)") {
-    nmsc::test::ScratchDir game_scratch("ui_windows_tracking");
+    hailstone::test::ScratchDir game_scratch("ui_windows_tracking");
     std::ofstream(game_scratch.path() / "eqstr_us.txt") << "EQST0002\n12946 off\n12947 on\n13148 group\n"
                                                          << "13140 Tracking players on.\n13141 Tracking players off.\n"
                                                          << "13159 red\n13163 You will NOT see %1 NPCs.\n"

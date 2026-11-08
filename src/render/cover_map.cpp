@@ -4,7 +4,7 @@
 
 #include "render/scene_lighting.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 CoverMap fit_cover_map(const glm::vec3& camera, std::uint32_t map_size) {
     CoverMap out;
@@ -62,4 +62,4 @@ bool cover_map_stale(CoverMapState& state, bool on, const CoverMap& map, std::ui
     return !same;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

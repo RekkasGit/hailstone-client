@@ -14,7 +14,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_DzExpeditionInfo (208 bytes): u32 assigned (0 clears the window), u32 max players, char[128] expedition name,
 // char[64] leader.
@@ -115,4 +115,4 @@ AppPacket encode_dz_quit();
 AppPacket encode_dz_list_timers();
 AppPacket encode_dz_player_list();
 
-} // namespace nmsc::net
+} // namespace hailstone::net

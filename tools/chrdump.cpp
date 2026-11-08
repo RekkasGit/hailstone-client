@@ -25,8 +25,8 @@
 #include "game/race_models.h"
 #include "render/material_state.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 

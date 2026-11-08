@@ -17,7 +17,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The fields of a spawn ProcessControls reads and writes.
 struct ControlSpawn {
@@ -196,4 +196,4 @@ bool is_movement_command(int command);
 bool execute_movement_command(ControlsState& state, int command, bool down, bool accept,
                               std::uint8_t autorun_bits = 0);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

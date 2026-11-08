@@ -8,9 +8,9 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
-using namespace nmsc::net;
+using namespace hailstone::net;
 
 namespace {
 
@@ -147,4 +147,4 @@ AppPacket build_player_profile(const ProfileSpec& spec) {
     return AppPacket(to_wire(Op::PlayerProfile), std::move(data));
 }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

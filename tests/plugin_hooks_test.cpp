@@ -6,7 +6,7 @@
 
 #include "plugin/hooks.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using plugin::Direction;
 using plugin::Flow;
 using plugin::Hooks;

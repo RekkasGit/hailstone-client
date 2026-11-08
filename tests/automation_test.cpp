@@ -15,12 +15,12 @@
 #include "plugin/policy.h"
 #include "plugin/ui_bridge.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 struct AutomationHost {
-    mq_test::World world{"nmsc_automation_test"};
+    mq_test::World world{"hailstone_automation_test"};
     std::unique_ptr<app::Automation> automation;
     std::vector<std::pair<mq::AbilityKind, std::string>> used;
     AutomationHost() {
@@ -198,13 +198,13 @@ print('[max] train ' .. tostring(hs.train_aa(10)) .. ' ' .. tostring(hs.train_aa
     CHECK(has2("[max] train false true")); // the prerequisite is met now
 }
 
-#ifdef NMSC_EXAMPLE_PLUGIN
+#ifdef HAILSTONE_EXAMPLE_PLUGIN
 // A script add-on that names itself after a compiled plugin (a "read,ui" script called "nms" beside the NMS server's
 // plugin) gets neither the plugin's capabilities in its windows nor its folder, functions, options or menu: each is
 // the owner's by kind and name (plugin::UiBridge::owner_tag).
 TEST_CASE("Automation: a script named after a compiled plugin takes none of its place") {
     AutomationHost h;
-    const fs::path built = NMSC_EXAMPLE_PLUGIN;
+    const fs::path built = HAILSTONE_EXAMPLE_PLUGIN;
     const fs::path plugin_dir = h.world.dir / "data" / "plugins" / "MQ2Example";
     fs::create_directories(plugin_dir);
     fs::copy_file(built, plugin_dir / built.filename(), fs::copy_options::overwrite_existing);

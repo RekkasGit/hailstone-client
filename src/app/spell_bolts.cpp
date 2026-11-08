@@ -6,7 +6,7 @@
 #include "core/log.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -227,4 +227,4 @@ std::vector<game::LightSource> SpellBolts::lights(std::size_t max) const {
     return projectile_lights(projectiles_, now_, max);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

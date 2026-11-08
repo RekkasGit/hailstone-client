@@ -19,7 +19,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // BaseProfile_GetTotalMoneyInCopper: p × 1000 + g × 100 + s × 10 + c.
 std::int64_t total_copper(const net::Coins& coins);
@@ -90,4 +90,4 @@ std::string merchant_quantity_text(std::int32_t quantity);
 std::int32_t merchant_list_level(const net::Item& item, const std::function<std::optional<std::int32_t>()>& spell_level);
 std::string merchant_level_text(std::int32_t level);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

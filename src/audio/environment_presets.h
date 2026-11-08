@@ -15,11 +15,11 @@
 #include <string>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 class GameDir;
 }
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 struct ZoneRoomPreset {
     std::string zone; // lower case
@@ -47,4 +47,4 @@ std::optional<std::vector<ZoneRoomPreset>> read_zone_room_presets(std::span<cons
 // and the table only. Empty when there is none or it does not validate; that is logged once per run.
 std::vector<ZoneRoomPreset> load_zone_room_presets(const GameDir& game);
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

@@ -22,7 +22,7 @@
 
 #include "platform/paths.h"
 
-namespace nmsc {
+namespace hailstone {
 
 // An account the login screen remembers for this server. Several make a box set: Log in all logs this window in to
 // the first and starts another Hailstone for each of the rest (--account), each entering its character.
@@ -139,4 +139,4 @@ std::string saved_character_key_part(std::string_view name);
 const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view host, int port);
 const ServerProfile* find_profile(const std::vector<ServerProfile>& profiles, std::string_view id);
 
-} // namespace nmsc
+} // namespace hailstone

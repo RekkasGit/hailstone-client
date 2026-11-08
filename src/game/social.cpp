@@ -15,7 +15,7 @@
 #include "game/zone_names.h"
 #include "net/social_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -382,11 +382,11 @@ struct SocialRow {
     const char* et_slots;
 };
 constexpr SocialRow kSocials[] = {
-#define NMSC_SOCIAL(id, anim, ou, ous, ot, ots, eu, eus, et, ets) {id, anim, ou, ous, ot, ots, eu, eus, et, ets},
-#define NMSC_SOCIAL_COMMAND(handler, id, standing)
+#define HAILSTONE_SOCIAL(id, anim, ou, ous, ot, ots, eu, eus, et, ets) {id, anim, ou, ous, ot, ots, eu, eus, et, ets},
+#define HAILSTONE_SOCIAL_COMMAND(handler, id, standing)
 #include "game/socials.inc"
-#undef NMSC_SOCIAL
-#undef NMSC_SOCIAL_COMMAND
+#undef HAILSTONE_SOCIAL
+#undef HAILSTONE_SOCIAL_COMMAND
 };
 struct SocialCommand {
     const char* handler;
@@ -394,11 +394,11 @@ struct SocialCommand {
     bool standing;
 };
 constexpr SocialCommand kSocialCommands[] = {
-#define NMSC_SOCIAL(id, anim, ou, ous, ot, ots, eu, eus, et, ets)
-#define NMSC_SOCIAL_COMMAND(handler, id, standing) {handler, id, standing != 0},
+#define HAILSTONE_SOCIAL(id, anim, ou, ous, ot, ots, eu, eus, et, ets)
+#define HAILSTONE_SOCIAL_COMMAND(handler, id, standing) {handler, id, standing != 0},
 #include "game/socials.inc"
-#undef NMSC_SOCIAL
-#undef NMSC_SOCIAL_COMMAND
+#undef HAILSTONE_SOCIAL
+#undef HAILSTONE_SOCIAL_COMMAND
 };
 
 // he / him / his for a gender (send_social's prologue: 12209/12297/12301,
@@ -648,4 +648,4 @@ AfkAction afk_keepalive_step(AfkKeepalive& k, std::int64_t now_ms, bool afk, boo
     return AfkAction::Keepalive;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -27,7 +27,7 @@
 #include "game/appearance_data.h"
 #include "game/race_models.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -1119,4 +1119,4 @@ CharacterModel CharacterLibrary::build_static_actor(const std::string& code, con
     return m;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

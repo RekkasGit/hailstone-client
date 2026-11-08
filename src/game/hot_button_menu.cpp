@@ -2,7 +2,7 @@
 
 #include "game/hot_button_press.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -91,4 +91,4 @@ std::optional<net::ItemSlot> hot_button_item_slot(const Inventory& inv, const Ho
     return by_id;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

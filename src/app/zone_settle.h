@@ -13,7 +13,7 @@
 #include <cstddef>
 #include <string>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // What a frame drawn behind the loading screen still left undone.
 struct ZoneSettleFrame {
@@ -77,4 +77,4 @@ private:
     float progress_ = 0.0f;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

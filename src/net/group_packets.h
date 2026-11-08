@@ -21,7 +21,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_GroupInvite (0x6110) / OP_GroupInvite2 (0x32c2), both directions, 148
 // bytes (rof2_structs.h GroupInvite_Struct): char[64] invitee, char[64]
@@ -238,4 +238,4 @@ std::optional<XTargetResponse> decode_xtarget_response(const AppPacket& p);
 // slot's name NUL-terminated.
 AppPacket encode_xtarget_request(std::uint32_t slot, std::uint32_t type, std::string_view name);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

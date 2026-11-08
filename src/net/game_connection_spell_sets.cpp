@@ -8,7 +8,7 @@
 
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -182,4 +182,4 @@ void GameConnection::memspellset_command(std::string_view args) {
     memorize_set(spell_loadouts_.at(n).spells);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -25,7 +25,7 @@
 // (rof2decomp:notes/connection-and-network.md §7.4) where they are known,
 // and EQEmu's server defaults (common/net/daybreak_connection.h) otherwise.
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -810,4 +810,4 @@ std::unique_ptr<Session> Session::create(SessionOptions options) {
     return std::make_unique<SessionImpl>(std::move(options));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -15,8 +15,8 @@
 #include "net/item_packets.h"
 #include "net/packet_io.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 namespace {
 

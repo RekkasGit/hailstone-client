@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 // The amount on the cursor for its coin type minus one: the profile's for 0..3, 0 for any other type.
@@ -97,4 +97,4 @@ TradeRequestResult handle_trade_request(const TradeRequestInput& in) {
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

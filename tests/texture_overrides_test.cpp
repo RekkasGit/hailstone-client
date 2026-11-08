@@ -16,8 +16,8 @@
 #include "core/png_write.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -244,7 +244,7 @@ TEST_CASE("png: Adam7 interlacing puts each pass's pixels back in place") {
 }
 
 TEST_CASE("texture overrides: by name in any case and extension, a zone's own first, turned as the original") {
-    nmsc::test::ScratchDir dir_scratch("texture_overrides_test");
+    hailstone::test::ScratchDir dir_scratch("texture_overrides_test");
     auto dir = dir_scratch.path();
     write(dir / "kbarkd.png", rgba_png(1, {{kRed}, {kBlue}}));
     write(dir / "gfaydark" / "KBARKD.PNG", rgba_png(1, {{kGreen}, {kGreen}}));
@@ -300,7 +300,7 @@ TEST_CASE("texture overrides: by name in any case and extension, a zone's own fi
 }
 
 TEST_CASE("texture packs: by content hash before name, the masked variant, maps, files with mips used as stored") {
-    nmsc::test::ScratchDir dir_scratch("texture_pack_test");
+    hailstone::test::ScratchDir dir_scratch("texture_pack_test");
     auto dir = dir_scratch.path();
     const std::vector<std::byte> city1 = bmp(1, {{kRed}}), city2 = bmp(1, {{kBlue}});
     const std::uint64_t h1 = texture_content_hash(city1);

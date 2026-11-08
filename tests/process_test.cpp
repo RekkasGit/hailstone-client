@@ -8,7 +8,7 @@
 #include "platform/process.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("process: an id, and resident memory where the system tells it") {
     CHECK(platform::process_id() != 0);

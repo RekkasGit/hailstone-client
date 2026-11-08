@@ -4,10 +4,11 @@
 
 #include "app/client_app_internal.h"
 #include "app/lua_eq_windows.h"
+#include "core/env.h"
 #include "core/web_url.h"
 #include "platform/open_folder.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::update_screen_picture() {
     // The server of the pictures: the one picked on the login screen, else this login's.
@@ -125,8 +126,8 @@ void ClientApp::draw_ui(float fps) {
         } else {
             action = ui::character_select_screen(char_view_);
         }
-        // NMSC_CHAR_CREATE=1 (testing): the character creation once the creation tables are in.
-        static bool test_create = std::getenv("NMSC_CHAR_CREATE") != nullptr;
+        // HAILSTONE_CHAR_CREATE=1 (testing): the character creation once the creation tables are in.
+        static bool test_create = hailstone::core::env("CHAR_CREATE") != nullptr;
         if (test_create && conn_->char_create_data()) {
             test_create = false;
             action = ui::CharacterSelectAction::Create;
@@ -411,4 +412,4 @@ void ClientApp::draw_ui(float fps) {
     draw_screen_picture_behind();
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

@@ -18,7 +18,7 @@
 #include "net/commerce.h"
 #include "net/item_packets.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 class ItemIconCache;
 
@@ -77,4 +77,4 @@ std::string short_price(std::int64_t copper);
 CommerceWindowsActions commerce_windows(CommerceWindowsState& state, const CommerceWindowsInput& in,
                                         ItemIconCache* icons);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

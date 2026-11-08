@@ -8,7 +8,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct BoundingSphere {
     glm::vec3 center{0.0f};
@@ -41,4 +41,4 @@ inline bool sphere_in_reach(const BoundingSphere& s, const glm::vec3& light, flo
     return glm::length(s.center - light) < radius + s.radius;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -1,6 +1,6 @@
 // The hailstone module: a Lua script as a plugin (docs/plugins.md "Lua plugins"). What a compiled plugin does
-// through sdk/nmsc_plugin.h, a script does through this table, held to the same capabilities:
-//   extend:  hailstone.hooks{...} (the core's questions, as NmscHooks), set_active, set_flag, set_player_classes,
+// through sdk/hailstone_plugin.h, a script does through this table, held to the same capabilities:
+//   extend:  hailstone.hooks{...} (the core's questions, as HailstoneHooks), set_active, set_flag, set_player_classes,
 //            set_character_classes, set_pet_list, set_vitals
 //   packets: hailstone.on_packet(stream, direction, opcode, fn), hailstone.send_packet(stream, opcode, data)
 //   ui:      hailstone.ui_function(name, fn), hailstone.option{...}, hailstone.menu(label, command), and the
@@ -37,10 +37,10 @@
 #include "plugin/policy.h"
 #include "plugin/ui_bridge.h"
 
-#define NMSC_HOST
-#include "nmsc_plugin.h"
+#define HAILSTONE_HOST
+#include "hailstone_plugin.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -373,25 +373,25 @@ public:
         lua_pushinteger(L(), s.id);
         return run(1) && bool_result().value_or(false);
     }
-    bool can_use_all_items(const net::GameConnection&) const override { return flag(NMSC_FLAG_ITEMS_ANY_CLASS); }
-    bool wide_item_links(const net::GameConnection&) const override { return flag(NMSC_FLAG_WIDE_ITEM_LINKS); }
+    bool can_use_all_items(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_ITEMS_ANY_CLASS); }
+    bool wide_item_links(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_WIDE_ITEM_LINKS); }
     std::uint32_t guild_member_classes(const net::GameConnection&, std::uint32_t class_value) const override {
         if (!hook("guild_member_classes")) return 0;
         lua_pushinteger(L(), class_value);
         return run(1) ? static_cast<std::uint32_t>(int_result().value_or(0)) : 0;
     }
     std::uint8_t hide_check_class(const net::GameConnection&, std::uint8_t class_id) const override {
-        return flag(NMSC_FLAG_HIDE_ANY_CLASS) ? std::uint8_t{9} : class_id; // 9 Rogue: sneaking keeps Hide
+        return flag(HAILSTONE_FLAG_HIDE_ANY_CLASS) ? std::uint8_t{9} : class_id; // 9 Rogue: sneaking keeps Hide
     }
-    bool aa_any_level(const net::GameConnection&) const override { return flag(NMSC_FLAG_AA_ANY_LEVEL); }
-    bool aa_train_all(const net::GameConnection&) const override { return flag(NMSC_FLAG_AA_TRAIN_ALL); }
-    bool augment_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_AUGMENT_CLASSES); }
-    bool research_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_RESEARCH_CLASSES); }
-    bool focus_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_FOCUS_CLASSES); }
+    bool aa_any_level(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AA_ANY_LEVEL); }
+    bool aa_train_all(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AA_TRAIN_ALL); }
+    bool augment_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AUGMENT_CLASSES); }
+    bool research_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_RESEARCH_CLASSES); }
+    bool focus_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_FOCUS_CLASSES); }
     bool backstab_either_hand(const net::GameConnection&) const override {
-        return flag(NMSC_FLAG_BACKSTAB_EITHER_HAND);
+        return flag(HAILSTONE_FLAG_BACKSTAB_EITHER_HAND);
     }
-    bool solo_adventure(const net::GameConnection&) const override { return flag(NMSC_FLAG_SOLO_ADVENTURE); }
+    bool solo_adventure(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_SOLO_ADVENTURE); }
     std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const override {
         std::uint32_t mask = 0;
         if (hook("vitals_classes")) {
@@ -525,7 +525,7 @@ void ensure_extension(Script& s) {
 
 // ---------------------------------------------------------------- extend
 
-// hailstone.hooks{ name = function(...) ... end, ... }: the core's questions (NmscHooks' names).
+// hailstone.hooks{ name = function(...) ... end, ... }: the core's questions (HailstoneHooks' names).
 int l_hooks(lua_State* L) {
     need_cap(L, plugin::kCapExtend, "hailstone.hooks");
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -550,11 +550,11 @@ int l_set_active(lua_State* L) {
 int l_set_flag(lua_State* L) {
     need_cap(L, plugin::kCapExtend, "hailstone.set_flag");
     static const std::pair<const char*, std::uint32_t> kFlags[] = {
-        {"wide_item_links", NMSC_FLAG_WIDE_ITEM_LINKS}, {"items_any_class", NMSC_FLAG_ITEMS_ANY_CLASS},
-        {"hide_any_class", NMSC_FLAG_HIDE_ANY_CLASS},   {"aa_any_level", NMSC_FLAG_AA_ANY_LEVEL},
-        {"aa_train_all", NMSC_FLAG_AA_TRAIN_ALL},       {"augment_classes", NMSC_FLAG_AUGMENT_CLASSES},
-        {"research_classes", NMSC_FLAG_RESEARCH_CLASSES}, {"focus_classes", NMSC_FLAG_FOCUS_CLASSES},
-        {"backstab_either_hand", NMSC_FLAG_BACKSTAB_EITHER_HAND}, {"solo_adventure", NMSC_FLAG_SOLO_ADVENTURE}};
+        {"wide_item_links", HAILSTONE_FLAG_WIDE_ITEM_LINKS}, {"items_any_class", HAILSTONE_FLAG_ITEMS_ANY_CLASS},
+        {"hide_any_class", HAILSTONE_FLAG_HIDE_ANY_CLASS},   {"aa_any_level", HAILSTONE_FLAG_AA_ANY_LEVEL},
+        {"aa_train_all", HAILSTONE_FLAG_AA_TRAIN_ALL},       {"augment_classes", HAILSTONE_FLAG_AUGMENT_CLASSES},
+        {"research_classes", HAILSTONE_FLAG_RESEARCH_CLASSES}, {"focus_classes", HAILSTONE_FLAG_FOCUS_CLASSES},
+        {"backstab_either_hand", HAILSTONE_FLAG_BACKSTAB_EITHER_HAND}, {"solo_adventure", HAILSTONE_FLAG_SOLO_ADVENTURE}};
     const std::string_view name = luaL_checkstring(L, 1);
     const bool on = lua_isnone(L, 2) || lua_toboolean(L, 2) != 0;
     Script& s = Script::of(L);
@@ -974,7 +974,7 @@ int l_zone_name(lua_State* L) {
     return 1;
 }
 
-// hailstone.server(): {name, host, port, world, world_host}, the server this login is on (nmsc_plugin.h
+// hailstone.server(): {name, host, port, world, world_host}, the server this login is on (hailstone_plugin.h
 // server_info); nil before the world login.
 int l_server(lua_State* L) {
     need_cap(L, plugin::kCapRead, "hailstone.server");
@@ -1324,4 +1324,4 @@ void release_plugin(Script& s) {
     if (s.social < 0 && s.registered && s.host->env.ui) s.host->env.ui->remove(s.name, plugin::UiBridge::Kind::Script);
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

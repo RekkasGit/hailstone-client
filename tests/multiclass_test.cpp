@@ -9,7 +9,7 @@
 #include "core/game_dir.h"
 #include "net/game_connection.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("multiclass: the class masks an extension sets") {
     GameDir game;

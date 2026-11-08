@@ -11,8 +11,8 @@
 #include "net/item_packets.h"
 #include "net/opcodes.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -604,7 +604,7 @@ TEST_CASE("item icons: A_DragItem sheet and cell, and the item info lines") {
 }
 
 TEST_CASE("opcode 0x3ed4: the split coin ProcessCursorQueue sends back") {
-    nmsc::net::AppPacket p = nmsc::net::encode_split_coin({1, 2, 3, 4});
+    hailstone::net::AppPacket p = hailstone::net::encode_split_coin({1, 2, 3, 4});
     CHECK(p.opcode == 0x3ed4);
     REQUIRE(p.data.size() == 16);
     CHECK(std::to_integer<int>(p.data[0]) == 1);
@@ -614,8 +614,8 @@ TEST_CASE("opcode 0x3ed4: the split coin ProcessCursorQueue sends back") {
 }
 
 TEST_CASE("item links: the loot window's Link All into the chat input (CLootWnd_LinkItemToChat)") {
-    using nmsc::game::link_all_into_chat;
-    using nmsc::game::make_item_link;
+    using hailstone::game::link_all_into_chat;
+    using hailstone::game::make_item_link;
     std::string a = make_item_link(1001, "Cloth Cap", true), b = make_item_link(1002, "Rusty Cap", true); // as long as a
     // ", " between links, after what was typed.
     auto r = link_all_into_chat("/g ", {a, b});
@@ -678,27 +678,27 @@ TEST_CASE("bags: contents up to index 999 decode and are held; 1000 and above ar
 #include "fuzz_support.h"
 
 TEST_CASE("item serialization: a count the bytes cannot hold reserves nothing large before it is refused") {
-    using nmsc::net::Item;
+    using hailstone::net::Item;
     // An empty item takes more than the 64 bytes the decoder assumes as the least one can take.
-    const auto one = nmsc::net::encode_char_inventory({Item{}});
+    const auto one = hailstone::net::encode_char_inventory({Item{}});
     REQUIRE(one.data.size() - 4 >= 64);
 
-    auto largest_while_decoding = [](const nmsc::net::AppPacket& p) {
-        nmsc::fuzz::reset_largest_allocation();
-        nmsc::fuzz::arm_allocation_guard(true);
-        auto got = nmsc::net::decode_char_inventory(p);
-        nmsc::fuzz::arm_allocation_guard(false);
+    auto largest_while_decoding = [](const hailstone::net::AppPacket& p) {
+        hailstone::fuzz::reset_largest_allocation();
+        hailstone::fuzz::arm_allocation_guard(true);
+        auto got = hailstone::net::decode_char_inventory(p);
+        hailstone::fuzz::arm_allocation_guard(false);
         CHECK(!got);
-        return nmsc::fuzz::largest_allocation();
+        return hailstone::fuzz::largest_allocation();
     };
     // OP_CharInventory claiming 4096 items in a 4-byte packet: it used to reserve 4096 items (megabytes) first.
     std::vector<std::byte> claim = {std::byte{0x00}, std::byte{0x10}, std::byte{0x00}, std::byte{0x00}};
-    CHECK(largest_while_decoding(nmsc::net::AppPacket(one.opcode, claim)) < 4096);
+    CHECK(largest_while_decoding(hailstone::net::AppPacket(one.opcode, claim)) < 4096);
     // One item whose bag claims 1000 contents with nothing after the count: no 1000-entry reserve either.
     auto bag = one.data;
     const std::uint32_t contents = 1000;
     for (std::size_t i = 0; i < 4; ++i) bag[bag.size() - 4 + i] = static_cast<std::byte>(contents >> (8 * i));
-    CHECK(largest_while_decoding(nmsc::net::AppPacket(one.opcode, bag)) < 1000 * sizeof(nmsc::net::BagItem) / 4);
+    CHECK(largest_while_decoding(hailstone::net::AppPacket(one.opcode, bag)) < 1000 * sizeof(hailstone::net::BagItem) / 4);
 }
 
 TEST_CASE("item links: the item display's icon links only without a BenefitFlag (ItemBase_GetUnknown0x100Max)") {

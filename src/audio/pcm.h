@@ -11,7 +11,7 @@
 #include <span>
 #include <vector>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 struct Pcm {
     std::uint32_t rate = 0;
@@ -42,4 +42,4 @@ public:
 std::unique_ptr<Source> make_mp3_source(std::vector<std::byte> file, std::int32_t loops);
 std::unique_ptr<Source> make_mp3_source(std::shared_ptr<const std::vector<std::byte>> file, std::int32_t loops);
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

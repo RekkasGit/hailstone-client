@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <span>
 
-namespace nmsc::core {
+namespace hailstone::core {
 
 class StepClock {
 public:
@@ -113,4 +113,4 @@ private:
     std::size_t count_ = 0;
 };
 
-} // namespace nmsc::core
+} // namespace hailstone::core

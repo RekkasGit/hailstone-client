@@ -23,7 +23,7 @@
 #include "net/item_packets.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // Server → client, through the real estate dispatcher (0x5b2500).
 inline constexpr std::uint16_t kOpReNop1 = 0x0351, kOpReNop2 = 0x3d94; // explicit no-ops
@@ -438,4 +438,4 @@ std::optional<RePlaceConfirm> decode_re_place_confirm(const AppPacket& p); // se
 // 0x6213 (S→C, any body; HandleWorldMessage): ItemPlacement_Stop, the placement cancelled.
 inline constexpr std::uint16_t kOpRePlaceStop = 0x6213;
 
-} // namespace nmsc::net
+} // namespace hailstone::net

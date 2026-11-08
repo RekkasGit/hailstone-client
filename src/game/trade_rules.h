@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct TradeFlags {
     std::uint8_t his_ready = 0, my_ready = 0;
@@ -109,4 +109,4 @@ struct TradeRequestResult {
 // auto-attacking opens the trade with no reply, else the refusal with reason 1.
 TradeRequestResult handle_trade_request(const TradeRequestInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

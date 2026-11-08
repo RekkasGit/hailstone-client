@@ -16,7 +16,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline glm::vec3 server_to_world(const glm::vec3& p) { return {p.y, p.x, p.z}; }
 inline glm::vec3 world_to_server(const glm::vec3& p) { return {p.y, p.x, p.z}; }
@@ -28,4 +28,4 @@ inline float yaw_to_heading(float yaw) {
     return h < 0.0f ? h + 512.0f : h;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

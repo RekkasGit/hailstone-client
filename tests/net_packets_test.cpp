@@ -16,8 +16,8 @@
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -1076,15 +1076,15 @@ TEST_CASE("OP_SendZonepoints: count, 32-byte entries (y before x), trailing entr
 TEST_CASE("dye: OP_Dye is the nine tints (EQ::TintProfile, 36 bytes)") {
     std::array<std::uint32_t, 9> t{};
     t[1] = 0xff102030;
-    nmsc::net::AppPacket p = nmsc::net::encode_dye(t);
-    CHECK(p.opcode == nmsc::net::to_wire(nmsc::net::Op::Dye));
+    hailstone::net::AppPacket p = hailstone::net::encode_dye(t);
+    CHECK(p.opcode == hailstone::net::to_wire(hailstone::net::Op::Dye));
     REQUIRE(p.data.size() == 36);
     CHECK(p.data[4] == std::byte{0x30}); // blue, green, red, use-tint
     CHECK(p.data[7] == std::byte{0xff});
 }
 
 TEST_CASE("saves: OP_Save and OP_SaveOnZoneReq are 484 bytes with a checksum of the 476 that follow the kind") {
-    nmsc::net::SaveRequest v;
+    hailstone::net::SaveRequest v;
     v.kind = 0x21;
     v.y = 10.5f;
     v.x = -20.0f;
@@ -1095,20 +1095,20 @@ TEST_CASE("saves: OP_Save and OP_SaveOnZoneReq are 484 bytes with a checksum of 
     v.minutes_played = 1234;
     v.primary = 10652;
     v.air_supply = 60;
-    nmsc::net::AppPacket p = nmsc::net::encode_save(v);
+    hailstone::net::AppPacket p = hailstone::net::encode_save(v);
     CHECK(p.opcode == 0x4a39);
     REQUIRE(p.data.size() == 484);
     CHECK(p.data[4] == std::byte{0x21});
     std::uint32_t sum = 0;
     std::memcpy(&sum, p.data.data(), 4);
-    CHECK(sum == nmsc::net::eq_crc32({p.data.data() + 5, 476}));
+    CHECK(sum == hailstone::net::eq_crc32({p.data.data() + 5, 476}));
     std::int32_t heading = 0;
     std::memcpy(&heading, p.data.data() + 5 + 12, 4);
     CHECK(heading == 255);
     std::uint32_t minutes = 0;
     std::memcpy(&minutes, p.data.data() + 5 + 16 + 440 + 4, 4); // after the armour and the vehicle byte's dword
     CHECK(minutes == 1234);
-    auto back = nmsc::net::decode_save(p);
+    auto back = hailstone::net::decode_save(p);
     REQUIRE(back);
     CHECK(back->y == 10.5f);
     CHECK(back->x == -20.0f);
@@ -1116,21 +1116,21 @@ TEST_CASE("saves: OP_Save and OP_SaveOnZoneReq are 484 bytes with a checksum of 
     CHECK(back->armor[21].material2 == 9);
     CHECK(back->primary == 10652);
     CHECK(back->air_supply == 60);
-    CHECK(nmsc::net::encode_save_on_zone(v).opcode == 0x600d);
+    CHECK(hailstone::net::encode_save_on_zone(v).opcode == 0x600d);
 }
 
 TEST_CASE("bug report: EQEmu's 8740-byte BugReport_Struct") {
-    nmsc::net::BugReport b;
+    hailstone::net::BugReport b;
     b.category = 4;
     b.reporter = "Me";
     b.x = 1.5f;
     b.target_id = 99;
     b.target_name = "a rat";
-    b.flags = nmsc::net::kBugRepeatable | nmsc::net::kBugTargetInfo;
+    b.flags = hailstone::net::kBugRepeatable | hailstone::net::kBugTargetInfo;
     b.text = "It broke.";
-    nmsc::net::AppPacket p = nmsc::net::encode(b);
-    CHECK(p.opcode == nmsc::net::to_wire(nmsc::net::Op::Bug));
-    REQUIRE(p.data.size() == nmsc::net::kBugReportSize); // size checked exactly
+    hailstone::net::AppPacket p = hailstone::net::encode(b);
+    CHECK(p.opcode == hailstone::net::to_wire(hailstone::net::Op::Bug));
+    REQUIRE(p.data.size() == hailstone::net::kBugReportSize); // size checked exactly
     auto at = [&](std::size_t o) { return std::string(reinterpret_cast<const char*>(p.data.data() + o)); };
     CHECK(at(4) == "Quest");
     CHECK(at(68) == "Me");
@@ -1144,18 +1144,18 @@ TEST_CASE("bug report: EQEmu's 8740-byte BugReport_Struct") {
 }
 
 TEST_CASE("veteran rewards: the list, a claim and its reply") {
-    nmsc::net::AppPacket rq = nmsc::net::encode_vet_claim(nmsc::net::kVetClaimList);
+    hailstone::net::AppPacket rq = hailstone::net::encode_vet_claim(hailstone::net::kVetClaimList);
     REQUIRE(rq.data.size() == 80); // RoF2 VeteranClaim, size checked exactly
-    std::vector<nmsc::net::VetReward> v{{7, 1, true, {{"Lucy's Tome", 1234, 1}, {"Cape", 55, 0}}}};
-    auto d = nmsc::net::decode_vet_rewards(nmsc::net::encode(v));
+    std::vector<hailstone::net::VetReward> v{{7, 1, true, {{"Lucy's Tome", 1234, 1}, {"Cape", 55, 0}}}};
+    auto d = hailstone::net::decode_vet_rewards(hailstone::net::encode(v));
     REQUIRE(d);
     REQUIRE(d->size() == 1);
     CHECK((*d)[0].claim_id == 7);
     REQUIRE((*d)[0].items.size() == 2);
     CHECK((*d)[0].items[0].name == "Lucy's Tome");
     CHECK((*d)[0].items[1].item_id == 55);
-    nmsc::net::AppPacket reply = nmsc::net::encode_vet_claim(7);
-    auto r = nmsc::net::decode_vet_claim_reply(reply);
+    hailstone::net::AppPacket reply = hailstone::net::encode_vet_claim(7);
+    auto r = hailstone::net::decode_vet_claim_reply(reply);
     REQUIRE(r);
     CHECK(r->claim_id == 7);
     CHECK(r->claimed); // action 0
@@ -1164,14 +1164,14 @@ TEST_CASE("veteran rewards: the list, a claim and its reply") {
 #include "net/movement_packets.h"
 
 TEST_CASE("find: the request is 40 bytes; the reply's points come in order") {
-    nmsc::net::FindPersonRequest fr;
+    hailstone::net::FindPersonRequest fr;
     fr.kind = 5;
     fr.id = 0xffff;
     fr.at = {1.0f, 2.0f, 3.0f};
     fr.point = {7.0f, 8.0f, 9.0f};
-    nmsc::net::AppPacket rq = nmsc::net::encode(fr);
+    hailstone::net::AppPacket rq = hailstone::net::encode(fr);
     REQUIRE(rq.data.size() == 40); // RoF2 FindPersonRequest_Struct, size checked exactly
-    nmsc::ByteReader r(rq.data);
+    hailstone::ByteReader r(rq.data);
     CHECK(r.le<std::uint32_t>() == 5u);
     CHECK(r.le<std::uint32_t>() == 0xffffu);
     CHECK(r.le<std::uint32_t>() == 0xffffffffu);
@@ -1180,52 +1180,52 @@ TEST_CASE("find: the request is 40 bytes; the reply's points come in order") {
     r.skip(8);
     CHECK(std::bit_cast<float>(r.le<std::uint32_t>()) == 7.0f);
     std::vector<glm::vec3> path{{0, 0, 0}, {10, 5, 0}, {20, 5, 1}};
-    nmsc::net::AppPacket reply = nmsc::net::encode_find_person_reply(path);
+    hailstone::net::AppPacket reply = hailstone::net::encode_find_person_reply(path);
     CHECK(reply.data.size() == 12 * 4);
-    auto d = nmsc::net::decode_find_person_reply(reply);
+    auto d = hailstone::net::decode_find_person_reply(reply);
     REQUIRE(d);
     REQUIRE(d->size() == 4);
     CHECK((*d)[0].x == doctest::Approx(20.0f)); // the destination first
     CHECK((*d)[3].x == doctest::Approx(20.0f));
-    auto none = nmsc::net::decode_find_person_reply(nmsc::net::AppPacket(nmsc::net::to_wire(nmsc::net::Op::FindPersonReply)));
+    auto none = hailstone::net::decode_find_person_reply(hailstone::net::AppPacket(hailstone::net::to_wire(hailstone::net::Op::FindPersonReply)));
     REQUIRE(none);
     CHECK(none->empty());
 }
 
 TEST_CASE("pvp: stats (4612 bytes), the leaderboard (8024) and the crystal counts") {
-    nmsc::net::PvPStats s;
+    hailstone::net::PvPStats s;
     s.kills = 3;
     s.points = 40;
     s.current_streak = 2;
     s.last_kill.name = "Victim";
     s.recent_kills = {{"Victim", 50, 1, 1, 0, 0, 5}};
-    nmsc::net::AppPacket p = nmsc::net::encode(s);
+    hailstone::net::AppPacket p = hailstone::net::encode(s);
     REQUIRE(p.data.size() == 4612);
-    auto d = nmsc::net::decode_pvp_stats(p);
+    auto d = hailstone::net::decode_pvp_stats(p);
     REQUIRE(d);
     CHECK(d->kills == 3);
     CHECK(d->points == 40);
     CHECK(d->last_kill.name == "Victim");
     REQUIRE(d->recent_kills.size() == 1);
     CHECK(d->recent_kills[0].points == 5);
-    CHECK(nmsc::net::encode_pvp_leaderboard_request(2).data.size() == 4);
+    CHECK(hailstone::net::encode_pvp_leaderboard_request(2).data.size() == 4);
     // EQEmu's reply is zeroed: no rows.
-    nmsc::net::AppPacket lb(nmsc::net::to_wire(nmsc::net::Op::PVPLeaderBoardReply), std::vector<std::byte>(8024));
-    auto l = nmsc::net::decode_pvp_leaderboard(lb);
+    hailstone::net::AppPacket lb(hailstone::net::to_wire(hailstone::net::Op::PVPLeaderBoardReply), std::vector<std::byte>(8024));
+    auto l = hailstone::net::decode_pvp_leaderboard(lb);
     REQUIRE(l);
     CHECK(l->rows.empty());
     std::vector<std::byte> c(16);
     c[0] = std::byte{7};  // radiant now
     c[8] = std::byte{9};  // ebon now (RoF2 order)
-    auto cc = nmsc::net::decode_crystal_counts(nmsc::net::AppPacket(nmsc::net::to_wire(nmsc::net::Op::CrystalCountUpdate), c));
+    auto cc = hailstone::net::decode_crystal_counts(hailstone::net::AppPacket(hailstone::net::to_wire(hailstone::net::Op::CrystalCountUpdate), c));
     REQUIRE(cc);
     CHECK(cc->radiant == 7);
     CHECK(cc->ebon == 9);
 }
 
 TEST_CASE("consume: OP_Consume is RoF2's 24-byte Consume_Struct") {
-    nmsc::net::AppPacket p = nmsc::net::encode_consume(nmsc::net::ItemSlot::possessions(25, 3), true, true);
-    CHECK(p.opcode == nmsc::net::to_wire(nmsc::net::Op::Consume));
+    hailstone::net::AppPacket p = hailstone::net::encode_consume(hailstone::net::ItemSlot::possessions(25, 3), true, true);
+    CHECK(p.opcode == hailstone::net::to_wire(hailstone::net::Op::Consume));
     REQUIRE(p.data.size() == 24); // size checked exactly
     std::uint32_t automatic = 0, type = 0;
     std::int16_t slot = 0, sub = 0;
@@ -1237,14 +1237,14 @@ TEST_CASE("consume: OP_Consume is RoF2's 24-byte Consume_Struct") {
     CHECK(sub == 3);
     CHECK(automatic == 0xffffffffu);
     CHECK(type == 2);
-    std::memcpy(&automatic, nmsc::net::encode_consume(nmsc::net::ItemSlot::possessions(23), false, false).data.data() + 12, 4);
+    std::memcpy(&automatic, hailstone::net::encode_consume(hailstone::net::ItemSlot::possessions(23), false, false).data.data() + 12, 4);
     CHECK(automatic == 999u); // a right click
 }
 
 #include "net/group_packets.h"
 
 TEST_CASE("OP_InspectBuffs minutes: the original's 32-bit arithmetic") {
-    using namespace nmsc::net;
+    using namespace hailstone::net;
     // (ticks x 3 + 15) x 2 / 60 in 32 bits: 10 ticks are 1 minute, and a count past 2^31 / 6 wraps as the
     // original's imul / idiv does: 0x20000000 x 6 + 30 is 0xc000001e, -1073741794 / 60.
     CHECK(inspect_buff_minutes(1) == 0);
@@ -1256,7 +1256,7 @@ TEST_CASE("OP_InspectBuffs minutes: the original's 32-bit arithmetic") {
 #include "net/ability_packets.h"
 
 TEST_CASE("the OP_Track reply's header and OP_ClearObject decoders") {
-    using namespace nmsc::net;
+    using namespace hailstone::net;
     auto bytes = [](std::initializer_list<std::uint8_t> v) {
         std::vector<std::byte> out;
         for (auto b : v) out.push_back(std::byte{b});

@@ -30,7 +30,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline glm::vec3 world_to_map(const glm::vec3& w) { return {-w.y, -w.x, w.z}; }
 inline glm::vec3 map_to_world(const glm::vec3& m) { return {-m.y, -m.x, m.z}; }
@@ -224,4 +224,4 @@ private:
     std::deque<Placed> placed_; // newest first
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

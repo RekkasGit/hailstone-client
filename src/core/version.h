@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 struct Version {
     std::uint32_t major = 0, minor = 0, patch = 0;
@@ -26,4 +26,4 @@ std::optional<Version> parse_version(std::string_view text);
 // <0, 0 or >0 as a comes before, with or after b.
 int compare_versions(const Version& a, const Version& b);
 
-} // namespace nmsc
+} // namespace hailstone

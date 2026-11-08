@@ -8,7 +8,7 @@
 #include "game/item_options.h"
 #include "game/tradeskill.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using game::ClientOption;
 
 TEST_CASE("item options: CInventoryWnd::DestroyHeld") {

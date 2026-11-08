@@ -25,7 +25,7 @@
 
 #include "assets/wld.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // The region type in the low byte of the client's region flags.
 enum class RegionType : std::uint8_t {
@@ -165,4 +165,4 @@ private:
     std::vector<std::string> tags_;
 };
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

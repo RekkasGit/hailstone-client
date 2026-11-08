@@ -12,9 +12,9 @@
 #include "render/point_shadows.h"
 #include "render/vk_context.h"
 
-namespace nmsc::assets { struct PointLight; }
+namespace hailstone::assets { struct PointLight; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 class ActorRenderer;
 class ObjectRenderer;
@@ -41,4 +41,4 @@ void draw_point_shadows(VkContext& vk, const FrameInfo& frame, PointShadows& sha
                         std::span<const assets::PointLight> lights, std::span<const std::uint32_t> builds,
                         ZoneRenderer& zone, ActorRenderer* actors, ObjectRenderer* objects = nullptr);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

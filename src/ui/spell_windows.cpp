@@ -14,7 +14,7 @@
 #include "render/vk_util.h"
 #include "ui/imgui_vk_textures.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // ---------------------------------------------------------------- icons
 
@@ -152,7 +152,7 @@ void spell_bar_window(const SpellBarView& view, SpellActions& actions, SpellIcon
     ImVec2 display = ImGui::GetIO().DisplaySize;
     // A row of gems in the bottom-right corner, clear of the chat window.
     ImGui::SetNextWindowPos(ImVec2(display.x - em * 0.6f, display.y - em * 0.6f), ImGuiCond_FirstUseEver, ImVec2(1.0f, 1.0f));
-    ImGui::Begin("Spell Gems##nmsc_gems", nullptr, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("Spell Gems##hailstone_gems", nullptr, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
     for (std::size_t i = 0; i < view.gems.size(); ++i) {
         const auto& g = view.gems[i];
         if (i) ImGui::SameLine();
@@ -196,7 +196,7 @@ void cast_bar_window(const CastBarView& view) {
     ImVec2 display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.72f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(em * 18.0f, 0.0f));
-    ImGui::Begin("##nmsc_castbar", nullptr,
+    ImGui::Begin("##hailstone_castbar", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize);
     if (view.visible) {
@@ -220,7 +220,7 @@ void spell_book_window(SpellBookView& view, SpellActions& actions, SpellIconCach
     ImVec2 display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.45f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(em * 36.0f, em * 26.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Spell Book##nmsc_book", &view.open, ImGuiWindowFlags_NoSavedSettings)) {
+    if (!ImGui::Begin("Spell Book##hailstone_book", &view.open, ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return;
     }
@@ -291,24 +291,24 @@ void buff_windows(const BuffWindowView& view, SpellActions& actions, SpellIconCa
     if (!view.buffs.empty()) {
         ImGui::SetNextWindowPos(ImVec2(display.x - em * 14.0f, display.y * 0.48f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(em * 13.0f, 0.0f), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Buffs##nmsc_buffs", nullptr, kPanelFlags);
+        ImGui::Begin("Buffs##hailstone_buffs", nullptr, kPanelFlags);
         buff_rows(view.buffs, &actions, icons, "b");
         ImGui::End();
     }
     if (!view.songs.empty()) {
         ImGui::SetNextWindowPos(ImVec2(display.x - em * 28.0f, display.y * 0.48f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(em * 13.0f, 0.0f), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Songs##nmsc_songs", nullptr, kPanelFlags);
+        ImGui::Begin("Songs##hailstone_songs", nullptr, kPanelFlags);
         buff_rows(view.songs, &actions, icons, "s");
         ImGui::End();
     }
     if (!view.target_name.empty() && !view.target.empty()) {
         ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f + em * 12.0f, em * 0.5f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(em * 13.0f, 0.0f), ImGuiCond_FirstUseEver);
-        ImGui::Begin(std::format("{}'s effects###nmsc_tbuffs", view.target_name).c_str(), nullptr, kPanelFlags);
+        ImGui::Begin(std::format("{}'s effects###hailstone_tbuffs", view.target_name).c_str(), nullptr, kPanelFlags);
         buff_rows(view.target, nullptr, icons, "t");
         ImGui::End();
     }
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

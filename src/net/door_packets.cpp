@@ -7,7 +7,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 using detail::write_cstring;
@@ -366,4 +366,4 @@ std::optional<RecipeAutoCombine> decode_recipe_auto_combine(const AppPacket& p) 
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

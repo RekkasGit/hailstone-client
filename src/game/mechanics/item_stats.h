@@ -14,7 +14,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // SumIntStatRecursive / SumByteStatRecursive @0x7b4280 / 0x7b40a0 in aug mode
 // (the per-stat getters' (recurse, 0, 1)): the item's own value (charm-scaled)
@@ -71,4 +71,4 @@ std::int32_t item_ac(const net::Item& item, bool recurse = true);
 // ItemTypeToSkill @0x... (rof2decomp item_base_eh.cpp): the skill an item type trains.
 std::uint8_t item_type_to_skill(std::uint32_t item_type);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

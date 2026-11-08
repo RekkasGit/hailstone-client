@@ -17,8 +17,8 @@
 #include "game/mechanics/physics.h"
 #include "net/movement_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::game::mechanics;
+using namespace hailstone;
+using namespace hailstone::game::mechanics;
 
 namespace {
 

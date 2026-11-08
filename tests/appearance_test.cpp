@@ -15,8 +15,8 @@
 #include "net/opcodes.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 TEST_CASE("PC-model races fold TextureType into slots 1-6") {
     game::Appearance a;
@@ -170,8 +170,8 @@ TEST_CASE("EQGL material layers: names, texture roles by suffix, entry sizes per
     CHECK(eqg_character::layer_name("GUS", 4, 1) == "C_GUS_S04_M02");
 }
 
-TEST_CASE("EQG texture variants come from the model's .lay layers" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("EQG texture variants come from the model's .lay layers" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto lib = CharacterLibrary::load(game, "");
     auto gus = lib.model("GUS"); // race 549, the small goo
     if (!gus) return;            // an install without gus.eqg
@@ -202,8 +202,8 @@ TEST_CASE("EQG texture variants come from the model's .lay layers" * doctest::sk
     CHECK(diffuse(9)["GUS_m00"] == "c_gus_bd_s00_c.dds");
 }
 
-TEST_CASE("dressing classic, Luclin and EQG models from the game files" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("dressing classic, Luclin and EQG models from the game files" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto lib = CharacterLibrary::load(game, "");
     auto hum = lib.model("HUM");
     REQUIRE(hum);
@@ -315,12 +315,12 @@ TEST_CASE("dressing classic, Luclin and EQG models from the game files" * doctes
 }
 
 TEST_CASE("armour tints a classic body slot only where the model has that variant's texture" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     // SKE's chest variants differ between game folders (one has 00..04, a server's own files may have only 00 and
     // 01), so each of materials 1..9 is checked against what this folder's SKE has: a variant whose SKECH<vv>
     // texture is there takes the colour; one that is not makes ReplaceMaterial fail and the chest stays as it was,
     // untinted. (A skeleton spawn's armour colours are dropped before dressing: game::drawn_appearance.)
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "");
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "");
     auto ske = lib.model("SKE");
     REQUIRE(ske);
     REQUIRE_FALSE(ske->luclin);
@@ -349,11 +349,11 @@ TEST_CASE("armour tints a classic body slot only where the model has that varian
     MESSAGE("SKE chest variants 1..9 in this folder: ", present, " present, ", missing, " missing");
 }
 
-TEST_CASE("a Luclin robe's sleeves sit on the body's forearms" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("a Luclin robe's sleeves sit on the body's forearms" * doctest::skip(!hailstone::test::game_dir())) {
     // CHierarchicalActor::AttachToHostBones @0x10043e10: the robe's bones take the body bones' matrices of the same
     // names. IT4336's skeleton (the High Elf female's robe 10) holds its sleeve bones (FOROBEARML1..4) away from the
     // body's rest pose; posed by the robe's own rest pose, the sleeves hung detached about 1.4 units below the arms.
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "", true);
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
     auto hif = lib.model("HIF");
     REQUIRE(hif);
     REQUIRE(hif->luclin);
@@ -390,8 +390,8 @@ TEST_CASE("a Luclin robe's sleeves sit on the body's forearms" * doctest::skip(!
 }
 
 TEST_CASE("SwapHead's head materials 0xf0..0xff (FUN_0040a5b0)") {
-    using nmsc::game::head_model;
-    using nmsc::game::map_head_material;
+    using hailstone::game::head_model;
+    using hailstone::game::map_head_material;
     CHECK(map_head_material(1, 0, 0xf0) == 0x273);
     CHECK(map_head_material(1, 1, 0xf0) == 0x26c);
     CHECK(map_head_material(2, 0, 0xf0) == 0x219); // Barbarian: the shared helm
@@ -417,21 +417,21 @@ TEST_CASE("SwapHead's head materials 0xf0..0xff (FUN_0040a5b0)") {
 }
 
 TEST_CASE("appearance tables: colour tables, NewArmorTagData, NewArmorAdjData") {
-    auto t = nmsc::game::ColorTable::parse("[Data]\r\nNumber=3\r\nValue1=255\r\nValue3=0\r\n");
+    auto t = hailstone::game::ColorTable::parse("[Data]\r\nNumber=3\r\nValue1=255\r\nValue3=0\r\n");
     REQUIRE(t.values.size() == 3);
     CHECK(t.values[0] == 0xff0000ffu);
     CHECK(t.values[1] == 0xffffffffu); // missing: 0xffffff
     CHECK(t.values[2] == 0xff000000u);
-    CHECK(nmsc::game::npc_tint_entry(3, 3) == 2);
-    CHECK_FALSE(nmsc::game::npc_tint_entry(4, 3));
-    CHECK_FALSE(nmsc::game::npc_tint_entry(0, 3));
+    CHECK(hailstone::game::npc_tint_entry(3, 3) == 2);
+    CHECK_FALSE(hailstone::game::npc_tint_entry(4, 3));
+    CHECK_FALSE(hailstone::game::npc_tint_entry(0, 3));
     // A forged Number fills no more than the client's bound.
-    auto forged = nmsc::game::ColorTable::parse("[Data]\nNumber=9223372036854775807\nValue2=1\n");
-    CHECK(forged.values.size() == static_cast<std::size_t>(nmsc::game::ColorTable::kMaxEntries));
+    auto forged = hailstone::game::ColorTable::parse("[Data]\nNumber=9223372036854775807\nValue2=1\n");
+    CHECK(forged.values.size() == static_cast<std::size_t>(hailstone::game::ColorTable::kMaxEntries));
     CHECK(forged.values[1] == 0xff000001u);
-    CHECK(nmsc::game::ColorTable::parse("[Data]\nNumber=-5\n").values.empty());
+    CHECK(hailstone::game::ColorTable::parse("[Data]\nNumber=-5\n").values.empty());
 
-    nmsc::game::NewArmorTables a;
+    hailstone::game::NewArmorTables a;
     a.parse_tags("#ID\tTag\n2000\tL\t14100\t\t\t\t\t# Helm\r\n2000\tLF\t14179\t\t\t\t\t# female\r\n"
                  "2000\tN\t14162\t\t-1\t\t\r\n2005\tL\t14108\t\t\t\t1\r\n");
     CHECK(a.find_tag(2000, "HUM")->it_number == 14100);
@@ -452,7 +452,7 @@ namespace {
 
 // A Luclin model's palette for the face and eye functions: material names by palette entry, the
 // replace calls they make and which materials are "loaded".
-struct FaceEnv : nmsc::game::ActorEnv {
+struct FaceEnv : hailstone::game::ActorEnv {
     std::vector<std::string> palette;
     std::vector<std::string> calls;
     std::vector<std::pair<std::string, std::uint32_t>> attached;
@@ -461,7 +461,7 @@ struct FaceEnv : nmsc::game::ActorEnv {
     bool has_part(std::int32_t) override { return false; }
     std::optional<std::string> part_object(std::int32_t) override { return std::nullopt; }
     bool mesh_hidden(std::int32_t) override { return false; }
-    bool attach(std::int32_t dag, const std::string& name, const nmsc::game::NewArmorAdjustment*) override {
+    bool attach(std::int32_t dag, const std::string& name, const hailstone::game::NewArmorAdjustment*) override {
         attached.emplace_back(name, static_cast<std::uint32_t>(dag));
         return true;
     }
@@ -480,13 +480,13 @@ struct FaceEnv : nmsc::game::ActorEnv {
     void robe_tint(std::int32_t, std::uint32_t) override {}
     void robe_off(const std::string&) override {}
     void robe_mesh(std::int32_t, const std::string&) override {}
-    std::optional<nmsc::game::NewArmorTag> find_new_armor_tag(std::uint32_t, const std::string&) override {
+    std::optional<hailstone::game::NewArmorTag> find_new_armor_tag(std::uint32_t, const std::string&) override {
         return std::nullopt;
     }
-    const nmsc::game::NewArmorAdjustment* find_adjustment(std::int32_t, std::int32_t, const std::string&) override {
+    const hailstone::game::NewArmorAdjustment* find_adjustment(std::int32_t, std::int32_t, const std::string&) override {
         return nullptr;
     }
-    std::uint32_t customization_hair_color(const nmsc::game::ActorLook&, std::uint8_t) override { return 0; }
+    std::uint32_t customization_hair_color(const hailstone::game::ActorLook&, std::uint8_t) override { return 0; }
     void find_eye_materials(std::int32_t& left, std::int32_t& right, bool halfling_male, bool froglok) override {
         for (std::size_t i = 0; i < palette.size(); ++i) {
             std::string_view rest = std::string_view(palette[i]).substr(3);
@@ -504,8 +504,8 @@ struct FaceEnv : nmsc::game::ActorEnv {
     }
 };
 
-nmsc::game::ActorLook luclin_look(std::int32_t race, std::uint8_t gender, const char* code) {
-    nmsc::game::ActorLook look;
+hailstone::game::ActorLook luclin_look(std::int32_t race, std::uint8_t gender, const char* code) {
+    hailstone::game::ActorLook look;
     look.race = race;
     look.gender = gender;
     look.code = code;
@@ -516,7 +516,7 @@ nmsc::game::ActorLook luclin_look(std::int32_t race, std::uint8_t gender, const 
 } // namespace
 
 TEST_CASE("SwapFace names the Luclin head materials by face variant and index") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     FaceEnv env;
     env.palette = {"HUMHE0001_MDF", "HUMHE0004_MDF", "HUMHE0005_MDF", "HUML_EYE_MDF", "HUMR_EYE_MDF"};
     ActorLook look = luclin_look(1, 0, "HUM");
@@ -550,7 +550,7 @@ TEST_CASE("SwapFace names the Luclin head materials by face variant and index") 
 }
 
 TEST_CASE("Luclin eyes: CHR_EYE<colour + race offset> on the eye palette entries, eye patches") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     FaceEnv env;
     env.palette = {"HUMHE0001_MDF", "HUML_EYE_MDF", "HUMR_EYE_MDF"};
     ActorLook look = luclin_look(1, 0, "HUM");

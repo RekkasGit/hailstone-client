@@ -13,10 +13,10 @@
 #include "core/asset_folder.h"
 
 struct SDL_Window;
-namespace nmsc::platform { class Window; }
-namespace nmsc::render { class VkContext; }
+namespace hailstone::platform { class Window; }
+namespace hailstone::render { class VkContext; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 class ImGuiLayer;
 
@@ -70,4 +70,4 @@ std::optional<std::filesystem::path> run_asset_picker(platform::Window& window, 
                                                       ImGuiLayer& imgui, AssetPickerView& view, int max_frames = 0,
                                                       const std::string& screenshot = {});
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

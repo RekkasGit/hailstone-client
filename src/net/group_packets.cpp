@@ -7,7 +7,7 @@
 #include "core/wrap_math.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -404,4 +404,4 @@ AppPacket encode_xtarget_request(std::uint32_t slot, std::uint32_t type, std::st
     return make_packet(Op::XTargetRequest, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

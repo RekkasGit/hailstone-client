@@ -6,7 +6,7 @@
 #include "assets/zone.h"
 #include "game/coords.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool is_ladder_actor(std::string_view tag) {
     static constexpr char kTag[] = "LADDER";
@@ -83,4 +83,4 @@ std::vector<ZoneLadder> zone_ladders(const assets::Zone& zone) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

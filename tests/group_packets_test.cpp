@@ -16,8 +16,8 @@
 #include "net/opcodes.h"
 #include "net/pet_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 

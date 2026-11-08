@@ -10,7 +10,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 enum class BlendMode : std::uint8_t {
     Opaque,
@@ -163,4 +163,4 @@ struct PointLight {
     float radius = 0.0f;
 };
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

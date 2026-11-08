@@ -17,7 +17,7 @@
 
 #include "game/mechanics/attack_rules.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct WorldState;
 class SpellTable;
@@ -35,4 +35,4 @@ struct AttackCheckInput {
 // AllowedToAttack(target, spell) with the local player as `self`.
 bool allowed_to_attack(const AttackCheckInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

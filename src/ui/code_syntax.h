@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 enum class CodeToken : std::uint8_t { Name, Keyword, String, Comment, Number, Builtin, Member, Symbol };
 
@@ -21,4 +21,4 @@ struct CodeSpan {
 // Every span that is not white space, in order.
 std::vector<CodeSpan> lua_code_spans(std::string_view text);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

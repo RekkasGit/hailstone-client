@@ -7,7 +7,7 @@ extern "C" {
 #include "lstate.h"
 }
 
-namespace nmsc::ui::lua {
+namespace hailstone::ui::lua {
 
 std::size_t gc_live_bytes(lua_State* L) {
     // Set by the cycle's atomic step to the heap then, and lowered by what its sweep frees: the objects the cycle
@@ -15,4 +15,4 @@ std::size_t gc_live_bytes(lua_State* L) {
     return static_cast<std::size_t>(G(L)->GCestimate);
 }
 
-} // namespace nmsc::ui::lua
+} // namespace hailstone::ui::lua

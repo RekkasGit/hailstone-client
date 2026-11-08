@@ -15,10 +15,10 @@
 #include "assets/pfs.h"
 #include "core/byte_io.h"
 
-namespace nmsc::test::pfs_fixtures {
+namespace hailstone::test::pfs_fixtures {
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 inline std::vector<std::byte> deflate_blocks(const std::vector<std::byte>& data, std::size_t block) {
     ByteWriter w;
@@ -66,4 +66,4 @@ inline std::vector<std::byte> make_pfs(const std::vector<std::pair<std::string, 
     return w.take();
 }
 
-} // namespace nmsc::test::pfs_fixtures
+} // namespace hailstone::test::pfs_fixtures

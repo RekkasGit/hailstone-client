@@ -10,7 +10,7 @@
 #include "core/log.h"
 #include "core/saturate.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -423,4 +423,4 @@ std::vector<RegionInfo> ZoneRegions::tagged() const {
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

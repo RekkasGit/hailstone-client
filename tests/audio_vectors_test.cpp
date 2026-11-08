@@ -13,14 +13,14 @@
 #include "game/sound_rules.h"
 #include "vector_files.h"
 
-using nmsc::test::each_vector;
-using nmsc::test::Json;
-using nmsc::game::mechanics::FpuPrecision;
+using hailstone::test::each_vector;
+using hailstone::test::Json;
+using hailstone::game::mechanics::FpuPrecision;
 
 namespace {
 
-std::uint32_t vec_bits(const Json& j) { return nmsc::test::f32_bits(j); }
-float vec_float(const Json& j) { return std::bit_cast<float>(nmsc::test::f32_bits(j)); }
+std::uint32_t vec_bits(const Json& j) { return hailstone::test::f32_bits(j); }
+float vec_float(const Json& j) { return std::bit_cast<float>(hailstone::test::f32_bits(j)); }
 
 FpuPrecision precision_of(const Json& r) {
     return r["precision"].text == "x87-53" ? FpuPrecision::Double53 : FpuPrecision::Single24;
@@ -36,7 +36,7 @@ std::string bits_diff(const std::string& what, std::uint32_t got, const Json& wa
 TEST_CASE("UpdateListenerEnvironment vectors") {
     each_vector("UpdateListenerEnvironment.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
-        auto env = nmsc::audio::listener_environment(in["have_local_player"].truthy(), vec_float(in["ceiling"]),
+        auto env = hailstone::audio::listener_environment(in["have_local_player"].truthy(), vec_float(in["ceiling"]),
                                                      vec_float(in["floor"]), in["indoors"].truthy(),
                                                      precision_of(r));
         const Json& want = r["out"]["environment"];
@@ -54,7 +54,7 @@ TEST_CASE("EqSoundManager_SetListenerLocation vectors") {
         const Json& calls = r["out"]["calls"];
         if (in["sound_disabled"].truthy()) return calls.items.empty() ? "" : "a call while disabled";
         if (calls.items.size() != 1) return "no call";
-        auto l = nmsc::audio::eq_listener_location(vec_bits(in["y"]), vec_bits(in["x"]), vec_bits(in["z"]),
+        auto l = hailstone::audio::eq_listener_location(vec_bits(in["y"]), vec_bits(in["x"]), vec_bits(in["z"]),
                                                    vec_bits(in["heading"]), precision_of(r));
         const Json& c = calls[0];
         for (auto d : {bits_diff("x", l.x, c["x"]), bits_diff("y", l.y, c["y"]), bits_diff("z", l.z, c["z"]),
@@ -68,7 +68,7 @@ TEST_CASE("SoundManager_SetListenerLocation vectors") {
     each_vector("SoundManager_SetListenerLocation.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         const Json& out = r["out"];
-        auto o = nmsc::audio::sound_manager_listener(vec_bits(in["x"]), vec_bits(in["y"]), vec_bits(in["z"]),
+        auto o = hailstone::audio::sound_manager_listener(vec_bits(in["x"]), vec_bits(in["y"]), vec_bits(in["z"]),
                                                      vec_bits(in["angle"]));
         for (auto d : {bits_diff("stored x", o.stored[0], out["stored_x"]), bits_diff("stored y", o.stored[1], out["stored_y"]),
                        bits_diff("stored z", o.stored[2], out["stored_z"]),
@@ -92,7 +92,7 @@ TEST_CASE("SoundManager_SetListenerLocation vectors") {
 
 TEST_CASE("LegalPlayerRace vectors") {
     each_vector("LegalPlayerRace.jsonl", [](const Json& r) -> std::string {
-        bool got = nmsc::audio::legal_player_race(r["in"]["race"].i32(), r["in"]["spawn_race"].i32());
+        bool got = hailstone::audio::legal_player_race(r["in"]["race"].i32(), r["in"]["spawn_race"].i32());
         if (got != r["out"]["value"].truthy())
             return std::format("race {} spawn {}: {}", r["in"]["race"].i32(), r["in"]["spawn_race"].i32(), got);
         return "";
@@ -103,7 +103,7 @@ TEST_CASE("LoadGlobalMusic vectors") {
     each_vector("LoadGlobalMusic.jsonl", [](const Json& r) -> std::string {
         std::set<std::string> files;
         for (const Json& f : r["in"]["files_found"].items) files.insert(f.text);
-        auto got = nmsc::audio::load_global_music([&](const std::string& f) { return files.contains(f); },
+        auto got = hailstone::audio::load_global_music([&](const std::string& f) { return files.contains(f); },
                                                   r["in"]["rand"].i32());
         const Json& want = r["out"]["set"];
         if (got.size() != want.items.size()) return std::format("{} calls, original {}", got.size(), want.items.size());
@@ -128,13 +128,13 @@ TEST_CASE("LoadGlobalMusic vectors") {
 TEST_CASE("MusicManager_SelectActiveEntry vectors") {
     each_vector("MusicManager_SelectActiveEntry.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
-        std::vector<nmsc::audio::MusicSelectEntry> entries;
+        std::vector<hailstone::audio::MusicSelectEntry> entries;
         for (const Json& e : in["entries"].items)
             entries.push_back({e["selected"].truthy(), e["finished"].truthy(), e["priority"].i32(),
                                e["start_requested"].truthy()});
         int current = in["current"].is_null() ? -1 : in["current"].i32();
         float volume = vec_float(in["volume"]);
-        auto s = nmsc::audio::select_active_entry(entries, current, in["music_enabled"].truthy(), volume);
+        auto s = hailstone::audio::select_active_entry(entries, current, in["music_enabled"].truthy(), volume);
         const Json& out = r["out"];
         int playing = out["playing"].is_null() ? -1 : out["playing"].i32();
         if (s.playing != playing) return std::format("playing {}, original {}", s.playing, playing);
@@ -166,7 +166,7 @@ TEST_CASE("MusicManager_SelectActiveEntry vectors") {
 TEST_CASE("DoSpellEffect vectors") {
     each_vector("DoSpellEffect.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
-        nmsc::game::SpellEffectStageInput s;
+        hailstone::game::SpellEffectStageInput s;
         s.stage = static_cast<std::uint32_t>(in["stage"].i64());
         s.have_spell = in["have_spell"].truthy();
         s.have_effect = in["have_effect"].truthy();
@@ -180,7 +180,7 @@ TEST_CASE("DoSpellEffect vectors") {
         s.particle_density = vec_float(in["particle_density"]);
         s.particle_opacity = vec_float(in["particle_opacity"]);
         s.spell_effects_option = in["spell_effects_option"].i32();
-        auto e = nmsc::game::spell_effect_stage(s);
+        auto e = hailstone::game::spell_effect_stage(s);
         const Json& out = r["out"];
         if (static_cast<std::int32_t>(e.value) != out["value"].i32()) return std::format("value {}", e.value);
         std::int32_t last = e.spawn_stage_emitters ? in["spawn_stage_emitters_result"].i32() : 0x5a5a5a5a;

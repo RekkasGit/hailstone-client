@@ -8,7 +8,7 @@
 #include "core/log.h"
 #include "platform/crash_log.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 constexpr std::size_t kOpenArchives = 2;
@@ -291,4 +291,4 @@ void SoundLibrary::worker() {
     }
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

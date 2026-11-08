@@ -9,7 +9,7 @@
 #include "game/bazaar.h"
 #include "game/inventory.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -261,4 +261,4 @@ void barter_search_sold(BarterSearchState& s, const net::BuyLine& line, std::int
         }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

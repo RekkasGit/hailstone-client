@@ -14,7 +14,7 @@
 #include "game/inventory.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // Bank slot counts. CDisplay builds CBankWnd from "BigBankWnd" (24 slots,
 // BIGB_BankSlot0..23) when the account has expansion bit 10 (0x400,
@@ -75,4 +75,4 @@ Refusal shared_bank_refusal(const net::Item& item, const Inventory& inv);
 // archived items do not count.
 Refusal lore_pickup_refusal(const net::Item& item, const Inventory& inv);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc {
+namespace hailstone {
 
 using Sha1Digest = std::array<std::uint8_t, 20>;
 
@@ -15,4 +15,4 @@ Sha1Digest sha1(std::string_view data);
 // Lower-case hex, 40 characters.
 std::string to_hex(const Sha1Digest& d);
 
-} // namespace nmsc
+} // namespace hailstone

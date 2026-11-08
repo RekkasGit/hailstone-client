@@ -1,16 +1,20 @@
-/* A test plugin for the server extension interface (sdk/nmsc_plugin.h, ABI 2; tests/native_extension_test.cpp):
+/* A test plugin for the server extension interface (sdk/hailstone_plugin.h, ABI 2; tests/native_extension_test.cpp):
  * it sets class masks, pets, switches and vitals from InitializePlugin and answers a few hooks. /exton and /extoff
  * switch it active and inactive.
  *
- * Built twice: ExtendTest (ABI 2) and, with NMSC_TEST_ABI1, ExtendTestV1, a plugin as an ABI 1 client built it (no
- * hook table, the old host table), which must still load. */
+ * Built three times: ExtendTest (ABI 2); with HAILSTONE_TEST_ABI1, ExtendTestV1, a plugin as an ABI 1 client built
+ * it (no hook table, the old host table, only the old export names), which must still load; and with
+ * HAILSTONE_TEST_NEW_HOOKS, ExtendTestNew, the same as ExtendTest with its hook table exported under the new name.
+ *
+ * It keeps the SDK's names up to 0.6 (nmsc_plugin.h, NmscHost, NMSC_*, the `nmsc` global) on purpose, so the build
+ * checks that a plugin written against them still compiles. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "nmsc_plugin.h"
 
-#ifdef NMSC_TEST_ABI1
+#ifdef HAILSTONE_TEST_ABI1
 const NmscHost* nmsc = 0;
 NMSC_EXPORT uint32_t nmsc_plugin_abi(void) { return 1; }
 NMSC_EXPORT void nmsc_plugin_set_host(const NmscHost* h) { nmsc = h; }
@@ -224,7 +228,11 @@ static int ui_info(void* user, const NmscArgs* args, NmscOut* out) {
     return 1;
 }
 
+#ifdef HAILSTONE_TEST_NEW_HOOKS
+NMSC_EXPORT const NmscHooks* hailstone_plugin_hooks(void) {
+#else
 NMSC_EXPORT const NmscHooks* nmsc_plugin_hooks(void) {
+#endif
     static NmscHooks hooks;
     memset(&hooks, 0, sizeof hooks);
     hooks.size = sizeof hooks;

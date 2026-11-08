@@ -3,7 +3,7 @@
 // check runs in the original's order.
 #include "game/mechanics/find_affect_slot.h"
 
-namespace nmsc::game::mechanics::affect {
+namespace hailstone::game::mechanics::affect {
 
 namespace {
 
@@ -441,4 +441,4 @@ blocked: // 0x43da03 / 0x43d5ff / 0x43d5bf
     return nullptr;
 }
 
-} // namespace nmsc::game::mechanics::affect
+} // namespace hailstone::game::mechanics::affect

@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 namespace {
 
@@ -65,4 +65,4 @@ bool host_allowed(std::string_view host, const std::vector<std::string>& allow) 
     return false;
 }
 
-} // namespace nmsc::web
+} // namespace hailstone::web

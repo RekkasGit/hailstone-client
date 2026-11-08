@@ -9,8 +9,8 @@
 #include "assets/zone.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -168,8 +168,8 @@ TEST_CASE("Detail batches: per entry, reversed, grouped while under 150 units ac
     CHECK(one[0].box == glm::vec4(0, 210, 0, 10));
 }
 
-TEST_CASE("potranquility's ground has palette detail layers" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "potranquility");
+TEST_CASE("potranquility's ground has palette detail layers" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "potranquility");
     std::size_t palettes = 0, singles = 0;
     for (const auto& mesh : z.terrain)
         for (const auto& m : mesh.materials) {

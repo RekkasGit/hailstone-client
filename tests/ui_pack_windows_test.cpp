@@ -37,7 +37,7 @@
 #include "plugin/policy.h"
 #include "web/browser_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -97,7 +97,7 @@ TEST_CASE("UI packs: every script of the shipped UIs loads, and their windows dr
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
         REQUIRE(fs::exists(src / "ui.ini"));
-        nmsc::test::ScratchDir dir_scratch("ui_pack_windows_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_windows_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -131,7 +131,7 @@ TEST_CASE("UI packs: each draws the login, server select and character select sc
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_pregame_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_pregame_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -392,7 +392,7 @@ TEST_CASE("UI packs: the marketplace draws its shelves, details and pages from a
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_marketplace_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_marketplace_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -471,7 +471,7 @@ TEST_CASE("UI packs: the spell book's sets and set editor draw; eq.SaveSpellSet 
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_spellsets_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_spellsets_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -484,7 +484,7 @@ TEST_CASE("UI packs: the spell book's sets and set editor draw; eq.SaveSpellSet 
             Session s(dir, pack);
             // the book opens only in a zone (CSpellBookWnd::AboutToShow): the mock EQEmu's connection in place of
             // the session's own
-            nmsc::test::Rig rig;
+            hailstone::test::Rig rig;
             REQUIRE(rig.to_zone());
             auto& conn = rig.conn;
             s.host.conn = &conn;
@@ -571,7 +571,7 @@ TEST_CASE("UI packs: the spell book's sets and set editor draw; eq.SaveSpellSet 
 // the details view, a spell selected) and no hovered item may share its ID.
 TEST_CASE("UI packs (modern): no two of the spell book's widgets share an ID") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_spellbook_ids_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_spellbook_ids_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -583,7 +583,7 @@ TEST_CASE("UI packs (modern): no two of the spell book's widgets share an ID") {
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
         Session s(dir, "modern");
-        nmsc::test::Rig rig;
+        hailstone::test::Rig rig;
         REQUIRE(rig.to_zone());
         auto& conn = rig.conn;
         s.host.conn = &conn;
@@ -623,7 +623,7 @@ TEST_CASE("UI packs: the inventory's alternate currencies draw, and a row select
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_currency_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_currency_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -663,7 +663,7 @@ TEST_CASE("UI packs: the inventory's alternate currencies draw, and a row select
 // it with a row part gets its style and draw called for each filled slot, with the slot number, and draws cleanly.
 TEST_CASE("UI packs (modern): lib/xtarget.lua takes a plugin's part on each extended target row") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_xtarget_lib_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_xtarget_lib_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -728,7 +728,7 @@ end)
 // Its one list (AAWindow's ModernList) holds every tab's abilities, with the tab, era and activated columns.
 TEST_CASE("UI packs (modern): lib/aa.lua takes a script's part on each AA row, in the details and as a banner") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_aa_lib_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_aa_lib_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     std::ofstream(dir / "game" / "dbstr_us.txt")
@@ -832,7 +832,7 @@ return table.concat(out, ';'))lua") == LUA_OK);
 // by that column and a second click the other way; dragging a head moves the column. Both are kept as settings.
 TEST_CASE("UI packs (modern): the AA list sorts by name, by a clicked head, and a head drags to move its column") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_aa_sort_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_aa_sort_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     std::ofstream(dir / "game" / "dbstr_us.txt") << "9001^1^Innate Strength^0^\n9002^1^Mystical Shielding^0^\n";
@@ -969,7 +969,7 @@ return table.concat(missing, ", ")
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_menu_icons_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_menu_icons_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -997,14 +997,14 @@ return table.concat(missing, ", ")
     }
 }
 
-#ifdef NMSC_MOCK_WEB_HELPER
+#ifdef HAILSTONE_MOCK_WEB_HELPER
 // The browser window in both packs with a browser behind it (the stand-in helper, tests/mock_web_helper.cpp, over
 // real pipes): eq.Web* from the window's Lua, and the window drawing the tabs without script errors.
 TEST_CASE("UI packs: the Lua Scripts window and eq.Scripts*: list, run, pause, stop, autorun") {
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_scripts_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_scripts_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::create_directories(dir / "scripts" / "other");
@@ -1079,7 +1079,7 @@ TEST_CASE("UI packs: the web browser window and eq.Web* with a browser") {
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch("ui_pack_browser_test");
+        hailstone::test::ScratchDir dir_scratch("ui_pack_browser_test");
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -1089,7 +1089,7 @@ TEST_CASE("UI packs: the web browser window and eq.Web* with a browser") {
         int w = 0, h = 0;
         ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
         {
-            web::BrowserHost browser([] { return web::process_transport({NMSC_MOCK_WEB_HELPER}); });
+            web::BrowserHost browser([] { return web::process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
             Session s(dir, pack);
             int wants_text = 0;
             app::WebService web({[&] { return &browser; }, [] { return nullptr; },
@@ -1225,7 +1225,7 @@ int max_alpha(const char* name) {
 
 TEST_CASE("UI packs (modern): the Options window's Window Transparency and a window's Fades") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_fade_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_fade_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1266,7 +1266,7 @@ TEST_CASE("UI packs (modern): the Options window's Window Transparency and a win
 
 TEST_CASE("UI packs (modern): a resizable dialog's Scale zooms the whole window") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_dialog_scale_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_dialog_scale_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1301,7 +1301,7 @@ TEST_CASE("UI packs (modern): a resizable dialog's Scale zooms the whole window"
 
 TEST_CASE("UI packs (modern): an invitation to a group pops up with who sent it") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_group_invite_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_group_invite_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1341,7 +1341,7 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);
         fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
-        nmsc::test::ScratchDir dir_scratch(std::string("ui_pack_consent_") + pack);
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_consent_") + pack);
         fs::path dir = dir_scratch.path();
         fs::create_directories(dir / "game");
         fs::copy(src, dir / pack, fs::copy_options::recursive);
@@ -1386,7 +1386,7 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
 // The gamepad pack has no popup of its own: the client's prompt stays, and its group window gives it the pad.
 TEST_CASE("UI packs (gamepad): an invitation to a group keeps the client's own prompt") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_group_invite_gamepad_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_group_invite_gamepad_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
@@ -1412,7 +1412,7 @@ TEST_CASE("UI packs (gamepad): an invitation to a group keeps the client's own p
 // in design pixels stays, and the window grows with it. Its right edge still changes its size.
 TEST_CASE("UI packs (modern): a dialog's corner scales it, its edge resizes it") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_dialog_corner_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_dialog_corner_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1473,7 +1473,7 @@ TEST_CASE("UI packs (modern): a dialog's corner scales it, its edge resizes it")
 // click unrolls it. A question to answer (rollup = false) has none.
 TEST_CASE("UI packs (modern): a dialog rolls up from the button beside its close box") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_dialog_rollup_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_dialog_rollup_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1629,7 +1629,7 @@ check(GPSTATE.testOpenList == nil, "stays off")
 return "ok"
 )lua";
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_gamepad_lib_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_gamepad_lib_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
@@ -1661,7 +1661,7 @@ return "ok"
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.
 TEST_CASE("UI packs (gamepad): cached window contents follow a change") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_gamepad_caches_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_gamepad_caches_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
@@ -1803,7 +1803,7 @@ TEST_CASE("UI packs (gamepad): cached window contents follow a change") {
 // quarter second): another item shows at once, and what it draws is what the window holds.
 TEST_CASE("UI packs (modern): an item display draws the shown item's stats, and another item at once") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_item_display_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_item_display_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1883,7 +1883,7 @@ TEST_CASE("UI packs (modern): an item display draws the shown item's stats, and 
 // draw without script errors when shown.
 TEST_CASE("UI packs (modern): the inventory, loot, trade, raid, guild, merchant, map and their kin draw") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_data_windows_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_data_windows_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1927,7 +1927,7 @@ TEST_CASE("UI packs (modern): the inventory, loot, trade, raid, guild, merchant,
 // click and group button, so what goes out is CRaid_SendMoveGroup's OP_RaidInvite {6, leader, member, group}.
 TEST_CASE("UI packs (modern): the raid leader drags a member onto another group") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
-    nmsc::test::ScratchDir dir_scratch("ui_pack_raid_move_test");
+    hailstone::test::ScratchDir dir_scratch("ui_pack_raid_move_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
@@ -1938,7 +1938,7 @@ TEST_CASE("UI packs (modern): the raid leader drags a member onto another group"
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
         Session s(dir, "modern");
-        nmsc::test::Rig rig;
+        hailstone::test::Rig rig;
         REQUIRE(rig.to_zone());
         auto& conn = rig.conn;
         s.host.conn = &conn;

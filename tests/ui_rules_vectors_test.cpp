@@ -15,8 +15,8 @@
 #include "game/spell_book.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
+using namespace hailstone::game;
+using hailstone::test::Json;
 
 namespace {
 
@@ -91,7 +91,7 @@ std::string check_about_to_show(const Json& rec) {
     SpellBookState s = book_state(in);
     s.profile = in["profile"].truthy();
     s.profile_340c = in["profile_340c"].i32();
-    if (!in["controlled_speed"].is_null()) s.controlled_speed = nmsc::test::f32_of(in["controlled_speed"]);
+    if (!in["controlled_speed"].is_null()) s.controlled_speed = hailstone::test::f32_of(in["controlled_speed"]);
     // IsSpellcaster's answer is the record's first call.
     s.spellcaster = out["calls"][0]["ret"].i32() != 0;
     std::vector<SpellBookCall> calls;
@@ -113,11 +113,11 @@ std::string check_on_show(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: CSpellBookWnd_AboutToShow (opening the book sits you down)") {
-    nmsc::test::each_vector("CSpellBookWnd_AboutToShow.jsonl", check_about_to_show);
+    hailstone::test::each_vector("CSpellBookWnd_AboutToShow.jsonl", check_about_to_show);
 }
 
 TEST_CASE("vectors: CSpellBookWnd_OnShow (closing it stands you up if it sat you)") {
-    nmsc::test::each_vector("CSpellBookWnd_OnShow.jsonl", check_on_show);
+    hailstone::test::each_vector("CSpellBookWnd_OnShow.jsonl", check_on_show);
 }
 
 namespace {
@@ -274,13 +274,13 @@ std::string check_group_world(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: CGroupBase AddMember / RemoveMember / SetLeader") {
-    nmsc::test::each_vector("CGroupBase_AddMember.jsonl", [](const Json& r) { return check_group(r, 0); });
-    nmsc::test::each_vector("CGroupBase_RemoveMember.jsonl", [](const Json& r) { return check_group(r, 1); });
-    nmsc::test::each_vector("CGroupBase_SetLeader.jsonl", [](const Json& r) { return check_group(r, 2); });
+    hailstone::test::each_vector("CGroupBase_AddMember.jsonl", [](const Json& r) { return check_group(r, 0); });
+    hailstone::test::each_vector("CGroupBase_RemoveMember.jsonl", [](const Json& r) { return check_group(r, 1); });
+    hailstone::test::each_vector("CGroupBase_SetLeader.jsonl", [](const Json& r) { return check_group(r, 2); });
 }
 
 TEST_CASE("vectors: HandleWorldMessage_Group") {
-    nmsc::test::each_vector("HandleWorldMessage_Group.jsonl", check_group_world);
+    hailstone::test::each_vector("HandleWorldMessage_Group.jsonl", check_group_world);
 }
 
 namespace {
@@ -309,11 +309,11 @@ std::string check_target(const Json& rec, bool self_or_pet, bool holder = true) 
 } // namespace
 
 TEST_CASE("vectors: CGroup_TargetMember and LocalPlayer_TargetSelfOrPet (F1..F6, the group window)") {
-    nmsc::test::each_vector("CGroup_TargetMember.jsonl", [](const Json& r) { return check_target(r, false); });
+    hailstone::test::each_vector("CGroup_TargetMember.jsonl", [](const Json& r) { return check_target(r, false); });
     // The recorder leaves out whether the player's +0x2cc (the character holder) is set (20% of the cases it is
     // null, and then the ungrouped path runs although "grouped" says the character has a group), so a grouped
     // record passes when either path gives the recorded result; ungrouped records are checked exactly.
-    nmsc::test::each_vector("LocalPlayer_TargetSelfOrPet.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("LocalPlayer_TargetSelfOrPet.jsonl", [](const Json& r) {
         std::string why = check_target(r, true);
         if (!why.empty() && r["in"]["grouped"].truthy() && check_target(r, true, false).empty()) return std::string();
         return why;
@@ -372,7 +372,7 @@ std::string check_quantity(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: CQuantityWnd_Open (the quantity dialog)") {
-    nmsc::test::each_vector("CQuantityWnd_Open.jsonl", check_quantity);
+    hailstone::test::each_vector("CQuantityWnd_Open.jsonl", check_quantity);
 }
 
 TEST_CASE("quantity dialog: the merchant's limits") {
@@ -435,11 +435,11 @@ std::string check_trade(const Json& rec, int which) {
 } // namespace
 
 TEST_CASE("vectors: CTradeWnd ready flags and coin") {
-    nmsc::test::each_vector("CTradeWnd_SetHisReadyTrade.jsonl", [](const Json& r) { return check_trade(r, 0); });
-    nmsc::test::each_vector("CTradeWnd_SetHisMoney.jsonl", [](const Json& r) { return check_trade(r, 1); });
-    nmsc::test::each_vector("CTradeWnd_OnTradeItemMoved.jsonl", [](const Json& r) { return check_trade(r, 2); });
-    nmsc::test::each_vector("CTradeWnd_ClickedMoneyButton.jsonl", [](const Json& r) { return check_trade(r, 3); });
-    nmsc::test::each_vector("CTradeWnd_DropCursorMoneyIntoTrade.jsonl", [](const Json& r) { return check_trade(r, 4); });
+    hailstone::test::each_vector("CTradeWnd_SetHisReadyTrade.jsonl", [](const Json& r) { return check_trade(r, 0); });
+    hailstone::test::each_vector("CTradeWnd_SetHisMoney.jsonl", [](const Json& r) { return check_trade(r, 1); });
+    hailstone::test::each_vector("CTradeWnd_OnTradeItemMoved.jsonl", [](const Json& r) { return check_trade(r, 2); });
+    hailstone::test::each_vector("CTradeWnd_ClickedMoneyButton.jsonl", [](const Json& r) { return check_trade(r, 3); });
+    hailstone::test::each_vector("CTradeWnd_DropCursorMoneyIntoTrade.jsonl", [](const Json& r) { return check_trade(r, 4); });
 }
 
 namespace {
@@ -487,7 +487,7 @@ std::string check_drop(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: CEverQuest_DropHeldItemOnGround") {
-    nmsc::test::each_vector("CEverQuest_DropHeldItemOnGround.jsonl", check_drop);
+    hailstone::test::each_vector("CEverQuest_DropHeldItemOnGround.jsonl", check_drop);
     CHECK(ground_drop_decision(true, 1) == DropDecision::Refused);
     CHECK(ground_drop_decision(false, 1) == DropDecision::DropNow);
     CHECK(ground_drop_decision(false, -1) == DropDecision::Disabled);
@@ -496,36 +496,36 @@ TEST_CASE("vectors: CEverQuest_DropHeldItemOnGround") {
 }
 
 TEST_CASE("ItemClient::CanDrop(1, 1, 0, 1): LMouseUp's check before a ground drop") {
-    nmsc::net::Item plain;
+    hailstone::net::Item plain;
     plain.no_drop = 255; // tradeable
     plain.name = "Rusty Dagger";
     CHECK(can_drop(plain, false, true, true) == CanDropResult::Droppable);
-    nmsc::net::Item no_trade = plain;
+    hailstone::net::Item no_trade = plain;
     no_trade.no_drop = 0;
     CHECK(can_drop(no_trade, false, true, true) == CanDropResult::NoTrade);
     CHECK(can_drop_message(CanDropResult::NoTrade) == 12921);
     // A real estate item: only with no_real_estate.
-    nmsc::net::Item estate = plain;
+    hailstone::net::Item estate = plain;
     estate.unknowna4 = 12;
     CHECK(can_drop(estate, false, true, true) == CanDropResult::NoTrade);
     CHECK(can_drop(estate, false, true, false) == CanDropResult::Droppable);
     // A bag holding a no trade item: 12922; any other item (an augment) 5293; without contents only the item counts.
-    nmsc::net::Item bag = plain;
+    hailstone::net::Item bag = plain;
     bag.item_class = 1;
     bag.contents.push_back({0, no_trade});
     CHECK(can_drop(bag, false, true, true) == CanDropResult::BagContentNoTrade);
     CHECK(can_drop_message(CanDropResult::BagContentNoTrade) == 12922);
     CHECK(can_drop(bag, false, false, true) == CanDropResult::Droppable);
-    nmsc::net::Item augmented = plain;
+    hailstone::net::Item augmented = plain;
     augmented.contents.push_back({0, no_trade});
     CHECK(can_drop(augmented, false, true, true) == CanDropResult::AugmentNoTrade);
     CHECK(can_drop_message(CanDropResult::AugmentNoTrade) == 5293);
     // The FV rules: the FV no-drop byte decides, NoDrop does not.
     CHECK(can_drop(no_trade, true, true, true) == CanDropResult::Droppable);
-    nmsc::net::Item fv = plain;
+    hailstone::net::Item fv = plain;
     fv.fv_no_drop = 1;
     CHECK(can_drop(fv, true, true, true) == CanDropResult::NoTrade);
-    nmsc::net::Item fv_bag = bag;
+    hailstone::net::Item fv_bag = bag;
     fv_bag.contents[0].item = fv;
     CHECK(can_drop(fv_bag, true, true, true) == CanDropResult::BagContentNoTrade);
     CHECK(can_drop(estate, true, true, true) == CanDropResult::NoTrade);

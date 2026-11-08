@@ -14,7 +14,7 @@
 #include <array>
 #include <cstdint>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // GuildRank_Compare @0x7ff390: b - a when both ranks are non-zero, else a - b (32-bit wrapping).
 std::int32_t guild_rank_compare(std::int32_t a, std::int32_t b);
@@ -61,4 +61,4 @@ inline constexpr std::int32_t kGuildPermGuildChatSee = 0x13; // msg_new_text: ch
 inline constexpr std::int32_t kGuildPermBanker = 0x1a;       // Send_OP_GuildManageBanker
 inline constexpr std::int32_t kGuildPermDemoteSelf = 0x1e;   // Send_OP_GuildDemote (yourself)
 
-} // namespace nmsc::game
+} // namespace hailstone::game

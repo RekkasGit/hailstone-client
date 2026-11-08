@@ -20,7 +20,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // ---------------------------------------------------------------- client → world
 
@@ -271,4 +271,4 @@ std::optional<ZoneServerInfo> decode_zone_server_info(const AppPacket& p);
 std::optional<std::string> decode_zone_unavail(const AppPacket& p);
 
 
-} // namespace nmsc::net
+} // namespace hailstone::net

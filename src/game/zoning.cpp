@@ -10,7 +10,7 @@
 #include "core/byte_io.h"
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -250,4 +250,4 @@ void zone_player_to_bind(std::size_t size, const ZoneToBindPacket& p, std::uint3
     h.finish();
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

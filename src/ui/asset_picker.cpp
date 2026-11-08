@@ -15,7 +15,7 @@
 #include "render/vk_context.h"
 #include "ui/imgui_layer.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -105,7 +105,7 @@ AssetPickerAction asset_picker_screen(AssetPickerView& view, bool dialog_open) {
     const float width = em * 36.0f;
     ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, vp->Size.y * 0.9f));
-    ImGui::Begin("Asset folder##nmsc", nullptr, kDialogFlags);
+    ImGui::Begin("Asset folder##hailstone", nullptr, kDialogFlags);
 
     ImGui::TextUnformatted("Hailstone");
     ImGui::SameLine();
@@ -254,4 +254,4 @@ std::optional<std::filesystem::path> run_asset_picker(platform::Window& window, 
     return std::nullopt;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

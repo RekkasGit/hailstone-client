@@ -5,7 +5,7 @@
 #include "core/log.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 ItemUi::ItemUi(render::VkContext& vk, const GameDir& game) {
     try {
@@ -60,4 +60,4 @@ void ItemUi::close_item_display(int index) {
     state_.info_ids.erase(state_.info_ids.begin() + index);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

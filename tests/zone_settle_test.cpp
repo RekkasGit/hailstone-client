@@ -3,7 +3,7 @@
 
 #include "app/zone_settle.h"
 
-using namespace nmsc::app;
+using namespace hailstone::app;
 
 namespace {
 ZoneSettleFrame drawn(std::size_t waiting = 0, std::size_t shadows = 0) {

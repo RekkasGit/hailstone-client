@@ -13,7 +13,7 @@
 #include "net/item_packets.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // The request's action (+0x24; EQEmu AugmentActions).
 enum class AugmentAction : std::uint32_t { Insert = 0, Remove = 1, Swap = 2, Destroy = 3 };
@@ -55,4 +55,4 @@ AppPacket encode_augment_info_request(std::uint32_t solvent_id, std::uint32_t wi
 std::optional<AugmentInfo> decode_augment_info(const AppPacket& p);
 AppPacket encode(const AugmentInfo& v); // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -18,7 +18,7 @@
 #include "render/point_shadows.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -639,4 +639,4 @@ void ObjectRenderer::create_shadow_pipelines(const std::filesystem::path& shader
     vkDestroyShaderModule(d, pfs, nullptr);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

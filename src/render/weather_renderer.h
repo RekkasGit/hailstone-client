@@ -20,9 +20,9 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct Daylight;
 struct SceneLighting;
@@ -141,4 +141,4 @@ private:
     std::array<void*, VkContext::kFramesInFlight> mapped_{};
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

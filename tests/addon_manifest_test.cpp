@@ -1,6 +1,6 @@
 // Add-ons (docs/addons.md): the GitHub links a player pastes (core/addon_source.h), the manifest
 // (core/addon_manifest.h) with its signature, and the library header check (core/binary_header.h). Malformed and
-// random input is refused without a crash; libFuzzer runs the same parsers (tests/fuzz_libfuzzer.cpp, NMSC_FUZZ_ZIP).
+// random input is refused without a crash; libFuzzer runs the same parsers (tests/fuzz_libfuzzer.cpp, HAILSTONE_FUZZ_ZIP).
 // The capability ceiling the manifest puts on an add-on's files is in tests/plugin_policy_test.cpp.
 
 #include <doctest/doctest.h>
@@ -16,7 +16,7 @@
 #include "core/ed25519.h"
 #include "core/sha256.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

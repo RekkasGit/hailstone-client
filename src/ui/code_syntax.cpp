@@ -4,7 +4,7 @@
 #include <cctype>
 #include <string>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -95,4 +95,4 @@ std::vector<CodeSpan> lua_code_spans(std::string_view t) {
     return out;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

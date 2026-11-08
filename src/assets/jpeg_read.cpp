@@ -11,7 +11,7 @@
 #define STBI_NO_HDR
 #include <stb_image.h>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 // The PNG and DDS decoders' limits (png_read.cpp, texture.cpp): stb's own allows 2^24 a side.
@@ -54,4 +54,4 @@ std::optional<Image> decode_jpeg(std::span<const std::byte> data, std::string* e
     return image;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

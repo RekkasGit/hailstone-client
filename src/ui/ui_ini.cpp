@@ -7,7 +7,7 @@
 
 #include "core/wrap_math.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace fs = std::filesystem;
 
@@ -216,4 +216,4 @@ bool UiIni::save_if_due(std::chrono::steady_clock::time_point now) {
     return save();
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

@@ -5,7 +5,7 @@
 #include "assets/texture_overrides.h"
 #include "core/game_dir.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 LoadedParticleTexture load_particle_texture(const std::string& name, std::optional<std::vector<std::byte>> zone_bytes,
                                             const GameDir& game) {
@@ -32,4 +32,4 @@ LoadedParticleTexture load_particle_texture(const std::string& name, std::option
     return out;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

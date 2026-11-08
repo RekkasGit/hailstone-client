@@ -6,7 +6,7 @@
 
 #include "core/atomic_file.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 constexpr std::size_t kLocalHeader = 30, kCentralHeader = 46, kEndRecord = 22;
@@ -149,4 +149,4 @@ bool ZipWriter::write(const std::filesystem::path& path) {
     return write_file_atomic(path, std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }
 
-} // namespace nmsc
+} // namespace hailstone

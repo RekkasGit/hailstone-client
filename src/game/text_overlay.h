@@ -15,7 +15,7 @@
 #include <optional>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The colour index → 0xRRGGBB of DisplayText's switch (@0x41f4b9); other indices are 0x606060.
 std::uint32_t text_overlay_rgb(std::int32_t colour);
@@ -65,4 +65,4 @@ TaskCompleteText task_complete_text(bool stage_complete, bool completed);
 inline constexpr std::int32_t kTaskTextAlpha = 0xff;
 inline constexpr std::uint32_t kTaskTextFadeInMs = 500, kTaskTextFadeOutMs = 500, kTaskTextHoldMs = 3000;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

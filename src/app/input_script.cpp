@@ -13,7 +13,7 @@
 #include "core/log.h"
 #include "platform/window.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -169,4 +169,4 @@ void InputScript::run(const Step& s, double now) {
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

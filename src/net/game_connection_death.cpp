@@ -12,7 +12,7 @@
 #include "net/packet_io.h"
 #include "net/player_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -420,4 +420,4 @@ void GameConnection::save_tick() {
     if (++save_ticks_ > 300) send_save(0xf);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

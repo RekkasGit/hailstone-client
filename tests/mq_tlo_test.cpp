@@ -6,13 +6,13 @@
 #include "mq/tlo.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using mq::Value;
 
 namespace {
 
 struct Fixture {
-    mq_test::World world{"nmsc_mq_tlo_test"};
+    mq_test::World world{"hailstone_mq_tlo_test"};
     mq::Registry reg;
     mq::Context ctx;
     Fixture() {

@@ -6,7 +6,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -135,4 +135,4 @@ void clear_hot_bar(HotButtonStore& store, int bar) {
 
 std::string hot_button_set_file(std::int32_t file) { return std::format("HB_{}.ini", file); }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

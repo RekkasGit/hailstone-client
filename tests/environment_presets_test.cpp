@@ -12,8 +12,8 @@
 #include "game_files.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::audio;
+using namespace hailstone;
+using namespace hailstone::audio;
 
 namespace {
 
@@ -141,11 +141,11 @@ TEST_CASE("Zone room presets: read from the asset folder's eqgame.exe in place, 
     CHECK(table[126].zone == "testzone126");
 }
 
-TEST_CASE("Zone room presets of the installed eqgame.exe" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("Zone room presets of the installed eqgame.exe" * doctest::skip(!hailstone::test::game_dir())) {
     // Structure only: the table's contents are the player's, and are not repeated here. A game folder without
     // eqgame.exe is valid (docs/layout.md): nothing to check then.
-    if (!nmsc::test::game_dir()->find_base("eqgame.exe")) return;
-    auto table = load_zone_room_presets(*nmsc::test::game_dir());
+    if (!hailstone::test::game_dir()->find_base("eqgame.exe")) return;
+    auto table = load_zone_room_presets(*hailstone::test::game_dir());
     REQUIRE(table.size() == kZoneRoomRecords);
     std::set<std::string> names;
     for (const auto& z : table) {

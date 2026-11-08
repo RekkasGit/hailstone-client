@@ -19,9 +19,9 @@
 #include "net/packet_io.h"
 #include "platform/udp_socket.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 
 namespace {
 

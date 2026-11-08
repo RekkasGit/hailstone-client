@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -75,4 +75,4 @@ std::vector<CombatAbilityMenuGroup> build_combat_ability_menu(
     return menu;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

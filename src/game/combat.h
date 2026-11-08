@@ -24,7 +24,7 @@
 #include "game/eq_strings.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // PcClient::GetConLevel's values.
 enum class Con : std::uint8_t { None = 0, Gray, Green, LightBlue, DarkBlue, White, Yellow, Red };
@@ -246,4 +246,4 @@ std::uint32_t next_npc(const WorldState& world, const glm::vec3& from, float yaw
 std::optional<std::uint32_t> pick_spawn(const WorldState& world, const glm::vec3& origin, const glm::vec3& dir,
                                         float max_distance, std::uint32_t skip);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

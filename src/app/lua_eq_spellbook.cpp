@@ -39,7 +39,7 @@
 #include "net/game_connection.h"
 #include "ui/ui_textures.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -315,4 +315,4 @@ void register_spellbook_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

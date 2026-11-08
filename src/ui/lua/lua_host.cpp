@@ -24,7 +24,7 @@
 #include "core/frame_sections.h"
 #include "core/log.h"
 
-namespace nmsc::ui::lua {
+namespace hailstone::ui::lua {
 
 namespace fs = std::filesystem;
 
@@ -1217,7 +1217,7 @@ LuaUi::LuaUi(fs::path scripts, fs::path settings) : impl_(std::make_unique<Impl>
         lua_pushboolean(S, g_caller_tag.empty() || (check && check(g_caller_tag)));
         return 1;
     });
-    lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.clipboard_allowed");
+    lua_setfield(L, LUA_REGISTRYINDEX, "hailstone.clipboard_allowed");
     // Libraries: no io (scripts do not need file access); os is reduced to clock/time/date.
     luaL_requiref(L, "_G", luaopen_base, 1);
     luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
@@ -1445,4 +1445,4 @@ void LuaUi::frame() {
     lap.mark("Lua garbage collection");
 }
 
-} // namespace nmsc::ui::lua
+} // namespace hailstone::ui::lua

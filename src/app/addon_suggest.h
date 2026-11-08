@@ -14,7 +14,7 @@
 #include "core/addon_index.h"
 #include "core/ed25519.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct AddonSuggestion {
     std::string name;   // the index's name for it; "" a server's suggestion (only its source is known)
@@ -48,4 +48,4 @@ std::string join_dismissed_suggestions(const std::vector<std::string>& keys);
 // The sentence the login screen shows for a suggestion; `server`: the picked server's name ("" this server).
 std::string addon_suggestion_text(const AddonSuggestion& s, std::string_view server);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

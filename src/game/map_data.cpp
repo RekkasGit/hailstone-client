@@ -9,7 +9,7 @@
 
 #include "core/zone_name.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -706,4 +706,4 @@ void MapView::zoom_to_fit(float lo_y, float hi_y, float lo_x, float hi_x, bool f
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

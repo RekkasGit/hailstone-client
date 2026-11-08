@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game::mechanics::combat_ability {
+namespace hailstone::game::mechanics::combat_ability {
 
 inline constexpr int kCombatAbilities = 300;             // PcBase::GetCombatAbility's slots (0 empty)
 inline constexpr std::int32_t kTimers = 20;               // the profile's reuse timers 0..19
@@ -88,4 +88,4 @@ bool do_combat_ability(std::int32_t spell_id, bool rank, Queries& q);
 // `args` (case-insensitive, the whole argument); without one lists the abilities still on their reuse timer.
 void discipline_command(std::string_view args, Queries& q);
 
-} // namespace nmsc::game::mechanics::combat_ability
+} // namespace hailstone::game::mechanics::combat_ability

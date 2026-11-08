@@ -10,7 +10,7 @@
 
 #include "app/lua_eq.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct LabelValue {
     std::string text;
@@ -42,4 +42,4 @@ std::uint32_t compare_color(std::int64_t value, std::int64_t base);
 // PlayerWnd / gauge text of a name: CEverQuest::trimName (the display name).
 std::string trim_name(const std::string& name);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

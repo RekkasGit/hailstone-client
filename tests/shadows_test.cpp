@@ -6,7 +6,7 @@
 #include "render/shadows.h"
 #include "game/sky_clock.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 namespace {
 
@@ -120,7 +120,7 @@ TEST_CASE("cover map: round the camera, looking down, snapped to its texels") {
 }
 
 TEST_CASE("sky clock: the moon's phase follows the calendar") {
-    nmsc::game::SkyClock clock;
+    hailstone::game::SkyClock clock;
     clock.set(1, 0, 0.0, 1); // midnight of the 1st: new
     CHECK(clock.moon_phase(0.0) == doctest::Approx(0.0f).epsilon(1e-4));
     clock.set(1, 0, 0.0, 15); // the 15th: full

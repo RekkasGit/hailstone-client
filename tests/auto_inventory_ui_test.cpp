@@ -10,8 +10,8 @@
 #include "net/item_packets.h"
 #include "net/packet_io.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 TEST_CASE("Auto-Inventory button: enabled with an item on the cursor; a click puts it in the inventory") {
     ImGuiContext* ctx = ImGui::CreateContext(); // the eq API reads the keyboard's modifiers

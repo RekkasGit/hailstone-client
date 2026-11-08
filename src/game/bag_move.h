@@ -27,7 +27,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct BagMove {
     enum class Where : std::uint8_t { Cursor, CursorBag, TargetBag };
@@ -48,4 +48,4 @@ struct BagMovePlan {
 // No moves and no refusal: nothing to move (an empty cursor bag without force).
 BagMovePlan plan_bag_move(const net::Item& cursor, const net::Item& target, bool force_bag);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

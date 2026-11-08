@@ -6,8 +6,8 @@
 
 #include "game/missiles.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 

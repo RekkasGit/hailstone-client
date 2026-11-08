@@ -38,7 +38,7 @@
 #include "core/game_dir.h"
 #include "core/png_write.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 namespace fs = std::filesystem;
 
 namespace {
@@ -157,13 +157,13 @@ int run_export(const fs::path& assets, const fs::path& work, const std::vector<s
                     e.bmp = std::to_integer<char>((*data)[0]) == 'B';
                     e.alpha = alpha_kind(rgba);
                     const std::string base = hex16(hash);
-                    nmsc::write_png_rgba(work / "src" / (base + ".png"), rgba.mips[0], rgba.width, rgba.height);
+                    hailstone::write_png_rgba(work / "src" / (base + ".png"), rgba.mips[0], rgba.width, rgba.height);
                     if (e.stored.starts_with("BMP 8-bit")) {
                         if (auto keyed = decode_texture(*data, {.palette_index0_transparent = true})) {
                             Image m = to_rgba8(*keyed);
                             if (alpha_kind(m) != "none") {
                                 e.masked_variant = true;
-                                nmsc::write_png_rgba(work / "src" / (base + ".m.png"), m.mips[0], m.width, m.height);
+                                hailstone::write_png_rgba(work / "src" / (base + ".m.png"), m.mips[0], m.width, m.height);
                             }
                         }
                     }
@@ -174,7 +174,7 @@ int run_export(const fs::path& assets, const fs::path& work, const std::vector<s
                         Image k = rgba;
                         if (remove_color_key(k)) {
                             e.keyed_variant = true;
-                            nmsc::write_png_rgba(work / "src" / (base + ".k.png"), k.mips[0], k.width, k.height);
+                            hailstone::write_png_rgba(work / "src" / (base + ".k.png"), k.mips[0], k.width, k.height);
                         }
                     }
                     std::lock_guard lock(mutex);
@@ -219,7 +219,7 @@ std::uint32_t level_dim(std::uint32_t d, std::size_t level) { return std::max<st
 // A DX10 DDS of the given block-compressed levels.
 std::vector<std::byte> dds_file(std::uint32_t w, std::uint32_t h, std::uint32_t dxgi,
                                 const std::vector<std::vector<std::byte>>& levels) {
-    nmsc::ByteWriter out;
+    hailstone::ByteWriter out;
     for (char c : std::string_view("DDS ")) out.le(static_cast<std::uint8_t>(c));
     out.le<std::uint32_t>(124);
     out.le<std::uint32_t>(0x1 | 0x2 | 0x4 | 0x1000 | 0x20000 | 0x80000); // caps, height, width, pixel format, mips, linear size
@@ -342,7 +342,7 @@ int run_build(const fs::path& work, const fs::path& pack, const std::string& up_
                 std::error_code ec;
                 if (!fs::exists(src, ec)) continue;
                 if (fs::exists(dst, ec) && fs::last_write_time(dst, ec) >= fs::last_write_time(src, ec)) continue;
-                auto bytes = nmsc::read_file(src);
+                auto bytes = hailstone::read_file(src);
                 std::string why;
                 auto decoded = bytes ? decode_texture(*bytes, {}, &why) : std::nullopt;
                 if (!decoded) {

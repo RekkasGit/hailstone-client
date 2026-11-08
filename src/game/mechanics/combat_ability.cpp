@@ -3,7 +3,7 @@
 #include <array>
 #include <cctype>
 
-namespace nmsc::game::mechanics::combat_ability {
+namespace hailstone::game::mechanics::combat_ability {
 
 namespace {
 
@@ -141,4 +141,4 @@ void discipline_command(std::string_view args, Queries& q) {
     }
 }
 
-} // namespace nmsc::game::mechanics::combat_ability
+} // namespace hailstone::game::mechanics::combat_ability

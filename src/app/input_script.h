@@ -28,9 +28,9 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::platform { class Window; }
+namespace hailstone::platform { class Window; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class InputScript {
 public:
@@ -77,4 +77,4 @@ private:
     std::vector<Release> releases_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

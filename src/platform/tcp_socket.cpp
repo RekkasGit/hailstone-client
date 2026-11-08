@@ -24,7 +24,7 @@
 #include <unistd.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 namespace {
 
@@ -331,4 +331,4 @@ std::optional<TcpSocket> TcpListener::accept() {
     return out;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

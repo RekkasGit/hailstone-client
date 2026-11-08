@@ -13,7 +13,7 @@
 #include "platform/tcp_socket.h"
 #include "plugin/plugin_tcp.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using platform::Endpoint;
 using platform::TcpListener;
 using platform::TcpSocket;

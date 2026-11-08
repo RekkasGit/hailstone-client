@@ -18,7 +18,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // ---------------------------------------------------------------- /who
 
@@ -448,4 +448,4 @@ AppPacket encode_lfguild_search_guilds(std::uint32_t level, std::uint32_t aa, st
 AppPacket encode(const std::vector<LFGuildPlayerMatch>& v); // server direction, for tests
 AppPacket encode(const std::vector<LFGuildGuildMatch>& v);  // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

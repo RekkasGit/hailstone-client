@@ -16,7 +16,7 @@
 #include "game/quantity_dialog.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -887,4 +887,4 @@ std::vector<EqHost::MenuRow> real_estate_menu_rows(EqHost& host, const net::ReMe
     return ItemsWindow::menu_rows(host, menu);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

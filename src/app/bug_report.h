@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // Under Discord's 10 MiB upload limit for an account without Nitro, with room to spare.
 inline constexpr std::size_t kBugReportLimit = 9'500'000;
@@ -95,4 +95,4 @@ std::vector<std::filesystem::path> unreported_crashes(const std::filesystem::pat
 // Marks a crash report bundled: crash-<date>.txt becomes crash-<date>.reported.txt (and its .dmp the same).
 void mark_crash_reported(const std::filesystem::path& crash);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -23,7 +23,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpawnAnimInput {
     glm::vec3 velocity{0.0f};   // units per tick (+0x70 / +0x74 / +0x78)
@@ -132,4 +132,4 @@ std::string action_clip(std::uint8_t action, const std::function<bool(std::strin
                         bool new_style = false, const NewStyleTrackInput& track_in = {},
                         const std::function<int()>& rand = {}, std::uint8_t* playing = nullptr);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

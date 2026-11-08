@@ -21,10 +21,10 @@
 #include "game/hot_button_state.h"
 #include "ui/ui_textures.h"
 
-namespace nmsc::net { struct Item; struct ItemSlot; struct ReMenu; class GameConnection; }
-namespace nmsc::ui { class UiIni; }
+namespace hailstone::net { struct Item; struct ItemSlot; struct ReMenu; class GameConnection; }
+namespace hailstone::ui { class UiIni; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 using Rgb = std::array<float, 3>;
 Rgb argb_to_rgb(std::uint32_t argb);
@@ -454,4 +454,4 @@ std::string deity_desc(const net::GameConnection& c, std::uint32_t deity);
 // Pushes eq.Item's table for `item` (nil without one); app/lua_eq.cpp.
 int push_item(lua_State* L, const net::Item* item);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

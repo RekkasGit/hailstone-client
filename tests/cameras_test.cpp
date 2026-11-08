@@ -7,7 +7,7 @@
 
 #include "game/cameras.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 

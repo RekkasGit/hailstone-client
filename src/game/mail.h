@@ -15,7 +15,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // MailMgr_SetMessageStatus @0x46af20's words, in its numbering.
 enum class MailStatus : std::uint8_t { New = 0, Unread = 1, Read = 2, Trash = 3, Deleted = 4 };
@@ -122,4 +122,4 @@ std::string mail_to_command(const std::string& recipients, const std::string& su
 // The name in an address: the part after the last '.' ("SOE.EQ.x.Name" → "Name").
 std::string mail_short_name(const std::string& address);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

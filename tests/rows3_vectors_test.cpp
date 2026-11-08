@@ -14,8 +14,8 @@
 #include "game/training.h"
 #include "vector_files.h"
 
-using nmsc::test::each_vector;
-using nmsc::test::Json;
+using hailstone::test::each_vector;
+using hailstone::test::Json;
 
 namespace {
 
@@ -25,17 +25,17 @@ namespace {
 // the bit of the word itself.
 std::string check_permission(const Json& r, std::int32_t rank, std::int32_t permission) {
     const Json& in = r["in"];
-    std::int32_t index = nmsc::game::guild_permission_word_index(rank, permission);
+    std::int32_t index = hailstone::game::guild_permission_word_index(rank, permission);
     if (index != in["table_word_index"].i32()) return std::format("word index {}, original {}", index, in["table_word_index"].i32());
     std::uint32_t word = in["table_word"].u32();
     bool want = r["out"]["value"].truthy();
-    nmsc::game::GuildPermissions t;
+    hailstone::game::GuildPermissions t;
     bool got;
     if (index >= 0 && static_cast<std::size_t>(index) < t.words.size()) {
         t.words[static_cast<std::size_t>(index)] = word;
-        got = nmsc::game::local_pc_has_guild_permission(true, false, rank, permission, t);
+        got = hailstone::game::local_pc_has_guild_permission(true, false, rank, permission, t);
     } else {
-        got = nmsc::game::guild_permission_bit(word, permission);
+        got = hailstone::game::guild_permission_bit(word, permission);
     }
     if (got != want) return std::format("rank {} permission {} word {:#x}: {}, original {}", rank, permission, word, got, want);
     return "";
@@ -49,18 +49,18 @@ TEST_CASE("GuildRank_Compare vectors") {
         const Json& in = r["in"];
         const Json& out = r["out"]["value"];
         if (fn == "GuildRank_Compare") {
-            std::int32_t got = nmsc::game::guild_rank_compare(in["a"].i32(), in["b"].i32());
+            std::int32_t got = hailstone::game::guild_rank_compare(in["a"].i32(), in["b"].i32());
             if (got != out.i32()) return std::format("compare({}, {}) {} original {}", in["a"].i32(), in["b"].i32(), got, out.i32());
         } else if (fn == "GuildRank_Above" || fn == "GuildRank_AtLeast") {
             std::int32_t a = in["rank"].i32(), b = in["other"].i32();
-            bool got = fn == "GuildRank_Above" ? nmsc::game::guild_rank_above(a, b) : nmsc::game::guild_rank_at_least(a, b);
+            bool got = fn == "GuildRank_Above" ? hailstone::game::guild_rank_above(a, b) : hailstone::game::guild_rank_at_least(a, b);
             if (got != out.truthy()) return std::format("{}({}, {})", fn, a, b);
         } else if (fn == "GuildMember_RankAtLeast") {
             std::int32_t a = 0, b = 0;
             bool has_a = in["a"].type != Json::Type::Null, has_b = in["b"].type != Json::Type::Null;
             if (has_a) a = in["a"]["rank"].i32();
             if (has_b) b = in["b"]["rank"].i32();
-            bool got = nmsc::game::guild_member_rank_at_least(has_a ? &a : nullptr, has_b ? &b : nullptr);
+            bool got = hailstone::game::guild_member_rank_at_least(has_a ? &a : nullptr, has_b ? &b : nullptr);
             if (got != out.truthy()) return std::format("members ({}, {})", a, b);
         } else {
             return "unknown fn " + fn;
@@ -81,15 +81,15 @@ TEST_CASE("LocalPC_HasGuildPermission vectors") {
     each_vector("LocalPC_HasGuildPermission.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         std::int32_t permission = in["permission"].i32();
-        nmsc::game::GuildPermissions none;
+        hailstone::game::GuildPermissions none;
         if (in["character"].type == Json::Type::Null) {
-            bool got = nmsc::game::local_pc_has_guild_permission(false, false, 0, permission, none);
+            bool got = hailstone::game::local_pc_has_guild_permission(false, false, 0, permission, none);
             return got == r["out"]["value"].truthy() ? "" : "no character";
         }
         bool gm = in["character"]["is_gm"].truthy();
         std::int32_t rank = in["character"]["guild_rank"].i32();
         if (gm) {
-            bool got = nmsc::game::local_pc_has_guild_permission(true, true, rank, permission, none);
+            bool got = hailstone::game::local_pc_has_guild_permission(true, true, rank, permission, none);
             return got == r["out"]["value"].truthy() ? "" : "gm";
         }
         return check_permission(r, rank, permission);
@@ -98,7 +98,7 @@ TEST_CASE("LocalPC_HasGuildPermission vectors") {
 
 TEST_CASE("Guild permission bits (disassembly)") {
     // FUN_007d96c0 / FUN_007d95e0: dword[1 + rank * 2 + permission / 32], bit permission % 32 (C division).
-    nmsc::game::GuildPermissions t;
+    hailstone::game::GuildPermissions t;
     t.set(8, 0x13, true);
     CHECK(t.words[17] == (1u << 0x13));
     CHECK(t.has(8, 0x13));
@@ -108,23 +108,23 @@ TEST_CASE("Guild permission bits (disassembly)") {
     CHECK(t.has(1, 33));
     t.set(8, 0x13, false);
     CHECK_FALSE(t.has(8, 0x13));
-    CHECK(nmsc::game::guild_permission_word_index(0, -1) == 1);  // -1 / 32 = 0
-    CHECK(nmsc::game::guild_permission_word_index(0, -33) == 0); // -33 / 32 = -1
-    CHECK(nmsc::game::guild_permission_bit(0x80000000u, -1));    // -1 % 32 = -1, shift & 31 = 31
-    CHECK_FALSE(nmsc::game::local_pc_has_guild_permission(false, true, 1, 7, t));
-    CHECK(nmsc::game::local_pc_has_guild_permission(true, true, 8, 7, t));
+    CHECK(hailstone::game::guild_permission_word_index(0, -1) == 1);  // -1 / 32 = 0
+    CHECK(hailstone::game::guild_permission_word_index(0, -33) == 0); // -33 / 32 = -1
+    CHECK(hailstone::game::guild_permission_bit(0x80000000u, -1));    // -1 % 32 = -1, shift & 31 = 31
+    CHECK_FALSE(hailstone::game::local_pc_has_guild_permission(false, true, 1, 7, t));
+    CHECK(hailstone::game::local_pc_has_guild_permission(true, true, 8, 7, t));
 }
 
 TEST_CASE("CAAWnd_FilterAccepts vectors") {
     each_vector("CAAWnd_FilterAccepts.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
-        nmsc::game::AAFilter f;
+        hailstone::game::AAFilter f;
         f.trainable_only = in["filter"]["trainable_only"].truthy();
         f.kind = in["filter"]["kind"].i32();
         f.expansion = in["filter"]["expansion"].i32();
         f.category = in["filter"]["display_category"].i32();
         const Json& ab = in["ability"];
-        nmsc::game::AltAbility a;
+        hailstone::game::AltAbility a;
         bool persistent = false;
         if (ab.type != Json::Type::Null) {
             a.id = static_cast<std::uint32_t>(ab["index"].i64());
@@ -146,7 +146,7 @@ TEST_CASE("CAAWnd_FilterAccepts vectors") {
             }
             return calls[at++]["ret"].truthy();
         };
-        bool got = nmsc::game::aa_filter_accepts(f, ab.type == Json::Type::Null ? nullptr : &a, persistent,
+        bool got = hailstone::game::aa_filter_accepts(f, ab.type == Json::Type::Null ? nullptr : &a, persistent,
                                                  [&] { return next("can_train_ability"); },
                                                  [&] { return next("has_alternate_ability"); });
         if (!error.empty()) return error;
@@ -172,7 +172,7 @@ TEST_CASE("GetPcSkillLimit vectors") {
         std::map<std::int32_t, std::int32_t> effects;
         for (const Json& c : in["calls"].items)
             if (c["fn"].text == "total_effect") effects[c["spa"].i32()] = c["ret"].i32();
-        nmsc::game::SkillLimitView who;
+        hailstone::game::SkillLimitView who;
         who.level = in["level"].i32();
         who.class_id = static_cast<std::uint8_t>(in["class"].i64());
         who.skill = [&](std::uint32_t s) {
@@ -203,8 +203,8 @@ TEST_CASE("GetPcSkillLimit vectors") {
             }
             return it->second;
         };
-        std::int32_t got = nmsc::game::pc_skill_limit(who, skill);
-        bool at = nmsc::game::at_skill_limit(who, skill);
+        std::int32_t got = hailstone::game::pc_skill_limit(who, skill);
+        bool at = hailstone::game::at_skill_limit(who, skill);
         if (!error.empty()) return error;
         if (got != r["out"]["value"].i32()) return std::format("skill {}: {}, original {}", skill, got, r["out"]["value"].i32());
         if (at != r["out"]["at_skill_limit"].truthy()) return std::format("skill {}: at limit differs", skill);
@@ -213,7 +213,7 @@ TEST_CASE("GetPcSkillLimit vectors") {
 }
 
 TEST_CASE("CTextOverlay timing (disassembly)") {
-    nmsc::game::TextOverlay o;
+    hailstone::game::TextOverlay o;
     o.display("Task complete", 14, 1, 0xff, 500, 500, 3000, 1000);
     auto f = o.frame(1000);
     REQUIRE(f);
@@ -231,12 +231,12 @@ TEST_CASE("CTextOverlay timing (disassembly)") {
     CHECK(o.frame(600)->text == "Task complete");
     o.display("failed", 13, 1, 0xff, 500, 500, 3000, 700);
     CHECK(o.frame(700)->text == "failed");
-    CHECK(nmsc::game::text_overlay_rgb(13) == 0xf00000);
-    CHECK(nmsc::game::text_overlay_rgb(15) == 0xf0f000);
-    CHECK(nmsc::game::text_overlay_rgb(3) == 0x606060);
-    CHECK(nmsc::game::task_slot_valid(0, 0));
-    CHECK_FALSE(nmsc::game::task_slot_valid(1, 1));
-    CHECK(nmsc::game::task_slot_valid(2, 28));
-    CHECK_FALSE(nmsc::game::task_slot_valid(3, 29));
-    CHECK_FALSE(nmsc::game::task_slot_valid(4, 0));
+    CHECK(hailstone::game::text_overlay_rgb(13) == 0xf00000);
+    CHECK(hailstone::game::text_overlay_rgb(15) == 0xf0f000);
+    CHECK(hailstone::game::text_overlay_rgb(3) == 0x606060);
+    CHECK(hailstone::game::task_slot_valid(0, 0));
+    CHECK_FALSE(hailstone::game::task_slot_valid(1, 1));
+    CHECK(hailstone::game::task_slot_valid(2, 28));
+    CHECK_FALSE(hailstone::game::task_slot_valid(3, 29));
+    CHECK_FALSE(hailstone::game::task_slot_valid(4, 0));
 }

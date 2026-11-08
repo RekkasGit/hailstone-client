@@ -17,7 +17,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The parts of a physics block (spawn +0x64) the conversions touch.
 struct VehicleBody {
@@ -62,4 +62,4 @@ inline void stop_corpse_slide(std::uint8_t spawn_type, float& speed_x, float& sp
     if (spawn_type == 2 || spawn_type == 3) speed_x = speed_y = 0.0f;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

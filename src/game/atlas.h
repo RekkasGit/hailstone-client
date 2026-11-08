@@ -19,7 +19,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct AtlasRect {
     int left = 0, top = 0, right = 0, bottom = 0; // AtlasWnd_ParseRectAttributes: {X, Y, X + CX, Y + CY}
@@ -60,4 +60,4 @@ struct AtlasPage {
 // One page's text as AtlasWnd_LoadPage reads it.
 AtlasPage parse_atlas_page(std::string_view text);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

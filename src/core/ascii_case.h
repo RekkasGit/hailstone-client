@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace nmsc {
+namespace hailstone {
 
 inline char ascii_lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
 
@@ -56,4 +56,4 @@ inline bool iglob(std::string_view pattern, std::string_view name) {
     return p == pattern.size();
 }
 
-} // namespace nmsc
+} // namespace hailstone

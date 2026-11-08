@@ -19,7 +19,7 @@
 #include "core/float_chars.h"
 #include "core/saturate.h"
 
-namespace nmsc::assets::eqg {
+namespace hailstone::assets::eqg {
 
 namespace {
 
@@ -848,4 +848,4 @@ std::optional<glm::vec3> light_definition_color(std::string_view view) {
            255.0f * k;
 }
 
-} // namespace nmsc::assets::eqg
+} // namespace hailstone::assets::eqg

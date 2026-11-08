@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -134,5 +134,5 @@ std::string element_description(const TaskElement& e, const EqStrings& strings,
 // N's description (`element_text`) when the element exists. At most 4000 characters.
 std::string task_description_text(const Task& task, const std::function<std::string(const TaskElement&)>& element_text);
 
-} // namespace nmsc::game
+} // namespace hailstone::game
 

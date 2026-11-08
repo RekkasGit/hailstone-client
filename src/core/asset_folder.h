@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 class GameDir;
 
@@ -67,4 +67,4 @@ GameDir open_game_dir(const std::filesystem::path& base, const std::filesystem::
 // One line naming what is wrong ("" when ok), for the picker and the log.
 std::string describe(const AssetFolderCheck& check);
 
-} // namespace nmsc
+} // namespace hailstone

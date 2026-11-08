@@ -11,7 +11,7 @@
 #include "game/spells.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -241,4 +241,4 @@ void SpellUi::draw(net::GameConnection& conn, const game::mechanics::Character* 
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

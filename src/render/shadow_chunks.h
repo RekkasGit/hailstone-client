@@ -11,7 +11,7 @@
 
 #include "render/culling.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // A run of indices, all in cell `cell` (ZoneRenderer's cell key, ordered x first), with its box.
 struct CellChunk {
@@ -27,4 +27,4 @@ struct CellChunk {
 // when one of them does.
 std::vector<CellChunk> merge_cell_chunks(std::span<const CellChunk> chunks, std::vector<std::uint32_t>& indices);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

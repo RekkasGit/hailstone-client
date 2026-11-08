@@ -10,7 +10,7 @@
 // Each function names the original it follows (rof2decomp notes/augments.md, items-and-inventory.md §3.5, and
 // re/src/game/item/augment_restrictions.cpp for the fit checks).
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace m = mechanics;
 
@@ -499,4 +499,4 @@ std::vector<AugmentMenuRow> augment_socket_menu(const net::Item& window_item, in
     return rows;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

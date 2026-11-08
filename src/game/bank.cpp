@@ -2,7 +2,7 @@
 
 #include "game/merchant.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using net::Item;
 
@@ -128,4 +128,4 @@ Refusal lore_pickup_refusal(const Item& item, const Inventory& inv) {
     return {pick(has_lore_item(item, inv, false), item, 379, 5305, 5306), {}};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -34,7 +34,7 @@
 
 #include "game/mechanics/hit_by_spell.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class SpellTable;
 class EqStrings;
@@ -92,4 +92,4 @@ mechanics::hit::Hit hit_record(std::uint16_t source, std::uint16_t level, float 
 
 HitLandingResult land_spell(const mechanics::hit::Hit& hit, const HitLandingContext& ctx);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -6,7 +6,7 @@
 
 #include "core/game_dir.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -116,4 +116,4 @@ std::string EqStrings::format(std::uint32_t id, std::span<const std::string> arg
     return expand(expand, it->second, 0);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

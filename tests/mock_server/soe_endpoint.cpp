@@ -5,7 +5,7 @@
 
 #include "core/byte_io.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 using soe::Bytes;
 using soe::ByteSpan;
@@ -311,4 +311,4 @@ void SoeEndpoint::send_disconnect() { transmit(soe::make_disconnect(connect_code
 
 void SoeEndpoint::send_out_of_session() { send_raw({std::byte{0}, std::byte{soe::op::OutOfSession}}); }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

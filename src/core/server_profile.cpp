@@ -10,7 +10,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 char lower(char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
@@ -305,4 +305,4 @@ std::string client_window_title(std::string_view server, std::string_view charac
     return title;
 }
 
-} // namespace nmsc
+} // namespace hailstone

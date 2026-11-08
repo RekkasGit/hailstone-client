@@ -33,7 +33,7 @@ difference from those patches' default.
 
 ### Who may open pages
 
-- The `web` permission (`plugin::kCapWeb`, `NMSC_CAP_WEB`, 4096) covers `/url` and `/www` run by a script or a plugin.
+- The `web` permission (`plugin::kCapWeb`, `HAILSTONE_CAP_WEB`, 4096) covers `/url` and `/www` run by a script or a plugin.
   It is part of `all`, so a server without a `hailstone.cfg`, and `player_caps` left at its default, grant it. A Lua
   social in press mode never has it (as with `ui`); one in full mode has it when its `caps` do.
 - `hailstone.cfg`:
@@ -160,7 +160,7 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
   once.
 - **Not yet:** GPU rendering, audio, macOS.
 - Built with CEF's flags (no exceptions, no RTTI, `-Werror`); the protocol and the address rules come from
-  `nmsc_web_protocol`, built with the client's. MSVC uses the DLL runtime (`/MD`) for both.
+  `hailstone_web_protocol`, built with the client's. MSVC uses the DLL runtime (`/MD`) for both.
 - `libcef.so` comes with its symbols (1.4 GB); the install strips it to about 264 MB.
 
 ### The window (`ui/<pack>/browser.lua`, `app/lua_eq_web.cpp`, `ui/web_textures.h`)
@@ -185,11 +185,11 @@ tools/hailstone-web/   the helper: links CEF, nothing of the client's but browse
 1. **Done:** OP_Weblink, `/url` and `/www` in the system's browser; the `web` permission; `[web] allow`.
 2. **Done:** the helper's messages, the platform pipes and `BrowserHost`, tested against an in-memory helper and
    the stand-in helper program (`tests/mock_web_helper.cpp`: a test pattern, clicks, messages echoed, crashes) over
-   real pipes; the decoder fuzzed. None of it needs CEF, so all of it runs in every build's `nmsc_tests`.
+   real pipes; the decoder fuzzed. None of it needs CEF, so all of it runs in every build's `hailstone_tests`.
 3. **Done for Linux (x64; arm64 and Windows were built by CI's build legs before they were dropped, docs/ci.md, not
    run here):** `tools/hailstone-web` on CEF's pinned
    minimal builds, in `browser/` of the build and the install (below). Open: macOS (CEF needs an app bundle with
-   its helper apps and framework: `NMSC_BROWSER` is off there), and a moment for CEF to write its cookies at
+   its helper apps and framework: `HAILSTONE_BROWSER` is off there), and a moment for CEF to write its cookies at
    shutdown (done since: below).
 4. **Done (unit and window tests; not tried in a live session):** the browser window, BrowserWnd, in the Modern and
    Gamepad packs (below), `eq.Web*` for the packs (docs/dev-ui.md), OP_Weblink and `/web` in it. The texture path

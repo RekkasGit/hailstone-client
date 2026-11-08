@@ -28,7 +28,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // TradeRequest_Struct (8 bytes): OP_TradeRequest and OP_TradeRequestAck.
 // The sender writes {the other side, itself}; the server forwards it as is
@@ -109,4 +109,4 @@ inline constexpr std::size_t kTradeBusySize = 12;
 AppPacket encode(const TradeBusy& v);
 std::optional<TradeBusy> decode_trade_busy(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

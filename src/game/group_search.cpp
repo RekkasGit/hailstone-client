@@ -7,7 +7,7 @@
 #include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -105,4 +105,4 @@ bool group_search_filtered(const GroupSearchFilters& f, const std::string& name,
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

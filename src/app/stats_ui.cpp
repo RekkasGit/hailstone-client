@@ -15,7 +15,7 @@
 #include "game/mechanics/tables.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 using namespace game::mechanics;
 
@@ -259,4 +259,4 @@ void StatsUi::draw(net::GameConnection& conn) {
     ImGui::End();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -14,7 +14,7 @@
 #include "game_files.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -70,7 +70,7 @@ TEST_CASE("Map windows: the toolbar walks a line, adds a label and saves the fou
     const GameDir* game = test::game_dir();
     if (!game) return;
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("map_windows_test");
+    hailstone::test::ScratchDir dir_scratch("map_windows_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir);
     // The server's maps folder (servers/<profile>/maps) takes the edits.
@@ -147,7 +147,7 @@ TEST_CASE("Map windows: the toolbar walks a line, adds a label and saves the fou
 
 TEST_CASE("Map windows: the maps directory is listed with the map closed and kept per character") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir scratch("map_pack_option_test");
+    hailstone::test::ScratchDir scratch("map_pack_option_test");
     const fs::path dir = scratch.path();
     const fs::path maps = dir / "maps";
     fs::create_directories(maps / "brewall");
@@ -191,7 +191,7 @@ TEST_CASE("Map windows: the maps directory is listed with the map closed and kep
 
 TEST_CASE("Map windows: Auto Z is set over eq.MapAutoZ and kept in the UI ini") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir scratch("map_auto_z_test");
+    hailstone::test::ScratchDir scratch("map_auto_z_test");
     const fs::path dir = scratch.path();
     fs::create_directories(dir / "maps");
     auto get = "local on, a, b = eq.MapAutoZ() return tostring(on) .. ',' .. a .. ',' .. b";
@@ -218,7 +218,7 @@ TEST_CASE("Map windows: Auto Z is set over eq.MapAutoZ and kept in the UI ini") 
 
 TEST_CASE("Map windows: an earlier version's AutoZRange sets both Auto Z ranges") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir scratch("map_auto_z_old_test");
+    hailstone::test::ScratchDir scratch("map_auto_z_old_test");
     const fs::path dir = scratch.path();
     fs::create_directories(dir / "maps");
     {

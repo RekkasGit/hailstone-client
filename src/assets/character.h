@@ -39,13 +39,13 @@
 #include "core/game_dir.h"
 #include "assets/wld.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::game {
+namespace hailstone { class GameDir; }
+namespace hailstone::game {
 struct Appearance;
 struct AppearanceData;
-} // namespace nmsc::game
+} // namespace hailstone::game
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // A bone's local transform: local = T(translation) * R(rotation) * S(scale).
 struct BonePose {
@@ -572,4 +572,4 @@ private:
     bool luclin_ = false;
 };
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

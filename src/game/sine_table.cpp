@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <numbers>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -65,4 +65,4 @@ float cmath_sin(float x) { return tables().sin[table_index(x)]; }
 
 float cmath_cos(float x) { return tables().cos[table_index(x)]; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

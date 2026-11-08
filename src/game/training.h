@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kTrainSkills = 100;    // PACKET_SKILL_ARRAY_SIZE
 inline constexpr int kTrainLanguages = 32;
@@ -97,4 +97,4 @@ struct TrainRefusal {
 // PcZoneClient_CanTrainSkillOrLanguage: nullopt when the request may go out.
 std::optional<TrainRefusal> check_train(const TraineeView& who, const TrainingRow& row);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -9,7 +9,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -154,4 +154,4 @@ std::optional<Item> GameConnection::take_item_refresh() {
     return it;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

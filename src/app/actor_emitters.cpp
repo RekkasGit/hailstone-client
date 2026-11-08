@@ -10,7 +10,7 @@
 #include "core/log.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 // eqgame's animation table (0xaae3d8): the standing and idle animations.
@@ -170,4 +170,4 @@ void ActorEmitters::clear() {
     live_.clear();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

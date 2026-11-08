@@ -60,7 +60,7 @@
 #include "ui/lua/lua_host.h"
 #include "ui/ui_ini.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1915,4 +1915,4 @@ void register_map_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<St
     luaL_setfuncs(L, fns, 2);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

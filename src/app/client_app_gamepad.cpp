@@ -5,7 +5,7 @@
 
 #include "app/client_app_internal.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 namespace {
 
@@ -254,4 +254,4 @@ void ClientApp::pad_cursor(const platform::GamepadState& pad, float dt) {
         gamepad_->set_mode(PadMode::Game);
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

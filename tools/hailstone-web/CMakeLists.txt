@@ -3,7 +3,7 @@
 # the client's targets. It and CEF's files go in build/hailstone/browser/ and an install's browser/.
 
 set(CEF_ROOT ${cef_SOURCE_DIR})
-# MSVC: the DLL runtime, as the client's targets (nmsc_web_protocol links in); CEF's default is the static one.
+# MSVC: the DLL runtime, as the client's targets (hailstone_web_protocol links in); CEF's default is the static one.
 set(CEF_RUNTIME_LIBRARY_FLAG "/MD" CACHE STRING "" FORCE)
 set(USE_SANDBOX OFF CACHE BOOL "" FORCE) # no Chromium sandbox yet (docs/browser.md)
 list(APPEND CMAKE_MODULE_PATH ${CEF_ROOT}/cmake)
@@ -14,12 +14,12 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 # chrome-sandbox is the Linux sandbox's setuid helper; the helper runs without the sandbox (hailstone_web.cpp).
 list(REMOVE_ITEM CEF_BINARY_FILES chrome-sandbox)
 
-set(NMSC_BROWSER_DIR ${NMSC_TREE_DIR}/browser)
+set(HAILSTONE_BROWSER_DIR ${HAILSTONE_TREE_DIR}/browser)
 add_executable(hailstone-web hailstone_web.cpp)
 SET_EXECUTABLE_TARGET_PROPERTIES(hailstone-web)
 add_dependencies(hailstone-web libcef_dll_wrapper)
-target_link_libraries(hailstone-web PRIVATE libcef_dll_wrapper nmsc_web_protocol ${CEF_STANDARD_LIBS})
-set_target_properties(hailstone-web PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${NMSC_BROWSER_DIR}$<0:>)
+target_link_libraries(hailstone-web PRIVATE libcef_dll_wrapper hailstone_web_protocol ${CEF_STANDARD_LIBS})
+set_target_properties(hailstone-web PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_BROWSER_DIR}$<0:>)
 
 if(WIN32)
   target_link_libraries(hailstone-web PRIVATE ${CEF_BINARY_DIR}/libcef.lib)
@@ -33,8 +33,8 @@ else()
   set_target_properties(hailstone-web PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN")
 endif()
 
-COPY_FILES(hailstone-web "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${NMSC_BROWSER_DIR}")
-COPY_FILES(hailstone-web "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${NMSC_BROWSER_DIR}")
+COPY_FILES(hailstone-web "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${HAILSTONE_BROWSER_DIR}")
+COPY_FILES(hailstone-web "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${HAILSTONE_BROWSER_DIR}")
 
 install(TARGETS hailstone-web RUNTIME DESTINATION browser)
 foreach(f ${CEF_BINARY_FILES})
@@ -56,8 +56,8 @@ install(FILES ${CEF_ROOT}/LICENSE.txt RENAME CEF-LICENSE.txt DESTINATION browser
 install(FILES ${CEF_ROOT}/CREDITS.html DESTINATION browser)
 if(UNIX AND NOT APPLE)
   # Spotify's libcef.so keeps its symbols (1.4 GB); the installed one is stripped (about 260 MB).
-  find_program(NMSC_STRIP NAMES strip)
-  if(NMSC_STRIP)
-    install(CODE "execute_process(COMMAND ${NMSC_STRIP} --strip-unneeded \"\${CMAKE_INSTALL_PREFIX}/browser/libcef.so\")")
+  find_program(HAILSTONE_STRIP NAMES strip)
+  if(HAILSTONE_STRIP)
+    install(CODE "execute_process(COMMAND ${HAILSTONE_STRIP} --strip-unneeded \"\${CMAKE_INSTALL_PREFIX}/browser/libcef.so\")")
   endif()
 endif()

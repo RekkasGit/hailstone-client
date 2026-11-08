@@ -9,7 +9,7 @@
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -184,4 +184,4 @@ void GameConnection::answer_name_change(const Confirmation& c, bool yes) {
     if (kind == kNameCharacter) system(5973, {}, 0xf);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

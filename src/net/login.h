@@ -18,7 +18,7 @@
 #include "net/packet.h"
 #include "net/session.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // Login opcodes of EQEmu's SoD/RoF2 login port, from
 // loginserver/login_util/login_opcodes_sod.conf (the RoF2 client uses the
@@ -273,4 +273,4 @@ PlayResult parse_play_reply(std::span<const std::byte> data);
 LoginReplyBase parse_kick_reply(std::span<const std::byte> data);
 } // namespace login_codec
 
-} // namespace nmsc::net
+} // namespace hailstone::net

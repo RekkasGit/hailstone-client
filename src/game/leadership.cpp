@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -100,4 +100,4 @@ int leadership_gauge(double exp, double per) {
     return std::isnan(g) ? 0 : static_cast<int>(std::clamp(g, 0.0, 1000.0));
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

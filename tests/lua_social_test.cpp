@@ -3,8 +3,8 @@
 
 #include "game/lua_social.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 TEST_CASE("Lua socials: the file round-trips") {
     LuaSocialFile f;

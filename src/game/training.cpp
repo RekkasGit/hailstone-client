@@ -2,7 +2,7 @@
 
 #include "core/wrap_math.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -151,4 +151,4 @@ std::optional<TrainRefusal> check_train(const TraineeView& who, const TrainingRo
     return TrainRefusal{12931};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

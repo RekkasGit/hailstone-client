@@ -24,9 +24,9 @@
 #include "assets/model.h"
 #include "assets/spell_effects.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 struct Zone;
 
@@ -83,4 +83,4 @@ std::vector<EnvironmentEmitter> parse_environment_emitters(std::string_view text
 // live .eqg's.
 std::size_t add_environment_emitters(const GameDir& game, Zone& zone);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

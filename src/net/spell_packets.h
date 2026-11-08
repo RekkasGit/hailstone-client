@@ -16,7 +16,7 @@
 #include "game/mechanics/cast_spell.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // RoF2 InventorySlot_Struct / the client's ItemGlobalIndex (12 bytes): i32
 // location (EQEmu's i16 Type + i16 Unknown02), i16 slot, sub-index, augment,
@@ -251,4 +251,4 @@ inline constexpr std::uint32_t kAuraAdd = 0, kAuraRemove = 1, kAuraClear = 2;
 std::optional<AuraUpdate> decode_aura_update(const AppPacket& p);
 AppPacket encode(const AuraUpdate& v); // both directions (the remove), and the server's for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

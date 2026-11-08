@@ -5,7 +5,7 @@
 
 #include "game/inventory.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -130,4 +130,4 @@ BagMovePlan plan_bag_move(const net::Item& cursor, const net::Item& target, bool
     return plan;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

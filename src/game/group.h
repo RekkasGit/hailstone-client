@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kGroupSlots = 6;
 
@@ -118,4 +118,4 @@ struct ParsedPetCommand {
 };
 std::optional<ParsedPetCommand> parse_pet_command(const std::string& args);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

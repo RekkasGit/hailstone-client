@@ -18,16 +18,16 @@
 #include "plugin/web_access.h"
 #include "web/browser_host.h"
 
-#define NMSC_HOST // the SDK's structs only, not the plugin side
-#include "nmsc_plugin.h"
+#define HAILSTONE_HOST // the SDK's structs only, not the plugin side
+#include "hailstone_plugin.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Host {
-    mq_test::World world{"nmsc_native_plugins_test"};
+    mq_test::World world{"hailstone_native_plugins_test"};
     fs::path plugin_dir = world.dir / "plugins";
     plugin::Hooks hooks;
     plugin::Policy policy;
@@ -41,7 +41,7 @@ struct Host {
 
     // own_folder: the binary in the plugin's own folder, plugins/MQ2Example/, not directly in plugins/.
     // `built`: the plugin to put in the folder (the example; tests/plugins/HostProbe.cpp ...).
-    explicit Host(bool own_folder = false, plugin::WebAccess* web = nullptr, fs::path built = NMSC_EXAMPLE_PLUGIN) {
+    explicit Host(bool own_folder = false, plugin::WebAccess* web = nullptr, fs::path built = HAILSTONE_EXAMPLE_PLUGIN) {
         fs::path dir = own_folder ? plugin_dir / "MQ2Example" : plugin_dir;
         fs::create_directories(dir);
         file = dir / built.filename();
@@ -478,11 +478,11 @@ TEST_CASE("native plugins: a binary in the plugin's own folder under plugins/") 
     h.plugins->unload("MQ2Example");
 }
 
-#ifdef NMSC_MOCK_WEB_HELPER
-// ABI 3 (sdk/nmsc_plugin.h web_*) through the example plugin's /webexample, over the app's WebService and the
+#ifdef HAILSTONE_MOCK_WEB_HELPER
+// ABI 3 (sdk/hailstone_plugin.h web_*) through the example plugin's /webexample, over the app's WebService and the
 // stand-in helper: the plugin's own tab, a message both ways, the server's sites, 'web' required, closed at unload.
 TEST_CASE("native plugins: web pages of the plugin's own (ABI 3), under 'web', closed when it unloads") {
-    web::BrowserHost browser([] { return web::process_transport({NMSC_MOCK_WEB_HELPER}); });
+    web::BrowserHost browser([] { return web::process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
     app::WebService web({[&] { return &browser; }, [] { return nullptr; }, [] { return std::string(); },
                          [] { return std::vector<std::string>{"example.org"}; }, [] {}});
     {
@@ -525,7 +525,7 @@ TEST_CASE("native plugins: web pages of the plugin's own (ABI 3), under 'web', c
 #endif
 
 TEST_CASE("native plugins: host functions from another thread do nothing; the caller's capabilities are none there") {
-    Host h(false, nullptr, NMSC_PROBE_PLUGIN);
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probethread");
@@ -550,7 +550,7 @@ TEST_CASE("native plugins: host functions from another thread do nothing; the ca
 
 TEST_CASE("native plugins: an exception out of a plugin is caught; out of InitializePlugin it leaves nothing behind") {
     {
-        Host h(false, nullptr, NMSC_PROBE_THROW_PLUGIN);
+        Host h(false, nullptr, HAILSTONE_PROBE_THROW_PLUGIN);
         h.approve(plugin::kCapAll);
         std::string why;
         CHECK_FALSE(h.plugins->load("HostProbeThrow", &why));
@@ -561,7 +561,7 @@ TEST_CASE("native plugins: an exception out of a plugin is caught; out of Initia
         CHECK_FALSE(h.reg.has_tlo("Probe"));
         CHECK(h.p("${Probe}") == "NULL");
     }
-    Host h(false, nullptr, NMSC_PROBE_PLUGIN);
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probethrow");
@@ -610,16 +610,16 @@ struct OneTab : plugin::WebAccess {
 };
 } // namespace
 
-TEST_CASE("native plugins: web_state fills what a shorter NmscWebState holds, as the other structs") {
+TEST_CASE("native plugins: web_state fills what a shorter HailstoneWebState holds, as the other structs") {
     OneTab web;
-    Host h(false, &web, NMSC_PROBE_PLUGIN);
+    Host h(false, &web, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
-    h.run("/probestate " + std::to_string(sizeof(NmscWebState)));
-    CHECK(h.printed_line("[Probe] state 1, size " + std::to_string(sizeof(NmscWebState)) +
+    h.run("/probestate " + std::to_string(sizeof(HailstoneWebState)));
+    CHECK(h.printed_line("[Probe] state 1, size " + std::to_string(sizeof(HailstoneWebState)) +
                          ", url https://example.org/, title Example"));
     // A plugin whose struct ended before the title: the url, the title left alone, its size kept.
-    const std::size_t shorter = offsetof(NmscWebState, title);
+    const std::size_t shorter = offsetof(HailstoneWebState, title);
     h.run("/probestate " + std::to_string(shorter));
     CHECK(h.printed_line("[Probe] state 1, size " + std::to_string(shorter) + ", url https://example.org/, title untouched"));
     h.run("/probestate 2"); // not even its size
@@ -631,7 +631,7 @@ TEST_CASE("native plugins: web_state fills what a shorter NmscWebState holds, as
 TEST_CASE("native plugins: web_message with no buffer gives the length and keeps the message") {
     OneTab web;
     web.messages = {"a long message of thirty-two byte", "next"};
-    Host h(false, &web, NMSC_PROBE_PLUGIN);
+    Host h(false, &web, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
     h.run("/probemessage 0");

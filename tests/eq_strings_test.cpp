@@ -6,9 +6,9 @@
 #include "game/eq_strings.h"
 #include "game_files.h"
 
-TEST_CASE("eqstr templates fill %n, %Tn and %Bn(type)" * doctest::skip(!nmsc::test::game_dir())) {
-    nmsc::game::EqStrings s;
-    s.load(*nmsc::test::game_dir());
+TEST_CASE("eqstr templates fill %n, %Tn and %Bn(type)" * doctest::skip(!hailstone::test::game_dir())) {
+    hailstone::game::EqStrings s;
+    s.load(*hailstone::test::game_dir());
     REQUIRE(s.loaded());
     std::vector<std::string> args{"1597", "0", "1215"};
     // %T3: argument 3 is an eqstr id (1215 "points"), expanded (FormatEqStrTemplate @0x4e1540).

@@ -28,7 +28,7 @@ std::string global(lua_State* L, const char* name) {
     return v;
 }
 // A global of a plugin folder's own (its scripts' globals are a table of their own).
-std::string folder_global(nmsc::ui::lua::LuaUi& lua, const char* tag, const char* name) {
+std::string folder_global(hailstone::ui::lua::LuaUi& lua, const char* tag, const char* name) {
     lua_State* L = lua.state();
     lua.push_folder_env_for_test(tag);
     std::string v = "nil";
@@ -41,7 +41,7 @@ std::string folder_global(nmsc::ui::lua::LuaUi& lua, const char* tag, const char
     lua_pop(L, 1);
     return v;
 }
-void set_folder_global(nmsc::ui::lua::LuaUi& lua, const char* tag, const char* name) {
+void set_folder_global(hailstone::ui::lua::LuaUi& lua, const char* tag, const char* name) {
     lua_State* L = lua.state();
     lua.push_folder_env_for_test(tag);
     if (lua_istable(L, -1)) {
@@ -51,7 +51,7 @@ void set_folder_global(nmsc::ui::lua::LuaUi& lua, const char* tag, const char* n
     lua_pop(L, 1);
 }
 // Runs `code` as a chunk of the folder `tag` (with its globals); its first result as text, or "error: ...".
-std::string run_in(nmsc::ui::lua::LuaUi& lua, const char* tag, const std::string& code) {
+std::string run_in(hailstone::ui::lua::LuaUi& lua, const char* tag, const std::string& code) {
     lua_State* L = lua.state();
     if (luaL_loadstring(L, code.c_str()) != LUA_OK) {
         std::string e = lua_tostring(L, -1);
@@ -72,7 +72,7 @@ std::string run_in(nmsc::ui::lua::LuaUi& lua, const char* tag, const std::string
 } // namespace
 
 TEST_CASE("Lua UI: a plugin's folder of windows, its own dofile root, gone with the folder") {
-    nmsc::test::ScratchDir scratch("lua_folders_test");
+    hailstone::test::ScratchDir scratch("lua_folders_test");
     const fs::path pack = scratch.path() / "pack", plug = scratch.path() / "plug" / "ui" / "pack";
     fs::create_directories(pack / "lib");
     fs::create_directories(plug / "lib");
@@ -88,7 +88,7 @@ TEST_CASE("Lua UI: a plugin's folder of windows, its own dofile root, gone with 
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frame = [&] {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -116,7 +116,7 @@ TEST_CASE("Lua UI: a plugin's folder of windows, its own dofile root, gone with 
 }
 
 TEST_CASE("Lua UI: a plugin's window covers the pack's of the same name; ui.base_window draws the pack's") {
-    nmsc::test::ScratchDir scratch("lua_folders_cover_test");
+    hailstone::test::ScratchDir scratch("lua_folders_cover_test");
     const fs::path pack = scratch.path() / "pack", plug = scratch.path() / "plug", other = scratch.path() / "other";
     fs::create_directories(pack);
     fs::create_directories(plug);
@@ -133,7 +133,7 @@ TEST_CASE("Lua UI: a plugin's window covers the pack's of the same name; ui.base
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frame = [&] {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -189,7 +189,7 @@ TEST_CASE("Lua UI: a plugin's window covers the pack's of the same name; ui.base
 }
 
 TEST_CASE("Lua UI: a plugin's code keeps to its own globals, sees eq, ui and the libraries read-only, loads text only") {
-    nmsc::test::ScratchDir scratch("lua_folders_confine_test");
+    hailstone::test::ScratchDir scratch("lua_folders_confine_test");
     const fs::path pack = scratch.path() / "pack", plug = scratch.path() / "plug";
     fs::create_directories(pack / "lib");
     fs::create_directories(plug);
@@ -218,7 +218,7 @@ TEST_CASE("Lua UI: a plugin's code keeps to its own globals, sees eq, ui and the
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frame = [&] {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -288,7 +288,7 @@ TEST_CASE("Lua UI: a plugin's code keeps to its own globals, sees eq, ui and the
 }
 
 TEST_CASE("Lua UI: a plugin's code runs as the plugin: its load, its windows, and the eq functions it took") {
-    nmsc::test::ScratchDir scratch("lua_folders_caller_test");
+    hailstone::test::ScratchDir scratch("lua_folders_caller_test");
     const fs::path pack = scratch.path() / "pack", plug = scratch.path() / "plug";
     fs::create_directories(pack);
     fs::create_directories(plug);
@@ -309,10 +309,10 @@ TEST_CASE("Lua UI: a plugin's code runs as the plugin: its load, its windows, an
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(pack, scratch.path() / "ui.txt");
         lua.add_eq_api([](lua_State* L) {
             lua_pushcfunction(L, [](lua_State* S) -> int {
-                const std::string tag(nmsc::ui::lua::LuaUi::caller_tag());
+                const std::string tag(hailstone::ui::lua::LuaUi::caller_tag());
                 lua_pushstring(S, tag.empty() ? "pack" : tag.c_str());
                 return 1;
             });
@@ -342,12 +342,12 @@ TEST_CASE("Lua UI: a plugin's code runs as the plugin: its load, its windows, an
         CHECK(live == 0); // every scope ended
         CHECK(std::find(scopes.begin(), scopes.end(), "plug") != scopes.end());
         CHECK(std::find(scopes.begin(), scopes.end(), "") == scopes.end()); // the pack's own code: none
-        CHECK(nmsc::ui::lua::LuaUi::caller_tag().empty());
+        CHECK(hailstone::ui::lua::LuaUi::caller_tag().empty());
         // An error inside a wrapped call ends its scope too.
         CHECK(run_in(lua, "plug", "return pcall(eq.Who, nil) and eq.Who()") == "plug");
         CHECK(run_in(lua, "plug", "return select(2, pcall(ui.window, 'x'))").find("bad argument") != std::string::npos);
         CHECK(live == 0);
-        CHECK(nmsc::ui::lua::LuaUi::caller_tag().empty());
+        CHECK(hailstone::ui::lua::LuaUi::caller_tag().empty());
         // A window the plugin registers from outside its load is still the plugin's: it goes with the folder, and
         // one registered after that is not taken.
         run_in(lua, "plug",

@@ -5,11 +5,11 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the build 
 project(hailstone VERSION 0.6.0 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
-set(NMSC_VERSION_LABEL "beta")
-if(NMSC_VERSION_LABEL STREQUAL "")
-  set(NMSC_RELEASE_VERSION ${PROJECT_VERSION})
+set(HAILSTONE_VERSION_LABEL "beta")
+if(HAILSTONE_VERSION_LABEL STREQUAL "")
+  set(HAILSTONE_RELEASE_VERSION ${PROJECT_VERSION})
 else()
-  set(NMSC_RELEASE_VERSION ${PROJECT_VERSION}-${NMSC_VERSION_LABEL})
+  set(HAILSTONE_RELEASE_VERSION ${PROJECT_VERSION}-${HAILSTONE_VERSION_LABEL})
 endif()
 
 # Portable RoF2-compatible client. Plan: docs/plan.md
@@ -25,14 +25,37 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(NMSC_BUILD_TESTS "Build unit tests" ON)
-option(NMSC_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
-option(NMSC_LIBFUZZER "Build libFuzzer targets (needs Clang; turns on NMSC_SANITIZE)" OFF)
-if(NMSC_LIBFUZZER)
-  set(NMSC_SANITIZE ON)
+# The build's options and settings were NMSC_* up to 0.6. One still set (on the command line, or in an older build
+# folder) is taken as its HAILSTONE_* name when that is not set, so an old build folder or script keeps its settings.
+get_cmake_property(_hailstone_cache CACHE_VARIABLES)
+foreach(_old IN LISTS _hailstone_cache)
+  if(NOT _old MATCHES "^NMSC_(.+)$")
+    continue()
+  endif()
+  set(_new "HAILSTONE_${CMAKE_MATCH_1}")
+  if(NOT DEFINED CACHE{${_new}})
+    get_property(_type CACHE ${_old} PROPERTY TYPE)
+    get_property(_help CACHE ${_old} PROPERTY HELPSTRING)
+    if(NOT _type OR _type STREQUAL "UNINITIALIZED")
+      set(_type STRING)
+    endif()
+    set(${_new} "$CACHE{${_old}}" CACHE ${_type} "${_help}")
+    if(NOT _type STREQUAL "INTERNAL")
+      message(WARNING "${_old} is now called ${_new}; the build uses its value as ${_new}")
+    endif()
+  elseif(NOT "$CACHE{${_old}}" STREQUAL "$CACHE{${_new}}")
+    message(WARNING "${_old} is ignored: it is now called ${_new}, which is set to \"$CACHE{${_new}}\"")
+  endif()
+endforeach()
+
+option(HAILSTONE_BUILD_TESTS "Build unit tests" ON)
+option(HAILSTONE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
+option(HAILSTONE_LIBFUZZER "Build libFuzzer targets (needs Clang; turns on HAILSTONE_SANITIZE)" OFF)
+if(HAILSTONE_LIBFUZZER)
+  set(HAILSTONE_SANITIZE ON)
 endif()
 
-if(NMSC_SANITIZE AND NOT MSVC)
+if(HAILSTONE_SANITIZE AND NOT MSVC)
   # Applies to every target, including the fetched libraries, so the runtime is consistent.
   add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g)
   add_link_options(-fsanitize=address,undefined)
@@ -42,17 +65,17 @@ if(NMSC_SANITIZE AND NOT MSVC)
 endif()
 
 # Run clang-tidy (config in .clang-tidy) on our own sources while compiling. Needs clang-tidy on PATH.
-option(NMSC_CLANG_TIDY "Run clang-tidy on the engine, app and tools while building" OFF)
+option(HAILSTONE_CLANG_TIDY "Run clang-tidy on the engine, app and tools while building" OFF)
 
 # The in-game browser's helper (tools/hailstone-web, docs/browser.md) on CEF's binary builds, fetched at configure
 # time (a few hundred MB). Off in sanitizer builds (CEF's binaries are not instrumented) and on macOS (its app bundles
 # are not done yet); without it pages open in the system's browser.
-if(NMSC_SANITIZE OR APPLE)
-  set(NMSC_BROWSER_DEFAULT OFF)
+if(HAILSTONE_SANITIZE OR APPLE)
+  set(HAILSTONE_BROWSER_DEFAULT OFF)
 else()
-  set(NMSC_BROWSER_DEFAULT ON)
+  set(HAILSTONE_BROWSER_DEFAULT ON)
 endif()
-option(NMSC_BROWSER "Build the in-game browser's helper on CEF" ${NMSC_BROWSER_DEFAULT})
+option(HAILSTONE_BROWSER "Build the in-game browser's helper on CEF" ${HAILSTONE_BROWSER_DEFAULT})
 
 # Lua is built as C, so a Lua error longjmps through the C++ functions it called. MSVC's longjmp unwinds like an
 # exception, but under its default /EHsc the compiler assumes extern "C" functions never throw and keeps no exact
@@ -68,19 +91,19 @@ include(Dependencies)
 include(Shaders)
 
 if(MSVC)
-  set(NMSC_WARNINGS /W4 /permissive- /utf-8)
+  set(HAILSTONE_WARNINGS /W4 /permissive- /utf-8)
 else()
-  set(NMSC_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wno-missing-field-initializers)
+  set(HAILSTONE_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Wno-missing-field-initializers)
 endif()
 
-if(NMSC_CLANG_TIDY)
-  find_program(NMSC_CLANG_TIDY_EXE NAMES clang-tidy clang-tidy-18 clang-tidy-19 clang-tidy-20 REQUIRED)
+if(HAILSTONE_CLANG_TIDY)
+  find_program(HAILSTONE_CLANG_TIDY_EXE NAMES clang-tidy clang-tidy-18 clang-tidy-19 clang-tidy-20 REQUIRED)
   # Applied per target below, so third_party and the fetched dependencies are never analysed.
-  set(NMSC_TIDY_COMMAND ${NMSC_CLANG_TIDY_EXE})
+  set(HAILSTONE_TIDY_COMMAND ${HAILSTONE_CLANG_TIDY_EXE})
 endif()
 
 # Engine library: everything except main(), so tools and tests link it too.
-add_library(nmsc_engine STATIC
+add_library(hailstone_engine STATIC
   src/core/log.cpp
   src/core/build_info.cpp
   src/core/zip_write.cpp
@@ -575,76 +598,76 @@ if(NOT MSVC)
 set_source_files_properties(src/game/mechanics/vehicle.cpp src/game/mechanics/ladder.cpp
     PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 endif()
-target_include_directories(nmsc_engine PUBLIC src)
-# The plugin SDK (sdk/nmsc_plugin.h): the host side of the C interface.
-target_include_directories(nmsc_engine PRIVATE sdk)
+target_include_directories(hailstone_engine PUBLIC src)
+# The plugin SDK (sdk/hailstone_plugin.h): the host side of the C interface.
+target_include_directories(hailstone_engine PRIVATE sdk)
 # The build's version line (core/build_info.h), remade at each build from git.
-add_custom_target(nmsc_build_info
-  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DVERSION=${NMSC_RELEASE_VERSION}
+add_custom_target(hailstone_build_info
+  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DVERSION=${HAILSTONE_RELEASE_VERSION}
           -DOUT=${CMAKE_BINARY_DIR}/generated/build_info.inc -P ${CMAKE_SOURCE_DIR}/cmake/BuildInfo.cmake
   BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/build_info.inc
   COMMENT "Build version")
-add_dependencies(nmsc_engine nmsc_build_info)
+add_dependencies(hailstone_engine hailstone_build_info)
 set_source_files_properties(src/core/build_info.cpp PROPERTIES OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/generated/build_info.inc)
-target_include_directories(nmsc_engine PRIVATE ${CMAKE_BINARY_DIR}/generated)
+target_include_directories(hailstone_engine PRIVATE ${CMAKE_BINARY_DIR}/generated)
 # Lua 5.4.7 (third_party/lua, MIT), for the Lua UI (src/ui/lua): compiled as C.
-file(GLOB NMSC_LUA_SOURCES CONFIGURE_DEPENDS third_party/lua/*.c)
-add_library(nmsc_lua STATIC ${NMSC_LUA_SOURCES})
-target_include_directories(nmsc_lua PUBLIC third_party/lua)
-set_target_properties(nmsc_lua PROPERTIES LINKER_LANGUAGE C)
+file(GLOB HAILSTONE_LUA_SOURCES CONFIGURE_DEPENDS third_party/lua/*.c)
+add_library(hailstone_lua STATIC ${HAILSTONE_LUA_SOURCES})
+target_include_directories(hailstone_lua PUBLIC third_party/lua)
+set_target_properties(hailstone_lua PROPERTIES LINKER_LANGUAGE C)
 if(NOT MSVC)
-  target_compile_options(nmsc_lua PRIVATE -w)
-  target_compile_definitions(nmsc_lua PRIVATE $<$<PLATFORM_ID:Linux>:LUA_USE_LINUX> $<$<PLATFORM_ID:Darwin>:LUA_USE_MACOSX>)
+  target_compile_options(hailstone_lua PRIVATE -w)
+  target_compile_definitions(hailstone_lua PRIVATE $<$<PLATFORM_ID:Linux>:LUA_USE_LINUX> $<$<PLATFORM_ID:Darwin>:LUA_USE_MACOSX>)
 endif()
-target_link_libraries(nmsc_engine PUBLIC nmsc_lua nmsc_web_protocol)
-target_compile_options(nmsc_engine PRIVATE ${NMSC_WARNINGS})
-if(NMSC_CLANG_TIDY)
-  set_target_properties(nmsc_engine PROPERTIES CXX_CLANG_TIDY "${NMSC_TIDY_COMMAND}")
+target_link_libraries(hailstone_engine PUBLIC hailstone_lua hailstone_web_protocol)
+target_compile_options(hailstone_engine PRIVATE ${HAILSTONE_WARNINGS})
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone_engine PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
 endif()
-target_compile_definitions(nmsc_engine PUBLIC VK_NO_PROTOTYPES GLM_FORCE_DEPTH_ZERO_TO_ONE GLM_FORCE_RADIANS)
-target_link_libraries(nmsc_engine PUBLIC imgui nmsc_audio_headers nmsc_bcdec nmsc_stb nmsc_recast nmsc_monocypher)
+target_compile_definitions(hailstone_engine PUBLIC VK_NO_PROTOTYPES GLM_FORCE_DEPTH_ZERO_TO_ONE GLM_FORCE_RADIANS)
+target_link_libraries(hailstone_engine PUBLIC imgui hailstone_audio_headers hailstone_bcdec hailstone_stb hailstone_recast hailstone_monocypher)
 # The updater (app/updater.h, docs/updater.md): the address of the release feed's manifest, and the release key's
 # public half (64 hex digits) its signature is checked with: update-key.pub at the top of the tree, or this option.
 # Without a key the build has no updates.
-set(NMSC_UPDATE_FEED "https://github.com/projecthailstone/hailstone-client/releases/latest/download/hailstone-update.txt"
+set(HAILSTONE_UPDATE_FEED "https://github.com/projecthailstone/hailstone-client/releases/latest/download/hailstone-update.txt"
     CACHE STRING "The update manifest's address")
 # The add-on index (core/addon_index.h, docs/addons.md "Suggested add-ons"), signed with the same release key.
-set(NMSC_ADDON_INDEX "https://raw.githubusercontent.com/projecthailstone/hailstone-addon-index/HEAD/hailstone-addon-index.txt"
+set(HAILSTONE_ADDON_INDEX "https://raw.githubusercontent.com/projecthailstone/hailstone-addon-index/HEAD/hailstone-addon-index.txt"
     CACHE STRING "The add-on index's address; empty: no suggested add-ons")
 # Hailstone's page, which the login screen's GitHub button opens (docs/updater.md "What the player sees").
-set(NMSC_PROJECT_PAGE "https://github.com/projecthailstone/hailstone-client" CACHE STRING "Hailstone's web page")
-set(NMSC_UPDATE_KEY_DEFAULT "")
+set(HAILSTONE_PROJECT_PAGE "https://github.com/projecthailstone/hailstone-client" CACHE STRING "Hailstone's web page")
+set(HAILSTONE_UPDATE_KEY_DEFAULT "")
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub)
-  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub NMSC_UPDATE_KEY_DEFAULT REGEX "^[0-9a-fA-F]+$" LIMIT_COUNT 1)
+  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub HAILSTONE_UPDATE_KEY_DEFAULT REGEX "^[0-9a-fA-F]+$" LIMIT_COUNT 1)
 endif()
-set(NMSC_UPDATE_KEY "${NMSC_UPDATE_KEY_DEFAULT}" CACHE STRING "The release key's public half (hex); empty: no updates")
+set(HAILSTONE_UPDATE_KEY "${HAILSTONE_UPDATE_KEY_DEFAULT}" CACHE STRING "The release key's public half (hex); empty: no updates")
 set_property(SOURCE src/app/updater.cpp APPEND PROPERTY COMPILE_DEFINITIONS
-             NMSC_UPDATE_FEED="${NMSC_UPDATE_FEED}" NMSC_UPDATE_KEY="${NMSC_UPDATE_KEY}"
-             NMSC_ADDON_INDEX="${NMSC_ADDON_INDEX}" NMSC_PROJECT_PAGE="${NMSC_PROJECT_PAGE}")
-target_link_libraries(nmsc_engine PUBLIC SDL3::SDL3 Vulkan::Headers volk::volk_headers GPUOpen::VulkanMemoryAllocator glm::glm ZLIB::ZLIB)
+             HAILSTONE_UPDATE_FEED="${HAILSTONE_UPDATE_FEED}" HAILSTONE_UPDATE_KEY="${HAILSTONE_UPDATE_KEY}"
+             HAILSTONE_ADDON_INDEX="${HAILSTONE_ADDON_INDEX}" HAILSTONE_PROJECT_PAGE="${HAILSTONE_PROJECT_PAGE}")
+target_link_libraries(hailstone_engine PUBLIC SDL3::SDL3 Vulkan::Headers volk::volk_headers GPUOpen::VulkanMemoryAllocator glm::glm ZLIB::ZLIB)
 if(WIN32)
-  target_link_libraries(nmsc_engine PUBLIC ws2_32 advapi32 dbghelp winhttp)
+  target_link_libraries(hailstone_engine PUBLIC ws2_32 advapi32 dbghelp winhttp)
 elseif(APPLE)
-  target_link_libraries(nmsc_engine PUBLIC "-framework Security" "-framework CoreFoundation")
+  target_link_libraries(hailstone_engine PUBLIC "-framework Security" "-framework CoreFoundation")
 else()
-  target_link_libraries(nmsc_engine PUBLIC ${CMAKE_DL_LIBS}) # libsecret, opened when first used (platform/credentials.h)
+  target_link_libraries(hailstone_engine PUBLIC ${CMAKE_DL_LIBS}) # libsecret, opened when first used (platform/credentials.h)
 endif()
 if(MSVC)
   # getenv, sscanf and _wfopen are fine as used: no "use the _s form" warnings.
-  target_compile_definitions(nmsc_engine PUBLIC _CRT_SECURE_NO_WARNINGS)
+  target_compile_definitions(hailstone_engine PUBLIC _CRT_SECURE_NO_WARNINGS)
 endif()
 # Windows: the programs run with UTF-8 as their ANSI code page (Windows 10 1903 and later), so narrow file names,
 # getenv and path::string() hold any name instead of '?' or an exception (cmake/utf8.manifest). MSVC-style linkers
 # take a .manifest source; MinGW would need a resource file.
-set(NMSC_WIN_MANIFEST "")
-set(NMSC_WIN_CLIENT_RESOURCES "")
+set(HAILSTONE_WIN_MANIFEST "")
+set(HAILSTONE_WIN_CLIENT_RESOURCES "")
 if(MSVC)
-  set(NMSC_WIN_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/utf8.manifest)
+  set(HAILSTONE_WIN_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/utf8.manifest)
   # The client's icon in the .exe (cmake/windows/hailstone.rc).
-  set(NMSC_WIN_CLIENT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/windows/hailstone.rc)
+  set(HAILSTONE_WIN_CLIENT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/windows/hailstone.rc)
 endif()
 
-nmsc_add_shaders(nmsc_shaders
+hailstone_add_shaders(hailstone_shaders
   shaders/zone.vert
   shaders/zone.frag
   shaders/spawn.vert
@@ -691,60 +714,60 @@ nmsc_add_shaders(nmsc_shaders
   shaders/fsr_easu.frag
   shaders/fsr_rcas.frag
 )
-add_dependencies(nmsc_engine nmsc_shaders)
+add_dependencies(hailstone_engine hailstone_shaders)
 
 # The client's folder (docs/layout.md): the build makes it in build/hailstone/, as an install does. The binary,
 # shaders/, ui/ and the runtime DLLs; the data Hailstone writes (hailstone.ini, servers/, logs/ ...) lands beside them,
 # since a dev build's folder is writable. $<0:> keeps multi-config generators from adding a Debug/Release level.
-set(NMSC_TREE_DIR ${CMAKE_BINARY_DIR}/hailstone)
+set(HAILSTONE_TREE_DIR ${CMAKE_BINARY_DIR}/hailstone)
 # Builds before the folder put the binary itself at build/hailstone: that file has to make way for the folder.
-if(EXISTS ${NMSC_TREE_DIR} AND NOT IS_DIRECTORY ${NMSC_TREE_DIR})
-  file(REMOVE ${NMSC_TREE_DIR})
+if(EXISTS ${HAILSTONE_TREE_DIR} AND NOT IS_DIRECTORY ${HAILSTONE_TREE_DIR})
+  file(REMOVE ${HAILSTONE_TREE_DIR})
 endif()
 
-# The example compiled plugin (plugins/example): plain C against sdk/nmsc_plugin.h, in build/hailstone/plugins.
+# The example compiled plugin (plugins/example): plain C against sdk/hailstone_plugin.h, in build/hailstone/plugins.
 add_library(MQ2Example MODULE plugins/example/MQ2Example.c)
 target_include_directories(MQ2Example PRIVATE sdk)
-set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${NMSC_TREE_DIR}/plugins$<0:>
-                                            RUNTIME_OUTPUT_DIRECTORY ${NMSC_TREE_DIR}/plugins$<0:>)
+set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>
+                                            RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>)
 
 # The server plugins are kept in repositories of their own and reach players as add-ons (docs/addons.md): the NMS
 # server's (projecthailstone/hailstone-nms) and the Project Triune server's (projecthailstone/hailstone-projecttriune,
 # private). Cloned into plugins/nms or plugins/projecttriune (both ignored here), each is built from its own
 # CMakeLists.txt (the nms and projecttriune targets, in build/hailstone/plugins/<name>/), and its logic
-# (NMSC_NMS_LOGIC, NMSC_TRIUNE_LOGIC) and tests (NMSC_NMS_TESTS, NMSC_TRIUNE_TESTS) join the tests. Without the
+# (HAILSTONE_NMS_LOGIC, HAILSTONE_TRIUNE_LOGIC) and tests (HAILSTONE_NMS_TESTS, HAILSTONE_TRIUNE_TESTS) join the tests. Without the
 # folder nothing of it is built.
-set(NMSC_HAS_NMS OFF)
-set(NMSC_NMS_LOGIC)
-set(NMSC_NMS_TESTS)
+set(HAILSTONE_HAS_NMS OFF)
+set(HAILSTONE_NMS_LOGIC)
+set(HAILSTONE_NMS_TESTS)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/nms/CMakeLists.txt)
   add_subdirectory(plugins/nms)
-  set(NMSC_HAS_NMS ON)
+  set(HAILSTONE_HAS_NMS ON)
 endif()
-set(NMSC_HAS_TRIUNE OFF)
-set(NMSC_TRIUNE_LOGIC)
-set(NMSC_TRIUNE_TESTS)
+set(HAILSTONE_HAS_TRIUNE OFF)
+set(HAILSTONE_TRIUNE_LOGIC)
+set(HAILSTONE_TRIUNE_TESTS)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/projecttriune/CMakeLists.txt)
   add_subdirectory(plugins/projecttriune)
-  set(NMSC_HAS_TRIUNE ON)
+  set(HAILSTONE_HAS_TRIUNE ON)
 endif()
 
-add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${NMSC_WIN_MANIFEST} ${NMSC_WIN_CLIENT_RESOURCES})
-target_compile_options(hailstone PRIVATE ${NMSC_WARNINGS})
+add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${HAILSTONE_WIN_MANIFEST} ${HAILSTONE_WIN_CLIENT_RESOURCES})
+target_compile_options(hailstone PRIVATE ${HAILSTONE_WARNINGS})
 # Windows: a Release (or MinSizeRel) client is a GUI program, so no console window opens beside it; main() stays the
 # entry point. Other builds keep the console for the log. Errors that stop a start are shown in a dialog either way
 # (app/startup_error.h), and the log is in logs/hailstone.log.
 if(MSVC)
   target_link_options(hailstone PRIVATE $<$<CONFIG:Release,MinSizeRel>:/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup>)
 endif()
-if(NMSC_CLANG_TIDY)
-  set_target_properties(hailstone PROPERTIES CXX_CLANG_TIDY "${NMSC_TIDY_COMMAND}")
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
 endif()
-target_link_libraries(hailstone PRIVATE nmsc_engine)
-set_target_properties(hailstone PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${NMSC_TREE_DIR}$<0:>)
+target_link_libraries(hailstone PRIVATE hailstone_engine)
+set_target_properties(hailstone PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}$<0:>)
 # Shaders are looked up next to the executable.
 add_custom_command(TARGET hailstone POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${NMSC_SHADER_OUT} $<TARGET_FILE_DIR:hailstone>/shaders)
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${HAILSTONE_SHADER_OUT} $<TARGET_FILE_DIR:hailstone>/shaders)
 if(WIN32)
   add_custom_command(TARGET hailstone POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:hailstone> $<TARGET_FILE_DIR:hailstone>
@@ -761,9 +784,9 @@ add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/pictures $<TARGET_FILE_DIR:hailstone>/pictures
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/flora $<TARGET_FILE_DIR:hailstone>/flora
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md $<TARGET_FILE_DIR:hailstone>)
-if(NMSC_MOLTENVK_DYLIB)
+if(HAILSTONE_MOLTENVK_DYLIB)
   add_custom_command(TARGET hailstone POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NMSC_MOLTENVK_DYLIB} $<TARGET_FILE_DIR:hailstone>)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${HAILSTONE_MOLTENVK_DYLIB} $<TARGET_FILE_DIR:hailstone>)
 endif()
 
 # cmake --install build --prefix <dir> gives the same folder: <dir>/hailstone(.exe), shaders/, ui/, icons/, pictures/, CHANGELOG.md and the shared
@@ -777,22 +800,22 @@ elseif(UNIX)
   set_target_properties(hailstone PROPERTIES INSTALL_RPATH "$ORIGIN")
 endif()
 install(TARGETS hailstone RUNTIME DESTINATION .)
-install(DIRECTORY ${NMSC_SHADER_OUT}/ DESTINATION shaders FILES_MATCHING PATTERN "*.spv")
+install(DIRECTORY ${HAILSTONE_SHADER_OUT}/ DESTINATION shaders FILES_MATCHING PATTERN "*.spv")
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ui/ DESTINATION ui)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
-if(NMSC_MOLTENVK_DYLIB)
+if(HAILSTONE_MOLTENVK_DYLIB)
   # macOS: Vulkan itself, beside the binary (platform/paths.h bundled_vulkan_library), with its licence.
-  install(FILES ${NMSC_MOLTENVK_DYLIB} DESTINATION .)
-  install(FILES ${NMSC_MOLTENVK_LICENSE} RENAME MoltenVK-LICENSE.txt DESTINATION .)
+  install(FILES ${HAILSTONE_MOLTENVK_DYLIB} DESTINATION .)
+  install(FILES ${HAILSTONE_MOLTENVK_LICENSE} RENAME MoltenVK-LICENSE.txt DESTINATION .)
 endif()
 if(WIN32)
   install(FILES $<TARGET_RUNTIME_DLLS:hailstone> DESTINATION .)
 elseif(TARGET SDL3-shared)
-  get_target_property(nmsc_sdl_imported SDL3-shared IMPORTED)
-  if(NOT nmsc_sdl_imported)
+  get_target_property(hailstone_sdl_imported SDL3-shared IMPORTED)
+  if(NOT hailstone_sdl_imported)
     install(TARGETS SDL3-shared LIBRARY DESTINATION . NAMELINK_SKIP)
   endif()
 endif()
@@ -800,31 +823,33 @@ install(TARGETS MQ2Example LIBRARY DESTINATION plugins COMPONENT examples EXCLUD
 
 # The browser helper's messages and the address rules, built with the client's flags (exceptions on): the helper
 # (tools/hailstone-web, CEF's flags: no exceptions, no RTTI) links them from here.
-add_library(nmsc_web_protocol STATIC src/web/browser_protocol.cpp src/web/page_rules.cpp src/core/web_url.cpp src/platform/binary_stdio.cpp)
-target_include_directories(nmsc_web_protocol PUBLIC src sdk)
-target_compile_options(nmsc_web_protocol PRIVATE ${NMSC_WARNINGS})
-if(NMSC_BROWSER)
+add_library(hailstone_web_protocol STATIC src/web/browser_protocol.cpp src/web/page_rules.cpp src/core/web_url.cpp src/platform/binary_stdio.cpp)
+target_include_directories(hailstone_web_protocol PUBLIC src sdk)
+target_compile_options(hailstone_web_protocol PRIVATE ${HAILSTONE_WARNINGS})
+if(HAILSTONE_BROWSER)
   add_subdirectory(tools/hailstone-web)
 endif()
 
 # Command-line tools.
-set(NMSC_TOOLS pfsdump texdump texpack wlddump florascan chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
-foreach(tool ${NMSC_TOOLS})
-  add_executable(${tool} tools/${tool}.cpp ${NMSC_WIN_MANIFEST})
-  target_compile_options(${tool} PRIVATE ${NMSC_WARNINGS})
-  if(NMSC_CLANG_TIDY)
-    set_target_properties(${tool} PROPERTIES CXX_CLANG_TIDY "${NMSC_TIDY_COMMAND}")
+set(HAILSTONE_TOOLS pfsdump texdump texpack wlddump florascan chrdump netprobe playprobe eqgdump audiodump hailstone_check hailstone_sign)
+foreach(tool ${HAILSTONE_TOOLS})
+  add_executable(${tool} tools/${tool}.cpp ${HAILSTONE_WIN_MANIFEST})
+  target_compile_options(${tool} PRIVATE ${HAILSTONE_WARNINGS})
+  if(HAILSTONE_CLANG_TIDY)
+    set_target_properties(${tool} PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
   endif()
-  target_link_libraries(${tool} PRIVATE nmsc_engine)
+  target_link_libraries(${tool} PRIVATE hailstone_engine)
 endforeach()
-target_link_libraries(texpack PRIVATE nmsc_bc7enc)
+target_link_libraries(texpack PRIVATE hailstone_bc7enc)
 
-if(NMSC_BUILD_TESTS)
+if(HAILSTONE_BUILD_TESTS)
   enable_testing()
-  add_executable(nmsc_tests ${NMSC_WIN_MANIFEST}
+  add_executable(hailstone_tests ${HAILSTONE_WIN_MANIFEST}
     tests/test_main.cpp
     tests/bag_move_test.cpp
     tests/byte_io_test.cpp
+    tests/env_test.cpp
+    tests/sdk_old_names_test.cpp
     tests/private_file_test.cpp
     tests/server_script_test.cpp
     tests/server_tools_test.cpp
@@ -898,10 +923,10 @@ if(NMSC_BUILD_TESTS)
     tests/mouse_look_test.cpp
     tests/mouse_capture_test.cpp
     tests/asset_picker_test.cpp
-    ${NMSC_NMS_TESTS}
-    ${NMSC_NMS_LOGIC}
-    ${NMSC_TRIUNE_TESTS}
-    ${NMSC_TRIUNE_LOGIC}
+    ${HAILSTONE_NMS_TESTS}
+    ${HAILSTONE_NMS_LOGIC}
+    ${HAILSTONE_TRIUNE_TESTS}
+    ${HAILSTONE_TRIUNE_LOGIC}
     tests/tcp_socket_test.cpp
     tests/plugin_tcp_test.cpp
     tests/merchant_buy_test.cpp
@@ -1106,94 +1131,98 @@ if(NMSC_BUILD_TESTS)
     tests/player_menu_test.cpp
     tests/connection_state_test.cpp
   )
-  target_include_directories(nmsc_tests PRIVATE tests sdk)
-  target_compile_options(nmsc_tests PRIVATE ${NMSC_WARNINGS})
-  target_link_libraries(nmsc_tests PRIVATE nmsc_engine doctest::doctest)
-  # The server extension test plugin (tests/plugins/ExtendTest.c), and the same as an ABI 1 plugin.
+  target_include_directories(hailstone_tests PRIVATE tests sdk)
+  target_compile_options(hailstone_tests PRIVATE ${HAILSTONE_WARNINGS})
+  target_link_libraries(hailstone_tests PRIVATE hailstone_engine doctest::doctest)
+  # The server extension test plugin (tests/plugins/ExtendTest.c), the same as an ABI 1 plugin, and the same with its
+  # hook table under the export name after 0.6.
   add_library(ExtendTest MODULE tests/plugins/ExtendTest.c)
   add_library(ExtendTestV1 MODULE tests/plugins/ExtendTest.c)
-  target_compile_definitions(ExtendTestV1 PRIVATE NMSC_TEST_ABI1)
+  target_compile_definitions(ExtendTestV1 PRIVATE HAILSTONE_TEST_ABI1)
+  add_library(ExtendTestNew MODULE tests/plugins/ExtendTest.c)
+  target_compile_definitions(ExtendTestNew PRIVATE HAILSTONE_TEST_NEW_HOOKS)
   # A C++ test plugin calling the host table from where it should not (tests/plugins/HostProbe.cpp).
   add_library(HostProbe MODULE tests/plugins/HostProbe.cpp)
   add_library(HostProbeThrow MODULE tests/plugins/HostProbe.cpp)
-  target_compile_definitions(HostProbeThrow PRIVATE NMSC_PROBE_THROW_INIT)
-  foreach(p ExtendTest ExtendTestV1 HostProbe HostProbeThrow)
+  target_compile_definitions(HostProbeThrow PRIVATE HAILSTONE_PROBE_THROW_INIT)
+  foreach(p ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow)
     target_include_directories(${p} PRIVATE sdk)
     set_target_properties(${p} PROPERTIES PREFIX "")
   endforeach()
-  # The stand-in browser helper (tests/browser_host_test.cpp), beside nmsc_tests (and its SDL3.dll on Windows).
-  add_executable(nmsc_mock_web_helper tests/mock_web_helper.cpp)
-  target_include_directories(nmsc_mock_web_helper PRIVATE src sdk)
-  target_compile_options(nmsc_mock_web_helper PRIVATE ${NMSC_WARNINGS})
-  target_link_libraries(nmsc_mock_web_helper PRIVATE nmsc_web_protocol)
-  set_target_properties(nmsc_mock_web_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:nmsc_tests>)
-  add_dependencies(nmsc_tests MQ2Example ExtendTest ExtendTestV1 HostProbe HostProbeThrow nmsc_mock_web_helper)
-  target_compile_definitions(nmsc_tests PRIVATE NMSC_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
-    NMSC_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" NMSC_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
-    NMSC_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" NMSC_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
-    NMSC_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data" NMSC_CLIENT_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/ui"
+  # The stand-in browser helper (tests/browser_host_test.cpp), beside hailstone_tests (and its SDL3.dll on Windows).
+  add_executable(hailstone_mock_web_helper tests/mock_web_helper.cpp)
+  target_include_directories(hailstone_mock_web_helper PRIVATE src sdk)
+  target_compile_options(hailstone_mock_web_helper PRIVATE ${HAILSTONE_WARNINGS})
+  target_link_libraries(hailstone_mock_web_helper PRIVATE hailstone_web_protocol)
+  set_target_properties(hailstone_mock_web_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:hailstone_tests>)
+  add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
+  target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
+    HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
+    HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
+    HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"
+    HAILSTONE_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data" HAILSTONE_CLIENT_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/ui"
     # The recorded vectors are looked for beside the source tree (tests/vector_files.h), whatever the run's directory.
-    NMSC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    NMSC_MOCK_WEB_HELPER="$<TARGET_FILE:nmsc_mock_web_helper>"
+    HAILSTONE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    HAILSTONE_MOCK_WEB_HELPER="$<TARGET_FILE:hailstone_mock_web_helper>"
     # doctest otherwise forward-declares std::ostream, which MSVC's STL rejects when a CHECK prints a string.
     DOCTEST_CONFIG_USE_STD_HEADERS)
-  if(NMSC_HAS_NMS)
-    target_include_directories(nmsc_tests PRIVATE ${NMSC_NMS_DIR} ${NMSC_NMS_DIR}/tests)
-    add_dependencies(nmsc_tests nms)
-    target_compile_definitions(nmsc_tests PRIVATE NMSC_HAS_NMS=1 NMSC_NMS_PLUGIN="$<TARGET_FILE:nms>"
-      NMSC_NMS_UI_DIR="${NMSC_NMS_DIR}/ui")
+  if(HAILSTONE_HAS_NMS)
+    target_include_directories(hailstone_tests PRIVATE ${HAILSTONE_NMS_DIR} ${HAILSTONE_NMS_DIR}/tests)
+    add_dependencies(hailstone_tests nms)
+    target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_HAS_NMS=1 HAILSTONE_NMS_PLUGIN="$<TARGET_FILE:nms>"
+      HAILSTONE_NMS_UI_DIR="${HAILSTONE_NMS_DIR}/ui")
   endif()
-  if(NMSC_HAS_TRIUNE)
-    target_include_directories(nmsc_tests PRIVATE ${NMSC_TRIUNE_DIR} ${NMSC_TRIUNE_DIR}/tests)
-    add_dependencies(nmsc_tests projecttriune)
-    target_compile_definitions(nmsc_tests PRIVATE NMSC_HAS_TRIUNE=1 NMSC_TRIUNE_PLUGIN="$<TARGET_FILE:projecttriune>"
-      NMSC_TRIUNE_UI_DIR="${NMSC_TRIUNE_DIR}/ui")
+  if(HAILSTONE_HAS_TRIUNE)
+    target_include_directories(hailstone_tests PRIVATE ${HAILSTONE_TRIUNE_DIR} ${HAILSTONE_TRIUNE_DIR}/tests)
+    add_dependencies(hailstone_tests projecttriune)
+    target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_HAS_TRIUNE=1 HAILSTONE_TRIUNE_PLUGIN="$<TARGET_FILE:projecttriune>"
+      HAILSTONE_TRIUNE_UI_DIR="${HAILSTONE_TRIUNE_DIR}/ui")
   endif()
-  if(NMSC_BROWSER)
-    add_dependencies(nmsc_tests hailstone-web)
-    target_compile_definitions(nmsc_tests PRIVATE NMSC_WEB_HELPER="$<TARGET_FILE:hailstone-web>")
+  if(HAILSTONE_BROWSER)
+    add_dependencies(hailstone_tests hailstone-web)
+    target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_WEB_HELPER="$<TARGET_FILE:hailstone-web>")
   endif()
-  add_test(NAME nmsc_tests COMMAND nmsc_tests)
+  add_test(NAME hailstone_tests COMMAND hailstone_tests)
   # Windows has no rpath: SDL3.dll has to sit next to the executable.
   if(WIN32)
-    add_custom_command(TARGET nmsc_tests POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:nmsc_tests> $<TARGET_FILE_DIR:nmsc_tests>
+    add_custom_command(TARGET hailstone_tests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:hailstone_tests> $<TARGET_FILE_DIR:hailstone_tests>
       COMMAND_EXPAND_LISTS)
   endif()
 endif()
 
-# libFuzzer targets for the parsers: cmake -DNMSC_LIBFUZZER=ON -DCMAKE_CXX_COMPILER=clang++ (implies NMSC_SANITIZE).
-if(NMSC_LIBFUZZER)
+# libFuzzer targets for the parsers: cmake -DHAILSTONE_LIBFUZZER=ON -DCMAKE_CXX_COMPILER=clang++ (implies HAILSTONE_SANITIZE).
+if(HAILSTONE_LIBFUZZER)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(FATAL_ERROR "NMSC_LIBFUZZER needs Clang")
+    message(FATAL_ERROR "HAILSTONE_LIBFUZZER needs Clang")
   endif()
   foreach(target pfs wld texture soe packets decoders zip)
     string(TOUPPER ${target} upper)
     add_executable(fuzz_${target} tests/fuzz_libfuzzer.cpp)
-    target_compile_definitions(fuzz_${target} PRIVATE NMSC_FUZZ_${upper})
-    target_compile_options(fuzz_${target} PRIVATE ${NMSC_WARNINGS} -fsanitize=fuzzer-no-link)
+    target_compile_definitions(fuzz_${target} PRIVATE HAILSTONE_FUZZ_${upper})
+    target_compile_options(fuzz_${target} PRIVATE ${HAILSTONE_WARNINGS} -fsanitize=fuzzer-no-link)
     target_link_options(fuzz_${target} PRIVATE -fsanitize=fuzzer)
-    target_link_libraries(fuzz_${target} PRIVATE nmsc_engine)
+    target_link_libraries(fuzz_${target} PRIVATE hailstone_engine)
   endforeach()
-  # The checked-out server plugins' decoders (tests/fuzz_decoders.inc NMSC_FUZZ_PLUGIN_DECODER).
+  # The checked-out server plugins' decoders (tests/fuzz_decoders.inc HAILSTONE_FUZZ_PLUGIN_DECODER).
   target_include_directories(fuzz_decoders PRIVATE sdk)
-  if(NMSC_HAS_NMS)
-    target_sources(fuzz_decoders PRIVATE ${NMSC_NMS_DIR}/nms_packets.cpp ${NMSC_NMS_DIR}/nms_rules.cpp)
-    target_include_directories(fuzz_decoders PRIVATE ${NMSC_NMS_DIR} ${NMSC_NMS_DIR}/tests)
-    target_compile_definitions(fuzz_decoders PRIVATE NMSC_HAS_NMS=1)
+  if(HAILSTONE_HAS_NMS)
+    target_sources(fuzz_decoders PRIVATE ${HAILSTONE_NMS_DIR}/nms_packets.cpp ${HAILSTONE_NMS_DIR}/nms_rules.cpp)
+    target_include_directories(fuzz_decoders PRIVATE ${HAILSTONE_NMS_DIR} ${HAILSTONE_NMS_DIR}/tests)
+    target_compile_definitions(fuzz_decoders PRIVATE HAILSTONE_HAS_NMS=1)
   endif()
-  if(NMSC_HAS_TRIUNE)
-    target_sources(fuzz_decoders PRIVATE ${NMSC_TRIUNE_DIR}/triune_packets.cpp ${NMSC_TRIUNE_DIR}/triune_rules.cpp
-                   ${NMSC_TRIUNE_DIR}/triune_windows.cpp)
-    target_include_directories(fuzz_decoders PRIVATE ${NMSC_TRIUNE_DIR} ${NMSC_TRIUNE_DIR}/tests)
-    target_compile_definitions(fuzz_decoders PRIVATE NMSC_HAS_TRIUNE=1)
+  if(HAILSTONE_HAS_TRIUNE)
+    target_sources(fuzz_decoders PRIVATE ${HAILSTONE_TRIUNE_DIR}/triune_packets.cpp ${HAILSTONE_TRIUNE_DIR}/triune_rules.cpp
+                   ${HAILSTONE_TRIUNE_DIR}/triune_windows.cpp)
+    target_include_directories(fuzz_decoders PRIVATE ${HAILSTONE_TRIUNE_DIR} ${HAILSTONE_TRIUNE_DIR}/tests)
+    target_compile_definitions(fuzz_decoders PRIVATE HAILSTONE_HAS_TRIUNE=1)
   endif()
 endif()
 
-# Windows has no rpath: the shared dependencies' DLLs (SDL3) next to each tool too (hailstone and nmsc_tests have
+# Windows has no rpath: the shared dependencies' DLLs (SDL3) next to each tool too (hailstone and hailstone_tests have
 # their own copy steps above).
 if(WIN32)
-  foreach(exe ${NMSC_TOOLS})
+  foreach(exe ${HAILSTONE_TOOLS})
     add_custom_command(TARGET ${exe} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${exe}> $<TARGET_FILE_DIR:${exe}>
       COMMAND_EXPAND_LISTS)

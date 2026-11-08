@@ -14,7 +14,7 @@
 #include "game/weather_state.h"
 #include "game_files.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 
@@ -80,7 +80,7 @@ TEST_CASE("sky colour maps: blend, keys and the day fraction") {
 }
 
 TEST_CASE("sky state: ini selection, weather transitions, storms and the getters") {
-    nmsc::IniFile sky, weather;
+    hailstone::IniFile sky, weather;
     sky.parse("[default]\nEnabled=1\n[SkySettings]\ndefault=\nqeynos=\nnoweather=\n[SkySetting-qeynos]\nDefaultWeather=Clear\n"
               "[SkySetting-noweather]\nDefaultBackdrop=x\n[SkySetting-default]\nDefaultWeather=Other\n");
     weather.parse("[ColorMaps]\nA=\nB=\nMissing=\n[ColorMap-A]\nFile=a\n[ColorMap-B]\nFile=b\n[ColorMap-Missing]\nFile=none\n"
@@ -139,7 +139,7 @@ TEST_CASE("sky state: ini selection, weather transitions, storms and the getters
 }
 
 TEST_CASE("sky colours from the game's sky.ini and weather.ini (sky_reference.py)") {
-    const nmsc::GameDir* game = nmsc::test::game_dir();
+    const hailstone::GameDir* game = hailstone::test::game_dir();
     if (!game) {
         MESSAGE("EQ_GAME_DIR not set; skipped");
         return;

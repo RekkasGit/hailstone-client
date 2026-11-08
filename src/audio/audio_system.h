@@ -22,15 +22,15 @@
 #include "audio/zone_emitters.h"
 #include "game/sound_rules.h"
 
-namespace nmsc {
+namespace hailstone {
 class Config;
 class GameDir;
 namespace platform {
 class AudioDevice;
 }
-} // namespace nmsc
+} // namespace hailstone
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 class SoundLibrary;
 class SoundFont;
@@ -203,4 +203,4 @@ private:
     std::vector<float> scratch_; // mixing without a device
 };
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

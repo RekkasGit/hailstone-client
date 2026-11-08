@@ -6,7 +6,7 @@
 
 #include "core/float_chars.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -324,4 +324,4 @@ std::uint32_t spell_record_crc(const SpellRecord& record) {
     return b1 | b3 << 8 | b0 << 16 | b2 << 24;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include <span>
 #include <vector>
 
-namespace nmsc::net::des {
+namespace hailstone::net::des {
 
 class Cipher {
 public:
@@ -29,4 +29,4 @@ std::vector<std::byte> zero_cbc_encrypt(std::span<const std::byte> plain);
 // nullopt when the input is not a whole number of blocks.
 std::optional<std::vector<std::byte>> zero_cbc_decrypt(std::span<const std::byte> cipher);
 
-} // namespace nmsc::net::des
+} // namespace hailstone::net::des

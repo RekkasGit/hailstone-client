@@ -631,7 +631,7 @@ TEST_CASE("Server script: a client_files that is a link to a folder elsewhere is
     // The script's real find command in a scratch folder: GNU find without -H lists nothing under a starting point
     // that is a link, so the clients were sent no files and no hailstone.cfg (no server rules), with no log line.
     namespace fs = std::filesystem;
-    nmsc::test::ScratchDir dir("server_files_link");
+    hailstone::test::ScratchDir dir("server_files_link");
     fs::create_directories(dir.path() / "elsewhere" / "scripts");
     std::ofstream(dir.path() / "elsewhere" / "hailstone.cfg") << "[plugins]\n";
     std::ofstream(dir.path() / "elsewhere" / "scripts" / "a.lua") << "print(1)\n";

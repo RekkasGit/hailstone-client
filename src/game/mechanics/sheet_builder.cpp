@@ -8,7 +8,7 @@
 #include "game/world_state.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 SpellLookup spell_lookup(const SpellTable& table) {
     return [&table](std::int32_t id) -> const SpellData* {
@@ -156,4 +156,4 @@ void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inve
     s.pvp_ruleset = live.pvp_rules != 0;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

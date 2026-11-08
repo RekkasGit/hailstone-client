@@ -1,6 +1,6 @@
 #include "game/appearance.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool is_pc_model_race(std::uint32_t race) {
     return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;
@@ -112,4 +112,4 @@ HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t mate
     return {v > 0xf1 ? hero_forge : v, 0};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

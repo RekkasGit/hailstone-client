@@ -10,7 +10,7 @@
 #include "game/spells.h"
 #include "net/guild_bank_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 OutputFileKind output_file_kind(std::string_view word) {
     // Cmd_outputfile's stricmp chain (0x9cef78 .. 0x9cef30).
@@ -145,4 +145,4 @@ std::string guild_bank_file(const std::vector<std::optional<net::GuildBankItem>>
 
 std::string real_estate_file() { return "RealEstateLocation\tRealEstateName\tItemName\tItemOwner\tStatus\tID\tCount\n"; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -26,7 +26,7 @@
 #include "core/sha256.h"
 #include "plugin/policy.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct AddonFile {
     std::string path; // relative to the add-on's folder, '/' separators
@@ -93,4 +93,4 @@ std::vector<plugin::Ceiling> addon_ceilings(const std::vector<InstalledAddon>& a
 // goes.
 void addons_at_start(const std::filesystem::path& data_dir);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

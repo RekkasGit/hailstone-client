@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct GuildMemberView {
     std::string name;
@@ -78,4 +78,4 @@ void guild_invite_prompt(const GuildWindowView& view, SocialActions& actions);
 void raid_window(RaidWindowView& view, SocialActions& actions);
 void friends_window(FriendsWindowView& view, SocialActions& actions);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

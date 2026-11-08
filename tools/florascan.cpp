@@ -23,8 +23,8 @@
 #include "core/game_dir.h"
 #include "core/png_write.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 

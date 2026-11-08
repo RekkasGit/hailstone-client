@@ -20,7 +20,7 @@
 
 #include "game/char_select_camera.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // CDisplay::cameraType.
 enum CameraType : int {
@@ -104,4 +104,4 @@ void set_camera_pitch(int type, GameCamera& cam, float pitch);
 bool camera_mouse_look(int type, GameCamera& cam, float dx, float dy, float raw_dy, float sensitivity, float rate,
                        bool underwater);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

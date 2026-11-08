@@ -21,7 +21,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 enum class Stream : std::uint8_t { World, Zone };
 enum class Direction : std::uint8_t { In, Out };
@@ -108,4 +108,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

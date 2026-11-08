@@ -16,10 +16,10 @@
 #include "render/gpu.h"
 #include "web/browser_protocol.h"
 
-namespace nmsc::render { class VkContext; struct FrameInfo; }
-namespace nmsc::web { class BrowserHost; }
+namespace hailstone::render { class VkContext; struct FrameInfo; }
+namespace hailstone::web { class BrowserHost; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 class WebTextures {
 public:
@@ -66,4 +66,4 @@ private:
     std::vector<Staging> staging_; // one per frame slot, grown as needed
 };
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

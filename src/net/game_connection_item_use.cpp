@@ -20,7 +20,7 @@
 #include "game/slash_commands.h"
 #include "net/item_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -424,4 +424,4 @@ void GameConnection::refresh_worn_stats_disabled() {
         if (Item* item = inventory_.at(ItemSlot::possessions(slot))) game::update_stats_disabled(*item, use_item, ornament, true);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

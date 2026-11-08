@@ -21,7 +21,7 @@
 #include "game/mechanics/item_stats.h"
 #include "game/spells.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -1039,4 +1039,4 @@ void Character::process_all_stats() {
     d_.ac = calc_ac(true, true);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

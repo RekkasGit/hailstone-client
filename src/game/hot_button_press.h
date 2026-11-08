@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kStrCantUseCommand = 12084; // "You can't use that command right now..."
 inline constexpr std::uint32_t kStrMustBeStopped = 12085;  // "You must be completely stopped before doing this action."
@@ -172,4 +172,4 @@ SocialLineParts split_social_line(const std::string& text);
 // (0..360000), each followed by the rest of the line after a comma.
 void social_passage_of_time(SocialQueue& s, std::uint32_t now_ms, SocialRunQueries& q);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

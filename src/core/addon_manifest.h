@@ -33,7 +33,7 @@
 #include "core/sha256.h"
 #include "core/version.h"
 
-namespace nmsc {
+namespace hailstone {
 
 enum class AddonKind : std::uint8_t { Script, Plugin };
 
@@ -69,4 +69,4 @@ bool addon_name_ok(std::string_view name);
 // The package for `platform` ("any" for a script), or null.
 const AddonPackage* addon_package_for(const AddonManifest& manifest, std::string_view platform);
 
-} // namespace nmsc
+} // namespace hailstone

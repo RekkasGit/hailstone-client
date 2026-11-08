@@ -1,6 +1,6 @@
 #include "game/chat_input.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void set_chat_input_mode(ChatInputWorld& w, std::int32_t mode, std::vector<ChatInputCall>& calls) {
     using F = ChatInputCall::Fn;
@@ -61,4 +61,4 @@ ChatKey chat_key(int slot) {
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

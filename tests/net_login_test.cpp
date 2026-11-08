@@ -9,13 +9,14 @@
 #include <zlib.h>
 
 #include "core/byte_io.h"
+#include "core/env.h"
 #include "net/des.h"
 #include "net/login.h"
 #include "net/session_codec.h"
 #include "platform/udp_socket.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 using soe::Bytes;
 using soe::ByteSpan;
 
@@ -404,18 +405,18 @@ TEST_CASE("login client: no reachable host is 6011") {
     CHECK(c.error_id() == login_error::NoConnection);
 }
 
-// Live check against a local login server, only when NMSC_LIVE_LOGIN=host:port is set; NMSC_LIVE_USER (default
-// nmscgrp1, password = the name) picks the account. NMSC_LIVE_REFRESH=1 also waits out the 60 s list refresh
+// Live check against a local login server, only when HAILSTONE_LIVE_LOGIN=host:port is set; HAILSTONE_LIVE_USER (default
+// nmscgrp1, password = the name) picks the account. HAILSTONE_LIVE_REFRESH=1 also waits out the 60 s list refresh
 // (sequence 5) before the play request (sequence 6).
-TEST_CASE("live login (NMSC_LIVE_LOGIN)") {
-    const char* target = std::getenv("NMSC_LIVE_LOGIN");
+TEST_CASE("live login (HAILSTONE_LIVE_LOGIN)") {
+    const char* target = hailstone::core::env("LIVE_LOGIN");
     if (!target) return;
     std::string t = target;
     auto colon = t.rfind(':');
     REQUIRE(colon != std::string::npos);
-    const char* u = std::getenv("NMSC_LIVE_USER");
+    const char* u = hailstone::core::env("LIVE_USER");
     std::string user = u ? u : "nmscgrp1";
-    bool refresh = std::getenv("NMSC_LIVE_REFRESH") != nullptr;
+    bool refresh = hailstone::core::env("LIVE_REFRESH") != nullptr;
     LoginClient c;
     c.start(t.substr(0, colon), static_cast<std::uint16_t>(std::stoi(t.substr(colon + 1))), user, user);
     auto run_until = [&](auto done, int seconds) {

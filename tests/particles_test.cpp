@@ -16,7 +16,7 @@
 #include "render/particle_renderer.h"
 #include "game_files.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -279,8 +279,8 @@ TEST_CASE("Model points: the WLD table and the point matrix") {
     CHECK(xp.z == doctest::Approx(1.0f));
 }
 
-TEST_CASE("NMS model points: dkm.pts" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("NMS model points: dkm.pts" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto archive = game.find("dkm.eqg");
     REQUIRE(archive);
     auto pfs = assets::PfsArchive::open(*archive);
@@ -297,8 +297,8 @@ TEST_CASE("NMS model points: dkm.pts" * doctest::skip(!nmsc::test::game_dir())) 
     CHECK(pts[10].name == "DAMAGE_POINT");
 }
 
-TEST_CASE("NMS spell particle files parse" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("NMS spell particle files parse" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto edd = game.read("spellsnew.edd");
     REQUIRE(edd);
     auto defs = assets::parse_edd(*edd);
@@ -365,8 +365,8 @@ TEST_CASE("Actor emitters: PRT versions widen as the EQGM loader widens them") {
     CHECK(assets::parse_prt(file(6, 0x6c)).empty());
 }
 
-TEST_CASE("NMS actor emitters: a fire elemental and a glowing sword" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("NMS actor emitters: a fire elemental and a glowing sword" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto archive = game.find("arxmentisweapons.eqg");
     REQUIRE(archive);
     auto pfs = assets::PfsArchive::open(*archive);

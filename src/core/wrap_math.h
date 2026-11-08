@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-namespace nmsc::core {
+namespace hailstone::core {
 
 // The signed 32-bit value of the low 32 bits of a result, as a 64-bit number.
 constexpr std::int64_t wrapped_value(std::uint32_t low) {
@@ -28,4 +28,4 @@ constexpr std::int32_t wrapped_mul_div(std::int32_t a, std::int32_t b, std::int3
     return wrapped_div(static_cast<std::uint32_t>(a) * static_cast<std::uint32_t>(b), divisor);
 }
 
-} // namespace nmsc::core
+} // namespace hailstone::core

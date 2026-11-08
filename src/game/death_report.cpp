@@ -1,6 +1,6 @@
 #include "game/death_report.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 DeathResult report_death(const DeathInput& in) {
     using F = DeathCall::Fn;
@@ -91,4 +91,4 @@ DeathResult report_death(const DeathInput& in) {
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -23,7 +23,7 @@
 #include "core/sha256.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 inline constexpr std::uint16_t kOpHsFilesRequest = 0x1426;
 inline constexpr std::uint16_t kOpHsFiles = 0x1427;
@@ -73,4 +73,4 @@ AppPacket encode(const ServerFilesPage& v);
 AppPacket encode(const ServerFilesChunk& v);
 AppPacket encode(const ServerFilesError& v);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -16,9 +16,9 @@
 #include "game_files.h"
 #include "wld_fixtures.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
-using namespace nmsc::test::wld_fixtures;
+using namespace hailstone;
+using namespace hailstone::assets;
+using namespace hailstone::test::wld_fixtures;
 
 namespace {
 
@@ -366,8 +366,8 @@ TEST_CASE("a zone fixture emitter: persistent, along its axis, spreading all rou
     CHECK_FALSE(ps.emitters()[0].particles.empty());
 }
 
-TEST_CASE("bazaar's lanterns and torches carry their flames" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "bazaar");
+TEST_CASE("bazaar's lanterns and torches carry their flames" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "bazaar");
     // L301 and CSMOKE (FTORCH301) and L307 (HAVSTLIGHT300..302), after "None".
     REQUIRE(z.particle_definitions.size() == 4);
     // 16 torches x (flame + smoke) + 13 + 10 + 14 x 2 lantern flames.
