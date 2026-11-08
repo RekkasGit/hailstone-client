@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-- macOS on Apple Silicon: a download for macOS 13.3 and later, with Vulkan (MoltenVK) included. It is experimental and not yet tried on a Mac, and it is not signed with an Apple Developer ID: after unzipping, run `xattr -dr com.apple.quarantine` on the folder once (README.md). The in-game browser is not in it yet; links open in your browser. Ctrl works as on Windows, in the windows as in the game (Cmd is not used as Ctrl)
 
 ## 0.6.0-beta (2026-11-07)
 
