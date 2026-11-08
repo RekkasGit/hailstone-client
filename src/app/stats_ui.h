@@ -43,7 +43,7 @@ public:
     const game::mechanics::Character* character() const { return character_.get(); }
     // Drops that player. It reads its connection's spell table (spell_lookup) and server extension
     // (CharacterSheet::skill_rules), which go with the connection: the app calls this before it drops or replaces
-    // one, and draw() does when not in a zone.
+    // one, and draw() does when not in a zone (camping counts as in one).
     void forget();
 
 private:
