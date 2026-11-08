@@ -28,6 +28,11 @@ bool hold_lock_file(const std::filesystem::path& lock);
 // std::fopen for a path; on Windows by its wide name, so any character in it works.
 std::FILE* open_c_file(const std::filesystem::path& path, const char* mode);
 
+// Windows: a GUI program (no console of its own) started from a console writes its stdout and stderr there from
+// now on (a tool's command-line mode). True when it did; elsewhere, where the streams already go to the terminal,
+// it does nothing and returns true.
+bool attach_parent_console();
+
 // The system, for bug reports: "Linux, CachyOS (kernel 7.3.0-4-cachyos), wayland", "Windows 10.0.26100".
 std::string system_description();
 

@@ -339,6 +339,7 @@ add_library(hailstone_engine STATIC
   src/platform/window.cpp
   src/platform/mouse_capture.cpp
   src/platform/open_folder.cpp
+  src/platform/folder_dialog.cpp
   src/platform/http_get.cpp
   src/platform/credentials.cpp
   src/platform/child_processes.cpp
@@ -603,13 +604,13 @@ target_include_directories(hailstone_engine PUBLIC src)
 target_include_directories(hailstone_engine PRIVATE sdk)
 # The build's version line (core/build_info.h), remade at each build from git.
 add_custom_target(hailstone_build_info
-  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DVERSION=${HAILSTONE_RELEASE_VERSION}
-          -DOUT=${CMAKE_BINARY_DIR}/generated/build_info.inc -P ${CMAKE_SOURCE_DIR}/cmake/BuildInfo.cmake
-  BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/build_info.inc
+  COMMAND ${CMAKE_COMMAND} -DSRC=${PROJECT_SOURCE_DIR} -DVERSION=${HAILSTONE_RELEASE_VERSION}
+          -DOUT=${PROJECT_BINARY_DIR}/generated/build_info.inc -P ${PROJECT_SOURCE_DIR}/cmake/BuildInfo.cmake
+  BYPRODUCTS ${PROJECT_BINARY_DIR}/generated/build_info.inc
   COMMENT "Build version")
 add_dependencies(hailstone_engine hailstone_build_info)
-set_source_files_properties(src/core/build_info.cpp PROPERTIES OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/generated/build_info.inc)
-target_include_directories(hailstone_engine PRIVATE ${CMAKE_BINARY_DIR}/generated)
+set_source_files_properties(src/core/build_info.cpp PROPERTIES OBJECT_DEPENDS ${PROJECT_BINARY_DIR}/generated/build_info.inc)
+target_include_directories(hailstone_engine PRIVATE ${PROJECT_BINARY_DIR}/generated)
 # Lua 5.4.7 (third_party/lua, MIT), for the Lua UI (src/ui/lua): compiled as C.
 file(GLOB HAILSTONE_LUA_SOURCES CONFIGURE_DEPENDS third_party/lua/*.c)
 add_library(hailstone_lua STATIC ${HAILSTONE_LUA_SOURCES})
@@ -719,7 +720,7 @@ add_dependencies(hailstone_engine hailstone_shaders)
 # The client's folder (docs/layout.md): the build makes it in build/hailstone/, as an install does. The binary,
 # shaders/, ui/ and the runtime DLLs; the data Hailstone writes (hailstone.ini, servers/, logs/ ...) lands beside them,
 # since a dev build's folder is writable. $<0:> keeps multi-config generators from adding a Debug/Release level.
-set(HAILSTONE_TREE_DIR ${CMAKE_BINARY_DIR}/hailstone)
+set(HAILSTONE_TREE_DIR ${PROJECT_BINARY_DIR}/hailstone)
 # Builds before the folder put the binary itself at build/hailstone: that file has to make way for the folder.
 if(EXISTS ${HAILSTONE_TREE_DIR} AND NOT IS_DIRECTORY ${HAILSTONE_TREE_DIR})
   file(REMOVE ${HAILSTONE_TREE_DIR})
@@ -840,7 +841,17 @@ foreach(tool ${HAILSTONE_TOOLS})
   endif()
   target_link_libraries(${tool} PRIVATE hailstone_engine)
 endforeach()
-target_link_libraries(texpack PRIVATE hailstone_bc7enc)
+# Texture packs built from the player's archives (src/texpack, docs/graphics.md "Built packs"): shared by texpack, the
+# tests and Hailstone Texture Studio (projecthailstone/hailstone-texstudio, which builds against this tree). The models
+# run behind texpack::Model; the studio's ncnn backend is in its own repository.
+add_library(hailstone_texpack STATIC
+  src/texpack/texpack.cpp
+  src/texpack/upscale.cpp
+  src/texpack/pack_job.cpp
+  src/texpack/model_catalog.cpp)
+target_compile_options(hailstone_texpack PRIVATE ${HAILSTONE_WARNINGS})
+target_link_libraries(hailstone_texpack PUBLIC hailstone_engine PRIVATE hailstone_bc7enc)
+target_link_libraries(texpack PRIVATE hailstone_texpack)
 
 if(HAILSTONE_BUILD_TESTS)
   enable_testing()
@@ -1131,10 +1142,11 @@ if(HAILSTONE_BUILD_TESTS)
     tests/loot_test.cpp
     tests/player_menu_test.cpp
     tests/connection_state_test.cpp
+    tests/texpack_test.cpp
   )
   target_include_directories(hailstone_tests PRIVATE tests sdk)
   target_compile_options(hailstone_tests PRIVATE ${HAILSTONE_WARNINGS})
-  target_link_libraries(hailstone_tests PRIVATE hailstone_engine doctest::doctest)
+  target_link_libraries(hailstone_tests PRIVATE hailstone_engine hailstone_texpack doctest::doctest)
   # The server extension test plugin (tests/plugins/ExtendTest.c), the same as an ABI 1 plugin, and the same with its
   # hook table under the export name after 0.6.
   add_library(ExtendTest MODULE tests/plugins/ExtendTest.c)

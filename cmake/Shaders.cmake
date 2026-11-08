@@ -6,10 +6,10 @@ if(NOT HAILSTONE_GLSLC AND NOT HAILSTONE_GLSLANG)
   message(FATAL_ERROR "Need glslc (shaderc) or glslangValidator to compile shaders")
 endif()
 
-set(HAILSTONE_SHADER_OUT ${CMAKE_BINARY_DIR}/shaders)
+set(HAILSTONE_SHADER_OUT ${PROJECT_BINARY_DIR}/shaders)
 # The run folder's copy (build/hailstone/shaders, where the executable looks): each shader is copied there when it
 # is compiled, so a change to a shader alone reaches it without the executable being relinked.
-set(HAILSTONE_SHADER_RUN ${CMAKE_BINARY_DIR}/hailstone/shaders)
+set(HAILSTONE_SHADER_RUN ${PROJECT_BINARY_DIR}/hailstone/shaders)
 # Files the shaders #include (GL_GOOGLE_include_directive): a change rebuilds every shader.
 set(HAILSTONE_SHADER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lighting.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/ao_kernel.glsl

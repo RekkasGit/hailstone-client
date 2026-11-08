@@ -133,4 +133,17 @@ std::string system_description() {
     return out;
 }
 
+bool attach_parent_console() {
+#if defined(_WIN32)
+    if (GetConsoleWindow()) return true; // (a console build has its own)
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return false;
+    FILE* f = nullptr;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+    return true;
+#else
+    return true;
+#endif
+}
+
 } // namespace hailstone::platform

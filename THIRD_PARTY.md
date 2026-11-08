@@ -23,7 +23,7 @@
 | Monocypher (github.com/LoupVaillant/Monocypher, tag 4.0.2) | BSD-2-Clause or CC0-1.0 | Ed25519 signatures of the update manifest (`src/core/ed25519.cpp`, docs/updater.md) |
 | libcurl (the system's own: `libcurl.so.4`, `/usr/lib/libcurl.4.dylib`) | curl (MIT/X-style) | the updater's HTTPS on Linux and macOS (`src/platform/http_get.cpp`), loaded at run time; not shipped, and only its API's names and constant values (from `curl/curl.h`) are in the source |
 | WinHTTP (part of Windows) | system library | the updater's HTTPS on Windows (`src/platform/http_get.cpp`) |
-| bc7enc_rdo (github.com/richgel999/bc7enc_rdo, commit b943862: `bc7enc`, `rgbcx`) | MIT or public domain | BC7/BC5/BC4 encoding in `tools/texpack` only, not the client |
+| bc7enc_rdo (github.com/richgel999/bc7enc_rdo, commit b943862: `bc7enc`, `rgbcx`) | MIT or public domain | BC7/BC5/BC4 encoding in `src/texpack` (`tools/texpack`, and Hailstone Texture Studio, which builds against this repository), not the client |
 
 `tools/texpack/upscale.py` runs outside the build on the player's machine. It uses PyTorch (BSD-3-Clause) and spandrel (MIT)
 from PyPI, and the PBRify models (github.com/Kim2091/PBRify_Remix, CC0-1.0), which the player downloads. None of
