@@ -4,7 +4,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool KeptItems::holds_kept(const net::Item& item) const {
     if (kept(item.id)) return true;
@@ -55,4 +55,4 @@ std::string KeptItems::format() const {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

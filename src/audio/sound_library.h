@@ -29,11 +29,11 @@
 #include "audio/pcm.h"
 #include "core/game_dir.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 class PfsArchive;
 }
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 class SoundLibrary {
 public:
@@ -116,4 +116,4 @@ private:
 
 std::string lower_case(std::string_view s);
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

@@ -4,7 +4,7 @@
 #include <cctype>
 #include <cstdio>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -123,4 +123,4 @@ void GuildPersonalNotes::set(std::string_view name, std::string_view note, std::
     entries.push_back({now_time, std::string(name), std::string(note)});
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

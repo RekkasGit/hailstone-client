@@ -1,6 +1,6 @@
 #include "core/changelog.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -50,4 +50,4 @@ std::vector<std::string> changelog_section(std::string_view text, std::string_vi
     return out;
 }
 
-} // namespace nmsc
+} // namespace hailstone

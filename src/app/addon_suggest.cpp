@@ -4,7 +4,7 @@
 
 #include "core/addon_source.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -82,4 +82,4 @@ std::string addon_suggestion_text(const AddonSuggestion& s, std::string_view ser
     return where + " has a Hailstone add-on for its own features: " + what + ".";
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

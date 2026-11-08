@@ -17,14 +17,14 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 enum class KeyCommand : std::uint16_t {
-#define NMSC_KEY_COMMAND(index, name) name = index,
+#define HAILSTONE_KEY_COMMAND(index, name) name = index,
 #include "game/keymap_tables.inc"
-#undef NMSC_KEY_COMMAND
+#undef HAILSTONE_KEY_COMMAND
 };
 inline constexpr int kKeyCommands = 479; // named, mappable commands (0..0x1de)
 inline constexpr int kKeySlots = 500;    // KeyCombo slots per bank (nEQMappableCommands)
@@ -112,4 +112,4 @@ private:
     std::array<bool, kKeySlots> state_{};
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

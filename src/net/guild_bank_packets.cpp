@@ -4,7 +4,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -166,4 +166,4 @@ AppPacket encode_guild_bank_permissions(std::uint32_t banker, std::int32_t key, 
     return make_packet(Op::GuildBank, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

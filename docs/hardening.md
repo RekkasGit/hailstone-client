@@ -7,12 +7,12 @@ lists what is checked and what was found. Every input is synthetic.
 ## Sanitizer build
 
 ```sh
-cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DNMSC_SANITIZE=ON
-cmake --build build-asan --target nmsc_tests
+cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DHAILSTONE_SANITIZE=ON
+cmake --build build-asan --target hailstone_tests
 ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure
 ```
 
-`NMSC_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=undefined` to every target (GCC or Clang), so
+`HAILSTONE_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=undefined` to every target (GCC or Clang), so
 a finding aborts the test with a stack trace. The whole existing suite (561 test cases, 44 skipped for missing
 `EQ_GAME_DIR` / vector files) ran clean under it before any fix; the findings below all came from the new fuzz tests.
 
@@ -33,7 +33,7 @@ trusting a bogus length). A call over 2 s also fails.
 | Login replies | `parse_handshake_reply`, `parse_login_reply`, `parse_server_list`, `parse_play_reply`, `reply_body`, with compressed/bomb seeds | error by exception only (the caller catches `std::exception`) |
 | Assets | PFS (multi-block), WLD (mesh fixtures plus every fragment type 0x03-0x37, `build_mesh`, `build_skeleton_pose`), EQG TER/MOD, ZON, heightmap ZON/DAT, ECO, TOG, water, EQGS/EQGM meshes, animations, DDS/BMP (all depths, RLE)/TGA, XMI, `_sounds.eff`, spellsnew, EDD, sound-bank/asset/emt/race text, ini, zone-line tags | no crash/hang/huge allocation; errors by `std::exception` |
 
-Optional libFuzzer targets (`-DNMSC_LIBFUZZER=ON`, Clang): `fuzz_pfs`, `fuzz_wld`, `fuzz_texture`, `fuzz_soe`, `fuzz_decoders` (every typed decoder of `tests/fuzz_decoders.inc`, byte 0 choosing it),
+Optional libFuzzer targets (`-DHAILSTONE_LIBFUZZER=ON`, Clang): `fuzz_pfs`, `fuzz_wld`, `fuzz_texture`, `fuzz_soe`, `fuzz_decoders` (every typed decoder of `tests/fuzz_decoders.inc`, byte 0 choosing it),
 `fuzz_packets`, `fuzz_zip` (the updater's package zip and manifest) from `tests/fuzz_libfuzzer.cpp`. These were only syntax-checked here (no Clang build of the
 dependencies was run); the deterministic tests are the verified part.
 
@@ -41,7 +41,7 @@ dependencies was run); the deterministic tests are the verified part.
 
 | Where | Problem | Fix |
 |---|---|---|
-| `sdk/nmsc_byte_io.h` (`core/byte_io.h`) `ByteReader::strnlen_bounded` | `memchr(nullptr, 0, 0)` on an empty buffer: UB (null pointer passed to a nonnull parameter), hit by `fixed_string`/`cstring` on empty input | return 0 for a zero length |
+| `sdk/hailstone_byte_io.h` (`core/byte_io.h`) `ByteReader::strnlen_bounded` | `memchr(nullptr, 0, 0)` on an empty buffer: UB (null pointer passed to a nonnull parameter), hit by `fixed_string`/`cstring` on empty input | return 0 for a zero length |
 | `src/assets/pfs.cpp` `inflate_entry` | the directory's file size was used for `std::vector(size)` before any check: a 12-byte directory entry could request 4 GB | reject a size above 1032 x the archive size (zlib's maximum expansion) |
 | `src/assets/pfs.cpp` `inflate_entry` | within that ratio, ~4 MB of junk deflate could still declare 4 GB, zero-filled before zlib saw a byte | the output grows with what zlib writes (64 KB, then doubling) |
 | `src/assets/eqg_character.cpp` `build_model` | EQGA key times 0 and 0xFFFFFFFF resampled to 21 million poses per bone | a clip is cut at 4096 frames (13.6 minutes at 200 ms) |

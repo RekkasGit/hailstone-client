@@ -18,7 +18,7 @@
 
 #include "game/spawn_heights.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What a spawn looks like (spawn packet, OP_WearChange, OP_Illusion). Slots
 // are the nine visible ones: 0 head, 1 chest, 2 arms, 3 wrists, 4 hands,
@@ -262,4 +262,4 @@ struct WorldState {
     }
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -14,7 +14,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

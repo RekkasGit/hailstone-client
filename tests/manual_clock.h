@@ -5,7 +5,7 @@
 #include <memory>
 #include <mutex>
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 // A session clock (SessionOptions::clock) that follows the steady clock until hold(), then moves only by advance(),
 // so a timeout test asserts on the session's own time, not on how promptly a loaded machine runs the test thread
@@ -40,4 +40,4 @@ private:
     std::shared_ptr<State> state_ = std::make_shared<State>();
 };
 
-} // namespace nmsc::test
+} // namespace hailstone::test

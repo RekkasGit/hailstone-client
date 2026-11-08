@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void CompassError::pick_target(std::int32_t skill, const Rand& rand) {
     if (skill < 0) skill = 1; // no character
@@ -52,4 +52,4 @@ std::int32_t CompassError::heading(float heading) const {
     return (static_cast<std::int32_t>(heading) + error_) % 512;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

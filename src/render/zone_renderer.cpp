@@ -29,7 +29,7 @@
 #include "render/shadow_chunks.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -1625,4 +1625,4 @@ float effect_scroll_seconds(std::uint64_t scene_ms) {
     return std::fmod(a_ftime, 100.0f);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct GroupMemberView {
     std::string name;
@@ -84,4 +84,4 @@ void group_window(GroupWindowView& view, GroupActions& actions);
 void invite_prompt(const GroupWindowView& view, GroupActions& actions);
 void pet_window(PetWindowView& view, GroupActions& actions);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

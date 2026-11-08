@@ -36,7 +36,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics::melee {
+namespace hailstone::game::mechanics::melee {
 
 // ---------------------------------------------------------------- __get_melee_range
 
@@ -319,4 +319,4 @@ void attack_on_reset(AttackState& s, bool attack_on, AttackQueries& q);
 // primary's when slot 14 holds no attack weapon).
 void swing_ready(AttackState& s, std::uint32_t now, AttackQueries& q);
 
-} // namespace nmsc::game::mechanics::melee
+} // namespace hailstone::game::mechanics::melee

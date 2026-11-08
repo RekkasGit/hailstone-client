@@ -10,7 +10,7 @@
 
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // Visible equipment slots (WearChange / spawn order).
 enum EquipSlot : std::uint8_t {
@@ -93,4 +93,4 @@ bool is_stock_shield_model(std::uint32_t item_model);
 // display.extra_shields, set once at start (dressed models are cached).
 void set_extra_shields(bool on);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

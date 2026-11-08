@@ -4,7 +4,7 @@
 #include <cmath>
 #include <limits>
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 namespace {
 float flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(b - a)); }
@@ -147,4 +147,4 @@ SteerOutput PathFollower::step(const glm::vec3& feet, double now) {
     return out;
 }
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

@@ -22,7 +22,7 @@
 #include "net/game_connection.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace cast = game::mechanics::cast;
 
@@ -573,4 +573,4 @@ void GameConnection::cast_spell_slot(int gem, std::uint32_t id, const ItemSlot* 
         log::debug("cast {}: started, nothing sent", id);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

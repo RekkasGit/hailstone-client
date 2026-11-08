@@ -16,8 +16,8 @@
 #include "ui/lua/lua_host.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 namespace fs = std::filesystem;
 
 namespace {

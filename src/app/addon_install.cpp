@@ -19,7 +19,7 @@
 #include "plugin/native_plugins.h"
 #include "plugin/policy.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -323,7 +323,7 @@ std::string taken_on_disk(const fs::path& data_dir, AddonKind kind, std::string_
     std::error_code ec;
     const fs::path folder = addon_folder(data_dir, kind, name);
     const std::string where = kind == AddonKind::Script ? "scripts/" : "plugins/";
-    // A plugin's folder that holds no library is only the settings a plugin left beside it (nmsc->config_dir), as
+    // A plugin's folder that holds no library is only the settings a plugin left beside it (host->config_dir), as
     // after an update took out a plugin an older release shipped: the install keeps them, as an update does.
     bool holds_library = kind == AddonKind::Script;
     if (kind == AddonKind::Plugin && fs::is_directory(folder, ec)) {
@@ -657,4 +657,4 @@ void addons_at_start(const fs::path& data_dir) {
     remove_quietly(dir / "new");
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

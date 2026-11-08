@@ -1,6 +1,6 @@
 #include "platform/local_time.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 std::optional<std::tm> local_time(std::time_t t) {
     std::tm out{};
@@ -22,4 +22,4 @@ std::optional<std::tm> utc_time(std::time_t t) {
     return out;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

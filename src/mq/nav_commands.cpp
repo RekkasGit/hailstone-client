@@ -13,7 +13,7 @@
 #include "net/game_connection.h"
 #include "plugin/policy.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -358,4 +358,4 @@ void add_nav_commands(plugin::Hooks& h, plugin::Hooks::Owner owner, const Comman
         plugin::kCapMove);
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

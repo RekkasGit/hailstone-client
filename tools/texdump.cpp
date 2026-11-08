@@ -12,7 +12,7 @@
 #include "assets/texture.h"
 #include "core/png_write.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
             return 1;
         }
         auto rgba = to_rgba8(*image);
-        if (rgba.mips.empty() || !nmsc::write_png_rgba(argv[3], rgba.mips[0], rgba.width, rgba.height)) {
+        if (rgba.mips.empty() || !hailstone::write_png_rgba(argv[3], rgba.mips[0], rgba.width, rgba.height)) {
             std::fprintf(stderr, "texdump: cannot write %s\n", argv[3]);
             return 1;
         }

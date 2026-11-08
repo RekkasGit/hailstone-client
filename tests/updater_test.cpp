@@ -19,8 +19,8 @@
 #include "core/zip_write.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::app;
+using namespace hailstone;
+using namespace hailstone::app;
 namespace fs = std::filesystem;
 
 namespace {

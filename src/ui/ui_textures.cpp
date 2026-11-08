@@ -23,7 +23,7 @@
 #include "ui/item_windows.h"
 #include "ui/spell_windows.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 std::optional<GridCell> gem_icon_cell(std::int32_t icon) {
     // A_SpellGems: gemicons01..03.tga, 256 x 256, 24 x 24 cells: 10 per row, 10 rows (100 per sheet).
@@ -409,4 +409,4 @@ std::optional<UiTextures::Cell> UiTextures::grid_cell(std::string_view name, int
     return out;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

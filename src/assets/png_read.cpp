@@ -9,7 +9,7 @@
 
 #include <zlib.h>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -229,4 +229,4 @@ std::optional<Image> decode_png(std::span<const std::byte> data, std::string* er
     return img;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

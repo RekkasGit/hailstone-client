@@ -8,7 +8,7 @@
 // Follows the rewrite's asm helpers instruction by instruction. A value on the
 // x87 stack is a quiet double; a float memory operand is X87(float).
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -127,4 +127,4 @@ bool mount_clicked_ladder(const LadderSwitch& ladder, LadderPlayer& p, LadderQue
     return true;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

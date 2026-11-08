@@ -13,7 +13,7 @@
 
 #include <SDL3/SDL_filesystem.h>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 std::filesystem::path env_path(const char* name) {
 #if defined(_WIN32)
@@ -257,4 +257,4 @@ std::filesystem::path new_screenshot_path(const std::filesystem::path& dir, std:
     }
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

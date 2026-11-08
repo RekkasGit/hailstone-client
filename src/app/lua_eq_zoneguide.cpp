@@ -8,7 +8,7 @@
 #include "app/lua_eq_windows.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -109,4 +109,4 @@ void add_zone_guide_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<ZonePathWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

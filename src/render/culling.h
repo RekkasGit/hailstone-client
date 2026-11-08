@@ -10,7 +10,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct Box {
     glm::vec3 min{0.0f};
@@ -36,4 +36,4 @@ inline Box sphere_box(const glm::vec3& center, float radius) { return {center - 
 // Whether two axis-aligned boxes share any point (touching counts).
 bool boxes_overlap(const Box& a, const Box& b);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

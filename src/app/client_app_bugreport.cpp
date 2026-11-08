@@ -15,7 +15,7 @@
 #include "game/eq_names.h"
 #include "platform/process.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 namespace {
 namespace fs = std::filesystem;
@@ -175,4 +175,4 @@ void ClientApp::report_last_crash() {
     crash_report_ = std::move(r);
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

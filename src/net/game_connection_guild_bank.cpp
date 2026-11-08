@@ -11,7 +11,7 @@
 #include "game/zone_names.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -222,4 +222,4 @@ void GameConnection::handle_guild_bank(Op op, const AppPacket& p) {
     if (b.pending > 0) --b.pending;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

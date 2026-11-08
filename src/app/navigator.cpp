@@ -15,7 +15,7 @@
 #include "game/world_state.h"
 #include "nav/zone_nav.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1085,4 +1085,4 @@ void Navigator::draw_overlay(ImDrawList* dl, const glm::mat4& view_proj, const g
     dl->PopClipRect();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

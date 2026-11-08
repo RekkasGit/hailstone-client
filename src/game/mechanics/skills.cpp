@@ -8,7 +8,7 @@
 #include "game/mechanics/item_stats.h"
 #include "game/spells.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -188,4 +188,4 @@ std::int32_t Character::skill_with_item_mods(std::uint32_t skill, bool spell_red
     return result;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

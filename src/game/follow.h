@@ -10,7 +10,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct FollowInput {
     // The player (+0x64 Y, +0x68 X, +0x6c Z as the server's coordinates), heading (+0x80, 0..512),
@@ -54,4 +54,4 @@ FollowStep follow_step(const FollowInput& in, const mechanics::Fpu& fpu = mechan
 // given precision (fpatan itself always gives 64 bits). Returned unrounded (in the precision's range).
 double x87_bearing(float y1, float x1, float y2, float x2, const mechanics::Fpu& fpu);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

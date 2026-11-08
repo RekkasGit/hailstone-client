@@ -2,30 +2,31 @@
 
 #include "app/client_app_internal.h"
 
+#include "core/env.h"
 #include "game/boats.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
-// NMSC_AUTO_BOARD=name (testing boats, game/boats.h): NMSC_AUTO_BOARD_SECONDS (6) after zoning in, the player is put
+// HAILSTONE_AUTO_BOARD=name (testing boats, game/boats.h): HAILSTONE_AUTO_BOARD_SECONDS (6) after zoning in, the player is put
 // a few units above the deck of the nearest vehicle whose name starts with `name` and drops onto it (as a teleport:
 // the server takes the next position update). Once, and again after each zone-in.
 void ClientApp::drive_auto_board() {
-    static const char* want = std::getenv("NMSC_AUTO_BOARD");
+    static const char* want = hailstone::core::env("AUTO_BOARD");
     if (!want || !conn_) return;
-    // NMSC_AUTO_BOARD_HELM: then, once standing on it, the right click that asks for the helm of a small boat.
-    static const bool helm = std::getenv("NMSC_AUTO_BOARD_HELM") != nullptr;
+    // HAILSTONE_AUTO_BOARD_HELM: then, once standing on it, the right click that asks for the helm of a small boat.
+    static const bool helm = hailstone::core::env("AUTO_BOARD_HELM") != nullptr;
     if (helm && auto_board_zone_ == zone_entered_ && !auto_board_helm_ && conn_->standing_on()) {
         auto_board_helm_ = true;
         conn_->right_click_boat(conn_->standing_on());
     }
     if (auto_board_zone_ == zone_entered_) return;
     auto_board_helm_ = false;
-    static const char* wait_s = std::getenv("NMSC_AUTO_BOARD_SECONDS");
+    static const char* wait_s = hailstone::core::env("AUTO_BOARD_SECONDS");
     const float wait = wait_s ? static_cast<float>(std::atof(wait_s)) : 6.0f;
     if (std::chrono::duration<float>(Clock::now() - zone_entered_).count() < wait) return;
-    // NMSC_AUTO_BOARD_SWIM: in the water beside a boat lying still instead (a little below its z), facing it, to swim
+    // HAILSTONE_AUTO_BOARD_SWIM: in the water beside a boat lying still instead (a little below its z), facing it, to swim
     // aboard; it waits for one.
-    static const bool swim = std::getenv("NMSC_AUTO_BOARD_SWIM") != nullptr;
+    static const bool swim = hailstone::core::env("AUTO_BOARD_SWIM") != nullptr;
     const game::Spawn* best = nullptr;
     float best_d = 0.0f;
     for (const auto& [id, s] : conn_->world().spawns) {
@@ -82,8 +83,8 @@ void ClientApp::drive_auto_door(MovementKeys& mk) {
     const game::Spawn* self = conn_->world().player();
     float height = self && self->size > 0.0f ? self->size : 6.0f;
     if (auto_door_step_ == 0) {
-        // Testing: NMSC_AUTO_DOOR_DELAY=S waits S seconds after zoning in (default 3), e.g. for a #goto first.
-        static const char* delay_s = std::getenv("NMSC_AUTO_DOOR_DELAY");
+        // Testing: HAILSTONE_AUTO_DOOR_DELAY=S waits S seconds after zoning in (default 3), e.g. for a #goto first.
+        static const char* delay_s = hailstone::core::env("AUTO_DOOR_DELAY");
         if (since < (delay_s ? std::strtof(delay_s, nullptr) : 3.0f)) return;
         const game::Door* best = nullptr;
         float best_d = 1e9f;
@@ -91,8 +92,8 @@ void ClientApp::drive_auto_door(MovementKeys& mk) {
             if (!game::door_can_be_used(d) || game::door_is_invisible(d) || world_objects_->door_radius(d.id) <= 0.0f)
                 continue;
             if (opts_.auto_door >= 2 && d.type >= 9) continue; // hinged doors only
-            // Testing: NMSC_AUTO_DOOR_ID=N walks to that door instead of the nearest.
-            static const char* want_id = std::getenv("NMSC_AUTO_DOOR_ID");
+            // Testing: HAILSTONE_AUTO_DOOR_ID=N walks to that door instead of the nearest.
+            static const char* want_id = hailstone::core::env("AUTO_DOOR_ID");
             if (want_id && d.id != std::atoi(want_id)) continue;
             float dist = glm::distance(me, d.world_position());
             if (dist < best_d) {
@@ -128,7 +129,7 @@ void ClientApp::drive_auto_door(MovementKeys& mk) {
         glm::vec3 to = d->world_position() - me;
         yaw_ = std::atan2(to.y, to.x);
         bool near = game::door_within_reach(*d, me, height, world_objects_->door_radius(d->id) - 3.0f);
-        static const char* walk_s = std::getenv("NMSC_AUTO_DOOR_SECONDS"); // testing: a longer walk
+        static const char* walk_s = hailstone::core::env("AUTO_DOOR_SECONDS"); // testing: a longer walk
         bool timeout = now - auto_door_at_ > std::chrono::seconds(walk_s ? std::atoi(walk_s) : 25);
         if (!near && !timeout) {
             mk.forward = true;
@@ -155,7 +156,7 @@ void ClientApp::drive_auto_door(MovementKeys& mk) {
         log::info("auto-door: door {} state {} z {:.2f}; player feet ({:.2f} {:.2f} {:.2f}), standing on {}", d->id,
                   d->state, d->z, feet_.x, feet_.y, feet_.z, movement_.standing_on());
     }
-    static const char* hold_s = std::getenv("NMSC_AUTO_DOOR_SECONDS"); // testing: a longer ride
+    static const char* hold_s = hailstone::core::env("AUTO_DOOR_SECONDS"); // testing: a longer ride
     if (now - auto_door_at_ > std::chrono::seconds(hold_s ? std::max(15, std::atoi(hold_s)) : 15)) auto_door_step_ = 3;
 }
 
@@ -329,4 +330,4 @@ void ClientApp::drive_drop_pickup() {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

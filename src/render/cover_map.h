@@ -20,7 +20,7 @@
 
 #include "render/culling.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct SceneLighting;
 
@@ -63,4 +63,4 @@ bool cover_map_stale(CoverMapState& state, bool on, const CoverMap& map, std::ui
 // cover_map_stale's `contents` from the zone renderer's id, the shadow map's generation and the casters' signature.
 std::uint64_t cover_contents(std::uint64_t zone, std::uint32_t shadow_map, std::uint64_t casters);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

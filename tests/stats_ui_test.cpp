@@ -9,8 +9,8 @@
 #include "game/mechanics/character.h"
 #include "mock_server/harness.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 TEST_CASE("Stats window: the player it built goes when the connection leaves the zone or is forgotten") {
     EmptyGameDir dir;

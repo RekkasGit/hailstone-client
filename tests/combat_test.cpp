@@ -17,8 +17,8 @@
 #include "net/packet_io.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -558,8 +558,8 @@ TEST_CASE("name_sprite_shows_guild: SetNameSpriteState's guild line (bGuildShowA
 }
 
 TEST_CASE("ReportSuccessfulHit's animation on the target") {
-    using nmsc::game::HitAnimInput;
-    using nmsc::game::hit_animation;
+    using hailstone::game::HitAnimInput;
+    using hailstone::game::hit_animation;
     HitAnimInput h;
     h.type = 1;
     h.damage = 5;
@@ -585,8 +585,8 @@ TEST_CASE("ReportSuccessfulHit's animation on the target") {
 }
 
 TEST_CASE("ReportSuccessfulHit's shared tail: a landed hit") {
-    using nmsc::game::HitAnimInput;
-    using nmsc::game::hit_landed;
+    using hailstone::game::HitAnimInput;
+    using hailstone::game::hit_landed;
     HitAnimInput h;
     h.type = 1;
     h.damage = 5;
@@ -617,10 +617,10 @@ TEST_CASE("ReportSuccessfulHit's shared tail: a landed hit") {
 }
 
 TEST_CASE("ReportSuccessfulHit's environmental hits: animation, line and sound") {
-    using nmsc::game::EnvHitInput;
-    using nmsc::game::environment_hit;
-    using nmsc::game::hit_animation;
-    using nmsc::game::HitAnimInput;
+    using hailstone::game::EnvHitInput;
+    using hailstone::game::environment_hit;
+    using hailstone::game::hit_animation;
+    using hailstone::game::HitAnimInput;
     HitAnimInput h;
     h.damage = 20;
     h.local_stand_state = 115; // the local player's state does not matter for these

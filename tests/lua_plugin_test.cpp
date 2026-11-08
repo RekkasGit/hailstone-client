@@ -13,13 +13,13 @@
 #include "plugin/ui_bridge.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Host {
-    mq_test::World world{"nmsc_lua_plugin_test"};
+    mq_test::World world{"hailstone_lua_plugin_test"};
     fs::path lua_dir = world.dir / "lua";
     plugin::Hooks hooks;
     plugin::Policy policy;
@@ -351,7 +351,7 @@ print('[rules] ' .. tostring(hs.server_rule('autocombat', 'hunter')) .. ' ' .. t
 
 TEST_CASE("Lua plugin: a bad argument or a raising table is an error; nothing is half made") {
     // (Lua is built as C: each error is a longjmp, so these are read before a C++ object exists. A leak checker,
-    // -DNMSC_SANITIZE=ON, is what sees a string or a reference left behind.)
+    // -DHAILSTONE_SANITIZE=ON, is what sees a string or a reference left behind.)
     Host h;
     h.write("bad.lua", R"lua(
 local hs = require('hailstone')

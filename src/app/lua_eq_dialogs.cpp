@@ -28,7 +28,7 @@
 #include "net/spell_packets.h"
 #include "platform/open_folder.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -962,4 +962,4 @@ void add_dialog_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
             n, n == 0 ? std::string("SpellDisplayWindow") : "SpellDisplayWindow#" + std::to_string(n + 1)));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

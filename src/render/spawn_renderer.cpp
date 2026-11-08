@@ -11,7 +11,7 @@
 #include "game/world_state.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -197,4 +197,4 @@ void SpawnRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, con
     vkCmdDraw(cmd, 36, count, 0, 0);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

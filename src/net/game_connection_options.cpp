@@ -15,7 +15,7 @@
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -270,4 +270,4 @@ void GameConnection::netstats_command() {
     for (auto& l : game::netstats_lines(n)) show_chat(std::move(l.text), l.color);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

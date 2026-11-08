@@ -25,7 +25,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 inline constexpr std::size_t kEddRecordSize = 0x1a0;
 
@@ -105,4 +105,4 @@ struct SpellEffect {
 // spellsnew.eff, indexed by a spell's SpellAnim.
 std::vector<SpellEffect> parse_spell_effects(std::span<const std::byte> data);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

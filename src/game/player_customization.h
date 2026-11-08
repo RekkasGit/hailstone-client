@@ -23,7 +23,7 @@
 #include "game/actor_look.h"
 #include "game/char_select_camera.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The actor's features (ActorBase +8..+0xe, +0x80..+0x88; PlayerClient +0xeac..+0xeb2, +0xf24..+0xf2c).
 struct FacialFeatures {
@@ -157,4 +157,4 @@ private:
     bool char_create_ = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

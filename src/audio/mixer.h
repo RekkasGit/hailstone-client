@@ -29,7 +29,7 @@
 
 #include "audio/pcm.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 enum class Bus : std::uint8_t { Effects, Music };
 
@@ -135,4 +135,4 @@ private:
     std::vector<float> wet_;
 };
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

@@ -8,7 +8,7 @@
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -115,4 +115,4 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

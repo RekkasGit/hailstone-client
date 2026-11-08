@@ -9,7 +9,7 @@
 #include "game/passage_of_time.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -133,4 +133,4 @@ void GameConnection::passage_of_time(std::int64_t now) {
     pstatus_.endurance = static_cast<std::uint32_t>(std::max(pools.endurance, 0));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

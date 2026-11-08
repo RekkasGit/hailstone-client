@@ -19,7 +19,7 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct SceneLighting;
 
@@ -63,4 +63,4 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

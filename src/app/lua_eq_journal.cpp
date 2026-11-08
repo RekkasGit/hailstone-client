@@ -14,7 +14,7 @@
 #include "net/game_connection.h"
 #include "ui/ui_ini.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -662,4 +662,4 @@ void add_journal_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::move(cats));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

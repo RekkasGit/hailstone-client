@@ -34,15 +34,15 @@
 
 struct ImDrawList;
 
-namespace nmsc::assets { class ZoneRegions; }
-namespace nmsc::game {
+namespace hailstone::assets { class ZoneRegions; }
+namespace hailstone::game {
 class CollisionMesh;
 struct Door;
 struct Spawn;
-} // namespace nmsc::game
-namespace nmsc::nav { class ZoneNav; }
+} // namespace hailstone::game
+namespace hailstone::nav { class ZoneNav; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class Navigator final : public nav::NavControl {
 public:
@@ -277,4 +277,4 @@ private:
     std::filesystem::path cache_file_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

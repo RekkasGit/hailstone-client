@@ -24,9 +24,9 @@
 #include "render/scene_lighting.h"
 #include "render/vk_context.h"
 
-namespace nmsc::assets { struct Zone; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct SceneLighting;
 
@@ -94,4 +94,4 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

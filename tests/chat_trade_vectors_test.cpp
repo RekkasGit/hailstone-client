@@ -14,8 +14,8 @@
 #include "game/zone_lines.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
+using namespace hailstone::game;
+using hailstone::test::Json;
 
 namespace {
 
@@ -92,7 +92,7 @@ TransactState transact_state(const Json& in) {
 } // namespace
 
 TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
-    nmsc::test::each_vector("CEverQuest_SetChatInputMode.jsonl", [](const Json& rec) {
+    hailstone::test::each_vector("CEverQuest_SetChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;
         set_chat_input_mode(w, rec["in"]["new_mode"].i32(), calls);
@@ -101,7 +101,7 @@ TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
 }
 
 TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (FUN_0051ebf0, the Enter key)") {
-    nmsc::test::each_vector("CEverQuest_ToggleChatInputMode.jsonl", [](const Json& rec) {
+    hailstone::test::each_vector("CEverQuest_ToggleChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;
         toggle_chat_input_mode(w, calls);
@@ -110,7 +110,7 @@ TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (FUN_0051ebf0, the Enter key)
 }
 
 TEST_CASE("vectors: PcClient_GetConLevel under the PvP rule sets") {
-    nmsc::test::each_vector("PcClient_GetConLevel.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("PcClient_GetConLevel.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         ConLevelInput c;
         c.pvp_rules = in["pvp_rules"].i32();
@@ -132,7 +132,7 @@ TEST_CASE("vectors: PcClient_GetConLevel under the PvP rule sets") {
 }
 
 TEST_CASE("vectors: ParseRegionNameFlags") {
-    nmsc::test::each_vector("ParseRegionNameFlags.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("ParseRegionNameFlags.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         RegionNameFlags r = parse_region_name_flags(in["name"].is_null() ? nullptr : in["name"].text.c_str(), in["flags"].u32());
@@ -145,14 +145,14 @@ TEST_CASE("vectors: ParseRegionNameFlags") {
 }
 
 TEST_CASE("vectors: CEverQuest_IsOkToTransact") {
-    nmsc::test::each_vector("CEverQuest_IsOkToTransact.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CEverQuest_IsOkToTransact.jsonl", [](const Json& rec) -> std::string {
         bool ok = is_ok_to_transact(transact_state(rec["in"]));
         return ok == rec["out"]["value"].truthy() ? std::string() : std::string("value");
     });
 }
 
 TEST_CASE("vectors: Handle_OP_TradeRequest") {
-    nmsc::test::each_vector("Handle_OP_TradeRequest.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("Handle_OP_TradeRequest.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         TradeRequestInput t;
@@ -215,7 +215,7 @@ TEST_CASE("vectors: Handle_OP_TradeRequest") {
 }
 
 TEST_CASE("vectors: Handle_OP_GroupInvite2") {
-    nmsc::test::each_vector("Handle_OP_GroupInvite2.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("Handle_OP_GroupInvite2.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         GroupInviteState st;

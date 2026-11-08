@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // What one GPU reports, read from its Vulkan properties and features.
 struct GpuSupport {
@@ -46,4 +46,4 @@ struct InstanceExtensions {
 InstanceExtensions choose_instance_extensions(const std::vector<std::string>& wanted,
                                               const std::vector<std::string>& offered);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

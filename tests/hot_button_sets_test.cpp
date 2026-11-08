@@ -7,7 +7,7 @@
 #include "game/icon_selection.h"
 #include "ui/ui_textures.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("hotbutton sets: saved by name or the first unused entry, then sorted; a set keeps its file number") {
     game::HotButtonSets s;

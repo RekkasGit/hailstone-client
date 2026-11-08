@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto archive = nmsc::assets::PfsArchive::open(argv[1]);
+        auto archive = hailstone::assets::PfsArchive::open(argv[1]);
         if (argc == 2) {
             for (const auto& name : archive.names()) {
                 auto data = archive.read(name);

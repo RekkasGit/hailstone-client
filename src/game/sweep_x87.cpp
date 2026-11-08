@@ -1,6 +1,6 @@
 #include "game/sweep_x87.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void SweepX87::load(const Info& in) {
     put3(kInfo + 0x04, in.start);
@@ -96,4 +96,4 @@ void SweepX87::skitter(Info& info) {
     save(info);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

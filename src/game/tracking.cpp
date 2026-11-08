@@ -3,7 +3,7 @@
 #include <cstring>
 #include <utility>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -318,4 +318,4 @@ TrackingAllowedFn& tracking_allowed() {
     return fn;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

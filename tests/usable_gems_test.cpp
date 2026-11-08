@@ -8,7 +8,7 @@
 #include "game/mechanics/character.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -27,7 +27,7 @@ game::AltAbility mnemonic_retention(std::uint32_t rank_id, std::int32_t extra) {
 } // namespace
 
 TEST_CASE("a stock server's character has 8 gems, and 8 + SPA 326 as Mnemonic Retention ranks are owned and lost") {
-    mq_test::World w("nmsc_usable_gems_test");
+    mq_test::World w("hailstone_usable_gems_test");
     net::GameConnection& c = *w.conn;
     game::AltAdvState& aa = A::alt_adv(c);
     aa.add(mnemonic_retention(1071, 1));
@@ -57,7 +57,7 @@ TEST_CASE("a stock server's character has 8 gems, and 8 + SPA 326 as Mnemonic Re
 TEST_CASE("with_character: the reused sheet follows the inventory, and a call from inside a call has its own") {
     // with_character builds into one kept sheet (no per-frame copy of every item's storage); a nested call must not
     // rebuild the sheet the outer character is reading.
-    mq_test::World w("nmsc_usable_gems_nested_test");
+    mq_test::World w("hailstone_usable_gems_nested_test");
     net::GameConnection& c = *w.conn;
     net::Item ring;
     ring.name = "Ring of the Test";
@@ -77,7 +77,7 @@ TEST_CASE("with_character: the reused sheet follows the inventory, and a call fr
 TEST_CASE("memorize_tick: a bard's step takes DEX, INT and meditate from one character") {
     // CSpellBookWnd::GetSpellMemTicksLeft @0x75db20: a bard steps (DEX + INT) / 30 + 1, then meditate / 10 + 2 more.
     // memorize_tick reads all three from one sheet, built only on a tick whose interval has passed.
-    mq_test::World w("nmsc_memorize_tick_test");
+    mq_test::World w("hailstone_memorize_tick_test");
     net::GameConnection& c = *w.conn;
     auto& prof = *A::profile(c);
     prof.class_ = 8; // bard

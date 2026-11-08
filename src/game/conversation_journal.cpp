@@ -12,7 +12,7 @@
 #include "game/spell_record.h"
 #include "platform/process.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::string journal_upper(std::string s) {
     for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -290,4 +290,4 @@ int ConversationJournal::save(const std::filesystem::path& base) const {
     return 0;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

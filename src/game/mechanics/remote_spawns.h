@@ -19,7 +19,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // A spawn's physics block (PlayerBase +0x64..), the fields an update sets,
 // with the original's Y/X naming (game/coords.h swaps them for the world).
@@ -126,4 +126,4 @@ struct RemoteBody {
 // the caller's (the vertical speed is left alone).
 void step_remote_spawn(RemoteBody& body, float elapsed_ms, bool npc);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

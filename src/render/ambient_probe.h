@@ -12,9 +12,9 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-namespace nmsc::assets { struct Zone; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 class AmbientProbe {
 public:
@@ -55,4 +55,4 @@ private:
     bool valid_ = false;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

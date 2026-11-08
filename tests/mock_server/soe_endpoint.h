@@ -23,9 +23,9 @@
 #include "net/session_codec.h"
 #include "platform/udp_socket.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
-namespace soe = ::nmsc::net::soe;
+namespace soe = ::hailstone::net::soe;
 
 // What the network does with a datagram.
 enum class Fate : std::uint8_t {
@@ -156,4 +156,4 @@ private:
     std::vector<soe::Bytes> held_;
 };
 
-} // namespace nmsc::test
+} // namespace hailstone::test

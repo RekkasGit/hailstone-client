@@ -6,11 +6,11 @@
 #include <ctime>
 #include <optional>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // `t` broken down in the local time zone; nullopt when the system cannot (a time far out of range).
 std::optional<std::tm> local_time(std::time_t t);
 // `t` broken down in UTC; nullopt when the system cannot.
 std::optional<std::tm> utc_time(std::time_t t);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

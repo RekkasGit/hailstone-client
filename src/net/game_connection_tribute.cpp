@@ -8,7 +8,7 @@
 #include "game/merchant.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -270,4 +270,4 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -11,7 +11,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 using detail::write_cstring;
@@ -899,4 +899,4 @@ std::optional<CoinReward> decode_cash_reward(const AppPacket& p) {
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

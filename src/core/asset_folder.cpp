@@ -6,7 +6,7 @@
 
 #include "core/game_dir.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 constexpr const char* kSoundArchives = "snd*.pfs";
@@ -178,4 +178,4 @@ std::string describe(const AssetFolderCheck& check) {
     return out;
 }
 
-} // namespace nmsc
+} // namespace hailstone

@@ -26,7 +26,7 @@
 #include "core/sha256.h"
 #include "core/version.h"
 
-namespace nmsc {
+namespace hailstone {
 
 struct UpdatePackage {
     std::string platform;  // update_platform()'s names: "linux-x64", "windows-x64" ...
@@ -58,4 +58,4 @@ std::string_view update_platform();
 // The packages of `platform`.
 std::vector<UpdatePackage> packages_for(const UpdateManifest& manifest, std::string_view platform);
 
-} // namespace nmsc
+} // namespace hailstone

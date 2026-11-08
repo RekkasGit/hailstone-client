@@ -19,10 +19,10 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc { class GameDir; }
-namespace nmsc::render { class VkContext; }
+namespace hailstone { class GameDir; }
+namespace hailstone::render { class VkContext; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct SpellIconCell {
     int sheet = 0;    // 1-based: spells0<sheet>.tga
@@ -128,4 +128,4 @@ void cast_bar_window(const CastBarView& view);
 void spell_book_window(SpellBookView& view, SpellActions& actions, SpellIconCache* icons);
 void buff_windows(const BuffWindowView& view, SpellActions& actions, SpellIconCache* icons);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

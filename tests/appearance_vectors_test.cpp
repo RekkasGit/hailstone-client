@@ -14,9 +14,9 @@
 #include "game/actor_look.h"
 #include "vector_files.h"
 
-using nmsc::test::each_vector;
-using nmsc::test::Json;
-namespace game = nmsc::game;
+using hailstone::test::each_vector;
+using hailstone::test::Json;
+namespace game = hailstone::game;
 
 namespace {
 

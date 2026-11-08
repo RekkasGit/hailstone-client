@@ -10,7 +10,7 @@
 #include <map>
 #include <system_error>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -248,4 +248,4 @@ FontFiles find_font_family(std::span<const FontFace> faces, std::string_view fam
     return out;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

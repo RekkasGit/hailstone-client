@@ -27,7 +27,7 @@
 
 #include <lua.hpp>
 
-namespace nmsc::ui::lua {
+namespace hailstone::ui::lua {
 
 namespace {
 
@@ -355,10 +355,10 @@ int CodeEditor(lua_State* L) {
 
 namespace {
 // The clipboard holds whatever the player copied (a password too) and is pasted where the player trusts it, so a
-// host keeps it from code it does not trust: when the state's registry has a function "nmsc.clipboard_allowed"
+// host keeps it from code it does not trust: when the state's registry has a function "hailstone.clipboard_allowed"
 // (mq/lua_mq.cpp, a script's state), it is asked first. The UI's own states have none.
 void check_clipboard(lua_State* L, const char* what) {
-    if (lua_getfield(L, LUA_REGISTRYINDEX, "nmsc.clipboard_allowed") != LUA_TFUNCTION) {
+    if (lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.clipboard_allowed") != LUA_TFUNCTION) {
         lua_pop(L, 1);
         return;
     }
@@ -383,4 +383,4 @@ int GetClipboardText(lua_State* L) {
     return 1;
 }
 
-} // namespace nmsc::ui::lua
+} // namespace hailstone::ui::lua

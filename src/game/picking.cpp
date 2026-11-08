@@ -6,7 +6,7 @@
 
 #include "game/sine_table.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -248,4 +248,4 @@ PickHit pick_actor(const PickSegment& seg, const PickScene& scene, std::uint32_t
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

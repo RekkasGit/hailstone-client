@@ -5,7 +5,7 @@
 #include "core/ini_file.h"
 #include "game/coords.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 bool ClientApp::target_ring_shown() const {
     if (!conn_ || !conn_->client_option(game::ClientOption::ShowTargetRing)) return false;
@@ -139,4 +139,4 @@ bool ClientApp::set_ring_option(std::string_view name, int value) {
     return true;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

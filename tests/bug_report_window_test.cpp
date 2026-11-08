@@ -13,8 +13,8 @@
 #include "app/lua_eq.h"
 #include "mock_server/harness.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 namespace {
 

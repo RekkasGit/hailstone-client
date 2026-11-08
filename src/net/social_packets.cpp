@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 using detail::write_cstring;
@@ -930,4 +930,4 @@ AppPacket encode(const std::vector<LFGuildGuildMatch>& v) {
     return make_packet(Op::LFGuild, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

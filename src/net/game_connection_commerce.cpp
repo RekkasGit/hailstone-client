@@ -31,7 +31,7 @@
 #include "net/zone_packets.h"
 #include "net/trade_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -868,4 +868,4 @@ bool GameConnection::adventure_merchant_sell(const ItemSlot& slot) {
     return true;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

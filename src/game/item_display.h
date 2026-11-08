@@ -18,7 +18,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 struct SpellData;
@@ -120,4 +120,4 @@ ItemDisplayLayout layout_item_display(const ItemDisplay& d, const ItemDisplayFra
 // FUN_007e8a10: the damage bonus the player's class and level give a weapon (the Dmg Bon line).
 std::int32_t weapon_damage_bonus(std::int32_t level, std::uint8_t player_class, const net::Item& item);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

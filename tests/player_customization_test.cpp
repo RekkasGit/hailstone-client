@@ -11,7 +11,7 @@
 #include "game/char_create_look.h"
 #include "game/player_customization.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 

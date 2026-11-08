@@ -18,7 +18,7 @@
 #include "game/mechanics/anim_select.h"
 #include "game/race_models.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -836,4 +836,4 @@ std::shared_ptr<const eqg_character::MeshFile> EqgCharacterStore::mesh_file(std:
     return it == mesh_files_.end() ? nullptr : it->second;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

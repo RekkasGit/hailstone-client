@@ -15,9 +15,9 @@
 #include "game/weather_state.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
+using namespace hailstone::game;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
 
 namespace {
 
@@ -90,7 +90,7 @@ private:
 } // namespace
 
 TEST_CASE("Weather_HandleWeatherMessage vectors") {
-    nmsc::test::each_vector("Weather_HandleWeatherMessage.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("Weather_HandleWeatherMessage.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         WeatherState w = state_of(in);
         weather_handle_message(w, in["message_kind"].i32(), in["message_intensity"].i32());
@@ -99,11 +99,11 @@ TEST_CASE("Weather_HandleWeatherMessage vectors") {
 }
 
 TEST_CASE("Weather_StartEffect vectors") {
-    nmsc::test::each_vector("Weather_StartEffect.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("Weather_StartEffect.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         const Json& out = r["out"];
-        using nmsc::game::mechanics::Fpu;
-        using nmsc::game::mechanics::FpuPrecision;
+        using hailstone::game::mechanics::Fpu;
+        using hailstone::game::mechanics::FpuPrecision;
         const Fpu fpu(r["precision"].text == "x87-53" ? FpuPrecision::Double53 : FpuPrecision::Single24);
         WeatherState w = state_of(in);
         // Sentinels for the fields only a start writes.
@@ -172,7 +172,7 @@ TEST_CASE("Weather_StartEffect vectors") {
 }
 
 TEST_CASE("Weather_RequestRainSnowToggle vectors") {
-    nmsc::test::each_vector("Weather_RequestRainSnowToggle.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("Weather_RequestRainSnowToggle.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         const Json& out = r["out"];
         RainSnowRequest q = rain_snow_request(in["kind"].i32(), in["on"].i32(), static_cast<std::uint8_t>(in["world_hour"].i64()));

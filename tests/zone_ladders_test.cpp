@@ -17,7 +17,7 @@
 #include "plugin/policy.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -244,8 +244,8 @@ TEST_CASE("zone ladders: hailstone.cfg [movement] passable_ladders") {
     CHECK(plugin::parse_server_cfg("[movement]\npassable_ladders = on\n").passable_ladders);
 }
 
-TEST_CASE("zone ladders: Upper Guk's ladders" * doctest::skip(!nmsc::test::game_dir())) {
-    const assets::Zone zone = assets::load_zone(*nmsc::test::game_dir(), "guktop");
+TEST_CASE("zone ladders: Upper Guk's ladders" * doctest::skip(!hailstone::test::game_dir())) {
+    const assets::Zone zone = assets::load_zone(*hailstone::test::game_dir(), "guktop");
     const auto ladders = game::zone_ladders(zone);
     REQUIRE(!ladders.empty());
     for (const auto& l : ladders) {
@@ -265,8 +265,8 @@ TEST_CASE("zone ladders: Upper Guk's ladders" * doctest::skip(!nmsc::test::game_
     MESSAGE("guktop: ", ladders.size(), " ladders, ", marked, " ladder triangles");
 }
 
-TEST_CASE("zone ladders: Cabilis East's canal ladders" * doctest::skip(!nmsc::test::game_dir())) {
-    const assets::Zone zone = assets::load_zone(*nmsc::test::game_dir(), "cabeast");
+TEST_CASE("zone ladders: Cabilis East's canal ladders" * doctest::skip(!hailstone::test::game_dir())) {
+    const assets::Zone zone = assets::load_zone(*hailstone::test::game_dir(), "cabeast");
     const auto ladders = game::zone_ladders(zone);
     // 2 LADDER14 (solid bamboo) and 13 LADDERCB101 (every polygon passable): all of them clickable.
     std::size_t placed = 0;

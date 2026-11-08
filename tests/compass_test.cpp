@@ -3,7 +3,7 @@
 
 #include "game/compass.h"
 
-using nmsc::game::CompassError;
+using hailstone::game::CompassError;
 
 TEST_CASE("compass: the error's target from the Sense Heading skill") {
     CompassError c;

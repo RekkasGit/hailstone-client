@@ -12,7 +12,7 @@
 #include "render/vk_util.h"
 #include "ui/imgui_vk_textures.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -301,4 +301,4 @@ void ItemPreviewView::record(const render::FrameInfo& frame, float dt) {
     t.drawn = true;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -12,7 +12,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_Stun (RoF2 Stun_Struct): u32 duration (ms), then two bytes EQEmu fills (163, 67).
 std::optional<std::uint32_t> decode_stun(const AppPacket& p);
@@ -115,4 +115,4 @@ std::optional<CoinFind> decode_pick_pocket(const AppPacket& p);
 // left the zone, 7 no bandage), u16.
 std::optional<std::uint16_t> decode_bind_wound(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

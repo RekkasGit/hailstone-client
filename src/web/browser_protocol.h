@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 inline constexpr std::uint32_t kProtocolVersion = 1;
 // The largest message either side accepts: a 4K page's full frame is 33 MB. A larger paint (a 4096x4096 tab's is
@@ -200,4 +200,4 @@ private:
     bool failed_ = false;
 };
 
-} // namespace nmsc::web
+} // namespace hailstone::web

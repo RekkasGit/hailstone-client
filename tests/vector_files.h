@@ -1,9 +1,9 @@
 #pragma once
 
 // Reading rof2decomp's test vectors (re/test/vectors/*.jsonl, recorded from
-// the original eqgame.exe): the directory (NMSC_VECTORS_DIR, else
+// the original eqgame.exe): the directory (HAILSTONE_VECTORS_DIR, else
 // rof2decomp/re/test/vectors beside the source tree, or beside the folder
-// holding it for a worktree, found from NMSC_SOURCE_DIR so that a run from
+// holding it for a worktree, found from HAILSTONE_SOURCE_DIR so that a run from
 // any directory (ctest) finds it), a per-record runner that counts
 // mismatches, and float helpers. Without the directory the checks pass with
 // a message.
@@ -19,15 +19,16 @@
 #include <optional>
 #include <string>
 
+#include "core/env.h"
 #include "json_lite.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 inline std::optional<std::filesystem::path> vector_dir() {
     namespace fs = std::filesystem;
-    if (const char* env = std::getenv("NMSC_VECTORS_DIR")) return fs::path(env);
-#ifdef NMSC_SOURCE_DIR
-    const fs::path source(NMSC_SOURCE_DIR);
+    if (const char* env = hailstone::core::env("VECTORS_DIR")) return fs::path(env);
+#ifdef HAILSTONE_SOURCE_DIR
+    const fs::path source(HAILSTONE_SOURCE_DIR);
 #else
     const fs::path source(".");
 #endif
@@ -45,7 +46,7 @@ inline void each_vector(const char* file, const std::function<std::string(const 
     auto dir = vector_dir();
     std::ifstream f(dir ? *dir / file : std::filesystem::path());
     if (!f) {
-        MESSAGE(std::string(file) << ": no vectors (NMSC_VECTORS_DIR); skipped");
+        MESSAGE(std::string(file) << ": no vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     std::string line;
@@ -78,4 +79,4 @@ inline std::uint64_t f64_bits(const Json& j) {
 }
 inline float f32_of(const Json& j) { return std::bit_cast<float>(f32_bits(j)); }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

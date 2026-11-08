@@ -3,7 +3,7 @@
 #include "core/wrap_math.h"
 #include "game/augments.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -243,4 +243,4 @@ std::uint8_t item_type_to_skill(std::uint32_t item_type) {
     }
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

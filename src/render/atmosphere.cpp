@@ -8,7 +8,7 @@
 
 #include "render/scene_lighting.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -219,4 +219,4 @@ ColorGrade color_grade(const Daylight& d, bool outdoor, const glm::vec3& fog, fl
     return g;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

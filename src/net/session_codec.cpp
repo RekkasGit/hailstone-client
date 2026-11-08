@@ -11,7 +11,7 @@
 // not copied) and the original client's UdpLibrary as described in
 // rof2decomp:notes/connection-and-network.md §7.
 
-namespace nmsc::net::soe {
+namespace hailstone::net::soe {
 
 namespace {
 
@@ -444,4 +444,4 @@ void InboundStream::consume(ByteSpan packet, std::vector<Bytes>& out) {
     reset_fragment();
 }
 
-} // namespace nmsc::net::soe
+} // namespace hailstone::net::soe

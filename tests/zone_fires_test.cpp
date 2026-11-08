@@ -14,7 +14,7 @@
 #include "game_files.h"
 #include "scratch_dir.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -173,7 +173,7 @@ TEST_CASE("environment emitter lines") {
 }
 
 TEST_CASE("environment emitters: a revamped zone loaded as S3D takes none of the live .eqg's") {
-    nmsc::test::ScratchDir dir("envemit");
+    hailstone::test::ScratchDir dir("envemit");
     auto write = [&](const std::string& name, const std::string& body) {
         std::ofstream(dir.path() / name, std::ios::binary) << body;
     };
@@ -186,7 +186,7 @@ TEST_CASE("environment emitters: a revamped zone loaded as S3D takes none of the
         write(std::string(zone) + ".eqg", "x");
         write(std::string(zone) + "_environmentemitters.txt", emitters);
     }
-    nmsc::GameDir game(dir.path());
+    hailstone::GameDir game(dir.path());
     Zone revamped;
     revamped.name = "nektulos"; // loads its RoF2 .s3d; the emitters file is the revamp's
     CHECK(add_environment_emitters(game, revamped) == 0);
@@ -198,16 +198,16 @@ TEST_CASE("environment emitters: a revamped zone loaded as S3D takes none of the
     CHECK(ordinary.particle_fixtures[0].transform[3].z == doctest::Approx(30.0f));
 }
 
-TEST_CASE("freeportwest's torches burn from its environment emitters" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_zone(*nmsc::test::game_dir(), "freeportwest");
+TEST_CASE("freeportwest's torches burn from its environment emitters" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_zone(*hailstone::test::game_dir(), "freeportwest");
     std::size_t flames = 0;
     for (const auto& f : z.particle_fixtures)
         flames += flame_emitter_hue(z.particle_definitions[f.definition]) != FlameHue::None;
     CHECK(flames > 400);
 }
 
-TEST_CASE("qeynos2's lamps carry mesh flames" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_zone(*nmsc::test::game_dir(), "qeynos2");
+TEST_CASE("qeynos2's lamps carry mesh flames" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_zone(*hailstone::test::game_dir(), "qeynos2");
     auto fires = placement_fires(z);
     CHECK(fires.size() > 50);
     for (const auto& f : fires) {

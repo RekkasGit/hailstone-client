@@ -21,7 +21,7 @@
 #include "scratch_dir.h"
 #include "ui/lua/lua_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 TEST_CASE("Plugin approvals: kept by hash per server, one answer per plugin name, revoked and forgotten by name") {

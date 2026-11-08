@@ -33,8 +33,9 @@
 #include "plugin/hooks.h"
 #include "game_files.h"
 #include "scratch_dir.h"
+#include "core/env.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -301,7 +302,7 @@ TEST_CASE("nav: areas from the regions: water costs more and can be avoided, lav
 }
 
 TEST_CASE("nav: the cache is written once built and read back, and a stale or broken one is ignored") {
-    test::ScratchDir dir("nmsc_nav_cache");
+    test::ScratchDir dir("hailstone_nav_cache");
     Scene s = walled_room();
     std::filesystem::path file = dir.path() / nav::ZoneNav::cache_name("test zone/1");
     CHECK(file.filename() == "test_zone_1.navmesh");
@@ -888,7 +889,7 @@ struct FakeNav : nav::NavControl {
 };
 
 struct MqHost {
-    mq_test::World world{"nmsc_nav_mq"};
+    mq_test::World world{"hailstone_nav_mq"};
     plugin::Hooks hooks;
     mq::Registry reg;
     mq::Context ctx;
@@ -1473,7 +1474,7 @@ TEST_CASE("nav: a stalled walk opens the door its way runs into (found by its mo
         app::Navigator nav2{locked};
         nav2.zone_loaded(collision, nullptr, {});
         // The log of the stuck walk: where it stood and the doors about.
-        nmsc::test::ScratchDir logs("nav_stuck_log");
+        hailstone::test::ScratchDir logs("nav_stuck_log");
         const std::filesystem::path log_file = logs.path() / "nav.log";
         REQUIRE(log::open_file(log_file));
         glm::vec3 at(20, 20, 0);
@@ -2164,7 +2165,7 @@ void walk_real_zone(const GameDir& game, const char* name, glm::vec3 from, glm::
     MeshMoveWorld world;
     world.mesh = &collision;
     world.regions = &zone.regions;
-    const bool trace = std::getenv("NMSC_NAV_WALK_TRACE") != nullptr;
+    const bool trace = hailstone::core::env("NAV_WALK_TRACE") != nullptr;
     struct Body {
         float frame_ms, radius, avatar;
     };

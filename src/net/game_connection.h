@@ -98,16 +98,16 @@
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::game::mechanics { struct GameTables; }
-namespace nmsc::game::mechanics { struct LiveState; }
+namespace hailstone { class GameDir; }
+namespace hailstone::game::mechanics { struct GameTables; }
+namespace hailstone::game::mechanics { struct LiveState; }
 
-namespace nmsc::game::mechanics { class Character; }
-namespace nmsc::game { struct FacialFeatures; }
+namespace hailstone::game::mechanics { class Character; }
+namespace hailstone::game { struct FacialFeatures; }
 
-namespace nmsc::plugin { class Hooks; }
+namespace hailstone::plugin { class Hooks; }
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct MemorizeSpell;
 
@@ -3268,4 +3268,4 @@ private:
     bool respawn_chosen_ = false;
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

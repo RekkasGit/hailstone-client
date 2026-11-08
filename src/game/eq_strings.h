@@ -10,9 +10,9 @@
 #include <string>
 #include <unordered_map>
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings {
 public:
@@ -31,4 +31,4 @@ private:
     std::unordered_map<std::uint64_t, std::string> db_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

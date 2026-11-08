@@ -23,9 +23,9 @@
 #include "assets/model.h"
 #include "assets/pfs.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 struct SkyLayer {
     Mesh mesh;
@@ -93,4 +93,4 @@ float sky_hour_ambient(int channel, int index);
 // over each 6-hour block). The moon is half a turn ahead.
 float sky_sweep_heading(float hour);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

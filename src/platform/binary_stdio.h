@@ -4,8 +4,8 @@
 // Windows opens them in text mode, which would turn the protocol's 0x0a bytes into 0x0d 0x0a. No SDL, so CEF's
 // helper links it without the client.
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 void binary_stdio();
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

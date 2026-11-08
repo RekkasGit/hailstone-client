@@ -18,7 +18,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_TaskDescription: u32 sequence, u32 task id, u8 open window, u32 type, u32 reward type; title;
 // u32 duration, u32 duration code, u32 elapsed seconds; description; u8 has rewards, u32 coin,
@@ -103,4 +103,4 @@ AppPacket encode_shared_task_quit();
 // OP_TaskRequestTimer (Z→C, 4 bytes): milliseconds.
 std::optional<std::uint32_t> decode_task_request_timer(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

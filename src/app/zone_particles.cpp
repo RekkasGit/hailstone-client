@@ -10,7 +10,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -95,4 +95,4 @@ void ZoneParticles::draw(const render::FrameInfo& frame, const glm::mat4& view_p
                         modern);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

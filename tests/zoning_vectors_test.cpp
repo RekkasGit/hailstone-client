@@ -15,10 +15,10 @@
 #include "game/zoning.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
-using nmsc::test::f32_of;
+using namespace hailstone::game;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
+using hailstone::test::f32_of;
 
 namespace {
 
@@ -461,20 +461,20 @@ std::string check_zone_to_bind(const Json& rec) {
 
 } // namespace
 
-TEST_CASE("vectors: Handle_OP_Death") { nmsc::test::each_vector("Handle_OP_Death.jsonl", check_death); }
+TEST_CASE("vectors: Handle_OP_Death") { hailstone::test::each_vector("Handle_OP_Death.jsonl", check_death); }
 TEST_CASE("vectors: Teleport_ResolveTeleportIndex") {
-    nmsc::test::each_vector("Teleport_ResolveTeleportIndex.jsonl", check_resolve);
+    hailstone::test::each_vector("Teleport_ResolveTeleportIndex.jsonl", check_resolve);
 }
 TEST_CASE("vectors: PlayerZoneClient_DoTeleport") {
-    nmsc::test::each_vector("PlayerZoneClient_DoTeleport.jsonl", check_do_teleport);
+    hailstone::test::each_vector("PlayerZoneClient_DoTeleport.jsonl", check_do_teleport);
 }
 TEST_CASE("vectors: SendTeleportIndexRequestAndWait") {
-    nmsc::test::each_vector("SendTeleportIndexRequestAndWait.jsonl", check_index_request);
+    hailstone::test::each_vector("SendTeleportIndexRequestAndWait.jsonl", check_index_request);
 }
 TEST_CASE("vectors: PlayerZoneClient_DoTeleportB") {
-    nmsc::test::each_vector("PlayerZoneClient_DoTeleportB.jsonl", check_teleport_b);
+    hailstone::test::each_vector("PlayerZoneClient_DoTeleportB.jsonl", check_teleport_b);
 }
-TEST_CASE("vectors: ZonePlayerToBind") { nmsc::test::each_vector("ZonePlayerToBind.jsonl", check_zone_to_bind); }
+TEST_CASE("vectors: ZonePlayerToBind") { hailstone::test::each_vector("ZonePlayerToBind.jsonl", check_zone_to_bind); }
 
 TEST_CASE("ATP region text: zone point 10 x N") {
     CHECK(atp_teleport_text("ATP_0012") == "DRNTP0025500012000000000000000");

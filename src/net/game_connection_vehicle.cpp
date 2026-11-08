@@ -8,7 +8,7 @@
 #include "game/race_models.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 constexpr std::size_t kControlBoatSize = 8; // {u32 boat id, u8 take control, 3 bytes}
@@ -106,4 +106,4 @@ void GameConnection::steer_boat(bool forward, bool back, bool left, bool right, 
     helm_moving_ = moving;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

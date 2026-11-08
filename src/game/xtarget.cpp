@@ -6,7 +6,7 @@
 
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -233,4 +233,4 @@ int XTargetRoleSets::slot_for_name(std::string_view name) const {
     return found;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

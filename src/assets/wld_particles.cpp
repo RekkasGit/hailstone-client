@@ -6,7 +6,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 std::optional<ParticleTexture> particle_texture(const wld::WldFile& wld, wld::Ref ref) {
     const auto* blit = wld.get<wld::ParticleSprite>(ref);
@@ -159,4 +159,4 @@ EmitterDefinition particle_cloud_definition(const wld::ParticleCloud& c, const P
     return d;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

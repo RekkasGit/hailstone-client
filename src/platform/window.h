@@ -20,7 +20,7 @@ struct SDL_Joystick;
 struct SDL_Gamepad;
 union SDL_Event;
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 struct WindowDesc {
     std::string title = "Hailstone";
@@ -258,4 +258,4 @@ private:
     float pushed_x_ = -1.0f, pushed_y_ = -1.0f; // push_mouse_motion's last place (its events' relative motion)
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

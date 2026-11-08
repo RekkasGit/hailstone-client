@@ -22,7 +22,7 @@
 // rule matters for EQ: OpenEQ docs/DDS_BC1_ALPHA.md found authored
 // transparency in FOURCC-only DXT1 files. See docs/formats/textures.md.
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -1132,4 +1132,4 @@ std::size_t mip_size(PixelFormat format, std::uint32_t width, std::uint32_t heig
     return 0;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

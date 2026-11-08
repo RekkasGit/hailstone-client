@@ -4,7 +4,7 @@
 
 #include "game/position_tracker.h"
 
-using nmsc::game::PositionTracker;
+using hailstone::game::PositionTracker;
 
 namespace {
 

@@ -9,7 +9,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 TargetIndicatorSettings TargetIndicatorSettings::parse(const IniFile& ini) {
     TargetIndicatorSettings out;
@@ -91,4 +91,4 @@ TargetRingLook target_ring_look(float radius, double seconds, double since_chang
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

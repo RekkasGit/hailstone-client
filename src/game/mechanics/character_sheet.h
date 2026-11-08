@@ -21,12 +21,12 @@
 #include "game/server_ext.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 struct SpellData;
 class SpellTable;
 }
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 inline constexpr int kPossessionSlots = 34;  // CalcCarriedWeight: possessions 0..0x21 (worn, general, cursor)
 inline constexpr int kWornSlots = 23;        // 0..22 (22 = ammo)
@@ -171,4 +171,4 @@ struct CharacterSheet {
 using SpellLookup = std::function<const SpellData*(std::int32_t id)>;
 SpellLookup spell_lookup(const SpellTable& table);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

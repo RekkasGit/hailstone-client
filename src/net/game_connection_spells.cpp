@@ -25,7 +25,7 @@
 #include "net/ability_packets.h"
 #include "game/race_models.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1047,4 +1047,4 @@ void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

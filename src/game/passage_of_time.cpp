@@ -10,7 +10,7 @@
 #include "game/mechanics/ticks.h"
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -316,4 +316,4 @@ bool one_second_tick(SpellState& spells, mechanics::CharacterSheet& sheet, const
     return true;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

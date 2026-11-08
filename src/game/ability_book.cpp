@@ -6,7 +6,7 @@
 
 #include "game/mechanics/abilities.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -200,4 +200,4 @@ void Autoskill::reset() {
     tried_.clear();
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

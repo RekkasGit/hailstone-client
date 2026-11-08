@@ -2,7 +2,7 @@
 
 #include <limits>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -250,4 +250,4 @@ MoneyButtonOut clicked_money_button(const MoneyButtonIn& in) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

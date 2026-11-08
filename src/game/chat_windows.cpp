@@ -5,7 +5,7 @@
 #include <format>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -182,4 +182,4 @@ CycleReply cycle_reply(std::string_view input, const std::vector<std::string>& n
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -16,7 +16,7 @@
 #include "game/alt_adv.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_SendAATable (Z→C): one rank (game::AltAbility), variable size. The
 // prerequisite and timer arrays are counted; EQEmu writes one zero
@@ -73,4 +73,4 @@ struct AATimer {
 std::optional<AATimer> decode_aa_timer(const AppPacket& p);
 AppPacket encode(const AATimer& v); // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

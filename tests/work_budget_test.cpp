@@ -3,7 +3,7 @@
 
 #include "core/work_budget.h"
 
-using nmsc::core::WorkBudget;
+using hailstone::core::WorkBudget;
 
 TEST_CASE("work budget: units start while the time spent is under the budget") {
     WorkBudget b(4.0);

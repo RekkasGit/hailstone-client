@@ -15,8 +15,8 @@
 #include "game/zone_lines.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -378,7 +378,7 @@ TEST_CASE("buried zone lines: a box with a real floor at its depth, or a reachab
 //   qeynos #1: source server (x -442, y 464) → qeynos2 (2) at (-5, -151)
 //   qeynos #2: source (-80, 586) → qeynos2 at (356, -26)
 //   qeynos #3, #4, #33: → qcat (45)
-TEST_CASE("qeynos zone lines match the server's zone_points table" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("qeynos zone lines match the server's zone_points table" * doctest::skip(!hailstone::test::game_dir())) {
     auto archive = PfsArchive::open(test::game_dir()->root() / "qeynos.s3d");
     auto data = archive.read("qeynos.wld");
     REQUIRE(data);

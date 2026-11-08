@@ -2,7 +2,7 @@
 
 #include <format>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -121,4 +121,4 @@ std::string IconSelection::range_text() const {
     return std::format("Icons: {} - {}", start, end - 1);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

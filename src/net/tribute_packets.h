@@ -15,7 +15,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 inline constexpr int kTributeSlots = 5;         // RoF2 invtype::TRIBUTE_SIZE
 inline constexpr int kTributeTiers = 10;        // MAX_TRIBUTE_TIERS
@@ -174,4 +174,4 @@ AppPacket encode(const GuildTributeDonation& v); // server direction, for tests
 AppPacket encode_guild_donate_platinum(std::uint32_t platinum, std::uint32_t master_id, std::uint32_t guild_id);
 std::optional<std::uint32_t> decode_guild_donate_platinum(const AppPacket& p); // the favour
 
-} // namespace nmsc::net
+} // namespace hailstone::net

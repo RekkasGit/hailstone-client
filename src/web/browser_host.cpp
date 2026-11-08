@@ -12,7 +12,7 @@
 #include "web/page_rules.h"
 #include "platform/helper_process.h"
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 namespace {
 
@@ -459,4 +459,4 @@ void BrowserHost::shutdown() {
     restart_at_.reset();
 }
 
-} // namespace nmsc::web
+} // namespace hailstone::web

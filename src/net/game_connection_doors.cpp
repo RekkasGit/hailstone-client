@@ -11,7 +11,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -304,4 +304,4 @@ bool GameConnection::drop_cursor_on_ground(bool announce) {
     return sent;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

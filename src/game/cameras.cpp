@@ -6,7 +6,7 @@
 #include "game/doors.h" // fix_heading
 #include "game/follow.h" // x87_bearing
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -229,4 +229,4 @@ bool camera_mouse_look(int type, GameCamera& cam, float dx, float dy, float raw_
     return turns_player;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

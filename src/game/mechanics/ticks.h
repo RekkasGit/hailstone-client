@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // CharacterZoneClient_ApplyManaRegenTick @0x4579e0: below the maximum
 // (`current` is Cur_Mana(1), `maximum` the character's virtual +0x24 (1)),
@@ -117,4 +117,4 @@ inline constexpr std::uint32_t kStrEffectFading = 0x30c3;     // SPA 0x3a / 0x9c
 // Returns 0.
 std::int32_t process_affects(AffectState& state, AffectQueries& q);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

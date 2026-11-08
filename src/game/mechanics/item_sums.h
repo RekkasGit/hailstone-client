@@ -18,11 +18,11 @@
 #include <functional>
 #include <span>
 
-namespace nmsc::net {
+namespace hailstone::net {
 struct Item;
 }
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The 56 rows of the stat table, in the original's order (the getter
 // ItemBase_Get<name>; the damage bonuses by their skill).
@@ -107,4 +107,4 @@ void sum_item_stats(ItemSums& sums, const ItemSources& sources, ItemSumQueries& 
 // virtual +0x40 (value, kind). Item haste and the Calc* functions follow.
 void derive_item_bonuses(ItemSums& sums, const std::function<std::int32_t(std::int32_t value, int kind)>& adjust);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

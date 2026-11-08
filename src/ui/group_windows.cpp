@@ -5,7 +5,7 @@
 
 #include <imgui.h>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -33,7 +33,7 @@ void group_window(GroupWindowView& view, GroupActions& actions) {
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(16.0f * em, 0.0f), ImVec2(16.0f * em, 40.0f * em));
     ImGui::SetNextWindowBgAlpha(0.75f);
-    ImGui::Begin("Group##nmsc_group", &view.open, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("Group##hailstone_group", &view.open, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
     for (std::size_t i = 0; i < view.members.size(); ++i) {
         const auto& m = view.members[i];
         ImGui::PushID(static_cast<int>(i));
@@ -72,7 +72,7 @@ void invite_prompt(const GroupWindowView& view, GroupActions& actions) {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.35f),
                             ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(0.9f);
-    ImGui::Begin("Group invitation##nmsc_invite", nullptr,
+    ImGui::Begin("Group invitation##hailstone_invite", nullptr,
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
     ImGui::Text("%s invites you to join a group.", view.inviter.c_str());
     if (ImGui::Button("Follow", ImVec2(em * 6.0f, 0.0f))) actions.accept = true;
@@ -88,7 +88,7 @@ void pet_window(PetWindowView& view, GroupActions& actions) {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + em * 17.2f, vp->WorkPos.y + em * 12.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(17.0f * em, 0.0f), ImVec2(17.0f * em, 40.0f * em));
     ImGui::SetNextWindowBgAlpha(0.75f);
-    ImGui::Begin("Pet##nmsc_pet", &view.open, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("Pet##hailstone_pet", &view.open, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize);
     if (view.has_pet) {
         ImGui::Text("%s", view.name.c_str());
         ImGui::SameLine();
@@ -140,4 +140,4 @@ void pet_window(PetWindowView& view, GroupActions& actions) {
     ImGui::End();
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

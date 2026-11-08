@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <unordered_set>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // How long a look no spawn wears stays (display clock), and how often the cache is swept.
 inline constexpr std::uint32_t kLookIdleMs = 5 * 60 * 1000;
@@ -47,4 +47,4 @@ template <class States> auto worn_meshes(const States& states) {
     return worn;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

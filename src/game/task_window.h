@@ -21,7 +21,7 @@
 
 #include "game/tasks.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -211,4 +211,4 @@ template <typename T, typename Comp> void msvc_qsort(std::vector<T>& v, Comp com
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

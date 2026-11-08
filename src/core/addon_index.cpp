@@ -4,7 +4,7 @@
 #include "core/addon_source.h"
 #include "core/update_manifest.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -141,4 +141,4 @@ std::vector<AddonIndexMatch> addon_index_matches(const AddonIndex& index, std::s
     return out;
 }
 
-} // namespace nmsc
+} // namespace hailstone

@@ -6,7 +6,7 @@
 
 #include "core/web_url.h"
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 namespace {
 
@@ -218,4 +218,4 @@ bool script_request_allowed(std::string_view url, const std::vector<std::string>
     return script_url_allowed(url, allow);
 }
 
-} // namespace nmsc::web
+} // namespace hailstone::web

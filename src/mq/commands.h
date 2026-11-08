@@ -19,7 +19,7 @@
 #include "mq/tlo.h"
 #include "plugin/hooks.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 struct CommandEnv {
     plugin::Hooks* hooks = nullptr;
@@ -70,4 +70,4 @@ private:
     int squelch_ = 0;
 };
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

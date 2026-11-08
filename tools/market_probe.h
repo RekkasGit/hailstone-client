@@ -39,7 +39,7 @@
 #include "net/market_packets.h"
 #include "net/player_packets.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class MarketProbe {
 public:
@@ -414,4 +414,4 @@ private:
     bool shop_force_ = false;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

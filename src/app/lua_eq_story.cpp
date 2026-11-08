@@ -11,7 +11,7 @@
 #include "core/file_time.h"
 #include "core/game_dir.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -142,4 +142,4 @@ private:
 
 void add_story_windows(std::vector<std::unique_ptr<StockWindow>>& out) { out.push_back(std::make_unique<StoryWindow>()); }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -10,8 +10,8 @@
 #include "game/mechanics/attack_rules.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
 
 namespace {
 
@@ -142,7 +142,7 @@ std::string check_allowed(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: PlayerZoneClient_AllowedToAttack (the PvP rules)") {
-    nmsc::test::each_vector("PlayerZoneClient_AllowedToAttack.jsonl", check_allowed);
+    hailstone::test::each_vector("PlayerZoneClient_AllowedToAttack.jsonl", check_allowed);
 }
 
 TEST_CASE("NotOnSameDeity: alignment groups") {

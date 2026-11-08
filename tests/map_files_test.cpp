@@ -10,7 +10,7 @@
 #include "net/server_files.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {

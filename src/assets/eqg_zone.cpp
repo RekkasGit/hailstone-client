@@ -28,7 +28,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -1133,4 +1133,4 @@ Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel&
     return zone;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

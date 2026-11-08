@@ -13,15 +13,15 @@
 #include <memory>
 #include <optional>
 
-namespace nmsc { class GameDir; }
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::game::mechanics {
+namespace hailstone { class GameDir; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::game::mechanics {
 struct GameTables;
 struct CharacterSheet;
 class Character;
 }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // Tells the connection what its player's own HP leaves out (net::GameConnection::own_hp): the character's items' HP
 // (DerivedStats::hp_bonus) for each of Cur_HP and Max_HP a server extension does not give whole; nothing without a
@@ -59,4 +59,4 @@ private:
     std::chrono::steady_clock::time_point next_check_{};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

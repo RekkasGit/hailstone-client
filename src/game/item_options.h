@@ -19,7 +19,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ---------------------------------------------------------------- destroying the cursor's item or coin
 
@@ -142,4 +142,4 @@ std::uint32_t adventure_purchase_question(std::uint32_t type, std::int32_t quant
 // purchase the %3": the cost, the currency's singular name for a cost of 1 else its plural, the item), else 8065.
 inline constexpr std::uint32_t kStrAltPurchaseOne = 8064, kStrAltPurchaseSeveral = 8065;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

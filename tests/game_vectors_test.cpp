@@ -1,7 +1,7 @@
 // Test vectors from the original eqgame.exe (rof2decomp re/test/vectors) for
 // game rules outside the character and movement mechanics: coin, item links,
 // spell CRCs and spell descriptions (rof2decomp batch 247). Without the
-// vectors directory (NMSC_VECTORS_DIR) the checks pass with a message.
+// vectors directory (HAILSTONE_VECTORS_DIR) the checks pass with a message.
 #include <doctest/doctest.h>
 
 #include <cstdlib>
@@ -24,19 +24,19 @@
 #include "json_lite.h"
 #include "vector_files.h"
 
-using nmsc::test::Json;
+using hailstone::test::Json;
 namespace fs = std::filesystem;
 
 namespace {
 
-std::optional<fs::path> vectors_dir() { return nmsc::test::vector_dir(); }
+std::optional<fs::path> vectors_dir() { return hailstone::test::vector_dir(); }
 
 // Runs `check` on every record of `file`; it returns a mismatch text or "".
 void each_record(const char* file, const std::function<std::string(const Json& in, const Json& out)>& check) {
     auto dir = vectors_dir();
     std::ifstream f(dir ? *dir / file : fs::path());
     if (!f) {
-        MESSAGE(std::string(file) << ": no vectors (NMSC_VECTORS_DIR); skipped");
+        MESSAGE(std::string(file) << ": no vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     std::string line;
@@ -44,7 +44,7 @@ void each_record(const char* file, const std::function<std::string(const Json& i
     while (std::getline(f, line)) {
         if (line.empty()) continue;
         ++n;
-        Json r = nmsc::test::parse_json(line);
+        Json r = hailstone::test::parse_json(line);
         std::string why = check(r["in"], r["out"]);
         if (!why.empty() && ++bad <= 10) FAIL_CHECK(std::string(file) << ":" << n << ": " << why);
     }
@@ -56,8 +56,8 @@ void each_record(const char* file, const std::function<std::string(const Json& i
 
 TEST_CASE("CreditCopper vectors") {
     each_record("CharacterZoneClient_CreditCopper.jsonl", [](const Json& in, const Json& out) -> std::string {
-        nmsc::net::Coins c{in["platinum"].u32(), in["gold"].u32(), in["silver"].u32(), in["copper"].u32()};
-        nmsc::game::credit_copper(c, in["credit"].i64());
+        hailstone::net::Coins c{in["platinum"].u32(), in["gold"].u32(), in["silver"].u32(), in["copper"].u32()};
+        hailstone::game::credit_copper(c, in["credit"].i64());
         if (c.platinum != out["platinum"].u32() || c.gold != out["gold"].u32() || c.silver != out["silver"].u32() ||
             c.copper != out["copper"].u32())
             return "coins differ";
@@ -67,7 +67,7 @@ TEST_CASE("CreditCopper vectors") {
 
 TEST_CASE("ItemBase_CalcItemLinkHash vectors") {
     each_record("ItemBase_CalcItemLinkHash.jsonl", [](const Json& in, const Json& out) -> std::string {
-        nmsc::game::ItemLinkHashInput h;
+        hailstone::game::ItemLinkHashInput h;
         h.name = in["name"].text;
         h.item_number = in["item_number"].i32();
         h.type = static_cast<std::uint8_t>(in["type"].i64());
@@ -84,7 +84,7 @@ TEST_CASE("ItemBase_CalcItemLinkHash vectors") {
         for (std::size_t k = 0; k < 6; ++k) {
             const Json& s = in["sockets"][k];
             if (s.is_null()) continue;
-            h.sockets[k] = nmsc::game::ItemLinkHashInput::Augment{s["item_number"].i32(), s["charm_file_id"].i32()};
+            h.sockets[k] = hailstone::game::ItemLinkHashInput::Augment{s["item_number"].i32(), s["charm_file_id"].i32()};
         }
         h.weight = in["weight"].i32();
         h.contents_value = in["contents_value"].i32();
@@ -93,31 +93,31 @@ TEST_CASE("ItemBase_CalcItemLinkHash vectors") {
         h.ac = in["ac"].i32();
         h.hp = in["hp"].i32();
         h.mana = in["mana"].i32();
-        std::string text = nmsc::game::item_link_hash_text(h);
+        std::string text = hailstone::game::item_link_hash_text(h);
         if (text != out["text"].text) return "text \"" + text + "\" != \"" + out["text"].text + "\"";
-        if (nmsc::game::item_link_hash(h) != out["hash"].u32()) return "hash differs";
+        if (hailstone::game::item_link_hash(h) != out["hash"].u32()) return "hash differs";
         return "";
     });
 }
 
 TEST_CASE("make_item_link carries the item's augments and hash") {
-    nmsc::net::Item item;
+    hailstone::net::Item item;
     item.id = 5019;
     item.name = "Fine Steel Long Sword";
     item.value = 1500;
     item.weight = 110;
-    nmsc::net::BagItem aug;
+    hailstone::net::BagItem aug;
     aug.index = 2;
     aug.item.id = 41000;
     item.contents.push_back(aug);
-    std::string link = nmsc::game::make_item_link(item, true);
-    auto parsed = nmsc::game::parse_item_link(std::string_view(link).substr(1, link.size() - 2));
+    std::string link = hailstone::game::make_item_link(item, true);
+    auto parsed = hailstone::game::parse_item_link(std::string_view(link).substr(1, link.size() - 2));
     REQUIRE(parsed);
     CHECK(parsed->item_id == 5019u);
     CHECK(parsed->augments[2] == 41000u);
     CHECK(parsed->text == item.name);
-    CHECK(parsed->hash == nmsc::game::item_link_hash(nmsc::game::item_link_hash_input(item)));
-    CHECK(nmsc::game::item_link_hash_text(nmsc::game::item_link_hash_input(item)).rfind("5019Fine Steel Long Sword41000", 0) == 0);
+    CHECK(parsed->hash == hailstone::game::item_link_hash(hailstone::game::item_link_hash_input(item)));
+    CHECK(hailstone::game::item_link_hash_text(hailstone::game::item_link_hash_input(item)).rfind("5019Fine Steel Long Sword41000", 0) == 0);
 }
 
 namespace {
@@ -132,7 +132,7 @@ std::vector<std::uint8_t> from_hex(const std::string& h) {
 TEST_CASE("MemChecker0 vectors") {
     each_record("MemChecker0.jsonl", [](const Json& in, const Json& out) -> std::string {
         auto data = from_hex(in["data_hex"].text);
-        if (nmsc::game::mem_checker0(data) != out["crc"].u32()) return "crc differs";
+        if (hailstone::game::mem_checker0(data) != out["crc"].u32()) return "crc differs";
         return "";
     });
 }
@@ -140,7 +140,7 @@ TEST_CASE("MemChecker0 vectors") {
 TEST_CASE("EQ_Spell_CalcCRC vectors") {
     each_record("EQ_Spell_CalcCRC.jsonl", [](const Json& in, const Json& out) -> std::string {
         auto want = from_hex(in["record_hex"].text);
-        nmsc::game::SpellRecord r = nmsc::game::spell_record_from_line(in["line"].text);
+        hailstone::game::SpellRecord r = hailstone::game::spell_record_from_line(in["line"].text);
         for (std::size_t k = 0; k < want.size(); ++k)
             if (r[k] != want[k]) {
                 char why[96];
@@ -148,21 +148,21 @@ TEST_CASE("EQ_Spell_CalcCRC vectors") {
                               k, r[k], want[k]);
                 return why;
             }
-        if (nmsc::game::mem_checker0(std::span<const std::uint8_t>(r.data(), nmsc::game::kSpellCrcBytes)) !=
+        if (hailstone::game::mem_checker0(std::span<const std::uint8_t>(r.data(), hailstone::game::kSpellCrcBytes)) !=
             out["crc32_raw"].u32())
             return "raw crc differs";
-        if (nmsc::game::spell_record_crc(r) != out["crc"].u32()) return "crc differs";
+        if (hailstone::game::spell_record_crc(r) != out["crc"].u32()) return "crc differs";
         return "";
     });
 }
 
 TEST_CASE("SpellTable CRCs of the game's spells_us.txt match the original's") {
-    const nmsc::GameDir* game = nmsc::test::game_dir();
+    const hailstone::GameDir* game = hailstone::test::game_dir();
     if (!game) return;
-    nmsc::game::SpellTable table;
+    hailstone::game::SpellTable table;
     if (!table.load(*game)) return;
     CHECK(table.file_crc() != 0);
-    CHECK(table.spell_crc(45001) == nmsc::game::spell_record_crc(nmsc::game::unknown_spell_record()));
+    CHECK(table.spell_crc(45001) == hailstone::game::spell_record_crc(hailstone::game::unknown_spell_record()));
     // The vectors' lines come from rof2decomp's copy of spells_us.txt; spells whose line is the same here must
     // get the same CRC from the table.
     auto data = game->read("spells_us.txt");
@@ -193,7 +193,7 @@ TEST_CASE("SpellTable CRCs of the game's spells_us.txt match the original's") {
 
 TEST_CASE("GetSpellDescriptionText vectors") {
     each_record("GetSpellDescriptionText.jsonl", [](const Json& in, const Json& out) -> std::string {
-        nmsc::game::SpellDescriptionContext c;
+        hailstone::game::SpellDescriptionContext c;
         for (std::size_t k = 0; k < 12; ++k) {
             const Json& s = in["slots"][k];
             c.slots[k] = {s["spa"].i32(), s["base"].i32(), s["base2"].i32(), s["max"].i32(), s["calc"].i32()};
@@ -237,7 +237,7 @@ TEST_CASE("GetSpellDescriptionText vectors") {
             if ((*call)["level"].i32() != level && why.empty()) why = "SpellDuration level differs";
             return (*call)["ret"].i32();
         };
-        std::string text = nmsc::game::format_spell_description(in["text"].text, c);
+        std::string text = hailstone::game::format_spell_description(in["text"].text, c);
         if (!why.empty()) return why;
         if (next != calls.items.size()) return "fewer calls than the original";
         if (text != out["text"].text) return "text \"" + text + "\" != \"" + out["text"].text + "\"";

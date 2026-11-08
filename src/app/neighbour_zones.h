@@ -19,15 +19,15 @@
 #include "game/neighbour_zones.h"
 #include "render/zone_renderer.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { struct Zone; }
-namespace nmsc::game {
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { struct Zone; }
+namespace hailstone::game {
 class CollisionMesh;
 struct SceneLight;
 struct ViewDistance;
-} // namespace nmsc::game
+} // namespace hailstone::game
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class NeighbourZones {
 public:
@@ -100,4 +100,4 @@ private:
     std::size_t drawn_triangles_ = 0, drawn_calls_ = 0, triangles_acc_ = 0, calls_acc_ = 0;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

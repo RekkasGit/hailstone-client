@@ -9,7 +9,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 inline constexpr std::uint32_t kShadowCascades = 4;
 // The shadow map's layers: the cascades, then the cover map and the water map (render/cover_map.h), the zone's solid
@@ -43,4 +43,4 @@ ShadowCascades fit_shadow_cascades(const ShadowCamera& camera, const glm::vec3& 
 inline constexpr float kShadowDistance = 1200.0f;
 inline constexpr float kShadowCasterReach = 2000.0f;
 
-} // namespace nmsc::render
+} // namespace hailstone::render

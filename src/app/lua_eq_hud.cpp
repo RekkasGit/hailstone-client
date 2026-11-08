@@ -30,7 +30,7 @@
 #include "mq/lua_mq.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -996,4 +996,4 @@ void add_hud_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     add_hotbar_windows(out);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

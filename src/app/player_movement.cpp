@@ -24,7 +24,7 @@
 #include "net/item_packets.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace mech = game::mechanics;
 
@@ -921,4 +921,4 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     return out;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

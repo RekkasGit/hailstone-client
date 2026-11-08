@@ -11,7 +11,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The game's random helpers the two filters call.
 class ChatRandom {
@@ -115,4 +115,4 @@ bool chat_line_filtered(std::uint32_t channel, bool listener_gm, bool sender_gm)
 // listener's skill in it is above 24, on channel 14 or from a GM; else eqstr 1412.
 std::uint32_t language_prefix_eqstr(std::uint32_t channel, std::uint8_t listener_skill, bool sender_gm);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

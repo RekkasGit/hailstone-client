@@ -47,7 +47,7 @@
 #include "ui/ui_ini.h"
 #include "ui/ui_textures.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 bool chat_window_used(int slot);  // app/lua_eq_chat.cpp: chat window 1..32 is open
 void chat_window_closed(int slot); // its close button: the window goes with its tabs
@@ -2954,4 +2954,4 @@ void EqApi::register_functions(lua_State* L) {
     gate_eq_calls(L);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

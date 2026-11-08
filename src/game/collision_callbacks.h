@@ -14,7 +14,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::int32_t kActorPlayer = 1;
 inline constexpr std::int32_t kActorSwitch = 3;
@@ -73,9 +73,9 @@ HitResult collision_hit_set_colliding_type(const HitActor& a, bool switch_acts_o
 // FUN_00510210's switch types.
 bool switch_acts_on_touch(std::uint8_t switch_type);
 
-} // namespace nmsc::game
+} // namespace hailstone::game
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What FloorActorFilter @0x476280 asks about an actor in the floor sweep's way
 // (rof2decomp batch 251, notes/lifts.md). vf30 is asked once or twice: the
@@ -123,4 +123,4 @@ struct FloorHitResult {
 };
 FloorHitResult collsn_callback_for_floor(const FloorHit& h, const mechanics::Fpu& fpu = mechanics::Fpu{});
 
-} // namespace nmsc::game
+} // namespace hailstone::game

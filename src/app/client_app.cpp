@@ -4,7 +4,7 @@
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -685,4 +685,4 @@ int run_client(const ClientOptions& options) {
     return code;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

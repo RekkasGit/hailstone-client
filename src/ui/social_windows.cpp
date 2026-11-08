@@ -4,7 +4,7 @@
 
 #include <imgui.h>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -28,7 +28,7 @@ void guild_window(GuildWindowView& view, SocialActions& actions) {
     float em = ImGui::GetFontSize();
     ImGui::SetNextWindowSize(ImVec2(em * 34.0f, em * 24.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.85f);
-    ImGui::Begin("Guild Management##nmsc_guild", &view.open, kPanelFlags);
+    ImGui::Begin("Guild Management##hailstone_guild", &view.open, kPanelFlags);
     if (!view.in_guild) {
         ImGui::TextColored(kDim, "You are not in a guild.");
         ImGui::End();
@@ -101,7 +101,7 @@ void guild_invite_prompt(const GuildWindowView& view, SocialActions& actions) {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.40f),
                             ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(0.9f);
-    ImGui::Begin("Guild invitation##nmsc_guild_invite", nullptr,
+    ImGui::Begin("Guild invitation##hailstone_guild_invite", nullptr,
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
     // Handle_OP_GuildInvite's question (eqstr 534).
     ImGui::Text("%s is interested in having you join %s.", view.inviter.c_str(), view.invite_guild.c_str());
@@ -116,7 +116,7 @@ void raid_window(RaidWindowView& view, SocialActions& actions) {
     float em = ImGui::GetFontSize();
     ImGui::SetNextWindowSize(ImVec2(em * 40.0f, em * 22.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.85f);
-    ImGui::Begin("Raid##nmsc_raid", &view.open, kPanelFlags);
+    ImGui::Begin("Raid##hailstone_raid", &view.open, kPanelFlags);
     if (!view.inviter.empty()) {
         ImGui::Text("%s invites you to join a raid.", view.inviter.c_str());
         if (ImGui::Button("Accept")) actions.raid_answer = true;
@@ -155,7 +155,7 @@ void friends_window(FriendsWindowView& view, SocialActions& actions) {
     float em = ImGui::GetFontSize();
     ImGui::SetNextWindowSize(ImVec2(em * 18.0f, em * 22.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.85f);
-    ImGui::Begin("Friends##nmsc_friends", &view.open, kPanelFlags);
+    ImGui::Begin("Friends##hailstone_friends", &view.open, kPanelFlags);
     if (!view.chat_connected) ImGui::TextColored(kDim, "Not connected to the chat server.");
     if (ImGui::BeginTabBar("lists")) {
         auto list = [&](const char* tab, std::vector<std::string>& names, std::optional<std::string>& add,
@@ -188,4 +188,4 @@ void friends_window(FriendsWindowView& view, SocialActions& actions) {
     ImGui::End();
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

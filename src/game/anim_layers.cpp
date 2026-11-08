@@ -4,7 +4,7 @@
 
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace mech = mechanics;
 
@@ -137,4 +137,4 @@ std::uint8_t new_style_layer_mode(const LayerModeInput& in) {
     return 2;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -31,7 +31,7 @@
 
 #include "assets/model.h"
 
-namespace nmsc::assets::wld {
+namespace hailstone::assets::wld {
 
 constexpr std::uint32_t kMagic = 0x54503d02;
 constexpr std::uint32_t kVersionOld = 0x00015500;
@@ -386,4 +386,4 @@ glm::mat4 placement_transform(const ActorInstance& inst);
 // XOR-decodes a string-table or bitmap-name buffer (the key restarts at 0).
 std::vector<std::uint8_t> decode_string_bytes(std::span<const std::byte> in);
 
-} // namespace nmsc::assets::wld
+} // namespace hailstone::assets::wld

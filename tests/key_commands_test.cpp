@@ -7,7 +7,7 @@
 
 #include "game/mechanics/controls.h"
 
-using namespace nmsc::game::mechanics;
+using namespace hailstone::game::mechanics;
 
 TEST_CASE("PITCHUP / PITCHDOWN hold the look keys and clear the ramps, even while frozen") {
     ControlsState s;
@@ -157,8 +157,8 @@ TEST_CASE("AUTORUN toggles forward autorun; refused commands change nothing") {
 
 namespace {
 
-nmsc::game::WorldState world_with(std::initializer_list<std::tuple<std::uint32_t, float, bool, bool>> spawns) {
-    nmsc::game::WorldState w;
+hailstone::game::WorldState world_with(std::initializer_list<std::tuple<std::uint32_t, float, bool, bool>> spawns) {
+    hailstone::game::WorldState w;
     w.player_id = 1;
     w.spawns[1].id = 1;
     for (auto [id, x, npc, corpse] : spawns) {
@@ -174,7 +174,7 @@ nmsc::game::WorldState world_with(std::initializer_list<std::tuple<std::uint32_t
 } // namespace
 
 TEST_CASE("TARGETNPC takes the nearest NPC, CYCLENPCTARGETS the next unvisited, then around again") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 30.0f, true, false}, {11, 10.0f, true, false}, {12, 20.0f, true, false},
                                {13, 600.0f, true, false}, {14, 5.0f, false, false}, {15, 1.0f, true, true}});
     TargetManager tm;
@@ -198,7 +198,7 @@ TEST_CASE("TARGETNPC takes the nearest NPC, CYCLENPCTARGETS the next unvisited, 
 }
 
 TEST_CASE("The PC and NPC cycles skip the spawns IsInvisible hides (Hide Traders), corpses do not") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{20, 5.0f, false, false}, {21, 10.0f, false, false}, {22, 3.0f, true, false},
                                {23, 4.0f, true, false}, {24, 2.0f, false, true}});
     TargetManager tm;
@@ -216,7 +216,7 @@ TEST_CASE("The PC and NPC cycles skip the spawns IsInvisible hides (Hide Traders
 }
 
 TEST_CASE("The red con tip's test: level 10 or below, the target more than two above, once per target") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     TargetManager tm;
     CHECK_FALSE(red_con_tip_due(tm, 50, 10, 12)); // two above: no
     CHECK_FALSE(red_con_tip_due(tm, 50, 11, 20)); // above level 10: no
@@ -228,7 +228,7 @@ TEST_CASE("The red con tip's test: level 10 or below, the target more than two a
 }
 
 TEST_CASE("TOGGLETARGET swaps between yourself and the remembered target") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 30.0f, true, false}});
     TargetManager tm;
     glm::vec3 eye(0.0f);
@@ -249,7 +249,7 @@ TEST_CASE("TOGGLETARGET swaps between yourself and the remembered target") {
 }
 
 TEST_CASE("TOGGLETWOTARGETS swaps the target and the one before it") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 30.0f, true, false}, {11, 40.0f, true, false}});
     TargetManager tm;
     glm::vec3 eye(0.0f);
@@ -270,7 +270,7 @@ TEST_CASE("TOGGLETWOTARGETS swaps the target and the one before it") {
 }
 
 TEST_CASE("Untargetable, banner and non-cyclable spawns are not cycled") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 3.0f, true, false}, {11, 4.0f, true, false}, {12, 5.0f, true, false},
                                {13, 9.0f, true, false}});
     w.spawns[10].targetable = false;
@@ -281,7 +281,7 @@ TEST_CASE("Untargetable, banner and non-cyclable spawns are not cycled") {
 }
 
 TEST_CASE("Hailstone: the NPC cycle skips players' pets and mercenaries unless skip_pets is off") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 30.0f, true, false}, {11, 5.0f, true, false}, {12, 8.0f, true, false},
                                {13, 9.0f, true, false}, {14, 12.0f, true, false}, {20, 3.0f, false, false}});
     w.spawns[11].pet_owner_id = 1;  // our pet
@@ -308,7 +308,7 @@ TEST_CASE("Hailstone: the NPC cycle skips players' pets and mercenaries unless s
 }
 
 TEST_CASE("Hailstone: the NPC cycle takes only the NPCs in sight when in_sight is set") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     WorldState w = world_with({{10, 5.0f, true, false}, {11, 8.0f, true, false}, {12, 12.0f, true, false},
                                {20, 3.0f, false, false}});
     glm::vec3 eye(0.0f);

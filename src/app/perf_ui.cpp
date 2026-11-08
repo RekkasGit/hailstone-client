@@ -17,7 +17,7 @@
 #include "render/vk_context.h"
 #include "render/zone_renderer.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -298,4 +298,4 @@ void PerfUi::draw(const PerfInputs& in) {
     ImGui::End();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

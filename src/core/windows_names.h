@@ -11,7 +11,7 @@
 
 #include "core/ascii_case.h"
 
-namespace nmsc {
+namespace hailstone {
 
 // Whether one path part (no separators) names a Windows device.
 inline bool is_windows_device_name(std::string_view part) {
@@ -49,4 +49,4 @@ inline std::string windows_file_key(std::string_view path) {
     }
 }
 
-} // namespace nmsc
+} // namespace hailstone

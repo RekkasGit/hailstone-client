@@ -13,9 +13,9 @@
 
 #include "assets/texture.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct LoadedParticleTexture {
     std::optional<assets::Image> image; // as decoded; nullopt when no folder has it or it does not decode
@@ -29,4 +29,4 @@ struct LoadedParticleTexture {
 LoadedParticleTexture load_particle_texture(const std::string& name, std::optional<std::vector<std::byte>> zone_bytes,
                                             const GameDir& game);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

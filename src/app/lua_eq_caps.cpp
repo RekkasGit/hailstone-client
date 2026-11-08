@@ -24,7 +24,7 @@
 #include "plugin/policy.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -181,4 +181,4 @@ std::optional<std::uint32_t> eq_call_caps(std::string_view name) {
 
 void gate_eq_calls(lua_State* L) { gate_table(L, -1, "", 0); }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

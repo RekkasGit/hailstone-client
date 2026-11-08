@@ -5,7 +5,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -48,4 +48,4 @@ std::optional<std::uint32_t> decode_pet_hott(const AppPacket& p) {
     return decode_with(p, [](ByteReader& r) { return r.le<std::uint32_t>(); });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

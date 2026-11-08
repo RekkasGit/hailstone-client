@@ -21,9 +21,9 @@
 #include "core/update_manifest.h"
 #include "platform/http_get.h"
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // hailstone.ini's update.* keys.
 struct UpdateSettings {
@@ -35,13 +35,13 @@ struct UpdateSettings {
 };
 UpdateSettings update_settings(const Config& config);
 
-// The address of the build's manifest (CMake NMSC_UPDATE_FEED) and its release key (NMSC_UPDATE_KEY, the public key
+// The address of the build's manifest (CMake HAILSTONE_UPDATE_FEED) and its release key (HAILSTONE_UPDATE_KEY, the public key
 // hex; nullopt when the build has none, and then there are no updates).
 std::string default_update_feed();
 std::optional<Ed25519PublicKey> update_release_key();
-// The add-on index's address (CMake NMSC_ADDON_INDEX, core/addon_index.h; "" none), signed with the release key.
+// The add-on index's address (CMake HAILSTONE_ADDON_INDEX, core/addon_index.h; "" none), signed with the release key.
 std::string default_addon_index();
-// Hailstone's page (CMake NMSC_PROJECT_PAGE), which the login screen links to.
+// Hailstone's page (CMake HAILSTONE_PROJECT_PAGE), which the login screen links to.
 std::string default_project_page();
 
 // Why updates are off for the Hailstone folder `install_dir` ("" when they are not): a development tree (the build
@@ -126,4 +126,4 @@ void finish_update_at_exit(bool restart);
 // Starts the Hailstone folder's client (after an install or a rollback), left running as this one quits.
 void start_installed_client();
 
-} // namespace nmsc::app
+} // namespace hailstone::app

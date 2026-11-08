@@ -25,7 +25,7 @@
 #include "game/appearance_data.h"
 #include "game/race_models.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -597,4 +597,4 @@ void CharacterLibrary::dress_new_model(const CharacterModel& model, const game::
     env.build();
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

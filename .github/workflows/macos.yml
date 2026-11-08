@@ -1,7 +1,7 @@
 name: macOS arm64
 
 # The one platform that cannot be built on the developer's Linux machine (docs/ci.md): GitHub's Apple Silicon runner
-# builds the client, runs nmsc_tests and keeps the installed folder as the run's artifact. A release's zip, manifest
+# builds the client, runs hailstone_tests and keeps the installed folder as the run's artifact. A release's zip, manifest
 # line and signature are still made locally from that folder (docs/updater.md "Making a release"); the release key
 # never comes here. Started by hand, for a release or a check, or by a push to a macos/** branch.
 
@@ -50,7 +50,7 @@ jobs:
 
       # No game folder or recorded vectors here: the tests that need them pass without checking anything.
       - name: Test
-        run: build/nmsc_tests
+        run: build/hailstone_tests
 
       - name: Install
         run: cmake --install build --prefix dist/hailstone

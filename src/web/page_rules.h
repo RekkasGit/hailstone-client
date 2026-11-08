@@ -3,13 +3,13 @@
 // What a script's or plugin's page may reach (docs/browser.md "Rules"), beyond core/web_url.h's http(s) and
 // [web] allow: never this computer or the player's own network (a router's admin page, a NAS, a dev server on
 // localhost), and, inside the page, only the allowed sites for frames and every request (images, scripts, fetch,
-// WebSockets) as well as for the page itself. Built into the helper too (nmsc_web_protocol).
+// WebSockets) as well as for the page itself. Built into the helper too (hailstone_web_protocol).
 
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 // A host (core/web_url.h's web_host form: lower case, an IPv6 literal in brackets) that names this computer or a
 // private network: localhost and *.localhost, a name without a dot or under .local, .lan, .internal, .home.arpa,
@@ -26,4 +26,4 @@ bool script_url_allowed(std::string_view url, const std::vector<std::string>& al
 // (data:, blob:, about:blank, about:srcdoc), which reach no network.
 bool script_request_allowed(std::string_view url, const std::vector<std::string>& allow);
 
-} // namespace nmsc::web
+} // namespace hailstone::web

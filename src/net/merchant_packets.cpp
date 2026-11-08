@@ -4,7 +4,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -392,4 +392,4 @@ std::uint32_t adventure_sell_price(std::uint32_t ldon_price, std::uint32_t sellb
     return static_cast<std::uint32_t>(std::min<std::uint64_t>(p, ldon_price));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

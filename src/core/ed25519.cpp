@@ -3,7 +3,7 @@
 #include <monocypher-ed25519.h>
 #include <monocypher.h>
 
-namespace nmsc {
+namespace hailstone {
 
 bool ed25519_verify(const Ed25519Signature& signature, const Ed25519PublicKey& public_key,
                     std::span<const std::byte> message) {
@@ -64,4 +64,4 @@ template <std::size_t N> std::optional<std::array<std::uint8_t, N>> hex_decode(s
 template std::optional<std::array<std::uint8_t, 32>> hex_decode<32>(std::string_view);
 template std::optional<std::array<std::uint8_t, 64>> hex_decode<64>(std::string_view);
 
-} // namespace nmsc
+} // namespace hailstone

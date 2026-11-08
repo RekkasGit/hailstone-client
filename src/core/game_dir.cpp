@@ -6,7 +6,7 @@
 #include <map>
 #include <stdexcept>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 void require_directory(const std::filesystem::path& root) {
@@ -304,4 +304,4 @@ std::optional<std::vector<std::byte>> read_file(const std::filesystem::path& pat
     return data;
 }
 
-} // namespace nmsc
+} // namespace hailstone

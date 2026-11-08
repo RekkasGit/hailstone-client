@@ -24,7 +24,7 @@
 #include "ui/ui_textures.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("eq_percent: FUN_004b37a0, cur / (max * 0.01f) truncated") {
     CHECK(app::eq_percent(59, 59) == 100);

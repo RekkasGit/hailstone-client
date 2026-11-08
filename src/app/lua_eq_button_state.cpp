@@ -10,7 +10,7 @@
 #include "game/spell_gem.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 std::uint32_t HostButtonQueries::now() { return net::GameConnection::eq_time(); }
 std::uint32_t HostButtonQueries::fast_now() { return static_cast<std::uint32_t>(std::time(nullptr)); }
@@ -108,4 +108,4 @@ std::uint32_t cool_down_color() {
     return game::spell_gem_overlay_color(c == 0 ? 0xf0f0f0u : c);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

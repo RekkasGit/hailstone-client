@@ -11,14 +11,14 @@
 #include "core/version.h"
 #include "platform/crash_log.h"
 
-#ifndef NMSC_UPDATE_FEED
-#define NMSC_UPDATE_FEED ""
+#ifndef HAILSTONE_UPDATE_FEED
+#define HAILSTONE_UPDATE_FEED ""
 #endif
-#ifndef NMSC_UPDATE_KEY
-#define NMSC_UPDATE_KEY ""
+#ifndef HAILSTONE_UPDATE_KEY
+#define HAILSTONE_UPDATE_KEY ""
 #endif
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -51,13 +51,13 @@ UpdateSettings update_settings(const Config& config) {
     return s;
 }
 
-std::string default_update_feed() { return NMSC_UPDATE_FEED; }
+std::string default_update_feed() { return HAILSTONE_UPDATE_FEED; }
 
-std::optional<Ed25519PublicKey> update_release_key() { return hex_decode<32>(NMSC_UPDATE_KEY); }
+std::optional<Ed25519PublicKey> update_release_key() { return hex_decode<32>(HAILSTONE_UPDATE_KEY); }
 
-std::string default_addon_index() { return NMSC_ADDON_INDEX; }
+std::string default_addon_index() { return HAILSTONE_ADDON_INDEX; }
 
-std::string default_project_page() { return NMSC_PROJECT_PAGE; }
+std::string default_project_page() { return HAILSTONE_PROJECT_PAGE; }
 
 std::string updates_off_reason(const fs::path& install_dir) {
     std::error_code ec;
@@ -276,4 +276,4 @@ void Updater::run_download() {
     set(s);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

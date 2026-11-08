@@ -2,7 +2,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -141,4 +141,4 @@ std::optional<TradeBusy> decode_trade_busy(const AppPacket& p) {
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct GuildPersonalNote {
     std::uint32_t time = 0; // __time32 when set, Util::FastTime when a member's note was last looked up
@@ -37,4 +37,4 @@ public:
     std::vector<GuildPersonalNote> entries;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

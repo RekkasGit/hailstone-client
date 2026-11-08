@@ -6,9 +6,9 @@
 
 #include "core/wrap_math.h"
 
-using nmsc::core::wrapped_div;
-using nmsc::core::wrapped_mul_div;
-using nmsc::core::wrapped_value;
+using hailstone::core::wrapped_div;
+using hailstone::core::wrapped_mul_div;
+using hailstone::core::wrapped_value;
 
 // Checked at compile time too, so a compiler's constant folding has to agree.
 static_assert(wrapped_value(0x80000000u) == -2147483648LL);

@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // A row of the zone point table (0xdd02e0, OP_SendZonePoints; 0x20 bytes).
 struct ZonePointRow {
@@ -157,4 +157,4 @@ struct ZoneToBindHooks {
 void zone_player_to_bind(std::size_t size, const ZoneToBindPacket& p, std::uint32_t current_zone,
                          bool have_respawn_window, bool have_cast_spell_window, const ZoneToBindHooks& hooks);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

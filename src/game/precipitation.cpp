@@ -8,7 +8,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -322,4 +322,4 @@ void PrecipitationField::update(const Frame& f) {
     wind_changed_ = false;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

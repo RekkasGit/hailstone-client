@@ -23,7 +23,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

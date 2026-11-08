@@ -4,7 +4,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -200,4 +200,4 @@ AppPacket encode(const AATimer& v) {
     return make_packet(Op::AAAction, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

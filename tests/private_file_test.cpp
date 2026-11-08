@@ -8,8 +8,8 @@
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
-using nmsc::platform::make_private_dir;
-using nmsc::platform::write_private_file;
+using hailstone::platform::make_private_dir;
+using hailstone::platform::write_private_file;
 
 namespace {
 std::string read_all(const fs::path& p) {
@@ -21,7 +21,7 @@ std::string read_all(const fs::path& p) {
 } // namespace
 
 TEST_CASE("Private file: written owner-only, never over a file already there") {
-    nmsc::test::ScratchDir dir("private_file");
+    hailstone::test::ScratchDir dir("private_file");
     const fs::path key = dir.path() / "release.key";
     REQUIRE(write_private_file(key, "secret\n"));
     CHECK(read_all(key) == "secret\n");
@@ -35,7 +35,7 @@ TEST_CASE("Private file: written owner-only, never over a file already there") {
 }
 
 TEST_CASE("Private folder: made owner-only, never over a folder or link already there") {
-    nmsc::test::ScratchDir dir("private_dir");
+    hailstone::test::ScratchDir dir("private_dir");
     const fs::path d = dir.path() / "scratch";
     REQUIRE(make_private_dir(d));
     CHECK(fs::is_directory(d));

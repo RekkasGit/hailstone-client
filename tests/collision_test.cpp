@@ -11,17 +11,17 @@
 #include "game/world_state.h"
 #include "game_files.h"
 
-using nmsc::game::CollisionMesh;
+using hailstone::game::CollisionMesh;
 
 namespace {
-nmsc::assets::Zone flat_zone() {
+hailstone::assets::Zone flat_zone() {
     // Two triangles: floor at z=0 over 0..100, a ledge at z=10 over 40..60.
-    nmsc::assets::Zone z;
-    nmsc::assets::Mesh m;
+    hailstone::assets::Zone z;
+    hailstone::assets::Mesh m;
     auto quad = [&](float x0, float x1, float h) {
         auto base = static_cast<std::uint32_t>(m.vertices.size());
         for (auto [x, y] : {std::pair{x0, x0}, {x1, x0}, {x1, x1}, {x0, x1}}) {
-            nmsc::assets::Vertex v;
+            hailstone::assets::Vertex v;
             v.position = {x, y, h};
             m.vertices.push_back(v);
         }
@@ -48,12 +48,12 @@ TEST_CASE("floor_below picks the highest floor within the step height") {
 }
 
 TEST_CASE("display_name strips digits and underscores") {
-    CHECK(nmsc::game::display_name("a_rat01") == "a rat");
-    CHECK(nmsc::game::display_name("Guard_Ahrens000") == "Guard Ahrens");
+    CHECK(hailstone::game::display_name("a_rat01") == "a rat");
+    CHECK(hailstone::game::display_name("Guard_Ahrens000") == "Guard Ahrens");
 }
 
-TEST_CASE("qeynos2 has floors under its streets" * doctest::skip(!nmsc::test::game_dir())) {
-    auto zone = nmsc::assets::load_classic_zone(*nmsc::test::game_dir(), "qeynos2");
+TEST_CASE("qeynos2 has floors under its streets" * doctest::skip(!hailstone::test::game_dir())) {
+    auto zone = hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), "qeynos2");
     auto mesh = CollisionMesh::build(zone);
     CHECK(mesh.triangle_count() > 10000);
     CHECK(mesh.floor_below({400, -300, 100}, 4).has_value());
@@ -90,12 +90,12 @@ TEST_CASE("line_of_sight: only the cells under the sight line are searched, with
     // to be checked at all (a box of 256 cells or fewer).
     std::mt19937 rng(11);
     std::uniform_real_distribution<float> at(0.0f, 1280.0f), z(-20.0f, 40.0f), size(2.0f, 40.0f);
-    std::vector<nmsc::game::CollisionTriangle> tris;
+    std::vector<hailstone::game::CollisionTriangle> tris;
     for (int i = 0; i < 3000; ++i) {
         glm::vec3 a(at(rng), at(rng), z(rng));
         glm::vec3 b = a + glm::vec3(size(rng), size(rng) - 20.0f, size(rng) - 20.0f);
         glm::vec3 c = a + glm::vec3(size(rng) - 20.0f, size(rng), size(rng));
-        tris.push_back(nmsc::game::CollisionTriangle::make(a, b, c, 0));
+        tris.push_back(hailstone::game::CollisionTriangle::make(a, b, c, 0));
     }
     auto mesh = CollisionMesh::from_triangles(tris);
     auto blocked = [&](const glm::vec3& a, const glm::vec3& b) {
@@ -136,8 +136,8 @@ TEST_CASE("line_of_sight: only the cells under the sight line are searched, with
     CHECK(checked - seen > 100); // some blocked
 }
 
-TEST_CASE("qeynos: the Steel Warriors hall wall blocks line of sight" * doctest::skip(!nmsc::test::game_dir())) {
-    auto zone = nmsc::assets::load_classic_zone(*nmsc::test::game_dir(), "qeynos");
+TEST_CASE("qeynos: the Steel Warriors hall wall blocks line of sight" * doctest::skip(!hailstone::test::game_dir())) {
+    auto zone = hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), "qeynos");
     auto mesh = CollisionMesh::build(zone);
     // Server (-544, 58, 32.5) -> world (58, -544); the screenshot showed a wall ahead along +X.
     glm::vec3 eye(58.0f, -544.0f, 33.0f);
@@ -157,7 +157,7 @@ namespace {
 // Floors (near-horizontal solid terrain triangles) whose record normal
 // normalize((v0 - v1) x (v2 - v1)) points up, and those pointing down: the
 // back-face rule (skip when n . delta > 0) needs floors facing up.
-std::pair<int, int> floor_facing(const nmsc::assets::Zone& zone) {
+std::pair<int, int> floor_facing(const hailstone::assets::Zone& zone) {
     int up = 0, down = 0;
     for (const auto& mesh : zone.terrain) {
         for (const auto& part : mesh.parts) {
@@ -165,7 +165,7 @@ std::pair<int, int> floor_facing(const nmsc::assets::Zone& zone) {
             for (std::uint32_t i = 0; i + 2 < part.index_count; i += 3) {
                 const auto& v = mesh.vertices;
                 std::uint32_t b = part.first_index + i + (mesh.front_ccw ? 2 : 1), c = part.first_index + i + (mesh.front_ccw ? 1 : 2);
-                auto t = nmsc::game::CollisionTriangle::make(v[mesh.indices[part.first_index + i]].position,
+                auto t = hailstone::game::CollisionTriangle::make(v[mesh.indices[part.first_index + i]].position,
                                                              v[mesh.indices[b]].position, v[mesh.indices[c]].position, 0);
                 if (t.normal.z > 0.9f) ++up;
                 if (t.normal.z < -0.9f) ++down;
@@ -176,20 +176,20 @@ std::pair<int, int> floor_facing(const nmsc::assets::Zone& zone) {
 }
 } // namespace
 
-TEST_CASE("zone floors face up by the record normal (WLD and EQG)" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("zone floors face up by the record normal (WLD and EQG)" * doctest::skip(!hailstone::test::game_dir())) {
     // Outdoor: few ceilings.
-    auto [up, down] = floor_facing(nmsc::assets::load_classic_zone(*nmsc::test::game_dir(), "qeytoqrg"));
+    auto [up, down] = floor_facing(hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), "qeytoqrg"));
     MESSAGE("qeytoqrg floors: " << up << " up, " << down << " down");
     CHECK(up > 4 * down);
     for (const char* name : {"arena2", "barren"}) {
-        auto [eup, edown] = floor_facing(nmsc::assets::load_eqg_zone(*nmsc::test::game_dir(), name));
+        auto [eup, edown] = floor_facing(hailstone::assets::load_eqg_zone(*hailstone::test::game_dir(), name));
         MESSAGE(std::string(name) << " floors: " << eup << " up, " << edown << " down");
         CHECK(eup > 4 * edown);
     }
 }
 
-TEST_CASE("player models carry their skeleton's bounding radius" * doctest::skip(!nmsc::test::game_dir())) {
-    auto lib = nmsc::assets::CharacterLibrary::load(*nmsc::test::game_dir(), "qeynos2");
+TEST_CASE("player models carry their skeleton's bounding radius" * doctest::skip(!hailstone::test::game_dir())) {
+    auto lib = hailstone::assets::CharacterLibrary::load(*hailstone::test::game_dir(), "qeynos2");
     for (const char* code : {"HUM", "HUF", "BAM", "DWM", "HOM", "OGM", "TRM", "ELM", "GNM", "IKM", "KEM", "ERM", "HIM", "HAM", "DAM", "FRM"}) {
         auto m = lib.model(code);
         if (!m) continue;
@@ -198,7 +198,7 @@ TEST_CASE("player models carry their skeleton's bounding radius" * doctest::skip
 }
 
 TEST_CASE("ground_below and roof_above see what is drawn: a tunnel roof is no ground, an invisible lid no roof") {
-    using nmsc::game::CollisionTriangle;
+    using hailstone::game::CollisionTriangle;
     // Up-facing by the record normal ((v0 - v1) x (v2 - v1)): v1 the corner, v0 along +x, v2 along +y.
     auto up = [](float z, std::uint8_t flags) {
         return CollisionTriangle::make({200, -100, z}, {-100, -100, z}, {-100, 200, z}, flags);
@@ -212,21 +212,21 @@ TEST_CASE("ground_below and roof_above see what is drawn: a tunnel roof is no gr
     CHECK(tunnel.ground_below({0, 0, 70}).value() == doctest::Approx(0));
     CHECK(tunnel.roof_above({0, 0, 5}).value() == doctest::Approx(30));
     // Qeynos' line to the Hills: an invisible lid at 80 over the open ground.
-    auto lid = CollisionMesh::from_triangles({up(0, 0), down(80, nmsc::game::kTriangleInvisible)});
+    auto lid = CollisionMesh::from_triangles({up(0, 0), down(80, hailstone::game::kTriangleInvisible)});
     CHECK(lid.floor_below({0, 0, 100}, 0).value() == doctest::Approx(80));
     CHECK(lid.ground_below({0, 0, 100}).value() == doctest::Approx(0));
     CHECK(lid.ceiling_above({0, 0, 5}).value() == doctest::Approx(80));
     CHECK(!lid.roof_above({0, 0, 5}).has_value());
     // An invisible floor (North Ro's plane under its shore) is no ground either.
-    auto plane = CollisionMesh::from_triangles({up(-111, nmsc::game::kTriangleInvisible)});
+    auto plane = CollisionMesh::from_triangles({up(-111, hailstone::game::kTriangleInvisible)});
     CHECK(!plane.ground_below({0, 0, 0}).has_value());
 
     // From a zone: an Invisible material's triangles carry the flag.
-    auto zone = [](nmsc::assets::BlendMode blend) {
-        nmsc::assets::Zone z;
-        nmsc::assets::Mesh m;
+    auto zone = [](hailstone::assets::BlendMode blend) {
+        hailstone::assets::Zone z;
+        hailstone::assets::Mesh m;
         for (glm::vec3 p : {glm::vec3(0, 0, 0), glm::vec3(0, 100, 0), glm::vec3(100, 0, 0)}) {
-            nmsc::assets::Vertex v;
+            hailstone::assets::Vertex v;
             v.position = p;
             m.vertices.push_back(v);
         }
@@ -238,9 +238,9 @@ TEST_CASE("ground_below and roof_above see what is drawn: a tunnel roof is no gr
         z.terrain.push_back(m);
         return z;
     };
-    auto seen = CollisionMesh::build(zone(nmsc::assets::BlendMode::Opaque));
+    auto seen = CollisionMesh::build(zone(hailstone::assets::BlendMode::Opaque));
     CHECK(seen.ground_below({10, 10, 5}).value() == doctest::Approx(0));
-    auto hidden = CollisionMesh::build(zone(nmsc::assets::BlendMode::Invisible));
+    auto hidden = CollisionMesh::build(zone(hailstone::assets::BlendMode::Invisible));
     CHECK(hidden.floor_below({10, 10, 5}, 0).value() == doctest::Approx(0));
     CHECK(!hidden.ground_below({10, 10, 5}).has_value());
 }

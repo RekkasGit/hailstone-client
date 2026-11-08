@@ -33,7 +33,7 @@
 #include "net/packet_io.h"
 #include "net/social_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -2258,4 +2258,4 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

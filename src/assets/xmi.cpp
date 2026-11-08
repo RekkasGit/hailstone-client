@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -141,4 +141,4 @@ std::vector<XmiSequence> parse_xmi(std::span<const std::byte> data) {
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

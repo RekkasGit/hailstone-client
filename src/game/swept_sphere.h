@@ -30,7 +30,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint8_t kTrianglePassable = 0x1;   // the terrain record's bit 0 (WLD 0x10)
 inline constexpr std::uint8_t kTriangleTransparent = 0x2; // bit 1: no or transparent material
@@ -97,4 +97,4 @@ struct SweepOutput {
 };
 SweepOutput sweep_output(const SphereSweep& sweep);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

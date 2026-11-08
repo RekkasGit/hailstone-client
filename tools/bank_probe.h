@@ -29,7 +29,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class BankProbe {
 public:
@@ -326,4 +326,4 @@ private:
     Clock::time_point since_{}, last_{}, wait_{};
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

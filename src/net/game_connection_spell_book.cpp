@@ -5,7 +5,7 @@
 #include "game/spell_book.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 bool GameConnection::open_spell_book() {
     if (state_ != ConnectionState::InZone) return false;
@@ -81,4 +81,4 @@ void GameConnection::spell_book_swap_click(int book_slot) {
     send_zone(encode(SwapSpell{static_cast<std::uint32_t>(book_swap_slot_), static_cast<std::uint32_t>(book_slot)}));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

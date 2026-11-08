@@ -12,9 +12,9 @@
 #include "mock_server/harness.h"
 #include "net/player_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 
 TEST_CASE("OP_Feedback, OP_Report and /uptime's answer as the original lays them out") {
     Feedback f;

@@ -2,7 +2,7 @@
 
 #include <charconv>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -95,4 +95,4 @@ std::string Version::to_string() const {
     return s;
 }
 
-} // namespace nmsc
+} // namespace hailstone

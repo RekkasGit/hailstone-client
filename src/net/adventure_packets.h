@@ -12,7 +12,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // The themes as EQEmu counts them (AdventureStatsColumn_Struct, the leaderboard's theme): 0 all, then Deepest Guk,
 // Miragul's Menagerie, Mistmoore Catacombs, Rujarkian Hills, Takish-Hiz.
@@ -90,4 +90,4 @@ struct AdventureLeaderboard {
 std::optional<AdventureLeaderboard> decode_adventure_leaderboard(const AppPacket& p);
 AppPacket encode(const AdventureLeaderboard& v); // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -1,7 +1,7 @@
 // Test vectors recorded from the original eqgame.exe by rof2decomp's harness
 // (rof2decomp re/test/vectors/README.md): <Function>.jsonl, one JSON object
 // per line, {"fn", "addr", "in": {...}, "out": {...}, "precision"}. The
-// directory is NMSC_VECTORS_DIR, else ../rof2decomp/re/test/vectors from the
+// directory is HAILSTONE_VECTORS_DIR, else ../rof2decomp/re/test/vectors from the
 // source tree (or ../../rof2decomp/... from a build directory); without
 // it the test passes with a message.
 //
@@ -40,7 +40,7 @@
 #include "game/mechanics/remote_spawns.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
+using namespace hailstone::game::mechanics;
 namespace fs = std::filesystem;
 
 namespace {
@@ -1434,18 +1434,18 @@ std::map<std::string, Checker> checkers() {
     };
     c["CCollisionInfoSphere::vf0"] = [arr3, check3](const Json& rec, const Json& in, const Json& out,
                                                     const std::string& w, Mismatch& m) {
-        nmsc::game::SweepX87 x(precision_of(rec).precision());
-        nmsc::game::SweepX87::Info info;
+        hailstone::game::SweepX87 x(precision_of(rec).precision());
+        hailstone::game::SweepX87::Info info;
         info.start = arr3(in.get("start"));
         info.delta = arr3(in.get("delta"));
         info.inv_length = f32(in, "inv_length");
         info.t = f32(in, "fraction_before");
         info.radius = f32(in, "radius");
-        auto run = [&](nmsc::game::SweepX87& machine, nmsc::game::SweepX87::Info& i) {
+        auto run = [&](hailstone::game::SweepX87& machine, hailstone::game::SweepX87::Info& i) {
             return machine.triangle(i, arr3(in.get("tri_normal")), arr3(in.get("v0")), arr3(in.get("v1")),
                                     arr3(in.get("v2")));
         };
-        nmsc::game::SweepX87::Info probe_info = info;
+        hailstone::game::SweepX87::Info probe_info = info;
         bool hit = run(x, info);
         m.check_int(hit, as_int(out.get("hit")), w, "hit");
         m.check_float(info.t, as_f32(out.get("fraction")), w, "fraction");
@@ -1454,7 +1454,7 @@ std::map<std::string, Checker> checkers() {
         // an edge's start vertex hits at t = 0 without a contact point, and vf0 normalises against what its stack
         // held. Such a record's normal is the recorder's stack garbage: a machine whose stack holds a NaN
         // pattern finds them, and their normals are not compared (counted in sweep_garbage_normals).
-        nmsc::game::SweepX87 probe(precision_of(rec).precision());
+        hailstone::game::SweepX87 probe(precision_of(rec).precision());
         probe.fill_stack(0x7fbadbadu);
         run(probe, probe_info);
         if (std::isnan(probe_info.normal[0]) && !std::isnan(info.normal[0])) {
@@ -1465,8 +1465,8 @@ std::map<std::string, Checker> checkers() {
     };
     c["CollisionInfo_GetClampPoint+CCollisionInfoBase::ComputeSkitter"] =
         [arr3, check3](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
-            nmsc::game::SweepX87 x(precision_of(rec).precision());
-            nmsc::game::SweepX87::Info info;
+            hailstone::game::SweepX87 x(precision_of(rec).precision());
+            hailstone::game::SweepX87::Info info;
             info.start = arr3(in.get("start"));
             info.delta = arr3(in.get("delta"));
             info.direction = arr3(in.get("direction"));
@@ -1480,8 +1480,8 @@ std::map<std::string, Checker> checkers() {
         };
     c["s3dCollideActorSweep"] = [arr3, check3](const Json& rec, const Json& in, const Json& out,
                                                const std::string& w, Mismatch& m) {
-        nmsc::game::SweepX87 x(precision_of(rec).precision());
-        nmsc::game::SweepX87::Info info = x.make_info(arr3(in.get("from")), arr3(in.get("to")), f32(in, "radius"));
+        hailstone::game::SweepX87 x(precision_of(rec).precision());
+        hailstone::game::SweepX87::Info info = x.make_info(arr3(in.get("from")), arr3(in.get("to")), f32(in, "radius"));
         if (flag(in, "hit")) {
             // What CollideActor left in the info.
             info.hit = true;
@@ -1495,7 +1495,7 @@ std::map<std::string, Checker> checkers() {
     };
     c["CollisionHit_SetCollidingType"] = [](const Json&, const Json& in, const Json& out, const std::string& w,
                                             Mismatch& m) {
-        nmsc::game::HitActor a;
+        hailstone::game::HitActor a;
         a.flags = u32(in, "actor_flags");
         a.has_owner = flag(in, "actor_has_owner");
         a.type = i32(in, "actor_type");
@@ -1506,7 +1506,7 @@ std::map<std::string, Checker> checkers() {
         a.door_has_switch = flag(in, "door_has_switch");
         // The mocked FUN_00510210's answer (al) is in the recorded calls.
         bool touch = (call_ret(out, "switch_acts_on_touch") & 0xff) != 0;
-        nmsc::game::HitResult r = nmsc::game::collision_hit_set_colliding_type(a, touch);
+        hailstone::game::HitResult r = hailstone::game::collision_hit_set_colliding_type(a, touch);
         m.check_int(r.ret, as_int(out.get("ret")), w, "ret");
         const Json* ct = out.get("colliding_type");
         if (is_null(ct) != !r.colliding_type) m.report(w, "colliding_type", "written or not");
@@ -1530,7 +1530,7 @@ std::map<std::string, Checker> checkers() {
     };
     auto filter = [](bool with_rider) {
         return [with_rider](const Json&, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
-            nmsc::game::FilterActor a;
+            hailstone::game::FilterActor a;
             a.has_owner = flag(in, "actor_has_owner");
             a.type = i32(in, "actor_type");
             a.spawn_found = flag(in, "spawn_found");
@@ -1544,7 +1544,7 @@ std::map<std::string, Checker> checkers() {
             a.object9_98 = static_cast<std::uint8_t>(u32(in, "object9_98"));
             a.mover_found = flag(in, "mover_found");
             a.spawn_is_movers_rider = flag(in, "spawn_is_movers_rider");
-            m.check_int(nmsc::game::collision_filter_movement(a, with_rider), as_int(out.get("ret")), w, "ret");
+            m.check_int(hailstone::game::collision_filter_movement(a, with_rider), as_int(out.get("ret")), w, "ret");
         };
     };
     c["CollisionFilter_Movement"] = filter(false);
@@ -1600,9 +1600,9 @@ std::map<std::string, Checker> checkers() {
             }
             void stop_particle(Switch&) override {}
             bool is_floor_switch(const Switch& s) override {
-                nmsc::game::Door d;
+                hailstone::game::Door d;
                 d.type = s.type;
-                return nmsc::game::is_floor_switch(d, zone);
+                return hailstone::game::is_floor_switch(d, zone);
             }
             std::optional<double> actor_radius(const Switch&) override {
                 if (!flag(si, "has_actor")) return std::nullopt;
@@ -1668,7 +1668,7 @@ std::map<std::string, Checker> checkers() {
     };
     c["CollsnCallbackForFloor"] = [](const Json& rec, const Json& in, const Json& out, const std::string& w,
                                      Mismatch& m) {
-        nmsc::game::FloorHit h;
+        hailstone::game::FloorHit h;
         h.actor_null = flag(in, "actor_null");
         h.is_camera_actor = flag(in, "is_camera_actor");
         h.player_found = flag(in, "player_found");
@@ -1683,7 +1683,7 @@ std::map<std::string, Checker> checkers() {
         h.distance = f32(in, "distance");
         h.hit_spawn_is_player = flag(in, "hit_spawn_is_player");
         h.hit_spawn_rideable = flag(in, "hit_spawn_rideable");
-        nmsc::game::FloorHitResult r = nmsc::game::collsn_callback_for_floor(h, precision_of(rec));
+        hailstone::game::FloorHitResult r = hailstone::game::collsn_callback_for_floor(h, precision_of(rec));
         m.check_int(r.ret, as_int(out.get("ret")), w, "ret");
         m.check_int(r.touching_switch, as_int(out.get("touching_switch_set")), w, "touching_switch_set");
         const Json* cl = out.get("calls");
@@ -1692,7 +1692,7 @@ std::map<std::string, Checker> checkers() {
         m.check_int(r.set_vehicle ? 1 : 0, static_cast<std::int64_t>(n), w, "set_vehicle calls");
     };
     c["FloorActorFilter"] = [](const Json&, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
-        nmsc::game::FloorFilterActor a;
+        hailstone::game::FloorFilterActor a;
         a.mover_present = flag(in, "mover_present");
         a.owner_is_mover = flag(in, "owner_is_mover");
         a.has_owner = flag(in, "actor_has_owner");
@@ -1709,7 +1709,7 @@ std::map<std::string, Checker> checkers() {
         const Json* c0 = call(out, "is_floor_switch");
         bool answer = c0 && as_int(c0->get("ret")).value_or(0) != 0;
         bool asked = false;
-        std::uint32_t r = nmsc::game::floor_actor_filter(a, answer, &asked);
+        std::uint32_t r = hailstone::game::floor_actor_filter(a, answer, &asked);
         m.check_int(r, as_int(out.get("ret")), w, "ret");
         m.check_int(asked, c0 != nullptr, w, "is_floor_switch asked");
     };
@@ -1846,7 +1846,7 @@ std::map<std::string, Checker> checkers() {
     return c;
 }
 
-std::optional<fs::path> vectors_dir() { return nmsc::test::vector_dir(); }
+std::optional<fs::path> vectors_dir() { return hailstone::test::vector_dir(); }
 
 } // namespace
 
@@ -1854,7 +1854,7 @@ TEST_CASE("Movement test vectors from the original client") {
     auto dir = vectors_dir();
     std::error_code ec;
     if (!dir || !fs::is_directory(*dir, ec)) {
-        MESSAGE("no rof2decomp test vectors (NMSC_VECTORS_DIR); skipped");
+        MESSAGE("no rof2decomp test vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     auto table = checkers();

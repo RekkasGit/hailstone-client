@@ -14,8 +14,8 @@
 #include "game/swept_sphere.h"
 #include "game_files.h"
 
-using namespace nmsc::game;
-namespace mech = nmsc::game::mechanics;
+using namespace hailstone::game;
+namespace mech = hailstone::game::mechanics;
 
 namespace {
 
@@ -227,7 +227,7 @@ void walk_into_walls(const CollisionMesh& mesh, glm::vec3 start, float radius, i
 }
 } // namespace
 
-TEST_CASE("walls of a WLD and an EQG zone block and slide" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("walls of a WLD and an EQG zone block and slide" * doctest::skip(!hailstone::test::game_dir())) {
     struct Case {
         const char* zone;
         bool eqg;
@@ -235,8 +235,8 @@ TEST_CASE("walls of a WLD and an EQG zone block and slide" * doctest::skip(!nmsc
     };
     for (Case c : {Case{"qeynos", false, {180, -220, 0}}, Case{"qeynos", false, {60, -280, 0}},
                    Case{"guildhall", true, {-34.65f, -8.39f, 0}}}) {
-        auto zone = c.eqg ? nmsc::assets::load_eqg_zone(*nmsc::test::game_dir(), c.zone)
-                          : nmsc::assets::load_classic_zone(*nmsc::test::game_dir(), c.zone);
+        auto zone = c.eqg ? hailstone::assets::load_eqg_zone(*hailstone::test::game_dir(), c.zone)
+                          : hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), c.zone);
         auto mesh = CollisionMesh::build(zone);
         glm::vec3 feet = c.feet;
         if (auto f = mesh.floor_below(feet + glm::vec3(0, 0, 5.0f), 0.0f)) feet.z = *f;
@@ -262,11 +262,11 @@ TEST_CASE("a type 1 volume's radius is the model's +0x38 x the model scale x COF
 }
 
 TEST_CASE("South Qeynos' doorways pass the stand-in radius but not the model radius" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     // The doorway west of the docks: a 2-thick wall at x 26..28, open for y -95.97..-85.97 and z 0..10. A human
     // walks through it in the original; a sphere swept straight through its middle, its centre vf94 = max(1.9, r)
     // above the spawn's z (the feet + AvatarHeight 3.75), must not hit anything for the human to pass.
-    auto zone = nmsc::assets::load_classic_zone(*nmsc::test::game_dir(), "qeynos");
+    auto zone = hailstone::assets::load_classic_zone(*hailstone::test::game_dir(), "qeynos");
     auto mesh = CollisionMesh::build(zone);
     auto passes = [&](float r) {
         glm::vec3 p(45.0f, -90.97f, 3.75f + std::max(1.9f, r));

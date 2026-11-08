@@ -32,7 +32,7 @@
 #include "net/packet_io.h"
 #include "game/attack_check.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -2530,4 +2530,4 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

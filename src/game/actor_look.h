@@ -17,7 +17,7 @@
 #include <optional>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The Luclin hair and beard colours (0x00RRGGBB, table 0xac1a70), indexed by
 // the hair / beard colour 0..23.
@@ -264,4 +264,4 @@ std::uint32_t set_luclin_eye(ActorLook& look, ActorEnv& env, bool secondary, std
 // classic races go to SetFacialFeatureNewModel. Returns the original's byte.
 std::uint8_t swap_face(ActorLook& look, ActorEnv& env, std::int32_t to, std::int32_t from, std::int32_t kind);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

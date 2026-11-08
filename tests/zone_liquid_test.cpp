@@ -8,8 +8,8 @@
 #include "assets/zone.h"
 #include "render/zone_renderer.h"
 
-using namespace nmsc;
-namespace wld = nmsc::assets::wld;
+using namespace hailstone;
+namespace wld = hailstone::assets::wld;
 
 namespace {
 

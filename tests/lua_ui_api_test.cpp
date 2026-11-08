@@ -22,7 +22,7 @@
 namespace fs = std::filesystem;
 
 TEST_CASE("Lua UI: the key names, keyboard capture, typing and DrawText's size") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "keys.lua") << "ok = ui.Key.A ~= nil and ui.Key.Z ~= nil and ui.Key['0'] ~= nil and ui.Key['9'] ~= nil\n"
@@ -42,7 +42,7 @@ TEST_CASE("Lua UI: the key names, keyboard capture, typing and DrawText's size")
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < 2; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -68,7 +68,7 @@ TEST_CASE("Lua UI: the key names, keyboard capture, typing and DrawText's size")
 // ui.FindWindowRect: a window's place and size by name, before its Begin (lib/snap.lua snaps a dialog's drag from
 // it); nothing for a window never drawn, and a "###" name finds the window whatever its title.
 TEST_CASE("Lua UI: FindWindowRect finds a drawn window by name") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_rect_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_rect_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "rect.lua") << "ui.window('Rect', function()\n"
@@ -85,7 +85,7 @@ TEST_CASE("Lua UI: FindWindowRect finds a drawn window by name") {
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < 2; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -114,7 +114,7 @@ TEST_CASE("Lua UI: FindWindowRect finds a drawn window by name") {
 // ui.GetIO: one table a frame (the HUD asks for it from every window), with the frame's values; the next frame's is
 // another, with that frame's.
 TEST_CASE("Lua UI: GetIO gives one table a frame") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_io_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_io_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "io.lua") << "frames = {}\n"
@@ -124,12 +124,12 @@ TEST_CASE("Lua UI: GetIO gives one table a frame") {
                                      "end)\n";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
-    nmsc::ui::configure_keys(); // as the client: no macOS Ctrl/Cmd swap, so the Ctrl event below reads as Ctrl
+    hailstone::ui::configure_keys(); // as the client: no macOS Ctrl/Cmd swap, so the Ctrl event below reads as Ctrl
     unsigned char* px = nullptr;
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < 2; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(i == 0 ? 800.0f : 1024.0f, 600);
@@ -168,7 +168,7 @@ int probe_style(lua_State*) {
 } // namespace
 
 TEST_CASE("Lua UI: PushStyleColors and PushStyleVars push a list in one call") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_style_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_style_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "style.lua")
@@ -185,7 +185,7 @@ TEST_CASE("Lua UI: PushStyleColors and PushStyleVars push a list in one call") {
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         lua_register(L, "probe", &probe_style);
         ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -215,7 +215,7 @@ TEST_CASE("Lua UI: PushStyleColors and PushStyleVars push a list in one call") {
 // filtered list and sorts it again when a row changes (in view or not), W.ButtonRow leaves the caller's opts alone,
 // and the testing hooks read their settings once.
 TEST_CASE("Modern UI libs: W.List's sorted copy, ButtonRow's opts, the test hooks read once") {
-    nmsc::test::ScratchDir scratch("lua_ui_modern_libs_test");
+    hailstone::test::ScratchDir scratch("lua_ui_modern_libs_test");
     const fs::path dir = scratch.path() / "pack";
     const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
     REQUIRE(fs::exists(lib / "widgets.lua"));
@@ -288,7 +288,7 @@ end)
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frames = [&](int n, float dt = 1.0f / 60.0f) {
             for (int i = 0; i < n; ++i) {
@@ -360,7 +360,7 @@ end)
 // drawn from their summed heights land where the line-by-line walk put them; the gamepad's block cache keeps the
 // last few texts.
 TEST_CASE("Lua UI: STML wraps are kept until the width changes, and match the per-frame wrap") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_stml_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_stml_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir / "lib");
     const fs::path ui_src = fs::path(__FILE__).parent_path().parent_path() / "ui";
@@ -479,7 +479,7 @@ end)
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < 4; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -520,7 +520,7 @@ end)
 // table, and a column or freeze set up after the first row asserts. The bindings refuse them; inside a table they
 // work as before.
 TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, are refused") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_table_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_table_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "t.lua") << "ui.window('T', function()\n"
@@ -550,7 +550,7 @@ TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, a
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < 2; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -575,7 +575,7 @@ TEST_CASE("Lua UI: table calls outside a table, or set up after the first row, a
 // userdata (a full userdata such as an mq.TLO value, a light one never made a texture, one since freed) is none, as
 // nil is, and never reaches the draw list, which the Vulkan backend would bind as a descriptor set.
 TEST_CASE("Lua UI: images draw only live textures the client handed out") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_image_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_image_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "i.lua") << "ui.window('I', function()\n"
@@ -589,16 +589,16 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
                                     "  ui.End()\n"
                                     "end)\n";
     static int live = 0, stranger = 0, freed = 0;
-    nmsc::ui::texture_id_added(&live);
-    nmsc::ui::texture_id_added(&freed);
-    nmsc::ui::texture_id_removed(&freed);
+    hailstone::ui::texture_id_added(&live);
+    hailstone::ui::texture_id_added(&freed);
+    hailstone::ui::texture_id_removed(&freed);
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
     unsigned char* px = nullptr;
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         lua_newuserdatauv(L, 16, 0);
         lua_setglobal(L, "FULL");
@@ -630,7 +630,7 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
         CHECK(other_draws == 0);
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
     }
-    nmsc::ui::texture_id_removed(&live);
+    hailstone::ui::texture_id_removed(&live);
     ImGui::DestroyContext(ctx);
 }
 
@@ -638,7 +638,7 @@ namespace {
 // Two frames of a pack with one script; the global `done` after them.
 bool run_pack_frames(const std::string& name, const std::string& script, int frames = 2,
                      const std::function<void(int)>& before_frame = {}) {
-    nmsc::test::ScratchDir scratch(name);
+    hailstone::test::ScratchDir scratch(name);
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "s.lua") << script;
@@ -649,7 +649,7 @@ bool run_pack_frames(const std::string& name, const std::string& script, int fra
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     bool done = false;
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         for (int i = 0; i < frames; ++i) {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -729,10 +729,10 @@ TEST_CASE("Lua UI: code editors made from changing ids are forgotten, not kept f
                           "  done = true\n"
                           "end)\n",
                           400, [&](int i) {
-                              if (i == 10) oldest_at_10 = nmsc::ui::lua::code_editors_oldest();
+                              if (i == 10) oldest_at_10 = hailstone::ui::lua::code_editors_oldest();
                               if (i == 399) {
-                                  kept = nmsc::ui::lua::code_editors_kept();
-                                  oldest = nmsc::ui::lua::code_editors_oldest();
+                                  kept = hailstone::ui::lua::code_editors_kept();
+                                  oldest = hailstone::ui::lua::code_editors_oldest();
                               }
                           }));
     CHECK(kept > 0);
@@ -775,7 +775,7 @@ TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's s
         at.push_back(1);
         at.push_back(text.size() / 3);
         at.push_back(0);
-        const auto got = nmsc::ui::lua::code_editor_places(text, at);
+        const auto got = hailstone::ui::lua::code_editor_places(text, at);
         REQUIRE(got.size() == at.size());
         for (std::size_t i = 0; i < at.size(); ++i) {
             CAPTURE(at[i]);
@@ -789,7 +789,7 @@ TEST_CASE("Lua UI: the code editor places text as CalcTextSize from the line's s
 // The modern pack's "Close with Esc" (ui/modern/lib/escape.lua): off until ticked; one press closes one ticked window,
 // the one opened or clicked last.
 TEST_CASE("Modern UI libs: Close with Esc closes the frontmost ticked window, one a press") {
-    nmsc::test::ScratchDir scratch("lua_ui_modern_escape_test");
+    hailstone::test::ScratchDir scratch("lua_ui_modern_escape_test");
     const fs::path dir = scratch.path() / "pack";
     const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
     REQUIRE(fs::exists(lib / "escape.lua"));
@@ -820,7 +820,7 @@ function open() return (OPEN.A and "A" or "") .. (OPEN.B and "B" or "") .. (OPEN
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frames = [&](int n) {
             for (int i = 0; i < n; ++i) {
@@ -878,7 +878,7 @@ function open() return (OPEN.A and "A" or "") .. (OPEN.B and "B" or "") .. (OPEN
 
 // Some windows (the inventory, the books, the bags, the map...) have Close with Esc ticked until the player unticks it.
 TEST_CASE("Modern UI libs: Close with Esc is on by default for the put-away windows, until unticked") {
-    nmsc::test::ScratchDir scratch("lua_ui_modern_escape_default_test");
+    hailstone::test::ScratchDir scratch("lua_ui_modern_escape_default_test");
     const fs::path dir = scratch.path() / "pack";
     const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
     REQUIRE(fs::exists(lib / "escape.lua"));
@@ -912,7 +912,7 @@ end
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frames = [&](int n) {
             for (int i = 0; i < n; ++i) {
@@ -955,7 +955,7 @@ end
 // ui.Begin's collapseRight puts the collapse button beside the close box for that window alone (the style's
 // WindowMenuButtonPosition is put back); ui.SetNextWindowCollapsed / ui.IsWindowCollapsed roll it up and say so.
 TEST_CASE("Lua UI: a window rolls up, its collapse button at the right") {
-    nmsc::test::ScratchDir scratch("lua_ui_api_collapse_test");
+    hailstone::test::ScratchDir scratch("lua_ui_api_collapse_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "roll.lua") << "ui.window('Roll', function()\n"
@@ -972,7 +972,7 @@ TEST_CASE("Lua UI: a window rolls up, its collapse button at the right") {
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frames = [&](int n) {
             for (int i = 0; i < n; ++i) {

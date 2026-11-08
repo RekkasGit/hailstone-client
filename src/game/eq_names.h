@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // CEverQuest::GetLangDesc @0x5159f0: the eqstr id of a language's name (EQEmu's language ids;
 // 3115 for unknown ones).
@@ -30,4 +30,4 @@ std::string class_list_name(std::span<const std::uint32_t> class_ids, bool abbre
 // none.
 std::string class_mask_name(std::uint32_t mask);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -17,7 +17,7 @@
 #include "render/vk_util.h"
 #include "ui/imgui_vk_textures.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 using net::Item;
 using net::ItemSlot;
@@ -381,7 +381,7 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - em * 26.0f, vp->WorkPos.y + em * 14.0f),
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.85f);
-        if (ImGui::Begin("Inventory##nmsc_inv", &state.show_inventory,
+        if (ImGui::Begin("Inventory##hailstone_inv", &state.show_inventory,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
             // Equipment: the stock window's 23 slots, six per row.
             ImGui::TextColored(kDim, "Equipment");
@@ -440,7 +440,7 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
             ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - em * 38.0f,
                                            vp->WorkPos.y + em * (14.0f + 7.0f * static_cast<float>(s - net::kSlotGeneral1) * 0.5f)),
                                     ImGuiCond_Appearing);
-            if (ImGui::Begin(std::format("{}##nmsc_bag{}", bag->name, s).c_str(), &open,
+            if (ImGui::Begin(std::format("{}##hailstone_bag{}", bag->name, s).c_str(), &open,
                              ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
                 for (int i = 0; i < bag->bag_slots; ++i) {
                     if (i % 4) ImGui::SameLine(0.0f, gap);
@@ -464,7 +464,7 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f - em * 10.0f, vp->WorkPos.y + em * 8.0f),
                                 ImGuiCond_FirstUseEver);
         bool open = true;
-        if (ImGui::Begin(std::format("Loot: {}###nmsc_loot", in.corpse_name).c_str(), &open,
+        if (ImGui::Begin(std::format("Loot: {}###hailstone_loot", in.corpse_name).c_str(), &open,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
             if (in.loot->empty()) ImGui::TextColored(kDim, "The corpse is empty.");
             int n = 0;
@@ -493,7 +493,7 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
         ImVec2 at = ImGui::IsMousePosValid() ? ImVec2(ImGui::GetMousePos().x + 16, ImGui::GetMousePos().y)
                                              : ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(at, ImGuiCond_Appearing);
-        if (ImGui::Begin(std::format("{}###nmsc_info{}", it.name, state.info_ids[i]).c_str(), &open,
+        if (ImGui::Begin(std::format("{}###hailstone_info{}", it.name, state.info_ids[i]).c_str(), &open,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
             if (icons) icons->draw(it.icon, em * kSlotEm, it.name.c_str());
             ImGui::SameLine();
@@ -523,4 +523,4 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
     return act;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

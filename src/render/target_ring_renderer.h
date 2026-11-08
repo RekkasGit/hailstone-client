@@ -14,7 +14,7 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct TargetRing {
     glm::vec3 feet{0.0f};
@@ -59,4 +59,4 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

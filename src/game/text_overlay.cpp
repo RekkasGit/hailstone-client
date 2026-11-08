@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::uint32_t text_overlay_rgb(std::int32_t colour) {
     switch (colour) {
@@ -94,4 +94,4 @@ TaskCompleteText task_complete_text(bool stage_complete, bool completed) {
     return completed ? TaskCompleteText{6003, 14, 1, true} : TaskCompleteText{6004, 13, 1, true};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -8,7 +8,7 @@
 #include "core/log.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 MovementTest::MovementTest(std::string spec) {
     if (auto plus = spec.find("+trace"); plus != std::string::npos) {
@@ -329,4 +329,4 @@ void MovementTest::observe(float t, const PlayerMovement::Frame& f, const Player
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

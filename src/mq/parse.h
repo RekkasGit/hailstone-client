@@ -11,11 +11,11 @@
 
 #include "mq/tlo.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 // One expression without the ${ }: "Me.PctHPs", "Spawn[npc radius 50].ID".
 Value evaluate(const Context& ctx, std::string_view expr);
 // The line with each ${...} replaced.
 std::string parse_macro_data(const Context& ctx, std::string_view line);
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

@@ -36,7 +36,7 @@
 
 #include "game/mechanics/switches.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // EQSwitch::State values.
 inline constexpr std::uint8_t kSwitchClosed = 0;
@@ -185,4 +185,4 @@ struct WorldContainer {
     bool window = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

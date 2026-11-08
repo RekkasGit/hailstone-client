@@ -17,9 +17,9 @@
 
 #include "core/sha256.h"
 
-namespace nmsc::game { class EqStrings; }
+namespace hailstone::game { class EqStrings; }
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 // Capability bits (the policy entries' caps).
 enum Cap : std::uint32_t {
@@ -181,4 +181,4 @@ private:
     std::uint32_t serial_ = 0;
 };
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

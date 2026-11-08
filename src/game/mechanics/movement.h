@@ -49,7 +49,7 @@
 #include "game/mechanics/fpu.h"
 #include "game/mechanics/physics.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // ---------------------------------------------------------------- constants
 
@@ -492,4 +492,4 @@ private:
     float step_scale_ = 1.0f;
 };
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

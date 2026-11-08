@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <string_view>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // Creates `path` (failing if anything is there already) and writes `text` to it. On POSIX the file is made 0600;
 // on Windows it takes its folder's permissions, as any new file there does (a user's own folder is private).
@@ -18,4 +18,4 @@ bool write_private_file(const std::filesystem::path& path, std::string_view text
 // takes its parent's permissions. For a tool's scratch folder in the shared temp folder that will hold a secret.
 bool make_private_dir(const std::filesystem::path& path);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

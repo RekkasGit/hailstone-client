@@ -21,7 +21,7 @@
 #include "game/player_customization.h"
 #include "game/spawn_heights.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 namespace {
 
@@ -329,4 +329,4 @@ void ClientApp::update_pre_game(float dt) {
     m->display_heading = m->heading;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

@@ -7,7 +7,7 @@
 #include "render/scene_lighting.h"
 #include "render/zone_renderer.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 void sync_point_shadows(PointShadows& shadows, const VkContext& vk) {
     if (shadows.total() != vk.point_shadow_slots() || shadows.map != vk.point_shadow_generation()) {
@@ -83,4 +83,4 @@ void draw_point_shadows(VkContext& vk, const FrameInfo& frame, PointShadows& sha
     }
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

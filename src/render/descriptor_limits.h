@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // One kind of limit, either the plain ones (VkPhysicalDeviceLimits) or the update-after-bind ones
 // (VkPhysicalDeviceVulkan12Properties).
@@ -38,4 +38,4 @@ inline std::uint32_t texture_array_limit(const DescriptorLimits& l) {
     return std::max(1u, n);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -63,7 +63,7 @@ struct TempDir {
     std::filesystem::path path;
     TempDir() {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = std::filesystem::temp_directory_path() / ("nmsc_pictures_" + std::to_string(stamp));
+        path = std::filesystem::temp_directory_path() / ("hailstone_pictures_" + std::to_string(stamp));
         std::filesystem::create_directories(path);
     }
     ~TempDir() {
@@ -79,7 +79,7 @@ void touch(const std::filesystem::path& p) {
 } // namespace
 
 TEST_CASE("JPEG pictures decode to RGBA8") {
-    using namespace nmsc::assets;
+    using namespace hailstone::assets;
     auto bytes = std::as_bytes(std::span(kJpeg));
     REQUIRE(is_jpeg(bytes));
     std::string error;
@@ -117,7 +117,7 @@ TEST_CASE("JPEG pictures decode to RGBA8") {
 }
 
 TEST_CASE("Screen pictures: a server's own folder replaces the client's") {
-    using namespace nmsc::ui;
+    using namespace hailstone::ui;
     TempDir t;
     const auto client = t.path / "ui" / kPictureFolder;
     const auto server = t.path / "servers" / "x" / "assets" / kPictureFolder;
@@ -143,7 +143,7 @@ TEST_CASE("Screen pictures: a server's own folder replaces the client's") {
 }
 
 TEST_CASE("Screen pictures: the shipped ones show only when neither the server nor the player has any") {
-    using namespace nmsc::ui;
+    using namespace hailstone::ui;
     TempDir t;
     const auto shipped = t.path / "pictures";
     const auto client = t.path / "ui" / kPictureFolder;
@@ -164,14 +164,14 @@ TEST_CASE("Screen pictures: the shipped ones show only when neither the server n
 
 TEST_CASE("Screen pictures: the shipped picture decodes") {
     const auto file =
-        std::filesystem::path(NMSC_TEST_DATA_DIR).parent_path().parent_path() / "pictures" / "hailstone.jpg";
+        std::filesystem::path(HAILSTONE_TEST_DATA_DIR).parent_path().parent_path() / "pictures" / "hailstone.jpg";
     std::ifstream in(file, std::ios::binary);
     REQUIRE(in);
     std::vector<char> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     std::vector<std::byte> data(raw.size());
     std::memcpy(data.data(), raw.data(), raw.size());
     std::string why;
-    auto img = nmsc::assets::decode_jpeg(data, &why);
+    auto img = hailstone::assets::decode_jpeg(data, &why);
     REQUIRE_MESSAGE(img, why);
     CHECK(img->width == 1024);
     CHECK(img->height == 559);

@@ -1,7 +1,7 @@
 // Fuzz-style tests for the file parsers, driven by small synthetic fixtures (no EQ files needed): PFS/S3D/EQG
 // archives, WLD, EQG models/zones/heightmaps/meshes/animations, DDS/BMP/TGA textures, XMI, sound and effect tables
 // and ini text. Each seed is cut at many lengths and mutated with a fixed seed; parsers may report an error by
-// exception but must not crash, hang or allocate on a bogus length. Run with -DNMSC_SANITIZE=ON for the full value.
+// exception but must not crash, hang or allocate on a bogus length. Run with -DHAILSTONE_SANITIZE=ON for the full value.
 
 #include <doctest/doctest.h>
 
@@ -28,8 +28,8 @@
 #include "pfs_fixtures.h"
 #include "wld_fixtures.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 using fuzz::Bytes;
 using fuzz::Rng;
 using fuzz::Throws;

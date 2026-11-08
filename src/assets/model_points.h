@@ -32,7 +32,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 struct CharacterModel;
 
@@ -126,4 +126,4 @@ private:
     std::unordered_map<const CharacterModel*, Model> models_;
 };
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

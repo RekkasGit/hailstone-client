@@ -8,8 +8,8 @@
 #include "game/keymap.h"
 #include "platform/window.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 TEST_CASE("Extra mouse buttons map to the original's MOUS codes") {
     // SDL: 1 left, 2 middle, 3 right, 4 X1, 5 X2, then the buttons past X2.

@@ -17,8 +17,8 @@
 #include "net/spell_packets.h"
 #include "ui/spell_windows.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -492,7 +492,7 @@ TEST_CASE("SPA 57: SpellCache_GetBuffValue(57, k) holds the levitate effects wit
 }
 
 TEST_CASE("A spell's target-type colour (FUN_004ad890: the gem tint and the memorize menu's rows)") {
-    using nmsc::game::spell_target_color;
+    using hailstone::game::spell_target_color;
     CHECK(spell_target_color(5, 0) == 0xffde2121u);  // single target (the default)
     CHECK(spell_target_color(6, 0) == 0xffcede29u);  // self
     CHECK(spell_target_color(41, 0) == 0xff9c31deu); // group
@@ -510,8 +510,8 @@ TEST_CASE("A spell's target-type colour (FUN_004ad890: the gem tint and the memo
 }
 
 TEST_CASE("Spell gem tints, tint stages and the cool-down rectangle (CSpellGemWnd)") {
-    using nmsc::game::SpellGemDisplay;
-    auto t = nmsc::game::spell_gem_tints(0xffde2121u);
+    using hailstone::game::SpellGemDisplay;
+    auto t = hailstone::game::spell_gem_tints(0xffde2121u);
     CHECK(t.colors[0] == 0xffde2121u);
     CHECK(t.colors[1] == 0xffca1e1eu); // an eleventh of each channel, truncated: 0x14, 3, 3
     CHECK(t.colors[10] == 0xffde2121u - 10u * 0x140303u);
@@ -542,13 +542,13 @@ TEST_CASE("Spell gem tints, tint stages and the cool-down rectangle (CSpellGemWn
     CHECK(d.cooldown_left(100500) == 4500);
     // 0.87 at most: the last 13 % stays covered until the end.
     CHECK(*d.overlay_fraction(104500) == 0.87);
-    CHECK(nmsc::game::spell_gem_overlay_top(0.87, 10, 50) == 10 + 34);
+    CHECK(hailstone::game::spell_gem_overlay_top(0.87, 10, 50) == 10 + 34);
     CHECK_FALSE(d.overlay_fraction(105000));
     CHECK(d.cooldown_duration == 0);
     // A linked timer longer than the gem's: its own time left is the total.
     d.update_cooldown(200000, 1000, 30000, 10000);
     CHECK(d.cooldown_duration == 30000);
-    CHECK(nmsc::game::spell_gem_overlay_color(0xc00000u) == 0x40c00000u);
+    CHECK(hailstone::game::spell_gem_overlay_color(0xc00000u) == 0x40c00000u);
 }
 
 TEST_CASE("blocked buffs: the 128-byte RoF2 struct both ways, and spells found by name") {
@@ -671,7 +671,7 @@ TEST_CASE("spells_us.txt: a live line read in RoF2's layout") {
 TEST_CASE("spells_us.txt: the live file read in RoF2's layout agrees with RoF2's") {
     // Runs with both installs: EQ_GAME_DIR a RoF2 one, EQ_LIVE_DIR a live one.
     const char* live_dir = std::getenv("EQ_LIVE_DIR");
-    auto game = nmsc::test::game_dir();
+    auto game = hailstone::test::game_dir();
     if (!live_dir || !game) return;
     GameDir live(live_dir);
     game::SpellTable rof2, converted;

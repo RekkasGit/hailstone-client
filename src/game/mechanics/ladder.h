@@ -26,7 +26,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The clicked switch (its actor's vtable +0x30, +0x80, +0x84, +0x60).
 struct LadderSwitch {
@@ -74,4 +74,4 @@ bool mount_clicked_ladder(const LadderSwitch& ladder, LadderPlayer& player, Ladd
 // __HeadingDiff @0x8d1fc0: |a - b| folded to 0..256, unrounded.
 double ladder_heading_diff(float a, float b, const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

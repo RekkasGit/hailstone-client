@@ -10,7 +10,7 @@
 #include "core/config.h"
 #include "game/keymap.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -415,4 +415,4 @@ const char* pad_glyph(PadType type, PadButton b) {
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

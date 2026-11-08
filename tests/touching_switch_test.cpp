@@ -2,7 +2,7 @@
 
 #include "game/mechanics/touching_switch.h"
 
-using namespace nmsc::game::mechanics;
+using namespace hailstone::game::mechanics;
 
 namespace {
 

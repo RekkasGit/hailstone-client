@@ -13,7 +13,7 @@
 
 struct lua_State;
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // The capabilities `name` ("ClickSlot", or "gamepad.set_mode" in a sub-table) needs from a plugin's code; 0 none;
 // nullopt for a name not listed.
@@ -23,4 +23,4 @@ std::optional<std::uint32_t> eq_call_caps(std::string_view name);
 // becomes one that checks the caller first (eq_call_caps).
 void gate_eq_calls(lua_State* L);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

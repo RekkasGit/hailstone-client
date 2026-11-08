@@ -22,7 +22,7 @@
 
 #include "game/swept_sphere.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct Spawn;
 
@@ -61,4 +61,4 @@ std::vector<CollisionTriangle> npc_walls(const NpcBody& body);
 // nearest (0: none did); each hit shortens the sweep as a wall does.
 std::uint32_t sweep_npcs(SphereSweep& s, std::span<const NpcBody> bodies);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

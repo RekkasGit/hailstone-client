@@ -32,7 +32,7 @@
 
 #include "assets/texture.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 class TextureOverrides {
 public:
@@ -102,4 +102,4 @@ inline std::optional<Image> decode_game_texture(std::string_view name, const std
     return decode_game_texture(name, bytes, options, error, zone);
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

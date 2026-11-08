@@ -16,7 +16,7 @@
 #include "game/world_state.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ItemBase_IsWornInVisibleSlot @0x7b2280: GetEquipSlots(1) has a visible slot (head 2, arms 7, wrist 10, range 11,
 // hands 12, primary 13, secondary 14, chest 17, legs 18, feet 19: the masks 0xe7c00 and 0x84).
@@ -44,4 +44,4 @@ ItemPreviewShow item_preview_show(const net::Item& item, std::uint8_t trailing);
 // left hand alone.
 Appearance preview_appearance(Appearance a, const net::Item& item, const net::Item* primary, const net::Item* secondary);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

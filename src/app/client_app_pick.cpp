@@ -2,7 +2,7 @@
 
 #include "app/client_app_internal.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 bool ClientApp::click_world(const PickTarget& hit) {
     if (!world_objects_ || !conn_) return false;
@@ -548,4 +548,4 @@ bool ClientApp::teleport_b(const game::TeleportBArgs& a, const char* what) {
     return ok;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

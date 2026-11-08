@@ -5,7 +5,7 @@
 #include "assets/eqg.h"
 #include "render/material_state.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 TEST_CASE("texture_frame steps a flame's frames one every delay and wraps") {
     // FIRE1_SPRITE: fire1..fire4 at 200 ms (ecommons_obj.wld, gequip.wld IT78).
@@ -29,9 +29,9 @@ TEST_CASE("texture_frame keeps still textures on their only frame") {
 TEST_CASE("alpha_unused: which materials never read their texture's alpha") {
     // An EQG material as eqg_character::append_pieces builds it from its shader name.
     auto eqg = [](const char* shader) {
-        nmsc::assets::Material m;
-        m.blend = nmsc::assets::eqg::shader_blend(shader);
-        m.eqg_shader = nmsc::assets::eqg::shader_class(shader);
+        hailstone::assets::Material m;
+        m.blend = hailstone::assets::eqg::shader_blend(shader);
+        m.eqg_shader = hailstone::assets::eqg::shader_class(shader);
         return material_state(m);
     };
     // it26526.mod (genericplateblue.eqg, the Iksar male's hero's forge chest 10801): its plate is drawn opaque from
@@ -40,10 +40,10 @@ TEST_CASE("alpha_unused: which materials never read their texture's alpha") {
     CHECK_FALSE(eqg("Chroma_MaxCBSGE1.fx").alpha_unused());
     CHECK_FALSE(eqg("Alpha_MaxCBS1.fx").alpha_unused());
     CHECK_FALSE(eqg("Opaque_AddAlphaC1Max.fx").alpha_unused());
-    nmsc::assets::Material classic;
+    hailstone::assets::Material classic;
     CHECK(material_state(classic).alpha_unused());
-    classic.blend = nmsc::assets::BlendMode::Masked;
+    classic.blend = hailstone::assets::BlendMode::Masked;
     CHECK_FALSE(material_state(classic).alpha_unused());
-    classic.blend = nmsc::assets::BlendMode::Transparent50;
+    classic.blend = hailstone::assets::BlendMode::Transparent50;
     CHECK_FALSE(material_state(classic).alpha_unused());
 }

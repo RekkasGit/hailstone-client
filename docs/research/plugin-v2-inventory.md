@@ -13,7 +13,7 @@ Groups:
 - **Flag**: a yes/no change to a stock rule. A plugin sets it with `host->set_flag(...)` while it is active.
 - **Callback**: a question the core asks while it runs. It goes in the plugin's hook table; null means the stock
   answer.
-- **Have**: the interface before v2 (`sdk/nmsc_plugin.h`, then `src/plugin/nmsc_plugin.h`, ABI 1) already covers it.
+- **Have**: the interface before v2 (`sdk/hailstone_plugin.h`, then `src/plugin/hailstone_plugin.h`, ABI 1) already covers it.
 - **Plugin**: code that is only NMS. It leaves the core.
 
 ## The goal: a server never needs to fork the client
@@ -67,8 +67,8 @@ Gaps beyond NMS's needs, to cover in phases 2-5:
   connection asks a chain of `ConnectionOptions::plugins` and then the built-in module (while `nms_mode()`).
   `wide_item_links`, `skill_rules`, `option` and `set_option` now get the connection, and `SkillRules` functions
   get a context, so the chain can hand out one rules pointer that stays valid.
-- Phase 2b, the C interface: done. `sdk/nmsc_plugin.h` (moved from `src/plugin/`) is ABI 2: the `NmscHooks` table
-  a plugin exports (`nmsc_plugin_hooks`), the `NMSC_FLAG_*` switches, and the host's `set_active`, `set_flag`,
+- Phase 2b, the C interface: done. `sdk/hailstone_plugin.h` (moved from `src/plugin/`) is ABI 2: the `HailstoneHooks` table
+  a plugin exports (`hailstone_plugin_hooks`), the `HAILSTONE_FLAG_*` switches, and the host's `set_active`, `set_flag`,
   `set_player_classes`, `set_character_classes`, `set_pet_list` and `set_vitals`, all under the new `extend`
   capability. Each such plugin is one member of the chain `Automation` hands every connection
   (`ConnectionOptions::plugins`). ABI 1 plugins still load. Not yet in the table: `item_right_click` and
@@ -102,9 +102,9 @@ Gaps beyond NMS's needs, to cover in phases 2-5:
 - Phase 6a, the host functions the NMS port needs: done. `close_spell_book`, `clear_spell_recovery`,
   `set_window_pet`, `inspect_item`, `max_camera_distance` / `set_max_camera_distance`, `write_chat_color`,
   `server_config_dir`, `character_config_dir` and `zone_name`; `right_click_item` takes the class the casting check
-  sees; `NmscPlayer` adds the cast and scribed spells, the stand state, the pet window's pet and the PC Spells filter;
+  sees; `HailstonePlayer` adds the cast and scribed spells, the stand state, the pet window's pet and the PC Spells filter;
   `set_vitals` also writes the player's current points. The Lua module has each. `core/byte_io.h` moved to the SDK
-  (`sdk/nmsc_byte_io.h`). An ini reader stays the plugin's own (the core's needs `core/atomic_file`).
+  (`sdk/hailstone_byte_io.h`). An ini reader stays the plugin's own (the core's needs `core/atomic_file`).
 - Phase 6b, NMS as a plugin: done. `plugins/nms/` builds a `MODULE` against `sdk/` alone (its own install
   component, `nms`); `docs/plugins/nms.md` describes it. The core lost `ServerModule` and the Module box,
   `ConnectionOptions::extension` / `force_extension`, `nms_mode()`, the NMS decoders (ServerAuthStats,
@@ -114,7 +114,7 @@ Gaps beyond NMS's needs, to cover in phases 2-5:
   `eq.Plugin("nms")`; the waypoint window is Lua in both packs. Found on the way: plugin windows could not
   `dofile` the pack's libraries (now they fall back to the pack), table keys from a plugin were always strings
   (whole numbers now become integers), a plugin's NULL level line dropped the stock line (now it keeps it),
-  `NMSC_PLUGIN` did not export C names from C++ (`NMSC_API`), and `NmscPlayer` lacked `in_zone`.
+  `HAILSTONE_PLUGIN` did not export C names from C++ (`HAILSTONE_API`), and `HailstonePlayer` lacked `in_zone`.
 - Phase 6c, the core's names: done. `opcodes_rof2.inc` is generated from stock EQEmu's `patch_RoF2.conf`
   (`tools/gen_opcodes.py` now needs the path): the 19 NMS opcodes left the table and `MercenarySwitch` (0x1b37)
   joined it; no other name or wire value changed. Hailstone's own server-script packets are `OP_HailstoneGuild*` /
@@ -189,7 +189,7 @@ function pointer, which costs about the same as the current virtual call.
 | The personal loot ImGui window, the UI demo's copy | item_windows.h:5, ui_demo.h:15, :68, ui_demo.cpp:286 | Plugin; removed from the demo |
 | `/fov` reaches the camera through `ExtensionAppContext` | client_app_internal.h:137, :1101 | host `set_camera_distance`, `set_max_camera_distance` (the Options zoom range stays core) |
 | `nms::add_lua_windows`, `nms::register_lua_api` | lua_eq.cpp:26, :298, :2477 | the plugin window and Lua bridge (§4) |
-| NMS sources in `nmsc_engine` | CMakeLists.txt:157-166 | a separate `MODULE` library that can include `sdk/` only |
+| NMS sources in `hailstone_engine` | CMakeLists.txt:157-166 | a separate `MODULE` library that can include `sdk/` only |
 
 These stay in the core because they are already general multiclass and multi-pet support: the classes on character
 select (dev_screens.h:192), the `player_classes` mask in the item display, inventory and item moves

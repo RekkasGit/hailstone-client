@@ -21,7 +21,7 @@
 struct lua_State;
 struct ImFont;
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // EQ UI font 1..6 (the <Font> numbers in the stock XML); null outside that
 // range or before the ImGui layer loaded them.
@@ -68,7 +68,7 @@ int code_editors_oldest();
 // Where ui.CodeEditor draws each byte offset of `at` (x, y from the text's start), asked in that order of one placer;
 // for the tests (an ImGui frame must be current).
 std::vector<std::pair<float, float>> code_editor_places(const std::string& text, const std::vector<std::size_t>& at);
-inline constexpr const char* kPackStateKey = "nmsc.ui.pack";
+inline constexpr const char* kPackStateKey = "hailstone.ui.pack";
 // A plugin sees the pack's shared tables through views (lua_host.cpp); a C function that reads a table raw
 // (lua_rawgeti, lua_next, lua_rawlen) calls this first on its argument: a view at idx is replaced by its table (only
 // in the pack's state; anything else stays as it is).
@@ -112,7 +112,7 @@ public:
     void set_caller_scope(CallerScope scope);
 
     // Whether a plugin folder's code (its tag) may use the player's clipboard (ui.GetClipboardText / SetClipboardText,
-    // which ask the state's registry function "nmsc.clipboard_allowed"): it holds whatever the player copied, a
+    // which ask the state's registry function "hailstone.clipboard_allowed"): it holds whatever the player copied, a
     // password too. The pack's own code always may; unset, no plugin's may. The app: only an owner with every
     // capability.
     using ClipboardCheck = std::function<bool(std::string_view tag)>;
@@ -161,4 +161,4 @@ private:
 };
 
 } // namespace lua
-} // namespace nmsc::ui
+} // namespace hailstone::ui

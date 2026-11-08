@@ -4,7 +4,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 float cloud_random(int rand_value, float min, float max) {
     return static_cast<float>(rand_value) / 32767.0f * (max - min) + min;
@@ -67,4 +67,4 @@ float CloudLayer::opacity(const CloudPatch& p) {
     return std::clamp(1.0f - (t - p.hold_ms) / 5000.0f, 0.0f, 1.0f);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

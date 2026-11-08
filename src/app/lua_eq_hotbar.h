@@ -16,9 +16,9 @@
 #include "ui/ui_textures.h"
 
 struct lua_State;
-namespace nmsc::ui { class UiIni; }
+namespace hailstone::ui { class UiIni; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class StockWindow;
 
@@ -54,4 +54,4 @@ void add_hotbar_windows(std::vector<std::unique_ptr<StockWindow>>& out);
 // eq.IconSelectionIcons(): the icon selection window's page of icons.
 void register_hotbar_api(lua_State* L, EqHost& host);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -232,4 +232,4 @@ std::optional<bool> pet_hot_button_checked(std::string_view label, std::string_v
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -6,7 +6,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -707,4 +707,4 @@ std::optional<CrystalCounts> decode_crystal_counts(const AppPacket& p) {
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

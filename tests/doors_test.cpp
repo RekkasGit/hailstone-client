@@ -22,8 +22,8 @@
 #include "net/door_packets.h"
 #include "net/opcodes.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -741,7 +741,7 @@ TEST_CASE("a rising elevator (a floor switch) lifts its rider through the floor 
 }
 
 TEST_CASE("CDisplay::CreateActor's definition name: _ACTORDEF only on names under 10 characters") {
-    using nmsc::game::create_actor_definition;
+    using hailstone::game::create_actor_definition;
     CHECK(create_actor_definition("IT63") == "IT63_ACTORDEF");
     CHECK(create_actor_definition("IT") == "IT_ACTORDEF");
     CHECK(create_actor_definition("IT10804_ACTORDEF") == "IT10804_ACTORDEF");

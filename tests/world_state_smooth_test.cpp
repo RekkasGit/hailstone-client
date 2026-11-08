@@ -6,7 +6,7 @@
 
 #include "game/world_state.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();

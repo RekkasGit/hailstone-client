@@ -6,7 +6,7 @@
 #include "core/atomic_file.h"
 #include "platform/paths.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 std::string_view trim(std::string_view s) {
@@ -187,4 +187,4 @@ void Config::erase(std::string_view key) {
 
 std::filesystem::path default_config_path() { return platform::config_file(); }
 
-} // namespace nmsc
+} // namespace hailstone

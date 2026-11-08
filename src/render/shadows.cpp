@@ -5,7 +5,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 ShadowCascades fit_shadow_cascades(const ShadowCamera& camera, const glm::vec3& to_light, float distance,
                                    float caster_reach, std::uint32_t map_size) {
@@ -55,4 +55,4 @@ ShadowCascades fit_shadow_cascades(const ShadowCamera& camera, const glm::vec3& 
     return out;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

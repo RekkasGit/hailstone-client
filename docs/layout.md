@@ -359,12 +359,12 @@ starts from when it has none.
 
 ## Builds and installs
 
-A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`, `browser/` (with `NMSC_BROWSER`),
+A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`, `browser/` (with `HAILSTONE_BROWSER`),
 the runtime DLLs on Windows, `libMoltenVK.dylib` on macOS, and
 the example plugin in `plugins/`. The server plugins are kept in repositories of their own and reach players as
 add-ons (docs/addons.md): the NMS server's (projecthailstone/hailstone-nms) and the Project Triune server's (private).
 Cloned into `plugins/nms/` or `plugins/projecttriune/` (which this repository ignores), each is built into the
-same folder under `build/hailstone/plugins/`, and its tests join `nmsc_tests`. Run it as
+same folder under `build/hailstone/plugins/`, and its tests join `hailstone_tests`. Run it as
 `build/hailstone/hailstone`. Since that folder is writable, a dev build
 keeps its `hailstone.ini`, logs and servers beside the binary. The tools (`pfsdump`, `hailstone_check` ...) and the tests
 stay in `build/`.

@@ -4,7 +4,7 @@
 
 #include "core/config.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 const char* pad_mode_name(PadMode m) {
     switch (m) {
@@ -83,4 +83,4 @@ void Gamepad::save() {
     if (!path_.empty()) config_.save(path_);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

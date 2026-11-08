@@ -23,7 +23,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellData;
 
@@ -165,4 +165,4 @@ private:
     std::optional<double> last_update_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

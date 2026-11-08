@@ -36,7 +36,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class ShopProbe {
 public:
@@ -455,4 +455,4 @@ private:
     bool saylink_clicked_ = false;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

@@ -17,7 +17,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 inline AppPacket make_packet(Op op, ByteWriter&& w) { return AppPacket(to_wire(op), w.take()); }
 
@@ -71,4 +71,4 @@ constexpr std::uint32_t put_bits(std::int64_t value, unsigned shift, unsigned bi
 }
 
 } // namespace detail
-} // namespace nmsc::net
+} // namespace hailstone::net

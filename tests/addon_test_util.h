@@ -20,7 +20,7 @@
 #include "core/update_manifest.h"
 #include "core/zip_write.h"
 
-namespace nmsc::addon_test {
+namespace hailstone::addon_test {
 
 inline std::string zip_of(const std::map<std::string, std::string>& files) {
     ZipWriter z;
@@ -145,4 +145,4 @@ inline std::string read_file(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-} // namespace nmsc::addon_test
+} // namespace hailstone::addon_test

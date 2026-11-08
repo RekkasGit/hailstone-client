@@ -21,7 +21,7 @@
 
 struct tsf;
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 // A loaded SoundFont shared by the music sources (each plays on its own copy).
 class SoundFont {
@@ -80,4 +80,4 @@ private:
 // An XMI sequence as a mixer source (stereo at the device rate).
 std::unique_ptr<Source> make_xmi_source(std::shared_ptr<SoundFont> font, assets::XmiSequence seq, std::int32_t loops);
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

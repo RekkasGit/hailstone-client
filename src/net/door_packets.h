@@ -21,7 +21,7 @@
 #include "net/item_packets.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // One OP_SpawnDoor record (100 bytes; the packet is a list of them). The
 // offsets are the original's (EQSwitch::LoadSwitchSounds) with the EQSwitch
@@ -212,4 +212,4 @@ inline constexpr std::uint32_t kAutoCombineFailed = 0xfffffff5;
 AppPacket encode(const RecipeAutoCombine& v);
 std::optional<RecipeAutoCombine> decode_recipe_auto_combine(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

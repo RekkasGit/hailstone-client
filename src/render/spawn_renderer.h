@@ -14,12 +14,12 @@
 #include "render/gpu.h"
 #include "render/vk_context.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 struct ViewDistance;
 struct WorldState;
 }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 class SpawnRenderer {
 public:
@@ -49,4 +49,4 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

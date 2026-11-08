@@ -22,7 +22,7 @@
 #include "render/vk_context.h"
 #include "render/weather_renderer.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 // The shader's own kernel, compiled as C++ with GLM's float operations (shaders/ao_kernel.glsl).
 namespace ao_kernel_test {

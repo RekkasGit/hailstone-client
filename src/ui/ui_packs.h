@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct UiPack {
     std::string id;          // the folder's name (ui.name)
@@ -24,4 +24,4 @@ std::vector<UiPack> list_ui_packs(const std::filesystem::path& root);
 // The UI `id` of `packs`, else "modern", else the first; null when there are none.
 const UiPack* find_ui_pack(const std::vector<UiPack>& packs, std::string_view id);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

@@ -5,8 +5,8 @@
 
 #include "game/mouse_look.h"
 
-using nmsc::game::MouseLook;
-using nmsc::game::MouseLookOptions;
+using hailstone::game::MouseLook;
+using hailstone::game::MouseLookOptions;
 
 TEST_CASE("mouse look: the right button looks with MouseActive, and a short press still clicks") {
     MouseLookOptions on{true, true};
@@ -97,7 +97,7 @@ TEST_CASE("mouse look: both buttons") {
 }
 
 TEST_CASE("pointer speed: ProcessMouseInput's cursor (MousePointerSpeedMod)") {
-    using nmsc::game::pointer_step;
+    using hailstone::game::pointer_step;
     // 0 and 1 move it as the mouse moves; 2 and up multiply the motion.
     auto s = pointer_step(100, 100, 5, -3, 0, 800, 600);
     CHECK((s.x == 105 && s.y == 97 && !s.leave));
@@ -117,7 +117,7 @@ TEST_CASE("pointer speed: ProcessMouseInput's cursor (MousePointerSpeedMod)") {
 }
 
 TEST_CASE("mouse buttons: a click inside one frame is a press and a release") {
-    using nmsc::game::button_edges;
+    using hailstone::game::button_edges;
     // Down and up again before the frame read the state (a quick click at 15 fps).
     auto quick = button_edges(true, false, false);
     CHECK(quick.pressed);

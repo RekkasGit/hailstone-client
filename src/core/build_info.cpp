@@ -1,10 +1,10 @@
 #include "core/build_info.h"
 
-#include "build_info.inc" // generated: NMSC_BUILD_VERSION, NMSC_RELEASE_VERSION
+#include "build_info.inc" // generated: HAILSTONE_BUILD_VERSION, HAILSTONE_RELEASE_VERSION
 
-namespace nmsc {
+namespace hailstone {
 
-const char* build_version() { return NMSC_BUILD_VERSION; }
-const char* release_version() { return NMSC_RELEASE_VERSION; }
+const char* build_version() { return HAILSTONE_BUILD_VERSION; }
+const char* release_version() { return HAILSTONE_RELEASE_VERSION; }
 
-} // namespace nmsc
+} // namespace hailstone

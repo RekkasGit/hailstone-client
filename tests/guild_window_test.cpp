@@ -17,7 +17,7 @@
 #include "plugin/hooks.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -52,7 +52,7 @@ net::AppPacket roster(std::initializer_list<const char*> names) {
 TEST_CASE("guild window: the roster list is built once a frame, and again after a click") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("guild_window");
+        hailstone::test::ScratchDir scratch("guild_window");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         app::EqHost host;
@@ -88,7 +88,7 @@ TEST_CASE("guild window: the roster list is built once a frame, and again after 
 TEST_CASE("guild window: Go to URL and Join Channel send the guild's text as it is; only an http(s) page opens") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("guild_window_links");
+        hailstone::test::ScratchDir scratch("guild_window_links");
         GameDir game(scratch.path());
         plugin::Hooks hooks;
         net::ConnectionOptions opts;

@@ -6,7 +6,7 @@
 #include "assets/sound_files.h"
 #include "game_files.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -179,7 +179,7 @@ TEST_CASE("spellsnew.eff: the stage sounds") {
 }
 
 TEST_CASE("Sound files of the installed game") {
-    const nmsc::GameDir* game = nmsc::test::game_dir();
+    const hailstone::GameDir* game = hailstone::test::game_dir();
     if (!game) return;
     // Greater Faydark: 19 records; record 12 is day 162 / night 164 ambience.
     auto eff = game->read("gfaydark_sounds.eff");

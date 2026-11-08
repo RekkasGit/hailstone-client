@@ -19,8 +19,8 @@
 #include "net/opcodes.h"
 #include "net/social_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -710,7 +710,7 @@ TEST_CASE("social emotes: send_social's texts") {
 }
 
 TEST_CASE("Hailstone AFK keepalive: input tells the zone once a minute and clears the zone's own AFK") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     AfkKeepalive k;
     // No input yet: nothing.
     CHECK(afk_keepalive_step(k, 1000, false, false) == AfkAction::None);
@@ -764,7 +764,7 @@ TEST_CASE("guild personal notes: the GN_ file (CGuildMgmtWnd::LoadPersonalNotes 
 }
 
 TEST_CASE("guild appearance lines: Handle_OP_SpawnAppearance cases 0x16 and 0x17") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     GuildState g;
     g.names = {{18, "Hailstone Guild Lab"}, {5, "Crimson Tide"}};
     g.guild_id = 0xffffffff;

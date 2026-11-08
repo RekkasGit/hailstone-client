@@ -14,10 +14,10 @@
 #include "scratch_dir.h"
 #include "wld_fixtures.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
-using namespace nmsc::test::wld_fixtures;
+using namespace hailstone::test::wld_fixtures;
 
 TEST_CASE("WldFile rejects data that is not WLD") {
     std::vector<std::byte> junk(64, std::byte{0x11});
@@ -248,8 +248,8 @@ void check_zone(const Zone& z) {
 
 } // namespace
 
-TEST_CASE("load_classic_zone loads qeynos2" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "qeynos2");
+TEST_CASE("load_classic_zone loads qeynos2" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "qeynos2");
     check_zone(z);
     CHECK(z.objects.size() > 10);
     CHECK(z.placements.size() > 100);
@@ -257,8 +257,8 @@ TEST_CASE("load_classic_zone loads qeynos2" * doctest::skip(!nmsc::test::game_di
     CHECK(z.read_file("qeynos2.wld"));
 }
 
-TEST_CASE("load_classic_zone loads gfaydark with upright trees" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "gfaydark");
+TEST_CASE("load_classic_zone loads gfaydark with upright trees" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "gfaydark");
     check_zone(z);
     REQUIRE(z.placements.size() > 1000);
     // Every placement keeps object +Z pointing up: Greater Faydark's trees
@@ -271,10 +271,10 @@ TEST_CASE("load_classic_zone loads gfaydark with upright trees" * doctest::skip(
     CHECK(upright == z.placements.size());
 }
 
-TEST_CASE("load_classic_zone poses skeletal trees in citymist" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("load_classic_zone poses skeletal trees in citymist" * doctest::skip(!hailstone::test::game_dir())) {
     // Witness from OpenEQ docs/WLD_PLACED_OBJECTS.md: 50 placements of a
     // seven-mesh, eight-node tree with 106 vertices and 72 polygons.
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "citymist");
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "citymist");
     check_zone(z);
     const auto& tree = z.objects.at("JNTREE103_ACTORDEF");
     CHECK(tree.vertices.size() == 106);
@@ -284,10 +284,10 @@ TEST_CASE("load_classic_zone poses skeletal trees in citymist" * doctest::skip(!
     CHECK(placed == 50);
 }
 
-TEST_CASE("load_classic_zone draws objects with their own archive's textures" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("load_classic_zone draws objects with their own archive's textures" * doctest::skip(!hailstone::test::game_dir())) {
     // qeytoqrg.s3d and qeytoqrg_obj.s3d both hold treea.bmp: the zone's an opaque DXT1 on the willows' green, the
     // object archive's the DXT5 cut-out the willows draw. The willows read the object archive's.
-    auto z = load_classic_zone(*nmsc::test::game_dir(), "qeytoqrg");
+    auto z = load_classic_zone(*hailstone::test::game_dir(), "qeytoqrg");
     std::size_t own = 0;
     for (const auto& [name, mesh] : z.objects)
         for (const auto& m : mesh.materials)
@@ -310,39 +310,39 @@ TEST_CASE("load_classic_zone draws objects with their own archive's textures" * 
     CHECK(pine);
 }
 
-TEST_CASE("load_classic_zone reads StartWorldDisplay's object archives" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("load_classic_zone reads StartWorldDisplay's object archives" * doctest::skip(!hailstone::test::game_dir())) {
     // <zone>_2_obj.s3d: grobb's signs and cannonball (doors in the server's table) are only there.
-    auto grobb = load_classic_zone(*nmsc::test::game_dir(), "grobb");
+    auto grobb = load_classic_zone(*hailstone::test::game_dir(), "grobb");
     CHECK(grobb.objects.contains("GRBSIGN404_ACTORDEF"));
     CHECK(grobb.objects.contains("HFCANBALL400_ACTORDEF"));
     // OBEQUIP_LEXIT in the Lost Dungeons of Norrath zones (expansion 6): the adventure exit portals.
-    auto guka = load_classic_zone(*nmsc::test::game_dir(), "guka");
+    auto guka = load_classic_zone(*hailstone::test::game_dir(), "guka");
     CHECK(guka.objects.contains("GKPORTAL701E_ACTORDEF"));
     // Not in other zones.
     CHECK_FALSE(grobb.objects.contains("GKPORTAL701E_ACTORDEF"));
 }
 
-TEST_CASE("load_classic_zone reports a missing zone" * doctest::skip(!nmsc::test::game_dir())) {
-    CHECK_THROWS(load_classic_zone(*nmsc::test::game_dir(), "no_such_zone"));
+TEST_CASE("load_classic_zone reports a missing zone" * doctest::skip(!hailstone::test::game_dir())) {
+    CHECK_THROWS(load_classic_zone(*hailstone::test::game_dir(), "no_such_zone"));
 }
 
 TEST_CASE("load_zone stops between its files when its cancel check says so") {
     // Cancelled before it starts: nothing is opened (an empty folder would otherwise say "not found").
-    nmsc::test::ScratchDir dir("zone_cancel");
-    nmsc::GameDir empty(dir.path());
+    hailstone::test::ScratchDir dir("zone_cancel");
+    hailstone::GameDir empty(dir.path());
     CHECK_THROWS_AS(load_zone(empty, "qeynos2", [] { return true; }), ZoneLoadCancelled);
     CHECK_THROWS_WITH(load_zone(empty, "qeynos2", [] { return false; }), doctest::Contains("not found"));
 }
 
-TEST_CASE("load_zone's cancel check is asked between the files of a real zone" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("load_zone's cancel check is asked between the files of a real zone" * doctest::skip(!hailstone::test::game_dir())) {
     int asked = 0;
-    auto z = load_zone(*nmsc::test::game_dir(), "qeynos2", [&] { return ++asked < 0; });
+    auto z = load_zone(*hailstone::test::game_dir(), "qeynos2", [&] { return ++asked < 0; });
     CHECK(asked > 3);
     CHECK_FALSE(z.terrain.empty());
     // Cancelled after a few checks: the load ends there.
     for (int stop_at : {1, 2, 3}) {
         int n = 0;
-        CHECK_THROWS_AS(load_zone(*nmsc::test::game_dir(), "qeynos2", [&] { return ++n >= stop_at; }), ZoneLoadCancelled);
+        CHECK_THROWS_AS(load_zone(*hailstone::test::game_dir(), "qeynos2", [&] { return ++n >= stop_at; }), ZoneLoadCancelled);
         CHECK(n == stop_at);
     }
 }

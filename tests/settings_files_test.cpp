@@ -15,14 +15,14 @@
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 struct TempDir {
     fs::path path;
     explicit TempDir(const char* tag) {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = fs::temp_directory_path() / (std::string("nmsc_settings_") + tag + "_" + std::to_string(stamp));
+        path = fs::temp_directory_path() / (std::string("hailstone_settings_") + tag + "_" + std::to_string(stamp));
         fs::create_directories(path);
     }
     ~TempDir() {

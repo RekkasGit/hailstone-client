@@ -10,7 +10,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 struct ProfileSpec {
     std::string name = "Gennro";
@@ -36,4 +36,4 @@ struct ProfileSpec {
 // gems 12 of 16, buffs 42, bandoliers 20 x 4, potion belt 5, languages 32, tributes 5. The checksum fields are set.
 net::AppPacket build_player_profile(const ProfileSpec& spec = {});
 
-} // namespace nmsc::test
+} // namespace hailstone::test

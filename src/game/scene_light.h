@@ -26,7 +26,7 @@
 
 #include "game/sine_table.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SceneLight {
     glm::vec3 ambient{0.1f};         // CSceneGraph +0x240 (vtable +0xc8)
@@ -74,4 +74,4 @@ bool sky_is_night(float hour);
 // interpolating sin and cos (CMath vtable +0x00 / +0x04).
 glm::vec3 sky_light_direction(float heading);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

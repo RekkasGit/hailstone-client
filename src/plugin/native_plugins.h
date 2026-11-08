@@ -1,12 +1,12 @@
 #pragma once
 
-// Compiled plugins (sdk/nmsc_plugin.h): shared libraries in the server's plugins/ folder and the player's plugin
+// Compiled plugins (sdk/hailstone_plugin.h): shared libraries in the server's plugins/ folder and the player's plugin
 // directories, loaded when the server's rules allow them (plugin/policy.h): the server's own always load, the
 // player's when its hailstone.cfg lets them (or it has none). Loading copies the exact bytes that were hashed to the cache
 // directory and loads the copy, so the file cannot change between the check and the load. A loaded plugin's MQ
 // callbacks are hooked onto the bus (plugin/hooks.h), each run with the plugin's capabilities; a callback it may not
 // use is left unhooked with a note in the chat window. /plugin list | /plugin <name> [load|unload].
-// A plugin with NMSC_CAP_EXTEND may also be a server extension (ABI 2): its hook table (NmscHooks), switches and
+// A plugin with HAILSTONE_CAP_EXTEND may also be a server extension (ABI 2): its hook table (HailstoneHooks), switches and
 // vitals join env.extensions as one member, asked while the plugin says it is active.
 // A library from the server's plugins/ folder also needs the player's word for its bytes (plugin/consent.h): until
 // then it does not load, and consent() holds the question for the UI; answer_consent() takes the answer.
@@ -25,12 +25,12 @@
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
 
-namespace nmsc::mq { class Registry; struct Context; }
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::game { class ExtensionChain; }
-namespace nmsc::plugin { class UiBridge; class WebAccess; }
+namespace hailstone::mq { class Registry; struct Context; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::game { class ExtensionChain; }
+namespace hailstone::plugin { class UiBridge; class WebAccess; }
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 struct NativeEnv {
     Hooks* hooks = nullptr;
@@ -134,4 +134,4 @@ private:
 // The plugin name for a file: its stem without a "lib" prefix ("libMQ2Foo.so" → "MQ2Foo").
 std::string plugin_name(const std::filesystem::path& file);
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

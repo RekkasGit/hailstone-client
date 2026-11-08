@@ -2,7 +2,7 @@
 
 #include "game/weather.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 // Random() and rand(): 50 % 100 + 1 > 50 (thunder2), 50 % 100 >= 30 (no second strike), 50 % 10000 + 10000 ms.

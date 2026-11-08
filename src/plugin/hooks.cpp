@@ -9,7 +9,7 @@
 #include "core/log.h"
 #include "game/slash_commands.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace {
 
@@ -306,4 +306,4 @@ void Hooks::imgui() {
     });
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

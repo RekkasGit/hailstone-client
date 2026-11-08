@@ -23,7 +23,7 @@
 #include "net/game_connection.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

@@ -6,7 +6,7 @@
 // Values "on the stack" are doubles (quiet); a float in memory goes in as
 // X87(float). Operands are passed in the order the instruction combines them.
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -450,4 +450,4 @@ void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std
     }
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

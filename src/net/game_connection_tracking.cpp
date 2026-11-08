@@ -9,7 +9,7 @@
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -132,4 +132,4 @@ std::vector<GameConnection::TrackLine> GameConnection::tracking_lines() const {
     return out;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

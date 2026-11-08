@@ -2,7 +2,7 @@
 
 #include "game/collision_callbacks.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 TouchResult touching_switch(const TouchedSwitch& sw, TouchSpawn& spawn, std::uint32_t now,
                             std::optional<std::uint8_t>& last_damage_switch, const TouchHooks& hooks) {
@@ -49,4 +49,4 @@ TouchResult touching_switch(const TouchedSwitch& sw, TouchSpawn& spawn, std::uin
     return r;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

@@ -18,7 +18,7 @@
 #include "game/fog.h"
 #include "game/view_distance.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SceneFogInput {
     std::int32_t hour = 12;         // the sky clock: 1..24
@@ -67,4 +67,4 @@ private:
     std::uint8_t sky_flag_ = 1;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

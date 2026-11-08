@@ -10,7 +10,7 @@
 #include "game/slash_commands.h"
 #include "platform/local_time.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -554,4 +554,4 @@ std::vector<ChatOut> netstats_lines(const NetStats& s) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

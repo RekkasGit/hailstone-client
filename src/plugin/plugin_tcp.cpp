@@ -5,7 +5,7 @@
 
 #include "platform/udp_socket.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 // Filled on resolve_async's thread, which owns it alone once the connection is gone.
 struct PluginTcp::Lookup {
@@ -118,4 +118,4 @@ std::int64_t PluginTcp::recv(std::span<std::byte> out) {
 
 std::string PluginTcp::error() const { return error_.empty() ? socket_.last_error() : error_; }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

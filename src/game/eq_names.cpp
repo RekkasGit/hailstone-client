@@ -4,7 +4,7 @@
 #include <iterator>
 #include <utility>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -124,4 +124,4 @@ std::uint32_t language_eqstr(std::uint32_t lang) {
     return lang < std::size(kIds) ? kIds[lang] : 3115;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

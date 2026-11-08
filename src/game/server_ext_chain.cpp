@@ -4,7 +4,7 @@
 
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -283,4 +283,4 @@ bool ExtensionChain::hide_xtarget_slot(const net::GameConnection& c, int slot) c
     return each(c, [&](const ServerExtension& e) { return e.hide_xtarget_slot(c, slot); });
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -17,7 +17,7 @@
 #include "game/mechanics/item_stats.h"
 #include "game/spells.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -643,4 +643,4 @@ std::int32_t total_effect(const CharacterSheet& sheet, const GameTables& tables,
     return ch.total_effect(spa, include_items, subindex, include_aa, include_buffs);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

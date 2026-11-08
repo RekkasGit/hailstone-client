@@ -17,7 +17,7 @@
 
 #include "nav/nav_mesh.h"
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 class ZoneNav {
 public:
@@ -74,4 +74,4 @@ private:
     std::vector<std::thread> workers_;
 };
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

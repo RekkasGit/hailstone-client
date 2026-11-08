@@ -28,7 +28,7 @@
 #include "scratch_dir.h"
 #include "ui/lua/lua_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -457,7 +457,7 @@ TEST_CASE("Plugin UI: a runaway window is stopped, the state's memory is capped,
     CHECK(s.run("", "return collectgarbage('isrunning')") == "false"); // the host's pacing, as it was
 }
 
-// The player's clipboard (ui.GetClipboardText / SetClipboardText ask the state's "nmsc.clipboard_allowed", as a
+// The player's clipboard (ui.GetClipboardText / SetClipboardText ask the state's "hailstone.clipboard_allowed", as a
 // script's state answers in mq/lua_mq.cpp): the pack's own code, and a plugin's only when the app lets its owner
 // (an owner with every capability).
 TEST_CASE("Plugin UI: the clipboard is the pack's, and a plugin's only with every capability") {
@@ -466,7 +466,7 @@ TEST_CASE("Plugin UI: the clipboard is the pack's, and a plugin's only with ever
     s.add_folder("plugin:Some");
     s.frame();
     lua_State* L = s.lua->state();
-    lua_getfield(L, LUA_REGISTRYINDEX, "nmsc.clipboard_allowed");
+    lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.clipboard_allowed");
     REQUIRE(lua_isfunction(L, -1));
     lua_setglobal(L, "ASK_CLIPBOARD"); // (the pack's global: the plugins read it through their fallback)
     const std::string ask = "return ASK_CLIPBOARD()";

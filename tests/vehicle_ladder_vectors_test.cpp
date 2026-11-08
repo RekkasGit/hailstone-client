@@ -13,10 +13,10 @@
 #include "game/mechanics/vehicle.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
-using nmsc::test::f32_of;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
+using hailstone::test::f32_of;
 
 namespace {
 
@@ -178,15 +178,15 @@ std::string check_ladder(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: Vehicle_WorldToLocal (a passenger into the vehicle's frame)") {
-    nmsc::test::each_vector("Vehicle_WorldToLocal.jsonl", [](const Json& r) { return check_vehicle(r, true); });
+    hailstone::test::each_vector("Vehicle_WorldToLocal.jsonl", [](const Json& r) { return check_vehicle(r, true); });
 }
 
 TEST_CASE("vectors: Vehicle_LocalToWorld (a passenger back into the world)") {
-    nmsc::test::each_vector("Vehicle_LocalToWorld.jsonl", [](const Json& r) { return check_vehicle(r, false); });
+    hailstone::test::each_vector("Vehicle_LocalToWorld.jsonl", [](const Json& r) { return check_vehicle(r, false); });
 }
 
 TEST_CASE("vectors: Ladder_MountClickedLadder") {
-    nmsc::test::each_vector("Ladder_MountClickedLadder.jsonl", check_ladder);
+    hailstone::test::each_vector("Ladder_MountClickedLadder.jsonl", check_ladder);
 }
 
 TEST_CASE("vehicle frame: to local and back keeps a passenger's place") {

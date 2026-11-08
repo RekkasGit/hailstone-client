@@ -20,6 +20,8 @@
 - Modern UI: hovering the spell book's Memorize ("In gem N") button no longer shows a red "MESSAGE FROM DEAR IMGUI: 2 visible items with conflicting ID" box. The button and the Memorized filter shared an ID
 - Your stats no longer drop to zero while you camp: during the countdown the inventory and character windows showed 0 for every stat until the camp ended or was cancelled
 - Ducking now crouches you at once, standing still: the crouch used to show only once you started moving. Standing up from a duck plays the crouch backward. Other players and NPCs that duck show it the same way
+- Plugin SDK: the names now say Hailstone. Include `hailstone_plugin.h` and `hailstone_byte_io.h`; the types are `Hailstone*` (`HailstoneSpawn`, `HailstoneHooks`, ...) and the host table `PluginHostApi`, the macros `HAILSTONE_*` (`HAILSTONE_PLUGIN`, `HAILSTONE_CAP_READ`, ...), the plugin's global `host` (`host->write_chat(host->host, ...)`), the namespace `hailstone` and the exports `hailstone_plugin_*`. The old `nmsc` names still build and built plugins load as before, and a plugin built with the new names still loads in 0.6 (docs/plugins.md "The names up to 0.6")
+- For people building Hailstone: the CMake options, targets and environment variables are now `HAILSTONE_*` and `hailstone_*` (`-DHAILSTONE_SANITIZE=ON`, `build/hailstone_tests`, `HAILSTONE_VECTORS_DIR`). An `NMSC_*` CMake setting or environment variable is still read when the new one is not set
 
 ## 0.6.0-beta (2026-11-07)
 

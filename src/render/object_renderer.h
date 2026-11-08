@@ -30,10 +30,10 @@
 #include "render/scene_lighting.h"
 #include "render/vk_context.h"
 
-namespace nmsc::assets { struct Mesh; }
-namespace nmsc::game { struct ViewDistance; }
+namespace hailstone::assets { struct Mesh; }
+namespace hailstone::game { struct ViewDistance; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 class ObjectRenderer {
 public:
@@ -165,4 +165,4 @@ private:
     std::vector<Prepared> prepared_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

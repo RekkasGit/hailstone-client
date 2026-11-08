@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct DeathInput {
     bool dead_known = true;        // the dead spawn exists (else nothing at all)
@@ -84,4 +84,4 @@ inline constexpr std::uint32_t kOwnDeathColor = 0x115, kOtherDeathColor = 0x116;
 
 DeathResult report_death(const DeathInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -1,6 +1,6 @@
 #pragma once
 
-// One of a plugin's own TCP connections (the SDK's tcp_* functions, NMSC_CAP_NET; docs/plugins.md "Connections").
+// One of a plugin's own TCP connections (the SDK's tcp_* functions, HAILSTONE_CAP_NET; docs/plugins.md "Connections").
 // Nothing waits for the network: a host name is looked up on a thread of its own (platform::resolve_async) while the
 // connection counts as connecting, and what the system cannot take at once waits here until a later call.
 
@@ -13,7 +13,7 @@
 
 #include "platform/tcp_socket.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 class PluginTcp {
 public:
@@ -57,4 +57,4 @@ private:
     std::string error_;
 };
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

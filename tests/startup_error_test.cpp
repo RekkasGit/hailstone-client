@@ -6,7 +6,7 @@
 #include "app/startup_error.h"
 #include "render/gpu_requirements.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

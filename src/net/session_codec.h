@@ -14,7 +14,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net::soe {
+namespace hailstone::net::soe {
 
 using Bytes = std::vector<std::byte>;
 using ByteSpan = std::span<const std::byte>;
@@ -170,4 +170,4 @@ private:
     bool broken_ = false;
 };
 
-} // namespace nmsc::net::soe
+} // namespace hailstone::net::soe

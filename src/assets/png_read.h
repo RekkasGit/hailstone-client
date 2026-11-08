@@ -11,11 +11,11 @@
 
 #include "assets/texture.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 bool is_png(std::span<const std::byte> data);
 
 // Returns nullopt and sets *error when the data is not a PNG this reader takes.
 std::optional<Image> decode_png(std::span<const std::byte> data, std::string* error = nullptr);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

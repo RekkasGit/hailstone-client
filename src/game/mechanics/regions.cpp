@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -65,4 +65,4 @@ RegionChange check_region_change(RegionSpawn& s, const RegionPoint& position, co
     return out;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

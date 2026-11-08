@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <string_view>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -50,4 +50,4 @@ void ServerLinks::opened(std::uint32_t tab, const std::string& url) {
     else tabs_.push_back({tab, url});
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

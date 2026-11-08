@@ -3,7 +3,7 @@
 #include "game/zone_ladders.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // EQObject_Construct @0x503e20 gives the actor type 6 (Ladder) when the
 // object's actor tag starts with "LADDER" (case-insensitive, 6 characters).
@@ -27,4 +27,4 @@ std::optional<game::mechanics::LadderSwitch> WorldObjects::ladder(const net::Gam
     return std::nullopt;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -7,7 +7,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -296,4 +296,4 @@ AppPacket encode_dz_quit() { return make_packet(Op::DzQuit, header()); }
 AppPacket encode_dz_list_timers() { return make_packet(Op::DzListTimers, header()); }
 AppPacket encode_dz_player_list() { return make_packet(Op::DzPlayerList, header()); }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

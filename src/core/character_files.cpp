@@ -7,7 +7,7 @@
 #include "core/log.h"
 #include "core/server_profile.h"
 
-namespace nmsc {
+namespace hailstone {
 
 std::string profile_id_for_world(std::string_view server_name) {
     std::string id;
@@ -126,4 +126,4 @@ bool save_chat_settings(const std::filesystem::path& chat_ini, std::string_view 
 
 }
 
-} // namespace nmsc
+} // namespace hailstone

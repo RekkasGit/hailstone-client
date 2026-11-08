@@ -13,7 +13,7 @@
 #include "platform/process.h"
 #include "platform/crash_log.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -413,4 +413,4 @@ void NeighbourZones::draw(const render::FrameInfo& frame, const glm::mat4& view_
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -14,8 +14,8 @@
 #include "game/sine_table.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
+using namespace hailstone::game;
+using hailstone::test::Json;
 
 namespace {
 
@@ -222,15 +222,15 @@ PickActor box_actor(float x, std::uint32_t mask = 2) {
 } // namespace
 
 TEST_CASE("vectors: CDisplay_PickActorAtPoint (the pick wrapper's exclusions)") {
-    nmsc::test::each_vector("CDisplay_PickActorAtPoint.jsonl", check_pick_call);
+    hailstone::test::each_vector("CDisplay_PickActorAtPoint.jsonl", check_pick_call);
 }
 
 TEST_CASE("vectors: CEverQuest_LeftClickedOnPlayer") {
-    nmsc::test::each_vector("CEverQuest_LeftClickedOnPlayer.jsonl", check_left_click);
+    hailstone::test::each_vector("CEverQuest_LeftClickedOnPlayer.jsonl", check_left_click);
 }
 
 TEST_CASE("vectors: CEverQuest_ClickedSwitch") {
-    nmsc::test::each_vector("CEverQuest_ClickedSwitch.jsonl", check_clicked_switch);
+    hailstone::test::each_vector("CEverQuest_ClickedSwitch.jsonl", check_clicked_switch);
 }
 
 TEST_CASE("pick masks (unk_BuildActorInstance)") {

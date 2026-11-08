@@ -16,7 +16,7 @@
 
 #include "net/real_estate_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The actor's position: EQPlacedItem keeps +0x8c..+0x94 in CDisplay::CreateActor's order, the actor's own (world x,
 // y, z; a door's (Y, X, Z) is passed the same way).
@@ -101,4 +101,4 @@ private:
     std::unordered_map<std::uint32_t, std::uint32_t> codes_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

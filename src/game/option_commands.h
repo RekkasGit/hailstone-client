@@ -16,7 +16,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ---------------------------------------------------------------- shared word tests
 
@@ -221,4 +221,4 @@ struct ChatOut {
 };
 std::vector<ChatOut> netstats_lines(const NetStats& s);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

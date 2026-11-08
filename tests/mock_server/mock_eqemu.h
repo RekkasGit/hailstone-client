@@ -28,7 +28,7 @@
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 // A spawn record the client accepts: a PC or NPC at a position (server coordinates: y first in the packet, the
 // client swaps to world x/y). `npc` 0 PC, 1 NPC, 2 NPC corpse, 3 PC corpse.
@@ -161,4 +161,4 @@ private:
     bool zoning_ = false;
 };
 
-} // namespace nmsc::test
+} // namespace hailstone::test

@@ -6,7 +6,7 @@
 
 #include "audio/sound_control.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 // A level, volume or send as the mixer keeps it: a NaN or infinity (an EMT gain of "nan" read with strtof) is 0, so
@@ -328,4 +328,4 @@ void Mixer::render_block(float* out, std::size_t frames) {
         for (std::size_t f = 0; f < frames; ++f) std::swap(out[f * 2], out[f * 2 + 1]);
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

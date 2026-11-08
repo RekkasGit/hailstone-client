@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct RaceModel {
     std::uint16_t race = 0;
@@ -63,4 +63,4 @@ bool is_small_boat_race(std::uint16_t race, std::uint8_t gender);
 // Number of distinct race ids in the table.
 std::size_t race_model_race_count();
 
-} // namespace nmsc::game
+} // namespace hailstone::game

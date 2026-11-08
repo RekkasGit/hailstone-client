@@ -14,7 +14,7 @@
 #include "render/scene_lighting.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -398,4 +398,4 @@ void WeatherRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, c
     }
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

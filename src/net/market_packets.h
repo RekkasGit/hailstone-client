@@ -20,7 +20,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // RoF2BazaarTraderBuyerActions (the first dword of OP_Trader / OP_TraderShop).
 inline constexpr std::uint32_t kTraderOff = 0, kTraderBegin = 1, kTraderEnd = 2, kTraderPriceUpdate = 3,
@@ -465,4 +465,4 @@ std::optional<std::vector<BarterBuyer>> decode_barter_buyer_list(const AppPacket
 // BART ini's line format (game/barter.h). EQEmu never sends it.
 std::optional<std::string> decode_buy_lines_text(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

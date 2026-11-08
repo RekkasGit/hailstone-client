@@ -4,7 +4,7 @@
 
 #include "game/mechanics/controls.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -113,4 +113,4 @@ FollowStep follow_step(const FollowInput& in, const Fpu& fpu) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -4,7 +4,7 @@
 
 #include "core/wrap_math.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using net::Item;
 
@@ -234,4 +234,4 @@ std::int32_t merchant_list_level(const net::Item& item, const std::function<std:
 
 std::string merchant_level_text(std::int32_t level) { return level < 2 ? std::string("--") : std::to_string(level); }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

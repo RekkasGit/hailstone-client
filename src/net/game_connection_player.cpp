@@ -24,7 +24,7 @@
 #include "net/player_packets.h"
 #include "net/task_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1196,4 +1196,4 @@ void GameConnection::stop_song() {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

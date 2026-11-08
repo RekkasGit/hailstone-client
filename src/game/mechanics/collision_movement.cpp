@@ -10,7 +10,7 @@
 // NaN's flag; operands are passed in the order the instruction combines them
 // (st(i) op st(0) for the reverse forms).
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -398,4 +398,4 @@ CollisionMove do_collision_movement(CollisionSpawn& s, Vec3f& target, CollisionQ
     return out;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

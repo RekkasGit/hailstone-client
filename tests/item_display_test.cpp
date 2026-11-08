@@ -4,7 +4,7 @@
 #include "game/eq_strings.h"
 #include "game/item_display.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 game::EqStrings strings() {

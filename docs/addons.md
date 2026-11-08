@@ -296,7 +296,7 @@ plugins/<name>/   an installed plugin
 ```
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
-  not is taken out. The player's other files there stay: a plugin's settings beside it (`nmsc->config_dir`), notes.
+  not is taken out. The player's other files there stay: a plugin's settings beside it (`host->config_dir`), notes.
   So do empty folders, other than those the update emptied and an empty folder where a file now goes (a folder that
   still holds the player's files stops the update).
 - **A removal** takes out the add-on's files and its record. The player's files in its folder stay, and the folder
@@ -316,7 +316,7 @@ plugins/<name>/   an installed plugin
 | `addons.check_hours` | 6 | at most this often (0: every start) |
 | `addons.allow_unsigned` | 1 | install add-ons whose manifest is not signed (the card says so) |
 | `addons.suggest` | 1 | suggest the add-ons of the servers you log in to (Suggested add-ons); the index is still fetched, for the store |
-| `addons.index` | the build's (CMake `NMSC_ADDON_INDEX`) | the add-on index's address, on GitHub's hosts; signed with the release key all the same |
+| `addons.index` | the build's (CMake `HAILSTONE_ADDON_INDEX`) | the add-on index's address, on GitHub's hosts; signed with the release key all the same |
 | `addons.suggest_never.<profile>` | | the suggestions put away for good on that server, `owner/repo` with `\|` between |
 
 Nothing is fetched when the system has no HTTPS (Linux and macOS without libcurl) or on test runs (`--frames`,

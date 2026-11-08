@@ -55,7 +55,7 @@ TEST_CASE("install.py keeps eqemu_config.json's mode: the database password stay
     // The scripts are in the repository: a path that misses them is a broken test, not a skip.
     REQUIRE(fs::exists(repo_root() / "server" / "install.py"));
     if (!have_python()) return;
-    nmsc::test::ScratchDir dir("install_py");
+    hailstone::test::ScratchDir dir("install_py");
     const fs::path config = dir.path() / "eqemu_config.json";
     std::ofstream(config) << R"({"server": {"database": {"password": "x"}, "directories": {"quests": "quests/"}}})";
     fs::permissions(config, fs::perms::owner_read | fs::perms::owner_write);
@@ -77,7 +77,7 @@ TEST_CASE("install.py keeps eqemu_config.json's mode: the database password stay
 TEST_CASE("check_core_names.py: a name with NMS then any C, and NMS in a Lua long string, are reported") {
     REQUIRE(fs::exists(repo_root() / "tools" / "check_core_names.py"));
     if (!have_python()) return;
-    nmsc::test::ScratchDir dir("core_names");
+    hailstone::test::ScratchDir dir("core_names");
     const fs::path root = dir.path() / "repo";
     fs::create_directories(root / "src");
     fs::create_directories(root / "ui");

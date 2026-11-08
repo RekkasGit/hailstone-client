@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // The folder that holds the binary (SDL_GetBasePath(), else the current directory). The shipped parts are read
 // from here: shaders/ and ui/<pack>/.
@@ -97,4 +97,4 @@ std::filesystem::path new_screenshot_path(const std::filesystem::path& dir, std:
 // The cached Vulkan pipelines (render/pipeline_cache.h): cache/pipelines.bin.
 std::filesystem::path pipeline_cache_file();
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

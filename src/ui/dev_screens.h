@@ -23,9 +23,9 @@
 #include "ui/screen_pictures.h"
 #include "ui/ui_packs.h"
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // The gamepad on the pre-game screens (a client extension, docs/gamepad.md), set by the app each frame. While
 // ImGui's gamepad navigation is on (ImGuiLayer::set_pad_navigation), the screens show the pad's buttons, the
@@ -544,4 +544,4 @@ void player_window(const PlayerView& view, InGameActions& actions);
 void target_window(const TargetView& view, bool attacking, InGameActions& actions);
 void respawn_window(const RespawnView& view, InGameActions& actions);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

@@ -18,11 +18,11 @@
 #include "net/item_packets.h"
 #include "net/market_packets.h"
 
-namespace nmsc {
+namespace hailstone {
 class IniFile;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class Inventory;
 
@@ -159,4 +159,4 @@ struct BarterSearchState {
 // FUN_0062b9f0 (Barter_ReportItemSold): the matching line (same buyer character id and slot) loses `sold`.
 void barter_search_sold(BarterSearchState& s, const net::BuyLine& line, std::int32_t sold);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

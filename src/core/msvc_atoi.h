@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace nmsc::core {
+namespace hailstone::core {
 
 inline std::int32_t msvc_atoi(std::string_view s) {
     std::size_t i = 0;
@@ -20,4 +20,4 @@ inline std::int32_t msvc_atoi(std::string_view s) {
     return static_cast<std::int32_t>(negative ? 0u - v : v);
 }
 
-} // namespace nmsc::core
+} // namespace hailstone::core

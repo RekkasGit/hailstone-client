@@ -7,7 +7,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -123,4 +123,4 @@ CameraFov camera_fov(float fov_units, int width, int height) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -21,7 +21,7 @@
 #include "game/zone_names.h"
 #include "game/gamepad_bindings.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 namespace {
 
@@ -154,7 +154,7 @@ struct Keyboard {
     bool open() const { return text_target || int_target; }
 };
 Keyboard g_keyboard;
-constexpr const char* kKeyboardPopup = "Keyboard##nmsc_osk";
+constexpr const char* kKeyboardPopup = "Keyboard##hailstone_osk";
 constexpr std::size_t kKeyboardMax = 64;
 
 void open_keyboard(std::string* text, int* number, const char* title, ImGuiInputTextFlags flags) {
@@ -423,7 +423,7 @@ LoginAction addons_window(AddonsView& a, bool busy, bool* open) {
     LoginAction action = LoginAction::None;
     const float em = ImGui::GetFontSize();
     ImGui::SetNextWindowSize(ImVec2(em * 34.0f, em * 30.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Add-ons##nmsc", open)) {
+    if (!ImGui::Begin("Add-ons##hailstone", open)) {
         ImGui::End();
         return action;
     }
@@ -667,7 +667,7 @@ LoginAction about_corner(const LoginView& view) {
 LoginAction login_screen(LoginView& view) {
     LoginAction action = LoginAction::None;
     center_next_window(33.0f);
-    ImGui::Begin("Login##nmsc", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("Login##hailstone", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
     // AlwaysAutoResize keeps the height to the content; the width comes from the label column.
     float label_w = ImGui::GetFontSize() * 6.0f;
     float field_w = ImGui::GetFontSize() * 25.0f; // the accounts table and the buttons row fit
@@ -744,9 +744,9 @@ LoginAction login_screen(LoginView& view) {
         if (ImGui::Button("New")) new_profile(view);
         ImGui::SameLine();
         ImGui::BeginDisabled(!picked);
-        if (ImGui::Button("Delete")) ImGui::OpenPopup("Delete server?##nmsc");
+        if (ImGui::Button("Delete")) ImGui::OpenPopup("Delete server?##hailstone");
         ImGui::EndDisabled();
-        if (ImGui::BeginPopupModal("Delete server?##nmsc", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::BeginPopupModal("Delete server?##hailstone", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("Delete \"%s\"?", preview.c_str());
             ImGui::TextColored(kDimColor, "Its folder (the server's asset files, maps and characters' files) is moved to");
             ImGui::TextColored(kDimColor, "servers/.deleted/, from where it can be brought back by hand.");
@@ -990,9 +990,9 @@ LoginAction login_screen(LoginView& view) {
             }
             if (forget) {
                 view.account_choice = *forget;
-                ImGui::OpenPopup("Forget account?##nmsc");
+                ImGui::OpenPopup("Forget account?##hailstone");
             }
-            if (ImGui::BeginPopupModal("Forget account?##nmsc", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (ImGui::BeginPopupModal("Forget account?##hailstone", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                 ImGui::Text("Forget %s on this server?", view.account_choice.c_str());
                 ImGui::TextColored(kDimColor, "Its saved password leaves the system keyring.");
                 if (ImGui::Button("Forget")) {
@@ -1377,7 +1377,7 @@ std::string join_favorite_worlds(const std::vector<std::string>& names) {
 ServerSelectAction server_select_screen(ServerSelectView& view) {
     ServerSelectAction action = ServerSelectAction::None;
     center_next_window(34.0f, 24.0f);
-    ImGui::Begin("Select a server##nmsc", nullptr, kDialogFlags);
+    ImGui::Begin("Select a server##hailstone", nullptr, kDialogFlags);
     // With the pad the picked row follows the navigation cursor, which starts on it.
     const bool pad = pad_nav();
     const bool appearing = ImGui::IsWindowAppearing();
@@ -1453,7 +1453,7 @@ CharacterSelectAction character_select_screen(CharacterSelectView& view) {
     else center_next_window(46.0f, 28.0f);
     std::string title = view.server_name.empty() ? std::string("Select a character")
                                                  : std::format("Select a character - {}", view.server_name);
-    ImGui::Begin(std::format("{}###nmsc_charselect", title).c_str(), nullptr, kDialogFlags);
+    ImGui::Begin(std::format("{}###hailstone_charselect", title).c_str(), nullptr, kDialogFlags);
     // With the pad the picked row follows the navigation cursor, which starts on it.
     const bool pad = pad_nav();
     const bool appearing = ImGui::IsWindowAppearing();
@@ -1583,7 +1583,7 @@ CharacterCreateAction character_create_screen(CharacterCreateView& view) {
     CharacterCreateAction action = CharacterCreateAction::None;
     if (view.scene) left_next_window(30.0f);
     else center_next_window(30.0f);
-    ImGui::Begin("Create a character###nmsc_charcreate", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("Create a character###hailstone_charcreate", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::BeginDisabled(view.busy);
 
     create_normalize(view);
@@ -1838,7 +1838,7 @@ bool create_stat_down(CharacterCreateView& view, int stat) {
 
 void loading_screen(const LoadingView& view) {
     center_next_window(24.0f);
-    ImGui::Begin("##nmsc_loading", nullptr,
+    ImGui::Begin("##hailstone_loading", nullptr,
                  kDialogFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize);
     float width = ImGui::GetFontSize() * 22.0f;
     ImGui::TextUnformatted(view.title.c_str());
@@ -1927,7 +1927,7 @@ void hud_panel(const HudView& view, bool& show_chat, bool& show_spawns, InGameAc
     float pad = ImGui::GetFontSize() * 0.6f;
     ImGui::SetNextWindowPos(ImVec2(pad, pad), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.7f);
-    ImGui::Begin("##nmsc_hud", nullptr,
+    ImGui::Begin("##hailstone_hud", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
     ImGui::TextUnformatted(view.zone.empty() ? "(no zone)" : view.zone.c_str());
@@ -1996,7 +1996,7 @@ std::optional<std::string> chat_window(ChatView& view, bool* open) {
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.75f);
-    if (!ImGui::Begin("Chat##nmsc", open, ImGuiWindowFlags_NoSavedSettings)) {
+    if (!ImGui::Begin("Chat##hailstone", open, ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return submitted;
     }
@@ -2038,7 +2038,7 @@ std::optional<std::uint32_t> spawn_list_window(SpawnListView& view, bool* open) 
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.75f);
-    std::string title = std::format("Spawns ({})###nmsc_spawns", view.spawns.size());
+    std::string title = std::format("Spawns ({})###hailstone_spawns", view.spawns.size());
     if (!ImGui::Begin(title.c_str(), open, ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return clicked;
@@ -2108,7 +2108,7 @@ void player_window(const PlayerView& view, InGameActions& actions) {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + em * 0.6f, vp->WorkPos.y + em * 12.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(16.0f * em, 0.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.75f);
-    ImGui::Begin("Player##nmsc_player", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::Begin("Player##hailstone_player", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
     ImGui::Text("%s", view.name.c_str());
     ImGui::SameLine();
     ImGui::TextColored(kDimColor, "level %d", view.level);
@@ -2142,7 +2142,7 @@ void target_window(const TargetView& view, bool attacking, InGameActions& action
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(16.0f * em, 0.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.75f);
-    ImGui::Begin("Target##nmsc_target", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::Begin("Target##hailstone_target", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
     if (!view.has_target) {
         ImGui::TextColored(kDimColor, "No target");
         ImGui::TextColored(kDimColor, "Click a spawn, Tab / F8 nearest NPC, F1 yourself.");
@@ -2166,7 +2166,7 @@ void target_window(const TargetView& view, bool attacking, InGameActions& action
 void respawn_window(const RespawnView& view, InGameActions& actions) {
     if (view.options.empty()) return;
     center_next_window(20.0f);
-    ImGui::Begin("You have died##nmsc_respawn", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("You have died##hailstone_respawn", nullptr, kDialogFlags | ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::Text("Respawn in %u s, or choose:", view.seconds_left);
     ImGui::BeginDisabled(!view.ready);
     for (const auto& [id, label] : view.options)
@@ -2187,4 +2187,4 @@ InGameActions in_game_overlay(InGameView& view) {
     return actions;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

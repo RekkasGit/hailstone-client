@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -496,4 +496,4 @@ PlayerCustomizationModel::Result PlayerCustomizationModel::click(CustomizationAc
     return Result::None;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

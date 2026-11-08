@@ -48,9 +48,9 @@
 #include "assets/flora.h"
 #include "assets/texture.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 struct Zone;
 
@@ -176,4 +176,4 @@ bool flora_kind_matches(std::string_view kind, std::string_view definition);
 // has flora already, no rules apply, or the donor or its definitions are missing; each logged).
 std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesystem::path& rules_dir, bool outdoor);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

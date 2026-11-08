@@ -6,7 +6,7 @@
 // values, and the port's output must equal the original's exactly, under the
 // record's x87 precision ("x87-24" or "x87-53").
 //
-// The directory is NMSC_VECTORS_DIR, else rof2decomp/re/test/vectors beside
+// The directory is HAILSTONE_VECTORS_DIR, else rof2decomp/re/test/vectors beside
 // the source tree (tests/vector_files.h); skipped without it.
 #include <doctest/doctest.h>
 
@@ -21,6 +21,7 @@
 #include <sstream>
 #include <string>
 
+#include "core/env.h"
 #include "game/mechanics/character.h"
 #include "game/mechanics/item_sums.h"
 #include "game/mechanics/ticks.h"
@@ -28,10 +29,10 @@
 #include "json_lite.h"
 #include "vector_files.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
+using namespace hailstone;
+using namespace hailstone::game;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
 namespace fs = std::filesystem;
 
 namespace {
@@ -925,7 +926,7 @@ std::map<std::string, Checker> checkers() {
     return m;
 }
 
-std::optional<fs::path> vectors_dir() { return nmsc::test::vector_dir(); }
+std::optional<fs::path> vectors_dir() { return hailstone::test::vector_dir(); }
 
 } // namespace
 
@@ -933,7 +934,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
     auto dir = vectors_dir();
     std::error_code ec;
     if (!dir || !fs::is_directory(*dir, ec)) {
-        MESSAGE("no rof2decomp test vectors (NMSC_VECTORS_DIR); skipped");
+        MESSAGE("no rof2decomp test vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     auto table = checkers();
@@ -953,7 +954,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
             if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
             Json j;
             try {
-                j = nmsc::test::parse_json(line);
+                j = hailstone::test::parse_json(line);
             } catch (const std::exception& e) {
                 FAIL(path.filename().string() << ":" << n << " not JSON: " << e.what());
                 continue;
@@ -968,7 +969,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
             if (!res.mismatches.empty()) {
                 ++failed;
                 ++by_precision_fail[j["precision"].text.empty() ? "-" : j["precision"].text];
-                if (first_failure.empty() && std::getenv("NMSC_DUMP"))
+                if (first_failure.empty() && hailstone::core::env("DUMP"))
                     for (auto& mm : res.mismatches) MESSAGE(n << " " << mm.first << " " << mm.second);
                 if (first_failure.empty())
                     first_failure = std::to_string(n) + ": " + res.mismatches[0].first + " " + res.mismatches[0].second;

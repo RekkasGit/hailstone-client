@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // An IPv4 or IPv6 address and port, independent of the OS socket structs.
 struct Endpoint {
@@ -83,4 +83,4 @@ private:
     std::string error_;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

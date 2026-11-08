@@ -8,7 +8,7 @@
 #include "net/session.h"
 #include "platform/udp_socket.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -263,4 +263,4 @@ void ChatServer::disconnect() {
     logged_in_ = false;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

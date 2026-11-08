@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kStrNoGround = 7697, kStrDropDisabled = 12320, kStrDropConfirm = 9057,
                                kStrDropped = 9058;
@@ -47,4 +47,4 @@ struct DropInput {
 // DropHeldItemOnGround's steps in order; empty without a cursor item.
 std::vector<DropStep> drop_held_item_steps(const DropInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -20,7 +20,7 @@
 #include "net/item_packets.h"
 #include "net/market_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // EQWorldData_IsBazaarZone @0x7dc6c0: the zone table's flag 0x10000000, which
 // only The Bazaar (151) has.
@@ -133,4 +133,4 @@ std::uint32_t join_price(std::uint32_t platinum, std::uint32_t gold, std::uint32
 // FormatCoinStringCompact @0x4ee020: "12p 3g 4s 5c" (zero parts left out, "0c" for nothing).
 std::string coin_compact(std::int64_t copper);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

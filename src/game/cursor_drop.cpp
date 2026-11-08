@@ -1,6 +1,6 @@
 #include "game/cursor_drop.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 DropDecision ground_drop_decision(bool no_ground, std::int32_t no_safe_drop) {
     if (no_ground) return DropDecision::Refused;
@@ -22,4 +22,4 @@ std::vector<DropStep> drop_held_item_steps(const DropInput& in) {
     return s;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -13,7 +13,7 @@
 #include "game/eq_names.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // MercHooks on the connection: chat lines, packets on the zone connection, the windows' open flags.
 struct GameConnection::MercLink : game::MercHooks {
@@ -233,4 +233,4 @@ bool GameConnection::merc_command(std::string_view handler, const std::string& a
     return false;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

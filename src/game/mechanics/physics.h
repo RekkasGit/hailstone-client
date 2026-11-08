@@ -39,7 +39,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // Step: dt = elapsed_ms * 0.02f (one tick = 50 ms), at most 3 ticks (the
 // physics manager's vf3 @0x588240 clamps it, 0x9d7070).
@@ -317,4 +317,4 @@ float elapsed_steps(std::uint32_t now, std::uint32_t last, const Fpu& fpu = Fpu{
 // Step's integration of one axis: position + speed * dt (the product unrounded).
 float integrate_axis(float position, float speed, float dt, const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

@@ -6,7 +6,7 @@
 #include "core/byte_io.h"
 #include "game/sine_table.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -176,4 +176,4 @@ const SpellPoints::Model& SpellPoints::of(const CharacterModel& model) {
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

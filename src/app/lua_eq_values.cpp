@@ -16,7 +16,7 @@
 // Each case names the original's switch case (the label function's byte-table index, or the gauge type) and what
 // it reads. rof2decomp: export/_globals.c (__GetLabelFromEQ, __GetGaugeValueFromEQ), notes/experience-and-aa.md.
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace mechanics = game::mechanics;
 
@@ -817,4 +817,4 @@ GaugeValue eq_gauge(const EqHost& host, int type) {
     return g;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

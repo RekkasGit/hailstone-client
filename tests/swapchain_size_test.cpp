@@ -4,7 +4,7 @@
 
 #include "render/swapchain_size.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 TEST_CASE("Swapchain size: a surface that lags a resize is caught up; one that differs for good is not chased") {
     const Extent old_size{800, 600}, new_size{1024, 768};

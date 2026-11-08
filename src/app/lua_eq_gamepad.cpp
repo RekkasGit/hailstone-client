@@ -9,7 +9,7 @@
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -217,4 +217,4 @@ void register_gamepad_api(lua_State* L, EqHost& host) {
     lua_setfield(L, -2, "gamepad");
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

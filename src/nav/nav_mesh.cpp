@@ -19,7 +19,7 @@
 #include "game/collision.h"
 #include "game/mechanics/movement.h"
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 namespace {
 
@@ -1169,4 +1169,4 @@ std::optional<std::vector<CachedTile>> decode_cache(std::span<const std::byte> b
     }
 }
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

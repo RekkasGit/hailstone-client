@@ -29,7 +29,7 @@
 #include <optional>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kIconTypes = 4;
 // The grid animation of an icon type ("A_DragItem" ...), nullptr outside 0..3.
@@ -79,4 +79,4 @@ private:
     std::int32_t per_page_ = 50;  // +0x264 (-1: All)
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

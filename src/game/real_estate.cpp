@@ -7,7 +7,7 @@
 
 #include "core/saturate.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using net::ReType;
 
@@ -422,4 +422,4 @@ std::string re_format_time_left(double days) {
     return s + std::to_string(whole % 7) + "d";
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

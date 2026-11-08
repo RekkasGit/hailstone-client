@@ -5,7 +5,7 @@
 
 #include "render/light_grid.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

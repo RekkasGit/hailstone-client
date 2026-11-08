@@ -7,7 +7,7 @@
 #include "game/collision.h"
 #include "game/zoning.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::string region_teleport_text(std::string_view tag) {
     if (!tag.empty() && tag[0] == 'A') return atp_teleport_text(tag);
@@ -114,4 +114,4 @@ std::optional<std::string> ZoneLineTrigger::update(const glm::vec3& feet, const 
     return region_teleport_text(info.tag);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include "mock_server/harness.h"
 #include "net/spell_packets.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

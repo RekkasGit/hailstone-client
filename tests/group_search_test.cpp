@@ -14,9 +14,9 @@
 #include "net/group_packets.h"
 #include "net/social_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 
 namespace {
 

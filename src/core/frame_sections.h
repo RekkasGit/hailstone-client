@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc::core::frame_sections {
+namespace hailstone::core::frame_sections {
 
 using Entry = std::pair<const char*, float>; // a name with static storage, milliseconds
 
@@ -58,4 +58,4 @@ private:
     std::chrono::steady_clock::time_point last_ = std::chrono::steady_clock::now();
 };
 
-} // namespace nmsc::core::frame_sections
+} // namespace hailstone::core::frame_sections

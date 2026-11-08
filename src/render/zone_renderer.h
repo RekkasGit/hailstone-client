@@ -17,17 +17,17 @@
 #include "render/scene_lighting.h"
 #include "render/vk_context.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets {
+namespace hailstone { class GameDir; }
+namespace hailstone::assets {
 struct Zone;
 struct Mesh;
 }
-namespace nmsc::game {
+namespace hailstone::game {
 struct ViewDistance;
 struct SceneLight;
 }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // How zone geometry is lit: the original's region vertex shader
 // (game/scene_light.h) or full-bright (a debugging view).
@@ -270,4 +270,4 @@ private:
     VkPipeline underwater_pipeline_ = VK_NULL_HANDLE;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

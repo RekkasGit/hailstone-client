@@ -10,7 +10,7 @@
 #include "game/coords.h"
 #include "game/real_estate.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -170,4 +170,4 @@ std::optional<net::AppPacket> Placement::confirm(const glm::vec3& box_a, const g
     return net::encode_re_place_confirm(ghost_, index_, box_a, box_b);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

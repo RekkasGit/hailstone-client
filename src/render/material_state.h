@@ -9,7 +9,7 @@
 
 #include "assets/model.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // Fog distances that keep a draw unfogged in shaders with linear fog.
 inline constexpr float kNoFogStart = 1.0e30f;
@@ -85,4 +85,4 @@ inline MaterialState material_state(const assets::Material& m) {
     return s;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -9,7 +9,7 @@
 #include <dr_mp3.h>
 #include <dr_wav.h>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 std::optional<Pcm> decode_wav(std::span<const std::byte> data) {
     unsigned int channels = 0, rate = 0;
@@ -160,4 +160,4 @@ std::unique_ptr<Source> make_mp3_source(std::shared_ptr<const std::vector<std::b
     return std::make_unique<Mp3Source>(std::move(file), loops);
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

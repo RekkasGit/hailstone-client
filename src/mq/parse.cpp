@@ -1,6 +1,6 @@
 #include "mq/parse.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -86,4 +86,4 @@ std::string parse_macro_data(const Context& ctx, std::string_view line) {
     return expand(ctx, line, pos, 0, closed);
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

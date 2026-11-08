@@ -18,7 +18,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -666,4 +666,4 @@ std::size_t add_zone_flora(const GameDir& game, Zone& zone, const std::filesyste
     return tiles;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

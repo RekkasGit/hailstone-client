@@ -28,7 +28,7 @@
 #include "ui/ui_ini.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1488,4 +1488,4 @@ void add_player_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<TipWindow>("TipWindow#2", 0));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

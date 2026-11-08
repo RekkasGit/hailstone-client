@@ -13,7 +13,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 enum class PadButton : std::uint8_t {
     A, B, X, Y, LB, RB, LT, RT, Back, Start, Guide, LS, RS, Up, Down, Left, Right, Touchpad,
@@ -85,4 +85,4 @@ inline void radial_dead_zone(float& x, float& y, float dead_zone) {
     y = y / mag * scaled;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

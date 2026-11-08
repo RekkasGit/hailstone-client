@@ -7,10 +7,10 @@
 #include "net/zone_packets.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("OP_RequestClientZoneChange hands DoTeleportB the zone dword, world x / y, z, heading, type and +4") {
-    mq_test::World w("nmsc_zone_change_request_test");
+    mq_test::World w("hailstone_zone_change_request_test");
     net::GameConnection& c = *w.conn;
     std::optional<game::TeleportBArgs> got;
     c.set_teleport_handler([&](const game::TeleportBArgs& a) { got = a; });
@@ -38,7 +38,7 @@ TEST_CASE("OP_RequestClientZoneChange hands DoTeleportB the zone dword, world x 
 }
 
 TEST_CASE("The zone dword carries the player profile's instance: a summon inside an instance moves, not zones") {
-    mq_test::World w("nmsc_zone_change_instance_test");
+    mq_test::World w("hailstone_zone_change_instance_test");
     net::GameConnection& c = *w.conn;
     // OP_NewZone as stock EQEmu sends it: the zone id, the instance left at 0.
     ByteWriter nz;
@@ -67,7 +67,7 @@ TEST_CASE("A new connection has none of the app's hooks, even where the freed on
     // has none (client_app_player.cpp): a test on the connection's address skipped a new one put where the old was.
     // This checks only the condition the app tests; the installation in ClientApp::update_player is not unit-tested
     // (ClientApp needs a window).
-    mq_test::World w("nmsc_zone_change_request_hooks_test");
+    mq_test::World w("hailstone_zone_change_request_hooks_test");
     CHECK_FALSE(w.conn->has_line_of_sight());
     w.conn->set_line_of_sight([](const glm::vec3&, const glm::vec3&) { return true; });
     CHECK(w.conn->has_line_of_sight());
@@ -78,7 +78,7 @@ TEST_CASE("A new connection has none of the app's hooks, even where the freed on
 
 TEST_CASE("OP_NewZone: a short name that is a path is not used for the zone's files") {
     // It names the zone's archives, map layers and navmesh cache (core/zone_name.h).
-    mq_test::World w("nmsc_new_zone_name_test");
+    mq_test::World w("hailstone_new_zone_name_test");
     net::GameConnection& c = *w.conn;
     net::NewZone nz;
     nz.zone_long_name = "Nowhere";

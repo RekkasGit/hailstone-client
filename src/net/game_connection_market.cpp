@@ -23,7 +23,7 @@
 #include "net/market_packets.h"
 #include "net/opcodes.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1535,4 +1535,4 @@ bool GameConnection::market_command(std::string_view h, const std::string& args)
     return false;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

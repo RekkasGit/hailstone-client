@@ -11,13 +11,13 @@
 #include "game/keymap.h"
 #include "game/targeting.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 using platform::GamepadState;
 using platform::PadButton;
 using Kind = PadAction::Kind;
 
-namespace nmsc::app {
+namespace hailstone::app {
 void register_gamepad_api(lua_State* L, EqHost& host); // app/lua_eq_gamepad.cpp
 }
 

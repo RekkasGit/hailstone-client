@@ -5,7 +5,7 @@
 
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::string trader_price_key(const net::Item& item) {
     // CBazaarWnd_ReadTraderItemFromIni @0x63a6c0: IsValidSpellID(GetSpellID(item, 0)) and charges >= 1.
@@ -112,4 +112,4 @@ TraderSelection select_trader_slot(const std::vector<TraderSlot>& slots, const I
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

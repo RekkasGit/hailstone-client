@@ -21,7 +21,7 @@
 
 #include "assets/sound_files.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // RaceManager_GetSoundID's kinds 0..43 (eqlib PlayerClient *_SoundID names).
 enum class SoundKind : std::uint8_t {
@@ -169,4 +169,4 @@ inline constexpr std::int32_t kSoundTeleport = 0x89;    // Teleport.WAV
 // fall_hit when the fall did damage, else jumpland.
 std::vector<std::int32_t> landing_sounds(bool land_sound, std::optional<std::int32_t> fall_damage);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

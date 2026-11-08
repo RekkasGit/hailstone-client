@@ -36,7 +36,7 @@
 #include "render/vk_context.h"
 #include "render/zone_renderer.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -411,4 +411,4 @@ int run_model_viewer(const ModelViewerOptions& opts) {
     return 0;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

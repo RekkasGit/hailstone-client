@@ -16,8 +16,8 @@
 #include "net/session_codec.h"
 #include "platform/udp_socket.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 using soe::Bytes;
 using soe::ByteSpan;
 

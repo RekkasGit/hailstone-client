@@ -15,9 +15,9 @@
 #include "assets/regions.h"
 #include "assets/spell_effects.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // A particle emitter standing in the zone: a placed object's particle node.
 struct ParticleFixture {
@@ -89,4 +89,4 @@ bool is_revamped_zone_name(std::string_view name);
 // The zone as the original picks it: EQG when <name>.eqg exists, else classic.
 Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel& cancel = {});
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

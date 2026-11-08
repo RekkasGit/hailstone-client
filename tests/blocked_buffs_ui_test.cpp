@@ -16,8 +16,8 @@
 #include "net/packet_io.h"
 #include "net/spell_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 TEST_CASE("Blocked buffs: a buff's spell id in the window's edit box, then Add, asks the server to block it") {
     ImGuiContext* ctx = ImGui::CreateContext();

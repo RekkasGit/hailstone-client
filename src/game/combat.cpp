@@ -10,7 +10,7 @@
 #include "game/coords.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -594,4 +594,4 @@ std::optional<std::uint32_t> pick_spawn(const WorldState& world, const glm::vec3
     return best;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

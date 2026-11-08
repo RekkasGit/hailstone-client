@@ -8,8 +8,8 @@
 #include "game/mechanics/abilities.h"
 #include "plugin/policy.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 TEST_CASE("ability book: keys") {
     CHECK(ability_key(AbilityKind::AltAbility, 1234) == "aa:1234");

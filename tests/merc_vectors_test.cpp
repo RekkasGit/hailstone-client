@@ -14,8 +14,8 @@
 #include "game/mercenary.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
+using namespace hailstone::game;
+using hailstone::test::Json;
 
 namespace {
 
@@ -426,16 +426,16 @@ std::string check_send_command(const Json& rec) {
 }
 
 void run(const char* file, Handler fn) {
-    nmsc::test::each_vector(file, [fn](const Json& r) { return check_handler(r, fn); });
+    hailstone::test::each_vector(file, [fn](const Json& r) { return check_handler(r, fn); });
 }
 
 } // namespace
 
 TEST_CASE("vectors: Handle_OP_MercenaryDataResponse") {
-    nmsc::test::each_vector("Handle_OP_MercenaryDataResponse.jsonl", check_data_response);
+    hailstone::test::each_vector("Handle_OP_MercenaryDataResponse.jsonl", check_data_response);
 }
 TEST_CASE("vectors: Handle_OP_MercenaryDataUpdate") {
-    nmsc::test::each_vector("Handle_OP_MercenaryDataUpdate.jsonl", check_data_update);
+    hailstone::test::each_vector("Handle_OP_MercenaryDataUpdate.jsonl", check_data_update);
 }
 TEST_CASE("vectors: Handle_OP_MercenaryHire") { run("Handle_OP_MercenaryHire.jsonl", merc_handle_hire); }
 TEST_CASE("vectors: Handle_OP_MercenaryTimer") { run("Handle_OP_MercenaryTimer.jsonl", merc_handle_timer); }
@@ -456,17 +456,17 @@ TEST_CASE("vectors: Merc_HandleUpkeepCharged") { run("Merc_HandleUpkeepCharged.j
 TEST_CASE("vectors: Handle_Opcode_0x3cbc") { run("Handle_Opcode_0x3cbc.jsonl", merc_handle_costs); }
 TEST_CASE("vectors: Handle_Opcode_0x2749") { run("Handle_Opcode_0x2749.jsonl", merc_handle_timer_cleared); }
 TEST_CASE("vectors: Handle_Opcode_0x20b9") { run("Handle_Opcode_0x20b9.jsonl", merc_handle_event7); }
-TEST_CASE("vectors: Send_OP_MercenaryDismiss") { nmsc::test::each_vector("Send_OP_MercenaryDismiss.jsonl", check_send_dismiss); }
+TEST_CASE("vectors: Send_OP_MercenaryDismiss") { hailstone::test::each_vector("Send_OP_MercenaryDismiss.jsonl", check_send_dismiss); }
 TEST_CASE("vectors: Merc_RequestTimerAndData") {
-    nmsc::test::each_vector("Merc_RequestTimerAndData.jsonl", check_timer_and_data);
+    hailstone::test::each_vector("Merc_RequestTimerAndData.jsonl", check_timer_and_data);
 }
-TEST_CASE("vectors: Merc_TickUpkeepTimer") { nmsc::test::each_vector("Merc_TickUpkeepTimer.jsonl", check_tick); }
-TEST_CASE("vectors: Merc_SendHireRequest") { nmsc::test::each_vector("Merc_SendHireRequest.jsonl", check_hire); }
-TEST_CASE("vectors: Send_Opcode_0x0b72") { nmsc::test::each_vector("Send_Opcode_0x0b72.jsonl", check_assist_mode); }
-TEST_CASE("vectors: Merc_RequestSetOwner") { nmsc::test::each_vector("Merc_RequestSetOwner.jsonl", check_set_owner); }
-TEST_CASE("vectors: Send_OP_MercenarySwitch") { nmsc::test::each_vector("Send_OP_MercenarySwitch.jsonl", check_send_switch); }
+TEST_CASE("vectors: Merc_TickUpkeepTimer") { hailstone::test::each_vector("Merc_TickUpkeepTimer.jsonl", check_tick); }
+TEST_CASE("vectors: Merc_SendHireRequest") { hailstone::test::each_vector("Merc_SendHireRequest.jsonl", check_hire); }
+TEST_CASE("vectors: Send_Opcode_0x0b72") { hailstone::test::each_vector("Send_Opcode_0x0b72.jsonl", check_assist_mode); }
+TEST_CASE("vectors: Merc_RequestSetOwner") { hailstone::test::each_vector("Merc_RequestSetOwner.jsonl", check_set_owner); }
+TEST_CASE("vectors: Send_OP_MercenarySwitch") { hailstone::test::each_vector("Send_OP_MercenarySwitch.jsonl", check_send_switch); }
 TEST_CASE("vectors: Send_OP_MercenaryCommand") {
-    nmsc::test::each_vector("Send_OP_MercenaryCommand.jsonl", check_send_command);
+    hailstone::test::each_vector("Send_OP_MercenaryCommand.jsonl", check_send_command);
 }
 
 // ---- unit checks of the texts and guards

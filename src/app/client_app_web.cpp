@@ -6,7 +6,7 @@
 #include "platform/open_folder.h"
 #include "web/page_rules.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 web::BrowserHost* ClientApp::browser() {
     if (browser_ || browser_tried_) return browser_.get();
@@ -110,4 +110,4 @@ void ClientApp::open_server_link(const std::string& url) {
     server_links_.opened(tab, url);
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

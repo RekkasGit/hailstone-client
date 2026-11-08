@@ -34,9 +34,9 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc { class GameDir; class IniFile; }
+namespace hailstone { class GameDir; class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // A colour map: 32 x 32 dwords 0xAARRGGBB, row-major, row 0 the file's first
 // row (the bytes after the 128-byte DDS header, unconverted and unflipped).
@@ -254,4 +254,4 @@ struct AreaFogResult {
 AreaFogResult area_fog_blend(const AreaFogData& fog, float radius, float distance, std::uint32_t zone_colour,
                              float zone_density, std::int32_t hour, std::int32_t minute);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

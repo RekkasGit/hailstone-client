@@ -7,7 +7,7 @@
 #include <ctime>
 #include <filesystem>
 
-namespace nmsc {
+namespace hailstone {
 
 inline std::chrono::system_clock::time_point file_time_to_system(std::filesystem::file_time_type t) {
 #if defined(_LIBCPP_VERSION)
@@ -23,4 +23,4 @@ inline std::time_t file_time_to_time_t(std::filesystem::file_time_type t) {
     return std::chrono::system_clock::to_time_t(file_time_to_system(t));
 }
 
-} // namespace nmsc
+} // namespace hailstone

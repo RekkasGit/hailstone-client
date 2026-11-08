@@ -7,8 +7,8 @@
 #include "game/precipitation.h"
 #include "game/weather.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 

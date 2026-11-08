@@ -28,7 +28,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using mechanics::Fpu;
 
@@ -169,4 +169,4 @@ std::array<float, 3> place_in_world(std::array<float, 3> p, const std::array<flo
     return safe_point;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

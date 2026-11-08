@@ -13,7 +13,7 @@
 #include "game/mercenary.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -321,4 +321,4 @@ void add_merc_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<MercInfoWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

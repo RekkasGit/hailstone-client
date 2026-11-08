@@ -17,7 +17,7 @@
 #include "game/training.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // OP_GMTraining (448 bytes both ways, GMTrainee_Struct): the guildmaster's
 // and the player's spawn ids, 100 skill dwords, then (+0x198) the greed
@@ -54,4 +54,4 @@ struct GMTrainSkillConfirm {
 std::optional<GMTrainSkillConfirm> decode_gm_train_skill_confirm(const AppPacket& p);
 AppPacket encode(const GMTrainSkillConfirm& v); // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

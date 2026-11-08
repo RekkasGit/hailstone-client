@@ -10,7 +10,7 @@
 #include "platform/http_get.h"
 #include "platform/open_folder.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -167,4 +167,4 @@ void start_installed_client() {
     if (!child.start({exe.string()}, error)) log::warn("Update: cannot start {}: {}", exe.string(), error);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

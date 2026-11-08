@@ -24,7 +24,7 @@
 #include "net/spell_packets.h"
 #include "net/zone_packets.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class SpellProbe {
 public:
@@ -463,4 +463,4 @@ private:
     std::string last_chat_;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

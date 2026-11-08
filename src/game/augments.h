@@ -26,7 +26,7 @@
 #include "net/augment_packets.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -219,4 +219,4 @@ inline constexpr std::uint32_t kAugMenuRemove = 100, kAugMenuSwap = 0x65, kAugMe
 std::vector<AugmentMenuRow> augment_socket_menu(const net::Item& window_item, int socket, const AugmentContext& ctx,
                                                 const EqStrings* strings);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

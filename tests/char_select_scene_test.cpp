@@ -13,7 +13,7 @@
 #include "game/player_customization.h"
 #include "game/spawn_heights.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 

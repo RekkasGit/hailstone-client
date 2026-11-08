@@ -12,7 +12,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 struct HttpGetOptions {
     std::string user_agent;          // required by GitHub
@@ -46,4 +46,4 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
 // Whether this system can fetch at all (Linux/macOS: libcurl could be loaded), and why not.
 bool http_available(std::string* why = nullptr);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

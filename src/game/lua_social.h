@@ -30,7 +30,7 @@
 
 #include "core/sha256.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct LuaSocial {
     std::string press;
@@ -61,4 +61,4 @@ std::optional<LuaSocialFile> import_lua_social(std::string_view text);
 // The file name of social `index` (0..119): "<index + 1>.lua".
 std::string lua_social_file_name(int index);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

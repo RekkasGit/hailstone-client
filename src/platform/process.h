@@ -9,7 +9,7 @@
 #include <optional>
 #include <string>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // This process's id.
 unsigned long process_id();
@@ -31,4 +31,4 @@ std::FILE* open_c_file(const std::filesystem::path& path, const char* mode);
 // The system, for bug reports: "Linux, CachyOS (kernel 7.3.0-4-cachyos), wayland", "Windows 10.0.26100".
 std::string system_description();
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

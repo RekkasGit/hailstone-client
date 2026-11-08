@@ -5,7 +5,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // The record ApplyFallDamage builds on its stack (@0x45ae2f) and ApplyDamage
 // sends: id (u16 spawn id, then zeroes), damage at 6, 1.0f at 10, twelve
@@ -86,4 +86,4 @@ AppPacket encode_find_person_reply(const std::vector<glm::vec3>& path) {
     return make_packet(Op::FindPersonReply, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

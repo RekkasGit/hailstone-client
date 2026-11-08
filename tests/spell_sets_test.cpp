@@ -6,7 +6,7 @@
 #include "core/ini_file.h"
 #include "game/spell_sets.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

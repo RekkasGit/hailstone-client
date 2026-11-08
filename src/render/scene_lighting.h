@@ -24,9 +24,9 @@
 #include "render/shadows.h"
 #include "render/vk_context.h"
 
-namespace nmsc::game { struct SceneLight; struct LightSource; }
+namespace hailstone::game { struct SceneLight; struct LightSource; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 enum class LightingMode : std::uint8_t { Classic, Modern };
 
@@ -222,4 +222,4 @@ private:
     std::array<void*, VkContext::kFramesInFlight> mapped_{};
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -21,7 +21,7 @@
 #include "platform/binary_stdio.h"
 #include "web/browser_protocol.h"
 
-using namespace nmsc::web;
+using namespace hailstone::web;
 
 namespace {
 
@@ -64,7 +64,7 @@ void loaded(std::uint32_t tab, std::string url) {
 } // namespace
 
 int main(int argc, char** argv) {
-    nmsc::platform::binary_stdio();
+    hailstone::platform::binary_stdio();
     std::uint32_t version = kProtocolVersion;
     for (int i = 1; i + 1 < argc; ++i)
         if (std::strcmp(argv[i], "--version") == 0) version = static_cast<std::uint32_t>(std::atoi(argv[i + 1]));

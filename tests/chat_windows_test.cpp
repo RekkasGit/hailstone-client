@@ -24,7 +24,7 @@
 #include "ui/dev_screens.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -78,7 +78,7 @@ void write_strings(const fs::path& game) {
 
 TEST_CASE("Chat windows: lines go to the window of their colour's channel (ChannelMap), kept in the UI ini") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_windows_test");
+    hailstone::test::ScratchDir dir_scratch("chat_windows_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -263,7 +263,7 @@ TEST_CASE("Chat windows: lines go to the window of their colour's channel (Chann
 
 TEST_CASE("Chat windows: each window keeps its own last 1000 lines; a busy one does not push out a quiet one's") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_window_lines_test");
+    hailstone::test::ScratchDir dir_scratch("chat_window_lines_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -310,7 +310,7 @@ TEST_CASE("Chat windows: each window keeps its own last 1000 lines; a busy one d
 
 TEST_CASE("Chat windows: eq.ChatText's version is the window's own; the incremental form sends only the new lines") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_text_since_test");
+    hailstone::test::ScratchDir dir_scratch("chat_text_since_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -516,7 +516,7 @@ TEST_CASE("Chat windows: the reply keys' index (LastTell_CycleIndex) and CYCLERE
 
 TEST_CASE("Chat windows: the chat keys fill the active window's input (TELL, CMDMODE_*, HISTORY_*) and page it") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_keys_test");
+    hailstone::test::ScratchDir dir_scratch("chat_keys_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -582,7 +582,7 @@ TEST_CASE("Chat windows: the chat keys fill the active window's input (TELL, CMD
 
 TEST_CASE("Chat windows: Always Chat Here takes the chat keys; the main window has it by default") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_here_test");
+    hailstone::test::ScratchDir dir_scratch("chat_here_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -661,7 +661,7 @@ TEST_CASE("Chat windows: Always Chat Here takes the chat keys; the main window h
 
 TEST_CASE("Chat windows: the chat history keeps each line's time; a version 1 file reads without times") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("chat_history_test");
+    hailstone::test::ScratchDir dir_scratch("chat_history_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
@@ -707,7 +707,7 @@ TEST_CASE("Chat windows: the chat history keeps each line's time; a version 1 fi
 TEST_CASE("Item display: a click on the icon links the item into the active chat window's input "
           "(CItemDisplayWnd::WndNotification, IconButton)") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("item_icon_link_test");
+    hailstone::test::ScratchDir dir_scratch("item_icon_link_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     std::ofstream(dir / "game" / "eqstr_us.txt") << "EQST0002\n6623 Main Chat\n6624 Chat\n15009 Always Chat Here\n"

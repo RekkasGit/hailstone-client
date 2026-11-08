@@ -22,7 +22,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 enum class SessionState : std::uint8_t {
     Connecting,   // SessionRequest sent, waiting for SessionResponse
@@ -130,4 +130,4 @@ public:
     virtual void simulate_link_loss() {}
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

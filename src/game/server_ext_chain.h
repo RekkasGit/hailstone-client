@@ -32,7 +32,7 @@
 
 #include "game/server_ext.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class ExtensionChain final : public ServerExtension {
 public:
@@ -110,4 +110,4 @@ private:
     mutable const ServerExtension* rules_owner_ = nullptr;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

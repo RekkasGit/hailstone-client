@@ -11,7 +11,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // Pet command numbers (EQEmu zone/common.h PET_*; the original's cmd_pet
 // table). The server gives them to its focused pet (NMS: the pet the player
@@ -59,4 +59,4 @@ std::optional<std::uint32_t> decode_pet_hott(const AppPacket& p);
 // OP_BuffCreate layout (ENCODE(OP_PetBuffWindow)); decode it with
 // decode_buff_icons (net/spell_packets.h). entity_id is the pet.
 
-} // namespace nmsc::net
+} // namespace hailstone::net

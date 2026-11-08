@@ -28,10 +28,10 @@
 #include "render/particle_textures.h"
 #include "render/vk_context.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::game { class ParticleSystem; }
+namespace hailstone { class GameDir; }
+namespace hailstone::game { class ParticleSystem; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct SceneLighting;
 
@@ -145,4 +145,4 @@ private:
     std::unique_ptr<core::LatestJobs<std::string, LoadedParticleTexture>> loader_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

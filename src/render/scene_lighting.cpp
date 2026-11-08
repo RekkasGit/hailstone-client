@@ -11,7 +11,7 @@
 #include "render/atmosphere.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 std::optional<LightingMode> parse_lighting_mode(std::string_view name) {
     if (name == "classic") return LightingMode::Classic;
@@ -278,4 +278,4 @@ void set_screen(SceneLighting& lighting, float near_plane, float far_plane, std:
     lighting.time = glm::vec4(static_cast<float>(std::fmod(seconds, 1024.0)), 0.0f, 0.0f, 0.0f);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

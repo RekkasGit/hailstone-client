@@ -29,7 +29,7 @@
 #include "net/packet.h"
 #include "net/world_packets.h" // ChatServerInfo, decode_chat_server
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 class Session;
 
@@ -103,4 +103,4 @@ private:
     std::vector<std::string> channels_;
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -16,7 +16,7 @@
 #include "game/mechanics/item_stats.h"
 #include "game/spells.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -470,4 +470,4 @@ std::int32_t Character::focus_reuse_mod(const SpellData& cast) const {
     return recast < total ? recast : total;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

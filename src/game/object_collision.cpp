@@ -5,7 +5,7 @@
 
 #include "assets/model.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -125,4 +125,4 @@ std::optional<float> floor_under(const ObjectShape& shape, const glm::mat4& inve
     return top.z + (bottom.z - top.z) * *t;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

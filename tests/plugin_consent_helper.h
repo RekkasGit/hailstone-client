@@ -12,7 +12,7 @@
 #include "plugin/consent.h"
 #include "plugin/native_plugins.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 // The player allowed (or refused) the library `file` on the server whose folder is `profile_dir`.
 inline bool answer_server_plugin(const std::filesystem::path& profile_dir, const std::filesystem::path& file,
@@ -22,4 +22,4 @@ inline bool answer_server_plugin(const std::filesystem::path& profile_dir, const
     return plugin::set_plugin_consent(profile_dir, plugin::plugin_name(file), sha256(bytes), allowed);
 }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

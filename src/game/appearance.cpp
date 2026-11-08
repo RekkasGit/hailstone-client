@@ -4,7 +4,7 @@
 #include <atomic>
 #include <iterator>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool is_pc_model_race(std::uint32_t race) {
     return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;
@@ -139,4 +139,4 @@ bool is_stock_shield_model(std::uint32_t m) {
     return std::find(std::begin(kSingles), std::end(kSingles), m) != std::end(kSingles);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

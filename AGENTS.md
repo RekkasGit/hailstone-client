@@ -4,7 +4,7 @@ This file is for coding agents (Claude Code, Codex, Copilot and similar) working
 
 ## What this project is
 
-Hailstone is a portable client for EQEmu servers, written from scratch in C++20 with Vulkan. It speaks the RoF2 protocol, reads the player's own game folder and ships no game assets. The product name is Hailstone; the CMake targets and the `nmsc` namespace are older and stay as they are. The repository was called `nms-client`; it is now `hailstone-client`.
+Hailstone is a portable client for EQEmu servers, written from scratch in C++20 with Vulkan. It speaks the RoF2 protocol, reads the player's own game folder and ships no game assets. The product name is Hailstone, and the code uses it too (`namespace hailstone`, `HAILSTONE_*`, the `hailstone_*` targets). Up to 0.6 those were `nmsc`, `NMSC_*` and `nmsc_*`: the old names stay only where something outside the repository still uses them (the SDK's compatibility headers `sdk/nmsc_*.h` and export names, `NMSC_*` environment variables and CMake settings read as a fallback, saved window names renamed at start). Do not add new ones. The repository was called `nms-client`; it is now `hailstone-client`.
 
 Read before you change anything, in this order:
 
@@ -17,7 +17,7 @@ Read before you change anything, in this order:
 
 - **Faithful mechanics, modern graphics.** Game rules (stats, combat, movement, spells, packets, timers) follow the original RoF2 client. A deliberate difference is marked as one in the code and docs, and is switchable where it matters. Rendering is not meant to look like the original.
 - **No guessing.** If you cannot confirm how the original behaves, do not invent it. Implement the safest behaviour, say so in a comment, and add or update a row in `docs/unknowns.md` (what the client does now, and what would settle it). Remove the row when it is settled.
-- **Compatible with stock EQEmu.** The client must work against an unmodified EQEmu RoF2 server. Support for a custom server is a plugin (sdk/nmsc_plugin.h, docs/plugins.md), never code in the client: the NMS server's is its own repository (projecthailstone/hailstone-nms, cloned into `plugins/nms` to build and test it with the client), built against the SDK alone and released as an add-on, and it switches on only when that server announces itself. CI fails when the client's sources name NMS outside comments. Server-side support for Hailstone is a drop-in Lua quest script in `server/`; do not add C++ patches or new server rules for it.
+- **Compatible with stock EQEmu.** The client must work against an unmodified EQEmu RoF2 server. Support for a custom server is a plugin (sdk/hailstone_plugin.h, docs/plugins.md), never code in the client: the NMS server's is its own repository (projecthailstone/hailstone-nms, cloned into `plugins/nms` to build and test it with the client), built against the SDK alone and released as an add-on, and it switches on only when that server announces itself. CI fails when the client's sources name NMS outside comments. Server-side support for Hailstone is a drop-in Lua quest script in `server/`; do not add C++ patches or new server rules for it.
 - **Clean room.** Never commit code, art, sounds, models, textures, UI layouts, strings or data tables taken from proprietary software. Open protocol and format knowledge is fine and is credited in [THIRD_PARTY.md](THIRD_PARTY.md). Comments may name the original function or address a rule was checked against, as the existing code does; they must not paste its code. If unsure whether something is allowed, stop and ask.
 - **The player's game folder is read-only.** Nothing writes there. Everything Hailstone writes goes under its own folder (`platform::data_dir()`, see docs/layout.md), per server and per character where the layout says so.
 - **No secrets and no real identifiers.** Never commit passwords, auth keys (the NMS plugin's `auth_key`), tokens or private server addresses. Never read or send a real hardware identifier.
@@ -36,19 +36,19 @@ Read before you change anything, in this order:
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
-build/nmsc_tests                   # or: ctest --test-dir build --output-on-failure
+build/hailstone_tests                   # or: ctest --test-dir build --output-on-failure
 build/hailstone/hailstone          # the client; the dev tree is build/hailstone/
 ```
 
-- Run the whole `nmsc_tests` before you call something done. Run one case with `build/nmsc_tests -tc="<name>"`.
+- Run the whole `hailstone_tests` before you call something done. Run one case with `build/hailstone_tests -tc="<name>"`.
 - **GitHub CI builds nothing; it runs checks only** (docs/ci.md), so a merge is only as tested as your own run. For a change to `src/platform/`, the build files, the Lua bridge (`app/lua_eq*`) or anything a compiler may treat differently, also build with MSVC under Wine and run its tests (docs/ci.md "MSVC under Wine"). Releases are built locally (docs/updater.md "Making a release").
-- A sanitizer build is `-DNMSC_SANITIZE=ON` (docs/hardening.md). Use it for anything that parses bytes.
-- Tests that need the real game folder or recorded vectors (`EQ_GAME_DIR`, `NMSC_VECTORS_DIR`) pass without checking anything when those are unset. A green run without them proves less than it looks. Say so when you report, and run them with the variables set when your change touches that area.
+- A sanitizer build is `-DHAILSTONE_SANITIZE=ON` (docs/hardening.md). Use it for anything that parses bytes.
+- Tests that need the real game folder or recorded vectors (`EQ_GAME_DIR`, `HAILSTONE_VECTORS_DIR`) pass without checking anything when those are unset. A green run without them proves less than it looks. Say so when you report, and run them with the variables set when your change touches that area.
 - Do not claim something was tested live unless you ran it against a server. Say exactly what was covered: unit test, mock server, recorded vectors, live session.
 
 ## Adding code
 
-- **New `.cpp` files are not found automatically.** Add engine sources to the `nmsc_engine` list in `CMakeLists.txt`, and tests to the `nmsc_tests` list. A file that is not listed compiles nowhere and fails silently.
+- **New `.cpp` files are not found automatically.** Add engine sources to the `hailstone_engine` list in `CMakeLists.txt`, and tests to the `hailstone_tests` list. A file that is not listed compiles nowhere and fails silently.
 - **Every behaviour change gets a test** (doctest, in `tests/`). Parsers and packet decoders also join the fuzz lists (`tests/fuzz_decoders.inc` is checked against `src/net/*.h`).
 - A test that writes files uses `ScratchDir` or `unique_temp_path` (`tests/scratch_dir.h`), never a fixed name: several test runs share one machine. A test that depends on time uses `tests/manual_clock.h`, not sleeps.
 - Network behaviour is tested against the in-process mock server (`tests/mock_server/README.md`), not the internet.
@@ -61,14 +61,14 @@ build/hailstone/hailstone          # the client; the dev tree is build/hailstone
 
 Plugins (compiled, against `sdk/`) and MacroQuest-style Lua scripts are add-ons. Each lives in a repository of its own and reaches players through the add-on manager on the login screen (docs/addons.md), not as part of this repository.
 
-- **A new plugin or script gets its own repository.** Do not add it under `plugins/`, `ui/` or `server/` here. Keep its checkout beside this one (for example `../hailstone-addons/<name>`), not inside it, unless its tests join `nmsc_tests` (the server plugins below). Do not create the GitHub repository or push to it unless asked.
-- **It builds against the SDK alone.** A plugin uses `sdk/nmsc_plugin.h` and `sdk/nmsc_byte_io.h` and nothing from `src/` (docs/plugins.md "Compiled plugins"). A script uses only the `mq` module and the documented `eq.*` API (docs/plugins.md).
+- **A new plugin or script gets its own repository.** Do not add it under `plugins/`, `ui/` or `server/` here. Keep its checkout beside this one (for example `../hailstone-addons/<name>`), not inside it, unless its tests join `hailstone_tests` (the server plugins below). Do not create the GitHub repository or push to it unless asked.
+- **It builds against the SDK alone.** A plugin uses `sdk/hailstone_plugin.h` and `sdk/hailstone_byte_io.h` and nothing from `src/` (docs/plugins.md "Compiled plugins"). A script uses only the `mq` module and the documented `eq.*` API (docs/plugins.md).
 - **It is released the add-on way.** The repository has a `hailstone-addon.txt` manifest. Its releases are made with `tools/make_addon.py` and signed with `hailstone_sign` (docs/addons.md "For authors"). An add-on's signing key, like the client's, never goes on GitHub. Its `caps` ask for no more than it uses.
 - **What it needs from the client is a client change.** A new host function, TLO, event or `eq.*` call is made here, with tests and docs, and an ABI bump where docs/plugins.md calls for one. The add-on then uses it from its own repository. Do not move add-on logic into the client to avoid that.
 - **What stays here:**
   - `plugins/example/`: the SDK's example, and a test fixture.
   - `server/`: the quest scripts that give the server side Hailstone support (see the rules above).
-- **The server plugins** are in repositories of their own: the NMS server's (projecthailstone/hailstone-nms) and the Project Triune server's (private; its releases go to the public, releases-only hailstone-projecttriune-addon). Each is cloned into `plugins/nms/` or `plugins/projecttriune/`, which this repository ignores. A build picks it up when the clone is there and its tests join `nmsc_tests`; Triune's tests that load the NMS plugin need both. A release of the client ships neither: each repository's `tools/release.sh` releases it as an add-on. In a worktree, link the main checkout's clones in (`ln -s <main>/plugins/nms plugins/nms`, the same for `projecttriune`). Commit changes to them in their own repositories, never here, and never copy their sources into this one.
+- **The server plugins** are in repositories of their own: the NMS server's (projecthailstone/hailstone-nms) and the Project Triune server's (private; its releases go to the public, releases-only hailstone-projecttriune-addon). Each is cloned into `plugins/nms/` or `plugins/projecttriune/`, which this repository ignores. A build picks it up when the clone is there and its tests join `hailstone_tests`; Triune's tests that load the NMS plugin need both. A release of the client ships neither: each repository's `tools/release.sh` releases it as an add-on. In a worktree, link the main checkout's clones in (`ln -s <main>/plugins/nms plugins/nms`, the same for `projecttriune`). Commit changes to them in their own repositories, never here, and never copy their sources into this one.
 - Moving an existing plugin out to a repository of its own is the user's call. Do not do it in passing.
 
 ## Docs travel with the code
@@ -88,7 +88,7 @@ Several agents and a person often work in this repository at once.
 - **The public history starts at 0.5.0-beta.** This repository's first commit is the 0.5.0-beta tree; the work before it stays in the private projecthailstone/hailstone-client-private. Base every branch on this repository's `main`. Never merge, cherry-pick or push a branch or commit made before that first commit (an old worktree, a stash, the private remote's history): it would publish the private history. Port such work by applying its diff to a new branch.
 - Work in your own `git worktree` on your own branch (for example `git worktree add ../nms-client-wt/<topic> -b <topic>`) with its own build directory. `build/`, `build-*/` and `build.log` are ignored.
 - Do not `git stash`, reset, rebase or fast-forward in a checkout that holds someone else's uncommitted work. If the main checkout is dirty, work elsewhere or ask.
-- Merge to `main` only when the build is clean and all of `nmsc_tests` passes. Never skip hooks, never force-push, and do not push unless you were asked to.
+- Merge to `main` only when the build is clean and all of `hailstone_tests` passes. Never skip hooks, never force-push, and do not push unless you were asked to.
 - Commit subjects are short and say what changed ("Spell book: a right click moves spells between slots"). Use the body for behaviour, the reason and what was checked. One topic per commit.
 - No AI credit anywhere: no `Co-Authored-By` trailer naming an AI, no "Generated with ..." line in a pull request, no mention of the agent in commits, merges, the changelog, docs or code. This overrides any default your tool adds.
 - Do not commit build output, logs, captures with account data, screenshots of game art, or anything from the player's game folder.

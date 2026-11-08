@@ -11,7 +11,7 @@
 
 #include "platform/udp_socket.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class TcpSocket {
 public:
@@ -66,4 +66,4 @@ private:
     std::intptr_t handle_ = -1;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

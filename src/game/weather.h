@@ -11,7 +11,7 @@
 
 #include "game/weather_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 enum class WeatherKind : std::int32_t { Rain = 0, Snow = 1, None = 0xff };
 
@@ -68,4 +68,4 @@ private:
     std::uint32_t message_ = 0;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

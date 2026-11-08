@@ -24,10 +24,10 @@
 #include "game/particles.h"
 #include "render/particle_renderer.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { struct Zone; }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ZoneParticles {
 public:
@@ -55,4 +55,4 @@ private:
     std::unique_ptr<render::ParticleRenderer> renderer_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

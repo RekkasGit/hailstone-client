@@ -32,19 +32,19 @@
 
 struct lua_State;
 
-namespace nmsc::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; }
-namespace nmsc::game { class HotButtonStore; struct HotButton; namespace mechanics { class Character; } }
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { class CharacterLibrary; struct CharacterModel; }
-namespace nmsc::mq { class ScriptHost; class Registry; struct Context; }
-namespace nmsc::ui {
+namespace hailstone::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; }
+namespace hailstone::game { class HotButtonStore; struct HotButton; namespace mechanics { class Character; } }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { class CharacterLibrary; struct CharacterModel; }
+namespace hailstone::mq { class ScriptHost; class Registry; struct Context; }
+namespace hailstone::ui {
 class UiTextures; class UiIni; struct ChatView; struct ServerSelectView; struct LoginView; struct CharacterSelectView;
 struct CharacterCreateView;
 }
-namespace nmsc::game { struct ItemLink; struct QuantityOpen; struct Spawn; class CharCreateLook; }
+namespace hailstone::game { struct ItemLink; struct QuantityOpen; struct Spawn; class CharCreateLook; }
 
-namespace nmsc::plugin { class UiBridge; class WebAccess; }
-namespace nmsc::app {
+namespace hailstone::plugin { class UiBridge; class WebAccess; }
+namespace hailstone::app {
 
 class ActionsUi;
 class Gamepad;
@@ -505,4 +505,4 @@ std::vector<std::pair<game::AutoskillRule, std::string>> autoskill_list(EqHost& 
 // when the player has no such ability or is not in the world. Readiness is the server's and the game's to refuse.
 bool use_ability(EqHost& h, mq::AbilityKind kind, std::string_view name);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -8,7 +8,7 @@
 // The connection asks one chain of extensions (game/server_ext_chain.h): the plugins' (net::ConnectionOptions::
 // plugins; compiled plugins, plugin/native_plugins.h, and Lua plugins, mq/lua_hailstone.cpp), each while it says it
 // is active. With no active member the chain gives every hook's default: the stock client. A plugin's packets,
-// commands, chat filter and per-frame work are the plugin interface's own callbacks (sdk/nmsc_plugin.h), not hooks
+// commands, chat filter and per-frame work are the plugin interface's own callbacks (sdk/hailstone_plugin.h), not hooks
 // here. docs/plugins.md.
 
 #include <cstdint>
@@ -21,14 +21,14 @@
 
 #include "game/tracking.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 class GameConnection;
 struct Item;
 struct ItemSlot;
 struct WhoResponse;
-} // namespace nmsc::net
+} // namespace hailstone::net
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellData;
 struct Spawn;
@@ -196,4 +196,4 @@ public:
 // The stock RoF2 client: every hook's default.
 ServerExtension& stock_server_extension();
 
-} // namespace nmsc::game
+} // namespace hailstone::game

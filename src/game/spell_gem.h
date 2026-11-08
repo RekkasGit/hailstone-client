@@ -24,7 +24,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellGemTints {
     std::array<std::uint32_t, 11> colors{}; // ARGB
@@ -108,4 +108,4 @@ std::int32_t spell_gem_overlay_top(double fraction, std::int32_t top, std::int32
 constexpr std::uint32_t kSpellGemOverlayUserColor = 0x15f;
 inline std::uint32_t spell_gem_overlay_color(std::uint32_t rgb) { return (0xff000000u | (rgb & 0xffffffu)) & 0x40ffffffu; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

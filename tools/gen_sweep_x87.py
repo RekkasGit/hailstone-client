@@ -3,7 +3,7 @@
 
 Input: `objdump -d -M intel` listings of eqgame.exe's functions (rof2decomp's NMS/eqgame.exe, the RoF2 client of
 May 10 2013), one file per function, named f_<hex address>.txt. Output: src/game/sweep_x87.inc, the body of
-nmsc::game::SweepX87 (game/sweep_x87.h): one C++ statement per original instruction, run on a small x87 machine
+hailstone::game::SweepX87 (game/sweep_x87.h): one C++ statement per original instruction, run on a small x87 machine
 (32-bit registers and flags, a 64 KB memory, the FPU stack with the original's rounding from game/mechanics/fpu.h).
 
 Why a translation and not a rewrite: the collision sweep's results depend on every x87 rounding, the order of the

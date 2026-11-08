@@ -26,7 +26,7 @@
 #include "assets/model.h"
 #include "assets/regions.h"
 
-namespace nmsc::assets::eqg {
+namespace hailstone::assets::eqg {
 
 constexpr std::uint32_t kZonMagic = 0x5a475145; // "EQGZ"
 constexpr std::uint32_t kTerMagic = 0x54475145; // "EQGT"
@@ -360,4 +360,4 @@ glm::mat4 placement_transform(const ZonPlacement& placement);
 // Object transform of the heightmap files: degrees, applied Z * Y * X.
 glm::mat4 heightmap_transform(const glm::vec3& position, const glm::vec3& degrees, const glm::vec3& scale);
 
-} // namespace nmsc::assets::eqg
+} // namespace hailstone::assets::eqg

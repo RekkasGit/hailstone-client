@@ -31,7 +31,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct Spawn;
 struct WorldState;
@@ -125,4 +125,4 @@ std::uint32_t get_previous_cycle_target(TargetManager& tm, std::int32_t mode, st
 // The backward NPC cycle as a target key: the new target, or nullopt when it stays.
 std::optional<std::uint32_t> target_previous_npc(TargetManager& tm, const WorldState& world, const glm::vec3& eye);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

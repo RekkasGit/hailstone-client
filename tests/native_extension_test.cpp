@@ -1,6 +1,6 @@
-// A compiled plugin as a server extension (sdk/nmsc_plugin.h ABI 2, plugin/native_plugins.h): the test plugin
+// A compiled plugin as a server extension (sdk/hailstone_plugin.h ABI 2, plugin/native_plugins.h): the test plugin
 // tests/plugins/ExtendTest.c sets class masks, pets, switches and vitals and answers hooks through the chain, only
-// with NMSC_CAP_EXTEND and while active. An ABI 1 plugin still loads.
+// with HAILSTONE_CAP_EXTEND and while active. An ABI 1 plugin still loads.
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -27,13 +27,13 @@
 #include <imgui.h>
 #include <lua.hpp>
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Host {
-    mq_test::World world{"nmsc_native_extension_test"};
+    mq_test::World world{"hailstone_native_extension_test"};
     fs::path plugin_dir = world.dir / "plugins";
     plugin::Hooks hooks;
     plugin::Policy policy;
@@ -49,7 +49,8 @@ struct Host {
 
     Host() {
         fs::create_directories(plugin_dir);
-        for (fs::path built : {fs::path(NMSC_EXTEND_PLUGIN), fs::path(NMSC_EXTEND_PLUGIN_V1)})
+        for (fs::path built : {fs::path(HAILSTONE_EXTEND_PLUGIN), fs::path(HAILSTONE_EXTEND_PLUGIN_V1),
+                               fs::path(HAILSTONE_EXTEND_PLUGIN_NEW)})
             fs::copy_file(built, plugin_dir / built.filename(), fs::copy_options::overwrite_existing);
         ctx.registry = &reg;
         ctx.conn = world.conn.get();
@@ -298,7 +299,7 @@ TEST_CASE("plugin server extension: setters, switches and hooks through the chai
     CHECK_FALSE(level_line(s7));
 }
 
-TEST_CASE("plugin server extension: needs NMSC_CAP_EXTEND; an ABI 1 plugin still loads") {
+TEST_CASE("plugin server extension: needs HAILSTONE_CAP_EXTEND; an ABI 1 plugin still loads") {
     Host h;
     net::GameConnection& c = *h.world.conn;
     h.approve(plugin::kCapAll & ~plugin::kCapExtend);
@@ -321,6 +322,21 @@ TEST_CASE("plugin server extension: needs NMSC_CAP_EXTEND; an ABI 1 plugin still
     h.plugins->unload("ExtendTestV1");
 }
 
+// The SDK's exports were nmsc_plugin_* up to 0.6 and are hailstone_plugin_* since: the client takes either.
+// ExtendTestV1 has only the old abi / set_host names and ExtendTest its hooks under the old name (above); ExtendTestNew
+// exports its hooks under the new one, and HAILSTONE_PLUGIN gives it both names of the other two.
+TEST_CASE("plugin server extension: the hook table under its export name after 0.6") {
+    Host h;
+    net::GameConnection& c = *h.world.conn;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("ExtendTestNew"));
+    CHECK(c.server_class_mask() == 0x3);
+    CHECK(h.chain.is_spellcaster(c) == true);
+    CHECK(h.chain.guild_member_classes(c, 1003) == 3);
+    h.plugins->unload("ExtendTestNew");
+    CHECK(h.chain.empty());
+}
+
 TEST_CASE("plugin server extension: before the zone-in only a plugin with 'login' loads") {
     Host h;
     h.approve(plugin::kCapAll & ~plugin::kCapLogin, true);
@@ -338,7 +354,7 @@ TEST_CASE("plugin server extension: before the zone-in only a plugin with 'login
 }
 
 TEST_CASE("connection: the last login's rules, provisional, from the world login to the zone-in") {
-    mq_test::World w("nmsc_provisional_rules_test");
+    mq_test::World w("hailstone_provisional_rules_test");
     using A = net::GameConnectionTestAccess;
     A::state(*w.conn) = net::ConnectionState::CharacterSelect;
     w.conn->update();
@@ -356,8 +372,8 @@ TEST_CASE("connection: the last login's rules, provisional, from the world login
 // folder, where a plugin's per-server files (server_config_dir) live.
 TEST_CASE("connection: the zone-in's rules keep the server's folder when the server sent no file list") {
     net::ConnectionOptions options;
-    options.server_files_dir = test::unique_temp_path("nmsc_no_list_rules_test");
-    mq_test::World w("nmsc_no_list_rules_world", options);
+    options.server_files_dir = test::unique_temp_path("hailstone_no_list_rules_test");
+    mq_test::World w("hailstone_no_list_rules_world", options);
     using A = net::GameConnectionTestAccess;
     A::state(*w.conn) = net::ConnectionState::InZone;
     A::update_server_rules(*w.conn);
@@ -370,7 +386,7 @@ TEST_CASE("connection: the zone-in's rules keep the server's folder when the ser
 // The scripts keep running through a zone change (the Scripts window; docs/plugins.md): the zone-in's rules stay
 // through every state of it, so nothing re-checks what runs; camping to character select makes them provisional.
 TEST_CASE("connection: the zone-in's rules last through a zone change") {
-    mq_test::World w("nmsc_zoning_rules_test");
+    mq_test::World w("hailstone_zoning_rules_test");
     using A = net::GameConnectionTestAccess;
     A::state(*w.conn) = net::ConnectionState::InZone;
     A::set_server_rules(*w.conn, plugin::Rules{});

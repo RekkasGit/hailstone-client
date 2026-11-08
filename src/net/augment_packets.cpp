@@ -6,7 +6,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -63,4 +63,4 @@ std::optional<AugmentInfo> decode_augment_info(const AppPacket& p) {
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

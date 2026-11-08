@@ -8,7 +8,7 @@
 // differential-tested rewrites of the original functions; the order of the
 // model calls is the original's (the vectors record it).
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -832,4 +832,4 @@ std::uint8_t swap_face(ActorLook& look, ActorEnv& env, std::int32_t to, std::int
     return 1;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

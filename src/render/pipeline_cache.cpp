@@ -7,7 +7,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 constexpr char kMagic[4] = {'H', 'S', 'P', 'C'};
@@ -94,4 +94,4 @@ bool save_pipeline_cache(const std::filesystem::path& path, std::span<const std:
     return write_file_atomic(path, std::string_view(reinterpret_cast<const char*>(file.data()), file.size()));
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -18,7 +18,7 @@
 #include <span>
 #include <vector>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 struct XmiEvent {
     std::uint32_t delay = 0;       // ticks after the previous event
@@ -37,4 +37,4 @@ inline constexpr int kXmiTicksPerSecond = 120;
 // The sequences in file order. Throws std::runtime_error on a malformed file.
 std::vector<XmiSequence> parse_xmi(std::span<const std::byte> data);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

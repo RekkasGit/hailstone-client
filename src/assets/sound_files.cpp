@@ -7,7 +7,7 @@
 #include "core/byte_io.h"
 #include "core/msvc_atoi.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -253,4 +253,4 @@ std::vector<SpellEffectSounds> parse_spell_effect_sounds(std::span<const std::by
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

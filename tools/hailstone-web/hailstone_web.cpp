@@ -9,7 +9,7 @@
 //
 // Threads: a reader thread blocks on standard input and posts each message to CEF's UI thread, where everything else
 // runs (CEF calls the off-screen handlers there), so only the UI thread writes standard output. Built with CEF's
-// flags: no exceptions, no RTTI (the protocol's own code is the client's, in nmsc_web_protocol).
+// flags: no exceptions, no RTTI (the protocol's own code is the client's, in hailstone_web_protocol).
 
 #include <algorithm>
 #include <atomic>
@@ -46,7 +46,7 @@
 #include "web/browser_protocol.h"
 #include "web/page_rules.h"
 
-namespace web = nmsc::web;
+namespace web = hailstone::web;
 
 namespace {
 
@@ -658,7 +658,7 @@ int run(const CefMainArgs& main_args, const std::vector<std::string>& args) {
     const int code = CefExecuteProcess(main_args, app, nullptr);
     if (code >= 0) return code;
 
-    nmsc::platform::binary_stdio();
+    hailstone::platform::binary_stdio();
     std::string data = arg_value(args, "--data");
     if (data.empty()) {
         std::fprintf(stderr, "hailstone-web: --data=<folder> is required\n");

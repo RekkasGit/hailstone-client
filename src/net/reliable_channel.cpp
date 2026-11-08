@@ -6,7 +6,7 @@
 // acknowledgement half of udp_reliable_send.cpp; offsets in the comments are
 // the original channel's.
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -209,4 +209,4 @@ void reliable_ack_all(ReliableChannel& ch, std::uint16_t sequence, std::int64_t 
     for (std::int64_t s = ch.oldest_unacked_seq; s <= ack; ++s) reliable_ack_one(ch, s, now);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

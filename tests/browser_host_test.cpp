@@ -17,8 +17,8 @@
 #include "web/browser_host.h"
 #include "web/browser_protocol.h"
 
-using namespace nmsc;
-using namespace nmsc::web;
+using namespace hailstone;
+using namespace hailstone::web;
 
 namespace {
 
@@ -845,7 +845,7 @@ TEST_CASE("browser host: garbage from the helper counts as a death; another vers
     CHECK(v.host.last_error().find("version") != std::string::npos);
 }
 
-#ifdef NMSC_MOCK_WEB_HELPER
+#ifdef HAILSTONE_MOCK_WEB_HELPER
 namespace {
 
 // Polls until `done` or 10 s (a real process answers through real pipes).
@@ -862,7 +862,7 @@ template <typename F> bool pump(BrowserHost& host, std::uint64_t now, F&& done) 
 } // namespace
 
 TEST_CASE("browser host: the stand-in helper over real pipes: a tab, a click, messages, a crash and a restart") {
-    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER}); });
+    BrowserHost host([] { return process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
     TabOptions o = script();
     o.width = 64;
     o.height = 32;
@@ -913,7 +913,7 @@ TEST_CASE("browser host: the stand-in helper over real pipes: a tab, a click, me
 // Several large evals in one frame (each under kMaxMessage, together past HelperProcess::kMaxPending): the first is
 // queued, the rest refused, and the helper, still reading, keeps running and answers afterwards.
 TEST_CASE("browser host: the stand-in helper: large evals in one frame leave it running") {
-    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER}); });
+    BrowserHost host([] { return process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
     auto id = host.open("https://example.org/", script());
     REQUIRE(id != 0);
     REQUIRE(pump(host, 0, [&] { return host.tab(id)->view.width != 0; }));
@@ -936,7 +936,7 @@ TEST_CASE("browser host: the stand-in helper: large evals in one frame leave it 
 TEST_CASE("helper process: Shutdown and the end of its input let it quit by itself") {
     platform::HelperProcess p;
     std::string error;
-    REQUIRE(p.start({NMSC_MOCK_WEB_HELPER}, error));
+    REQUIRE(p.start({HAILSTONE_MOCK_WEB_HELPER}, error));
     p.write(encode_message(Shutdown{}));
     p.stop(false);
     CHECK(p.wait_exit(10'000));
@@ -948,7 +948,7 @@ TEST_CASE("helper process: Shutdown and the end of its input let it quit by itse
 TEST_CASE("helper process: a helper that does not read is ended once its queue is full") {
     platform::HelperProcess p(std::size_t{1} << 20);
     std::string error;
-    REQUIRE(p.start({NMSC_MOCK_WEB_HELPER, "--stall", "1"}, error));
+    REQUIRE(p.start({HAILSTONE_MOCK_WEB_HELPER, "--stall", "1"}, error));
     const std::vector<std::byte> chunk(std::size_t{64} << 10, std::byte{0x55});
     std::size_t written = 0;
     // (Past the pipe's own buffer and the limit, a queue that is empty again is one the helper's end took.)
@@ -963,7 +963,7 @@ TEST_CASE("helper process: a helper that does not read is ended once its queue i
 }
 
 TEST_CASE("browser host: a helper of another version is given up on") {
-    BrowserHost host([] { return process_transport({NMSC_MOCK_WEB_HELPER, "--version", "99"}); });
+    BrowserHost host([] { return process_transport({HAILSTONE_MOCK_WEB_HELPER, "--version", "99"}); });
     auto id = host.open("https://example.org/", {});
     REQUIRE(id != 0);
     REQUIRE(pump(host, 0, [&] { return !host.available(); }));
@@ -983,13 +983,13 @@ TEST_CASE("browser host: a helper that cannot start") {
 }
 #endif
 
-#ifdef NMSC_WEB_HELPER
+#ifdef HAILSTONE_WEB_HELPER
 // The real helper (tools/hailstone-web, CEF). A script's tab on about:blank, coloured by its own script: the whole
 // path (start, a tab, painting, the page's script, the bridge, the rules, shutdown) runs without a network or a
 // server. (A script's tab may not open 127.0.0.1; the player's error page test is the next one.)
 TEST_CASE("browser host: the CEF helper draws a page and passes messages both ways") {
     test::ScratchDir data("hailstone-web");
-    BrowserHost host([&] { return process_transport({NMSC_WEB_HELPER, "--data=" + data.path().string()}); });
+    BrowserHost host([&] { return process_transport({HAILSTONE_WEB_HELPER, "--data=" + data.path().string()}); });
     TabOptions o = script({"example.net"});
     o.width = 320;
     o.height = 200;
@@ -1057,7 +1057,7 @@ TEST_CASE("browser host: the CEF helper quits by itself at Shutdown, with a tab 
     test::ScratchDir data("hailstone-web-quit");
     platform::HelperProcess p;
     std::string error;
-    REQUIRE(p.start({NMSC_WEB_HELPER, "--data=" + data.path().string()}, error));
+    REQUIRE(p.start({HAILSTONE_WEB_HELPER, "--data=" + data.path().string()}, error));
     Open o;
     o.tab = 1;
     o.width = 64;

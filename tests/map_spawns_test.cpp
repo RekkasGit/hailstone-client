@@ -15,7 +15,7 @@
 #include "mq_test_world.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -60,7 +60,7 @@ TEST_CASE("Map spawns: a plugin's marks on the minimap, the zone map and the map
     auto ext = std::make_shared<ShowRat>();
     net::ConnectionOptions opts;
     opts.plugins = ext;
-    mq_test::World world("nmsc_map_spawns_test", opts);
+    mq_test::World world("hailstone_map_spawns_test", opts);
     test::ScratchDir scratch("map_spawns_test");
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
@@ -104,7 +104,7 @@ TEST_CASE("Map spawns: a plugin's marks on the minimap, the zone map and the map
 }
 
 TEST_CASE("Map lines: the minimap draws the lines that cross its circle, however far their ends") {
-    mq_test::World world("nmsc_map_lines_test");
+    mq_test::World world("hailstone_map_lines_test");
     test::ScratchDir scratch("map_lines_test");
     std::filesystem::create_directories(scratch.path() / "maps");
     {

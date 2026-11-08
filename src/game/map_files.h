@@ -18,11 +18,11 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 class GameDir;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct MapFolders {
     std::filesystem::path own;     // empty: none
@@ -47,4 +47,4 @@ MapFiles find_map_files(const MapFolders& f, std::string_view zone, std::string_
 // name in any case, sorted by lower-cased name; those starting with '.' are left out.
 std::vector<std::string> map_skins(const MapFolders& f);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

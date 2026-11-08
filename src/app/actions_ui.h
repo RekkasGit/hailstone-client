@@ -31,12 +31,12 @@
 #include "game/keymap.h"
 #include "game/mechanics/abilities.h"
 
-namespace nmsc { class Config; }
-namespace nmsc::platform { struct InputState; }
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::game::mechanics { class Character; }
+namespace hailstone { class Config; }
+namespace hailstone::platform { struct InputState; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::game::mechanics { class Character; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // What the client knows about the player this frame that the connection does not.
 struct AbilityView {
@@ -88,7 +88,7 @@ public:
         store_.current(bar, button) = b;
         changed();
     }
-    // Any button of any page as its ini string ("" empty) for the plugins (NmscHost hot_button / set_hot_button;
+    // Any button of any page as its ini string ("" empty) for the plugins (PluginHostApi hot_button / set_hot_button;
     // nullopt before a character's file is loaded or out of range), and a bar's page; a change is saved.
     std::optional<std::string> hot_button_spec(int bar, int page, int button) const;
     bool set_hot_button_spec(int bar, int page, int button, const std::string& spec);
@@ -283,4 +283,4 @@ private:
     bool attack_toggle_ = false;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

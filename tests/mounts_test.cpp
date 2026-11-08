@@ -6,7 +6,7 @@
 #include "game/targeting.h"
 #include "game/world_state.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 

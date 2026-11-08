@@ -14,7 +14,7 @@
 #include "game/particles.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::vector<LightSource> select_lights(std::span<const assets::PointLight> zone_lights,
                                        std::span<const LightSource> dynamic, const glm::vec3& center, float range,
@@ -168,4 +168,4 @@ std::vector<LightSource> particle_lights(const ParticleSystem& particles,
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

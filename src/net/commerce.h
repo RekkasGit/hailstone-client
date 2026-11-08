@@ -16,7 +16,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct MerchantSession {
     std::uint32_t npc_id = 0;
@@ -92,4 +92,4 @@ struct QuantityRequest {
     bool centred = false;    // opened at (-1, -1): the dialog shows centred
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

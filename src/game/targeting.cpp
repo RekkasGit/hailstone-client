@@ -5,7 +5,7 @@
 #include "game/race_models.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -227,4 +227,4 @@ std::optional<std::uint32_t> target_previous_npc(TargetManager& tm, const WorldS
     return id;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -1,6 +1,6 @@
 # Login server protocol (SoD/RoF2 port)
 
-Implementation: `src/net/login.{h,cpp}` (`LoginClient`, `login_codec`), `src/net/des.{h,cpp}`. Tool: `netprobe [-v] login HOST[:PORT] USER PASS [SERVER_NAME]`. Tests: `tests/net_login_test.cpp`; the live check runs only with `NMSC_LIVE_LOGIN=host:port`.
+Implementation: `src/net/login.{h,cpp}` (`LoginClient`, `login_codec`), `src/net/des.{h,cpp}`. Tool: `netprobe [-v] login HOST[:PORT] USER PASS [SERVER_NAME]`. Tests: `tests/net_login_test.cpp`; the live check runs only with `HAILSTONE_LIVE_LOGIN=host:port`.
 
 Server side: EQEmu `loginserver/client.cpp`, `login_types.h`, `world_server.cpp`, `encryption.cpp`, `login_util/login_opcodes_sod.conf` (read as a spec, nothing copied).
 
@@ -64,7 +64,7 @@ The world connection's first packet is OP_SendLoginInfo (0x7a09, 464 bytes): the
 
 ## Live check (2026-10-21, EQEmu login server on 127.0.0.1:5997)
 
-`NMSC_LIVE_LOGIN=127.0.0.1:5997 NMSC_LIVE_REFRESH=1 nmsc_tests -tc="live login*"` (account nmscgrp1): login (sequence 3), list (4), the list again after 60 s (5), play (6). The login server logged `Play received from client [nmscgrp1] server number [2] sequence [6]` and answered with sequence 6; the client then entered the world and zoned in as before.
+`HAILSTONE_LIVE_LOGIN=127.0.0.1:5997 HAILSTONE_LIVE_REFRESH=1 hailstone_tests -tc="live login*"` (account nmscgrp1): login (sequence 3), list (4), the list again after 60 s (5), play (6). The login server logged `Play received from client [nmscgrp1] server number [2] sequence [6]` and answered with sequence 6; the client then entered the world and zoned in as before.
 
 ## Live check (2026-10-20)
 

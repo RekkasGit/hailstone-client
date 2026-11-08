@@ -15,7 +15,7 @@
 #include "net/game_connection.h"
 #include "net/player_packets.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -241,4 +241,4 @@ void add_tint_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<ColorPickerWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 class ZipWriter {
 public:
@@ -45,4 +45,4 @@ private:
     bool finished_ = false;
 };
 
-} // namespace nmsc
+} // namespace hailstone

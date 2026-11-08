@@ -25,7 +25,7 @@
 #include "game/coords.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -613,4 +613,4 @@ std::size_t WorldObjects::modelled_doors() const {
     return static_cast<std::size_t>(std::count_if(doors_.begin(), doors_.end(), [](const auto& kv) { return kv.second.model != nullptr; }));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

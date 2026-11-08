@@ -30,7 +30,7 @@
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace fs = std::filesystem;
 
@@ -128,7 +128,7 @@ struct TloRef {
     Value base;
 };
 
-constexpr const char* kTloMeta = "nmsc.mq.tlo";
+constexpr const char* kTloMeta = "hailstone.mq.tlo";
 
 void push_ref(lua_State* L, TloRef ref) {
     void* mem = lua_newuserdatauv(L, sizeof(TloRef), 0);
@@ -742,13 +742,13 @@ int l_dofile(lua_State* L) {
 int find_module(lua_State* L, const char* given) {
     Script& s = Script::of(L);
     std::string name = given;
-    lua_getfield(L, LUA_REGISTRYINDEX, "nmsc.loaded");
+    lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.loaded");
     lua_getfield(L, -1, given);
     lua_remove(L, -2);
     if (!lua_isnil(L, -1)) return 2;
     lua_pop(L, 1);
     if (name == "mq") {
-        lua_getfield(L, LUA_REGISTRYINDEX, "nmsc.mq");
+        lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.mq");
         return 2;
     }
     if (name == "ImGui") {
@@ -815,7 +815,7 @@ int l_require(lua_State* L) {
         lua_pop(L, 1);
         lua_pushboolean(L, 1);
     }
-    lua_getfield(L, LUA_REGISTRYINDEX, "nmsc.loaded");
+    lua_getfield(L, LUA_REGISTRYINDEX, "hailstone.loaded");
     lua_pushvalue(L, -2);
     lua_setfield(L, -2, name);
     lua_pop(L, 1);
@@ -1060,7 +1060,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     lua_pushcclosure(L, l_setmetatable, 1);
     lua_setglobal(L, "setmetatable");
     lua_newtable(L);
-    lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.loaded");
+    lua_setfield(L, LUA_REGISTRYINDEX, "hailstone.loaded");
     ui::lua::register_ui_api(L);
     // ui.GetClipboardText / SetClipboardText (ui/lua/lua_code_editor.cpp): the player's clipboard, only for a script
     // that may do everything (asked at each call: the rules may change while it runs).
@@ -1068,7 +1068,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
         lua_pushboolean(l, Script::of(l).caps == plugin::kCapAll);
         return 1;
     });
-    lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.clipboard_allowed");
+    lua_setfield(L, LUA_REGISTRYINDEX, "hailstone.clipboard_allowed");
 
     luaL_newmetatable(L, kTloMeta);
     for (auto [n, fn] : std::initializer_list<std::pair<const char*, lua_CFunction>>{
@@ -1121,7 +1121,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     lua_pushstring(L, script_config_dir(sc).string().c_str());
     lua_setfield(L, -2, "configDir");
     lua_pushvalue(L, -1);
-    lua_setfield(L, LUA_REGISTRYINDEX, "nmsc.mq");
+    lua_setfield(L, LUA_REGISTRYINDEX, "hailstone.mq");
     lua_pushvalue(L, -1);
     lua_setglobal(L, "mq");
     register_hailstone(L);
@@ -1645,11 +1645,11 @@ void ScriptHost::Impl::lua_command(std::string_view args) {
     say("[Lua] usage: /lua run <script> [args] | stop [script] | pause [script] | list");
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq
 
 // ---------------------------------------------------------------- Lua socials
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -2014,4 +2014,4 @@ const ButtonFace& ScriptHost::button_face(int social, const std::string& name, c
     return s->face;
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

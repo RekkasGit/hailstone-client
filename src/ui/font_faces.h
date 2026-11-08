@@ -12,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 struct FontFace {
     std::string family; // the typographic family (name 16), else the family (name 1)
@@ -40,4 +40,4 @@ struct FontFiles {
 };
 FontFiles find_font_family(std::span<const FontFace> faces, std::string_view family);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

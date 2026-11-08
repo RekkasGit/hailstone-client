@@ -6,7 +6,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -340,4 +340,4 @@ AppPacket encode_marketplace_preview_request(std::uint32_t item_id) {
     return AppPacket(to_wire(Op::ItemPreviewRequest), std::move(b));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

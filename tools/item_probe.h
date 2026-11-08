@@ -25,7 +25,7 @@
 #include "net/opcodes.h"
 #include "ui/item_windows.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class ItemProbe {
 public:
@@ -416,4 +416,4 @@ private:
     bool auto_inv_done_ = false, loot_all_done_ = false;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

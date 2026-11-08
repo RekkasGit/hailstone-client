@@ -6,7 +6,7 @@
 #include "core/sha1.h"
 #include "core/sha256.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("sha256: FIPS 180-4 vectors") {
     CHECK(to_hex(sha256(std::string_view(""))) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");

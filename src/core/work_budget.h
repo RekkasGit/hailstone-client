@@ -7,7 +7,7 @@
 
 #include <cstddef>
 
-namespace nmsc::core {
+namespace hailstone::core {
 
 class WorkBudget {
 public:
@@ -34,4 +34,4 @@ private:
     std::size_t started_ = 0;
 };
 
-} // namespace nmsc::core
+} // namespace hailstone::core

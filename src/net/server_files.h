@@ -38,7 +38,7 @@
 #include "net/server_files_packets.h"
 #include "plugin/policy.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // A path the server may send: relative, '/' separators, no empty, "." or ".." parts, no part starting with '.', no
 // ':' or '\\' or control characters, and not a program or script (.exe, .dll, .so, .lua ...): data only.
@@ -228,4 +228,4 @@ private:
     double rate_ = 0;
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

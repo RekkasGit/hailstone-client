@@ -23,9 +23,9 @@
 
 #include "app/player_movement.h"
 
-namespace nmsc::assets { struct Zone; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class MovementTest {
 public:
@@ -68,4 +68,4 @@ private:
     std::int64_t last_hp_ = -1;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

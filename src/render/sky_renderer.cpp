@@ -17,7 +17,7 @@
 #include "core/log.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -543,4 +543,4 @@ void SkyRenderer::draw_clouds(VkCommandBuffer cmd, std::uint32_t slot, const glm
     }
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

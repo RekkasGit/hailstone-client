@@ -9,7 +9,7 @@
 
 #include "core/float_chars.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -351,4 +351,4 @@ std::string Registry::text(const Context& ctx, const Value& v) const {
     return "NULL";
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

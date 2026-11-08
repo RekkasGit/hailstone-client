@@ -4,7 +4,7 @@
 
 #include "game/bag_move.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using game::BagMove;
 
 namespace {

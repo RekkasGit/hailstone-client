@@ -7,12 +7,12 @@
 
 #include <cstdint>
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 enum class Op : std::uint16_t {
-#define NMSC_OP(name, value) name,
+#define HAILSTONE_OP(name, value) name,
 #include "net/opcodes_rof2.inc"
-#undef NMSC_OP
+#undef HAILSTONE_OP
     Count_
 };
 
@@ -26,4 +26,4 @@ Op from_wire(std::uint16_t wire);
 // "SendLoginInfo" etc.; "Unknown" for out-of-range values.
 const char* op_name(Op op);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

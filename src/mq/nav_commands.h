@@ -8,9 +8,9 @@
 
 #include "mq/commands.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 void add_nav_commands(plugin::Hooks& hooks, plugin::Hooks::Owner owner, const CommandEnv& env,
                       const std::function<void(const std::string&)>& say);
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

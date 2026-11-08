@@ -20,8 +20,8 @@
 #include "scratch_dir.h"
 #include "wld_fixtures.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -95,9 +95,9 @@ TEST_CASE("race model table") {
 }
 
 TEST_CASE("the female froglok takes the male's clips: she sits instead of holding the rest pose" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     // globalpcfroglok_chr.wld has tracks for FRM only (GetAlternateAnimTag @0x406a60: FRF -> FRM).
-    const auto& game = *nmsc::test::game_dir();
+    const auto& game = *hailstone::test::game_dir();
     CharacterLibrary lib(CharacterLibrary::open_archives(game, {"globalpcfroglok_chr.s3d"}));
     auto m = lib.build("FRF");
     CHECK(m.animation_donor == "FRM");
@@ -108,8 +108,8 @@ TEST_CASE("the female froglok takes the male's clips: she sits instead of holdin
     }
 }
 
-TEST_CASE("classic human model from global_chr.s3d" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("classic human model from global_chr.s3d" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto archives = global_character_archives(game);
     CHECK(std::find(archives.begin(), archives.end(), "global_chr.s3d") != archives.end());
 
@@ -168,8 +168,8 @@ TEST_CASE("classic human model from global_chr.s3d" * doctest::skip(!nmsc::test:
     for (const auto& v : m.vertices) CHECK(glm::length(glm::vec3(world[v.bones[0]] * glm::vec4(v.position, 1.0f))) < 8.0f);
 }
 
-TEST_CASE("every global character model builds" * doctest::skip(!nmsc::test::game_dir())) {
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "");
+TEST_CASE("every global character model builds" * doctest::skip(!hailstone::test::game_dir())) {
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "");
     std::size_t built = 0;
     for (const auto& code : lib.model_codes()) {
         // BOAT is a static actor and IVM has no visible mesh in the shipped files.
@@ -181,11 +181,11 @@ TEST_CASE("every global character model builds" * doctest::skip(!nmsc::test::gam
 }
 
 TEST_CASE("Nektulos will-o-wisps (race 69) are the WIL actor, a glow with no light" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     const auto* rm = game::find_race_model(69, 2);
     REQUIRE(rm);
     CHECK(rm->code == "WIL");
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "nektulos");
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "nektulos");
     auto wil = lib.model("WIL");
     REQUIRE(wil);
     // One additive (WILHE0001_MDF, raw 0x80000017) part: the original's wisp, not a sprite or particle effect.
@@ -196,9 +196,9 @@ TEST_CASE("Nektulos will-o-wisps (race 69) are the WIL actor, a glow with no lig
 }
 
 TEST_CASE("duplicate actor definitions: first at one level, latest across levels" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     // BAM is defined in both global_chr and global4_chr.
-    const auto& game = *nmsc::test::game_dir();
+    const auto& game = *hailstone::test::game_dir();
     auto archives = CharacterLibrary::open_archives(game, {"global_chr.s3d", "global4_chr.s3d"});
     REQUIRE(archives.size() == 2);
     CharacterLibrary same(archives, {2, 2});
@@ -208,19 +208,19 @@ TEST_CASE("duplicate actor definitions: first at one level, latest across levels
     CHECK(later.build("BAM").source.find("global4_chr") != std::string::npos);
 }
 
-TEST_CASE("global archives load at resource level 0" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("global archives load at resource level 0" * doctest::skip(!hailstone::test::game_dir())) {
     // CDisplay::InitWorld: FLAGS[0] == 'T' -> level 0, else 2. Every NMS line starts with T.
-    auto levels = global_archive_levels(*nmsc::test::game_dir());
+    auto levels = global_archive_levels(*hailstone::test::game_dir());
     REQUIRE(!levels.empty());
     for (const auto& [name, level] : levels) CHECK(level == 0);
     CHECK(levels.contains("global_chr.s3d"));
     CHECK(kGlobalResourceLevel < kZoneResourceLevel);
 }
 
-TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" * doctest::skip(!hailstone::test::game_dir())) {
     // The Luclin Erudite folds a robe flap away (ERMPEBUTTR scaled to 0.02) and borrows the Wood Elf's clips, whose
     // track for that bone has scale 1: unfolded, the flap reached out 13 units from the hip.
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "", true);
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
     auto m = lib.model("ERM");
     REQUIRE(m);
     auto clip = m->clips.find("P01");
@@ -234,10 +234,10 @@ TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" 
     CHECK(reach < 6.0f);
 }
 
-TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * doctest::skip(!hailstone::test::game_dir())) {
     // global_chr's classic ELF has C10, C11 and T07..T09, the Luclin ELF has not; the few bone names the two share
     // lent a Luclin human those clips with every other bone in the rest pose: a T-pose.
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "", true);
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
     for (const char* code : {"HUF", "HUM", "HIF", "ERM"}) {
         CAPTURE(code);
         auto m = lib.model(code);
@@ -259,7 +259,7 @@ TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * d
 TEST_CASE("zone_character_archives: RoF2's and the live client's _chr.txt entries") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() /
-                   ("nmsc_chr_txt_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+                   ("hailstone_chr_txt_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(dir);
     auto touch = [&](const char* name, const char* text = "") { std::ofstream(dir / name) << text; };
     // RoF2: "kob,kob" is kob.eqg, "rtn,rtn" an EQG too, "skh,qeynos_chr2" an S3D. Live: "cln,cln_chr" is cln_chr.s3d.
@@ -278,7 +278,7 @@ TEST_CASE("zone_character_archives: RoF2's and the live client's _chr.txt entrie
 TEST_CASE("live hero's forge pieces: Resources/Layers rows name a base mesh and a texture layer") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() /
-                   ("nmsc_layers_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+                   ("hailstone_layers_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(dir / "Resources" / "Layers");
     auto touch = [&](const char* name, const char* text) { std::ofstream(dir / name, std::ios::binary) << text; };
     // The files read in name order, the first row for a piece winning; CRLF lines.
@@ -397,7 +397,7 @@ TEST_CASE("live hero's forge pieces: IT27104 is IT19814 with GENERIC_CHAIN_BLUE_
 
 TEST_CASE("EQG textures: c_<code>_ names are read from <code>.eqg over another archive's copies") {
     // Live's and RoF2's mpu.eqg (the puma mount) carry old c_pma_bd_s00_c.dds copies; pma.eqg's are the puma's.
-    auto game = nmsc::test::game_dir();
+    auto game = hailstone::test::game_dir();
     if (!game) return;
     GameDir dir(*game);
     if (!dir.exists("mpu.eqg") || !dir.exists("pma.eqg")) return;

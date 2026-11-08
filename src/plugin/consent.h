@@ -14,7 +14,7 @@
 
 #include "core/sha256.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 inline constexpr std::string_view kApprovalsName = "plugin_approvals.txt";
 
@@ -66,4 +66,4 @@ inline constexpr std::string_view kConsentWarning =
     "A compiled plugin is a program. It runs with full access to your computer: your files, your accounts and your "
     "network, not only the game. Allow it only if you trust this server.";
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

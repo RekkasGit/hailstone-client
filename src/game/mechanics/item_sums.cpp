@@ -3,7 +3,7 @@
 #include "game/mechanics/item_stats.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -210,4 +210,4 @@ void derive_item_bonuses(ItemSums& sums, const std::function<std::int32_t(std::i
     for (const auto& a : kAdjusted) sums.at(a[0]) = adjust(sums.at(a[0]), static_cast<int>(a[1]));
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

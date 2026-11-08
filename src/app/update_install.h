@@ -29,7 +29,7 @@
 #include "core/sha256.h"
 #include "core/update_manifest.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 std::filesystem::path update_dir(const std::filesystem::path& install_dir);
 
@@ -96,4 +96,4 @@ std::vector<std::string> retire_old_release_files(const std::filesystem::path& i
 std::vector<std::string> retire_old_release_files(const std::filesystem::path& install_dir,
                                                   const std::vector<RetiredFile>& retired);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

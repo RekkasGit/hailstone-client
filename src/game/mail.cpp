@@ -4,7 +4,7 @@
 #include <cctype>
 #include <optional>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 const char* mail_status_word(MailStatus s) {
     switch (s) {
@@ -306,4 +306,4 @@ std::string mail_short_name(const std::string& address) {
     return dot == std::string::npos ? address : address.substr(dot + 1);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

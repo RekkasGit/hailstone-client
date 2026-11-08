@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 // The entries of `version`'s section (its heading's first word is `version`), one a string, without the "- ", the
 // lines of an entry joined with spaces and Markdown's backticks taken out. Empty when there is no such section.
@@ -17,4 +17,4 @@ std::vector<std::string> changelog_section(std::string_view text, std::string_vi
 // The file's name in the Hailstone folder.
 inline constexpr std::string_view kChangelogName = "CHANGELOG.md";
 
-} // namespace nmsc
+} // namespace hailstone

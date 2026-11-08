@@ -23,8 +23,8 @@
 #include "pfs_fixtures.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -174,7 +174,7 @@ TEST_CASE("shader names map to blend modes") {
     CHECK(eqg::shader_blend("Alpha_MaxCBSG1.fx") == BlendMode::Masked);
     CHECK(eqg::shader_blend("Chroma_MPLBasicAT.fx") == BlendMode::Masked);
     CHECK(eqg::shader_blend("AddAlpha_MPLBasicA.fx") == BlendMode::Additive);
-    using nmsc::assets::EqgShader;
+    using hailstone::assets::EqgShader;
     CHECK(eqg::shader_class("Alpha_MaxCBSG1.fx") == EqgShader::Alpha);
     CHECK(eqg::shader_class("AlphaSModelC1Max.fx") == EqgShader::Alpha);
     CHECK(eqg::shader_class("Chroma_MPLBasicAT.fx") == EqgShader::Chroma);
@@ -222,7 +222,7 @@ TEST_CASE("EQG effect parameters come from the e_* properties") {
     prop("e_fSlide2Y", 0, -0.5f, 0, "");
     prop("e_fFresnelBias", 0, 0.06f, 0, "");
     prop("e_fWaterColor1", 3, 0, 0xff3d5d64u, "");
-    auto e = eqg::effect_params(def, nmsc::assets::EqgShader::Water);
+    auto e = eqg::effect_params(def, hailstone::assets::EqgShader::Water);
     CHECK(e.slide == glm::vec4(0.04f, 0.0f, 0.0f, -0.5f));
     REQUIRE(e.textures.size() == 2);
     CHECK(e.textures[0] == "water_n.dds");
@@ -618,8 +618,8 @@ TEST_CASE("heightmap coverage: CEcoTextureLayer_ComputeCoverage's steps") {
 
 // ---- Real files (EQ_GAME_DIR) ----
 
-TEST_CASE("Crescent Reach loads as an EQG zone with water regions" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("Crescent Reach loads as an EQG zone with water regions" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     CHECK(is_eqg_zone(game, "crescent"));
     CHECK_FALSE(is_eqg_zone(game, "qeynos2"));
     auto z = load_zone(game, "crescent");
@@ -636,8 +636,8 @@ TEST_CASE("Crescent Reach loads as an EQG zone with water regions" * doctest::sk
     CHECK(mesh.floor_below({-250.0f, -1300.0f, 400.0f}, 0.0f).has_value());
 }
 
-TEST_CASE("Anguish lights sit on the geometry after the (y, -x, z) swap" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_eqg_zone(*nmsc::test::game_dir(), "anguish");
+TEST_CASE("Anguish lights sit on the geometry after the (y, -x, z) swap" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_eqg_zone(*hailstone::test::game_dir(), "anguish");
     CHECK(z.lights.size() == 452);
     std::size_t inside = 0;
     for (const auto& l : z.lights)
@@ -647,8 +647,8 @@ TEST_CASE("Anguish lights sit on the geometry after the (y, -x, z) swap" * docte
 }
 
 TEST_CASE("heightmap zones load: feerrott2 (feerrott.zon) and oldcommons (commonlands.zon)" *
-          doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto f = load_zone(game, "feerrott2");
     CHECK(f.placements.size() == 10901); // OpenEQ's count for the same archive
     REQUIRE_FALSE(f.terrain.empty());
@@ -660,8 +660,8 @@ TEST_CASE("heightmap zones load: feerrott2 (feerrott.zon) and oldcommons (common
 }
 
 TEST_CASE("heightmap regions: Moors ponds are water, its four zone lines decode" *
-          doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     auto z = load_zone(game, "moors");
     auto archive = PfsArchive::open(*game.find("moors.eqg"));
     auto sheets = eqg::parse_water_sheets(*archive.read("water.dat"));
@@ -692,7 +692,7 @@ TEST_CASE("heightmap regions: Moors ponds are water, its four zone lines decode"
 TEST_CASE("Zones the live client revamped under the RoF2 name load as S3D, or not at all") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() /
-                   ("nmsc_revamped_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+                   ("hailstone_revamped_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     auto touch = [&](const char* name) {
         fs::create_directories(dir);
         std::ofstream(dir / name) << "x";
@@ -812,9 +812,9 @@ TEST_CASE("binary ZON: a terrain listed many times is loaded once") {
     w.le<std::uint32_t>(0);
     w.bytes(s.bytes);
     for (int i = 0; i < 50; ++i) w.le(name);
-    nmsc::test::ScratchDir dir("eqg_ter_dup");
+    hailstone::test::ScratchDir dir("eqg_ter_dup");
     {
-        auto eqg = nmsc::test::pfs_fixtures::make_pfs({{"terdup.zon", w.take()}, {"ter_dup.ter", ter}});
+        auto eqg = hailstone::test::pfs_fixtures::make_pfs({{"terdup.zon", w.take()}, {"ter_dup.ter", ter}});
         std::ofstream f(dir.path() / "terdup.eqg", std::ios::binary);
         f.write(reinterpret_cast<const char*>(eqg.data()), static_cast<std::streamsize>(eqg.size()));
     }
@@ -838,10 +838,10 @@ TEST_CASE("binary ZON: a .mod that is missing or does not parse is tried once ho
     w.bytes(s.bytes);
     for (int i = 0; i < 50; ++i) w.le(bad);
     for (int i = 0; i < 50; ++i) w.le(gone);
-    nmsc::test::ScratchDir dir("eqg_mod_dup");
+    hailstone::test::ScratchDir dir("eqg_mod_dup");
     {
         std::vector<std::byte> garbage(64, std::byte{0x5a});
-        auto eqg = nmsc::test::pfs_fixtures::make_pfs({{"moddup.zon", w.take()}, {"bad.mod", garbage}});
+        auto eqg = hailstone::test::pfs_fixtures::make_pfs({{"moddup.zon", w.take()}, {"bad.mod", garbage}});
         std::ofstream f(dir.path() / "moddup.eqg", std::ios::binary);
         f.write(reinterpret_cast<const char*>(eqg.data()), static_cast<std::streamsize>(eqg.size()));
     }
@@ -850,7 +850,7 @@ TEST_CASE("binary ZON: a .mod that is missing or does not parse is tried once ho
     CHECK(zone.objects.empty());
     // The log keeps its last 16 lines: one failed parse and one missing model, not one per entry.
     char recent[4096];
-    nmsc::log::copy_recent_lines(recent, sizeof recent);
+    hailstone::log::copy_recent_lines(recent, sizeof recent);
     std::string lines(recent);
     std::size_t parses = 0;
     for (auto at = lines.find("model bad.mod:"); at != std::string::npos; at = lines.find("model bad.mod:", at + 1))

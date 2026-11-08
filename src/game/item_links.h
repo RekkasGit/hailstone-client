@@ -24,7 +24,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct ItemLink {
     std::uint32_t item_id = 0;
@@ -141,4 +141,4 @@ inline constexpr int kChatInputMaxTags = 10;
 LinkAllChat link_all_into_chat(const std::string& typed, const std::vector<std::string>& tags,
                                std::size_t max_chars = kChatInputMaxChars, int max_tags = kChatInputMaxTags);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

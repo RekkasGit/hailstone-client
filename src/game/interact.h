@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct DuelState {
     std::uint32_t challenged = 0; // 0xddf7e4: whom we challenged, or the challenger we accepted
@@ -85,4 +85,4 @@ struct Spawn;
 // corpses keep the original's right click.
 bool opens_player_menu(const Spawn& sp, bool self);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

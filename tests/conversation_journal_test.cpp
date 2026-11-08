@@ -8,7 +8,7 @@
 #include "game/conversation_journal.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 TEST_CASE("Conversation journal: NPCs by name and zone, an entry per text, categories, the files") {
@@ -35,7 +35,7 @@ TEST_CASE("Conversation journal: NPCs by name and zone, an entry per text, categ
     j.remove_category(0);
     CHECK(j.set_category("Again", "", -1)->id == 0); // the lowest free id
 
-    nmsc::test::ScratchDir dir_scratch("journal_test");
+    hailstone::test::ScratchDir dir_scratch("journal_test");
     const fs::path& dir = dir_scratch.path();
     REQUIRE(j.save(dir / "CJ") == 0);
     std::ifstream hdr(dir / "CJ.hdr");
@@ -65,7 +65,7 @@ TEST_CASE("Conversation journal: NPCs by name and zone, an entry per text, categ
 TEST_CASE("Conversation journal: the files open in a folder whose name is outside the ANSI code page") {
     // The data folder sits under the user's profile, which may be named in any script; on Windows path::string()
     // throws for such a name and a narrow fopen cannot open it.
-    nmsc::test::ScratchDir dir_scratch("journal_unicode_test");
+    hailstone::test::ScratchDir dir_scratch("journal_unicode_test");
     const fs::path dir = dir_scratch.path() / fs::path(std::u8string(u8"Журнал 日記"));
     fs::create_directories(dir);
     game::ConversationJournal j;

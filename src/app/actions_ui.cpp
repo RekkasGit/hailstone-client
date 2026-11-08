@@ -27,7 +27,7 @@
 #include "platform/paths.h"
 #include "platform/window.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace mech = game::mechanics;
 using game::HotButton;
@@ -36,7 +36,7 @@ using game::HotButtonType;
 namespace {
 
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
-constexpr const char* kDragType = "NMSC_HOTBUTTON";
+constexpr const char* kDragType = "HAILSTONE_HOTBUTTON";
 
 bool is_modifier(std::uint8_t code) {
     return code == 0x2a || code == 0x36 || code == 0x1d || code == 0x9d || code == 0x38 || code == 0xb8;
@@ -853,7 +853,7 @@ void ActionsUi::draw_hotbar(net::GameConnection& conn, const mech::Character* ch
     float em = ImGui::GetFontSize();
     ImVec2 display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y - em * 0.6f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 1.0f));
-    if (!ImGui::Begin("Hotbar##nmsc_hotbar", &hotbar_open_, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::Begin("Hotbar##hailstone_hotbar", &hotbar_open_, kPanelFlags | ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
     }
@@ -938,7 +938,7 @@ void ActionsUi::draw_actions(net::GameConnection& conn, const mech::Character* c
     ImVec2 display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display.x - em * 0.6f, display.y * 0.35f), ImGuiCond_FirstUseEver, ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowSize(ImVec2(em * 22.0f, em * 26.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Actions##nmsc_actions", &actions_open_, ImGuiWindowFlags_NoSavedSettings)) {
+    if (!ImGui::Begin("Actions##hailstone_actions", &actions_open_, ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return;
     }
@@ -1117,7 +1117,7 @@ void ActionsUi::draw_keys(net::GameConnection& conn) {
     ImVec2 display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.45f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(em * 30.0f, em * 28.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Keyboard##nmsc_keys", &keys_open_, ImGuiWindowFlags_NoSavedSettings)) {
+    if (!ImGui::Begin("Keyboard##hailstone_keys", &keys_open_, ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return;
     }
@@ -1175,4 +1175,4 @@ void ActionsUi::draw_keys(net::GameConnection& conn) {
     ImGui::End();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

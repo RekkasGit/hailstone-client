@@ -12,10 +12,10 @@
 
 #include "plugin/web_access.h"
 
-namespace nmsc::web { class BrowserHost; }
-namespace nmsc::ui { class WebTextures; }
+namespace hailstone::web { class BrowserHost; }
+namespace hailstone::ui { class WebTextures; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct WebServiceEnv {
     std::function<web::BrowserHost*()> browser;   // made on first use; null without the helper
@@ -83,4 +83,4 @@ private:
     float last_x_ = -1, last_y_ = -1;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

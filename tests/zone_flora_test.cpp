@@ -16,8 +16,8 @@
 #include "game_files.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -356,7 +356,7 @@ TEST_CASE("zone flora: East Commonlands' ground (game files)") {
     CHECK(!stats.empty());
 
     // The shipped rules: plants on the meadows, none in the water.
-    REQUIRE(add_zone_flora(*game, zone, NMSC_SOURCE_DIR "/flora", true) > 500);
+    REQUIRE(add_zone_flora(*game, zone, HAILSTONE_SOURCE_DIR "/flora", true) > 500);
     CHECK(!zone.flora.donors.empty());
     REQUIRE(zone.flora.grower);
     std::vector<FloraInstance> plants;

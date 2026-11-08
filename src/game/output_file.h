@@ -17,7 +17,7 @@
 #include "net/guild_bank_packets.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 class Inventory;
@@ -68,4 +68,4 @@ std::string guild_bank_file(const std::vector<std::optional<net::GuildBankItem>>
 // character's real estate (none under EQEmu, which has no real estate).
 std::string real_estate_file();
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 class Config {
 public:
@@ -71,4 +71,4 @@ private:
 // The settings file of the client: hailstone.ini in the data folder (platform::config_file()).
 std::filesystem::path default_config_path();
 
-} // namespace nmsc
+} // namespace hailstone

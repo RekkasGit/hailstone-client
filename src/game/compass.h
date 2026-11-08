@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class CompassError {
 public:
@@ -59,4 +59,4 @@ private:
     bool was_shown_ = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

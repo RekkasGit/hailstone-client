@@ -10,7 +10,7 @@
 
 #include "platform/process.h"
 
-namespace nmsc::log {
+namespace hailstone::log {
 
 namespace {
 std::atomic<Level> g_level{Level::Info};
@@ -132,4 +132,4 @@ void write(Level level, std::string_view message) {
     }
 }
 
-} // namespace nmsc::log
+} // namespace hailstone::log

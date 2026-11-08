@@ -6,10 +6,10 @@
 #include "render/actor_layers.h"
 #include "render/actor_renderer.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-using nmsc::render::ActorLayers;
-using nmsc::render::LayerRequest;
+using namespace hailstone;
+using namespace hailstone::game;
+using hailstone::render::ActorLayers;
+using hailstone::render::LayerRequest;
 
 TEST_CASE("bone groups: the classic skeleton's callback") {
     CHECK(classic_bone_group("HUMCH_TRACK") == kUpperBones);
@@ -230,7 +230,7 @@ TEST_CASE("new-style: an attack over a walk; a stand cuts it") {
 }
 
 TEST_CASE("classic: an action asked during an unfinished one follows it (+0x10c4)") {
-    using nmsc::game::classic_may_interrupt;
+    using hailstone::game::classic_may_interrupt;
     CHECK_FALSE(classic_may_interrupt(5, 5));   // never over itself
     CHECK_FALSE(classic_may_interrupt(2, 5));   // C05 is not interruptible
     CHECK(classic_may_interrupt(2, 0x20));      // P01 is

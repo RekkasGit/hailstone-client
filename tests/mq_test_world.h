@@ -17,7 +17,7 @@
 #include "net/game_connection.h"
 #include "scratch_dir.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct GameConnectionTestAccess {
     static game::WorldState& world(GameConnection& c) { return c.world_; }
@@ -51,9 +51,9 @@ struct GameConnectionTestAccess {
     }
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net
 
-namespace nmsc::mq_test {
+namespace hailstone::mq_test {
 
 inline std::string spell_line(std::initializer_list<std::pair<int, std::string>> set) {
     std::vector<std::string> cols(237, "0");
@@ -180,4 +180,4 @@ struct World {
     }
 };
 
-} // namespace nmsc::mq_test
+} // namespace hailstone::mq_test

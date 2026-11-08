@@ -38,7 +38,7 @@
 
 #include "assets/spell_effects.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // eqclient.ini [Defaults] SpellParticleDensity / SpellParticleOpacity.
 struct SpellParticleSettings {
@@ -225,4 +225,4 @@ private:
     std::optional<glm::vec3> viewer_;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game
