@@ -409,7 +409,7 @@ add_library(hailstone_engine STATIC
   src/game/object_collision.cpp
   src/game/zone_ladders.cpp
   src/game/swept_sphere.cpp
-  src/game/sweep_x87.cpp
+  src/game/sphere_sweep.cpp
   src/game/collision_callbacks.cpp
   src/game/merchant.cpp
   src/game/bank.cpp
@@ -590,7 +590,7 @@ if(NOT MSVC)
     src/game/mechanics/abilities.cpp src/game/mechanics/item_sums.cpp src/game/mechanics/ticks.cpp
     src/game/mechanics/remote_spawns.cpp src/game/mechanics/controls.cpp src/game/mechanics/regions.cpp
     src/game/mechanics/anim_select.cpp src/game/mechanics/hit_by_spell.cpp src/game/mechanics/cast_spell.cpp
-    src/game/mechanics/collision_movement.cpp src/game/sweep_x87.cpp src/game/follow.cpp
+    src/game/mechanics/collision_movement.cpp src/game/sphere_sweep.cpp src/game/follow.cpp
     src/game/mechanics/switches.cpp src/game/mechanics/floor_height.cpp src/game/mechanics/can_i_fit_here.cpp
     src/audio/listener.cpp src/game/spell_gem.cpp
     src/game/mechanics/melee.cpp src/game/mechanics/use_skill.cpp src/game/fog.cpp src/game/spawn_heights.cpp
