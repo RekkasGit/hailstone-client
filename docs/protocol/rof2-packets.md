@@ -510,7 +510,7 @@ Tried live against EQEmu with two clients (playprobe `--duel`, `--duel-wait`, `-
 | KeyRing | C→Z | 0x1219 | "KEY\0"; EQEmu answers with the key ring as text |
 | Rewind | C→Z | 0x1745 | empty |
 | SpawnAppearance | C→Z | 0x0971 | /autosplit: {our id, 28, 0/1} |
-| Bandolier | C→Z | 0x7677 | 40 B: u32 action (0 create, 1 remove, 2 activate), u8 set, char[32] name (at most 31 characters and a NUL; the original copies 32 with no NUL, which EQEmu's CreateBandolier strcpy's one byte past `Name[32]`: a deliberate difference), 3 B. Create stores the four weapon slots' items (13, 14, 11, 22); activate moves them locally (the server's `SetBandolier` makes the same moves without telling the client) |
+| Bandolier | C→Z | 0x7677 | 40 B: u32 action (0 create, 1 remove, 2 activate), u8 set, char[32] name (at most 31 characters and a NUL; the original copies 32 with no NUL, which EQEmu's CreateBandolier strcpy's one byte past `Name[32]`: a deliberate difference), 3 B. Create stores the four weapon slots' items (13, 14, 11, 22); activate moves them locally (the server's `SetBandolier` makes the same moves without telling the client). Like the original's `ProcessMove`, a swap is all or nothing: when a weapon it puts back has no free general or bag slot, nothing moves, eqstr 9342 is printed and no packet is sent |
 | ReadBook | C→Z | 0x72df | 8216 B: u32 window 0xffffffff, slot {i16 slot, i16 sub, i16 aug −1, i16 0}, u32 book type, u32 target, u8, u8, char[8194] the item's book file |
 | ReadBook | Z→C | 0x72df | the same struct with the text; type 0 note, 1 book, 2 item info |
 | RequestTitles / SendTitleList | C→Z / Z→C | 0x6344 / 0x2d08 | empty / {u32 count, count × {u32 id, prefix, suffix}}: the titles we may take (`net/player_packets.h`) |

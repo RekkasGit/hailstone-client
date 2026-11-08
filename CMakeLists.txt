@@ -1046,6 +1046,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_plugin_test.cpp
     tests/spell_projectiles_test.cpp
     tests/commerce_test.cpp
+    tests/bandolier_swap_test.cpp
     tests/bank_test.cpp
     tests/real_estate_test.cpp
     tests/lua_eq_pregame_test.cpp
