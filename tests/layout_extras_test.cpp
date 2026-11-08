@@ -262,7 +262,7 @@ int use_up_stack(int depth) {
     return use_up_stack(depth + 1) + pad[0];
 }
 
-// Runs `crash` in a child process that has a SIGSEGV handler of its own (exit status 42) installed before the crash
+// Runs `crash` in a child process that has a SIGSEGV and SIGBUS handler of its own (exit status 42) installed before the crash
 // handler; the child's exit status, or -1 when it did not exit by itself.
 int crash_in_child(const fs::path& logs, void (*crash)()) {
     pid_t pid = ::fork();
@@ -273,6 +273,7 @@ int crash_in_child(const fs::path& logs, void (*crash)()) {
         sigemptyset(&earlier.sa_mask);
         earlier.sa_flags = SA_ONSTACK;
         sigaction(SIGSEGV, &earlier, nullptr);
+        sigaction(SIGBUS, &earlier, nullptr); // macOS: a thread's stack overflow hits its guard page as SIGBUS
         platform::install_crash_handler(logs);
         crash();
         ::_exit(1);

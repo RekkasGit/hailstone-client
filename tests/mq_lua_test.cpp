@@ -2,7 +2,9 @@
 // server's rules.
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <fstream>
+#include <thread>
 
 #include <imgui.h>
 
@@ -793,9 +795,13 @@ print('url ' .. mq.web.state(tab).url)
 while true do mq.delay(1000) end
 )");
         REQUIRE(h.scripts->run("page", {}));
-        for (int i = 0; i < 3000 && !h.printed_line("url https://www.example.org/"); ++i) {
+        // A real helper process answers through real pipes: wait by the wall clock, not a count of pulses (a slow
+        // machine, such as the macOS runner, starts the process later than 3000 quick pulses took).
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (!h.printed_line("url https://www.example.org/") && std::chrono::steady_clock::now() < until) {
             browser.poll(0);
             h.pulses(1, 10);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         CHECK(h.printed_line("open true"));
         CHECK(h.printed_line("elsewhere true"));

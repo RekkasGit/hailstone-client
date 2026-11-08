@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
+# The oldest macOS a build runs on (set before project()). 13.3 is the first whose libc++ formats floating-point
+# numbers (std::format of a float, std::to_chars), which the client uses; the bundled MoltenVK needs 12.0.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the build runs on")
 project(hailstone VERSION 0.6.0 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
@@ -10,6 +13,12 @@ else()
 endif()
 
 # Portable RoF2-compatible client. Plan: docs/plan.md
+
+# A plugin is a .dylib on macOS (plugin/native_plugins.cpp), where CMake would name a MODULE library .so. Set here, it
+# holds for the example, the test plugins and the server plugins built in this tree.
+if(APPLE)
+  set(CMAKE_SHARED_MODULE_SUFFIX ".dylib")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -752,6 +761,10 @@ add_custom_command(TARGET hailstone POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/pictures $<TARGET_FILE_DIR:hailstone>/pictures
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/flora $<TARGET_FILE_DIR:hailstone>/flora
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md $<TARGET_FILE_DIR:hailstone>)
+if(NMSC_MOLTENVK_DYLIB)
+  add_custom_command(TARGET hailstone POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NMSC_MOLTENVK_DYLIB} $<TARGET_FILE_DIR:hailstone>)
+endif()
 
 # cmake --install build --prefix <dir> gives the same folder: <dir>/hailstone(.exe), shaders/, ui/, icons/, pictures/, CHANGELOG.md and the shared
 # libraries the build made (SDL3 when it was fetched), found through an rpath of the binary's own folder. Only these
@@ -770,6 +783,11 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
+if(NMSC_MOLTENVK_DYLIB)
+  # macOS: Vulkan itself, beside the binary (platform/paths.h bundled_vulkan_library), with its licence.
+  install(FILES ${NMSC_MOLTENVK_DYLIB} DESTINATION .)
+  install(FILES ${NMSC_MOLTENVK_LICENSE} RENAME MoltenVK-LICENSE.txt DESTINATION .)
+endif()
 if(WIN32)
   install(FILES $<TARGET_RUNTIME_DLLS:hailstone> DESTINATION .)
 elseif(TARGET SDL3-shared)
@@ -811,6 +829,7 @@ if(NMSC_BUILD_TESTS)
     tests/server_script_test.cpp
     tests/server_tools_test.cpp
     tests/float_chars_test.cpp
+    tests/file_time_test.cpp
     tests/screen_pictures_test.cpp
     tests/window_icon_test.cpp
     tests/sha256_test.cpp

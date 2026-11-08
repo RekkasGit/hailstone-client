@@ -11,6 +11,9 @@ and on pull requests to `main`:
 - `wiki`: `tools/sync_wiki.py --check`, every document of `docs/`, `CONTRIBUTING.md` and `server/README.md` has a
   wiki page and no link points at a missing file (docs/wiki.md).
 
+One workflow builds: `.github/workflows/macos.yml` ("macOS arm64" below), the one platform the developer's Linux
+machine cannot build. It runs only when started by hand or on a push to a `macos/**` branch.
+
 Builds and tests run on the developer's machine, to save Actions minutes. The build legs (linux-gcc and
 windows-msvc, and before them Linux Clang, macOS arm64, Linux arm64, a sanitizer leg and clang-tidy) were dropped
 on 2026-11-02; they are in the workflow's history. Before a merge to `main`:
@@ -18,6 +21,7 @@ on 2026-11-02; they are in the workflow's history. Before a merge to `main`:
 | Platform | How | When |
 |---|---|---|
 | Linux | `cmake --build build && build/nmsc_tests` (AGENTS.md "Build and test"), with `EQ_GAME_DIR` set when the change touches assets | every merge |
+| macOS arm64 | the macOS workflow (below): Apple Clang, `nmsc_tests` on GitHub's Apple Silicon runner | a change to `src/platform/`, the build files, or anything Apple Clang may treat differently; and every release |
 | Windows | MSVC, CI's old compiler, under Wine: `tools/docker/msvc_build.sh`, then `wine build-msvc/nmsc_tests.exe` ("MSVC under Wine" below) | a change to `src/platform/`, the build files, the Lua bridge (`app/lua_eq*`) or anything a compiler may treat differently; and every release |
 
 Releases are built the same way: Linux in the `hailstone-linux-build` container (Ubuntu 24.04, so the client runs
@@ -53,7 +57,9 @@ Behaviour is unchanged by all of these.
 ## Not covered
 
 - Nothing runs on GitHub's machines but the checks: a change merged without the builds above is not built anywhere.
-- Linux arm64, Windows arm64 and macOS are not built.
+- Linux arm64 and Windows arm64 are not built. macOS arm64 is built only when its workflow is started.
+- No macOS build has been run on a Mac with a display: the runner has no usable GPU, so the window, MoltenVK and
+  the rendering are compiled and linked only.
 - Nothing runs against a real game install or a server unless run by hand; Vulkan and audio device code is only compiled.
 
 ## Windows builds from Linux
@@ -114,3 +120,21 @@ Windows release is made from (docs/updater.md "Making a release").
 ## clang-tidy
 
 Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/(?!game/sweep_x87).*\.cpp$'` with the root `.clang-tidy`; the CI job that did this is in the workflow's history.
+
+## macOS arm64
+
+`.github/workflows/macos.yml` builds on GitHub's `macos-15` runner (Apple Silicon, Apple Clang): a Release build,
+`nmsc_tests` (without game files or vectors), `cmake --install`, and an ad hoc signature on every Mach-O file of the
+install (Apple Silicon runs no unsigned code, and the install's rpath edits can leave the linker's signature stale).
+It fails when the binary needs a library outside the system's and its own folder. The run's artifact,
+`hailstone-macos-arm64`, is the installed folder as a tar, which keeps the executable bits an artifact's zip drops.
+
+Start it from the Actions tab or with `gh workflow run macos.yml -f ref=<commit or tag>`; a push to a branch named
+`macos/<topic>` starts it too. Then `gh run download <run> -n hailstone-macos-arm64` and `tar xf` it. The repository
+is public, so its minutes are free.
+
+The build sets `CMAKE_OSX_DEPLOYMENT_TARGET` to 13.3 (the first macOS whose libc++ formats floating-point numbers),
+fetches MoltenVK's prebuilt release (cmake/Dependencies.cmake) and leaves the in-game browser out (CEF needs app
+bundles there). There is no Developer ID signature or notarization, by choice: players clear the download's
+quarantine (README.md "Download").
+

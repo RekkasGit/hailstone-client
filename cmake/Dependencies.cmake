@@ -211,3 +211,20 @@ if(NMSC_BROWSER)
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   FetchContent_MakeAvailable(cef)
 endif()
+
+# MoltenVK (Apache-2.0): Vulkan on Metal. macOS has no Vulkan of its own, so a build ships this beside the client
+# (platform/paths.h bundled_vulkan_library). The release's prebuilt universal dylib, pinned with its SHA-256.
+# NMSC_MOLTENVK=OFF leaves it out, for a build run against an installed Vulkan SDK.
+if(APPLE)
+  option(NMSC_MOLTENVK "Ship MoltenVK beside the client (macOS)" ON)
+endif()
+if(APPLE AND NMSC_MOLTENVK)
+  FetchContent_Declare(moltenvk
+    URL https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar
+    URL_HASH SHA256=f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
+    SOURCE_SUBDIR nmsc-not-a-subproject
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(moltenvk)
+  set(NMSC_MOLTENVK_DYLIB ${moltenvk_SOURCE_DIR}/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib)
+  set(NMSC_MOLTENVK_LICENSE ${moltenvk_SOURCE_DIR}/LICENSE)
+endif()

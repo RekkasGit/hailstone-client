@@ -7,6 +7,7 @@
 | SDL3 | zlib | window, input, audio device, Vulkan surface |
 | Vulkan-Headers | Apache-2.0 / MIT | Vulkan API |
 | volk | MIT | Vulkan loader |
+| MoltenVK (github.com/KhronosGroup/MoltenVK, release v1.4.2, the prebuilt `MoltenVK-macos.tar`) | Apache-2.0 | Vulkan on Metal, macOS only: shipped beside the client as `libMoltenVK.dylib`, with `MoltenVK-LICENSE.txt` |
 | Vulkan Memory Allocator | MIT | GPU memory |
 | glm | MIT (Happy Bunny) | maths |
 | zlib | zlib | PFS inflate; PNG writer in tools |

@@ -50,6 +50,10 @@ std::filesystem::path ui_packs_dir(); // install_dir()/ui, one folder with a ui.
 std::filesystem::path icons_dir();    // install_dir()/icons, the window icon
 std::filesystem::path pictures_dir(); // install_dir()/pictures, the shipped pre-game and loading pictures
 std::filesystem::path flora_dir();    // install_dir()/flora, the zone flora rules (assets/zone_flora.h)
+// The Vulkan driver a release ships beside the binary in `install`: libMoltenVK.dylib on macOS, which has no system
+// Vulkan of its own. Empty when the file is not there (a dev build using an installed SDK) and on every other system,
+// where the graphics driver brings Vulkan.
+std::filesystem::path bundled_vulkan_library(const std::filesystem::path& install);
 
 // The writable files and folders, all under data_dir().
 std::filesystem::path config_file();                     // hailstone.ini, the client's settings

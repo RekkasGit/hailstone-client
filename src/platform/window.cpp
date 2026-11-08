@@ -10,6 +10,7 @@
 
 #include "core/log.h"
 #include "game/mouse_look.h"
+#include "platform/paths.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -132,6 +133,14 @@ Window::Window(const WindowDesc& desc) {
     // would otherwise put SDL in relative mode by itself on Wayland, holding the cursor until something left it;
     // relative mode is only ever mouse look's and the window cursor's here (platform/mouse_capture.h).
     SDL_SetHint(SDL_HINT_MOUSE_EMULATE_WARP_WITH_RELATIVE, "0");
+    // A release's own MoltenVK (macOS has no system Vulkan). SDL loads Vulkan when it makes the window, from this
+    // hint's path; without it SDL and volk would only look in the system's folders.
+    if (const auto lib = bundled_vulkan_library(install_dir()); !lib.empty()) {
+        const std::u8string u = lib.u8string(); // SDL takes UTF-8
+        SDL_SetHint(SDL_HINT_VULKAN_LIBRARY, reinterpret_cast<const char*>(u.c_str()));
+        bundled_vulkan_ = true;
+        log::info("Vulkan: the bundled {}", reinterpret_cast<const char*>(u.c_str()));
+    }
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
     // Gamepads (docs/gamepad.md): without them the client still runs. SDL sends SDL_EVENT_GAMEPAD_ADDED for the pads
@@ -784,6 +793,11 @@ VkSurfaceKHR Window::create_surface(VkInstance instance) const {
     if (!SDL_Vulkan_CreateSurface(window_, instance, nullptr, &surface))
         throw std::runtime_error(std::string("SDL_Vulkan_CreateSurface: ") + SDL_GetError());
     return surface;
+}
+
+PFN_vkGetInstanceProcAddr Window::bundled_vulkan_loader() const {
+    if (!bundled_vulkan_) return nullptr;
+    return reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
 }
 
 } // namespace nmsc::platform

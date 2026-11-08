@@ -223,6 +223,10 @@ public:
 
     std::vector<const char*> required_instance_extensions() const;
     VkSurfaceKHR create_surface(VkInstance instance) const;
+    // vkGetInstanceProcAddr of the Vulkan library the window loaded when it is the one shipped beside the binary
+    // (platform/paths.h bundled_vulkan_library: MoltenVK on macOS), for volkInitializeCustom; volk's own search does
+    // not look beside the binary. Null otherwise: volk finds the system's Vulkan itself.
+    PFN_vkGetInstanceProcAddr bundled_vulkan_loader() const;
 
 private:
     static bool on_a_display(int x, int y);
@@ -230,6 +234,7 @@ private:
     void close_gamepad();
     void read_gamepad();
     SDL_Window* window_ = nullptr;
+    bool bundled_vulkan_ = false; // SDL was pointed at bundled_vulkan_library()
     bool text_input_ = false; // set_text_input turned it on
     mutable WindowGeometry normal_; // the last normal place and size (kept while it is maximized)
     InputState input_;
