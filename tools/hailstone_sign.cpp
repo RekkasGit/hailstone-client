@@ -152,8 +152,11 @@ int verify(const std::string& key_arg, const fs::path& manifest) {
             return 1;
         }
         std::printf("add-on %s %s (%s), caps", a->name.c_str(), a->version_text.c_str(),
-                    a->kind == AddonKind::Script ? "script" : "plugin");
+                    a->kind == AddonKind::Script   ? "script"
+                    : a->kind == AddonKind::Plugin ? "plugin"
+                                                   : "tool");
         for (const auto& c : a->caps) std::printf(" %s", c.c_str());
+        if (a->caps.empty()) std::printf(" none");
         std::printf("\n");
         for (const auto& p : a->packages)
             std::printf("  %s: %s, %llu bytes\n", p.platform.c_str(), p.file.c_str(),
