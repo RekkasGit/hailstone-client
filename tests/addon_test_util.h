@@ -61,6 +61,21 @@ inline std::string library_for(std::string_view platform) {
     return b;
 }
 
+// The first bytes of a program this platform runs (header only: it is never run): ELF ET_EXEC, a PE executable image
+// that is not a DLL, a Mach-O MH_EXECUTE.
+inline std::string program_for(std::string_view platform) {
+    std::string b = library_for(platform);
+    if (platform.starts_with("linux")) {
+        b[16] = 2; // ET_EXEC
+    } else if (platform.starts_with("windows")) {
+        b[0x84 + 18] = 0x22; // IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_LARGE_ADDRESS_AWARE, no IMAGE_FILE_DLL
+        b[0x84 + 19] = 0x00;
+    } else {
+        b[12] = 2; // MH_EXECUTE
+    }
+    return b;
+}
+
 inline std::string this_platform() { return std::string(update_platform()); }
 inline std::string lib_ext() { return std::string(plugin_extension(update_platform())); }
 

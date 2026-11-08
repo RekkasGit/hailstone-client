@@ -1143,6 +1143,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/player_menu_test.cpp
     tests/connection_state_test.cpp
     tests/texpack_test.cpp
+    tests/addon_tool_test.cpp
   )
   target_include_directories(hailstone_tests PRIVATE tests sdk)
   target_compile_options(hailstone_tests PRIVATE ${HAILSTONE_WARNINGS})

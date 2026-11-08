@@ -245,6 +245,7 @@ void UiDemo::draw(const DemoFrameInput& in) {
         case ui::LoginAction::AddonSuggestLook:
         case ui::LoginAction::AddonSuggestLater:
         case ui::LoginAction::AddonSuggestNever:
+        case ui::LoginAction::AddonStart:
             login_.status = {"Demo: add-ons are not installed here.", false};
             break;
         case ui::LoginAction::Quit: quit_ = true; break;

@@ -28,7 +28,11 @@ hailstone/
   plugins/                   compiled plugins: plugins/<name>.so, or plugins/<name>/ with the binary and its settings;
                              plugins/<name>/ui/<pack>/ holds its Lua windows for each UI pack (docs/plugins.md)
   scripts/                   MacroQuest Lua scripts; scripts/config/ is mq.configDir (mq.pickle; config/<script>/ for a script without every capability)
-  textures/<pack>/           texture packs; display.texture_folder names one (empty: textures/default/)
+  textures/<pack>/           texture packs; display.texture_folder names one (empty: textures/default/). A pack built
+                             by Hailstone Texture Studio or tools/texpack holds by-hash/<hash>[.m|.k|.n|.r].dds and
+                             pack.ini (what it was built with)
+  tools/<name>/              tool add-ons, each a program of its own with its files (docs/addons.md "Tools"): the
+                             add-on manager's alone, as nothing else is put there
   maps/                      the player's in-game maps for every server, maps/<dir>/ a maps directory (below)
   servers/<profile>/         one folder per saved server (core/server_profile.h); servers/.deleted/ the deleted ones
     server.ini               [Server] name, host, port, username, remember

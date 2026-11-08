@@ -213,11 +213,23 @@ std::string extension_of(std::string_view path) {
 
 fs::path addons_dir(const fs::path& data_dir) { return data_dir / "addons"; }
 
+namespace {
+std::string_view kind_folder(AddonKind kind) {
+    return kind == AddonKind::Script ? "scripts" : kind == AddonKind::Plugin ? "plugins" : "tools";
+}
+} // namespace
+
 fs::path addon_folder(const fs::path& data_dir, AddonKind kind, std::string_view name) {
-    return data_dir / (kind == AddonKind::Script ? "scripts" : "plugins") / rel(name);
+    return data_dir / rel(kind_folder(kind)) / rel(name);
 }
 
-std::string_view addon_kind_word(AddonKind kind) { return kind == AddonKind::Script ? "script" : "plugin"; }
+std::string_view addon_kind_word(AddonKind kind) {
+    return kind == AddonKind::Script ? "script" : kind == AddonKind::Plugin ? "plugin" : "tool";
+}
+
+std::string addon_tool_program(std::string_view name, std::string_view platform) {
+    return std::string(name) + (platform.starts_with("windows-") ? ".exe" : "");
+}
 
 std::vector<InstalledAddon> read_installed_addons(const fs::path& data_dir) {
     std::vector<InstalledAddon> out;
@@ -247,8 +259,8 @@ std::vector<InstalledAddon> read_installed_addons(const fs::path& data_dir) {
             auto [name, kind] = split(rest);
             InstalledAddon a;
             a.name = std::string(name);
-            a.kind = kind == "plugin" ? AddonKind::Plugin : AddonKind::Script;
-            bad = !addon_name_ok(name) || (kind != "plugin" && kind != "script");
+            a.kind = kind == "plugin" ? AddonKind::Plugin : kind == "tool" ? AddonKind::Tool : AddonKind::Script;
+            bad = !addon_name_ok(name) || (kind != "plugin" && kind != "script" && kind != "tool");
             out.push_back(std::move(a));
             continue;
         }
@@ -322,7 +334,9 @@ namespace {
 std::string taken_on_disk(const fs::path& data_dir, AddonKind kind, std::string_view name) {
     std::error_code ec;
     const fs::path folder = addon_folder(data_dir, kind, name);
-    const std::string where = kind == AddonKind::Script ? "scripts/" : "plugins/";
+    const std::string where = std::string(kind_folder(kind)) + "/";
+    if (kind == AddonKind::Tool) // nothing but add-ons is put in tools/: any folder or file of the name is in the way
+        return fs::exists(folder, ec) ? where + std::string(name) + " is there already" : std::string();
     // A plugin's folder that holds no library is only the settings a plugin left beside it (host->config_dir), as
     // after an update took out a plugin an older release shipped: the install keeps them, as an update does.
     bool holds_library = kind == AddonKind::Script;
@@ -358,6 +372,7 @@ std::string addon_name_taken(const fs::path& data_dir, const std::vector<Install
     if (const InstalledAddon* a = find_addon(addons, name))
         return "the add-on \"" + a->name + "\" is installed already";
     if (std::string why = taken_on_disk(data_dir, kind, name); !why.empty()) return why;
+    if (kind == AddonKind::Tool) return {};
     // Nor a script and a compiled plugin of one name: their windows are told apart by kind
     // (plugin::UiBridge::owner_tag), but the player would not tell them apart.
     const AddonKind other = kind == AddonKind::Script ? AddonKind::Plugin : AddonKind::Script;
@@ -368,7 +383,7 @@ std::string addon_name_taken(const fs::path& data_dir, const std::vector<Install
 
 bool addon_owns_folder(const fs::path& data_dir, std::string_view folder) {
     for (const auto& a : read_installed_addons(data_dir)) {
-        const std::string mine = std::string(a.kind == AddonKind::Script ? "scripts/" : "plugins/") + a.name;
+        const std::string mine = std::string(kind_folder(a.kind)) + "/" + a.name;
         if (iequal(mine, folder)) return true;
     }
     return false;
@@ -390,6 +405,154 @@ bool lua_compiles(std::string_view text, std::string_view chunk_name, std::strin
     return ok;
 }
 
+namespace {
+
+// The bytes of a zip entry of at most `limit` bytes, or nullopt with *error why not.
+std::optional<std::string> read_entry(ZipReader& zip, const ZipEntry& e, std::uint64_t limit, std::string* error) {
+    if (e.size > limit) {
+        if (error) *error = e.name + " is too large";
+        return std::nullopt;
+    }
+    std::string bytes;
+    bytes.reserve(e.size);
+    if (!zip.extract(e, [&](std::span<const std::byte> piece) {
+            bytes.append(reinterpret_cast<const char*>(piece.data()), piece.size());
+            return true;
+        })) {
+        if (error) *error = e.name + ": " + zip.error();
+        return std::nullopt;
+    }
+    return bytes;
+}
+
+// Writes `files` into addons/new/<name>/, each hashed as it is written; `runnable` are made runnable (not on
+// Windows, which has no such bit).
+std::optional<std::vector<AddonFile>> write_unpacked(const fs::path& data_dir, std::string_view name, ZipReader& zip,
+                                                     const std::vector<const ZipEntry*>& files,
+                                                     [[maybe_unused]] const std::vector<const ZipEntry*>& runnable,
+                                                     std::string* error) {
+    const fs::path dir = addons_dir(data_dir) / "new" / rel(name);
+    remove_quietly(dir);
+    std::vector<AddonFile> out;
+    for (const ZipEntry* e : files) {
+        const fs::path to = dir / rel(e->name);
+        std::error_code ec;
+        fs::create_directories(to.parent_path(), ec);
+        std::ofstream file(to, std::ios::binary | std::ios::trunc);
+        if (!file) {
+            if (error) *error = "cannot write " + to.string();
+            return std::nullopt;
+        }
+        Sha256 h;
+        AddonFile f;
+        f.path = e->name;
+        f.size = e->size;
+        if (!zip.extract(*e, [&](std::span<const std::byte> piece) {
+                h.update(piece);
+                file.write(reinterpret_cast<const char*>(piece.data()), static_cast<std::streamsize>(piece.size()));
+                return static_cast<bool>(file);
+            })) {
+            file.close();
+            remove_quietly(dir);
+            if (error) *error = e->name + ": " + zip.error();
+            return std::nullopt;
+        }
+        file.close();
+        if (!file) {
+            remove_quietly(dir);
+            if (error) *error = "cannot write " + to.string();
+            return std::nullopt;
+        }
+#ifndef _WIN32
+        if (std::find(runnable.begin(), runnable.end(), e) != runnable.end())
+            fs::permissions(to, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                            fs::perm_options::add, ec);
+#endif
+        f.sha256 = h.finish();
+        out.push_back(std::move(f));
+    }
+    return out;
+}
+
+// A library file name of `platform`'s: <x>.dll, <x>.dylib, <x>.so or a versioned <x>.so.<n>[.<n>...].
+bool library_name(std::string_view lower_name, std::string_view platform) {
+    const std::string_view ext = plugin_extension(platform);
+    if (ext.empty()) return false;
+    if (lower_name.size() > ext.size() && lower_name.ends_with(ext)) return true;
+    if (ext != ".so") return false;
+    const auto at = lower_name.find(".so.");
+    if (at == std::string_view::npos || at == 0) return false;
+    for (char c : lower_name.substr(at + 4))
+        if (!((c >= '0' && c <= '9') || c == '.')) return false;
+    return true;
+}
+
+// Every name a tool's package may not hold, whatever its place: what runs on its own or through a shell (a program
+// other than the tool's, a script for a system interpreter). Lua is the tool's own business: it runs nowhere else.
+constexpr std::string_view kToolRefused[] = {".exe", ".com", ".bat", ".cmd", ".ps1", ".sh",  ".asi", ".flt",
+                                             ".py",  ".js",  ".vbs", ".scr", ".msi", ".jar", ".app"};
+
+std::optional<std::vector<AddonFile>> unpack_tool(const fs::path& data_dir, const AddonManifest& m, ZipReader& zip,
+                                                  std::string_view platform, std::string* error) {
+    auto fail = [&](std::string why) -> std::optional<std::vector<AddonFile>> {
+        if (error) *error = std::move(why);
+        return std::nullopt;
+    };
+    const std::string program_name = addon_tool_program(m.name, platform);
+    std::vector<const ZipEntry*> files, libraries;
+    std::map<std::string, std::string> seen;
+    std::uint64_t total = 0;
+    const ZipEntry* program = nullptr;
+    for (const auto& e : zip.entries()) {
+        if (e.is_directory()) continue;
+        if (files.size() >= kMaxFiles) return fail("the package holds too many files");
+        total += e.size;
+        if (total > kMaxPluginBytes) return fail("the package is too large");
+        if (!net::is_safe_file_path_shape(e.name)) return fail(e.name + " is not a name a tool may hold");
+        if (!seen.emplace(lower(e.name), e.name).second) return fail(e.name + " is in the package twice");
+        const bool top = e.name.find('/') == std::string::npos;
+        const std::string name = lower(file_of(e.name));
+        if (top && name == lower(program_name)) {
+            if (e.name != program_name) return fail(e.name + ": the program is named " + program_name);
+            program = &e;
+        } else if (library_name(name, platform)) {
+            if (!top) return fail(e.name + ": a tool's libraries go at the top of its package, beside its program");
+            libraries.push_back(&e);
+        } else if (library_name(name, "linux-x64") || library_name(name, "windows-x64") ||
+                   library_name(name, "macos-x64")) {
+            return fail(e.name + " is a library for another platform");
+        } else {
+            for (std::string_view ext : kToolRefused)
+                if (name.size() > ext.size() && name.ends_with(ext))
+                    return fail(e.name + " is not something a tool may hold (one program, named after it, and its "
+                                         "libraries for " + std::string(platform) + ")");
+        }
+        files.push_back(&e);
+    }
+    if (!program) return fail("the package has no program for " + std::string(platform) + " (" + program_name + ")");
+
+    // The checks that read a file's contents: each Lua file compiles, the program runs here, each library loads here.
+    for (const ZipEntry* e : files) {
+        const bool lua = extension_of(e->name) == ".lua";
+        const bool lib = std::find(libraries.begin(), libraries.end(), e) != libraries.end();
+        if (!lua && !lib && e != program) continue;
+        auto bytes = read_entry(zip, *e, lua ? kMaxLuaFile : kMaxLibrary, error);
+        if (!bytes) return std::nullopt;
+        if (lua) {
+            std::string why;
+            if (!lua_compiles(*bytes, m.name + "/" + e->name, &why)) return fail(e->name + " does not compile: " + why);
+            continue;
+        }
+        const BinaryHeader h = read_binary_header(std::as_bytes(std::span(bytes->data(), bytes->size())));
+        if (e == program ? !program_fits_platform(h, platform) : !binary_fits_platform(h, platform))
+            return fail(e->name + " is not a " + std::string(e == program ? "program" : "library") + " for " +
+                        std::string(platform));
+    }
+    return write_unpacked(data_dir, m.name, zip, files, {program}, error);
+}
+
+} // namespace
+
 std::optional<std::vector<AddonFile>> unpack_addon(const fs::path& data_dir, const AddonManifest& m,
                                                    const fs::path& zip_path, std::string_view platform,
                                                    std::string* error) {
@@ -399,6 +562,7 @@ std::optional<std::vector<AddonFile>> unpack_addon(const fs::path& data_dir, con
     };
     ZipReader zip;
     if (!zip.open(zip_path)) return fail("the package is not a zip this reads: " + zip.error());
+    if (m.kind == AddonKind::Tool) return unpack_tool(data_dir, m, zip, platform, error);
     const bool script = m.kind == AddonKind::Script;
     const std::string top = std::string(script ? "scripts/" : "plugins/") + m.name + "/";
     const std::string_view lib_ext = plugin_extension(platform);
@@ -444,61 +608,22 @@ std::optional<std::vector<AddonFile>> unpack_addon(const fs::path& data_dir, con
     for (const ZipEntry* e : files) {
         const bool lua = extension_of(e->name) == ".lua";
         if (!lua && e != library) continue;
-        if (e->size > (lua ? kMaxLuaFile : kMaxLibrary)) return fail(e->name + " is too large");
-        std::string bytes;
-        bytes.reserve(e->size);
-        if (!zip.extract(*e, [&](std::span<const std::byte> piece) {
-                bytes.append(reinterpret_cast<const char*>(piece.data()), piece.size());
-                return true;
-            }))
-            return fail(e->name + ": " + zip.error());
+        auto bytes = read_entry(zip, *e, lua ? kMaxLuaFile : kMaxLibrary, error);
+        if (!bytes) return std::nullopt;
         if (lua) {
             std::string why;
-            if (!lua_compiles(bytes, m.name + "/" + e->name, &why)) return fail(e->name + " does not compile: " + why);
+            if (!lua_compiles(*bytes, m.name + "/" + e->name, &why)) return fail(e->name + " does not compile: " + why);
         } else {
-            const BinaryHeader h = read_binary_header(std::as_bytes(std::span(bytes.data(), bytes.size())));
+            const BinaryHeader h = read_binary_header(std::as_bytes(std::span(bytes->data(), bytes->size())));
             if (!binary_fits_platform(h, platform)) return fail(e->name + " is not a library for " + std::string(platform));
         }
     }
 
-    // Then out into new/<name>/, each file hashed as it is written.
-    const fs::path dir = addons_dir(data_dir) / "new" / rel(m.name);
-    remove_quietly(dir);
-    std::vector<AddonFile> out;
-    for (const ZipEntry* e : files) {
-        const fs::path to = dir / rel(e->name);
-        std::error_code ec;
-        fs::create_directories(to.parent_path(), ec);
-        std::ofstream file(to, std::ios::binary | std::ios::trunc);
-        if (!file) return fail("cannot write " + to.string());
-        Sha256 h;
-        AddonFile f;
-        f.path = e->name;
-        f.size = e->size;
-        if (!zip.extract(*e, [&](std::span<const std::byte> piece) {
-                h.update(piece);
-                file.write(reinterpret_cast<const char*>(piece.data()), static_cast<std::streamsize>(piece.size()));
-                return static_cast<bool>(file);
-            })) {
-            file.close();
-            remove_quietly(dir);
-            return fail(e->name + ": " + zip.error());
-        }
-        file.close();
-        if (!file) {
-            remove_quietly(dir);
-            return fail("cannot write " + to.string());
-        }
-#ifndef _WIN32
-        // A plugin's library as the loader wants it; nothing else is made runnable.
-        if (e == library)
-            fs::permissions(to, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
-                            fs::perm_options::add, ec);
-#endif
-        f.sha256 = h.finish();
-        out.push_back(std::move(f));
-    }
-    return out;
+    // Then out into new/<name>/, each file hashed as it is written; a plugin's library as the loader wants it, and
+    // nothing else made runnable.
+    std::vector<const ZipEntry*> runnable;
+    if (library) runnable.push_back(library);
+    return write_unpacked(data_dir, m.name, zip, files, runnable, error);
 }
 
 bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::string* error) {
@@ -509,7 +634,8 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     std::vector<InstalledAddon> all = read_installed_addons(data_dir);
     const InstalledAddon* old = find_addon(all, addon.name);
     if (old && old->kind != addon.kind) {
-        if (error) *error = "an add-on cannot change from a script to a plugin or back";
+        if (error) *error = "an add-on cannot change its kind (" + std::string(addon_kind_word(old->kind)) + " to " +
+                            std::string(addon_kind_word(addon.kind)) + ")";
         return false;
     }
     std::error_code ec;

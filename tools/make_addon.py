@@ -2,7 +2,9 @@
 """Makes a Hailstone add-on's packages and its manifest, hailstone-addon.txt (docs/addons.md).
 
 A script is one folder (its init.lua at the top); a plugin is one folder for each platform it is built for, each
-with its library (<name>.so, <name>.dll or <name>.dylib) at the top and its windows in ui/<pack>/. Upload
+with its library (<name>.so, <name>.dll or <name>.dylib) at the top and its windows in ui/<pack>/; a tool (a program
+of its own) is one folder for each platform, with its program (<name>, <name>.exe on Windows) and its libraries at
+the top and its data anywhere. Upload
 everything in --out to a GitHub release of the add-on's repository: the client finds the manifest as the newest
 release's asset and the packages beside it.
 
@@ -11,6 +13,8 @@ usage:
       --dir path/to/autoloot --out release/
   tools/make_addon.py --name MQ2Hud --kind plugin --version 2.0.0 --caps read,ui \\
       --platform linux-x64=build-linux/MQ2Hud --platform windows-x64=build-win/MQ2Hud --out release/
+  tools/make_addon.py --name texstudio --kind tool --version 1.0.0 \
+      --platform linux-x64=dist/linux --platform windows-x64=dist/windows --out release/
 
 Optional: --author, --description, --notes (the release's page), --min-client (the oldest Hailstone it needs).
 Then sign it, if you want players' clients to refuse versions signed by anyone else:
@@ -36,6 +40,11 @@ CAPS = {"read", "commands", "target", "actions", "move", "chat", "events", "ui",
 PROGRAMS = (".exe", ".dll", ".so", ".dylib", ".com", ".bat", ".cmd", ".ps1", ".sh", ".asi", ".flt", ".py", ".js",
             ".vbs", ".scr", ".msi", ".jar", ".app")
 LIBRARY = {"linux": ".so", "windows": ".dll", "macos": ".dylib"}
+VERSIONED_SO = re.compile(r"^[^/]+\.so(\.[0-9]+)+$")
+
+
+def tool_program(name, platform):
+    return name + (".exe" if platform.startswith("windows-") else "")
 
 
 def files_under(root):
@@ -81,6 +90,23 @@ def check(name, kind, files, platform):
     lib = LIBRARY.get(platform.split("-", 1)[0])
     if not lib:
         sys.exit(f"{platform}: not a platform Hailstone has plugins for")
+    if kind == "tool":
+        program = tool_program(name, platform)
+        if program not in files:
+            sys.exit(f"{platform}: the package has its program at its top, {program}")
+        for f in files:
+            low = f.lower()
+            is_lib = low.endswith(lib) or (lib == ".so" and VERSIONED_SO.match(low))
+            if f == program:
+                continue
+            if is_lib:
+                if "/" in f:
+                    sys.exit(f"{f}: a tool's libraries go at its top, beside its program")
+                continue
+            if low.endswith(PROGRAMS) or VERSIONED_SO.match(low.rsplit("/", 1)[-1]):
+                sys.exit(f"{f}: a tool may hold its one program, its libraries for {platform} and data, nothing "
+                         "else that runs")
+        return
     libs = [f for f in files if f.lower().endswith(lib)]
     if libs != [f"{name}{lib}"] and libs != [f"lib{name}{lib}"]:
         sys.exit(f"{platform}: the package has exactly one library at its top, {name}{lib} (found {libs or 'none'})")
@@ -92,13 +118,13 @@ def check(name, kind, files, platform):
             sys.exit(f"{f}: a plugin may hold its one library, its windows and data, no other programs")
 
 
-def make_zip(path, root, names):
+def make_zip(path, root, names, runnable=()):
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for name in names:
             full = os.path.join(root, *name.split("/"))
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.create_system = 3
-            info.external_attr = (0o100000 | 0o644) << 16
+            info.external_attr = (0o100000 | (0o755 if name in runnable else 0o644)) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             with open(full, "rb") as f:
                 z.writestr(info, f.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
@@ -123,11 +149,11 @@ def one_line(text, what):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True)
-    ap.add_argument("--kind", required=True, choices=["script", "plugin"])
+    ap.add_argument("--kind", required=True, choices=["script", "plugin", "tool"])
     ap.add_argument("--version", required=True)
-    ap.add_argument("--caps", required=True, help="what it needs: read,ui,actions ... (docs/plugins.md)")
+    ap.add_argument("--caps", default="", help="what it needs: read,ui,actions ... (docs/plugins.md); a tool none")
     ap.add_argument("--dir", help="a script's folder")
-    ap.add_argument("--platform", action="append", default=[], help="a plugin's PLATFORM=FOLDER, once for each")
+    ap.add_argument("--platform", action="append", default=[], help="a plugin's or a tool's PLATFORM=FOLDER, once for each")
     ap.add_argument("--author", default="")
     ap.add_argument("--description", default="")
     ap.add_argument("--notes", default="", help="the release's page")
@@ -139,8 +165,11 @@ def main():
     for v in (a.version, a.min_client or "0.0.0"):
         if not VERSION.match(v):
             sys.exit(f"{v}: not a version (1.2.3, 1.2.3-beta.1)")
-    caps = [c.strip().lower() for c in a.caps.replace(" ", ",").split(",") if c.strip()]
-    if not caps or any(c not in CAPS for c in caps):
+    caps = [c.strip().lower() for c in a.caps.replace(" ", ",").split(",") if c.strip() and c.strip() != "none"]
+    if a.kind == "tool":
+        if caps:
+            sys.exit("--caps: a tool asks for none (it is a program of its own, not run by the client)")
+    elif not caps or any(c not in CAPS for c in caps):
         sys.exit(f"--caps: some of {', '.join(sorted(CAPS))}")
     if a.notes and (not a.notes.startswith(("https://", "http://")) or any(c.isspace() for c in a.notes)):
         sys.exit("--notes: an http(s) address")
@@ -154,7 +183,7 @@ def main():
         builds.append(("any", a.dir))
     else:
         if a.dir or not a.platform:
-            sys.exit("a plugin takes --platform PLATFORM=FOLDER, once for each platform (and no --dir)")
+            sys.exit(f"a {a.kind} takes --platform PLATFORM=FOLDER, once for each platform (and no --dir)")
         for p in a.platform:
             plat, _, folder = p.partition("=")
             if not PLATFORM.match(plat) or plat == "any" or not folder:
@@ -169,7 +198,7 @@ def main():
         lines.append(f"author {one_line(a.author, 'author')}")
     if a.description:
         lines.append(f"description {one_line(a.description, 'description')}")
-    lines.append(f"caps {','.join(caps)}")
+    lines.append(f"caps {','.join(caps) if caps else 'none'}")
     if a.notes:
         lines.append(f"notes {a.notes}")
     for plat, folder in builds:
@@ -179,7 +208,7 @@ def main():
         check(a.name, a.kind, files, plat)
         file = f"{a.name}-{a.version}.zip" if plat == "any" else f"{a.name}-{a.version}-{plat}.zip"
         path = os.path.join(a.out, file)
-        make_zip(path, folder, files)
+        make_zip(path, folder, files, [tool_program(a.name, plat)] if a.kind == "tool" else [])
         lines.append(f"package {plat} {os.path.getsize(path)} {digest(path)} {file}")
         print(f"{plat}: {path} ({len(files)} files)")
     manifest = os.path.join(a.out, MANIFEST)

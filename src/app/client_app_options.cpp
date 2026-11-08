@@ -289,6 +289,11 @@ void ClientApp::apply_font_face() {
 
 std::vector<std::string> ClientApp::option_choices(std::string_view name) const {
     std::vector<std::string> out;
+    // The texture packs (display.texture_folder): "Off", then each folder of textures/.
+    if (name == "texture_pack") {
+        out.push_back("Off");
+        for (auto& p : assets::texture_pack_names(platform::textures_dir())) out.push_back(std::move(p));
+    }
     // The Options window's font list (EnumerateSystemFonts): "Default" (the Arial-class font), then every family.
     if (name == "font_face") {
         out.push_back("Default");
@@ -373,6 +378,13 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     // 1: the asset-folder picker shows on the login screen, or at the next start (assets.pick); 1: this start's
     // folder came from --game-dir or EQ_GAME_DIR, which the picker does not change.
     if (o == "asset_folder_pick") return asset_folder_pick_requested(config_) ? 1 : 0;
+    // The texture pack: its index in option_choices("texture_pack") (0 off; -1 a folder given by path, or a missing
+    // one). Hailstone Texture Studio (projecthailstone/hailstone-texstudio, the tool add-on "texstudio",
+    // docs/addons.md): 1 when it is installed (setting it starts it), 0 when it is not.
+    if (o == "texture_pack")
+        return assets::texture_pack_choice(config_.get_string("display.texture_folder", ""),
+                                           assets::texture_pack_names(platform::textures_dir()));
+    if (o == "texture_studio") return texture_studio_installed() ? 1 : 0;
     if (o == "asset_folder_override") return asset_source_ == AssetFolderSource::Override ? 1 : 0;
     audio::AudioSettings s = audio_ ? audio_->settings() : audio::load_audio_settings(config_);
     if (o == "master") return s.master;
@@ -513,6 +525,22 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "asset_folder_pick") {
         request_asset_folder_pick(config_, v != 0);
         config_.save(config_path_);
+        return;
+    }
+    if (o == "texture_pack") {
+        // From the next start: the zone loaders read the overrides on their own threads (TextureOverrides has no
+        // lock), so the folder is indexed only at start (client_app_internal.h).
+        auto value = assets::texture_pack_value(v, assets::texture_pack_names(platform::textures_dir()));
+        if (!value) return;
+        config_.set("display.texture_folder", *value);
+        config_.save(config_path_);
+        log::info("texture pack: {} (from the next start)", value->empty() ? "default" : *value);
+        return;
+    }
+    if (o == "texture_studio") {
+        if (v == 0) return;
+        std::string error;
+        if (!start_addon_tool(kTextureStudio, &error)) log::warn("{}", error);
         return;
     }
     if (o == "clip_plane") {

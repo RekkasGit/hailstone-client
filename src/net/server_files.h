@@ -43,6 +43,8 @@ namespace hailstone::net {
 // A path the server may send: relative, '/' separators, no empty, "." or ".." parts, no part starting with '.', no
 // ':' or '\\' or control characters, and not a program or script (.exe, .dll, .so, .lua ...): data only.
 bool is_safe_server_file_path(std::string_view path);
+// The same rules on a path's shape alone, whatever kind of file it is (an add-on tool's package, docs/addons.md).
+bool is_safe_file_path_shape(std::string_view path);
 
 // This build's plugin platform folder ("linux-x64", "windows-x64", "macos-arm64" ...).
 std::string_view plugin_platform();

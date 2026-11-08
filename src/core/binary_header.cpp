@@ -34,6 +34,7 @@ BinaryHeader elf(std::span<const std::byte> b) {
     const auto machine = read<std::uint16_t>(r, big);
     h.format = BinaryFormat::Elf;
     h.library = type == 3; // ET_DYN
+    h.program = type == 2 || type == 3; // ET_EXEC; a PIE is ET_DYN (its PT_INTERP is not read)
     switch (machine) {
     case 62: h.archs = {"x64"}; break;    // EM_X86_64
     case 183: h.archs = {"arm64"}; break; // EM_AARCH64
@@ -58,6 +59,7 @@ BinaryHeader pe(std::span<const std::byte> b) {
     const auto characteristics = r.le<std::uint16_t>();
     h.format = BinaryFormat::Pe;
     h.library = (characteristics & 0x2000u) != 0; // IMAGE_FILE_DLL
+    h.program = !h.library && (characteristics & 0x0002u) != 0; // IMAGE_FILE_EXECUTABLE_IMAGE
     switch (machine) {
     case 0x8664: h.archs = {"x64"}; break;   // IMAGE_FILE_MACHINE_AMD64
     case 0xaa64: h.archs = {"arm64"}; break; // IMAGE_FILE_MACHINE_ARM64
@@ -78,7 +80,7 @@ std::string macho_arch(std::uint32_t cputype) {
 }
 
 // A thin Mach-O at `at`: its magic (64- or 32-bit, either byte order), cputype and filetype.
-bool macho_thin(std::span<const std::byte> b, std::size_t at, std::string& arch, bool& library) {
+bool macho_thin(std::span<const std::byte> b, std::size_t at, std::string& arch, bool& library, bool& program) {
     if (at > b.size() || b.size() - at < 16) return false;
     ByteReader r(b);
     r.seek(at);
@@ -91,6 +93,7 @@ bool macho_thin(std::span<const std::byte> b, std::size_t at, std::string& arch,
     r.skip(4); // cpusubtype
     const auto filetype = read<std::uint32_t>(r, big);
     library = filetype == 6 || filetype == 8; // MH_DYLIB, MH_BUNDLE
+    program = filetype == 2;                  // MH_EXECUTE
     return true;
 }
 
@@ -110,25 +113,28 @@ BinaryHeader read_binary_header(std::span<const std::byte> b) {
             BinaryHeader h;
             h.format = BinaryFormat::MachO;
             h.library = true;
+            h.program = true;
             for (std::uint32_t i = 0; i < n; ++i) {
                 r.skip(8); // cputype, cpusubtype: the slice's own header says them again
                 const auto offset = r.be<std::uint32_t>();
                 r.skip(8); // size, align
                 std::string arch;
-                bool library = false;
-                if (!macho_thin(b, offset, arch, library)) return {};
+                bool library = false, program = false;
+                if (!macho_thin(b, offset, arch, library, program)) return {};
                 h.archs.push_back(arch);
                 h.library = h.library && library;
+                h.program = h.program && program;
             }
             return h;
         }
         std::string arch;
-        bool library = false;
-        if (macho_thin(b, 0, arch, library)) {
+        bool library = false, program = false;
+        if (macho_thin(b, 0, arch, library, program)) {
             BinaryHeader h;
             h.format = BinaryFormat::MachO;
             h.archs = {arch};
             h.library = library;
+            h.program = program;
             return h;
         }
     } catch (const std::out_of_range&) {
@@ -136,9 +142,10 @@ BinaryHeader read_binary_header(std::span<const std::byte> b) {
     return {};
 }
 
-bool binary_fits_platform(const BinaryHeader& h, std::string_view platform) {
+namespace {
+bool fits_platform(const BinaryHeader& h, std::string_view platform) {
     const std::size_t dash = platform.find('-');
-    if (dash == std::string_view::npos || !h.library) return false;
+    if (dash == std::string_view::npos) return false;
     const std::string_view os = platform.substr(0, dash), arch = platform.substr(dash + 1);
     const BinaryFormat want = os == "linux" ? BinaryFormat::Elf
                               : os == "windows" ? BinaryFormat::Pe
@@ -147,6 +154,11 @@ bool binary_fits_platform(const BinaryHeader& h, std::string_view platform) {
     return want != BinaryFormat::Unknown && h.format == want &&
            std::find(h.archs.begin(), h.archs.end(), arch) != h.archs.end();
 }
+} // namespace
+
+bool binary_fits_platform(const BinaryHeader& h, std::string_view platform) { return h.library && fits_platform(h, platform); }
+
+bool program_fits_platform(const BinaryHeader& h, std::string_view platform) { return h.program && fits_platform(h, platform); }
 
 std::string_view plugin_extension(std::string_view platform) {
     if (platform.starts_with("linux-")) return ".so";

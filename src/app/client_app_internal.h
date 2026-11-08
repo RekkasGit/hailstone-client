@@ -653,6 +653,13 @@ private:
     void start_addons();
     void update_addons();
     void addons_login_action(ui::LoginAction action);
+    // Starts the installed tool add-on `name` (tools/<name>/, docs/addons.md), told the data folder; false with
+    // *error why not (not installed, its program gone, or the system would not start it).
+    bool start_addon_tool(std::string_view name, std::string* error);
+    // Hailstone Texture Studio's add-on name (projecthailstone/hailstone-texstudio): Options' "Texture Studio..."
+    // starts it once it is installed.
+    static constexpr std::string_view kTextureStudio = "texstudio";
+    bool texture_studio_installed() const;
 public:
     struct UpdateExit {
         bool install = false; // a downloaded update is installed now
@@ -1042,6 +1049,7 @@ private:
     std::string listed_characters_; // what note_listed_characters() wrote last (a signature)
     std::vector<std::string> worlds_noted_; // the worlds the login server listed, as set_listed_worlds() last had them
     platform::ChildProcesses box_clients_; // the box set's other windows
+    platform::ChildProcesses tools_;       // the tool add-ons the player started (left running when Hailstone quits)
     // The updater (app/client_app_update.cpp, docs/updater.md): null when updates are off for this run.
     std::unique_ptr<Updater> updater_;
     UpdateSettings update_settings_;

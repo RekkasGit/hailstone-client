@@ -72,6 +72,13 @@ TextureOverrides& texture_overrides();
 // platform::textures_dir()), empty for the pack "default", "off" for none, or an absolute path to any folder.
 std::filesystem::path texture_folder_setting(std::string_view value, const std::filesystem::path& packs);
 
+// The Options window's texture pack choice: "Off", then the folders of `packs` (texture_pack_names, sorted). The
+// choice display.texture_folder `value` is (0 off, -1 a folder given by path or not there), and the value a choice
+// stores (nullopt out of range; the pack "default" is stored as empty, as texture_folder_setting reads it).
+std::vector<std::string> texture_pack_names(const std::filesystem::path& packs);
+int texture_pack_choice(std::string_view value, const std::vector<std::string>& names);
+std::optional<std::string> texture_pack_value(int choice, const std::vector<std::string>& names);
+
 // decode_texture for the game texture `name`: its override when there is one, oriented as `original` (the game's
 // file, or nullopt when the game has none) would decode with `options`; else `original` decoded. A masked texture's
 // fully opaque override takes its cut-out from the original's transparent texels.

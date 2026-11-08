@@ -253,8 +253,15 @@ std::string AddonManager::manifest_problem(const AddonManifest& m, std::uint32_t
         if (running && compare_versions(*running, *m.min_client) < 0)
             return m.name + " " + m.version_text + " needs Hailstone " + m.min_client_text + " or newer";
     }
-    if (m.kind == AddonKind::Plugin && !addon_package_for(m, env_.platform))
+    if (m.kind != AddonKind::Script && !addon_package_for(m, env_.platform))
         return m.name + " has no build for " + (env_.platform.empty() ? std::string("this system") : env_.platform);
+    // A tool asks for nothing (the manifest refuses one that does): the client grants it nothing to ask for.
+    if (m.kind == AddonKind::Tool) {
+        if (caps) *caps = 0;
+        if (!m.key && !env_.settings.allow_unsigned)
+            return m.name + " is not signed, and hailstone.ini addons.allow_unsigned is off";
+        return {};
+    }
     auto c = plugin::parse_caps_strict(joined(m.caps));
     if (!c) return m.name + " asks for a permission this Hailstone does not know: a newer Hailstone may be needed";
     if (*c == 0) return m.name + " does not say what it needs (its manifest's caps)";

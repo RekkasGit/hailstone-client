@@ -35,6 +35,8 @@ local BOX_LOGIN_TIP = "This window logs in the first account, and a new window s
   .. "enters its character."
 local PLUGIN_WARNING = "A plugin is a program: these permissions limit what it does through Hailstone, not what it "
   .. "can do on your computer. Install only plugins you trust."
+local TOOL_WARNING = "A tool is a program of its own: it runs on your computer with your rights, outside Hailstone, "
+  .. "which starts it when you ask. Install only tools you trust."
 local UI_TIP_SAVED = "The look and layout of the game's windows on this server, kept with it. The screen changes to it now."
 local UI_TIP_NEW = "The look and layout of the game's windows on this server, kept with it once it is saved. The "
   .. "screen changes to it now."
@@ -420,12 +422,14 @@ local function offerCard(o, s, bh)
   ui.PushTextWrapPos(0)
   if o.description ~= "" then ui.TextWrapped(o.description) end
   if o.installedVersion ~= "" then P.Faint("Installed now: " .. o.installedVersion) end
-  ui.Text("It asks to:")
-  bullets(o.caps, s)
+  if o.kind ~= "tool" then
+    ui.Text("It asks to:")
+    bullets(o.caps, s)
+  end
   P.Faint(o.key ~= "" and ("Signed with key " .. o.key .. ": later versions must carry the same key.")
     or "Not signed: later versions come from whoever controls the repository.")
-  if o.kind == "plugin" then
-    ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, PLUGIN_WARNING)
+  if o.kind == "plugin" or o.kind == "tool" then
+    ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, o.kind == "tool" and TOOL_WARNING or PLUGIN_WARNING)
   end
   if o.blocked ~= "" then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, o.blocked) end
   ui.PopTextWrapPos()
@@ -464,6 +468,11 @@ local function addonRow(a, r, s)
     if #r.modified > 0 then P.Faint(string.format("You changed %d of its files.", #r.modified)) end
     if r.note ~= "" then P.Faint(r.note) end
     ui.PopTextWrapPos()
+    if r.canStart then
+      if P.Primary("Start", 0, 0, true) then eq.LoginDo("addonStart", r.name) end
+      P.Tip("Start " .. r.name .. " (it opens a window of its own)")
+      ui.SameLine()
+    end
     if r.group == "installed" then
       local v, changed = ui.Checkbox("Update by itself", r.autoUpdate)
       if changed then eq.LoginDo("addonAuto", r.name, v) end
@@ -536,7 +545,7 @@ local function storeItem(a, it, s, lh)
   ui.PushFont(T.font.large)
   ui.TextColored(C.text[1], C.text[2], C.text[3], 1, it.name)
   ui.PopFont()
-  local kind = it.kind == "plugin" and "plugin" or it.kind == "script" and "script" or nil
+  local kind = (it.kind == "plugin" or it.kind == "script" or it.kind == "tool") and it.kind or nil
   if kind or it.worlds ~= "" then
     ui.SameLine()
     local px, py = ui.GetCursorScreenPos()
