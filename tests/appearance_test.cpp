@@ -90,7 +90,7 @@ TEST_CASE("OP_WearChange follows the client's slot rules") {
 }
 
 TEST_CASE("a secondary is a shield by its model number, not its textures (CDisplay::IsShield)") {
-    using hailstone::game::is_shield_model;
+    const auto is_shield_model = hailstone::game::is_stock_shield_model;
     // The ranges' ends and one past them.
     CHECK_FALSE(is_shield_model(199));
     CHECK(is_shield_model(200));
@@ -117,6 +117,27 @@ TEST_CASE("a secondary is a shield by its model number, not its textures (CDispl
     // The Haunting Nightmares Shield Ornament's IT101064 (shield_round_halloween textures) is held in the hand.
     CHECK_FALSE(is_shield_model(101064));
     CHECK_FALSE(is_shield_model(0));
+}
+
+TEST_CASE("display.extra_shields puts later shields on the shield point (Hailstone)") {
+    using hailstone::game::is_shield_model;
+    // A shield's model RoF2 does not list, used only by shields and their ornaments.
+    CHECK_FALSE(hailstone::game::is_stock_shield_model(11224));
+    CHECK(is_shield_model(11224));
+    CHECK(is_shield_model(11490));
+    // RoF2's own still count.
+    CHECK(is_shield_model(200));
+    CHECK(is_shield_model(14000));
+    // Left out: the IT63 placeholder, a weapon's model a few shields borrow, a model only an ornament uses.
+    CHECK_FALSE(is_shield_model(63));
+    CHECK_FALSE(is_shield_model(10201));
+    CHECK_FALSE(is_shield_model(101064));
+    CHECK_FALSE(is_shield_model(0));
+    // Switched off: RoF2's list alone.
+    hailstone::game::set_extra_shields(false);
+    CHECK_FALSE(is_shield_model(11224));
+    CHECK(is_shield_model(200));
+    hailstone::game::set_extra_shields(true);
 }
 
 TEST_CASE("OP_WearChange round trip") {

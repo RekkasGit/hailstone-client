@@ -114,13 +114,14 @@ bool Config::attach_character(const std::filesystem::path& path) {
 bool Config::is_shared_key(std::string_view key) {
     // The client's own (asset folders, add-ons, updates, news, the browser, plugins and scripts it loads), the login
     // screen's (servers, worlds, the music there), the window's place and mode (one window, whoever plays in it), and
-    // what is taken only at start (the sample count, the UI pack and scale, the sound device, the navigation threads).
+    // what is taken only at start (the sample count, the UI pack and scale, the sound device, the navigation threads,
+    // the extra shields).
     static constexpr std::string_view kPrefixes[] = {"assets.", "addons.", "update.", "news.", "login.", "browser.",
                                                       "window.", "plugins.", "scripts."};
     static constexpr std::string_view kKeys[] = {
         "display.window_mode", "display.resolution", "display.msaa", "ui.name", "ui.scale", "ui.cpp_windows",
         "ui.dev_windows", "ui.perf_window", "ui.perf_log_hitches", "game.fixed_step", "audio.pregame_music",
-        "audio.enabled", "audio.soundfont", "audio.mix_ahead", "nav.threads", "nav.prebuild"};
+        "audio.enabled", "audio.soundfont", "audio.mix_ahead", "nav.threads", "nav.prebuild", "display.extra_shields"};
     for (std::string_view p : kPrefixes)
         if (key.starts_with(p)) return true;
     return std::find(std::begin(kKeys), std::end(kKeys), key) != std::end(kKeys);
