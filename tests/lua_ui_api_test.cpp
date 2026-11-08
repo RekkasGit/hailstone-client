@@ -876,6 +876,82 @@ function open() return (OPEN.A and "A" or "") .. (OPEN.B and "B" or "") .. (OPEN
     ImGui::DestroyContext(ctx);
 }
 
+// Some windows (the inventory, the books, the bags, the map...) have Close with Esc ticked until the player unticks it.
+TEST_CASE("Modern UI libs: Close with Esc is on by default for the put-away windows, until unticked") {
+    nmsc::test::ScratchDir scratch("lua_ui_modern_escape_default_test");
+    const fs::path dir = scratch.path() / "pack";
+    const fs::path lib = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern" / "lib";
+    REQUIRE(fs::exists(lib / "escape.lua"));
+    fs::create_directories(dir);
+    fs::copy(lib, dir / "lib", fs::copy_options::recursive);
+    std::ofstream(dir / "esc.lua") << R"lua(
+PRESS = false
+eq = { TakeCloseTopWindow = function() local p = PRESS; PRESS = false; return p end }
+local esc = dofile("lib/escape.lua")
+NAMES = { "Other", "InventoryWindow", "Bag7", "ItemDisplayWindow#3" }
+OPEN = { Other = true, InventoryWindow = true, Bag7 = true, ["ItemDisplayWindow#3"] = true }
+for i, name in ipairs(NAMES) do
+  ui.window(name, function()
+    if not OPEN[name] then return end
+    ui.SetNextWindowPos((i - 1) * 200, 0, ui.Cond.Always)
+    ui.SetNextWindowSize(150, 100, ui.Cond.Always)
+    ui.Begin(name)
+    if esc.Frame(name) then OPEN[name] = false end
+    ui.End()
+  end)
+end
+function open()
+  local s = ""
+  for _, name in ipairs(NAMES) do if OPEN[name] then s = s .. name .. " " end end
+  return s
+end
+)lua";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto lua_do = [&](const char* code) {
+            REQUIRE(luaL_dostring(L, code) == LUA_OK);
+            std::string out = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return out;
+        };
+        auto press = [&] {
+            lua_do("PRESS = true");
+            frames(3);
+        };
+        frames(2);
+        // nothing saved: the inventory, the bag and the item display close, the other window does not
+        press();
+        press();
+        press();
+        CHECK(lua_do("return open()") == "Other ");
+        press();
+        CHECK(lua_do("return open()") == "Other ");
+        // unticked ("0" saved), the inventory stays open; the bag still closes
+        lua_do("ui.SetSetting('hud.esc.InventoryWindow', '0') OPEN.InventoryWindow, OPEN.Bag7 = true, true");
+        frames(2);
+        press();
+        press();
+        CHECK(lua_do("return open()") == "Other InventoryWindow ");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // ui.Begin's collapseRight puts the collapse button beside the close box for that window alone (the style's
 // WindowMenuButtonPosition is put back); ui.SetNextWindowCollapsed / ui.IsWindowCollapsed roll it up and say so.
 TEST_CASE("Lua UI: a window rolls up, its collapse button at the right") {
