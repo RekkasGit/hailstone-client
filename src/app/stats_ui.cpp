@@ -59,11 +59,11 @@ std::string pct_haste(std::int32_t v) {
 
 void StatsUi::draw(net::GameConnection& conn) {
     const auto& profile = conn.profile();
-    if (!profile || conn.state() != net::ConnectionState::InZone) {
+    // The camp countdown is still in the game (GameConnection::in_zone): the player stays and is rebuilt, or every
+    // window that reads it (the inventory's stats, movement, the hot buttons) would show zero until the camp ends.
+    if (!profile || !conn.in_zone()) {
         forget();
-        // Out of the zone the items' HP goes; the camp countdown keeps the last frame's (the character is not rebuilt
-        // then, and the items do not change).
-        if (conn.state() != net::ConnectionState::Camping) share_own_hp_items(conn, nullptr);
+        share_own_hp_items(conn, nullptr); // out of the zone the items' HP goes
         return;
     }
 
