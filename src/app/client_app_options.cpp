@@ -2,6 +2,7 @@
 // frame settings (window mode, resolution, vertical sync, frame caps, field of view, UI scale).
 
 #include "app/client_app_internal.h"
+#include "game/appearance.h"
 
 namespace nmsc::app {
 
@@ -563,6 +564,9 @@ void ClientApp::apply_settings() {
     pc_names_ = config_.get_bool("display.pc_names", true);
     npc_names_ = config_.get_bool("display.npc_names", true);
     con_name_colour_ = config_.get_bool("display.con_name_colour", true);
+    // display.extra_shields (Hailstone, a deliberate difference): later shields on the shield point, not in the hand.
+    // Read at start only: dressed models are cached.
+    if (!settings_applied_) game::set_extra_shields(config_.get_bool("display.extra_shields", true));
     own_name_ = config_.get_bool("display.own_name", true);
     player_menu_ = config_.get_bool("mouse.player_menu", true);
     // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.

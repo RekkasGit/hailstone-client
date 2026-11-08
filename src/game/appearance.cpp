@@ -1,6 +1,7 @@
 #include "game/appearance.h"
 
 #include <algorithm>
+#include <atomic>
 #include <iterator>
 
 namespace nmsc::game {
@@ -115,7 +116,21 @@ HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t mate
     return {v > 0xf1 ? hero_forge : v, 0};
 }
 
+namespace {
+std::atomic<bool> g_extra_shields{true};
+constexpr std::uint32_t kExtraShields[] = {
+#include "game/shield_models.inc"
+};
+} // namespace
+
+void set_extra_shields(bool on) { g_extra_shields = on; }
+
 bool is_shield_model(std::uint32_t m) {
+    return is_stock_shield_model(m) ||
+           (g_extra_shields && std::binary_search(std::begin(kExtraShields), std::end(kExtraShields), m));
+}
+
+bool is_stock_shield_model(std::uint32_t m) {
     if (m - 200u <= 28u || m - 11001u <= 19u || m - 10530u <= 14u || m - 10664u <= 7u) return true;
     if (m >= 11496u && m <= 11497u) return true;
     static constexpr std::uint32_t kSingles[] = {10691, 10729, 10730, 67367, 10738, 10754, 10772, 10775, 10781,
