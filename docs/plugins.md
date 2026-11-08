@@ -388,7 +388,9 @@ Faces run only when `faces` is on, and always with `read` alone.
 ## Compiled plugins
 
 A plugin is a `.dll`, `.so` or `.dylib` built against `sdk/nmsc_plugin.h`, a plain C interface that works
-with any compiler. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
+with any compiler. On macOS the client loads only `.dylib`: CMake names a `MODULE` library `.so` there, so a
+plugin's own build sets `CMAKE_SHARED_MODULE_SUFFIX` to `.dylib` (or the target's `SUFFIX`); the client's build does
+this for the plugins built in its tree. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
 
 ```c
 #include "nmsc_plugin.h"

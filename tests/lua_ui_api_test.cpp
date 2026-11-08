@@ -37,6 +37,8 @@ TEST_CASE("Lua UI: the key names, keyboard capture, typing and DrawText's size")
                                        "end)\n";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
+    // On macOS ImGui swaps Ctrl and Cmd as the key events come in; the Ctrl event below is to read as Ctrl.
+    ImGui::GetIO().ConfigMacOSXBehaviors = false;
     unsigned char* px = nullptr;
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);

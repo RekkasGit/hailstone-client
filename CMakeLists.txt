@@ -14,6 +14,12 @@ endif()
 
 # Portable RoF2-compatible client. Plan: docs/plan.md
 
+# A plugin is a .dylib on macOS (plugin/native_plugins.cpp), where CMake would name a MODULE library .so. Set here, it
+# holds for the example, the test plugins and the server plugins built in this tree.
+if(APPLE)
+  set(CMAKE_SHARED_MODULE_SUFFIX ".dylib")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
