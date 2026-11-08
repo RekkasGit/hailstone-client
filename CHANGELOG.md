@@ -8,6 +8,7 @@
 - An NPC or player killed while moving now drops where it died: its corpse used to slide on for a moment in the direction it had been moving
 - A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
 - A character with more than 300 different AAs now sees all of them. Some servers allow more than 300, but the client used to keep only the first 300, so the rest were missing from the AA window and their bonuses from the character sheet
+- Modern UI: hovering the spell book's Memorize ("In gem N") button no longer shows a red "MESSAGE FROM DEAR IMGUI: 2 visible items with conflicting ID" box. The button and the Memorized filter shared an ID
 
 ## 0.6.0-beta (2026-11-07)
 
