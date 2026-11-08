@@ -16,7 +16,8 @@
 namespace hailstone::game {
 
 std::string display_name(const std::string& name) {
-    std::string out = name;
+    // CEverQuest::trimName (game/social.h trim_name) drops '#' too: the server's "#Name" spawns show as "Name".
+    std::string out = name.substr(std::min(name.find_first_not_of('#'), name.size()));
     while (!out.empty() && std::isdigit(static_cast<unsigned char>(out.back()))) out.pop_back();
     for (char& c : out)
         if (c == '_') c = ' ';

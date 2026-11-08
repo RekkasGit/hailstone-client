@@ -151,7 +151,8 @@ struct Spawn {
     double vehicle_checked = -1.0;
 };
 
-// "a_rat01" -> "a rat": trailing digits stripped, underscores to spaces.
+// "a_rat01" -> "a rat", "#Guard_Bob00" -> "Guard Bob": leading '#' and trailing digits stripped, underscores to
+// spaces.
 std::string display_name(const std::string& name);
 
 // CDisplay::CreatePlayerActor's elemental swap (0x48f5bc..0x48f771, before the model lookup), keyed on the body
