@@ -536,7 +536,7 @@ TEST_CASE("hot buttons: the character ini format") {
     CHECK(back.abilities[0] == -1);
 }
 
-TEST_CASE("Disarm while hidden drops the first buff of each invisibility SPA, then unhides (batch 252)") {
+TEST_CASE("Disarm while hidden drops the first buff of each invisibility SPA, then unhides") {
     Fixture f;
     f.sheet.skills[skill::kDisarm] = 20;
     SkillState st;

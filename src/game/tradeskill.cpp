@@ -14,14 +14,13 @@ bool is_combine_container(std::uint32_t bag_type) {
 }
 
 bool is_tradeskill_container_type(std::uint32_t t) {
+    // Bag types 9..54, without the few in that range that are not tradeskill containers.
+    if (t < 9 || t > 54) return false;
     switch (t) {
-    case 9: case 10: case 0xb: case 0xc: case 0xe: case 0xf: case 0x10: case 0x11: case 0x12: case 0x13: case 0x14:
-    case 0x15: case 0x16: case 0x18: case 0x19: case 0x1a: case 0x1b: case 0x1f: case 0x20: case 0x21: case 0x22:
-    case 0x23: case 0x24: case 0x26: case 0x27: case 0x28: case 0x29: case 0x2a: case 0x2b: case 0x2c: case 0x2d:
-    case 0x2e: case 0x2f: case 0x30: case 0x31: case 0x32: case 0x34: case 0x36:
-        return true;
-    default:
+    case 13: case 23: case 28: case 29: case 30: case 37: case 51: case 53:
         return false;
+    default:
+        return true;
     }
 }
 
