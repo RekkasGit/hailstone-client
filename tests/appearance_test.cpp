@@ -89,6 +89,36 @@ TEST_CASE("OP_WearChange follows the client's slot rules") {
     CHECK(game::luclin_armor_slot(tunic, 5, game::kSlotArms) == game::kSlotArms);
 }
 
+TEST_CASE("a secondary is a shield by its model number, not its textures (CDisplay::IsShield)") {
+    using nmsc::game::is_shield_model;
+    // The ranges' ends and one past them.
+    CHECK_FALSE(is_shield_model(199));
+    CHECK(is_shield_model(200));
+    CHECK(is_shield_model(228));
+    CHECK_FALSE(is_shield_model(229));
+    CHECK_FALSE(is_shield_model(300)); // held_type's shield range (IT200..300) is another table
+    CHECK(is_shield_model(10530));
+    CHECK(is_shield_model(10544));
+    CHECK_FALSE(is_shield_model(10545));
+    CHECK(is_shield_model(10664));
+    CHECK(is_shield_model(10671));
+    CHECK_FALSE(is_shield_model(10672));
+    CHECK(is_shield_model(11001));
+    CHECK(is_shield_model(11020));
+    CHECK_FALSE(is_shield_model(11021));
+    CHECK(is_shield_model(11496));
+    CHECK(is_shield_model(11497));
+    CHECK_FALSE(is_shield_model(11498));
+    // Single numbers: the 10th anniversary shield IT14000 and the highest, IT67367.
+    CHECK(is_shield_model(14000));
+    CHECK(is_shield_model(67367));
+    CHECK(is_shield_model(11443));
+    CHECK_FALSE(is_shield_model(11444));
+    // The Haunting Nightmares Shield Ornament's IT101064 (shield_round_halloween textures) is held in the hand.
+    CHECK_FALSE(is_shield_model(101064));
+    CHECK_FALSE(is_shield_model(0));
+}
+
 TEST_CASE("OP_WearChange round trip") {
     net::WearChange w;
     w.spawn_id = 0x1234;
