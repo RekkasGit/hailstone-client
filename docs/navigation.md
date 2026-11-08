@@ -26,6 +26,10 @@ rasterised, so there is no separate tool and no hand-made file.
 - Passable triangles (WLD polygon flag 0x10, EQG flag 1) are left out; the sweep never hits them. The exception is
   a water surface: a flat passable triangle with water 1.5 under its middle and none 1.5 over it. It is ground for
   the mesh, so a path can cross water whose bottom is too deep or too steep to walk ("Water" below).
+- Triangles wholly outside the terrain's box, 200 units round it, are left out. Zones park the objects they do not
+  use far under the world (Field of Bone's trees stand at z -32768); taken in, they stretched the heightfield past
+  Recast's span heights (8191 cells, about 2457 units) and the whole mesh was built 32000 units under the zone. The
+  movement sweep still has them.
 - A triangle whose record normal faces up within 55 degrees is ground. A floor stops a fall only when its normal faces
   up (the sweep skips back faces), so a triangle facing down is never ground, only an obstacle.
 - Agent: height 6, radius 2, climb 4, cells of 0.6 x 0.3, tiles of 128 cells (76.8 units). These are not the
@@ -142,8 +146,10 @@ and the step into the lair. Without the links the walk stopped about 850 units s
 
 ### When it is built
 
-At the zone-in only when the zone has a cache file, or with `nav.prebuild=1` in `hailstone.ini`. Otherwise it is built
-when first wanted: a `/nav`, the overlay or the Navigation TLO's path questions. The tiles are built on worker threads (`nav.threads`, default 2, at most
+At the zone-in: read from the zone's cache file when there is one, and built otherwise, so a new zone's mesh is under
+way before anything asks for it (a `/stick` near its target walks straight and never asks). `nav.prebuild=0` in
+`hailstone.ini` turns the build at the zone-in off; the mesh is then built when first wanted: a `/nav`, the overlay or
+the Navigation TLO's path questions. The tiles are built on worker threads (`nav.threads`, default 2, at most
 8), nearest the player first, and a walk asked for meanwhile starts when its tiles are there. A walk to a spawn asks
 the server for its path meanwhile, when there is no mesh under the player yet: the same `OP_FindPersonRequest` as
 `/find`, but quiet (`GameConnection::request_quiet_path`: no path drawn, no sound, no chat line). A stock EQEmu server
