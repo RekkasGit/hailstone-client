@@ -4,11 +4,10 @@
 // its actor stands to the position physics integrated, through the zone's
 // collision.
 //
-// Exact port of rof2decomp batch 246 (re/src/game/spawn/collision_movement.cpp
-// and collision_movement_eh.cpp), checked against the original's vectors
-// (tests/movement_vectors_test.cpp). The original keeps its locals in a frame
-// and runs x87 code on them; the port reproduces each rounding and each NaN
-// (fpu.h). What it asks a virtual, the scene graph, the collision interface
+// Follows the original's described behaviour step by step and is checked
+// against its recorded results (tests/movement_vectors_test.cpp). The
+// original keeps its locals in a frame and computes on the x87; this keeps
+// each rounding and each NaN rule (fpu.h). What it asks a virtual, the scene graph, the collision interface
 // (EQGraphicsDX9.dll) or another function is a CollisionQueries call, in the
 // original's order; the sweep itself (s3dCollideActorSweep @0x476560) is a
 // query too: game/zone_sweep.h implements it for the client.
@@ -150,8 +149,8 @@ double collision_volume_radius(float avatar_height, bool npc, std::uint32_t race
 double model_sweep_radius(float model_radius, float scale, float co_factor = 1.0f, const Fpu& fpu = Fpu{});
 
 // The radius the client sweeps a spawn's actor with: the one place to drop the
-// original's rule in. By the static reading (rof2decomp notes/collision-sweep.md)
-// it is model_sweep_radius above (6.68 for a classic human, 6.21 Luclin), but a
+// original's rule in. By the static reading (docs/mechanics.md, "Movement
+// collision") it is model_sweep_radius above (6.68 for a classic human, 6.21 Luclin), but a
 // sphere that big cannot pass South Qeynos' 10 x 10 doorways under the sweep's
 // rules (tests/swept_sphere_test.cpp), which the original's players do, so the
 // client keeps 0x5062a0's player value (0.475 x AvatarHeight, 1.78 for a

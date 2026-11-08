@@ -3,9 +3,9 @@
 #include <cmath>
 #include <cstring>
 
-// Names in the comments: F<off> is the original's frame local [esp + off]
-// after its prologue (rof2decomp's Frame), so the steps can be read side by
-// side with the rewrite. A value "on the stack" is a double here (x87 values
+// Names in the comments: F<off> is the original's frame slot [esp + off]
+// after its prologue, so the steps can be checked against the original's
+// listing. A value "on the stack" is a double here (x87 values
 // are quiet); a float in memory goes in as X87(float) and keeps a signalling
 // NaN's flag; operands are passed in the order the instruction combines them
 // (st(i) op st(0) for the reverse forms).

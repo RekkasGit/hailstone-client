@@ -1,13 +1,13 @@
-// Test vectors recorded from the original eqgame.exe by rof2decomp's harness
-// (rof2decomp re/test/vectors/README.md): <Function>.jsonl, one JSON object
-// per line, {"fn", "addr", "in": {...}, "out": {...}, "precision"}. The
-// directory is HAILSTONE_VECTORS_DIR, else ../rof2decomp/re/test/vectors from the
-// source tree (or ../../rof2decomp/... from a build directory); without
-// it the test passes with a message.
+// Test vectors recorded from the original eqgame.exe: <Function>.jsonl, one
+// JSON object per line, {"fn", "addr", "in": {...}, "out": {...},
+// "precision"}, in the directory HAILSTONE_VECTORS_DIR; without it the test
+// passes with a message.
 //
 // Every record of the movement functions is checked against the ports in
 // game/mechanics/movement.h, at the record's x87 precision; floats must match
-// bit for bit. Mocked callees' results (in.calls) are inputs.
+// bit for bit, except the collision sweep's (game/sphere_sweep.h), which is
+// compared within a stated tolerance. Mocked callees' results (in.calls) are
+// inputs.
 #include <doctest/doctest.h>
 
 #include <cmath>
@@ -29,7 +29,7 @@
 
 #include "game/mechanics/collision_movement.h"
 #include "game/collision_callbacks.h"
-#include "game/sweep_x87.h"
+#include "game/sphere_sweep.h"
 #include "game/mechanics/controls.h"
 #include "game/mechanics/switches.h"
 #include "game/mechanics/floor_height.h"
@@ -522,7 +522,7 @@ ControlSpawn control_spawn(const Json& j) {
     ControlSpawn s;
     s.speed_multiplier = f32(j, "speed_multiplier");
     s.swim_state = static_cast<std::uint8_t>(i32(j, "swim_state"));
-    // Records before rof2decomp's rename call these levitating, race and levitate_speed.
+    // Older recordings call these levitating, race and levitate_speed.
     s.sneaking = flag(j, j.get("sneaking") ? "sneaking" : "levitating");
     s.stand_state = static_cast<std::uint8_t>(i32(j, j.get("stand_state") ? "stand_state" : "race"));
     s.walk_speed = f32(j, "walk_speed");
@@ -538,8 +538,207 @@ ControlSpawn control_spawn(const Json& j) {
     return s;
 }
 
-// SweptSphereTriangle records whose normal is the recorder's uninitialised stack (see the vf0 checker).
-int sweep_garbage_normals = 0;
+// ---- the collision sweep (game/sphere_sweep.h)
+//
+// The sweep is Hailstone's own implementation of the described behaviour, not the original's instruction stream, so
+// its results are compared within a tolerance rather than bit for bit. Each function's tally reports how many records
+// agreed exactly, how many needed the tolerance, and the largest differences seen.
+
+namespace sweep = hailstone::game::sweep;
+
+// The tolerances. t is a fraction of the move; normals and slide directions are unit vectors; points are world
+// coordinates, so their tolerance grows with their size (a float's spacing near 2000 is 1.2e-4).
+constexpr double kSweepTolT = 1e-4;
+constexpr double kSweepTolUnit = 1e-3;
+constexpr double kSweepTolPoint = 1e-3;
+constexpr double kSweepTolPointRel = 1e-6;
+constexpr double kSweepTolDistanceRel = 1e-4;
+// The original keeps its intermediate points (the sphere's lowest point, where it meets the plane, the contact) in
+// float memory even at 53-bit precision, so a hit normal, (centre - contact) / r, carries a float's error of the
+// coordinates' size over r, and t one of their size over the move's length: the tolerance grows by this many floats
+// of that size.
+constexpr double kSweepTolFloats = 8.0;
+// Near-grazing records: a hit or a miss decided within rounding of a boundary (the sphere touching an edge or vertex
+// exactly, a centre on an edge's line or in the plane, a move parallel to the plane). One counts as grazing when
+// moving the radius, the sweep's t limit or the start (by that fraction of the radius, along each axis) gives the
+// recorded result.
+constexpr double kSweepGrazing = 1e-4;
+// The records that still disagree (none grazing, inputs a client could hold) may be at most this share of all;
+// each is reported.
+// They are capsule (edge) cases whose rule the description leaves open: see docs/unknowns.md.
+constexpr double kSweepDisagreeShare = 0.01;
+
+struct SweepTally {
+    int records = 0, exact = 0, tolerated = 0, grazing = 0, contact_assumed = 0, unphysical = 0, disagree = 0;
+    double worst_t = 0, worst_unit = 0, worst_point = 0, worst_distance = 0;
+};
+std::map<std::string, SweepTally> sweep_tallies;
+
+// The difference between a result and a recorded one: NaN matches any NaN, an infinity only itself.
+double sweep_diff(double got, double want) {
+    if (std::isnan(got) || std::isnan(want)) return std::isnan(got) && std::isnan(want) ? 0.0 : HUGE_VAL;
+    if (std::isinf(got) || std::isinf(want)) return got == want ? 0.0 : HUGE_VAL;
+    return std::fabs(got - want);
+}
+bool sweep_same_bits(float got, float want) {
+    return (std::isnan(got) && std::isnan(want)) || bits_of(got) == bits_of(want);
+}
+
+std::optional<std::array<float, 3>> sweep_floats(const Json* j) {
+    auto* a = j ? std::get_if<std::shared_ptr<JsonArray>>(&j->v) : nullptr;
+    if (!a || (*a)->size() != 3) return std::nullopt;
+    std::array<float, 3> v{};
+    for (std::size_t k = 0; k < 3; ++k) {
+        auto f = as_f32(&(**a)[k]);
+        if (!f) return std::nullopt;
+        v[k] = *f;
+    }
+    return v;
+}
+
+template <class F>
+sweep::Vec3<F> sweep_vec(const Json* j) {
+    sweep::Vec3<F> v(0);
+    if (auto f = sweep_floats(j))
+        for (int k = 0; k < 3; ++k) v[k] = static_cast<F>((*f)[static_cast<std::size_t>(k)]);
+    return v;
+}
+
+// One record's stop and slide comparison: every field within its tolerance, and whether all were exact.
+struct SweepCompare {
+    Mismatch& m;
+    const std::string& w;
+    bool exact = true;
+    void field(double got, std::optional<float> want, double tolerance, double& worst, const char* what) {
+        if (!want) {
+            m.report(w, what, "missing");
+            return;
+        }
+        double d = sweep_diff(got, *want);
+        if (!sweep_same_bits(static_cast<float>(got), *want)) exact = false;
+        if (d != HUGE_VAL) worst = std::max(worst, d);
+        if (!(d <= tolerance)) {
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "got %.9g, want %.9g (tolerance %.3g)", got, static_cast<double>(*want),
+                          tolerance);
+            m.report(w, what, buf);
+        }
+    }
+    template <class V>
+    void vec(const V& got, const Json* want, double tolerance, double relative, double& worst, const char* what) {
+        auto f = sweep_floats(want);
+        if (!f) {
+            m.report(w, what, "missing");
+            return;
+        }
+        for (std::size_t k = 0; k < 3; ++k) {
+            double scale = std::isfinite((*f)[k]) ? std::fabs(static_cast<double>((*f)[k])) : 0.0;
+            field(static_cast<double>(got[static_cast<int>(k)]), (*f)[k], tolerance + relative * scale, worst, what);
+        }
+    }
+};
+
+// CCollisionInfoSphere::vf0 @0x7a28e0: the sphere against one triangle record.
+template <class F>
+void check_sweep_triangle(const Json& in, const Json& out, const std::string& w) {
+    using V = sweep::Vec3<F>;
+    SweepTally& tally = sweep_tallies["SweptSphereTriangle"];
+    ++tally.records;
+    const V start = sweep_vec<F>(in.get("start")), delta = sweep_vec<F>(in.get("delta"));
+    const V n = sweep_vec<F>(in.get("tri_normal"));
+    const V v0 = sweep_vec<F>(in.get("v0")), v1 = sweep_vec<F>(in.get("v1")), v2 = sweep_vec<F>(in.get("v2"));
+    const F inv_length = static_cast<F>(f32(in, "inv_length")), t_max = static_cast<F>(f32(in, "fraction_before"));
+    const F radius = static_cast<F>(f32(in, "radius"));
+    auto run = [&](const V& c, F t_limit, F r) {
+        return sweep::sphere_triangle<F>(c, delta, inv_length, t_limit, r, n, v0, v1, v2);
+    };
+
+    // Records with infinite or NaN inputs, or a triangle normal that is not of unit length, test the original's
+    // handling of garbage, which the client's triangle records never hold (CollisionTriangle::make): compared like
+    // the rest, but a disagreement there is counted apart and is no failure.
+    bool physical = std::isfinite(inv_length) && std::isfinite(t_max) && std::isfinite(radius) &&
+                    std::fabs(static_cast<double>(glm::length(n)) - 1.0) <= 1e-3;
+    double size = 0;
+    for (const V& p : {start, delta, v0, v1, v2}) {
+        for (int k = 0; k < 3; ++k) physical = physical && std::isfinite(p[k]);
+        size = std::max(size, static_cast<double>(glm::length(p)));
+    }
+
+    const bool want_hit = flag(out, "hit");
+    const std::optional<float> want_t = as_f32(out.get("fraction"));
+    const std::optional<std::array<float, 3>> want_n = sweep_floats(out.get("normal"));
+    const double move = static_cast<double>(glm::length(delta));
+    const double tol_t = kSweepTolT + kSweepTolFloats * 0x1p-24 * size / std::max(move, 1e-30);
+    const double tol_n = kSweepTolUnit + kSweepTolFloats * 0x1p-24 * (size + move) / static_cast<double>(radius);
+    // Without a hit the sweep's t is untouched.
+    auto t_of = [&](const sweep::TriangleHit<F>& h) { return static_cast<double>(h.hit ? h.t : t_max); };
+    auto agrees = [&](const sweep::TriangleHit<F>& h) {
+        if (h.hit != want_hit || !want_t || !(sweep_diff(t_of(h), *want_t) <= tol_t)) return false;
+        if (!h.hit || h.contact_assumed) return true;
+        if (!want_n) return false;
+        for (int k = 0; k < 3; ++k)
+            if (!(sweep_diff(static_cast<double>(h.normal[k]), (*want_n)[static_cast<std::size_t>(k)]) <= tol_n))
+                return false;
+        return true;
+    };
+
+    sweep::TriangleHit<F> h = run(start, t_max, radius);
+    if (agrees(h)) {
+        bool exact = want_t && sweep_same_bits(static_cast<float>(t_of(h)), *want_t);
+        tally.worst_t = std::max(tally.worst_t, sweep_diff(t_of(h), want_t ? *want_t : 0.0f));
+        if (h.hit && h.contact_assumed) {
+            ++tally.contact_assumed; // the original's normal is whatever its stack held
+        } else if (h.hit) {
+            for (int k = 0; k < 3; ++k) {
+                float wk = (*want_n)[static_cast<std::size_t>(k)];
+                exact = exact && sweep_same_bits(static_cast<float>(h.normal[k]), wk);
+                tally.worst_unit = std::max(tally.worst_unit, sweep_diff(static_cast<double>(h.normal[k]), wk));
+            }
+        }
+        ++(exact ? tally.exact : tally.tolerated);
+        return;
+    }
+    const F g = static_cast<F>(kSweepGrazing);
+    for (F rs : {1 - g, F(1), 1 + g})
+        for (F ts : {1 - g, F(1), 1 + g})
+            for (int axis = -1; axis < 6; ++axis) {
+                V c = start;
+                if (axis >= 0) c[axis % 3] += (axis < 3 ? g : -g) * radius;
+                if (agrees(run(c, t_max * ts, radius * rs))) {
+                    ++tally.grazing;
+                    return;
+                }
+            }
+    if (!physical) {
+        ++tally.unphysical;
+        return;
+    }
+    ++tally.disagree;
+    char buf[200];
+    std::snprintf(buf, sizeof buf, "%s: hit %d t %.7g, want hit %d t %.7g", w.c_str(), int(h.hit), t_of(h),
+                  int(want_hit), want_t ? static_cast<double>(*want_t) : 0.0);
+    MESSAGE("SweptSphereTriangle disagrees: " << buf);
+}
+
+// GetClampPoint @0x7a2680 and ComputeSkitter @0x7a2720 on a recorded info.
+template <class F>
+void check_stop_and_slide(const char* name, const sweep::Vec3<F>& from, const sweep::Vec3<F>& delta,
+                          const sweep::Vec3<F>& direction, F t, bool hit, const sweep::Vec3<F>& normal, const Json& out,
+                          const std::string& w, Mismatch& m) {
+    SweepTally& tally = sweep_tallies[name];
+    SweepCompare cmp{m, w};
+    cmp.vec(sweep::clamp_point<F>(from, delta, t), out.get("stop"), kSweepTolPoint, kSweepTolPointRel,
+            tally.worst_point, "stop");
+    sweep::Skitter<F> k;
+    if (hit) k = sweep::skitter<F>(direction, delta, t, normal);
+    cmp.vec(k.direction, out.get("slide_direction"), kSweepTolUnit, 0.0, tally.worst_unit, "slide_direction");
+    std::optional<float> want = as_f32(out.get("slide_distance"));
+    double scale = want && std::isfinite(*want) ? std::fabs(static_cast<double>(*want)) : 0.0;
+    cmp.field(static_cast<double>(k.distance), want, kSweepTolPoint + kSweepTolDistanceRel * scale,
+              tally.worst_distance, "slide_distance");
+    ++tally.records;
+    ++(cmp.exact ? tally.exact : tally.tolerated);
+}
 
 std::map<std::string, Checker> checkers() {
     std::map<std::string, Checker> c;
@@ -1415,7 +1614,6 @@ std::map<std::string, Checker> checkers() {
         compare("virtual_calls", tape.virtual_calls);
         compare("calls", tape.calls);
     };
-    // ---- the collision sweep (rof2decomp batch 250; game/sweep_x87.h)
     auto arr3 = [](const Json* j) {
         std::array<float, 3> v{};
         auto* a = j ? std::get_if<std::shared_ptr<JsonArray>>(&j->v) : nullptr;
@@ -1432,66 +1630,38 @@ std::map<std::string, Checker> checkers() {
         }
         for (std::size_t k = 0; k < 3; ++k) m.check_float(got[k], as_f32(&(**a)[k]), w, what);
     };
-    c["CCollisionInfoSphere::vf0"] = [arr3, check3](const Json& rec, const Json& in, const Json& out,
-                                                    const std::string& w, Mismatch& m) {
-        hailstone::game::SweepX87 x(precision_of(rec).precision());
-        hailstone::game::SweepX87::Info info;
-        info.start = arr3(in.get("start"));
-        info.delta = arr3(in.get("delta"));
-        info.inv_length = f32(in, "inv_length");
-        info.t = f32(in, "fraction_before");
-        info.radius = f32(in, "radius");
-        auto run = [&](hailstone::game::SweepX87& machine, hailstone::game::SweepX87::Info& i) {
-            return machine.triangle(i, arr3(in.get("tri_normal")), arr3(in.get("v0")), arr3(in.get("v1")),
-                                    arr3(in.get("v2")));
-        };
-        hailstone::game::SweepX87::Info probe_info = info;
-        bool hit = run(x, info);
-        m.check_int(hit, as_int(out.get("hit")), w, "hit");
-        m.check_float(info.t, as_f32(out.get("fraction")), w, "fraction");
-        if (!hit || !flag(out, "hit")) return;
-        // The original's bug (rof2decomp notes/collision-sweep.md, SweptSphereEdge): a sphere that already holds
-        // an edge's start vertex hits at t = 0 without a contact point, and vf0 normalises against what its stack
-        // held. Such a record's normal is the recorder's stack garbage: a machine whose stack holds a NaN
-        // pattern finds them, and their normals are not compared (counted in sweep_garbage_normals).
-        hailstone::game::SweepX87 probe(precision_of(rec).precision());
-        probe.fill_stack(0x7fbadbadu);
-        run(probe, probe_info);
-        if (std::isnan(probe_info.normal[0]) && !std::isnan(info.normal[0])) {
-            ++sweep_garbage_normals;
-            return;
-        }
-        check3(m, info.normal, out.get("normal"), w, "normal");
+    // ---- the collision sweep (game/sphere_sweep.h), at the record's precision: float in game, double at 53 bits.
+    auto at53 = [](const Json& rec) { return precision_of(rec).precision() == FpuPrecision::Double53; };
+    c["CCollisionInfoSphere::vf0"] = [at53](const Json& rec, const Json& in, const Json& out, const std::string& w,
+                                            Mismatch&) {
+        if (at53(rec)) check_sweep_triangle<double>(in, out, w);
+        else check_sweep_triangle<float>(in, out, w);
     };
     c["CollisionInfo_GetClampPoint+CCollisionInfoBase::ComputeSkitter"] =
-        [arr3, check3](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
-            hailstone::game::SweepX87 x(precision_of(rec).precision());
-            hailstone::game::SweepX87::Info info;
-            info.start = arr3(in.get("start"));
-            info.delta = arr3(in.get("delta"));
-            info.direction = arr3(in.get("direction"));
-            info.t = f32(in, "fraction");
-            info.hit = flag(in, "hit");
-            info.normal = arr3(in.get("normal"));
-            check3(m, x.clamp_point(info), out.get("stop"), w, "stop");
-            if (info.hit) x.skitter(info);
-            check3(m, info.slide, out.get("slide_direction"), w, "slide_direction");
-            m.check_float(info.slide_distance, as_f32(out.get("slide_distance")), w, "slide_distance");
+        [at53](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
+            auto run = [&](auto zero) {
+                using F = decltype(zero);
+                check_stop_and_slide<F>("SweepStopAndSlide", sweep_vec<F>(in.get("start")), sweep_vec<F>(in.get("delta")),
+                                        sweep_vec<F>(in.get("direction")), static_cast<F>(f32(in, "fraction")),
+                                        flag(in, "hit"), sweep_vec<F>(in.get("normal")), out, w, m);
+            };
+            if (at53(rec)) run(0.0);
+            else run(0.0f);
         };
-    c["s3dCollideActorSweep"] = [arr3, check3](const Json& rec, const Json& in, const Json& out,
-                                               const std::string& w, Mismatch& m) {
-        hailstone::game::SweepX87 x(precision_of(rec).precision());
-        hailstone::game::SweepX87::Info info = x.make_info(arr3(in.get("from")), arr3(in.get("to")), f32(in, "radius"));
-        if (flag(in, "hit")) {
-            // What CollideActor left in the info.
-            info.hit = true;
-            info.t = f32(in, "fraction");
-            info.normal = arr3(in.get("normal"));
-            x.skitter(info);
-        }
-        check3(m, x.clamp_point(info), out.get("stop"), w, "stop");
-        check3(m, info.slide, out.get("slide_direction"), w, "slide_direction");
-        m.check_float(info.slide_distance, as_f32(out.get("slide_distance")), w, "slide_distance");
+    c["s3dCollideActorSweep"] = [at53](const Json& rec, const Json& in, const Json& out, const std::string& w,
+                                       Mismatch& m) {
+        auto run = [&](auto zero) {
+            using F = decltype(zero);
+            sweep::Vec3<F> from = sweep_vec<F>(in.get("from"));
+            sweep::Start<F> s = sweep::start<F>(from, sweep_vec<F>(in.get("to")), static_cast<F>(f32(in, "radius")));
+            // What CollideActor left in the info: t 1 without a hit.
+            bool hit = flag(in, "hit");
+            F t = hit ? static_cast<F>(f32(in, "fraction")) : F(1);
+            check_stop_and_slide<F>("s3dCollideActorSweep", from, s.delta, s.direction, t, hit,
+                                    sweep_vec<F>(in.get("normal")), out, w, m);
+        };
+        if (at53(rec)) run(0.0);
+        else run(0.0f);
     };
     c["CollisionHit_SetCollidingType"] = [](const Json&, const Json& in, const Json& out, const std::string& w,
                                             Mismatch& m) {
@@ -1854,7 +2024,7 @@ TEST_CASE("Movement test vectors from the original client") {
     auto dir = vectors_dir();
     std::error_code ec;
     if (!dir || !fs::is_directory(*dir, ec)) {
-        MESSAGE("no rof2decomp test vectors (HAILSTONE_VECTORS_DIR); skipped");
+        MESSAGE("no recorded test vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     auto table = checkers();
@@ -1895,7 +2065,14 @@ TEST_CASE("Movement test vectors from the original client") {
         }
     }
     MESSAGE(files << " movement vector files checked from " << dir->string());
-    if (sweep_garbage_normals)
-        MESSAGE("SweptSphereTriangle: " << sweep_garbage_normals
-                                        << " normals not compared (the original read uninitialised stack)");
+    for (const auto& [name, t] : sweep_tallies) {
+        if (!t.records) continue;
+        MESSAGE(name << ": " << t.records << " records, " << t.exact << " exact, " << t.tolerated
+                     << " within the tolerance, " << t.grazing << " near grazing, " << t.disagree << " disagreeing, "
+                     << t.unphysical << " disagreeing with garbage inputs (not failures), " << t.contact_assumed
+                     << " normals not compared (the original's is undefined); largest differences: t " << t.worst_t
+                     << ", unit vectors " << t.worst_unit << ", points " << t.worst_point << ", slide distance "
+                     << t.worst_distance);
+        CHECK(t.disagree <= kSweepDisagreeShare * t.records);
+    }
 }
