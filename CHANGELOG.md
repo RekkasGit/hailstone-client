@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Modern UI spell bar: the menu for loading a spell into an empty gem (right click) now opens at that gem, not at the place of an earlier click
+
 ## 0.6.0-beta (2026-11-07)
 
 - Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview

@@ -1522,6 +1522,9 @@ int SpellGemClick(lua_State* L) {
         return 1;
     }
     bool right = phase == "right" || phase == "rightup";
+    // The empty gem's spell select menu opens at the gem (HandleSpellRightClick): the gem's hit box the script just
+    // tested, not the rectangle some earlier ClickChild or ClickSlot left.
+    if (right) note_click_rect(m.host);
     lua_pushboolean(L, w && w->gem_click(m.host, id, right));
     return 1;
 }
