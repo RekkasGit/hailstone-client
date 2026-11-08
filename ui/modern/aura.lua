@@ -1,7 +1,7 @@
 -- Auras: replaces the game's AuraWindow (a window the player opens and closes: the EQ menu's Auras, its key, the X
 -- in the corner; the state is kept as the stock window's). A borderless frame with each aura's icon and name; a
--- right click on one removes it (the game's list takes the click). Its height follows the number of auras; the
--- corner grip scales it.
+-- right click on one removes it (the game's list takes the click). Its height follows the number of auras; its
+-- scale is the right-click menu's.
 local hud = dofile("lib/hud.lua")
 local T = hud.T
 local C = T.color

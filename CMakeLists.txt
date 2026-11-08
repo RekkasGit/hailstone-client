@@ -1013,6 +1013,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
     tests/spells_test.cpp
+    tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
     tests/item_packets_test.cpp
     tests/augments_test.cpp

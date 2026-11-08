@@ -7,6 +7,12 @@
 
 namespace hailstone::app::client_internal {
 
+bool ClientApp::target_ring_shown() const {
+    if (!conn_ || !conn_->client_option(game::ClientOption::ShowTargetRing)) return false;
+    const auto& world = conn_->world();
+    return world.target_id && world.spawns.contains(world.target_id);
+}
+
 void ClientApp::draw_target_ring(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane,
                                  bool modern, double seconds) {
     const double dt = ring_last_seconds_ >= 0.0 ? std::clamp(seconds - ring_last_seconds_, 0.0, 0.25) : 0.0;
@@ -15,11 +21,8 @@ void ClientApp::draw_target_ring(const render::FrameInfo& frame, const glm::mat4
     // with the indicator off (Show3dTargetIndicator, TargetIndicator +0); otherwise the section of the target's
     // con, hidden for con 0.
     auto hide = [this] { ring_target_ = 0; };
-    if (!conn_ || !conn_->client_option(game::ClientOption::ShowTargetRing)) return hide();
-    const auto& world = conn_->world();
-    auto it = world.target_id ? world.spawns.find(world.target_id) : world.spawns.end();
-    if (it == world.spawns.end()) return hide();
-    const game::Spawn& s = it->second;
+    if (!target_ring_shown()) return hide();
+    const game::Spawn& s = conn_->world().spawns.at(conn_->world().target_id);
     auto section = game::target_ring_section(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
     if (!section) return hide();
     // Hailstone: the player's colour and opacity over the ini's (Options > Display "Target Ring").
@@ -42,8 +45,6 @@ void ClientApp::draw_target_ring(const render::FrameInfo& frame, const glm::mat4
     game::TargetRingLook look = game::target_ring_look(radius, seconds, seconds - ring_target_since_, attacking, ring_cues_);
 
     if (!target_ring_renderer_) target_ring_renderer_ = std::make_unique<render::TargetRingRenderer>(vk_, shader_dir_);
-    // The classic lighting takes no depth copy of its own.
-    if (!modern) vk_.begin_translucent(frame);
 
     render::TargetRing ring;
     ring.feet = feet;

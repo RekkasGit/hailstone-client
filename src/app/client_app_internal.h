@@ -765,10 +765,11 @@ private:
     void trace_spawn(float dt);
     void draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent);
     // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet, drawn
-    // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent; the classic
-    // lighting, which has no other use for it, takes the depth copy here when there is a ring to draw.
+    // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent (the classic
+    // lighting, which has no other use for the copy, takes it when target_ring_shown).
     void draw_target_ring(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
                           double seconds);
+    bool target_ring_shown() const; // the option on and a target in the world
     mutable std::optional<game::TargetIndicatorSettings> target_indicator_; // TargetIndicator.ini, read on first use
     // Hailstone's look (game::target_ring_look): the target it last showed and since when, the dashes' turn.
     std::uint32_t ring_target_ = 0;

@@ -96,13 +96,13 @@ target_link_libraries(imgui PUBLIC SDL3::SDL3 Vulkan::Headers volk::volk_headers
 FetchContent_Declare(dr_libs
   GIT_REPOSITORY https://github.com/mackron/dr_libs.git
   GIT_TAG fa931f3285ced10ace628f7f1ac951e1951e7ea6 # wav-0.14.5
-  SOURCE_SUBDIR nmsc-headers-only
+  SOURCE_SUBDIR hailstone-headers-only
   SYSTEM)
 FetchContent_MakeAvailable(dr_libs)
 FetchContent_Declare(tinysoundfont
   GIT_REPOSITORY https://github.com/schellingb/TinySoundFont.git
   GIT_TAG 853a0a171759f1ddba0de1442133a75912bbeffa
-  SOURCE_SUBDIR nmsc-headers-only
+  SOURCE_SUBDIR hailstone-headers-only
   SYSTEM)
 FetchContent_MakeAvailable(tinysoundfont)
 add_library(hailstone_audio_headers INTERFACE)
@@ -113,7 +113,7 @@ target_include_directories(hailstone_audio_headers SYSTEM INTERFACE ${dr_libs_SO
 FetchContent_Declare(bcdec
   GIT_REPOSITORY https://github.com/iOrange/bcdec.git
   GIT_TAG 80859ed3b7afb1c527a2a99d70c61457bea72d0c
-  SOURCE_SUBDIR nmsc-headers-only
+  SOURCE_SUBDIR hailstone-headers-only
   SYSTEM)
 FetchContent_MakeAvailable(bcdec)
 add_library(hailstone_bcdec INTERFACE)
@@ -124,7 +124,7 @@ target_include_directories(hailstone_bcdec SYSTEM INTERFACE ${bcdec_SOURCE_DIR})
 FetchContent_Declare(stb
   GIT_REPOSITORY https://github.com/nothings/stb.git
   GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20
-  SOURCE_SUBDIR nmsc-headers-only
+  SOURCE_SUBDIR hailstone-headers-only
   SYSTEM)
 FetchContent_MakeAvailable(stb)
 add_library(hailstone_stb INTERFACE)
@@ -135,7 +135,7 @@ target_include_directories(hailstone_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 FetchContent_Declare(monocypher
   GIT_REPOSITORY https://github.com/LoupVaillant/Monocypher.git
   GIT_TAG 0d85f98c9d9b0227e42cf795cb527dff372b40a4 # 4.0.2
-  SOURCE_SUBDIR nmsc-headers-only
+  SOURCE_SUBDIR hailstone-headers-only
   SYSTEM)
 FetchContent_MakeAvailable(monocypher)
 add_library(hailstone_monocypher STATIC ${monocypher_SOURCE_DIR}/src/monocypher.c
@@ -153,7 +153,7 @@ endif()
 FetchContent_Declare(recastnavigation
   GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
   GIT_TAG 6dc1667f580357e8a2154c28b7867bea7e8ad3a7 # v1.6.0
-  SOURCE_SUBDIR nmsc-sources-only
+  SOURCE_SUBDIR hailstone-sources-only
   SYSTEM)
 FetchContent_MakeAvailable(recastnavigation)
 file(GLOB hailstone_recast_sources
@@ -177,7 +177,7 @@ endif()
 FetchContent_Declare(bc7enc_rdo
   GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
   GIT_TAG b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
-  SOURCE_SUBDIR nmsc-sources-only
+  SOURCE_SUBDIR hailstone-sources-only
   SYSTEM)
 FetchContent_MakeAvailable(bc7enc_rdo)
 add_library(hailstone_bc7enc STATIC ${bc7enc_rdo_SOURCE_DIR}/bc7enc.cpp ${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp)
@@ -207,7 +207,7 @@ if(HAILSTONE_BROWSER)
   FetchContent_Declare(cef
     URL "https://cef-builds.spotifycdn.com/cef_binary_${hailstone_cef_url_version}_${hailstone_cef_platform}_minimal.tar.bz2"
     URL_HASH SHA1=${hailstone_cef_sha1}
-    SOURCE_SUBDIR nmsc-not-a-subproject
+    SOURCE_SUBDIR hailstone-not-a-subproject
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   FetchContent_MakeAvailable(cef)
 endif()
@@ -222,7 +222,7 @@ if(APPLE AND HAILSTONE_MOLTENVK)
   FetchContent_Declare(moltenvk
     URL https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar
     URL_HASH SHA256=f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
-    SOURCE_SUBDIR nmsc-not-a-subproject
+    SOURCE_SUBDIR hailstone-not-a-subproject
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   FetchContent_MakeAvailable(moltenvk)
   set(HAILSTONE_MOLTENVK_DYLIB ${moltenvk_SOURCE_DIR}/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib)

@@ -5,6 +5,10 @@
 
 #include <cstring>
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include <imgui.h>
 #include <lua.hpp>
@@ -137,7 +141,7 @@ TEST_CASE("spell book: a right click picks a slot up, the next sends OP_SwapSpel
     CHECK(conn.spell_state().book[0] == 201);
 }
 
-TEST_CASE("eq.SpellBookMemorize: an empty gem only (StartSpellMemorization, bReplace 0)") {
+TEST_CASE("eq.SpellBookMemorize: with replace_gem_spell off, an empty gem only (StartSpellMemorization, bReplace 0)") {
     Rig rig;
     auto& conn = rig.conn;
     REQUIRE(rig.to_zone());
@@ -157,6 +161,7 @@ TEST_CASE("eq.SpellBookMemorize: an empty gem only (StartSpellMemorization, bRep
         app::EqHost host;
         host.in_game = host.ui_ready = true;
         host.conn = &conn;
+        host.get_option = [](std::string_view o) { return o == "replace_gem_spell" ? 0 : 1; };
         app::EqApi api(host);
         lua_State* L = luaL_newstate();
         luaL_openlibs(L);
@@ -169,6 +174,97 @@ TEST_CASE("eq.SpellBookMemorize: an empty gem only (StartSpellMemorization, bRep
         REQUIRE(conn.spell_state().memorizing.has_value());
         CHECK(conn.spell_state().memorizing->gem == 1);
         CHECK(conn.spell_state().memorizing->spell == 201);
+        lua_close(L);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// Hailstone's replace_gem_spell (on by default): a book spell dropped on a gem that holds another spell memorizes
+// there as into an empty gem. OP_MemorizeSpell goes out for that gem; EQEmu's Client::MemSpell forgets the old spell
+// (OP_MemorizeSpell 2) and memorizes the new (1), and the forget says nothing ("You forget" is for a forget asked
+// for). The gem keeps its spell until then. A spell already in a gem is still refused.
+TEST_CASE("eq.SpellBookMemorize: with replace_gem_spell on, a spell memorizes over the gem's spell") {
+    Rig rig;
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    conn.set_spell_table_for_test(two_spells());
+    REQUIRE(conn.profile());
+    PlayerProfile pp = *conn.profile();
+    pp.class_ = 2; // a cleric: the book opens
+    conn.set_profile_for_test(pp);
+    conn.receive_zone_packet_for_test(encode(MemorizeSpell{0, 200, kMemScribe, 0}));
+    conn.receive_zone_packet_for_test(encode(MemorizeSpell{1, 201, kMemScribe, 0}));
+    conn.receive_zone_packet_for_test(encode(MemorizeSpell{0, 200, kMemMemorize, 0})); // gem 0: Minor Healing
+    REQUIRE(conn.spell_state().gems[0].spell == 200);
+    conn.set_sitting(true);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.conn = &conn;
+        bool replace = true;
+        host.get_option = [&replace](std::string_view o) { return o == "replace_gem_spell" ? (replace ? 1 : 0) : 0; };
+        CHECK(host.gem_takes_book_spell(0));
+        CHECK(host.gem_takes_book_spell(1));
+        CHECK_FALSE(host.gem_takes_book_spell(-1));
+        CHECK_FALSE(host.gem_takes_book_spell(game::kSpellGems));
+        replace = false;
+        CHECK_FALSE(host.gem_takes_book_spell(0));
+        CHECK(host.gem_takes_book_spell(1));
+        replace = true;
+        app::EqApi api(host);
+        lua_State* L = luaL_newstate();
+        luaL_openlibs(L);
+        lua_newtable(L);
+        api.register_functions(L);
+        lua_setglobal(L, "eq");
+        // the gem's own spell again: refused as already memorized
+        REQUIRE(luaL_dostring(L, "eq.SpellBookMemorize(0, 0)") == LUA_OK);
+        CHECK_FALSE(conn.spell_state().memorizing.has_value());
+        REQUIRE(luaL_dostring(L, "eq.SpellBookMemorize(1, 0)") == LUA_OK);
+        REQUIRE(conn.spell_state().memorizing.has_value());
+        CHECK(conn.spell_state().memorizing->gem == 0);
+        CHECK(conn.spell_state().memorizing->spell == 201);
+        CHECK(conn.spell_state().gems[0].spell == 200); // kept until the server answers
+        // the memorize runs to its end: OP_MemorizeSpell {gem 0, 201, memorize}
+        auto mems = [&] { return MockEqServer::count(rig.server.zone_log, Op::MemorizeSpell); };
+        const auto before = mems();
+        std::vector<std::int64_t> steps;
+        const std::int64_t t0 = GameConnection::now_ms();
+        for (int i = 1; i <= 400; ++i) steps.push_back(t0 + i * 1000);
+        conn.set_game_steps(steps);
+        REQUIRE(rig.until([&] { return mems() > before; }));
+        conn.set_game_steps(std::nullopt);
+        const AppPacket* sent = nullptr;
+        for (auto it = rig.server.zone_log.rbegin(); it != rig.server.zone_log.rend(); ++it)
+            if (from_wire(it->opcode) == Op::MemorizeSpell) {
+                sent = &*it;
+                break;
+            }
+        REQUIRE(sent != nullptr);
+        auto d = decode_memorize_spell(*sent);
+        REQUIRE(d);
+        CHECK(d->slot == 0);
+        CHECK(d->spell_id == 201);
+        CHECK(d->scribing == kMemMemorize);
+        drain_chat(conn);
+        // EQEmu's answer: forget gem 0, then memorize 201 into it
+        conn.receive_zone_packet_for_test(encode(MemorizeSpell{0, 200, kMemForget, 0}));
+        conn.receive_zone_packet_for_test(encode(MemorizeSpell{0, 201, kMemMemorize, 0}));
+        CHECK(conn.spell_state().gems[0].spell == 201);
+        CHECK_FALSE(conn.spell_state().memorizing.has_value());
+        for (const auto& line : drain_chat(conn)) CHECK(line.find("12496") == std::string::npos); // no You forget
+        // A spell picked up from the book and clicked onto the full gem (HandleSpellLeftClick) memorizes there too;
+        // with the option off it does not.
+        host.cursor_spell = 0; // Minor Healing
+        replace = false;
+        REQUIRE(luaL_dostring(L, "eq.SpellGemClick('CSPW_Spell0', 'left')") == LUA_OK);
+        CHECK_FALSE(conn.spell_state().memorizing.has_value());
+        replace = true;
+        REQUIRE(luaL_dostring(L, "eq.SpellGemClick('CSPW_Spell0', 'left')") == LUA_OK);
+        REQUIRE(conn.spell_state().memorizing.has_value());
+        CHECK(conn.spell_state().memorizing->gem == 0);
+        CHECK(conn.spell_state().memorizing->spell == 200);
         lua_close(L);
     }
     ImGui::DestroyContext(ctx);

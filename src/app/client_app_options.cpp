@@ -347,6 +347,9 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "tab_skip_pets") return config_.get_bool("target.skip_pets", true) ? 1 : 0;
     // Hailstone: Tab's NPC cycle takes only the NPCs in the player's line of sight (game/targeting.h), on by default.
     if (o == "tab_line_of_sight") return config_.get_bool("target.line_of_sight", true) ? 1 : 0;
+    // Hailstone: a book spell dropped on a gem that holds another spell memorizes over it (app/lua_eq_spellbook.cpp
+    // gem_takes_book_spell), on by default; off, the gem refuses it as the original's does.
+    if (o == "replace_gem_spell") return config_.get_bool("spells.replace_gem", true) ? 1 : 0;
     // Hailstone: auto attack stays on past the target's death while the extended target list holds a spawn
     // (net::GameConnection::set_attack_until_xtarget_clear), off by default.
     if (o == "attack_until_xtarget_clear") return config_.get_bool("combat.attack_until_xtarget_clear", false) ? 1 : 0;
@@ -421,6 +424,11 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     }
     if (o == "tab_line_of_sight") {
         config_.set_bool("target.line_of_sight", v != 0);
+        config_.save(config_path_);
+        return;
+    }
+    if (o == "replace_gem_spell") {
+        config_.set_bool("spells.replace_gem", v != 0);
         config_.save(config_path_);
         return;
     }
