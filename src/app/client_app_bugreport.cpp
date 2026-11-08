@@ -10,6 +10,7 @@
 
 #include "core/atomic_file.h"
 #include "core/build_info.h"
+#include "core/file_time.h"
 #include "game/coords.h"
 #include "game/eq_names.h"
 #include "platform/process.h"
@@ -144,8 +145,7 @@ void ClientApp::report_last_crash() {
     r.crash = true;
     r.category = "Crash";
     std::error_code ec;
-    r.time = std::chrono::system_clock::to_time_t(
-        std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(crash, ec)));
+    r.time = file_time_to_time_t(fs::last_write_time(crash, ec));
     if (ec) r.time = std::time(nullptr);
     const std::string text = read_text_file(crash).value_or("");
     r.facts = {

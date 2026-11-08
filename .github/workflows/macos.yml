@@ -46,7 +46,7 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build build -- -k 0 # every error in one run
 
       # No game folder or recorded vectors here: the tests that need them pass without checking anything.
       - name: Test
