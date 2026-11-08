@@ -101,20 +101,38 @@ local function wrap(segments, width, out)
   return out
 end
 
+-- (the link pieces drawn this line, four entries each: left, bottom, right, the link; reused, not made every frame)
+local rects = {}
+
+-- A link's words are drawn as separate pieces (and on separate rows when it wraps), but it is one link: the mouse on
+-- any piece underlines every piece of it, and a click on any piece follows it.
 local function drawPieces(p, onLink)
   local n = #p
   if n == 0 then ui.Text("") return end
+  local m, hovered = 0, nil
   for i = 1, n, 4 do
     if i > 1 and not p[i + 3] then ui.SameLine(0, 0) end
     local col = p[i + 1]
     ui.TextColored(col[1], col[2], col[3], 1, p[i])
     local link = p[i + 2]
-    if type(link) == "table" and ui.IsItemHovered() then
+    if type(link) == "table" then
       local x0, _, x1, y1 = ui.GetItemRect()
-      ui.DrawRect(x0, y1 - 1, x1, y1, stml.LINK[1], stml.LINK[2], stml.LINK[3], 1, 0, 1)
-      if ui.IsItemClicked(ui.Mouse.Left) and onLink then onLink(link) end
+      rects[m + 1], rects[m + 2], rects[m + 3], rects[m + 4] = x0, y1, x1, link
+      m = m + 4
+      if ui.IsItemHovered() then
+        hovered = link
+        if ui.IsItemClicked(ui.Mouse.Left) and onLink then onLink(link) end
+      end
     end
   end
+  if hovered then
+    for j = 1, m, 4 do
+      if rects[j + 3] == hovered then
+        ui.DrawRect(rects[j], rects[j + 1] - 1, rects[j + 2], rects[j + 1], stml.LINK[1], stml.LINK[2], stml.LINK[3], 1, 0, 1)
+      end
+    end
+  end
+  for j = m, 1, -1 do rects[j] = nil end
 end
 
 -- Draws one line, word-wrapped to width, each piece in its colour. A link is underlined while hovered; onLink(link)

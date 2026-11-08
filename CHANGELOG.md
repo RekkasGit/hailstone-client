@@ -23,6 +23,7 @@
 - Plugin SDK: the names now say Hailstone. Include `hailstone_plugin.h` and `hailstone_byte_io.h`; the types are `Hailstone*` (`HailstoneSpawn`, `HailstoneHooks`, ...) and the host table `PluginHostApi`, the macros `HAILSTONE_*` (`HAILSTONE_PLUGIN`, `HAILSTONE_CAP_READ`, ...), the plugin's global `host` (`host->write_chat(host->host, ...)`), the namespace `hailstone` and the exports `hailstone_plugin_*`. The old `nmsc` names still build and built plugins load as before, and a plugin built with the new names still loads in 0.6 (docs/plugins.md "The names up to 0.6")
 - For people building Hailstone: the CMake options, targets and environment variables are now `HAILSTONE_*` and `hailstone_*` (`-DHAILSTONE_SANITIZE=ON`, `build/hailstone_tests`, `HAILSTONE_VECTORS_DIR`). An `NMSC_*` CMake setting or environment variable is still read when the new one is not set
 - Modern UI spell bar: the menu for loading a spell into an empty gem (right click) now opens at that gem, not at the place of an earlier click
+- Modern UI: a link in a text, such as [South Ro] in a chat line or an NPC's reply, is underlined as a whole when the mouse is on it, not only the word under the mouse, and a link that wraps onto the next row is underlined on both rows
 
 ## 0.6.0-beta (2026-11-07)
 
