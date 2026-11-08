@@ -732,6 +732,20 @@ TEST_CASE("ao sample: at the default intensity, a mid-range occluder shades abou
         }
 }
 
+TEST_CASE("ao close fade: none within reach of a face, full from 12 units, rising in between") {
+    CHECK(ao_kernel_test::ao_close_fade(0.5f) == 0.0f);
+    CHECK(ao_kernel_test::ao_close_fade(4.0f) == 0.0f);
+    CHECK(ao_kernel_test::ao_close_fade(8.0f) == doctest::Approx(0.5f));
+    CHECK(ao_kernel_test::ao_close_fade(12.0f) == doctest::Approx(1.0f));
+    CHECK(ao_kernel_test::ao_close_fade(500.0f) == doctest::Approx(1.0f));
+    float last = 0.0f;
+    for (float d = 4.0f; d <= 12.0f; d += 0.5f) {
+        const float f = ao_kernel_test::ao_close_fade(d);
+        CHECK(f >= last);
+        last = f;
+    }
+}
+
 TEST_CASE("ao visibility: open, shaded and closed stay within [0, 1]") {
     CHECK(ao_kernel_test::ao_visibility(0.0f, 4.0f, 12.0f) == doctest::Approx(1.0f));
     float part = ao_kernel_test::ao_visibility(1.5f, 4.0f, 12.0f);

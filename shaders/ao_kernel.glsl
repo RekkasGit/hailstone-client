@@ -19,4 +19,12 @@ float ao_visibility(float sum, float intensity, float samples) {
     return clamp(1.0f - sum * intensity / samples, 0.0f, 1.0f);
 }
 
+// How much of the occlusion a surface `view_depth` units from the camera keeps. Close up the pixel cap shrinks the
+// kernel to about a tenth of the depth, small enough to find every fold of a low-poly face (an erudite's brow
+// groove, the cheeks) that its smoothed normals hide; so the AO fades out between 12 and 4 units.
+float ao_close_fade(float view_depth) {
+    float t = clamp((view_depth - 4.0f) / 8.0f, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 #endif
