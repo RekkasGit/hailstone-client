@@ -1,6 +1,7 @@
 // ClientApp: Text overlay, nameplates and the Lua UI host glue.
 
 #include "app/client_app_internal.h"
+#include "app/nameplate_layer.h"
 
 #include "game/item_preview.h"
 
@@ -54,7 +55,7 @@ void ClientApp::update_market_hidden(bool in_game) {
         if (conn_->market_hidden(s)) market_hidden_.insert(id);
 }
 
-void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
+void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4& view_proj, VkExtent2D extent, float far_plane) {
     if (!conn_) return;
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
     // The 3D view's pixels to its place in the window (/viewport).
@@ -74,6 +75,17 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
     }
     const game::NameSpriteSwitches switches{pc_names_, npc_names_, own_name_};
     const std::uint32_t hidden = hidden_spawn();
+    // Hailstone (docs/graphics.md "Name plates"), a deliberate difference: each plate's text is hidden wherever the
+    // scene is nearer, pixel by pixel (app/nameplate_layer.h); without the pipeline (a missing shader) it is drawn
+    // plain.
+    if (!plate_layer_) plate_layer_ = std::make_unique<NameplateLayer>(vk_, shader_dir_);
+    plate_layer_->begin(frame, dl, glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h), camera_.near_plane,
+                        far_plane);
+    struct Entry {
+        std::uint32_t id;
+        NameplateText plate;
+    };
+    std::vector<Entry> plates;
     for (const auto& [id, s] : world.spawns) {
         if (market_hidden_.contains(id)) continue; // IsInvisible: Hide Traders / Hide Buyers
         // ToggleNpcNameSprites / ToggleCharacterNameSprites; the player's own name too, as the original draws it (not
@@ -102,7 +114,6 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
         if (clip.w <= 0.1f) continue;
         glm::vec2 ndc(clip.x / clip.w, clip.y / clip.w);
         if (std::abs(ndc.x) > 1.0f || std::abs(ndc.y) > 1.0f) continue;
-        if (collision_ && !collision_->line_of_sight(camera_.position, head)) continue;
         float px = view_area_.x + (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width) * sx;
         float py = view_area_.y + (0.5f - ndc.y * 0.5f) * static_cast<float>(extent.height) * sy;
         std::string label = game::display_name(s.name);
@@ -117,54 +128,53 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
         if (!s.title.empty() && (!player || level > 3)) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
-        ImVec2 size = ImGui::CalcTextSize(label.c_str());
-        ImU32 color = s.is_corpse ? IM_COL32(170, 170, 170, 255) : s.is_npc ? IM_COL32(255, 220, 120, 255) : IM_COL32(140, 190, 255, 255);
-        // Hailstone (option con_name_colour, a deliberate difference; docs/graphics.md "Name plates"): an NPC's name takes
-        // its consider colour, as the target plate below does. Off: this client's yellow (neither is the original's tint).
-        if (auto rgb = game::npc_name_colour(s, conn_->player_status().level, conn_->pvp_rules(), con_name_colour_))
-            color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
-        // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) gets (0x11, 0xb5, 0xe1).
-        if (s.is_npc && !s.is_corpse && s.mercenary) color = IM_COL32(0x11, 0xb5, 0xe1, 255);
-        if (id == world.target_id) {
-            // The target: its consider colour on a dark plate edged in that colour, with a marker bobbing above it
-            // (Hailstone's look, not the original's; its ring: draw_target_ring).
-            std::uint32_t rgb = game::con_rgb(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
-            color = IM_COL32((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 255);
-            const float fs = ImGui::GetFontSize();
-            const float padx = fs * 0.45f, pady = fs * 0.12f;
-            ImVec2 a(px - size.x * 0.5f - padx, py - pady), b(px + size.x * 0.5f + padx, py + size.y + pady);
-            dl->AddRectFilled(a, b, IM_COL32(0, 0, 0, 150), fs * 0.35f);
-            dl->AddRect(a, b, color, fs * 0.35f, 0, std::max(1.5f, fs * 0.1f));
-            const float bob = std::abs(std::sin(static_cast<float>(ImGui::GetTime()) * 4.0f)) * fs * 0.3f;
-            const float tip = a.y - fs * 0.25f - bob, half = fs * 0.4f;
-            ImVec2 t0(px - half, tip - half * 1.2f), t1(px + half, tip - half * 1.2f), t2(px, tip);
-            dl->AddTriangleFilled(ImVec2(t0.x, t0.y + 1.5f), ImVec2(t1.x, t1.y + 1.5f), ImVec2(t2.x, t2.y + 1.5f),
-                                  IM_COL32(0, 0, 0, 200));
-            dl->AddTriangleFilled(t0, t1, t2, color);
-        }
-        dl->AddText(ImVec2(px - size.x * 0.5f + 1, py + 1), IM_COL32(0, 0, 0, 200), label.c_str());
-        dl->AddText(ImVec2(px - size.x * 0.5f, py), color, label.c_str());
+        NameplateText plate;
+        plate.pos = glm::vec2(px, py);
+        plate.depth = clip.w;
+        plate.name = label;
+        plate.target = id == world.target_id;
+        plate.highlight = plate.target && target_plate_highlight_;
+        plate.through_walls = !game::plate_hidden_by_scene(plate.target, target_plate_through_walls_);
         // An NPC's owner line ("(Banker)", a pet's "(Soandso`s pet)" with PetOwnerNames), the name sprite's second
         // line (PlayerClient::SetNameSpriteState's "\n(owner)").
         if (std::string owner = game::npc_owner_line(s, conn_->client_option(game::ClientOption::PetOwnerNames));
-            !owner.empty()) {
-            ImVec2 os = ImGui::CalcTextSize(owner.c_str());
-            float oy = py + size.y;
-            dl->AddText(ImVec2(px - os.x * 0.5f + 1, oy + 1), IM_COL32(0, 0, 0, 200), owner.c_str());
-            dl->AddText(ImVec2(px - os.x * 0.5f, oy), color, owner.c_str());
-        }
+            !owner.empty())
+            plate.lines.push_back(std::move(owner));
         // The guild tag under a player's name ("<Guild Name>", the name sprite's second line).
         if (game::name_sprite_shows_guild(s, show_names_)) {
             std::string guild = conn_->guild().name_of(s.guild_id);
-            if (!guild.empty()) {
-                guild = "<" + guild + ">";
-                ImVec2 gs = ImGui::CalcTextSize(guild.c_str());
-                float gy = py + size.y;
-                dl->AddText(ImVec2(px - gs.x * 0.5f + 1, gy + 1), IM_COL32(0, 0, 0, 200), guild.c_str());
-                dl->AddText(ImVec2(px - gs.x * 0.5f, gy), color, guild.c_str());
-            }
+            if (!guild.empty()) plate.lines.push_back("<" + guild + ">");
         }
+        plate.color = s.is_corpse ? IM_COL32(170, 170, 170, 255) : s.is_npc ? IM_COL32(255, 220, 120, 255) : IM_COL32(140, 190, 255, 255);
+        // Hailstone (option con_name_colour, a deliberate difference; docs/graphics.md "Name plates"): an NPC's name takes
+        // its consider colour, as the target plate below does. Off: this client's yellow (neither is the original's tint).
+        if (auto rgb = game::npc_name_colour(s, conn_->player_status().level, conn_->pvp_rules(), con_name_colour_))
+            plate.color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
+        // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) gets (0x11, 0xb5, 0xe1).
+        if (s.is_npc && !s.is_corpse && s.mercenary) plate.color = IM_COL32(0x11, 0xb5, 0xe1, 255);
+        if (plate.target) {
+            const std::uint32_t rgb = game::con_rgb(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
+            plate.color = IM_COL32((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 255);
+        }
+        plates.push_back({id, std::move(plate)});
     }
+    // Hailstone (game/nameplate_overlap.h): the nearer name is drawn over the farther, and a name a nearer one covers
+    // fades toward a tenth of its alpha, smoothly (tau 0.3 s). The target stays at full alpha at its projected head.
+    std::vector<game::PlateBox> boxes;
+    boxes.reserve(plates.size());
+    for (const auto& e : plates) {
+        const glm::vec2 size = NameplateLayer::size_of(e.plate);
+        boxes.push_back({e.plate.pos.x - size.x * 0.5f, e.plate.pos.y, e.plate.pos.x + size.x * 0.5f,
+                         e.plate.pos.y + size.y, e.plate.depth, e.plate.target});
+    }
+    const std::vector<float> targets =
+        plate_overlap_fade_ ? game::plate_target_alpha(boxes) : std::vector<float>(boxes.size(), 1.0f);
+    const std::vector<std::size_t> order = game::plate_draw_order(boxes);
+    const float dt = ImGui::GetIO().DeltaTime;
+    for (std::size_t i = 0; i < plates.size(); ++i)
+        plates[i].plate.alpha = plate_fade_.step(plates[i].id, targets[i], dt, plates[i].plate.target);
+    plate_fade_.end_frame();
+    for (std::size_t i : order) plate_layer_->draw(plates[i].plate);
     dl->PopClipRect();
 }
 

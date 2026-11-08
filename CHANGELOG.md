@@ -27,6 +27,9 @@
 - Modern UI spell bar: the menu for loading a spell into an empty gem (right click) now opens at that gem, not at the place of an earlier click
 - Modern UI: a link in a text, such as [South Ro] in a chat line or an NPC's reply, is underlined as a whole when the mouse is on it, not only the word under the mouse, and a link that wraps onto the next row is underlined on both rows
 - Bandolier: with full bags, swapping to a set that has to put a weapon back no longer makes that weapon vanish from your inventory until you log in again. As in the original client, the swap is refused with "You do not have enough room to use this bandolier." and nothing moves
+- Names behind walls, poles, doors and characters are now cut off exactly, pixel by pixel and in the same frame. Before, a name vanished as a whole when the point above the head was out of sight, and otherwise drew over whatever stood in front. "Target Name Through Walls" in Options > Display keeps your target's name in sight behind walls (`display.target_plate_through_walls=1` in `hailstone.ini`; off by default)
+- Names that overlap on the screen: the nearer name is drawn over the farther and the farther one fades to a tenth of its alpha between 10 % and 20 % coverage, smoothly. Selecting a faded name immediately restores the target at full alpha at its natural head position. "Fade Overlapping Names" in Options > Display turns the fade off (`display.plate_overlap_fade=0` in `hailstone.ini`)
+- "Highlight Target Name" in Options > Display: turn off the dark plate, edge and marker around your target's name (`display.target_plate_highlight=0` in `hailstone.ini`)
 
 ## 0.6.0-beta (2026-11-07)
 
