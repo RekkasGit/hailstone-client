@@ -972,6 +972,36 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
             }
         return it->second;
     };
+    // The donor's tracks likewise, by clip: global_chr's classic ELF shares a few bone names (the root, PE, CH, NE,
+    // HE and the points) with the Luclin ELF a Luclin model borrows from, and its C10, C11 and T07..T09, which the
+    // Luclin ELF has not, lent those few bones and left the rest of the body in the rest pose: a Luclin human, high
+    // elf or erudite threw or kicked in a T-pose. A WLD whose own <donor>_ACTORDEF has an equivalent of fewer than
+    // half of this model's bones holds another skeleton, and a borrowed clip all of whose tracks are in such WLDs is
+    // not lent. Not "all of them": a model and its donor differ by a bone or two (HUF's HAIR_POINT01). A name the
+    // two skeletons share is one track, in whichever WLD the name table kept, so a clip with any track of the right
+    // skeleton keeps all its tracks, as before.
+    std::set<std::string> suffixes;
+    for (const auto& b : m.bone_names)
+        if (b.starts_with(code)) suffixes.insert(b.substr(code.size()));
+    std::map<const wld::WldFile*, bool> donor_rivals;
+    auto donor_rival = [&](const TrackLoc* loc) {
+        if (!loc || loc->wld == &w) return false;
+        auto [it, added] = donor_rivals.try_emplace(loc->wld, false);
+        if (added)
+            if (auto a = actor_wlds().find({loc->wld, m.animation_donor})) {
+                const auto* other = actor_skeleton(*loc->wld, std::get<wld::ActorDef>((*a)->data));
+                std::size_t shared = 0;
+                if (other)
+                    for (const auto& node : other->nodes) {
+                        const auto* f = loc->wld->resolve(node.track);
+                        if (f && f->name.starts_with(m.animation_donor) &&
+                            suffixes.contains(f->name.substr(m.animation_donor.size())))
+                            ++shared;
+                    }
+                it->second = shared * 2 < suffixes.size();
+            }
+        return it->second;
+    };
     std::set<std::string> own_codes, donor_codes;
     for (std::size_t i = 0; i < n; ++i) {
         if (const auto* codes = clips_by_bone().find(m.bone_names[i]))
@@ -987,7 +1017,7 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
         AnimationClip a;
         a.borrowed = !own;
         a.tracks.resize(n);
-        bool timed = false, found = false;
+        bool timed = false, found = false, lent = own;
         for (std::size_t i = 0; i < n; ++i) {
             const std::string& name = own ? m.bone_names[i] : donor_names[i];
             const TrackLoc* loc = name.empty() ? nullptr : track(clip_code + name);
@@ -998,6 +1028,7 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
                 continue;
             }
             found = true;
+            if (!own && !donor_rival(loc)) lent = true;
             for (const auto& f : def->frames) {
                 BonePose p = to_pose(f);
                 // A bone the model hides by scaling it to nearly nothing at rest stays hidden in a borrowed track:
@@ -1015,7 +1046,7 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
                 }
             }
         }
-        if (found) m.clips.emplace(clip_code, std::move(a));
+        if (found && lent) m.clips.emplace(clip_code, std::move(a));
     }
     // Luclin takes: "C01A" (else "C01B") also plays as "C01" when the model
     // has no animated C01 of its own (OpenEQ luclin.rs install_animation_aliases).
