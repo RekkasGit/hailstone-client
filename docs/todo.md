@@ -142,6 +142,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] A release job in CI (packages, manifest, signature, upload).
 - [x] macOS arm64 releases: a plain folder like Linux's with MoltenVK beside the binary, built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
 - [ ] macOS on a Mac: the client run on Apple Silicon (MoltenVK's device features, the window, input, audio, the Keychain), and an update installed there. Only the build and the headless tests have run.
+- [ ] macOS: the saved passwords use the Keychain's SecKeychain calls, deprecated since macOS 10.10 (Apple Clang warns, `platform/credentials.cpp`); SecItem's calls replace them.
 - [ ] macOS: the startup error for a missing Vulkan names the graphics card makers' drivers (app/startup_error.cpp); on macOS it would be the missing `libMoltenVK.dylib`.
 - [ ] Downloads that resume (HTTP range requests) instead of starting over.
 
