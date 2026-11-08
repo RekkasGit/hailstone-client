@@ -59,8 +59,7 @@ enum class Key : std::uint8_t {
 };
 
 // Every key by its DirectInput scan code (DIK_*, 0..255): the codes the
-// original client's key bindings store (KeyCombo, rof2decomp
-// re/src/game/ui/key_combo.cpp). Extended keys use the DIK values with bit 7
+// original client's key bindings store (KeyCombo). Extended keys use the DIK values with bit 7
 // set (0x9c keypad enter, 0xc8 up arrow, ...). 0 = no key.
 inline constexpr std::size_t kKeyCodes = 256;
 // The DirectInput scan code of an SDL scancode (0 when the key has none).

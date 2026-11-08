@@ -203,7 +203,7 @@ std::optional<TraderClick> decode_trader_click(const AppPacket& p) {
         TraderClick v;
         v.action = r.le<std::uint32_t>();
         v.trader_id = r.le<std::uint32_t>();
-        v.approval = r.le<std::uint8_t>(); // (char)param_3[2]
+        v.approval = r.le<std::uint8_t>(); // the third byte of the trader record
         return v;
     });
 }

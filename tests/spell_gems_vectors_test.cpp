@@ -1,5 +1,5 @@
 // Spell gems and buff stacking (game/mechanics/spell_gems.h, find_affect_slot.h) against the original's vectors
-// (rof2decomp batch 260): CSpellBookWnd_GetSpellMemTicksLeft (3000), CSpellBookWnd_FinishMemorizing (600),
+// (recorded from eqgame.exe): CSpellBookWnd_GetSpellMemTicksLeft (3000), CSpellBookWnd_FinishMemorizing (600),
 // Handle_OP_MemorizeSpell (2500), PcZoneClient_IsLinkedSpellTimerReady (600), EQ_Spell_StackingSpaTables (529),
 // CharacterZoneClient_CanUseMemorizedSpellSlot (1500) and CharacterZoneClient_FindAffectSlot (1600).
 //

@@ -10,8 +10,7 @@
 // middle keeps its distance from the right edge, one over the middle keeps its distance from the middle, the rest
 // keep theirs from the left; windowed places are stored for a 4096 x 4096 screen (CResolutionHandler::
 // GetFullscreenSize). "Show" comes from the character's file only (defaults.ini too for "HotButtonWnd"); without it
-// a window is shown when its IniFlags have bit 9 (CSidlScreenWnd_InitIniStorage). rof2decomp export/
-// CSidlScreenWnd.c and _globals.c.
+// a window is shown when its IniFlags have bit 9 (CSidlScreenWnd_InitIniStorage).
 
 #include <chrono>
 #include <cstdint>

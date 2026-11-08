@@ -3,7 +3,7 @@
 // Login-server client: session handshake, credentials, server list and the
 // "play" request that makes the world server expect us. Non-blocking: call
 // update() regularly and watch state(). Wire format: docs/protocol/login.md;
-// it follows the original's eqmain.dll (rof2decomp:notes/eqmain.md).
+// it follows the original's eqmain.dll.
 
 #include <chrono>
 #include <cstdint>
@@ -44,11 +44,10 @@ constexpr std::uint16_t LoginExpansionPacketData = 0x0031;
 constexpr std::uint16_t KickPlayerReply = 0x0032;
 } // namespace login_op
 
-// The RoF2 client connects to the world server on this fixed port
-// (rof2decomp:notes/connection-and-network.md §4.1).
+// The RoF2 client connects to the world server on this fixed port.
 constexpr std::uint16_t kWorldPort = 9000;
 
-// eqlsstr_us.txt ids the client shows itself (rof2decomp:notes/eqmain.md, "Errors").
+// eqlsstr_us.txt ids the client shows itself.
 namespace login_error {
 constexpr std::int32_t NoError = 101;
 constexpr std::int32_t Timeout = 103;             // login or server list unanswered
@@ -104,7 +103,7 @@ struct PlayResult {
     }
 };
 
-// What the world connection needs (rof2decomp notes §3, §4.1): OP_SendLoginInfo
+// What the world connection needs: OP_SendLoginInfo
 // carries the account id as decimal text and the session key as the password.
 struct WorldTicket {
     std::uint32_t account_id = 0;

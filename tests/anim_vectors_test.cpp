@@ -1,5 +1,5 @@
 // The movement animation choice against the original's vectors
-// (rof2decomp batch 248): SelectMovementAnim.jsonl
+// (recorded from eqgame.exe): SelectMovementAnim.jsonl
 // (PlayerAnimation_SelectMovementAnim @0x5888a0, 3000 records at x87
 // precision 24 and 53) and OldModelAnimSpeed.jsonl (0x4afc90, 2000).
 // Floats must match bit for bit; the callees asked must be the ones the

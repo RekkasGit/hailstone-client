@@ -1,7 +1,7 @@
 #pragma once
 
-// The chat input mode and the fixed key slots 479..499: exact ports of rof2decomp batch 265
-// (re/src/game/ui/chat_input_mode.cpp), checked against CEverQuest_SetChatInputMode.jsonl and
+// The chat input mode and the fixed key slots 479..499, as the original keeps them, checked against
+// CEverQuest_SetChatInputMode.jsonl and
 // CEverQuest_ToggleChatInputMode.jsonl.
 //
 // __InChatMode: 0 while the active chat window's input line has the keys,

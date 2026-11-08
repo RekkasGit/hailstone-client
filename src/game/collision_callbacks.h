@@ -1,7 +1,6 @@
 #pragma once
 
-// The movement sweep's actor callbacks (rof2decomp batch 250,
-// re/src/game/spawn/collision_sweep.cpp; checked against the original's
+// The movement sweep's actor callbacks (checked against the original's
 // vectors in tests/movement_vectors_test.cpp): which actors a moving spawn's
 // sweep tests, and what an actor hit does to the player.
 //
@@ -77,8 +76,8 @@ bool switch_acts_on_touch(std::uint8_t switch_type);
 
 namespace hailstone::game {
 
-// What FloorActorFilter @0x476280 asks about an actor in the floor sweep's way
-// (rof2decomp batch 251, notes/lifts.md). vf30 is asked once or twice: the
+// What FloorActorFilter @0x476280 asks about an actor in the floor sweep's way.
+// vf30 is asked once or twice: the
 // first answer is `type`, later ones `type_again`.
 struct FloorFilterActor {
     bool mover_present = false;   // the sweep's owner (the spawn)

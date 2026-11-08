@@ -162,7 +162,7 @@ void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
     if (m.packet.item_type != kMissileItemSpell && now < m.launch_at) return;
     std::optional<MissileSpawn> source = world.spawn ? world.spawn(m.packet.source_id) : std::nullopt;
     if (!source || m.packet.item_type == kMissileItemSpell) {
-        m.done = true; // no source; a spell missile (not ported, see the header)
+        m.done = true; // no source; a spell missile (not modelled, see the header)
         return;
     }
     m.ends_at = now + 6000;
@@ -335,7 +335,7 @@ bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
         if (now > m.ends_at) return false;
     } else {
         if (now > m.ends_at) return false;
-        if (!moved) return false; // item type 9 would go on (not ported)
+        if (!moved) return false; // item type 9 would go on (not modelled)
         if (m.target_id == 0) {
             // The sweep (its result is always 0; a hit ends the missile through the callback and the
             // skitter distance it leaves).

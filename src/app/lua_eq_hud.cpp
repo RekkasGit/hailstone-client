@@ -1,5 +1,5 @@
 // The HUD windows: player, target, group, buffs, songs, spell gems, casting bar and hot bars. Each model follows
-// the original window class (rof2decomp export/C*.c): which children its OnProcessFrame / Update* shows, what it
+// the original window class: which children its OnProcessFrame / Update* shows, what it
 // sets on them, and what its WndNotification does for a click.
 
 #include <algorithm>

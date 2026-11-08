@@ -69,7 +69,7 @@ inline void each_vector(const char* file, const std::function<std::string(const 
     CHECK(bad == 0);
 }
 
-// A float's bits as the vectors write it (rof2decomp tools/re/export_vectors.py): a number, "inf", "-inf",
+// A float's bits as the vectors write it: a number, "inf", "-inf",
 // "nan" (the quiet NaN 0x7fc00000; 0x7ff8000000000000 for a double) or "nan:0x<bits>" for any other NaN.
 inline std::uint32_t f32_bits(const Json& j) {
     if (j.type == Json::Type::String && j.text == "nan") return 0x7fc00000u;

@@ -266,7 +266,7 @@ struct PlayerProfile {
     bool leadership_exp_on = false;
     std::vector<std::pair<std::uint32_t, std::uint32_t>> tributes;
     // The block before the endurance, which the original copies to PcProfile +0x3424..+0x3470
-    // (PcClient_ApplyBaseProfileData @0x5789b0; rof2decomp mechanics). EQEmu sends fixed values.
+    // (PcClient_ApplyBaseProfileData @0x5789b0). EQEmu sends fixed values.
     std::int32_t base_hp_total = 0, base_endurance_total = 0, base_mana_total = 0; // +0x3424 / +0x3428 / +0x342c
     std::int32_t base_save_cold = 0, base_save_fire = 0, base_save_magic = 0, base_save_disease = 0,
                  base_save_poison = 0, base_save_physical = 0, base_save_corruption = 0; // +0x3438 +0x3434 +0x3430 ...
@@ -338,7 +338,7 @@ std::optional<TimeOfDay> decode_time_of_day(const AppPacket& p);
 
 // OP_Weather (12 bytes, or 8: EQEmu's weather changes and #set weather send only the two words the original reads):
 // kind (0 rain, 1 snow, 0xff stop), intensity (the server's 1..10, 0 fades out), a third word the original does not
-// read (rof2decomp notes/eqgraphicsdx9.md, Weather). The zone-in one is {0xff, 0x31, 0}.
+// read. The zone-in one is {0xff, 0x31, 0}.
 struct Weather {
     std::int32_t kind = 0xff, intensity = 0;
     std::uint32_t mode = 0;

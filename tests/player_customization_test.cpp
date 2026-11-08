@@ -1,5 +1,5 @@
 // The player customization window's rules (game/player_customization.h) against the original's control flow
-// (rof2decomp export CPlayerCustomizationWnd.c: sub_00715770, sub_00714a40, sub_00714850, WndNotification).
+// (CPlayerCustomizationWnd: 0x715770, 0x714a40, 0x714850, WndNotification).
 
 #include <doctest/doctest.h>
 

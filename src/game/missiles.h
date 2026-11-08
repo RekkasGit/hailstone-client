@@ -1,7 +1,7 @@
 #pragma once
 
 // Missiles: arrows, thrown weapons and spell bolts in flight (EQMissile,
-// eqgame 0x4ff7d0..0x5022e1; rof2decomp Ghidra, traced for this port).
+// eqgame 0x4ff7d0..0x5022e1).
 //
 // The server sends each one as OP_SomeItemPacketMaybe (0x747c, 116 bytes;
 // EQEmu's Mob::ProjectileAnimation / SendItemAnimation). The client never makes
@@ -48,7 +48,7 @@
 // (+0x40 stays 0), and ProcessMissile ends an item type 9 missile whose spell
 // fails IsValidSpellID @0x4ad150 (1..45000) before it makes the actor, so the
 // original shows nothing for them; here every item type 9 missile is dropped
-// likewise. What the original does with a valid spell is not ported (no
+// likewise. What the original does with a valid spell is not modelled (no
 // server sends one): its lifetime from the spell's duration, the start on the
 // target for the area target types, the projectile stage (DoSpellEffect stage
 // 1), MoveMissile's area pulses (HitActor on the spawns in range every 2 s,

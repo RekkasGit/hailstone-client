@@ -2,8 +2,8 @@
 
 // CharacterZoneClient::UseSkill @0x45b2d0 (9935 bytes): the /doability path. It decides locally whether a skill
 // may be used, starts its reuse timer, prints the original's messages and sends the skill's packet; the server
-// decides the outcome. Ported from the disassembly and checked against the original's vectors (rof2decomp
-// b1538ef4: UseSkill_Combat / _Activity / _Target / _Gather; tests/use_skill_vectors_test.cpp), which list every
+// decides the outcome. Worked from the disassembly and checked against the original's vectors
+// (UseSkill_Combat / _Activity / _Target / _Gather; tests/use_skill_vectors_test.cpp), which list every
 // callee in call order with its answer.
 //
 // The order, in short:

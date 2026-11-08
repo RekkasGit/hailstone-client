@@ -293,67 +293,31 @@ void RealEstateManager::reset() {
     *this = RealEstateManager();
 }
 
+namespace {
+
+// RealEstate::ShowResultCode @0x5ae1f0's lines: {eqstr id, result code}, by eqstr id.
+struct ResultLine {
+    std::uint32_t eqstr_id;
+    std::int32_t code;
+};
+constexpr ResultLine kResultLines[] = {
+    {731, 64}, {732, 65}, {743, 66}, {744, 67}, {749, 68}, {760, 70}, {5219, 10}, {5220, 17}, {5226, 9},
+    {5229, 19}, {5230, 36}, {5231, 20}, {5237, 28}, {5240, 22}, {5241, 11}, {5242, 15}, {5243, 16}, {5250, 35},
+    {5251, 23}, {5272, 12}, {5273, 29}, {5275, 21}, {5282, 39}, {5283, 42}, {5291, 43}, {5292, 44}, {5312, 45},
+    {5313, 46}, {5319, 47}, {5331, 48}, {5332, 49}, {5333, 50}, {5334, 53}, {5335, 55}, {5338, 59}, {5404, 71},
+    {5405, 72}, {5406, 73}, {5407, 74}, {5408, 75}, {5409, 76}, {5413, 79}, {5414, 77}, {5415, 78}, {5418, 81},
+    {5429, 82}, {6436, 31}, {6437, 32}, {6438, 33}, {6440, 38}, {6441, 24}, {6442, 25},
+};
+
+} // namespace
+
 std::uint32_t re_result_message(std::int32_t code) {
-    // RealEstate::ShowResultCode @0x5ae1f0's arms (eqstr ids); 0 and -1 print nothing, an unlisted code 5223.
-    switch (code) {
-    case -1:
-    case 0: return 0;
-    case 9: return 5226;
-    case 10: return 5219;
-    case 11: return 5241;
-    case 12: return 5272;
-    case 15: return 5242;
-    case 16: return 5243;
-    case 17: return 5220;
-    case 19: return 5229;
-    case 20: return 5231;
-    case 21: return 5275;
-    case 22: return 5240;
-    case 23: return 5251;
-    case 24: return 6441;
-    case 25: return 6442;
-    case 28: return 5237;
-    case 29: return 5273;
-    case 31: return 6436;
-    case 32: return 6437;
-    case 33: return 6438;
-    case 35: return 5250;
-    case 36: return 5230;
-    case 38: return 6440;
-    case 39: return 5282;
-    case 42: return 5283;
-    case 43: return 5291;
-    case 44: return 5292;
-    case 45: return 5312;
-    case 46: return 5313;
-    case 47: return 5319;
-    case 48: return 5331;
-    case 49: return 5332;
-    case 50: return 5333;
-    case 53: return 5334;
-    case 55: return 5335;
-    case 59: return 5338;
-    case 64: return 0x2db;
-    case 65: return 0x2dc;
-    case 66: return 0x2e7;
-    case 67: return 0x2e8;
-    case 68: return 0x2ed;
-    case 70: return 0x2f8;
-    case 71: return 5404;
-    case 72: return 5405;
-    case 73: return 5406;
-    case 74: return 5407;
-    case 75: return 5408;
-    case 76: return 5409;
-    case 77: return 5414;
-    case 78: return 5415;
-    case 79: return 5413;
-    case 81: return 5418;
-    case 82: return 5429;
+    // 0 and -1 print nothing, an unlisted code 5223.
     // 83 builds its line with 0x7dbd10(.., 10, 1, 1, 1), not traced: nothing here (docs/unknowns.md).
-    case 83: return 0;
-    default: return 5223;
-    }
+    if (code == 0 || code == -1 || code == 83) return 0;
+    for (const ResultLine& line : kResultLines)
+        if (line.code == code) return line.eqstr_id;
+    return 5223;
 }
 
 std::uint32_t re_sell_message(std::int32_t code) {

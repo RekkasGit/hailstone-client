@@ -1,8 +1,8 @@
 #pragma once
 
 // The original client's character rules (CharacterZoneClient and its
-// helpers in eqgame.exe), ported from rof2decomp's differential-tested
-// rewrite onto a CharacterSheet. One Character evaluates one sheet; the
+// helpers in eqgame.exe), reimplemented on a CharacterSheet and checked
+// against the original's vectors. One Character evaluates one sheet; the
 // member functions are named after the original functions they reproduce,
 // with their addresses in the comments, and keep the original's argument
 // meanings (include_buffs = "with buffs" / "the live value",
@@ -16,17 +16,13 @@
 //
 // Every call the original makes to another of these functions goes through
 // Hooks first, so that a test can replay a recorded call of the original
-// (rof2decomp re/test/vectors: the original ran with its callees mocked) and
+// (the recorded vectors: the original ran with its callees mocked) and
 // check one function on its own. Without hooks the port computes everything.
 //
-// Sources: rof2decomp re/src/game/character/{effects,stat_calc,stats,vitals,
-// calc_ac_eh,carried_weight_eh,item_haste_eh,regen,skill_caps,adjusted_skill,
-// skill_item_mods_eh,spell_effects,aa_effects_cache,negate_effects_eh,
-// focus_effects_eh,focus_pct}.cpp, re/src/game/spell/{eq_spell,focus_limits}.cpp
-// (all "replaced tested"), and the exe's disassembly / Ghidra export for the
-// functions that are not rewritten yet (CacheBuffSlotEffects @0x436b30,
-// CacheWornItemEffects @0x437780, ProcessAllStats @0x4547e0); see
-// docs/mechanics.md.
+// Sources: the original's functions named in each file, checked against its
+// vectors, and the exe's disassembly for those without vectors
+// (CacheBuffSlotEffects @0x436b30, CacheWornItemEffects @0x437780,
+// ProcessAllStats @0x4547e0); see docs/mechanics.md.
 
 #include <cstdint>
 #include <functional>

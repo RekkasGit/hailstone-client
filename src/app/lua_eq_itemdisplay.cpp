@@ -4,7 +4,7 @@
 // BuildItemInfo), so the window is drawn "live" (eq.ChildRect), at the size it gives itself there
 // (CXWnd::Resize @006adce8: eq.WindowClient; game::layout_item_display). The augment sockets are
 // CItemDisplayWnd_UpdateAugmentSlots @0x69f240's rows (game/augments.h) and their input CItemDisplayWnd::
-// WndNotification @006ae870's (rof2decomp notes/augments.md §3, §4).
+// WndNotification @006ae870's.
 
 #include <cfloat>
 #include <charconv>

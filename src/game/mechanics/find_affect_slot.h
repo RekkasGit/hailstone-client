@@ -1,8 +1,6 @@
 #pragma once
 
-// CharacterZoneClient::FindAffectSlot @0x43d300 and the stacking rules it runs (rof2decomp batch 260:
-// re/src/game/character/find_affect_slot.cpp, re/src/game/spell/stacking_predicates.cpp,
-// re/src/game/character/{last_effect_slot,spell_level_checks,zone_client_checks,stat_calc}.cpp): where a buff that
+// CharacterZoneClient::FindAffectSlot @0x43d300 and the stacking rules it runs: where a buff that
 // lands goes on the character, or nowhere when an existing buff blocks it. EQ_Character::HitBySpell is its only
 // caller (game/mechanics/hit_by_spell.h, the buff path).
 //

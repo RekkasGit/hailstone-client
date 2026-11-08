@@ -4,8 +4,8 @@ What opens web pages, who may open them, and the plan for Hailstone's in-game br
 
 ## The original
 
-RoF2 shows web pages in its own HTML windows, built on Gecko (XULRunner: `xul.dll`, the `libMozilla::*` glue; rof2decomp
-notes/libraries.md). Three paths reach one:
+RoF2 shows web pages in its own HTML windows, built on Gecko (XULRunner: `xul.dll`, the `libMozilla::*` glue).
+Three paths reach one:
 
 - **OP_Weblink** (0x6f4b, zone → client, EQEmu's `SendWebLink` / `Weblink_Struct`: the address, NUL-terminated). The
   case @0x4c5b5d in `CEverQuest::HandleWorldMessage` takes the payload as a C string and calls

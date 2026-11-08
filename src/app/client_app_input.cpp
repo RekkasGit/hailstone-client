@@ -41,7 +41,7 @@ bool ClientApp::script_keypress(std::string_view command, int mode) {
 }
 
 // The key map's commands (game/keymap.h: the original's 479 mappable commands with
-// KeypressHandler::ResetKeysToEqDefaults' default keys, rof2decomp re/src/game/ui/default_keys.inc,
+// KeypressHandler::ResetKeysToEqDefaults' default keys,
 // rebindable in the key window). Movement is read as held commands in update_player.
 void ClientApp::key_command(const game::KeyMap::Event& e) {
     if (!e.down) return;

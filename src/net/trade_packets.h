@@ -4,7 +4,7 @@
 // a RoF2 translator in the NMS server's common/patches/rof2.cpp except
 // OP_CancelTrade (ENCODE copies fromid and action), so the layouts are
 // rof2_structs.h / eq_packet_structs.h (#pragma pack(1)). What the original
-// client sends and does comes from rof2decomp's export of eqgame.exe:
+// client sends and does follows eqgame.exe:
 //
 //   OP_TradeRequest    C→Z  CEverQuest::DropItemOrMoneyOnPlayer @0x5331f0: {target, me}
 //   OP_TradeRequest    Z→C  Handle_OP_TradeRequest @0x4c23c0: CTradeWnd::Activate(partner, 0),

@@ -1,5 +1,5 @@
-// The movement key handlers of __ExecuteCmd (game/mechanics/controls.h,
-// rof2decomp batch 247) and the targeting commands (game/targeting.h).
+// The movement key handlers of __ExecuteCmd (game/mechanics/controls.h)
+// and the targeting commands (game/targeting.h).
 #include <doctest/doctest.h>
 
 #include <algorithm>

@@ -55,36 +55,34 @@ int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot) {
     return slot;
 }
 
+namespace {
+
+// The head material a race's 0xf0 helm becomes, by gender, in the order of
+// the male ids. The Barbarian (2) takes 0x219 / 0x212 for 0xf0 and 0xf1.
+struct RaceHelm {
+    std::uint32_t race;
+    std::uint32_t male;
+    std::uint32_t female;
+};
+constexpr RaceHelm kRaceHelms[] = {
+    {6, 0x221, 0x21c},  {8, 0x22d, 0x226},   {4, 0x235, 0x231},  {3, 0x23f, 0x23a},
+    {12, 0x249, 0x244}, {7, 0x253, 0x24e},   {5, 0x25d, 0x258},  {11, 0x267, 0x262},
+    {1, 0x273, 0x26c},  {128, 0x27b, 0x276}, {10, 0x285, 0x280}, {9, 0x28f, 0x28a},
+};
+
+} // namespace
+
 std::uint32_t map_head_material(std::uint32_t race, std::uint8_t gender, std::uint32_t id) {
+    if (id != 0xf0 && id != 0xf1) return id;
     const bool female = gender != 0;
-    if (id == 0xf0) {
-        switch (race) {
-        case 1: return female ? 0x26c : 0x273;
-        case 2: break; // the Barbarian helm below
-        case 3: return female ? 0x23a : 0x23f;
-        case 4: return female ? 0x231 : 0x235;
-        case 5: return female ? 0x258 : 0x25d;
-        case 6: return female ? 0x21c : 0x221;
-        case 7: return female ? 0x24e : 0x253;
-        case 8: return female ? 0x226 : 0x22d;
-        case 9: return female ? 0x28a : 0x28f;
-        case 10: return female ? 0x280 : 0x285;
-        case 11: return female ? 0x262 : 0x267;
-        case 12: return female ? 0x244 : 0x249;
-        case 128: return female ? 0x276 : 0x27b;
-        default: return id;
-        }
-    } else if (id == 0xf1) {
-        switch (race) {
-        case 2: break;
-        case 10: return female ? 0x281 : 0x286;
-        case 1: case 3: case 4: case 5: case 6: case 7: case 8: case 9: case 11: case 12: case 128: return 3;
-        default: return id;
-        }
-    } else {
-        return id;
+    if (race == 2) return female ? 0x212 : 0x219;
+    for (const RaceHelm& helm : kRaceHelms) {
+        if (helm.race != race) continue;
+        if (id == 0xf0) return female ? helm.female : helm.male;
+        // 0xf1: the Ogre (10) has a helm of its own; the other races take 3.
+        return race == 10 ? (female ? 0x281u : 0x286u) : 3u;
     }
-    return female ? 0x212 : 0x219;
+    return id;
 }
 
 HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t material, std::uint32_t hero_forge) {

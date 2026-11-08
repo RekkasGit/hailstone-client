@@ -5,8 +5,8 @@
 // read (the account's characters), the headers of the selected mailbox and
 // the bodies fetched so far; commands go to the chat server as text
 // ("[getheaders", "[getbody 12", "[setmessagestatus READ 12", "[selectmailbox
-// 1", "[mailto ..."), see net/chat_server.h. The rules here follow MailMgr_*
-// (rof2decomp export, addresses at each function).
+// 1", "[mailto ..."), see net/chat_server.h. The rules here follow the original's MailMgr_*
+// functions (addresses at each function).
 
 #include <cstdint>
 #include <map>

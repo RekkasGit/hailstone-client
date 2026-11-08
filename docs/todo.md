@@ -24,7 +24,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Ranged attacks do not turn the player in the original either.
 - [x] Held buffs seen live (a SPA 436 buff freezes Courage's countdown). Melee checked by hand.
 - [ ] Distance-scaled spell effects live (needs a spell with a distance modifier cast at range). Buff caster ids and temporary pets in the line filters are in unknowns.md.
-- [ ] Spell particles: which spawn is the impact stage's caster (the struck spawn here, the packet's source in rof2decomp; unknowns.md).
+- [ ] Spell particles: which spawn is the impact stage's caster (the struck spawn here, the packet's source in the original's EQPlayer::TriggerSpellEffect; unknowns.md).
 - [x] Commands: `/discipline`, `/doability`, `/stopdisc`, `/memspellset`, `/spellscribe`, `/targetgroupbuff` / `/tgb`, `/autofire`, `/melody`, `/dismount`, `/aggrometer`, `/buyer`, `/claim` (f3c5c5d).
 - [ ] `/gems`: the Gems mini-game (CGemsGameWnd, 0x6705f0 to 0x6734e0), a port of its own.
 - [x] (358bf04, checked live: /discipline now runs the NMS reuse timers; the empty list after login matches the original) A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet); the reuse list is empty after zone-in until the server sends timers.
@@ -57,7 +57,6 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Seen live (5ba3a3b and before): a stock-loot corpse with a partial stack, Link All (a crash without a loot session fixed) and Loot All, a two-client trade with coin and the busy refusals, Ctrl bag moves and the bag swap, the tradeskill search and favourites (the modern window's selected recipe fixed), the bandolier's Make Hot Button and Auto Swap, the merchant's Qty and Lvl.
 - [x] The item display's icon links its item into the active chat window's input (CItemDisplayWnd::WndNotification, IconButton), both packs, X in the gamepad one (unit tests; not seen live).
 - [x] Link All in the gamepad loot window (unit tests); the inventory doll drop in the modern pack (checked live). Open: the bandolier button actually swapping weapons.
-- [x] rof2decomp `notes/items-and-inventory.md` §2.7: the swap list's room mode is 3 for every entry, not "3 + i".
 - [x] Bazaar: Find Trader, Hide Traders, the result row's Buy button, the stall check, the price load of a selected slot (f7401f3; Hide Traders by unit tests only).
 - [x] Barter: the feature check, offline mode, Hide Buyers (f7401f3; Hide Buyers and the feature check by unit tests only).
 - [x] Mail: the ignore list (kept and edited only, as in the original); the composition window's From (351d492).
@@ -83,7 +82,6 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Login: the kick request after 302/114 (eqmain's 0x16 / 0x32) with a Yes/No box (5c3a3cc; EQEmu never sends 302/114, mock tests only).
 - [ ] Login: the reply's two leading bytes (unused by OnPlayerLogin), pushes 0x25 to 0x30 (EQEmu sends only 0x31).
 - [x] The world and zone link-death timeout is the original's 180 s of silence (Params 0x12, UdpConnection +0x15c), not 15 s; 15 s is the keepalive delay (Params 0xe) and /offlinemode's exit window (0x3a98 @0x53ddc3). Login (14.8 s) and chat (44 s) keep the client's limits (docs/unknowns.md). Checked live on the NMS dev server (2026-10-31): a character idle in South Qeynos for 270 s stayed connected and camped out normally.
-- [x] rof2decomp notes: Params 0xe is the keepalive delay, not the no-data timeout (checked at 0x8c4197 / 0x8c61c4).
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
 - [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
 - [ ] Whether the original checks the address a SessionResponse comes from (the client takes any with its connect code, as multi-homed EQEmu hosts need; unknowns.md).
@@ -109,7 +107,6 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [ ] Riding: do_change_form's unseat and re-seat (`game::change_form_unseat`, @0x597110) is ported but not called, so an illusion or form change while mounted keeps the rider seated without the original's re-seat through do_stand.
 - [x] Ladders placed in the zone (objects.wld LADDER* actors, type 6): walking into one climbs it (CollidingType 6 from the sweep's hit), a click from the top mounts it (zone-ladders; unit tests). Not tried live.
 - [x] Passable ladders (Cabilis's LADDERCB101, every polygon passable): clickable from the top as in the original, and climbed by walking or swimming into them by Hailstone's own rule, switched by `hailstone.cfg` `[movement] passable_ladders` (canal-ladder; unit tests, and the real Cabilis East zone with `EQ_GAME_DIR`). Not tried live.
-- [x] rof2decomp: the upper/lower naming in player_animation_{start,layers,play,rows}.cpp fixed, differential tests pass (uncommitted in rof2decomp).
 - [x] Luclin eye colours and `SwapFace` (e7a5849; model viewer). Open: one-texture Luclin materials' tint (female dwarf faces 2 and 3).
 - [x] Elementals: UseLuclinElementals (default on) draws race 75 as the typed Luclin elementals 209–212 by texture, and off draws those as race 75 (CreatePlayerActor's swap; unit tests and `chrdump` on the live asset folder, not seen live).
 - [ ] UseLuclinElementals off also skips loading `Global5_chr2`, `Global5_chr` and `frog_mount_chr` ("Global NPC Models", @0x492780); `global_character_archives` loads `global5_chr` either way.

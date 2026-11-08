@@ -1,7 +1,6 @@
 // Luclin-style models (the SoL player models and the player Froglok) and new
 // (EQG) models of the classic races (Drakkin), dressed by the original's
-// ActorClient functions (game/actor_look.h, rof2decomp batch 266,
-// notes/appearance.md): body materials by SwapBodyMaterial, hair, beard,
+// ActorClient functions (game/actor_look.h): body materials by SwapBodyMaterial, hair, beard,
 // Drakkin tattoo and facial attachment by ApplyFacialFeatures, armour IT
 // parts, helms and hero's forge pieces by ApplyArmorTexture /
 // UpdateNewArmorSlot. DressEnv stands for the graphics DLL's model: it

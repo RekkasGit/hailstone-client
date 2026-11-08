@@ -6,7 +6,7 @@
 // PlayerAnimation_ChooseIdleAnimation, their clips found as 0x58afa0
 // finds a sequence's track (new_style_track); classic models through
 // 0x4afe60 with 0x4b15b0's stand-state substitutions and
-// 0x4afc90's rate. The posture changes (rof2decomp batch 248, row 65):
+// 0x4afc90's rate. The posture changes:
 // sitting down plays P02 (STNG on new-style models) once, then P07 (NSIT)
 // is held with O03 (SIDL) as the fidget; standing up plays P02 reversed
 // (STDG on new-style models). Crouching plays the duck (L08, CRCH) once and

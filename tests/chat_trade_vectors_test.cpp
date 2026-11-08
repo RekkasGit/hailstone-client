@@ -1,4 +1,4 @@
-// rof2decomp batch 265's vectors (recorded from eqgame.exe): the chat input mode (game/chat_input.h), con levels
+// The original's vectors (recorded from eqgame.exe): the chat input mode (game/chat_input.h), con levels
 // under the PvP rule sets (game/combat.h), region name flags (game/zone_lines.h), IsOkToTransact and
 // Handle_OP_TradeRequest (game/trade_rules.h) and Handle_OP_GroupInvite2 (game/group_rules.h).
 #include <doctest/doctest.h>

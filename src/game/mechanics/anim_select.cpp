@@ -1,8 +1,6 @@
 // Movement animation choice and playback rate (game/mechanics/anim_select.h).
-// Sources: rof2decomp re/src/game/spawn/movement_animation.cpp (batch 248:
-// PlayerAnimation_SelectMovementAnim @0x5888a0, 0x58af10, 0x4afc90)
-// and re/src/game/spawn/player_animation_update.cpp (batch 213:
-// 0x4afe60). The float steps follow the original's x87 instruction order;
+// Follows the original's PlayerAnimation_SelectMovementAnim @0x5888a0,
+// 0x58af10, 0x4afc90 and 0x4afe60. The float steps follow the original's x87 instruction order;
 // comments give the addresses.
 #include "game/mechanics/anim_select.h"
 
@@ -256,7 +254,7 @@ bool movement_still(float y, float x, float z, const Fpu& f) {
 bool new_style_can_idle(std::int32_t a) { return a == 0x6e || a == 0x70 || a == 0x76; }
 
 IdleAnimResult choose_idle_animation(const IdleAnimInput& in) {
-    // The rewrite's order (idle_animation.cpp); the start is the low byte of 0xa1e344 (0xfe).
+    // The original's order; the start is the low byte of 0xa1e344 (0xfe).
     IdleAnimResult res;
     std::uint8_t anim = kNoAnimation;
     float speed = 1.0f;

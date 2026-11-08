@@ -12,7 +12,7 @@ namespace hailstone::app {
 
 namespace {
 
-// CVideoModesWnd @0x78a6c0 (rof2decomp export CVideoModesWnd.c): VIDW_VideoResolutionsList (one column
+// CVideoModesWnd @0x78a6c0: VIDW_VideoResolutionsList (one column
 // "Resolution"), VIDW_RefreshRateCombobox, VIDW_BitDepthCombobox and VIDW_AcceptButton. Update @0x789a50: the render
 // interface's modes of at least 640 x 480 (in a window: no larger than the desktop) in 16 or 32 bit formats, each
 // width x height once ("%dx%d"), the current one selected; in full screen the refresh rates of the current one

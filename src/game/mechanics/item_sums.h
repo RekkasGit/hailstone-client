@@ -5,9 +5,7 @@
 // and the other item lookups, the worn-only copies and their caps, and the
 // copies and adjustments the derived stats start from.
 //
-// Exact port of rof2decomp batch 242 (re/src/game/character/
-// process_all_stats_eh.cpp and its generated stat table
-// process_all_stats.inc), checked against the original's vectors
+// Follows the original exactly, checked against its vectors
 // (tests/mechanics_vectors_test.cpp). The sums live where the original keeps
 // them, so they are indexed by the original's field offsets: ItemSums::at()
 // takes a CharacterZoneClient offset (+0x24..+0x198), base_at() a
@@ -98,7 +96,7 @@ struct ItemSums {
 };
 
 // ClearSums, the worn items, KeepWornSums and the other lookups (the pack
-// items, CharacterZoneClient::sub_0044b150, are the caller's: not rewritten).
+// items, CharacterZoneClient::sub_0044b150, are the caller's).
 // The endurance upkeep (+0x94) is left as it is.
 void sum_item_stats(ItemSums& sums, const ItemSources& sources, ItemSumQueries& q);
 

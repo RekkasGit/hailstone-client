@@ -35,7 +35,7 @@ std::string load_stml_page(const GameDir* game, const std::string& path, std::st
 
 namespace {
 
-// CHelpWnd @0x54e8a0 (rof2decomp export CHelpWnd.c): children Display (an STML box), BackButton,
+// CHelpWnd @0x54e8a0: children Display (an STML box), BackButton,
 // CustomerServiceButton, TipsButton and Contents; SetFile @0x54e670 loads __HelpPath ("help\") + the file into Display
 // (CStmlWnd::LoadPage without history) and the constructor shows help.html. WndNotification @0x54e740: Contents shows
 // help.html again; BackButton goes back a page (CStmlWnd::GoToBackHistoryLink) and enables itself while there is

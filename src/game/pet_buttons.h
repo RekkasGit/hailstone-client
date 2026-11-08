@@ -1,7 +1,6 @@
 #pragma once
 
-// The pet window's command buttons as hot buttons (CPetInfoWnd, rof2decomp re/src/game/ui/pet_info_notification_eh.cpp
-// and the CPetInfoWnd_* helpers in export/_globals.c):
+// The pet window's command buttons as hot buttons (CPetInfoWnd's WndNotification and the CPetInfoWnd_* helpers):
 //   - a drag from a command button (WndNotification message 0x17, unless the window is locked, +0x2d) puts on the
 //     cursor (CCursorAttachment::AttachToCursor(0, 0, 10, index, "%s %s" of eqstr 6700 "Pet" and the button's
 //     text, -1)) the button's index among Pet0_Button..Pet13_Button (+0x234..);
@@ -62,8 +61,8 @@ int pet_command_toggle_state(int index);
 // focus: the commands that stay on.
 bool is_toggle_pet_command(std::string_view name);
 
-// What CharacterZoneClient_CanUsePetCommand @0x4438e0 reads (rof2decomp re/src/game/character/pet_commands.cpp,
-// checked against the disassembly): the pet spawn (CharacterZoneClient_GetPetSpawn), its race (virtual +0x88),
+// What CharacterZoneClient_CanUsePetCommand @0x4438e0 reads (checked against the
+// disassembly): the pet spawn (CharacterZoneClient_GetPetSpawn), its race (virtual +0x88),
 // bSummoned (+0x2e0, the spawn bitfield's bit 2), its property 0x1f (PlayerBase::HasProperty(0x1f, 0, 0)), and the
 // character's TotalEffect(spa, 1, sub, 1, 1).
 struct PetCommandQuery {

@@ -1,5 +1,5 @@
 // GameConnection: real estate (player housing, guild halls, placed objects) as RealEstateManagerClient and the
-// CRealEstate*Wnd windows handle it (rof2decomp notes/housing-and-market.md; the decompile of the functions named
+// CRealEstate*Wnd windows handle it (the functions named
 // below). The state is game::RealEstateManager; the packets net/real_estate_packets.h. A stock EQEmu server sends
 // none of these; a server with housing (Project Triune) sends them with the original's numbers.
 

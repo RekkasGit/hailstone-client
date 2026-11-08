@@ -1,7 +1,7 @@
 // GameConnection: merchants, NPC dialogue (hail) and trades with players and
 // NPCs (quest hand-ins). Packets in net/merchant_packets.h and
 // net/trade_packets.h; prices and money in game/merchant.h. The client side
-// follows the original's functions from rof2decomp's export of eqgame.exe
+// follows the original's functions in eqgame.exe
 // (names and addresses at each function below and in those headers).
 //
 // Cursor queue (the hand-in problem OpenEQ's docs/QUEST_HANDIN_PLAN.md
@@ -157,7 +157,7 @@ void GameConnection::merchant_select(const ItemSlot& slot) {
 }
 
 void GameConnection::parcel_coin_button(int coin, std::int32_t have) {
-    // 0x698290 (rof2decomp: 83 bytes; SelectSlot(0), then 0x6909a0(coin) and 0x6f2120 when have > 0).
+    // 0x698290 (83 bytes; SelectSlot(0), then 0x6909a0(coin) and 0x6f2120 when have > 0).
     if (!merchant_ || !merchant_->open || coin < 0 || coin > 3) return;
     merchant_->selected.reset();
     merchant_->parcel_coin = -1;

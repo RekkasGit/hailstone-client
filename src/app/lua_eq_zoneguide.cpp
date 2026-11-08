@@ -15,7 +15,7 @@ namespace {
 // Opcodes not in EQEmu's RoF2 table: CFindLocationWnd_RequestLocations @0x66ba80 sends both, empty, once per zone.
 constexpr std::uint16_t kOpFindLocationRequest = 0x2a92, kOpFindZoneConnectionRequest = 0x6d6e;
 
-// CFindLocationWnd @0x66c560 (rof2decomp export CFindLocationWnd.c): FLW_FindLocationList (sortable, "LocationList"
+// CFindLocationWnd @0x66c560: FLW_FindLocationList (sortable, "LocationList"
 // columns kept in the UI ini), FLW_FilterLocationsCheckbox (checked at first: only destinations the player can use)
 // and FLW_FoundNoneLabel. AboutToShow @0x66be60 hides the list while nothing is known and the "nothing found" label,
 // and asks for the zone's locations (RequestLocations: once per zone, again after OnZone); OnProcessFrame @0x66b9d0,

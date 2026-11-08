@@ -6,7 +6,7 @@
 // (OP_RespondAA @0x4bec60, OP_AAExpUpdate @0x4b70c0, the profile), the reuse
 // timers (OP_AAAction from the server, Handle_OP_AAAction @0x4b5bd0) and the
 // original's rules for what may be trained and when an ability is ready.
-// rof2decomp:notes/experience-and-aa.md; docs/protocol/rof2-packets.md "Alternate advancement".
+// docs/protocol/rof2-packets.md "Alternate advancement".
 // Pure state and rules; the packets are handled in net/game_connection_progress.cpp.
 
 #include <array>
@@ -101,7 +101,7 @@ struct AAFilter {
     std::int32_t category = 0;   // +0xc
 };
 
-// CAAWnd_FilterAccepts @0x6085b0 (rof2decomp batch 257, vector CAAWnd_FilterAccepts): whether the list shows
+// CAAWnd_FilterAccepts @0x6085b0 (vector CAAWnd_FilterAccepts): whether the list shows
 // `a` (true for none). In order: trainable only needs CanTrainAbility (`can_train`, asked only then); kind 1 needs
 // a spell (+0x4c > 0); kind 2 needs no spell or a first persistent effect (AltAbility_FirstPersistentEffect
 // @0x42e1a0: the effect list's head value, 0 for an empty list); a positive category must equal +0x8c, a positive

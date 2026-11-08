@@ -211,7 +211,7 @@ ShowNames shownames_command(std::string_view args, std::string_view off) {
 
 namespace {
 
-// usercolor_help.inc (rof2decomp; the exe's own lines): the usage, then page1..page7.
+// /usercolor's help (the exe's own lines): the usage, then page1..page7.
 constexpr const char* kUsage[] = {"Format: /usercolor <number> <red> <green> <blue>", "<number> -> 1 to 69",
                                   "<red> <green> <blue> -> 0 to 255",
                                   "To reset a user color use /usercolor <number> reset",
@@ -445,17 +445,23 @@ int particle_density_choice(float density) {
 // ---------------------------------------------------------------- tracking
 
 std::optional<TrackFilterChoice> trackfilter_choice(std::string_view args, const EqStrFn& eqstr) {
-    struct Option {
-        char first, second;
-        std::uint32_t name, bit;
+    // Each filter bit with the letters that pick it (lower case, from the start of the argument) and its name's
+    // eqstr; tried in this order.
+    struct Filter {
+        std::uint32_t bit;
+        std::string_view prefix;
+        std::uint32_t eqstr_id;
     };
-    static constexpr Option kOptions[] = {{'g', 'n', 13156, 0x01}, {'g', 'y', 11005, 0x40}, {'b', 0, 13157, 0x02},
-                                          {'w', 0, 13158, 0x04},   {'y', 0, 13160, 0x08},   {'r', 0, 13159, 0x10},
-                                          {'l', 'b', 13161, 0x20}};
-    for (const Option& o : kOptions) {
-        bool letters = lower(at(args, 0)) == o.first && (!o.second || lower(at(args, 1)) == o.second);
-        if (letters || same_no_case(args, eqstr(o.name))) return TrackFilterChoice{o.bit, o.name};
-    }
+    static constexpr Filter kFilters[] = {{0x01, "gn", 13156}, {0x40, "gy", 11005}, {0x02, "b", 13157},
+                                          {0x04, "w", 13158},  {0x08, "y", 13160},  {0x10, "r", 13159},
+                                          {0x20, "lb", 13161}};
+    auto starts_with = [&](std::string_view prefix) {
+        for (std::size_t i = 0; i < prefix.size(); ++i)
+            if (lower(at(args, i)) != prefix[i]) return false;
+        return true;
+    };
+    for (const Filter& f : kFilters)
+        if (starts_with(f.prefix) || same_no_case(args, eqstr(f.eqstr_id))) return TrackFilterChoice{f.bit, f.eqstr_id};
     return std::nullopt;
 }
 

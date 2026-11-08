@@ -1,8 +1,7 @@
 #pragma once
 
 // OP_Death 0x6517 as the original handles it: Handle_OP_Death @0x532b50
-// (CEverQuest::ReportDeath), rof2decomp batch 263 (re/src/game/net/
-// death_report.cpp; notes/connection-and-network.md 6.5). Checked against
+// (CEverQuest::ReportDeath). Checked against
 // the original's vectors (Handle_OP_Death).
 //
 // The record: +0 dead id, +4 killer id, +0x10 spell, +0x14 skill (byte),

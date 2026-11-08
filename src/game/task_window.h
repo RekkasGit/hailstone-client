@@ -1,7 +1,7 @@
 #pragma once
 
-// The quest journal's contents as CTaskWnd builds them (rof2decomp export/CTaskWnd.c and the CTaskWnd_* functions in
-// export/_globals.c; CTaskEntry / CTaskElement / PCTaskStatus as eqlib-rof2's TaskSystem.h lays them out):
+// The quest journal's contents as CTaskWnd builds them (CTaskWnd and the CTaskWnd_* functions;
+// CTaskEntry / CTaskElement / PCTaskStatus as eqlib-rof2's TaskSystem.h lays them out):
 //   - the task list (TASK_TaskList; CTaskWnd_RebuildTaskLists @0x7720e0, CTaskWnd_CollectTaskRows @0x76ed40,
 //     CTaskWnd_SortAndFillTaskList @0x771600, CTaskWnd_AddTaskRow @0x76f080, the timers @0x76ee20 / @0x76ef90);
 //   - the objectives (TASK_TaskElementList; CTaskWnd_FillObjectiveList @0x76f2c0);

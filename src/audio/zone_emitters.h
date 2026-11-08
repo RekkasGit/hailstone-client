@@ -1,8 +1,7 @@
 #pragma once
 
 // A zone's sound emitters and music, as the original's EqSoundManager keeps
-// them (rof2decomp export/EqSoundManager.c, SoundEmitter.c, MusicManager.c;
-// re/src/game/audio/eq_sound.cpp):
+// them (EqSoundManager, SoundEmitter, MusicManager):
 //   - SetCurrentZone @0x4ab4c0 loads <zone>.emt (EmitterLoad/EmitterAdd) and,
 //     only when that file cannot be opened, <zone>_sndbnk.eff + _sounds.eff
 //     (LoadOldEmitters @0x4ab150 / CreateOldEmitter @0x4aac30);

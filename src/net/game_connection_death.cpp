@@ -1,4 +1,4 @@
-// Death, the respawn at bind, teleports by index and camping (rof2decomp batch 263; game/death_report.h,
+// Death, the respawn at bind, teleports by index and camping (game/death_report.h,
 // game/zoning.h).
 #include <cctype>
 #include <chrono>

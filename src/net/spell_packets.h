@@ -4,7 +4,7 @@
 // hits and spell messages. Layouts follow the NMS server's RoF2 translator
 // (common/patches/rof2.cpp ENCODE/DECODE, rof2_structs.h) and, for
 // pass-through opcodes, common/eq_packet_structs.h; the client side is
-// rof2decomp:notes/spell-casting.md. Per-packet notes are in
+// the original's casting code. Per-packet notes are in
 // docs/protocol/rof2-packets.md ("Spells").
 
 #include <array>

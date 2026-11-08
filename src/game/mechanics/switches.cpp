@@ -1,5 +1,6 @@
 #include "game/mechanics/switches.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -51,8 +52,7 @@ bool turn_done(const Fpu& f, float a, float b, float limit) {
     return c.c0 != c.c3;
 }
 
-// The lifts' and platforms' step: a coordinate *c between its base b and b + travel (see the rewrite's
-// StepToward). Returns true when done.
+// The lifts' and platforms' step: a coordinate *c between its base b and b + travel. Returns true when done.
 bool step_toward(const Fpu& f, float& c, float b, double travel, double open, double close, float dt, bool opening) {
     double d = travel;
     double t = x87_add(f, st(b), d); // fld D; fld b; fadd st, st(1)
@@ -218,18 +218,14 @@ void move_switch(const Fpu& f, Switch& sw, float dt, SwitchQueries& q) {
         sw.heading = turned(f, dt, speed, sw.heading, opening);
         float h = to_f(fix_heading_x87(sw.heading, f));
         sw.heading = h;
-        if (opening) {
-            if (turn_done(f, h, sw.base_heading, limit)) {
-                sw.heading = tf(target);
-                q.change_state(sw, 1);
-            }
-        } else if (turn_done(f, h, target, limit)) {
-            sw.heading = tf(sw.base_heading);
-            q.change_state(sw, 0);
-        }
+        // Opening stops by the base heading and snaps to the target; closing the other way round.
+        const float stop_by = opening ? sw.base_heading : target;
+        if (!turn_done(f, h, stop_by, limit)) return;
+        sw.heading = tf(opening ? target : sw.base_heading);
+        q.change_state(sw, opening ? 1 : 0);
         return;
     }
-    if (type == 0x28 || type == 0x1e || type == 0x23 || type == 0x82 || type == 0x24) {
+    if (type == 0x1e || type == 0x23 || type == 0x24 || type == 0x28 || type == 0x82) {
         float speed = 8.0f;
         float turn = limit;
         switch (type) {
@@ -337,6 +333,13 @@ bool near_switch(const Fpu& f, const SwitchSpawn& s, float radius, float cy, flo
     return !c.c0 && !c.c3;
 }
 
+// The switch types that act on touch (0x510210): 0x33 and the trap types from 0x73 to 0x98 that have a case.
+bool acts_on_touch(std::uint8_t type) {
+    if (type == 0x33) return true;
+    static constexpr std::uint8_t kTraps[] = {0x73, 0x74, 0x78, 0x7d, 0x82, 0x87, 0x8c, 0x91, 0x92, 0x96, 0x97, 0x98};
+    return std::find(std::begin(kTraps), std::end(kTraps), type) != std::end(kTraps);
+}
+
 } // namespace
 
 double fix_heading_x87(float heading, const Fpu& f) {
@@ -382,7 +385,7 @@ void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std
     if (static_cast<std::int32_t>(elapsed_ms) < 0) e = x87_add(f, e, X87(kTwoTo32));
     float dt = to_f(x87_mul(f, e, X87(kTickScale)));
     float radius = kDefaultRadius;
-    float centre[2] = {0.0f, 0.0f}; // the original's uninitialised slots, as the rewrite
+    float centre[2] = {0.0f, 0.0f}; // the original's uninitialised slots, taken as 0
     for (Switch* p : switches) {
         if (kMaxTicks < dt) break;
         Switch& sw = *p;
@@ -415,14 +418,7 @@ void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std
             continue;
         }
         if (sw.state == 0 || (sw.state == 1 && type < 0x64)) continue;
-        bool touch = false;
-        switch (sw.type) { // 0x510210
-        case 0x33: case 0x73: case 0x74: case 0x78: case 0x7d: case 0x82: case 0x87: case 0x8c: case 0x91: case 0x92:
-        case 0x96: case 0x97: case 0x98:
-            touch = true;
-            break;
-        default: break;
-        }
+        bool touch = acts_on_touch(sw.type);
         bool floor = q.is_floor_switch(sw);
         if (floor) {
             auto r = q.actor_radius(sw);

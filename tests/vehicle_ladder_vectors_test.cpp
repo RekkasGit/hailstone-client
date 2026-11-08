@@ -1,5 +1,5 @@
 // Vehicle_WorldToLocal.jsonl, Vehicle_LocalToWorld.jsonl and
-// Ladder_MountClickedLadder.jsonl (rof2decomp batch 252, recorded from
+// Ladder_MountClickedLadder.jsonl (recorded from
 // eqgame.exe) against game/mechanics/vehicle.h and ladder.h; floats bit for
 // bit at the record's x87 precision.
 #include <doctest/doctest.h>

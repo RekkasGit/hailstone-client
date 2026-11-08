@@ -5,8 +5,8 @@
 // that clip, per-bone fallback to the rest pose, 100 ms default frame time)
 // and the rigid per-vertex bone binding follow OpenEQ
 // crates/openeq-assets/src/character.rs (MIT OR Apache-2.0); see
-// THIRD_PARTY.md. The archive load order comes from rof2decomp
-// notes/spawns-races-models.md section 5.2.
+// THIRD_PARTY.md. The archive load order follows the original client's
+// start-up loads.
 
 #include "assets/character.h"
 

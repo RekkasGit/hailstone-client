@@ -82,7 +82,7 @@ public:
     virtual void drop_selection() = 0;
 };
 
-// CInventoryWnd::ClickedMoneyButton (GameConnection::inventory_money_button, rof2decomp batch 261): coin on the
+// CInventoryWnd::ClickedMoneyButton (GameConnection::inventory_money_button): coin on the
 // cursor goes into the inventory as this button's coin; otherwise the quantity dialog opens at the button's centre
 // with max = start = the inventory's coins of that type (none: nothing; one, Shift: all, Ctrl: 1 at once) and its
 // answer comes onto the cursor. Before the dialog, on the merchant's Parcels page, 0x698290

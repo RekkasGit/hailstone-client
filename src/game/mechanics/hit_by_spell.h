@@ -1,7 +1,6 @@
 #pragma once
 
-// EQ_Character::HitBySpell @0x43e8c0 (rof2decomp batch 249,
-// re/src/game/spell/hit_by_spell_eh.cpp): what the client does when a spell
+// EQ_Character::HitBySpell @0x43e8c0: what the client does when a spell
 // lands on it (OP_Action type 231 -> PlayerZoneClient::IWasHit). In order:
 //  1. validation (a spawn, launch data, IsValidSpellID, the spell, the caster);
 //  2. Divine Aura: refused when the SPA 40 total is above 0, except spell 982,

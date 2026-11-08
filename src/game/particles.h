@@ -1,7 +1,7 @@
 #pragma once
 
 // Spell particle emitters: the graphics DLL's CParticleSystem as far as
-// rof2decomp notes/eqgraphicsdx9.md (Particles) and OpenEQ
+// the analysis of the original client and OpenEQ's
 // docs/SPELL_EFFECT_FORMAT.md describe it.
 //
 // eqgame's SpellEffect_SpawnStageEmitters @0x51aa20 walks the four emitter
@@ -61,7 +61,7 @@ inline constexpr std::size_t kSpellFxSourceCount = 3;
 SpellFxSource spell_fx_source(std::uint32_t caster, std::uint32_t struck, std::uint32_t me,
                               std::optional<bool> caster_is_npc, std::optional<bool> struck_is_npc);
 
-// CreateSpellEmitter's arguments (eqgame's order; see the table in the notes).
+// CreateSpellEmitter's arguments (eqgame's order).
 struct SpellEmitterRequest {
     std::int32_t emitter = 0;     // 1: EDD record index
     std::uint32_t key = 0;        // 2: spawn id << 16 | spell id

@@ -4,7 +4,7 @@
 // them: the info lines (IDW_ItemInfo1..12: the name, the flags, the classes, races, deities and slots), the stat
 // grid (IDW_Row<r>Col<c>Stat / Value, 26 rows of 3 columns, filled column by column in two blocks), the heroic
 // bonuses beside their values (IDW_Heroic<n>) and the description STML (CItemDisplayWnd_CreateEffectsString
-// @0x6a6810 with UpdateStrings @0x69ae30). rof2decomp export/_globals.c and the disassembly; docs/unknowns.md lists
+// @0x6a6810 with UpdateStrings @0x69ae30), read from the disassembly; docs/unknowns.md lists
 // what is not ported.
 
 #include <array>

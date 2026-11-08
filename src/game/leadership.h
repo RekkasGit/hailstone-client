@@ -28,7 +28,7 @@ int leadership_gauge(double exp, double per);
 int leadership_max_rank(int index);
 std::uint32_t leadership_next_cost(int index, std::uint32_t rank);
 
-// The original's leadership ability records (0x55d8e0, rof2decomp re/src/game/core/store_switch_0055d8e0.inc) as
+// The original's leadership ability records (0x55d8e0) as
 // the leadership window's hot buttons read them: how many hot buttons the ability has (+8: 3 for the marks and
 // the main assists, else 1) and the three string ids of its hot button text (+0xc, +0x10, +0x14; 0 none).
 struct LeadershipHotButtonDef {

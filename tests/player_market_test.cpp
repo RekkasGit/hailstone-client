@@ -1,5 +1,5 @@
 // Player, bazaar and mail packets byte for byte against the original's senders
-// (rof2decomp export: Cmd_duel, Send_OP_InspectRequest, CBazaarWnd,
+// (Cmd_duel, Send_OP_InspectRequest, CBazaarWnd,
 // CBazaarSearchWnd::doQuery, MailMgr_*) and EQEmu's RoF2 layouts
 // (common/patches/rof2_structs.h, rof2.cpp, ucs/clientlist.cpp, ucs/database.cpp);
 // and the rules in game/interact.h, game/bazaar.h, game/mail.h.

@@ -1,7 +1,7 @@
 #pragma once
 
-// The in-game map's data and rules as the original's MapViewMap keeps them (rof2decomp export/MapViewMap.c,
-// export/CMapViewWnd.c, export/_globals.c; the helpers decompiled at the addresses given below). Pure state: the
+// The in-game map's data and rules as the original's MapViewMap keeps them (MapViewMap, CMapViewWnd
+// and the helpers at the addresses given below). Pure state: the
 // files are read and written by the caller (app/lua_eq_map.cpp), the drawing is the caller's too.
 //
 // Map files: <maps dir>/<zone>.txt is layer 0 (the base map), <zone>_1.txt .. <zone>_3.txt layers 1..3
@@ -82,7 +82,7 @@ MapLayerParse parse_map_layer(std::string_view text, int layer, std::string& lab
 // (is_zone_short_name: a name with a separator, "..", a drive or a device name would name a file elsewhere).
 std::string map_layer_file_name(std::string_view zone, int layer);
 
-// A label's place candidates (MapLabel_PlacementRect @0x6c8290, rof2decomp re/src/game/ui/map_labels.cpp): the
+// A label's place candidates (MapLabel_PlacementRect @0x6c8290): the
 // rectangle {l, t, r, b} of a w x h text at anchor 0..23 around (x, y).
 std::array<int, 4> map_label_rect(unsigned anchor, int x, int y, int w, int h);
 

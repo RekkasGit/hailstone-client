@@ -4,8 +4,8 @@
 // state is game/group.h's XTargetState) and the extended target window's role strings and role sets
 // (CExtendedTargetWnd_BuildRoleSetString @0x54a050, CExtendedTargetWnd_ApplyRoleSetString @0x54a990, the ten
 // "TargetSet" role sets at 0xe5f834 that ReadCharacterIniSettings / SaveExtendedTargetRoleSetsToIni keep in the
-// character ini's [ExternalTargetRoles]). Ported from the rof2decomp export (_globals.c, CExtendedTargetWnd.c) and
-// re/src/game/ui/xtarget_*.cpp; addresses at each function.
+// character ini's [ExternalTargetRoles]). Follows the original's CExtendedTargetWnd and
+// XTarget_* functions; addresses at each function.
 
 #include <array>
 #include <cstdint>

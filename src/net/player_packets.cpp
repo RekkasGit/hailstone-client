@@ -52,7 +52,7 @@ AppPacket encode(const DuelRefusal& v) {
     w.le(v.challenger);
     w.le(v.refuser);
     w.le(v.kind);
-    w.zeros(3); // the original's local_204 upper bytes (uninitialised stack)
+    w.zeros(3); // the upper bytes of the original's kind word (uninitialised stack)
     return AppPacket(kOpDuelRefusal, w.take());
 }
 

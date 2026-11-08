@@ -1,5 +1,5 @@
 // EQ_Character::HitBySpell (game/mechanics/hit_by_spell.h) against the
-// original's vectors (rof2decomp batch 249): HitBySpell_Validation (300),
+// original's vectors (recorded from eqgame.exe): HitBySpell_Validation (300),
 // _Instant (400), _Items (300), _Moves (300) and _Buff (500).
 //
 // Each record holds the inputs, every mocked callee the original called (in
@@ -8,10 +8,9 @@
 // and sine table), then the state after the call. The fakes' answers that the
 // record does not hold (the CharacterBase's level / mana / PcClient, the floor
 // heights, the sine-table values, the collision answers, DoSpellCheck's
-// record bytes) come from the generator's world: rof2decomp's MakeWorld
-// (re/test/tests/hit_by_spell_test_eh.cpp) is ported below with its random
-// generator, and every regenerated input is first compared with the record's
-// "in". The port then runs against a replay: each callee it calls must be the
+// record bytes) come from the world the record was recorded over: it is drawn
+// again below from the same random streams, and every regenerated input is
+// first compared with the record's "in". The port then runs against a replay: each callee it calls must be the
 // record's next call with the same arguments (byte arguments the original
 // pushes as dwords compare by their low byte; a pointer the record names
 // "world" is any object of the world), and gets the recorded answer; each
@@ -19,12 +18,16 @@
 // compared, floats bit for bit.
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <iterator>
 #include <map>
 #include <optional>
+#include <span>
 #include <system_error>
 #include <string>
 #include <vector>
@@ -38,146 +41,184 @@ using hailstone::test::Json;
 
 namespace {
 
-// ---------------------------------------------------------------- the generator (rof2decomp test harness)
+// ---------------------------------------------------------------- regenerating a record's world
+//
+// The records were recorded over worlds drawn from seeded xorshift32 streams: one per file, whose draws seed
+// one stream per record. The draws below must come in the same order and with the same bounds as when the
+// vectors were recorded, or the world no longer matches the record's "in".
 
-struct Rng {
-    std::uint32_t state;
-    explicit Rng(std::uint32_t seed) : state(seed ? seed : 0x9e3779b9u) {}
-    std::uint32_t Next() {
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
-        return state;
+class Stream {
+public:
+    explicit Stream(std::uint32_t seed) : s_(seed == 0 ? 0x9e3779b9u : seed) {}
+
+    std::uint32_t bits() {
+        s_ ^= s_ << 13;
+        s_ ^= s_ >> 17;
+        s_ ^= s_ << 5;
+        return s_;
     }
-    int Range(int lo, int hi) {
-        std::uint32_t span = static_cast<std::uint32_t>(hi) - static_cast<std::uint32_t>(lo) + 1u;
-        return static_cast<int>(static_cast<std::uint32_t>(lo) + Next() % span);
+    // lo..hi inclusive, by the remainder over the span (the span is taken unsigned, as when recorded).
+    std::int32_t in(std::int32_t lo, std::int32_t hi) {
+        const std::uint32_t span = static_cast<std::uint32_t>(hi) - static_cast<std::uint32_t>(lo) + 1u;
+        return static_cast<std::int32_t>(static_cast<std::uint32_t>(lo) + bits() % span);
     }
-    bool Chance(int percent) { return static_cast<int>(Next() % 100) < percent; }
-    int Interesting() {
-        static const int edges[] = {0, 1, -1, 2, 9, 10, 11, 59, 60, 61, 99, 100, 255, 256, 330, 1000, 0x7fffffff,
-                                    static_cast<int>(0x80000000), 10000000, 9999999};
-        std::uint32_t pick = Next() % 4;
-        if (pick == 0) return edges[Next() % (sizeof(edges) / sizeof(edges[0]))];
-        if (pick == 3) return static_cast<int>(Next());
-        return Range(-5, 400);
+    std::uint32_t in_u(std::int32_t lo, std::int32_t hi) { return static_cast<std::uint32_t>(in(lo, hi)); }
+    std::uint8_t in_byte(std::int32_t lo, std::int32_t hi) { return static_cast<std::uint8_t>(in(lo, hi)); }
+    bool odds(std::int32_t percent) { return static_cast<std::int32_t>(bits() % 100) < percent; }
+    // A quarter of the time an edge value, a quarter anything at all, else a small number.
+    std::int32_t awkward() {
+        static constexpr std::int32_t kEdge[] = {0, 1, -1, 2, 9, 10, 11, 59, 60, 61, 99, 100, 255, 256, 330, 1000,
+                                                 0x7fffffff, static_cast<std::int32_t>(0x80000000u), 10000000,
+                                                 9999999};
+        switch (bits() % 4) {
+        case 0: return kEdge[bits() % std::size(kEdge)];
+        case 3: return static_cast<std::int32_t>(bits());
+        default: return in(-5, 400);
+        }
     }
+
+private:
+    std::uint32_t s_;
 };
 
-std::uint32_t fbits(float f) { return std::bit_cast<std::uint32_t>(f); }
+std::uint32_t bits_of(float f) { return std::bit_cast<std::uint32_t>(f); }
 
-std::uint32_t random_float(Rng& rng) {
-    switch (rng.Range(0, 13)) {
-    case 0: return 0;
-    case 1: return 0x80000000;
-    case 2: return 0x7fc00000 | (rng.Next() & 0x3fffff);
-    case 3: return 0x7f800000 | (rng.Next() & 0x3fffff) | 1;
-    case 4: return rng.Chance(50) ? 0x7f800000 : 0xff800000;
-    case 5: return rng.Next() & 0x807fffff;
-    case 6: return 0x3f800000;
-    case 7: return rng.Next();
-    default: return fbits(static_cast<float>(static_cast<std::int32_t>(rng.Next() % 4000001) - 2000000) / 997.0f);
+// Any float's bits, NaNs, infinities and denormals included (6 times in 14 a plain number).
+std::uint32_t wild_float(Stream& s) {
+    const std::int32_t kind = s.in(0, 13);
+    if (kind >= 8)
+        return bits_of(static_cast<float>(static_cast<std::int32_t>(s.bits() % 4000001) - 2000000) / 997.0f);
+    if (kind == 2 || kind == 3) { // a NaN: quiet, or signalling (never a zero payload)
+        const std::uint32_t payload = s.bits() & 0x3fffff;
+        return kind == 2 ? 0x7fc00000 | payload : 0x7f800000 | payload | 1;
     }
+    if (kind == 4) return s.odds(50) ? 0x7f800000 : 0xff800000; // an infinity
+    if (kind == 5) return s.bits() & 0x807fffff;               // a denormal
+    if (kind == 7) return s.bits();
+    return kind == 0 ? 0u : kind == 1 ? 0x80000000u : 0x3f800000u; // 0, -0, 1
 }
-std::uint32_t plain_float(Rng& rng) {
-    if (rng.Chance(8)) return random_float(rng);
-    return fbits(static_cast<float>(static_cast<std::int32_t>(rng.Next() % 200001) - 100000) / 61.0f);
+// A whole number lo..hi divided by `d`.
+std::uint32_t fraction(Stream& s, std::int32_t lo, std::int32_t hi, float d) {
+    return bits_of(static_cast<float>(s.in(lo, hi)) / d);
 }
-std::int32_t value(Rng& rng) {
-    switch (rng.Range(0, 5)) {
-    case 0: return rng.Interesting();
-    case 1: return -rng.Range(0, 300);
-    case 2: return rng.Range(0, 300);
-    default: return rng.Range(-20, 20);
-    }
+// 1.0f, or half the time the float just above it.
+std::uint32_t one_or_next(Stream& s) { return s.odds(50) ? 0x3f800001 : 0x3f800000; }
+// Mostly a number within +-1640, sometimes a wild one.
+std::uint32_t ordinary_float(Stream& s) {
+    if (s.odds(8)) return wild_float(s);
+    return bits_of(static_cast<float>(static_cast<std::int32_t>(s.bits() % 200001) - 100000) / 61.0f);
+}
+std::int32_t small_value(Stream& s) {
+    const std::int32_t kind = s.in(0, 5);
+    if (kind == 0) return s.awkward();
+    if (kind == 1) return -s.in(0, 300);
+    if (kind == 2) return s.in(0, 300);
+    return s.in(-20, 20);
 }
 
-constexpr std::int32_t kLoop1Handled[] = {15, 20, 25, 35, 36, 38, 42, 56, 61, 62, 68, 72, 74, 83, 91, 116, 145, 160,
-                                          189, 338, 343, 358, 369, 379, 380, 381, 388, 389, 390, 417};
+// What a file's records exercise. Each family but the validation and buff ones lists the SPAs its main spell's
+// first slot sweeps and its other slots favour; the order is the one the draws index.
+enum class Set { Validation, Instant, Items, Moves, Buff };
+
 constexpr std::int32_t kInstantSpas[] = {160, 20, 68, 25, 72, 189, 74, 42, 56, 15, 358, 417, 343, 91, 338, 388};
 constexpr std::int32_t kItemSpas[] = {61, 62, 38, 35, 36, 116, 369, 389, 390};
 constexpr std::int32_t kMoveSpas[] = {83, 145, 379, 380, 381};
 
-bool loop1_handled(std::int32_t spa) {
-    for (std::int32_t h : kLoop1Handled)
-        if (h == spa) return true;
-    return false;
-}
-std::int32_t unhandled(Rng& rng) {
-    for (;;) {
-        std::int32_t spa = rng.Chance(3) ? static_cast<std::int32_t>(rng.Next()) : rng.Range(-3, 470);
-        if (!loop1_handled(spa)) return spa;
+std::span<const std::int32_t> listed_spas(Set set) {
+    switch (set) {
+    case Set::Instant: return kInstantSpas;
+    case Set::Items: return kItemSpas;
+    case Set::Moves: return kMoveSpas;
+    default: return {};
     }
 }
+bool early(Set set) { return set == Set::Validation; }
 
-struct Family {
-    const std::int32_t* spas;
-    int count;
-    bool buff;
-    bool early;
-};
-const Family kEarly = {nullptr, 0, false, true};
-const Family kInstant = {kInstantSpas, 16, false, false};
-const Family kItems = {kItemSpas, 9, false, false};
-const Family kMoves = {kMoveSpas, 5, false, false};
-const Family kBuff = {nullptr, 0, true, false};
-
-std::int32_t sweep_spa(const Family& f, std::uint32_t sweep) {
-    if (f.buff) return static_cast<std::int32_t>(sweep % 475) - 3;
-    std::uint32_t pool = static_cast<std::uint32_t>(f.count) + 476;
-    std::uint32_t n = sweep % pool;
-    if (n < static_cast<std::uint32_t>(f.count)) return f.spas[n];
-    std::int32_t spa = static_cast<std::int32_t>(n - static_cast<std::uint32_t>(f.count)) - 3;
-    return loop1_handled(spa) ? 254 : spa;
+// The SPAs HitBySpell's first effect loop handles: those three families' together.
+bool first_loop_handles(std::int32_t spa) {
+    for (Set set : {Set::Instant, Set::Items, Set::Moves}) {
+        const auto spas = listed_spas(set);
+        if (std::find(spas.begin(), spas.end(), spa) != spas.end()) return true;
+    }
+    return false;
 }
-std::int32_t pick_spa(Rng& rng, const Family& f) {
-    if (f.buff) return rng.Chance(5) ? static_cast<std::int32_t>(rng.Next()) : rng.Range(-3, 470);
-    if (f.count != 0 && rng.Chance(60)) return f.spas[rng.Range(0, f.count - 1)];
-    return unhandled(rng);
+std::int32_t unlisted_spa(Stream& s) {
+    for (;;) {
+        const std::int32_t spa = s.odds(3) ? static_cast<std::int32_t>(s.bits()) : s.in(-3, 470);
+        if (!first_loop_handles(spa)) return spa;
+    }
+}
+// The main spell's first SPA walks through the family's list and then -3..472 (a buff's through -3..471), one
+// step per record: no draw.
+std::int32_t swept_spa(Set set, std::uint32_t step) {
+    if (set == Set::Buff) return static_cast<std::int32_t>(step % 475) - 3;
+    const auto spas = listed_spas(set);
+    const auto listed = static_cast<std::uint32_t>(spas.size());
+    const std::uint32_t at = step % (listed + 476);
+    if (at < listed) return spas[at];
+    const std::int32_t spa = static_cast<std::int32_t>(at - listed) - 3;
+    return first_loop_handles(spa) ? 254 : spa;
+}
+std::int32_t random_spa(Stream& s, Set set) {
+    if (set == Set::Buff) return s.odds(5) ? static_cast<std::int32_t>(s.bits()) : s.in(-3, 470);
+    const auto spas = listed_spas(set);
+    if (!spas.empty() && s.odds(60)) return spas[static_cast<std::size_t>(s.in(0, static_cast<std::int32_t>(spas.size()) - 1))];
+    return unlisted_spa(s);
 }
 
 void set_text(char* to, const char* text) { std::strcpy(to, text); }
 
-void make_spell(Rng& rng, Spell& s, const Family& f, std::uint32_t sweep, bool main) {
-    s.range = random_float(rng);
-    s.push_back = rng.Chance(70) ? 0 : (rng.Chance(20) ? 0x80000000 : random_float(rng));
-    s.push_up = rng.Chance(70) ? 0 : random_float(rng);
-    if (main) {
-        if (f.buff) s.duration_formula = static_cast<std::uint32_t>(rng.Range(1, 9));
-        else s.duration_formula = (f.early && rng.Chance(30)) ? static_cast<std::uint32_t>(rng.Range(1, 3)) : 0;
-    } else {
-        s.duration_formula = static_cast<std::uint32_t>(rng.Range(0, 2));
+void fill_spell(Stream& s, Spell& sp, Set set, std::uint32_t step, bool main) {
+    sp.range = wild_float(s);
+    if (s.odds(70)) sp.push_back = 0;
+    else sp.push_back = s.odds(20) ? 0x80000000 : wild_float(s);
+    sp.push_up = s.odds(70) ? 0 : wild_float(s);
+    if (!main) sp.duration_formula = s.in_u(0, 2);
+    else if (set == Set::Buff) sp.duration_formula = s.in_u(1, 9);
+    else if (early(set) && s.odds(30)) sp.duration_formula = s.in_u(1, 3);
+    else sp.duration_formula = 0;
+    const int filled = s.odds(30) ? 12 : s.in(1, 12);
+    for (std::size_t k = 0; k < 12; ++k) {
+        std::int32_t spa = main && k == 0 ? swept_spa(set, step) : random_spa(s, set);
+        if (static_cast<int>(k) >= filled && s.odds(80)) spa = 254;
+        sp.attrib[k] = spa;
+        sp.base[k] = s.odds(10) ? 0 : small_value(s);
+        sp.base2[k] = small_value(s);
+        sp.max[k] = small_value(s);
     }
-    int used = rng.Chance(30) ? 12 : rng.Range(1, 12);
-    for (int i = 0; i < 12; ++i) {
-        std::int32_t spa = i == 0 && main ? sweep_spa(f, sweep) : pick_spa(rng, f);
-        if (i >= used) spa = rng.Chance(80) ? 254 : spa;
-        auto k = static_cast<std::size_t>(i);
-        s.attrib[k] = spa;
-        s.base[k] = rng.Chance(10) ? 0 : value(rng);
-        s.base2[k] = value(rng);
-        s.max[k] = value(rng);
-    }
-    s.recourse_178 = rng.Chance(60) ? 0 : static_cast<std::uint32_t>(rng.Range(1, 40));
-    s.timer_id_198 = rng.Chance(70) ? static_cast<std::uint32_t>(rng.Range(0, 0x15)) : rng.Next();
-    s.flag_240 = rng.Chance(80) ? 0 : 1;
-    s.spell_type = static_cast<std::uint8_t>(rng.Chance(80) ? rng.Range(0, 1) : rng.Range(2, 255));
-    s.byte_26c = static_cast<std::uint8_t>(rng.Next());
-    s.target_type = static_cast<std::uint8_t>(rng.Chance(30) ? 0xd : (rng.Chance(30) ? 0x14 : rng.Range(0, 30)));
-    const char* names[] = {"Spirit of Wolf", "Gate", "X"};
-    set_text(s.name.data(), names[rng.Range(0, 2)]);
-    if (rng.Chance(70)) set_text(s.teleport_zone.data(), rng.Chance(50) ? "qeynos" : "freportn");
+    sp.recourse_178 = s.odds(60) ? 0 : s.in_u(1, 40);
+    sp.timer_id_198 = s.odds(70) ? s.in_u(0, 0x15) : s.bits();
+    sp.flag_240 = s.odds(80) ? 0 : 1;
+    sp.spell_type = s.odds(80) ? s.in_byte(0, 1) : s.in_byte(2, 255);
+    sp.byte_26c = static_cast<std::uint8_t>(s.bits());
+    if (s.odds(30)) sp.target_type = 0xd;
+    else sp.target_type = s.odds(30) ? 0x14 : s.in_byte(0, 30);
+    static const char* const kNames[] = {"Spirit of Wolf", "Gate", "X"};
+    set_text(sp.name.data(), kNames[s.in(0, 2)]);
+    if (s.odds(70)) set_text(sp.teleport_zone.data(), s.odds(50) ? "qeynos" : "freportn");
 }
 
-constexpr std::uint32_t kIds[] = {0x3d6, 0x29a, 0x2a2, 0x628, 0xe6e, 0xad7, 0x57, 0x58, 0xad6, 0x2e6, 0x5c4};
-
-enum Knob {
-    kCasterPtr, kMyChar, kTheirChar, kBard, kStunned, kItemCast, kGroup, kSpellCheck, kMaxEffects, kIsPcMe,
-    kIsPcCaster, kPvpDuration, kDuration, kCasterLevel, kCbLevel, kCbMana, kPc, kMeDC, kCasterDC, kInWorld,
-    kActorOn, kTerrainOn, kLineHits, kTeleportOk, kFloorNone, kSlot, kAffectPtr, kRoll, kHasProperty, kGet150,
-    kBindSpot, kExpansion, kZoneIndex, kHton, kSent, kItem, kItemType, kBookLang, kMagic, kPcAffect, kTime, kGemSeed,
-    kFocus, kRandom100, kLowHigh, kRefused, kTotal, kChangeForm, kGeneric, kHasFlag, kVehicle, kMount, kWriteNormal,
-    kThrowAt, kLoreText, kKnobs
+// The fakes' answers. The replay takes most callees' answers from the record, so many of these are only drawn
+// (the stream needs them); the ones the replay reads are marked.
+struct Answers {
+    // The CharacterBase and the spawns' virtuals (read).
+    std::uint32_t has_pc = 0, cb_level = 0, cb_max_mana = 0, me_vf_dc = 0, caster_vf_dc = 0;
+    // The scene and collision (read): the point in the world, the actor collision flag (low byte), the
+    // terrain flag, which line tests hit (a bit per call), whether the sphere test writes its normal.
+    std::uint32_t in_world = 0, actor_collision = 0, terrain_collision = 0, line_hits = 0, writes_normal = 0;
+    // DoSpellCheck's record seed, FindAffectSlot's slot, GetItem's item, GetLoreName's text (read).
+    std::uint32_t spell_check = 0, affect_slot = 0, item = 0, lore_text = 0;
+    // The thrown-at spawn (moves; set to 0 before each run, read).
+    std::uint32_t throw_at = 0;
+    // Only drawn.
+    std::uint32_t their_character = 0, bard = 0, stunned = 0, item_cast = 0, group = 0, max_effects = 0;
+    std::uint32_t me_is_pc = 0, caster_is_pc = 0, pvp_duration = 0, duration = 0, caster_level = 0;
+    std::uint32_t teleport_ok = 0, has_affect = 0, roll = 0, has_property = 0, get_150 = 0, bind_spot = 0;
+    std::uint32_t expansion = 0, zone_index = 0, hton = 0, sent = 0, item_type = 0, book_lang = 0, magic = 0;
+    std::uint32_t pc_affect = 0, time = 0, gem_seed = 0, focus = 0, random_100 = 0, low_high = 0, refused = 0;
+    std::uint32_t total = 0, change_form = 0, generic = 0, has_flag = 0, vehicle = 0, mount = 0;
+    // Three dwords no draw sets: they keep the World's size, which decides which stray pointers are "world".
+    std::uint32_t spare[3]{};
 };
 
 // Everything the record's objects are, in one block (a pointer inside it that
@@ -203,7 +244,7 @@ struct World {
     Affect affect;
     std::array<Affect, 10> buffs;
     char texts[4][0x30]{};
-    std::array<std::uint32_t, kKnobs> k{};
+    Answers answers;
     std::array<std::int32_t, 16> calc{}, cached{};
     std::uint32_t floors[4][2]{};
     std::uint32_t trig[2]{};
@@ -218,256 +259,328 @@ struct World {
     std::int32_t duration = -1;
 };
 
-void make_world(World& w, Rng& rng, const Family& f, std::uint32_t sweep) {
-    w = World{};
-    w.self.base = &w.cb;
-    w.has_me = !(f.early && rng.Chance(2));
-    w.self.spawn = w.has_me ? &w.me : nullptr;
-    w.self.cache_valid = static_cast<std::uint8_t>(rng.Range(0, 1));
-    w.self.aa_cache_valid = static_cast<std::uint8_t>(rng.Range(0, 2));
-    w.self.stats_dirty = static_cast<std::uint8_t>(rng.Range(0, 2));
-    w.cb.zone_id = rng.Range(1, 4);
-    w.cb.y = plain_float(rng);
-    w.cb.x = plain_float(rng);
-    w.cb.z = plain_float(rng);
-    w.cb.heading = plain_float(rng);
-    w.cb.mesmerized = static_cast<std::uint8_t>(rng.Range(0, 2));
-    for (Spawn* p : {&w.me, &w.caster}) {
-        p->type = static_cast<std::uint8_t>(rng.Chance(75) ? 0 : rng.Range(1, 3));
-        p->flag_208 = static_cast<std::uint8_t>(rng.Chance(70) ? 0 : 1);
-        p->owner_38c = rng.Chance(70) ? 0 : static_cast<std::uint32_t>(rng.Range(1, 3));
-        p->spawn_id = static_cast<std::uint32_t>(rng.Range(1, 3));
-        std::uint32_t* fields[] = {&p->y, &p->x, &p->z, &p->speed_y, &p->speed_x, &p->speed_z, &p->rotation_speed,
-                                   &p->heading};
-        for (std::uint32_t* v : fields) *v = plain_float(rng);
-        p->heading_speed = plain_float(rng);
-        p->floor_z = plain_float(rng);
-        p->model_height = plain_float(rng);
-        p->casting_spell = rng.Chance(30) ? -1 : rng.Range(0, 12);
-        p->stand_state = static_cast<std::uint8_t>(rng.Chance(50) ? 0x64 : rng.Range(0, 0x70));
-        p->class_id = static_cast<std::uint8_t>(rng.Chance(20) ? 8 : rng.Range(1, 16));
-        rng.Range(1, 100); // +0x250
+// The spell ids the main spell draws from half the time.
+constexpr std::uint32_t kMainIds[] = {0x3d6, 0x29a, 0x2a2, 0x628, 0xe6e, 0xad7, 0x57, 0x58, 0xad6, 0x2e6, 0x5c4};
+
+// Draws one record's world, section by section, in the stream's order.
+class WorldDraw {
+public:
+    WorldDraw(World& w, Stream& s, Set set) : w_(w), s_(s), set_(set) {}
+
+    void all(std::uint32_t step) {
+        w_ = World{};
+        w_.self.base = &w_.cb;
+        character();
+        spawn(w_.me);
+        spawn(w_.caster);
+        links();
+        profile();
+        spells(step);
+        hit();
+        buffs();
+        affect();
+        target_and_rides();
+        answers();
+        tables();
+        globals();
     }
-    w.caster.character = rng.Chance(75) ? &w.caster_char : nullptr;
-    w.me.character = rng.Chance(75) ? &w.me_char : nullptr;
-    w.me_char.spawn = &w.pc_as_spawn;
-    w.caster_char.spawn = &w.caster;
-    w.caster_char.cache_valid = static_cast<std::uint8_t>(rng.Range(0, 1));
-    w.pc.gem_timers = rng.Chance(80) ? w.timers.data() : nullptr;
-    w.pc.id_20a8 = static_cast<std::int32_t>(rng.Next());
-    w.profile.class_id = static_cast<std::uint8_t>(rng.Chance(60) ? rng.Range(1, 16) : (rng.Chance(50) ? 8 : 7));
-    w.profile.weight = rng.Chance(10) ? rng.Interesting() : rng.Range(0, 400);
-    w.profile.mana = value(rng);
-    w.profile.dword_3248 = static_cast<std::int32_t>(rng.Next());
-    w.profile.dword_3264 = static_cast<std::int32_t>(rng.Next());
-    w.drunkenness = rng.Range(0, 250);
-    std::uint32_t main_id = rng.Chance(40) ? kIds[rng.Range(0, 10)] : static_cast<std::uint32_t>(rng.Range(100, 300));
-    if (f.early && rng.Chance(3)) main_id = rng.Chance(50) ? 0 : 0xafc9;
-    for (int s = 0; s < 8; ++s) {
-        auto k = static_cast<std::size_t>(s);
-        w.spell_ids[k] = s == 0 ? main_id : (s == 1 ? 0x11a8 : static_cast<std::uint32_t>(rng.Range(1, 60)));
-        make_spell(rng, w.spells[k], f, sweep, s == 0);
+
+private:
+    void character() {
+        w_.has_me = !(early(set_) && s_.odds(2));
+        w_.self.spawn = w_.has_me ? &w_.me : nullptr;
+        w_.self.cache_valid = s_.in_byte(0, 1);
+        w_.self.aa_cache_valid = s_.in_byte(0, 2);
+        w_.self.stats_dirty = s_.in_byte(0, 2);
+        CharacterBase& cb = w_.cb;
+        cb.zone_id = s_.in(1, 4);
+        for (std::uint32_t* v : {&cb.y, &cb.x, &cb.z, &cb.heading}) *v = ordinary_float(s_);
+        cb.mesmerized = s_.in_byte(0, 2);
     }
-    if (f.early && rng.Chance(3)) w.spell_ids[0] = main_id + 1;
-    w.hit.caster_id = static_cast<std::uint16_t>(rng.Range(1, 9));
-    w.hit.item_level = static_cast<std::uint16_t>(rng.Chance(60) ? 0 : rng.Range(1, 300));
-    w.hit.modifier = rng.Chance(40) ? 0x3f800000
-                                    : (rng.Chance(30) ? fbits(static_cast<float>(rng.Range(1, 40)) / 8.0f)
-                                                      : random_float(rng));
-    w.hit.push_heading = rng.Chance(60) ? plain_float(rng) : random_float(rng);
-    w.hit.word_1b = static_cast<std::uint16_t>(rng.Chance(50) ? 0 : w.spell_ids[static_cast<std::size_t>(rng.Range(0, 7))]);
-    w.hit.song_value = value(rng);
-    w.hit.spell_id = main_id;
-    w.hit.caster_level = static_cast<std::uint8_t>(rng.Chance(20) ? rng.Range(200, 255) : rng.Range(1, 100));
-    w.launch.byte_32 = static_cast<std::uint8_t>(rng.Next());
-    w.launch.item_flag = static_cast<std::uint8_t>(rng.Range(0, 1));
-    for (Affect& b : w.buffs) {
-        b.type = static_cast<std::uint8_t>(rng.Chance(70) ? rng.Range(1, 4) : 0);
-        b.level = static_cast<std::uint8_t>(rng.Range(1, 110));
-        b.spell_id = static_cast<std::int32_t>(rng.Chance(80) ? w.spell_ids[static_cast<std::size_t>(rng.Range(0, 7))]
-                                                              : rng.Next() % 100);
-        for (auto& v : b.slot_data) v = rng.Range(-3, 10);
-        b.flags_24 = rng.Next();
+
+    void spawn(Spawn& p) {
+        p.type = s_.odds(75) ? 0 : s_.in_byte(1, 3);
+        p.flag_208 = s_.odds(70) ? 0 : 1;
+        p.owner_38c = s_.odds(70) ? 0 : s_.in_u(1, 3);
+        p.spawn_id = s_.in_u(1, 3);
+        for (std::uint32_t* v : {&p.y, &p.x, &p.z, &p.speed_y, &p.speed_x, &p.speed_z, &p.rotation_speed, &p.heading,
+                                 &p.heading_speed, &p.floor_z, &p.model_height})
+            *v = ordinary_float(s_);
+        p.casting_spell = s_.odds(30) ? -1 : s_.in(0, 12);
+        p.stand_state = s_.odds(50) ? 0x64 : s_.in_byte(0, 0x70);
+        p.class_id = s_.odds(20) ? 8 : s_.in_byte(1, 16);
+        s_.in(1, 100); // +0x250
     }
-    {
-        std::uint32_t d[24];
-        for (auto& v : d) v = rng.Next();
-        Affect& a = w.affect;
-        a.type = static_cast<std::uint8_t>(d[0]);
-        a.level = static_cast<std::uint8_t>(d[0] >> 8);
-        a.byte_2 = static_cast<std::uint8_t>(d[0] >> 16);
-        a.byte_3 = static_cast<std::uint8_t>(d[0] >> 24);
-        a.modifier = d[1];
-        a.spell_id = static_cast<std::int32_t>(d[2]);
-        a.duration = static_cast<std::int32_t>(d[3]);
-        a.caster_10 = static_cast<std::int32_t>(d[4]);
-        a.dword_14 = static_cast<std::int32_t>(d[5]);
-        a.y_18 = d[6];
-        a.x_1c = d[7];
-        a.z_20 = d[8];
-        a.flags_24 = d[9];
-        for (int j = 0; j < 12; ++j) a.slot_data[static_cast<std::size_t>(j)] = static_cast<std::int32_t>(d[10 + j]);
+
+    void links() {
+        w_.caster.character = s_.odds(75) ? &w_.caster_char : nullptr;
+        w_.me.character = s_.odds(75) ? &w_.me_char : nullptr;
+        w_.me_char.spawn = &w_.pc_as_spawn;
+        w_.caster_char.spawn = &w_.caster;
+        w_.caster_char.cache_valid = s_.in_byte(0, 1);
+        w_.pc.gem_timers = s_.odds(80) ? w_.timers.data() : nullptr;
+        w_.pc.id_20a8 = static_cast<std::int32_t>(s_.bits());
     }
-    w.target.type = static_cast<std::uint8_t>(rng.Range(0, 3));
-    w.target.owner_38c = static_cast<std::uint32_t>(rng.Range(1, 3));
-    w.target.spawn_id = rng.Next();
-    set_text(w.target.name.data(), "Target");
-    for (int off = 0; off < 8; ++off) {
-        std::uint32_t m = plain_float(rng), v = plain_float(rng);
-        auto field = [&](Spawn& s) -> std::uint32_t* {
-            switch (off) {
-            case 0: return &s.speed_y;
-            case 1: return &s.speed_x;
-            case 2: return &s.speed_z;
-            case 3: return &s.rotation_speed;
-            case 4: return &s.heading;
-            case 7: return &s.heading_speed;
-            default: return nullptr; // +0x84, +0x88
-            }
-        };
-        if (auto* p = field(w.mount)) *p = m;
-        if (auto* p = field(w.vehicle)) *p = v;
+
+    void profile() {
+        Profile& p = w_.profile;
+        if (s_.odds(60)) p.class_id = s_.in_byte(1, 16);
+        else p.class_id = s_.odds(50) ? 8 : 7;
+        p.weight = s_.odds(10) ? s_.awkward() : s_.in(0, 400);
+        p.mana = small_value(s_);
+        p.dword_3248 = static_cast<std::int32_t>(s_.bits());
+        p.dword_3264 = static_cast<std::int32_t>(s_.bits());
+        w_.drunkenness = s_.in(0, 250);
     }
-    const char* texts[] = {"~*Lore Book", "#Book", "Plain Book", "Elvish"};
-    for (int t = 0; t < 4; ++t) set_text(w.texts[t], texts[(t + rng.Range(0, 3)) & 3]);
-    auto& k = w.k;
-    if (f.early && rng.Chance(3)) {
-        w.caster_none = true;
-    } else {
-        w.caster_me = rng.Chance(30);
+
+    // The main spell (0), the 0x11a8 spell (1) and six others; each id is drawn before its spell.
+    void spells(std::uint32_t step) {
+        main_id_ = s_.odds(40) ? kMainIds[s_.in(0, 10)] : s_.in_u(100, 300);
+        if (early(set_) && s_.odds(3)) main_id_ = s_.odds(50) ? 0 : 0xafc9;
+        for (std::size_t k = 0; k < w_.spells.size(); ++k) {
+            if (k == 0) w_.spell_ids[k] = main_id_;
+            else if (k == 1) w_.spell_ids[k] = 0x11a8;
+            else w_.spell_ids[k] = s_.in_u(1, 60);
+            fill_spell(s_, w_.spells[k], set_, step, k == 0);
+        }
+        if (early(set_) && s_.odds(3)) w_.spell_ids[0] = main_id_ + 1; // the main spell no longer has the hit's id
     }
-    k[kTheirChar] = rng.Chance(40) ? 0 : 1; // 0: pc, 1: pc + 0x100 (the caster's)
-    k[kBard] = rng.Chance(30) ? 1 : 0;
-    k[kStunned] = f.early && rng.Chance(10) ? 1 : 0;
-    k[kItemCast] = rng.Chance(30);
-    k[kGroup] = rng.Chance(70);
-    {
-        std::uint32_t a = rng.Next() & ~1u;
-        k[kSpellCheck] = a | (rng.Chance(95) ? 1u : 0u);
+
+    std::uint32_t some_spell_id() { return w_.spell_ids[static_cast<std::size_t>(s_.in(0, 7))]; }
+
+    void hit() {
+        Hit& h = w_.hit;
+        h.caster_id = static_cast<std::uint16_t>(s_.in(1, 9));
+        h.item_level = static_cast<std::uint16_t>(s_.odds(60) ? 0 : s_.in(1, 300));
+        if (s_.odds(40)) h.modifier = 0x3f800000;
+        else h.modifier = s_.odds(30) ? fraction(s_, 1, 40, 8.0f) : wild_float(s_);
+        h.push_heading = s_.odds(60) ? ordinary_float(s_) : wild_float(s_);
+        h.word_1b = static_cast<std::uint16_t>(s_.odds(50) ? 0 : some_spell_id());
+        h.song_value = small_value(s_);
+        h.spell_id = main_id_;
+        h.caster_level = s_.odds(20) ? s_.in_byte(200, 255) : s_.in_byte(1, 100);
+        w_.launch.byte_32 = static_cast<std::uint8_t>(s_.bits());
+        w_.launch.item_flag = s_.in_byte(0, 1);
     }
-    k[kMaxEffects] = static_cast<std::uint32_t>(rng.Range(0, 10));
-    k[kIsPcMe] = rng.Chance(50);
-    k[kIsPcCaster] = rng.Chance(50);
-    k[kPvpDuration] = static_cast<std::uint32_t>(value(rng));
-    k[kDuration] = static_cast<std::uint32_t>(value(rng));
-    k[kCasterLevel] = static_cast<std::uint32_t>(rng.Chance(50) ? rng.Range(30, 60) : rng.Range(0, 255));
-    k[kCbLevel] = static_cast<std::uint32_t>(rng.Range(30, 60));
-    k[kCbMana] = static_cast<std::uint32_t>(value(rng));
-    k[kPc] = rng.Chance(85) ? 1 : 0;
-    k[kMeDC] = rng.Chance(50);
-    k[kCasterDC] = rng.Chance(50);
-    k[kInWorld] = rng.Chance(85);
-    {
-        std::uint32_t a = static_cast<std::uint32_t>(rng.Range(0, 1));
-        k[kActorOn] = a | (rng.Next() & 0xffffff00u);
-    }
-    k[kTerrainOn] = rng.Chance(60);
-    k[kLineHits] = rng.Next();
-    k[kTeleportOk] = rng.Next();
-    k[kSlot] = static_cast<std::uint32_t>(rng.Range(0, 60));
-    k[kAffectPtr] = rng.Chance(90) ? 1 : 0;
-    k[kRoll] = static_cast<std::uint32_t>(rng.Chance(40) ? (rng.Chance(50) ? rng.Range(94, 96) : rng.Range(4, 6))
-                                                         : rng.Range(1, 100));
-    k[kHasProperty] = rng.Chance(30);
-    k[kGet150] = rng.Chance(15);
-    k[kBindSpot] = rng.Chance(60);
-    k[kExpansion] = rng.Chance(60);
-    k[kZoneIndex] = static_cast<std::uint32_t>(rng.Range(1, 4));
-    k[kHton] = rng.Next();
-    k[kSent] = rng.Chance(80);
-    k[kItem] = rng.Chance(80) ? 0x1234500u + static_cast<std::uint32_t>(rng.Range(0, 3)) : 0;
-    k[kItemType] = static_cast<std::uint32_t>(rng.Range(0, 2));
-    k[kBookLang] = static_cast<std::uint32_t>(rng.Range(0, 5));
-    k[kMagic] = rng.Chance(50);
-    k[kPcAffect] = rng.Next();
-    k[kTime] = rng.Next();
-    k[kGemSeed] = rng.Next();
-    k[kFocus] = rng.Next();
-    k[kRandom100] = static_cast<std::uint32_t>(rng.Range(0, 100));
-    k[kLowHigh] = static_cast<std::uint32_t>(rng.Chance(40) ? rng.Range(9, 11) : rng.Range(1, 100));
-    k[kRefused] = static_cast<std::uint32_t>(rng.Chance(60) ? 0 : rng.Range(1, 2));
-    k[kTotal] = static_cast<std::uint32_t>(rng.Chance(50) ? 0 : value(rng));
-    k[kChangeForm] = rng.Chance(85);
-    k[kGeneric] = static_cast<std::uint32_t>(value(rng));
-    k[kHasFlag] = rng.Chance(50);
-    k[kVehicle] = rng.Chance(30);
-    k[kMount] = rng.Chance(40);
-    k[kWriteNormal] = rng.Chance(60);
-    k[kThrowAt] = 0;
-    k[kLoreText] = static_cast<std::uint32_t>(rng.Range(0, 3));
-    for (int j = 0; j < 16; ++j) {
-        auto i = static_cast<std::size_t>(j);
-        w.calc[i] = rng.Chance(35) ? rng.Range(-3, 9) : value(rng);
-        w.cached[i] = rng.Chance(70) ? 0 : value(rng);
-    }
-    for (auto& fl : w.floors) {
-        if (rng.Chance(25)) {
-            fl[0] = 0xec4ecb8f;
-            fl[1] = 0x3f800000;
-        } else {
-            fl[0] = plain_float(rng);
-            fl[1] = rng.Chance(50) ? 0x3f800001 : 0x3f800000;
+
+    void buffs() {
+        for (Affect& b : w_.buffs) {
+            b.type = s_.odds(70) ? s_.in_byte(1, 4) : 0;
+            b.level = s_.in_byte(1, 110);
+            b.spell_id = static_cast<std::int32_t>(s_.odds(80) ? some_spell_id() : s_.bits() % 100);
+            for (std::int32_t& v : b.slot_data) v = s_.in(-3, 10);
+            b.flags_24 = s_.bits();
         }
     }
-    w.trig[0] = rng.Chance(80) ? fbits(static_cast<float>(rng.Range(-1000, 1000)) / 1000.0f) : random_float(rng);
-    w.trig[1] = rng.Chance(50) ? 0x3f800001 : 0x3f800000;
-    w.normal[0] = rng.Chance(20) ? (0x7f800001 | (rng.Next() & 0x3ffffe)) : plain_float(rng);
-    w.normal[1] = plain_float(rng);
-    w.normal[2] = plain_float(rng);
-    Globals& g = w.globals;
-    g.target = rng.Chance(80) ? &w.target : nullptr;
-    Spawn* players[] = {&w.me, &w.caster, &w.target, nullptr};
-    g.local_player = players[rng.Range(0, 3)];
-    g.controlled_player = players[rng.Range(0, 3)];
-    g.connected = rng.Chance(70);
-    g.zone_type = static_cast<std::uint8_t>(rng.Range(0, 5));
-    g.ruleset = static_cast<std::uint32_t>(rng.Chance(50) ? 0 : rng.Range(1, 7));
-    g.bind_blocked = static_cast<std::uint8_t>(rng.Chance(85) ? 0 : 1);
-    g.no_send_log = static_cast<std::uint8_t>(rng.Range(0, 1));
-    std::uint32_t pushed = rng.Next() & 0xfefefefe;
-    g.controlled_pushed = static_cast<std::uint8_t>(pushed);
-    g.local_pushed = static_cast<std::uint8_t>(pushed >> 8);
-    g.save_reason = static_cast<std::int32_t>(rng.Next());
-    std::uint32_t dd00e0 = rng.Next();
-    w.dd00e4 = rng.Next();
-    g.packet_opcode = static_cast<std::uint16_t>(dd00e0);
-    g.packet_target = static_cast<std::int32_t>((dd00e0 >> 16) | (w.dd00e4 << 16));
-    g.send_count = static_cast<std::int32_t>(rng.Next());
+
+    // The affect HitBySpell may fill: 24 raw dwords, of which the first 22 are its fields.
+    void affect() {
+        std::array<std::uint32_t, 24> raw{};
+        for (std::uint32_t& v : raw) v = s_.bits();
+        Affect& a = w_.affect;
+        a.type = static_cast<std::uint8_t>(raw[0]);
+        a.level = static_cast<std::uint8_t>(raw[0] >> 8);
+        a.byte_2 = static_cast<std::uint8_t>(raw[0] >> 16);
+        a.byte_3 = static_cast<std::uint8_t>(raw[0] >> 24);
+        a.modifier = raw[1];
+        a.spell_id = static_cast<std::int32_t>(raw[2]);
+        a.duration = static_cast<std::int32_t>(raw[3]);
+        a.caster_10 = static_cast<std::int32_t>(raw[4]);
+        a.dword_14 = static_cast<std::int32_t>(raw[5]);
+        a.y_18 = raw[6];
+        a.x_1c = raw[7];
+        a.z_20 = raw[8];
+        a.flags_24 = raw[9];
+        for (std::size_t j = 0; j < a.slot_data.size(); ++j) a.slot_data[j] = static_cast<std::int32_t>(raw[10 + j]);
+    }
+
+    // The target, then the mount's and the vehicle's motion: a pair of draws for each dword +0x70..+0x8c, of
+    // which +0x84 and +0x88 are not kept.
+    void target_and_rides() {
+        w_.target.type = s_.in_byte(0, 3);
+        w_.target.owner_38c = s_.in_u(1, 3);
+        w_.target.spawn_id = s_.bits();
+        set_text(w_.target.name.data(), "Target");
+        using Field = std::uint32_t Spawn::*;
+        static constexpr Field kMotion[] = {&Spawn::speed_y, &Spawn::speed_x, &Spawn::speed_z, &Spawn::rotation_speed,
+                                            &Spawn::heading, nullptr, nullptr, &Spawn::heading_speed};
+        for (Field f : kMotion) {
+            const std::uint32_t for_mount = ordinary_float(s_);
+            const std::uint32_t for_vehicle = ordinary_float(s_);
+            if (f == nullptr) continue;
+            w_.mount.*f = for_mount;
+            w_.vehicle.*f = for_vehicle;
+        }
+        static const char* const kTexts[] = {"~*Lore Book", "#Book", "Plain Book", "Elvish"};
+        for (int t = 0; t < 4; ++t) set_text(w_.texts[t], kTexts[(t + s_.in(0, 3)) & 3]);
+    }
+
+    void answers() {
+        if (early(set_) && s_.odds(3)) w_.caster_none = true;
+        else w_.caster_me = s_.odds(30);
+        Answers& a = w_.answers;
+        a.their_character = s_.odds(40) ? 0 : 1; // 0: pc, 1: pc + 0x100 (the caster's)
+        a.bard = s_.odds(30) ? 1 : 0;
+        a.stunned = early(set_) && s_.odds(10) ? 1 : 0;
+        a.item_cast = s_.odds(30);
+        a.group = s_.odds(70);
+        const std::uint32_t check_high = s_.bits() & ~1u;
+        a.spell_check = check_high | (s_.odds(95) ? 1u : 0u);
+        a.max_effects = s_.in_u(0, 10);
+        a.me_is_pc = s_.odds(50);
+        a.caster_is_pc = s_.odds(50);
+        a.pvp_duration = static_cast<std::uint32_t>(small_value(s_));
+        a.duration = static_cast<std::uint32_t>(small_value(s_));
+        a.caster_level = s_.odds(50) ? s_.in_u(30, 60) : s_.in_u(0, 255);
+        a.cb_level = s_.in_u(30, 60);
+        a.cb_max_mana = static_cast<std::uint32_t>(small_value(s_));
+        a.has_pc = s_.odds(85) ? 1 : 0;
+        a.me_vf_dc = s_.odds(50);
+        a.caster_vf_dc = s_.odds(50);
+        a.in_world = s_.odds(85);
+        const std::uint32_t enabled = s_.in_u(0, 1);
+        a.actor_collision = enabled | (s_.bits() & 0xffffff00u);
+        a.terrain_collision = s_.odds(60);
+        a.line_hits = s_.bits();
+        a.teleport_ok = s_.bits();
+        a.affect_slot = s_.in_u(0, 60);
+        a.has_affect = s_.odds(90) ? 1 : 0;
+        if (!s_.odds(40)) a.roll = s_.in_u(1, 100);
+        else a.roll = s_.odds(50) ? s_.in_u(94, 96) : s_.in_u(4, 6);
+        a.has_property = s_.odds(30);
+        a.get_150 = s_.odds(15);
+        a.bind_spot = s_.odds(60);
+        a.expansion = s_.odds(60);
+        a.zone_index = s_.in_u(1, 4);
+        a.hton = s_.bits();
+        a.sent = s_.odds(80);
+        a.item = s_.odds(80) ? 0x1234500u + s_.in_u(0, 3) : 0;
+        a.item_type = s_.in_u(0, 2);
+        a.book_lang = s_.in_u(0, 5);
+        a.magic = s_.odds(50);
+        for (std::uint32_t* v : {&a.pc_affect, &a.time, &a.gem_seed, &a.focus}) *v = s_.bits();
+        a.random_100 = s_.in_u(0, 100);
+        a.low_high = s_.odds(40) ? s_.in_u(9, 11) : s_.in_u(1, 100);
+        a.refused = s_.odds(60) ? 0 : s_.in_u(1, 2);
+        a.total = s_.odds(50) ? 0 : static_cast<std::uint32_t>(small_value(s_));
+        a.change_form = s_.odds(85);
+        a.generic = static_cast<std::uint32_t>(small_value(s_));
+        a.has_flag = s_.odds(50);
+        a.vehicle = s_.odds(30);
+        a.mount = s_.odds(40);
+        a.writes_normal = s_.odds(60);
+        a.throw_at = 0;
+        a.lore_text = s_.in_u(0, 3);
+    }
+
+    // The effect formulas and caches, the floor heights (value, scale), the sine-table answer (value, scale) and
+    // the collision normal.
+    void tables() {
+        for (std::size_t j = 0; j < w_.calc.size(); ++j) {
+            w_.calc[j] = s_.odds(35) ? s_.in(-3, 9) : small_value(s_);
+            w_.cached[j] = s_.odds(70) ? 0 : small_value(s_);
+        }
+        for (auto& floor : w_.floors) {
+            if (s_.odds(25)) {
+                floor[0] = 0xec4ecb8f; // no floor
+                floor[1] = 0x3f800000;
+                continue;
+            }
+            floor[0] = ordinary_float(s_);
+            floor[1] = one_or_next(s_);
+        }
+        if (s_.odds(80)) w_.trig[0] = fraction(s_, -1000, 1000, 1000.0f);
+        else w_.trig[0] = wild_float(s_);
+        w_.trig[1] = one_or_next(s_);
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            if (axis == 0 && s_.odds(20)) w_.normal[axis] = 0x7f800001 | (s_.bits() & 0x3ffffe); // a signalling NaN
+            else w_.normal[axis] = ordinary_float(s_);
+        }
+    }
+
+    void globals() {
+        Globals& g = w_.globals;
+        g.target = s_.odds(80) ? &w_.target : nullptr;
+        Spawn* const anyone[] = {&w_.me, &w_.caster, &w_.target, nullptr};
+        g.local_player = anyone[s_.in(0, 3)];
+        g.controlled_player = anyone[s_.in(0, 3)];
+        g.connected = s_.odds(70);
+        g.zone_type = s_.in_byte(0, 5);
+        g.ruleset = s_.odds(50) ? 0 : s_.in_u(1, 7);
+        g.bind_blocked = s_.odds(85) ? 0 : 1;
+        g.no_send_log = s_.in_byte(0, 1);
+        const std::uint32_t pushed = s_.bits() & 0xfefefefe;
+        g.controlled_pushed = static_cast<std::uint8_t>(pushed);
+        g.local_pushed = static_cast<std::uint8_t>(pushed >> 8);
+        g.save_reason = static_cast<std::int32_t>(s_.bits());
+        // The world packet buffer at 0xdd00e0: its first dword, then the next.
+        const std::uint32_t buffer_0 = s_.bits();
+        w_.dd00e4 = s_.bits();
+        g.packet_opcode = static_cast<std::uint16_t>(buffer_0);
+        g.packet_target = static_cast<std::int32_t>((buffer_0 >> 16) | (w_.dd00e4 << 16));
+        g.send_count = static_cast<std::int32_t>(s_.bits());
+    }
+
+    World& w_;
+    Stream& s_;
+    Set set_;
+    std::uint32_t main_id_ = 0;
+};
+
+// Per-file adjustments after the world, drawn from the same stream.
+
+// Validation: sometimes an unknown SPA (123) in a detrimental spell, sometimes with the formulas near 0.
+void validation_extra(World& w, Stream& s) {
+    if (!s.odds(30)) return;
+    Spell& main = w.spells[0];
+    main.attrib[static_cast<std::size_t>(s.in(0, 11))] = 123;
+    main.spell_type = 0;
+    if (!s.odds(60)) return;
+    for (std::size_t j = 0; j < w.calc.size(); ++j) {
+        w.cached[j] = 0;
+        w.calc[j] = s.in(-1, 1);
+    }
 }
 
-void early_tweak(World& w, Rng& rng) {
-    if (rng.Chance(30)) {
-        w.spells[0].attrib[static_cast<std::size_t>(rng.Range(0, 11))] = 123;
-        w.spells[0].spell_type = 0;
-        if (rng.Chance(60))
-            for (int j = 0; j < 16; ++j) {
-                w.cached[static_cast<std::size_t>(j)] = 0;
-                w.calc[static_cast<std::size_t>(j)] = rng.Range(-1, 1);
-            }
-    }
-}
-void buff_tweak(World& w, Rng& rng) {
-    static constexpr std::int32_t kBiased[] = {0x3a, 0x9c, 0x1e, 0x11, 0x12, 0x56, 35, 36, 116, 369, 3, 156};
-    for (int i = 1; i < 12; ++i)
-        if (rng.Chance(25)) w.spells[0].attrib[static_cast<std::size_t>(i)] = kBiased[rng.Range(0, 11)];
-    if (rng.Chance(15)) {
+// Buffs: the SPAs whose values the buff path scales or not, and formula pairs.
+void buff_extra(World& w, Stream& s) {
+    Spell& main = w.spells[0];
+    static constexpr std::int32_t kFavoured[] = {0x3a, 0x9c, 0x1e, 0x11, 0x12, 0x56, 35, 36, 116, 369, 3, 156};
+    for (std::size_t i = 1; i < 12; ++i)
+        if (s.odds(25)) main.attrib[i] = kFavoured[s.in(0, 11)];
+    if (s.odds(15)) {
         static constexpr std::int32_t kUnscaled[] = {0x3a, 0x9c, 0x1e, 0x11, 0x12, 0x56, 254};
-        for (int i = 1; i < 12; ++i) w.spells[0].attrib[static_cast<std::size_t>(i)] = kUnscaled[rng.Range(0, 6)];
-        static constexpr std::int32_t kFirst[] = {0x56, 0x12, 3, 0x9c, 200};
-        w.spells[0].attrib[0] = kFirst[rng.Range(0, 4)];
+        static constexpr std::int32_t kLead[] = {0x56, 0x12, 3, 0x9c, 200};
+        for (std::size_t i = 1; i < 12; ++i) main.attrib[i] = kUnscaled[s.in(0, 6)];
+        main.attrib[0] = kLead[s.in(0, 4)];
     }
-    if (rng.Chance(30)) {
-        static constexpr std::int32_t kPairs[] = {-2, -1, 8, 9, 7, 6};
-        for (int j = 0; j < 16; ++j) w.calc[static_cast<std::size_t>(j)] = kPairs[rng.Range(0, 5)];
+    if (s.odds(30)) {
+        static constexpr std::int32_t kFormulas[] = {-2, -1, 8, 9, 7, 6};
+        for (std::int32_t& c : w.calc) c = kFormulas[s.in(0, 5)];
     }
-    if (rng.Chance(30)) w.hit.modifier = fbits(static_cast<float>(rng.Range(2, 40)) / 8.0f);
+    if (s.odds(30)) w.hit.modifier = fraction(s, 2, 40, 8.0f);
 }
-void moves_tweak(World& w, Rng& rng) {
-    for (int i = 0; i < 12; ++i)
-        if (w.spells[0].attrib[static_cast<std::size_t>(i)] == 379)
-            w.spells[0].base[static_cast<std::size_t>(i)] =
-                rng.Chance(10) ? -rng.Range(0, 0x7fffffff) : rng.Range(-2, 16);
-    w.k[kThrowAt] = rng.Chance(6) ? static_cast<std::uint32_t>(rng.Range(1, 6)) : 0;
+
+// Moves: shadow step (SPA 379) distances, and a thrown-at spawn.
+void moves_extra(World& w, Stream& s) {
+    Spell& main = w.spells[0];
+    for (std::size_t i = 0; i < 12; ++i) {
+        if (main.attrib[i] != 379) continue;
+        main.base[i] = s.odds(10) ? -s.in(0, 0x7fffffff) : s.in(-2, 16);
+    }
+    w.answers.throw_at = s.odds(6) ? s.in_u(1, 6) : 0;
+}
+
+using Extra = void (*)(World&, Stream&);
+
+// One record's world: the draws, the file's extra, then the launch record and the duration override.
+void draw_record(World& w, Stream& s, Set set, Extra extra, std::uint32_t step) {
+    WorldDraw(w, s, set).all(step);
+    if (extra != nullptr) extra(w, s);
+    w.answers.throw_at = 0;
+    const bool without_launch = s.odds(2) && early(set);
+    w.launch_used = without_launch ? nullptr : &w.launch;
+    w.duration = s.odds(80) ? -1 : small_value(s);
 }
 
 // ---------------------------------------------------------------- names
@@ -575,31 +688,31 @@ public:
     }
     Handle cb_pc() override {
         tape("CharacterBase::vf4c (PcClient)", {});
-        return w_.k[kPc] ? reinterpret_cast<Handle>(&w_.pc) : 0;
+        return w_.answers.has_pc ? reinterpret_cast<Handle>(&w_.pc) : 0;
     }
     std::uint32_t cb_level() override {
         tape("CharacterBase::vf68 (level)", {});
-        return w_.k[kCbLevel];
+        return w_.answers.cb_level;
     }
     std::uint32_t cb_max_mana() override {
         tape("CharacterBase::vf6c (max mana)", {});
-        return w_.k[kCbMana];
+        return w_.answers.cb_max_mana;
     }
     std::uint8_t spawn_vf_dc(Spawn* s) override {
         bool me = s == &w_.me;
         tape("spawn vfdc (is_me)", {me ? 1u : 0u});
-        return static_cast<std::uint8_t>(me ? w_.k[kMeDC] : w_.k[kCasterDC]);
+        return static_cast<std::uint8_t>(me ? w_.answers.me_vf_dc : w_.answers.caster_vf_dc);
     }
     void pc_base_vf58(Handle base) override {
         tape("PcClient base vf58", {base == reinterpret_cast<Handle>(&w_.pc) + kPcBase ? 1u : 0u});
     }
     std::uint8_t point_in_world(const std::array<std::uint32_t, 3>& p) override {
         tape("pinstSceneGraph vf4c IsPointInWorld(x,y,z)", {p[0], p[1], p[2]});
-        return static_cast<std::uint8_t>(w_.k[kInWorld]);
+        return static_cast<std::uint8_t>(w_.answers.in_world);
     }
     std::uint8_t actor_collision_enabled() override {
         tape("pinstCollision vf48 IsActorCollisionEnabled", {});
-        return static_cast<std::uint8_t>(w_.k[kActorOn]);
+        return static_cast<std::uint8_t>(w_.answers.actor_collision);
     }
     void set_actor_collision(std::uint8_t flag) override {
         tape("pinstCollision vf50 SetActorCollisionEnabled(flag)", {flag}, {0xff});
@@ -611,12 +724,12 @@ public:
         tape("  sphere: filter, callback, +0x94, +0x98, +0x9c", {s.filter, s.callback, s.dword_94, s.dword_98, s.byte_9c});
         tape("  sphere before the test: normal x,y,z (stale frame bytes), +0x34, +0x68",
              {i.normal[0], i.normal[1], i.normal[2], i.inverse_length, i.moving});
-        if (w_.k[kWriteNormal]) s.info.normal = {w_.normal[0], w_.normal[1], w_.normal[2]};
+        if (w_.answers.writes_normal) s.info.normal = {w_.normal[0], w_.normal[1], w_.normal[2]};
         return 1;
     }
     std::uint8_t terrain_collision_enabled() override {
         tape("pinstCollision vf44 IsTerrainCollisionEnabled", {});
-        return static_cast<std::uint8_t>(w_.k[kTerrainOn]);
+        return static_cast<std::uint8_t>(w_.answers.terrain_collision);
     }
     std::uint8_t collide_line(CollisionLine& l) override {
         const CollisionInfo& i = l.info;
@@ -626,7 +739,7 @@ public:
         tape("  line: +0x74..+0x84", {l.ray[0], l.ray[1], l.ray[2], l.ray[3], l.ray[4]});
         tape("  line: +0x88, 1/len +0x34, t +0x38, dir x,y", {l.ray[5], i.inverse_length, i.fraction, i.direction[0], i.direction[1]});
         std::uint32_t n = w_.line_calls++;
-        return static_cast<std::uint8_t>((w_.k[kLineHits] >> (n & 31)) & 1);
+        return static_cast<std::uint8_t>((w_.answers.line_hits >> (n & 31)) & 1);
     }
     double floor_height(Spawn* s, std::uint32_t x, std::uint32_t y, std::uint32_t z) override {
         tape("GetPlayerFloorHeight(is_me, x, y, z, flag)", {s == &w_.me ? 1u : 0u, x, y, z, 1});
@@ -678,7 +791,7 @@ public:
     }
     std::uint32_t do_spell_check(std::uint32_t id, SpellCheckRecord& r) override {
         const Json* c = call("DoSpellCheck", std::nullopt, {I(id), S(), I(1)});
-        std::uint32_t seed = w_.k[kSpellCheck];
+        std::uint32_t seed = w_.answers.spell_check;
         for (std::uint32_t i = 0; i < 0x144; ++i) r[i] = static_cast<std::uint8_t>((seed >> 8) + i * 13 + (i >> 3));
         return static_cast<std::uint32_t>(ret(c));
     }
@@ -789,12 +902,12 @@ public:
     void feign(std::uint32_t id, std::int32_t v) override { call("StopCastAndFeignDeath", P(&w_.self), {I(id), I(v)}); }
     Handle get_item(std::uint32_t slot) override {
         call("GetItem", P(&w_.cb), {S(), I(slot)});
-        return w_.k[kItem];
+        return w_.answers.item;
     }
     void release_item() override { call("VePointer::~VePointer", std::nullopt, {}); }
     const char* lore_name(Handle item) override {
         call("GetLoreName", H(item), {});
-        return w_.texts[w_.k[kLoreText] & 3];
+        return w_.texts[w_.answers.lore_text & 3];
     }
     std::int32_t item_type(Handle item) override { return ret(call("GetType", H(item), {})); }
     std::uint32_t book_lang(Handle item) override {
@@ -844,8 +957,8 @@ public:
     Affect* find_affect_slot(std::uint32_t id, Spawn* caster, std::int32_t* slot, std::uint32_t level,
                              std::uint32_t launch) override {
         const Json* c = call("FindAffectSlot", P(&w_.self), {I(id), P(caster), S(), I(0), I(level), I(0), I(0), B(launch)});
-        if (c && (*c)["ret"].type == Json::Type::String) *slot = static_cast<std::int32_t>(w_.k[kSlot]);
-        else if (c) *slot = static_cast<std::int32_t>(w_.k[kSlot]);
+        if (c && (*c)["ret"].type == Json::Type::String) *slot = static_cast<std::int32_t>(w_.answers.affect_slot);
+        else if (c) *slot = static_cast<std::int32_t>(w_.answers.affect_slot);
         return obj<Affect>(c);
     }
     void set_buff_caster_id(std::uint32_t slot, std::uint32_t id) override {
@@ -1187,31 +1300,32 @@ std::string check_outputs(const Json& out, World& w, std::uint8_t result) {
     return c.error;
 }
 
-void run_file(const char* file, const Family& family, std::uint32_t seed, void (*tweak)(World&, Rng&)) {
+// Runs a record's world through the port against the replay of its calls.
+std::string run_world(const Json& r, World& w, std::uint8_t* result) {
+    Fpu fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
+    Replay replay(w, r["out"], fpu);
+    HitState state;
+    state.self = &w.self;
+    state.globals = &w.globals;
+    state.frame = &replay.frame;
+    // GetSpawnByID answers the record's caster; the world's knob says which.
+    *result = hit_by_spell(state, w.hit, w.launch_used, w.duration, replay, fpu);
+    return replay.finish();
+}
+
+// One stream per file; each record's world comes from a stream of its own, seeded by the file's next draw.
+void run_file(const char* file, Set set, std::uint32_t seed, Extra extra) {
     static World world; // large; one per run
-    Rng rng(seed);
-    int it = 0;
+    Stream file_stream(seed);
+    std::uint32_t record = 0;
     hailstone::test::each_vector(file, [&](const Json& r) -> std::string {
         World& w = world;
-        Rng local(rng.Next());
-        make_world(w, local, family, static_cast<std::uint32_t>(it) * 7);
-        ++it;
-        if (tweak) tweak(w, local);
-        w.k[kThrowAt] = 0;
-        bool no_launch = local.Chance(2) && family.early;
-        w.launch_used = no_launch ? nullptr : &w.launch;
-        w.duration = local.Chance(80) ? -1 : value(local);
+        Stream s(file_stream.bits());
+        draw_record(w, s, set, extra, record++ * 7);
         Names names(w);
         if (std::string why = check_inputs(r["in"], w, names); !why.empty()) return "regenerated input: " + why;
-        Fpu fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
-        Replay replay(w, r["out"], fpu);
-        HitState state;
-        state.self = &w.self;
-        state.globals = &w.globals;
-        state.frame = &replay.frame;
-        // GetSpawnByID answers the record's caster; the world's knob says which.
-        std::uint8_t result = hit_by_spell(state, w.hit, w.launch_used, w.duration, replay, fpu);
-        if (std::string why = replay.finish(); !why.empty()) return why;
+        std::uint8_t result = 0;
+        if (std::string why = run_world(r, w, &result); !why.empty()) return why;
         return check_outputs(r["out"], w, result);
     });
 }
@@ -1221,35 +1335,25 @@ void run_file(const char* file, const Family& family, std::uint32_t seed, void (
 // the first step that leaves the distance unchanged; the replay's later mismatches are expected and ignored.
 int shadow_step_fixed_points() {
     static World world;
-    Rng rng(0x7e44);
-    int it = 0, raised = 0;
+    Stream file_stream(0x7e44);
+    std::uint32_t record = 0;
+    int raised = 0;
     hailstone::test::each_vector("HitBySpell_Moves.jsonl", [&](const Json& r) -> std::string {
         World& w = world;
-        Rng local(rng.Next());
-        make_world(w, local, kMoves, static_cast<std::uint32_t>(it) * 7);
-        ++it;
-        moves_tweak(w, local);
-        w.k[kThrowAt] = 0;
-        bool no_launch = local.Chance(2) && kMoves.early;
-        w.launch_used = no_launch ? nullptr : &w.launch;
-        w.duration = local.Chance(80) ? -1 : value(local);
+        Stream s(file_stream.bits());
+        draw_record(w, s, Set::Moves, moves_extra, record++ * 7);
         Names names(w);
         if (!check_inputs(r["in"], w, names).empty()) return "";
         bool any = false;
-        for (std::size_t i = 0; i < 12; ++i)
-            if (w.spells[0].attrib[i] == 379 && w.spells[0].base[i] > 5) {
-                w.spells[0].base[i] = 1 << 26;
-                any = true;
-            }
+        for (std::size_t i = 0; i < 12; ++i) {
+            if (w.spells[0].attrib[i] != 379 || w.spells[0].base[i] <= 5) continue;
+            w.spells[0].base[i] = 1 << 26;
+            any = true;
+        }
         if (!any) return "";
         ++raised;
-        Fpu fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
-        Replay replay(w, r["out"], fpu);
-        HitState state;
-        state.self = &w.self;
-        state.globals = &w.globals;
-        state.frame = &replay.frame;
-        (void)hit_by_spell(state, w.hit, w.launch_used, w.duration, replay, fpu);
+        std::uint8_t result = 0;
+        (void)run_world(r, w, &result);
         return "";
     });
     return raised;
@@ -1268,11 +1372,11 @@ TEST_CASE("HitBySpell: a shadow step (SPA 379) whose float distance cannot shrin
         CHECK(raised > 0);
 }
 
-TEST_CASE("HitBySpell vectors: validation") { run_file("HitBySpell_Validation.jsonl", kEarly, 0x7e41, early_tweak); }
-TEST_CASE("HitBySpell vectors: instant effects") { run_file("HitBySpell_Instant.jsonl", kInstant, 0x7e42, nullptr); }
-TEST_CASE("HitBySpell vectors: items") { run_file("HitBySpell_Items.jsonl", kItems, 0x7e43, nullptr); }
-TEST_CASE("HitBySpell vectors: moves") { run_file("HitBySpell_Moves.jsonl", kMoves, 0x7e44, moves_tweak); }
-TEST_CASE("HitBySpell vectors: buffs") { run_file("HitBySpell_Buff.jsonl", kBuff, 0x7e45, buff_tweak); }
+TEST_CASE("HitBySpell vectors: validation") { run_file("HitBySpell_Validation.jsonl", Set::Validation, 0x7e41, validation_extra); }
+TEST_CASE("HitBySpell vectors: instant effects") { run_file("HitBySpell_Instant.jsonl", Set::Instant, 0x7e42, nullptr); }
+TEST_CASE("HitBySpell vectors: items") { run_file("HitBySpell_Items.jsonl", Set::Items, 0x7e43, nullptr); }
+TEST_CASE("HitBySpell vectors: moves") { run_file("HitBySpell_Moves.jsonl", Set::Moves, 0x7e44, moves_extra); }
+TEST_CASE("HitBySpell vectors: buffs") { run_file("HitBySpell_Buff.jsonl", Set::Buff, 0x7e45, buff_extra); }
 
 // ---------------------------------------------------------------- the client's landing (game/hit_landing.h)
 

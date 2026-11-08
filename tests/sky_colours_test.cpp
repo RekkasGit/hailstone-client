@@ -1,5 +1,6 @@
 // The CSky colour maps (game/sky_colours.h), the weather's per-frame side (game/weather_state.h) and the scene light's sky
-// colours. The expected colours with the game files are tools/dx9/sky_reference.py's (rof2decomp), run on the same
+// colours. The expected colours with the game files are a reference renderer's (tools/dx9/sky_reference.py in the
+// analysis of the original client), run on the same
 // install with `python3 -I tools/dx9/sky_reference.py --zone <zone> --times ...`.
 #include <doctest/doctest.h>
 

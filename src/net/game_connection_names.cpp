@@ -1,5 +1,5 @@
-// GameConnection: the name change windows (CNameChangeWnd, CNameChangePetWnd, CNameChangeMercWnd; rof2decomp export
-// CNameChange*Wnd.c, re/src/game/commands/name_commands.cpp, name_change_open_eh.cpp, net/name_handlers.cpp). The
+// GameConnection: the name change windows (CNameChangeWnd, CNameChangePetWnd, CNameChangeMercWnd, their
+// commands and the rename answer's handler). The
 // three are one window with its own strings, opcodes and ini key; the window models are app/lua_eq_names.cpp.
 
 #include <format>
@@ -87,7 +87,7 @@ bool GameConnection::handle_name_change(const AppPacket& p) {
         if (p.opcode != kOpChangeMercName) return false;
         kind = kNameMerc;
     }
-    // The rename answer (rof2decomp net/name_handlers.cpp RenameResult): the result at +0x80 (0 refused 5167, 1 done
+    // The rename answer (RenameResult): the result at +0x80 (0 refused 5167, 1 done
     // 5976, -1 5977 and -2 5978 for character names only, -3 5979, -4 5980, -5 5193) printed in colour 0xf; the
     // request is no longer pending; the string shown again as dialog 0xb (OK, 10 s); a successful rename closes the
     // window.
@@ -95,16 +95,20 @@ bool GameConnection::handle_name_change(const AppPacket& p) {
     ByteReader r(p.data);
     r.skip(0x80);
     auto result = static_cast<std::int32_t>(r.le<std::uint32_t>());
+    struct Answer {
+        std::int32_t result;
+        std::uint32_t eqstr;
+        bool character_only;
+    };
+    static constexpr Answer kAnswers[] = {
+        {1, 5976, false}, {0, 5167, false}, {-1, 5977, true}, {-2, 5978, true},
+        {-3, 5979, false}, {-4, 5980, false}, {-5, 5193, false},
+    };
     std::uint32_t id = 0;
-    switch (result) {
-    case 0: id = 5167; break;
-    case 1: id = 5976; break;
-    case -1: id = kind == kNameCharacter ? 5977 : 0; break;
-    case -2: id = kind == kNameCharacter ? 5978 : 0; break;
-    case -3: id = 5979; break;
-    case -4: id = 5980; break;
-    case -5: id = 5193; break;
-    default: break;
+    for (const Answer& ans : kAnswers) {
+        if (ans.result != result) continue;
+        if (!ans.character_only || kind == kNameCharacter) id = ans.eqstr;
+        break;
     }
     if (id) system(id, {}, 0xf);
     auto& w = name_change_[static_cast<std::size_t>(kind)];

@@ -107,8 +107,7 @@ bool is_live_racedata_line(std::string_view line);
 // A live line's gender field: 0, 1, or 2 for both (also when it is empty).
 int live_racedata_gender(std::string_view line);
 
-// spellsnew.eff (SpellEffects_ReadFiles @0x4adeb0, rof2decomp
-// re/src/game/world/spell_effects_read.cpp): 268-byte records, a 64-byte name
+// spellsnew.eff (SpellEffects_ReadFiles @0x4adeb0): 268-byte records, a 64-byte name
 // then three stages (cast, projectile, impact) of 68 bytes that each start with
 // a wave id. A spell's SpellAnim (spells_us.txt field 145) indexes it; index 0
 // and empty names are no effect (SpellMgr_SetSpellExtraData @0x467260).

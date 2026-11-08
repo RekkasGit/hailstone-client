@@ -14,7 +14,7 @@
 #include "net/game_connection.h"
 
 // Each case names the original's switch case (the label function's byte-table index, or the gauge type) and what
-// it reads. rof2decomp: export/_globals.c (__GetLabelFromEQ, __GetGaugeValueFromEQ), notes/experience-and-aa.md.
+// it reads (__GetLabelFromEQ, __GetGaugeValueFromEQ).
 
 namespace hailstone::app {
 

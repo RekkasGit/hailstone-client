@@ -1,6 +1,6 @@
 #pragma once
 
-// One step of /follow: PlayerClient::FollowPlayerAI @0x58d3c0 (rof2decomp batch 254, checked against its
+// One step of /follow: PlayerClient::FollowPlayerAI @0x58d3c0 (checked against its
 // FollowPlayerAI vectors). The original runs it every frame while the follow link (+0xe40) is set; it turns the
 // player toward the followed spawn and sets the follow movement flags (0xddf720 move, 0xddf670 run) that the
 // movement code reads like held keys.

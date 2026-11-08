@@ -1,4 +1,4 @@
-// The chat functions of the eq table (rof2decomp re/src/ui/lua_eq_chat.cpp's contracts) over the client's chat
+// The chat functions of the eq table over the client's chat
 // lines (ui::ChatView), in up to 32 chat windows (the chat manager below). Lines are given to the scripts as STML in the colour the
 // original uses for their channel: the user colour of the channel (eqlib ChatFilters.h USERCOLOR_*: say 256, tell
 // 257, ...) as eqclient.ini [TextColors] User_<n> sets it (n = colour - 255).

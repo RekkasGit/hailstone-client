@@ -1,6 +1,6 @@
 #pragma once
 
-// The augment packets of the item display (rof2decomp:notes/augments.md §1, §6): OP_AugmentItem (client → zone,
+// The augment packets of the item display: OP_AugmentItem (client → zone,
 // the insert / remove / swap / destroy request) and OP_AugmentInfo (both directions, the name of an augment's
 // solvent). Layouts follow the client's sends (CItemDisplayWnd::InsertAugmentRequest @006a8190 and its siblings,
 // CItemDisplayWnd::SetItem @006ae100) and the NMS server's RoF2 translator (rof2_structs.h AugmentItem_Struct,

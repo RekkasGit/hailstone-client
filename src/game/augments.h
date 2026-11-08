@@ -4,11 +4,10 @@
 // of an item's sockets (CItemDisplayWnd_UpdateAugmentSlots @0x69f240, the augment lines of the description) and the
 // requests the display makes when a socket is clicked (CItemDisplayWnd::InsertAugmentRequest @006a8190,
 // RemoveAugmentRequest @006a86b0, CItemDisplayWnd_HandleAugmentInsert @006a8b70 (swap), sub_006a92c0 (destroy)).
-// rof2decomp:notes/augments.md and items-and-inventory.md §3.5; the fit checks follow rof2decomp
-// re/src/game/item/augment_restrictions.cpp (replaced, checked against the original's vectors). The rules are
+// The fit checks are checked against the original's vectors. The rules are
 // plain functions over net::Item; GameConnection supplies the inventory searches and sends the result.
 //
-// Item fields (ItemDefinition offsets as the notes give them): item_class +0x11a (0 common, 1 bag), item_type
+// Item fields (ItemDefinition offsets): item_class +0x11a (0 common, 1 bag), item_type
 // +0x1d4, classes / races / deity +0x170 / +0x174 / +0x178, equip_slots +0xf0, delay +0x182, material = ArmorProps
 // .Type +0x1d8, aug_sockets +0x1ec (8 bytes each: type, visible +4, and the +5 flag: the socket scales its augment's
 // stats and colours the display's modifiers), aug_type +0x21c, aug_restrict2 = AugSkinTypeMask +0x220,

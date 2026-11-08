@@ -119,7 +119,7 @@ private:
     std::shared_ptr<TintState> s_;
 };
 
-// CColorPickerWnd (rof2decomp export CColorPickerWnd.c). Open @0x659af0: the caller, the colour into the three
+// CColorPickerWnd. Open @0x659af0: the caller, the colour into the three
 // values, sliders (0..255, SetNumTicks(0x100)) and edit boxes ("%d", numbers only, 3 characters), the swatches'
 // decal tints back to their XML colours (CRNormal) and CPW_TC15Button's to the colour (sub_006595d0).
 // WndNotification @0x6596b0: a slider moved writes its edit box; an edit box changed reads all three (atoi, above

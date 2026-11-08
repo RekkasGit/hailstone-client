@@ -72,7 +72,7 @@ namespace {
 // a player spawn in a loaded zone, not stuck, controlled, never a corpse or
 // a mount, with no ladders. PlayerClient +0x58 is IsSmallBoatRace (false for
 // players); the buoyancy is ProcessControls' 0xddfd78; 0x8d0800 is mode 5
-// with vf64 (the walk speed) at least SpeedRun (rof2decomp's answers to
+// with vf64 (the walk speed) at least SpeedRun (the analysis's answers to
 // docs/unknowns.md; +0x90 is taken as false). The levitation floor probe
 // answers `hover_floor`.
 class PlayerEnv final : public EnvQueries {
@@ -166,7 +166,7 @@ glm::vec3 step(PhysicsBody& body, const Environment& env, float elapsed_ms, cons
     return body.feet - from;
 }
 
-// ------------------------------------------------- exact ports (batch 240)
+// ------------------------------------------------- exact ports (Step, env, landing)
 
 namespace {
 
@@ -352,7 +352,7 @@ float integrate_axis(float position, float speed, float dt, const Fpu& f) {
     return static_cast<float>(x87_add(f, position, x87_mul(f, st(speed), st(dt))));
 }
 
-// ------------------------------------------------- exact ports (batch 246)
+// ------------------------------------------------- exact ports (friction)
 
 namespace {
 

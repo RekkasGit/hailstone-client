@@ -6,7 +6,7 @@
 // regions with a name such as "WTN_..." or "DRNTP00255000004...".
 //
 // Tag meanings follow the original client: ParseRegionNameFlags @0x487530
-// (rof2decomp:re/src/game/world/region_name_flags.cpp) for the flag bits and
+// for the flag bits and
 // Teleport_ResolveTeleportIndex @0x506630 for the zone-line fields. The BSP
 // walk matches the EQEmu server's water map (zone/water_map_v1.cpp) and
 // OpenEQ crates/openeq-assets/src/liquid_regions.rs (MIT OR Apache-2.0).

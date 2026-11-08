@@ -1,7 +1,7 @@
 #pragma once
 
 // The classic lighting constants the original's region shaders use, per frame.
-// Source: rof2decomp notes/eqgraphicsdx9.md (Lighting) and the eqgame side:
+// Source: the graphics DLL's lighting and the eqgame side:
 // CDisplay_UpdateSkyWeatherAndFog @0x4942b0, CDisplay_UpdateSunLighting
 // @0x496af0, CDisplay_UpdateSkyTimeOfDay @0x496d80.
 //

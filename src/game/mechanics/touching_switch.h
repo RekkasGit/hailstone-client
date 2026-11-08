@@ -1,7 +1,7 @@
 #pragma once
 
 // PlayerClient::TouchingSwitch @0x5939e0: what a spawn does with the switch it touches (+0x2d4, pTouchingSwitch).
-// rof2decomp re/src/game/spawn/touching_switch_eh.cpp. Three places set +0x2d4:
+// Three places set +0x2d4:
 //   - the movement sweep's hit callback (CollisionHit_SetCollidingType @0x475e70) for a switch that acts on touch
 //     (0x510210), and calls TouchingSwitch at once;
 //   - the touch overlap test DoCollisionMovement runs when the spawn does not collide (0x509a00: a

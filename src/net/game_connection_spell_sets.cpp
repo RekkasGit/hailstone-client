@@ -1,7 +1,5 @@
 // Spell sets: CSpellBookWnd::MemorizeSet / ContinueSetMem / OnProcessFrame's set step / StartSpellMemorization, the
-// spell gem menu's set items (CCastSpellWnd::WndNotification: SaveLoadout, memorize, delete) and /memspellset
-// (rof2decomp re/src/game/commands/spellbook_set.cpp, ui/spell_book_memorize.cpp, ui/cast_spell_notification_eh.cpp,
-// commands/name_commands.cpp; notes/spell-casting.md section 5).
+// spell gem menu's set items (CCastSpellWnd::WndNotification: SaveLoadout, memorize, delete) and /memspellset.
 #include "net/game_connection.h"
 
 #include <string>

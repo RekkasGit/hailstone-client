@@ -1,4 +1,4 @@
-// rof2decomp batch 262's vectors (recorded from eqgame.exe): the pick
+// The original's vectors (recorded from eqgame.exe): the pick
 // wrapper's exclusions, a left click on a spawn and a click on a door
 // (game/clicks.h), plus checks of the DLL half (game/picking.h), which has no
 // vectors.

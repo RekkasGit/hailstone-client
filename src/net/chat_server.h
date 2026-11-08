@@ -6,7 +6,7 @@
 // The world server names the chat server in OP_SetChatServer2
 // ("host,port,shortname.character,<type><key>"); Handle_OP_SetChatServer2
 // @0x4b82b0 splits it and CEverQuest::ChatServerConnect @0x5135b0 opens
-// its own SOE session (rof2decomp:notes/ui-chat-commands.md §3.7). The
+// its own SOE session. The
 // packets follow EQEmu's UCS (ucs/clientlist.cpp, utils/patches/
 // mail_opcodes.conf): one-byte opcodes; OP_MailLogin logs in with the
 // mailbox "SOE.EQ.<short>.<name>" and the key; commands go as OP_Mail

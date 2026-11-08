@@ -1,4 +1,4 @@
-// rof2decomp batch 253's vectors (recorded from eqgame.exe): the spell book,
+// The original's vectors (recorded from eqgame.exe): the spell book,
 // group, quantity dialog, trade and drop rules in src/game, checked call for
 // call against the original's.
 #include <doctest/doctest.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-// A spell gem's look, as CSpellGemWnd draws it (rof2decomp batch 256: answered from the disassembly of
+// A spell gem's look, as CSpellGemWnd draws it (answered from the disassembly of
 // CSpellGemWnd::Draw @0x760b70, with CButtonWnd's cool-down helpers @0x8970a0..0x897a30):
 //
 //  - SetSpellGemTint @0x760200: eleven tints, each darker by an eleventh of every channel (truncated), with icon

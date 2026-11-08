@@ -1,4 +1,4 @@
-// rof2decomp batch 263's vectors (recorded from eqgame.exe): OP_Death's
+// The original's vectors (recorded from eqgame.exe): OP_Death's
 // report (game/death_report.h), the region teleports, the teleport-by-index
 // request and the respawn at bind (game/zoning.h).
 #include <doctest/doctest.h>

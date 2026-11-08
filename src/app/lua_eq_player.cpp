@@ -1,7 +1,7 @@
 // The player windows: InspectWnd (CInspectWnd), ConfirmationDialogBox (CConfirmationDialogBoxWnd), BookWindow
 // (CBookWnd), NoteWindow (CNoteWnd), BandolierWnd (CBandolierWnd), TextEntryWnd (CTextEntryWnd),
 // LargeDialogWindow (CLargeDialogWnd) and TipWindow (CTipWnd, the context tips) over GameConnection's duel, inspect, book, bandolier and popup state
-// (net/game_connection_player.cpp). Each window's rules are its original's (rof2decomp export, addresses at each
+// (net/game_connection_player.cpp). Each window's rules are its original's (addresses at each
 // class); what is not known is in docs/unknowns.md.
 
 #include <algorithm>
@@ -1089,7 +1089,7 @@ private:
 
 // ---------------------------------------------------------------- PotionBeltWnd (CPotionBeltWnd)
 
-// CPotionBeltWnd (rof2decomp export CPotionBeltWnd.c) over GameConnection's belt (the profile's). min(5, 2 + SPA 362
+// CPotionBeltWnd over GameConnection's belt (the profile's). min(5, 2 + SPA 362
 // + PcClient +0x2ef0) usable slots (PcZoneClient_GetMaxPotionBeltSlots; +0x2ef0's source is not known: taken as 0).
 // UpdateSlots @0x71f050 for each slot: beyond the usable ones or empty, no icon and empty texts; else the icon (cell
 // 0x150 for icon 0), the item's name as the tooltip, and the count label: the items with that id the player
@@ -1211,7 +1211,7 @@ constexpr ContextTip kContextTips[] = {
 };
 constexpr int kContextTipCount = static_cast<int>(std::size(kContextTips));
 
-// CTipWnd (rof2decomp export CTipWnd.c): one class, two windows on the same screen. The tip of the day window
+// CTipWnd: one class, two windows on the same screen. The tip of the day window
 // (pinstCTipWnd_1, mode 0; here "TipWindow#2") and the context tip window (pinstCTipWnd_2, mode 1; "TipWindow").
 // The constructor @0x776ab0 shows Show Another Tip in mode 0 and History and the "don't show this" pair in mode 1;
 // mode 0 loads help\tips\totd.txt (LoadDayTips @0x776780). sub_00775e00 reads [Tips] ShowTips, then ShowTOTD (mode 0)

@@ -7,7 +7,7 @@
 // KeypressHandler_ReadKeyMapFromIni @0x513940), the key names of KeyCombo::GetTextDescription @0x88b690 and the
 // key press dispatch of KeypressHandler::HandleKeyDown @0x5594e0 / HandleKeyUp @0x559800.
 //
-// Tables: keymap_tables.inc (tools/gen_keymap.py from rof2decomp). Keys are DirectInput scan codes
+// Tables: keymap_tables.inc (tools/gen_keymap.py, from the analysis of the original client). Keys are DirectInput scan codes
 // (platform/window.h kKeyCodes).
 
 #include <array>

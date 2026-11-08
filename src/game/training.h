@@ -2,8 +2,8 @@
 
 // Training skills and languages at a guildmaster: the training window's rows
 // (CTrainWnd::SetGMData @0x7824a0), the cost (0x584a30), the checks
-// before a train request (PcZoneClient_CanTrainSkillOrLanguage @0x5855a0,
-// rof2decomp re/src/game/character/can_train.cpp) and which languages a
+// before a train request (PcZoneClient_CanTrainSkillOrLanguage @0x5855a0)
+// and which languages a
 // character may learn (PcClient::checkLang @0x581800). Pure rules; the
 // packets are handled in net/game_connection_progress.cpp.
 
@@ -54,7 +54,7 @@ struct TraineeView {
     std::function<bool(std::uint32_t)> at_skill_limit;
 };
 
-// What PcZoneClient::GetPcSkillLimit @0x584be0 asks of the character (rof2decomp batch 257, vector GetPcSkillLimit).
+// What PcZoneClient::GetPcSkillLimit @0x584be0 asks of the character (recorded vector GetPcSkillLimit).
 struct SkillLimitView {
     std::int32_t level = 0;   // the virtual base's virtual +0x68 (passed to GetSkillCap as the level)
     std::uint8_t class_id = 0; // profile +0x3374

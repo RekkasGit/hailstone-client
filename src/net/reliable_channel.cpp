@@ -2,8 +2,8 @@
 
 #include "core/wrap_math.h"
 
-// Port of rof2decomp re/src/game/net/udp_reliable_give_time.cpp and the
-// acknowledgement half of udp_reliable_send.cpp; offsets in the comments are
+// Follows the original's UdpReliableChannel::GiveTime and the
+// acknowledgement half of its send path; offsets in the comments are
 // the original channel's.
 
 namespace hailstone::net {

@@ -1,4 +1,4 @@
-// rof2decomp batch 256's vectors (recorded from the original eqgame.exe): the listener's place and room, the
+// The original's vectors (recorded from eqgame.exe): the listener's place and room, the
 // player races of the swim sounds, the music entries and their selection, and the spell effect stage sounds.
 
 #include <doctest/doctest.h>

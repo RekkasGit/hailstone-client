@@ -1,7 +1,5 @@
-// EQ_Character::HitBySpell (game/mechanics/hit_by_spell.h). Source:
-// rof2decomp re/src/game/spell/hit_by_spell_eh.cpp (batch 249); the exe
-// helpers from re/src/game/character/spell_affect_helpers.cpp (batch 244),
-// re/src/game/spell/eq_spell.cpp and the disassembly of 0x441bb0..0x441f24
+// EQ_Character::HitBySpell (game/mechanics/hit_by_spell.h), checked against
+// the original's vectors; the exe helpers from the disassembly of 0x441bb0..0x441f24
 // (Vec3_Normalize, Vec3_Cross, Ray_SetFromPoints, the CCollisionInfoBase and
 // CCollisionInfoSphere constructors, the matrix helpers). Addresses in the
 // comments are the original's.

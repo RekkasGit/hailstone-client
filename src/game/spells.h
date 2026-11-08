@@ -4,16 +4,15 @@
 //
 // Spell records come from the game's spells_us.txt: one line per spell, 237
 // '^'-separated columns, loaded as the original's Spellmanager::LoadTextSpells
-// @0x5c1c30 / EQ_Spell_InitFromLine @0x4ae710 do (rof2decomp:notes/
-// spell-casting.md §7: lines that do not start with a digit are skipped; an id
-// above 45000 stops the load). Column numbers follow that note's field map
-// (§7.2), which matches EQEmu's spells_new columns.
+// @0x5c1c30 / EQ_Spell_InitFromLine @0x4ae710 do (lines that do not
+// start with a digit are skipped; an id above 45000 stops the load). Column
+// numbers follow the original's field map, which matches EQEmu's spells_new
+// columns.
 //
-// The rules (cast checks, cast time, memorize speed, chat lines) follow
-// rof2decomp:notes/spell-casting.md §2..§5 and the exported decompilation of
-// CEverQuest::ReportSuccessfulHit @0x52ee40 (the spell branch, type 231). The
-// server decides fizzles, interrupts, resists, mana use and landing; the
-// client only gates, times and reports (spell-casting.md §0, §9).
+// The rules (cast checks, cast time, memorize speed, chat lines) follow the
+// original's casting functions and CEverQuest::ReportSuccessfulHit @0x52ee40
+// (the spell branch, type 231). The server decides fizzles, interrupts,
+// resists, mana use and landing; the client only gates, times and reports.
 
 #include <array>
 #include <cstdint>
@@ -168,7 +167,7 @@ public:
     const SpellData* get(std::uint32_t id) const;
     // The spell named `name` (case-insensitive; the lowest id when several share it), or null.
     const SpellData* find_by_name(std::string_view name) const;
-    // SpellManager::GetSpellByGroupAndRank @0x5c1ae0 (rof2decomp re/src/game/spell/spell_manager.cpp) over the
+    // SpellManager::GetSpellByGroupAndRank @0x5c1ae0 over the
     // spells of SpellGroup `group` (> 0; the load hashes them by it): among those of SpellSubGroup `subgroup`, the
     // one of exactly `rank`; else, when `rank` is -1 or `below` for lower ranks, the highest rank seen. Null when
     // none. Of equal ranks the original takes the first in its hash chain; here the highest id.

@@ -1,4 +1,4 @@
-// GameConnection: the item display's augment requests and OP_AugmentInfo (rof2decomp:notes/augments.md; the rules
+// GameConnection: the item display's augment requests and OP_AugmentInfo (the rules
 // in game/augments.h, the packets in net/augment_packets.h).
 
 #include <algorithm>

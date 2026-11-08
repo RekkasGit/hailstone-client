@@ -3,7 +3,7 @@
 // Social state and the pure rules behind the social slash commands: /who's
 // filter words and its result lines, /random's numbers, /played and /time
 // texts, tells and replies, friends and ignore lists, guild and raid state.
-// Sources are the original's handlers in the rof2decomp export (addresses
+// Sources are the original's handlers (addresses
 // below); the network side is net/game_connection_social.cpp.
 
 #include <array>
@@ -65,7 +65,7 @@ std::vector<std::string> format_who_response(const net::WhoResponse& r, const Eq
 // Classes 20..35 (guildmasters), 40 (banker) and 41 (merchant) have names but no titles; other classes are
 // eqstr 1484.
 std::uint32_t kunark_class_eqstr(std::int32_t class_id, std::int32_t level, bool base_name);
-// 0x44d420 (the /who class column, rof2decomp batch 254): KunarkClass, and above level 50 " (" the base
+// 0x44d420 (the /who class column): KunarkClass, and above level 50 " (" the base
 // class name ")": "Champion (Warrior)".
 std::string who_class_text(const EqStrings& strings, std::int32_t class_id, std::int32_t level);
 
@@ -309,7 +309,7 @@ AfkAction afk_keepalive_step(AfkKeepalive& k, std::int64_t now_ms, bool afk, boo
 struct SocialState {
     std::string last_tell_from;        // /reply, /rtarget
     std::vector<std::string> last_tells; // __LastTell: who told us last, newest first (50; the Reply to... menu)
-    int last_tell_index = 0;           // DAT_00de21d8: the reply keys' place in it (game::cycle_last_tell)
+    int last_tell_index = 0;           // 0xde21d8: the reply keys' place in it (game::cycle_last_tell)
     std::vector<std::string> friends;  // the chat server's buddy list (OP_Buddy)
     std::vector<std::string> ignored;  // OP_Ignore
     bool afk = false, lfg = false;

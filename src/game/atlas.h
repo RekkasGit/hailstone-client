@@ -1,7 +1,6 @@
 #pragma once
 
-// The map window's atlas page (AtlasWnd, rof2decomp 0x61e2d0..0x620b80, decompiled in a scratch copy of the Ghidra
-// database): pages of the game folder's Atlas\<skin>\ (Default.xml first), each a TinyXML document of top-level
+// The map window's atlas page (AtlasWnd, 0x61e2d0..0x620b80): pages of the game folder's Atlas\<skin>\ (Default.xml first), each a TinyXML document of top-level
 // elements with unquoted attributes:
 //   <Background Image = "file.tga" CX = 128 CY = 128 />          the image tiled under the page
 //   <Image File = "file.tga"> <Rect X = 0 Y = 0 CX = 256 CY = 256/> </Image>   a picture (the file's top left

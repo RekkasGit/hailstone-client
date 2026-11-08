@@ -8,15 +8,13 @@
 // decides locally whether a skill may be used, prints the original's messages
 // and names the packet to send. The server decides the outcome.
 //
-// Sources: the Ghidra export of eqgame.exe (rof2decomp:export/, UseSkill
+// Checked against the original's UseSkill
 // @0x45b2d0, PlayerZoneClient::DoAttack @0x5a5000, CanIHit @0x5a2940,
 // CanUseCombatSkill @0x5a2f10, CanMeleeAttackNow @0x5a0600, __get_melee_range
 // @0x4ddeb0, __get_bearing @0x4ef250, the CSkillMgr accessors @0x5ba1b0..
 // @0x5bae40, CharacterZoneClient_GetSkillReuseTime @0x4427f0,
-// CharacterZoneClient::DoPassageOfTime @0x45daf0's timer loops),
-// rof2decomp:notes/combat-and-movement.md §2 and rof2decomp's tested rewrite
-// of PlayerZoneClient::ModifyAttackSpeed (re/src/game/character/
-// attack_speed_eh.cpp). UseSkill itself is the vector-checked port in
+// CharacterZoneClient::DoPassageOfTime @0x45daf0's timer loops) and
+// PlayerZoneClient::ModifyAttackSpeed @0x5a2c20. UseSkill itself is the vector-checked port in
 // game/mechanics/use_skill.h; use_skill() below answers its callees from a
 // SkillContext. Gaps: docs/unknowns.md "Abilities".
 

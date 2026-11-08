@@ -2,11 +2,10 @@
 
 // Rain and snow: the original's weather state (the 0x30-byte singleton at
 // 0xe64438 that OP_Weather fills) and the graphics DLL's precipitation
-// manager it drives. Source: rof2decomp batch 270 (re/src/game/display/
-// weather_manager.cpp, vectors Weather_HandleWeatherMessage, Weather_StartEffect,
-// Weather_RequestRainSnowToggle), batch 191 (CDisplay::LightningStrike) and the
-// spawns10 batch (CDisplay::ApplyWeatherState, CDisplay::StopWeather);
-// notes/eqgraphicsdx9.md "Weather: OP_Weather, rain, snow and lightning".
+// manager it drives. Source: the original's weather manager (the recorded
+// vectors Weather_HandleWeatherMessage, Weather_StartEffect,
+// Weather_RequestRainSnowToggle), CDisplay::LightningStrike,
+// CDisplay::ApplyWeatherState and CDisplay::StopWeather.
 //
 //   Weather_HandleWeatherMessage @0x5a95e0   OP_Weather into the pending fields
 //   Weather_StartEffect @0x5a9cf0            applying it

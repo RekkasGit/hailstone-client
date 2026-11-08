@@ -1,8 +1,7 @@
 #pragma once
 
-// Spell gems: memorising, the gem and recovery timers, linked timers and the gem count (rof2decomp batch 260:
-// re/src/game/ui/spell_book_memorize.cpp, re/src/game/net/memorize_spell_handler.cpp,
-// re/src/game/character/linked_spell_timers.cpp, and the exe's disassembly of CSpellBookWnd::GetSpellMemTicksLeft
+// Spell gems: memorising, the gem and recovery timers, linked timers and the gem count (checked against the
+// original's vectors, and the exe's disassembly of CSpellBookWnd::GetSpellMemTicksLeft
 // @0x75db20 and CharacterZoneClient::CanUseMemorizedSpellSlot @0x433bc0).
 //
 // Times: the gem timers (PlayerClient +0x2e8, 13 of them: gems 0..11 and 12 for items / AAs) and the recovery lock

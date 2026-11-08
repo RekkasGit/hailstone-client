@@ -1,5 +1,5 @@
 // The hot bar window's own menu and settings, a hotbutton's Change Size / Assign Icon, and the icon selection window
-// (app/lua_eq_hotbar.h; rof2decomp export/CHotButtonWnd.c, CIconSelectionWnd.c, _globals.c).
+// (app/lua_eq_hotbar.h; the original's CHotButtonWnd and CIconSelectionWnd).
 
 #include "app/lua_eq_hotbar.h"
 

@@ -26,7 +26,7 @@ namespace hailstone::app {
 
 namespace {
 
-// eqmain.dll's server select (not decompiled: the window is laid out from its XML and acts as the client's own server
+// eqmain.dll's server select (not analysed: the window is laid out from its XML and acts as the client's own server
 // select does): ServerList (Server 400, Status 100: the worlds the login server lists, a world that cannot be joined
 // in red), PlayButton (the selected world, when it can be joined), ExitButton ("LOGOUT": back to the login screen),
 // and LastServerLabel / PlayLastServerButton, the world played last on this login server (hidden without one).
@@ -125,7 +125,7 @@ private:
 
 // ---------------------------------------------------------------- CharacterCreation (CCharacterCreation)
 
-// CCharacterCreation @0x64e2e0 (rof2decomp export CCharacterCreation.c, re/src/game/ui/char_create_buttons_eh.cpp) over
+// CCharacterCreation @0x64e2e0 over
 // world's creation tables (GameConnection::char_create_data, OP_CharacterCreateRequest; CharCreateCombos):
 // - CCharacterCreation_InitRaceClassButtons @0x64e5b0: for each race of the combinations the buttons
 //   CC_Race_<race name>_Button (female) and _Button_Male and an overlay; for each class CC_Class_<class name>_Button.

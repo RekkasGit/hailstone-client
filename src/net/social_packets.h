@@ -4,8 +4,8 @@
 // /assist, /lfg, /consent and /deny, and the guild and raid packets. Layouts
 // follow the NMS server's RoF2 translator (common/patches/rof2.cpp,
 // rof2_structs.h) and, for pass-through opcodes, common/eq_packet_structs.h;
-// what the client sends and when follows the original (rof2decomp export,
-// addresses at each struct). Per-packet notes are in
+// what the client sends and when follows the original (addresses at each
+// struct). Per-packet notes are in
 // docs/protocol/rof2-packets.md ("Social, guilds and raids").
 
 #include <array>

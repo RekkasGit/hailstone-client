@@ -298,7 +298,7 @@ TEST_CASE("mock server: chat, spawns, HP, items and position updates in zone") {
 
 TEST_CASE("mock server: OP_ClientUpdate is sent at most every 280 ms, with the current position, only when it changed") {
     // docs/protocol/rof2-packets.md: "OP_ClientUpdate (46 B) when moving"; the rate is the client's kPositionInterval
-    // (280 ms, rof2decomp combat-and-movement.md §3.4). The client has no clock seam (game_connection.cpp reads
+    // (280 ms, net/game_connection.cpp). The client has no clock seam (game_connection.cpp reads
     // steady_clock directly), so this test runs for real time, with bounds that hold however slow the machine is.
     Rig rig;
     REQUIRE(rig.to_zone());
@@ -682,7 +682,7 @@ TEST_CASE("mock server: /camp desk and /camp server send their kind; a camp ends
     conn.say("/camp desk");
     REQUIRE(rig.until([&] { return server.camp_requests == 3; }));
     CHECK(last_camp_kind() == 1);
-    // A link death during it keeps the kind: DoMainLoop's exit goes to the desktop (0x1e5 with DAT_00dd2664 1).
+    // A link death during it keeps the kind: DoMainLoop's exit goes to the desktop (0x1e5 with the quit flag at 0xdd2664 1).
     server.zone.send_disconnect();
     REQUIRE(rig.until_state(ConnectionState::Disconnected));
     CHECK(!conn.camped_out());

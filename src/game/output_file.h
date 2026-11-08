@@ -1,6 +1,6 @@
 #pragma once
 
-// /outputfile's files (rof2decomp re/src/game/commands/outputfile_command.cpp, Cmd_outputfile @0x4febd0, and the
+// /outputfile's files (Cmd_outputfile @0x4febd0 and the
 // writers it calls): what each one writes, as text, from the data the windows show. Cmd_outputfile picks the writer
 // by its first word (stricmp): guild, raid, spellbook, inventory, guildbank, realestate, guildhall; the second word
 // is the file (none: each writer's default name).

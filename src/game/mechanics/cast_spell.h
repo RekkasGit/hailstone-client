@@ -1,10 +1,9 @@
 #pragma once
 
 // CharacterZoneClient::CastSpell @0x43a830: every check the original makes
-// before it sends OP_CastSpell, the cast it commits and the packet. Ported
-// from the disassembly (rof2decomp:notes/spell-casting.md §2.3; Ghidra's
-// output drops results there) and checked against the original's own vectors
-// (rof2decomp batch 978d6270, CastSpell_Checks / _Buffs / _Items / _Target /
+// before it sends OP_CastSpell, the cast it commits and the packet. Worked
+// from the disassembly and checked against the original's own vectors
+// (CastSpell_Checks / _Buffs / _Items / _Target /
 // _Range / _BodyType / _Send; tests/cast_spell_vectors_test.cpp), which list
 // every callee in order with its answer.
 //

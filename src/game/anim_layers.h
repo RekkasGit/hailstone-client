@@ -90,8 +90,7 @@ bool classic_may_interrupt(std::uint8_t requested, std::uint8_t playing, bool cl
 bool classic_queues(std::uint8_t anim);
 bool classic_clears_queue(std::uint8_t anim);
 
-// 0x4b0860 (read from the exe; rof2decomp's comment on it
-// names only 0x20): true when `playing` (+0x10c0) leaves a classic model's
+// 0x4b0860 (read from the exe, which tests more than 0x20): true when `playing` (+0x10c0) leaves a classic model's
 // stand and idle requests as they are: P01 (0x20), C01..D05 (1..0x10), the
 // walk L01 (0x11), the turn P03 (0x22), T04..T09 (0x2a..0x2f), L11 (0x4b)
 // and none (0xfe). After anything else (the run, a jump, a fall, a duck, a

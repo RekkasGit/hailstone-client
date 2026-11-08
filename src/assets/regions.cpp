@@ -80,7 +80,7 @@ std::optional<ZoneLineTarget> decode_zone_line(std::string_view tag) {
     ZoneLineTarget t;
     if (tag[0] == 'A') {
         // ATP: the client formats "DRNTP00255%05d000000000000000" with atoi(name + 4), so the zone point read
-        // back from the text is 10 x that number (rof2decomp batch 263).
+        // back from the text is 10 x that number (checked against the recorded vectors).
         // A number past int's range in a forged tag is clamped (atoi's overflow is undefined; docs/unknowns.md) so
         // that times 10 stays in range.
         t.reference = true;

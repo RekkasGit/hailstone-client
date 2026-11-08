@@ -1,7 +1,7 @@
 #pragma once
 
 // The item preview (CObjectPreviewWnd, the 3D view an Alt + right click on an item opens): which items it shows, and
-// on whom. Read from the disassembly (rof2decomp; no vectors):
+// on whom. Read from the disassembly (no vectors):
 //  - CInvSlot::HandleRButtonUp @0x697250 with Alt (keyboard flags & 0xc), the item display's Alt + right click, the
 //    merchant's preview, the guild bank's Alt + right click on a row (0x67cb80) ... send OP_ItemPreviewRequest
 //    (Send_OP_ItemPreviewRequest @0x6fff10 with an item, @0x6ffc20 with an item id: net::encode_item_preview_request)

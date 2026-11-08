@@ -1,4 +1,4 @@
-// Written from the rof2decomp notes (augments.md §1, §6) and EQEmu rof2_structs.h (read as reference, no code
+// Written from the original client's augment sends and EQEmu rof2_structs.h (read as reference, no code
 // copied).
 
 #include "net/augment_packets.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-// The item move rules of rof2decomp batch 261 (rof2decomp:notes/items-and-inventory.md §2.7, §3.1, §3.2), each a
+// The original's item move rules, each a
 // pure function checked against the vectors recorded from the original eqgame.exe:
 //   - PcZoneClient_CanItemGoInEquipSlot @0x5831b0 (PcZoneClient_CanItemGoInEquipSlot.jsonl);
 //   - CharacterZoneClient::CanUseItem @0x44c430 and its race / deity / level checks @0x446200 / @0x4462c0 /

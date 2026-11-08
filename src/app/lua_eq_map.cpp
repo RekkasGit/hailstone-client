@@ -1,6 +1,6 @@
 // The map: MapViewWnd (CMapViewWnd), MapToolbarWnd (CMapToolbarWnd), EditLabelWnd (CEditLabelWnd) and the map's
-// own drawing and mouse, eq.DrawMap / MapZoom / MapMouseDown / MapMouseUp / MapPanReset / MapRightClick (rof2decomp
-// re/src/ui/lua_eq_map.cpp, whose scripts re/scripts/rof2ui/mapview.lua and maptoolbar.lua run here). The map's
+// own drawing and mouse, eq.DrawMap / MapZoom / MapMouseDown / MapMouseUp / MapPanReset / MapRightClick
+// (for the packs' map.lua and maptoolbar.lua). The map's
 // state and rules are game/map_data.h (MapViewMap); this file reads and writes the map files, keeps the window
 // settings in the character's UI ini as CMapViewWnd::LoadIniInfo / StoreIniInfo do, and draws as
 // MapViewMap::Draw @0x6cd4a0 draws:
@@ -66,7 +66,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr std::uint32_t kHighlight = 0xffffff00; // MapViewMap::Draw's local_268
+constexpr std::uint32_t kHighlight = 0xffffff00; // MapViewMap::Draw's highlight colour
 constexpr std::uint32_t kEqStrManualZoom = 5459; // "Manually zooming and panning is disabled ..."
 constexpr std::uint32_t kEqStrRange = 6730;      // "Range = %1"
 constexpr std::uint32_t kEqStrSaved = 12322;     // "%1 saved."

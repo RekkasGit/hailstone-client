@@ -4,7 +4,7 @@
 // purchase structs (ENCODE/DECODE(OP_ShopPlayerBuy), (OP_ShopPlayerSell) in
 // the NMS server's common/patches/rof2.cpp, which copy the fields one by
 // one), so the layouts are rof2_structs.h's (#pragma pack(1)). What the
-// original client fills in comes from rof2decomp's export of eqgame.exe:
+// original client fills in follows eqgame.exe:
 //
 //   OP_ShopRequest  C→Z  CEverQuest::RightClickedOnPlayer @0x536d80 (class 41 = merchant)
 //   OP_ShopRequest  Z→C  Handle_OP_ShopRequest @0x4b75f0 → CMerchantWnd::Activate

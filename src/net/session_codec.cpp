@@ -8,8 +8,7 @@
 #include "core/log.h"
 
 // Formats follow EQEmu's common/net/daybreak_connection.cpp (read as a spec,
-// not copied) and the original client's UdpLibrary as described in
-// rof2decomp:notes/connection-and-network.md §7.
+// not copied) and the original client's UdpLibrary (docs/protocol/session.md).
 
 namespace hailstone::net::soe {
 
@@ -79,7 +78,7 @@ Bytes compress_body(ByteSpan body) {
     if (body.size() > 30) {
         uLongf len = compressBound(static_cast<uLong>(body.size()));
         out.resize(1 + len);
-        // Level 6, as the original client (notes §7.2).
+        // Level 6, as the original client.
         if (compress2(reinterpret_cast<Bytef*>(out.data() + 1), &len, reinterpret_cast<const Bytef*>(body.data()),
                       static_cast<uLong>(body.size()), 6) == Z_OK &&
             len < body.size()) {

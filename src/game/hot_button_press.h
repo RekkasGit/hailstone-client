@@ -1,7 +1,6 @@
 #pragma once
 
-// Pressing a hot button and what follows: exact ports of rof2decomp batch 267 (re/src/game/ui/do_hot_button.cpp,
-// hot_button_socials.cpp), checked against CHotButtonWnd_DoHotButton.jsonl, CHotButton_RightClick.jsonl and
+// Pressing a hot button and what follows, as the original does it, checked against CHotButtonWnd_DoHotButton.jsonl, CHotButton_RightClick.jsonl and
 // Social_Stop.jsonl.
 //
 // CHotButtonWnd::DoHotButton @0x68c8b0: a stunned local player (stand state 0x66) or a pending item request

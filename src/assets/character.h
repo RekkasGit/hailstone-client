@@ -182,8 +182,7 @@ std::shared_ptr<const CharacterArchive> load_character_archive(const GameDir& ga
 
 // The classic character archives the original client loads at start-up, in
 // load order: GlobalLoad.txt's _chr entries (phases 1-4), global5/7_chr,
-// then Resources/GlobalLoad_chr.txt's S3D entries (rof2decomp
-// notes/spawns-races-models.md 5.2). EQG entries are skipped.
+// then Resources/GlobalLoad_chr.txt's S3D entries. EQG entries are skipped.
 // Also the equipment archives (GlobalLoad.txt flag E: gequip*, IT models)
 // and the extended armour textures global17..23_amr. With `luclin`, the
 // Luclin player-model archives enabled in eqclient.ini load after phase 2.
@@ -311,8 +310,7 @@ void append_wld_mesh(const wld::WldFile& wld, const wld::Fragment& mesh, std::si
 // same level and otherwise inserts at the head of the chain, and Find
 // (0x100c7360) takes the first entry with level <= the lookup's maximum (3 at
 // almost every call site): so within one level the first loaded definition
-// wins, and across levels the latest (rof2decomp notes/eqgraphicsdx9.md,
-// Duplicate actor and track definitions). StartWorldDisplay's zone `_chr`
+// wins, and across levels the latest. StartWorldDisplay's zone `_chr`
 // requests pass level 2. CDisplay::InitWorld gives a GlobalLoad.txt line level
 // 0 when its FLAGS start with 'T' and 2 otherwise (@0x492093); every NMS line
 // starts with T, and GlobalLoad_chr.txt's S3D fallbacks load at 0 as well. So

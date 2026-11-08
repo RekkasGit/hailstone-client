@@ -1,4 +1,4 @@
-// CharacterZoneClient::UseSkill (game/mechanics/use_skill.h) against the original's vectors (rof2decomp b1538ef4):
+// CharacterZoneClient::UseSkill (game/mechanics/use_skill.h) against the original's vectors (recorded from eqgame.exe):
 // UseSkill_Combat, _Activity, _Target and _Gather, 1500 records each.
 //
 // Each record holds the inputs and every callee the original called (the mocks with their arguments and answers,

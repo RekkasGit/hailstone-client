@@ -6,7 +6,7 @@
 // OP_BuyerItems). RoF2 has no OP_TraderBuy of its own: purchases travel as
 // OP_TraderShop action 10. Layouts follow the original's senders and readers
 // (CBazaarWnd, CBazaarSearchWnd, CBazaarConfirmationWnd, CMerchantWnd and
-// HandleWorldMessage_Bazaar @0x4ba870 in the rof2decomp export) and the NMS
+// HandleWorldMessage_Bazaar @0x4ba870 in eqgame.exe) and the NMS
 // server's EQEmu RoF2 translator (common/patches/rof2.cpp ENCODE/DECODE of
 // these opcodes, rof2_structs.h RoF2BazaarTraderBuyerActions, zone/
 // trading.cpp). Per-packet notes: docs/protocol/rof2-packets.md "Bazaar".

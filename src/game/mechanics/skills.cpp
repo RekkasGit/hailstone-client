@@ -1,7 +1,6 @@
 // Skill values and caps: GetRacialSkillBonus @0x444bd0, CSkillMgr::GetSkillCap @0x5baec0,
 // CSkillMgr_GetSkillCapWithEffects @0x5ba600, GetAdjustedSkill @0x449fe0 and
-// CharacterZoneClient_GetSkillWithItemMods @0x5826e0 (rof2decomp re/src/game/character/{stats,skill_caps,
-// adjusted_skill,skill_item_mods_eh}.cpp, replaced and tested).
+// CharacterZoneClient_GetSkillWithItemMods @0x5826e0, checked against the original's vectors.
 #include "game/mechanics/character.h"
 
 #include "core/wrap_math.h"

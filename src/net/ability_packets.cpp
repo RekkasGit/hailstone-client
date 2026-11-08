@@ -8,7 +8,7 @@ namespace hailstone::net {
 AppPacket encode_combat_ability(std::uint32_t target, std::uint32_t atk, std::uint32_t skill) {
     ByteWriter w;
     w.le(target);
-    w.le(atk & 0xffu); // DAT_00dd00e6 = slot & 0xff
+    w.le(atk & 0xffu); // the slot byte at 0xdd00e6: slot & 0xff
     w.le(skill);
     return make_packet(Op::CombatAbility, std::move(w));
 }

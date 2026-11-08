@@ -1,8 +1,8 @@
 // The melee timing ports (game/mechanics/melee.h) against the original's
-// vectors (rof2decomp batch 258, 13030e54): MeleeRange (3000),
+// vectors (recorded from eqgame.exe): MeleeRange (3000),
 // ModifyAttackSpeed (4000, the bag search replayed from out.calls),
 // GetHandToHandDelay (3000), CheckDoubleAttack (4000) and CheckDualWield
-// (4000, Random() replayed from in.rand); DoAttack (batch 269, 1200, every
+// (4000, Random() replayed from in.rand); DoAttack (1200, every
 // callee replayed from out.calls). Then unit tests of DoAttack's timing and
 // DoPassageOfTime's ready flags (no vectors: the disassembly's rules).
 #include <doctest/doctest.h>
@@ -163,7 +163,7 @@ std::string check_dual_wield(const Json& r) {
 
 // ---------------------------------------------------------------- DoAttack (call by call)
 
-// The original's callees replayed from out.calls (rof2decomp batch 269, re/test/tests/do_attack_vectors.inc): each
+// The original's callees replayed from out.calls: each
 // query takes the next record, checks its name and arguments and returns its result. Items are the vectors' numbers
 // (0..11 the world's, -2 the fist, -1 none), which the port passes around as ItemRefs.
 class RecordedAttack final : public ml::AttackQueries {

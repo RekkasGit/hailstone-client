@@ -127,8 +127,8 @@ void ClientApp::load_zone(const std::string& short_name) {
         // original's outdoor zone types 1, 2 and 5 (CDisplay_UpdateSunLighting).
         // The sky itself does not: it is drawn whenever OP_NewZone's sky byte is
         // set (with the Sky option on and SkyString2 or the zone's short name
-        // non-empty; SetFog and CDisplay_SetSkyEnabled @0x4b37c0, rof2decomp
-        // batch 252); the time type is never read for it.
+        // non-empty; SetFog and CDisplay_SetSkyEnabled @0x4b37c0);
+        // the time type is never read for it.
         outdoor_light_ = z->time_type == 1 || z->time_type == 2 || z->time_type == 5;
         time_type_ = z->time_type;
         sky_renderer_.reset();

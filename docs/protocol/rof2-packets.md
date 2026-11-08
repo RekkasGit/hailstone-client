@@ -643,7 +643,7 @@ Delete in the inbox sends TRASH, in the trash DELETED; Purge sends DELETED for t
 
 ### Marketplace (`net/marketplace_packets.h`, `GameConnection` in `net/game_connection_marketplace.cpp`, rules in `game/marketplace.{h,cpp}`)
 
-The in-game store (CMarketplaceWnd). Stock EQEmu has none of these opcodes (they are not in `patch_RoF2.conf`): a server that sells through the window answers the original client's opcodes, so the same server works for this client and for an unmodified RoF2 client. Layouts are the original's readers and senders (rof2decomp `notes/housing-and-market.md` section 9, its `refs/nms-release-extras/offsets/Market.h` section 44, and the disassembly of HandleWorldMessage's cases). The funding pages (Add Funds, credit cards) went to the publisher's web service and are not offered. Unit-tested and mock-server tested; not tried live.
+The in-game store (CMarketplaceWnd). Stock EQEmu has none of these opcodes (they are not in `patch_RoF2.conf`): a server that sells through the window answers the original client's opcodes, so the same server works for this client and for an unmodified RoF2 client. Layouts are the original's readers and senders (NMS-Release-Extras' `offsets/Market.h` section 44 and the disassembly of HandleWorldMessage's cases). The funding pages (Add Funds, credit cards) went to the publisher's web service and are not offered. Unit-tested and mock-server tested; not tried live.
 
 The catalog, funding and state feeds are read as the original's `CUnSerializeBuffer` reads them: every field on its own bounds check, so a short packet leaves what it lacks at the defaults (MarketplaceItem's ctor) and goes on with the next field. Catalog strings are NUL-terminated and cut to the node's buffer (name 127, the 64-byte one 63, the rest 1023 characters); the cursor still skips the whole string. The state feed's string is a u32 length and the bytes.
 
@@ -732,7 +732,7 @@ Not built: the ownership transfer offer and its answer (0x5df8 from the server, 
 
 ### Real estate: housing, guild halls, placed objects (`net/real_estate_packets.h`, `GameConnection` in `net/game_connection_real_estate.cpp`, state in `game/real_estate.{h,cpp}`)
 
-None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends none of them. A server with housing, such as Project Triune, sends them with the original's numbers. The layouts come from rof2decomp's `notes/housing-and-market.md` and were checked against the decompile; where the two disagree, the decompile wins (the corrections are listed below). Records use u32-length strings with no NUL. Placed objects, escrow and the fixed bodies use NUL-terminated strings. The original reads fail-open, so a short packet leaves defaults and misreads the rest. Hailstone refuses a short packet instead.
+None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends none of them. A server with housing, such as Project Triune, sends them with the original's numbers. The layouts come from NMS-Release-Extras' research headers (`Housing.h`, `HousingNpc.h`; THIRD_PARTY.md) and were checked against the original client's code; where the two disagree, the client's code wins (the corrections are listed below). Records use u32-length strings with no NUL. Placed objects, escrow and the fixed bodies use NUL-terminated strings. The original reads fail-open, so a short packet leaves defaults and misreads the rest. Hailstone refuses a short packet instead.
 
 | Op | Dir | Payload | Effect |
 |---|---|---|---|
@@ -769,7 +769,7 @@ Occupancy, once a second (`RealEstateManagerClient_Process`):
 
 The buy, sell and transfer checks print the original's refusals before anything is sent; the server makes the final decision.
 
-Where the decompile corrects the note:
+Where the client's code corrects the headers:
 - Escrow is one serialized object in both directions, not a fixed struct.
 - The server's escrow reply sets the *cursor's* coin, not the purse.
 - The house is found from the current estate, before the yard.

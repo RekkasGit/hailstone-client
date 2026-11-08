@@ -318,7 +318,7 @@ bool UdpSocket::open(Endpoint::Family family, std::string& error, const Endpoint
         close_native(s);
         return false;
     }
-    // The original client asks for 128 KiB socket buffers (rof2decomp notes §7.4). The receive buffer is 2 MiB: the
+    // The original client asks for 128 KiB socket buffers. The receive buffer is 2 MiB: the
     // server's files come in bursts of up to net::ServerFileSync::kWindow pieces (net/server_files.h), which overflow
     // 128 KiB between two service passes, and EQEmu's resends of what was dropped back off for seconds.
     int buf = 0x20000;

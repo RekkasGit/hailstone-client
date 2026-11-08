@@ -315,7 +315,7 @@ void GameConnection::handle_skill_update(const AppPacket& p) {
 }
 
 void GameConnection::handle_level_update(std::uint32_t new_level) {
-    // Handle_OP_LevelUpdate @0x4b9c10 (rof2decomp re/src/game/net/experience.cpp): losing levels prints 442 /
+    // Handle_OP_LevelUpdate @0x4b9c10: losing levels prints 442 /
     // 443 (colour 13); gaining one adds 5 practice points.
     std::uint32_t current = pstatus_.level;
     if (current == 0) return;
@@ -980,7 +980,7 @@ std::string GameConnection::task_element_text(const game::TaskElement& e) const 
 
 bool GameConnection::progress_command(std::string_view h, const std::string& args) {
     if (h == "cmd_alternateadv") {
-        // cmd_alternateadv @0x4f73e0 (rof2decomp re/src/game/commands/alternateadv_command.cpp). A server's client
+        // cmd_alternateadv @0x4f73e0. A server's client
         // may take some forms first (the NMS patch: "/alt toggle <id>").
         if (server_ext().handler_command(*this, h, args)) return true;
         std::string_view rest = args;

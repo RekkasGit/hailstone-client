@@ -180,8 +180,8 @@ private:
     std::deque<std::uint32_t> free_;   // +0x38 list
     std::vector<std::uint32_t> still_; // update()'s scratch, kept between frames
     std::int32_t kind_ = 0xff;          // +0x0c
-    glm::vec3 wind_{0.0f, 0.0f, -1.0f}; // +0x44 (DAT_10173058..60)
-    bool wind_changed_ = false;         // DAT_1017c988
+    glm::vec3 wind_{0.0f, 0.0f, -1.0f}; // +0x44 (the DLL's 0x10173058..60)
+    bool wind_changed_ = false;         // the DLL's wind-changed flag at 0x1017c988
 };
 
 // 0x1007ef70: a blended (1 - t) + b t per byte, alpha too, each rounded to the nearest.

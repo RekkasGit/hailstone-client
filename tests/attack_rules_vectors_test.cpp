@@ -1,5 +1,5 @@
-// PlayerZoneClient_AllowedToAttack.jsonl (rof2decomp batch 252, recorded
-// from eqgame.exe) against game/mechanics/attack_rules.h: the result and
+// PlayerZoneClient_AllowedToAttack.jsonl (the recorded vectors, from
+// eqgame.exe) against game/mechanics/attack_rules.h: the result and
 // every callee asked, in order (the callees' answers are the record's).
 #include <doctest/doctest.h>
 

@@ -8,7 +8,7 @@
 // sheet_builder.h; tests and test vectors fill it directly.
 //
 // Field comments name the original's storage (PcProfile / CharacterBase /
-// CharacterZoneClient offsets, rof2decomp:notes/spell-stacking-and-stats.md)
+// CharacterZoneClient offsets)
 // so that a vector recorded from the original maps onto it one to one.
 
 #include <array>

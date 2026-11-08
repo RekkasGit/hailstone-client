@@ -1,8 +1,7 @@
 #pragma once
 
-// Teleports and the respawn at bind as the original does them (rof2decomp
-// batch 263, notes/connection-and-network.md 6.5; re/src/game/spawn/
-// teleport_eh.cpp; the disassembly of Teleport_ResolveTeleportIndex
+// Teleports and the respawn at bind as the original does them (the
+// disassembly of Teleport_ResolveTeleportIndex
 // @0x506630, its zone point lookup @0x513420, DoTeleportB @0x507ca0 and
 // HandleWorldMessage's OP_ZonePlayerToBind case @0x4c8af4).
 //
@@ -31,7 +30,7 @@ struct ZonePointRow {
 
 // PcClient::PrepareForRepop @0x586d80's coin rule: the carried coin (profile +0x33b8..) is cleared above level 5
 // (150 when the PcBase virtual +0xc holds and the profile flag it tests is clear), at any level under PvP rule set 6
-// (0xdcee70), or whenever that flag is set (rof2decomp batch 265).
+// (0xdcee70), or whenever that flag is set.
 bool repop_clears_coin(std::int32_t pvp_rules, std::int32_t level, bool virtual_0c, bool flag);
 
 // The text CheckRegionChange passes for an ATP region: "DRNTP00255%05d000000000000000" of atoi(name + 4),
@@ -43,11 +42,11 @@ std::string atp_teleport_text(std::string_view region_name);
 struct ResolvedTeleport {
     bool ok = false;
     float x = 0, y = 0, z = 0, heading = 0; // the destination (0 when a field is missing)
-    std::int32_t found = 0;          // *param_4: the zone (0 when it failed)
-    std::int32_t destination = 0;    // *param_8: the same zone (set only on success)
-    bool same_zone = false;          // *param_7: the zone is `current_zone` (set only on success)
-    std::int32_t zone_point = -1;    // *param_11: the zone point number read or given, else -1
-    std::int32_t index_request = 0;  // *param_12: the row's +0x18
+    std::int32_t found = 0;          // the zone out-parameter (0 when it failed)
+    std::int32_t destination = 0;    // the destination out-parameter: the same zone (set only on success)
+    bool same_zone = false;          // the same-zone out-flag: the zone is `current_zone` (set only on success)
+    std::int32_t zone_point = -1;    // the zone point out-parameter: the number read or given, else -1
+    std::int32_t index_request = 0;  // the index out-parameter: the row's +0x18
     bool camera_flag = false;        // EverQuest::Cameras[cameraType] +0x46 = 1 on success
 };
 // `location` is the player's position (+0x64..), which a few zone pairs move (34 <-> 10: y -/+ 1044; 3 -> 4:

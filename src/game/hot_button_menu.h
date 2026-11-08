@@ -1,6 +1,6 @@
 #pragma once
 
-// A hotbutton's mouse and its context menu (rof2decomp 0x5536b0, CHotButton's WndNotification for its
+// A hotbutton's mouse and its context menu (0x5536b0, CHotButton's WndNotification for its
 // button; the menu CHotButtonWnd_BuildContextMenus @0x54ef20 builds once into 0xade708, CHotButton_UpdateContextMenu
 // @0x550e30 fits it to the button, CHotButton_ShowContextMenu @0x551360 pops it up at the mouse).
 //

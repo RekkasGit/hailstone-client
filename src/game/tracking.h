@@ -1,7 +1,7 @@
 #pragma once
 
-// The tracking window's list (CTrackingWnd): exact ports of rof2decomp batch 267 (re/src/game/ui/tracking_list.cpp)
-// and of the OP_Track reply parser SetTrackingList @0x77a930 with the std::sort it runs, checked against
+// The tracking window's list (CTrackingWnd): follows the original's list functions
+// and the OP_Track reply parser SetTrackingList @0x77a930 with the std::sort it runs, checked against
 // TrackSort.jsonl, CTrackingWnd_GetTrackColor.jsonl, CTrackingWnd_OnProcessFrame.jsonl and
 // CTrackingWnd_SetTrackingList.jsonl.
 //

@@ -3,9 +3,9 @@
 // A spawn's heights: how the original client turns its size, race and model
 // into its model scale, AvatarHeight (its z above its feet), ViewHeight (the
 // eye above the feet) and the rest SetHeights writes, and what follows a size
-// change. Exact ports of the original's x87 arithmetic (game/mechanics/fpu.h),
-// checked against the vectors recorded from eqgame.exe (rof2decomp batch 259,
-// notes/spawn-heights.md; tests/spawn_heights_vectors_test.cpp).
+// change. They follow the original's x87 arithmetic (game/mechanics/fpu.h),
+// checked against the vectors recorded from eqgame.exe
+// (tests/spawn_heights_vectors_test.cpp).
 //
 // The rules the rest of the client follows from them:
 //  - feet = z - AvatarHeight: a spawn at rest has z = floor + AvatarHeight

@@ -2,8 +2,8 @@
 
 // The player customization window (CPlayerCustomizationWnd, EQUI_PlayerCustomizationWnd.xml; /facepick and key 492
 // open it): the face, hair, eyes, beard, Barbarian tattoo, Drakkin heritage, tattoo and facial attachment of the
-// local player, tried on the model and sent with OP_FaceChange. Ported from the original's functions (rof2decomp
-// export CPlayerCustomizationWnd.c and disassembly; the window's members by their offsets):
+// local player, tried on the model and sent with OP_FaceChange. Follows the original's functions (the
+// window's members by their offsets):
 //   AboutToShow @0x715cf0, AboutToHide @0x714620, OnProcessFrame @0x715ef0, WndNotification @0x715f30,
 //   sub_00715770 (the rows' states), PlayerCustomization_ClampFeaturesToModel @0x714f60 (the new-style rows),
 //   sub_00714850 (a new-style feature stepped), sub_00714a40 (an old-style feature stepped through SetFHEB),

@@ -1,7 +1,6 @@
-// Augments: the fit test against the original's vectors (rof2decomp re/test/vectors/ItemBase_CanGemFitInSlot.jsonl;
+// Augments: the fit test against the original's vectors (ItemBase_CanGemFitInSlot.jsonl;
 // a fixed subset of it is kept in tests/data, the whole file is read when the vectors directory is there), the
-// OP_AugmentItem / OP_AugmentInfo layouts, the insert / remove / swap / destroy rules and the socket rows
-// (rof2decomp notes/augments.md).
+// OP_AugmentItem / OP_AugmentInfo layouts, the insert / remove / swap / destroy rules and the socket rows.
 #include <doctest/doctest.h>
 
 #include <format>

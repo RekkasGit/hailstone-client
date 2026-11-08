@@ -126,7 +126,7 @@ private:
     std::string name_, ignore_name_;
 };
 
-// GuildManagementWnd (CGuildMgmtWnd, rof2decomp export/CGuildMgmtWnd.c). One selected member across the member,
+// GuildManagementWnd (CGuildMgmtWnd). One selected member across the member,
 // note and tribute lists (+0x104), which show the members the ShowOffline / HideAlts toggles let through (ini keys of
 // those names, default on). The buttons are WndNotification's: Invite, Remove, Make Leader, Promote and Demote run
 // /guildinvite, /guildremove, /guildleader and Send_OP_GuildPromote / Send_OP_GuildDemote on the member; Alt sets its
@@ -815,7 +815,7 @@ public:
         return &d;
     }
     bool click(EqHost& host, std::string_view id, std::string_view button, bool) override {
-        // CRaidWnd::WndNotification @0x72d180 (rof2decomp re/src/game/ui/raid_notification_eh.cpp): the member buttons
+        // CRaidWnd::WndNotification @0x72d180: the member buttons
         // act on the raid target (a click in the lists).
         if (!host.conn || button != "left") return false;
         auto& c = *host.conn;
@@ -876,12 +876,11 @@ public:
     }
 
 private:
-    // The options window's button for a class (CRaid::UpdateClassColor's table, read backwards), -1 for none.
+    // The options window's button for a class (the inverse of CRaid::UpdateClassColor's button-to-class table), -1
+    // for none. Indexed by class id: warrior 1 is button 13, bard 8 button 0, berserker 16 button 15.
     static int class_button(std::uint8_t class_id) {
-        static constexpr std::uint8_t kClassOfButton[16] = {8, 15, 2, 6, 14, 13, 7, 11, 3, 4, 9, 5, 10, 1, 12, 16};
-        for (int b = 0; b < 16; ++b)
-            if (kClassOfButton[b] == class_id) return b;
-        return -1;
+        static constexpr std::int8_t kButtonOfClass[17] = {-1, 13, 2, 8, 9, 11, 3, 6, 0, 10, 12, 7, 14, 5, 4, 1, 15};
+        return class_id < 17 ? kButtonOfClass[class_id] : -1;
     }
     const game::RaidMember* note_member(EqHost& host) const {
         if (!host.conn || note_name_.empty()) return nullptr;
@@ -908,7 +907,7 @@ private:
 };
 
 
-// RaidOptionsWindow (CRaidOptionsWnd, rof2decomp export/CRaidOptionsWnd.c): UpdateComponents (on showing and every
+// RaidOptionsWindow (CRaidOptionsWnd): UpdateComponents (on showing and every
 // 250 ms) enables Set Loot Type in a raid for its leader and shows the loot type as a number ("%d") with the combo box
 // on it; picking a type sends it as /setloottype does (CRaid::SetLootType with itoa(choice + 1)). The looter list is
 // CRaid::UpdateOptionsWindow's: the leader, then the group leaders (type 2) or the raid looters (type 3), or only
@@ -1189,7 +1188,7 @@ private:
     int player_sel_ = -1, guild_sel_ = -1;
 };
 
-// GuildBankWnd (CGuildBankWnd, rof2decomp export/CGuildBankWnd.c) over the connection's guild bank
+// GuildBankWnd (CGuildBankWnd) over the connection's guild bank
 // (net/game_connection_guild_bank.cpp). The two lists show the items you may see (permission 15, else your own),
 // the main list through the filter; one selection across both. The buttons follow CGuildBankWnd_UpdateButtons and
 // WndNotification: Withdraw and Split ask how many in the quantity dialog, an item's permission Single Member and

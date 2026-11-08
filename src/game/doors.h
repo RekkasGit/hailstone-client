@@ -6,16 +6,15 @@
 // fills them from OP_SpawnDoor / OP_MoveDoor / OP_GroundSpawn, the app draws
 // and collides with them.
 //
-// The rules are the original client's, from the rof2decomp export
-// (rof2decomp:export/EQSwitch.c, _globals.c, CDisplay.c):
+// The rules are the original client's (EQSwitch and CDisplay):
 //   EQSwitch::LoadSwitchSounds @0x511990   the constructor from an OP_SpawnDoor record
 //   EQSwitch::PostInit @0x510960           type conversions, scale and remain-open fixes
 //   EQSwitch::ResetSwitchState @0x510b50   the state a spawned door starts in
-//   EQSwitch::ChangeState @0x50f540        (rof2decomp re/src/game/world/switch_state.cpp)
+//   EQSwitch::ChangeState @0x50f540
 //   EQSwitch::RepopFrequency @0x50f370     how long until a moved door returns
-//   EQSwitch::RepopSwitch @0x512690        (re/src/game/spawn/switch_repop.cpp)
+//   EQSwitch::RepopSwitch @0x512690
 //   EQSwitch::TopSpeed @0x50f2c0, GetCustomMoveDistance @0x50ff20
-//   EQSwitch_IsFloorSwitch @0x50ff80       (re/src/game/world/floor_switch.cpp)
+//   EQSwitch_IsFloorSwitch @0x50ff80
 //   CDisplay_ProcessSwitches @0x48d530     the per-frame animation
 //   CDisplay::SlideSwitchLeftRight @0x4880a0
 //   EQSwitch::UseSwitch @0x511d70          the click range check
@@ -127,7 +126,7 @@ struct SwitchClock {
 };
 // The spawns ProcessSwitches looks at for a moving floor switch's riders: a
 // rider's floor cache is reset (CollisionCounter = 0) so its next floor test
-// finds the switch's new top; nothing carries it (rof2decomp notes/lifts.md).
+// finds the switch's new top; nothing carries it.
 struct DoorRiders {
     std::span<const mechanics::SwitchSpawn> spawns;
     std::function<void(std::size_t)> reset_collision_counter;

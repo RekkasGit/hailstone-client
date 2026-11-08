@@ -1,7 +1,6 @@
 #pragma once
 
-// The real estate manager as RealEstateManagerClient keeps it (rof2decomp notes/housing-and-market.md §5.1, §7; the
-// decompile of 0x5b2500, RealEstateManagerClient_Process @0x5b0a10 and its resolvers 0x5affc0 / 0x5b00e0 /
+// The real estate manager as RealEstateManagerClient keeps it (0x5b2500, RealEstateManagerClient_Process @0x5b0a10 and its resolvers 0x5affc0 / 0x5b00e0 /
 // 0x5b0140 / 0x4b2f40 / 0x4b30f0 / 0x4d6790 / 0x5b45b0): the definition catalog and its cost sets, the estate
 // records, their access tables, the item rows the server feeds per estate, the local character's owned-estate lists,
 // the areas, the placed objects, and which estate the player stands in (occupancy). No network and no windows here:

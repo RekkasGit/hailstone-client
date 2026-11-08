@@ -1,7 +1,6 @@
 #pragma once
 
-// The find path (pinstPlayerPath, rof2decomp 0x59a060..0x59da00, decompiled in a scratch copy of the Ghidra
-// database; the request side is rewritten in rof2decomp re/src/game/spawn/player_path_find.cpp). The path itself is
+// The find path (pinstPlayerPath, the original's 0x59a060..0x59da00). The path itself is
 // the server's: the client asks with OP_FindPersonRequest (Send_OP_FindPersonRequest @0x59a420) and draws what
 // OP_FindPersonReply brings (PlayerPath_HandleFindPersonReply @0x59c870). No path data is read from the game folder;
 // SpellEffects\Path.ini only shapes the path (PlayerPath_LoadSettings @0x59b310).

@@ -70,42 +70,59 @@ SpawnSounds spawn_sounds(const std::unordered_map<std::int32_t, assets::RaceSoun
     return s;
 }
 
+namespace {
+
+// The door types that share a set of sounds, by the opening sound's wave id. A sound of 0 is none. `closing` plays
+// when the door goes to state 3 and `closed` when it reaches 0; `opening` plays at state 2, and for some sets at
+// state 3 too (before `closing`).
+struct DoorSoundSet {
+    std::int32_t opening, closing, closed;
+    bool opening_at_3;
+    std::uint8_t type_count;
+    std::array<std::uint8_t, 16> types;
+};
+constexpr DoorSoundSet kDoorSounds[] = {
+    {0x77, 0x77, 0, false, 4, {0x73, 0x74, 0x82, 0x87}},
+    {0x87, 0x88, 0, false, 2, {0x00, 0x05}},
+    {0x87, 0xbd, 0, false, 2, {0x23, 0x24}},
+    {0xac, 0, 0, false, 1, {0x6e}},
+    {0xad, 0, 0xae, true, 1, {0x1e}},
+    {0xb0, 0xaf, 0, false, 2, {0x01, 0x06}},
+    {0xb3, 0xb2, 0, false, 9, {0x02, 0x07, 0x08, 0x8c, 0x91, 0x92, 0x96, 0x97, 0x98}},
+    {0xb4, 0, 0, true, 1, {0x28}},
+    {0xb5, 0, 0xb6, true, 10, {0x3c, 0x3d, 0x41, 0x42, 0x46, 0x47, 0x4b, 0x4c, 0x52, 0x53}},
+    {0xb8, 0xb7, 0, false, 16,
+     {0x0a, 0x0b, 0x0c, 0x0f, 0x10, 0x11, 0x14, 0x15, 0x16, 0x19, 0x1a, 0x1b, 0x4e, 0x4f, 0x50, 0x51}},
+    {0xb8, 0xb7, 0xb6, false, 5, {0x3e, 0x43, 0x48, 0x4d, 0x54}},
+    {0xb9, 0, 0, true, 1, {0x3b}},
+    {0xbb, 0, 0, false, 1, {0x78}},
+    {0xbc, 0, 0, false, 1, {0x7d}},
+};
+
+const DoorSoundSet* door_sound_set(std::uint8_t type) {
+    for (const DoorSoundSet& set : kDoorSounds)
+        for (std::size_t i = 0; i < set.type_count; ++i)
+            if (set.types[i] == type) return &set;
+    return nullptr;
+}
+
+} // namespace
+
 std::vector<std::int32_t> door_sounds(std::uint8_t type, std::uint8_t state) {
-    struct Sounds {
-        std::int32_t opening;
-        bool also_state3;
-        std::int32_t closing;
-        std::int32_t closed;
-    };
-    Sounds s{0, false, 0, 0};
-    switch (type) {
-    case 0x00: case 0x05: s = {0x87, false, 0x88, 0}; break;
-    case 0x23: case 0x24: s = {0x87, false, 0xbd, 0}; break;
-    case 0x01: case 0x06: s = {0xb0, false, 0xaf, 0}; break;
-    case 0x3e: case 0x43: case 0x48: case 0x4d: case 0x54: s = {0xb8, false, 0xb7, 0xb6}; break;
-    case 0x3c: case 0x3d: case 0x41: case 0x42: case 0x46: case 0x47: case 0x4b: case 0x4c: case 0x52: case 0x53:
-        s = {0xb5, true, 0, 0xb6};
-        break;
-    case 0x0a: case 0x0b: case 0x0c: case 0x0f: case 0x10: case 0x11: case 0x14: case 0x15: case 0x16: case 0x19:
-    case 0x1a: case 0x1b: case 0x4e: case 0x4f: case 0x50: case 0x51:
-        s = {0xb8, false, 0xb7, 0};
-        break;
-    case 0x1e: s = {0xad, true, 0, 0xae}; break;
-    case 0x28: s = {0xb4, true, 0, 0}; break;
-    case 0x3b: s = {0xb9, true, 0, 0}; break;
-    case 0x6e: s = {0xac, false, 0, 0}; break;
-    case 0x78: s = {0xbb, false, 0, 0}; break;
-    case 0x7d: s = {0xbc, false, 0, 0}; break;
-    case 0x73: case 0x74: case 0x82: case 0x87: s = {0x77, false, 0x77, 0}; break;
-    case 0x02: case 0x07: case 0x08: case 0x8c: case 0x91: case 0x92: case 0x96: case 0x97: case 0x98:
-        s = {0xb3, false, 0xb2, 0};
-        break;
-    default: break;
-    }
     std::vector<std::int32_t> out;
-    if (s.opening && (state == 2 || (s.also_state3 && state == 3))) out.push_back(s.opening);
-    if (s.closing && state == 3) out.push_back(s.closing);
-    if (s.closed && state == 0) out.push_back(s.closed);
+    const DoorSoundSet* set = door_sound_set(type);
+    if (!set) return out;
+    auto play = [&](std::int32_t wave) {
+        if (wave) out.push_back(wave);
+    };
+    if (state == 2) {
+        play(set->opening);
+    } else if (state == 3) {
+        if (set->opening_at_3) play(set->opening);
+        play(set->closing);
+    } else if (state == 0) {
+        play(set->closed);
+    }
     return out;
 }
 

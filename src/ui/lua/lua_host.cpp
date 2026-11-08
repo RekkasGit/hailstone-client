@@ -1,6 +1,5 @@
-// The Lua UI host. Ported from rof2decomp re/src/ui/lua_host.cpp: the same script loading, hot reload, window
-// registry, settings and error handling, with portable file access in place of the Win32 calls and no debugging
-// console (Hailstone can be inspected directly).
+// The Lua UI host: script loading, hot reload, the window registry, settings and error handling, with portable
+// file access and no debugging console (Hailstone can be inspected directly).
 #include "ui/lua/lua_host.h"
 #include "ui/lua/lua_gc_live.h"
 

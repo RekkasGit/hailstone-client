@@ -1,7 +1,7 @@
 #pragma once
 
-// The appearance data files the original client reads at start-up
-// (rof2decomp notes/appearance.md): the colour tables (Resources/npct.ini,
+// The appearance data files the original client reads at start-up:
+// the colour tables (Resources/npct.ini,
 // itmt.ini), the hero's forge tables (Resources/NewArmorTagData.txt,
 // NewArmorAdjData.txt) and Resources/PlayerCustomization.txt.
 

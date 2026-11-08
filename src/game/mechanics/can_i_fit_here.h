@@ -1,8 +1,7 @@
 #pragma once
 
-// The room checks around a spawn's move, exact ports of rof2decomp batch 255
-// (re/src/game/spawn/can_i_fit_here.cpp, notes/collision-sweep.md "Room to
-// stand"), checked against the original's vectors
+// The room checks around a spawn's move, as the original makes them,
+// checked against its vectors
 // (tests/movement_vectors_test.cpp):
 //
 // PlayerZoneClient::CanIFitHere @0x509650: whether the controlled player has

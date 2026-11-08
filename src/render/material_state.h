@@ -1,8 +1,8 @@
 #pragma once
 
 // Render state per material blend mode, shared by the zone, object and actor
-// renderers. Source for the EQG classes: rof2decomp notes/eqgraphicsdx9.md
-// (Alpha_* and AddAlpha shaders; state flags +5..+9 applied by 0x10088a50).
+// renderers. The EQG classes follow the original's Alpha_* and AddAlpha
+// shaders (state flags +5..+9 applied by 0x10088a50).
 
 #include <cstddef>
 #include <cstdint>

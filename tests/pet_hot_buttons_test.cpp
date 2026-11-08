@@ -58,7 +58,7 @@ TEST_CASE("Pet hot buttons: the drop's button and SyncHotButtonStates") {
 }
 
 TEST_CASE("Pet command menu: CanUsePetCommand and the window's button layout") {
-    // CharacterZoneClient_CanUsePetCommand (the rewrite in rof2decomp pet_commands.cpp, its disassembly's pushes:
+    // CharacterZoneClient_CanUsePetCommand (the original's pushes in its disassembly:
     // TotalEffect(0x10b, 1, command, 1, 1), (0x119, 1, 0, 1, 1), (0x4a, 1, 0, 1, 1)).
     std::vector<std::pair<std::int32_t, std::int32_t>> asked;
     std::set<std::pair<std::int32_t, std::int32_t>> have;

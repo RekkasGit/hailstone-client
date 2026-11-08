@@ -2,8 +2,8 @@
 
 // The MusicManager: every music the client can play, the global entries 1..15 (EqSoundManager::LoadGlobalMusic
 // @0x4aa860) and the zone's music emitters' entries, with the one rule that picks what plays
-// (MusicManager_SelectActiveEntry @0x5c0b40, MusicManager::Play @0x5c0c00 and Stop @0x5c0c30; rof2decomp batch 256,
-// re/src/game/audio/listener_music.cpp, checked against the original's vectors in tests/audio_vectors_test.cpp).
+// (MusicManager_SelectActiveEntry @0x5c0b40, MusicManager::Play @0x5c0c00 and Stop @0x5c0c30;
+// checked against the original's vectors in tests/audio_vectors_test.cpp).
 //
 // An entry: +0 volume, +4 start requested (Play sets it), +0x10 id, +0x14 asset, +0x18 track, +0x1c priority (lower
 // wins), +0x20 selected (Play sets, Stop clears), +0x24 fade-in, +0x28 fade-out when another entry takes over or the

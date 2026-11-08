@@ -1,9 +1,7 @@
 #pragma once
 
 // The eqgame side of mouse picking and of what a left click on a spawn or a
-// door does (rof2decomp batch 262, notes/eqgraphicsdx9.md "Mouse picking";
-// re/src/game/display/actor_picking.cpp, ui/left_click_player_eh.cpp,
-// ui/clicked_switch_eh.cpp, spawn/actor_instance.cpp). The ray and the
+// door does. The ray and the
 // actor tests (EQGraphicsDX9.dll) are game/picking.h.
 //
 // Checked against the original's vectors: CDisplay_PickActorAtPoint,

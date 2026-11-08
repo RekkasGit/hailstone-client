@@ -81,7 +81,7 @@ Buf& line_bytes(Buf& b) {
 TEST_CASE("barter: the inspect and its answer, buy lines from the server, the buyer appearance") {
     CHECK(bytes_of(encode_barter_inspect(kBuyerInspectBegin, 42)) == Buf().u32(11).u32(42).u32(0).b);
     CHECK(bytes_of(encode_barter_inspect(kBuyerInspectEnd, 42)) == Buf().u32(12).u32(42).u32(0).b);
-    // EQEmu's ShowBuyLines echoes the request with the approval at +8 (Handle_OP_Barter 11 reads param_2[2]).
+    // EQEmu's ShowBuyLines echoes the request with the approval at +8 (Handle_OP_Barter 11 reads the packet's third dword).
     auto r = decode_barter_inspect_reply(packet(Op::Barter, Buf().u32(11).u32(42).u32(7).b));
     REQUIRE(r);
     CHECK(r->spawn_id == 42);

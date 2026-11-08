@@ -1,7 +1,7 @@
 #pragma once
 
-// Where the sound listener is and which room it is in, as the original computes them (rof2decomp batch 256,
-// re/src/game/audio/listener_music.cpp; checked against the original's vectors in tests/audio_vectors_test.cpp):
+// Where the sound listener is and which room it is in, as the original computes them (checked against
+// the original's vectors in tests/audio_vectors_test.cpp):
 //
 //  - CDisplay::RealRender_World @0x49ca83 passes the local player's position (+0x64 y, +0x68 x, +0x6c z) with the
 //    camera's heading (512 units a turn) to EqSoundManager::SetListenerLocation @0x4a94a0, which hands Miles

@@ -59,6 +59,19 @@ double fild(std::int32_t v) { return static_cast<double>(v); }
 
 bool in_fog_region(std::uint8_t r) { return r >= 5 && r <= 10; }
 
+// A fog distance as SetFog keeps it: the value on the FPU and the float it
+// was last loaded from or stored to.
+struct FogDistance {
+    double value;
+    std::uint32_t bits;
+    static FogDistance from_bits(std::uint32_t b) { return {ld(b), b}; }
+    void store(double v) {
+        value = v;
+        bits = st(v);
+    }
+    void reload() { value = ld(bits); }
+};
+
 double far_plane(const Ops& o, const FogClip& clip) {
     double min_clip = ld(clip.min_clip);
     return o.add(min_clip, o.mul(o.sub(ld(clip.max_clip), min_clip), o.mul(fild(clip.clip_plane), ld(kTwentieth))));
@@ -80,25 +93,15 @@ SetFogResult set_fog(const Fpu& fpu, const SetFogInput& in) {
     if (!in.world) return out;
     const bool adjust = !in_fog_region(in.camera_region);
     const double tenth = ld(kTenth), fifty = ld(kFifty), one = 1.0, zero = 0.0;
-    std::uint32_t start_bits = in.start, end_bits = in.end;
-    double start, end;
-    if (less(ld(start_bits), tenth) && less(ld(end_bits), tenth)) {
-        start = o.sub(ld(in.yon), fifty);
-        start_bits = st(start);
-        end = o.sub(ld(in.yon), one);
-        end_bits = st(end);
-    } else {
-        start = ld(start_bits);
-        end = ld(end_bits);
+    FogDistance start = FogDistance::from_bits(in.start);
+    FogDistance end = FogDistance::from_bits(in.end);
+    // Both under a tenth: the fog runs from 50 short of the yon plane to 1 short of it.
+    if (less(start.value, tenth) && less(end.value, tenth)) {
+        start.store(o.sub(ld(in.yon), fifty));
+        end.store(o.sub(ld(in.yon), one));
     }
-    if (less(start, zero)) {
-        start = zero;
-        start_bits = st(zero);
-    }
-    if (less(end, start)) {
-        end = o.add(fifty, start);
-        end_bits = st(end);
-    }
+    if (less(start.value, zero)) start.store(zero);
+    if (less(end.value, start.value)) end.store(o.add(fifty, start.value));
     std::uint8_t r = in.red, g = in.green, b = in.blue;
     if (r == 0 && g == 0 && b == 0) r = g = b = 0xc0;
     if (!in.sky_option) {
@@ -113,32 +116,25 @@ SetFogResult set_fog(const Fpu& fpu, const SetFogInput& in) {
         double far = far_plane(o, in.clip);
         std::uint32_t far_bits = st(far);
         if (adjust && !in.raining) {
-            bool fade = less(std::fabs(o.sub(end, far)), ld(kHundredth)) || less(far, end);
-            if (fade) {
-                double margin = calc_fog_fade_margin(fpu, start_bits, in.clip);
-                end = o.sub(ld(far_bits), margin);
-                end_bits = st(end);
-                start = ld(start_bits);
+            const bool at_far_plane = less(std::fabs(o.sub(end.value, far)), ld(kHundredth)) || less(far, end.value);
+            if (at_far_plane) {
+                const double margin = calc_fog_fade_margin(fpu, start.bits, in.clip);
+                end.store(o.sub(ld(far_bits), margin));
+                start.reload();
             }
-            if (less(start, zero)) {
-                start = zero;
-                start_bits = st(zero);
-            }
-            if (less_equal(end, start)) {
-                start = o.sub(end, one);
-                start_bits = st(start);
-            }
+            if (less(start.value, zero)) start.store(zero);
+            if (less_equal(end.value, start.value)) start.store(o.sub(end.value, one));
         }
         out.fog_on = static_cast<std::uint8_t>(in.on);
         if (adjust) {
-            out.fog_start = st(start);
-            out.fog_end = st(end);
+            out.fog_start = st(start.value);
+            out.fog_end = st(end.value);
             out.fog_density = quiet(in.density);
         }
         out.red = r;
         out.green = g;
         out.blue = b;
-        if (greater(ld(kSkyMinFog), end) || in.camera_region >= 5) out.sky_flag = 0;
+        if (greater(ld(kSkyMinFog), end.value) || in.camera_region >= 5) out.sky_flag = 0;
     }
     std::uint32_t colour = 0xff000000u | static_cast<std::uint32_t>(r) << 16 | static_cast<std::uint32_t>(g) << 8 | b;
     std::uint32_t density = quiet(in.density);
@@ -149,18 +145,18 @@ SetFogResult set_fog(const Fpu& fpu, const SetFogInput& in) {
         } else if (in.sky_option && out.sky_flag != 0 && in.camera_region < 5) {
             colour = (colour & 0xff000000u) | (in.sky->colour & 0xffffffu);
         }
-        start = ld(start_bits);
-        end = ld(end_bits);
+        start.reload();
+        end.reload();
     }
     RenderFog render;
     render.on = in.on;
-    render.end = Fpu::ftol(end);
-    render.start = Fpu::ftol(start);
+    render.end = Fpu::ftol(end.value);
+    render.start = Fpu::ftol(start.value);
     render.density = quiet(density);
     render.colour = colour;
     out.render = render;
-    out.start = start;
-    out.end = end;
+    out.start = start.value;
+    out.end = end.value;
     return out;
 }
 
@@ -230,21 +226,25 @@ SkyWeatherResult update_sky_weather_and_fog(const Fpu& fpu, const SkyWeatherInpu
                 double from = entry(table, now);
                 return o.add(o.mul(o.mul(o.sub(entry(table, next), from), minutes), per_minute), from);
             };
-            red = interpolate(0);
-            ambient[0] = st(red);
-            green = interpolate(1);
-            ambient[1] = st(green);
-            blue = interpolate(2);
-            ambient[2] = st(blue);
+            // Each channel goes to its slot as soon as it is worked out.
+            auto channel = [&](int table) {
+                const double value = interpolate(table);
+                ambient[static_cast<std::size_t>(table)] = st(value);
+                return value;
+            };
+            red = channel(0);
+            green = channel(1);
+            blue = channel(2);
         }
-        if (greater(green, one)) {
-            green = one;
-            ambient[1] = st(one);
-        }
-        if (greater(red, one)) {
-            red = one;
-            ambient[0] = st(one);
-        }
+        // Over 1, green and then red come down to 1 on the FPU and in their
+        // slots; blue only in its slot.
+        auto cap = [&](double& value, std::size_t slot) {
+            if (!greater(value, one)) return;
+            value = one;
+            ambient[slot] = st(one);
+        };
+        cap(green, 1);
+        cap(red, 0);
         if (greater(blue, one)) ambient[2] = st(one);
     } else {
         red = ld(zone_type == 4 ? 0.5f : kTenth);

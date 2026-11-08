@@ -1,6 +1,6 @@
 // ClientApp: the scene behind character select and creation.
 //
-// The original (rof2decomp) keeps a world display up before the game: CEverQuest::StartNetworkGame @0x53bdd0 makes
+// The original keeps a world display up before the game: CEverQuest::StartNetworkGame @0x53bdd0 makes
 // the local PC and player (pinstLocalPlayer = pinstModelPlayer) at 0, 0, 7 in zone 0xbe and starts the world display
 // there (0x49d920: "clz", the CharSelectZone; Yon 5000), 0x517840 puts the camera (Cameras[7]) on it;
 // DoCharacterSelection @0x53aac0 sets the time to 12:00, the sun light, no shadows, Yon 2500 and fog 150 .. 2500

@@ -1,7 +1,7 @@
 #pragma once
 
-// Ctrl moves into a bag (CInvSlotMgr::MoveItem's bag path @0x698d80, rof2decomp notes/items-and-inventory.md §2.7)
-// and how MultipleItemMoveManager::ProcessMove @0x572300 resolves them (re/src/game/item/multi_move_*_eh.cpp).
+// Ctrl moves into a bag (CInvSlotMgr::MoveItem's bag path @0x698d80)
+// and how MultipleItemMoveManager::ProcessMove @0x572300 resolves them.
 //
 // The list MoveItem builds, every entry with room mode 3 (the destination bag's own slots; the second loop's mode
 // is 3 for each entry too, `lea ebx,[edi+3]` runs once before the loop at 0x699403):

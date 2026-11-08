@@ -1,7 +1,7 @@
 #pragma once
 
 // The procedural sky's cloud patches (CCloudPatch), as the graphics DLL moves
-// them (rof2decomp notes/eqgraphicsdx9.md, Sky):
+// them:
 //   - time base: dt_ms = GetTickCount() delta x TimeScale (1.0), 1 on the
 //     first frame and when the delta is 0 (CSkyBase_UpdateFrameTime @0x100c2130);
 //   - per frame (CCloudPatch_Update @0x10030020): angle += Velocity dt (not

@@ -1,7 +1,7 @@
 #pragma once
 
-// What character creation does to the model player (the local player at GameState 2), ported from rof2decomp's
-// CCharacterCreation (export _globals.c / CCharacterCreation.c; re/src/game/ui/char_create_faces.cpp):
+// What character creation does to the model player (the local player at GameState 2), following the original's
+// CCharacterCreation:
 //   CCharacterCreation_SetRace @0x64eeb0 (the model part: ApplyNewPCToPlayer, then RandomizeFacialFeatures),
 //   sub_0064d930 (the gender: ApplyNewPCToPlayer), the class (sub_0064dff0, then CCharacterCreation_SetHeritage with
 //   the actor's heritage, WndNotification @0x64f150), CCharacterCreation_ApplyNewPCToPlayer @0x64b080,

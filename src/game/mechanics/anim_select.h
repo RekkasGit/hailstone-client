@@ -1,8 +1,6 @@
 #pragma once
 
-// Which movement animation a character plays, and how fast (rof2decomp
-// batch 248, re/src/game/spawn/movement_animation.cpp, and batch 213,
-// re/src/game/spawn/player_animation_update.cpp).
+// Which movement animation a character plays, and how fast.
 //
 // The original has two animation objects:
 //  - new-style models (NpcManager_IsNewStyleModelRace: EQG races 197..732,
@@ -15,12 +13,11 @@
 //    ...) and 0x4afc90 scales its playback rate per race on the way to
 //    the actor.
 //
-// Both are exact ports: every float step follows the original's x87
+// Both follow the original exactly: every float step follows the original's x87
 // instructions at the FPU's precision (game/mechanics/fpu.h; in game 24-bit).
 // select_movement_anim and old_model_anim_speed are checked against the
 // original's vectors SelectMovementAnim / OldModelAnimSpeed
-// (tests/anim_vectors_test.cpp); select_old_style_anim has no vectors (the
-// rewrite is differential-tested in rof2decomp).
+// (tests/anim_vectors_test.cpp); select_old_style_anim has no vectors.
 
 #include <cstdint>
 #include <functional>
@@ -117,8 +114,7 @@ struct IdleAnimResult {
     AnimStart start;
     bool set_still_since = false; // +0x360 was written with display_time (a fidget roll)
 };
-// PlayerAnimation_ChooseIdleAnimation @0x58a1e0 (rof2decomp
-// re/src/game/spawn/idle_animation.cpp): a still new-style player's
+// PlayerAnimation_ChooseIdleAnimation @0x58a1e0: a still new-style player's
 // animation. Stunned (0x20 in +0x14c): STUN; treading water (BodyWet >= 5, or
 // TWTR/SWIM playing): TWTR; turning: LTRN (+0x8c > 0) or TURN, CWLK while
 // ducking; ducking: CRCH at rate 2; every 5 s (from +0x360) a roll: IDLE

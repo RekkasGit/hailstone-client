@@ -1,7 +1,7 @@
 #pragma once
 
 // The packets CharacterZoneClient::UseSkill @0x45b2d0 and SendCombatAbilityAttack @0x4fb3d0 send, byte for byte as
-// the original builds them in its send buffer (0xdd00e0: the opcode, then the fields; rof2decomp export/), checked
+// the original builds them in its send buffer (0xdd00e0: the opcode, then the fields), checked
 // against EQEmu's structs (common/eq_packet_structs.h, patches/rof2.cpp) and its handlers (zone/client_packet.cpp).
 // docs/protocol/rof2-packets.md "Skills and abilities".
 

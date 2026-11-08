@@ -6,7 +6,7 @@
 // PhysicsObject::Step and CollisionPass run for each other spawn whose last
 // update is at most 12 s old.
 //
-// Exact ports of rof2decomp batch 243 (re/src/game/net/client_update.cpp):
+// Follow the original exactly:
 // unpack_physics @0x4ee6c0, Handle_OP_ClientUpdate @0x4b3d00 and
 // 0x4877e0 (AdvanceSpawn), checked against the original's
 // vectors (tests/movement_vectors_test.cpp).
@@ -56,7 +56,7 @@ void unpack_spawn_position(SpawnPhysics& physics, const PackedPosition& packed, 
 // sets the spawn's motion state +0x270 to 6). Returns whether it was one.
 bool clear_stopped_motion(PackedPosition& packed);
 
-// Handle_OP_NPCMoveUpdate @0x4b3ef0 (rof2decomp batch 245): the bit stream
+// Handle_OP_NPCMoveUpdate @0x4b3ef0: the bit stream
 // unpacked into the 0x18-byte OP_ClientUpdate record that it hands to
 // Handle_OP_ClientUpdate. Fields are read high bit first (BitStream::ReadUInt
 // @0x80d380); the signed ones (BitStream::ReadInt @0x80d460) are a sign bit
@@ -115,8 +115,8 @@ struct RemoteBody {
     float speed_run = 0.0f;     // the update's animation field x 0.025
 };
 
-// PhysicsObject::Step for another spawn on the ground (rof2decomp's reading
-// of the Step rewrite, batch 243 follow-up): dt = min(elapsed_ms x 0.02, 3);
+// PhysicsObject::Step for another spawn on the ground (the analysis's reading
+// of Step): dt = min(elapsed_ms x 0.02, 3);
 // the heading turns by speed_heading x dt; the velocity keeps c (0.625, the
 // zone's AreaFriction; halved, PhysicsObject vf12 @0x59e030, for an NPC
 // without a rider that moves sideways) and gains 0.8 x speed_run along the

@@ -2,7 +2,7 @@
 // duels, inspect, surname, corpse summoning and dragging, shielding, the key
 // ring, /rewind, autosplit, the bandolier, reading books and the spell book
 // command. Packets in net/player_packets.h, state in game/interact.h; every
-// function names the original it follows (rof2decomp export of eqgame.exe).
+// function names the original it follows (in eqgame.exe).
 
 #include <algorithm>
 #include <cctype>

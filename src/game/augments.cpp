@@ -2,13 +2,13 @@
 
 #include <algorithm>
 #include <format>
+#include <initializer_list>
 
 #include "game/eq_strings.h"
 #include "game/merchant.h"
 #include "game/mechanics/item_stats.h"
 
-// Each function names the original it follows (rof2decomp notes/augments.md, items-and-inventory.md §3.5, and
-// re/src/game/item/augment_restrictions.cpp for the fit checks).
+// Each function names the original it follows; the fit checks are checked against the original's vectors.
 
 namespace hailstone::game {
 
@@ -25,31 +25,44 @@ bool same_serial(const net::Item& a, const net::Item& b) {
     return a.instance_id == b.instance_id && a.parcel_item_id == b.parcel_item_id;
 }
 
+constexpr std::uint64_t host_types(std::initializer_list<std::uint32_t> types) {
+    std::uint64_t mask = 0;
+    for (std::uint32_t t : types) mask |= std::uint64_t{1} << t;
+    return mask;
+}
+
+// ItemTypes: 0 1H slashing, 1 2H slashing, 2 piercing, 3 1H blunt, 4 2H blunt, 8 shield, 0xa armour, 0x23 2H
+// piercing, 0x2d hand to hand.
+constexpr std::uint64_t kOneHanded = host_types({0, 2, 3, 0x2d});
+constexpr std::uint64_t kTwoHanded = host_types({1, 4, 0x23});
+// Restriction n (1..18) at [n - 1].
+constexpr std::array<std::uint64_t, 18> kHostTypesByRestriction{
+    host_types({8, 0xa}),                            // 1
+    kOneHanded | kTwoHanded | host_types({5, 6, 7}), // 2
+    kOneHanded,                                      // 3
+    kTwoHanded,                                      // 4
+    host_types({0}),                                 // 5
+    host_types({3}),                                 // 6
+    host_types({2}),                                 // 7
+    host_types({0x2d}),                              // 8
+    host_types({1}),                                 // 9
+    host_types({4}),                                 // 10
+    host_types({0x23}),                              // 11
+    host_types({5}),                                 // 12
+    host_types({8}),                                 // 13
+    host_types({0, 3, 0x2d}),                        // 14
+    host_types({3, 0xd}),                            // 15
+    host_types({0, 1}),                              // 16
+    host_types({3, 4}),                              // 17
+    host_types({2, 0x23}),                           // 18
+};
+
 // The augment restriction's allowed host ItemTypes (+0x1d4); 0 and values above 0x12 allow all
 // (ItemBase_CanAugmentGoInItem's switch).
 bool type_allowed(std::uint32_t restriction, std::uint32_t t) {
-    switch (restriction) {
-    case 0: return true;
-    case 1: return t == 0xa || t == 8;
-    case 2: return t == 3 || t == 0 || t == 4 || t == 1 || t == 2 || t == 0x23 || t == 7 || t == 5 || t == 6 || t == 0x2d;
-    case 3: return t == 3 || t == 0 || t == 2 || t == 0x2d;
-    case 4: return t == 4 || t == 1 || t == 0x23;
-    case 5: return t == 0;
-    case 6: return t == 3;
-    case 7: return t == 2;
-    case 8: return t == 0x2d;
-    case 9: return t == 1;
-    case 10: return t == 4;
-    case 11: return t == 0x23;
-    case 12: return t == 5;
-    case 13: return t == 8;
-    case 14: return t == 3 || t == 0 || t == 0x2d;
-    case 15: return t == 3 || t == 0xd;
-    case 16: return t == 0 || t == 1;
-    case 17: return t == 3 || t == 4;
-    case 18: return t == 2 || t == 0x23;
-    default: return true;
-    }
+    if (restriction == 0 || restriction > kHostTypesByRestriction.size()) return true;
+    if (t >= 64) return false;
+    return (kHostTypesByRestriction[restriction - 1] >> t & 1u) != 0;
 }
 
 // ItemContainer_FindItemByID @0x7e5280 / 0x7e4f90 over the host's children: a depth-first search for `id` (0
@@ -110,7 +123,7 @@ AugmentRequest confirm(std::uint32_t dialog, std::uint32_t eqstr, std::vector<st
     return r;
 }
 
-// The start every request shares (augments.md §2 steps 1-2): nothing for an invalid or hidden socket or without a
+// The start every request shares: nothing for an invalid or hidden socket or without a
 // PC; the host by its index (when the serial matches), else by its serial; 5473 when neither finds it.
 struct Start {
     bool done = false;
@@ -135,7 +148,7 @@ Start start(const net::Item& window_item, int socket, const AugmentContext& ctx)
     return s;
 }
 
-// The checks insert and swap share after the fit test (§2.1 steps 7-9): prestige (0xc → 7686), the appearance
+// The checks insert and swap share after the fit test: prestige (0xc → 7686), the appearance
 // feature for a type-21 socket (0xd → 5485), and the NO TRADE rule (3364). 0 passes.
 std::uint32_t usability(const net::Item& host, const net::Item& cursor, int socket, const AugmentContext& ctx) {
     if (ctx.can_use_prestige && !ctx.can_use_prestige(cursor)) return augment_fit_string_id(0xc);
@@ -150,7 +163,7 @@ std::uint32_t usability(const net::Item& host, const net::Item& cursor, int sock
     return 0;
 }
 
-// A distiller for the augment's SolventItemID (§2.2 step 6 / §2.3 step 7): the item with that id, else (and on
+// A distiller for the augment's SolventItemID: the item with that id, else (and on
 // remove also instead of a type-55 match) the first Perfected Augmentation Distiller.
 std::optional<FoundItem> find_distiller(std::uint32_t solvent, bool discard_solvent, const AugmentContext& ctx) {
     std::optional<FoundItem> d = ctx.item_by_id ? ctx.item_by_id(solvent) : std::nullopt;
@@ -294,22 +307,13 @@ int can_gem_fit_in_slot(const net::Item& host, const net::Item* aug, std::uint32
 }
 
 std::uint32_t augment_fit_string_id(int result) {
-    switch (result) {
-    case 0: return 0;
-    case 1: case 2: case 3: case 4: return 3365;
-    case 5: return 3366;
-    case 6: return 5476;
-    case 7: return 3367;
-    case 8: case 9: return 5480;
-    case 10: return 3371;
-    case 0xb: return 6193;
-    case 0xc: return 7686;
-    case 0xd: return 5485;
-    case 0xe: return 5477;
-    case 0xf: return 5475;
-    case 0x10: return 5365;
-    default: return 3362;
-    }
+    // The eqstr id for each fit result 0..0x10 (0x7afe40); any other result says 3362.
+    static constexpr std::array<std::uint32_t, 0x11> kFitStrings{
+        0,    3365, 3365, 3365, 3365, 3366, 5476, 3367, 5480,
+        5480, 3371, 6193, 7686, 5485, 5477, 5475, 5365,
+    };
+    if (result < 0 || result >= static_cast<int>(kFitStrings.size())) return 3362;
+    return kFitStrings[static_cast<std::size_t>(result)];
 }
 
 std::uint32_t aug_restriction_string_id(std::uint32_t restriction) {

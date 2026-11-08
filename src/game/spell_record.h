@@ -6,9 +6,7 @@
 // OP_CastSpell carries, SpellManager_GetSpellCRC @0x432560) and
 // ComputeFileChecksum @0x808d90 (the file CRCs of OP_ZoneEntry +68/+72).
 //
-// Exact port of rof2decomp re/src/game/spell/spell_parse.cpp (the field-by-
-// field parse, generated there from the disassembly) and spell_crc.cpp
-// (batch 247), checked against the original's EQ_Spell_CalcCRC vectors (642
+// Follows the original's field-by-field parse and CRC, checked against the original's EQ_Spell_CalcCRC vectors (642
 // real spells_us.txt lines, the record bytes and the CRC).
 
 #include <array>

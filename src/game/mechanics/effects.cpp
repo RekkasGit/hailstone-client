@@ -1,17 +1,19 @@
 // The spell effect totals: CalcAffectChangeGeneric, the SpellCache (buffs,
 // worn items, AAs, negations) and CharacterZoneClient::TotalEffect.
 //
-// Sources (rof2decomp):
-//  - CalcAffectChangeGeneric @0x434df0: re/src/game/character/spell_effects.cpp (replaced, tested)
-//  - CacheNegateSpellEffects @0x435d80: re/src/game/character/negate_effects_eh.cpp (replaced, tested)
-//  - CacheAAEffects @0x4385d0: re/src/game/character/aa_effects_cache.cpp (replaced, tested)
-//  - TotalEffect @0x438990: re/src/game/character/effects.cpp (replaced, tested)
-//  - CacheBuffSlotEffects @0x436b30, CacheWornItemEffects @0x437780: NOT rewritten in rof2decomp yet; ported
-//    from the exe's disassembly (tools/re/disasm.py) and the Ghidra export, notes/spell-stacking-and-stats.md §4.
+// Checked against the original's vectors:
+//  - CalcAffectChangeGeneric @0x434df0
+//  - CacheNegateSpellEffects @0x435d80
+//  - CacheAAEffects @0x4385d0
+//  - TotalEffect @0x438990
+//  - CacheBuffSlotEffects @0x436b30, CacheWornItemEffects @0x437780: no vectors; worked from the exe's
+//    disassembly.
 #include "game/mechanics/character.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <optional>
 
 #include "core/wrap_math.h"
 #include "game/mechanics/item_stats.h"
@@ -34,51 +36,96 @@ std::uint32_t u(std::int32_t v) { return static_cast<std::uint32_t>(v); }
 
 bool valid_spell_id(std::int32_t id) { return id >= 1 && id <= 45000; } // IsValidSpellID @0x4ad150
 
-// The SPAs cached per subindex = base2 (the buff list; the item list lacks 378).
-bool keyed_buff(std::int32_t spa) {
-    switch (spa) {
-    case 57: case 169: case 183: case 184: case 185: case 186: case 197: case 216: case 220: case 224: case 227:
-    case 247: case 260: case 262: case 264: case 267: case 268: case 330: case 378: case 418:
-        return true;
-    default:
-        return false;
-    }
+template <std::size_t N>
+bool one_of(const std::array<std::int32_t, N>& sorted, std::int32_t spa) {
+    return std::binary_search(sorted.begin(), sorted.end(), spa);
 }
-bool keyed_item(std::int32_t spa) { return spa != 378 && keyed_buff(spa); }
+
+// The SPAs the item list and the AA cache key by base2 / the limit value (the AA cache's jump table at 0x43883c
+// plus 330 and 418); the buff list keys 378 that way too.
+constexpr std::array<std::int32_t, 19> kKeyedBySubindex = {57,  169, 183, 184, 185, 186, 197, 216, 220, 224,
+                                                           227, 247, 260, 262, 264, 267, 268, 330, 418};
+bool keyed_item(std::int32_t spa) { return one_of(kKeyedBySubindex, spa); }
+bool keyed_buff(std::int32_t spa) { return spa == 378 || keyed_item(spa); }
 
 // "A snare (negative) wins, else the largest" (buffs @0x43755b, items @0x43833c).
 bool most_negative_kind(std::int32_t spa) {
-    switch (spa) {
-    case 3: case 169: case 170: case 171: case 172: case 173: case 174: case 175: case 176: case 177: case 178:
-    case 179: case 180: case 184: case 185: case 186: case 188: case 195: case 292: case 200: case 114:
-        return true;
-    default:
-        return false;
-    }
+    if (spa >= 169 && spa <= 180) return true;
+    static constexpr std::array<std::int32_t, 8> kOthers = {3, 114, 184, 185, 186, 188, 195, 200};
+    return spa == 292 || one_of(kOthers, spa);
 }
 // "Positive beats non-positive, else the smallest" (@0x437512, @0x4382f2).
 bool positive_kind(std::int32_t spa) { return spa == 168 || spa == 182 || spa == 197; }
 // The invisibility / see-invisible kinds: the largest (buffs) / the snare rule (items).
 bool invis_kind(std::int32_t spa) {
-    return spa == 12 || spa == 314 || spa == 28 || spa == 315 || spa == 29 || spa == 316 || spa == 13;
+    if (spa >= 314 && spa <= 316) return true;
+    return spa == 12 || spa == 13 || spa == 28 || spa == 29;
 }
-// The PvP resist debuffs scaled by 1.5 (@0x437372).
-bool pvp_resist(std::int32_t spa) { return spa == 50 || spa == 49 || spa == 48 || spa == 46 || spa == 370 || spa == 47; }
+// The PvP resist debuffs scaled by 1.5 (@0x437372): the five resists and corruption.
+bool pvp_resist(std::int32_t spa) { return (spa >= 46 && spa <= 50) || spa == 370; }
 
-// The AA cache's keyed SPAs and maxima (aa_effects_cache.cpp).
-bool keyed_aa(std::int32_t spa) {
-    switch (spa) {
-    case 0x39: case 0xa9: case 0xb7: case 0xb8: case 0xb9: case 0xba: case 0xc5: case 0xd8: case 0xdc: case 0xe0:
-    case 0xe3: case 0xf7: case 0x104: case 0x106: case 0x108: case 0x10b: case 0x10c: case 0x14a: case 0x1a2:
-        return true;
-    default:
-        return false;
-    }
+// The AA cache's keyed SPAs and maxima (CacheAAEffects @0x4385d0). The ones that keep the largest limit (key 1)
+// also keep the largest base; 265, 345 and 346 keep only the base.
+bool keyed_aa(std::int32_t spa) { return one_of(kKeyedBySubindex, spa); }
+bool aa_keeps_largest_limit(std::int32_t spa) {
+    static constexpr std::array<std::int32_t, 4> kLimit = {217, 278, 439, 440};
+    return one_of(kLimit, spa);
 }
 bool aa_keeps_largest(std::int32_t spa) {
-    return spa == 0x109 || spa == 0x1b7 || spa == 0x159 || spa == 0xd9 || spa == 0x15a || spa == 0x1b8 || spa == 0x116;
+    return aa_keeps_largest_limit(spa) || spa == 265 || spa == 345 || spa == 346;
 }
-bool aa_keeps_largest_limit(std::int32_t spa) { return spa == 0x1b7 || spa == 0xd9 || spa == 0x1b8 || spa == 0x116; }
+
+// CalcAffectChangeGeneric's formula families. Each answers the change for its own calc values and nullopt for
+// any other, so the caller tries them in turn and falls back to level x calc.
+
+// Changes per tick of the buff's elapsed duration.
+std::optional<std::uint32_t> per_tick_factor(std::int32_t calc) {
+    if (calc == 107 || calc == 108) return static_cast<std::uint32_t>(calc - 106);
+    if (calc == 120) return 5u;
+    if (calc == 122) return 12u;
+    return std::nullopt;
+}
+
+// Changes per level above a floor.
+struct PastLevel {
+    std::uint32_t floor;
+    std::uint32_t per_level;
+};
+std::optional<PastLevel> past_level_rule(std::int32_t calc) {
+    // 111..114 and the steeper 115..118: four floors each.
+    static constexpr std::uint32_t kGentle[4][2] = {{16, 6}, {24, 8}, {34, 10}, {44, 15}};
+    static constexpr std::uint32_t kSteep[4][2] = {{15, 7}, {24, 10}, {34, 13}, {44, 20}};
+    // 124..132: every level above 50.
+    static constexpr std::uint32_t kPastFifty[9] = {1, 2, 3, 4, 5, 10, 15, 20, 25};
+    if (calc >= 124 && calc <= 132) return PastLevel{50, kPastFifty[calc - 124]};
+    if (calc >= 115 && calc <= 118) return PastLevel{kSteep[calc - 115][0], kSteep[calc - 115][1]};
+    if (calc >= 111 && calc <= 114) return PastLevel{kGentle[calc - 111][0], kGentle[calc - 111][1]};
+    return std::nullopt;
+}
+
+// Plain functions of the level (lvl is 0..255).
+std::optional<std::uint32_t> level_formula(std::int32_t calc, std::uint32_t lvl) {
+    switch (calc) {
+    case 102: return lvl;
+    case 103: return lvl * 2;
+    case 104: return lvl * 3;
+    case 105: return lvl * 4;
+    case 101: return lvl >> 1;
+    case 109: return lvl >> 2;
+    case 119: return lvl >> 3;
+    case 143: return (lvl * 3) >> 2;
+    case 121: return lvl / 3;
+    case 110: return lvl / 6;
+    default: break;
+    }
+    if (calc < 139 || calc > 142) return std::nullopt;
+    // 139..142: from level 31 up, half, all, one and a half or twice the levels above 30.
+    if (lvl <= 30) return 0u;
+    if (calc == 140) return lvl - 30;
+    if (calc == 142) return lvl * 2 - 60;
+    if (calc == 139) return u(static_cast<std::int32_t>(lvl - 30) / 2);
+    return u(core::wrapped_div(lvl * 3 - 90, 2));
+}
 
 bool spell_affects(const SpellData& s, std::int32_t spa) {
     return std::find(s.effect.begin(), s.effect.end(), spa) != s.effect.end(); // EQ_Spell::SpellAffects @0x4af770
@@ -161,86 +208,41 @@ std::int32_t Character::calc_affect_change(const SpellData& spell, std::uint32_t
         change = u(calc - 2000) * lvl;
         decaying = true;
     }
-    if (!decaying) {
-        auto over_level = [&](std::uint32_t floor, std::uint32_t factor) {
-            int over = static_cast<int>(lvl) - static_cast<int>(floor);
-            if (over > 0) change = u(over) * factor;
-        };
-        auto over_duration = [&](std::uint32_t factor) {
-            if (spell.duration_formula != 0 && affect) {
-                change = u(ticks_used()) * factor;
-                if (value >= 0) change = 0u - change;
-            }
-        };
-        switch (calc) {
-        case 100: change = 0; break;
-        case 101: change = lvl >> 1; break;
-        case 102: change = lvl; break;
-        case 103: change = lvl * 2; break;
-        case 104: change = lvl * 3; break;
-        case 105: change = lvl * 4; break;
-        case 107: over_duration(1); break;
-        case 108: over_duration(2); break;
-        case 109: change = lvl >> 2; break;
-        case 110: change = lvl / 6; break;
-        case 111: over_level(16, 6); break;
-        case 112: over_level(24, 8); break;
-        case 113: over_level(34, 10); break;
-        case 114: over_level(44, 15); break;
-        case 115: over_level(15, 7); break;
-        case 116: over_level(24, 10); break;
-        case 117: over_level(34, 13); break;
-        case 118: over_level(44, 20); break;
-        case 119: change = lvl >> 3; break;
-        case 120: over_duration(5); break;
-        case 121: change = lvl / 3; break;
-        case 122: over_duration(12); break;
-        case 123:
-            // RandomRoll1ToN(max - value): random in the original; no fixed result to reproduce. 0 here.
-            change = 0;
-            break;
-        case 124: over_level(50, 1); break;
-        case 125: over_level(50, 2); break;
-        case 126: over_level(50, 3); break;
-        case 127: over_level(50, 4); break;
-        case 128: over_level(50, 5); break;
-        case 129: over_level(50, 10); break;
-        case 130: over_level(50, 15); break;
-        case 131: over_level(50, 20); break;
-        case 132: over_level(50, 25); break;
-        case 137: // scales with the character's missing HP
-            if (sheet_.has_spawn && spawn_hp_max_ != 0)
-                change = 0u - u(core::wrapped_div(u(spawn_hp_current_) * u(value), spawn_hp_max_));
-            break;
-        case 138:
-            if (sheet_.has_spawn) {
-                std::int32_t half = spawn_hp_max_ / 2;
-                if (spawn_hp_current_ > half) change = 0u - u(value);
-                else if (half != 0)
-                    change = 0u - u(core::wrapped_div(u(spawn_hp_current_) * u(value), half));
-            }
-            break;
-        case 139:
-            if (lvl > 30) change = u(static_cast<std::int32_t>(lvl - 30) / 2);
-            break;
-        case 140:
-            if (lvl > 30) change = lvl - 30;
-            break;
-        case 141:
-            if (lvl > 30) change = u(core::wrapped_div(lvl * 3 - 90, 2));
-            break;
-        case 142:
-            if (lvl > 30) change = lvl * 2 - 60;
-            break;
-        case 143: change = (lvl * 3) >> 2; break;
-        default: change = lvl * u(calc); break;
+    // The other formulas; a family that finds nothing to add gives 0.
+    auto formula_change = [&]() -> std::uint32_t {
+        if (auto per_tick = per_tick_factor(calc)) {
+            if (spell.duration_formula == 0 || !affect) return 0;
+            const std::uint32_t by_ticks = u(ticks_used()) * *per_tick;
+            return value >= 0 ? 0u - by_ticks : by_ticks;
         }
-    }
-    if (spa == 11 && value < 100) {
+        if (auto rule = past_level_rule(calc)) {
+            const int levels_past = static_cast<int>(lvl) - static_cast<int>(rule->floor);
+            return levels_past > 0 ? u(levels_past) * rule->per_level : 0u;
+        }
+        if (auto by_level = level_formula(calc, lvl)) return *by_level;
+        if (calc == 137) { // scales with the character's missing HP
+            if (!sheet_.has_spawn || spawn_hp_max_ == 0) return 0;
+            return 0u - u(core::wrapped_div(u(spawn_hp_current_) * u(value), spawn_hp_max_));
+        }
+        if (calc == 138) {
+            if (!sheet_.has_spawn) return 0;
+            const std::int32_t half_hp = spawn_hp_max_ / 2;
+            if (spawn_hp_current_ > half_hp) return 0u - u(value);
+            if (half_hp == 0) return 0;
+            return 0u - u(core::wrapped_div(u(spawn_hp_current_) * u(value), half_hp));
+        }
+        // 100 adds nothing; 123 is RandomRoll1ToN(max - value) in the original, random, with no fixed result to
+        // reproduce: 0 here.
+        if (calc == 100 || calc == 123) return 0;
+        return lvl * u(calc);
+    };
+    if (!decaying) change = formula_change();
+    const bool slowing_haste = spa == 11 && value < 100;
+    if (!slowing_haste) {
+        value = static_cast<std::int32_t>(u(value) + change);
+    } else {
         value = static_cast<std::int32_t>(u(value) - change);
         if (maxv != 0 && value < maxv) value = maxv;
-    } else {
-        value = static_cast<std::int32_t>(u(value) + change);
     }
     if (cap_at_max && maxv != 0) {
         std::int32_t cap = maxv < 0 ? static_cast<std::int32_t>(0u - u(maxv)) : maxv;
@@ -250,7 +252,7 @@ std::int32_t Character::calc_affect_change(const SpellData& spell, std::uint32_t
     return static_cast<std::int32_t>(0u - u(value));
 }
 
-// ---- CalcAffectChange @0x436670's distance modifier (rof2decomp batch 283, re/src/game/character/affect_change.cpp) ----
+// ---- CalcAffectChange @0x436670's distance modifier ----
 
 double Character::spell_distance_mod(const SpellData& spell, std::optional<float> distance) const {
     const float max_dist = spell.distance_mod_end_x;

@@ -14,7 +14,7 @@ struct RowIds {
     const char* up;
     const char* text;
 };
-// CPlayerCustomizationWnd's constructor @0x716b80 (rof2decomp re/src/game/ui/child_items/cplayercustomizationwnd.inc):
+// CPlayerCustomizationWnd's constructor @0x716b80:
 // the down buttons at +0x234.., the up buttons at +0x25c.., the labels at +0x284...
 constexpr RowIds kRows[kCustomizationRows] = {
     {"Face_Down_Button", "Face_Up_Button", "Face_Text"},

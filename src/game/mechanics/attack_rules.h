@@ -3,8 +3,8 @@
 // Who may attack, or cast a spell on, whom: PlayerZoneClient::AllowedToAttack
 // @0x5a2360 and PlayerZoneClient::NotOnSameDeity @0x59e8d0 (the PvP rules).
 //
-// Exact port of rof2decomp's rewrite (re/src/game/spawn/attack_rules.cpp),
-// checked against PlayerZoneClient_AllowedToAttack.jsonl (batch 252), whose
+// Checked against the original's vectors,
+// PlayerZoneClient_AllowedToAttack.jsonl, whose
 // records list every callee's answer in call order. The original asks its
 // callees (the attacker virtual, levels, masters, spells, deities, the group)
 // through AttackQueries, in its order.

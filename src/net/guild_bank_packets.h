@@ -2,8 +2,8 @@
 
 // The guild bank in EQEmu's layouts (zone/guild_mgr.cpp SendGuildBank, zone/client_packet.cpp Handle_OP_GuildBank,
 // common/patches/rof2.cpp ENCODE / DECODE OP_GuildBank: RoF2's actions are EQEmu's less one); the client's requests
-// as CGuildBankWnd sends them (Send_OP_GuildBank_0067cc00 / _0067ea40 / _0067ec10 and WndNotification, rof2decomp
-// export/CGuildBankWnd.c), the server's messages as Handle_OP_GuildBank @0x67e470 reads them.
+// as CGuildBankWnd sends them (Send_OP_GuildBank_0067cc00 / _0067ea40 / _0067ec10 and WndNotification),
+// the server's messages as Handle_OP_GuildBank @0x67e470 reads them.
 
 #include <cstdint>
 #include <optional>

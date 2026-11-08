@@ -64,8 +64,7 @@ std::string EqStrings::format(std::uint32_t id, std::span<const std::string> arg
         return out;
     }
     auto arg = [&](std::size_t n) -> std::string { return n >= 1 && n <= args.size() ? args[n - 1] : std::string(); };
-    // FormatEqStrTemplate @0x4e1540 (rof2decomp notes/ui-chat-commands.md
-    // 4.3): %T<n> expands argument n as an eqstr id with the same arguments
+    // FormatEqStrTemplate @0x4e1540: %T<n> expands argument n as an eqstr id with the same arguments
     // (EQEmu's GENERIC_STRINGID_SAY 554 "%1 says '%T2'" for NPC SayString),
     // nested at most 10 deep.
     auto expand = [&](auto& self, const std::string& t, int depth) -> std::string {

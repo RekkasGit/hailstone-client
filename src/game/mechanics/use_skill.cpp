@@ -7,6 +7,14 @@ namespace hailstone::game::mechanics::useskill {
 
 namespace {
 
+// The skills a mounted player may still use (the table at 0x45d9a8).
+bool usable_on_mount(std::uint32_t skill) {
+    static constexpr std::uint32_t kMounted[] = {10, 16, 27, 30, 32, 40, 53, 55, 71, 73};
+    for (std::uint32_t s : kMounted)
+        if (s == skill) return true;
+    return false;
+}
+
 constexpr std::int32_t kColorSkill = 0x10e, kColorRed = 0xd;
 
 // eqstr ids (NMS/eqstr_us.txt) and tokens.
@@ -86,9 +94,9 @@ void Run::go() {
         return;
     }
     if (me.has_mount || q_.get_pc_spell_affect(Obj::Character, 0x71, nullptr, false) != 0) {
-        switch (skill_) { // the table at 0x45d9a8
-        case 10: case 16: case 27: case 30: case 32: case 40: case 53: case 55: case 71: case 73: break;
-        default: say(kNotOnMount, kColorRed); return;
+        if (!usable_on_mount(skill_)) {
+            say(kNotOnMount, kColorRed);
+            return;
         }
     }
     if (skill_ == 0x72) q_.send_ldon_inspect(0, 0);

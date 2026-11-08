@@ -1,6 +1,5 @@
 // GameConnection: the ability commands that are not skills or casts of their own: /stopdisc, /melody and the bard
-// twist, /dismount (net/game_connection_mounts.cpp; rof2decomp re/src/game/commands/small_commands7.cpp, melody_command.cpp, combat_commands.cpp,
-// re/src/game/spawn/spawn_helpers2_s9.cpp and player_helpers_s10.cpp). /autofire is with the attack flags in
+// twist, /dismount (net/game_connection_mounts.cpp). /autofire is with the attack flags in
 // game_connection.cpp, /discipline with doCombatAbility in game_connection_cast.cpp.
 
 #include <algorithm>

@@ -1,4 +1,4 @@
-// The client option commands' rules (game/option_commands.h; rof2decomp re/src/game/commands).
+// The client option commands' rules (game/option_commands.h).
 #include <doctest/doctest.h>
 
 #include <filesystem>

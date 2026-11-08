@@ -3,9 +3,8 @@
 // Climbing onto a clicked ladder: Ladder_MountClickedLadder @0x509c50, run
 // when the player clicks a switch whose actor type is 6.
 //
-// Exact port of rof2decomp batch 252 (re/src/game/spawn/ladder.cpp), checked
-// against Ladder_MountClickedLadder.jsonl at both x87 precisions; rof2decomp
-// notes/combat-and-movement.md §3.5:
+// Follows the original exactly, checked against its vectors
+// (Ladder_MountClickedLadder.jsonl) at both x87 precisions:
 //  - already climbing (movement mode 6): only turn to the ladder's heading,
 //    or its opposite when __HeadingDiff >= 256;
 //  - A = max(player actor height (vf44), 2) + 0.5;

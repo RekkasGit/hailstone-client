@@ -1,6 +1,6 @@
 // GameConnection: game commands that act on the player or the target: /shieldgroup, /blockspell, /sheathe, /open,
 // /reveal, /hidecorpses (and the loot window's hide of a looted corpse), /decaycorpse and /setstartcity. Packets in
-// net/player_packets.h and net/spell_packets.h; every function names the original it follows (rof2decomp export of
+// net/player_packets.h and net/spell_packets.h; every function names the original it follows (in
 // eqgame.exe).
 
 #include <algorithm>
@@ -89,7 +89,7 @@ bool GameConnection::game_command(std::string_view h, const std::string& args) {
 }
 
 bool GameConnection::may_shield() {
-    // MayShield (rof2decomp re/src/game/commands/ability_commands.cpp): no merchant, guild master or banker open
+    // MayShield: no merchant, guild master or banker open
     // (0x1aaa) and a warrior of level 30 or more (0xfc1). Colour 0x111.
     if (merchant_ || training_ || bank_) {
         system(6826, {}, kColorCommand);

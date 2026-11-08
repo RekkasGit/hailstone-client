@@ -1,7 +1,7 @@
 #pragma once
 
 // A model's named points (spell points): where spell particles attach to a
-// character (rof2decomp notes/eqgraphicsdx9.md, Model points).
+// character.
 //
 // eqgame's ActorClient::InitSpellPoints @0x40a3d0 looks up ten points by name
 // through the actor (vtable +0x184) into ActorClient +0x148 (spawn +0xfec),

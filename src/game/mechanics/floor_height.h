@@ -1,8 +1,8 @@
 #pragma once
 
 // CDisplay::GetPlayerFloorHeight @0x507230 (a thiscall on the spawn): the
-// floor under a spawn, cached. Exact port of rof2decomp batch 251
-// (re/src/game/world/lift_floor.cpp), checked against the original's vectors
+// floor under a spawn, cached. Follows the original exactly, checked against
+// its vectors
 // (tests/movement_vectors_test.cpp). The cache (+0x1060 CollisionCounter,
 // +0x1064 CachedFloorLocation, +0x1070 CachedFloorHeight) holds while x and y
 // are unchanged, z + 0.001 is not below the cached z, (for the controlled

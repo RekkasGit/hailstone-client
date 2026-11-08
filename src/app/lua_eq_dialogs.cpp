@@ -196,7 +196,7 @@ constexpr OptionRow kColorRows[] = {
     {86, 4586, 0}, {87, 641, 0}, {88, 642, 0}, {89, 645, 0}, {90, 6360, 0}, {91, 7506, 0}, {92, 5208, 0},
     {93, 5209, 0}, {94, 6450, 0}, {95, 7680, 0}, {96, 7725, 0}, {97, 7726, 0}, {98, 7727, 0},
 };
-// COptionsWnd (rof2decomp export COptionsWnd.c). The Options window itself is this client's own
+// COptionsWnd. The Options window itself is this client's own
 // (ui/<pack>/options.lua: its settings are client options, eq.Option / eq.SetOption); it takes these lists from here:
 //  - Keys (KeyboardPageWndNotification @0x70aa40, RefreshCurrentKeyboardAssignmentList @0x70a560): the filter
 //    combo's choices are the XML's (Movement .. Voice Chat, All; not Item Placement, as real estate is left out:
@@ -776,7 +776,7 @@ private:
     std::string note_, saved_note_;
 };
 
-// FeedbackWindow (/feedback; CFeedbackWnd, rof2decomp export/CFeedbackWnd.c): the character's name (FBKW_UserName, set
+// FeedbackWindow (/feedback; CFeedbackWnd): the character's name (FBKW_UserName, set
 // by the constructor), the text (FBKW_FeedbackInput, at most 0x3ff characters); Send sends it with the position and
 // heading (OP_Feedback) when there is text and clears it, Cancel clears it; both close the window.
 class FeedbackWindow : public StockWindow {

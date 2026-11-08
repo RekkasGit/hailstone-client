@@ -1,4 +1,4 @@
-// rof2decomp batch 254's vectors (recorded from the original eqgame.exe): the /who class text, the target types
+// The original's vectors (recorded from eqgame.exe): the /who class text, the target types
 // that need a target, the chat garbler and bad word filter, GetPlayerFromPartialName and /follow's step.
 
 #include <doctest/doctest.h>

@@ -421,7 +421,7 @@ bool target_type_needs_target(std::uint8_t t) {
 
 bool target_type_requires_target(std::uint8_t t) {
     switch (t) {
-    // @0x43b75e: these jump to the "need a target" path (LAB_0043bc5a → eqstr 214) without one.
+    // @0x43b75e: these jump to the "need a target" path (0x43bc5a → eqstr 214) without one.
     case 5: case 9: case 10: case 11: case 12: case 13: case 15: case 16: case 17: case 18: case 20: case 27:
     case 34: case 35: case 39: case 43: case 47:
     // Targeted AE (8, 21, 22, 23, 28).

@@ -41,8 +41,7 @@ constexpr std::uint8_t OutOfSession = 0x1d;
 enum class EncodePass : std::uint8_t { None = 0, Compression = 1, Xor = 4 };
 
 constexpr std::uint32_t kProtocolVersion = 3;
-// The original client caps a decoded packet at 8192 bytes
-// (rof2decomp:notes/connection-and-network.md §7.3).
+// The original client caps a decoded packet at 8192 bytes.
 constexpr std::size_t kMaxDecodedSize = 8192;
 
 // What the server chose in its SessionResponse.

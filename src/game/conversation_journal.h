@@ -1,6 +1,6 @@
 #pragma once
 
-// The conversation journal (the NPC journal window's data; rof2decomp _globals ConversationJournal_* and the
+// The conversation journal (the NPC journal window's data; the original's ConversationJournal_* and the
 // 0x47a0e0..0x47ba00 helpers, CJournalTextWnd +0x228): NPCs by name and zone, each with the lines they said to the
 // player (an entry per distinct text: the time and place it was last said and a category), the categories, and the
 // texts kept once each by their CRC (__MemChecker1).

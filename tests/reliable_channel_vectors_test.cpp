@@ -1,4 +1,4 @@
-// UdpReliableChannel_GiveTime.jsonl (rof2decomp, recorded from eqgame.exe)
+// UdpReliableChannel_GiveTime.jsonl (recorded from eqgame.exe)
 // against net/reliable_channel: the resend timeout, which slots are (re)sent
 // with which header, the window, the counters and the wake time.
 #include <doctest/doctest.h>

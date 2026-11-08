@@ -10,7 +10,7 @@ namespace hailstone::app {
 
 namespace {
 
-// CNameChangeWnd @0x6fb1b0 (rof2decomp export CNameChangeWnd.c; the pet and mercenary windows @0x6fa630 / @0x6f9ab0
+// CNameChangeWnd @0x6fb1b0 (the pet and mercenary windows @0x6fa630 / @0x6f9ab0
 // differ only in their child prefix, strings and ini key). Children: <prefix>NameEdit (15 characters), Prompt,
 // SubmitButton, CloseButton, DisableReminderButton. Open(remind) @0x6fae40 (GameConnection::NameChangeWindow):
 // Disable Reminder shown by `remind`; the close button reads "Remind Me Later" with the reminder's prompt, else

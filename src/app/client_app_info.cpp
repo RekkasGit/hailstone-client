@@ -1,5 +1,5 @@
-// ClientApp: the original's client commands that act on the app's windows and files rather than the connection
-// (rof2decomp re/src/game/commands): /channel (the active chat window's default channel), /url and /www (the web
+// ClientApp: the original's client commands that act on the app's windows and files rather than the connection:
+// /channel (the active chat window's default channel), /url and /www (the web
 // browser), /outputfile (the inventory, spell book, raid and guild rosters and the guild bank written to files in the
 // character's folder). GameConnection::run_slash_command hands them here through client_command.
 

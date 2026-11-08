@@ -1,7 +1,6 @@
 #pragma once
 
-// Guild ranks and their permissions, as the original keeps them (rof2decomp batch 257,
-// re/src/game/world/guild_ranks.cpp; vectors GuildRank_Compare, GuildRank_HasPermission,
+// Guild ranks and their permissions, as the original keeps them (vectors GuildRank_Compare, GuildRank_HasPermission,
 // LocalPC_HasGuildPermission):
 //   - ranks run 1 (leader) .. 8 (recruit); GuildRank_Compare @0x7ff390 compares them the other way round when
 //     both are non-zero;

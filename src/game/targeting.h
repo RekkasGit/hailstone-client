@@ -5,14 +5,13 @@
 // and 38), with CTargetManager's cycle lists
 // (TargetManager_GetNextCycleTarget @0x5c6710 and its helpers).
 //
-// Ported from rof2decomp (batch 247 and re/src/game/spawn/
-// cycle_next_target.cpp, cycle_visited_s10.cpp, cycle_targets.cpp,
-// spawn_checks.cpp' TargetManager_CycleCandidateCallback); the command
+// Follows the original's cycle functions and
+// TargetManager_CycleCandidateCallback; the command
 // arguments are read from the disassembly at 0x4d8a2f..0x4d8c65:
 //   TARGETPC 30 (mode 0, restart), CYCLEPCTARGETS 31 (0), TARGETNPC 32 (1,
 //   restart), CYCLENPCTARGETS 33 (1), TARGETCORPSE 34 (2, restart),
 //   CYCLECORPSETARGETS 35 (2), range 500 for all.
-// Not ported (the scene graph lives in EQGraphicsDX9.dll, vtable +0x98): the
+// Not modelled (the scene graph lives in EQGraphicsDX9.dll, vtable +0x98): the
 // distance it measures. The client offers the spawns within 500 units of the
 // eye point, in id order, with their 3D distance, that eqgame's filter
 // 0x5c58c0 passes (never the local or the controlled player): mode 0 the
@@ -21,7 +20,7 @@
 // 2 the corpses; for modes 0 and 1 it also leaves out the spawns the local
 // player's PlayerZoneClient::IsInvisible @0x5a1850 hides (0x5c5a04), of which
 // the client models Hide Traders and Hide Buyers (TargetManager::invisible).
-// Its other tests (body types, owners, stale updates) are not ported.
+// Its other tests (body types, owners, stale updates) are not modelled.
 
 #include <array>
 #include <cstdint>
@@ -60,7 +59,7 @@ struct TargetManager {
     std::function<bool(const Spawn&)> invisible;
     // Hailstone (option tab_line_of_sight, on by default; docs/mechanics.md): the NPC cycle takes only the NPCs this
     // says the player can see (the zone's collision between the eyes and the spawn). Unset: every NPC, as the
-    // original's cycle as ported here.
+    // original's cycle as modelled here.
     std::function<bool(const Spawn&)> in_sight;
 };
 

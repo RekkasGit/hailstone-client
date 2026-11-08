@@ -15,8 +15,8 @@
 #include "game/spell_description.h"
 #include "game/spells.h"
 
-// Each section names the original's code it follows (rof2decomp export/_globals.c: CItemDisplayWnd_BuildItemInfo
-// and the helpers it calls; the eqgame.exe disassembly where the decompiler dropped arguments).
+// Each section names the original's code it follows (CItemDisplayWnd_BuildItemInfo and the helpers it calls,
+// read from the eqgame.exe disassembly where arguments were unclear).
 
 namespace hailstone::game {
 
@@ -412,7 +412,7 @@ std::string collectible_trophy_text(const net::Item& item, const ItemDisplayCont
 
 // CItemDisplayWnd_CreateEffectsString @0x6a6810 (what this client keeps of an item).
 std::string effects_text(const net::Item& item, const ItemDisplayContext& ctx) {
-    std::string a, b, c, d; // local_9e4, local_9d4, local_9dc, local_9f8
+    std::string a, b, c, d; // the original's four text buffers
     std::vector<const net::ItemEffect*> described;
     if (item.item_class == 0) {
         if (item.is_lore() && item.lore_group > 0 && ctx.db_string) {

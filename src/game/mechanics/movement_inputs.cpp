@@ -35,7 +35,7 @@ MovementFacts movement_facts(const Character& ch) {
     f.hp = ch.cur_hp(true, arg);
     f.max_hp = ch.max_hp(true, arg);
     f.low_level_exempt_off = ch.sheet().slowdown_any_level;
-    // CacheBuffSlotEffects keys SPA 57 by Base2 (rof2decomp batch 247).
+    // CacheBuffSlotEffects keys SPA 57 by Base2.
     f.levitate_mode2 = ch.cached_buff(57, 0);
     f.levitate_mode5 = ch.cached_buff(57, 1);
     const StatBlock& s = ch.stats().stats;

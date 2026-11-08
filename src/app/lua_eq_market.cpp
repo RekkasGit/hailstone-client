@@ -1,7 +1,7 @@
 // The bazaar and barter windows: BazaarWnd (CBazaarWnd, the trader window), BazaarSearchWnd (CBazaarSearchWnd),
 // BazaarConfirmationWnd (CBazaarConfirmationWnd) and BarterMerchantWnd (CBarterMerchantWnd) over GameConnection's
 // market state (game/bazaar.h, net/game_connection_market.cpp). The connection keeps the original's rules; these
-// models lay its state out as the original windows do (rof2decomp export, addresses at each class).
+// models lay its state out as the original windows do (addresses at each class).
 
 #include <algorithm>
 #include <charconv>

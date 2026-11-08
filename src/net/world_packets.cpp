@@ -1,5 +1,5 @@
 // Written from EQEmu rof2.cpp/rof2_structs.h (read as reference, no code copied)
-// and the rof2decomp notes; OpenEQ crates/openeq-net/src/world.rs was studied to
+// and the original client; OpenEQ crates/openeq-net/src/world.rs was studied to
 // cross-check the login record and character-select tail (THIRD_PARTY.md).
 
 #include "net/world_packets.h"

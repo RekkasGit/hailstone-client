@@ -1,14 +1,14 @@
 #pragma once
 
 // Which sound the original plays for which event (wave ids of soundassets.txt;
-// the playing itself is audio/). Sources in rof2decomp:
-//   PlayerClient::SetSounds @0x58d7f0 (re/src/game/spawn/player_sounds.cpp) and
+// the playing itself is audio/). Sources in the original:
+//   PlayerClient::SetSounds @0x58d7f0 and
 //   RaceManager_GetSoundID @0x7f46d0: a spawn's 44 sound ids from racedata.txt;
 //   PlayerAnimation_PlayAnimationSound @0x4b09d0: the sound of an animation
 //   (attacks, steps, jumps, swimming, death);
 //   CEverQuest::ReportSuccessfulHit @0x52ee40 and 0x514920: hit and block sounds;
-//   EQSwitch::ChangeState @0x50f540 (re/src/game/world/switch_state.cpp): door sounds;
-//   Handle_OP_LevelUpdate @0x4b9c10 (re/src/game/net/experience.cpp): level up;
+//   EQSwitch::ChangeState @0x50f540: door sounds;
+//   Handle_OP_LevelUpdate @0x4b9c10: level up;
 //   PlayerZoneClient_LandingAndFallCheck @0x506e20 and IHaveFallen @0x58cd20: landing.
 
 #include <array>
@@ -118,8 +118,8 @@ AnimationSounds animation_sounds(const SpawnSounds& s, const AnimationSoundInput
 
 // ---- spell effect stages (DoSpellEffect @0x522500) ------------------------
 
-// One stage of a spell's effect (0 cast, 1 projectile, 2 impact), as DoSpellEffect plays it (rof2decomp batch 256,
-// re/src/game/spell/do_spell_effect.cpp; vectors DoSpellEffect.jsonl). Its callers: CEverQuest::StartCasting (stage
+// One stage of a spell's effect (0 cast, 1 projectile, 2 impact), as DoSpellEffect plays it (the recorded vectors
+// DoSpellEffect.jsonl). Its callers: CEverQuest::StartCasting (stage
 // 0, caster = target = the casting spawn), EQPlayer::TriggerSpellEffect from PlayerZoneClient::IWasHit for every
 // OP_Action of type 231, both copies (stage 2, caster = the packet's word +2 spawn, target = the struck spawn), and
 // the missiles (stage 1 / 2 without a target).

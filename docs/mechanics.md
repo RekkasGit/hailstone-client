@@ -113,7 +113,7 @@ is-spellcaster check and the focus level falloff percent. The AA focus collector
 effect takes the limits that follow it).
 
 The distance modifier (CharacterZoneClient::CalcAffectChange @0x436670, PlayerClient::CalcSpellDistanceMod
-@0x59fbe0; rof2decomp batch 283, no vectors; unit tests in `tests/mechanics_test.cpp`): a spell with a distance range
+@0x59fbe0; no recorded vectors; unit tests in `tests/mechanics_test.cpp`): a spell with a distance range
 (columns 227..230: near distance and modifier, far distance and modifier, and the parser's ratio +0x4e9) scales the
 generic value by the modifier at the spawn's 2D distance from the player (clamped to the range, at least 0; the far
 modifier when the spawn is not found), rounded half away from zero, a negative value rounding to 0 giving -1. The
@@ -976,7 +976,7 @@ Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle
   emote commands, whatever the window's default channel), RTARGET "/rtarget <name>" (12365 without one),
   HISTORY_UP / HISTORY_DOWN the lines sent before (the input's own Up / Down); each replaces what the input held and
   gives it the keys. PAGEUP / PAGEDOWN scroll the active window's output by its height less 8. The reply list's
-  index (DAT_00de21d8) is the one REPLY and RTARGET read, back to the newest with every new tell; CYCLEREPLY (Tab)
+  index (0xde21d8) is the one REPLY and RTARGET read, back to the newest with every new tell; CYCLEREPLY (Tab)
   steps it one older, round to the newest, and CYCLEREPLY_BACK (Shift+Tab) one newer, round to the oldest
   (LastTell_CycleIndex), only while the chat input has the keys and holds a "?tell" or "?rtarget" line
   (`game::cycle_reply`). Here they are the chat input's own Tab and Shift+Tab (the default keys; another key bound to
@@ -1292,7 +1292,7 @@ it does nothing). Which group plays what:
 
 ## Character appearance
 
-`game/actor_look.*` ports the ActorClient appearance functions (rof2decomp `re/src/game/spawn/`; vectors in
+`game/actor_look.*` follows the ActorClient appearance functions (the recorded vectors in
 `tests/appearance_vectors_test.cpp`); `assets/character_parts.cpp` (Luclin and new models) and
 `assets/character_dress.cpp` (classic models) run them on the model.
 

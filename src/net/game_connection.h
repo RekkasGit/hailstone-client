@@ -5,7 +5,7 @@
 // creation, entering the world, the zone-in handshake, and then keeps the
 // in-zone state (spawns, chat) and sends the player's movement.
 //
-// Sequence sources: rof2decomp:notes/connection-and-network.md §4–6 and
+// Sequence sources: the original client's connection handling and
 // docs/protocol/rof2-packets.md (from the server's world/client.cpp and
 // zone/client_packet.cpp).
 //
@@ -325,12 +325,12 @@ public:
     // In a zone, the camp's 30 s included (the player is still there): what the plugins see as in_zone.
     bool in_zone() const { return state_ == ConnectionState::InZone || state_ == ConnectionState::Camping; }
     const std::string& error() const { return error_; }
-    // Where a finished camp goes (DAT_00dd2664: 0 character select, 1 the desktop, 2 the server list), once the
+    // Where a finished camp goes (the camp kind at 0xdd2664: 0 character select, 1 the desktop, 2 the server list), once the
     // zone has dropped the link after OP_Logout (state Disconnected, error "Camped out."); nullopt otherwise.
     std::optional<std::uint32_t> camped_out() const { return camped_out_; }
     // A link death (HandleWorldDisconnect @0x51be10): the world or zone link dropped (the 180 s no-data timeout, the
     // server's disconnect) other than at a camp's end or a zone change. In game (DoMainLoop's call, line 0x4a81) the
-    // client goes on as a camp would, with DAT_00dd2664 as it stands: 0 character select, 1 the desktop, 2 the
+    // client goes on as a camp would, with the camp kind at 0xdd2664 as it stands: 0 character select, 1 the desktop, 2 the
     // server list; elsewhere (character select, the zone-in) to the front end. nullopt otherwise.
     struct LinkDeath {
         bool in_game = false;
@@ -579,7 +579,7 @@ public:
     // A one-shot animation on a spawn, as an OP_Animation for it would play it at speed 10 (a missile's
     // launch: Send_OP_Animation_0058f540 -> PlayAttackAnimation on its source).
     void play_animation(std::uint32_t spawn_id, std::uint8_t action);
-    // OP_ControlBoat {spawn id, take_control} (rof2decomp notes/combat-and-movement.md §3.5): take_control 1
+    // OP_ControlBoat {spawn id, take_control}: take_control 1
     // makes that spawn pinstControlledPlayer ("You have the helm, captain.", 1407); release_boat() lets go
     // ({id, 0}). 0: the player itself is controlled.
     std::uint32_t controlled_boat() const { return controlled_boat_; }
@@ -606,8 +606,8 @@ public:
     void set_hit_modes(const game::HitModes& modes) { hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
-    // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition; rof2decomp
-    // re/src/game/spawn/change_position.cpp) for the player: 100 stand, 105
+    // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
+    // for the player: 100 stand, 105
     // kneel (looting, bind wound), 110 sit, 111 crouch, 115 lie down (feign
     // death). Nothing for the same state or for sitting while mounted;
     // otherwise auto attack goes off, and crouch to stand or sit needs
@@ -1450,7 +1450,7 @@ public:
         bool hide = false, sneak = false;
     };
     VisibilityCleared take_visibility_cleared() { return std::exchange(visibility_cleared_, {}); }
-    // CharacterZoneClient::MakeMeVisible @0x4592b0 (rof2decomp visible_status.cpp): when invisible, the
+    // CharacterZoneClient::MakeMeVisible @0x4592b0: when invisible, the
     // invisibility effects are removed, the state is sent (SpawnAppearance {me, 3, 0}), hiding ends
     // (Send_OP_Hide: OP_Hide {0}, eqstr 12337) and with `appearance` sneaking too (eqstr 12338,
     // SpawnAppearance {me, 15, 0}).
@@ -1840,7 +1840,7 @@ public:
     std::vector<const game::AltAbility*> aa_list(std::int32_t type, const game::AAFilter& filter) const;
     // AltAdvManager::IsAbilityReady (SPA 264 reduces the reuse time).
     game::AAReadiness aa_readiness(std::uint32_t rank_id) const;
-    // The item recast timers (rof2decomp notes/items-and-inventory.md §3.7), in Util::FastTime seconds (time(0),
+    // The item recast timers, in Util::FastTime seconds (time(0),
     // as the server's ItemSerializationHeader last_cast_time): the item's own (ItemBase +0x34, net::Item
     // last_cast_time) and the profile's 100 by recast type (PcBase +0x6a5c, PcBase_Get/SetItemRecastTimer).
     // PcZoneClient::GetItemRecastTimer @0x580600: the later (unsigned) of the item's own and, for a recast type
@@ -2061,7 +2061,7 @@ public:
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }
-    // The reply keys' place in last_tells (DAT_00de21d8; game::cycle_last_tell steps it).
+    // The reply keys' place in last_tells (0xde21d8; game::cycle_last_tell steps it).
     int& last_tell_index() { return social_.last_tell_index; }
     // The user gave input this frame (keys, mouse, pad, typing): the AFK keepalive's activity (game/social.h).
     void note_user_activity() { afk_keepalive_.last_input_ms = now_ms(); }
@@ -2753,7 +2753,7 @@ private:
     void surname_command(const std::string& args);
     void corpse_command(Op op);
     void shield_command(const std::string& args);
-    bool may_shield(); // MayShield (rof2decomp ability_commands.cpp), the checks /shield and /shieldgroup share
+    bool may_shield(); // MayShield, the checks /shield and /shieldgroup share
     // The game commands of net/game_connection_game_commands.cpp: /shieldgroup, /blockspell, /sheathe, /open,
     // /reveal, /hidecorpses, /decaycorpse, /setstartcity.
     bool game_command(std::string_view handler, const std::string& args);
@@ -2883,7 +2883,7 @@ private:
     std::chrono::steady_clock::time_point zone_change_started_{}, zone_change_sent_{}, zone_change_retry_at_{};
     game::EqStrings strings_;
 
-    // Movement sending (rof2decomp:notes/combat-and-movement.md §3.4).
+    // Movement sending.
     glm::vec3 position_{0.0f};
     glm::vec3 velocity_{0.0f};
     float heading_ = 0.0f;
@@ -3060,7 +3060,7 @@ private:
     bool garbling_on_ = true;  // 0xddfd50, OP_LogServer +0x14 (EQEmu sends 1)
     bool chat_blocked_ = false; // 0xddf70d
 
-    // CastSpell's state (rof2decomp batch 254).
+    // CastSpell's state.
     std::function<bool(const glm::vec3&, const glm::vec3&)> line_of_sight_;
     TeleportHandler teleport_handler_;
     bool in_combat_ = false;          // PcClient +0x31bc
@@ -3260,7 +3260,7 @@ private:
 
     std::chrono::steady_clock::time_point camp_started_{};
     int camp_notices_ = 0;          // 12684 lines shown (one per 5 s)
-    std::uint32_t camp_kind_ = 0;   // DAT_00dd2664 (Cmd_camp)
+    std::uint32_t camp_kind_ = 0;   // 0xdd2664 (Cmd_camp)
     std::optional<std::uint32_t> camped_out_;
     std::optional<LinkDeath> link_death_;
     std::int32_t air_supply_ = 0;

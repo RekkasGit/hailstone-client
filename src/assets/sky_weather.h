@@ -3,8 +3,7 @@
 // The cloud definitions of the graphics DLL's procedural sky (CSky):
 // Resources/Sky/sky.ini [SkySetting-<zone>] names a DefaultWeather, whose
 // weather.ini [WeatherPattern-<name>] lists Cloud0..CloudN, each a
-// [Cloud-<name>] section (read by CCloudDefinition_Load @0x100278b0;
-// rof2decomp notes/eqgraphicsdx9.md, Sky). Only the clouds are used here; the
+// [Cloud-<name>] section (read by CCloudDefinition_Load @0x100278b0). Only the clouds are used here; the
 // colour maps, satellites and rings of CSky are not decoded.
 
 #include <cstdint>

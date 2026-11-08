@@ -1,9 +1,7 @@
 #pragma once
 
 // The group's member list as the original changes it, and the chat lines it
-// prints: exact ports of rof2decomp batch 253 (re/src/game/world/
-// group_members.cpp, re/src/game/net/group_world_message.cpp,
-// group_role_message.cpp), checked against CGroupBase_AddMember /
+// prints, following the original and checked against CGroupBase_AddMember /
 // RemoveMember / SetLeader.jsonl and HandleWorldMessage_Group.jsonl.
 //  - AddMember (CGroupBase vf1 @0x7d6150): refuses a null member or a name
 //    already in the group; takes the first free of six slots, a mercenary
@@ -121,7 +119,7 @@ void group_target_member(GroupTargetWorld& w, std::int32_t n, bool target_of_tar
 // our target's target (`own` is the character's +0x2dd0 spawn).
 void target_self_or_pet(GroupTargetWorld& w, bool grouped, std::int32_t n, bool target_of_target, int own);
 
-// ---- an incoming invitation (rof2decomp batch 265, Handle_OP_GroupInvite2.jsonl)
+// ---- an incoming invitation (Handle_OP_GroupInvite2.jsonl)
 
 inline constexpr std::uint32_t kOpGroupInvite = 0x6110, kOpGroupInvite2 = 0x32c2, kOpCancelInvite = 0x2a50;
 inline constexpr std::uint32_t kStrInvitesYou = 12280, kStrToJoinFollow = 12281;

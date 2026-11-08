@@ -1,10 +1,9 @@
 #pragma once
 
 // The graphics DLL's half of mouse picking: the scene graph's
-// PickActorAtScreenPoint @0x10069790 (EQGraphicsDX9.dll), from rof2decomp
-// notes/eqgraphicsdx9.md "Mouse picking" (batch 262; no vectors: the
-// original's vectors fake the DLL, so this half follows the notes and the
-// disassembly):
+// PickActorAtScreenPoint @0x10069790 (EQGraphicsDX9.dll); no vectors: the
+// original's vectors fake the DLL, so this half follows the
+// disassembly:
 //  - the ray: CCamera::GetScreenRay @0x10007640 (the camera-space direction
 //    from the cot table and the viewport @0x10006860, rotated by the camera,
 //    normalised, times Yon), from the camera position;

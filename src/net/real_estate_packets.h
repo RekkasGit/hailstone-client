@@ -1,8 +1,8 @@
 #pragma once
 
 // Real estate (player housing, guild halls, placed furniture): the packets RealEstateManagerClient_HandleMessage
-// @0x5b2500 reads and the windows send (rof2decomp notes/housing-and-market.md §§2-5; checked against the decompile
-// of 0x5b2500, 0x5b7a90, 0x5b0f80, 0x74ab50, 0x74c4c0, 0x5abd20 and ConfirmationDialog_HandleResponse's 0x89).
+// @0x5b2500 reads and the windows send (checked against
+// 0x5b2500, 0x5b7a90, 0x5b0f80, 0x74ab50, 0x74c4c0, 0x5abd20 and ConfirmationDialog_HandleResponse's 0x89).
 // None of these are in EQEmu's RoF2 table: a stock EQEmu server never sends them, a server with housing (Project
 // Triune) does, with the original's numbers.
 //
@@ -91,7 +91,7 @@ std::optional<ReRecord> decode_re_record(const AppPacket& p);
 AppPacket encode_re_record(std::uint16_t op, const ReRecord& v); // server direction, for tests
 
 // A definition (0x2698's first part; RealEstate::ReadOneDefinition @0x7f4c90): u32 f00..f10, str name, u32
-// f11..f16, u32 n, n × u32. Field meanings in the note's §5.3.
+// f11..f16, u32 n, n × u32.
 struct ReDefinition {
     std::uint32_t id = 0;
     std::int32_t f01 = -1;

@@ -1,8 +1,7 @@
 #pragma once
 
-// The original's client option commands as rules, without the client around them (rof2decomp re/src/game/commands:
-// option_commands.cpp, status_commands.cpp, small_commands7.cpp, setting_commands.cpp, screen_commands.cpp,
-// usercolor.cpp, hotbutton_eh.cpp, window_commands.cpp, world_commands.cpp, shadows_command.cpp). The connection
+// The original's client option commands as rules, without the client around them (the option, status,
+// setting, screen, /usercolor, hot button, window, world and /shadows commands). The connection
 // (net/game_connection_options.cpp) and the app (app/client_app_commands.cpp) say what they decide and keep the
 // settings. Strings are eqstr ids of eqstr_us.txt unless they are the exe's own text, which is given here.
 

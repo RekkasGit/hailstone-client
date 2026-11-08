@@ -1,7 +1,7 @@
 // Using items: a right click on an item slot (CInvSlot::HandleRButtonUp @0x697250), /useitem (Cmd_useitem
 // @0x479200) and the potion belt send OP_ItemVerifyRequest; the server's OP_ItemVerifyReply
-// (Handle_OP_ItemVerifyReply @0x4bf800) eats, drinks, applies a poison or casts the item's click effect (rof2decomp
-// notes/items-and-inventory.md §4, read again from the disassembly).
+// (Handle_OP_ItemVerifyReply @0x4bf800) eats, drinks, applies a poison or casts the item's click effect (read
+// from the disassembly).
 #include "net/game_connection.h"
 
 #include <algorithm>

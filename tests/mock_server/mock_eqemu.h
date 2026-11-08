@@ -35,7 +35,7 @@ namespace hailstone::test {
 net::Spawn make_spawn(const std::string& name, std::uint32_t id, std::uint8_t npc, std::uint32_t race, float x, float y,
                       float z, float heading = 0.0f);
 
-// A common item in a possessions slot (rof2decomp items-and-inventory.md; net/item_packets.h).
+// A common item in a possessions slot (net/item_packets.h).
 net::Item make_item(std::uint32_t item_id, const std::string& name, std::int16_t slot, std::uint32_t stack = 1);
 
 struct MockCharacter {

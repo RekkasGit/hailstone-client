@@ -1,9 +1,9 @@
 // Merchants, trade and NPC dialogue: byte-exact packet layouts (the NMS
-// server's rof2_structs.h / rof2.cpp and what rof2decomp's export shows the
-// original client sending), and the client's price and money maths ported
-// from rof2decomp (ItemBase::ValueSellMerchant @0x7bcf80, PcClient_TakeMoney
-// @0x5819f0, FormatMoneyWords @0x4dc5f0). Vectors from the original exe can
-// be added later (rof2decomp re/test/vectors).
+// server's rof2_structs.h / rof2.cpp and what the original client is seen
+// sending), and the client's price and money maths, which follow the original's
+// ItemBase::ValueSellMerchant @0x7bcf80, PcClient_TakeMoney
+// @0x5819f0 and FormatMoneyWords @0x4dc5f0. Vectors from the original exe can
+// be added later.
 
 #include <doctest/doctest.h>
 

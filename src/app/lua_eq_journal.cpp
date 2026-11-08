@@ -52,7 +52,7 @@ void multi_select(ListData& l, int row, int mods, int& anchor) {
 
 class JournalCatWindow;
 
-// CJournalTextWnd @0x6b4780 (rof2decomp export CJournalTextWnd.c, the _globals CJournalTextWnd_* functions): made by
+// CJournalTextWnd @0x6b4780 (and the CJournalTextWnd_* functions): made by
 // CDisplay::InitGameUI only with the Lost Dungeons of Norrath or Gates of Discord expansion (OP_ExpansionInfo bits
 // 0x10 / 0x20; TOGGLE_JOURNAL asks the same). The UI ini's JournalLog (0x6b2860) turns the logging on; then the
 // journal is read at once (CJournalTextWnd_LoadJournalFiles: here the character folder's CJ.hdr / CJ.txt, the
@@ -357,7 +357,7 @@ private:
     int npc_anchor_ = -1, dialog_anchor_ = -1;
 };
 
-// CJournalCatWnd @0x6b0f80 (rof2decomp export CJournalCatWnd.c): CategoryList (Name 100, Description 250; sorted by
+// CJournalCatWnd @0x6b0f80: CategoryList (Name 100, Description 250; sorted by
 // name or, its second column clicked, description; again reverses), DefaultChooser ("None" 1216 and the categories:
 // the category new lines get, the UI ini's DefaultCategory), NameInput (15 characters), DescInput (255), Add (a new
 // category with the lowest free id; 3182 when the name is taken), Update (the selected one's name and

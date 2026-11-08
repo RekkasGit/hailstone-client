@@ -8,12 +8,10 @@
 // PlayerPhysics::IntegrateHeading @0x8d1e80 and PlayerBase::MyFeetAreOnGround
 // @0x8cfca0. Collision (DoCollisionMovement) is the caller's.
 //
-// Sources: rof2decomp re/src/game/spawn/physics_helpers_s10.cpp (rewritten and
-// tested: MyFeetAreOnGround, vf0, vf4, PushAlongHeading), physics_steps_s10.cpp
-// (SetAccel, the strafe vf14), batch 240's physics_step_eh.cpp and
-// physics_env.cpp (Step, GetEnvCoefficients, LandingAndFallCheck: the exact
-// ports at the end of this header) and batch 246's physics_friction.cpp (vf3,
-// ApplyFriction, SlowInMode5); each step names its address. All of them are
+// Sources: the original's MyFeetAreOnGround, vf0, vf4, PushAlongHeading,
+// SetAccel, the strafe vf14, Step, GetEnvCoefficients, LandingAndFallCheck
+// (the exact ports at the end of this header), vf3, ApplyFriction and
+// SlowInMode5; each step names its address. All of them are
 // checked against the original's vectors (tests/movement_vectors_test.cpp).
 //
 // Units are the original's: positions in world units, velocities in world
@@ -146,12 +144,11 @@ void push_along_heading(PhysicsBody& body, float amount);
 float heading_sin(float heading);
 float heading_cos(float heading);
 
-// ------------------------------------------------- exact ports (batch 240)
+// ------------------------------------------------- exact ports (Step, env, landing)
 //
-// rof2decomp batch 240 rewrote PhysicsObject::Step, GetEnvCoefficients and
-// LandingAndFallCheck (re/src/game/spawn/physics_step_eh.cpp and
-// physics_env.cpp) and recorded vectors from the original for all three.
-// The functions below are those rewrites, on the original's own fields, with
+// PhysicsObject::Step, GetEnvCoefficients and LandingAndFallCheck, with
+// vectors recorded from the original for all three.
+// The functions below follow them on the original's own fields, with
 // every question the original asks a virtual or another function turned
 // into a query, so tests/movement_vectors_test.cpp can feed them the
 // recorded answers. env_coefficients() and the controller's landing run on
@@ -263,7 +260,7 @@ struct LandingResult {
 LandingResult landing_and_fall_check(LandingSpawn& spawn, LandingQueries& q, const LandingWorld& world,
                                      const Fpu& fpu = Fpu{});
 
-// The math table (CMath, rof2decomp notes/eqgraphicsdx9.md): 512 floats,
+// The math table (CMath): 512 floats,
 // cos(i * pi/256) at +4 and sin at +0x804, the quadrant entries exact; its
 // vtable +8 (sin) and +0xc (cos) return table[(int)trunc(angle) & 511], with
 // no interpolation. heading_sin / heading_cos above use it.
@@ -280,7 +277,7 @@ public:
     virtual void add_push(float push[3]) = 0;                     // PhysicsObject vf4 (+0x10), with a spawn
 };
 
-// PhysicsObject::vf3 @0x8d2040 (rof2decomp batch 246): with a SpeedRun that
+// PhysicsObject::vf3 @0x8d2040: with a SpeedRun that
 // is not 0, push[0] += cos(heading) * SpeedRun and push[1] += sin(heading) *
 // SpeedRun (the products unrounded), and with a camera angle that is not 0,
 // push[2] += vf0(sin(angle) * SpeedRun); with a spawn vf4 adds to the push;

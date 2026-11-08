@@ -1,7 +1,7 @@
 #pragma once
 
-// The `eq` table of the Lua UI packs (ui/<pack>): rof2decomp's rof2ui scripts were written against the original client's
-// CXWnd tree (rof2decomp re/src/ui/lua_eq*.cpp); here the same functions, with the same arguments and returns,
+// The `eq` table of the Lua UI packs (ui/<pack>): the scripts are written against the original client's
+// CXWnd tree; here the same functions, with the same arguments and returns,
 // answer from this client's own state. A stock window is a model (app/lua_eq_windows.h) keyed by its XML screen
 // name, and each of its children by its XML ScreenID: what the original window's code would have set on that
 // child (text, shown, enabled, art, gauge) is computed from GameConnection, the spell, item and group state, and a

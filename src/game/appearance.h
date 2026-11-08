@@ -2,9 +2,8 @@
 
 // Spawn appearance rules that do not depend on the model files: which
 // dressing path a spawn uses and how armour updates change it. Sources:
-// rof2decomp notes/spawns-races-models.md §2.8 (OP_WearChange), §3 row 30
-// (EQPlayer::UnSerializeSpawn) and §4 (PlayerClient::ApplyBodyTexture,
-// RefreshEquipSlot, SetHead).
+// the original's OP_WearChange handling, EQPlayer::UnSerializeSpawn and
+// PlayerClient::ApplyBodyTexture, RefreshEquipSlot and SetHead.
 
 #include <cstdint>
 
@@ -42,7 +41,7 @@ void normalize_appearance(Appearance& a, std::uint32_t race);
 // (docs/unknowns.md); SwapBodyMaterial itself has no race rule.
 Appearance drawn_appearance(const Appearance& a, std::uint32_t race);
 
-// OP_WearChange (§2.8). Returns false when the client ignores it: a body
+// OP_WearChange. Returns false when the client ignores it: a body
 // slot of a spawn with a fixed body texture, or a slot >= 9.
 bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
                        std::uint32_t tint);
@@ -70,7 +69,7 @@ int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot);
 std::uint32_t map_head_material(std::uint32_t race, std::uint8_t gender, std::uint32_t id);
 
 // What PlayerClient::SwapHead @0x594210 puts on an old (classic) model for
-// head material `material` (rof2decomp batch 248, row 30): the head mesh
+// head material `material`: the head mesh
 // <code>HE<variant>, plus an item IT<item> held on the head point when
 // item != 0. 0xf0..0xff map through map_head_material; a result still
 // >= 0xf0 is that item with HE00. 7 is 2 (3 for Iksar). Vah Shir (130) wear

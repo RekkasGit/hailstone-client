@@ -1,8 +1,7 @@
 #pragma once
 
 // Placed real estate objects in the world, and item placement mode as ItemPlacement keeps it (the singleton at
-// ItemPlacement_GetInstance @0x558540; rof2decomp notes/housing-and-market.md §5.8, §7.7; the decompile of
-// EQPlacedItem_CreateActor @0x504b60, the 0x626e reply @0x4d058a, ItemPlacement_SetMode @0x557330, its predicate
+// ItemPlacement_GetInstance @0x558540; EQPlacedItem_CreateActor @0x504b60, the 0x626e reply @0x4d058a, ItemPlacement_SetMode @0x557330, its predicate
 // 0x5ae160, ItemPlacement_ResetRotation @0x558970, ItemPlacement_AdjustScale @0x558a70 / ResetScale @0x558b30,
 // 0x558820's 90-degree turns, the listener's validation 0x5ae010 and AreaManager::Query @0x4b2bf0, and
 // Send_Opcode_0x711a @0x5b1f90). Pure logic: no network, no Vulkan.

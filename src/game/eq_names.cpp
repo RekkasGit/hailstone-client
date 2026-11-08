@@ -119,9 +119,17 @@ std::string class_mask_name(std::uint32_t mask) {
 }
 
 std::uint32_t language_eqstr(std::uint32_t lang) {
-    static constexpr std::uint32_t kIds[] = {3114, 3200, 3201, 3202, 3203, 3204, 3205, 3206, 3207, 3208, 3217, 3219, 3220, 3209,
-                                             3210, 3211, 3212, 3213, 3214, 3215, 3216, 3218, 3221, 3222, 3223, 7658, 7659};
-    return lang < std::size(kIds) ? kIds[lang] : 3115;
+    // The language names' eqstr ids come in runs: languages first .. first + count - 1 say id .. id + count - 1.
+    struct Run {
+        std::uint32_t first, id, count;
+    };
+    static constexpr Run kRuns[] = {
+        {0, 3114, 1},  {1, 3200, 9},  {13, 3209, 8}, {10, 3217, 1}, {21, 3218, 1},
+        {11, 3219, 2}, {22, 3221, 3}, {25, 7658, 2},
+    };
+    for (const Run& run : kRuns)
+        if (lang >= run.first && lang - run.first < run.count) return run.id + (lang - run.first);
+    return 3115;
 }
 
 } // namespace hailstone::game

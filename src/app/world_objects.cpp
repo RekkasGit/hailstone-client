@@ -418,7 +418,7 @@ void WorldObjects::update(const net::GameConnection& conn) {
 
 const WorldObjects::Model* WorldObjects::placed_model(const std::string& tag) {
     // CDisplay::CreateActor (EQPlacedItem_CreateActor passes the fallbacks on): "_ACTORDEF" for a short tag, IT63,
-    // then RED_BLOB (rof2decomp N 48.1).
+    // then RED_BLOB.
     std::string def = upper(game::create_actor_definition(tag));
     const Model* m = def.ends_with("_ACTORDEF") ? model_for(def) : nullptr;
     for (const char* fallback : game::kCreateActorFallbacks)

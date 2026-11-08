@@ -199,7 +199,7 @@ select (dev_screens.h:192), the `player_classes` mask in the item display, inven
 ## 3. Opcodes
 
 `src/net/opcodes_rof2.inc` is generated from **the NMS server's copy** of `patch_RoF2.conf`, not EQEmu's. Comparing
-it with the stock file (`rof2decomp/refs/eqemu/utils/patches/patch_RoF2.conf`) gives 21 opcodes that only NMS has:
+it with the stock file (EQEmu's `utils/patches/patch_RoF2.conf`) gives 21 opcodes that only NMS has:
 
 | Opcodes | Today handled in |
 |---|---|

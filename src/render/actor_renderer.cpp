@@ -68,7 +68,7 @@ VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
 // in and the old one out linearly over (new.blendIn + current.blendOut) / 2
 // ms (PlayerAnimation_SelectMovementAnim @0x5890d8, table 0xaae3d8): every
 // record is 100/100 except STND and IDLE (blendIn 250), so 100 ms, or 175 ms
-// into STND (P01) / IDLE (O01) (rof2decomp notes/eqgraphicsdx9.md). The clip
+// into STND (P01) / IDLE (O01). The clip
 // and rate come from game/spawn_animation.h.
 
 } // namespace

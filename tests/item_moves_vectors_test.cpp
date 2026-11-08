@@ -1,4 +1,4 @@
-// rof2decomp batch 261's vectors (recorded from the original eqgame.exe): the equip-slot rule, CanUseItem and its
+// The original's vectors (recorded from eqgame.exe): the equip-slot rule, CanUseItem and its
 // race / deity / level checks, the server OP_MoveItem apply, OP_MoveMultipleItems, MoveMoney and the inventory
 // window's money buttons (game/item_moves.h, net/item_packets.h).
 

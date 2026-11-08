@@ -1,9 +1,7 @@
 // The original's movement rules (game/mechanics/movement.h, physics.h) and
 // the movement packets (net/movement_packets.h). Expected values are worked
 // out by hand from the original's instructions (the addresses in the
-// headers); rof2decomp's differential tests (re/test/tests/movement_rate_test,
-// weight_factor_test, hp_levitation_test, physics_steps_s10_test,
-// spawn_helpers2_s9_test, player_helpers_s10_test) cover the same branches.
+// headers).
 
 #include <doctest/doctest.h>
 

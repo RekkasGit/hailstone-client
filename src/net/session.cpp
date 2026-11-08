@@ -22,7 +22,7 @@
 
 // Client side of the SOE session protocol. Wire format and timings:
 // docs/protocol/session.md. Timings follow the original client
-// (rof2decomp:notes/connection-and-network.md §7.4) where they are known,
+// where they are known,
 // and EQEmu's server defaults (common/net/daybreak_connection.h) otherwise.
 
 namespace hailstone::net {
@@ -34,11 +34,11 @@ using std::chrono::milliseconds;
 using soe::Bytes;
 using soe::ByteSpan;
 
-// Original client (notes §7.4): SessionRequest resend (param 0x21),
+// Original client: SessionRequest resend (param 0x21),
 // SessionStatRequest interval (0x1a), unacknowledged-reliable timeout
 // (0x12/0x13 = 180 s), reliable window (0x2b-0x2d: 100000 bytes, 400 slots),
-// drain wait on close (§7.5). Resends follow the original's reliable channel
-// (§7.4a, net/reliable_channel.h): T = min(1.25 rtt + 300, 8000) ms. Param
+// drain wait on close. Resends follow the original's reliable channel
+// (net/reliable_channel.h): T = min(1.25 rtt + 300, 8000) ms. Param
 // 0x15 (150 ms) is the multi-buffer hold time (SessionOptions::hold_time,
 // UdpConnection_BufferedSend @0x8c49b0 / FlushMultiBuffer @0x8c4850); the
 // service thread is the UdpManagerThread (run loop @0x8cbfb0).
@@ -568,7 +568,7 @@ private:
                 return fail(std::format("the server asked for a {}-byte CRC; only 0, 2 or 4 bytes are supported",
                                         static_cast<int>(r->params.crc_bytes)));
             params_ = r->params;
-            // The original adopts the server's size unclamped (notes §7.2); keep it sane.
+            // The original adopts the server's size unclamped; keep it sane.
             params_.max_packet_size = std::clamp<std::uint32_t>(params_.max_packet_size, 64, 8192);
             init_channel();
             state_ = SessionState::Connected;

@@ -1,6 +1,6 @@
 // GameConnection: the typed-line interpreter, chat, and the social, guild,
 // raid and chat-server commands. What the client does and says follows the
-// original's handlers in the rof2decomp export (addresses at each function;
+// original's handlers (addresses at each function;
 // strings are eqstr ids from eqstr_us.txt); packets are net/social_packets.h
 // and net/chat_server.h, state game/social.h.
 
@@ -526,7 +526,7 @@ void GameConnection::emote_command(const std::string& args) {
 }
 
 void GameConnection::social_emote(const game::SocialEmote& e, const std::string& args) {
-    // The four standing socials (rof2decomp standing_socials.cpp) need the player standing still.
+    // The four standing socials need the player standing still.
     const game::Spawn* me = world_.player();
     if (chat_blocked_) return; // send_social @0x526935: nothing while 0xddf70d is set
     if (e.needs_standing && (pstatus_.stand_state != 100 || moving_)) return system(13069);
@@ -612,7 +612,7 @@ void GameConnection::handle_special_message(const SpecialMessage& m) {
 }
 
 void GameConnection::handle_channel_message(const ChannelMessage& m) {
-    // msg_new_text @0x4c0080 (rof2decomp batch 254): the spam flag under filter 31 first.
+    // msg_new_text @0x4c0080: the spam flag under filter 31 first.
     if (m.spam && chat_filters_.mode(game::kFilterSpam) == 1) return;
     if (iequals(m.sender, character_) && m.channel != 20) {
         // Our own line: the original echoed it when sending. Tells come back from the server as the echo (7 / 14):
@@ -1469,7 +1469,7 @@ void GameConnection::raid_remove_looter() {
 }
 
 void GameConnection::raid_set_loot_type(const std::string& text) {
-    // CRaid::SetLootType @0x47d9b0 (rof2decomp re/src/game/commands/misc_helpers8.cpp): in a raid; the leader and a
+    // CRaid::SetLootType @0x47d9b0: in a raid; the leader and a
     // single digit, else 5094 (dsp_chat_2); 1..4 other than the current type becomes it and is sent {0x20, me, me}.
     if (!zone_session_ || !raid_.active) return;
     if (!iequals(raid_.leader, character_) || text.size() != 1 || !std::isdigit(static_cast<unsigned char>(text[0])))

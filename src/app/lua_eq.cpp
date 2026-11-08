@@ -1,5 +1,5 @@
-// The `eq` functions (app/lua_eq.h). Names, arguments and returns follow rof2decomp re/src/ui/lua_eq.cpp and
-// lua_eq_window.cpp; each function's comment gives its contract. Window functions find the stock window model by
+// The `eq` functions (app/lua_eq.h). Names, arguments and returns follow the
+// original UI scripts' contracts; each function's comment gives its contract. Window functions find the stock window model by
 // screen name (app/lua_eq_windows.h); a window without a model is never shown, so its script draws nothing.
 
 #include "app/lua_eq.h"
@@ -206,7 +206,7 @@ struct EqApi::Impl {
         if (!layout_defaults.empty()) scan(layout_defaults, "Defaults.ini", {}, {});
         return out;
     }
-    // __CopyLayout @0x55be50 (rof2decomp export, re/src/game/ui/layout_copy_eh.cpp): the current file and size onto
+    // __CopyLayout @0x55be50: the current file and size onto
     // itself is refused (6337); a missing file says 6338; a file with no place for that size 6342. Otherwise every
     // window key kept for that size (XPos, YPos, Width, Height, Minimized and the Restore* keys + the size: the
     // table at 0xe63a98) goes to the current file for the current size, the size-free keys (Show, BGTint.*, BGType,
@@ -459,7 +459,7 @@ void push_cell(lua_State* L, const ui::UiTextures::Cell& c) {
 
 } // namespace
 
-// The item table of eq.Item (rof2decomp lua_eq.cpp PushItem).
+// The item table of eq.Item.
 int push_item(lua_State* L, const net::Item* item) {
     if (!item) {
         lua_pushnil(L);
@@ -2279,7 +2279,7 @@ int CursorAttachment(lua_State* L) {
 }
 
 // menus = eq.CascadeMenus()   -- the open EQ menu and submenus: { x, y, w, h, items = { { kind, text, rect, icon,
-// decalW, decalH, textX, enabled, arrow, arrowRect, background } } } (rof2decomp's contract; app/lua_eq_menu.h)
+// decalW, decalH, textX, enabled, arrow, arrowRect, background } } } (app/lua_eq_menu.h)
 int CascadeMenus(lua_State* L) {
     auto& m = Impl::of(L);
     if (!m.host.in_game) m.cascade.close();

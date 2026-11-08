@@ -1,7 +1,7 @@
 // The real estate windows (CRealEstatePurchaseWnd, CRealEstateManageWnd, CRealEstateItemsWnd,
 // CRealEstateNeighborhoodWnd, CRealEstatePlotSearchWnd) over the connection's real estate state
 // (net/game_connection_real_estate.cpp, game/real_estate.h). What each shows and sends follows the original's
-// functions named below (rof2decomp notes/housing-and-market.md §6 and the decompile); the packs draw them
+// functions named below; the packs draw them
 // (ui/<pack>/realestate*.lua). Child ids are this client's, the windows being the packs' own.
 
 #include <algorithm>
@@ -507,7 +507,7 @@ private:
         host.conn->re_save_access(host.conn->real_estate().occupancy().yard, a);
     }
     static std::string group_name(std::uint32_t g) {
-        // The seven access groups in table order (the rof2decomp note's reading of the live saves).
+        // The seven access groups in table order (as read from the live saves).
         static const char* kGroups[] = {"Everyone", "Visitor", "Acquaintance", "Friend", "Trustee", "Co-Owner", "Reserved"};
         return g < 7 ? kGroups[g] : std::to_string(g);
     }

@@ -917,7 +917,7 @@ std::array<std::int32_t, 25> init_innates(std::uint32_t race, std::uint32_t clas
     case 128: has(10); has(kInnateInfravision); break;            // Iksar
     default: has(kInnateInfravision); break; // Wood Elf 4/112, Half Elf, Dwarf 8/94, Halfling 11/81, Vah Shir 130...
     }
-    // The class's (param_2).
+    // The class's (the second argument).
     switch (class_id) {
     case 4: has(1); break;            // Ranger
     case 6: has(4); break;            // Druid

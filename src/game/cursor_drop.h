@@ -1,7 +1,6 @@
 #pragma once
 
-// Dropping the cursor's item on the ground: rof2decomp batch 253
-// (re/src/game/ui/cursor_drop_eh.cpp; LMouseUp answered from its
+// Dropping the cursor's item on the ground (LMouseUp answered from its
 // disassembly), with CEverQuest::DropHeldItemOnGround @0x526290 checked
 // against CEverQuest_DropHeldItemOnGround.jsonl.
 //  - LMouseUp: a NoGround item says 7697; then NoSafeDrop (eqclient.ini

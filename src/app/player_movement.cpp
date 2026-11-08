@@ -31,7 +31,7 @@ namespace mech = game::mechanics;
 namespace {
 
 // Zone flags from the original's zone table (ZoneManager::ZoneManager
-// @0x7dca10, EQZoneInfo +0x198; rof2decomp re/src/game/world/zone_table.inc).
+// @0x7dca10, EQZoneInfo +0x198).
 constexpr std::uint16_t kBazaarZones[] = {151};      // 0x10000000 EQWorldData_IsBazaarZone
 constexpr std::uint16_t kBarterZones[] = {151, 346}; // 0x02000000 EQWorldData_IsBarterZone
 constexpr std::uint16_t kNoAirZones[] = {171};       // 0x00004000 EQWorldData::IsNoAirZone
@@ -656,8 +656,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         out.messages.push_back(conn.strings().format(msg, {}));
 
     // Levitation (UpdateLevitationState after each effect cache rebuild):
-    // SpellCache_GetBuffValue(57, 0) gives mode 2, else (57, 1) mode 5
-    // (rof2decomp batch 247, re/src/game/character/spell_cache.cpp).
+    // SpellCache_GetBuffValue(57, 0) gives mode 2, else (57, 1) mode 5.
     body.fly_mode = mech::levitation_mode(body.fly_mode, facts.levitate_mode2 != 0, facts.levitate_mode5 != 0,
                                           std::nullopt,
                                           in(kNoLevitateZones, zone));
@@ -762,8 +761,8 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         fall.spa228 = facts.spa228;
         // The zone's no-fall-damage flag (0xddfc6e) comes from OP_NewZone.
         if (const auto& z = conn.zone_info()) fall.no_fall_damage_zone = z->fall_damage_off != 0;
-        // dmg -= dmg * h / (h + 1000) with h = heroic AGI (rof2decomp batch 240,
-        // CharacterZoneClient_ApplyFallDamage @0x45ac60).
+        // dmg -= dmg * h / (h + 1000) with h = heroic AGI
+        // (CharacterZoneClient_ApplyFallDamage @0x45ac60).
         fall.heroic_agi_bonus = facts.heroic_agi;
         float vz = body.velocity.z;
         mech::LandingEvents land = ctl_.land(*floor, fall);

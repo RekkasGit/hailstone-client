@@ -1,4 +1,4 @@
-// rof2decomp batch 267's vectors (recorded from eqgame.exe): pressing a hot button, its right click and the
+// The original's vectors (recorded from eqgame.exe): pressing a hot button, its right click and the
 // socials' queue (game/hot_button_press.h), and the tracking window's list (game/tracking.h).
 #include <doctest/doctest.h>
 

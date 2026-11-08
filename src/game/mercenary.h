@@ -2,8 +2,8 @@
 
 // Mercenaries as the original client keeps them: the client mercenary manager (pinstCMercenaryClientManager
 // 0xe63e90, CMercenaryClientManager), its packet handlers and senders, the per-frame upkeep timer, and the texts the
-// three mercenary windows (MMTW_MerchantWnd, MMGW_ManageWnd, MIW_InfoWnd) show. rof2decomp notes/mercenaries.md
-// (batch 268), addresses at each function; checked against the 25 vector files recorded from the original
+// three mercenary windows (MMTW_MerchantWnd, MMGW_ManageWnd, MIW_InfoWnd) show. Addresses
+// at each function; checked against the 25 vector files recorded from the original
 // (tests/merc_vectors_test.cpp).
 //
 // Nothing here does networking or UI: the handlers and senders report what they do through MercHooks (chat lines,

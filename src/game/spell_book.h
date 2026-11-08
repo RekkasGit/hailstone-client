@@ -1,7 +1,7 @@
 #pragma once
 
-// Opening and closing the spell book (CSpellBookWnd): exact ports of
-// rof2decomp batch 253 (re/src/game/ui/spell_book_open.cpp), checked against
+// Opening and closing the spell book (CSpellBookWnd): follows the
+// original's AboutToShow and OnShow, checked against
 // CSpellBookWnd_AboutToShow.jsonl and CSpellBookWnd_OnShow.jsonl.
 //  - AboutToShow @0x75c970: refuses a non-caster or a profile with +0x340c
 //    set; a controlled spawn still moving (SpeedRun > 0) refuses with 12085;
@@ -10,7 +10,7 @@
 //    (12371) and auto fire (279) go off, colour 13.
 //  - OnShow @0x75b6e0, hidden: a sitting player stands up when the book sat
 //    it down.
-// Closing triggers (rof2decomp notes): a stand-state change away from sitting
+// Closing triggers: a stand-state change away from sitting
 // (PlayerZoneClient::ChangePosition -> LocalPlayer_CloseSpellbookAndDrag),
 // horizontal movement (PlayerAnimation_SelectMovementAnim), GetConscious and
 // MoveToZone. GameConnection keeps the state (open_spell_book /

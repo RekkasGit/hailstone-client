@@ -1,8 +1,7 @@
 #pragma once
 
 // The Lua UI: windows written as Lua scripts over Dear ImGui (the `ui` table)
-// and the game (the `eq` table), the same API as rof2decomp's rof2ui scripts
-// (re/scripts/rof2ui). Scripts are loaded from the UI's folder (ui/<name>), reloaded
+// and the game (the `eq` table). Scripts are loaded from the UI's folder (ui/<name>), reloaded
 // when they change, and each window they register with ui.window(name, draw)
 // is drawn once per frame. A script error never stops the client: it shows in
 // the "UI errors" window and the failed window stays off until it reloads.

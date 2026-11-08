@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 
 #include "core/msvc_atoi.h"
 
@@ -26,43 +27,48 @@ bool is_tradeskill_container_type(std::uint32_t t) {
 
 namespace {
 
-// GetContainerTradeskill's table (rof2decomp re/src/game/character/tradeskill_eh.cpp): the type, its tradeskill, and
-// what the character must be (a class, a race, one of four classes) with the line said when not.
-enum class Need : std::uint8_t { Nothing, Class, Race, AnyOfFourClasses };
-struct ContainerEntry {
+// GetContainerTradeskill's container types, in three kinds: open to anyone, a research container of one of the four
+// caster classes, or kept to one race (with the line said to anyone else).
+struct OpenBench {
     std::uint8_t type, skill;
-    Need need;
-    std::uint16_t value, message;
 };
-constexpr ContainerEntry kContainerSkills[] = {
-    {9, 59, Need::Nothing, 0, 0}, {10, 57, Need::Nothing, 0, 0}, {11, 58, Need::Nothing, 0, 0},
-    {12, 56, Need::Nothing, 0, 0}, {14, 60, Need::Nothing, 0, 0}, {15, 60, Need::Nothing, 0, 0},
-    {16, 61, Need::Nothing, 0, 0}, {17, 63, Need::Nothing, 0, 0}, {18, 64, Need::Nothing, 0, 0},
-    {19, 65, Need::Nothing, 0, 0}, {20, 68, Need::Nothing, 0, 0}, {21, 69, Need::Nothing, 0, 0},
-    {22, 69, Need::Nothing, 0, 0}, {24, 58, Need::Class, 12, 0x135}, {25, 58, Need::Class, 13, 0x136},
-    {26, 58, Need::Class, 11, 0x137}, {27, 58, Need::Class, 14, 0x138}, {29, 58, Need::AnyOfFourClasses, 0, 0},
-    {31, 63, Need::Race, 5, 0x139}, {32, 63, Need::Race, 6, 0x13a}, {33, 63, Need::Race, 10, 0x13b},
-    {34, 63, Need::Race, 8, 0x13c}, {35, 63, Need::Race, 12, 0x13d}, {36, 63, Need::Race, 2, 0x13e},
-    {38, 63, Need::Race, 0x80, 0x13f}, {39, 63, Need::Race, 1, 0x140}, {40, 63, Need::Race, 1, 0x140},
-    {41, 61, Need::Race, 11, 0x141}, {42, 61, Need::Race, 3, 0x142}, {43, 61, Need::Race, 4, 0x143},
-    {44, 64, Need::Race, 4, 0x144}, {45, 69, Need::Race, 0x80, 0x145}, {46, 55, Need::Nothing, 0, 0},
-    {47, 63, Need::Race, 9, 0x146}, {48, 63, Need::Race, 4, 0x147}, {49, 63, Need::Race, 11, 0x148},
-    {50, 63, Need::Race, 3, 0x149}, {52, 63, Need::Race, 0x14a, 0x1698}, {54, 60, Need::Nothing, 0, 0},
+constexpr OpenBench kOpenBenches[] = {
+    {12, 56}, {46, 55}, {10, 57}, {11, 58}, {9, 59},  {14, 60}, {15, 60}, {54, 60},
+    {16, 61}, {17, 63}, {18, 64}, {19, 65}, {20, 68}, {21, 69}, {22, 69},
 };
 
-// The race's bit index (1..17) in an item's race mask.
+// Research (skill 58): type 24 + i for class kResearchClasses[i] (refused with eqstr 0x135 + i), and type 29 for any
+// of them (refused without a line).
+constexpr std::int32_t kResearchSkill = 58;
+constexpr std::uint32_t kResearchClasses[4] = {12, 13, 11, 14};
+constexpr std::uint32_t kAnyResearchType = 29;
+
+struct RacialBench {
+    std::uint8_t type, skill;
+    std::int32_t race;
+    std::uint16_t refusal; // eqstr
+};
+constexpr RacialBench kRacialBenches[] = {
+    {39, 63, 1, 0x140},  {40, 63, 1, 0x140},  {36, 63, 2, 0x13e},   {50, 63, 3, 0x149},    {42, 61, 3, 0x142},
+    {43, 61, 4, 0x143},  {44, 64, 4, 0x144},  {48, 63, 4, 0x147},   {31, 63, 5, 0x139},    {32, 63, 6, 0x13a},
+    {34, 63, 8, 0x13c},  {47, 63, 9, 0x146},  {33, 63, 10, 0x13b},  {41, 61, 11, 0x141},   {49, 63, 11, 0x148},
+    {35, 63, 12, 0x13d}, {38, 63, 0x80, 0x13f}, {45, 69, 0x80, 0x145}, {52, 63, 0x14a, 0x1698},
+};
+
+// The race's bit index (1..17) in an item's race mask: races below 13 are their own index, four later races follow,
+// and every other race shares the last bit.
 std::int32_t race_index(std::int32_t race) {
     if (race < 13) return race;
-    switch (race) {
-    case 0x14a: return 15;
-    case 0x80: return 13;
-    case 0x82: return 14;
-    case 0x20a: return 16;
-    default: return 17;
-    }
+    struct LaterRace {
+        std::int32_t race, index;
+    };
+    static constexpr LaterRace kLater[] = {{0x80, 13}, {0x82, 14}, {0x14a, 15}, {0x20a, 16}};
+    for (const LaterRace& l : kLater)
+        if (l.race == race) return l.index;
+    return 17;
 }
 
-std::uint32_t bit(std::int32_t index) { return 1u << ((index - 1) & 31); }
+std::uint32_t bit(std::int32_t index) { return std::uint32_t{1} << (static_cast<std::uint32_t>(index - 1) % 32u); }
 
 } // namespace
 
@@ -81,22 +87,27 @@ ContainerSkill container_tradeskill(std::uint32_t bag_type, std::uint32_t classe
     };
     if (deities != 0 && !(bit(u.deity == 396 ? 1 : u.deity - 199) & deities)) return refuse(5943);
     if (races != 0 && !(bit(race_index(u.race)) & races)) return refuse(5944);
-    for (const ContainerEntry& e : kContainerSkills) {
-        if (e.type != bag_type) continue;
-        bool allowed = true;
-        switch (e.need) {
-        case Need::Nothing: break;
-        case Need::Class: allowed = is(e.value); break;
-        case Need::Race: allowed = u.race == static_cast<std::int32_t>(e.value); break;
-        case Need::AnyOfFourClasses: allowed = is(12) || is(13) || is(11) || is(14); break;
-        }
-        if (!allowed) {
-            r.message = e.message;
-            return r;
-        }
-        r.skill = e.skill;
-        break;
+    // From here a refusal's line is set even for the quiet types.
+    auto grant = [&](std::int32_t skill, bool allowed, std::uint32_t refusal) {
+        if (allowed)
+            r.skill = skill;
+        else
+            r.message = refusal;
+        return r;
+    };
+    for (const OpenBench& b : kOpenBenches)
+        if (b.type == bag_type) return grant(b.skill, true, 0);
+    if (bag_type >= 24 && bag_type < 24 + std::size(kResearchClasses)) {
+        const std::uint32_t i = bag_type - 24;
+        return grant(kResearchSkill, is(kResearchClasses[i]), 0x135 + i);
     }
+    if (bag_type == kAnyResearchType) {
+        bool any = false;
+        for (std::uint32_t cls : kResearchClasses) any = any || is(cls);
+        return grant(kResearchSkill, any, 0);
+    }
+    for (const RacialBench& b : kRacialBenches)
+        if (b.type == bag_type) return grant(b.skill, u.race == b.race, b.refusal);
     return r;
 }
 

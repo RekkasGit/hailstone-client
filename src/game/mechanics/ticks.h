@@ -2,9 +2,8 @@
 
 // The timed character updates CharacterZoneClient::DoPassageOfTime runs
 // (docs/mechanics.md, Cadences): the 6 s buff tick (ProcessAffects) and
-// mana regen tick, and the 1 s endurance upkeep. Exact ports of rof2decomp batch 242
-// (re/src/game/character/process_affects.cpp), checked against the
-// original's vectors (tests/mechanics_vectors_test.cpp).
+// mana regen tick, and the 1 s endurance upkeep. They follow the original
+// exactly, checked against its vectors (tests/mechanics_vectors_test.cpp).
 
 #include <array>
 #include <cstdint>

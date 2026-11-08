@@ -1,4 +1,4 @@
-// The fog and per-frame scene light (game/fog.h) against the original's vectors (rof2decomp batch 264):
+// The fog and per-frame scene light (game/fog.h) against the original's vectors (recorded from eqgame.exe):
 // CDisplay_CalcFogFadeMargin (1500), CDisplay::SetFog (3000) and CDisplay_UpdateSkyWeatherAndFog (3000).
 //
 // Each record holds the original's inputs (its arguments and the globals it read), the answers of the mocked

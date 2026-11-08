@@ -2,8 +2,8 @@
 
 // How the client turns the zone's fog and clip values (OP_NewZone) and the
 // player's ClipPlane setting into fog and far-plane distances.
-// Source: rof2decomp:notes/rendering-and-zones.md §2 (Handle_OP_NewZone
-// @0x4c9ee6..0x4c9f98, CDisplay::SetFog @0x48ae80, ClipPlane keybinds @0x4d873b).
+// Source: the original's Handle_OP_NewZone
+// @0x4c9ee6..0x4c9f98, CDisplay::SetFog @0x48ae80, ClipPlane keybinds @0x4d873b.
 
 #include <cstdint>
 
@@ -34,7 +34,7 @@ float zone_far_plane(const ZoneFogInput& fixed, int clip_plane);
 
 // SetFog's run-time conditions for the far-plane margin.
 struct FogConditions {
-    bool special_region = false; // DAT_00d1f3c0 (camera region / weather type) in 5..10
+    bool special_region = false; // 0xd1f3c0 (camera region / weather type) in 5..10
     bool raining = false;        // bRain
 };
 
@@ -67,11 +67,10 @@ ViewDistance compute_view_distance(const ZoneFogInput& zone, int clip_plane = 15
 //   end = far - CDisplay_CalcFogFadeMargin(start) = far - 0.15 (far - start)
 //   (0.15 far when |far - start| < 0.001); finally start >= 0 and, if
 //   end <= start, start = end - 1.
-// Source: rof2decomp notes/eqgraphicsdx9.md "Fog margin argument".
 glm::vec2 set_fog_distances(float start, float end, float far_plane, bool fog_enabled, FogConditions conditions = {});
 
 // ---------------------------------------------------------------------------
-// Actor clip: how far away spawns are drawn (rof2decomp notes/rendering-and-zones.md §4).
+// Actor clip: how far away spawns are drawn.
 //
 // eqclient.ini ActorClipPlane (CDisplay+0x2d78; the Advanced Display options' slider; read @0x491e69, default 50)
 // becomes the camera's actor clip in 0x487900 and CDisplay::UpdateCameraFov @0x48ac70: camera vtable +0x14
@@ -92,7 +91,7 @@ enum class SpawnDraw {
 SpawnDraw spawn_draw(bool has_actor, bool has_model, float distance, float actor_clip);
 
 // ---------------------------------------------------------------------------
-// Camera field of view (rof2decomp notes/eqgraphicsdx9.md "Camera and FOV").
+// Camera field of view.
 //
 // Every EverQuest::Cameras entry is created with +0x40 = 90 (@0x533ac1), and the
 // camera switch copies it into CDisplay+0x28f4 (@0x49423b), so the stock FOV is

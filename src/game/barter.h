@@ -3,8 +3,8 @@
 // The barter hall: the original's barter manager (the 200 buy lines at 0xb79320, the buyer mode flag +0x8fc0, the
 // welcome text +0x8fc4, the BART ini) and the state of its three windows, CBarterWnd (/buyer: our own buy lines),
 // CBarterSearchWnd (/barter: other buyers' lines) and CBarterMerchantWnd (a buyer's lines, from a right click).
-// Ported from the rof2decomp export (_globals.c 0x420e10..0x423850, CBarterWnd.c, CBarterSearchWnd.c,
-// CBarterMerchantWnd.c, the CBarter*Wnd_* helpers at 0x629c00..0x6318f0); addresses at each function. The packets
+// Follows the original's 0x420e10..0x423850, CBarterWnd, CBarterSearchWnd, CBarterMerchantWnd and the
+// CBarter*Wnd_* helpers at 0x629c00..0x6318f0; addresses at each function. The packets
 // are net/market_packets.h's, the rules that send them net/game_connection_market.cpp's.
 
 #include <array>

@@ -1,5 +1,5 @@
-// ClientApp: the original's slash commands that act on the client rather than the connection (rof2decomp
-// re/src/game/commands; the rules are game/option_commands.h): the windows (/filter, /note, /map, /loadskin), the
+// ClientApp: the original's slash commands that act on the client rather than the connection (the rules
+// are game/option_commands.h): the windows (/filter, /note, /map, /loadskin), the
 // chat windows (/chatfontsize, /clearchat, /clearallchat, /usercolor), hot buttons (/hotbutton), and the display,
 // sound and mouse settings, which go to hailstone.ini as the Options window's do (the original's eqclient.ini
 // [Defaults] / [Options]). GameConnection::run_slash_command hands them here (set_client_commands).
@@ -23,7 +23,7 @@ namespace hailstone::app {
 
 namespace client_internal {
 
-// Cmd_xtarget @0x4e4780 (the usage: Cmd_xtarget_PrintUsage @0x4e3530, rof2decomp xtarget_usage.inc). Up to three
+// Cmd_xtarget @0x4e4780 (the usage: Cmd_xtarget_PrintUsage @0x4e3530). Up to three
 // words (GetNextCmdArg). A first word starting with a digit targets that slot (1-based); "show" (any prefix of it)
 // shows the window with "on", hides it with "off", else toggles it; "target <n>" targets slot n; "add" puts the
 // target (a player 2, an NPC 3, by name) in the first auto hater slot; "remove" turns the last specific slot back
@@ -259,7 +259,7 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
     }
 
     if (h == "Cmd_copylayout") {
-        // Cmd_copylayout @0x4f33d0 (rof2decomp commands/window_commands.cpp): no argument opens the layout copy window
+        // Cmd_copylayout @0x4f33d0: no argument opens the layout copy window
         // (LayoutCopyWindow, app/lua_eq_layout.cpp); not while the give, trade or send-money window is open (3192,
         // colour 0xf); "usage" / "help" print 6335; "restore" is the screen's size as "%dx%d", else the first two
         // words are the size and the ini file (none: the current one; neither: 6335). It prints 6336 and copies

@@ -45,7 +45,7 @@ std::size_t int_token(std::string_view text, int& out) {
     return used;
 }
 
-// XTarget_ParseTargetType's table (re/src/game/ui/xtarget_types.inc): the names and short names.
+// XTarget_ParseTargetType's table: the names and short names.
 struct TypeName {
     const char* name;
     std::uint32_t type;

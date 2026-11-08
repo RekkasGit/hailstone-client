@@ -1,4 +1,4 @@
-// The weather state (game/weather_state.h) against the original's vectors (rof2decomp batch 270):
+// The weather state (game/weather_state.h) against the original's vectors (recorded from eqgame.exe):
 // Weather_HandleWeatherMessage (600), Weather_StartEffect (1500) and Weather_RequestRainSnowToggle (300).
 //
 // Weather_StartEffect's records hold the precipitation manager's virtual calls in order ("virtual_calls": raw 32-bit

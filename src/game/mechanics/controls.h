@@ -6,8 +6,8 @@
 // and the camera moves; the speed is capped with SPA 290 and the position is
 // marked dirty for the next update packet.
 //
-// Exact port of rof2decomp batch 243 (re/src/game/spawn/process_controls.cpp),
-// checked against the original's vectors, which list every callee in call
+// Follows the original exactly,
+// checked against its vectors, which list every callee in call
 // order (tests/movement_vectors_test.cpp). The original's globals are
 // ControlsState fields (addresses in the comments); what it asks a callee is
 // a ControlsQueries call, and what it tells one (SetAccel, the pitch, the
@@ -23,12 +23,11 @@ namespace hailstone::game::mechanics {
 struct ControlSpawn {
     float speed_multiplier = 0.0f; // +0x18: the speed modifier (below -1000: frozen)
     std::uint8_t swim_state = 0;   // +0xa2 (5 and up: swimming)
-    bool sneaking = false;         // +0x264 (rof2decomp's rewrite calls it "levitating")
+    bool sneaking = false;         // +0x264
     std::uint8_t stand_state = 0;  // +0x35c StandState: 100 standing, 111 ducking, 110 sitting, 102 frozen
-                                   // (the rewrite's "race")
     float walk_speed = 0.0f;       // +0x330
     float run_speed = 0.0f;        // +0x350
-    float sneak_speed = 0.0f;      // +0x11c8 (PlayerZoneClient::InitSneakMod; the rewrite's "levitate speed")
+    float sneak_speed = 0.0f;      // +0x11c8 (PlayerZoneClient::InitSneakMod)
     float height = 0.0f;           // +0x138 AvatarHeight (the closest zoom)
     std::uint32_t spawn_id = 0;    // +0x148
     std::int32_t follow_e40 = 0;   // +0xe40 (auto follow, copied to a controlled mount)
@@ -158,7 +157,7 @@ double fix_heading(double heading, const Fpu& fpu = Fpu{});
 void process_controls(ControlsState& state, ControlsQueries& q, const Fpu& fpu = Fpu{});
 
 // __ExecuteCmd @0x4d7230's movement commands (key command numbers; the
-// handlers are inline in its switch, rof2decomp batch 247), run on each key
+// handlers are inline in its switch), run on each key
 // press (`down`) and release:
 //   AUTORUN (0, press): `autorun_bits` when given, else toggles forward
 //     autorun (1; turning it on also releases BACK); clears 0xddfd20.

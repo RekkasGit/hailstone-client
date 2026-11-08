@@ -376,7 +376,7 @@ std::optional<std::uint8_t> hit_animation(const HitAnimInput& in) {
         if (in.spell_target_anim != 0 && in.spell_target_anim < 0x4f &&
             (in.target_stand_state == 100 || in.target_stand_state == 102))
             anim = in.spell_target_anim;
-        if (!(damage > 0 && in.spell_detrimental)) damage = 0; // local_13a0 is set only then
+        if (!(damage > 0 && in.spell_detrimental)) damage = 0; // the landed damage is set only then
     } else if (is_environment_hit(in.type)) {
         // The switch's cases -0xd..-3 (@0x52fc58..), then @0x5302f0: no damage drops the animation.
         if (damage == 0) return std::nullopt;
@@ -390,7 +390,7 @@ std::optional<std::uint8_t> hit_animation(const HitAnimInput& in) {
 }
 
 bool hit_landed(const HitAnimInput& in) {
-    if (!in.target_alive || in.damage <= 0) return false; // @0x5311ee: Type 2 and above return; 0 < local_13a0
+    if (!in.target_alive || in.damage <= 0) return false; // @0x5311ee: Type 2 and above return; 0 < the landed damage
     if (in.type == 231) return in.spell_detrimental;      // @0x530ddb: set only for a detrimental spell
     return true;
 }
@@ -399,7 +399,7 @@ EnvHit environment_hit(const EqStrings& strings, const EnvHitInput& in) {
     EnvHit out;
     if (!is_environment_hit(in.type)) return out;
     std::uint32_t id = 0;
-    bool named = !in.on_me; // another's line takes the name (BuildStringFromEQSTR with local_136c)
+    bool named = !in.on_me; // another's line takes the name (BuildStringFromEQSTR with the victim's name)
     switch (in.type) {
     case 0xf3: id = 0x2378; break; // mind burns
     case 0xf4: id = 0x165a; break; // rotting

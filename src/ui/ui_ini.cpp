@@ -42,7 +42,7 @@ int convert_to_res(int pos, int extent, int from, int to) {
 }
 
 WindowIniInfo window_ini_info(std::string_view screen) {
-    // The flags and version each window class passes to the CSidlScreenWnd constructor (rof2decomp export: the
+    // The flags and version each window class passes to the CSidlScreenWnd constructor (the
     // CSidlScreenWnd1 calls; CSidlScreenWnd2 @0x85f120 passes 0xfffffcff, version 1) or to EnableIniStorage.
     struct Entry {
         std::string_view screen, section;

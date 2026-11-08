@@ -2,7 +2,7 @@
 // trader (CMerchantWnd in trader mode, OP_TraderShop) and the bazaar search
 // (CBazaarSearchWnd, CBazaarConfirmationWnd). Packets in
 // net/market_packets.h, state and rules in game/bazaar.h; each function names
-// the original it follows (rof2decomp export of eqgame.exe).
+// the original it follows (in eqgame.exe).
 
 #include <algorithm>
 #include <cctype>
@@ -97,7 +97,7 @@ void GameConnection::load_trader_slots() {
 }
 
 void GameConnection::trader_select(int slot) {
-    // CBazaarWnd::SelectBazaarSlotItem @0x6393e0 (from its disassembly; the decompile drops the loop): the price
+    // CBazaarWnd::SelectBazaarSlotItem @0x6393e0 (from its disassembly, loop included): the price
     // goes to 0; with an item in the slot the first of the 200 slots holding the same item (ItemBase +0xd8..+0xe4,
     // the GUID, or the same ItemBase_GetID and +0x44) becomes the selection and its price goes into the money
     // buttons; an empty slot leaves no selection.
