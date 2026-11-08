@@ -566,6 +566,59 @@ TEST_CASE("UI packs: the spell book's sets and set editor draw; eq.SaveSpellSet 
     }
 }
 
+// Two widgets of one window with the same ID make ImGui's "conflicting ID" popup show when either is hovered: the
+// Memorized filter and the details pane's Memorize button were both "##mem". The mouse crosses the whole book (in
+// the details view, a spell selected) and no hovered item may share its ID.
+TEST_CASE("UI packs (modern): no two of the spell book's widgets share an ID") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    nmsc::test::ScratchDir dir_scratch("ui_pack_spellbook_ids_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigDebugHighlightIdConflicts = true;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        nmsc::test::Rig rig;
+        REQUIRE(rig.to_zone());
+        auto& conn = rig.conn;
+        s.host.conn = &conn;
+        conn.set_spell_table_for_test(book_spells());
+        REQUIRE(conn.profile());
+        net::PlayerProfile pp = *conn.profile();
+        pp.class_ = 2; // a cleric: the book opens
+        conn.set_profile_for_test(pp);
+        for (std::uint32_t i = 0; i < 3; ++i)
+            conn.receive_zone_packet_for_test(net::encode(net::MemorizeSpell{i, 200 + i, net::kMemScribe, 0}));
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('SpellBookWnd', true) ui.SetSetting('test.book.tab', 'details')"
+                                 " ui.SetSetting('test.book.select', '200')") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        ImGuiWindow* book = ImGui::FindWindowByName("###modern.SpellBookWnd");
+        REQUIRE(book != nullptr);
+        const ImVec2 at = book->Pos, size = book->Size;
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        int conflicts = 0;
+        for (float y = at.y + 4; y < at.y + size.y; y += 12) { // widgets here are 24 px tall or more
+            for (float x = at.x + 4; x < at.x + size.x; x += 16) {
+                ImGui::GetIO().AddMousePosEvent(x, y);
+                s.frames(1);
+                if (g.DebugDrawIdConflicts != 0) {
+                    ++conflicts;
+                    MESSAGE("conflicting ID hovered at " << x - at.x << ", " << y - at.y);
+                }
+            }
+        }
+        CHECK(conflicts == 0);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("UI packs: the inventory's alternate currencies draw, and a row selects the stock list's row") {
     for (const char* pack : {"modern", "gamepad"}) {
         INFO(pack);

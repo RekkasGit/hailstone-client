@@ -637,7 +637,7 @@ local function detailsTab(x, y, w, h, s, st)
   local gem = gemFor(st)
   local canMem = not e.gem and gem ~= nil
   local label = e.gem and ("In gem " .. (e.gem + 1)) or (gem and ("Memorize (gem " .. (gem + 1) .. ")") or "No free gem")
-  if T.Button("##mem", x, by, x + bw, by + 26 * s, s, label, { primary = canMem, enabled = canMem }) then memorize(e, gem, st) end
+  if T.Button("##memorize", x, by, x + bw, by + 26 * s, s, label, { primary = canMem, enabled = canMem }) then memorize(e, gem, st) end
   if T.Button("##show", x + bw + 6 * s, by, x + w, by + 26 * s, s, "Spell window") then eq.ShowSpell(e.id) end
   -- the game's spell display text
   local dy = by + 36 * s
