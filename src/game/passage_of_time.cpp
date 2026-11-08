@@ -18,7 +18,7 @@ using mechanics::AffectBuff;
 using mechanics::AffectSpell;
 using mechanics::Character;
 
-constexpr std::int64_t kSixSeconds = 6000; // @0x45f26e: cmp 0x1770 / jbe
+constexpr std::int64_t kSixSeconds = 6000; // @0x45f26e: at most 6000 (unsigned)
 constexpr std::int64_t kOneSecond = 1000;
 constexpr std::uint32_t kColourSpellFading = 0x121; // ProcessAffects' dsp_chat colour
 constexpr std::uint32_t kColourBleeding = 0xd;      // @0x45f38c
@@ -176,7 +176,7 @@ public:
         if (!distance && sb && sb->caster_is_self) distance = 0.0f; // the player's own spawn
         const bool caster_found = distance.has_value();
         if (caster_found) v = ch_.scale_by_distance(*d, v, distance);
-        // fld modifier / fld1 / fucompp / jnp: not exactly 1.0 (NaN included) scales: fild v / fmul / __ftol2_sse.
+        // A modifier not exactly 1.0 (NaN included) scales: v * modifier, truncated.
         const float modifier = sb ? sb->modifier : 1.0f;
         if (!(modifier == 1.0f))
             v = mechanics::Fpu::ftol(ch_.fpu().mul(static_cast<double>(v), static_cast<double>(modifier)));

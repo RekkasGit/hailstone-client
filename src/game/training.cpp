@@ -84,7 +84,7 @@ std::vector<TrainingRow> training_rows(const TraineeView& who, const std::array<
 }
 
 std::int32_t training_cost(std::int32_t value) {
-    // 32-bit sub, imul, imul, idiv: a skill past 1301 wraps the cube (the server's value is uncapped).
+    // A 32-bit difference cubed, divided signed: a skill past 1301 wraps the cube (the server's value is uncapped).
     auto v = static_cast<std::int32_t>(static_cast<std::uint32_t>(value) - 10u);
     if (v < 0) v = 0;
     const auto u = static_cast<std::uint32_t>(v);

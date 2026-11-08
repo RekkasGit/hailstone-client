@@ -27,7 +27,7 @@ std::int32_t wrap_add(std::int32_t a, std::int32_t b) {
 std::int32_t wrap_sub(std::int32_t a, std::int32_t b) {
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(a) - static_cast<std::uint32_t>(b));
 }
-// value * 100 / whole: the product with wraparound (imul), the division signed (idiv).
+// value * 100 / whole: the product with wraparound, the division signed.
 std::int32_t percent(std::int32_t value, std::int32_t whole) {
     if (whole == 0) return 0;
     return core::wrapped_div(static_cast<std::uint32_t>(value) * 100u, whole);
@@ -384,7 +384,7 @@ std::array<std::pair<const char*, std::int32_t>, 8> viewport_ini(const Viewport&
 
 ViewRect viewport_rect(const Viewport& v, std::int32_t screen_w, std::int32_t screen_h) {
     ViewRect r;
-    // imul then idiv: a scale from a hand-edited display.viewport wraps the product (core/wrap_math.h).
+    // The division is signed: a scale from a hand-edited display.viewport wraps the product (core/wrap_math.h).
     r.x = v.v[4] ? core::wrapped_mul_div(screen_w, v.v[4], 100) : v.v[0];
     r.y = v.v[5] ? core::wrapped_mul_div(screen_h, v.v[5], 100) : v.v[1];
     r.w = v.v[6] ? core::wrapped_mul_div(screen_w, v.v[6], 100) : wrap_sub(v.v[2], v.v[0]);

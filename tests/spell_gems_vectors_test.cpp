@@ -7,7 +7,7 @@
 // answers. The port runs against a replay: each callee it calls must be the record's next call with the same
 // arguments, and gets the recorded answer; then every recorded output is compared. Two outputs of
 // Handle_OP_MemorizeSpell start from values the record does not hold (the casting gem byte and the cast item's
-// dirty byte): they are compared only when the port writes them. FindAffectSlot runs the real stacking rules:
+// dirty byte): they are compared only when the client writes them. FindAffectSlot runs the real stacking rules:
 // CalcAffectChange is the client's CalcAffectChangeGeneric (Character::calc_affect_change; the records' spells have
 // no distance modifier and no formula 123, 137 or 138).
 #include <doctest/doctest.h>

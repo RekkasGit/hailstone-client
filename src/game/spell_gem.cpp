@@ -99,7 +99,7 @@ std::optional<double> cool_down_fraction(std::uint32_t& begin, std::uint32_t& du
     std::uint32_t left = duration - elapsed;
     if (duration == 0 || left == 0) return std::nullopt;
     Fpu fpu(p);
-    // fild (unsigned: + 2^32 when negative) of total - left and total, fdivp, then the smaller of it and 0.87.
+    // total - left over total (each unsigned: + 2^32 when negative), then the smaller of it and 0.87.
     double fraction = fpu.div(static_cast<double>(duration - left), static_cast<double>(duration));
     constexpr double kMax = 0.87; // 0xa1b608
     return kMax < fraction ? kMax : fraction;

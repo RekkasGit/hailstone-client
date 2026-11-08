@@ -4,7 +4,7 @@
 // and how MultipleItemMoveManager::ProcessMove @0x572300 resolves them.
 //
 // The list MoveItem builds, every entry with room mode 3 (the destination bag's own slots; the second loop's mode
-// is 3 for each entry too, `lea ebx,[edi+3]` runs once before the loop at 0x699403):
+// is 3 for each entry too, the mode is set once before the loop at 0x699403):
 //  - the cursor item is not a bag, or an empty bag without bForceBag: {the cursor item -> the target bag};
 //  - else each item of the cursor bag in slot order -> the target bag, and with bForceBag (Ctrl + right-click,
 //    CInvSlot::HandleRButtonUp @0x697250) each item of the target bag in slot order -> the cursor bag.

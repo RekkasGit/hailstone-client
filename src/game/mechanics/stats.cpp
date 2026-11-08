@@ -140,7 +140,7 @@ std::int32_t Character::recommended_item_value(const net::Item& item, std::int32
     double ratio;
     std::int32_t rec = item_recommended_level(item);
     if (rec != 0 && sheet_.level < rec) {
-        // fild level / fstp dword (exact) / fild rec / fdivr
+        // level (exact as a float) / rec
         ratio = fpu_.div(d(sheet_.level), d(rec));
     } else {
         std::int32_t rec_skill = item_recommended_skill(item);
@@ -150,7 +150,7 @@ std::int32_t Character::recommended_item_value(const net::Item& item, std::int32
         if (raw < 1) raw = 1;
         ratio = fpu_.div(d(raw), d(rec_skill));
     }
-    // fimul value / fadd 0.5f / fstp qword / _floor / __ftol2_sse
+    // ratio * value + 0.5f, stored as a double, _floor, truncated
     double x = fpu_.add(fpu_.mul(ratio, d(value)), 0.5);
     std::int32_t r = Fpu::ftol(std::floor(x));
     return r < 1 ? 1 : r;
@@ -352,7 +352,7 @@ std::int32_t Character::stat_sum(bool include_buffs, std::int32_t spa, std::int3
 std::int32_t Character::drunk_scaled(bool include_buffs, std::int32_t total) const {
     if (!sheet_.is_pc() || !include_buffs || sheet_.drunkenness == 0) return total;
     double factor = fpu_.sub(1.0, fpu_.mul(d(sheet_.drunkenness), 0.005));
-    if (!(0.2 < factor || 0.2 == factor)) factor = 0.2; // fcom / test ah, 0x41: keep the factor unless below 0.2
+    if (!(0.2 < factor || 0.2 == factor)) factor = 0.2; // keep the factor unless below 0.2
     return Fpu::ftol(fpu_.mul(factor, d(total)));
 }
 
@@ -411,7 +411,7 @@ std::int32_t Character::calc_agi(bool b) {
     if (b && sheet_.is_pc() && (sheet_.expansions & kExpansionHeroicStats))
         agility += static_cast<std::uint32_t>(d_.heroic_agi);
     float factor = calculate_weight();
-    // fld factor / fimul agility / __ftol2_sse
+    // factor * agility, truncated
     std::int32_t result = Fpu::ftol(fpu_.mul(f(factor), d(static_cast<std::int32_t>(agility))));
     d_.uncapped.agi = result;
     return cap_stat(result, 2);
@@ -432,7 +432,7 @@ std::int32_t Character::max_hp(bool include_buffs, int arg) const {
     std::int32_t stamina = include_buffs ? d_.stats.sta : d_.stats_no_buffs.sta;
     if (stamina > 255) stamina = add(stamina, -255) / 2 + 255;
     const ClassLevelRow* r = tables_.class_levels.row(sheet_.level, sheet_.class_id);
-    hp = add(hp, Fpu::ftol(fpu_.mul(r ? r->hp_per_stamina : 0.0, d(stamina)))); // fld qword / fimul / ftol
+    hp = add(hp, Fpu::ftol(fpu_.mul(r ? r->hp_per_stamina : 0.0, d(stamina)))); // a double times the integer, truncated
     std::int32_t percent = total_effect(214, true, 0, true, include_buffs);
     hp = add(hp, core::wrapped_mul_div(percent, hp, 10000));
     // Leadership: the owner (virtual +0x4c) missing or with expansion bit 0x40.
@@ -498,7 +498,7 @@ std::int32_t Character::max_endurance(bool include_buffs) const {
 }
 
 namespace {
-// x87 PercentOf (Cur_Mana @0x4443ac): fild pct / fmul 0.01f / fimul max / fadd 0.99f / __ftol2_sse.
+// x87 PercentOf (Cur_Mana @0x4443ac): pct * 0.01f * max + 0.99f, truncated.
 std::int32_t percent_of(const Fpu& fpu, std::int32_t pct, std::int32_t max) {
     double x = fpu.mul(d(pct), f(0.01f));
     x = fpu.mul(x, d(max));
@@ -576,7 +576,7 @@ std::int32_t Character::cur_endurance(bool update, std::int32_t* stored) const {
 // ---- weight ----
 
 std::int32_t Character::calc_carried_weight() const {
-    // Each step rounds to a float where the original stores one (fstp dword).
+    // Each step rounds to a float where the original stores one.
     auto tenth = [&](std::int32_t w) { return Fpu::to_float(fpu_.mul(d(w), f(0.1f))); };
     double total = 0.0;
     for (int slot = 0; slot < kPossessionSlots; ++slot) {
@@ -593,7 +593,7 @@ std::int32_t Character::calc_carried_weight() const {
         }
     }
     std::int32_t effect = total_effect(221, true, 0, true, true);
-    // fild effect / fld total / fmul st(1) / fxch / fmul 0.01f / fsubp: total - effect * total * 0.01f
+    // total - effect * total * 0.01f
     double x = fpu_.sub(total, fpu_.mul(fpu_.mul(d(effect), total), f(0.01f)));
     if (x > 32766.0) x = 32766.0;
     else if (x < 0.0) x = 0.0; // NaN is kept, as the x87 compares leave it
@@ -891,7 +891,7 @@ private:
 
 void Character::process_all_stats() {
     d_ = {};
-    // The item sums (item_sums.h, the exact port): the worn slots 0..0x15,
+    // The item sums (item_sums.h, following the original exactly): the worn slots 0..0x15,
     // then the 21 other lookups (0x42def0 x5, 0x42df20 x10, the
     // virtuals +0x4c x2 and +0x54 x4).
     std::array<StatItem, 0x16> worn_items;

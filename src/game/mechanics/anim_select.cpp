@@ -33,7 +33,7 @@ double round24_wide(double v) {
     return static_cast<double>(static_cast<float>(v * scale)) / scale;
 }
 
-// fsqrt at the FPU's precision. The operand always has at most the
+// The square root at the FPU's precision. The operand always has at most the
 // precision's bits (a float or an earlier result), so the double square root
 // rounded again to 24 bits is the correctly rounded result.
 double x87_sqrt(const Fpu& fpu, double v) {
@@ -43,10 +43,10 @@ double x87_sqrt(const Fpu& fpu, double v) {
     return fpu.precision() == FpuPrecision::Double53 ? r : round24_wide(r);
 }
 
-// fstp dword.
+// Stored as a float.
 float store(double v) { return static_cast<float>(v); }
 
-// fcomp: st0 < operand (C0 set, C2 clear: ((status >> 8) & 5) == 1). NaN: false.
+// The loaded value below the operand, ordered (NaN: false).
 bool below(double st0, double operand) { return st0 < operand; }
 
 // sqrt((y*y + x*x) + z*z) as 0x588a9a / 0x588c2b form it: loads x, y, z;
@@ -59,7 +59,7 @@ double length3(const Fpu& f, float y, float x, float z) {
     return x87_sqrt(f, x87_add(f, X87(s), X87(zz)));
 }
 
-// 0x588a26: CMath sqrt (EQGraphicsDX9 CMath::vf4: fld, fsqrt) of y*y + x*x
+// 0x588a26: CMath sqrt (EQGraphicsDX9 CMath::vf4: the square root at the precision) of y*y + x*x
 // stored as a float, * 0.5 + 1, stored. (x*x first; y*y into y's slot; the
 // sum's destination is y*y.)
 float ground_rate(const Fpu& f, float y, float x) {
@@ -243,7 +243,7 @@ bool is_jump_animation(std::uint8_t anim, bool new_style) {
 std::string_view old_anim_clip(std::uint8_t old) { return old > 0 && old < 0x4f ? kOldNames[old] : std::string_view{}; }
 
 bool movement_still(float y, float x, float z, const Fpu& f) {
-    // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; fcomp 0.01.
+    // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; compared with 0.01.
     double yy = x87_mul(f, X87(y), X87(y));
     double xx = x87_mul(f, X87(x), X87(x));
     double s = x87_add(f, X87(xx), X87(yy));
@@ -634,9 +634,9 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
 double old_model_anim_speed(std::int32_t anim, float speed, std::int32_t race, std::int32_t gender, bool new_model,
                             bool display_129, const Fpu& f) {
     switch (old_speed_rule(anim, race, gender, new_model, display_129)) {
-    case 1: return x87_add(f, X87(speed), X87(speed)); // fadd st0, st0
+    case 1: return x87_add(f, X87(speed), X87(speed)); // speed + speed
     case 2: return x87_mul(f, X87(speed), X87(kThreeQuarters));
-    default: return static_cast<double>(speed); // fld dword
+    default: return static_cast<double>(speed);
     }
 }
 

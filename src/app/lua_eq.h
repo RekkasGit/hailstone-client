@@ -286,7 +286,7 @@ struct EqHost {
     std::function<void(int tip)> activate_tip;
     // A window's Activate on another stock window (the inventory's Face button: CPlayerCustomizationWnd).
     std::function<void(std::string_view screen)> show_window;
-    // The layout copy window (app/lua_eq_layout.cpp, EqApi's port of __CopyLayout): the layouts there are to copy
+    // The layout copy window (app/lua_eq_layout.cpp, EqApi's __CopyLayout): the layouts there are to copy
     // (a UI ini and the resolution its keys are stored for: "1280x1024", "Windowed"), and the copy, which answers
     // the eqstr of a refusal and its arguments (none: copied).
     struct LayoutSource {

@@ -1832,7 +1832,7 @@ int MapRightClick(lua_State* L) {
     const float x = static_cast<float>(luaL_checknumber(L, 1)), y = static_cast<float>(luaL_checknumber(L, 2));
     if (!drawn_now(s) || !h.conn || !h.feet_valid || !s.view.current_zone) return 0;
     if (s.area_w < 1.0f || s.area_h < 1.0f) return 0;
-    // The point in the original's pixels, the integer mouse as the original's (fild).
+    // The point in the original's pixels, the integer mouse as the original's.
     float px = std::trunc((x - s.ox) / s.k), py = std::trunc((y - s.oy) / s.k);
     glm::vec2 yx = s.view.world_coordinates(px, py, s.area_w, s.area_h); // the original's (Y, X) = world (x, y)
     auto me = h.conn->world().player();

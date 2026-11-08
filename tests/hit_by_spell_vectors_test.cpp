@@ -1011,7 +1011,7 @@ private:
     void fail(const std::string& why) {
         if (error.empty()) error = why;
     }
-    // Compares one recorded value with what the port passed.
+    // Compares one recorded value with what the client passed.
     bool same(const Json& rec, const Arg& a) const {
         switch (a.kind) {
         case Arg::Skip: return true;
@@ -1300,7 +1300,7 @@ std::string check_outputs(const Json& out, World& w, std::uint8_t result) {
     return c.error;
 }
 
-// Runs a record's world through the port against the replay of its calls.
+// Runs a record's world through the client's rules against the replay of its calls.
 std::string run_world(const Json& r, World& w, std::uint8_t* result) {
     Fpu fpu(r["precision"].text == "x87-24" ? FpuPrecision::Single24 : FpuPrecision::Double53);
     Replay replay(w, r["out"], fpu);

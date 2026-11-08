@@ -1,4 +1,4 @@
-// core/wrap_math.h: a wrapped 32-bit product divided as the original's idiv divides it, in every compiler's build.
+// core/wrap_math.h: a wrapped 32-bit product divided as the original divides it (signed), in every compiler's build.
 #include <doctest/doctest.h>
 
 #include <cstdint>
@@ -31,7 +31,7 @@ TEST_CASE("wrapped_div: the product's low 32 bits, signed, divided towards zero"
     // A focus's cast-time share (GetFocusCastingTimeModifier): INT_MIN over -100 is positive.
     CHECK(wrapped_div(runtime("2147483648") * 95u, -100) == 21474836);
     CHECK(wrapped_div(runtime("3000") * static_cast<std::uint32_t>(-20), -100) == 600);
-    // Truncation towards zero both ways, as idiv.
+    // Truncation towards zero both ways, as the original.
     CHECK(wrapped_div(static_cast<std::uint32_t>(-7), 2) == -3);
     CHECK(wrapped_div(7u, -2) == -3);
 }

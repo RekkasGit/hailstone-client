@@ -288,7 +288,7 @@ TEST_CASE("marketplace rules: CanBuy, the quantity buttons, prices and funds") {
     e.kind = 6;
     CHECK_FALSE(game::marketplace_can_raise_quantity(e, 1, 1000));
     e.kind = 0;
-    // 32-bit product, as imul wraps.
+    // A 32-bit product, wrapping as the original's does.
     e.price = 0x80000000u;
     CHECK(game::marketplace_can_raise_quantity(e, 1, 0)); // 2 * 0x80000000 wraps to 0
     CHECK_FALSE(game::marketplace_can_lower_quantity(1));

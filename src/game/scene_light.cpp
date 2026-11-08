@@ -15,7 +15,7 @@ float fix_heading(float h) {
     return h < 0.0f ? h + 512.0f : h;
 }
 
-// The original stores each channel as a byte, truncated (fistp under a chop
+// The original stores each channel as a byte, truncated (stored as an integer under a chop
 // control word), and the graphics DLL converts back with x 1/255.
 glm::vec3 through_bytes(glm::vec3 c) {
     return glm::floor(glm::clamp(c, 0.0f, 1.0f) * 255.0f) / 255.0f;

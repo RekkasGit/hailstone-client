@@ -15,7 +15,7 @@ constexpr float kHalf = 0.5f;     // 0x9c4998
 constexpr std::uint8_t kDucking = 0x6f;
 constexpr std::uint8_t kStanding = 0x64;
 
-// fld: a float on the stack (a signalling NaN comes out quiet).
+// A float loaded for arithmetic (a signalling NaN comes out quiet).
 double st(float v) {
     std::uint32_t b;
     std::memcpy(&b, &v, 4);
@@ -23,13 +23,13 @@ double st(float v) {
     std::memcpy(&v, &b, 4);
     return static_cast<double>(v);
 }
-// fld / fstp dword: a float copied through the FPU (x87::CopyFloat; a signalling NaN comes out quiet).
+// A float copied through the FPU (x87::CopyFloat; a signalling NaN comes out quiet).
 float copy(float v) { return static_cast<float>(st(v)); }
-// fst dword: rounded to a float.
+// Rounded to a float.
 float to_f(double v) { return static_cast<float>(v); }
-// fucom: equal (not unordered).
+// Equal (not unordered).
 bool equal(double a, double b) { return !std::isnan(a) && !std::isnan(b) && a == b; }
-// fcom: a < b (not unordered).
+// a < b (not unordered).
 bool less(double a, double b) { return !std::isnan(a) && !std::isnan(b) && a < b; }
 
 // The refusal: CachedFloorHeight put back, CollisionCounter reset.
@@ -73,8 +73,8 @@ bool can_i_fit_here(FloorCache& c, const std::array<float, 3>& p, const FitSpawn
             if (less(top, z)) {
                 stale = true;
             } else {
-                double moved = std::fabs(x87_sub(f, st(old_floor), floor_ext)); // fsubr [old]; fabs
-                // fcomp 0.01 / test ah, 0x41 / jne keep: kept when below, equal or unordered.
+                double moved = std::fabs(x87_sub(f, st(old_floor), floor_ext)); // |old - floor|
+                // Against 0.01: kept when below, equal or unordered.
                 stale = !(std::isnan(moved) || moved <= static_cast<double>(kSame));
             }
         }

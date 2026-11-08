@@ -166,7 +166,7 @@ TEST_CASE("GetPcSkillLimit vectors") {
         auto find = [&](const char* fn) -> const Json* {
             for (const Json& c : in["calls"].items)
                 if (c["fn"].text == fn) return &c;
-            if (error.empty()) error = std::format("the port asked {}, the original did not", fn);
+            if (error.empty()) error = std::format("the client asked {}, the original did not", fn);
             return nullptr;
         };
         std::map<std::int32_t, std::int32_t> effects;

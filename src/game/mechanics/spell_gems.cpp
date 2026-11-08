@@ -10,7 +10,7 @@ std::int32_t get_spell_mem_ticks_left(MemorizeBook& book, MemorizeWorld& w, Memo
     std::int32_t step = 1;
     const std::int32_t needed = q.spell_level_needed(book.spell, w.class_id);
     std::int32_t interval = static_cast<std::int32_t>(
-        static_cast<std::uint32_t>(needed - q.level() + 5) * 100u); // imul (wraps)
+        static_cast<std::uint32_t>(needed - q.level() + 5) * 100u); // the product wraps
     if (interval < 100) interval = 100;
     if (w.now - w.last_tick > static_cast<std::uint32_t>(interval)) {
         w.last_tick = w.now;

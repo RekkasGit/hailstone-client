@@ -139,7 +139,7 @@ void do_stand(WorldState& w, Spawn& rider, Spawn* mount, MountQueries& q, MountE
     const bool local = rider.id == w.player_id;
     std::int32_t point = -1;
     // The local player needs room for 3 x AvatarHeight between the ceiling and the floor (when CanIFitHere finds
-    // the position good); fld room; fld AvatarHeight; fmul 3.0; fcompp; test ah, 0x41: only a larger need fails.
+    // the position good); room against AvatarHeight * 3.0, unrounded: only a larger need fails.
     if (local && q.can_i_fit_here()) {
         double need = static_cast<double>(rider.heights.avatar_height) * kRoomFactor;
         if (need > q.room_above()) {

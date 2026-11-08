@@ -17,7 +17,7 @@
 // Every call the original makes to another of these functions goes through
 // Hooks first, so that a test can replay a recorded call of the original
 // (the recorded vectors: the original ran with its callees mocked) and
-// check one function on its own. Without hooks the port computes everything.
+// check one function on its own. Without hooks the client computes everything.
 //
 // Sources: the original's functions named in each file, checked against its
 // vectors, and the exe's disassembly for those without vectors

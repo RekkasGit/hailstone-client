@@ -5,7 +5,7 @@
 // the fake virtuals as notes, the float fakes, every packet with its bytes) in call order. The port runs against a
 // replay: each call it makes must be the record's next one with the same arguments (an argument recorded as null
 // came from bytes the original never writes: any value passes), and gets the recorded answer. Packet bytes recorded
-// as "xx" must be 0 from the port. Then the player fields and globals written are compared.
+// as "xx" must be 0 from the client. Then the player fields and globals written are compared.
 #include <doctest/doctest.h>
 
 #include <cstdint>

@@ -1,4 +1,4 @@
-// The melee timing ports (game/mechanics/melee.h) against the original's
+// The melee timing rules (game/mechanics/melee.h) against the original's
 // vectors (recorded from eqgame.exe): MeleeRange (3000),
 // ModifyAttackSpeed (4000, the bag search replayed from out.calls),
 // GetHandToHandDelay (3000), CheckDoubleAttack (4000) and CheckDualWield
@@ -165,7 +165,7 @@ std::string check_dual_wield(const Json& r) {
 
 // The original's callees replayed from out.calls: each
 // query takes the next record, checks its name and arguments and returns its result. Items are the vectors' numbers
-// (0..11 the world's, -2 the fist, -1 none), which the port passes around as ItemRefs.
+// (0..11 the world's, -2 the fist, -1 none), which the client passes around as ItemRefs.
 class RecordedAttack final : public ml::AttackQueries {
 public:
     RecordedAttack(const Json& in, const Json& calls, const Fpu& f) : in_(in), calls_(calls), f_(f) {}
@@ -311,7 +311,7 @@ public:
         arg(take("get_string"), "id", eqstr);
         arg(take("dsp_chat_2"), "id", eqstr);
     }
-    // The fake PlayerDistance: fld distance; fadd distance_extra (at the precision), left on the x87 stack.
+    // The fake PlayerDistance: distance + distance_extra (at the precision), unrounded.
     double player_distance(const ml::Spawn* target) override {
         const Json* c = take("player_distance");
         arg(c, "z_scale_bits", 0);

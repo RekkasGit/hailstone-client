@@ -17,7 +17,7 @@ std::int32_t add(std::int32_t a, std::int32_t b) {
 double d(std::int32_t v) { return static_cast<double>(v); }
 double f(float v) { return static_cast<double>(v); }
 
-// fild value / fmul 100.0f / fmul modifier / fmul 0.01f / fadd 0.5f / __ftol2_sse
+// value * 100.0f * modifier * 0.01f + 0.5f, truncated
 std::int32_t scale_by_modifier(const Fpu& fpu, std::int32_t value, float modifier) {
     double x = fpu.mul(d(value), 100.0);
     x = fpu.mul(x, f(modifier));
@@ -25,13 +25,13 @@ std::int32_t scale_by_modifier(const Fpu& fpu, std::int32_t value, float modifie
     x = fpu.add(x, 0.5);
     return Fpu::ftol(x);
 }
-// fild value / fmul modifier / fadd 0.5f / __ftol2_sse
+// value * modifier + 0.5f, truncated
 std::int32_t scale_half_up(const Fpu& fpu, std::int32_t value, float modifier) {
     return Fpu::ftol(fpu.add(fpu.mul(d(value), f(modifier)), 0.5));
 }
-// fild value / fmul dword k / __ftol2_sse
+// value * k, truncated
 std::int32_t scale(const Fpu& fpu, std::int32_t value, float k) { return Fpu::ftol(fpu.mul(d(value), f(k))); }
-// fild minutes / fmul 1.5f / fimul regen / __ftol2_sse
+// minutes * 1.5f * regen, truncated
 std::int32_t scale_minutes(const Fpu& fpu, std::int32_t minutes, std::int32_t regen) {
     return Fpu::ftol(fpu.mul(fpu.mul(d(minutes), 1.5), d(regen)));
 }

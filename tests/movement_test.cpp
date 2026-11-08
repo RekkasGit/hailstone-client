@@ -20,7 +20,7 @@ using namespace hailstone::game::mechanics;
 
 namespace {
 
-// fild n / fmul 0.01f: the percent the original multiplies by.
+// n * 0.01f: the percent the original multiplies by.
 float pct(int n) { return static_cast<float>(n * static_cast<double>(0.01f)); }
 
 std::uint32_t bits(float f) {

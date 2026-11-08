@@ -9,10 +9,10 @@
 // @0x8cfca0. Collision (DoCollisionMovement) is the caller's.
 //
 // Sources: the original's MyFeetAreOnGround, vf0, vf4, PushAlongHeading,
-// SetAccel, the strafe vf14, Step, GetEnvCoefficients, LandingAndFallCheck
-// (the exact ports at the end of this header), vf3, ApplyFriction and
-// SlowInMode5; each step names its address. All of them are
-// checked against the original's vectors (tests/movement_vectors_test.cpp).
+// SetAccel, the strafe vf14, Step, GetEnvCoefficients, LandingAndFallCheck (at
+// the end of this header, following the original exactly), vf3, ApplyFriction
+// and SlowInMode5; each step names its address. All of them are checked against
+// the original's vectors (tests/movement_vectors_test.cpp).
 //
 // Units are the original's: positions in world units, velocities in world
 // units per physics tick, where one tick is 50 ms (Step: dt = elapsed_ms *
@@ -21,9 +21,10 @@
 // heading 0 faces +Y; here heading 0 faces +X, counterclockwise, so the
 // original's "cos(heading) to Y, sin(heading) to X" is "cos to x, sin to y".
 //
-// Float math: the original runs on the x87 FPU, which Direct3D 9 sets to
-// 24-bit precision, so every operation rounds to a float; this code computes
-// in float in the same order. The exact ports take the precision (fpu.h).
+// Float math: the original runs on the x87 FPU, which Direct3D 9 sets to 24-bit
+// precision, so every operation rounds to a float; this code computes in float
+// in the same order. The functions that follow the original exactly take the
+// precision (fpu.h).
 //
 // Friction and the run-speed push are applied once per call (per frame), not
 // scaled by the elapsed time, exactly as in the original: like the original,
@@ -144,7 +145,7 @@ void push_along_heading(PhysicsBody& body, float amount);
 float heading_sin(float heading);
 float heading_cos(float heading);
 
-// ------------------------------------------------- exact ports (Step, env, landing)
+// ------------------------------------------------- the original's Step, env, landing
 //
 // PhysicsObject::Step, GetEnvCoefficients and LandingAndFallCheck, with
 // vectors recorded from the original for all three.

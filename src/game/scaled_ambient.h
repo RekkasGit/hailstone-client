@@ -4,7 +4,7 @@
 // 0x1003a4c0, actor vtable +0xf0), which CDisplay_UpdateSkyWeatherAndFog
 // smooths by 0.01 per frame (game/fog.h).
 //
-// From the DLL's code (read for this port; no vectors):
+// From the DLL's code (read for this client; no vectors):
 //  - at most once per 1000 ms (timeGetTime - actor +0x1c > 1000) and only
 //    while the actor's flag +0xa is set (cleared after the probe), it sweeps
 //    a 0.5-radius sphere down from the actor's position, trying in order:

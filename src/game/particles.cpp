@@ -256,7 +256,7 @@ void ParticleSystem::spawn(Emitter& e, std::uint32_t count) {
         }
         case 6: { // box surface
             // EQGraphicsDX9.dll's shape switch, case 6 (@0x100737be): two draws from the signed table (-1..1) for the
-            // two free axes, in that order, then the face from the unsigned one (0..1) times 6.0 through fistp
+            // two free axes, in that order, then the face from the unsigned one (0..1) times 6.0 stored as an integer
             // (rounded to nearest, so 0..6: faces 0 and 6 are half as likely). Faces 0..4 are -x, +x, -y, +y, -z;
             // anything else +z. The original's random numbers come from shuffled tables, this client's from its own
             // generator.

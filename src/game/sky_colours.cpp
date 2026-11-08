@@ -89,7 +89,7 @@ ColourMap blend_colour_map(const ColourMap& a, const ColourMap& b, std::uint32_t
 
 std::uint32_t sky_ticks(float v) {
     float x = v * 65536.0f; // exact: a power of two
-    if (!(x > -2147483649.0f && x < 2147483648.0f)) return 0x80000000u; // fistp's integer indefinite
+    if (!(x > -2147483649.0f && x < 2147483648.0f)) return 0x80000000u; // the x87's integer indefinite
     return static_cast<std::uint32_t>(static_cast<std::int32_t>(std::trunc(x)));
 }
 
@@ -116,7 +116,7 @@ ColourPick pick_colour_key(std::span<const ColourKey> keys, std::uint32_t t) {
 float sky_day_fraction(std::int32_t hour, std::int32_t minute, std::uint32_t elapsed_ms) {
     const mechanics::Fpu fpu; // 24-bit, as in game
     double a = fpu.add(fpu.mul(static_cast<double>(hour), 60.0), static_cast<double>(minute));
-    // fild elapsed (+2^32 when negative as an int32) / fmul 1/3000 / faddp / fmul 1/1440 / fstp.
+    // (elapsed (+2^32 when negative as an int32) * 1/3000 + a) * 1/1440, stored as a float.
     double e = static_cast<double>(static_cast<std::int32_t>(elapsed_ms));
     if (static_cast<std::int32_t>(elapsed_ms) < 0) e = fpu.add(e, 4294967296.0);
     e = fpu.mul(e, static_cast<double>(1.0f / 3000.0f));
@@ -316,7 +316,7 @@ void SkyState::update(float frame_ms, float precipitation, std::uint32_t render_
         if (remaining_ > 0.0f) {
             float r = remaining_ / total_;
             float scaled = r * 255.0f;
-            // fistp with chop into a byte (r is in (0, 1] here, so k is 0..255).
+            // Truncated into a byte (r is in (0, 1] here, so k is 0..255).
             std::int32_t k = std::isfinite(scaled) ? static_cast<std::uint8_t>(static_cast<std::int32_t>(std::trunc(scaled))) : 0;
             if (k != last_k_) {
                 auto a = set_map(previous_);

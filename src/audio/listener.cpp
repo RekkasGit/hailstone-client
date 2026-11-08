@@ -21,7 +21,7 @@ constexpr std::uint32_t kIndefinite = 0xffc00000u; // the x87's default NaN stor
 float as_float(std::uint32_t b) { return std::bit_cast<float>(b); }
 std::uint32_t bits_of(float f) { return std::bit_cast<std::uint32_t>(f); }
 
-// fld dword / fstp dword: a signalling NaN comes out quiet; everything else is unchanged.
+// A float copied through the FPU: a signalling NaN comes out quiet; everything else is unchanged.
 std::uint32_t through_fpu(std::uint32_t b) { return std::isnan(as_float(b)) ? b | kQuietBit : b; }
 
 bool same_name(std::string_view a, std::string_view b) {
@@ -40,7 +40,7 @@ struct Wide {
     double value() const { return std::ldexp(static_cast<double>(hi), 64) + static_cast<double>(lo); }
 };
 
-// The x87's fsin / fcos argument reduction: by pi/2 with its 66-bit pi (0x3243F6A8885A308D3 / 2^64), done exactly
+// The x87's sine / cosine argument reduction: by pi/2 with its 66-bit pi (0x3243F6A8885A308D3 / 2^64), done exactly
 // on the integer significand. Returns the remainder in [-pi/4, pi/4] (approximately) and the quadrant.
 void reduce(float operand, double& r, unsigned& quadrant) {
     double a = std::fabs(static_cast<double>(operand));
@@ -77,12 +77,12 @@ void reduce(float operand, double& r, unsigned& quadrant) {
     quadrant = k;
 }
 
-// Shared by fsin and fcos: NaN, infinity and the out-of-range operand.
+// Shared by the sine and the cosine: NaN, infinity and the out-of-range operand.
 std::optional<std::uint32_t> special(std::uint32_t operand) {
     float f = as_float(operand);
     if (std::isnan(f)) return operand | kQuietBit;
     if (std::isinf(f)) return kIndefinite;
-    if (std::fabs(f) >= 9223372036854775808.0f) return operand; // C2 set, st(0) unchanged
+    if (std::fabs(f) >= 9223372036854775808.0f) return operand; // out of range: the operand unchanged
     return std::nullopt;
 }
 
@@ -144,7 +144,7 @@ ListenerLocation eq_listener_location(std::uint32_t y, std::uint32_t x, std::uin
     double t = game::mechanics::x87_mul(fpu, X87(as_float(heading)), X87(kTwoPi));
     t = game::mechanics::x87_mul(fpu, X87(t), X87(kOneOver512));
     out.angle = std::isnan(t) ? bits_of(static_cast<float>(t)) | kQuietBit : bits_of(static_cast<float>(t));
-    out.z = through_fpu(z) ^ 0x80000000u; // fchs
+    out.z = through_fpu(z) ^ 0x80000000u; // negated
     out.y = through_fpu(x);
     out.x = through_fpu(y);
     return out;

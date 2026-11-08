@@ -46,16 +46,16 @@ constexpr std::uint32_t kTokCantHit = 123;        // 0x7b
 constexpr std::uint32_t kTokStunned = 125;        // 0x7d
 constexpr std::int32_t kColorCombat = 0x12f, kColorRed = 0xd;
 
-// An x87 operand loaded from a float in memory (fld quiets a signalling NaN; the payload stays).
+// An x87 operand loaded from a float in memory (a signalling NaN comes out quiet; the payload stays).
 X87 loaded(float f) { return X87(static_cast<double>(f)); }
 
-// fcom-style tests: NaN compares unordered (false).
+// Ordered compares: NaN is unordered (false).
 bool less(double a, double b) { return a < b; }
 
 // x87 add/sub/mul rounding to the precision, and the store of an extended value to a float.
 double store_float(double v) { return Fpu::to_float(v); }
 
-// The low dword of fistp qword under a chop control word (truncation toward zero).
+// The low dword of a 64-bit integer store with truncation toward zero.
 std::uint32_t chop_low32(double v) {
     return static_cast<std::uint32_t>(static_cast<std::uint64_t>(static_cast<std::int64_t>(std::trunc(v))));
 }
@@ -66,17 +66,17 @@ std::uint32_t chop_low32(double v) {
 
 float melee_range(const RangeSpawn* a, const RangeSpawn* b, const Fpu& f) {
     if (!a || !b) return kMinRange;
-    // PlayerZoneClient_GetScaledMeleeRadius: fld radius; fmul scale (unrounded), stored as a float by the caller.
+    // PlayerZoneClient_GetScaledMeleeRadius: radius * scale (unrounded), stored as a float by the caller.
     double first = store_float(x87_mul(f, loaded(a->melee_radius), X87(a->scale)));
     double second = store_float(x87_mul(f, loaded(b->melee_radius), X87(b->scale)));
-    // |height(a) - height(b)|: fld a (stored as a float), fld b, fsubr [a], stored, ABS_wrapper (fabs), stored.
+    // |height(a) - height(b)|: a (stored as a float) less b, stored, ABS_wrapper, stored.
     double ha = store_float(static_cast<double>(a->height));
     double gap = store_float(std::fabs(store_float(x87_sub(f, X87(ha), loaded(b->height)))));
     double r = store_float(x87_mul(f, x87_add(f, X87(first), X87(second)), X87(kRadiusShare)));
-    // fld 14; fcomp r: raised to 14 unless 14 <= r (NaN kept).
+    // Raised to 14 unless 14 <= r (NaN kept).
     if (less(r, kMinRange)) r = kMinRange;
     double d = store_float(x87_add(f, x87_add(f, X87(r), X87(kRangeExtra)), X87(gap)));
-    // fld 75; fcomp d: lowered to 75 when 75 < d (NaN kept).
+    // Lowered to 75 when 75 < d (NaN kept).
     if (less(kMaxRange, d)) d = kMaxRange;
     return static_cast<float>(d);
 }
@@ -87,7 +87,7 @@ std::uint32_t modify_attack_speed(std::uint32_t delay, std::uint32_t with_bags, 
                                   const Fpu& f) {
     if (delay == 0) return 0;
     if (haste > 0) {
-        // fild haste; fmul 0.01f; fild delay (+2^32 when negative); fdivrp: delay / percent; fistp qword (chop).
+        // haste * 0.01f; delay (+2^32 when negative) / that percent, truncated to 64 bits.
         double percent = f.mul(static_cast<double>(haste), static_cast<double>(kPercent));
         double d = static_cast<double>(static_cast<std::int32_t>(delay));
         if (static_cast<std::int32_t>(delay) < 0) d = f.add(d, static_cast<double>(kTwoTo32));
@@ -99,7 +99,7 @@ std::uint32_t modify_attack_speed(std::uint32_t delay, std::uint32_t with_bags, 
         if (!bags->has_item(slot) || bags->item_class(slot) != 1) continue;
         if (bags->container_type(slot) != 2 || bags->weight_reduction(slot) <= 0) continue;
         std::int32_t reduction = bags->weight_reduction(slot);
-        // fild wr; fmul 0.0025f; fild delay (+2^32 when negative); fmulp; __ftol2_sse.
+        // wr * 0.0025f * delay (+2^32 when negative), truncated.
         double share = f.mul(static_cast<double>(reduction), static_cast<double>(kQuiverShare));
         double d = static_cast<double>(static_cast<std::int32_t>(delay));
         if (static_cast<std::int32_t>(delay) < 0) d = f.add(d, static_cast<double>(kTwoTo32));
@@ -180,8 +180,8 @@ double bearing(float y1, float x1, float y2, float x2, const Fpu& f) {
     double dy = std::fabs(x87_sub(f, loaded(y1), X87(y2)));
     double dx = std::fabs(x87_sub(f, loaded(x1), X87(x2)));
     if (kBearingEpsilon > dy) dy = kBearingEpsilon;
-    // fpatan (st1 = atan(st1 / st0), not rounded to the precision control: a 64-bit significand), then
-    // fmul 180.0 and fmul 1/pi at the precision.
+    // The arctangent (not rounded to the precision control: a 64-bit significand), then
+    // times 180.0 and 1/pi at the precision.
     long double angle = std::atan2(static_cast<long double>(dx), static_cast<long double>(dy));
     long double scaled = angle * static_cast<long double>(kHalfTurnDegrees);
     double degrees = f.precision() == FpuPrecision::Double53 ? static_cast<double>(scaled)
@@ -224,7 +224,7 @@ bool can_i_hit(const Spawn& me, const Spawn* target, float extra, HitQueries& q,
     if (!me.has_actor || !t.has_actor) return false;
     RangeSpawn ra = me.range(), rb = t.range();
     double range = melee_range(&ra, &rb, f);
-    // fucompp 0 against extra: equal (not unordered) and both players: range * 1.25.
+    // extra against 0: equal (not unordered) and both players: range * 1.25.
     if (extra == 0.0f && me.type == 0 && t.type == 0) range = x87_mul(f, X87(range), X87(kPcRangeScale));
     double reach = store_float(x87_add(f, X87(range), X87(extra)));
     double d2 = distance_squared_3d(me, t, f);
@@ -312,7 +312,7 @@ void set_fist(AttackState& s, std::int32_t damage, std::uint8_t skill, AttackQue
     q.fist_set_definition();
 }
 
-// fild dword / fstp dword; fild dword / fadd dword / fstp dword.
+// An integer stored as a float; an integer plus a float, stored as a float.
 float fild(std::int32_t v) { return static_cast<float>(v); }
 float fiadd(std::int32_t v, float to, const Fpu& f) {
     return static_cast<float>(f.add(static_cast<double>(v), static_cast<double>(to)));
@@ -521,7 +521,7 @@ bool do_attack(AttackState& s, Spawn& me, const Spawn* target, std::uint32_t slo
         }
         float range = 0.0f;
         if (slot == kRangeSlot) {
-            // fcomp 30.0f: closer than 30 is too close (12698); NaN is not.
+            // Closer than 30 is too close (12698); NaN is not.
             if (target && less(q.player_distance(target), kRangedTooClose)) {
                 q.token(kTokTooClose, 0xf);
                 return false;

@@ -54,7 +54,7 @@ struct ResolvedTeleport {
 ResolvedTeleport resolve_teleport_index(std::string_view text, std::int32_t index, std::int32_t current_zone,
                                         float location[3], std::span<const ZonePointRow> zone_points);
 
-// The quieting fld / fstp of a float's bits (a signalling NaN comes out quiet).
+// The quieting copy through the FPU of a float's bits (a signalling NaN comes out quiet).
 std::uint32_t through_fpu(std::uint32_t bits);
 
 // PlayerZoneClient::DoTeleport @0x508c10 for the local player (or another spawn: only the Eye of Zomm check).

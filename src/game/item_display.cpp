@@ -674,9 +674,10 @@ ItemDisplay build_item_display(const net::Item& item, const ItemDisplayContext& 
     }
     if (item.power > 0) { // MaxPower: "<power * 100 / max>%", the tooltip "<power>/<max>"
         // The power field this client keeps is the item's maximum; its current power is not sent separately.
-        // Deliberate difference: the original divides an int32 product (instance +0x110 * 100 / GetMaxPower, imul
-        // and idiv), which wraps past 21.4 million. With the current power unknown and the maximum standing in for
-        // it, the wrap would only turn the 100% this can show into a meaningless number, so it multiplies in 64 bits.
+        // Deliberate difference: the original divides an int32 product (instance +0x110 * 100 / GetMaxPower, the
+        // product wrapping, the division signed), which wraps past 21.4 million. With the current power unknown and the
+        // maximum standing in for it, the wrap would only turn the 100% this can show into a meaningless number, so it
+        // multiplies in 64 bits.
         std::uint32_t cur = item.power, max = item.power;
         g.put(2, str(ctx, 0x340b), std::to_string(static_cast<std::uint64_t>(cur) * 100 / max) + "%", 0, true);
         g.cell(g.row - 1, 2).tooltip = std::to_string(cur) + "/" + std::to_string(max);

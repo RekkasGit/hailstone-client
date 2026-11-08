@@ -94,7 +94,7 @@ std::optional<PaletteMap> decode_palette_map(std::span<const std::byte> bmp) {
 
 int palette_entry(const PaletteMap& map, glm::vec2 uv, std::size_t entries) {
     if (map.width == 0 || map.height == 0) return -1;
-    // fistp to 64 bits; NaN and values out of range store the integer indefinite, whose low 32 bits are 0.
+    // Stored as a 64-bit integer; NaN and values out of range store the integer indefinite, whose low 32 bits are 0.
     auto texel = [](float t, std::uint32_t n) {
         double x = std::nearbyint(static_cast<double>(t) * n);
         auto r = std::isfinite(x) && std::abs(x) < 9.2e18 ? static_cast<std::uint32_t>(static_cast<std::int64_t>(x))

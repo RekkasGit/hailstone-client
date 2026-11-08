@@ -61,7 +61,7 @@ std::optional<ColourMap> parse_colour_map(std::span<const std::byte> dds);
 std::uint32_t blend_colour(std::uint32_t a, std::uint32_t b, std::uint32_t w);
 ColourMap blend_colour_map(const ColourMap& a, const ColourMap& b, std::uint32_t w);
 
-// (uint32)trunc(v * 65536.0f), as the DLL's fistp under a chop control word:
+// (uint32)trunc(v * 65536.0f), as the DLL stores it under a chop control word:
 // a key's start or length, or the day fraction's tick t.
 std::uint32_t sky_ticks(float v);
 

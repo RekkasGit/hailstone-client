@@ -111,7 +111,7 @@ std::int32_t carried_weight(const net::GameConnection& conn, std::int32_t spa221
 
 // The movement inputs before the character exists (the first frames after zoning in): the profile's
 // values and the buffs' base values, as the client did before the stats port was wired in. Once the
-// Character is built, mech::movement_facts takes everything from it (the exact ports).
+// Character is built, mech::movement_facts takes everything from it (each following the original exactly).
 mech::MovementFacts fallback_facts(const net::GameConnection& conn, const net::PlayerProfile* prof,
                                    const net::PlayerStatus& st) {
     mech::MovementFacts f;
@@ -330,8 +330,8 @@ public:
                 if (!w.in_world(from)) return static_cast<double>(mech::kNoFloorHeight);
                 MoveWorld::Sweep s = w.world_sweep(from, glm::vec3(at[0], at[1], 32767.0f), r);
                 mech::Fpu fpu;
-                double top = mech::x87_add(fpu, s.out.position.z, r); // fld z'; fld r; fadd st(1), st
-                double start = mech::x87_add(fpu, r, at[2]);            // fadd [z]
+                double top = mech::x87_add(fpu, s.out.position.z, r); // z' + r
+                double start = mech::x87_add(fpu, r, at[2]);            // r + z
                 if (start < top || start == top || std::isnan(start) || std::isnan(top)) return top;
                 return static_cast<double>(mech::kNoFloorHeight);
             }
@@ -442,7 +442,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
     pc.touch = [this](std::uint8_t id) { touch_now(id); };
     out.fits = pc.can_i_fit_here({body.feet.x, body.feet.y, body.feet.z + floor_offset}, 0);
     if (player_ceiling_)
-        out.room = static_cast<double>(*player_ceiling_) - static_cast<double>(floor_cache_.floor); // fld; fsub
+        out.room = static_cast<double>(*player_ceiling_) - static_cast<double>(floor_cache_.floor);
     return out;
 }
 

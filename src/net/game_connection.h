@@ -2184,7 +2184,7 @@ public:
     // takes the request once.
     enum class QuitRequest : std::uint8_t { None, Quit, Exit };
     QuitRequest take_quit_request() { return std::exchange(quit_request_, QuitRequest::None); }
-    // The original handlers the app ports (windows, chat windows, display and sound settings;
+    // The original handlers the app follows (windows, chat windows, display and sound settings;
     // app/client_app_commands.cpp): called with the handler's name and the arguments for a table command the
     // connection does not handle; true = handled.
     void set_client_commands(std::function<bool(std::string_view handler, const std::string& args)> fn) {

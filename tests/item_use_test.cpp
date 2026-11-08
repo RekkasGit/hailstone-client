@@ -96,7 +96,8 @@ TEST_CASE("item use: a right click sends OP_ItemVerifyRequest; the reply eats th
 
 TEST_CASE("item use: a food duration past 2^31 / 100 wraps as the original's 32-bit FoodDuration x 100 / 2") {
     // 0x02000000 x 100 is 0xc8000000 in 32 bits, -939524096, so half of it is -469762048: the hunger goes down from
-    // 5999 to -469756049 (stored as the u32 the meter keeps), as the original's imul / idiv gives, on every compiler.
+    // 5999 to -469756049 (stored as the u32 the meter keeps), as the original's wrapped product and signed division
+    // give, on every compiler.
     MockConfig config = with_items({});
     config.characters[0].inventory[1].cast_time_ = 0x02000000;
     Rig rig(config);

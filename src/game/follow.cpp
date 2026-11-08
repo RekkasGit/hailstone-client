@@ -10,7 +10,7 @@ namespace {
 
 using mechanics::Fpu;
 
-// x87 fmul of an extended-precision value (fpatan's result) by a double constant, rounded once to the precision.
+// The x87 product of an extended-precision value (an arctangent) by a double constant, rounded once to the precision.
 double mul_ext(long double a, double b, const Fpu& fpu) {
     double hi = static_cast<double>(a);
     double lo = static_cast<double>(a - static_cast<long double>(hi)); // exact: a has 64 significant bits
@@ -64,7 +64,7 @@ double x87_bearing(float y1, float x1, float y2, float x2, const Fpu& fpu) {
     double dx = std::fabs(fpu.sub(b, d));
     const double eps = 9.999999974752427e-07;
     if (eps > dy) dy = eps;
-    long double theta = std::atan2(static_cast<long double>(dx), static_cast<long double>(dy)); // fpatan
+    long double theta = std::atan2(static_cast<long double>(dx), static_cast<long double>(dy)); // 64 bits, as the x87's
     double deg = fpu.mul(mul_ext(theta, 180.0, fpu), 0.3183099014828645);
     double v;
     if (!(a < c)) {
@@ -72,7 +72,7 @@ double x87_bearing(float y1, float x1, float y2, float x2, const Fpu& fpu) {
         else if (std::isnan(d) || std::isnan(b)) v = deg;
         else v = fpu.add(deg, 180.0);
     } else if (!(d <= b)) {
-        v = deg; // x2 above x1 (fcompp; jp): an equal x takes the 270 branch
+        v = deg; // x2 above x1 (unordered too): an equal x takes the 270 branch
     } else {
         v = fpu.add(fpu.sub(90.0, deg), 270.0);
     }

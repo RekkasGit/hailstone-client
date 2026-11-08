@@ -177,8 +177,9 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
         }
         const bool vowel = !item->name.empty() && is_vowel(item->name[0]);
         system(drink ? (vowel ? 8502 : 12078) : (vowel ? 8501 : 12075), {item->name}, kChatFood);
-        // FoodDuration x 100 / 2 in the original's 32 bits (imul, then idiv): a duration past 2^31 / 100 wraps as it
-        // does there, written with wrapped_div so that no compiler folds it as if nothing wrapped (AGENTS.md).
+        // FoodDuration x 100 / 2 in the original's 32 bits (the product wraps, the division is signed): a duration past
+        // 2^31 / 100 wraps as it does there, written with wrapped_div so that no compiler folds it as if nothing
+        // wrapped (AGENTS.md).
         // The add wraps in 32 bits too: the level is whatever the server last sent (OP_Stamina can carry any u32),
         // so it is done unsigned, never as a signed add that could overflow.
         const std::int32_t gain = core::wrapped_div(static_cast<std::uint32_t>(item->cast_time_) * 100u, 2);

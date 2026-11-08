@@ -14,7 +14,7 @@ bool PositionTracker::record(const std::array<float, 3>& p, std::uint32_t reason
     if (!g.main_loop) {
         if (reason == kPositionMove) return false;
     } else if (reason == kPositionMove) {
-        // 0x56e250: fucompp per component, a NaN never equal.
+        // 0x56e250: compared per component, a NaN never equal.
         bool same = has_last_ && p[0] == last_[0] && p[1] == last_[1] && p[2] == last_[2];
         if (same && now - last_time_ < 1000) return false;
         last_ = p;

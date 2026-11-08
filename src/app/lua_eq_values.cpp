@@ -270,7 +270,7 @@ LabelValue stock_label(const EqHost& host, int type) {
     case 22: { // case 0x15: the displayed AC (0x580330), green / red against it without AC buffs
         if (!ch) return int_value(0);
         std::int64_t x = static_cast<std::int64_t>(ch->compute_defense(true)) + ch->stats().ac;
-        // (x * 1000) * 0x9abf9f49 >> 32, + x * 1000, sar 9, + the sign bit: x * 1000 / 847
+        // x * 1000 / 847, the signed division by a multiply with 0x9abf9f49 and shifts, as the original computes it
         std::int64_t v = x * 1000;
         std::int64_t hi = (v * static_cast<std::int64_t>(static_cast<std::int32_t>(0x9abf9f49))) >> 32;
         std::int64_t q = (hi + v) >> 9;
@@ -783,7 +783,7 @@ GaugeValue stock_gauge(const EqHost& host, int type) {
         if (rw->time_remaining_ms == 0) return {0, {}};
         std::int64_t total = static_cast<std::int32_t>(rw->time_remaining_ms);
         std::int64_t e = std::min<std::int64_t>(c.respawn_age_ms() + 500, total);
-        double f = (1.0 - static_cast<double>(e) / static_cast<double>(total)) * 1000.0; // fild, fidiv, fsubr, fmul 1000.0f
+        double f = (1.0 - static_cast<double>(e) / static_cast<double>(total)) * 1000.0;
         return {static_cast<int>(f), {}};
     }
     case 29: { // case 0x1d: the combat timer, min(seconds left, 30) * 1000 / 30; -1 (not drawn) once none is left
@@ -801,8 +801,8 @@ GaugeValue stock_gauge(const EqHost& host, int type) {
 
 GaugeFill gauge_fill(int value) {
     if (value == -2) return {1000, 0xff800000u};
-    if (value >= -110 && value <= -10) return {(value + 110) * 10, 0xff800080u}; // fadd 110.0f, fmul 10.0f
-    if (value >= -2000 && value <= -1000) return {value + 2000, 0xffc08080u};    // fadd 2000.0f
+    if (value >= -110 && value <= -10) return {(value + 110) * 10, 0xff800080u};
+    if (value >= -2000 && value <= -1000) return {value + 2000, 0xffc08080u};
     if (value < 0) return {};
     return {std::min(value, 1000), std::nullopt};
 }

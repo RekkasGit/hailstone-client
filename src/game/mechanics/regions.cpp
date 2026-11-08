@@ -10,7 +10,7 @@ constexpr std::uint8_t kStandState6f = 0x6f;
 constexpr float kIceFriction = 0.99f;     // 0x9c5994
 constexpr float kIceAcceleration = 0.02f; // 0x9c58fc
 
-// fld dword / fstp dword: a signalling NaN comes out quiet.
+// A float copied through the FPU: a signalling NaN comes out quiet.
 float through_fpu(float v) {
     std::uint32_t b;
     std::memcpy(&b, &v, 4);
@@ -22,19 +22,19 @@ float through_fpu(float v) {
 } // namespace
 
 double collision_height(const CollisionHeightSpawn& s, const Fpu& f) {
-    double h = static_cast<double>(through_fpu(s.avatar_height)); // fld [+0x138]
+    double h = static_cast<double>(through_fpu(s.avatar_height)); // +0x138, quiet on load
     if (s.stand_state == kStandState6f) return h;
     if (s.mount_race && s.has_rider) return x87_mul(f, X87(h), X87(3.0f));
     if (0.0f < s.length) return static_cast<double>(through_fpu(s.length));
-    return x87_add(f, X87(h), X87(h)); // fadd st, st
+    return x87_add(f, X87(h), X87(h)); // h + h
 }
 
 float region_sample_z(const CollisionHeightSpawn& s, float z, const Fpu& f) {
     float avatar = through_fpu(s.avatar_height);
-    double v = x87_sub(f, X87(collision_height(s, f)), X87(avatar)); // fsub [avatarHeight]
-    v = x87_sub(f, X87(0.25f), X87(v));                              // fsubr [0.25]
-    v = x87_add(f, X87(v), X87(through_fpu(z)));                     // fadd [z]
-    return static_cast<float>(v);                                    // fstp
+    double v = x87_sub(f, X87(collision_height(s, f)), X87(avatar)); // avatarHeight a memory operand
+    v = x87_sub(f, X87(0.25f), X87(v));                              // 0.25 - v
+    v = x87_add(f, X87(v), X87(through_fpu(z)));
+    return static_cast<float>(v);                                    // rounds to float here
 }
 
 RegionChange check_region_change(RegionSpawn& s, const RegionPoint& position, const RegionZone& zone,

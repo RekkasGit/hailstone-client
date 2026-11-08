@@ -27,7 +27,7 @@ constexpr float kPerMinute = 1.0f / 60.0f; // 0x9c82e4 (0x3c888889)
 constexpr float kAmbientFloor = 0.08f; // 0x9c82e0
 constexpr float kThird = 1.0f / 3.0f;  // 0x9c82dc (0x3eaaaaab)
 
-// fld dword: a float in memory onto the FPU (a signalling NaN comes out
+// A float in memory loaded onto the FPU (a signalling NaN comes out
 // quiet; the payload is kept).
 double ld(std::uint32_t bits) {
     if ((bits & 0x7f800000u) == 0x7f800000u && (bits & 0x007fffffu) != 0) bits |= 0x00400000u;
@@ -35,10 +35,10 @@ double ld(std::uint32_t bits) {
 }
 double ld(float f) { return ld(std::bit_cast<std::uint32_t>(f)); }
 
-// fstp dword.
+// Stored as a float.
 std::uint32_t st(double v) { return std::bit_cast<std::uint32_t>(static_cast<float>(v)); }
 
-// fld dword / fstp dword.
+// A float copied through the FPU (quiet).
 std::uint32_t quiet(std::uint32_t bits) { return st(ld(bits)); }
 
 // Register-register x87 arithmetic (both operands on the FPU, so quiet).
@@ -49,12 +49,12 @@ struct Ops {
     double mul(double a, double b) const { return mechanics::x87_mul(f, X87(a), X87(b)); }
 };
 
-// fcom's ordered outcomes (unordered: none of them).
+// The ordered compares (unordered: none of them).
 bool less(double a, double b) { return a < b; }
 bool greater(double a, double b) { return a > b; }
 bool less_equal(double a, double b) { return a <= b; }
 
-// fild.
+// An integer loaded (exact).
 double fild(std::int32_t v) { return static_cast<double>(v); }
 
 bool in_fog_region(std::uint8_t r) { return r >= 5 && r <= 10; }
@@ -259,7 +259,7 @@ SkyWeatherResult update_sky_weather_and_fog(const Fpu& fpu, const SkyWeatherInpu
     }
     std::uint32_t slot = in.light_level;
     double level = ld(slot);
-    if (level == -1.0) { // fucom: equal
+    if (level == -1.0) { // equal, not NaN
         level = light;
         slot = st(light);
     }
@@ -303,7 +303,7 @@ SkyWeatherResult update_sky_weather_and_fog(const Fpu& fpu, const SkyWeatherInpu
         special_bits[i] = st(special[i]);
     }
     const double full = ld(k255);
-    // fistp under a chop control word: truncation (out of range: 0x80000000).
+    // Stored as an integer with truncation (out of range: 0x80000000).
     auto chop = [](double v) { return static_cast<std::uint32_t>(Fpu::ftol(v)) & 0xff; };
     out.special_ambient = 0xff000000u | chop(o.mul(special[0], full)) << 16 | chop(o.mul(special[1], full)) << 8 |
                           chop(o.mul(special[2], full));

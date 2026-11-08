@@ -18,7 +18,7 @@ constexpr const char* kError = "#ERR";            // 0xa10228
 
 using Ctx = SpellDescriptionContext;
 
-// "%d" of |value| (cdq / xor / sub: INT_MIN stays negative).
+// "%d" of |value| (a two's-complement magnitude: INT_MIN stays negative).
 std::string number(std::int32_t value) {
     auto sign = static_cast<std::uint32_t>(value >> 31);
     auto magnitude = static_cast<std::int32_t>((static_cast<std::uint32_t>(value) ^ sign) - sign);

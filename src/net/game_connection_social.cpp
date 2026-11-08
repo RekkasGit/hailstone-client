@@ -402,7 +402,7 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
     if (merc_command(h, args)) return true;
     if (player_command(h, args)) return true;
     if (market_command(h, args)) return true;
-    // The commands the app ports (app/client_app_commands.cpp).
+    // The commands the app implements (app/client_app_commands.cpp).
     if (client_commands_ && client_commands_(h, args)) return true;
     return false;
 }

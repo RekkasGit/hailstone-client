@@ -1246,7 +1246,7 @@ TEST_CASE("consume: OP_Consume is RoF2's 24-byte Consume_Struct") {
 TEST_CASE("OP_InspectBuffs minutes: the original's 32-bit arithmetic") {
     using namespace hailstone::net;
     // (ticks x 3 + 15) x 2 / 60 in 32 bits: 10 ticks are 1 minute, and a count past 2^31 / 6 wraps as the
-    // original's imul / idiv does: 0x20000000 x 6 + 30 is 0xc000001e, -1073741794 / 60.
+    // original's wrapped product and signed division do: 0x20000000 x 6 + 30 is 0xc000001e, -1073741794 / 60.
     CHECK(inspect_buff_minutes(1) == 0);
     CHECK(inspect_buff_minutes(10) == 1);
     CHECK(inspect_buff_minutes(0x20000000) == -17895696);

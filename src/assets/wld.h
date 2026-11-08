@@ -239,7 +239,7 @@ struct RegionTag {
 // 0x35 GLOBALAMBIENTLIGHTDEF: the zone's global ambient colour. It has no
 // name reference; the payload is one colour, stored B, G, R, A.
 // CS3DFile::LoadGlobalAmbient @0x1001b6a0 passes it to CSceneGraph vtable
-// +0xd0, which feeds the shaders' SpecialAmbient (notes/eqgraphicsdx9.md).
+// +0xd0, which feeds the shaders' SpecialAmbient (docs/formats/wld.md).
 struct GlobalAmbient {
     std::uint32_t color = 0;
 };
@@ -280,7 +280,7 @@ struct ParticleCloud {
     std::uint32_t color = 0;       // +0x4c stored B, G, R in the low three bytes; the top byte is not used
     std::array<glm::vec3, 2> ranges{}; // flag 0x01: box corners (mode 0)
     // flag 0x04: the 0x26 sprite. The DLL's readers load only the low byte of
-    // this word (movzx at the texture read), which names the right fragment
+    // this word (zero-extended at the texture read), which names the right fragment
     // only for the first definitions of a file; later same-name clouds reuse
     // the first one's registered definition by name before that read. The
     // full reference is kept here and resolves to the same sprite.

@@ -87,7 +87,7 @@ GameConnection::GameConnection(const GameDir& game, ConnectionOptions options) :
 
 namespace {
 
-// SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (fild, fmul, fdiv, __ftol2: truncated), so nothing wraps; the
+// SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (truncated), so nothing wraps; the
 // 64-bit integer quotient is the same for every int32 pair. A spawn still alive (cur >= 1) shows at least 1%; at or
 // below 0 it keeps that value (here 0, the percentage being unsigned).
 std::uint8_t spawn_hp_percent(std::int64_t cur, std::int64_t max) {

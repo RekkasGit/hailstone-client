@@ -234,7 +234,7 @@ float melee_range(const SkillActor* a, const SkillActor* b);
 bool can_i_hit(const SkillContext& ctx, float extra_range, SkillResult& out);
 // PlayerZoneClient::CanUseCombatSkill @0x5a2f10 for slot 100.
 bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill);
-// PlayerZoneClient::DoAttack @0x5a5000 for the local player (the port in game/mechanics/melee.h) on this context:
+// PlayerZoneClient::DoAttack @0x5a5000 for the local player (game/mechanics/melee.h) on this context:
 // slots 13 / 14 (auto attack; the swings go to SkillResult::swings) and 100 (a combat skill: OP_CombatAbility).
 // `skill` is the argument as passed (DoAttack compares its low byte). Returns the original's al.
 bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out);
@@ -245,7 +245,7 @@ bool do_attack_skill(const SkillContext& ctx, SkillState& state, std::uint32_t s
 // (melee::swing_ready).
 void attack_on_reset(const SkillContext& ctx, SkillState& state, bool attack_on);
 void swing_ready(const SkillContext& ctx, SkillState& state);
-// CharacterZoneClient::UseSkill @0x45b2d0: the exact port (game/mechanics/use_skill.h) run on this context, its
+// CharacterZoneClient::UseSkill @0x45b2d0: the original's rules (game/mechanics/use_skill.h) run on this context, its
 // callees answered from it (DoAttack(100, ...) is do_attack_skill, CanIHit can_i_hit, the timers SkillTimers) and
 // its messages, packets and state changes collected in the result.
 SkillResult use_skill(const SkillContext& ctx, SkillState& state, std::uint32_t skill);
@@ -255,9 +255,9 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
 
 // CharacterZoneClient::HasSkill @0x44a1b0's value (GetAdjustedSkill). With a class mask and skill rules on the sheet
 // (CharacterSheet::skill_rules from the server extension), those rules first; the NMS plugin's are the NMS patch's
-// HasSkill detour (the NMS plugin's nms_rules.h, in its own repository; notes/nms-dinput8.md §3.8): a profile skill
-// of -1 and Tracking without Ranger, Druid or Bard give 0; otherwise GetAdjustedSkill runs with the class it picks
-// for the skill (Rogue for Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
+// HasSkill detour (the NMS plugin's nms_rules.h, in its own repository): a profile skill of -1 and Tracking without
+// Ranger, Druid or Bard give 0; otherwise GetAdjustedSkill runs with the class it picks for the skill (Rogue for
+// Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill);
 
 // The Actions window's lists: skills the player has (CharacterZoneClient::HasSkill @0x44a1b0: adjusted skill

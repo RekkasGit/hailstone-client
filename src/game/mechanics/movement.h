@@ -31,10 +31,10 @@
 //   PcClient::ProcessAirSupply @0x584ac0
 //   LocalPlayer_ApplyEnvironmentRegionDamage @0x459860
 //
-// Float math: the exact ports take the x87 precision (game/mechanics/fpu.h;
-// in game 24-bit, the default) and round where the original stores a float;
-// the recorded vectors cover both precisions. The controller runs at
-// 24-bit precision.
+// Float math: the functions that follow the original exactly take the x87
+// precision (game/mechanics/fpu.h; in game 24-bit, the default) and round where
+// the original stores a float; the recorded vectors cover both precisions. The
+// controller runs at 24-bit precision.
 
 #include <cstdint>
 #include <optional>
@@ -287,7 +287,7 @@ std::int32_t max_air_supply(std::int32_t stamina, std::int32_t spa246, std::uint
 bool can_breathe(std::uint8_t head_wet, bool no_air_zone, std::uint32_t race, std::int32_t spa14);
 // PcClient::ProcessAirSupply @0x584ac0 (once a second, for a player spawn): breathing refills AirSupply (PcBase
 // +0x2084, from the profile at zone-in) to MaxAirSupply; otherwise it counts down, and at 1 or less it becomes 0 and
-// drowning does Max_HP x 0.125 (fild / fmul qword / __ftol2) damage, type 0xfb, when that is above 0.
+// drowning does Max_HP x 0.125 (times a double, truncated) damage, type 0xfb, when that is above 0.
 struct AirSupply {
     std::int32_t air = 0;
     std::int32_t drowning_damage = 0; // TakeEnvironmentalDamage when > 0
@@ -321,7 +321,7 @@ FallDamage apply_fall_damage(const FallDamageInput& in, const Fpu& fpu = Fpu{});
 // it returned 1 or more, else 0x72 (nullopt: no sound).
 std::optional<std::int32_t> fall_sound(bool has_pc, std::uint8_t spawn_type, std::int32_t damage_result);
 
-// fld / fstp dword: the value a float becomes when the original passes it
+// A float copied through the FPU: the value a float becomes when the original passes it
 // through the FPU (IHaveFallen's damage argument, SetAccel's immediate
 // target): a signalling NaN comes out quiet.
 float through_fpu(float v);

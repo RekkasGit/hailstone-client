@@ -2,7 +2,7 @@
 
 // A spell landing on the player: OP_Action type 231 with effect flag 4 goes
 // through PlayerZoneClient::IWasHit @0x5a07b0 to EQ_Character::HitBySpell
-// (game/mechanics/hit_by_spell.h). This runs the port with the client's state
+// (game/mechanics/hit_by_spell.h). This runs those rules with the client's state
 // behind its callees and reports what the client applies itself.
 //
 // What the callees answer here (docs/unknowns.md, Spells):

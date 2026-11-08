@@ -24,8 +24,8 @@ struct MaterialState {
     bool lit = true;        // false: texture only (COLOROP SELECTARG1, state flag +6)
     bool masked_texture = false; // decode palette index 0 of BMPs as transparent
 
-    // Opaque without an alpha test: the texture's alpha is never read (EQG Opaque_* classes, notes/eqgraphicsdx9.md
-    // "Alpha_* and AddAlpha shaders"; classic opaque methods), so the colour stored under its alpha 0 is drawn
+    // Opaque without an alpha test: the texture's alpha is never read (EQG Opaque_* classes, docs/graphics.md;
+    // classic opaque methods), so the colour stored under its alpha 0 is drawn
     // (render::TextureUse::OpaqueColor).
     bool alpha_unused() const { return draw && pass == 0 && alpha_ref == 0.0f && opacity == 1.0f; }
 };

@@ -3,7 +3,7 @@
 // function's inputs, the values its callees returned (mocks in the original's
 // run: in.calls / in.virtual_calls / in.lookups) and its outputs. Each record
 // becomes a CharacterSheet plus Character::hooks that replay those callee
-// values, and the port's output must equal the original's exactly, under the
+// values, and the client's output must equal the original's exactly, under the
 // record's x87 precision ("x87-24" or "x87-53").
 //
 // The directory is HAILSTONE_VECTORS_DIR (tests/vector_files.h); skipped

@@ -1,4 +1,4 @@
-// The spawn height ports (game/spawn_heights.h) against the original's
+// The spawn height rules (game/spawn_heights.h) against the original's
 // vectors (recorded from eqgame.exe): SetHeights (3000),
 // ComputeSpecialHeights (1800), ChangeHeight (1500), 0x5062a0 the
 // collision-volume radius (2000), CalcScaleFactorForHeight (1500) and

@@ -22,7 +22,7 @@
 // 11. the spell's push: speed += table(heading) * push_back, z += push_up;
 // 12. stats dirty; returns 1.
 //
-// An exact port: the objects are plain structs (PlayerClient, EQ_Spell,
+// Follows the original exactly: the objects are plain structs (PlayerClient, EQ_Spell,
 // EQ_Affect fields at the original's offsets, named), every callee the
 // original calls through a function or virtual pointer is a HitQueries call
 // (the order and arguments are the original's), and the exe helpers it calls
@@ -30,7 +30,7 @@
 // the EQ_Affect slot-data helpers, the collision-info constructors, Vec3_Cross,
 // Matrix3x3_TransformVec3, Ray_SetFromPoints) are ported here. Floats are
 // kept as their bits; every x87 step runs at the FPU's precision
-// (game/mechanics/fpu.h), copies quiet a signalling NaN as fld/fstp do.
+// (game/mechanics/fpu.h), a copy through the FPU quiets a signalling NaN.
 // Checked against HitBySpell_Validation / _Instant / _Items / _Moves / _Buff
 // (tests/hit_by_spell_vectors_test.cpp).
 

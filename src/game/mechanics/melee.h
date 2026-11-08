@@ -23,10 +23,10 @@
 // The first five and DoAttack are checked against the original's vectors
 // (MeleeRange, ModifyAttackSpeed, GetHandToHandDelay, CheckDoubleAttack,
 // CheckDualWield, DoAttack call by call; tests/melee_vectors_test.cpp);
-// CanIHit, CanMeleeAttackNow and the timers are ported from the disassembly
+// CanIHit, CanMeleeAttackNow and the timers follow the original's code
 // (no vectors). Every callee the original calls through
 // a pointer is a query, in the original's order; x87 steps run at the FPU's
-// precision (fpu.h). __get_bearing's fpatan is the one step not emulated bit
+// precision (fpu.h). __get_bearing's arctangent is the one step not emulated bit
 // for bit: it runs in long double (the x87's 64-bit significand), so only a
 // facing exactly on the 80 / 256 limit could come out differently.
 
@@ -137,7 +137,7 @@ struct Spawn {
 };
 
 // An item reference as DoAttack and DoPassageOfTime hand it around (the VePointer an unk_Container_GetItem or
-// AttackWeaponRef_GetItem lookup fills): opaque to the port, answered by the queries. kNoItem is a null pointer,
+// AttackWeaponRef_GetItem lookup fills): opaque to the client, answered by the queries. kNoItem is a null pointer,
 // kFistItem the fist pseudo-item (the ItemClient at 0xe6427c, whose definition is FistDefinition).
 using ItemRef = std::int32_t;
 inline constexpr ItemRef kNoItem = -1, kFistItem = -2;
@@ -263,7 +263,7 @@ public:
     virtual std::uint32_t skill_reuse_time(std::uint32_t skill) = 0; // CharacterZoneClient_GetSkillReuseTime
     virtual void set_skill_timer_duration(std::uint32_t skill, std::uint32_t ms) = 0; // CSkillMgr
     virtual void chat2(std::uint32_t eqstr) = 0;       // StringTable::getString + CEverQuest::dsp_chat_2
-    // CDisplay::PlayerDistance(this, target, 0): the x87's st0 (unrounded beyond the precision).
+    // CDisplay::PlayerDistance(this, target, 0): the x87 result (unrounded beyond the precision).
     virtual double player_distance(const Spawn* target) = 0;
     virtual bool hit_anyway() = 0;                     // the byte 0xddf654: CanIHit failures are ignored
     virtual std::uint8_t can_i_hit(const Spawn* target, float range) = 0; // PlayerZoneClient::CanIHit

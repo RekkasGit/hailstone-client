@@ -108,9 +108,9 @@ ranged delays).
 Item sums in process_all_stats (`item_sums.*`), process-affects, the mana regen tick and the endurance upkeep
 (`ticks.*`) are checked against vectors.
 
-Not differential-tested yet: the buff-slot and worn-item effect caches, the recommended-level scaling, the
-is-spellcaster check and the focus level falloff percent. The AA focus collector's iterator is modelled (an AA focus
-effect takes the limits that follow it).
+Not checked against the original's vectors yet: the buff-slot and worn-item effect caches, the recommended-level
+scaling, the is-spellcaster check and the focus level falloff percent. The AA focus collector's iterator is modelled (an
+AA focus effect takes the limits that follow it).
 
 The distance modifier (CharacterZoneClient::CalcAffectChange @0x436670, PlayerClient::CalcSpellDistanceMod
 @0x59fbe0; no recorded vectors; unit tests in `tests/mechanics_test.cpp`): a spell with a distance range

@@ -44,7 +44,7 @@ ZoneFogInput new_zone_fixes(const ZoneFogInput& zone) {
 }
 
 float actor_clip_distance(int actor_clip_plane, float far_plane) {
-    // lea eax, [edi + edi*4 + 0x19]; add eax, eax; fild; fcom against the Yon: the smaller.
+    // (plane * 5 + 25) * 2 as an integer, compared with the Yon: the smaller.
     const float clip = static_cast<float>((actor_clip_plane * 5 + 25) * 2);
     return clip <= far_plane ? clip : far_plane;
 }

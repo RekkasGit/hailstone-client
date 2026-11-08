@@ -274,7 +274,7 @@ check of the server's files (docs/plugins.md). v2 needs plugins that load at ser
 bit (`login`) for the world-stage hooks.
 
 From reading the code, without a live check: the forced "NMS server" setting is not needed for the checksums. The NMS
-world sends `OP_SendCharacterSets` before each `OP_SendCharInfo`, and the rewrite already waits for it
+world sends `OP_SendCharacterSets` before each `OP_SendCharInfo`, and the client already waits for it
 (nms_extension.cpp:404). So detecting the server is enough, as long as the plugin is loaded by then.
 
 ## 7. Tests and build

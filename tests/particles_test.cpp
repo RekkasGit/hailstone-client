@@ -119,8 +119,8 @@ TEST_CASE("CreateSpellEmitter: duration, density and capacity rules") {
 }
 
 TEST_CASE("A box-surface particle draws its two free axes, then its face, as the graphics DLL does") {
-    // EQGraphicsDX9.dll's shape 6 (@0x100737be): r1, r2 in -1..1, then the face fistp(u * 6.0) with u in 0..1;
-    // faces 0..4 are -x, +x, -y, +y, -z, anything else (5, and 6 from the rounding) +z.
+    // EQGraphicsDX9.dll's shape 6 (@0x100737be): r1, r2 in -1..1, then the face u * 6.0 rounded to an integer with u in
+    // 0..1; faces 0..4 are -x, +x, -y, +y, -z, anything else (5, and 6 from the rounding) +z.
     for (std::uint32_t seed : {7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u}) {
         std::vector<assets::EmitterDefinition> defs(2);
         defs[1].duration = 1.0f;

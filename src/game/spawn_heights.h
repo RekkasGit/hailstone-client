@@ -163,7 +163,7 @@ template <typename InWorld>
 std::array<float, 3> place_in_world(std::array<float, 3> p, const std::array<float, 3>& safe_point, InWorld&& in_world) {
     if (in_world(p)) return p;
     for (int i = 0; i < 4; ++i) {
-        p[2] = static_cast<float>(static_cast<double>(p[2]) + 2.0); // fadd [2.0]; fstp (exact in either precision)
+        p[2] = static_cast<float>(static_cast<double>(p[2]) + 2.0); // exact in either precision
         if (in_world(p)) return p;
     }
     return safe_point;

@@ -91,7 +91,7 @@ std::uint32_t blend_precipitation_colour(std::uint32_t a, std::uint32_t b, float
     std::uint32_t out = 0;
     for (int shift = 0; shift < 32; shift += 8) {
         float x = static_cast<float>((a >> shift) & 0xff) * (1.0f - t) + static_cast<float>((b >> shift) & 0xff) * t;
-        auto v = static_cast<std::int32_t>(std::nearbyint(x)); // fistp
+        auto v = static_cast<std::int32_t>(std::nearbyint(x)); // stored as an integer, rounded to nearest
         out |= static_cast<std::uint32_t>(std::clamp(v, 0, 255)) << shift;
     }
     return out;

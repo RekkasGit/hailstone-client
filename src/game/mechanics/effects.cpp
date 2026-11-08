@@ -269,7 +269,7 @@ double Character::spell_distance_mod(const SpellData& spell, std::optional<float
 std::int32_t Character::scale_by_distance(const SpellData& spell, std::int32_t value, std::optional<float> distance) const {
     if (spell.distance_mod_end_x == 0.0f && spell.distance_mod_start_x == 0.0f) return value;
     if (!sheet_.has_spawn) return value;
-    // fild, fstp dword: the value as a float; the modifier times it, compared with 0 (NaN is not below), then
+    // The value as a float; the modifier times it, compared with 0 (NaN is not below), then
     // ceil(x - 0.5) below 0, else floor(x + 0.5), and __ftol2_sse.
     const double scale = Fpu::to_float(static_cast<double>(value));
     const double x = fpu_.mul(spell_distance_mod(spell, distance), scale);
@@ -404,7 +404,7 @@ void Character::cache_buff_slot(EffectCache& c, int slot) const {
         }
         if (spa == 424) continue; // physics effects (MarkPhysicsEffectUpdated), not cached
         if (b.modifier != 1.0f && spa != 182) {
-            // fild v / fmul dword modifier / __ftol2_sse
+            // v * modifier, truncated
             v = Fpu::ftol(fpu_.mul(static_cast<double>(v), static_cast<double>(b.modifier)));
         }
         if (most_negative_kind(spa)) {

@@ -1,5 +1,5 @@
 // GameConnection: casting a memorized spell. CCastSpellWnd::HandleSpellLeftClick @0x6488f0 gates the gem, then
-// CharacterZoneClient::CastSpell @0x43a830 runs as game/mechanics/cast_spell.h ports it, with this file's
+// CharacterZoneClient::CastSpell @0x43a830 runs as game/mechanics/cast_spell.h implements it, with this file's
 // CastQueries as its live adapter: each callee the original calls is answered from the client's state, and the
 // ones the client has no state for are answered neutrally (docs/unknowns.md, "Spells / the cast checks").
 

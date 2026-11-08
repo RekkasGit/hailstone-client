@@ -18,7 +18,7 @@ bool marketplace_can_buy(const net::MarketplaceEntry& e, std::uint32_t wallet) {
 bool marketplace_can_raise_quantity(const net::MarketplaceEntry& e, std::uint32_t quantity, std::uint32_t wallet) {
     if (e.max_quantity != 0 && quantity >= e.max_quantity) return false;
     if (quantity >= kMarketplaceMaxQuantity || e.kind == 6) return false;
-    // imul in 32 bits, as the original multiplies.
+    // The product wraps in 32 bits, as the original multiplies.
     const auto total = static_cast<std::uint32_t>((quantity + 1u) * e.price);
     return total <= wallet;
 }
