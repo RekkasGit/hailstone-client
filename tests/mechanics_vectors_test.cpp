@@ -952,6 +952,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
         while (std::getline(f, line)) {
             ++n;
             if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
+            hailstone::test::normalise_recorded_names(line);
             Json j;
             try {
                 j = hailstone::test::parse_json(line);

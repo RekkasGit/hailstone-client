@@ -91,6 +91,7 @@ TEST_CASE("CanGemFitInSlot: the kept vector subset") {
     std::map<int, int> codes;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
+        test::normalise_recorded_names(line);
         ++n;
         Json r = test::parse_json(line);
         ++codes[r["out"]["value"].i32()];

@@ -43,6 +43,7 @@ void each_record(const char* file, const std::function<std::string(const Json& i
     int n = 0, bad = 0;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
+        hailstone::test::normalise_recorded_names(line);
         ++n;
         Json r = hailstone::test::parse_json(line);
         std::string why = check(r["in"], r["out"]);

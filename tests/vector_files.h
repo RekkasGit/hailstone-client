@@ -15,6 +15,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "core/env.h"
 #include "json_lite.h"
@@ -25,6 +26,24 @@ inline std::optional<std::filesystem::path> vector_dir() {
     namespace fs = std::filesystem;
     if (const char* env = hailstone::core::env("VECTORS_DIR")) return fs::path(env);
     return std::nullopt;
+}
+
+// The recordings name a function they have no name for by its address with a
+// FUN_ prefix and 8 hex digits; the tests name it as the comments do, 0x<address>
+// ("FUN_008cfd10" -> "0x8cfd10"). Rewrites every such name in a record's line.
+inline void normalise_recorded_names(std::string& line) {
+    constexpr std::string_view prefix = "FUN_";
+    auto hex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); };
+    for (std::size_t at = line.find(prefix); at != std::string::npos; at = line.find(prefix, at + 1)) {
+        std::size_t digits = at + prefix.size();
+        if (digits + 8 > line.size()) break;
+        bool ok = true;
+        for (std::size_t i = digits; i < digits + 8; ++i) ok = ok && hex(line[i]);
+        if (!ok) continue;
+        std::size_t first = digits;
+        while (first < digits + 7 && line[first] == '0') ++first;
+        line.replace(at, digits + 8 - at, "0x" + line.substr(first, digits + 8 - first));
+    }
 }
 
 // Runs `check` on every record of `file` (the whole record); it returns a
@@ -40,6 +59,7 @@ inline void each_vector(const char* file, const std::function<std::string(const 
     int n = 0, bad = 0;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
+        normalise_recorded_names(line);
         ++n;
         std::string why = check(parse_json(line));
         if (!why.empty() && ++bad <= 10) FAIL_CHECK(std::string(file) << ":" << n << ": " << why);
