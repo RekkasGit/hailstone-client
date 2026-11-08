@@ -1,12 +1,9 @@
 #pragma once
 
-// Reading rof2decomp's test vectors (re/test/vectors/*.jsonl, recorded from
-// the original eqgame.exe): the directory (HAILSTONE_VECTORS_DIR, else
-// rof2decomp/re/test/vectors beside the source tree, or beside the folder
-// holding it for a worktree, found from HAILSTONE_SOURCE_DIR so that a run from
-// any directory (ctest) finds it), a per-record runner that counts
-// mismatches, and float helpers. Without the directory the checks pass with
-// a message.
+// Reading the recorded test vectors (*.jsonl, recorded from the original
+// eqgame.exe): the directory (HAILSTONE_VECTORS_DIR), a per-record runner that
+// counts mismatches, and float helpers. Without the directory the checks pass
+// with a message.
 
 #include <doctest/doctest.h>
 
@@ -27,16 +24,6 @@ namespace hailstone::test {
 inline std::optional<std::filesystem::path> vector_dir() {
     namespace fs = std::filesystem;
     if (const char* env = hailstone::core::env("VECTORS_DIR")) return fs::path(env);
-#ifdef HAILSTONE_SOURCE_DIR
-    const fs::path source(HAILSTONE_SOURCE_DIR);
-#else
-    const fs::path source(".");
-#endif
-    // The source tree's sibling, or its parent's sibling (a worktree under ../<repo>-wt/<topic>).
-    for (fs::path p : {source / "../rof2decomp/re/test/vectors", source / "../../rof2decomp/re/test/vectors"}) {
-        std::error_code ec;
-        if (fs::is_directory(p, ec)) return p.lexically_normal();
-    }
     return std::nullopt;
 }
 

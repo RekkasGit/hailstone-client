@@ -10,11 +10,11 @@ template takes:
   s/o/p  the player's he/him/his (echo: you/you/your)
   S/O/P  the target's he/him/his
 
-Also writes the command → social id map from rof2decomp's rewrites
-(re/src/game/commands/socials.inc and standing_socials.cpp) as
+Also writes the command → social id map, read from COMMANDS_DIR's listing of
+the command handlers (socials.inc and standing_socials.cpp), as
 HAILSTONE_SOCIAL_COMMAND(handler, id, needs standing still).
 
-usage: tools/gen_socials.py PATH/TO/eqgame.exe ROF2DECOMP/re/src/game/commands > src/game/socials.inc
+usage: tools/gen_socials.py PATH/TO/eqgame.exe COMMANDS_DIR > src/game/socials.inc
 """
 import re
 import struct
