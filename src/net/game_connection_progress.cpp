@@ -141,7 +141,7 @@ void GameConnection::handle_progress(Op op, const AppPacket& p) {
         break;
 
     // ---- tasks (CTaskManager::HandleMessage @0x482080). Each change the original marks the task window for a
-    // rebuild with (FUN_0076ff50) bumps tasks_.revision and looks for the compass mark again.
+    // rebuild with (0x76ff50) bumps tasks_.revision and looks for the compass mark again.
     case Op::TaskDescription:
         // CTaskManager_HandleTaskDescription @0x4812b0: with open_window set the entry is emptied first and the
         // window shown.
@@ -639,8 +639,8 @@ bool GameConnection::combine_container(std::int16_t bag_slot) {
 void GameConnection::send_combine(const ItemSlot& container_slot, std::uint32_t container_type) {
     // The end of CContainerWnd::HandleCombine @0x65f7b0: the request is pending (IsItemPending, reason 0x13) before
     // anything is sent. A transformation mold (0x37 / 0x38) first asks 6328 / 6339 (ConfirmationDialog 0x86, Yes /
-    // No, no time limit, with a copy of the request, FUN_0065da10); ConfirmationDialog_HandleResponse's 0x86 sends
-    // that copy on a yes and takes the pending request back on a no (FUN_004232f0).
+    // No, no time limit, with a copy of the request, 0x65da10); ConfirmationDialog_HandleResponse's 0x86 sends
+    // that copy on a yes and takes the pending request back on a no (0x4232f0).
     TradeSkillCombine c;
     c.container_slot = container_slot;
     combine_pending_ = true;
@@ -931,7 +931,7 @@ void GameConnection::ask_abandon_task(std::uint32_t type, std::uint32_t sequence
 }
 
 void GameConnection::update_task_compass() {
-    // FUN_0076ff70 (from CTaskWnd::OnProcessFrame once a task changed or a zone was entered): the last mark is
+    // 0x76ff70 (from CTaskWnd::OnProcessFrame once a task changed or a zone was entered): the last mark is
     // remembered and taken off, then the first matching NPC marked; 6035 (colour 0xf) when it is a different task
     // element than the last one.
     task_compass_dirty_ = false;
@@ -1089,7 +1089,7 @@ void GameConnection::shared_task_leader_selected(const std::optional<std::string
 }
 
 namespace {
-// FUN_0047c090: a shared task member by name (__stricmp).
+// 0x47c090: a shared task member by name (__stricmp).
 bool in_shared_task(const game::TaskState& t, std::string_view name) {
     return std::any_of(t.shared_members.begin(), t.shared_members.end(),
                        [&](const std::string& n) { return iequals(n, name); });

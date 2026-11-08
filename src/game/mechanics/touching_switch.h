@@ -3,8 +3,8 @@
 // PlayerClient::TouchingSwitch @0x5939e0: what a spawn does with the switch it touches (+0x2d4, pTouchingSwitch).
 // rof2decomp re/src/game/spawn/touching_switch_eh.cpp. Three places set +0x2d4:
 //   - the movement sweep's hit callback (CollisionHit_SetCollidingType @0x475e70) for a switch that acts on touch
-//     (FUN_00510210), and calls TouchingSwitch at once;
-//   - the touch overlap test DoCollisionMovement runs when the spawn does not collide (FUN_00509a00 @0x508787: a
+//     (0x510210), and calls TouchingSwitch at once;
+//   - the touch overlap test DoCollisionMovement runs when the spawn does not collide (0x509a00: a
 //     sphere of half the actor's radius at the actor, against the touch switches; its hit callback 0x475c50 sets the
 //     local player's +0x2d4 and calls TouchingSwitch);
 //   - the floor test's callback (CollsnCallbackForFloor @0x475f40) for a floor switch less than Height + 2 below
@@ -37,16 +37,16 @@ struct TouchSpawn {
     std::uint16_t spawn_id = 0;          // +0x148
     std::uint8_t spawn_type = 0;         // +0x125 (0: a PC)
     std::uint32_t last_touch_ms = 0;     // +0x3d8
-    bool has_inventory = true;           // FUN_0059f730 (a PC's)
+    bool has_inventory = true;           // 0x59f730 (a PC's)
     std::optional<std::int32_t> cursor_item_id; // the item on the cursor (slot 0x21), when one is held
 };
 
 // What the original calls.
 struct TouchHooks {
     std::function<std::int32_t()> random_percent;          // RandomPercentRoll
-    // FUN_004dd7a0: the zone (zone | instance << 16) of the zone point numbered `param`, else -1.
+    // 0x4dd7a0: the zone (zone | instance << 16) of the zone point numbered `param`, else -1.
     std::function<std::int32_t(std::int32_t param)> zone_point_zone;
-    // FUN_004dd6e0 / FUN_004dd740: EQWorldData::GetGeometryNameFromIndex(zone) finds a name and "<name>.s3d" /
+    // 0x4dd6e0 / 0x4dd740: EQWorldData::GetGeometryNameFromIndex(zone) finds a name and "<name>.s3d" /
     // "<name>.eqg" exists.
     std::function<bool(std::int32_t zone)> zone_s3d_exists;
     std::function<bool(std::int32_t zone)> zone_eqg_exists;
@@ -69,7 +69,7 @@ struct TouchResult {
 inline constexpr std::uint8_t kTrapDamageType = 0xfd;
 
 // `last_damage_switch` is the global 0xe6418c (the switch that last hurt the local player, by id); `now` is
-// CDisplay +0x154. FUN_00510210 is game::switch_acts_on_touch (game/collision_callbacks.h); the floor test's
+// CDisplay +0x154. 0x510210 is game::switch_acts_on_touch (game/collision_callbacks.h); the floor test's
 // rule for setting +0x2d4 is game::collsn_callback_for_floor.
 TouchResult touching_switch(const TouchedSwitch& sw, TouchSpawn& spawn, std::uint32_t now,
                             std::optional<std::uint8_t>& last_damage_switch, const TouchHooks& hooks);

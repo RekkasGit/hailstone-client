@@ -392,7 +392,7 @@ TEST_CASE("character-creation tables decode and validate like CheckCharCreateInf
     REQUIRE(data->combos.size() == 2);
     CHECK(data->combos[1].zone == 394);
     CHECK(encode(*data).data == p.data);
-    // FUN_007f2d00: every required expansion bit must be owned.
+    // 0x7f2d00: every required expansion bit must be owned.
     CHECK(char_create_allowed(data->combos[0], 0));
     CHECK_FALSE(char_create_allowed(data->combos[1], 0));
     CHECK_FALSE(char_create_allowed(data->combos[1], 0x3ff));

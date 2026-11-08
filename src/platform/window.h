@@ -66,7 +66,7 @@ inline constexpr std::size_t kKeyCodes = 256;
 // The DirectInput scan code of an SDL scancode (0 when the key has none).
 std::uint8_t dik_from_sdl_scancode(int sdl_scancode);
 // The key code of a mouse button other than left and right (0 for those and for buttons past the eighth). The
-// original binds DirectInput mouse buttons 2..7 (middle, X1, X2 and three more) as codes 0xf0..0xf5 (FUN_0051a770
+// original binds DirectInput mouse buttons 2..7 (middle, X1, X2 and three more) as codes 0xf0..0xf5 (0x51a770
 // @0x51a770, called at the end of __ProcessMouseEvents: a press goes through HandleKeyDownEvent @0x5fc680 with the
 // held Shift / Ctrl / Alt like a key, a release through HandleKeyUpEvent @0x5f9ad0); KeyCombo::GetTextDescription
 // names them "MOUS MID" and "MOUS AUX1".."MOUS AUX5". SDL numbers the same buttons 2, 4, 5, 6, 7, 8.

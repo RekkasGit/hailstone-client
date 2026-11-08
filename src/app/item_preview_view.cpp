@@ -111,7 +111,7 @@ void ItemPreviewView::make_target(Target& t, int width, int height) {
 }
 
 void ItemPreviewView::reset_camera() {
-    // FUN_00576120: the view fitted to the actor again.
+    // 0x576120: the view fitted to the actor again.
     yaw_ = 0.0f;
     pitch_ = glm::radians(10.0f);
     zoom_ = 1.0f;
@@ -140,7 +140,7 @@ bool ItemPreviewView::set_item_subject(std::uint32_t number) {
         clear_subject();
         return false;
     }
-    // A one-bone stand-in for the item (FUN_00577440 shows the item's actor alone): its vertices on bone 0, at rest.
+    // A one-bone stand-in for the item (0x577440 shows the item's actor alone): its vertices on bone 0, at rest.
     auto model = std::make_shared<assets::CharacterModel>();
     model->code = "ITM";
     model->bone_names = {"ITM_DAG"};

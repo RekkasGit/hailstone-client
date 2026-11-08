@@ -42,7 +42,7 @@ TEST_CASE("buff time overlay: the largest part of SecondsToHMS, none under a sec
     CHECK_FALSE(game::buff_time_overlay(s, 60000));
 }
 
-TEST_CASE("spell counters: FUN_0075ef10 sums the counter slots of every effect holding the spell") {
+TEST_CASE("spell counters: 0x75ef10 sums the counter slots of every effect holding the spell") {
     auto s = spell(20);
     s.effect[0] = game::kSpaDiseaseCounter;
     s.base[0] = 4;

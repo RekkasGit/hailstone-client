@@ -255,7 +255,7 @@ public:
     virtual std::int32_t cached_item_effect(Character* c, std::int32_t spa) = 0;
     virtual std::uint32_t bard_cast_bard(const Spell* spell, std::uint32_t class_id) = 0;
     virtual std::uint8_t sub_00433830(const Spell* spell, Character* caster_character) = 0;
-    virtual Handle character_of(Spawn* spawn) = 0; // FUN_0059f730: the spawn's PcClient
+    virtual Handle character_of(Spawn* spawn) = 0; // 0x59f730: the spawn's PcClient
     virtual void token_to_client(Handle to, std::uint32_t id, std::uint32_t color) = 0;
     virtual std::uint8_t is_item_cast(const Launch* launch) = 0;
     virtual std::uint8_t is_self_or_group_member(Handle pc_character, const char* name) = 0;
@@ -281,7 +281,7 @@ public:
     virtual std::uint8_t get_level(Spawn* s) = 0; // PlayerZoneClient::GetLevel
     virtual Profile* current_profile() = 0;       // ProfileManager::GetCurrentProfile
     virtual void record_position_sample(Spawn* s, std::uint32_t kind) = 0; // (kind, 0, 0)
-    virtual Spawn* vehicle_of(Spawn* s) = 0;      // FUN_0058cf90
+    virtual Spawn* vehicle_of(Spawn* s) = 0;      // 0x58cf90
     virtual Spawn* mount_spawn(Spawn* s) = 0;     // PlayerClient_GetMountSpawn
     // Loop 1.
     virtual std::int32_t get_drunkenness(Handle pc) = 0;
@@ -297,7 +297,7 @@ public:
     virtual void set_bind_z(Handle pc, std::uint32_t slot, std::uint32_t v) = 0;
     virtual void set_bind_heading(Handle pc, std::uint32_t slot, std::uint32_t v) = 0;
     virtual void save_pc() = 0;                   // CEverQuest::SavePC(0, 1, 0xe)
-    virtual void set_150(Spawn* s) = 0;           // FUN_008cfd10(0)
+    virtual void set_150(Spawn* s) = 0;           // 0x8cfd10(0)
     virtual void play_sound(Spawn* s, std::uint32_t sound) = 0;
     virtual std::int32_t zone_index(const char* name) = 0; // EQWorldData::GetIndexFromZoneName
     // MoveToZone(zone, "portal spell", 0, 7, x, y, z, heading, -1, -1, 0).
@@ -310,7 +310,7 @@ public:
     virtual void close_world() = 0;                           // NetMgr_CloseConnection
     virtual void log_void_connection(std::uint32_t opcode) = 0; // DebugLog_Printf
     virtual const char* get_string(std::uint32_t id) = 0;
-    virtual void set_endurance(std::int32_t v) = 0; // FUN_00441e50 on the CharacterBase
+    virtual void set_endurance(std::int32_t v) = 0; // 0x441e50 on the CharacterBase
     virtual void cur_endurance() = 0;               // Cur_Endurance(1)
     virtual void cur_mana() = 0;                    // Cur_Mana(1)
     virtual void feign(std::uint32_t spell_id, std::int32_t v) = 0; // StopCastAndFeignDeath
@@ -329,7 +329,7 @@ public:
     virtual void set_spell_recast_timer(Handle pc, std::uint32_t gem) = 0; // (gem, 0)
     virtual std::uint32_t fast_time() = 0;
     virtual void set_linked_reuse(Handle pc, std::uint32_t timer, std::uint32_t when) = 0;
-    virtual std::int32_t random_below(std::uint32_t n) = 0; // FUN_00402870
+    virtual std::int32_t random_below(std::uint32_t n) = 0; // 0x402870
     virtual void stop_current_spell_cast() = 0;             // (1)
     virtual void apply_fling(Spawn* local, const FlingRecord& record) = 0;
     virtual std::uint8_t is_valid_teleport(Spawn* s, std::uint32_t x, std::uint32_t y, std::uint32_t z,
@@ -340,8 +340,8 @@ public:
     virtual Affect* find_affect_slot(std::uint32_t spell_id, Spawn* caster, std::int32_t* slot,
                                      std::uint32_t level_dword, std::uint32_t launch_dword) = 0;
     virtual void set_buff_caster_id(std::uint32_t slot, std::uint32_t id) = 0;
-    virtual std::uint8_t has_buff_flag(const Spell* spell) = 0; // FUN_00453520
-    virtual void on_new_buff(std::uint32_t slot) = 0;            // FUN_0045b250
+    virtual std::uint8_t has_buff_flag(const Spell* spell) = 0; // 0x453520
+    virtual void on_new_buff(std::uint32_t slot) = 0;            // 0x45b250
     virtual std::int32_t refused_mez(std::int32_t max, Spawn* caster, const Spell* spell) = 0; // 0x4432a0
     virtual std::int32_t total_effect(Character* c, std::int32_t spa) = 0; // TotalEffect(spa, 1, 0, 1, 1)
     virtual void root_aa(std::int32_t total) = 0; // EmptyFunction_00443570("POP_AA_EnhancedRootOnMe", total)
@@ -350,8 +350,8 @@ public:
     virtual void lose_control_message(Spawn* s) = 0;
     virtual void update_all_visibility() = 0;
     virtual void set_view_actor(const char* name) = 0;
-    virtual void spa87(std::int32_t v) = 0;   // FUN_004940b0 on CDisplay
-    virtual void spa57(std::int32_t v) = 0;   // FUN_00432b20
+    virtual void spa87(std::int32_t v) = 0;   // 0x4940b0 on CDisplay
+    virtual void spa57(std::int32_t v) = 0;   // 0x432b20
     virtual void update_visible_status() = 0; // UpdateMyVisibleStatus(0)
     virtual std::int32_t random_low_high(std::int32_t lo, std::int32_t hi) = 0;
     // CalcAffectChangeGeneric(spell, caster id, index, affect, base, 1).
@@ -360,7 +360,7 @@ public:
     virtual void add_physics_effect(Spawn* s, std::uint32_t spell_id, std::uint32_t caster_id, std::uint32_t slot,
                                     std::int32_t value) = 0;
     virtual void apply_post_effect(const Spell* spell, std::uint32_t index) = 0; // (.., 1)
-    virtual void spa436() = 0; // FUN_004325e0(1)
+    virtual void spa436() = 0; // 0x4325e0(1)
 };
 
 // The original's frame buffers that outlive a callee's use of them: the

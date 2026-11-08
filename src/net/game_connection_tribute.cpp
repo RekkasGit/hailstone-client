@@ -184,7 +184,7 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
     case Op::GuildOptInOut:
         // HandleWorldMessage_GuildTribute: the named member (CGuild::FindMemberByName, _strnicmp over 64; none,
         // nothing) gets the
-        // states, donations, time and flag (FUN_00482cf0), then its tribute list row is refreshed.
+        // states, donations, time and flag (0x482cf0), then its tribute list row is refreshed.
         if (auto v = decode_guild_tribute_opt(p)) {
             if (v->member == character_) g.opted_in = v->on;
             for (auto& m : guild_.members) {

@@ -31,7 +31,7 @@ inline bool is_bazaar_zone(std::uint32_t zone_id) {
 }
 inline constexpr std::uint8_t kBagTraderSatchel = 51; // ItemBase_GetContainerType 0x33
 
-// FUN_005101b0 (the trader spot test of FUN_004431a0): the switch's type (EQSwitch +0x26) is 0x99 or 0x9b, the
+// 0x5101b0 (the trader spot test of 0x4431a0): the switch's type (EQSwitch +0x26) is 0x99 or 0x9b, the
 // bazaar's trader stalls (0x9a is not one).
 inline bool is_trader_stall(std::uint8_t switch_type) { return switch_type == 0x99 || switch_type == 0x9b; }
 

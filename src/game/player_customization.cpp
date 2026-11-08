@@ -29,7 +29,7 @@ constexpr RowIds kRows[kCustomizationRows] = {
     {"FacialAttachmentIndex_Down_Button", "FacialAttachmentIndex_Up_Button", "FacialAttachmentIndex_Text"},
 };
 
-// FUN_0040c2a0's return: the face without its tens digit (a new-style classic race keeps it whole).
+// 0x40c2a0's return: the face without its tens digit (a new-style classic race keeps it whole).
 std::uint8_t face_index(CustomizationActor& a, std::int32_t face) {
     return split_face(face, a.features().face, a.race(), a.new_style_model()).index;
 }
@@ -45,7 +45,7 @@ std::int32_t heritage_index(CustomizationActor& a, std::int32_t heritage) {
 }
 
 std::int32_t heritage_by_index(CustomizationActor& a, std::int32_t index) {
-    // CPlayerCustomizationManager_GetHeritageByIndex @0x8ceef0 (FUN_00714470): 0 past the list.
+    // CPlayerCustomizationManager_GetHeritageByIndex @0x8ceef0 (0x714470): 0 past the list.
     auto list = a.heritages();
     return index >= 0 && index < static_cast<std::int32_t>(list.size()) ? list[static_cast<std::size_t>(index)] : 0;
 }
@@ -84,7 +84,7 @@ void actor_set_heritage(CustomizationActor& a, std::int32_t heritage, bool keep)
         f.tattoo = pick(a.counts().tattoos);
         f.details = pick(a.counts().facial_attachments);
     } else {
-        // FUN_008cec80: the record of the actor's current heritage lists its class (it is among the heritages of
+        // 0x8cec80: the record of the actor's current heritage lists its class (it is among the heritages of
         // {race, class, gender}); then the asked heritage is taken, else one at random.
         if (std::find(list.begin(), list.end(), f.heritage) != list.end())
             f.heritage = heritage;

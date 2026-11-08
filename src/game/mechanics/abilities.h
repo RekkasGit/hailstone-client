@@ -213,7 +213,7 @@ struct SkillResult {
     bool stop_auto_fire = false;             // SetAutoRangeAttack(0) (feign death; DoAttack(11) with auto fire on)
     bool open_tracking_window = false;
     bool track_request = false;              // Send_OP_Track (the tracking window was already open)
-    bool compass_reset = false;              // FUN_0065b650: the compass's error back to 0 (game/compass.h)
+    bool compass_reset = false;              // 0x65b650: the compass's error back to 0 (game/compass.h)
     bool visibility_changed = false;         // EQ_Character::UpdateMyVisibleStatus
     bool used = false;                       // a timer started or a request went out
     std::vector<int> removed_buffs;          // RemovePCAffectex(affect, 0): buff slots to clear locally
@@ -270,7 +270,7 @@ std::vector<std::uint32_t> usable_skills(const Character& ch, bool combat);
 // 0xff = not) for a race and class. The client fills them itself (EQEmu sends them all 0xff): when the local player's
 // actor is made (and on an illusion, EQPlayer::do_change_form, with the actor's current race) and when a buff with
 // SPA 65 or 66 fades. Both callers keep slot 10 (+0x3258, regeneration) as it was. The race's GetRawSkillCap pass
-// (its argument 1 path) and FUN_005bac00's string are left out.
+// (its argument 1 path) and 0x5bac00's string are left out.
 inline constexpr std::size_t kInnateInfravision = 6;  // +0x3248 (eqstr 6617 'Infravision')
 inline constexpr std::size_t kInnateSlam = 11;        // +0x325c
 inline constexpr std::size_t kInnateUltravision = 13; // +0x3264 (eqstr 6622 'Ultravision')

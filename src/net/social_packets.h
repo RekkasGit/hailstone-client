@@ -117,14 +117,14 @@ std::optional<std::uint32_t> decode_assist(const AppPacket& p);
 //
 // OP_LFGCommand (0x6060), client → zone, 80 bytes (Send_OP_LFGCommand @0x5191c0): u32 0, u8 on +4, u8 match
 // filter +5 (GSFW_ExclusionSearchCheckbox), u32 from level +8, u32 to level +0xc, char[64] comments +0x10.
-// Cmd_lfgroup sends {on, 0, 0, 100, ""}; the window's posts (FUN_006783b0) its fields.
+// Cmd_lfgroup sends {on, 0, 0, 100, ""}; the window's posts (0x6783b0) its fields.
 struct LfgCommand {
     bool on = false, match_filter = false;
     std::uint32_t from_level = 0, to_level = 0;
     std::string comments;
 };
 AppPacket encode(const LfgCommand& v);
-// OP_LFPCommand (0x49a9), client → zone, 84 bytes (Send_OP_LFPCommand @0x519280; FUN_006791f0): u32 0, u8 on +4,
+// OP_LFPCommand (0x49a9), client → zone, 84 bytes (Send_OP_LFPCommand @0x519280; 0x6791f0): u32 0, u8 on +4,
 // u8 match filter +5, u32 from +8, u32 to +0xc, u32 classes +0x10 (1 << class id), char[64] comments +0x14.
 struct LfpCommand {
     bool on = false, match_filter = false;

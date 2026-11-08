@@ -48,11 +48,11 @@ struct CameraTarget {
     float eye_height = 0.0f;  // PlayerClient_GetEyeHeight (vtable +0xd0)
     bool ducking = false;     // StandState (+0x35c) 111
     bool sitting = false;     // StandState 110
-    // FUN_0058cf90: riding. With the mount's dag 0xe found (FUN_0058c8a0), its world z: the eye z is eye + that z;
+    // 0x58cf90: riding. With the mount's dag 0xe found (0x58c8a0), its world z: the eye z is eye + that z;
     // else z + eye + 3.5.
     bool riding = false;
     std::optional<float> mount_seat_z;
-    // The tether camera's sitting case: the spawn's bone 0 world z (FUN_0058c8a0(S, 0)), when found.
+    // The tether camera's sitting case: the spawn's bone 0 world z (0x58c8a0(S, 0)), when found.
     std::optional<float> root_bone_z;
 };
 

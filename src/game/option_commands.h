@@ -121,7 +121,7 @@ struct HotButtonCommand {
     std::int32_t color = 0;
 };
 // Cmd_hotbutton @0x4f79b0: "<name> [colour] <text>": the second word is the colour when it is all digits (an empty
-// one too: 0), else it starts the text. The social is stored by FUN_004ea9f0(name, text, colour, -1, 1).
+// one too: 0), else it starts the text. The social is stored by 0x4ea9f0(name, text, colour, -1, 1).
 HotButtonCommand hotbutton_command(std::string_view args);
 
 // ---------------------------------------------------------------- /viewport

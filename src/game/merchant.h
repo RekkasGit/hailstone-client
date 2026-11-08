@@ -31,8 +31,8 @@ std::int64_t total_copper(const net::Coins& coins);
 // than the player has.
 bool take_money(net::Coins& coins, std::int64_t amount);
 
-// CharacterZoneClient_CreditCopper (FUN_004488c0, rof2decomp batch 247): adds
-// `credit` copper (FUN_007e7040's capped credit; uncapped when the cap is -1,
+// CharacterZoneClient_CreditCopper (0x4488c0, rof2decomp batch 247): adds
+// `credit` copper (0x7e7040's capped credit; uncapped when the cap is -1,
 // as on EQEmu) to the purse and re-splits the total into the fewest coins:
 // p = T/1000, g = T%1000/100, s = T%100/10, c = T%10, signed 64-bit, each
 // count stored as its low 32 bits. FinishSellingItem calls it on a sale.

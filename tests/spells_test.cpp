@@ -491,7 +491,7 @@ TEST_CASE("SPA 57: SpellCache_GetBuffValue(57, k) holds the levitate effects wit
     CHECK(ch2.cached_buff(57, 1) == 0);
 }
 
-TEST_CASE("A spell's target-type colour (FUN_004ad890: the gem tint and the memorize menu's rows)") {
+TEST_CASE("A spell's target-type colour (0x4ad890: the gem tint and the memorize menu's rows)") {
     using hailstone::game::spell_target_color;
     CHECK(spell_target_color(5, 0) == 0xffde2121u);  // single target (the default)
     CHECK(spell_target_color(6, 0) == 0xffcede29u);  // self

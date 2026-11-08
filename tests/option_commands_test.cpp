@@ -312,7 +312,7 @@ TEST_CASE("option commands: /netstats lines") {
     CHECK(found);
 }
 
-TEST_CASE("option commands: /hotbutton's social store (FUN_004ea9f0)") {
+TEST_CASE("option commands: /hotbutton's social store (0x4ea9f0)") {
     HotButtonStore store;
     store.social(0).name = "Taken";
     store.social(0).lines[1] = "kept";

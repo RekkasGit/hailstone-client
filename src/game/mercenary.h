@@ -77,7 +77,7 @@ struct MercManager {
     std::uint32_t timer_interval = 0;      // +0x208 OP_MercenaryTimer +4 (ms)
     std::uint32_t timer_dword_8 = 0;       // +0x20c OP_MercenaryTimer +8
     std::uint32_t last_tick = 0;           // +0x210 GetTickCount of the last upkeep tick
-    std::uint32_t stance_pointers = 0;     // +0x238's count: the active mercenary's stance pairs (FUN_005669b0)
+    std::uint32_t stance_pointers = 0;     // +0x238's count: the active mercenary's stance pairs (0x5669b0)
 };
 
 // What the handlers and senders do outside the manager, in the original's order.
@@ -133,7 +133,7 @@ inline constexpr std::uint16_t kOpMercSwitch = 0x1b37,       // OP_MercenarySwit
     kOpMercTransferAnswer = 0x4333,                           // its answer
     kOpMercLog = 0xee80;                                      // /merclog
 
-// States 0, 1, 2 and 4: no active (unsuspended) mercenary (FUN_00564820).
+// States 0, 1, 2 and 4: no active (unsuspended) mercenary (0x564820).
 bool merc_inactive(std::uint32_t state);
 
 // Record_Unserialize_569cf0 @0x569cf0: one entry from `data` at `pos` into `rec`. Every field is read only when it
@@ -143,14 +143,14 @@ bool merc_inactive(std::uint32_t state);
 // wire's count).
 void merc_read_record(std::span<const std::uint8_t> data, std::size_t& pos, MercRecord& rec);
 
-// Merc_ResetState (FUN_00566620): the zone-in reset; the owned list is kept.
+// Merc_ResetState (0x566620): the zone-in reset; the owned list is kept.
 void merc_reset(MercManager& m, std::uint32_t fast_time);
-// Merc_TickUpkeepTimer (FUN_00564d70), every frame: while active the time left goes down by the ticks since the last
+// Merc_TickUpkeepTimer (0x564d70), every frame: while active the time left goes down by the ticks since the last
 // one, stopping at 0 (unsigned compare); the last tick becomes now either way.
 void merc_tick_upkeep(MercManager& m, std::uint32_t now);
 // The local dismissal (Send_OP_MercenaryDismiss without confirm, Handle_OP_MercenaryDismiss, OP_MercenaryTimer).
 void merc_dismiss_locally(MercManager& m, MercHooks& h);
-// FUN_00566f70: last tick = GetTickCount, event 0x13, then event 5 for state 0 or 2 for states 1, 2 and 4.
+// 0x566f70: last tick = GetTickCount, event 0x13, then event 5 for state 0 or 2 for states 1, 2 and 4.
 void merc_restart_upkeep(MercManager& m, MercHooks& h);
 
 // ---- handlers (HandleWorldMessage_Mercenary @0x569920). `p` is the packet (null: none; the 4-byte reads are
@@ -229,7 +229,7 @@ std::string buff_timer_text(std::int32_t seconds);
 // or 0x12 for more than one), "" without one.
 std::string merc_upkeep_charged_text(const MercManager& m, bool alt_currency, const std::string& currency);
 std::string merc_upkeep_waived_text(const MercManager& m, const std::string& currency);
-// The manage window's TimeLeftText (FUN_006e5c70): state 5 and time left > 0 → merc_duration_short, else "0m 0s".
+// The manage window's TimeLeftText (0x6e5c70): state 5 and time left > 0 → merc_duration_short, else "0m 0s".
 std::string merc_time_left_text(const MercManager& m);
 // Its tooltip (CMercenaryWnd_FormatUpkeepTimerText @0x6e5d80); state 3 formats an uninitialised buffer in the
 // original ("" here).
@@ -237,9 +237,9 @@ std::string merc_upkeep_tooltip(const MercManager& m);
 // A cost as the windows show it: platinum (cost / 10) and gold (cost % 10), signed.
 std::int32_t merc_cost_platinum(std::int32_t gold);
 std::int32_t merc_cost_gold(std::int32_t gold);
-// FUN_00565e00: the owned list's tooltip from the description (dbstr kind 23): up to its fourth '<', "<br>" → " ".
+// 0x565e00: the owned list's tooltip from the description (dbstr kind 23): up to its fourth '<', "<br>" → " ".
 std::string merc_description_summary(const std::string& description);
-// FUN_00566040: "race - type" from the description ("Race: X<br>Type: Y<br>..." → "X - Y").
+// 0x566040: "race - type" from the description ("Race: X<br>Type: Y<br>..." → "X - Y").
 std::string merc_race_and_type(const std::string& description);
 
 // The manage window's buttons (CMercenaryManageWnd_UpdateButtons @0x6e5770) and the suspend button (@0x6e63b0).

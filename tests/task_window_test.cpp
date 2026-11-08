@@ -123,7 +123,7 @@ TEST_CASE("task window: the task list's rows, colours, times and separators") {
 }
 
 TEST_CASE("task window: the time-left sort's comparator is the original's") {
-    // FUN_0076f9f0: rows whose times differ compare as 1 both ways; qsort then orders as the CRT does.
+    // 0x76f9f0: rows whose times differ compare as 1 both ways; qsort then orders as the CRT does.
     std::vector<TaskListRow> rows;
     for (int i = 0; i < 4; ++i) {
         TaskListRow r;

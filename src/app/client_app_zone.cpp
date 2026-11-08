@@ -278,7 +278,7 @@ void ClientApp::update_precipitation(float dt, float sky_hour) {
 }
 
 // One frame of CDisplay_UpdateSkyWeatherAndFog -> ApplyWeatherFog -> SetFog (game::SceneFog), with the region type
-// at the camera (the camera driver's FUN_0048c890 after IsPointInWorld; outside the world the last one stays),
+// at the camera (the camera driver's 0x48c890 after IsPointInWorld; outside the world the last one stays),
 // infravision and ultravision (the race's innate slots +0x3248 / +0x3264, SPA 65 / 66) and the player's light level.
 game::SceneFogFrame ClientApp::scene_fog_frame(float sky_hour, double t) {
     game::SceneFogInput in;
@@ -330,7 +330,7 @@ void ClientApp::update_listener() {
     audio_->set_weather(weather_.raining(), weather_.windy());
 
     // PlayerZoneClient's HeadWet change: under water (5) sets room type 0x16 and the special flag
-    // (FUN_0048a480); coming out runs UpdateListenerEnvironment again. (The stun's 0x17 needs a stun state the
+    // (0x48a480); coming out runs UpdateListenerEnvironment again. (The stun's 0x17 needs a stun state the
     // client does not keep.)
     std::uint8_t head_wet = motion_head_wet_;
     if (head_wet != head_wet_) {

@@ -62,12 +62,12 @@ struct CollisionSpawn {
     std::array<MovementStat, 20> ring{}; // +0x528 MovementStats
     std::uint32_t ring_index = 0;       // +0xe3c
     std::uint32_t ring_count = 0;       // +0xe38
-    std::array<float, 3> last_good{};   // +0x284: the position FUN_00507430 saved after the last step
+    std::array<float, 3> last_good{};   // +0x284: the position 0x507430 saved after the last step
 };
 
 using Vec3f = std::array<float, 3>; // the original's order (y, x, z)
 
-// The collision info FUN_00509190 builds for the overlap test (pinstCollision +0xc).
+// The collision info 0x509190 builds for the overlap test (pinstCollision +0xc).
 struct CollisionTestInfo {
     Vec3f from{}, to{};
     float radius = 0.0f, radius_squared = 0.0f, radius_inverse = 0.0f;
@@ -96,7 +96,7 @@ public:
     virtual bool has_property(std::uint32_t property) = 0; // PlayerBase::HasProperty(property, 0, 0)
     virtual double height() = 0;                        // PlayerClient +0x94, unrounded on the FPU
     virtual double collision_radius() = 0;              // the +0x101c actor's +0x44, unrounded
-    virtual bool moving_state() = 0;                    // FUN_00506c90
+    virtual bool moving_state() = 0;                    // 0x506c90
     virtual bool rider() = 0;                           // PlayerBase_GetRider != 0
     virtual void set_rider_stand_time(std::uint32_t time) = 0; // the rider's +0x34
     virtual std::uint32_t display_time() = 0;           // CDisplay +0x154
@@ -107,19 +107,19 @@ public:
     // CollisionFilter_MovementWithRider, else CollisionFilter_Movement; the hit callback
     // CollisionHit_SetCollidingType when `hit_callback`). The results start as `out`.
     virtual void sweep(const Vec3f& from, const Vec3f& to, bool rider_filter, bool hit_callback, SweepResult& out) = 0;
-    virtual void no_collide() = 0;                      // FUN_00509a00: the touch-switch overlap test
-    virtual void move_without_collision(const Vec3f& target, Vec3f& out) = 0; // FUN_00507730
+    virtual void no_collide() = 0;                      // 0x509a00: the touch-switch overlap test
+    virtual void move_without_collision(const Vec3f& target, Vec3f& out) = 0; // 0x507730
     virtual bool in_scene_region(const Vec3f& p) = 0;   // pinstSceneGraph +0x4c (IsPointInWorld)
     virtual bool can_i_fit_here(const Vec3f& p, std::uint32_t flag) = 0; // PlayerZoneClient::CanIFitHere
-    virtual void clear_stuck(std::uint32_t arg) = 0;    // FUN_00509230
-    virtual bool check_stuck() = 0;                     // FUN_005064c0
+    virtual void clear_stuck(std::uint32_t arg) = 0;    // 0x509230
+    virtual bool check_stuck() = 0;                     // 0x5064c0
     virtual bool collision_test(const CollisionTestInfo& info) = 0; // pinstCollision +0xc
     virtual void set_actor_location(const Vec3f& p) = 0; // ActorClient::SetActorLocation
     virtual bool is_player_spawn() = 0;                 // IsSpawnInfoPlayerSpawn
-    virtual void after_place() = 0;                     // FUN_00509210
+    virtual void after_place() = 0;                     // 0x509210
     virtual bool can_swim_jump_now() = 0;               // PlayerClient_CanSwimJumpNow
-    virtual bool on_ladder() = 0;                       // FUN_0059fb80
-    virtual void finish_move() = 0;                     // FUN_00507430 (saves the last good position)
+    virtual bool on_ladder() = 0;                       // 0x59fb80
+    virtual void finish_move() = 0;                     // 0x507430 (saves the last good position)
     virtual void after_move(const Vec3f& from, const Vec3f& actor) = 0; // EmptyFunction_00509220
 };
 
@@ -134,7 +134,7 @@ struct CollisionMove {
 CollisionMove do_collision_movement(CollisionSpawn& spawn, Vec3f& target, CollisionQueries& q,
                                     const Fpu& fpu = Fpu{});
 
-// FUN_005062a0, the radius eqgame gives a spawn's actor as its collision
+// 0x5062a0, the radius eqgame gives a spawn's actor as its collision
 // volume (CRender::BuildActorForSpawn passes it to CreateActorInstance, and
 // PlayerZoneClient::ChangeHeight sets it with the actor's vf48,
 // SetCollisionVolumeRadius): AvatarHeight x 0.5 x 0.95 for a player, x 0.35
@@ -154,7 +154,7 @@ double model_sweep_radius(float model_radius, float scale, float co_factor = 1.0
 // it is model_sweep_radius above (6.68 for a classic human, 6.21 Luclin), but a
 // sphere that big cannot pass South Qeynos' 10 x 10 doorways under the sweep's
 // rules (tests/swept_sphere_test.cpp), which the original's players do, so the
-// client keeps FUN_005062a0's player value (0.475 x AvatarHeight, 1.78 for a
+// client keeps 0x5062a0's player value (0.475 x AvatarHeight, 1.78 for a
 // human) as a stand-in until a run-time read of the original's vf44 settles it
 // (docs/unknowns.md).
 struct SweepRadiusSpawn {
@@ -163,11 +163,11 @@ struct SweepRadiusSpawn {
 };
 float sweep_radius(const SweepRadiusSpawn& spawn);
 
-// FUN_00509130: a vector scaled to length 1, or zero when its length is
+// 0x509130: a vector scaled to length 1, or zero when its length is
 // within 2^-23 of 0 (the length unrounded, compared with the constants).
 void normalize_vector(float v[3], const Fpu& fpu = Fpu{});
 
-// FUN_00507430's first half: with the zone's collision loaded, a position
+// 0x507430's first half: with the zone's collision loaded, a position
 // outside the scene's box grown by 2000 stops the spawn and puts it back at
 // `last_good`; otherwise the position becomes the last good one. Returns
 // false when it was put back.

@@ -383,7 +383,7 @@ public:
             out.checked = game::weapon_button_checked(id == "ACP_MeleeAttackButton", q, hotbutton_extras(host));
         } else if (auto s = ability(host, id)) {
             out.text = *s >= 0 && host.skill_name ? host.skill_name(static_cast<std::uint32_t>(*s)) : "";
-            // FUN_00613a70 (Abilities) / CombatPageOnProcessFrame: the skill's timer and SetCheck(!IsAvailable).
+            // 0x613a70 (Abilities) / CombatPageOnProcessFrame: the skill's timer and SetCheck(!IsAvailable).
             game::ButtonCoolDown& cd = cool_downs_[static_cast<std::size_t>(ability_index(id) + (id.starts_with("ACP_") ? 6 : 0))];
             if (*s < 0) {
                 cd.stop();

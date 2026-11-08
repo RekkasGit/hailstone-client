@@ -71,7 +71,7 @@ namespace {
 // The game's answers for the local player (GetEnvCoefficients' queries):
 // a player spawn in a loaded zone, not stuck, controlled, never a corpse or
 // a mount, with no ladders. PlayerClient +0x58 is IsSmallBoatRace (false for
-// players); the buoyancy is ProcessControls' 0xddfd78; FUN_008d0800 is mode 5
+// players); the buoyancy is ProcessControls' 0xddfd78; 0x8d0800 is mode 5
 // with vf64 (the walk speed) at least SpeedRun (rof2decomp's answers to
 // docs/unknowns.md; +0x90 is taken as false). The levitation floor probe
 // answers `hover_floor`.

@@ -164,7 +164,7 @@ int UseSkill(lua_State* L) {
 //  - WndNotification @0x65a2e0: the effect button's click removes the discipline (Cmd_stopdisc's RemoveMyAffect),
 //    CAW_OpenCombatSkillSelectWnd shows CombatSkillSelectWnd; a button's left click with a combat ability on the
 //    cursor (attachment type 12) puts it there (the button's old one goes on the cursor), else uses the button
-//    (FUN_00659c80); a drag takes the ability off; a right click pops up the ability menu (built by
+//    (0x659c80); a drag takes the ability off; a right click pops up the ability menu (built by
 //    CCombatAbilityWnd_RebuildAbilityMenus, game/combat_ability_menu.h) at the button's centre, whose item puts
 //    10000 + n as 0x84 + n on the button (SaveCombatAbilitiesToIni).
 // A drag from the "Discipline" row n (eq.PickUp("CombatAbilityWnd", "Discipline", n)) makes the discipline's
@@ -332,7 +332,7 @@ private:
 };
 
 // CCombatSkillsSelectWnd @0x4771d0 ("CombatSkillSelectWnd"), opened by the combat ability window's "S": every
-// combat ability ShouldDisplayThisSkill lets through, one line each (FUN_004774f0): Name, Level (GetSpellLevelNeeded
+// combat ability ShouldDisplayThisSkill lets through, one line each (0x4774f0): Name, Level (GetSpellLevelNeeded
 // of the class), Cost (+0x194 endurance), Upkeep (+0x19c), Target (6816 Self for target type 6, 6817 Group for 41,
 // else 6818 Other), Duration (GetSpellDuration at the character's level, ticks * 6 as "%d:%02d:%02d"), Reuse
 // (recast / 1000 the same way) and Timer (+0x198); the line's data 0x84 + n. A click selects the line (the

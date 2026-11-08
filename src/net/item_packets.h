@@ -256,7 +256,7 @@ struct Item {
 
     // The instance's stats-disabled bytes, ItemBase +0x100 (eqlib bDisableAugTexture) and +0x101 (bRankDisabled):
     // client state, not in the packet (ItemClient_UnSerializeItemTree @0x5553b0 never writes them, the constructor
-    // clears them); FUN_007b28a0 sets them (game::update_stats_disabled).
+    // clears them); 0x7b28a0 sets them (game::update_stats_disabled).
     bool aug_texture_disabled = false;
     bool rank_disabled = false;
 
@@ -325,7 +325,7 @@ std::optional<ItemPacket> decode_item_packet(const AppPacket& p);
 AppPacket encode_item_packet(bool link_response, const ItemPacket& v); // server direction, for tests
 
 // OP_ItemPreviewRequest (C->S, 80 bytes; Send_OP_ItemPreviewRequest @0x6fff10 / @0x6ffc20): u32 item id, then for
-// an item with an ornamentation (FUN_007b0700: either IT string, the ornament icon, unknowna1 >= 0, the hero's
+// an item with an ornamentation (0x7b0700: either IT string, the ornament icon, unknowna1 >= 0, the hero's
 // forge model or unknown063 set) char[30] ornament_main (+4), char[30] ornament_off (+0x22), unknowna1 (+0x40),
 // ornament_hero_model (+0x44), unknown063 (+0x48) and the byte +0x4d = 1; otherwise empty strings, -1, 0, 0, 0.
 // EQEmu reads only the id. Without `item` (the id-only sender @0x6ffc20) the defaults.
@@ -444,7 +444,7 @@ AppPacket encode(const ItemLinkClick& v);
 std::optional<ItemLinkClick> decode_item_link_click(const AppPacket& p);
 
 // OP_ItemLinkResponse sent by the client (Send_OP_ItemLinkResponse @0x69baf0; 0x48 bytes): u32 item id, u32 flags
-// (| 2 with shift held), char name[64]; the krono slot's Inspect sends {88888, "Krono", 0} (FUN_006949d0). The
+// (| 2 with shift held), char name[64]; the krono slot's Inspect sends {88888, "Krono", 0} (0x6949d0). The
 // server answers with an item packet (OP_ItemLinkResponse).
 struct ItemLinkRequest {
     std::uint32_t item_id = 0;
@@ -501,7 +501,7 @@ AppPacket encode(const ItemVerifyReply& v); // server direction, for tests
 
 // OP_ApplyPoison (both ways, 12 bytes, RoF2 ApplyPoison_Struct): a TypelessInventorySlot {i16 slot, i16 sub, i16 aug,
 // i16 unknown} and u32 success. DoPassageOfTime @0x45e1e8 sends the poison's top-level slot as ItemIndex(slot, -1, -1)
-// (FUN_00460160); its unknown word and success are stack left-overs there (0 here, and EQEmu reads neither). The
+// (0x460160); its unknown word and success are stack left-overs there (0 here, and EQEmu reads neither). The
 // reply (Handle_OP_ApplyPoison @0x4b5c20) reads only success.
 struct ApplyPoison {
     std::int16_t slot = -1;

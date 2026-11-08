@@ -12,7 +12,7 @@
 namespace hailstone::render {
 
 // Back-face culling of EQ geometry. The original culls counter-clockwise
-// triangles (D3DCULL_CCW, set at device init by FUN_100916d0 and again by
+// triangles (D3DCULL_CCW, set at device init by 0x100916d0 and again by
 // CRender::DrawRenderEffectBuckets @0x1008b470); WLD triangles are clockwise
 // from the front. The screen winding after this client's projection was
 // mapped by testing (rof2decomp notes/eqgraphicsdx9.md, Culling).

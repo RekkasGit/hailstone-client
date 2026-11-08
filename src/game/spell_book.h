@@ -32,8 +32,8 @@ struct SpellBookCall {
     enum class Kind : std::uint8_t {
         Chat,             // dsp_chat(text, color)
         Chat2,            // dsp_chat_2(text) (default colour)
-        CastWindowHidden, // FUN_00646780 (only with a cast window)
-        CastWindowShown,  // FUN_00646720 (no null check)
+        CastWindowHidden, // 0x646780 (only with a cast window)
+        CastWindowShown,  // 0x646720 (no null check)
         ChangePosition,   // unk_SetStandState(state)
         SetAutoAttack,    // SetAutoAttack(0)
         SetAutoFire,      // SetAutoRangeAttack(0)

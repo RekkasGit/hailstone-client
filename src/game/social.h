@@ -65,13 +65,13 @@ std::vector<std::string> format_who_response(const net::WhoResponse& r, const Eq
 // Classes 20..35 (guildmasters), 40 (banker) and 41 (merchant) have names but no titles; other classes are
 // eqstr 1484.
 std::uint32_t kunark_class_eqstr(std::int32_t class_id, std::int32_t level, bool base_name);
-// FUN_0044d420 (the /who class column, rof2decomp batch 254): KunarkClass, and above level 50 " (" the base
+// 0x44d420 (the /who class column, rof2decomp batch 254): KunarkClass, and above level 50 " (" the base
 // class name ")": "Champion (Warrior)".
 std::string who_class_text(const EqStrings& strings, std::int32_t class_id, std::int32_t level);
 
 // ---------------------------------------------------------------- spawn names
 
-// CEverQuest::trimName's copy (FUN_008d3740): digits and '#' dropped, '_' turned into a space (the suffix
+// CEverQuest::trimName's copy (0x8d3740): digits and '#' dropped, '_' turned into a space (the suffix
 // localisation that follows leaves these names alone).
 std::string trim_name(std::string_view name);
 // PlayerManagerClient::GetPlayerFromPartialName @0x599710: among `names` (the spawn list's order) the one whose
@@ -180,17 +180,17 @@ struct GuildState {
     std::uint32_t invite_guild = 0, invite_rank = 0;
     std::int64_t invite_ms = 0;
     bool invite_world = false; // from another zone (OP_HailstoneGuildReply): answered with OP_HailstoneGuild
-    // OP_GuildUpdate actions 0 and 1 (the guild's web page and chat channel) and 4 (a rank's name, FUN_007d9520).
+    // OP_GuildUpdate actions 0 and 1 (the guild's web page and chat channel) and 4 (a rank's name, 0x7d9520).
     std::string url, channel;
     std::array<std::string, 9> rank_names;
 
     bool in_guild() const { return guild_id != 0xffffffff && guild_id != 0; }
     std::string name_of(std::uint32_t id) const;
     std::optional<std::uint32_t> id_of(const std::string& name) const; // case-insensitive
-    // FUN_007d89e0: the name the guild gave the rank, else its default.
+    // 0x7d89e0: the name the guild gave the rank, else its default.
     std::string rank_name(std::uint32_t rank) const;
 };
-// FUN_007ff350: the ranks' default names (table 0xb617d0, 1..8; "" otherwise).
+// 0x7ff350: the ranks' default names (table 0xb617d0, 1..8; "" otherwise).
 std::string guild_rank_name(std::uint32_t rank);
 
 // The chat line Handle_OP_SpawnAppearance @0x4b4b60 prints (colour 0x111) for a guild id (case 0x16) or rank (0x17)

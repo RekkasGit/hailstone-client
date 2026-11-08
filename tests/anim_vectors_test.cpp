@@ -1,7 +1,7 @@
 // The movement animation choice against the original's vectors
 // (rof2decomp batch 248): SelectMovementAnim.jsonl
 // (PlayerAnimation_SelectMovementAnim @0x5888a0, 3000 records at x87
-// precision 24 and 53) and OldModelAnimSpeed.jsonl (FUN_004afc90, 2000).
+// precision 24 and 53) and OldModelAnimSpeed.jsonl (0x4afc90, 2000).
 // Floats must match bit for bit; the callees asked must be the ones the
 // original asked.
 #include <doctest/doctest.h>
@@ -152,7 +152,7 @@ TEST_CASE("Animation tables") {
     CHECK(new_style_layer_kind(0x68) == 2);
 }
 
-TEST_CASE("PlayAttackAnimation: old-style models (FUN_0059f750)") {
+TEST_CASE("PlayAttackAnimation: old-style models (0x59f750)") {
     auto old = [](std::uint32_t skill, std::uint32_t type, std::uint8_t slot, std::uint32_t race = 1,
                   std::uint8_t cls = 1, std::int32_t range = 0) {
         AttackAnimInput in;
@@ -190,7 +190,7 @@ TEST_CASE("PlayAttackAnimation: old-style models (FUN_0059f750)") {
     CHECK(old(0, 9, 7) == 0x2c);
 }
 
-TEST_CASE("PlayAttackAnimation: new-style models (FUN_0059f8d0)") {
+TEST_CASE("PlayAttackAnimation: new-style models (0x59f8d0)") {
     auto nu = [](std::uint32_t skill, std::uint32_t type, std::uint8_t slot, std::uint32_t race = 522,
                  std::uint8_t cls = 1, std::uint8_t wet = 0) {
         AttackAnimInput in;
@@ -311,7 +311,7 @@ TEST_CASE("Classic models: walk, run, backward, still") {
     in.race = 1;
     in.walk_speed = 0.46f;
     in.now_ms = 1000;
-    // Walking: L01 at 0.5 * |v_h| + 1 (FUN_004afe60), unchanged by FUN_004afc90 for L01.
+    // Walking: L01 at 0.5 * |v_h| + 1 (0x4afe60), unchanged by 0x4afc90 for L01.
     in.velocity = {0.3f, 0.4f, 0.0f};
     in.speed_run = 0.4f;
     auto c = frame(st, in, m);
@@ -400,9 +400,9 @@ TEST_CASE("Classic models: ducking while still (ChangePosition @0x5a0bc0)") {
     CHECK(c.reverse);
 }
 
-TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not name") {
+TEST_CASE("Classic models: P08 / O02 after an animation 0x4b0860 does not name") {
     using hailstone::game::classic_plain_stand_after;
-    // FUN_004b0860 @0x4b0860, read from the exe.
+    // 0x4b0860, read from the exe.
     for (int a : {0x20, 1, 5, 0xb, 0x10, 0x11, 0x22, 0x2a, 0x2f, 0x4b, 0xfe})
         CHECK(classic_plain_stand_after(static_cast<std::uint8_t>(a)));
     for (int a : {0, 0x12, 0x13, 0x14, 0x15, 0x18, 0x19, 0x1a, 0x21, 0x26, 0x27, 0x29, 0x30, 0x46, 0x47, 0x48, 0x4a})
@@ -600,7 +600,7 @@ TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
     CHECK(track(0x6f) == "IDLE_BA_3");
 }
 
-TEST_CASE("OP_Animation actions: the clip, else FUN_004b1210's replacement") {
+TEST_CASE("OP_Animation actions: the clip, else 0x4b1210's replacement") {
     auto clip = [](std::uint8_t action, const Model& m) {
         return hailstone::game::action_clip(action, [&](std::string_view c) { return m.has(c); });
     };

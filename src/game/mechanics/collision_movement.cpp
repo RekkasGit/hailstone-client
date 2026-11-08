@@ -42,7 +42,7 @@ float to_f(double v) { return static_cast<float>(v); }
 
 // The square of a vector's length as the original sums it: with the three
 // components loaded in the order (b, a, c) of [+4], [+0], [+8]:
-// (b*b + a*a) + c*c, each step rounded (FUN_00509130 and the speed checks).
+// (b*b + a*a) + c*c, each step rounded (0x509130 and the speed checks).
 double length_squared(const Fpu& f, double a, double b, double c) {
     double aa = x87_mul(f, a, a);  // fld st(1); fmulp st(2): a * a
     double bb = x87_mul(f, b, b);  // fld st(2); fmulp st(3): b * b
@@ -177,7 +177,7 @@ double model_sweep_radius(float model_radius, float scale, float co_factor, cons
 }
 
 float sweep_radius(const SweepRadiusSpawn& spawn) {
-    // Stand-in: FUN_005062a0 for a player, stored as a float (SetCollisionVolumeRadius).
+    // Stand-in: 0x5062a0 for a player, stored as a float (SetCollisionVolumeRadius).
     return static_cast<float>(collision_volume_radius(spawn.avatar_height, false, spawn.race, false));
 }
 
@@ -328,7 +328,7 @@ CollisionMove do_collision_movement(CollisionSpawn& s, Vec3f& target, CollisionQ
             if (kFlat > fr.f6c && kMinusOne > position[5]) position[5] = kMinusOne;
             q.clear_stuck(0);
             if (q.check_stuck() && q.is_controlled()) {
-                // FUN_00509190 -> CCollisionInfoSphere::InitFromActor @0x476ab0 and the base @0x441c90.
+                // 0x509190 -> CCollisionInfoSphere::InitFromActor @0x476ab0 and the base @0x441c90.
                 CollisionTestInfo info;
                 float r = to_f(q.collision_radius());
                 info.from = {tf(position[0]), tf(position[1]), tf(position[2])}; // live: check_stuck may move z

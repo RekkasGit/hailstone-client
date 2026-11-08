@@ -36,7 +36,7 @@ void place_flora(const FloraTile& tile, std::span<const eqg::EcoFloraLayer> laye
         std::size_t k = 0;
         while (k < tile.layer_names.size() && tile.layer_names[k] != layer.texture_layer) ++k;
         if (k >= tile.layer_names.size() || k >= tile.layer_masks.size()) continue;
-        // The share of the tile the texture layer covers (FUN_100f65b0), times the density.
+        // The share of the tile the texture layer covers (0x100f65b0), times the density.
         std::size_t covered = 0;
         for (std::size_t i = 0; i < std::size_t{S} * S; ++i)
             if (mask_at(k, i) >= layer.min_alpha) ++covered;

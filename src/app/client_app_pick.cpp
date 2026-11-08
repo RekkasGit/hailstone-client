@@ -70,7 +70,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
     x -= view_area_.x;
     y -= view_area_.y;
     const auto& world = conn_->world();
-    // FUN_0048b5c0: the view actor (the player's) is excluded in first person or with /clickthrough bit 0;
+    // 0x48b5c0: the view actor (the player's) is excluded in first person or with /clickthrough bit 0;
     // mounts are not modelled.
     game::PickCallInput call_in;
     call_in.world_state = player_ready_ ? 1 : 0;
@@ -218,13 +218,13 @@ void ClientApp::update_placement() {
     const game::Placement& pl = conn_->placement();
     glm::vec3 at = game::placed_world_position(pl.ghost());
     // Collision, wall and cursor modes: the ghost on the surface under the mouse. ItemPlacement_UpdatePosition's
-    // own placement (CollideWithWorld @0x558030, FUN_00557630 / FUN_00557c40: the wall fit, the box resting on the
+    // own placement (CollideWithWorld @0x558030, 0x557630 / 0x557c40: the wall fit, the box resting on the
     // surface) and free mode's mouse-delta moves (ItemPlacement_HandleMouseMove) are not built (docs/unknowns.md).
     if (pl.mode() != static_cast<int>(game::PlaceMode::Free) && !ui_.wants_mouse())
         if (auto p = world_point_at(in.mouse_x, in.mouse_y)) at = *p;
     glm::vec3 lo{-1.0f}, hi{1.0f};
     if (auto b = world_objects_->ghost_bounds()) lo = b->lo, hi = b->hi;
-    // FUN_00505210: a player inside the object's box refuses it (0x1c); here the local player.
+    // 0x505210: a player inside the object's box refuses it (0x1c); here the local player.
     std::uint32_t extra = 0;
     if (!pl.ghost().npc_item) {
         net::RePlacedItem moved = pl.ghost();

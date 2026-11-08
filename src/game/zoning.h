@@ -119,8 +119,8 @@ struct TeleportBHooks {
     // last bit survives as at 53-bit precision).
     std::function<double(float x, float y, float z, int flag)> floor_height;
     std::function<void()> update_actor;        // SetCCreateCamera (UpdatePlayerActor)
-    std::function<void()> find_person_request; // FUN_0059a9c0: Send_OP_FindPersonRequest while pinstPlayerPath has a target
-    std::function<void()> rewind_reset;        // FUN_005091e0
+    std::function<void()> find_person_request; // 0x59a9c0: Send_OP_FindPersonRequest while pinstPlayerPath has a target
+    std::function<void()> rewind_reset;        // 0x5091e0
     std::function<void(const MoveToZoneCall&)> move_to_zone;
 };
 inline constexpr float kNoFloor = -9.99999988e26f; // 0x9c5760: GetPlayerFloorHeight's "none"
@@ -146,7 +146,7 @@ struct ZoneToBindHooks {
     std::function<void()> update_spell_gems;          // CCastSpellWnd::UpdateSpellGems
     std::function<void()> stop_death_music;           // SetMusicSelection(8, 0), same zone
     std::function<void()> rewind_reset;               // same zone
-    std::function<void()> send_position_list;         // FUN_0058ff50, same zone
+    std::function<void()> send_position_list;         // 0x58ff50, same zone
     std::function<void(const MoveToZoneCall&)> move_to_zone; // another zone (reason 10, save flag 1)
     std::function<void()> local_view_setup;           // another zone
     std::function<void()> restore_camera;             // RestoreSavedCameraType

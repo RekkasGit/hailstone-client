@@ -5,7 +5,7 @@
 //   - a drag from a command button (WndNotification message 0x17, unless the window is locked, +0x2d) puts on the
 //     cursor (CCursorAttachment::AttachToCursor(0, 0, 10, index, "%s %s" of eqstr 6700 "Pet" and the button's
 //     text, -1)) the button's index among Pet0_Button..Pet13_Button (+0x234..);
-//   - dropped on a hot button (FUN_00552e00, the attachment type 10 → hot button type 8 by FUN_0054ee90) it becomes
+//   - dropped on a hot button (0x552e00, the attachment type 10 → hot button type 8 by 0x54ee90) it becomes
 //     a type 8 button whose value is that index and whose label is the attachment's text (63 characters, no icon);
 //     a toggle command's makes the hot button a check button (+0x258);
 //   - pressed (DoHotButton type 8, game/hot_button_press.h) the pet window's button of that index is clicked: the

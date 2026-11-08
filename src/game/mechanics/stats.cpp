@@ -10,7 +10,7 @@
 //  - re/src/game/character/calc_ac_eh.cpp (CalcAC), item_haste_eh.cpp (CalcItemHaste),
 //    pack_item_scans_eh.cpp + item_stat_adds.inc (food and drink stats), character_lookups.cpp (CanUseItem)
 //  - ProcessAllStats @0x4547e0 itself: NOT rewritten; ported from the Ghidra export and the disassembly
-//    (FUN_00585190, the recommended-level scaling, from the disassembly).
+//    (0x585190, the recommended-level scaling, from the disassembly).
 // The x87 formulas follow rof2decomp re/include/rof2/x87.h instruction by instruction through Fpu.
 #include "game/mechanics/character.h"
 #include "core/wrap_math.h"
@@ -130,7 +130,7 @@ bool Character::can_use_item(const net::Item& item, bool prestige) const {
 // and prestige.
 bool Character::usable_for_stats(const net::Item& item) const { return can_use_item(item, true); }
 
-// FUN_00585190 (CharacterZoneClient vtable +0x34): an item stat of an item with a recommended level or skill
+// 0x585190 (CharacterZoneClient vtable +0x34): an item stat of an item with a recommended level or skill
 // above the character's, scaled down: floor(level / recLevel * value + 0.5), at least 1; or with the skill
 // (GetSkillWithItemMods) below the recommended skill, the raw skill (at least 1) / recSkill instead.
 std::int32_t Character::recommended_item_value(const net::Item& item, std::int32_t value, std::uint8_t skill) const {
@@ -878,7 +878,7 @@ private:
 void Character::process_all_stats() {
     d_ = {};
     // The item sums (item_sums.h, the exact port): the worn slots 0..0x15,
-    // then the 21 other lookups (FUN_0042def0 x5, FUN_0042df20 x10, the
+    // then the 21 other lookups (0x42def0 x5, 0x42df20 x10, the
     // virtuals +0x4c x2 and +0x54 x4).
     std::array<StatItem, 0x16> worn_items;
     std::array<const StatItem*, 0x16> worn{};

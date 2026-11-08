@@ -39,7 +39,7 @@ void ActionsUi::save_hot_button_set(net::GameConnection& conn, int bar, const st
         game::write_hot_button_set(file, store_, bar);
         if (!file.save(path)) log::warn("cannot write {}", path.string());
     }
-    // eqstr 8007 with the name as the entry has it, then FUN_005199c0 (sorted, every entry written)
+    // eqstr 8007 with the name as the entry has it, then 0x5199c0 (sorted, every entry written)
     messages_.emplace_back(conn.strings().format(game::kStrHbSetSaved, std::vector<std::string>{sets_.at(n).name}), 0xf);
     sets_.sort();
     save_now();
@@ -57,7 +57,7 @@ void ActionsUi::load_hot_button_set(net::GameConnection& conn, int bar, int n) {
 void ActionsUi::delete_hot_button_set(net::GameConnection& conn, int n) {
     if (n < 0 || n >= game::kHotButtonSets || !sets_.at(n).in_use) return;
     std::string text = conn.strings().format(game::kStrHbSetDeleted, std::vector<std::string>{sets_.at(n).name});
-    sets_.remove(n); // not in use, changed, sorted (FUN_005199c0); the file stays
+    sets_.remove(n); // not in use, changed, sorted (0x5199c0); the file stays
     save_now();
     messages_.emplace_back(std::move(text), 0xf);
 }

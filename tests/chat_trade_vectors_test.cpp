@@ -91,7 +91,7 @@ TransactState transact_state(const Json& in) {
 
 } // namespace
 
-TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
+TEST_CASE("vectors: CEverQuest_SetChatInputMode (0x518230)") {
     hailstone::test::each_vector("CEverQuest_SetChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;
@@ -100,7 +100,7 @@ TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
     });
 }
 
-TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (FUN_0051ebf0, the Enter key)") {
+TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (0x51ebf0, the Enter key)") {
     hailstone::test::each_vector("CEverQuest_ToggleChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;

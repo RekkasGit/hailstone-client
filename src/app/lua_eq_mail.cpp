@@ -281,7 +281,7 @@ private:
 
 // ---------------------------------------------------------------- MailCompositionWindow (CMailCompositionWnd)
 
-// CMailCompositionWnd (WndNotification @0x6c24f0): From is the current mailbox's name (FUN_006c1590 on AboutToShow
+// CMailCompositionWnd (WndNotification @0x6c24f0): From is the current mailbox's name (0x6c1590 on AboutToShow
 // and on MailMgr's mailbox change: MailMgr_GetMailboxName(MailMgr +0x1c), OP_MailLogin's address of that mailbox);
 // Send, enabled by OnProcessFrame @0x6c1190 with To and Subject filled and GetGameFeature(6) not 0 (MailMgr_SendMail with To, Subject and
 // the text; without the chat service eqstr 4529) and Cancel ("Message cancelled and not sent.", 4525); the address

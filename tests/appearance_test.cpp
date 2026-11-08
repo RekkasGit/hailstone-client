@@ -440,7 +440,7 @@ TEST_CASE("a Luclin robe's sleeves sit on the body's forearms" * doctest::skip(!
     CHECK(farthest < 0.6f); // the bell sleeve flares to 0.49; it hung 1.39 away
 }
 
-TEST_CASE("SwapHead's head materials 0xf0..0xff (FUN_0040a5b0)") {
+TEST_CASE("SwapHead's head materials 0xf0..0xff (0x40a5b0)") {
     using hailstone::game::head_model;
     using hailstone::game::map_head_material;
     CHECK(map_head_material(1, 0, 0xf0) == 0x273);

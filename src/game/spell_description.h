@@ -5,7 +5,7 @@
 // item display windows.
 //
 // Exact port of rof2decomp re/src/game/spell/spell_description.cpp (batch
-// 247): the formatter (FUN_007f9550) and its four code handlers, checked
+// 247): the formatter (0x7f9550) and its four code handlers, checked
 // against the original's 1000 GetSpellDescriptionText vectors
 // (tests/game_vectors_test.cpp). The codes, each ended by whitespace (9..13),
 // one of !.-:;, '" or the end (the ender is kept as text):

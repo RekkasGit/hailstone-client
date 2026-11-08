@@ -238,7 +238,7 @@ struct MapState {
     }
     bool edit_mode() const { return toolbar_open; }
 
-    // FUN_006cbfa0: the player's and the selected label's box (the original's minY, maxY, minX, maxX).
+    // 0x6cbfa0: the player's and the selected label's box (the original's minY, maxY, minX, maxX).
     std::optional<glm::vec4> label_box(const EqHost& h) const {
         auto p = player_map(h);
         if (!p || !view.selected_label) return std::nullopt;
@@ -317,9 +317,9 @@ struct MapState {
 
     // CDisplay_LoadWorldExtents + CMapViewWnd_LoadZoneMap for the current zone.
     void load_zone(EqHost& h, const std::string& name) {
-        if (editing && !zone.empty()) save(h); // FUN_006ccea0
+        if (editing && !zone.empty()) save(h); // 0x6ccea0
         if (!toolbar_open) editing = false;
-        if (name != zone) clear_search(); // FUN_006c93a0
+        if (name != zone) clear_search(); // 0x6c93a0
         zone = name;
         view.current_zone = true;
         view.clear();
@@ -338,9 +338,9 @@ struct MapState {
     }
 
     // A zone's map that is not the player's (CMapViewWnd_LoadZoneMap for another zone): its layers, the box of its
-    // lines (FUN_006c8fc0: their ends' extremes, 0 included), no player.
+    // lines (0x6c8fc0: their ends' extremes, 0 included), no player.
     void load_other_zone(EqHost& h, const std::string& name) {
-        if (editing && !zone.empty()) save(h); // FUN_006ccea0
+        if (editing && !zone.empty()) save(h); // 0x6ccea0
         if (!toolbar_open) editing = false;
         if (name != zone) clear_search();
         zone = name;
@@ -433,7 +433,7 @@ struct MapState {
         search_ids.clear();
     }
 
-    // sub_006cc480 / FUN_006cc1a0: the labels whose text holds the search text (all when it is empty).
+    // sub_006cc480 / 0x6cc1a0: the labels whose text holds the search text (all when it is empty).
     void run_search() {
         search_rows = ListData{};
         search_ids.clear();
@@ -521,12 +521,12 @@ struct MapState {
     const game::PlayerPath* path(const EqHost& h) const {
         return h.conn && h.conn->player_path().active() ? &h.conn->player_path() : nullptr;
     }
-    // FUN_006c8760: with Auto-Zoom on, the map on the player's zone and a find path or a failed find's X shown,
+    // 0x6c8760: with Auto-Zoom on, the map on the player's zone and a find path or a failed find's X shown,
     // the map follows the find: zoom and pan are held (string 5459).
     bool find_locked(const EqHost& h) const {
         return view.find_auto_zoom && view.current_zone && h.feet_valid && (path(h) || view.failed_find);
     }
-    // FUN_006ccef0: the box of the player and the path's points (or the failed find's point), the original's
+    // 0x6ccef0: the box of the player and the path's points (or the failed find's point), the original's
     // (minY, maxY, minX, maxX); only while the find holds the map.
     std::optional<glm::vec4> find_box(const EqHost& h) const {
         if (!find_locked(h)) return std::nullopt;
@@ -547,7 +547,7 @@ struct MapState {
     // The zone the failed find's X belongs to (CMapViewWnd +ZoneId: a new zone takes it away).
     std::string failed_zone;
 
-    // FUN_006c9330 / FUN_006cc410: the automap (MTW_AutoMapButton) starts a line where the player stands and ends it.
+    // 0x6c9330 / 0x6cc410: the automap (MTW_AutoMapButton) starts a line where the player stands and ends it.
     void start_automap(const EqHost& h) {
         auto p = player_map(h);
         if (automap || !p || !view.current_zone) return;
@@ -619,7 +619,7 @@ public:
         auto& v = s.view;
         if (h.conn)
             if (auto f = h.conn->take_failed_find()) {
-                // FUN_006c92e0: the map window shows the failed find's X.
+                // 0x6c92e0: the map window shows the failed find's X.
                 open_ = true;
                 v.failed_find = true;
                 v.failed_point = f->point;
@@ -638,7 +638,7 @@ public:
         }
         if (open_) {
             s.automap_step(h);
-            // FUN_006ceec0: while the find holds the map, it is zoomed to the find's box (up to x20 for a failed
+            // 0x6ceec0: while the find holds the map, it is zoomed to the find's box (up to x20 for a failed
             // find's X).
             if (auto b = s.find_box(h); b && s.area_w > 0 && s.area_h > 0) {
                 auto me = s.player_map(h);
@@ -739,7 +739,7 @@ public:
         } else if (id == "MVW_SearchButton") s.run_search();
         else if (id == "MVW_SearchClearButton") s.clear_search();
         else if (id == "MVW_SearchHideButton" || id == "MVW_Spacer") {
-            s.search_shown = false; // FUN_006c7d80
+            s.search_shown = false; // 0x6c7d80
             s.search_rows.rows.clear();
             s.search_ids.clear();
         } else {
@@ -779,7 +779,7 @@ public:
         s.search_rows.selected = row;
         if (auto* l = s.view.label_by_id(s.search_ids[static_cast<std::size_t>(row)])) {
             s.view.selected_label = l;
-            // FUN_006ccdb0: back to the centre, zoomed to the player and the label.
+            // 0x6ccdb0: back to the centre, zoomed to the player and the label.
             s.view.pan_x = s.view.pan_y = 0;
             if (auto b = s.label_box(h); b && s.area_w > 0 && s.area_h > 0) {
                 s.view.precalc(s.player_map(h) ? std::optional<glm::vec2>(glm::vec2(*s.player_map(h))) : std::nullopt, b);
@@ -820,7 +820,7 @@ public:
             return true;
         }
         if (id != "MVW_MapsDirCombobox" || index < 0 || index >= static_cast<int>(s.skins.choices.size())) return false;
-        if (s.editing) s.save(h); // FUN_006ccea0
+        if (s.editing) s.save(h); // 0x6ccea0
         s.skins.selected = index;
         s.skin = index == 0 ? std::string() : s.skins.choices[static_cast<std::size_t>(index)];
         if (s.ini) s.ini->put("Main", "MapSkin", s.skin);
@@ -875,7 +875,7 @@ public:
             if (v.marked_label) open_label(false, v.marked_label);
         } else if (id == "MTW_MoveLabelToMeButton") {
             if (v.marked_label && me) {
-                v.marked_label->pos = *me; // FUN_006c80c0
+                v.marked_label->pos = *me; // 0x6c80c0
                 v.relayout = true;
             }
         } else if (id == "MTW_RemoveLabelButton") {
@@ -892,7 +892,7 @@ public:
             else s.stop_automap(h);
         } else if (id == "MTW_ClearMapButton" || id == "MTW_ClearLayerButton") {
             // ConfirmationDialog(toolbar, 0x65 / 100, string 15060 / 15061, Yes / No (0xc), no time limit); Yes is
-            // the toolbar's answer: FUN_006ca9e0 (the whole map) / FUN_006cbee0 (the active layer).
+            // the toolbar's answer: 0x6ca9e0 (the whole map) / 0x6cbee0 (the active layer).
             bool whole = id == "MTW_ClearMapButton";
             EqHost::Confirm q;
             q.text = s.str(h, whole ? 15060u : 15061u);
@@ -905,12 +905,12 @@ public:
             };
             h.confirm = std::move(q);
         } else if (id == "MTW_SetCurrentColorButton") {
-            // CColorPickerWnd::Open(toolbar, FUN_006c8b30: the current colour); 0x25 sets it (FUN_006c8b50).
+            // CColorPickerWnd::Open(toolbar, 0x6c8b30: the current colour); 0x25 sets it (0x6c8b50).
             auto st = s_;
             h.pick_color(v.current_color, [st](std::uint32_t c) { st->view.current_color = 0xff000000u | (c & 0xffffff); });
         } else if (id == "MTW_ChangeLineColorButton") {
-            // With a marked line: Open(toolbar, FUN_006c8c40: the newest marked line's colour); 0x25 colours the
-            // marked lines (FUN_006c8bf0) and clears the marks (FUN_006c8b80(0)).
+            // With a marked line: Open(toolbar, 0x6c8c40: the newest marked line's colour); 0x25 colours the
+            // marked lines (0x6c8bf0) and clears the marks (0x6c8b80(0)).
             if (!v.marked_lines.empty() && v.marked_lines.front()) {
                 auto st = s_;
                 h.pick_color(v.marked_lines.front()->color, [st](std::uint32_t c) {
@@ -1845,9 +1845,9 @@ int MapRightClick(lua_State* L) {
 
 std::vector<std::uint32_t> map_command(StockWindow& w, EqHost& h, std::string_view args) {
     // Cmd_map @0x4e5960: with the map window open. "color r g b" (15057, its length; each clamped to 0..255) sets
-    // the current colour (FUN_006c8b50: 15058, or 15059 with a value missing); "addpoint" / "startline" / "endline"
-    // (15043..15045, whole words) add a point, start a line or end it at the player (FUN_006cab70 / FUN_006c7f90 /
-    // FUN_006caa70: 15050 / 15048 / 15049); "automap" (15053) ends or starts the automap (15052 / 15051); anything
+    // the current colour (0x6c8b50: 15058, or 15059 with a value missing); "addpoint" / "startline" / "endline"
+    // (15043..15045, whole words) add a point, start a line or end it at the player (0x6cab70 / 0x6c7f90 /
+    // 0x6caa70: 15050 / 15048 / 15049); "automap" (15053) ends or starts the automap (15052 / 15051); anything
     // else 15046 and 15047. The player is where the toolbar's buttons put points (the feet, map coordinates).
     auto* map = dynamic_cast<MapViewWindow*>(&w);
     if (!map || !map->shown(h) || !h.conn) return {};

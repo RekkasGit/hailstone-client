@@ -41,7 +41,7 @@ struct MerchantSession {
     std::int64_t parcel_sent_ms = 0;
     bool parcel_sending = false; // a parcel sent (OP_ShopSendParcel) waits for its answer
     std::int64_t parcel_send_ms = 0;
-    // The Parcels (mail) page and the inventory's coin buttons (FUN_00698290, GameConnection::parcel_coin_button):
+    // The Parcels (mail) page and the inventory's coin buttons (0x698290, GameConnection::parcel_coin_button):
     // the coin button outlined (CInventoryWnd's button +0x259, 0 platinum .. 3 copper; -1 none; every SelectSlot
     // clears it), and the last money picked there for sending (Hailstone: it fills the page's money, see
     // set_parcel_money; `serial` counts the picks over the connection, so a pack sees each new one).

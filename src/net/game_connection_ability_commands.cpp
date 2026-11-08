@@ -122,7 +122,7 @@ void GameConnection::melody_command(const std::string& args) {
         if (bard_song(*s)) stop_current_spell_cast();
         return;
     }
-    // Each run of digits (sscanf "%d") above 0 joins the twist (FUN_00594cf0: appended, no limit).
+    // Each run of digits (sscanf "%d") above 0 joins the twist (0x594cf0: appended, no limit).
     for (std::size_t i = 0; i < args.size();) {
         if (!std::isdigit(static_cast<unsigned char>(args[i]))) {
             ++i;

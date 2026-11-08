@@ -35,7 +35,7 @@ bool still(const glm::vec3& v) {
     return v.x < 0.001f && v.x > -0.001f && v.y < 0.001f && v.y > -0.001f && v.z < 0.001f && v.z > -0.001f;
 }
 
-// FUN_007a3550: the squared distance from p to the segment from `from` along `dir`.
+// 0x7a3550: the squared distance from p to the segment from `from` along `dir`.
 float segment_distance_squared(const glm::vec3& p, const glm::vec3& from, const glm::vec3& dir) {
     double dx = static_cast<double>(p.x) - from.x, dy = static_cast<double>(p.y) - from.y,
            dz = static_cast<double>(p.z) - from.z;
@@ -299,7 +299,7 @@ void missile_physics(Missile& m, std::uint32_t now) {
     }
     // Vtable +8 (0x8d2770): the tilt turns at its rate.
     m.tilt += m.tilt_rate * ticks;
-    // Vtable +0xc (0x8d2620): the push along heading and pitch, x 0.8 (FUN_008d2000's first pair).
+    // Vtable +0xc (0x8d2620): the push along heading and pitch, x 0.8 (0x8d2000's first pair).
     glm::vec3 push{0.0f};
     if (m.speed != 0.0f) {
         float flat = cmath_cos(m.heading) * m.speed;
@@ -311,7 +311,7 @@ void missile_physics(Missile& m, std::uint32_t now) {
     if (push.x != 0.0f) push.x *= 0.8f;
     if (push.y != 0.0f) push.y *= 0.8f;
     if (push.z != 0.0f) push.z *= 0.8f;
-    // Vtable +4 (PhysicsObject::ApplyFriction): 0.625 with the range byte (FUN_008d2000's second pair), else 0.85.
+    // Vtable +4 (PhysicsObject::ApplyFriction): 0.625 with the range byte (0x8d2000's second pair), else 0.85.
     float friction = m.packet.range != 0 ? 0.625f : 0.85f;
     for (int i = 0; i < 3; ++i) {
         if (m.velocity[i] != 0.0f) m.velocity[i] *= friction;

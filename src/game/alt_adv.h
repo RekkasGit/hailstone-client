@@ -140,12 +140,12 @@ struct AltAdvState {
     std::array<std::int64_t, kAATimers> timers{}; // PcBase_SetAATimer: when each timer last started (time() s)
     bool timers_seen = false;
 
-    // OP_SendAATable (FUN_004a3c00 adds the rank; a known id is replaced).
+    // OP_SendAATable (0x4a3c00 adds the rank; a known id is replaced).
     void add(AltAbility a) { table[a.id] = std::move(a); }
     const AltAbility* get(std::uint32_t id) const;
     // PcZoneClient::HasAlternateAbility @0x582670: the rank id is in the owned list.
     bool has(std::uint32_t id) const;
-    // FUN_004a3d70: the owned rank of an ability (by group id), or null.
+    // 0x4a3d70: the owned rank of an ability (by group id), or null.
     const AltAbility* owned_rank(std::int32_t group) const;
     // The owned rank of the ability `a` belongs to, 0 when none.
     std::int32_t owned_rank_number(const AltAbility& a) const;

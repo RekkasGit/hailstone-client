@@ -12,7 +12,7 @@
 //    outside (1). Indoors is CDisplay +0x28ec, which CDisplay::SetupEmitterEnvironment @0x48a500 sets when the player
 //    actor's scaled ambient is below 0.48: every frame, as its 500 ms gate compares last check - now (unsigned),
 //    which only holds back a clock that went backwards. RealRender_World runs it every frame unless a special environment is set
-//    (CDisplay +0x2d68): FUN_0048a480 sets room type 0x16 when the head goes under water (HeadWet 5) and 0x17 when
+//    (CDisplay +0x2d68): 0x48a480 sets room type 0x16 when the head goes under water (HeadWet 5) and 0x17 when
 //    the player is stunned (CharacterZoneClient_ApplyStun); leaving the water and PrepareForRepop run the update
 //    again, which clears it.
 //  - EqSoundManager::SetListenerEnvironmentLow / High / Outside give the SoundManager the zone's room type for that
@@ -33,7 +33,7 @@ namespace hailstone::audio {
 // Listener environments (EqSoundManager +0xff8; emitters with an environment only play in theirs).
 enum ListenerEnvironment : std::int32_t { kEnvironmentOutside = 1, kEnvironmentHigh = 2, kEnvironmentLow = 3 };
 
-// The special room types FUN_0048a480 sets (EAX environments 22 and 23).
+// The special room types 0x48a480 sets (EAX environments 22 and 23).
 constexpr std::int32_t kRoomUnderwater = 0x16, kRoomDrugged = 0x17;
 
 // CDisplay_UpdateListenerEnvironment: nothing without a local player.

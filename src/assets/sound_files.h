@@ -56,7 +56,7 @@ inline constexpr std::int32_t kSoundBankLoopBase = 162;
 // soundassets.txt: lines "id^name[^]"; "Unknown" names are left out.
 std::unordered_map<std::int32_t, std::string> parse_sound_assets(std::string_view text);
 // soundassets.txt's named lines, "name^file" ("YouveGotMail^mail1.wav"): the name -> the file. The original gives
-// each a free wave id and keeps name -> id in the sound manager (+0xbaec, FUN_004ab800); FUN_004ab700 looks a
+// each a free wave id and keeps name -> id in the sound manager (+0xbaec, 0x4ab800); 0x4ab700 looks a
 // name up (-1 when it is not there).
 std::unordered_map<std::string, std::string> parse_named_sound_assets(std::string_view text);
 

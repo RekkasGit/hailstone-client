@@ -101,7 +101,7 @@ public:
     virtual std::int32_t tick_hp_change(int index, const AffectBuff& buff, int slot, const AffectSpell& spell) = 0;
     virtual bool timers_on_hold() = 0;                  // AreBuffTimersOnHold
     virtual bool spell_has_spa(const AffectSpell& spell, std::int32_t spa) = 0; // EQ_Spell::SpellAffects
-    virtual std::int32_t recheck(std::int32_t spell_id) = 0; // FUN_004326b0
+    virtual std::int32_t recheck(std::int32_t spell_id) = 0; // 0x4326b0
     virtual void end_stun() = 0;
     virtual void modify_cur_hp(std::int32_t amount) = 0; // ModifyCurHP(amount, 0)
 };

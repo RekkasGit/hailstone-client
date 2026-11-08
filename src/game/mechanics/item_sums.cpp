@@ -13,7 +13,7 @@ std::int32_t add(std::int32_t a, std::int32_t b) {
 
 // process_all_stats.inc: where each row is summed (a CharacterBase stat
 // behind the virtual base, or a CharacterZoneClient field) and, for the
-// damage bonuses, the skill whose slot (FUN_004437d0) indexes +0x4c.
+// damage bonuses, the skill whose slot (0x4437d0) indexes +0x4c.
 struct StatRow {
     bool via_base;
     std::uint32_t offset;

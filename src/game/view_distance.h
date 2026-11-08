@@ -74,7 +74,7 @@ glm::vec2 set_fog_distances(float start, float end, float far_plane, bool fog_en
 // Actor clip: how far away spawns are drawn (rof2decomp notes/rendering-and-zones.md §4).
 //
 // eqclient.ini ActorClipPlane (CDisplay+0x2d78; the Advanced Display options' slider; read @0x491e69, default 50)
-// becomes the camera's actor clip in FUN_00487900 and CDisplay::UpdateCameraFov @0x48ac70: camera vtable +0x14
+// becomes the camera's actor clip in 0x487900 and CDisplay::UpdateCameraFov @0x48ac70: camera vtable +0x14
 // gets min((ActorClipPlane x 5 + 25) x 2, Yon), the Yon read back through vtable +0x10. Spawns past it are not
 // drawn; nearer ones are drawn, fogged, all the way out (not cut at the fog end).
 inline constexpr int kDefaultActorClipPlane = 50;

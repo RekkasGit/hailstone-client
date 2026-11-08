@@ -53,7 +53,7 @@ struct LayerRequest {
     bool reverse = false;
     bool restart = false;    // asked again from its start
     float blend_ms = 100.0f; // the cross-fade into it (classic models: 100 ms)
-    bool new_style = false;  // the new-style animation object (FUN_0058afa0) rather than the classic one
+    bool new_style = false;  // the new-style animation object (0x58afa0) rather than the classic one
     bool corpse = false;     // dead: the base clip on the whole body, any action dropped
     bool mounted = false;    // a rider
     bool humanoid = false;   // PlayerBase::HasProperty(1): body type 1
@@ -76,9 +76,9 @@ struct ActorLayers {
     const assets::AnimationClip* follow_clip = nullptr;
     float follow_rate = 1.0f;
 
-    // An action starts (FUN_004b15b0 / FUN_0058afa0 for an OP_Animation): on the upper body alone or on both
+    // An action starts (0x4b15b0 / 0x58afa0 for an OP_Animation): on the upper body alone or on both
     // groups (game/anim_layers.h). False when the model's object plays nothing now: a new-style rider's action
-    // that is not of layer kind 1, a group mode (FUN_0058ac90) of 0 or 1 (the new-style object records a mode 1
+    // that is not of layer kind 1, a group mode (0x58ac90) of 0 or 1 (the new-style object records a mode 1
     // sequence at +0x10c4 / +0x10cc and never plays it), the same sequence asked again (mode 3: it keeps
     // playing), or a classic request that may not interrupt the unfinished action (kept as the follow-up).
     // Asked for the clip a group already plays, BlendToAnimation leaves it as it is (no replay).

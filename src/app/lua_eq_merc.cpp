@@ -155,7 +155,7 @@ private:
         auto e = entries(host);
         row_ = row >= 0 && static_cast<std::size_t>(row) < e.size() ? row : -1;
         stance_row_ = 0;
-        if (row_ >= 0) host.conn->merc_select_entry(e[static_cast<std::size_t>(row_)]); // FUN_00566b00
+        if (row_ >= 0) host.conn->merc_select_entry(e[static_cast<std::size_t>(row_)]); // 0x566b00
     }
 
     std::uint32_t serial_ = 0;

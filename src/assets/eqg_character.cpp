@@ -269,7 +269,7 @@ std::vector<Layer> parse_layers(std::span<const std::byte> data) {
     std::uint32_t version = r.le<std::uint32_t>();
     std::uint32_t ns = count(r, data.size());
     std::uint32_t n = count(r, data.size());
-    // Entry sizes in u32s per version (FUN_100645f0).
+    // Entry sizes in u32s per version (0x100645f0).
     std::size_t words = 0;
     switch (version) {
     case 1: words = 10; break;
@@ -713,7 +713,7 @@ std::shared_ptr<const CharacterModel> EqgCharacterStore::model(std::string_view 
             m.clip_aliases = eqg_character::classic_aliases([&](std::string_view t) { return m.clips.contains(t); });
             mesh_files_[code] = std::make_shared<const eqg_character::MeshFile>(std::move(mesh));
             m.source = src->archive + ":" + src->member;
-            // The EQGM loader reads <name>.pts from the mesh's archive (FUN_100624e0).
+            // The EQGM loader reads <name>.pts from the mesh's archive (0x100624e0).
             if (auto pts = a->read(lower(code) + ".pts")) {
                 try {
                     m.points = parse_pts(*pts);

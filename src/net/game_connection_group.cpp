@@ -117,7 +117,7 @@ public:
     }
     void set_member_role(int m, std::int32_t role, std::uint8_t on) override {
         // CGroupBase_SetMemberRole @0x7d6200: roles 1 main tank, 2 main assist, 3 puller (a mercenary only tanks); a
-        // role taken is first cleared from every member (each clearing printed too); then FUN_0054dd70 code 4:
+        // role taken is first cleared from every member (each clearing printed too); then 0x54dd70 code 4:
         // "%1 is now %2" 0x1da9 / 0x1daa (the member's trimmed name and GroupRole_GetName), colour 0x111. Nothing
         // changes without a leader or when the member already has that state.
         if (m < 0 || m >= 6 || role < 0 || role > 3 || g_.leader.empty()) return;
@@ -504,7 +504,7 @@ void GameConnection::handle_group(Op op, const AppPacket& p) {
             }
             group_.leader = u->leader;
             group_.active = true;
-            // The group you invited into being: the group finder's posts end (FUN_005166f0 → FUN_00678550).
+            // The group you invited into being: the group finder's posts end (0x5166f0 → 0x678550).
             if (creating_group_) {
                 group_search_joined_group();
                 creating_group_ = false;
@@ -638,7 +638,7 @@ void GameConnection::accept_group_invite() {
     f.invitee = character_;
     f.unknown148 = group_.invite_cookie;
     send_zone(encode(f, !group_.invite_via_first_opcode));
-    group_search_joined_group(); // the group finder's posts end (FUN_00678550)
+    group_search_joined_group(); // the group finder's posts end (0x678550)
     creating_group_ = false;
     group_.inviter.clear();
     group_.invite_via_first_opcode = false;
@@ -1032,7 +1032,7 @@ bool GameConnection::leadership_command(std::string_view h, const std::string& a
 bool GameConnection::has_gates_of_discord() const { return profile_ && (profile_->expansions & 0x40) != 0; }
 
 bool GameConnection::group_has_players(int n) const {
-    // FUN_00443630 → GetNumPlayersInGroup(0) @0x7d5c10: the members whose +0x14 byte is clear (taken here as the
+    // 0x443630 → GetNumPlayersInGroup(0) @0x7d5c10: the members whose +0x14 byte is clear (taken here as the
     // members that are not offline).
     if (!group_.active) return false;
     int count = 0;
@@ -1053,7 +1053,7 @@ bool GameConnection::leadership_has_rank(int ability, std::int32_t rank) const {
 }
 
 bool GameConnection::is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const {
-    // FUN_0057f760 / FUN_0057f790 / FUN_0057f7c0: the character's own spawn id among the profile's three.
+    // 0x57f760 / 0x57f790 / 0x57f7c0: the character's own spawn id among the profile's three.
     const std::uint32_t me = world_.player_id;
     return me && std::find(ids.begin(), ids.end(), me) != ids.end();
 }
@@ -1063,20 +1063,20 @@ bool GameConnection::leadership_ability_active(int ability, std::int32_t rank) c
     // and the rank, then per ability.
     if (!has_gates_of_discord() || !leadership_has_rank(ability, rank)) return false;
     const std::uint32_t me = world_.player_id;
-    const bool leader = group_.is_leader(character_);     // FUN_00443670
+    const bool leader = group_.is_leader(character_);     // 0x443670
     const bool raid_leader = raid_.active && iequals(raid_.leader, character_);
     switch (ability) {
-    case 0: // mark NPC: the group leader or its marker (FUN_0057f700: the profile's +0x218)
+    case 0: // mark NPC: the group leader or its marker (0x57f700: the profile's +0x218)
         return group_has_players(3) && (leader || (me && leadership_.group_marker == me));
     case 1: case 6: case 7: case 8: case 9: case 10: case 11: case 12: case 13: case 14:
         return group_has_players(3);
-    case 2: // the main assist (FUN_0057f730: +0x21c)
+    case 2: // the main assist (0x57f730: +0x21c)
         return group_has_players(3) && (leader || (me && leadership_.group_assist == me));
     case 4: case 5:
         return group_has_players(3) && leader;
-    case 0x10: // the raid's mark NPC: the raid leader or one of its markers (FUN_0057f790)
+    case 0x10: // the raid's mark NPC: the raid leader or one of its markers (0x57f790)
         return (raid_leader || is_raid_delegate(leadership_.raid_markers)) && raid_has_players(18);
-    case 0x12: // the raid leader or one of the third set (FUN_0057f7c0)
+    case 0x12: // the raid leader or one of the third set (0x57f7c0)
         return (raid_leader || is_raid_delegate(leadership_.raid_waypointers)) && raid_has_players(18);
     case 0x13: case 0x14: case 0x15:
         return raid_leader && raid_has_players(18);
@@ -1106,7 +1106,7 @@ void GameConnection::activate_leadership_ability(int ability, std::int32_t param
     const bool target_pc = t && !t->is_npc && !t->is_corpse; // Type 0
     const std::uint32_t me = world_.player_id;
     const bool raid_leader = raid_.active && iequals(raid_.leader, character_); // CRaid__IsRaidLeader_on_instCRaid
-    // FUN_004493c0 on the target's name (CharacterZoneClient_IsSelfOrGroupMember).
+    // 0x4493c0 on the target's name (CharacterZoneClient_IsSelfOrGroupMember).
     auto in_group = [&](const game::Spawn& s) { return s.id == me || group_.slot_of(base_name(s.name)) >= 0; };
     auto refuse = [&](std::uint32_t id) { system(id, {}, 0xd); };
     auto send = [&](int a, std::int32_t p) {
@@ -1342,7 +1342,7 @@ void GameConnection::set_leadership_exp(bool on) {
 }
 
 bool GameConnection::leadership_hot_button_enabled(int ability, int n) const {
-    // FUN_00560180 (CLeadershipWnd_UpdateAbilityDescription's hot buttons 1..3): FUN_0055fb60 is the character's own
+    // 0x560180 (CLeadershipWnd_UpdateAbilityDescription's hot buttons 1..3): 0x55fb60 is the character's own
     // rank (PcBase +0x1da0).
     if (game::leadership_passive(ability) || ability < 0 || ability >= game::kLeadershipAbilities) return false;
     const auto& def = game::leadership_hot_button_def(ability);

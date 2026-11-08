@@ -8,7 +8,7 @@
 //
 // Exact ports of rof2decomp batch 243 (re/src/game/net/client_update.cpp):
 // unpack_physics @0x4ee6c0, Handle_OP_ClientUpdate @0x4b3d00 and
-// FUN_004877e0 @0x4877e0 (AdvanceSpawn), checked against the original's
+// 0x4877e0 (AdvanceSpawn), checked against the original's
 // vectors (tests/movement_vectors_test.cpp).
 
 #include <array>
@@ -46,7 +46,7 @@ struct UnpackZ {
 
 // unpack_physics @0x4ee6c0: each field is the signed integer times its unit
 // (0.125 positions, 1/64 deltas, 0.25 heading and pitch, 0.025 SpeedRun,
-// 0.05 the turn rate), rounded to float. A vehicle's transform (FUN_008d0130)
+// 0.05 the turn rate), rounded to float. A vehicle's transform (0x8d0130)
 // is the caller's.
 void unpack_spawn_position(SpawnPhysics& physics, const PackedPosition& packed, const UnpackZ& z,
                            const Fpu& fpu = Fpu{});
@@ -91,7 +91,7 @@ ClientUpdateResult handle_client_update(const ClientUpdateInput& in, PackedPosit
 inline constexpr std::uint32_t kSpawnStaleMs = 12000;    // AdvanceSpawn: no movement after 12 s without an update
 inline constexpr std::uint32_t kSpawnRequestMs = 15000;  // at most one unknown-spawn request per 15 s
 
-// FUN_004877e0 @0x4877e0: whether a spawn other than the local and controlled
+// 0x4877e0: whether a spawn other than the local and controlled
 // players is stepped (PhysicsObject::Step and CollisionPass) this frame.
 struct AdvanceInput {
     bool hidden = false;            // +0x1e54 or +0x1e55

@@ -208,7 +208,7 @@ void XTargetRoleSets::save(const std::function<void(const std::string& key, cons
 }
 
 void XTargetRoleSets::sort_and_save(const std::function<void(const std::string& key, const std::string& value)>& put) {
-    // qsort with FUN_00519920: used sets first, by name without case.
+    // qsort with 0x519920: used sets first, by name without case.
     std::stable_sort(sets.begin(), sets.end(), [](const XTargetRoleSet& a, const XTargetRoleSet& b) {
         if (a.used != b.used) return a.used;
         if (!a.used) return false;

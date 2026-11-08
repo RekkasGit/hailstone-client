@@ -443,7 +443,7 @@ void GameConnection::answer_confirmation(bool yes) {
     if (c.id >= game::kConfirmAugInsert && c.id <= game::kConfirmAugDestroy) {
         // ConfirmationDialog_HandleResponse @0x52d540, types 0x76..0x79 (@0x52db52): a yes sends the kept
         // OP_AugmentItem block unchanged (nothing is checked again); either answer then pops the pending reason and
-        // takes IsItemPending back (FUN_004232f0, clamped at 0).
+        // takes IsItemPending back (0x4232f0, clamped at 0).
         if (yes && state_ == ConnectionState::InZone) send_zone(c.offer);
         spells_.pending = std::max(0, spells_.pending - 1);
         return;
@@ -475,7 +475,7 @@ void GameConnection::answer_confirmation(bool yes) {
     } else if (c.id == kConfirmAttune) {
         equip_attuned(c.slot); // game_connection_items.cpp
     } else if (c.id == kConfirmMercDismiss) {
-        // FUN_005682b0, dialog 2: Send_OP_MercenaryDismiss(0, 1).
+        // 0x5682b0, dialog 2: Send_OP_MercenaryDismiss(0, 1).
         with_merc([](game::MercManager& m, game::MercHooks& h) { game::merc_send_dismiss(m, false, true, h); });
     } else if (c.id == kConfirmDestroy) {
         destroy_cursor(); // CInventoryWnd's dialog 100: PcZoneClient::DestroyHeldItemOrMoney
@@ -512,7 +512,7 @@ void GameConnection::answer_confirmation(bool yes) {
 // ---------------------------------------------------------------- corpses, shield, keys
 
 void GameConnection::corpse_command(Op op) {
-    // SendCorpseCommandForTarget @0x478d80 (FUN_00478d00 picks the corpse): the
+    // SendCorpseCommandForTarget @0x478d80 (0x478d00 picks the corpse): the
     // target when it is a corpse, else our first corpse in the zone.
     const game::Spawn* corpse = nullptr;
     auto t = world_.spawns.find(world_.target_id);
@@ -1114,7 +1114,7 @@ bool GameConnection::player_command(std::string_view h, const std::string& args)
     if (h == "Cmd_toggleinspect") { toggle_inspect_command(args); return true; }
     if (h == "Cmd_clickthrough") {
         // Cmd_clickthrough @0x4e5730: atoi into the byte, saved as Options/ClickThroughMask; the masks are worked
-        // out at every pick here (FUN_00490ba0 re-applies them to the actors in the original).
+        // out at every pick here (0x490ba0 re-applies them to the actors in the original).
         change_client_option(game::ClientOption::ClickThroughMask,
                              static_cast<std::uint8_t>(std::atoi(args.c_str())));
         return true;

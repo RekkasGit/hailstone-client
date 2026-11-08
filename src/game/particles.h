@@ -12,7 +12,7 @@
 //     the slot's minimum (level 1 for a missing caster);
 //   - the location picks the given point (0), the caster (1), the missile (2)
 //     or the target (3); the attach id one of the actor's ten spell points
-//     (assets/model_points.h; ActorClient +0x148, FUN_0058cd90): 1 point 0,
+//     (assets/model_points.h; ActorClient +0x148, 0x58cd90): 1 point 0,
 //     2..7 points 1..6 or else point 0, 8 the actor without a point, 9 / 10
 //     the eyes (points 7 / 8; the slot is skipped without them), 11 the mouth
 //     (point 9), 12 the actor without a point at the chest's x and y, scaled
@@ -50,12 +50,12 @@ SpellParticleSettings spell_particle_settings(std::optional<float> density, std:
 
 // Hailstone (not in the original): whose a spell effect stage is, for the Options window's per-source spell
 // particle densities, which scale SpellParticleDensity. The original has one density and an "On For" filter
-// (SpellParticleCastFilter, FUN_00514bd0: self, group, raid, all players, and NPCs as a bit); this client offers the
+// (SpellParticleCastFilter, 0x514bd0: self, group, raid, all players, and NPCs as a bit); this client offers the
 // three densities instead and does not read the filter.
 enum class SpellFxSource : std::uint8_t { Self = 0, Players = 1, Npcs = 2 };
 inline constexpr std::size_t kSpellFxSourceCount = 3;
 // `caster` cast the spell and `struck` is the spawn it lands on (the caster again for the cast stage); `me` the
-// player. A spell the player cast, or one that lands on the player, is Self (as FUN_00514bd0 always shows those). Any
+// player. A spell the player cast, or one that lands on the player, is Self (as 0x514bd0 always shows those). Any
 // other is the caster's kind: NPCs (pets and mercenaries included), else Players. Without a known caster, the struck
 // spawn's kind; without either, Players.
 SpellFxSource spell_fx_source(std::uint32_t caster, std::uint32_t struck, std::uint32_t me,
@@ -166,7 +166,7 @@ struct Emitter {
 
 // Where an attached emitter is this frame: its actor's spell point (the
 // point's world position and its axes, columns) or, without a point, the
-// actor's origin (no axes). The DLL's update (FUN_10072160) takes a pointed
+// actor's origin (no axes). The DLL's update (0x10072160) takes a pointed
 // emitter's position from the point's world matrix and an unpointed one's
 // from the actor (vtable +0x7c) every frame.
 struct EmitterAttachment {

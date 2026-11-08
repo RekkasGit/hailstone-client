@@ -70,10 +70,10 @@ private:
 
 // CLayoutCopyWnd @0x6b5ec0 (rof2decomp export CLayoutCopyWnd.c): LC_LayoutsList (columns File 180 and Mode 140),
 // LC_CopyButton and the LC_CopyHotButton / LC_CopyHotButtonLoadouts / LC_CopySocials check boxes. AboutToShow
-// (FUN_006b6620) fills the list from the layouts found (EqHost::layout_sources, FUN_006b6580). WndNotification
+// (0x6b6620) fills the list from the layouts found (EqHost::layout_sources, 0x6b6580). WndNotification
 // @0x6b5af0: Copy, with a row selected, asks 6332 (the window's dialog 100, Yes / No, 60 s); the yes posts message
-// 0x4646 to the main window (FUN_006b5b80), whose handler copies the selected layout with the three boxes
-// (FUN_006b5bb0, __CopyLayout: EqHost::copy_layout) and prints the refusal it gives.
+// 0x4646 to the main window (0x6b5b80), whose handler copies the selected layout with the three boxes
+// (0x6b5bb0, __CopyLayout: EqHost::copy_layout) and prints the refusal it gives.
 //
 // Hailstone additions, not in the original:
 // - LC_CopyChatCheckBox and LC_CopyOptionsCheckBox copy the chat settings and the game options, which this client

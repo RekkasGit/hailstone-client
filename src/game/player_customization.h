@@ -67,7 +67,7 @@ public:
     virtual void set_heritage(std::int32_t heritage) = 0;
     virtual void swap_face(std::uint8_t face) = 0;
     // The customization manager: the counts of {race, heritage, gender}, the heritages of {race, class, gender} in
-    // its order, and the heritage's name (FUN_00408ed0).
+    // its order, and the heritage's name (0x408ed0).
     virtual CustomizationCounts counts() = 0;
     virtual std::vector<std::int32_t> heritages() = 0;
     virtual std::string heritage_name() = 0;

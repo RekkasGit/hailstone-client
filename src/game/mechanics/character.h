@@ -102,7 +102,7 @@ public:
         Hook<std::int32_t, std::uint32_t, bool> skill_with_item_mods; // vtable +0x18 (skill, flag)
         Hook<std::int32_t, std::uint32_t> adjusted_skill, racial_skill_bonus;
         Hook<std::int32_t, std::int32_t, std::int32_t, std::int32_t> skill_cap; // CSkillMgr::GetSkillCap(level, cls, skill)
-        Hook<std::int32_t, std::uint32_t, std::uint32_t> skill_min_level;       // FUN_005baa20(skill, cls)
+        Hook<std::int32_t, std::uint32_t, std::uint32_t> skill_min_level;       // 0x5baa20(skill, cls)
         Hook<std::int32_t, std::uint32_t> skill_entry; // -1 no entry, else EQ_Skill::LevelCappedSkill
         Hook<std::int32_t, std::uint32_t, std::uint32_t, std::uint32_t> skill_cap_cell; // SkillCaps[cls][skill][level]
         Hook<std::int32_t> max_level, base_hp_regen, base_endurance_regen, heroic_sta_bonus, max_effects;
@@ -221,7 +221,7 @@ public:
     std::int32_t invis_level(int kind) const;                // CalcInvisLevel @0x442770
     // CharacterZoneClient::CanUseItem(item, prestige) @0x446470 (level, race, deity, prestige).
     bool can_use_item(const net::Item& item, bool prestige = true) const;
-    // FUN_00585190 (vtable +0x34): an item stat scaled down for a recommended level or skill above the character's.
+    // 0x585190 (vtable +0x34): an item stat scaled down for a recommended level or skill above the character's.
     std::int32_t recommended_item_value(const net::Item& item, std::int32_t value, std::uint8_t skill) const;
 
     // ---- regen (regen.cpp) ----

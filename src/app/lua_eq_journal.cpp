@@ -54,10 +54,10 @@ class JournalCatWindow;
 
 // CJournalTextWnd @0x6b4780 (rof2decomp export CJournalTextWnd.c, the _globals CJournalTextWnd_* functions): made by
 // CDisplay::InitGameUI only with the Lost Dungeons of Norrath or Gates of Discord expansion (OP_ExpansionInfo bits
-// 0x10 / 0x20; TOGGLE_JOURNAL asks the same). The UI ini's JournalLog (FUN_006b2860) turns the logging on; then the
+// 0x10 / 0x20; TOGGLE_JOURNAL asks the same). The UI ini's JournalLog (0x6b2860) turns the logging on; then the
 // journal is read at once (CJournalTextWnd_LoadJournalFiles: here the character folder's CJ.hdr / CJ.txt, the
 // original's userdata\CJ_<name>_<server>) and each NPC line OP_SpecialMesg sends for the journal is kept
-// (FUN_006b3c00: the NPC by name and zone, now, where, the line, the category window's default category).
+// (0x6b3c00: the NPC by name and zone, now, where, the line, the category window's default category).
 // The window: EnableButton (logging: 6726 on, which reloads; 6727 off, which saves and empties it), SearchButton
 // (a search: the text entry 3186, 32 characters; again clears it; 3185 or the search's first 7 characters and
 // "..."), CategoryFilter ("ALL" 13205 and the categories), NPCList (name, zone, the newest time; sorted by name, zone
@@ -187,7 +187,7 @@ public:
         }
         if (id == "CategorySelect") {
             select_combo_.selected = index;
-            // FUN_0047a640(choice - 1): the category whose id is the choice's place
+            // 0x47a640(choice - 1): the category whose id is the choice's place
             game::JournalCategory* c = journal_.category(index - 1);
             std::int32_t cat = c ? c->id : -1;
             for (int r : dialog_.multi)
@@ -212,10 +212,10 @@ private:
         int r = journal_.load(base_);
         if (r < -1) write_backups_ = false;
         refresh_all(host, false);
-        cats_reset(host); // FUN_006b1580(0)
+        cats_reset(host); // 0x6b1580(0)
     }
     void cats_reset(EqHost& host);
-    // FUN_006b3360: the NPCs with an entry in the filter's category and, with a search, one holding it.
+    // 0x6b3360: the NPCs with an entry in the filter's category and, with a search, one holding it.
     void rebuild_npcs() {
         npc_rows_.clear();
         std::string upper = game::journal_upper(search_.substr(0, 0x7f));
@@ -225,7 +225,7 @@ private:
             npc_rows_.push_back(n.get());
         }
     }
-    // FUN_006b2bf0: by name (0), zone id (1), zone name (2) or the newest time (3).
+    // 0x6b2bf0: by name (0), zone id (1), zone name (2) or the newest time (3).
     void sort_npcs() {
         auto key_less = [this](const game::JournalNpc* a, const game::JournalNpc* b) {
             switch (npc_sort_) {
@@ -239,7 +239,7 @@ private:
         if (npc_asc_) std::stable_sort(npc_rows_.begin(), npc_rows_.end(), key_less);
         else std::stable_sort(npc_rows_.begin(), npc_rows_.end(), [&](auto* a, auto* b) { return key_less(b, a); });
     }
-    // FUN_006b3480: the current NPC's entries, with a search those holding it.
+    // 0x6b3480: the current NPC's entries, with a search those holding it.
     void rebuild_entries() {
         entry_rows_.clear();
         if (!current_) return;
@@ -253,7 +253,7 @@ private:
             entry_rows_.push_back(current_->entries[i].get());
         }
     }
-    // FUN_006b2c90: by time (0) or category (1, 2).
+    // 0x6b2c90: by time (0) or category (1, 2).
     void sort_entries() {
         auto key_less = [this](const game::JournalEntry* a, const game::JournalEntry* b) {
             return dialog_sort_ == 0 ? a->time < b->time : a->category < b->category;
@@ -275,7 +275,7 @@ private:
         if (sel != -1) npcs_.selected = sel, npcs_.multi = {sel};
         select_npc(host, sel);
     }
-    // FUN_006b3840
+    // 0x6b3840
     void select_npc(EqHost& host, int row) {
         if (row == -1) {
             current_ = nullptr;
@@ -372,7 +372,7 @@ public:
         list_.widths = {100, 250};
     }
     std::int32_t default_category() const { return default_; }
-    // The journal changed under it (emptied or loaded): FUN_006b0690 / FUN_006b1580(0).
+    // The journal changed under it (emptied or loaded): 0x6b0690 / 0x6b1580(0).
     void reset(EqHost& host) {
         selected_ = nullptr;
         list_.multi.clear();
@@ -385,7 +385,7 @@ public:
         default_ = std::atoi(ini.get("JournalCatWnd", "DefaultCategory").value_or("-1").c_str());
     }
     void set_shown(EqHost& host, bool show) override {
-        if (show && !open_) { // AboutToShow: FUN_006b0690, FUN_006b1580(0)
+        if (show && !open_) { // AboutToShow: 0x6b0690, 0x6b1580(0)
             selected_ = nullptr;
             list_.multi.clear();
             chooser_ = {};
@@ -413,7 +413,7 @@ public:
         if (id != "CategoryList" || row < 0 || row >= static_cast<int>(rows_.size())) return false;
         multi_select(list_, row, mods, anchor_);
         selected_ = rows_[static_cast<std::size_t>(row)];
-        name_ = selected_->name; // FUN_006b0940
+        name_ = selected_->name; // 0x6b0940
         desc_ = selected_->description;
         return true;
     }
@@ -473,7 +473,7 @@ public:
     }
 
 private:
-    // FUN_006b1580: the categories sorted, the list and chooser filled.
+    // 0x6b1580: the categories sorted, the list and chooser filled.
     void rebuild(EqHost& host, bool keep) {
         rows_.clear();
         if (text_)
@@ -602,7 +602,7 @@ bool JournalNpcWindow::click(EqHost& host, std::string_view id, std::string_view
             logging_ = false;
             clear_dialog();
             journal_.clear();
-            cats_reset(host); // FUN_006b0690
+            cats_reset(host); // 0x6b0690
             refresh_all(host, false);
         } else {
             if (host.conn) host.conn->show_eqstr(6726, {}, 0xf);

@@ -32,7 +32,7 @@ struct SpellGemTints {
 };
 SpellGemTints spell_gem_tints(std::uint32_t color);
 
-// FUN_004ad890 (ecx: the spell): a spell's colour (ARGB) by its target type (+0x26e), with the AE duration (+0x24)
+// 0x4ad890 (ecx: the spell): a spell's colour (ARGB) by its target type (+0x26e), with the AE duration (+0x24)
 // under 3000 ms switching two of them. SetSpellGemTint takes it for a gem's background, and MakeSpellSelectMenu
 // for each spell's row in the gem's memorize menu (AddMenuItem's colour).
 std::uint32_t spell_target_color(std::uint8_t target_type, std::uint32_t ae_duration);

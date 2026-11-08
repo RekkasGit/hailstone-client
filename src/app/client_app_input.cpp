@@ -73,7 +73,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
     }
     if (cmd == static_cast<int>(C::CMD_TOGGLE_FIND_WINDOW) && eq_api_ && eq_api_->replaces("FindLocationWnd")) {
         // __ExecuteCmd case 100: with FindLocationWnd shown, CFindLocationWnd_FindSelected and the window goes;
-        // else a shown find path stops (FUN_0066bf80: PlayerPath_Stop); else the window shows.
+        // else a shown find path stops (0x66bf80: PlayerPath_Stop); else the window shows.
         if (eq_api_->shown("FindLocationWnd")) eq_api_->show("FindLocationWnd", false);
         else if (conn_->player_path().active()) conn_->stop_find_path();
         else eq_api_->show("FindLocationWnd", true);
@@ -94,7 +94,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
     if (cmd == static_cast<int>(C::CYCLE_XTARGET)) return conn_->target_next_xtarget();
     if (cmd == static_cast<int>(C::REMOVE_XTARGET_BY_SLOT)) return conn_->remove_target_xtargets();
     if (cmd >= static_cast<int>(C::CMD_OPENING_ATTACK1) && cmd <= static_cast<int>(C::CMD_OPENING_ATTACK8)) {
-        // __ExecuteCmd case 103: the combat ability window's button n (FUN_00659c80).
+        // __ExecuteCmd case 103: the combat ability window's button n (0x659c80).
         actions_ui_->use_combat_ability_button(*conn_, cmd - static_cast<int>(C::CMD_OPENING_ATTACK1));
         return;
     }
@@ -135,7 +135,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
         else conn_->set_target(0);
         break;
     // The item placement keys (__ExecuteCmd 146..157: ItemPlacement_SetMode, ResetRotation, ResetScale, the
-    // 90-degree turns of FUN_00558820 by 128).
+    // 90-degree turns of 0x558820 by 128).
     case C::CMD_REAL_ESTATE_ITEM_PLACEMENT_TOGGLE_MODE: conn_->placement_set_mode(-1); break;
     case C::CMD_REAL_ESTATE_ITEM_PLACEMENT_SET_MODE_COLLISION: conn_->placement_set_mode(0); break;
     case C::CMD_REAL_ESTATE_ITEM_PLACEMENT_SET_MODE_WALL: conn_->placement_set_mode(1); break;
@@ -214,7 +214,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
         if (eq_api_ && eq_api_->replaces("InventoryWindow")) eq_api_->toggle("InventoryWindow");
         else if (item_ui_) item_ui_->toggle_inventory();
         break;
-    // __ExecuteCmd cases 115..117: CInvSlotMgr_OpenAllBags, CloseAllBags and their toggle (FUN_006989e0).
+    // __ExecuteCmd cases 115..117: CInvSlotMgr_OpenAllBags, CloseAllBags and their toggle (0x6989e0).
     case C::OPEN_INV_BAGS:
         if (eq_api_ && eq_api_->replaces("Bag1")) eq_api_->open_all_bags();
         else if (item_ui_) item_ui_->open_all_bags(*conn_);
@@ -283,7 +283,7 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
         conn_->stop_song();
         actions_ui_->stop_social();
         break;
-    // __ExecuteCmd case 163 (FUN_00698d60): the bank's and the shared bank's bags open or close.
+    // __ExecuteCmd case 163 (0x698d60): the bank's and the shared bank's bags open or close.
     case C::CMD_TOGGLE_BANK_BAGS:
         if (eq_api_ && eq_api_->replaces("Bag1")) eq_api_->toggle_all_bank_bags();
         break;
@@ -350,7 +350,7 @@ game::CameraTarget ClientApp::camera_target(const glm::vec3& feet) const {
     t.ducking = stand == net::kStandCrouching;
     t.sitting = stand == net::kStandSitting;
     if (me->mount_id) {
-        // FUN_0058c8a0(mount, 0xe): the mount's seat as drawn (eye_position's).
+        // 0x58c8a0(mount, 0xe): the mount's seat as drawn (eye_position's).
         t.riding = true;
         auto it = conn_->world().spawns.find(me->mount_id);
         auto rider = actor_renderer_ ? actor_renderer_->choose_model(*me).model : nullptr;
@@ -679,7 +679,7 @@ void ClientApp::update_combat_input() {
     // ground: drop it after asking (DropHeldItemOnGround without /fastdrop).
     if (auto at = std::exchange(left_click_, std::nullopt)) {
         // ItemPlacement_OnLeftMouseUp first: while placing, a click confirms a valid spot (0x711a) and does nothing
-        // else. The box sent is the ghost's world box (FUN_004907f0's, max then min).
+        // else. The box sent is the ghost's world box (0x4907f0's, max then min).
         if (conn_->placement().active()) {
             glm::vec3 lo{0.0f}, hi{0.0f};
             if (world_objects_)
@@ -698,7 +698,7 @@ void ClientApp::update_combat_input() {
             return;
         }
         PickTarget hit = pick_at(at->x, at->y, game::kClickRequired, game::kClickSkip, "left click");
-        // A mount race with a rider (PlayerBase_IsMountRace, FUN_0058cfb0) gives the rider (LMouseUp @0x53875b).
+        // A mount race with a rider (PlayerBase_IsMountRace, 0x58cfb0) gives the rider (LMouseUp @0x53875b).
         if (hit.kind == PickTarget::Kind::Spawn) {
             const auto& spawns = conn_->world().spawns;
             if (auto m = spawns.find(hit.id); m != spawns.end() && game::is_mount_race(m->second.race) &&

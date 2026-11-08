@@ -750,7 +750,7 @@ None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends 
 | 0x5a63 | both | the 0xbc-byte body (+0x0c the giver) | "Do you wish to accept %1 from %2?" (7636, 5 min); the answer echoes it with +0xb9 = yes (a no also prints 7638) |
 | 0x1045 / 0x2a9e | Z→C | EQPlacedItem {cstr tag, u8 NPC item, u32, u32, cstr key, u32 re, u32 item, f32 scale, heading, pitch, roll, x, y, z, u8 no collision, u8 wall only, u8 no free mode, u32 wall allowed, 7 × u32} / ≥ 0x28 B with re at +0x20, item at +0x24 | a placed object added or updated / removed |
 | 0x49df | Z→C | u32 n × {u32 id, f32[16] row-major local → world, 5 × i32} | the areas, replaced |
-| 0x21ec | both | 768 B: cstr key, slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x2c name (reply), 40 entries at +0x6c of {type, parameter, text id, sub-menu parameter} (request: 0xff), +0x2ec a filter byte (request: 1), +0x2f0 / +0x2f4 the click, +0x2f8 one more field | an estate item's context menu (ShowItemContextMenu @0x7375f0, FUN_00542a90) |
+| 0x21ec | both | 768 B: cstr key, slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x2c name (reply), 40 entries at +0x6c of {type, parameter, text id, sub-menu parameter} (request: 0xff), +0x2ec a filter byte (request: 1), +0x2f0 / +0x2f4 the click, +0x2f8 one more field | an estate item's context menu (ShowItemContextMenu @0x7375f0, 0x542a90) |
 | 0x050c / 0x51e3 / 0x64a3 / 0x7ad1 | C→Z | {re, item, the entry's parameter} / 0x7ad1 {re, item, 140 zero bytes} | the menu's entry types 8, 9, 0x13 and 5; meaning not known |
 | 0x58c7 | both | C→Z {re, item}; Z→C an item | inspect |
 | 0x2b35 | Z→C | u8 mode | toggles the plot search window (only in a neighborhood: 8078 otherwise) |
@@ -778,7 +778,7 @@ Where the decompile corrects the note:
 - Unlisted 0x1228 codes print 5223.
 - The search request is 224 bytes.
 
-Placement mode (`game/placement.{h,cpp}`) follows FUN_005ae160's modes (collision, wall, cursor, free) and checks the item's box against the areas named in the reply's code map: an area holding all 8 corners with code 0 allows it; otherwise the last such area's code, otherwise the root estate's code, or 1. A player inside the box gives 0x1c. A 0x1228 {0} or 0x6213 ends it, and so does a zone change. Escape cancelling it is Hailstone's own.
+Placement mode (`game/placement.{h,cpp}`) follows 0x5ae160's modes (collision, wall, cursor, free) and checks the item's box against the areas named in the reply's code map: an area holding all 8 corners with code 0 allows it; otherwise the last such area's code, otherwise the root estate's code, or 1. A player inside the box gives 0x1c. A 0x1228 {0} or 0x6213 ends it, and so does a zone change. Escape cancelling it is Hailstone's own.
 
 Not built: the ghost's fit to walls and surfaces (ItemPlacement_UpdatePosition), free mode's mouse moves, the 0x21ea NPC-item binding to a placement, the polls, `/outputfile realestate`'s rows.
 

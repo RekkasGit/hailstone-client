@@ -153,7 +153,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             log::debug("item packet {:#x}: {} at {}/{}/{}", ip->type, item.name, item.slot.type, item.slot.slot, item.slot.sub);
             ItemSlot at = item.slot;
             at.aug = -1;
-            // Type 0x67 (Trade): FUN_006ae710(item, 0) re-runs SetItem on every display showing this serial (the
+            // Type 0x67 (Trade): 0x6ae710(item, 0) re-runs SetItem on every display showing this serial (the
             // server keeps the host's serial when it rebuilds it after an augment change, so it refreshes in place).
             if (ip->type == kItemPacketTrade) {
                 item_refreshes_.push_back(item);

@@ -523,7 +523,7 @@ void Run::main_switch() {
             if (!q_.find_item_by_item_type(0x25, nullptr, nullptr)) return token(0xa2);
             Handle pole = q_.get_item(slot);
             std::string id_file = q_.get_id_file(pole, 0x22);
-            q_.update_item_slot(me, slot == 13 ? 7 : 8, id_file, 0, 1); // FUN_004dcea0: 13 -> 7, 14 -> 8
+            q_.update_item_slot(me, slot == 13 ? 7 : 8, id_file, 0, 1); // 0x4dcea0: 13 -> 7, 14 -> 8
             q_.item_ref_release();
             token(0xa3);
             q_.set_activity(0x37, 0);

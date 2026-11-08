@@ -518,7 +518,7 @@ public:
         ev_.swim_jumped = ctl_.swim_jump(true, ctl_.swim_surface_clear, now_) || ev_.swim_jumped;
     }
     void proc_mouse(bool) override {}
-    // FUN_00516cd0 on that spawn's Angle (+0x84): at least -64 for both while the local player's mount is the
+    // 0x516cd0 on that spawn's Angle (+0x84): at least -64 for both while the local player's mount is the
     // controlled player (@0x516cd0 asks pinstLocalPlayer's GetMount), else -128. Riding, the mount's pitch is the
     // body's; the rider's own is overwritten on its next physics step (PhysicsObject::vf8 @0x59e170: the local
     // rider's Angle = its mount actor's pitch, vf8c), so the rider and the camera look where the mount does.
@@ -641,7 +641,7 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
                     : crouching  ? kStandDucking
                                  : kStandStanding;
     if (ch.riding) {
-        // The mount stands (FUN_004b15b0 keeps a mount race's StandState at 100); a frozen rider (stunned, the
+        // The mount stands (0x4b15b0 keeps a mount race's StandState at 100); a frozen rider (stunned, the
         // PcBase's +0xfc) keeps it still. The rider is the local player of ProcessControls' questions.
         c.stand_state = ch.frozen || ch.dead ? kStandFrozen : kStandStanding;
         c.sneaking = false;

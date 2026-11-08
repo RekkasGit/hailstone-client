@@ -184,7 +184,7 @@ private:
     bool wind_changed_ = false;         // DAT_1017c988
 };
 
-// FUN_1007ef70: a blended (1 - t) + b t per byte, alpha too, each rounded to the nearest.
+// 0x1007ef70: a blended (1 - t) + b t per byte, alpha too, each rounded to the nearest.
 std::uint32_t blend_precipitation_colour(std::uint32_t a, std::uint32_t b, float t);
 
 } // namespace hailstone::game

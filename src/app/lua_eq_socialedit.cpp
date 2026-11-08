@@ -1,5 +1,5 @@
 // The social editor: SocialEditWnd (CSocialEditWnd @0x7588a0) over the character's socials (game/hotbuttons.h).
-// FUN_00758bb0 opens it on social n (page n / 12, button n % 12, colour 0), FUN_00758730 fills the name, the five
+// 0x758bb0 opens it on social n (page n / 12, button n % 12, colour 0), 0x758730 fills the name, the five
 // lines and the colour from the social, CSocialEditWnd::WndNotification @0x758c10 takes the clicks: Accept
 // (sub_00758470) copies the boxes into the social (name 15 characters, lines 255, the colour), clears its cooldown,
 // saves the socials (SaveSocialsToIni) and closes; Clear (sub_007585e0) empties the name and the lines; a colour
@@ -65,7 +65,7 @@ public:
         if (!show) h.social_editing = -1;
     }
 
-    // FUN_00758bb0: the social to edit, then FUN_00758730 and Show(1, 1, 1).
+    // 0x758bb0: the social to edit, then 0x758730 and Show(1, 1, 1).
     bool activate(EqHost& h, int social) override {
         if (!h.hot_buttons || social < 0 || social >= game::kSocialPages * game::kSocialButtons) return false;
         page_ = social / game::kSocialButtons;
@@ -80,7 +80,7 @@ public:
     void child(EqHost&, std::string_view id, Child& out) override {
         if (id == "SEW_NameInput") {
             out.text = name_;
-            // The name box's CRNormal: the chosen colour button's (FUN_00758730 / WndNotification); unset until a
+            // The name box's CRNormal: the chosen colour button's (0x758730 / WndNotification); unset until a
             // social's colour 0..19 or a button set it.
             if (name_color_) out.color = argb_to_rgb(*name_color_);
         } else if (int n = number_between(id, "SEW_Line", "Input"); n >= 0 && n < game::kSocialLines) {
@@ -120,7 +120,7 @@ public:
 private:
     int social() const { return page_ * game::kSocialButtons + button_; }
 
-    // FUN_00758730.
+    // 0x758730.
     void load(const game::HotButtonStore& store) {
         const game::Social& s = store.social(social());
         name_ = s.name;
@@ -153,7 +153,7 @@ private:
 
 EqHost* host_of(lua_State* L) { return static_cast<EqHost*>(lua_touserdata(L, lua_upvalueindex(1))); }
 
-// eq.OpenSocialEditor(index): the social editor on social 0..119 (FUN_00758bb0).
+// eq.OpenSocialEditor(index): the social editor on social 0..119 (0x758bb0).
 int OpenSocialEditor(lua_State* L) {
     EqHost& h = *host_of(L);
     auto social = static_cast<std::int32_t>(luaL_checkinteger(L, 1));

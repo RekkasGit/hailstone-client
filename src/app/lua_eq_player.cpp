@@ -454,7 +454,7 @@ private:
 // selected set (PcZoneClient_CreateBandolierSet); Delete sends OP_Bandolier remove; Use (and a list click with Auto
 // Swap checked) is PcZoneClient::BandolierSwap. Auto Swap is kept in the UI ini ([BandolierWnd] AutoSwap "1" / "0",
 // read as on for '1', 't' or 'T'). Make Hot Button (CBandolierWnd_MakeHotButton @0x6261d0) stores a social named as
-// the set with the line "/bandolier Activate <set>" (9305, 9310; FUN_004ea9f0(name, line, 0, -1, 1)), puts it on the
+// the set with the line "/bandolier Activate <set>" (9305, 9310; 0x4ea9f0(name, line, 0, -1, 1)), puts it on the
 // cursor and says 13282 (or 13283). The right button held on a slot sends OP_Bandolier 3 (encode_bandolier_hold).
 class BandolierWindow : public StockWindow {
 public:
@@ -548,7 +548,7 @@ public:
     }
 
 private:
-    // FUN_0044c500: the item is somewhere in the player's possessions (worn, general slots, bags, cursor).
+    // 0x44c500: the item is somewhere in the player's possessions (worn, general slots, bags, cursor).
     static bool has_item(const net::GameConnection& c, std::uint32_t id) {
         for (const auto& [key, item] : c.inventory().items()) {
             if (key.first != net::kInvPossessions) continue;
@@ -662,7 +662,7 @@ public:
 
 // CExtendedTargetWnd: a row per extended target slot (CExtendedTargetWnd_RefreshSlots: as many rows as the list
 // has slots, OP_XTargetResponse's max: 5 + the AA's extra slots on EQEmu); the gauges, mana / endurance gauges and
-// percent labels are EQTypes 42+n, 62+n, 82+n and 151+n (app/lua_eq_values.cpp). FUN_0054a270 per row: the gauge's
+// percent labels are EQTypes 42+n, 62+n, 82+n and 151+n (app/lua_eq_values.cpp). 0x54a270 per row: the gauge's
 // text colour (CRNormal) is the spawn's con colour (PcClient::GetConLevel, GetRGBAFromIndex; the layout's for no
 // spawn or con 0); the HP labels show with a spawn; the mana gauge with Mana Display on, a spawn that is a player or
 // a mercenary (+0x125 0 or +0x208) and a casting class (EQ_Character::IsSpellcaster_3 @0x59fb90 on the spawn's
@@ -704,7 +704,7 @@ public:
         mana_ = read("Manabars", mana_);
         endurance_ = read("Endurancebars", endurance_);
         aggro_ = read("AggroPct", aggro_);
-        auto_haters_ = read("AutoAddHaters", true); // FUN_00578400: sent when it differs from the list's
+        auto_haters_ = read("AutoAddHaters", true); // 0x578400: sent when it differs from the list's
         zone_ = 0;                                  // sent again with the next zone-in
     }
     void frame(EqHost& host) override {

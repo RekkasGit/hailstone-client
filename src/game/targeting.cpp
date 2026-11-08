@@ -133,7 +133,7 @@ std::vector<CycleCandidate> cycle_candidates(const WorldState& world, std::int32
     std::vector<CycleCandidate> out;
     for (const auto& [id, s] : world.spawns) {
         if (id == world.player_id || (world.controlled_id != 0 && id == world.controlled_id)) continue;
-        // FUN_005c58c0: mode 1 leaves out mount races and spawns with a rider; mode 0 takes a non-player only when it
+        // 0x5c58c0: mode 1 leaves out mount races and spawns with a rider; mode 0 takes a non-player only when it
         // is a mount race with a rider.
         const bool mount_race = is_mount_race(s.race);
         bool wanted = mode == 2   ? s.is_corpse

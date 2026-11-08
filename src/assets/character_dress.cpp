@@ -168,7 +168,7 @@ void CharacterLibrary::build_item_mesh(std::uint32_t number, std::optional<ItemM
         out = actor_mesh(code);
     } else if (eqg_) {
         // An EQG item (OnDemandResources EQGM): its pieces in its own space, held rigidly; its .pts and .prt
-        // beside it in the archive part_mesh opened (the EQGM loader reads both, FUN_100624e0).
+        // beside it in the archive part_mesh opened (the EQGM loader reads both, 0x100624e0).
         if (auto file = eqg_->part_mesh(code)) {
             ItemMesh item;
             item.eqg = true;
@@ -246,7 +246,7 @@ namespace {
 
 // The head (PlayerClient::SwapHead's old-model path, game::head_model): NPC
 // bodies take HeadType; PC-model races their head armour, only with
-// show_helm. The race and gender are the model code's (FUN_0040a5b0 reads the
+// show_helm. The race and gender are the model code's (0x40a5b0 reads the
 // actor's).
 // The PC race and gender whose model code this is (0 for other models).
 std::pair<std::uint32_t, std::uint8_t> pc_race_of(const CharacterModel& model) {
@@ -408,7 +408,7 @@ CharacterMesh CharacterLibrary::dress_wld(const CharacterModel& model, const gam
     // SwapHead's head DAG (actor +0x14c, CHierarchicalActor @0x10043250): once the head mesh took, every palette
     // material named HELM* or CHAIN* (a Barbarian's BAMHE0003*, BAMHE0004* and CHAIN01*) takes the head's armour
     // colour (SetTint1: black is untinted). SwapHead does nothing for a PC race without show helm; Vah Shir wear
-    // their helms as items. The "keep head" flag FUN_0040a5b0 gives some female and Erudite helms reaches the DLL
+    // their helms as items. The "keep head" flag 0x40a5b0 gives some female and Erudite helms reaches the DLL
     // only to be passed on to the actor's child (+0x58), so it changes nothing.
     const std::uint32_t race = pc_race_of(model).first;
     const bool head_dag = race != 130 && (race == 0 || body_texture || a.show_helm);

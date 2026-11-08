@@ -78,7 +78,7 @@ double fix_heading_x87(float heading, const Fpu& fpu = Fpu{});
 double heading_diff_x87(float a, float b, const Fpu& fpu = Fpu{});
 // EQSwitch::GetCustomMoveDistance @0x50ff20: +0x78 when above 0, -it below -3, else 0.
 double custom_move_distance_x87(std::int32_t custom);
-// FUN_005101f0: switch types that never move (0x32..0x3a but 0x35, 0x99..0x9b).
+// 0x5101f0: switch types that never move (0x32..0x3a but 0x35, 0x99..0x9b).
 bool switch_is_static(std::uint8_t type);
 
 // One ProcessSwitches frame: `elapsed_ms` is __EQGetTime minus the last call's (unsigned), `now_ms` the time

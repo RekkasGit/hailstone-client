@@ -16,7 +16,7 @@ bool GroupTrack::start(const assets::AnimationClip* c, std::uint8_t code, float 
     if (!std::isfinite(speed) || speed < 0.0f) speed = 0.0f;
     if (c == clip && reversed == reverse && !restart) {
         // BlendToAnimation leaves the animation it plays alone; the caller's speed still reaches it
-        // (SetCurrentAnimationParameters, FUN_004b15b0's "keep" path / FUN_0058ac90's mode 3).
+        // (SetCurrentAnimationParameters, 0x4b15b0's "keep" path / 0x58ac90's mode 3).
         rate = speed;
         loop = loops;
         anim = code;
@@ -80,7 +80,7 @@ float GroupTrack::shown_previous_time() const { return shown(previous, previous_
 
 namespace {
 // The cross-fade into `to` on a group that plays `from`: classic models always 100 ms (0x9c3988), new-style ones
-// the mean of the old sequence's blend-out and the new one's blend-in (FUN_005890a0 / FUN_00589410, per group).
+// the mean of the old sequence's blend-out and the new one's blend-in (0x5890a0 / 0x589410, per group).
 float blend_seconds(const LayerRequest& req, std::uint8_t from, std::uint8_t to, float classic_ms) {
     return (req.new_style ? mech::new_style_blend_ms(from, to) : classic_ms) / 1000.0f;
 }
@@ -93,9 +93,9 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
     GroupTrack& lo = group[game::kLowerBones];
     bool upper_only = false;
     if (req.new_style) {
-        // FUN_0058afa0: each group's mode (FUN_0058ac90; the style column is not tracked, so a sequence asked
+        // 0x58afa0: each group's mode (0x58ac90; the style column is not tracked, so a sequence asked
         // again is the same one) decides. A rider plays only sequences of layer kind 1, and those on the upper
-        // body (FUN_00588e20); a kind 1 sequence plays there alone too while the legs walk, run or turn (kind 2).
+        // body (0x588e20); a kind 1 sequence plays there alone too while the legs walk, run or turn (kind 2).
         const std::uint8_t kind = mech::new_style_layer_kind(anim);
         auto mode_of = [&](const GroupTrack& g) {
             game::LayerModeInput li;
@@ -112,13 +112,13 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
             upper_only = kind == 1 && mech::new_style_layer_kind(lo.anim) == 2;
         }
         if (upper_only) {
-            // FUN_00588e20: nothing while the upper body plays a sequence of layer kind 0 (and no mount answer).
+            // 0x588e20: nothing while the upper body plays a sequence of layer kind 0 (and no mount answer).
             if (upper_mode != 2) return false;
             if (!req.mounted && mech::new_style_layer_kind(up.anim) == 0) return false;
         } else {
             const std::uint8_t lower_mode = mode_of(lo);
             if (kind == 2) {
-                // FUN_005890a0: nothing without a lower mode, then each group by its own.
+                // 0x5890a0: nothing without a lower mode, then each group by its own.
                 if (lower_mode == 0 || (lower_mode != 2 && upper_mode != 2)) return false;
                 upper_only = lower_mode != 2;
                 if (upper_mode != 2) {
@@ -126,13 +126,13 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
                     return false;
                 }
             } else {
-                // FUN_00589410: nothing when either mode is 0, both 3 continue, neither 2 queues.
+                // 0x589410: nothing when either mode is 0, both 3 continue, neither 2 queues.
                 if (lower_mode == 0 || upper_mode == 0) return false;
                 if (lower_mode != 2 && upper_mode != 2) return false;
             }
         }
     } else {
-        // FUN_004b15b0 with key 1: an action that may not interrupt waits for the upper body's cycle.
+        // 0x4b15b0 with key 1: an action that may not interrupt waits for the upper body's cycle.
         if (!game::classic_may_interrupt(anim, up.anim) && up.clip && !up.completed()) {
             if (game::classic_queues(anim)) {
                 follow_up = anim;
@@ -177,8 +177,8 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
             follow_up = 0x20;
             follow_clip = nullptr;
         } else if (!action && req.base_anim == 0x20 && follow_up != 0x20 && follow_clip) {
-            // The stand request plays the follow-up (FUN_004b15b0's idle path: +0x10c4 becomes the request, and
-            // then 0x20 or 0x47 by FUN_004b0860 on the animation playing).
+            // The stand request plays the follow-up (0x4b15b0's idle path: +0x10c4 becomes the request, and
+            // then 0x20 or 0x47 by 0x4b0860 on the animation playing).
             const assets::AnimationClip* c = follow_clip;
             const std::uint8_t a = follow_up;
             follow_up = req.follow_up_after;
@@ -190,11 +190,11 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
     if (action && req.new_style) {
         const std::uint8_t kind = mech::new_style_layer_kind(req.base_anim);
         if (!action_on_legs && kind == 2) {
-            // FUN_005890a0: the legs take the walk / run / turn (their mode 2 or 3); the upper body's unfinished
+            // 0x5890a0: the legs take the walk / run / turn (their mode 2 or 3); the upper body's unfinished
             // action queues it (mode 1).
             legs_free = true;
         } else if (!action_on_legs && !req.mounted) {
-            // FUN_00589410: another sequence starts on both groups when either group's mode is 2, cutting the
+            // 0x589410: another sequence starts on both groups when either group's mode is 2, cutting the
             // action; otherwise nothing changes.
             game::LayerModeInput li;
             li.wanted = req.base_anim;
@@ -211,7 +211,7 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
             }
         }
     } else if (action && game::classic_legs_take_motion(action_anim, req.base_anim, req.humanoid)) {
-        // FUN_004b15b0's busy path: a walk or run under an unfinished action of table 0xdced38 starts on the
+        // 0x4b15b0's busy path: a walk or run under an unfinished action of table 0xdced38 starts on the
         // legs alone; other requests wait for the action.
         legs_free = true;
         action_on_legs = false;

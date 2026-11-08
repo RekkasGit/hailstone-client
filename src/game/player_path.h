@@ -8,7 +8,7 @@
 //
 // The points are kept as the original keeps them: index 0 at the destination, the last one where the player stands
 // (the reply is walked from its end). PlayerPath_Update @0x59d280 runs every frame (CDisplay::RealRender_World): it
-// trims the path behind the player and extends it to where the player is (FUN_0059cfa0), and ends it within
+// trims the path behind the player and extends it to where the player is (0x59cfa0), and ends it within
 // FinishRange of the destination (PlayerPath_OnDestinationReached @0x59c4a0).
 //
 // Coordinates are this client's world axes (game/coords.h), which are the original's (Y, X, Z) of a spawn
@@ -31,12 +31,12 @@ namespace hailstone::game {
 // What a find looks for (+0x18; the request's first dword).
 enum class FindKind : std::uint32_t {
     Spawn = 1,          // PlayerPath_FindSpawn / FindSpawnByID / FindGroupMember / FindRaidMember: +0x1c the spawn id
-    ZoneConnection = 2, // FUN_0059c210 (a Find Location row of kind 2): +0x1c its id
+    ZoneConnection = 2, // 0x59c210 (a Find Location row of kind 2): +0x1c its id
     RealEstateItem = 3, // PlayerPath_FindRealEstateItem: the item's GUID, +0x34 / +0x38 its real estate ids
     RealEstatePlot = 4, // PlayerPath_FindRealEstatePlot: +0x34 the plot
     MapLocation = 5,    // PlayerPath_FindMapLocation: +0x3c the point (the map's right click)
     Switch = 6,         // FindManager::SetDestSwitch: +0x1c the switch id
-    Point = 7,          // FUN_0059c3c0: +0x3c the point
+    Point = 7,          // 0x59c3c0: +0x3c the point
 };
 
 // SpellEffects\Path.ini [Path] (PlayerPath_LoadSettings; the defaults are its GetFloat / GetInt fallbacks).
@@ -112,12 +112,12 @@ public:
     FindRequest find_spawn(std::uint16_t id, bool face, std::uint32_t now_ms = 0);
     // PlayerPath_FindMapLocation @0x59c310: the map's right click, at `point` (the player's height).
     FindRequest find_map_location(const glm::vec3& point, bool face, std::uint32_t now_ms = 0);
-    // FUN_0059c210 / FindManager::SetDestSwitch / FUN_0059c3c0: the Find Location rows of kinds 2, 6 and 7.
+    // 0x59c210 / FindManager::SetDestSwitch / 0x59c3c0: the Find Location rows of kinds 2, 6 and 7.
     FindRequest find_target(FindKind kind, std::int32_t id, bool face, std::uint32_t now_ms = 0);
     FindRequest find_point(const glm::vec3& point, bool face, std::uint32_t now_ms = 0);
     // PlayerPath_FindRealEstatePlot @0x59c2c0.
     FindRequest find_plot(std::int32_t plot, bool face, std::uint32_t now_ms = 0);
-    // Send_OP_FindPersonRequest: the request again (FUN_0059a9c0 on zoning while active; RefreshIfMoved).
+    // Send_OP_FindPersonRequest: the request again (0x59a9c0 on zoning while active; RefreshIfMoved).
     FindRequest request(std::uint32_t now_ms);
     // PlayerPath_RefreshIfMoved @0x59c420: a request when 3 s passed since the last and `player` is 25 or more from
     // the path's current point (+0x68). Nothing calls it in RoF2.
@@ -128,7 +128,7 @@ public:
     // ---- the reply (PlayerPath_HandleFindPersonReply): the packet's points in order (count = size / 12).
     struct Reply {
         // Fewer than two points (or more than 10000 after the extra points): kStrPathPrevented and the path ends;
-        // with exactly one point that is not (0, 0, 0) the map shows it as a failed find (FUN_006c92e0: the map
+        // with exactly one point that is not (0, 0, 0) the map shows it as a failed find (0x6c92e0: the map
         // window opens) with the find's kind.
         bool failed = false;
         std::optional<glm::vec3> failed_point;
@@ -139,7 +139,7 @@ public:
         std::optional<glm::vec3> face;
     };
     // `gm`: the player's vfunc +0xdc (a GM's path is not put on the floor). `floor`: the floor probe for the reply's
-    // points (FUN_008d4120, then FUN_008d42e0 within 50 above); null leaves them where they are.
+    // points (0x8d4120, then 0x8d42e0 within 50 above); null leaves them where they are.
     Reply handle_reply(std::span<const glm::vec3> points, std::uint32_t now_ms, bool gm, const FloorFn& floor);
 
     // ---- every frame (PlayerPath_Update, with the player's position)
@@ -169,12 +169,12 @@ public:
     float floor_offset() const { return floor_offset_; } // +0x138
 
     // ---- the line's look (PlayerPath_Update's drawing half: the thick line and its travelling emitters)
-    // The visible stretch (+0xac / +0xb0): FUN_00599fd0 of the grown length (+0x130) capped by FadeStart / FadeEnd.
+    // The visible stretch (+0xac / +0xb0): 0x599fd0 of the grown length (+0x130) capped by FadeStart / FadeEnd.
     float fade_near() const { return fade_near_; }
     float fade_far() const { return fade_far_; }
-    // FUN_0059b040's alpha (0..255) of a line point `distance` from the player.
+    // 0x59b040's alpha (0..255) of a line point `distance` from the player.
     int line_alpha(float distance) const;
-    // The thick line's points this frame (FUN_0059b040 / FUN_0059b220): from the destination to the trim point, the
+    // The thick line's points this frame (0x59b040 / 0x59b220): from the destination to the trim point, the
     // segments sampled every SegmentLength on a Catmull-Rom spline whose tangent handles are CurveScale long.
     struct LinePoint {
         glm::vec3 position{0.0f};
@@ -184,12 +184,12 @@ public:
     };
     const std::vector<LinePoint>& line() const { return line_; }
     // The travelling emitters (+0x198, 0x18 bytes each, MaxEmitterCount of them): EmitterN definitions placed at
-    // their distance from the destination along the path (FUN_0059ab60).
+    // their distance from the destination along the path (0x59ab60).
     struct Mover {
         float coordinate = 0.0f;
         std::uint32_t born_ms = 0;
         std::uint32_t serial = 0; // a new mover (or a reused one) gets a new serial: its emitters are made again
-        bool shown = true;        // FUN_0059a7c0: off the path, it stops emitting
+        bool shown = true;        // 0x59a7c0: off the path, it stops emitting
         bool placed = false;
         glm::vec3 position{0.0f};
     };
@@ -199,10 +199,10 @@ public:
     float length() const { return total_; }
 
 private:
-    void clear();        // FUN_0059a910's fields and the movers
+    void clear();        // 0x59a910's fields and the movers
     void target(FindKind kind, std::int32_t id); // the fields the finds set
-    void trim(const glm::vec3& player);           // FUN_0059cfa0
-    void move_emitters(std::uint32_t now_ms, std::uint32_t dt); // FUN_0059a5f0
+    void trim(const glm::vec3& player);           // 0x59cfa0
+    void move_emitters(std::uint32_t now_ms, std::uint32_t dt); // 0x59a5f0
     void walk(const glm::vec3& eye, std::uint32_t now_ms);
 
     PathSettings settings_;

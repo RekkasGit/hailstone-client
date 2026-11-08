@@ -15,7 +15,7 @@
 // Not ported (the scene graph lives in EQGraphicsDX9.dll, vtable +0x98): the
 // distance it measures. The client offers the spawns within 500 units of the
 // eye point, in id order, with their 3D distance, that eqgame's filter
-// FUN_005c58c0 passes (never the local or the controlled player): mode 0 the
+// 0x5c58c0 passes (never the local or the controlled player): mode 0 the
 // players and the mount races with a rider (whom the candidate callback puts
 // in their place), 1 the NPCs that are not mount races and carry no rider,
 // 2 the corpses; for modes 0 and 1 it also leaves out the spawns the local
@@ -55,7 +55,7 @@ struct TargetManager {
     // Hailstone (option tab_skip_pets, on by default; docs/mechanics.md): the NPC cycle leaves out players' pets
     // and mercenaries. The original offers every NPC with +0x161 set, pets included.
     bool skip_pets = true;
-    // PlayerZoneClient::IsInvisible for another spawn (FUN_005c58c0's test for the PC and NPC cycles): the traders
+    // PlayerZoneClient::IsInvisible for another spawn (0x5c58c0's test for the PC and NPC cycles): the traders
     // Hide Traders hides and the buyers Hide Buyers hides (GameConnection::market_hidden). Unset: none.
     std::function<bool(const Spawn&)> invisible;
     // Hailstone (option tab_line_of_sight, on by default; docs/mechanics.md): the NPC cycle takes only the NPCs this

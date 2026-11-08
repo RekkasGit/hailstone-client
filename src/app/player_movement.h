@@ -89,11 +89,11 @@ public:
     // s3dCollideSphereWithWorld for the floor test: the zone, the floor switches and the vehicles (FloorActorFilter),
     // in the floor-only mode (the terrain's walls are skipped); the stop point's z. CollsnCallbackForFloor's
     // vehicle: when the stop is on a vehicle spawn's model (PlayerClient_IsVehicleRace), its id goes to `vehicle`
-    // (the spawn's +0x150, FUN_008cfd10); other spawns' models are not floors.
+    // (the spawn's +0x150, 0x8cfd10); other spawns' models are not floors.
     virtual float floor_sweep(const glm::vec3& from, const glm::vec3& to, float radius,
                               std::uint32_t* vehicle = nullptr, std::vector<FloorSwitchHit>* switches = nullptr) const = 0;
-    // FUN_00509a00's overlap test: a still sphere at `at` against the switches that act on touch (filter 0x475c00:
-    // a switch actor whose switch passes FUN_00510210); the doors it touches, in order.
+    // 0x509a00's overlap test: a still sphere at `at` against the switches that act on touch (filter 0x475c00:
+    // a switch actor whose switch passes 0x510210); the doors it touches, in order.
     virtual std::vector<std::uint8_t> touch_overlap(const glm::vec3&, float) const { return {}; }
     virtual std::optional<float> ceiling_above(const glm::vec3& p) const = 0;
 };
@@ -173,7 +173,7 @@ public:
     void set_race(std::uint32_t race) { race_ = race; }
     // The jump's crouch window (game::mechanics::jump_crouch_window of the controlled spawn's duck clip).
     void set_crouch_window(std::uint32_t ms) { crouch_window_ = ms; }
-    // FUN_00506c90's first test: the animation object's vf24 (a jump animation is +0x10c0), as the renderer last
+    // 0x506c90's first test: the animation object's vf24 (a jump animation is +0x10c0), as the renderer last
     // chose it; nothing without a drawn model (then a jump counts for kJumpWindowMs after it).
     void set_jump_animation(std::optional<bool> playing) { jump_animation_ = playing; }
 

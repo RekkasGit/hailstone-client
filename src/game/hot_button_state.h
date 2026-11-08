@@ -12,7 +12,7 @@
 //    CSkillMgr::IsAvailable is false (a running timer; sneak while sneaking and hide while hidden, which the timers
 //    keep unavailable);
 //  - 4 social below 120: SetCoolDown(the /timer start +0x514, length +0x518), checked while it runs;
-//  - 4 from 120 (alternate ability group n - 120, FUN_004a3d70's rank): not owned (HasAlternateAbility) checks it
+//  - 4 from 120 (alternate ability group n - 120, 0x4a3d70's rank): not owned (HasAlternateAbility) checks it
 //    and stops the cool-down; owned, AltAdvManager::IsAbilityReady's (left, total) seconds give
 //    SetCoolDown(now + (left - total) * 1000, total * 1000), checked while it runs;
 //  - 10 combat ability (0x84 + n): SetCoolDown(FastTimeToEQTime(GetDisciplineReuseTimer(+0x198)) - reuse, reuse)
@@ -59,7 +59,7 @@ public:
         bool owned = false;
         std::int32_t left = 0, total = 0; // IsAbilityReady's seconds
     };
-    // The alternate ability group's rank (FUN_004a3d70), none without one.
+    // The alternate ability group's rank (0x4a3d70), none without one.
     virtual std::optional<AltAbility> alt_ability(std::int32_t group) = 0;
     struct CombatAbility {
         std::uint32_t ready = 0; // GetDisciplineReuseTimer: FastTime seconds
@@ -108,7 +108,7 @@ void update_potion_belt_cool_down(ButtonCoolDown& cd, const std::optional<HotBut
 void update_hot_button(HotButtonDisplay& d, const HotButton& b, HotButtonStateQueries& q, bool extras);
 
 // The Actions window's Combat and Abilities pages (CActionsWnd::CombatPageOnProcessFrame @0x613db0,
-// FUN_00613a70): a skill button's SetCoolDown(GetSkillLastUsed, GetSkillTimerDuration) and SetCheck(!IsAvailable);
+// 0x613a70): a skill button's SetCoolDown(GetSkillLastUsed, GetSkillTimerDuration) and SetCheck(!IsAvailable);
 // the melee and range buttons are both checked while the primary swing is not ready or auto fire is on (with the
 // extras, the melee one also while auto attack is on).
 void update_skill_button(ButtonCoolDown& cd, bool& checked, std::uint32_t skill, HotButtonStateQueries& q);

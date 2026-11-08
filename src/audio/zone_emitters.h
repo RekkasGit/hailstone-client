@@ -89,7 +89,7 @@ ZoneSoundSet emitters_from_eff(const std::vector<assets::EffSoundRecord>& record
                                const std::function<bool(const std::string&)>& exists, const std::string& label = {});
 
 // The base gain of a classic effect emitter from its level (CreateOldEmitter,
-// FUN_005bdb40): level <= 0 (wrapping negation) gives 0.2 for kind 0 and 1.0
+// 0x5bdb40): level <= 0 (wrapping negation) gives 0.2 for kind 0 and 1.0
 // for kinds 2/3; 1..10000 gives 10^(-level/2000); larger levels are silent.
 float classic_level_gain(std::int32_t level, std::uint8_t kind);
 

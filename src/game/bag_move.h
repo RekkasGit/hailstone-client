@@ -10,11 +10,11 @@
 //    CInvSlot::HandleRButtonUp @0x697250) each item of the target bag in slot order -> the cursor bag.
 // ProcessMove first takes every source out (DetachSourceItems), then finds each entry a place in its bag
 // (CheckDestinations -> FindRoom @0x571870, entries a split appends included):
-//  1. a stackable item tries each slot in order (FUN_005713d0): a slot holding an item it stacks with takes it when
+//  1. a stackable item tries each slot in order (0x5713d0): a slot holding an item it stacks with takes it when
 //     that stack, plus what other entries already put there, has room for all of it; with room for part, that part
 //     goes there and the rest becomes a new entry at the end of the list (same source); a full stack is skipped;
-//  2. else the first slot that holds nothing and that no entry has taken (FUN_0056f5c0);
-//  3. (FUN_0056f1c0 trades places with an earlier entry headed for the same location; for these lists it cannot
+//  2. else the first slot that holds nothing and that no entry has taken (0x56f5c0);
+//  3. (0x56f1c0 trades places with an earlier entry headed for the same location; for these lists it cannot
 //     make room that 1 and 2 did not find, and is left out here.)
 // Both need the bag's consent (ItemClient::CanGoInBag). An entry without a place fails the whole move: 0x20 when the
 // bag refuses the item (CheckBag), else 7. MoveItem prints 0x20 as eqstr 12934 "%1 cannot be moved into %2 because

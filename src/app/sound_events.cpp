@@ -177,7 +177,7 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
         SpawnState& st = spawns_[id];
         bool local = id == my_id;
         // A new-style code (a missile's launch on a new-style source) sounds as its old-style number, as
-        // FUN_004b15b0 remaps it before PlayAnimationSound.
+        // 0x4b15b0 remaps it before PlayAnimationSound.
         const std::uint8_t action =
             s.action >= 0x4f ? game::mechanics::new_to_old_anim(s.action) : s.action;
         if (st.seq_seen && s.action_seq != st.action_seq && action != 0)

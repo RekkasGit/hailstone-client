@@ -2,7 +2,7 @@
 
 // The radial flora of EQG heightmap zones: grass, flowers and ferns scattered over the terrain by the ecosystems'
 // *FLORAPART layers (assets/eqg.h EcoFloraLayer) with the shapes of RadialFloraDefs.rfd (FloraDefinition). The
-// placement follows EQGraphicsDX9's FUN_101084e0 (docs/formats/eqg.md "Radial flora"): per tile and layer, the share
+// placement follows EQGraphicsDX9's 0x101084e0 (docs/formats/eqg.md "Radial flora"): per tile and layer, the share
 // of the tile its texture layer covers (mask >= MINALPHA) times DENSITY gives how many to place, the fraction by
 // chance; up to ITERATIONS random spots are tried, each kept when the mask there reaches MINALPHA and the height and
 // slope lie in the layer's bands (widened by their tolerances); a kept one takes a random size of its definition, a
@@ -55,7 +55,7 @@ struct ZoneFlora {
     bool empty() const { return instances.empty() && !grower; }
 };
 
-// MSVC's rand() (FUN_1011060e): 0..32767.
+// MSVC's rand() (0x1011060e): 0..32767.
 struct MsvcRand {
     std::uint32_t state = 1;
     std::int32_t operator()() {

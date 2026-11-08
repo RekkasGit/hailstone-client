@@ -257,7 +257,7 @@ TEST_CASE("a type 1 volume's radius is the model's +0x38 x the model scale x COF
     CHECK(mech::model_sweep_radius(5.5696f, 1.2f) == doctest::Approx(6.6835).epsilon(1e-4));
     CHECK(mech::model_sweep_radius(5.1781f, 1.2f) == doctest::Approx(6.2137).epsilon(1e-4));
     CHECK(mech::model_sweep_radius(5.5696f, 1.2f, 0.5f) == doctest::Approx(3.3418).epsilon(1e-4));
-    // The stand-in the client sweeps with: FUN_005062a0's player value.
+    // The stand-in the client sweeps with: 0x5062a0's player value.
     CHECK(mech::sweep_radius({3.75f, 1}) == doctest::Approx(1.78125));
 }
 

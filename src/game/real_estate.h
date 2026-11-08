@@ -28,7 +28,7 @@ constexpr std::uint32_t re_type_bit(net::ReType t) {
     return v == 0 || v > 31 ? 0 : 1u << (v - 1);
 }
 inline constexpr std::uint32_t kReOwnerMask = 0x88; // EmptyFunction_007f62b0: plots and guild plots
-inline constexpr std::uint32_t kReCrateMask = 0x40; // FUN_007f62c0
+inline constexpr std::uint32_t kReCrateMask = 0x40; // 0x7f62c0
 // RealEstate::IsOwnerType @0x7f6030 (4, 8); 0x7f60f0 houses (2, 3); 0x7f61b0 crates (7); 0x7f6280 guild plots (8);
 // 0x7f5f70's group test, true only for neighborhoods (5).
 constexpr bool re_is_owner_type(net::ReType t) { return t == net::ReType::Plot || t == net::ReType::GuildPlot; }
@@ -72,7 +72,7 @@ public:
     const net::ReRecord* record(std::uint32_t id) const;
     const std::unordered_map<std::uint32_t, net::ReRecord>& records() const { return records_; }
     net::ReType record_type(std::uint32_t id) const;
-    // FUN_005b41d0: a plot is owned when its owner is set, a guild plot when its guild is.
+    // 0x5b41d0: a plot is owned when its owner is set, a guild plot when its guild is.
     bool already_owned(std::uint32_t id) const;
 
     // 0x3968 / 0x485d.
@@ -147,7 +147,7 @@ private:
 // RealEstate::ShowResultCode @0x5ae1f0: the eqstr id for a 0x1228 code, 0 for none (success, -1 and codes it does not
 // list print nothing).
 std::uint32_t re_result_message(std::int32_t code);
-// FUN_005ad930 (0x66bf, sell / move out) and FUN_005adad0 (0x68ba, transfer): 0 for success.
+// 0x5ad930 (0x66bf, sell / move out) and 0x5adad0 (0x68ba, transfer): 0 for success.
 std::uint32_t re_sell_message(std::int32_t code);
 std::uint32_t re_transfer_message(std::int32_t code);
 

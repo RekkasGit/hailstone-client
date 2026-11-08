@@ -146,7 +146,7 @@ public:
     virtual void set_activity(std::int32_t kind, std::int32_t spawn) = 0;          // Send_OP_TrackTarget_004ed870
     virtual std::int32_t rand_nbr() = 0;                                           // Random
     virtual std::int32_t random_low_high(std::int32_t low, std::int32_t high) = 0; // RandomNumberLowHigh
-    virtual void compass_reset() = 0;                                              // FUN_0065b650
+    virtual void compass_reset() = 0;                                              // 0x65b650
     virtual void send_track() = 0;                                                 // Send_OP_Track
     virtual std::int32_t not_on_same_deity(Spawn& self, Spawn& other, std::int32_t a1) = 0;
     virtual std::int32_t get_level(Spawn& spawn) = 0;                              // PlayerZoneClient::GetLevel (al)

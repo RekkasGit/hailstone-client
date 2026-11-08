@@ -63,7 +63,7 @@ std::uint32_t effective_material(const Appearance& a, int slot);
 // (1-6) is dressed with.
 int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot);
 
-// FUN_0040a5b0 (ActorBase, @0x40a5b0): the head material ids 0xf0 / 0xf1 of
+// 0x40a5b0 (ActorBase, @0x40a5b0): the head material ids 0xf0 / 0xf1 of
 // the old models by the actor's race and gender (female: gender 1): 0xf0 is a
 // per-race helm item, 0xf1 the head 3 (Ogres a helm, Barbarians the 0xf0 one);
 // any other id, or a race outside 1-12 and 128, stays as it is.
@@ -95,7 +95,7 @@ void set_extra_shields(bool on);
 
 // PlayerClient_UpdateHoldingAnimation @0x58d780: whether a spawn's holding column (+0x334) is other than 0, which
 // on a tunic-point model plays its variant B tracks (assets::CharacterModel::held_aliases). The column is 1..7 when
-// either hand's model kind (+0x119c / +0x11a0, FUN_00489ec0) is set, and a kind is 0 only for no model.
+// either hand's model kind (+0x119c / +0x11a0, 0x489ec0) is set, and a kind is 0 only for no model.
 inline bool holds_item(const Appearance& a) {
     return a.material[kSlotPrimary] != 0 || a.material[kSlotSecondary] != 0;
 }

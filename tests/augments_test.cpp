@@ -562,7 +562,7 @@ TEST_CASE("Augments travel as children; a type-0x67 packet refreshes displays of
     CHECK(st.info[1].id == 24136);
 }
 
-TEST_CASE("stats-disabled bytes: FUN_007b28a0 and the stat sums' disabled children") {
+TEST_CASE("stats-disabled bytes: 0x7b28a0 and the stat sums' disabled children") {
     using namespace hailstone::game;
     net::Item host;
     host.item_class = 0;

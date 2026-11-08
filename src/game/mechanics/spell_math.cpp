@@ -6,7 +6,7 @@
 // re/src/game/character/focus_effects_eh.cpp (GetBest*Focus, Collect*FocusEffects, GetFocusCastingTimeModifier),
 // re/src/game/character/focus_pct.cpp (GetSpellFocusPct, GetAAFocusPct), re/src/game/spell/focus_limits.cpp
 // (CheckFocusLimit). From the disassembly: EQ_Character::IsSpellcaster_2 @0x4288e0,
-// GetFocusLevelFalloffPct @0x428980, FUN_004acd60 and the focus-type table FUN_004acc50.
+// GetFocusLevelFalloffPct @0x428980, 0x4acd60 and the focus-type table 0x4acc50.
 #include "game/mechanics/character.h"
 
 #include <algorithm>
@@ -32,7 +32,7 @@ std::int32_t cast_time_share(const SpellData& spell, std::int32_t value) {
     return core::wrapped_div(spell.cast_time * u(value), -100);
 }
 
-// FUN_004acc50: the focus effect types (an AA effect list's focus entries).
+// 0x4acc50: the focus effect types (an AA effect list's focus entries).
 bool is_focus_type(std::int32_t type) {
     if (type == 0xa7 || (type >= 0x7c && type <= 0x85)) return true;
     switch (type) {
@@ -73,7 +73,7 @@ struct LimitState {
             pending[word] &= ~bit;
         }
     }
-    void note(std::int32_t type) { flag = flag || type == 0x19b; } // FUN_004acd60
+    void note(std::int32_t type) { flag = flag || type == 0x19b; } // 0x4acd60
     void finish() {
         for (std::uint32_t w : pending)
             if (w != 0) {

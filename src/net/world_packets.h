@@ -113,7 +113,7 @@ struct CharCreateAllocation {
 struct CharCreateCombo {
     std::uint32_t expansion_required = 0, race = 0, class_ = 0, deity = 0, allocation_index = 0, zone = 0;
 };
-// FUN_007f2d00: a combination is offered when the account owns every expansion it requires (world's
+// 0x7f2d00: a combination is offered when the account owns every expansion it requires (world's
 // OP_ExpansionInfo bits, GameConnection::world_expansions).
 constexpr bool char_create_allowed(const CharCreateCombo& c, std::uint32_t owned) {
     return (c.expansion_required & owned) == c.expansion_required;

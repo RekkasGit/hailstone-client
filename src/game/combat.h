@@ -7,7 +7,7 @@
 //
 // Sources: rof2decomp re/src/game/world/consider_message.cpp
 // (BuildConsiderMessage @0x522e20), re/src/game/spawn/con_level.cpp
-// (PcClient::GetConLevel @0x577cb0), eqgame.exe FUN_007be930/@0x7be770 (the
+// (PcClient::GetConLevel @0x577cb0), eqgame.exe 0x7be930/@0x7be770 (the
 // consider table, read from the disassembly), the exported decompilation of
 // CEverQuest::ReportSuccessfulHit @0x52ee40, SetDefaultDamageDescByRace
 // @0x5143c0 and Handle_OP_Death (rof2decomp export/). Message templates come
@@ -30,7 +30,7 @@ namespace hailstone::game {
 enum class Con : std::uint8_t { None = 0, Gray, Green, LightBlue, DarkBlue, White, Yellow, Red };
 
 // The standard consider colour of a spawn of level `theirs` for a player of
-// level `mine` (FUN_007be930: a 106 × 106 table built by @0x7be770).
+// level `mine` (0x7be930: a 106 × 106 table built by @0x7be770).
 Con standard_con(int theirs, int mine);
 // PcClient::GetConLevel @0x577cb0 over its inputs (rof2decomp batch 265,
 // PcClient_GetConLevel.jsonl): 0 for a spawn of type 2+ (corpses), with its
@@ -44,7 +44,7 @@ struct ConLevelInput {
     std::int32_t pvp_rules = 0;     // 0xdcee70
     std::int32_t my_level = 0;      // the character's level (CharacterBase virtual +0x68)
     std::int32_t their_level = 0;   // PlayerZoneClient::GetLevel's byte
-    std::uint32_t standard = 0;     // FUN_007be930(theirs, mine): standard_con
+    std::uint32_t standard = 0;     // 0x7be930(theirs, mine): standard_con
     std::uint8_t spawn_type = 0;    // +0x125: 0 player, 1 NPC, 2+ corpses
     bool virtual_50 = false;        // spawn virtual +0x50 (set: con 0)
     bool virtual_98 = false;        // spawn virtual +0x98 (set: con 0 unless the next two hold)

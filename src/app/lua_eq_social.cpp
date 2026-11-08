@@ -301,14 +301,14 @@ public:
             return &tribute_;
         }
         if (id == "BannerKitList") {
-            // HandleBannerKitList fills it from a server message EQEmu does not send; FUN_00681960 adds a row only
+            // HandleBannerKitList fills it from a server message EQEmu does not send; 0x681960 adds a row only
             // for a planted banner.
             banner_kits_ = make_list({{"", 0}, {"Banner", 400}});
             return &banner_kits_;
         }
         if (id == "GT_Rank_List") {
             if (fresh(ranks_built_)) return &ranks_;
-            // CGuildMgmtWnd_RefreshRanksPage: each rank's number, name (FUN_007d89e0) and how many members hold it.
+            // CGuildMgmtWnd_RefreshRanksPage: each rank's number, name (0x7d89e0) and how many members hold it.
             ranks_ = make_list({{"", 16}, {"Name", 140}, {"#", 30}});
             for (std::uint32_t r = 1; r <= 8; ++r) {
                 int n = 0;
@@ -611,7 +611,7 @@ private:
                c.guild().permissions.has(mine, permission);
     }
     // CGuildMgmtWnd::UpdateButtons @0x67fef0 for the selected member: `manage` when the local rank is above the
-    // member's (FUN_007d7360), or a GM's over anyone but the leader. MakeLeader: the leader, another member;
+    // member's (0x7d7360), or a GM's over anyone but the leader. MakeLeader: the leader, another member;
     // Promote: manage, permission 8, the member below rank 2; Demote: (yourself, not the leader, permission 0x1e)
     // or (manage, permission 9), the member above rank 8; Remove: yourself, or manage and permission 0xa; Alt:
     // yourself, or manage and permission 0x1a.
@@ -1315,7 +1315,7 @@ public:
 
     const ComboData* combo(EqHost& host, std::string_view id) override {
         if (id == "FilterCombo") {
-            // The XML's choices; FUN_0067da70 reads the index.
+            // The XML's choices; 0x67da70 reads the index.
             filter_.choices = {"Show All", "Public Only", "Useable Only", "Withdrawable", "Not Withdrawable"};
             if (filter_.selected < 0) filter_.selected = 0;
             return &filter_;
@@ -1390,7 +1390,7 @@ private:
         auto p = static_cast<std::uint32_t>(it.permission);
         return p <= 3 ? eqstr(host, 6103 + p) : std::string();
     }
-    // FUN_0067da70: 1 public, 2 public if usable, 3 withdrawable, 4 not withdrawable, else all.
+    // 0x67da70: 1 public, 2 public if usable, 3 withdrawable, 4 not withdrawable, else all.
     bool filter_accepts(const net::GameConnection& c, const net::GuildBankItem& it, std::int32_t key) const {
         switch (filter_.selected) {
         case 1: return it.permission == net::GuildBankPermission::Public;

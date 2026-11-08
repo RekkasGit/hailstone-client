@@ -21,7 +21,7 @@ constexpr std::uint32_t kRed = 0xffff0000, kGreen = 0xff00ff00, kGrey = 0xff8080
 constexpr std::uint32_t kStrUnlimited = 3475, kStrDone = 3476, kStrHidden = 3474, kStrAll = 13205, kStrOptional = 6115;
 constexpr std::uint32_t kStrRewards = 3477, kStrExperience = 138, kStrRadiant = 8957, kStrEbon = 8958, kStrPoints = 1215;
 
-// The slots of a type (FUN_00480080).
+// The slots of a type (0x480080).
 std::uint32_t slot_count(std::uint32_t type) {
     if (type == kTaskTypeTask || type == kTaskTypeShared) return 1;
     if (type == kTaskTypeQuest || type == 3) return 29;
@@ -310,7 +310,7 @@ std::optional<TaskCompassMark> task_compass_mark(const TaskState& s, std::uint32
             const TaskElement& e = it->second;
             if (e.type != 1 && e.type != 4) continue;
             if (e.done_count >= e.goal_count) continue;
-            // FUN_0076fed0: the TargetZoneID list (atoi of each ';' token) holds the zone.
+            // 0x76fed0: the TargetZoneID list (atoi of each ';' token) holds the zone.
             if (!e.target_zones.empty()) {
                 bool here = false;
                 std::string list = e.target_zones.substr(0, 63);
@@ -330,7 +330,7 @@ std::optional<TaskCompassMark> task_compass_mark(const TaskState& s, std::uint32
                 if (c == ' ') c = '_';
             }
             if (name.empty()) continue;
-            std::string list = name.substr(0, 63); // FUN_0076fe50's 0x40-byte strtok buffer
+            std::string list = name.substr(0, 63); // 0x76fe50's 0x40-byte strtok buffer
             std::vector<std::string> tokens;
             std::size_t p = 0;
             while (p < list.size()) {

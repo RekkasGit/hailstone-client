@@ -79,7 +79,7 @@ struct HitLandingResult {
     std::vector<int> removed_buffs;    // buff slots RemoveAffect cleared
     std::vector<PlacedBuff> placed_buffs; // the buff HitBySpell placed (after the removals)
     std::vector<std::int32_t> sounds;  // PlayerClient::PlaySound(wave) at the player, in order
-    bool buff_timers_on_hold = false;  // SPA 0x1b4 landed: FUN_004325e0(1), the spawn's +0x22d
+    bool buff_timers_on_hold = false;  // SPA 0x1b4 landed: 0x4325e0(1), the spawn's +0x22d
     bool feigned = false;              // SPA 74 landed: StopCastAndFeignDeath (the twist, the cast, lie down)
     // PlayerClient_RecordPositionSample(kind, 0, 0) on the player, in order (3 teleport, 7 knock-back, 9 spell move).
     std::vector<std::uint32_t> position_samples;

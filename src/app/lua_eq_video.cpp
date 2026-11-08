@@ -20,7 +20,7 @@ namespace {
 // current ones chosen. A click on a row refills the combos for it (sub_0078a090, full screen only). Accept
 // (WndNotification @0x78a370): not while the give, trade or send-money window is open (3192, colour 0xf); otherwise
 // the mode is set (message 0x4644 to the render window) and, in full screen, 6682 ("%1" = 30) asks to keep it for 30
-// seconds; No or no answer goes back to the mode before (FUN_0078a600). The modes are this client's display modes
+// seconds; No or no answer goes back to the mode before (0x78a600). The modes are this client's display modes
 // (the "resolution" option's choices, "W x H (R Hz)"), which are 32 bit.
 class VideoModesWindow : public StockWindow {
 public:

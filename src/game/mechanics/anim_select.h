@@ -6,13 +6,13 @@
 //
 // The original has two animation objects:
 //  - new-style models (NpcManager_IsNewStyleModelRace: EQG races 197..732,
-//    Drakkin; vtable 0x9d70a0): the update FUN_0058af10 sends a still player
+//    Drakkin; vtable 0x9d70a0): the update 0x58af10 sends a still player
 //    to PlayerAnimation_ChooseIdleAnimation and a moving one to
 //    PlayerAnimation_SelectMovementAnim @0x5888a0. Codes are 0x4f + the
 //    track of the tag table at 0xaae3d8 (WALK 0x68, NRUN 0x6a, ...);
-//  - old-style (classic WLD) models (vtable 0x9ca640): FUN_004afe60 picks an
+//  - old-style (classic WLD) models (vtable 0x9ca640): 0x4afe60 picks an
 //    old-numbered animation (0x11 L01 walk, 0x12 L02 run, 0x20 P01 stand,
-//    ...) and FUN_004afc90 scales its playback rate per race on the way to
+//    ...) and 0x4afc90 scales its playback rate per race on the way to
 //    the actor.
 //
 // Both are exact ports: every float step follows the original's x87
@@ -38,10 +38,10 @@ inline constexpr std::uint8_t kNoAnimation = 0xfe;
 struct AnimStart {
     bool played = false;    // false: nothing started (the choice was 0xfe, or the path starts nothing)
     std::uint8_t anim = kNoAnimation;
-    bool play_once = false; // argument 2 (unused by the new-style player FUN_0058afa0)
+    bool play_once = false; // argument 2 (unused by the new-style player 0x58afa0)
     bool reverse = false;   // argument 3: play backward
     float speed = 1.0f;     // argument 4: the playback rate
-    bool replay = false;    // argument 5: FUN_0058ac90's layer flag
+    bool replay = false;    // argument 5: 0x58ac90's layer flag
 };
 
 // ---- new-style models
@@ -91,7 +91,7 @@ struct MovementAnimResult {
 // LastTimeStoodStill +0x360.)
 MovementAnimResult select_movement_anim(const MovementAnimInput& in, const Fpu& fpu = Fpu{});
 
-// FUN_0058af10's still test: (vy*vy + vx*vx) + vz*vz below 0.01 (and no
+// 0x58af10's still test: (vy*vy + vx*vx) + vz*vz below 0.01 (and no
 // mount): the player then goes to ChooseIdleAnimation instead.
 bool movement_still(float speed_y, float speed_x, float speed_z, const Fpu& fpu = Fpu{});
 
@@ -144,14 +144,14 @@ struct AttackAnimInput {
     bool new_style = false;      // NpcManager_IsNewStyleModelRace(race)
 };
 // The animation (old-style number below 0x4f, else a new-style code); the
-// speed it writes is always 1. Old-style models (FUN_0059f750): item type 9
+// speed it writes is always 1. Old-style models (0x59f750): item type 9
 // T06 (0x2c); with a range arrows (0x1b) C09, 0x1c C10, others C05; else by
 // skill: 1H blunt / slashing and frenzy C05, 2H C03, bash C07, dragon punch
 // and tiger claw T08, eagle strike T09, flying kick T07, hand to hand C08,
 // kick and intimidation C01 (C11 for a monk's intimidation), round kick C11,
 // the rest C02 (C04 with item type 0x23, 2H piercing); the secondary hand
 // (slot 14) turns all of them into C06 but a monk's intimidation; an Iksar's
-// C07 is C06 and dragon punch C07. New-style models (FUN_0059f8d0): MCST
+// C07 is C06 and dragon punch C07. New-style models (0x59f8d0): MCST
 // for item type 9; with a range BATK for arrows, WATK for 0x1c, BLPR (WATK
 // in water); in water WATK; by skill SLPR / BLPR (primary) or SLSC / BLSC,
 // SL2H, BASH, MHA1, MHA2, MKCK, PATK / SATK, KICK, RKCK, the rest STPR (ST2H
@@ -177,7 +177,7 @@ bool new_style_mount_fallback_flag(std::uint8_t code);
 // A sequence's layer kind (-0xc): 1 the attacks, sheathing and casting, 2
 // the walk / run / turn sequences, 0 the rest.
 std::uint8_t new_style_layer_kind(std::uint8_t code);
-// A sequence's priority (-4; FUN_0058ac90 keeps a looping sequence of higher
+// A sequence's priority (-4; 0x58ac90 keeps a looping sequence of higher
 // priority playing). 0 for codes outside the table.
 std::int32_t new_style_priority(std::uint8_t code);
 // The cross-fade the bone groups use when `to` replaces `from`:
@@ -202,7 +202,7 @@ bool is_jump_animation(std::uint8_t anim, bool new_style);
 // T01..T09), or empty for 0 and numbers from 0x4f.
 std::string_view old_anim_clip(std::uint8_t old);
 
-// What FUN_004afe60 reads (PlayerBase offsets).
+// What 0x4afe60 reads (PlayerBase offsets).
 struct OldStyleAnimInput {
     float speed_y = 0.0f, speed_x = 0.0f, speed_z = 0.0f; // +0x70 / +0x74 / +0x78 (the player's own)
     float speed_run = 0.0f;       // +0x7c
@@ -236,16 +236,16 @@ struct OldStyleAnimInput {
 
 struct OldStyleAnimResult {
     AnimStart start;
-    bool idle_sounds = false;         // FUN_0058a480 ran
+    bool idle_sounds = false;         // 0x58a480 ran
     bool spell_book_slot_0x94 = false;
     bool set_still_since = false;     // +0x360 was written with `still_since`
     std::uint32_t still_since = 0;
 };
 
-// FUN_004afe60 @0x4afe60: the old-style object's per-update choice.
+// 0x4afe60: the old-style object's per-update choice.
 OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu& fpu = Fpu{});
 
-// FUN_004afc90 @0x4afc90: an old-style model's playback rate for old
+// 0x4afc90: an old-style model's playback rate for old
 // animation `anim`: doubled for 0x14, 0x13 (not race 8 males), 0x10 with the
 // animation set's new-model flag (+0x34), race 216, races 209..212 while
 // CDisplay +0x129 is set, and with the flag for gender 1 animations 2 and 4

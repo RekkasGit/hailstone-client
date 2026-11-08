@@ -52,7 +52,7 @@ bool type_allowed(std::uint32_t restriction, std::uint32_t t) {
     }
 }
 
-// ItemContainer_FindItemByID @0x7e5280 / FUN_007e4f90 over the host's children: a depth-first search for `id` (0
+// ItemContainer_FindItemByID @0x7e5280 / 0x7e4f90 over the host's children: a depth-first search for `id` (0
 // matches the first item), the path written at index[level] (when below 3) and reset below each searched child.
 // The path starts as the host's own index (its children's container is at depth = the host's index length).
 bool find_by_id(const net::Item& item, std::uint32_t id, int level, std::array<std::int16_t, 3>& path) {

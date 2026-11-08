@@ -41,7 +41,7 @@ public:
     virtual bool is_3d() = 0;                              // CDisplay::is3dON
     virtual bool has_vehicle() = 0;                        // PlayerClient +0x150
     virtual bool scene_accepts(const std::array<float, 3>& p) = 0; // pinstSceneGraph vf4c
-    virtual void set_vehicle_none() = 0;                   // FUN_008cfd10(0)
+    virtual void set_vehicle_none() = 0;                   // 0x8cfd10(0)
     virtual void touching_cleared() {}                     // `clear`: pTouchingSwitch = 0
     // s3dCollideSphereWithWorld(from, to, radius, FloorActorFilter, CollsnCallbackForFloor, ...); `actor_normal`:
     // the spawn's actor gets the hit's normal (`clear`). Returns its result (0 in practice) and the stop point's z.

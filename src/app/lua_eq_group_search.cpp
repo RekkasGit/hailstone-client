@@ -50,7 +50,7 @@ int box_index(std::string_view id) {
     return -1;
 }
 
-// FUN_00677830: a double click on a result starts a tell to the name in its first column: "/tell <name> " (13974)
+// 0x677830: a double click on a result starts a tell to the name in its first column: "/tell <name> " (13974)
 // in the active chat window's input, which takes the keyboard.
 void start_tell(const net::GameConnection& c, const std::string& name) {
     if (!name.empty()) request_chat_focus(std::format("{} {} ", fmt(c, 13974), name));
@@ -58,14 +58,14 @@ void start_tell(const net::GameConnection& c, const std::string& name) {
 
 // GroupSearchWnd. Two tab boxes: GSW_InfoPages ("I am a:", the player page 0 and the group page 1) and
 // GSW_SearchPages ("Show me:", the players list 0 and the groups list 1). OnProcessFrame (every 400 ms while shown)
-// refreshes the page's label (FUN_00678000: 6709 with the level, class and "<guild>"; FUN_00677400: 6711 with the
+// refreshes the page's label (0x678000: 6709 with the level, class and "<guild>"; 0x677400: 6711 with the
 // level and group size, kept while not grouped) and the lock on Get Matches (CGroupSearchWnd_UpdateQueryButtonText:
 // "Get Matches (n)" and disabled for 15 s after a search). The buttons are the WndNotification handlers routed by
-// CGroupSearchWnd_RouteListNotification @0x67a9c0 to the page that sent them (FUN_00679b70, FUN_0067a6f0,
-// FUN_00679c20, FUN_0067a870). A double click on a result row starts a tell (FUN_00677830); a click on a group shows
-// its members (red when the filters drop them) and the classes it wants (FUN_0067a160, FUN_00679e30). The two
-// result lists sort by a header click (CListWnd's sort; the window sets 0x440000): FUN_00679c20 / FUN_0067a870 answer
-// notification 0x10 for the players' Level and the groups' # and Level with FUN_00677920 (the cells' atoi), the
+// CGroupSearchWnd_RouteListNotification @0x67a9c0 to the page that sent them (0x679b70, 0x67a6f0,
+// 0x679c20, 0x67a870). A double click on a result row starts a tell (0x677830); a click on a group shows
+// its members (red when the filters drop them) and the classes it wants (0x67a160, 0x679e30). The two
+// result lists sort by a header click (CListWnd's sort; the window sets 0x440000): 0x679c20 / 0x67a870 answer
+// notification 0x10 for the players' Level and the groups' # and Level with 0x677920 (the cells' atoi), the
 // other columns by text.
 class GroupSearchWindow : public StockWindow {
 public:
@@ -75,7 +75,7 @@ public:
         if (!host.conn) return false;
         auto& gs = host.conn->group_search();
         if (gs.window_open && gs.info_page >= 0) {
-            info_page_ = gs.info_page; // FUN_00676550: CTabWnd::SetPage, then Show
+            info_page_ = gs.info_page; // 0x676550: CTabWnd::SetPage, then Show
             gs.info_page = -1;
         }
         return gs.window_open;
@@ -89,7 +89,7 @@ public:
         auto& c = *host.conn;
         c.group_search_prepare();
         const auto& gs = c.group_search();
-        if (serial_ != gs.results_serial) { // FUN_006772b0: a new groups reply clears the two detail lists
+        if (serial_ != gs.results_serial) { // 0x6772b0: a new groups reply clears the two detail lists
             serial_ = gs.results_serial;
             group_selected_ = -1;
             detail_ = -1;
@@ -100,10 +100,10 @@ public:
         last_frame_ = now;
         const game::Spawn* me = c.world().player();
         if (!me) return;
-        // FUN_00678000.
+        // 0x678000.
         std::string guild = c.guild().in_guild() ? std::format("<{}>", c.guild().name_of(c.guild().guild_id)) : std::string();
         player_label_ = fmt(c, 6709, {std::to_string(me->level), c.class_desc(static_cast<std::int32_t>(me->class_id)), guild});
-        // FUN_00677400: only in a group.
+        // 0x677400: only in a group.
         if (c.group().active) group_label_ = fmt(c, 6711, {std::to_string(me->level), std::to_string(c.group().count())});
     }
 
@@ -131,8 +131,8 @@ public:
         else if (id == "GIP_LevelRangeMinEditbox") out.text = gs.group_min;
         else if (id == "GIP_LevelRangeMaxEditbox") out.text = gs.group_max;
         else if (int i = box_index(id); i >= 0) out.checked = gs.roles[static_cast<std::size_t>(i)];
-        // The post / Update / off buttons as FUN_00678df0, FUN_00678250, FUN_006786a0 (the player's) and
-        // FUN_00679d30, FUN_00678310, FUN_00679480 (the group's) leave them.
+        // The post / Update / off buttons as 0x678df0, 0x678250, 0x6786a0 (the player's) and
+        // 0x679d30, 0x678310, 0x679480 (the group's) leave them.
         else if (id == "PIP_PostMyInfoButton") {
             out.shown = out.enabled = !gs.lfg.on;
             out.checked = gs.lfg.on;
@@ -188,8 +188,8 @@ public:
         else if (id == "GIP_RemoveOurInfoButton") c.group_search_remove_group();
         else if (id == "PIP_AdditionalFiltersButton" || id == "GIP_AdditionalFiltersButton") gs.filters_open = true;
         else if (int i = box_index(id); i >= 0) gs.roles[static_cast<std::size_t>(i)] = !gs.roles[static_cast<std::size_t>(i)];
-        else if (id == "GIP_SelectAllRolesButton") gs.roles.fill(true);   // FUN_00677580
-        else if (id == "GIP_DeselectAllRolesButton") gs.roles.fill(false); // FUN_006775b0
+        else if (id == "GIP_SelectAllRolesButton") gs.roles.fill(true);   // 0x677580
+        else if (id == "GIP_DeselectAllRolesButton") gs.roles.fill(false); // 0x6775b0
         else if (id == "PLP_ShowMatchesCheckbox") gs.players_show_all = false; // radio group FilterPlayerMatches
         else if (id == "PLP_ShowAllCheckbox") gs.players_show_all = true;
         else if (id == "GLP_ShowMatchesCheckbox") gs.groups_show_all = false; // FilterGroupMatches
@@ -243,7 +243,7 @@ public:
         }
         const net::LfpMatch* g = detail_ >= 0 && detail_ < static_cast<int>(gs.groups.size()) ? &gs.groups[static_cast<std::size_t>(detail_)] : nullptr;
         if (id == "GLP_GroupDetailList") {
-            // FUN_00679e30: name, class code, level; the members the filters drop in red (0xffff0000).
+            // 0x679e30: name, class code, level; the members the filters drop in red (0xffff0000).
             details_ = {};
             details_.columns = 3;
             details_.labels = {"Name", "Class", "Level"};
@@ -258,7 +258,7 @@ public:
             return &details_;
         }
         if (id == "GLP_ClassesWantedList") {
-            // FUN_0067a160: 6710 then " ANY" (6718) for all 16 classes, else " <code>" for each in the boxes' order.
+            // 0x67a160: 6710 then " ANY" (6718) for all 16 classes, else " <code>" for each in the boxes' order.
             wanted_ = {};
             wanted_.columns = 1;
             wanted_.labels = {"Desired Classes"};
@@ -284,7 +284,7 @@ public:
         if (id == "PLP_PlayerSearchResultList") player_selected_ = record_of(player_rows_, row);
         else if (id == "GLP_PlayerSearchResultList") {
             group_selected_ = record_of(group_rows_, row);
-            // FUN_0067a160: the record whose leader has the row's name (the first such).
+            // 0x67a160: the record whose leader has the row's name (the first such).
             detail_ = -1;
             detail_selected_ = -1;
             if (group_selected_ >= 0 && group_selected_ < static_cast<int>(gs.groups.size())) {
@@ -320,7 +320,7 @@ public:
 private:
     static constexpr std::string_view kGetMatches = "Get Matches";
 
-    // CListWnd's sort of a result list: FUN_00677920 (atoi of both cells, -1 / 0 / 1) for the numeric columns, else
+    // CListWnd's sort of a result list: 0x677920 (atoi of both cells, -1 / 0 / 1) for the numeric columns, else
     // the texts; `rows` (the records behind the rows) follow.
     template <class Numeric>
     static void sort_rows(ListData& d, std::vector<std::size_t>& rows, const ListSort& sort, Numeric numeric) {

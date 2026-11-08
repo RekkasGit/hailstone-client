@@ -42,7 +42,7 @@ std::string rank_name(const net::GameConnection& c, std::int32_t value, bool lan
     return c.strings().format(0xc98 + static_cast<std::uint32_t>(i), {});
 }
 
-// FUN_005baa20: the first level the class has the skill (GetSkillCap above 0); 0 when never.
+// 0x5baa20: the first level the class has the skill (GetSkillCap above 0); 0 when never.
 std::int32_t skill_level(const game::mechanics::Character& ch, std::uint8_t cls, std::uint32_t skill) {
     for (std::int32_t l = 1; l <= 100; ++l)
         if (ch.skill_cap(l, cls, static_cast<std::int32_t>(skill), false) > 0) return l;
@@ -457,7 +457,7 @@ public:
         return true;
     }
     // CAAWnd::ShowAbility @0x60a7a0 after the window is activated (a right click on an ability's hot button,
-    // FUN_0054fc10): the list row of that ability group, on whichever of the four tabs lists it, is selected and its
+    // 0x54fc10): the list row of that ability group, on whichever of the four tabs lists it, is selected and its
     // tab shown; nothing changes when no list holds it.
     bool activate(EqHost& host, int group) override {
         if (!host.conn) return false;
@@ -546,7 +546,7 @@ public:
         const auto& o = *host.conn->tasks().offers;
         if (selected_ < 0 || selected_ >= static_cast<int>(o.offers.size())) return;
         const auto& t = o.offers[static_cast<std::size_t>(selected_)];
-        // CTaskSelectWnd_ShowTaskDescription @0x76b310: the offer's description through FUN_00481960 (the step
+        // CTaskSelectWnd_ShowTaskDescription @0x76b310: the offer's description through 0x481960 (the step
         // markers and %N element texts, as the task window's; game::task_description_text) over the elements the
         // offer carries. (Its reward line, eqstr 0x178d with the reward's target names, is not built.)
         game::Task task;
@@ -611,7 +611,7 @@ public:
             return &elements_;
         }
         if (id == "QUEST_TaskList") {
-            // CTaskWnd_FillHistoryList @0x76fb90: the list's row is the history index (FUN_00480060(row)).
+            // CTaskWnd_FillHistoryList @0x76fb90: the list's row is the history index (0x480060(row)).
             auto rows = game::history_rows(ts.completed);
             if (history_selected_ >= static_cast<int>(rows.size())) history_selected_ = -1;
             history_ = task_list_data(rows, {"", "Quest Title", "Completion"}, {40, 220, 200}, history_selected_);

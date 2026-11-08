@@ -1,12 +1,12 @@
 // Per-frame clip choice for character models (game/spawn_animation.h).
 // Sources: rof2decomp batch 248 (movement_animation.cpp) and batch 213
-// (player_animation_update.cpp FUN_004afe60, player_animation_start.cpp
-// FUN_004b15b0's stand-state substitutions, player_animation_pick.cpp
-// FUN_004b1210's replacements); the old-style object's slot 0x38
+// (player_animation_update.cpp 0x4afe60, player_animation_start.cpp
+// 0x4b15b0's stand-state substitutions, player_animation_pick.cpp
+// 0x4b1210's replacements); the old-style object's slot 0x38
 // (0x4b07e0: may an idle start from this animation) read from the exe;
 // idle_animation.cpp (PlayerAnimation_ChooseIdleAnimation) and
-// player_animation_rows.cpp / player_animation_play.cpp (FUN_00589770,
-// FUN_00588730, FUN_005885e0, FUN_00588470, FUN_0058afa0) for the new-style
+// player_animation_rows.cpp / player_animation_play.cpp (0x589770,
+// 0x588730, 0x5885e0, 0x588470, 0x58afa0) for the new-style
 // tracks.
 #include "game/spawn_animation.h"
 
@@ -25,7 +25,7 @@ namespace {
 // The old-style object's slot 0x38 (0x4b07e0): true for 0x20, 0x26, 0x47, 0x4a.
 bool old_can_idle(std::int32_t anim) { return anim == 0x20 || anim == 0x26 || anim == 0x47 || anim == 0x4a; }
 
-// FUN_004b1210's fixed replacement for an old-style animation the model lacks.
+// 0x4b1210's fixed replacement for an old-style animation the model lacks.
 std::uint8_t old_replacement(std::uint8_t a) {
     if ((a >= 1 && a <= 4) || (a >= 6 && a <= 9)) return 5;
     switch (a) {
@@ -53,7 +53,7 @@ std::string track_of(std::uint8_t code, int column) {
     return std::string(mech::new_style_tag(code)) + "_" + std::string(assets::eqg_character::kTrackStyles[column]);
 }
 
-// The player's animation table as FUN_0058afa0 reads it: a cell is variant k (0..3) of a column.
+// The player's animation table as 0x58afa0 reads it: a cell is variant k (0..3) of a column.
 struct Rows {
     const std::function<bool(std::string_view)>& has;
     bool cell(std::uint8_t code, int column, int k) const {
@@ -67,7 +67,7 @@ struct Rows {
     }
 };
 
-// FUN_00588730 @0x588730: the column for an animation (no forced column, no mount: slot 0x34's 0x200 state and
+// 0x588730: the column for an animation (no forced column, no mount: slot 0x34's 0x200 state and
 // GetMount are not modelled).
 int column_for(std::uint8_t code, const NewStyleTrackInput& in) {
     if (!(in.player_state & kPrimaryEquipped)) return 0;
@@ -76,8 +76,8 @@ int column_for(std::uint8_t code, const NewStyleTrackInput& in) {
     return in.forced_column != -1 ? in.forced_column : column;
 }
 
-// FUN_005885e0 @0x5885e0: STDA / IDLA for STND / IDLE while aggressive or after an attack (the playing sequence's
-// +0x19 with CEverQuest +0x5c8, the game state, in game: not 1 or 2). CDisplay +0x12c's FUN_007f4100 on the
+// 0x5885e0: STDA / IDLA for STND / IDLE while aggressive or after an attack (the playing sequence's
+// +0x19 with CEverQuest +0x5c8, the game state, in game: not 1 or 2). CDisplay +0x12c's 0x7f4100 on the
 // player's +0xfd0 / +0xfbc is taken as false.
 std::uint8_t alternate_row(std::uint8_t code, int column, const NewStyleTrackInput& in, const Rows& rows) {
     const bool flagged = mech::new_style_attack_flag(mech::old_to_new_anim(in.current));
@@ -96,7 +96,7 @@ std::uint8_t alternate_row(std::uint8_t code, int column, const NewStyleTrackInp
 NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
                               const std::function<bool(std::string_view)>& has_clip,
                               const std::function<int()>& rand) {
-    // FUN_00589770 @0x589770: the row and column, following the sequence fallbacks.
+    // 0x589770: the row and column, following the sequence fallbacks.
     const Rows rows{has_clip};
     std::uint8_t track = code;
     int column = 0;
@@ -129,7 +129,7 @@ NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
         track = mech::new_style_fallback(track);
     }
     if (!found) return {};
-    // FUN_00588470 @0x588470 with extra 0xff: rand() % (1 + the column's variants 2..4 present).
+    // 0x588470 with extra 0xff: rand() % (1 + the column's variants 2..4 present).
     int count = 1;
     for (int k = 1; k <= 3; ++k)
         if (rows.cell(track, column, k)) ++count;
@@ -153,7 +153,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     SpawnAnimChoice keep{st.clip, st.reverse, st.rate, st.loop, false, 100.0f, st.anim, in.follow_up};
     auto start = [&](const std::string& clip, std::uint8_t anim, bool reverse, float rate, bool loop,
                      float blend_ms) {
-        // The same animation asked again does not restart it (FUN_004b0900); a
+        // The same animation asked again does not restart it (0x4b0900); a
         // one-shot clip then holds its last frame.
         bool same = st.started && clip == st.clip && reverse == st.reverse;
         SpawnAnimChoice c{clip, reverse, rate, loop, !same, blend_ms, anim, in.follow_up};
@@ -168,12 +168,12 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     };
 
     // A new-style code on its track (new_style_track); the same sequence and column asked again keeps its
-    // variant (FUN_0058ac90's mode 3: nothing changes).
+    // variant (0x58ac90's mode 3: nothing changes).
     NewStyleTrackInput track_in{in.player_state, st.anim, -1};
     auto start_new = [&](std::uint8_t code, bool reverse, float rate, bool loop) -> std::optional<SpawnAnimChoice> {
         NewStyleTrack t = new_style_track(code, track_in, has_clip, rand);
         if (t.clip.empty()) return std::nullopt;
-        // FUN_0058afa0: BWLK found on WALK's row plays it backward.
+        // 0x58afa0: BWLK found on WALK's row plays it backward.
         if (code == mech::kAnimBackWalk && t.code == mech::kAnimWalk) reverse = true;
         // The layers store the sequence found (Base + row) as the animation playing (+0x10c0).
         const float blend = mech::new_style_blend_ms(st.anim, t.code);
@@ -198,7 +198,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
                 return start("P02", mech::kOldSitStand, false, 1.0f, false, 100.0f);
             }
         } else if (in.stand_state == 100 && from == 110) {
-            // FUN_0058afa0: STNG asked reversed plays STDG forward.
+            // 0x58afa0: STNG asked reversed plays STDG forward.
             if (in.new_style) {
                 if (auto c = start_new(mech::kAnimStandUp, false, 1.0f, false)) {
                     st.posture = true;
@@ -237,7 +237,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     const float vy = in.velocity.y, vx = in.velocity.x, vz = in.velocity.z;
 
     if (in.new_style) {
-        // FUN_0058af10: a still player (and no mount) goes to ChooseIdleAnimation, a moving one to
+        // 0x58af10: a still player (and no mount) goes to ChooseIdleAnimation, a moving one to
         // SelectMovementAnim (which clears +0x360).
         mech::AnimStart r;
         if (mech::movement_still(vy, vx, vz, fpu)) {
@@ -280,7 +280,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
             st.still_since = 0;
         }
         if (!r.played) return keep;
-        // The play (FUN_0058afa0) does nothing for a sequence the model has no track of (nor its fallbacks).
+        // The play (0x58afa0) does nothing for a sequence the model has no track of (nor its fallbacks).
         if (auto c = start_new(r.anim, r.reverse, r.speed, !r.play_once)) return *c;
         return keep;
     }
@@ -308,7 +308,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     if (r.set_still_since) st.still_since = r.still_since;
     if (!r.start.played) return keep;
     std::uint8_t anim = r.start.anim;
-    // FUN_004b15b0: while sitting, standing becomes sitting and the idle the
+    // 0x4b15b0: while sitting, standing becomes sitting and the idle the
     // seated fidget; other stances drop idle requests.
     if (in.stand_state == 110) {
         if (anim == 0x20 || anim == 0x47) anim = mech::kOldSit;
@@ -325,14 +325,14 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
         std::string_view c = mech::old_anim_clip(a);
         return !c.empty() && has_clip(c);
     };
-    // FUN_004b15b0: an animation the model lacks takes FUN_004b1210's replacement (the seated ones play nothing).
+    // 0x4b15b0: an animation the model lacks takes 0x4b1210's replacement (the seated ones play nothing).
     if (!has_anim(anim)) {
         if (anim == mech::kOldSit || anim == mech::kOldSitIdle) return keep; // nothing starts
         anim = old_replacement(anim);
     }
     // Its idle block: what is still missing is a stand request. A stand request plays the follow-up (+0x10c4)
-    // when there is one, else P01, or P08 when the animation playing (+0x10c0) is not one FUN_004b0860 names; an
-    // idle (O01) after such an animation is O02 (0x48), FUN_004b1210's O01 for a model without it.
+    // when there is one, else P01, or P08 when the animation playing (+0x10c0) is not one 0x4b0860 names; an
+    // idle (O01) after such an animation is O02 (0x48), 0x4b1210's O01 for a model without it.
     std::uint8_t follow_up = in.follow_up;
     const bool plain = classic_plain_stand_after(st.anim);
     if (!has_anim(anim) || anim == mech::kOldStand) {
@@ -355,7 +355,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     }
     const std::string clip(mech::old_anim_clip(anim));
     double rate = mech::old_model_anim_speed(anim, r.start.speed, in.race, in.gender, false, false, fpu);
-    // FUN_004b15b0 starts the layers with a 100 ms blend (0x9c3988) whatever the animation; the tag table's
+    // 0x4b15b0 starts the layers with a 100 ms blend (0x9c3988) whatever the animation; the tag table's
     // blend times are the new-style object's.
     SpawnAnimChoice c = start(clip, anim, r.start.reverse, static_cast<float>(rate), !r.start.play_once, 100.0f);
     c.follow_up = follow_up;
@@ -374,7 +374,7 @@ std::string action_clip(std::uint8_t action, const std::function<bool(std::strin
         if (playing) *playing = t.code;
         return t.clip;
     }
-    // FUN_004b15b0: a new-style code becomes its old-style number (0xaaf428); 0x4f and above play nothing.
+    // 0x4b15b0: a new-style code becomes its old-style number (0xaaf428); 0x4f and above play nothing.
     if (action >= 0x4f && action <= 0xb6) action = mech::new_to_old_anim(action);
     if (playing) *playing = action;
     if (action == 0 || action >= 0x4f) return {};

@@ -340,7 +340,7 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
     }
     if (h == "Cmd_hotbutton") {
         // Cmd_hotbutton @0x4f79b0: a social made from the line (game::hotbutton_command), put on the cursor (the
-        // original's FUN_004ea9f0 with start -1); 13282 made, 13283 not; no name the usage.
+        // original's 0x4ea9f0 with start -1); 13282 made, 13283 not; no name the usage.
         game::HotButtonCommand hb = game::hotbutton_command(args);
         if (hb.usage) {
             for (std::uint32_t id = game::kStrHotButtonUsage; id <= game::kStrHotButtonUsage + 3; ++id) c.show_eqstr(id);

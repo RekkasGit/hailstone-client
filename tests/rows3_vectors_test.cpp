@@ -97,7 +97,7 @@ TEST_CASE("LocalPC_HasGuildPermission vectors") {
 }
 
 TEST_CASE("Guild permission bits (disassembly)") {
-    // FUN_007d96c0 / FUN_007d95e0: dword[1 + rank * 2 + permission / 32], bit permission % 32 (C division).
+    // 0x7d96c0 / 0x7d95e0: dword[1 + rank * 2 + permission / 32], bit permission % 32 (C division).
     hailstone::game::GuildPermissions t;
     t.set(8, 0x13, true);
     CHECK(t.words[17] == (1u << 0x13));

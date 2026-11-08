@@ -50,7 +50,7 @@ TEST_CASE("Conversation journal: NPCs by name and zone, an entry per text, categ
     CHECK(k.npcs()[0]->entries.size() == 2);
     CHECK(k.text(k.npcs()[0]->entries[1]->text) == "Guard Gehnus says 'Go away'");
     CHECK(k.npcs()[0]->entries[1]->category == 1);
-    // read back as the original does (FUN_0047ac60): "Lore" (id 1, none yet) takes the lowest free id, 0, and the
+    // read back as the original does (0x47ac60): "Lore" (id 1, none yet) takes the lowest free id, 0, and the
     // next category, id 0, then finds it and renames it
     REQUIRE(k.categories().size() == 1);
     CHECK(k.categories()[0]->name == "Again");

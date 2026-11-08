@@ -3,10 +3,10 @@
 // Which clip a character model plays each frame, as the original's two
 // animation objects choose (game/mechanics/anim_select.h): new-style (EQG)
 // models through PlayerAnimation_SelectMovementAnim or, still,
-// PlayerAnimation_ChooseIdleAnimation, their clips found as FUN_0058afa0
+// PlayerAnimation_ChooseIdleAnimation, their clips found as 0x58afa0
 // finds a sequence's track (new_style_track); classic models through
-// FUN_004afe60 with FUN_004b15b0's stand-state substitutions and
-// FUN_004afc90's rate. The posture changes (rof2decomp batch 248, row 65):
+// 0x4afe60 with 0x4b15b0's stand-state substitutions and
+// 0x4afc90's rate. The posture changes (rof2decomp batch 248, row 65):
 // sitting down plays P02 (STNG on new-style models) once, then P07 (NSIT)
 // is held with O03 (SIDL) as the fidget; standing up plays P02 reversed
 // (STDG on new-style models). Crouching plays the duck (L08, CRCH) once and
@@ -104,13 +104,13 @@ struct NewStyleTrack {
 };
 // The clip a new-style code plays on an EQG model whose tracks are named
 // "<tag>_<style>_<n>" (assets/eqg_character.h is_track_name), as
-// FUN_0058afa0 finds it: FUN_00589770 follows the sequence fallbacks (SLSC ->
+// 0x58afa0 finds it: 0x589770 follows the sequence fallbacks (SLSC ->
 // SLPR -> STND) until a sequence has a variant in the column, column 1 or
-// column 0; FUN_00588730's column is 0 (BA) without a primary weapon (0x40),
+// column 0; 0x588730's column is 0 (BA) without a primary weapon (0x40),
 // 3 (DW) with a secondary too (0x80), else 2 (2H) for SL2H/BL2H, 4 (ST) for
-// ST2H, 1 (1H) for the rest; FUN_005885e0 plays STDA / IDLA for STND / IDLE
+// ST2H, 1 (1H) for the rest; 0x5885e0 plays STDA / IDLA for STND / IDLE
 // while aggressive (0x4 / 0x8) or after an attack (+0x19 of the playing
-// sequence); FUN_00588470 picks the variant at random among those the
+// sequence); 0x588470 picks the variant at random among those the
 // column has (rand() % count). Mounts (column 5) are not modelled.
 NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
                               const std::function<bool(std::string_view)>& has_clip,
@@ -119,8 +119,8 @@ NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
 // The clip an OP_Animation action (or any animation the client starts: an
 // old-style number below 0x4f, else a new-style code) plays, or empty for
 // none. Classic models: a new-style code goes to its old-style number (the
-// map at 0xaaf428, FUN_004b15b0), whose classic code a model without it
-// replaces as FUN_004b1210 does: the attacks 1..4 and 6..9 become 5 (C05),
+// map at 0xaaf428, 0x4b15b0), whose classic code a model without it
+// replaces as 0x4b1210 does: the attacks 1..4 and 6..9 become 5 (C05),
 // so EQEmu's NPC swings (8 hand to hand, 6 the off hand) play C05 on models
 // that have only that; 11 (round kick) becomes 1, 10 (swim attack) swimming
 // (P06). The replacement's own fallback, standing, is left to the movement

@@ -420,7 +420,7 @@ void MapView::start_line(const glm::vec3& p) {
 }
 
 void MapView::add_point(const glm::vec3& p) {
-    // The original tests the current point against the zone box's max plus p (FUN_006cab70 @0x6cab8d), not p.
+    // The original tests the current point against the zone box's max plus p (0x6cab70), not p.
     if (!line_active || !current_zone) return;
     if (!(0.9f < std::fabs(current_point.x - (max_x + p.x)) || 0.9f < std::fabs(current_point.y - (max_y + p.y))))
         return;
@@ -475,7 +475,7 @@ bool MapView::join_lines_at_intersect(bool ctrl) {
     if (marked_lines.size() != 2) return false;
     MapLine& b = *marked_lines[0]; // the newer mark
     MapLine& a = *marked_lines[1]; // the older: the one moved with Ctrl
-    // FUN_006c8d30: where the two lines (as infinite lines) cross; parallel within 0.0001: none.
+    // 0x6c8d30: where the two lines (as infinite lines) cross; parallel within 0.0001: none.
     double x1 = a.start.x, y1 = a.start.y, x2 = a.end.x, y2 = a.end.y;
     double x3 = b.start.x, y3 = b.start.y, x4 = b.end.x, y4 = b.end.y;
     double den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
@@ -597,7 +597,7 @@ int MapView::count_overlaps(int l, int t, int r, int b, const Placed* exclude) c
     return n;
 }
 
-// FUN_006cada0: tries anchors from `anchor` up; the first whose rectangle lies inside the clip rectangle (or any,
+// 0x6cada0: tries anchors from `anchor` up; the first whose rectangle lies inside the clip rectangle (or any,
 // with `force`) and overlaps nothing is taken (placed, the label's offset set, 0 returned). Otherwise the anchor
 // with the fewest overlaps (under 50) as -(anchor + 1), or 1 when every anchor has 50 or more.
 int MapView::try_place(unsigned anchor, int x, int y, MapLabel& label, int cl, int ct, int cr, int cb, bool force) {

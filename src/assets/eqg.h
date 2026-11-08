@@ -255,7 +255,7 @@ struct TextureAnimation {
 };
 std::optional<TextureAnimation> parse_texture_animation(std::span<const std::byte> data);
 
-// An .eco flora layer (*FLORAPART *LAYER), as the DLL's layer reader FUN_10107a60 stores it: the flora definition
+// An .eco flora layer (*FLORAPART *LAYER), as the DLL's layer reader 0x10107a60 stores it: the flora definition
 // (*FLORA, +0x14), the texture layer whose mask it grows on (*TEXTURELAYER, +0x18), the height band (+0x20..+0x28),
 // the slope band (+0x2c..+0x34), *DENSITY (+0x38, float), *ITERATIONS (+0x3c), *MINSCALE / *MAXSCALE (+0x40 /
 // +0x44) and *MINALPHA (+0x58, a byte).

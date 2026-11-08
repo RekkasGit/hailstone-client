@@ -144,7 +144,7 @@ struct ReAccess {
     struct Group {
         std::uint32_t group = 0, bits = 0;
     };
-    // The constructor's slots with FUN_005b5830's masks: Everyone, Visitor 3, Acquaintance 0x803, Friend 0xe03,
+    // The constructor's slots with 0x5b5830's masks: Everyone, Visitor 3, Acquaintance 0x803, Friend 0xe03,
     // Trustee 0x1f87, Co-owner 0x1fff, the seventh 0.
     std::array<Group, kReAccessGroups> groups{{{0, 3}, {1, 3}, {2, 0x803}, {3, 0xe03}, {4, 0x1f87}, {5, 0x1fff}, {6, 0}}};
     struct Member {
@@ -153,7 +153,7 @@ struct ReAccess {
     };
     std::vector<Member> members;
 };
-// 0x3968: u32 re, the table, u32 (read after it; its use, FUN_005b59a0 when no area manager exists, is not known).
+// 0x3968: u32 re, the table, u32 (read after it; its use, 0x5b59a0 when no area manager exists, is not known).
 // 0x485d: u32 re, the table. 0x3146 (C→S, the save): the table alone? see encode_re_access_save.
 struct ReAccessMessage {
     std::uint32_t re = 0;
@@ -163,7 +163,7 @@ struct ReAccessMessage {
 std::optional<ReAccessMessage> decode_re_access(const AppPacket& p);
 AppPacket encode(std::uint16_t op, const ReAccessMessage& v); // server direction, for tests
 
-// One item row (0x3c; FUN_005abd20): u32 re, u32 item; u8 placed, u32 f04; 7 × u32 counters; str, str name; then the
+// One item row (0x3c; 0x5abd20): u32 re, u32 item; u8 placed, u32 f04; 7 × u32 counters; str, str name; then the
 // item serialized as in OP_ItemPacket after its type (ItemClient::CreateItemClient).
 struct ReItemRow {
     std::uint32_t re = 0, item_id = 0;
@@ -176,7 +176,7 @@ struct ReItemRow {
 ReItemRow read_re_item_row(ByteReader& r);
 void write_re_item_row(ByteWriter& w, const ReItemRow& v);
 // 0x087f: u32 re, str name, u32 n, rows. 0x1cef: the same without the name. 0x1097: u32 re, then a summary update
-// (FUN_005ab4b0, not decoded: kept raw). 0x2cf7: u32 re, one row.
+// (0x5ab4b0, not decoded: kept raw). 0x2cf7: u32 re, one row.
 struct ReItemList {
     std::uint32_t re = 0;
     std::optional<std::string> name;
@@ -246,7 +246,7 @@ struct ReSearchReply {
 std::optional<ReSearchReply> decode_re_search_reply(const AppPacket& p);
 AppPacket encode(const ReSearchReply& v); // server direction, for tests
 
-// 0x2aa6, both directions: the escrow object (RealEstate::EscrowDeserialize @0x748700, its writer FUN_00748ce0):
+// 0x2aa6, both directions: the escrow object (RealEstate::EscrowDeserialize @0x748700, its writer 0x748ce0):
 // u32 action, u32 re, u32 f8, cstr address (≤ 63), cstr owner (≤ 31), u8, u32, u32 n, n × {u32 currency (0 coin),
 // u32 coin type, u64 amount}. Coin types as CRealEstateManageWnd::SendEscrowFromCursor @0x741ee0 makes them: 3
 // platinum, 2 gold, 1 silver, 0 copper. From the server it pays coin to the player (the withdraw path); the balance
@@ -319,7 +319,7 @@ struct ReNpcItem {
 };
 std::optional<ReNpcItem> decode_re_npc_item(const AppPacket& p);
 
-// 0x21ec (768 bytes both ways). The request (FUN_00542a90, from the items window's right click on a row): char[18]
+// 0x21ec (768 bytes both ways). The request (0x542a90, from the items window's right click on a row): char[18]
 // key (the item's 16-digit serial) at +0, a slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x28 0, the name
 // zeroed, 40 entries 0xff-filled, u8 1 at +0x2ec, the mouse's x, y at +0x2f0 / +0x2f4, the item's +0xec at +0x2f8.
 // The reply (CRealEstateItemsWnd_ShowItemContextMenu @0x7375f0): the same, +0x2c cstr name, 40 entries at +0x6c +
@@ -359,7 +359,7 @@ std::optional<Item> decode_re_inspect(const AppPacket& p);
 
 // Client → server.
 // 0x2691: subtype (0 my plots / search, 1 my items, 2 a neighborhood row, 4 the plot search window), id, 0, char[80]
-// at +0x0c, char[64] at +0x5c (the plot search's name: FUN_0074b920), char[64] at +0x9c, u8 flag +0xdc, u8 1
+// at +0x0c, char[64] at +0x5c (the plot search's name: 0x74b920), char[64] at +0x9c, u8 flag +0xdc, u8 1
 // +0xdd, 2 bytes of padding (224 bytes).
 AppPacket encode_re_search(std::uint32_t subtype, std::uint32_t id, std::string_view s0 = {}, std::string_view s1 = {},
                            std::string_view s2 = {}, std::uint8_t flag = 0);
@@ -378,24 +378,24 @@ enum class ReEscrowAction : std::uint32_t { Deposit = 0, Withdraw = 1, SetUpkeep
 AppPacket encode_re_escrow(ReEscrowAction action, std::uint32_t re, std::vector<ReEscrow::Entry> entries = {});
 // 0x3146: one estate's access table (RealEstateAccess::Serialize): u32 re then the table.
 AppPacket encode_re_access_save(std::uint32_t re, const ReAccess& access);
-// 0x3424 / 0x2036 (move to storage / inventory; FUN_0073f6c0 / FUN_00542470): char[18] key (the item's serial) at
+// 0x3424 / 0x2036 (move to storage / inventory; 0x73f6c0 / 0x542470): char[18] key (the item's serial) at
 // +0, a slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x28 0, and for storage the destination at +0x2c: the
-// container index of the estate's type (FUN_007f5ec0: 2 a house (closet), 3 a plot (shed), 6 a crate). 48 / 44 bytes.
+// container index of the estate's type (0x7f5ec0: 2 a house (closet), 3 a plot (shed), 6 a crate). 48 / 44 bytes.
 AppPacket encode_re_to_storage(std::string_view key, std::uint32_t re, std::uint32_t item, std::uint32_t destination);
 AppPacket encode_re_to_inventory(std::string_view key, std::uint32_t re, std::uint32_t item);
-// FUN_007f5ec0: an estate type's container index (the storage destinations).
+// 0x7f5ec0: an estate type's container index (the storage destinations).
 std::uint32_t re_container_index(ReType type);
 AppPacket encode_re_store_all();          // 0x6917
 AppPacket encode_re_pack_crate(bool pack); // 0x613d
 AppPacket encode_re_inspect(std::uint32_t re, std::uint32_t item); // 0x58c7
-// ItemGlobalIndex as the placement packets carry it: on the wire (FUN_004d60e0) u8 location then u16 slot, sub, aug
+// ItemGlobalIndex as the placement packets carry it: on the wire (0x4d60e0) u8 location then u16 slot, sub, aug
 // (7 bytes); in the fixed bodies {i32 location, i16 slot, i16 sub, i16 aug, 2 bytes} (12 bytes).
 struct ReItemIndex {
     std::int32_t location = -1;
     std::int16_t slot = -1, sub = -1, aug = -1;
 };
 inline constexpr std::int16_t kReCursorSlot = 33;
-// 0x626e (C→S, 60 bytes; FUN_005424d0's defaults, then CEverQuest::LMouseUp with a placeable item on the cursor or
+// 0x626e (C→S, 60 bytes; 0x5424d0's defaults, then CEverQuest::LMouseUp with a placeable item on the cursor or
 // the items window's Place): +0x00 the item's serial (16 characters + u16), +0x14 the item index (the cursor: {0,
 // 33, -1, -1}), +0x20 re, +0x24 item (an item already placed: its row's ids, the index left at -1s; else -1, -1),
 // +0x28 0, +0x2c 1, +0x30 u8 1, +0x34 / +0x38 the mouse's screen x, y.
@@ -424,7 +424,7 @@ std::optional<RePlaceReply> decode_re_place_reply(const AppPacket& p);
 AppPacket encode(const RePlaceReply& v); // server direction, for tests
 // 0x711a (96 bytes; Send_Opcode_0x711a @0x5b1f90 → RealEstate::SerializeConfirm @0x5b3fb0): +0x00 the key (18
 // bytes), +0x14 the item index (12 bytes), +0x20 re, +0x24 item, +0x28 0, +0x2c heading, pitch, roll, scale, x,
-// y, z (f32), +0x48 / +0x54 the actor's bounding box (FUN_004907f0: the second vec3, then the first).
+// y, z (f32), +0x48 / +0x54 the actor's bounding box (0x4907f0: the second vec3, then the first).
 AppPacket encode_re_place_confirm(const RePlacedItem& v, const ReItemIndex& index = {}, const glm::vec3& box_a = {},
                                   const glm::vec3& box_b = {});
 struct RePlaceConfirm {

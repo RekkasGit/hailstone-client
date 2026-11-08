@@ -14,7 +14,7 @@ bool PositionTracker::record(const std::array<float, 3>& p, std::uint32_t reason
     if (!g.main_loop) {
         if (reason == kPositionMove) return false;
     } else if (reason == kPositionMove) {
-        // FUN_0056e250: fucompp per component, a NaN never equal.
+        // 0x56e250: fucompp per component, a NaN never equal.
         bool same = has_last_ && p[0] == last_[0] && p[1] == last_[1] && p[2] == last_[2];
         if (same && now - last_time_ < 1000) return false;
         last_ = p;
@@ -23,7 +23,7 @@ bool PositionTracker::record(const std::array<float, 3>& p, std::uint32_t reason
     samples_.push_back({p, reason, now});
     ++sequence_;
     last_time_ = now;
-    return reason == 3 || reason == 4 || reason == 5 || reason == 8; // FUN_0056e290
+    return reason == 3 || reason == 4 || reason == 5 || reason == 8; // 0x56e290
 }
 
 std::vector<std::byte> PositionTracker::take(bool force, std::uint32_t now) {

@@ -84,7 +84,7 @@ struct CollisionTriangle {
 // with the sweep's t, normal and collided updated.
 bool collide_triangle(SphereSweep& sweep, const CollisionTriangle& tri);
 
-// FUN_00509130's rule for vectors: zero when the length is within 2^-23 of 0.
+// 0x509130's rule for vectors: zero when the length is within 2^-23 of 0.
 glm::vec3 normalize_or_zero(const glm::vec3& v);
 
 // s3dCollideActorSweep's outputs from a finished sweep: the clamp point

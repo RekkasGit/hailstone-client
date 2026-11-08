@@ -10,17 +10,17 @@
 //   8010 Save hotbutton set        CTextEntryWnd "Enter hotbutton set name:" (8008; 1..24 characters, empty)
 //   8011 Delete hotbutton set ▸    the sets in use (ids 0x1838 + n), disabled with none: ConfirmationDialog 0x81 (8031)
 //   8028 Clear current hotbuttons  ConfirmationDialog 0x82 (8029): every button of the bar's 10 pages cleared, 8032
-//   7674 Button Size               CQuantityWnd "Percent" 40..175 from the bar's PercentSize (FUN_0068a170)
+//   7674 Button Size               CQuantityWnd "Percent" 40..175 from the bar's PercentSize (0x68a170)
 //   7673 Show Key Map              checked with the bar's ShowKeyMap: toggles it
 //   7675 Show Spinner              checked with the bar's ShowSpinner: toggles it (the page buttons)
-//   4654 Open New Bar              enabled while a bar is hidden: shows the first hidden bar (FUN_0068b6f0)
+//   4654 Open New Bar              enabled while a bar is hidden: shows the first hidden bar (0x68b6f0)
 //
 // Saving (the text entry's OK, notification 0x26): the set of that name (case ignored) among those in use, else the
 // first unused entry; none: eqstr 8006 with "100" (the original's text, for 10 sets), colour 0xd. The entry takes the
 // name, in use, changed, file number = its index (a change here, below), and the bar's 10 pages of 12 buttons go to
 // .\userdata\HB_<file number>_<name>_<server>.ini, section [Hotbuttons], key Page<p>.Slot<b> (1-based): the
 // button's FormatHotButtonIniString text, an empty button's key removed; then eqstr 8007 with the name (colour 0xf)
-// and FUN_005199c0: the sets sorted (qsort with FUN_00519890: in use first, by name with __stricmp), all marked
+// and 0x5199c0: the sets sorted (qsort with 0x519890: in use first, by name with __stricmp), all marked
 // changed, SaveHotButtonLoadoutsToIni. The file number stays the index the set was saved at, while the sort moves it,
 // so in the original a later set saved at that index (a new one after a delete, or another set re-saved there) writes
 // over the file of the set moved away and that set is lost. Fixed here (a change): a set saved again keeps its own
@@ -29,7 +29,7 @@
 // original's format, so the original's files load as they are.
 // Loading (0x80, Yes): set n in use: for each page and button the button is cleared (ClearHotButtonSlot) and, when
 // the file has a value for it, parsed (ParseHotButtonIniString); saved (SaveHotButtonsToIni), eqstr 8015 (colour 0xf).
-// Deleting (0x81, Yes): set n in use: eqstr 8013, no longer in use, changed, FUN_005199c0 (sorted, saved); the file
+// Deleting (0x81, Yes): set n in use: eqstr 8013, no longer in use, changed, 0x5199c0 (sorted, saved); the file
 // stays. Clearing (0x82, Yes): the bar's 120 buttons cleared, saved, eqstr 8032 (colour 0xf).
 // The character ini keeps them (SaveHotButtonLoadoutsToIni @0x546160, ReadCharacterIniSettings @0x546ea0): section
 // [HBLoadouts], for each changed entry HBSet<n>.inuse (0 / 1) and, in use, HBSet<n>.name and HBSet<n>.fileNum.
@@ -73,7 +73,7 @@ public:
     void load(const IniFile& ini);
     // SaveHotButtonLoadoutsToIni: the changed entries into [HBLoadouts]; they are no longer changed.
     void save(IniFile& ini);
-    // FUN_005199c0 without its save: in use first, by name (case ignored); every entry changed.
+    // 0x5199c0 without its save: in use first, by name (case ignored); every entry changed.
     void sort();
     // The text entry's OK: the entry `name` (cut to kHotButtonSetNameMax) is saved as (the set of that name, else the
     // first unused one; -1: all 10 in use), marked in use and changed. Its file number (changed from the original's

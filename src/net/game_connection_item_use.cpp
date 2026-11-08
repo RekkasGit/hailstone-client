@@ -197,7 +197,7 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
             return;
         }
         system(12081, {item->name}, kChatFood);
-        // FUN_007bf990(the Alcohol Tolerance skill when known, else 0): drunkenness +
+        // 0x7bf990(the Alcohol Tolerance skill when known, else 0): drunkenness +
         // ftol(max(0, 270 - skill) / 270 x 30 + 10), at most 200.
         const std::int32_t tolerance = skill_value(66) > 0 ? skill_value(66) : 0;
         const std::int32_t x = std::max(0, 270 - tolerance);
@@ -373,7 +373,7 @@ Item* GameConnection::valid_cast_item() {
 void GameConnection::preview_item(const Item* item) {
     if (state_ != ConnectionState::InZone) return;
     item_preview_.open = true; // vtable +0xd8 (1, 1, 1)
-    if (!item) { // FUN_006ff980(0, 1): the view and its buttons hidden, the label shown
+    if (!item) { // 0x6ff980(0, 1): the view and its buttons hidden, the label shown
         item_preview_.show = false;
         item_preview_.item.reset();
         ++item_preview_.serial;
@@ -394,7 +394,7 @@ void GameConnection::preview_item_id(std::uint32_t item_id) {
 }
 
 void GameConnection::handle_item_preview(const AppPacket& p) {
-    // HandleWorldMessage case 0x7f80 (0xb07f, the marketplace's, is not handled: no marketplace): FUN_006ffa70.
+    // HandleWorldMessage case 0x7f80 (0xb07f, the marketplace's, is not handled: no marketplace): 0x6ffa70.
     auto r = decode_item_preview(p);
     if (!r) {
         log::warn("could not decode the item preview ({} bytes)", p.data.size());

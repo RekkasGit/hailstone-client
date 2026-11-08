@@ -1,8 +1,8 @@
 // Movement animation choice and playback rate (game/mechanics/anim_select.h).
 // Sources: rof2decomp re/src/game/spawn/movement_animation.cpp (batch 248:
-// PlayerAnimation_SelectMovementAnim @0x5888a0, FUN_0058af10, FUN_004afc90)
+// PlayerAnimation_SelectMovementAnim @0x5888a0, 0x58af10, 0x4afc90)
 // and re/src/game/spawn/player_animation_update.cpp (batch 213:
-// FUN_004afe60). The float steps follow the original's x87 instruction order;
+// 0x4afe60). The float steps follow the original's x87 instruction order;
 // comments give the addresses.
 #include "game/mechanics/anim_select.h"
 
@@ -80,7 +80,7 @@ double stride_value(const Fpu& f, const MovementAnimInput& in, bool shrink) {
     return s;
 }
 
-// FUN_004afc90's decision: 0 keep, 1 double, 2 * 0.75.
+// 0x4afc90's decision: 0 keep, 1 double, 2 * 0.75.
 int old_speed_rule(std::int32_t anim, std::int32_t race, std::int32_t gender, bool styled, bool display_129) {
     bool late = false;
     if (race != 0x14a) {
@@ -103,8 +103,8 @@ int old_speed_rule(std::int32_t anim, std::int32_t race, std::int32_t gender, bo
 // The sequence table at 0xaae3d8 (0x28-byte rows for codes 0x4f..0xb6; read
 // from the exe): the tag (+0x10 from 0xaae3dc), the fallback sequence (-8),
 // the priority (-4), blend in / out (+0 / +4, ms), the layer kind (-0xc,
-// FUN_0058afa0's choice of layers) and the flags +0x19 (FUN_005885e0: the
-// stand after it may be the combat stand) and +0x1a (FUN_00589770: column 5
+// 0x58afa0's choice of layers) and the flags +0x19 (0x5885e0: the
+// stand after it may be the combat stand) and +0x1a (0x589770: column 5
 // may fall back to column 0);
 // with the new-to-old map at 0xaaf428 (the old-style number of each code).
 struct Sequence {
@@ -648,7 +648,7 @@ namespace hailstone::game::mechanics {
 
 namespace {
 
-// FUN_0059f750 @0x59f750: the old-style models' choice (read from the disassembly; its jump table at 0x59f854 /
+// 0x59f750: the old-style models' choice (read from the disassembly; its jump table at 0x59f854 /
 // 0x59f87c).
 std::uint8_t old_attack_animation(const AttackAnimInput& in) {
     std::uint32_t a;
@@ -685,7 +685,7 @@ std::uint8_t old_attack_animation(const AttackAnimInput& in) {
     return static_cast<std::uint8_t>(a);
 }
 
-// FUN_0059f8d0 @0x59f8d0: the new-style models' choice (its jump table at 0x59fa40 / 0x59fa6c).
+// 0x59f8d0: the new-style models' choice (its jump table at 0x59fa40 / 0x59fa6c).
 std::uint8_t new_attack_animation(const AttackAnimInput& in) {
     const bool primary = in.slot == 0xd, secondary = in.slot == 0xe;
     std::uint32_t a = secondary ? 0x55 : 0x52; // STSC / STPR

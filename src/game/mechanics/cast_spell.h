@@ -214,8 +214,8 @@ public:
     virtual bool spell_allowed(Spawn* target, std::int32_t association) = 0;   // SpellManager vtable +8
     virtual std::int32_t focus_range_modifier(const Spell& spell) = 0;         // GetFocusRangeModifier
     virtual std::uint32_t player_distance(Spawn& from, Spawn& to, std::uint32_t extra_bits) = 0; // float bits
-    virtual Handle spawn_character_pc(Spawn& spawn) = 0;                       // FUN_0059f730
-    virtual bool target_type_12_check(Spawn& spawn) = 0;                       // FUN_0059ed50
+    virtual Handle spawn_character_pc(Spawn& spawn) = 0;                       // 0x59f730
+    virtual bool target_type_12_check(Spawn& spawn) = 0;                       // 0x59ed50
     // CharacterZoneClient_IsSelfOrGroupMember on `pc` for a name: the caster's character (who null) or a spawn's.
     virtual bool is_self_or_group_member(Handle pc, const Spawn* who) = 0;
     virtual bool has_property(Spawn& spawn, std::int32_t property, std::int32_t a2, std::int32_t a3) = 0;

@@ -245,14 +245,14 @@ void GameConnection::update() {
         while (auto p = zone_session_ ? zone_session_->receive() : std::nullopt)
             if (!options_.hooks || options_.hooks->packet(plugin::Stream::Zone, plugin::Direction::In, *p) == plugin::Flow::Continue)
                 handle_zone(*p);
-        // CTaskWnd::OnProcessFrame: the task compass mark looked for again once marked (FUN_0076ff70).
+        // CTaskWnd::OnProcessFrame: the task compass mark looked for again once marked (0x76ff70).
         if (task_compass_dirty_ && state_ == ConnectionState::InZone) update_task_compass();
         if (zone_session_ && zone_exit_ != ZoneExit::None && zone_session_->state() != SessionState::Disconnected &&
             Clock::now() >= zone_exit_deadline_) {
             if (zone_exit_ == ZoneExit::CampLogout) {
                 // The zone kept the link 3 s after OP_Logout: DoMainLoop's exit (exit reason 0x1e6) records the
                 // position, saves (SavePCForce(0): OP_SaveOnZoneReq), sends OP_DeleteSpawn and waits again.
-                // Neither goes out when the link is down (the connection's status +0x8c, FUN_00542380) or while the
+                // Neither goes out when the link is down (the connection's status +0x8c, 0x542380) or while the
                 // respawn window is up (PlayerZoneClient RespawnTimer).
                 if (!respawn_) {
                     send_zone(encode_save_on_zone(save_request(0)));
@@ -996,7 +996,7 @@ void GameConnection::finish_zone_in() {
     state_ = ConnectionState::InZone;
     status_.clear();
     report_state_ = 1; // Cmd_report's 0xddf640, set at each zone-in (the 0x345d step)
-    // ProcessGame's zone-in after a death (CEverQuest +0x39580, set by FUN_00531730): the death tip, once.
+    // ProcessGame's zone-in after a death (CEverQuest +0x39580, set by 0x531730): the death tip, once.
     if (death_tip_pending_) {
         death_tip_pending_ = false;
         window_toggle_ = "tip:31";
@@ -1014,7 +1014,7 @@ void GameConnection::finish_zone_in() {
     if (entered) send_zone(encode_hailstone_guild({}));
     // And the server's settings for the client; a server without Hailstone's script does not answer.
     if (entered) send_zone(encode_hailstone_settings_request());
-    // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (FUN_0076ff50).
+    // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (0x76ff50).
     ++tasks_.revision;
     task_compass_dirty_ = true;
 }
@@ -1928,7 +1928,7 @@ void GameConnection::set_player_motion(const glm::vec3& position, float heading,
     if (glm::distance(position, last_sent_position_) > 0.01f || moving != moving_) motion_dirty_ = true;
     float dh = std::abs(heading - last_sent_heading_);
     if (std::min(dh, 512.0f - dh) >= 2.0f) motion_dirty_ = true;
-    // PlayerAnimation_SelectMovementAnim (run when FUN_004afe60 finds the player moving: squared speed 0.01 or
+    // PlayerAnimation_SelectMovementAnim (run when 0x4afe60 finds the player moving: squared speed 0.01 or
     // more) deactivates an open spell book unless the horizontal speed is below 0.001 on both axes.
     if (spell_book_open_ && glm::dot(velocity, velocity) >= 0.01f &&
         (std::abs(velocity.x) >= 0.001f || std::abs(velocity.y) >= 0.001f))

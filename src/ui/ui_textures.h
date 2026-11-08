@@ -58,7 +58,7 @@ public:
     // The first frame of a stock animation (<Ui2DAnimation item="name"> in any uifiles/default XML file, as
     // CSidlManagerBase::FindAnimation finds it).
     std::optional<Cell> animation(std::string_view name);
-    // A grid animation (<Grid>true</Grid>: A_DragItem, A_SpellGems, A_MenuIcons ...): its cell count (FUN_0087a820:
+    // A grid animation (<Grid>true</Grid>: A_DragItem, A_SpellGems, A_MenuIcons ...): its cell count (0x87a820:
     // the first frame's columns x rows x the frames; nullopt: no such grid animation) and cell `index` (frame by
     // frame; down each column first when <Vertical>, else across each row), as IconCache::GetIcon draws it.
     std::optional<int> grid_cells(std::string_view name);

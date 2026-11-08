@@ -662,7 +662,7 @@ public:
     std::uint8_t sub_00433830(const Spell* s, Character* c) override {
         return static_cast<std::uint8_t>(ret(call("sub_00433830", P(&w_.self), {P(s), P(c)})));
     }
-    Handle character_of(Spawn* s) override { return handle(call("FUN_0059f730", P(s), {})); }
+    Handle character_of(Spawn* s) override { return handle(call("0x59f730", P(s), {})); }
     void token_to_client(Handle to, std::uint32_t id, std::uint32_t color) override {
         call("token_string_to_client", std::nullopt, {H(to), I(id), I(color), I(0)});
     }
@@ -728,7 +728,7 @@ public:
     void record_position_sample(Spawn* s, std::uint32_t kind) override {
         call("RecordPositionSample", P(s), {I(kind), I(0), I(0)});
     }
-    Spawn* vehicle_of(Spawn* s) override { return obj<Spawn>(call("FUN_0058cf90", P(s), {})); }
+    Spawn* vehicle_of(Spawn* s) override { return obj<Spawn>(call("0x58cf90", P(s), {})); }
     Spawn* mount_spawn(Spawn* s) override { return obj<Spawn>(call("GetMountSpawn", P(s), {})); }
     std::int32_t get_drunkenness(Handle pc) override { return ret(call("GetDrunkenness", H(pc), {})); }
     void set_drunkenness(Handle pc, std::int32_t v) override {
@@ -758,7 +758,7 @@ public:
         call("SetBindHeading", H(pc), {I(slot), I(v)});
     }
     void save_pc() override { call("CEverQuest::SavePC", std::nullopt, {I(0), I(1), I(0xe)}); }
-    void set_150(Spawn* s) override { call("FUN_008cfd10", P(s), {I(0)}); }
+    void set_150(Spawn* s) override { call("0x8cfd10", P(s), {I(0)}); }
     void play_sound(Spawn* s, std::uint32_t sound) override { call("PlaySound", P(s), {I(sound)}); }
     std::int32_t zone_index(const char* name) override {
         return ret(call("GetIndexFromZoneName", std::nullopt, {T(name)}));
@@ -783,7 +783,7 @@ public:
         call("getString", std::nullopt, {I(id), I(0)});
         return w_.texts[(id ^ (id >> 4)) & 3];
     }
-    void set_endurance(std::int32_t v) override { call("FUN_00441e50", P(&w_.cb), {I(v)}); }
+    void set_endurance(std::int32_t v) override { call("0x441e50", P(&w_.cb), {I(v)}); }
     void cur_endurance() override { call("Cur_Endurance", P(&w_.self), {I(1)}); }
     void cur_mana() override { call("Cur_Mana", P(&w_.self), {I(1)}); }
     void feign(std::uint32_t id, std::int32_t v) override { call("StopCastAndFeignDeath", P(&w_.self), {I(id), I(v)}); }
@@ -827,7 +827,7 @@ public:
     void set_linked_reuse(Handle pc, std::uint32_t timer, std::uint32_t when) override {
         call("SetLinkedSpellReuseTimer", H(pc), {I(timer), I(when)});
     }
-    std::int32_t random_below(std::uint32_t n) override { return ret(call("FUN_00402870", std::nullopt, {I(n)})); }
+    std::int32_t random_below(std::uint32_t n) override { return ret(call("0x402870", std::nullopt, {I(n)})); }
     void stop_current_spell_cast() override { call("StopCurrentSpellCast", P(&w_.self), {I(1)}); }
     void apply_fling(Spawn* local, const FlingRecord& r) override {
         call("ApplyFling", P(local), {S()});
@@ -852,9 +852,9 @@ public:
         call("SetBuffCasterID", P(&w_.cb), {I(slot), I(id)});
     }
     std::uint8_t has_buff_flag(const Spell* s) override {
-        return static_cast<std::uint8_t>(ret(call("FUN_00453520", P(&w_.self), {P(s)})));
+        return static_cast<std::uint8_t>(ret(call("0x453520", P(&w_.self), {P(s)})));
     }
-    void on_new_buff(std::uint32_t slot) override { call("FUN_0045b250", P(&w_.self), {I(slot)}); }
+    void on_new_buff(std::uint32_t slot) override { call("0x45b250", P(&w_.self), {I(slot)}); }
     std::int32_t refused_mez(std::int32_t max, Spawn* caster, const Spell* s) override {
         return ret(call("EmptyFunction_004432a0", P(&w_.self), {I(max), P(caster), P(s)}));
     }
@@ -872,8 +872,8 @@ public:
     void lose_control_message(Spawn* s) override { call("ShowLoseControlMessage", P(s), {}); }
     void update_all_visibility() override { call("UpdateAllPlayersVisibility", std::nullopt, {}); }
     void set_view_actor(const char* name) override { call("SetViewActorByName", std::nullopt, {T(name)}); }
-    void spa87(std::int32_t v) override { call("FUN_004940b0", std::nullopt, {I(v)}); }
-    void spa57(std::int32_t v) override { call("FUN_00432b20", P(&w_.self), {I(v)}); }
+    void spa87(std::int32_t v) override { call("0x4940b0", std::nullopt, {I(v)}); }
+    void spa57(std::int32_t v) override { call("0x432b20", P(&w_.self), {I(v)}); }
     void update_visible_status() override { call("UpdateMyVisibleStatus", P(&w_.self), {I(0)}); }
     std::int32_t random_low_high(std::int32_t lo, std::int32_t hi) override {
         return ret(call("RandomNumberLowHigh", std::nullopt, {I(lo), I(hi)}));
@@ -889,7 +889,7 @@ public:
     void apply_post_effect(const Spell* s, std::uint32_t index) override {
         call("ApplyPostEffect", P(&w_.self), {P(s), I(index), I(1)});
     }
-    void spa436() override { call("FUN_004325e0", P(&w_.self), {I(1)}); }
+    void spa436() override { call("0x4325e0", P(&w_.self), {I(1)}); }
 
 private:
     double trig() const {

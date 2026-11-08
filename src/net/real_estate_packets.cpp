@@ -379,7 +379,7 @@ std::optional<ReSearchReply> decode_re_search_reply(const AppPacket& p) {
         r.le<std::uint32_t>();
         auto owner_type = static_cast<ReType>(r.le<std::uint8_t>());
         if (owner_type == ReType::Plot || owner_type == ReType::GuildPlot) {
-            // FUN_005b0f80's form B.
+            // 0x5b0f80's form B.
             v.kind = ReSearchReply::Record;
             r.le<std::uint32_t>();
             auto auto_open = r.le<std::uint16_t>();
@@ -736,7 +736,7 @@ AppPacket encode_re_menu_request(std::string_view key, std::uint32_t re, std::ui
 }
 
 AppPacket encode_re_menu_request(std::uint32_t re, std::uint32_t item, std::int32_t x, std::int32_t y) {
-    // EqItemGuid_Construct (sixteen '0', then a u16 0) and FUN_00542a90(guid, {-1, -1, 0xffff}, re, item, x, y, 0,
+    // EqItemGuid_Construct (sixteen '0', then a u16 0) and 0x542a90(guid, {-1, -1, 0xffff}, re, item, x, y, 0,
     // -1); the third index dword's upper half is the original's stack, 0 here.
     ReMenu q;
     q.key = "0000000000000000";

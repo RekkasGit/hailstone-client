@@ -6,7 +6,7 @@
 //   RaceManager_GetSoundID @0x7f46d0: a spawn's 44 sound ids from racedata.txt;
 //   PlayerAnimation_PlayAnimationSound @0x4b09d0: the sound of an animation
 //   (attacks, steps, jumps, swimming, death);
-//   CEverQuest::ReportSuccessfulHit @0x52ee40 and FUN_00514920: hit and block sounds;
+//   CEverQuest::ReportSuccessfulHit @0x52ee40 and 0x514920: hit and block sounds;
 //   EQSwitch::ChangeState @0x50f540 (re/src/game/world/switch_state.cpp): door sounds;
 //   Handle_OP_LevelUpdate @0x4b9c10 (re/src/game/net/experience.cpp): level up;
 //   PlayerZoneClient_LandingAndFallCheck @0x506e20 and IHaveFallen @0x58cd20: landing.
@@ -68,7 +68,7 @@ struct HitInput {
 };
 std::vector<std::int32_t> hit_sounds(const SpawnSounds& defender, const HitInput& in, std::int32_t pick);
 
-// The sound of a blocked hit (FUN_00514920, damage -1): StaffBlk, SwordBlk when
+// The sound of a blocked hit (0x514920, damage -1): StaffBlk, SwordBlk when
 // both hold a type-2 item, and ShldBlk half of the time (`coin` 0 or 1) when the
 // defender's left hand holds a shield (type 3).
 std::int32_t block_sound(std::int32_t attacker_right, std::int32_t defender_right, std::int32_t defender_left,
@@ -76,7 +76,7 @@ std::int32_t block_sound(std::int32_t attacker_right, std::int32_t defender_righ
 // Other misses: dodge (-4) plays fall_hit (0x73), rune (-6) StaffBlk (0x84); others none.
 std::optional<std::int32_t> miss_sound(std::int32_t damage);
 
-// FUN_00489ec0 (PlayerClient::SetHeldModel's RightHolding / LeftHolding): the
+// 0x489ec0 (PlayerClient::SetHeldModel's RightHolding / LeftHolding): the
 // kind of item model IT<n> held: 0 none, 1 other, 2 blade (and the table's
 // other 1..62 entries), 3 shield (IT200..300, some low numbers), 4, 5 whip (IT10778).
 std::int32_t held_type(std::uint32_t item_model);
@@ -136,7 +136,7 @@ struct SpellEffectStageInput {
     bool have_caster = false;
     bool have_target = false;
     std::array<std::int32_t, 3> stage_sounds{-1, -1, -1}; // of the record in use (new, else old)
-    bool particles_filtered = false;  // FUN_00514bd0(stage, caster, target)
+    bool particles_filtered = false;  // 0x514bd0(stage, caster, target)
     std::int32_t dragon_breath = 0;   // EQ_Spell::SpellUsesDragonBreathEffect (asked only when needed)
     float particle_density = 1.0f;    // 0xe634e8
     float particle_opacity = 1.0f;    // 0xe634ec
@@ -146,7 +146,7 @@ struct SpellEffectStage {
     std::uint32_t value = 0;                  // 0: nothing done (no spell, effect or caster, or stage > 2)
     std::optional<std::int32_t> sound;        // PlayerClient::PlaySound(this) at ...
     bool sound_at_target = false;             // ... the target (stage 2), else the caster (stage 0)
-    bool filter_asked = false;                // FUN_00514bd0 called
+    bool filter_asked = false;                // 0x514bd0 called
     bool dragon_breath_asked = false;         // SpellUsesDragonBreathEffect called
     bool spawn_stage_emitters = false;        // SpellEffect_SpawnStageEmitters (new record)
     bool do_particle_effect = false;          // DoParticleEffect (old record only)

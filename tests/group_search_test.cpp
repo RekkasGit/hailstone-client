@@ -265,7 +265,7 @@ TEST_CASE("mock server: /lfg, the group finder's posts, searches, results and jo
     REQUIRE(rig.until([&] { return conn.group_search().results_serial == 2; }));
     CHECK(conn.group_search().groups.size() == 1); // Show All
 
-    // Joining someone's group ends both posts (FUN_00678550: not the leader).
+    // Joining someone's group ends both posts (0x678550: not the leader).
     std::size_t lfg_before = sent(server, Op::LFGCommand).size(), lfp_before = sent(server, Op::LFPCommand).size();
     conn.group_search_joined_group();
     REQUIRE(rig.until([&] { return sent(server, Op::LFPCommand).size() == lfp_before + 1; }));
@@ -287,7 +287,7 @@ TEST_CASE("CListWnd's own sort: header clicks, the window's 0x10 answer, else th
     CHECK(!s.ascending);
     CHECK(s.order(d.rows) == std::vector<std::size_t>{2, 3, 1, 4, 0});
     s.header_click(0);
-    // FUN_00677920's atoi answer
+    // 0x677920's atoi answer
     auto atoi_cmp = [&](std::size_t a, std::size_t b) -> std::optional<int> {
         int x = std::atoi(d.rows[a].texts[0].c_str()), y = std::atoi(d.rows[b].texts[0].c_str());
         return x < y ? -1 : x > y ? 1 : 0;

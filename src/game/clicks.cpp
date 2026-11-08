@@ -34,7 +34,7 @@ PickCall pick_call(const PickCallInput& in) {
 }
 
 std::uint32_t guildmaster_string_id(std::int32_t c) {
-    // FUN_005151b0's table (rof2decomp re/src/game/core/lookup_005151b0.inc).
+    // 0x5151b0's table (rof2decomp re/src/game/core/lookup_005151b0.inc).
     static constexpr std::uint32_t k1to16[] = {0x5de, 0x5e2, 0x5e6, 0x5ee, 0x5ea, 0x5f2, 0x5f6, 0x5fa,
                                                0x5fe, 0x602, 0x606, 0x60a, 0x60e, 0x612, 0x616, 0x169f};
     static constexpr std::uint32_t k20to35[] = {0x5cf, 0x5d0, 0x5d1, 0x5d3, 0x5d2, 0x5d4, 0x5d5, 0x5d6,

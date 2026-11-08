@@ -67,7 +67,7 @@ void GameConnection::memorize_from_cursor(std::uint32_t spell, int gem) {
         spell_message(3345, {}, 0xf);
         return;
     }
-    int slot = -1; // FUN_0075bc00
+    int slot = -1; // 0x75bc00
     for (int i = 0; i < game::kSpellBookSize; ++i)
         if (spells_.book[static_cast<std::size_t>(i)] == spell) {
             slot = i;

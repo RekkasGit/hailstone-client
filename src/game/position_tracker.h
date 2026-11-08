@@ -7,8 +7,8 @@
 //                                             entry count, +0x20 enabled, +0x21 the last moving sample, +0x2d
 //                                             whether there is one, +0x30 the last sample's time
 //   PositionTracker_RecordPosition @0x56e570  records a sample (below)
-//   FUN_0056e680                              writes the oldest samples as 17-byte entries
-//   FUN_0056e510                              forgets every sample; +0x1c = +0x1e
+//   0x56e680                              writes the oldest samples as 17-byte entries
+//   0x56e510                              forgets every sample; +0x1c = +0x1e
 //   Send_OP_FloatListThing @0x58c9c0          sends them (GameConnection::send_position_history)
 //   PlayerClient_RecordPositionSample @0x58ff80  the local player's position (or a given one) as a sample
 // Independent of the network; the times are __EQGetTime milliseconds.
@@ -56,13 +56,13 @@ public:
     // the last one less than 1 s after the last sample is not taken.
     bool record(const std::array<float, 3>& position, std::uint32_t reason, std::uint32_t now, const Gate& gate);
 
-    // FUN_0056e680(buffer, force): the oldest samples, at most 10000, each as {f32 Y, f32 X, f32 Z, u8 reason, u16
+    // 0x56e680(buffer, force): the oldest samples, at most 10000, each as {f32 Y, f32 X, f32 Z, u8 reason, u16
     // the sample time's low word, u16 the entry count (counting up)}; without `force` it stops at a sample not older
     // than 2 s. Returns the payload (count x 17 + 1 bytes; the last byte is not written by the original: 0 here),
     // empty when no sample was taken.
     std::vector<std::byte> take(bool force, std::uint32_t now);
 
-    // FUN_0056e510.
+    // 0x56e510.
     void flush();
 
     bool empty() const { return samples_.empty(); }

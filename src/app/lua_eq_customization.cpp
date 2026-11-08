@@ -94,7 +94,7 @@ public:
     }
 
     void child(EqHost&, std::string_view id, Child& out) override {
-        // A label's colour follows its state (FUN_0088e4a0 / FUN_0088e4b0: the piece's TextColor or DisabledColor,
+        // A label's colour follows its state (0x88e4a0 / 0x88e4b0: the piece's TextColor or DisabledColor,
         // 128 grey for every label of EQUI_PlayerCustomizationWnd.xml; the heritage labels are green).
         auto label = [&](bool on, bool green) {
             out.enabled = on;

@@ -101,7 +101,7 @@ struct TaskState {
     // OP_TaskHistoryReply by history index (CTaskManager +0x74388 QuestHistoryEntries, their +0x3be1
     // bElementsReceived): kept until the next OP_CompletedTasks empties them (CTaskManager_ClearAllTaskEntries).
     std::map<std::uint32_t, std::vector<TaskElement>> history;
-    // Bumped where the original marks the task window for a rebuild (FUN_0076ff50: OP_TaskDescription,
+    // Bumped where the original marks the task window for a rebuild (0x76ff50: OP_TaskDescription,
     // OP_TaskActivity, OP_CancelTask, OP_CompletedTasks, entering a zone).
     std::uint32_t revision = 0;
     std::int64_t request_timer_until_ms = 0; // OP_TaskRequestTimer: no new shared task requests before this
@@ -127,7 +127,7 @@ struct TaskState {
 std::string element_description(const TaskElement& e, const EqStrings& strings,
                                 const std::function<std::string(std::uint32_t)>& spell_name);
 
-// The description a task window shows (FUN_00481960 @0x481960, which CTaskWnd_BuildTaskDetailsSTML runs once on a
+// The description a task window shows (0x481960, which CTaskWnd_BuildTaskDetailsSTML runs once on a
 // task's description): text in "[n,m,...,text]" markers shows only while the elements n, m, ... (1-based activity
 // numbers, each 1..20) all exist (type not 0 or -1) and are not all done; a marker without numbers ("[text]") never
 // shows; text outside markers always shows. Then each "%N" (N = 20 down to 1, the first occurrence) becomes element

@@ -126,7 +126,7 @@ net::BuyLine parse_buy_line_ini(std::string_view text) {
 }
 
 std::vector<std::pair<std::uint32_t, net::BuyLine>> parse_buy_lines_text(std::string_view text) {
-    // FUN_00423450 reads the '$'-ended count; each record's second '^' field is its slot (the first, "*2", is read and
+    // 0x423450 reads the '$'-ended count; each record's second '^' field is its slot (the first, "*2", is read and
     // dropped).
     std::vector<std::pair<std::uint32_t, net::BuyLine>> out;
     std::int64_t count = 0;

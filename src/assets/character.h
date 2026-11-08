@@ -116,7 +116,7 @@ struct CharacterModel {
     std::map<std::string, std::string, std::less<>> clip_aliases;
     // Models with a tunic point (InitAnimationTracks' +0x34, the Luclin ones): code -> its variant B ("P01" ->
     // "P01B"), the track of holding column 1. PlayerClient_UpdateHoldingAnimation gives a spawn holding anything
-    // a column from 1 to 7, and FUN_004b1210 takes column 1 for those the model has no variant of (no model ships
+    // a column from 1 to 7, and 0x4b1210 takes column 1 for those the model has no variant of (no model ships
     // C..H); with nothing held it plays column 0, `clips` as they are. clip(code, true) follows these.
     std::map<std::string, std::string, std::less<>> held_aliases;
     std::string animation_donor; // model whose clips fill in missing ones, or empty
@@ -140,7 +140,7 @@ struct CharacterModel {
 
     const AnimationClip* clip(std::string_view code) const;
     // The clip a spawn plays for `code`, `holding` when PlayerClient_UpdateHoldingAnimation gives it a column other
-    // than 0: its variant B when the model has one (held_aliases), else clip(code), as FUN_004b1210 falls back.
+    // than 0: its variant B when the model has one (held_aliases), else clip(code), as 0x4b1210 falls back.
     const AnimationClip* clip(std::string_view code, bool holding) const;
     // First of the codes that exists, else the rest pose.
     const AnimationClip& first_clip(std::initializer_list<std::string_view> codes, bool holding = false) const;

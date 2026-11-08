@@ -70,7 +70,7 @@ void StatsUi::draw(net::GameConnection& conn) {
     auto now = std::chrono::steady_clock::now();
     // The same live state the connection's regen ticks build the character from (its time sitting included).
     LiveState live = conn.live_state();
-    // ProcessAllStats' first loop: the worn items' stats-disabled bytes (FUN_007b28a0) before the sums read them.
+    // ProcessAllStats' first loop: the worn items' stats-disabled bytes (0x7b28a0) before the sums read them.
     conn.refresh_worn_stats_disabled();
     // Rebuilt every frame (movement, the hot buttons and the windows read this player), into the last frame's sheet:
     // its items, buffs and abilities reuse their storage, so an unchanged inventory is copied without allocating.

@@ -73,7 +73,7 @@ TEST_CASE("classic layering tables") {
     CHECK_FALSE(classic_legs_take_motion(5, 0x12, false));
 }
 
-TEST_CASE("new-style layer modes (FUN_0058ac90)") {
+TEST_CASE("new-style layer modes (0x58ac90)") {
     LayerModeInput in;
     in.wanted = 0x6a; // NRUN
     in.playing = 0x6a;

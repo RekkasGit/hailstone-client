@@ -88,7 +88,7 @@ TEST_CASE("barter: the inspect and its answer, buy lines from the server, the bu
     CHECK(r->approval == 7);
     CHECK(decode_barter_inspect_reply(packet(Op::Barter, Buf().u32(11).u32(42).u32(0).b))->approval == 0);
 
-    // OP_BuyerItems 14 as EQEmu writes it ({14, slot, slot, line}); FUN_007d6ef0 reads the missing buyer fields as 0.
+    // OP_BuyerItems 14 as EQEmu writes it ({14, slot, slot, line}); 0x7d6ef0 reads the missing buyer fields as 0.
     BuyLine l = bone_chips();
     auto back = decode_buy_line(encode_buy_line(kBuyerSendBuyLine, l));
     REQUIRE(back);
@@ -160,7 +160,7 @@ TEST_CASE("barter: selling at the buyer and from the search window as the origin
     CHECK(back->quantity == 5);
 }
 
-TEST_CASE("barter: a sale's answer as EQEmu writes it, read with FUN_00423500") {
+TEST_CASE("barter: a sale's answer as EQEmu writes it, read with 0x423500") {
     // Barter_SellerTransactionComplete: {9, sub action, error code, 16 B, buyer, item, seller, a line, ..., quantity}.
     std::vector<BuyLineTrade> trade{{0, 1, 0, "Cloth Cap"}};
     auto ok = decode_buyer_sale_result(

@@ -153,11 +153,11 @@ void GameConnection::merchant_select(const ItemSlot& slot) {
     if (!merchant_ || !merchant_->open) return;
     if (!inventory_.at(slot)) return;
     merchant_->selected = slot;
-    merchant_->parcel_coin = -1; // CInvSlotMgr::SelectSlot clears the coin buttons' outline (FUN_00690950)
+    merchant_->parcel_coin = -1; // CInvSlotMgr::SelectSlot clears the coin buttons' outline (0x690950)
 }
 
 void GameConnection::parcel_coin_button(int coin, std::int32_t have) {
-    // FUN_00698290 (rof2decomp: 83 bytes; SelectSlot(0), then FUN_006909a0(coin) and FUN_006f2120 when have > 0).
+    // 0x698290 (rof2decomp: 83 bytes; SelectSlot(0), then 0x6909a0(coin) and 0x6f2120 when have > 0).
     if (!merchant_ || !merchant_->open || coin < 0 || coin > 3) return;
     merchant_->selected.reset();
     merchant_->parcel_coin = -1;

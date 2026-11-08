@@ -74,7 +74,7 @@ struct XTargetState {
     std::vector<XTargetSlot> slots; // resized to the response's max
     bool auto_haters = false;       // +0x14: auto add haters (Send_OP_XTargetAutoAddHaters @0x548850)
     int current = 0;                // +0x18: the slot TargetNextSlot (CYCLE_XTARGET) last targeted
-    int selected = -1;              // +0x1c: the slot the window's menu acts on (FUN_00548960)
+    int selected = -1;              // +0x1c: the slot the window's menu acts on (0x548960)
     // This client: counts the zone-ins (GameConnection::reset_group_for_zone empties the list), so the window can
     // send its settings and restore its roles once per zone.
     std::uint32_t zone = 0;

@@ -118,10 +118,10 @@ inline std::int32_t movement_rate_effect(std::int32_t spa99, std::int32_t spa3) 
 // rider (a mount) ramps by rate_scale (0xde0a68) * 50 * its run speed over
 // 400 rising / 200 falling, or 1500 when the rider has no PcClient or the
 // PcClient's virtual +0x80 holds (@0x57d190: the OP_RestState combat byte
-// +0x31bc; the PcClient is FUN_0059f730's: the rider's +0x2cc, its
+// +0x31bc; the PcClient is 0x59f730's: the rider's +0x2cc, its
 // CharacterBase virtual base's +0x4c thunk @0x57d1e0), stopping at the target.
 struct AccelRider {
-    bool has_pc = false;   // the rider's PcClient (FUN_0059f730 on its +0x3c)
+    bool has_pc = false;   // the rider's PcClient (0x59f730 on its +0x3c)
     bool pc_flag = false;  // that PcClient's virtual +0x80: in combat (OP_RestState)
 };
 float set_accel(float current, float target, bool immediate, std::optional<AccelRider> rider, float rate_scale,
@@ -138,7 +138,7 @@ float cap_speed_multiplier(float speed_multiplier, std::int32_t spa290, const Fp
 double swimming_speed(float base, std::int32_t swimming_skill, const Fpu& fpu = Fpu{}, float speed_scale = 2.15f,
                       float skill_scale = 1.5f, float* scaled_base = nullptr);
 
-// FUN_00516cd0 (batch 243): a physics block's pitch (+0x2c) += delta, then
+// 0x516cd0 (batch 243): a physics block's pitch (+0x2c) += delta, then
 // at most 128 and at least -128 (-64 when the local player's mount is the
 // controlled player); the clamps compare the unrounded sum.
 float add_physics_pitch(float pitch, float delta, bool riding_controlled_mount, const Fpu& fpu = Fpu{});
@@ -217,7 +217,7 @@ SwimJump do_swim_jump(bool jump, bool surface_clear, float swim_strength, float 
 // float (in world coordinates: x gets the cosine). `spawn` is the spawn's position (its z: the feet plus
 // AvatarHeight).
 glm::vec3 swim_probe_point(const glm::vec3& spawn, float heading, float avatar_height, const Fpu& fpu = Fpu{});
-// Then: clear unless the scene graph's +0x4c (IsPointInWorld) accepts the point and FUN_0048c890 (scene graph +0x1c,
+// Then: clear unless the scene graph's +0x4c (IsPointInWorld) accepts the point and 0x48c890 (scene graph +0x1c,
 // the region lookup without a prefix) gives a region type whose low byte is not 0 there. The type is asked only for
 // a point in the world.
 inline bool swim_surface_clear(bool in_world, std::uint8_t region_type) { return !in_world || region_type == 0; }
@@ -232,7 +232,7 @@ public:
     virtual bool mount_race() = 0;                // PlayerBase_IsMountRace @0x8cf970
     virtual std::uint8_t stand_state() = 0;       // +0x35c
     virtual void change_position(std::uint8_t state) = 0; // PlayerZoneClient::ChangePosition @0x5a0bc0 (may refuse)
-    // With an actor (+0x1024): FUN_00406740, min(500, the crouch animation's length + 1) (animation 0x18 on
+    // With an actor (+0x1024): 0x406740, min(500, the crouch animation's length + 1) (animation 0x18 on
     // old-style models, 0x7a on new-style ones); 500 without one.
     virtual std::uint32_t crouch_window() = 0;
     virtual bool feet_on_ground() = 0;            // PlayerBase::MyFeetAreOnGround @0x8cfca0
@@ -269,10 +269,10 @@ struct JumpSpawn {
 // its own jump. A jump sends OP_Jump and costs min(50, Max_Endurance / 10) endurance.
 void main_loop_jump(JumpState& state, JumpSpawn& spawn, JumpQueries& q, std::uint32_t now, const Fpu& fpu = Fpu{});
 
-// FUN_00406740, the jump's crouch window: the actor definition's duck track (row 0x18 on old-style models, slot 0)
+// 0x406740, the jump's crouch window: the actor definition's duck track (row 0x18 on old-style models, slot 0)
 // gives its length (track vf0, truncated with a chop control word), plus 1, at most 500; 500 without the track.
 std::uint32_t jump_crouch_window(std::optional<double> duck_track_length);
-// The clip FUN_00406740 reads: by the actor's HasNewStyleHierarchicalModel (vtable +0xbc), row 0x7a - 0x4f (CRCH)
+// The clip 0x406740 reads: by the actor's HasNewStyleHierarchicalModel (vtable +0xbc), row 0x7a - 0x4f (CRCH)
 // of a new-style table or row 0x18 (L08) of a classic one, slot 0 (column 0, BA; variant 1), the track
 // FindAnimationTrackForModel @0x406830 binds as "CRCH_BA_1".
 std::string_view jump_duck_clip(bool new_style_hierarchy);
@@ -383,7 +383,7 @@ struct CharacterInput {
     bool gm_flag = false;       // DAT_00ddf654 / 0xddf790: no endurance check
     bool interface_locked = false; // /safelock (0xe15dac): ProcessControls does nothing
     std::int32_t race = 0;      // PlayerClient vf88, the race shown (0x8e / 0x8f never jump)
-    std::uint32_t crouch_window = kJumpWindowMs; // FUN_00406740 (jump_crouch_window) on the controlled spawn's actor
+    std::uint32_t crouch_window = kJumpWindowMs; // 0x406740 (jump_crouch_window) on the controlled spawn's actor
     // The local player rides: the body is its mount (pinstControlledPlayer), which has the player as rider. The
     // speeds, the modifier and the race above are then the mount's, the rest the rider's.
     bool riding = false;

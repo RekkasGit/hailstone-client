@@ -386,7 +386,7 @@ CharacterCreateAction character_create_screen(CharacterCreateView& view);
 // one is not), and resets the stats when the row changed. The lists: the races (by id), the race's classes (by id),
 // the deities of race and class (by name), the start zones of race, class and the chosen deity (by name, as
 // FillStartCityCombo). create_set_deity keeps the city when race, class, deity and city still combine, else takes the
-// first that does (FUN_0064bee0); create_set_city picks the row of that city. create_ready: Create can go.
+// first that does (0x64bee0); create_set_city picks the row of that city. create_ready: Create can go.
 void create_normalize(CharacterCreateView& view);
 std::vector<std::uint32_t> create_races(const CharacterCreateView& view);
 std::vector<std::uint32_t> create_classes(const CharacterCreateView& view);

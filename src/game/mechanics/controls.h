@@ -137,7 +137,7 @@ public:
     virtual void print(std::uint32_t string_id, std::int32_t color) = 0; // dsp_chat
     virtual void do_swim_jump() = 0;                  // PlayerClient::DoSwimJump(1) on the controlled player
     virtual void proc_mouse(bool can_move) = 0;       // CEverQuest::procMouse
-    virtual void add_pitch(ControlWho who, float delta) = 0; // FUN_00516cd0 on that spawn's physics
+    virtual void add_pitch(ControlWho who, float delta) = 0; // 0x516cd0 on that spawn's physics
     virtual void close_loot_window() = 0;             // CLootWnd virtual +0xd8 (0, 1, 1)
     virtual void sit() = 0;
     virtual void set_camera_heading(float value) = 0; // camera virtuals +0x20, +0x10, +0x18, +0x14

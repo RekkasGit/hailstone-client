@@ -194,7 +194,7 @@ public:
         const SpellData* d = ch_.spell(spell.id);
         return d && d->has_effect(spa); // EQ_Spell::SpellAffects: all 12 slots
     }
-    // FUN_004326b0 only decides whether SPA 3 / 0x63 end with the spawn check, which always passes here.
+    // 0x4326b0 only decides whether SPA 3 / 0x63 end with the spawn check, which always passes here.
     std::int32_t recheck(std::int32_t) override { return 0; }
     void end_stun() override { host_.end_stun(); }
     void modify_cur_hp(std::int32_t amount) override { game::modify_cur_hp(pools_, amount); }

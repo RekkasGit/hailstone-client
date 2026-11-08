@@ -416,7 +416,7 @@ void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std
         }
         if (sw.state == 0 || (sw.state == 1 && type < 0x64)) continue;
         bool touch = false;
-        switch (sw.type) { // FUN_00510210
+        switch (sw.type) { // 0x510210
         case 0x33: case 0x73: case 0x74: case 0x78: case 0x7d: case 0x82: case 0x87: case 0x8c: case 0x91: case 0x92:
         case 0x96: case 0x97: case 0x98:
             touch = true;

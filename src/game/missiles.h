@@ -27,7 +27,7 @@
 //    launch (+0x104: the source's attack animation, below) and makes the
 //    actor (CDisplay::CreateActor with the model name);
 //  - with one, when more than 32 ms passed since the last step (+0x54):
-//    EQMissile::MissileAI @0x4ffb10 (homing), the physics step FUN_008d2790
+//    EQMissile::MissileAI @0x4ffb10 (homing), the physics step 0x8d2790
 //    (PhysicsObject at +4, vtable 0x9cef90) and CDisplay::MoveMissile
 //    @0x5019c0 (the actor's motion, the hit and the end).
 //
@@ -175,7 +175,7 @@ float missile_actor_scale(const std::string& model, std::int32_t zone_id);
 void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world);
 // EQMissile::MissileAI.
 void missile_ai(Missile& m, std::uint32_t now, const MissileWorld& world);
-// FUN_008d2790: the physics step.
+// 0x8d2790: the physics step.
 void missile_physics(Missile& m, std::uint32_t now);
 // CDisplay::MoveMissile: false when the missile ends.
 bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world);

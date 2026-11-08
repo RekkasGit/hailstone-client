@@ -103,7 +103,7 @@ TEST_CASE("Map windows: the toolbar walks a line, adds a label and saves the fou
         CHECK(api.click_child("MapViewWnd", "MVW_ShowGroupButton")); // off, stored
         api.save_layout();
     }
-    // Layer 1 (the active layer): newest first; the end point repeats (FUN_006cab70's test is against the zone
+    // Layer 1 (the active layer): newest first; the end point repeats (0x6cab70's test is against the zone
     // box's max plus the point, so a point where the line already is still adds a line).
     // (After the game's own layer 1, read with the zone.)
     std::string layer1 = slurp(maps / "qeynos_1.txt");

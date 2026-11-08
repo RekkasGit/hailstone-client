@@ -97,7 +97,7 @@ struct PhysicsBody {
     bool dead = false;             // StandState 120: Step's vf13 stops the speeds
     float fall_start_z = -1e27f;   // +0x20c: the feet's z where a fall began (LandingAndFallCheck)
     float buoyancy = 0.0f;         // 0xddfd78: 2.0 while CMD_MOVE_DOWN is held (ProcessControls)
-    float walk_speed = 0.0f;       // +0x330: vf64, which FUN_008d0800 compares with SpeedRun
+    float walk_speed = 0.0f;       // +0x330: vf64, which 0x8d0800 compares with SpeedRun
     std::int32_t colliding_type = 0; // +0x24 CollidingType: DoCollisionMovement zeroes it on every step
                                      // that is not still; a door hit sets 3 (the switch's actor type)
 };
@@ -184,7 +184,7 @@ class EnvQueries {
 public:
     virtual ~EnvQueries() = default;
     virtual bool spawn_vf90() = 0;            // PlayerClient +0x90 (a race check): gravity although not walking
-    virtual bool possibly_stuck() = 0;        // FUN_008cfc90: PlayerBase +0x124
+    virtual bool possibly_stuck() = 0;        // 0x8cfc90: PlayerBase +0x124
     virtual bool collision_zone_loaded() = 0; // pinstCollision +0x44 (asked up to three times)
     virtual float gravity() = 0;              // the physics manager's +0x10
     virtual bool mount_race() = 0;            // PlayerBase_IsMountRace
@@ -196,7 +196,7 @@ public:
     virtual bool controlled() = 0;            // PlayerClient +0x6c: this is pinstControlledPlayer
     virtual bool spawn_vf50() = 0;            // PlayerClient +0x50: race and gender info set
     virtual float floor_at(float y, float x, float z) = 0; // the physics manager's +0x14: -1e27 without a floor
-    virtual bool rising() = 0;                // FUN_008d0800
+    virtual bool rising() = 0;                // 0x8d0800
     virtual float buoyancy() = 0;             // this->vf15(spawn, &out)
 };
 
@@ -234,7 +234,7 @@ public:
     virtual bool spawn_vf58() = 0;          // PlayerClient +0x58
     virtual bool player_spawn() = 0;        // IsSpawnInfoPlayerSpawn
     virtual std::int32_t sound_race() = 0;  // PlayerClient +0x88 (0x7f: no landing sound)
-    virtual bool rider_zone_client() = 0;   // FUN_0058cfb0: a non-player spawn's rider
+    virtual bool rider_zone_client() = 0;   // 0x58cfb0: a non-player spawn's rider
     virtual bool no_recovery() = 0;         // PlayerClient +0x7c
     // CDisplay::GetFloorHeight from (y, x, z) down; -1e27 without a floor.
     virtual float floor_below(float y, float x, float z) = 0;
@@ -255,7 +255,7 @@ struct LandingResult {
     bool land_sound = false;         // sound 0x72
     bool vehicle_fall_sent = false;  // 0x65c7: a flung player spawn landed
     bool fling_stopped = false;      // PlayerClient +0x30(0)
-    // FUN_005024b0: placed on a recovered floor (y, x, z, heading).
+    // 0x5024b0: placed on a recovered floor (y, x, z, heading).
     std::optional<glm::vec4> placed;
 };
 

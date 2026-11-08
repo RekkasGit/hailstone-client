@@ -133,7 +133,7 @@ struct EqApi::Impl {
             bool& was = tip_shown[screen_name];
             if (shown && !was) {
                 if (tip == -100) {
-                    // CActionsWnd::OnShow @0x614a20 (FUN_00614510 on the tab box's page): the Abilities page 4,
+                    // CActionsWnd::OnShow @0x614a20 (0x614510 on the tab box's page): the Abilities page 4,
                     // Combat 3, Socials 5, the Main page none
                     auto page = w->tab_page(host, "ACTW_ActionsSubwindows");
                     tip = !page ? -1 : *page == 1 ? 4 : *page == 2 ? 3 : *page == 3 ? 5 : -1;
@@ -152,10 +152,10 @@ struct EqApi::Impl {
             was = shown;
         }
     }
-    // CLayoutCopyWnd's list (FUN_006b6580 / FUN_006b6240): every UI ini (.\UI_*.ini; here every character's UI.ini
+    // CLayoutCopyWnd's list (0x6b6580 / 0x6b6240): every UI ini (.\UI_*.ini; here every character's UI.ini
     // of this server, characters/<world>/<name>/UI.ini) and then defaults.ini, one row per screen size its sections
     // keep a place for (a key that starts with "XPos": the rest of the key), each pair once; not the current file's
-    // own current size (FUN_0055b4c0 / FUN_0055b560). This client always runs windowed ("Windowed").
+    // own current size (0x55b4c0 / 0x55b560). This client always runs windowed ("Windowed").
     // Hailstone difference: the characters' files come newest first (the UI.ini written last: the character played
     // last), not in the original's file order, and name their world when the server has characters on several.
     std::vector<EqHost::LayoutSource> layout_sources() const {
@@ -212,7 +212,7 @@ struct EqApi::Impl {
     // table at 0xe63a98) goes to the current file for the current size, the size-free keys (Show, BGTint.*, BGType,
     // Fades, Delay, Duration, Alpha, FadeToAlpha, Locked, the Global* fades, PercentSize, ShowKeyMap, ShowSpinner:
     // 0xe63a50) as they are; from the source character's file, with the boxes, the sections HotButtons..HotButtons10
-    // (then the hot buttons are read again), HBLoadouts and Socials (FUN_0055b930). Then the windows are placed
+    // (then the hot buttons are read again), HBLoadouts and Socials (0x55b930). Then the windows are placed
     // again from the file (unk_ApplyWindowPositions). Not built: the skins (UISkin / AtlasSkin / MapSkin) and the
     // ViewPort section, which this client does not have, and the HB_<n> hot button files.
     // Hailstone: the Chat and Options boxes also copy the source character's chat.ini and options.ini, which hold

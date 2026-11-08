@@ -219,7 +219,7 @@ std::vector<std::string> format_who_response(const net::WhoResponse& r, const Eq
             std::string zone;
             if (e.zone_string != 0xffffffff)
                 zone = str(strings, e.zone_string, {(e.zone_id >> 15) & 1 ? e.zone_name : zone_short_name(e.zone_id)});
-            // FUN_0044d420: the class name, with its level title above 50 (who_class_text). NMS class masks
+            // 0x44d420: the class name, with its level title above 50 (who_class_text). NMS class masks
             // list their classes instead.
             std::string klass;
             if (multiclass_masks && e.class_ != 0) {
@@ -626,7 +626,7 @@ AnonChange anonymous_command(int flags, std::string_view args, std::string_view 
 }
 
 AnonChange roleplay_command(int flags, std::string_view args, std::string_view off, std::string_view on) {
-    bool roleplaying = (flags & kRoleplayFlag) != 0; // FUN_0058b720
+    bool roleplaying = (flags & kRoleplayFlag) != 0; // 0x58b720
     bool want = !starts_with_word(args, off, 3) && (starts_with_word(args, on, 2) || !roleplaying);
     if (want && !roleplaying && (flags & kAnonFlag)) return {flags, 8873, false}; // 0x22a9
     int f = want ? flags | kRoleplayFlag : flags & ~kRoleplayFlag;

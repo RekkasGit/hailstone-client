@@ -115,8 +115,8 @@ struct HeightLink {
     bool has_actor = false;  // PlayerClient +0x101c
     bool mount_race = false; // PlayerBase_IsMountRace
 };
-// What ChangeHeight gives a spawn's actor: its scale (FUN_0040c090, vf78(scale, 1)) and, with an actor, the
-// collision-volume radius (vf48, FUN_005062a0 stored as a float).
+// What ChangeHeight gives a spawn's actor: its scale (0x40c090, vf78(scale, 1)) and, with an actor, the
+// collision-volume radius (vf48, 0x5062a0 stored as a float).
 struct HeightActorUpdate {
     std::size_t spawn = 0; // index into the chain
     float scale = 0.0f;

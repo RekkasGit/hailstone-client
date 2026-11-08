@@ -39,7 +39,7 @@ class GroupCalls {
 public:
     virtual ~GroupCalls() = default;
     virtual void attach_spawn(int member) = 0;            // vtable +0x2c
-    virtual void message(std::uint32_t code, int member) = 0; // vtable +0x20 (FUN_0054dd70): 0 leader, 1 joined, 2 left
+    virtual void message(std::uint32_t code, int member) = 0; // vtable +0x20 (0x54dd70): 0 leader, 1 joined, 2 left
     virtual void set_leader(int member) = 0;              // vtable +0x14 (CGroup: SetLeader)
     virtual void group_vf18(int member) = 0;
     virtual void group_vf1c(int member) = 0;
@@ -54,7 +54,7 @@ bool group_add_member(GroupSlotsModel& g, int member, std::int16_t kind, bool na
 bool group_remove_member(GroupSlotsModel& g, int member, GroupCalls& c);
 bool group_set_leader(GroupSlotsModel& g, int member, GroupCalls& c);
 
-// FUN_0054dd70's line for a code: the eqstr id and whether it takes the
+// 0x54dd70's line for a code: the eqstr id and whether it takes the
 // member's name; 0 for nothing (code 2 about ourselves prints an empty line).
 struct GroupLine {
     std::uint32_t eqstr = 0;
@@ -82,7 +82,7 @@ public:
     virtual ~GroupWorldCalls() = default;
     virtual void say(std::uint32_t eqstr) = 0;                      // BuildStringFromEQSTR + dsp_chat, colour 0x111
     virtual void delete_group() = 0;                                // the group's virtual +0 with 1
-    virtual void armor_filters_after_leaving() = 0;                 // FUN_00597750 (local PcClient)
+    virtual void armor_filters_after_leaving() = 0;                 // 0x597750 (local PcClient)
     virtual int member_by_name(const std::string& name) = 0;        // CGroup_GetMemberByName, -1 none
     // A new CGroupMember: name2, merc flag into +8, +0x84 into +0x10, owner name, its spawn by name.
     virtual int new_member(const GroupWorldPacket& p) = 0;
@@ -90,7 +90,7 @@ public:
     virtual void apply_armor_filter(const std::string& name) = 0;  // PlayerClient_ApplyNewArmorFilterGroupMember
     virtual void set_leader(int member) = 0;                        // the group's virtual +0x14
     virtual void pc_delete_group() = 0;                             // PcClient_DeleteGroup
-    virtual bool remove_member_by_name(const std::string& name) = 0; // FUN_0054daf0
+    virtual bool remove_member_by_name(const std::string& name) = 0; // 0x54daf0
     virtual void rename(int member, const std::string& name) = 0;
     virtual std::optional<std::string> leader_name() = 0;           // CGroupBase +0x1c's name
     virtual void set_member_role(int member, std::int32_t role, std::uint8_t on) = 0; // CGroupBase_SetMemberRole
@@ -112,7 +112,7 @@ struct GroupTargetWorld {
     std::function<int(std::int32_t id)> spawn_by_id;
 };
 
-// FUN_0054da00 (CGroup: target member n): the (n+1)-th occupied slot's spawn,
+// 0x54da00 (CGroup: target member n): the (n+1)-th occupied slot's spawn,
 // selecting n (the ordinal among occupied slots); with `target_of_target`
 // that spawn's own target instead (selection cleared).
 void group_target_member(GroupTargetWorld& w, std::int32_t n, bool target_of_target);

@@ -2,7 +2,7 @@
 
 // The hot bar window's own parts (app/lua_eq_hotbar.cpp): CHotButtonWnd's settings in the UI ini and its window
 // menu (hotbutton sets, Clear current hotbuttons, Button Size, Show Key Map, Show Spinner, Open New Bar;
-// game/hot_button_sets.h), the key map text on its buttons (FUN_0068a720), a hotbutton's custom icon (FUN_0054ff40),
+// game/hot_button_sets.h), the key map text on its buttons (0x68a720), a hotbutton's custom icon (0x54ff40),
 // and the icon selection window (CIconSelectionWnd, game/icon_selection.h) a hotbutton's Assign Icon opens.
 
 #include <cstdint>
@@ -37,16 +37,16 @@ void unregister_hot_bar_window(int bar, StockWindow* window);
 
 // The bar's window menu (CHotButtonWnd's ContextMenuID: the right button on the window) at x, y.
 void open_hot_bar_menu(EqHost& host, int bar, float x, float y);
-// FUN_0068a170: CQuantityWnd::Open(bar, 175, PercentSize, x, y, 0, 40, "Percent"); its answer (0x24) is the bar's
+// 0x68a170: CQuantityWnd::Open(bar, 175, PercentSize, x, y, 0, 40, "Percent"); its answer (0x24) is the bar's
 // PercentSize, stored (StoreIniInfo). The bar's Button Size and a button's Change Size.
 void open_hot_bar_size(EqHost& host, int bar, float x, float y);
-// FUN_0068f330: the icon selection window on bar 0..9's button 0..11 (its {icon type, icon}) at x, y.
+// 0x68f330: the icon selection window on bar 0..9's button 0..11 (its {icon type, icon}) at x, y.
 void open_icon_selection(EqHost& host, int bar, int button, float x, float y);
-// FUN_0054ff40: a button's own icon (icon type != -1: __GetAnimationCache(type)->GetIcon(icon)), drawn instead of
+// 0x54ff40: a button's own icon (icon type != -1: __GetAnimationCache(type)->GetIcon(icon)), drawn instead of
 // what the button would show (its decal, its item's icon, its gem's spell icon). Nullopt: none.
 std::optional<ui::UiTextures::Cell> hot_button_custom_icon(EqHost& host, std::int32_t type, std::int32_t icon);
-// FUN_0068a720: the key bound to HOT<bar + 1>_<button + 1> (KeypressHandler::GetKeyAttachedToEqCommand(0x25 + bar *
-// 12 + button), KeyCombo::GetTextDescription), "" when unbound; FUN_005506b0 draws it on the button while the bar's
+// 0x68a720: the key bound to HOT<bar + 1>_<button + 1> (KeypressHandler::GetKeyAttachedToEqCommand(0x25 + bar *
+// 12 + button), KeyCombo::GetTextDescription), "" when unbound; 0x5506b0 draws it on the button while the bar's
 // ShowKeyMap is on.
 std::string hot_button_key_text(EqHost& host, int bar, int button);
 

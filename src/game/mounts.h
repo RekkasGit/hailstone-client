@@ -29,7 +29,7 @@ std::string mount_name_for(std::string_view rider);
 // characters gives an empty name (the original writes its 0 before the buffer then; nothing is found either way).
 std::optional<std::string> rider_name_for_mount(std::string_view mount);
 
-// FUN_0058dde0: the rider's model cannot ride: its race (vf88) is not 367, 522 or 1, it has an actor and the actor
+// 0x58dde0: the rider's model cannot ride: its race (vf88) is not 367, 522 or 1, it has an actor and the actor
 // definition has no tunic point (+0x34). PlayerClient_IsHumanActorDef @0x58dd50: a mount race drawn as the
 // HUM / HUF fallback.
 bool riding_blocked(const Spawn& s);

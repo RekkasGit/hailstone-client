@@ -1,5 +1,5 @@
 // The item preview (game/item_preview.h): OP_ItemPreviewRequest's bytes, the reply, which items show and on whom,
-// and the player's copy wearing the item (FUN_005769a0).
+// and the player's copy wearing the item (0x5769a0).
 #include <doctest/doctest.h>
 
 #include <cstring>
@@ -72,7 +72,7 @@ TEST_CASE("item preview: what shows, and on whom") {
     CHECK(item_model_number("xyz") == 0);
 }
 
-TEST_CASE("item preview: the player's copy wearing it (FUN_005769a0)") {
+TEST_CASE("item preview: the player's copy wearing it (0x5769a0)") {
     Appearance me;
     me.material[kSlotPrimary] = 10;
     me.material[kSlotSecondary] = 20;

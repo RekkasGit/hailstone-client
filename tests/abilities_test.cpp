@@ -343,7 +343,7 @@ TEST_CASE("UseSkill: sense heading and the no-skill gate") {
     CHECK(r.messages[0].args == std::vector<std::string>{"@12433"});
     REQUIRE(r.sends.size() == 1);
     CHECK(r.sends[0].kind == SkillSend::Kind::SenseHeading);
-    CHECK(r.compass_reset); // FUN_0065b650 on the compass window
+    CHECK(r.compass_reset); // 0x65b650 on the compass window
     // the message reads the true heading (me +0x80), in bands of 64 from 0x45c8b6: 225..288 is South (12431), as
     // 256 is due south
     for (auto [heading, id] : {std::pair{225.0f, 12431}, {288.9f, 12431}, {289.0f, 12430}, {224.9f, 12432},

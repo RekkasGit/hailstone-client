@@ -1,6 +1,6 @@
 // The spawn height ports (game/spawn_heights.h) against the original's
 // vectors (rof2decomp batch 259, 7eb07518): SetHeights (3000),
-// ComputeSpecialHeights (1800), ChangeHeight (1500), FUN_005062a0 the
+// ComputeSpecialHeights (1800), ChangeHeight (1500), 0x5062a0 the
 // collision-volume radius (2000), CalcScaleFactorForHeight (1500) and
 // GetEyeHeight (2000). Every float is compared bit for bit (the getters'
 // unrounded results as doubles). Then the race table's new-style flag, the
@@ -142,7 +142,7 @@ TEST_CASE("vectors: ChangeHeight") {
     });
 }
 
-TEST_CASE("vectors: GetCollisionVolumeRadius (FUN_005062a0)") {
+TEST_CASE("vectors: GetCollisionVolumeRadius (0x5062a0)") {
     hailstone::test::each_vector("GetCollisionVolumeRadius.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         double v = mech::collision_volume_radius(f32(in["avatar_height"]), in["type"].i32() == 1,

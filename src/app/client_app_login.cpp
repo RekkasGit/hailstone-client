@@ -721,7 +721,7 @@ void ClientApp::update_link_death() {
     if (death.in_game) {
         // DoMainLoop's exit as after a camp: exit reason 0x1e6 to character select, or 0x1e5 when DAT_00dd2664 is 1
         // (the desktop) or 2 (the front end). OP_SaveOnZoneReq / OP_DeleteSpawn are not sent: the link is down
-        // (FUN_00542380), and WaitForWorldDisconnect returns at once.
+        // (0x542380), and WaitForWorldDisconnect returns at once.
         camp_finished(death.camp_kind);
     } else {
         // HandleWorldDisconnect(…, 1): GameState 0xff and exit reason 0x1e5, the front end.

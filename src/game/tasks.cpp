@@ -29,7 +29,7 @@ const Task* TaskState::find_id(std::uint32_t task_id) const {
 
 Task& TaskState::describe(Task t) {
     if (Task* old = find(t.type, t.sequence)) {
-        // With open_window set the original empties the entry first (FUN_004808e0), its elements included.
+        // With open_window set the original empties the entry first (0x4808e0), its elements included.
         if (old->task_id == t.task_id && !t.open_window) t.elements = std::move(old->elements);
         *old = std::move(t);
         return *old;

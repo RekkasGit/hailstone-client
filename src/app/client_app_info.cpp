@@ -75,7 +75,7 @@ bool ClientApp::client_info_command(std::string_view h, const std::string& args)
         if (ch->number == 7) {
             set_active_chat_default(7, name);
         } else if (ch->number == 0x14) {
-            // FUN_007efa20: the channel's index in the chat service's list (stricmp), -1 when not joined.
+            // 0x7efa20: the channel's index in the chat service's list (stricmp), -1 when not joined.
             int index = -1;
             auto chans = c.chat_channels();
             for (std::size_t i = 0; i < chans.size(); ++i)
@@ -192,14 +192,14 @@ void ClientApp::outputfile_command(const std::string& args) {
         return;
     case game::OutputFileKind::GuildBank:
         // EQWorldData_IsGuildHallZone and the guild bank window, else 6284; OutputFile_WriteGuildRoster @0x67e7a0
-        // writes only when the bank is the player's guild's (FUN_0067e560: GameConnection::guild_bank_allowed).
+        // writes only when the bank is the player's guild's (0x67e560: GameConnection::guild_bank_allowed).
         if (!c.in_guild_hall_zone()) return c.show_eqstr(6284);
         if (!c.guild_bank_allowed()) return;
         if (file.empty()) file = me + "-GuildBank.txt";
         write(file, game::guild_bank_file(c.guild_bank().main, c.guild_bank().deposit, c.strings()));
         return;
     case game::OutputFileKind::RealEstate:
-        // OutputFile_WriteRealEstate @0x5b37d0: the header and the real estate's items. The rows (FUN_005b3600) are not
+        // OutputFile_WriteRealEstate @0x5b37d0: the header and the real estate's items. The rows (0x5b3600) are not
         // traced, so only the header is written (docs/unknowns.md).
         if (file.empty()) file = me + "-RealEstate.txt";
         write(file, game::real_estate_file());

@@ -182,7 +182,7 @@ public:
         calls.push_back(std::format("dsp_chat {}", kGroupChatColor));
     }
     void delete_group() override { group_calls.push_back("delete_group 1"); }
-    void armor_filters_after_leaving() override { calls.push_back("armor_filters_after_leaving (FUN_00597750)"); }
+    void armor_filters_after_leaving() override { calls.push_back("armor_filters_after_leaving (0x597750)"); }
     int member_by_name(const std::string& name) override {
         int k = lookup(name);
         calls.push_back(std::format("get_member_by_name {}", k != -1));

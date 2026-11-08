@@ -203,7 +203,7 @@ TEST_CASE("The PC and NPC cycles skip the spawns IsInvisible hides (Hide Traders
                                {23, 4.0f, true, false}, {24, 2.0f, false, true}});
     TargetManager tm;
     glm::vec3 eye(0.0f);
-    // FUN_005c58c0 asks the local player's IsInvisible for modes 0 and 1 (0x5c5a04): a hidden trader (20) is never
+    // 0x5c58c0 asks the local player's IsInvisible for modes 0 and 1 (0x5c5a04): a hidden trader (20) is never
     // offered to TARGETPC / CYCLEPCTARGETS, so the next player is.
     tm.invisible = [](const Spawn& s) { return s.id == 20 || s.id == 22 || s.id == 24; };
     CHECK(*target_key_command(tm, 30, w, eye) == 21u);

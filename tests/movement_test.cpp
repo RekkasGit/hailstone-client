@@ -454,7 +454,7 @@ TEST_CASE("Controller: the look keys ramp the pitch by the physics time factor")
     float expect = 0.0f;
     for (int i = 1; i <= 14; ++i) {
         m.controls(in, ch, static_cast<std::uint32_t>(i));
-        // The controlled and the local player are one spawn: FUN_00516cd0 adds the step twice.
+        // The controlled and the local player are one spawn: 0x516cd0 adds the step twice.
         expect += 2.0f * static_cast<float>(std::min(i, 12));
         CHECK(m.body.camera_angle == doctest::Approx(std::min(expect, 128.0f)));
     }
@@ -939,7 +939,7 @@ TEST_CASE("Controller: feigning death (StandState 115) holds the player still; t
     CHECK(m.body.speed_run == 0.7f);
 }
 
-TEST_CASE("the jump's crouch window: the duck track's length + 1, at most 500 (FUN_00406740)") {
+TEST_CASE("the jump's crouch window: the duck track's length + 1, at most 500 (0x406740)") {
     CHECK(jump_crouch_window(std::nullopt) == 500);
     CHECK(jump_duck_clip(false) == "L08");
     CHECK(jump_duck_clip(true) == "CRCH_BA_1");

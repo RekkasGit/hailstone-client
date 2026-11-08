@@ -4,7 +4,7 @@
 // (0xff404040) box in font 1, at least 10 pixels wide:
 //  - the time left, bottom right, white (CBuffWindow_DrawBuffTimeOverlays @0x641ae0);
 //  - the disease / poison / curse / corruption counters left, top right, coloured by the counter
-//    (CBuffWindow_DrawSpellCounterOverlays @0x641e10 over FUN_0075ef10);
+//    (CBuffWindow_DrawSpellCounterOverlays @0x641e10 over 0x75ef10);
 //  - the hits left of a limited-use buff, bottom left, white (CBuffWindow_DrawEffectCountOverlays @0x642190).
 // PostDraw draws each one only when its option is on: the BuffWindow ShowBuffTimer / ShowBuffCounters /
 // ShowBuffLimitUse, the ShortDurationBuffWindow ShowSongTimer / ShowSongCounters / ShowSongLimitUse
@@ -21,13 +21,13 @@ namespace hailstone::game {
 struct SpellData;
 struct BuffSlot;
 
-// The original's spell effect ids the counters count (FUN_0075ef10's order).
+// The original's spell effect ids the counters count (0x75ef10's order).
 inline constexpr int kSpaDiseaseCounter = 35;
 inline constexpr int kSpaPoisonCounter = 36;
 inline constexpr int kSpaCurseCounter = 116;
 inline constexpr int kSpaCorruptionCounter = 369;
 
-// FUN_0075ef10 @0x75ef10 (CSpellDisplayManager): over the local player's effects holding the spell, for each of
+// 0x75ef10 (CSpellDisplayManager): over the local player's effects holding the spell, for each of
 // the spell's 12 slots that is a counter effect, the slot's base value is added to `base` and the effect's slot
 // data (EQ_Affect_GetSlotDataValue: the counters left) to `left`, in the order corruption (369), disease (35),
 // curse (116), poison (36).

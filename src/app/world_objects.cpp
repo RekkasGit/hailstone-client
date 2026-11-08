@@ -205,7 +205,7 @@ const WorldObjects::Model* WorldObjects::model_for(const std::string& raw) {
                         owned = assets::eqg::build_mesh(assets::eqg::parse_model(*data, false), base, stats);
                         mesh = &*owned;
                         read = [a](std::string_view file) { return a->read(file); };
-                        // The EQGM loader (FUN_100624e0) reads the model's .pts and .prt beside it.
+                        // The EQGM loader (0x100624e0) reads the model's .pts and .prt beside it.
                         auto pts = a->read(lower(base) + ".pts");
                         auto prt = a->read(lower(base) + ".prt");
                         if (pts && prt) {

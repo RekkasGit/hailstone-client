@@ -817,7 +817,7 @@ std::map<std::string, Checker> checkers() {
                                            Mismatch& m) {
         m.check_int(has_skill(i32(in, "adjusted_skill")), as_int(out.get("value")), w, "value");
     };
-    c["FUN_00516cd0"] = [](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
+    c["0x516cd0"] = [](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
         bool riding = flag(in, "local_has_mount") && flag(in, "controlled_is_that_mount");
         m.check_float(add_physics_pitch(f32(in, "pitch"), f32(in, "delta"), riding, precision_of(rec)),
                       as_f32(out.get("pitch")), w, "pitch");
@@ -869,7 +869,7 @@ std::map<std::string, Checker> checkers() {
         auto* oarr = std::get_if<std::shared_ptr<JsonArray>>(&out.get("packed")->v);
         for (std::size_t k = 0; k < 5; ++k) m.check_int(packed[k], static_cast<std::uint32_t>(as_int(&(**oarr)[k]).value_or(0)), w, "packed");
         m.check_int(last, as_int(out.get("last_request")), w, "last_request");
-        // Which object each step lands on: the one found, or the mount it rides (FUN_0058cf90).
+        // Which object each step lands on: the one found, or the mount it rides (0x58cf90).
         std::string target = r.unpack_rider ? who("mount_or_self") : found;
         bool spawn_stamped = (r.unpack_rider && found == "spawn") || (r.unpack && target == "spawn");
         bool mount_stamped = (r.unpack_rider && found == "mount") || (r.unpack && target == "mount");
@@ -880,7 +880,7 @@ std::map<std::string, Checker> checkers() {
         m.check_int(r.unpack && r.stop && target == "mount" ? 6 : 0, as_int(out.get("mount_motion_state")), w,
                     "mount_motion_state");
     };
-    c["FUN_004877e0"] = [](const Json&, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
+    c["0x4877e0"] = [](const Json&, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
         auto who = [&](const char* key) {
             const Json* j = in.get(key);
             auto* s = j ? std::get_if<std::string>(&j->v) : nullptr;
@@ -1143,7 +1143,7 @@ std::map<std::string, Checker> checkers() {
         m.check_float(push[1], as_f32(out.get("push_x")), w, "push_x");
         m.check_float(push[2], as_f32(out.get("push_z")), w, "push_z");
     };
-    c["PhysicsObject_SlowInMode5 (FUN_008d0800)"] = [](const Json& rec, const Json& in, const Json& out,
+    c["PhysicsObject_SlowInMode5 (0x8d0800)"] = [](const Json& rec, const Json& in, const Json& out,
                                                        const std::string& w, Mismatch& m) {
         // The spawn's vf64 is the walk speed times 1.0, unrounded.
         double walk = x87_mul(precision_of(rec), st_value(f32(in, "walk_speed")), st_value(1.0f));
@@ -1504,7 +1504,7 @@ std::map<std::string, Checker> checkers() {
         a.kind = i32(in, "kind");
         a.player_found = flag(in, "player_found");
         a.door_has_switch = flag(in, "door_has_switch");
-        // The mocked FUN_00510210's answer (al) is in the recorded calls.
+        // The mocked 0x510210's answer (al) is in the recorded calls.
         bool touch = (call_ret(out, "switch_acts_on_touch") & 0xff) != 0;
         hailstone::game::HitResult r = hailstone::game::collision_hit_set_colliding_type(a, touch);
         m.check_int(r.ret, as_int(out.get("ret")), w, "ret");
@@ -1832,7 +1832,7 @@ std::map<std::string, Checker> checkers() {
         m.check_int(duck.active, as_int(out.get("auto_duck")), w, "auto_duck");
         m.check_int(duck.until, as_int(out.get("auto_duck_until")), w, "auto_duck_until");
     };
-    c["FUN_00506c90"] = [](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
+    c["0x506c90"] = [](const Json& rec, const Json& in, const Json& out, const std::string& w, Mismatch& m) {
         StillSpawn s;
         s.jump_animation = flag(in, "jump_animation");
         s.controlled = flag(in, "is_controlled_player");

@@ -12,7 +12,7 @@ namespace hailstone::game {
 using net::ReType;
 
 void RealEstateManager::set_catalog(net::ReCatalog catalog) {
-    // ReadDefsFromPacket clears the catalog first (FUN_007f5a50), ReadCostsFromPacket the cost groups.
+    // ReadDefsFromPacket clears the catalog first (0x7f5a50), ReadCostsFromPacket the cost groups.
     catalog_ = std::move(catalog);
     // DefinitionTypeOf follows the catalog: the root's type is recomputed for the new definitions.
     if (const net::ReRecord* r = record(occ_.root)) occ_.root_type = definition_type(r->definition);
@@ -50,7 +50,7 @@ void RealEstateManager::set_current(net::ReRecord record) {
 void RealEstateManager::remove_record(std::uint32_t id) { records_.erase(id); }
 
 void RealEstateManager::merge_search_record(const net::ReRecord& r) {
-    // FUN_005b0f80 form B: an id the client has gets only its owner (FUN_005b4fe0) and guild (vt+8); others are
+    // 0x5b0f80 form B: an id the client has gets only its owner (0x5b4fe0) and guild (vt+8); others are
     // made by RealEstate::RealEstate @0x7fe1e0 from {id, 0, parent, definition, guild, f28, address, owner}.
     auto it = records_.find(r.id);
     if (it != records_.end()) {
@@ -125,7 +125,7 @@ const ReItemSummary* RealEstateManager::summary(std::uint32_t re) const {
 }
 
 void RealEstateManager::set_owned(OwnedList list, const std::vector<std::uint32_t>& ids) {
-    // FUN_005b4060 / 40a0 / 40e0 clear the list, then each id is added once (PcBase's add-unique).
+    // 0x5b4060 / 40a0 / 40e0 clear the list, then each id is added once (PcBase's add-unique).
     auto& v = owned_[static_cast<int>(list)];
     v.clear();
     for (auto id : ids)
@@ -140,7 +140,7 @@ void RealEstateManager::toggle_owned(OwnedList list, std::uint32_t id, bool add)
 }
 
 bool RealEstateManager::point_in_area(const net::ReArea& area, const glm::vec3& p) {
-    // FUN_00505ba0 inverts the area's 4×4 (row-major as sent: m[12..14] the translation); PointInVolume then takes
+    // 0x505ba0 inverts the area's 4×4 (row-major as sent: m[12..14] the translation); PointInVolume then takes
     // the point as a row vector: local = p · inverse.
     glm::mat4 m;
     for (int r = 0; r < 4; ++r)
@@ -175,7 +175,7 @@ const net::RePlacedItem* RealEstateManager::placed(std::uint32_t re, std::uint32
 }
 
 bool RealEstateManager::descends_from(std::uint32_t id, std::uint32_t ancestor) const {
-    // FUN_004b3090(id, ancestor, -1, 1): id itself or a parent up the chain, at most 10 steps from depth 1.
+    // 0x4b3090(id, ancestor, -1, 1): id itself or a parent up the chain, at most 10 steps from depth 1.
     for (int depth = 1; depth <= 10; ++depth) {
         if (id == ancestor) return true;
         const net::ReRecord* r = record(id);
@@ -186,7 +186,7 @@ bool RealEstateManager::descends_from(std::uint32_t id, std::uint32_t ancestor) 
 }
 
 std::uint32_t RealEstateManager::area_estate(std::uint32_t area_id, std::uint32_t root) const {
-    // FUN_004b30f0: a record whose definition's f01 is the area's id, and that is the root or below it (the test
+    // 0x4b30f0: a record whose definition's f01 is the area's id, and that is the root or below it (the test
     // starts from the record's parent).
     for (const auto& [id, r] : records_) {
         const net::ReDefinition* d = definition(r.definition);
@@ -236,13 +236,13 @@ const net::ReRecord* find_down_in(const RealEstateManager& m, const net::ReRecor
 } // namespace
 
 const net::ReRecord* RealEstateManager::find_down(const net::ReRecord* r, std::uint32_t mask, int skip, int depth) const {
-    // FUN_005b45b0: depth first through the child lists, `skip` levels left out, at most 10 deep.
+    // 0x5b45b0: depth first through the child lists, `skip` levels left out, at most 10 deep.
     std::unordered_map<const net::ReRecord*, int> failed;
     return find_down_in(*this, r, mask, skip, depth, failed);
 }
 
 void RealEstateManager::process(std::uint32_t now_ms, bool has_player, const glm::vec3& server_pos) {
-    // FUN_005adb60 after 5 s: the latch is released whatever the answer.
+    // 0x5adb60 after 5 s: the latch is released whatever the answer.
     if (pending_ && now_ms - pending_at_ >= 5000) pending_ = false;
     if (records_.empty()) {
         occ_.current = occ_.root;
@@ -267,7 +267,7 @@ void RealEstateManager::process(std::uint32_t now_ms, bool has_player, const glm
     }
     occ_.current = current;
     const net::ReRecord* cur = record(current);
-    // FUN_005affc0: the house is the current estate when it is one, else a house among a plot's children.
+    // 0x5affc0: the house is the current estate when it is one, else a house among a plot's children.
     occ_.house = kReNone;
     if (cur) {
         ReType t = definition_type(cur->definition);
@@ -284,7 +284,7 @@ void RealEstateManager::process(std::uint32_t now_ms, bool has_player, const glm
     // ResolveCurrentChild @0x5b00e0: the yard.
     const net::ReRecord* yard = find_up(cur, kReOwnerMask);
     occ_.yard = yard ? yard->id : kReNone;
-    // FUN_005b0140: the first crate below the yard.
+    // 0x5b0140: the first crate below the yard.
     const net::ReRecord* crate = find_down(yard, kReCrateMask, 1, 0);
     occ_.crate = crate ? crate->id : kReNone;
 }
@@ -350,14 +350,14 @@ std::uint32_t re_result_message(std::int32_t code) {
     case 79: return 5413;
     case 81: return 5418;
     case 82: return 5429;
-    // 83 builds its line with FUN_007dbd10(.., 10, 1, 1, 1), not traced: nothing here (docs/unknowns.md).
+    // 83 builds its line with 0x7dbd10(.., 10, 1, 1, 1), not traced: nothing here (docs/unknowns.md).
     case 83: return 0;
     default: return 5223;
     }
 }
 
 std::uint32_t re_sell_message(std::int32_t code) {
-    // FUN_005ad930; 13 builds its line with FUN_007dbd10 (not traced: nothing here).
+    // 0x5ad930; 13 builds its line with 0x7dbd10 (not traced: nothing here).
     switch (code) {
     case 0:
     case 13: return 0;
@@ -377,7 +377,7 @@ std::uint32_t re_sell_message(std::int32_t code) {
 }
 
 std::uint32_t re_transfer_message(std::int32_t code) {
-    // FUN_005adad0.
+    // 0x5adad0.
     if (code == 0) return 0;
     if (code == 2) return 0x149f;
     if (code == 3) return 0x1dd5;
@@ -385,7 +385,7 @@ std::uint32_t re_transfer_message(std::int32_t code) {
 }
 
 double re_upkeep_days(const RealEstateManager& m, const net::ReRecord& r) {
-    // FUN_007413f0(definition, record +0x3c): the upkeep entry whose key is the record's upkeep set, within the
+    // 0x7413f0(definition, record +0x3c): the upkeep entry whose key is the record's upkeep set, within the
     // definition's upkeep group; its leaves are the daily cost per currency. RefreshUpkeepList: for each currency
     // with a cost, the escrow balance (the record's map; none 0) / the cost; the least wins; none with a cost:
     // unlimited (-1).

@@ -61,7 +61,7 @@ public:
     virtual bool spell_affects(const AttackSpell& s, std::int32_t attribute) = 0; // EQ_Spell::SpellAffects
     virtual const AttackSpawn* spawn_by_id(std::uint32_t id) = 0;          // PlayerManagerClient::GetSpawnByID
     virtual bool not_on_same_deity(const AttackSpawn& self, const AttackSpawn& other, const AttackSpell* spell) = 0;
-    virtual bool has_owner(const AttackSpawn& target) = 0;                 // FUN_0059f730 non-null
+    virtual bool has_owner(const AttackSpawn& target) = 0;                 // 0x59f730 non-null
     virtual bool is_corpse(const AttackSpawn& s) = 0;                      // PlayerClient::IsCorpse
     virtual bool is_self_or_group_member(const AttackSpawn& s) = 0;        // CharacterZoneClient_IsSelfOrGroupMember
     virtual bool is_newbie_zone(std::uint32_t zone) = 0;                   // EQWorldData::IsNewbieZone

@@ -14,7 +14,7 @@ namespace {
 // differ only in their child prefix, strings and ini key). Children: <prefix>NameEdit (15 characters), Prompt,
 // SubmitButton, CloseButton, DisableReminderButton. Open(remind) @0x6fae40 (GameConnection::NameChangeWindow):
 // Disable Reminder shown by `remind`; the close button reads "Remind Me Later" with the reminder's prompt, else
-// "Close" with the manual one. FUN_006fb020(1) after a change of the pending flag: Submit Name enabled while no
+// "Close" with the manual one. 0x6fb020(1) after a change of the pending flag: Submit Name enabled while no
 // request is out and reading "Submit Name" or "Request Pending". WndNotification @0x6fb470: Submit Name (or Enter in
 // the box, message 6, while Submit Name is enabled) runs the window's command with the typed name; the close button
 // and the close box (message 0xa) hide it; Disable Reminder asks first. AboutToHide lets it hide.

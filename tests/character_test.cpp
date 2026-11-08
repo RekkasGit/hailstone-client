@@ -256,7 +256,7 @@ TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * d
     }
 }
 
-TEST_CASE("a spawn holding something plays the model's variant B, else what it has (FUN_004b1210)") {
+TEST_CASE("a spawn holding something plays the model's variant B, else what it has (0x4b1210)") {
     CharacterModel m;
     for (const char* c : {"", "P01", "P01B", "C01"}) m.clips[c].frame_count = 2;
     m.held_aliases["P01"] = "P01B";

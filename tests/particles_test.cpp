@@ -262,7 +262,7 @@ TEST_CASE("Model points: the WLD table and the point matrix") {
     CHECK(assets::find_point(lp, "SPELLPOINT_MOUTH")->offset == glm::vec3(0.08f, 0.6f, 0.0f));
     CHECK(assets::find_point(lp, "SPELLPOINT_LHAND")->bone == "HUMSPELL_POINT_TRACK");
     CHECK(assets::find_point(lp, "SPELLPOINT_RHAND")->bone == "HUMSPELL_POINT_TRACK");
-    // FUN_1006f370: heading 128 turns +X onto +Y; the offset is the translation; the scale applies first.
+    // 0x1006f370: heading 128 turns +X onto +Y; the offset is the translation; the scale applies first.
     assets::ModelPoint p;
     p.offset = {1, 2, 3};
     p.rotation = {128, 0, 0};

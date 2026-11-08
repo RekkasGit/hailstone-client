@@ -143,7 +143,7 @@ AppPacket encode_guild_tribute_toggle(bool on);
 
 // OP_GuildOptInOut: C→Z 80 bytes {u32 guild, u32 on, char[64] member, u32 command, u32 master}; Z→C 88 bytes {u32
 // guild, char[64] member, u32 on, u32 trophy on, u32 donations, u32 time, u32 command}. The original's handler
-// (HandleWorldMessage_GuildTribute, FUN_00482cf0) gives the named member the two states, the donations, the time
+// (HandleWorldMessage_GuildTribute, 0x482cf0) gives the named member the two states, the donations, the time
 // and the command's low byte (the tribute cells' flag). EQEmu echoes the request's command when a member opts in
 // or out, sends 1 after a donation and 0x2fb when a member zones in.
 AppPacket encode_guild_tribute_opt(std::uint32_t guild_id, bool on, std::string_view member);

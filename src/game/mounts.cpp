@@ -81,7 +81,7 @@ std::optional<std::string> rider_name_for_mount(std::string_view mount) {
 }
 
 bool riding_blocked(const Spawn& s) {
-    // FUN_0058dde0: the race shown (vf88) 0x16f, 0x20a or 1 always rides; otherwise an actor (+0x1024) whose
+    // 0x58dde0: the race shown (vf88) 0x16f, 0x20a or 1 always rides; otherwise an actor (+0x1024) whose
     // definition's +0x34 is 0 cannot.
     if (s.race == 0x16f || s.race == 0x20a || s.race == 1) return false;
     return s.actor_made && !s.tunic_point;
@@ -123,8 +123,8 @@ void dismount(WorldState& w, Spawn& rider, MountEvents& ev) {
         w.set_heights(rider, 0.0f, 1.0f); // EQPlayer::SetHeights(0, 1.0)
     }
     if (local) ev.close_spell_book = true;
-    mount->rider_id = 0; // FUN_008cfd30(0) on the mount
-    rider.mount_id = 0;  // FUN_008cfd20(0)
+    mount->rider_id = 0; // 0x8cfd30(0) on the mount
+    rider.mount_id = 0;  // 0x8cfd20(0)
     // +0x84 (the pitch) = 0, PerFrameUpdate, +0x1f00 (MountAnimationRelated) = 0: drawing state here.
 }
 

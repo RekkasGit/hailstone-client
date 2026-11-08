@@ -53,8 +53,8 @@ inline bool has_solvent(const net::Item& aug) { return aug.aug_distiller != 0; }
 // ItemBase_IsStatsDisabled @007b0520: either of the instance's disable bytes, +0x101 (rank) or +0x100 (the aug
 // texture), is set. Only update_stats_disabled writes them.
 inline bool stats_disabled(const net::Item& item) { return item.rank_disabled || item.aug_texture_disabled; }
-// FUN_007b28a0 (thiscall, item; use_item, ornament), what ProcessAllStats runs on each worn item (slots 0..0x15) and
-// the item display builders (CItemDisplayWnd_BuildItemInfo @0x6a9540, BuildItemDescriptionSTML @0x6a3360, FUN_006a1c70)
+// 0x7b28a0 (thiscall, item; use_item, ornament), what ProcessAllStats runs on each worn item (slots 0..0x15) and
+// the item display builders (CItemDisplayWnd_BuildItemInfo @0x6a9540, BuildItemDescriptionSTML @0x6a3360, 0x6a1c70)
 // on the shown item, with the game features GetGameFeature(0x13 UseItem) and GetGameFeature(0x15 Ornament):
 //  - +0x101 = use_item != -1 and use_item < the definition's Prestige (+0x1d0; 0 for a non-Type-0 item);
 //  - a container (ItemClass 1): each item inside gets the same call, then its +0x100 = 0;
@@ -63,7 +63,7 @@ inline bool stats_disabled(const net::Item& item) { return item.rank_disabled ||
 //  - last, an item at a top-level index (ItemGlobalIndex slot word +0x3c not -1, sub word +0x3e -1) gets +0x100 = 0.
 // `top_level` is that last test for `item` (the children are never top level).
 void update_stats_disabled(net::Item& item, std::int32_t use_item, std::int32_t ornament, bool top_level);
-// FUN_0069bf80: a valid, visible socket (ornaments included) holds an augment (the title's "(Augmented)").
+// 0x69bf80: a valid, visible socket (ornaments included) holds an augment (the title's "(Augmented)").
 bool is_augmented(const net::Item& item);
 
 // ---- the fit test
@@ -139,7 +139,7 @@ AugmentSockets build_augment_sockets(const net::Item& item, const net::Item* cur
 // @006a5931: every valid, visible socket, ornaments included, each followed by <BR>).
 std::string augment_socket_row_text(const net::Item& item, int socket, const AugmentStrings& s, bool highlight);
 std::string augment_description_rows(const net::Item& item, const AugmentStrings& s);
-// FUN_0069d6e0 (ItemType 54): 3357 "This Augmentation fits in slot types: %1" over the AugType bits 1..31 (dbstr
+// 0x69d6e0 (ItemType 54): 3357 "This Augmentation fits in slot types: %1" over the AugType bits 1..31 (dbstr
 // type 16 names, " " before the first and ", " between; 3369 "Fits in all slot types." with 31 or more bits). No
 // <BR>.
 std::string augment_slot_types_line(const net::Item& aug, const AugmentStrings& s);

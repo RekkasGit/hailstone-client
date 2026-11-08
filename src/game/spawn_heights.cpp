@@ -252,7 +252,7 @@ bool set_heights(SpawnHeights& s, const HeightInputs& in, float view_offset, flo
     if (!in.new_style_model && in.old_model_scale) scale = x87_mul(f, scale, X87(kOldModelSwitched));
     s.model_scale = to_f(scale);
     s.avatar_height = to_f(x87_mul(f, scale, X87(avatar0)));
-    s.view_height = to_f(x87_mul(f, X87(kViewHeight), X87(s.model_scale))); // FUN_00506330 x [+0x31c]
+    s.view_height = to_f(x87_mul(f, X87(kViewHeight), X87(s.model_scale))); // 0x506330 x [+0x31c]
 
     float new_scale = kNoScale;
     float eye = quiet(s.view_height);
@@ -311,7 +311,7 @@ double eye_height(const EyeInputs& in, const Fpu& f) {
         return x87_add(f, x87_mul(f, X87(in.definition_eye), X87(in.model_scale)), X87(in.camera_offset));
     }
     float avatar = quiet(in.avatar_height); // fld [+0x138]; fstp [temp]
-    double v = x87_sub(f, X87(quiet(in.view_height)), X87(avatar)); // FUN_00506330; fsub [temp]
+    double v = x87_sub(f, X87(quiet(in.view_height)), X87(avatar)); // 0x506330; fsub [temp]
     if (in.mounted) v = x87_add(f, v, X87(in.race == kRaceFroglok ? 1.0f : 0.5f));
     return v;
 }

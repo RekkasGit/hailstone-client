@@ -227,7 +227,7 @@ public:
     bool has_property(std::uint32_t) override { return false; }
     double height() override { return height_; }
     double collision_radius() override { return radius_; }
-    // FUN_00506c90 (game/mechanics/can_i_fit_here.h): a jump animation, levitation, the auto-duck.
+    // 0x506c90 (game/mechanics/can_i_fit_here.h): a jump animation, levitation, the auto-duck.
     bool moving_state() override { return mech::must_collide_still(still); }
     bool rider() override { return false; }
     void set_rider_stand_time(std::uint32_t) override {}
@@ -275,7 +275,7 @@ public:
                 if (r.touching_switch && touch) touch(d.id);
             }
     }
-    // FUN_00509a00 (DoCollisionMovement @0x508787, when the spawn does not collide): if the spawn's vf6c holds, a
+    // 0x509a00 (DoCollisionMovement @0x508787, when the spawn does not collide): if the spawn's vf6c holds, a
     // still sphere of the actor's radius x 0.5 (r + r x -0.5, 0x9c4e48) at the actor's location against the
     // switches that act on touch; each one hit is the local player's touched switch (0x475c50).
     void no_collide() override {
@@ -361,7 +361,7 @@ public:
         return fits;
     }
     void clear_stuck(std::uint32_t) override {}
-    // FUN_005064c0: z - height below the floor height puts z at floor + height and stops the fall.
+    // 0x5064c0: z - height below the floor height puts z at floor + height and stops the fall.
     bool check_stuck() override {
         float& z = spawn_.physics[2];
         if (!(z - height_ < spawn_.floor_height)) return false;
@@ -380,7 +380,7 @@ public:
     bool is_player_spawn() override { return true; }
     void after_place() override {}
     bool can_swim_jump_now() override { return can_swim_jump_; }
-    bool on_ladder() override { return spawn_.colliding_type == 6; } // FUN_0059fb80
+    bool on_ladder() override { return spawn_.colliding_type == 6; } // 0x59fb80
     void finish_move() override {
         auto box = world_ ? world_->world_box() : std::nullopt;
         Vec3f lo{}, hi{};
@@ -402,7 +402,7 @@ public:
     std::optional<float>* player_ceiling = nullptr; // PlayerClient +0x11b4
     std::uint32_t* standing_on = nullptr;           // PlayerClient +0x150
     std::int32_t* touching = nullptr;               // PlayerClient +0x2d4 (a door id, -1 none)
-    bool* kept_move = nullptr;                      // FUN_00507430 saved the position as the last good one
+    bool* kept_move = nullptr;                      // 0x507430 saved the position as the last good one
     float touch_height = 0.0f;                      // Height (+0x13c), for CollsnCallbackForFloor
     std::int32_t touch_zone = 0;
     std::function<void(std::uint8_t)> touch;        // +0x2d4 = the door, then PlayerClient::TouchingSwitch
@@ -810,7 +810,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     pc.touch_height = touch_height_;
     pc.touch_zone = touch_zone_;
     pc.touch = [this](std::uint8_t id) { touch_now(id); };
-    // FUN_00506c90's inputs: the jump animation (+0x10c0 L03 / L04, JMPA / JMPU) as the renderer last chose it;
+    // 0x506c90's inputs: the jump animation (+0x10c0 L03 / L04, JMPA / JMPU) as the renderer last chose it;
     // without a drawn model, taken as playing for kJumpWindowMs after a jump.
     pc.still.jump_animation = jump_animation_ ? *jump_animation_
                                               : ctl_.jump_ended() != 0 && now - ctl_.jump_ended() < mech::kJumpWindowMs;
@@ -839,7 +839,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     if (cm.held && body.fly_mode == mech::FlyMode::Ground && body.body_wet == 0 &&
         body.feet.z > body.floor_height + kHeldInAir)
         cs.physics[5] = speed_z;
-    // FUN_00507430 after saving the last good position: PlayerClient_RecordPositionSample(1) there, then
+    // 0x507430 after saving the last good position: PlayerClient_RecordPositionSample(1) there, then
     // Send_OP_FloatListThing(0) (once a second, the samples older than 2 s).
     if (kept_move) {
         const glm::vec3 at(cs.physics[0], cs.physics[1], cs.physics[2]);

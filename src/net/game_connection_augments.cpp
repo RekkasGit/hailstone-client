@@ -101,7 +101,7 @@ void GameConnection::run_augment_request(const game::AugmentRequest& r) {
         break;
     case game::AugmentRequest::Confirm: {
         // The block goes to a heap copy the dialog keeps; IsItemPending + 1 and PendingRequestLog_PushPendingReason
-        // (0x13) until ConfirmationDialog_HandleResponse answers (FUN_004232f0 takes both back).
+        // (0x13) until ConfirmationDialog_HandleResponse answers (0x4232f0 takes both back).
         log::info("augment: confirmation {:#x}, eqstr {}", r.dialog, r.eqstr);
         ++spells_.pending;
         Confirmation c;
@@ -138,7 +138,7 @@ std::string GameConnection::augment_solvent_text(std::uint32_t window) const {
 
 void GameConnection::handle_augment_info(const AppPacket& p) {
     // CEverQuest::HandleWorldMessage case 0x0afb @004cb57c: 13325 when +0x48 is 55, else 5881 with the name;
-    // FUN_006a09e0 puts "<BR>" + text into that window's SolventText (FUN_0069c020) and calls UpdateStrings.
+    // 0x6a09e0 puts "<BR>" + text into that window's SolventText (0x69c020) and calls UpdateStrings.
     auto v = decode_augment_info(p);
     if (!v) return;
     std::string text = v->unknown072 == game::kItemTypeSolvent ? strings_.format(13325, {})

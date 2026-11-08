@@ -18,7 +18,7 @@ namespace {
 // CStoryWnd @0x5c3c40 (rof2decomp export CStoryWnd.c): StoryList (Date 160, Title 200), Display (an STML box),
 // AutomaticButton (a check box) and CloseButton. Init @0x5c3820 reads every storyline\story*.txt: its first line (to
 // the new line, at most 0x7ff) is the title, its file time (_stat32's st_mtime) the date; the stories are sorted
-// newest first (FUN_005c3190) and listed as ctime(date) and title. LoadIniInfo @0x5c3420 reads eqclient.ini [News]
+// newest first (0x5c3190) and listed as ctime(date) and title. LoadIniInfo @0x5c3420 reads eqclient.ini [News]
 // LastRead ("%08X", the newest date read) and Automatic (here hailstone.ini news.last_read and news.automatic, the
 // "news_last_read" and "news_automatic" options). AboutToShow selects the oldest story newer than LastRead
 // (SelectOldestNew @0x5c3510; none: no row, an empty page); SelectIndex @0x5c3290 shows the story's page
