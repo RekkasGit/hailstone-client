@@ -339,6 +339,10 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "npc_names") return npc_names_ ? 1 : 0;
     // Hailstone: NPC names in their consider colour, on by default (draw_nameplates).
     if (o == "con_name_colour") return con_name_colour_ ? 1 : 0;
+    // Hailstone: the target's name on a dark plate edged in its colour with a bobbing marker (draw_nameplates), on by default.
+    if (o == "target_plate_highlight") return target_plate_highlight_ ? 1 : 0;
+    // Hailstone: names a nearer name covers fade (draw_nameplates), on by default.
+    if (o == "plate_overlap_fade") return plate_overlap_fade_ ? 1 : 0;
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -460,6 +464,18 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.save(config_path_);
         return;
     }
+    if (o == "plate_overlap_fade") {
+        plate_overlap_fade_ = v != 0;
+        config_.set_bool("display.plate_overlap_fade", v != 0);
+        config_.save(config_path_);
+        return;
+    }
+    if (o == "target_plate_highlight") {
+        target_plate_highlight_ = v != 0;
+        config_.set_bool("display.target_plate_highlight", v != 0);
+        config_.save(config_path_);
+        return;
+    }
     if (o == "pc_names" || o == "npc_names") {
         (o == "pc_names" ? pc_names_ : npc_names_) = v != 0;
         config_.set_bool(o == "pc_names" ? "display.pc_names" : "display.npc_names", v != 0);
@@ -555,6 +571,8 @@ void ClientApp::apply_settings() {
     pc_names_ = config_.get_bool("display.pc_names", true);
     npc_names_ = config_.get_bool("display.npc_names", true);
     con_name_colour_ = config_.get_bool("display.con_name_colour", true);
+    target_plate_highlight_ = config_.get_bool("display.target_plate_highlight", true);
+    plate_overlap_fade_ = config_.get_bool("display.plate_overlap_fade", true);
     own_name_ = config_.get_bool("display.own_name", true);
     player_menu_ = config_.get_bool("mouse.player_menu", true);
     // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.

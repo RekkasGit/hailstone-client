@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Names are drawn behind walls, poles, doors and characters instead of over them: the edge of whatever stands in front cuts the name exactly, pixel by pixel and in the same frame, so it stays right when you or the character move past it. Your target's name is never hidden
+- Names that overlap on the screen: the nearer name is drawn over the farther and the farther one fades to a tenth of its alpha between 10 % and 20 % coverage, smoothly. Selecting a faded name immediately restores the target at full alpha at its natural head position. "Fade Overlapping Names" in Options > Display turns the fade off (`display.plate_overlap_fade=0` in `hailstone.ini`)
+- "Highlight Target Name" in Options > Display: turn off the dark plate, edge and marker around your target's name (`display.target_plate_highlight=0` in `hailstone.ini`)
+
 ## 0.6.0-beta (2026-11-07)
 
 - Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview

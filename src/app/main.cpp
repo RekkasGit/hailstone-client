@@ -57,6 +57,8 @@
 #include "render/particle_renderer.h"
 #include "render/atmosphere.h"
 #include "render/weather_renderer.h"
+#include "app/nameplate_layer.h"
+#include "app/plate_test.h"
 #include "game/collision.h"
 #include "app/neighbour_zones.h"
 #include "game/zone_names.h"
@@ -90,6 +92,9 @@ struct Options {
     float sky_timescale = 1.0f; // viewer: the sky's TimeScale (cloud motion)
     int spell_effect = 0;       // viewer: a spellsnew.eff effect to play in front of the camera
     int spell_bolt = 0;         // viewer: a spell whose bolt or comet to throw across the view (modern)
+    bool plate_test = false;    // viewer: test name plates over the zone, for tools/probe_test.py (--plate-test)
+    bool plate_plain = false;   // ... drawn with no depth test, the comparison's reference (--plate-test-no-depth)
+    float plate_ghost = 0.0f;   // ... the alpha of what the scene hides, 0 drops it (--plate-test-ghost A)
     std::optional<std::pair<int, int>> weather; // viewer: OP_Weather {kind, intensity}, settled (--weather)
     float weather_age = -1.0f;     // --weather-age: seconds since it began (default settled, 600)
     float weather_stopped = -1.0f; // --weather-stopped: stopped this many seconds ago
@@ -218,6 +223,9 @@ void usage() {
         "  --sky N            viewer sky from sky.s3d: 0 none (indoor), 1..17 (default 1)\n"
         "  --vision KIND      viewer: see as a race with infra (infravision) or ultra (ultravision)\n"
         "  --time HH          viewer time of day, hour 1..24 (default 12; fractions allowed)\n"
+        "  --plate-test       viewer, with --frames 8 or more: test name plates over the zone, their boxes in the log\n"
+        "                     (--plate-test-no-depth: with no depth test; --plate-test-ghost A: the alpha of what\n"
+        "                     the scene hides); tools/probe_test.py compares the two\n"
         "  --spell-bolt ID    viewer, modern lighting: throw spell ID's bolt or comet (app/spell_bolts.h)\n"
         "                     across the view every 2.5 s\n"
         "  --spell-effect N   viewer: play spellsnew.eff effect N's cast and impact stages 25 units in\n"
@@ -368,6 +376,14 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--spell-effect")) {
             need(1);
             o.spell_effect = std::atoi(argv[++i]);
+        } else if (arg("--plate-test")) {
+            o.plate_test = true;
+        } else if (arg("--plate-test-ghost")) {
+            need(1);
+            o.plate_test = true;
+            o.plate_ghost = std::strtof(argv[++i], nullptr);
+        } else if (arg("--plate-test-no-depth")) {
+            o.plate_test = o.plate_plain = true;
         } else if (arg("--spell-bolt")) {
             need(1);
             o.spell_bolt = std::atoi(argv[++i]);
@@ -973,6 +989,20 @@ int main(int argc, char** argv) {
             }
         }
 
+        // --plate-test: name plates drawn as the client draws them (app/nameplate_layer.h) on ImGui's own layer, over
+        // the zone, placed from the CPU's rays (app/plate_test.h) for the view the camera starts in (it must stand still).
+        std::optional<game::CollisionMesh> plate_collision;
+        std::unique_ptr<ui::ImGuiLayer> plate_ui;
+        std::unique_ptr<app::NameplateLayer> plate_layer;
+        std::vector<app::TestPlate> test_plates;
+        if (zone && opts.plate_test) {
+            plate_collision = game::CollisionMesh::build(*zone);
+            plate_ui = std::make_unique<ui::ImGuiLayer>(window, vk, ui::ImGuiLayerDesc{});
+            plate_layer = std::make_unique<app::NameplateLayer>(vk, shader_dir);
+            plate_layer->set_depth_test(!opts.plate_plain);
+            plate_layer->set_occluded_alpha(opts.plate_ghost);
+        }
+
         // Developer UI demo (temporary until the stock UI engine, M5).
         std::unique_ptr<ui::ImGuiLayer> ui_layer;
         std::unique_ptr<app::UiDemo> ui_demo;
@@ -1319,6 +1349,45 @@ int main(int argc, char** argv) {
                                            2.0f / (static_cast<float>(std::max(1, width)) * proj[0][0]),
                                            weather.particles(), 1.0f,
                                            opts.modern ? render::kModernPrecipitation : render::kClassicPrecipitation);
+            }
+            if (plate_ui && frame >= 3) {
+                plate_ui->new_frame();
+                const ImVec2 disp = ImGui::GetIO().DisplaySize;
+                const glm::vec2 scale(disp.x / static_cast<float>(width), disp.y / static_cast<float>(height));
+                const std::string name = "TEST PLATE 00", line = "(a second line)";
+                if (test_plates.empty()) {
+                    app::ViewRays rays;
+                    const auto ao = camera.ao_view(width, height, draw_view.far_plane);
+                    rays.position = camera.position;
+                    rays.forward = camera.forward();
+                    rays.right = camera.right();
+                    rays.up = glm::cross(rays.right, rays.forward);
+                    rays.tan_half_x = ao.tan_half_x;
+                    rays.tan_half_y = ao.tan_half_y;
+                    rays.width = width;
+                    rays.height = height;
+                    rays.far_plane = draw_view.far_plane;
+                    const ImVec2 ns = ImGui::CalcTextSize(name.c_str()), ls = ImGui::CalcTextSize(line.c_str());
+                    const float bw = std::max(ns.x, ls.x) / scale.x, bh = ns.y * 2.0f / scale.y;
+                    test_plates = app::make_test_plates(*plate_collision, rays, 5, 3, bw, bh);
+                    static constexpr const char* kinds[] = {"front", "behind", "partial"};
+                    for (const auto& p : test_plates)
+                        log::info("test plate {} {} {} {} {} {}", p.id, kinds[static_cast<int>(p.kind)],
+                                  static_cast<int>(p.top_middle.x - bw * 0.5f), static_cast<int>(p.top_middle.y),
+                                  static_cast<int>(p.top_middle.x + bw * 0.5f), static_cast<int>(p.top_middle.y + bh));
+                }
+                plate_layer->begin(*f, ImGui::GetBackgroundDrawList(), glm::vec4(0.0f, 0.0f, disp.x, disp.y), camera.near_plane,
+                                   draw_view.far_plane);
+                for (const auto& tp : test_plates) {
+                    app::NameplateText plate;
+                    plate.pos = tp.top_middle * scale;
+                    plate.depth = tp.depth;
+                    plate.name = name;
+                    plate.lines = {line};
+                    plate.color = IM_COL32(255, 0, 255, 255);
+                    plate_layer->draw(plate);
+                }
+                plate_ui->render(*f);
             }
             if (ui_layer) ui_layer->render(*f);
             vk.end_frame(*f);

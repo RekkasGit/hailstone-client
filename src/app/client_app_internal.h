@@ -43,6 +43,8 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "app/nameplate_layer.h"
+#include "game/nameplate_overlap.h"
 #include "game/sky_colours.h"
 #include "game/option_commands.h"
 #include "ui/font_faces.h"
@@ -762,7 +764,7 @@ private:
     // The `eq` table of the Lua UI over this client's state (the rof2ui scripts' game API).
     void register_eq_api(lua_State* L);
     void trace_spawn(float dt);
-    void draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent);
+    void draw_nameplates(const render::FrameInfo& frame, const glm::mat4& view_proj, VkExtent2D extent, float far_plane);
     // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet, drawn
     // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent; the classic
     // lighting, which has no other use for it, takes the depth copy here when there is a ring to draw.
@@ -890,6 +892,7 @@ private:
     // gathered each frame: not drawn, named or clicked.
     void update_market_hidden(bool in_game);
     std::unordered_set<std::uint32_t> market_hidden_;
+    game::PlateFade plate_fade_; // each overlapped name's fade toward its target alpha (game/nameplate_overlap.h)
     // The spawn not to draw: the player's own in first person (camera 0's activate hides it; no other camera does).
     std::uint32_t hidden_spawn() const {
         return camera_type_ != game::kCameraFirstPerson || eq_host_.customization_zoom >= 0 ? 0u
@@ -1009,6 +1012,9 @@ private:
     platform::Window window_;
     std::string window_title_; // what update_window_title() set last
     render::VkContext vk_;
+    // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
+    // first use.
+    std::unique_ptr<NameplateLayer> plate_layer_; // draw_nameplates, made at its first use
     ui::ImGuiLayer ui_;
     bool quit_ = false;
     bool close_pending_ = false; // a window close request held through a loading screen
@@ -1268,6 +1274,8 @@ private:
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
     bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
+    bool plate_overlap_fade_ = true; // Hailstone: a covered name fades (display.plate_overlap_fade)
+    bool target_plate_highlight_ = true; // Hailstone: the target's name on a dark plate with a marker (display.target_plate_highlight)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,
