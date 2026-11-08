@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bandolier: with full bags, swapping to a set that has to put a weapon back no longer makes that weapon vanish from your inventory until you log in again. As in the original client, the swap is refused with "You do not have enough room to use this bandolier." and nothing moves
 - Options > Graphics "Flora Distance" draws the grass up to three times further (400 to 1,200 units; the gamepad UI's Display page has Grass and Grass distance). Past the usual distance the grass thins out, so it costs less than it would at full density
 - The classic outdoor zones have grass: with Show Grass on, grass grows on the meadows, forests, swamps and jungles of every outdoor zone of the original world, Kunark, Velious, Luclin and the Planes, with the shapes and pictures of your game folder's revamped Commonlands and the colour of the ground it stands on. Roads, sand, snow, rock, water, roofs and dungeon floors stay bare, and East Commonlands has a few desert plants on its sand. Hailstone's own: the original zones have none
 - The grass now lies in the shade of trees, buildings and hills (modern lighting), bends aside around you and the characters walking through it, and costs less to draw. Flora Distance now draws further in thick grassland too: before, the Karanas' grass ran out of room long before the slider's distance

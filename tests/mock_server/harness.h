@@ -43,7 +43,8 @@ public:
                                               << "1400 TOLD %1: %2\n"
                                               << "12293 CAMPING\n"
                                               << "12946 off\n"
-                                              << "12947 on\n";
+                                              << "12947 on\n"
+                                              << "9342 NO ROOM FOR THE BANDOLIER\n";
     }
     ~EmptyGameDir() {
         std::error_code ec;

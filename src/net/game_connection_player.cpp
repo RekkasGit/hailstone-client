@@ -691,9 +691,18 @@ bool GameConnection::bandolier_activate(int index) {
     // only OP_Bandolier action 2; EQEmu's Client::SetBandolier makes the same
     // moves without telling the client. The moves here follow SetBandolier and
     // MoveItemToInventory, which EQEmu wrote to match the client.
+    //
+    // ProcessMove is all or nothing: a move that fails puts every item back
+    // and BandolierSwap returns without sending, printing eqstr 9342 for
+    // error 0x11 (no room) and 9343 for 0x1a. So a returned item with nowhere
+    // to go cancels the whole swap here too. Sending it anyway would leave the
+    // client without the item while the server keeps it (EQEmu puts it on the
+    // cursor), and the next swap would then miss it.
     if (index < 0 || index >= bandolier_sets() || spells_.pending > 0) return false;
     const game::BandolierSet set = bandolier_[static_cast<std::size_t>(index)];
     if (set.name.empty()) return false;
+    const game::Inventory before = inventory_;
+    bool room = true;
     std::array<std::optional<Item>, 4> pulled;
     for (std::size_t b = 0; b < 4; ++b) {
         if (set.items[b].id == 0) continue;
@@ -710,7 +719,7 @@ bool GameConnection::bandolier_activate(int index) {
                 pulled[b] = inventory_.take(*from);
             }
         } else if (auto held = inventory_.take(ItemSlot::possessions(weapon))) {
-            return_item_to_inventory(std::move(*held));
+            room = return_item_to_inventory(std::move(*held)) && room;
         }
     }
     for (std::size_t b = 0; b < 4; ++b) {
@@ -720,12 +729,17 @@ bool GameConnection::bandolier_activate(int index) {
             auto held = inventory_.take(ItemSlot::possessions(weapon));
             pulled[b]->slot = ItemSlot::possessions(weapon);
             inventory_.put(ItemSlot::possessions(weapon), std::move(*pulled[b]));
-            if (held) return_item_to_inventory(std::move(*held));
+            if (held) room = return_item_to_inventory(std::move(*held)) && room;
         } else if (auto held = inventory_.take(ItemSlot::possessions(weapon))) {
-            return_item_to_inventory(std::move(*held));
+            room = return_item_to_inventory(std::move(*held)) && room;
         }
-        refresh_worn_slot(weapon);
     }
+    if (!room) {
+        inventory_ = before;
+        system(9342); // You do not have enough room to use this bandolier.
+        return false;
+    }
+    for (std::int16_t weapon : game::kBandolierSlots) refresh_worn_slot(weapon);
     send_zone(encode_bandolier(kBandolierSet, static_cast<std::uint8_t>(index)));
     return true;
 }
@@ -754,7 +768,7 @@ std::optional<ItemSlot> GameConnection::find_item_for_bandolier(std::uint32_t it
     return std::nullopt;
 }
 
-void GameConnection::return_item_to_inventory(Item item) {
+bool GameConnection::return_item_to_inventory(Item item) {
     // Client::MoveItemToInventory: a stackable item first tops up matching
     // stacks (general slots, then inside each bag), then the first free
     // general slot, or the first free slot of a bag that fits it.
@@ -777,25 +791,26 @@ void GameConnection::return_item_to_inventory(Item item) {
                 }
             }
         }
-        if (item.stack_count == 0) return;
+        if (item.stack_count == 0) return true;
     }
     for (std::int16_t s = kSlotGeneral1; s <= kSlotGeneral10; ++s) {
         const Item* there = inventory_.at(ItemSlot::possessions(s));
         if (!there) {
             item.slot = ItemSlot::possessions(s);
             inventory_.put(ItemSlot::possessions(s), std::move(item));
-            return;
+            return true;
         }
         if (there->is_bag() && game::bag_fit(*there, item) == 0) {
             for (std::int16_t sub = 0; sub < static_cast<std::int16_t>(there->bag_slots); ++sub) {
                 if (inventory_.at(ItemSlot::possessions(s, sub))) continue;
                 item.slot = ItemSlot::possessions(s, sub);
                 inventory_.put(ItemSlot::possessions(s, sub), std::move(item));
-                return;
+                return true;
             }
         }
     }
-    log::warn("bandolier: no room for {} (the server keeps it)", item.name);
+    log::info("bandolier: no room for {}", item.name);
+    return false;
 }
 
 void GameConnection::bandolier_command(const std::string& args) {

@@ -2769,7 +2769,8 @@ private:
     void init_bandolier_from_profile();
     std::int32_t aa_effect_total(std::int32_t spa) const;
     std::optional<ItemSlot> find_item_for_bandolier(std::uint32_t item_id) const;
-    void return_item_to_inventory(Item item);
+    // Client::MoveItemToInventory short of its cursor fallback: false (nothing placed) when there is no room.
+    bool return_item_to_inventory(Item item);
     void bandolier_command(const std::string& args);
     void handle_read_book(const ReadBook& r);
     void book_command(const std::string& args);
