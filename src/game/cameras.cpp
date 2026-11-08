@@ -6,7 +6,7 @@
 #include "game/doors.h" // fix_heading
 #include "game/follow.h" // x87_bearing
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -171,6 +171,12 @@ void reset_camera_defaults(std::array<GameCamera, 6>& cameras) {
     u2.look_pitch = true;
 }
 
+glm::vec3 wheel_follow_position(const glm::vec3& eye, const glm::vec3& back, float distance, const CameraSweep& sweep) {
+    const glm::vec3 wanted = eye + back * distance;
+    if (!sweep) return wanted;
+    return sweep(eye, wanted, kSweepRadius).value_or(eye);
+}
+
 CameraPose update_camera(int type, GameCamera& cam, const CameraTarget& target, const CameraSweep& sweep) {
     switch (type) {
     case kCameraOverhead: return overhead(cam, target, sweep);
@@ -223,4 +229,4 @@ bool camera_mouse_look(int type, GameCamera& cam, float dx, float dy, float raw_
     return turns_player;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include "net/game_connection.h"
 #include "net/item_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -440,4 +440,4 @@ void GameConnection::marketplace_frame(std::int64_t now) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

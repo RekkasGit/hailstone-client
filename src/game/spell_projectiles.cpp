@@ -8,7 +8,7 @@
 
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -387,4 +387,4 @@ void SpellProjectiles::clear() {
     last_cast_.clear();
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

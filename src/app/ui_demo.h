@@ -14,7 +14,7 @@
 #include "ui/dev_screens.h"
 #include "ui/item_windows.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 enum class DemoScreen { Login, Servers, Characters, NoCharacters, Loading, InGame, Items };
 
@@ -67,4 +67,4 @@ private:
     ui::ItemIconCache* item_icons_ = nullptr;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

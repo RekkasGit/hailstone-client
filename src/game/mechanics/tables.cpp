@@ -5,7 +5,7 @@
 
 #include "core/game_dir.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -54,9 +54,9 @@ struct SkillFlags {
     std::uint32_t name;
 };
 constexpr SkillFlags kSkillFlags[kSkillCount] = {
-#define NMSC_SKILL(id, capped, activated, name) {capped, activated, name},
+#define HAILSTONE_SKILL(id, capped, activated, name) {capped, activated, name},
 #include "game/mechanics/skill_info.inc"
-#undef NMSC_SKILL
+#undef HAILSTONE_SKILL
 };
 
 // The byte table at 0x5ba25c (skills 0..77): 1 selects "held at 252".
@@ -162,4 +162,4 @@ bool GameTables::load(const GameDir& game) {
     return a && b;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

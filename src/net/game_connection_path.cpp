@@ -11,7 +11,7 @@
 #include "net/game_connection.h"
 #include "net/movement_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 const std::vector<glm::vec3>& GameConnection::find_path() const {
     static const std::vector<glm::vec3> none;
@@ -175,4 +175,4 @@ void GameConnection::path_tick() {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

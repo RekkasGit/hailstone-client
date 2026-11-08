@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <utility>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -237,4 +237,4 @@ AtlasPage parse_atlas_page(std::string_view text) {
     return page;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

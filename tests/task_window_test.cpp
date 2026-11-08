@@ -13,8 +13,8 @@
 #include "game/task_window.h"
 #include "game/tasks.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 

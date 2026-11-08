@@ -25,7 +25,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // ---------------------------------------------------------------- shared
 
@@ -681,4 +681,4 @@ std::optional<Illusion> decode_illusion(const AppPacket& p);
 // TODO: OP_SpawnDoor, OP_GroundSpawn, OP_Action, OP_BeginCast. Items,
 // inventory and loot are in net/item_packets.h.
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using mechanics::Fpu;
 
@@ -143,4 +143,4 @@ std::int32_t spell_gem_overlay_top(double fraction, std::int32_t top, std::int32
     return top + Fpu::ftol(fpu.mul(fraction, static_cast<double>(bottom - top)));
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

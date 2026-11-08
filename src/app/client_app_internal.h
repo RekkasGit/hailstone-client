@@ -140,7 +140,7 @@
 #include "ui/asset_picker.h"
 #include "core/asset_folder_choice.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -458,7 +458,8 @@ public:
             if (conn_ && conn_->follow_target()) conn_->stop_follow(false);
         };
         nenv.threads = std::clamp(config_.get_int("nav.threads", 2), 1, 8);
-        nenv.prebuild = config_.get_bool("nav.prebuild", false);
+        // On by default: a zone with no cached mesh starts building it at the zone-in, so it is there when first wanted.
+        nenv.prebuild = config_.get_bool("nav.prebuild", true);
         nenv.assist_follow = config_.get_bool("nav.follow", true);
         nav_ = std::make_unique<Navigator>(std::move(nenv));
         AutomationEnv aenv;
@@ -749,6 +750,8 @@ private:
     // Cameras 1..5: the spawn they follow (the player, as drawn this frame), and their update into camera_.
     game::CameraTarget camera_target(const glm::vec3& feet) const;
     void update_game_camera(const glm::vec3& feet);
+    // unk_EQCamera_SetPosition's sweep for the cameras 1..6 (game/cameras.h).
+    game::CameraSweep camera_sweep() const;
     // The player's eye: its z plus PlayerClient_GetEyeHeight (game/spawn_heights.h).
     glm::vec3 eye_position() const;
     void draw_ui(float fps);
@@ -762,10 +765,11 @@ private:
     void trace_spawn(float dt);
     void draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent);
     // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet, drawn
-    // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent; the classic
-    // lighting, which has no other use for it, takes the depth copy here when there is a ring to draw.
+    // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent (the classic
+    // lighting, which has no other use for the copy, takes it when target_ring_shown).
     void draw_target_ring(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
                           double seconds);
+    bool target_ring_shown() const; // the option on and a target in the world
     mutable std::optional<game::TargetIndicatorSettings> target_indicator_; // TargetIndicator.ini, read on first use
     // Hailstone's look (game::target_ring_look): the target it last showed and since when, the dashes' turn.
     std::uint32_t ring_target_ = 0;
@@ -980,7 +984,7 @@ private:
     void draw_world_container();
     void drive_auto_door(MovementKeys& mk);
     void drive_auto_board();
-    Clock::time_point auto_board_zone_{}; // the zone-in NMSC_AUTO_BOARD last boarded after
+    Clock::time_point auto_board_zone_{}; // the zone-in HAILSTONE_AUTO_BOARD last boarded after
     bool auto_board_helm_ = false;
     // PlayerZoneClient::DoTeleport for a zone-line region's teleport text (game/zoning.h).
     void region_teleport(const std::string& text);
@@ -1265,6 +1269,7 @@ private:
     bool pc_names_ = true, npc_names_ = true;
     bool own_name_ = true; // Hailstone's switch for the player's own name sprite (display.own_name; game::NameSpriteSwitches)
     bool player_menu_ = true; // Hailstone's right-click menu on players (mouse.player_menu; game::opens_player_menu)
+    bool con_name_colour_ = true;     // Hailstone: NPC names in their consider colour (display.con_name_colour)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,
@@ -1436,4 +1441,4 @@ private:
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

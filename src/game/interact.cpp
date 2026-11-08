@@ -2,7 +2,7 @@
 
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 DuelRequestOutcome duel_request(DuelState& s, std::uint32_t challenger, bool ignored) {
     // Handle_OP_RequestDuel @0x4b67c0.
@@ -47,4 +47,4 @@ bool opens_player_menu(const Spawn& sp, bool self) {
     return !self && !sp.is_npc && !sp.is_corpse && !sp.trader && !sp.buyer;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

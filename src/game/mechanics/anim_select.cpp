@@ -11,7 +11,7 @@
 #include <cstring>
 #include <limits>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -642,9 +642,9 @@ double old_model_anim_speed(std::int32_t anim, float speed, std::int32_t race, s
     }
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -747,4 +747,4 @@ std::uint8_t attack_animation(const AttackAnimInput& in) {
     return in.new_style ? new_attack_animation(in) : old_attack_animation(in);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

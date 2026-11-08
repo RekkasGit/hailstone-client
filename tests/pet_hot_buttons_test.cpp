@@ -24,7 +24,7 @@
 #include "net/pet_packets.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("Pet hot buttons: the drop's button and SyncHotButtonStates") {
     auto b = game::pet_command_hot_button(4, "Pet", "sit");
@@ -181,7 +181,7 @@ std::string run(lua_State* L, const std::string& code) {
 TEST_CASE("Pet hot buttons: a pet window button dragged to a bar, lit while its command is on") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("pet_hot_buttons");
+        hailstone::test::ScratchDir scratch("pet_hot_buttons");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         game::HotButtonStore store;
@@ -336,7 +336,7 @@ TEST_CASE("Pet toggles: the ini keys, GetPetCommandAvailable and ReissueToggledP
 TEST_CASE("Pet toggles: /pet words save PetButtonToggleState, a new pet gets the toggles that are on") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("pet_toggles");
+        hailstone::test::ScratchDir scratch("pet_toggles");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         app::EqHost host;
@@ -442,7 +442,7 @@ TEST_CASE("Pet toggles: /pet words save PetButtonToggleState, a new pet gets the
 TEST_CASE("Pet window: a pet there before the UI ini is read still pops the window up over a saved hidden state") {
     ImGuiContext* ctx = ImGui::CreateContext();
     {
-        nmsc::test::ScratchDir scratch("pet_popup");
+        hailstone::test::ScratchDir scratch("pet_popup");
         GameDir game(scratch.path());
         net::GameConnection conn(game, {});
         app::EqHost host;

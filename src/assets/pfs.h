@@ -21,7 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 class PfsArchive {
 public:
@@ -60,4 +60,4 @@ std::uint32_t pfs_name_crc(std::string_view name);
 // Inflates one zlib stream into exactly `out.size()` bytes. Throws on error.
 void zlib_inflate(std::span<const std::byte> in, std::span<std::byte> out);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

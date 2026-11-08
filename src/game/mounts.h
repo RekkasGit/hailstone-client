@@ -17,7 +17,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct Spawn;
 struct WorldState;
@@ -93,4 +93,4 @@ void summon_mount_tick(WorldState& w, MountQueries& q, MountEvents& ev);
 Spawn* controlled_spawn(WorldState& w);
 const Spawn* controlled_spawn(const WorldState& w);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

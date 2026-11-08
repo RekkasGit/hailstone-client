@@ -8,9 +8,10 @@
 #include <vector>
 
 #include "app/lua_eq_windows.h"
+#include "core/file_time.h"
 #include "core/game_dir.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -96,8 +97,7 @@ private:
             std::error_code ec;
             auto t = std::filesystem::last_write_time(e.path, ec);
             if (!ec)
-                s.time = std::chrono::duration_cast<std::chrono::seconds>(
-                             std::chrono::clock_cast<std::chrono::system_clock>(t).time_since_epoch()).count();
+                s.time = std::chrono::duration_cast<std::chrono::seconds>(file_time_to_system(t).time_since_epoch()).count();
             newest_ = std::max(newest_, s.time);
             stories_.push_back(std::move(s));
         }
@@ -142,4 +142,4 @@ private:
 
 void add_story_windows(std::vector<std::unique_ptr<StockWindow>>& out) { out.push_back(std::make_unique<StoryWindow>()); }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

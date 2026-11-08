@@ -9,7 +9,7 @@
 
 #include "game/view_distance.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct Daylight;
 
@@ -96,4 +96,4 @@ struct ColorGrade {
 // `fog` the zone's fog colour (linear), `outdoor` the zone's time type, `overcast` the storm.
 ColorGrade color_grade(const Daylight& daylight, bool outdoor, const glm::vec3& fog, float overcast);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

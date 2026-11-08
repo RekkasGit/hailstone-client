@@ -1,5 +1,5 @@
-// libFuzzer entry points (build with -DNMSC_LIBFUZZER=ON and Clang). One executable per parser family, chosen by
-// the NMSC_FUZZ_TARGET definition from CMake. Seed corpora: any file of that kind; the deterministic tests in
+// libFuzzer entry points (build with -DHAILSTONE_LIBFUZZER=ON and Clang). One executable per parser family, chosen by
+// the HAILSTONE_FUZZ_TARGET definition from CMake. Seed corpora: any file of that kind; the deterministic tests in
 // fuzz_net_test.cpp and fuzz_assets_test.cpp are the always-on version of the same checks.
 
 #include <cstddef>
@@ -20,7 +20,7 @@
 #include "core/zip_read.h"
 #include "net/session_codec.h"
 #include "net/zone_packets.h"
-#if defined(NMSC_FUZZ_DECODERS)
+#if defined(HAILSTONE_FUZZ_DECODERS)
 #include <iterator>
 
 #include "net/aa_packets.h"
@@ -50,10 +50,10 @@
 #include "net/training_packets.h"
 #include "net/tribute_packets.h"
 #include "net/world_packets.h"
-#if defined(NMSC_HAS_NMS)
+#if defined(HAILSTONE_HAS_NMS)
 #include "nms_packets.h"
 #endif
-#if defined(NMSC_HAS_TRIUNE)
+#if defined(HAILSTONE_HAS_TRIUNE)
 #include "triune_packets.h"
 #include "triune_windows.h"
 #endif
@@ -63,17 +63,17 @@
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     std::span<const std::byte> in(reinterpret_cast<const std::byte*>(data), size);
     try {
-#if defined(NMSC_FUZZ_PFS)
-        auto a = nmsc::assets::PfsArchive::from_memory(std::vector<std::byte>(in.begin(), in.end()));
+#if defined(HAILSTONE_FUZZ_PFS)
+        auto a = hailstone::assets::PfsArchive::from_memory(std::vector<std::byte>(in.begin(), in.end()));
         for (const auto& n : a.names()) (void)a.read(n);
-#elif defined(NMSC_FUZZ_WLD)
-        auto w = nmsc::assets::wld::WldFile::parse(in);
+#elif defined(HAILSTONE_FUZZ_WLD)
+        auto w = hailstone::assets::wld::WldFile::parse(in);
         for (const auto& f : w.fragments())
-            if (const auto* m = std::get_if<nmsc::assets::wld::MeshDef>(&f.data)) (void)nmsc::assets::wld::build_mesh(w, *m, f.name);
-#elif defined(NMSC_FUZZ_TEXTURE)
-        (void)nmsc::assets::decode_texture(in);
-#elif defined(NMSC_FUZZ_SOE)
-        namespace soe = nmsc::net::soe;
+            if (const auto* m = std::get_if<hailstone::assets::wld::MeshDef>(&f.data)) (void)hailstone::assets::wld::build_mesh(w, *m, f.name);
+#elif defined(HAILSTONE_FUZZ_TEXTURE)
+        (void)hailstone::assets::decode_texture(in);
+#elif defined(HAILSTONE_FUZZ_SOE)
+        namespace soe = hailstone::net::soe;
         soe::SessionParams params;
         params.crc_bytes = 2;
         params.passes = {soe::EncodePass::Compression, soe::EncodePass::Xor};
@@ -85,48 +85,48 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         soe::InboundStream stream;
         std::vector<soe::Bytes> out;
         (void)stream.push(v, out);
-#elif defined(NMSC_FUZZ_PACKETS)
+#elif defined(HAILSTONE_FUZZ_PACKETS)
         // First two bytes pick the decoder-agnostic opcode; the rest is the payload. Decoders must not throw.
         if (size >= 2) {
-            nmsc::net::AppPacket p(static_cast<std::uint16_t>(data[0] | data[1] << 8), std::vector<std::byte>(in.begin() + 2, in.end()));
-            (void)nmsc::net::decode_spawn(p);
-            (void)nmsc::net::decode_player_profile(p);
-            (void)nmsc::net::decode_new_zone(p);
-            (void)nmsc::net::decode_channel_message(p);
-            (void)nmsc::net::decode_zone_points(p);
+            hailstone::net::AppPacket p(static_cast<std::uint16_t>(data[0] | data[1] << 8), std::vector<std::byte>(in.begin() + 2, in.end()));
+            (void)hailstone::net::decode_spawn(p);
+            (void)hailstone::net::decode_player_profile(p);
+            (void)hailstone::net::decode_new_zone(p);
+            (void)hailstone::net::decode_channel_message(p);
+            (void)hailstone::net::decode_zone_points(p);
         }
-#elif defined(NMSC_FUZZ_DECODERS)
+#elif defined(HAILSTONE_FUZZ_DECODERS)
         // Every typed decoder of tests/fuzz_decoders.inc: byte 0 picks it, bytes 1..2 are the opcode, the rest the
         // payload.
-        using Fn = void (*)(const nmsc::net::AppPacket&);
+        using Fn = void (*)(const hailstone::net::AppPacket&);
         static const Fn kDecoders[] = {
-#define NMSC_FUZZ_DECODER(fn) [](const nmsc::net::AppPacket& p) { (void)nmsc::net::fn(p); },
-#define NMSC_FUZZ_PLUGIN_DECODER(ns, fn) [](const nmsc::net::AppPacket& p) { (void)::ns::fn(p.data); },
-#define NMSC_FUZZ_GAME_DECODER(fn) [](const nmsc::net::AppPacket& p) { ::nmsc::fuzz_game::feed(&::nmsc::game::fn, p.data); },
+#define HAILSTONE_FUZZ_DECODER(fn) [](const hailstone::net::AppPacket& p) { (void)hailstone::net::fn(p); },
+#define HAILSTONE_FUZZ_PLUGIN_DECODER(ns, fn) [](const hailstone::net::AppPacket& p) { (void)::ns::fn(p.data); },
+#define HAILSTONE_FUZZ_GAME_DECODER(fn) [](const hailstone::net::AppPacket& p) { ::hailstone::fuzz_game::feed(&::hailstone::game::fn, p.data); },
 #include "fuzz_decoders.inc"
-#undef NMSC_FUZZ_GAME_DECODER
-#undef NMSC_FUZZ_PLUGIN_DECODER
-#undef NMSC_FUZZ_DECODER
+#undef HAILSTONE_FUZZ_GAME_DECODER
+#undef HAILSTONE_FUZZ_PLUGIN_DECODER
+#undef HAILSTONE_FUZZ_DECODER
         };
         if (size >= 3) {
-            nmsc::net::AppPacket p(static_cast<std::uint16_t>(data[1] | data[2] << 8), std::vector<std::byte>(in.begin() + 3, in.end()));
+            hailstone::net::AppPacket p(static_cast<std::uint16_t>(data[1] | data[2] << 8), std::vector<std::byte>(in.begin() + 3, in.end()));
             kDecoders[data[0] % std::size(kDecoders)](p);
         }
-#elif defined(NMSC_FUZZ_ZIP)
+#elif defined(HAILSTONE_FUZZ_ZIP)
         // The updater's inputs (docs/updater.md): a package zip read whole, and the same bytes as a manifest.
-        nmsc::ZipReader zip;
+        hailstone::ZipReader zip;
         if (zip.open(std::vector<std::byte>(in.begin(), in.end())))
             for (const auto& e : zip.entries()) (void)zip.extract(e, [](std::span<const std::byte>) { return true; });
-        (void)nmsc::parse_update_manifest(std::string_view(reinterpret_cast<const char*>(data), size),
-                                          nmsc::Ed25519PublicKey{});
+        (void)hailstone::parse_update_manifest(std::string_view(reinterpret_cast<const char*>(data), size),
+                                          hailstone::Ed25519PublicKey{});
         // The add-on manager's (docs/addons.md): a manifest, a pasted link, a plugin library's header.
         const std::string_view text(reinterpret_cast<const char*>(data), size);
-        (void)nmsc::parse_addon_manifest(text);
-        (void)nmsc::parse_addon_link(text);
-        (void)nmsc::read_binary_header(in);
-        (void)nmsc::parse_addon_index(text, nmsc::Ed25519PublicKey{});
+        (void)hailstone::parse_addon_manifest(text);
+        (void)hailstone::parse_addon_link(text);
+        (void)hailstone::read_binary_header(in);
+        (void)hailstone::parse_addon_index(text, hailstone::Ed25519PublicKey{});
 #else
-#error "define one of NMSC_FUZZ_PFS, NMSC_FUZZ_WLD, NMSC_FUZZ_TEXTURE, NMSC_FUZZ_SOE, NMSC_FUZZ_PACKETS, NMSC_FUZZ_DECODERS, NMSC_FUZZ_ZIP"
+#error "define one of HAILSTONE_FUZZ_PFS, HAILSTONE_FUZZ_WLD, HAILSTONE_FUZZ_TEXTURE, HAILSTONE_FUZZ_SOE, HAILSTONE_FUZZ_PACKETS, HAILSTONE_FUZZ_DECODERS, HAILSTONE_FUZZ_ZIP"
 #endif
     } catch (const std::exception&) {
         // A reported error is the expected outcome for malformed input; crashes and sanitizer reports are not.

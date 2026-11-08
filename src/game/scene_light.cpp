@@ -6,7 +6,7 @@
 
 #include "assets/sky.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -92,4 +92,4 @@ glm::vec3 point_light_term(const glm::vec3& light, const glm::vec3& color, float
     return color * facing * falloff;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

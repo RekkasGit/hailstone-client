@@ -12,7 +12,7 @@
 #include "core/log.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -382,4 +382,4 @@ AreaFogResult area_fog_blend(const AreaFogData& fog, float radius, float distanc
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

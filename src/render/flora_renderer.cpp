@@ -15,7 +15,7 @@
 #include "render/scene_lighting.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -391,4 +391,4 @@ void FloraRenderer::create_pipeline(const std::filesystem::path& shader_dir) {
     vkDestroyShaderModule(d, fs, nullptr);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

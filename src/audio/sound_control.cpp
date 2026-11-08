@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 // msssoft.m3d's constants: 0.0001 (0x2240c788), 1/pi (0x2240c774), the behind factor 0.75 (0x2240c770).
@@ -50,4 +50,4 @@ float miles_volume_curve(float volume) {
     return static_cast<float>(std::pow(static_cast<double>(volume), 5.0 / 3.0));
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

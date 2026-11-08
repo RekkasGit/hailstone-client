@@ -4,8 +4,9 @@
 #include "app/lua_eq_menu.h"
 #include "game/mechanics/abilities.h"
 #include "game/boats.h"
+#include "core/env.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 // CanIFitHere and the room above for crouch to stand (unk_SetStandState): nothing between the feet and the
 // standing height.
@@ -365,11 +366,10 @@ game::CameraTarget ClientApp::camera_target(const glm::vec3& feet) const {
     return t;
 }
 
-void ClientApp::update_game_camera(const glm::vec3& feet) {
+game::CameraSweep ClientApp::camera_sweep() const {
     // unk_EQCamera_SetPosition's sweep: the zone and its objects, not spawns (filter 0x476410 lets a spawn collide
     // only as a vehicle; vehicles are not in this sweep). No collision: straight to the point.
-    const game::CameraSweep sweep = [this](const glm::vec3& from, const glm::vec3& to,
-                                           float radius) -> std::optional<glm::vec3> {
+    return [this](const glm::vec3& from, const glm::vec3& to, float radius) -> std::optional<glm::vec3> {
         if (!collision_) return to;
         game::SphereSweep s = game::SphereSweep::make(from, to, radius);
         if (!s.valid()) return std::nullopt;
@@ -377,7 +377,11 @@ void ClientApp::update_game_camera(const glm::vec3& feet) {
         if (world_objects_) world_objects_->sweep_sphere(s);
         return s.collided ? s.start + s.delta * s.t : to;
     };
-    const game::CameraPose pose = game::update_camera(camera_type_, cameras_[camera_type_], camera_target(feet), sweep);
+}
+
+void ClientApp::update_game_camera(const glm::vec3& feet) {
+    const game::CameraPose pose =
+        game::update_camera(camera_type_, cameras_[camera_type_], camera_target(feet), camera_sweep());
     camera_.position = pose.position;
     camera_.yaw = game::heading_to_yaw(pose.heading);
     // A look-at pitch below the horizon is 512 - the angle (CMath's arctangent).
@@ -709,11 +713,11 @@ void ClientApp::update_combat_input() {
     }
 }
 
-// NMSC_TRACE_SPAWN=name: log one spawn's server and drawn positions ten
+// HAILSTONE_TRACE_SPAWN=name: log one spawn's server and drawn positions ten
 // times a second (to check how smoothly spawns move).
 void ClientApp::trace_spawn(float dt) {
-    // NMSC_TRACE_VEHICLES: every vehicle spawn every 2 s (testing boats, game/boats.h).
-    static const bool vehicles = std::getenv("NMSC_TRACE_VEHICLES") != nullptr;
+    // HAILSTONE_TRACE_VEHICLES: every vehicle spawn every 2 s (testing boats, game/boats.h).
+    static const bool vehicles = hailstone::core::env("TRACE_VEHICLES") != nullptr;
     static float vehicle_timer = 0.0f;
     if (vehicles && conn_ && (vehicle_timer += dt) >= 2.0f) {
         vehicle_timer = 0.0f;
@@ -728,7 +732,7 @@ void ClientApp::trace_spawn(float dt) {
                                                    : "no triangles");
         }
     }
-    static const char* want = std::getenv("NMSC_TRACE_SPAWN");
+    static const char* want = hailstone::core::env("TRACE_SPAWN");
     static float timer = 0.0f;
     if (!want || !conn_ || (timer += dt) < 0.1f) return;
     timer = 0.0f;
@@ -758,4 +762,4 @@ void ClientApp::trace_spawn(float dt) {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

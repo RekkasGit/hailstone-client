@@ -3,12 +3,15 @@
 // The precipitation manager's particles (render/weather_renderer.h, game/precipitation.h), one instance each, as the
 // original's CRender builds their quads (0x1007fd10): orientation 0 a Width x Height square facing the camera,
 // 1 a streak Height long standing up from the drop (against the wind (0, 0, -1)), Width across, 2 lying flat on the
-// ground. Facing and upright ones are at least a pixel wide, as the original's.
+// ground. Facing and upright ones are at least a pixel wide, as the original's. The modern style
+// (render::PrecipitationStyle) draws the facing ones at least style.y pixels both ways and, below style.z pixels of
+// their own size, fades them into a soft dot (v_dot), so a far snowflake does not average away in its texture's mips.
 
 layout(push_constant) uniform Push {
     mat4 view_proj;
     vec4 camera;  // xyz, w: a pixel's world size one unit in front of the camera
     vec4 forward; // xyz the camera's direction, w: the light scale
+    vec4 style;   // x a pixel's world size one unit in front, y the facing ones' least pixels, z dot below (0: none)
     uvec4 texture_slot;
 } pc;
 
@@ -19,6 +22,8 @@ layout(location = 3) in vec4 i_color;
 
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out vec4 v_color;
+layout(location = 2) out vec2 v_corner;
+layout(location = 3) out float v_dot;
 
 void main() {
     const vec2 kCorners[6] = vec2[6](vec2(-1, -1), vec2(1, -1), vec2(1, 1), vec2(-1, -1), vec2(1, 1), vec2(-1, 1));
@@ -27,6 +32,13 @@ void main() {
     int orientation = int(i_position.w + 0.5);
     float depth = max(dot(p - pc.camera.xyz, pc.forward.xyz), 1e-3);
     float width = i_size.x, height = i_size.y;
+    v_dot = 0.0;
+    if (orientation == 0 && pc.style.y > 0.0) {
+        float px = pc.style.x * depth; // one pixel here
+        if (pc.style.z > 0.0) v_dot = 1.0 - smoothstep(0.5 * pc.style.z, pc.style.z, max(width, height) / px);
+        width = max(width, pc.style.y * px);
+        height = max(height, pc.style.y * px);
+    }
     if (orientation != 2) width = max(width, pc.camera.w * depth); // a pixel at least
     vec3 world;
     vec3 to_cam = normalize(pc.camera.xyz - p);
@@ -47,6 +59,7 @@ void main() {
         world = p + right * (corner.x * 0.5 * width) + up * (corner.y * 0.5 * height);
     }
     v_uv = vec2(mix(i_uv.x, i_uv.z, corner.x * 0.5 + 0.5), mix(i_uv.w, i_uv.y, corner.y * 0.5 + 0.5));
+    v_corner = corner;
     v_color = vec4(i_color.rgb * pc.forward.w, i_color.a);
     gl_Position = pc.view_proj * vec4(world, 1.0);
 }

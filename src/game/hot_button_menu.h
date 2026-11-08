@@ -40,7 +40,7 @@
 #include "game/hotbuttons.h"
 #include "game/inventory.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kStrHbActivate = 7661, kStrHbConsume = 5371, kStrHbInspect = 7668,
                                kStrHbClear = 7662, kStrHbChangeSize = 7671, kStrHbAssignIcon = 7664,
@@ -93,4 +93,4 @@ std::optional<HotButton> inventory_hot_button(const net::ItemSlot& slot, const n
 // with its item id, top-level slots in order, each bag's contents after the bag; never the cursor. Nullopt: none.
 std::optional<net::ItemSlot> hot_button_item_slot(const Inventory& inv, const HotButton& b);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

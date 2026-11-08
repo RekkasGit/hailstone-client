@@ -17,9 +17,9 @@
 
 #include "game/guild_ranks.h"
 
-namespace nmsc::net { struct WhoResponse; struct WhoRequest; }
+namespace hailstone::net { struct WhoResponse; struct WhoRequest; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -318,4 +318,4 @@ struct SocialState {
     std::int64_t session_start_ms = 0; // /played's "This session"
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -12,7 +12,7 @@
 #include "core/log.h"
 #include "core/saturate.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -261,6 +261,9 @@ std::vector<EnvironmentEmitter> parse_environment_emitters(std::string_view text
 }
 
 std::size_t add_environment_emitters(const GameDir& game, Zone& zone) {
+    // A revamped zone loaded from its RoF2 .s3d: the emitters file beside it is the live .eqg's (nektulos' torches
+    // and campfires), placed for the new zone and burning in mid-air in the old one.
+    if (is_revamped_zone_name(zone.name) && !is_eqg_zone(game, zone.name)) return 0;
     auto text = game.read(lower(zone.name) + "_environmentemitters.txt");
     if (!text) return 0;
     auto emitters = parse_environment_emitters(
@@ -291,4 +294,4 @@ std::size_t add_environment_emitters(const GameDir& game, Zone& zone) {
     return added;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

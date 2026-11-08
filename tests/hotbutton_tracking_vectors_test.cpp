@@ -12,10 +12,10 @@
 #include "game/tracking.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
-using nmsc::test::f32_of;
+using namespace hailstone::game;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
+using hailstone::test::f32_of;
 
 namespace {
 
@@ -210,7 +210,7 @@ std::string identity(const std::string& s) { return s; }
 } // namespace
 
 TEST_CASE("vectors: CHotButtonWnd_DoHotButton") {
-    nmsc::test::each_vector("CHotButtonWnd_DoHotButton.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CHotButtonWnd_DoHotButton.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         HotButtonGlobals g;
@@ -243,7 +243,7 @@ TEST_CASE("vectors: CHotButtonWnd_DoHotButton") {
 }
 
 TEST_CASE("vectors: CHotButton_RightClick (FUN_0054fc10)") {
-    nmsc::test::each_vector("CHotButton_RightClick.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CHotButton_RightClick.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         HotButtonRightClick c;
@@ -276,7 +276,7 @@ TEST_CASE("vectors: CHotButton_RightClick (FUN_0054fc10)") {
 }
 
 TEST_CASE("vectors: Social_Stop (FUN_006143b0)") {
-    nmsc::test::each_vector("Social_Stop.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("Social_Stop.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         SocialQueue s;
@@ -294,7 +294,7 @@ TEST_CASE("vectors: Social_Stop (FUN_006143b0)") {
 }
 
 TEST_CASE("vectors: TrackSort (the seven tracking sort predicates)") {
-    nmsc::test::each_vector("TrackSort.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("TrackSort.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         bool less = track_less(in["order"].i32(), entry(in["a"]), entry(in["b"]));
         return less == rec["out"]["a_before_b"].truthy() ? std::string() : std::string("a_before_b");
@@ -302,7 +302,7 @@ TEST_CASE("vectors: TrackSort (the seven tracking sort predicates)") {
 }
 
 TEST_CASE("vectors: CTrackingWnd_GetTrackColor") {
-    nmsc::test::each_vector("CTrackingWnd_GetTrackColor.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CTrackingWnd_GetTrackColor.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         TrackEntry e;
         e.spawn_id = in["spawn_id"].i32();
@@ -316,7 +316,7 @@ TEST_CASE("vectors: CTrackingWnd_GetTrackColor") {
 }
 
 TEST_CASE("vectors: CTrackingWnd_OnProcessFrame") {
-    nmsc::test::each_vector("CTrackingWnd_OnProcessFrame.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CTrackingWnd_OnProcessFrame.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         bool active = false;
@@ -340,7 +340,7 @@ TEST_CASE("vectors: CTrackingWnd_OnProcessFrame") {
 }
 
 TEST_CASE("vectors: CTrackingWnd_SetTrackingList (the OP_Track reply and its sort)") {
-    nmsc::test::each_vector("CTrackingWnd_SetTrackingList.jsonl", [](const Json& rec) -> std::string {
+    hailstone::test::each_vector("CTrackingWnd_SetTrackingList.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
         std::vector<std::uint8_t> data;

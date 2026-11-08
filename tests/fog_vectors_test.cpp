@@ -17,11 +17,11 @@
 #include "game/fog.h"
 #include "vector_files.h"
 
-using namespace nmsc::game;
-using nmsc::game::mechanics::Fpu;
-using nmsc::game::mechanics::FpuPrecision;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
+using namespace hailstone::game;
+using hailstone::game::mechanics::Fpu;
+using hailstone::game::mechanics::FpuPrecision;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
 
 namespace {
 
@@ -37,10 +37,10 @@ std::string hex(std::uint64_t v) {
 
 // The callee answers "a + b, unrounded" (fld dword a / fadd dword b at the record's precision).
 double plus(const Fpu& fpu, const Json& a, const Json& b) {
-    using nmsc::game::mechanics::X87;
+    using hailstone::game::mechanics::X87;
     std::uint32_t ab = f32_bits(a);
     if ((ab & 0x7f800000u) == 0x7f800000u && (ab & 0x7fffffu)) ab |= 0x400000u; // fld quiets
-    return nmsc::game::mechanics::x87_add(fpu, X87(static_cast<double>(std::bit_cast<float>(ab))),
+    return hailstone::game::mechanics::x87_add(fpu, X87(static_cast<double>(std::bit_cast<float>(ab))),
                                           X87(std::bit_cast<float>(f32_bits(b))));
 }
 
@@ -48,7 +48,7 @@ double plus(const Fpu& fpu, const Json& a, const Json& b) {
 std::uint64_t double_bits(const Json& j) {
     if (j.type == Json::Type::String && j.text.rfind("nan:0x", 0) == 0)
         return std::strtoull(j.text.c_str() + 6, nullptr, 16);
-    return nmsc::test::f64_bits(j);
+    return hailstone::test::f64_bits(j);
 }
 
 // The recorder fills CDisplay with the bytes 0xa5 + offset and reports a field still holding them as not written.
@@ -84,7 +84,7 @@ std::string cmp_byte(const char* key, const Json& want, const std::optional<std:
 } // namespace
 
 TEST_CASE("Fog vectors: CDisplay_CalcFogFadeMargin") {
-    nmsc::test::each_vector("CalcFogFadeMargin.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("CalcFogFadeMargin.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         double m = calc_fog_fade_margin(fpu_of(r), f32_bits(in["fog_start"]), clip_of(in));
         std::uint64_t got = std::bit_cast<std::uint64_t>(m), want = double_bits(r["out"]["margin"]);
@@ -94,7 +94,7 @@ TEST_CASE("Fog vectors: CDisplay_CalcFogFadeMargin") {
 }
 
 TEST_CASE("Fog vectors: CDisplay::SetFog") {
-    nmsc::test::each_vector("SetFog.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("SetFog.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         Fpu fpu = fpu_of(r);
         SetFogInput s;
@@ -153,7 +153,7 @@ TEST_CASE("Fog vectors: CDisplay::SetFog") {
 
 TEST_CASE("Fog vectors: CDisplay_UpdateSkyWeatherAndFog") {
     const auto tables = game_hour_ambient();
-    nmsc::test::each_vector("UpdateSkyWeatherAndFog.jsonl", [&](const Json& r) -> std::string {
+    hailstone::test::each_vector("UpdateSkyWeatherAndFog.jsonl", [&](const Json& r) -> std::string {
         const Json& in = r["in"];
         const Json& out = r["out"];
         Fpu fpu = fpu_of(r);

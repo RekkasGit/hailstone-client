@@ -27,7 +27,7 @@
 
 #include "game/swept_sphere.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // CMath +0x1084 table read by 0x100b93d0: cos[i] / sin[i] (1e30 for i = 0)
 // at i = trunc(angle) & 511 folded into 0..127 (quadrants 1 and 2 use ~i).
@@ -114,4 +114,4 @@ struct PickHit {
 // `mask & skip`.
 PickHit pick_actor(const PickSegment& seg, const PickScene& scene, std::uint32_t required, std::uint32_t skip);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -12,7 +12,7 @@
 struct SDL_Process;
 struct SDL_IOStream;
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class HelperProcess {
 public:
@@ -55,4 +55,4 @@ private:
     int exit_code_ = 0;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

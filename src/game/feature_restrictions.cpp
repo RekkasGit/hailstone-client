@@ -3,7 +3,7 @@
 #include <array>
 #include <format>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -65,4 +65,4 @@ std::string feature_refused_message(std::int32_t feature, const std::optional<ne
                        kLevels[static_cast<std::size_t>(level)]);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

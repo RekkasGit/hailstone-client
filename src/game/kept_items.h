@@ -14,11 +14,11 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::net {
+namespace hailstone::net {
 struct Item;
 }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class KeptItems {
 public:
@@ -39,4 +39,4 @@ private:
     std::map<std::uint32_t, std::string> items_; // id -> name
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

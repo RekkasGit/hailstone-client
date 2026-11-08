@@ -23,7 +23,7 @@
 #include "mq/event_pattern.h"
 #include "mq/lua_mq.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace fs = std::filesystem;
 
@@ -173,7 +173,7 @@ struct Script {
     int chain_id = 0;
     int hooks_ref = LUA_NOREF;
     bool active = true;
-    std::uint32_t flags = 0; // NMSC_FLAG_* (sdk/nmsc_plugin.h)
+    std::uint32_t flags = 0; // HAILSTONE_FLAG_* (sdk/hailstone_plugin.h)
     std::optional<game::CharacterVitals> vitals;
     bool registered = false;
     bool main_done = false;
@@ -244,4 +244,4 @@ inline void need_caps(lua_State* L, std::uint32_t cap, const char* what) {
     if (s.dry) luaL_error(L, "%s does nothing in a dry run", what);
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

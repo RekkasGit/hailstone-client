@@ -19,7 +19,7 @@
 #include <deque>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The sample reasons the original records (EQEmu's UpdateMovementType names in brackets).
 enum PositionReason : std::uint32_t {
@@ -80,4 +80,4 @@ private:
     std::uint32_t last_time_ = 0; // +0x30
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

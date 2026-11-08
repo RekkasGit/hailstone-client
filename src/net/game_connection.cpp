@@ -32,7 +32,7 @@
 #include "net/packet_io.h"
 #include "game/attack_check.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -596,6 +596,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         poison_interacting_ = false;
         spells_.memorizing.reset();
         spells_.others.clear();
+        cast_stage_shown_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
         loot_.reset();
@@ -2529,4 +2530,4 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

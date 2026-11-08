@@ -25,8 +25,8 @@
 #include "game/spells.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
 
 namespace {
 
@@ -327,7 +327,7 @@ struct AffectWorld final : affect::AffectQueries {
         for (const Json& sp : in["spells"].items) {
             std::int32_t id = sp["id"].i32();
             hit::Spell& h = spells[id];
-            nmsc::game::SpellData& d = data[id];
+            hailstone::game::SpellData& d = data[id];
             h.id = id;
             d.id = static_cast<std::uint32_t>(id);
             h.attrib.fill(0xfe);
@@ -352,7 +352,7 @@ struct AffectWorld final : affect::AffectQueries {
         for (std::size_t s = 0; s < affects.size(); ++s) before[s] = affects[s];
     }
     SpellLookup lookup() {
-        return [this](std::int32_t id) -> const nmsc::game::SpellData* {
+        return [this](std::int32_t id) -> const hailstone::game::SpellData* {
             auto it = data.find(id);
             return it == data.end() ? nullptr : &it->second;
         };
@@ -385,7 +385,7 @@ struct AffectWorld final : affect::AffectQueries {
     }
     void remove_affect(hit::Affect* a) override { removed.push_back(static_cast<int>(a - affects.data())); }
     std::int32_t calc_affect_change(const hit::Spell* s, std::uint32_t level, std::uint32_t slot, std::int32_t) override {
-        const nmsc::game::SpellData& d = data.at(s->id);
+        const hailstone::game::SpellData& d = data.at(s->id);
         auto k = static_cast<std::uint8_t>(slot);
         return ch.calc_affect_change(d, level, k, nullptr, k < 12 ? d.base[k] : 0, true);
     }
@@ -395,7 +395,7 @@ struct AffectWorld final : affect::AffectQueries {
     CharacterSheet sheet;
     GameTables tables;
     std::map<std::int32_t, hit::Spell> spells;
-    std::map<std::int32_t, nmsc::game::SpellData> data;
+    std::map<std::int32_t, hailstone::game::SpellData> data;
     Character ch;
     hit::Character self, caster_pc;
     hit::Spawn target_spawn, caster, caster_pc_spawn, other;
@@ -439,23 +439,23 @@ std::string check_find_affect_slot(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: CSpellBookWnd::GetSpellMemTicksLeft") {
-    nmsc::test::each_vector("CSpellBookWnd_GetSpellMemTicksLeft.jsonl", check_ticks);
+    hailstone::test::each_vector("CSpellBookWnd_GetSpellMemTicksLeft.jsonl", check_ticks);
 }
 TEST_CASE("vectors: CSpellBookWnd::FinishMemorizing") {
-    nmsc::test::each_vector("CSpellBookWnd_FinishMemorizing.jsonl", check_finish);
+    hailstone::test::each_vector("CSpellBookWnd_FinishMemorizing.jsonl", check_finish);
 }
 TEST_CASE("vectors: Handle_OP_MemorizeSpell") {
-    nmsc::test::each_vector("Handle_OP_MemorizeSpell.jsonl", check_handler);
+    hailstone::test::each_vector("Handle_OP_MemorizeSpell.jsonl", check_handler);
 }
 TEST_CASE("vectors: PcZoneClient_IsLinkedSpellTimerReady") {
-    nmsc::test::each_vector("PcZoneClient_IsLinkedSpellTimerReady.jsonl", check_linked);
+    hailstone::test::each_vector("PcZoneClient_IsLinkedSpellTimerReady.jsonl", check_linked);
 }
 TEST_CASE("vectors: EQ_Spell stacking SPA tables") {
-    nmsc::test::each_vector("EQ_Spell_StackingSpaTables.jsonl", check_stacking);
+    hailstone::test::each_vector("EQ_Spell_StackingSpaTables.jsonl", check_stacking);
 }
 TEST_CASE("vectors: CharacterZoneClient::CanUseMemorizedSpellSlot") {
-    nmsc::test::each_vector("CharacterZoneClient_CanUseMemorizedSpellSlot.jsonl", check_slot);
+    hailstone::test::each_vector("CharacterZoneClient_CanUseMemorizedSpellSlot.jsonl", check_slot);
 }
 TEST_CASE("vectors: CharacterZoneClient::FindAffectSlot (real stacking rules)") {
-    nmsc::test::each_vector("CharacterZoneClient_FindAffectSlot.jsonl", check_find_affect_slot);
+    hailstone::test::each_vector("CharacterZoneClient_FindAffectSlot.jsonl", check_find_affect_slot);
 }

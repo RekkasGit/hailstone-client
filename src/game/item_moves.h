@@ -16,7 +16,7 @@
 #include <functional>
 #include <optional>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ---------------------------------------------------------------- equip slots
 
@@ -199,4 +199,4 @@ struct MoneyButtonOut {
 };
 MoneyButtonOut clicked_money_button(const MoneyButtonIn& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

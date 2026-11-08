@@ -10,11 +10,11 @@
 
 #include "assets/texture.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 class Window;
 }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // Largest side taken: SDL hands the pixels to the system as they are, and the icon is 256 x 256.
 inline constexpr std::uint32_t kMaxWindowIconSide = 1024;
@@ -25,4 +25,4 @@ std::optional<assets::Image> read_window_icon(const std::filesystem::path& file,
 // Sets icons_dir()/hailstone.png on the window; logs and leaves the system's icon when that fails.
 void apply_window_icon(platform::Window& window);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

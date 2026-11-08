@@ -8,7 +8,7 @@
 
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("convert_to_res: left, middle and right anchoring") {
     // Left of the middle: unchanged.

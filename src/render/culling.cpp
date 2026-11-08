@@ -1,6 +1,6 @@
 #include "render/culling.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 Frustum frustum_from(const glm::mat4& m) {
     // Row i of the matrix (glm is column-major): clip.i = dot(row_i, (p, 1)).
@@ -26,4 +26,4 @@ bool boxes_overlap(const Box& a, const Box& b) {
            a.min.z <= b.max.z && b.min.z <= a.max.z;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

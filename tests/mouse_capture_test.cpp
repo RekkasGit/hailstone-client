@@ -10,7 +10,7 @@
 
 #include "platform/mouse_capture.h"
 
-using nmsc::platform::MouseCapture;
+using hailstone::platform::MouseCapture;
 
 namespace {
 

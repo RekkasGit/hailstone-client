@@ -23,7 +23,7 @@
 #include "core/byte_io.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // ---------------------------------------------------------------- slots
 
@@ -514,4 +514,4 @@ inline constexpr std::size_t kApplyPoisonSize = 12;
 AppPacket encode(const ApplyPoison& v);
 std::optional<ApplyPoison> decode_apply_poison(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

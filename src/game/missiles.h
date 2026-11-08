@@ -69,7 +69,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // OP_SomeItemPacketMaybe as the client reads it (offsets above).
 struct MissilePacket {
@@ -196,4 +196,4 @@ private:
     std::uint32_t serial_ = 0;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

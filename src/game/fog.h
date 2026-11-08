@@ -26,7 +26,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The fog clip globals SetFog and the margin read: eqclient.ini ClipPlane
 // (0xde0c00) and NewZone minclip / maxclip (0xddfb54 / 0xddfb58, after
@@ -174,4 +174,4 @@ SetFogArgs apply_weather_fog(const WeatherFogInput& in);
 inline constexpr float kFogRange = 10.0f;
 float fog_factor(float distance, std::int32_t start, std::int32_t end, float density);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

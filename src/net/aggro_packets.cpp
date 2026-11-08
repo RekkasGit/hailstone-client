@@ -4,7 +4,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -56,4 +56,4 @@ AppPacket encode_aggro_lock(std::uint32_t spawn_id) {
     return make_packet(Op::AggroMeterLockTarget, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

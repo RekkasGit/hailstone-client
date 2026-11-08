@@ -2,15 +2,19 @@
 // emitters, and the zone's flames merged and lit.
 #include <doctest/doctest.h>
 
+#include <cstring>
+#include <fstream>
 #include <limits>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "assets/zone.h"
 #include "assets/zone_fires.h"
+#include "core/game_dir.h"
 #include "game_files.h"
+#include "scratch_dir.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -168,16 +172,42 @@ TEST_CASE("environment emitter lines") {
     CHECK(big[2].definition == 0);
 }
 
-TEST_CASE("freeportwest's torches burn from its environment emitters" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_zone(*nmsc::test::game_dir(), "freeportwest");
+TEST_CASE("environment emitters: a revamped zone loaded as S3D takes none of the live .eqg's") {
+    hailstone::test::ScratchDir dir("envemit");
+    auto write = [&](const std::string& name, const std::string& body) {
+        std::ofstream(dir.path() / name, std::ios::binary) << body;
+    };
+    // An EDD 110 of two empty records ("None" and one more).
+    std::string edd = std::string("EDD\0" "110\0", 8) + std::string(2 * 0x1a0, '\0');
+    write("environmentemittersnew.edd", edd);
+    const std::string emitters = "Name^EmitterDefIdx^X^Y^Z^Lifespan\nfire1^1^10^20^30^4000000\n";
+    for (const char* zone : {"nektulos", "somezone"}) {
+        write(std::string(zone) + ".s3d", "x");
+        write(std::string(zone) + ".eqg", "x");
+        write(std::string(zone) + "_environmentemitters.txt", emitters);
+    }
+    hailstone::GameDir game(dir.path());
+    Zone revamped;
+    revamped.name = "nektulos"; // loads its RoF2 .s3d; the emitters file is the revamp's
+    CHECK(add_environment_emitters(game, revamped) == 0);
+    CHECK(revamped.particle_fixtures.empty());
+    Zone ordinary;
+    ordinary.name = "somezone";
+    CHECK(add_environment_emitters(game, ordinary) == 1);
+    REQUIRE(ordinary.particle_fixtures.size() == 1);
+    CHECK(ordinary.particle_fixtures[0].transform[3].z == doctest::Approx(30.0f));
+}
+
+TEST_CASE("freeportwest's torches burn from its environment emitters" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_zone(*hailstone::test::game_dir(), "freeportwest");
     std::size_t flames = 0;
     for (const auto& f : z.particle_fixtures)
         flames += flame_emitter_hue(z.particle_definitions[f.definition]) != FlameHue::None;
     CHECK(flames > 400);
 }
 
-TEST_CASE("qeynos2's lamps carry mesh flames" * doctest::skip(!nmsc::test::game_dir())) {
-    auto z = load_zone(*nmsc::test::game_dir(), "qeynos2");
+TEST_CASE("qeynos2's lamps carry mesh flames" * doctest::skip(!hailstone::test::game_dir())) {
+    auto z = load_zone(*hailstone::test::game_dir(), "qeynos2");
     auto fires = placement_fires(z);
     CHECK(fires.size() > 50);
     for (const auto& f : fires) {

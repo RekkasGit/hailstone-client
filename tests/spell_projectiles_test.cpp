@@ -4,7 +4,7 @@
 #include "game/spell_projectiles.h"
 #include "game/spells.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 

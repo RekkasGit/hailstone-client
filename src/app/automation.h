@@ -29,13 +29,13 @@
 #include "plugin/hooks.h"
 #include "plugin/policy.h"
 
-namespace nmsc::net { class GameConnection; }
-namespace nmsc::mq { class ScriptHost; class Registry; struct Context; }
-namespace nmsc::game { class ExtensionChain; }
-namespace nmsc::plugin { class UiBridge; class WebAccess; }
-namespace nmsc::nav { class NavControl; }
+namespace hailstone::net { class GameConnection; }
+namespace hailstone::mq { class ScriptHost; class Registry; struct Context; }
+namespace hailstone::game { class ExtensionChain; }
+namespace hailstone::plugin { class UiBridge; class WebAccess; }
+namespace hailstone::nav { class NavControl; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct AutomationEnv {
     std::filesystem::path install_dir; // the folder of the binary (platform::install_dir())
@@ -119,4 +119,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

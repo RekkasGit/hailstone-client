@@ -16,7 +16,7 @@
 #include <span>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellData;
 struct BuffSlot;
@@ -61,4 +61,4 @@ std::optional<BuffOverlayText> buff_limit_overlay(const SpellData& spell, std::s
 // 4 ticks keeps the window's alpha (`short_song`). The factor (0.01..1) over the window's alpha; 1 otherwise.
 double buff_fade(std::int64_t ms_left, std::int64_t now_ms, bool short_song);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

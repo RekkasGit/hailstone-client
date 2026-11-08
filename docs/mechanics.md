@@ -162,8 +162,9 @@ and the scripts' and plugins' frame (`mq.delay`, OnPulse), which runs once a dra
 
 Once a drawn frame, as before: the keys and clicks (a press is kept for the next step), the mouse look (it turns the
 heading directly), the camera. The camera is drawn between the last two steps (a share of the last step's move and
-turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body is drawn
-eased as before (game/world_state.cpp). Movement events (the jump, the landing sound, fall damage) of all the
+turn behind), so it moves smoothly at any refresh rate, at most one step (17 ms) behind. The player's body, and the
+mount it rides, is drawn at that same place and heading (`WorldState::set_local_drawn`), not eased toward it as other
+spawns are: eased (a twelfth of a second), it trailed the camera behind the player. Movement events (the jump, the landing sound, fall damage) of all the
 frame's steps are gathered for its sounds.
 
 `game.fixed_step = 0` runs one step per drawn frame at its own time: the original's code as written, for comparing.
@@ -230,8 +231,10 @@ already bindable through those keys.
 
 `game/cameras.h` ports the original's cameras (EverQuest::Cameras, CDisplay::cameraType): first person (0), overhead
 (1), chase (2), user 1 and 2 (3, 4) and tether (5), plus the wheel-follow camera (6), which is this client's own camera
-behind the player (its distance the mouse wheel's; its pull-in against scenery and the gamepad's stick its own). The
-player's model is drawn in every camera but first person.
+behind the player (its distance the mouse wheel's, the gamepad's stick its own). It stops against scenery as the
+cameras 1..5 do, where the 0.25 sphere swept from the eye stops (`wheel_follow_position`); it used to step its
+distance down by a fifth until the line behind was clear, which in a small room jumped between the steps as the
+player walked. The player's model is drawn in every camera but first person.
 
 | Camera | Where it stands (each frame, on the player as drawn) | Mouse look: sideways / up-down | Keys that act |
 |---|---|---|---|
@@ -672,6 +675,15 @@ find affect slot 1600). Each record is replayed call for call against the record
   slot); else the open effect slot (songs from max - 21, the last slot for a discipline) and, for a beneficial
   spell, the first droppable buff. Buffs of an unknown spell are cleared on the way. GetEffect gives slot 0 for an
   index outside 0..96.
+- A book spell dropped or clicked onto a gem (HandleSpellLeftClick, StartSpellMemorization(slot, gem, bReplace 0)
+  @0x75bf30): the original memorizes only into an empty gem and refuses one that holds a spell. Enhancement (option
+  `replace_gem_spell`, hailstone.ini `spells.replace_gem`, Options > Interface "Drop Replaces a Memorized Spell", on
+  by default; `EqHost::gem_takes_book_spell`): a usable gem that holds another spell takes it too, and the memorize
+  runs as into an empty one. At 0 ticks OP_MemorizeSpell goes out for that gem; a stock EQEmu server's
+  `Client::MemSpell` forgets the old spell (OP_MemorizeSpell 2, no "You forget" since the gem is being replaced)
+  and memorizes the new. The gem keeps the old spell until then. The modern book's double-click and Memorize button
+  take the gem picked in its strip, full or not, else the first empty one; with every gem full and none picked, its
+  status line says how to replace one.
 - Live: `GameConnection::memorize_tick` and `handle_memorize_spell`; the hit-by-spell buff path
   (`game/hit_landing.*`) calls `find_affect_slot`, and the buff it writes appears at once
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.
@@ -684,6 +696,10 @@ find affect slot 1600). Each record is replayed call for call against the record
   (`HitLandingResult::feigned`) and `GameConnection::land_spell_on_me` does the rest. EQEmu's SE_FeignDeath only rolls
   the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
   for everyone (`tests/feign_death_spell_test.cpp`).
+- Lying feigned (StandState 115, from the skill or the spell) the player cannot move: ProcessControls moves, turns,
+  strafes and jumps only standing (100) or ducking (111), and the forward key's auto-stand (AllowAutoStand) stands only a
+  sitting player (110), so a feigned one stays down until /sit or /stand (CEverQuest::Sit: anything but standing or
+  ducking stands up). The client hands ProcessControls the feigned state as 115 (`CharacterInput::lying`).
 
 ## Kept items: Hailstone's Keep mark
 
@@ -725,7 +741,10 @@ not both: marking one clears the other.
   ftol(max(0, 270 - Alcohol Tolerance) x (1/270)f x 30 + 10) up to 200, OP_DeleteItem {slot, -1, -1}, 12079, one
   item less (else 12080); poison (42) runs `apply_poison` (below). Then the click effect (the reply's spell, else the
   item's): unless a charm's stat scale is below 1, cast with CastSpell(gem 12, the item) when nothing is being cast
-  or the profile class is Bard (potions play wave 0x95); a retarget of CastSpell's is undone. CastSpell's item checks
+  or the profile class is Bard (potions play wave 0x95); a retarget of CastSpell's is undone. That CastSpell sends
+  nothing (its send argument is 0, @0x4bff60): it sets the item's recast timer or starts the cast bar locally, while
+  the server has already cast the item on OP_ItemVerifyRequest (a second OP_CastSpell would cast an instant clicky
+  twice on EQEmu). CastSpell's item checks
   refuse with no message for an item cast: click level (block 0 +4, the wire's level2) above the level (136), an
   Attuneable item whose NoDropFlag (the header's inst_nodrop) is clear (7586), click type 4 not in a worn slot 0..22
   (179), and for types 4 and 5 CanUseItem(item, 1): class, deity, required level, race (the server extension's "all
@@ -938,6 +957,8 @@ race. Off, the original's checks apply.
   person, where the model is hidden. Hailstone adds a switch for it alone (a deliberate difference: Options > Display
   "Show My Name", hailstone.ini `display.own_name`, on by default); "Show Player Names" off hides it too. Not done:
   the original shows the title window's chosen title and suffix on the player's own sprite while that window is open.
+- Their colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
+  (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
 
 ## Chat keys, the PvP rule set, trade and group invites
 
@@ -1260,6 +1281,10 @@ it does nothing). Which group plays what:
   animation, else 0x47, so the next stand is P08 (a follow-up of 0x47 plays P08 and is reset the same way). The
   layers keep an OP_Animation action as +0x10c0 until it ends (FUN_004b15b0 writes +0x10c0 only for what it
   starts), unless a walk or run took the legs under it; so after a social the stand is P08, after an attack P01.
+- Ducking (PlayerZoneClient::ChangePosition @0x5a0bc0): a change to 'o' (111) plays the duck 0x18 (L08; CRCH on
+  a new-style model) once, unless it or the duck walk 0x16 (L06 / CWLK) is playing; 'd' (100) from 'o' plays it
+  backward. A plain play, not a held posture: a walk or a jump replaces it, and a still ducking spawn asks for
+  nothing more, so the crouch shows without moving (`game::choose_spawn_animation`).
 - Climbing: the local player's CollidingType (+0x24, 6 on a ladder) reaches FUN_004afe60 / SelectMovementAnim, which
   play L07 / CLMB forward going up and reversed going down. Other spawns' +0x24 is 0 here (docs/unknowns.md).
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`: CollisionPass's
@@ -1340,7 +1365,7 @@ countdown, gone out of the zone), and everything that shows, reports or tests th
 `net::GameConnection::own_hp`: the windows (labels 17, 18, 19 and 70, gauge 1, the ability book's HP percent, the
 developer group window's own row), the player's own spawn's HP percent (SetSpawnHP's, so `Spawn[...].PctHPs`, a self
 target and a plugin's spawn), `Me.CurrentHPs`, `Me.MaxHPs` and `Me.PctHPs`, `hailstone.player()`'s `cur_hp` /
-`max_hp`, a plugin's `NmscPlayer`, the knocked-out test (`player_down`: the mouse and the context menu, OP_Save),
+`max_hp`, a plugin's `HailstonePlayer`, the knocked-out test (`player_down`: the mouse and the context menu, OP_Save),
 UseSkill's Cur_HP check, the fall damage report's knock-out floor, the caster's Max_HP in CastSpell and the hit
 sound's HP. The bare packet value goes below 1 while a geared player still stands, which is why none of these read
 it. The developer stats window compares its computed Max_HP with that sum. The regeneration ticks and the sheet's

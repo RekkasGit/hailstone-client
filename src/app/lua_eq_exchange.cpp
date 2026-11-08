@@ -27,7 +27,7 @@
 #include "net/game_connection.h"
 #include "net/item_packets.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -120,4 +120,4 @@ void register_exchange_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

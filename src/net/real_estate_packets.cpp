@@ -7,7 +7,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 using detail::write_cstring;
@@ -1025,4 +1025,4 @@ std::optional<RePlaceConfirm> decode_re_place_confirm(const AppPacket& p) {
     return v;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

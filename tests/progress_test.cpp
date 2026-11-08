@@ -21,8 +21,8 @@
 #include "net/training_packets.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -156,6 +156,21 @@ TEST_CASE("aa: OP_RespondAA, OP_AAExpUpdate and the server's OP_AAAction") {
     REQUIRE(d->owned.size() == 2);
     CHECK(d->owned[1].id == 7000);
     CHECK(d->owned[1].charges == 3);
+
+    // A server that sends more than the stock 300 slots: every owned rank is kept (a deliberate difference; the
+    // original stops at 300).
+    RespondAA big;
+    for (std::uint32_t i = 0; i < 450; ++i) big.owned.push_back({1000 + i, 1, 0});
+    AppPacket bp = encode(big);
+    CHECK(bp.data.size() == 24 + 450 * 12);
+    auto bd = decode_respond_aa(bp);
+    REQUIRE(bd);
+    REQUIRE(bd->owned.size() == 450);
+    CHECK(bd->owned[449].id == 1449);
+    game::AltAdvState st;
+    st.set_owned(bd->spent, bd->assigned, std::move(bd->owned));
+    CHECK(st.owned.size() == 450);
+    CHECK(st.has(1449));
 
     // AltAdvStats_Struct: u32 experience, u16 unspent, u16, u8 percentage, 3 bytes.
     Buf e;

@@ -4,7 +4,7 @@
 
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 SpellCounters spell_counters(const SpellData& spell, std::span<const BuffSlot> effects) {
     SpellCounters out;
@@ -69,4 +69,4 @@ std::optional<BuffOverlayText> buff_limit_overlay(const SpellData& spell, std::s
     return BuffOverlayText{std::format("{}", hits), 0xffffffff};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

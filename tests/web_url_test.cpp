@@ -5,8 +5,8 @@
 #include "fuzz_support.h"
 #include "web/page_rules.h"
 
-using namespace nmsc;
-using namespace nmsc::web;
+using namespace hailstone;
+using namespace hailstone::web;
 
 TEST_CASE("web_host: http(s) only, lower-cased, without user info, port or trailing dot") {
     CHECK(web_host("https://Example.org/path?q=1#x") == "example.org");

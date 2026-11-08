@@ -8,7 +8,7 @@
 
 #include "core/log.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 std::string file_url(const std::filesystem::path& path) {
     std::u8string u8 = path.generic_u8string();
@@ -50,4 +50,4 @@ bool open_url(const std::string& url) {
     return false;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

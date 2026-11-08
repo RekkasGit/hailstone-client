@@ -8,7 +8,7 @@
 #include "render/vk_context.h"
 #include "render/vk_util.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace {
 
@@ -233,4 +233,4 @@ void UploadBatch::submit() {
     textures_.clear();
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -13,13 +13,13 @@
 #include "plugin/ui_bridge.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Host {
-    mq_test::World world{"nmsc_lua_plugin_test"};
+    mq_test::World world{"hailstone_lua_plugin_test"};
     fs::path lua_dir = world.dir / "lua";
     plugin::Hooks hooks;
     plugin::Policy policy;
@@ -99,6 +99,7 @@ hs.set_pet_list({{spawn = 300, class = 13}, {spawn = 301, class = 13}})
 hs.set_flag('wide_item_links', true)
 hs.set_flag('research_classes', true)
 hs.set_flag('backstab_either_hand', true)
+hs.set_flag('solo_adventure', true)
 hs.set_vitals{max_hp = 1234}
 hs.hooks{
   is_spellcaster = function() return true end,
@@ -150,6 +151,7 @@ TEST_CASE("Lua plugin: the hailstone module's extension, packets, UI and readers
     CHECK(h.chain.research_classes(c));
     CHECK_FALSE(h.chain.focus_classes(c));
     CHECK(h.chain.backstab_either_hand(c));
+    CHECK(h.chain.solo_adventure(c));
     CHECK(h.chain.character_vitals(c).max_hp == 1234);
 
     // Hooks.
@@ -349,7 +351,7 @@ print('[rules] ' .. tostring(hs.server_rule('autocombat', 'hunter')) .. ' ' .. t
 
 TEST_CASE("Lua plugin: a bad argument or a raising table is an error; nothing is half made") {
     // (Lua is built as C: each error is a longjmp, so these are read before a C++ object exists. A leak checker,
-    // -DNMSC_SANITIZE=ON, is what sees a string or a reference left behind.)
+    // -DHAILSTONE_SANITIZE=ON, is what sees a string or a reference left behind.)
     Host h;
     h.write("bad.lua", R"lua(
 local hs = require('hailstone')

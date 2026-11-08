@@ -19,7 +19,7 @@
 #include "game/particles.h"
 #include "nav/zone_nav.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::load_zone(const std::string& short_name) {
     unload_zone();
@@ -267,9 +267,10 @@ void ClientApp::update_precipitation(float dt, float sky_hour) {
         f.colours = {game::colour_cell(*map, 4 + 2 * kind), game::colour_cell(*map, 5 + 2 * kind)};
     }
     f.random = [this] { return std::uniform_int_distribution<std::int32_t>(0, 0x7fff)(weather_random_); };
-    f.ground = [this](const glm::vec3& a, const glm::vec3& b) -> std::optional<game::PrecipitationHit> {
+    f.ground = [this](const glm::vec3& a, const glm::vec3& b,
+                      bool back_faces) -> std::optional<game::PrecipitationHit> {
         if (!collision_) return std::nullopt;
-        auto hit = collision_->first_hit(a, b, true); // roofs with nothing over them too
+        auto hit = collision_->first_hit(a, b, back_faces);
         if (!hit) return std::nullopt;
         return game::PrecipitationHit{hit->t, hit->normal.z};
     };
@@ -412,6 +413,10 @@ void ClientApp::enter_zone() {
     }
     floor_offset_ = me->heights.avatar_height;
     feet_ = position - glm::vec3(0, 0, floor_offset_);
+    // The last zone's last step is not drawn across into this one: the body and camera are drawn between steps
+    // (update_player), and a frame before the first step here would offset them by it.
+    step_move_ = glm::vec3(0.0f);
+    step_turn_ = step_pitch_ = 0.0f;
     if (audio_ && music_dead_) {
         // The death music stops on the zone-in after it (MSG_READY / the repop).
         audio_->music_selection(audio::kMusicDeath, false);
@@ -888,4 +893,4 @@ void ClientApp::update_missiles() {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

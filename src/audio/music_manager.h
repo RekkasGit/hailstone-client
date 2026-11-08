@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 class EmitterSink;
 
@@ -140,4 +140,4 @@ private:
     std::vector<Voice> voices_; // per file: its voice ("the asset is playing")
 };
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

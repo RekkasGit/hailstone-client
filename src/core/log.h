@@ -5,7 +5,7 @@
 #include <format>
 #include <string_view>
 
-namespace nmsc::log {
+namespace hailstone::log {
 
 enum class Level { Debug, Info, Warn, Error };
 
@@ -43,4 +43,4 @@ template <typename... Args> void error(std::format_string<Args...> fmt, Args&&..
     write(Level::Error, std::format(fmt, std::forward<Args>(args)...));
 }
 
-} // namespace nmsc::log
+} // namespace hailstone::log

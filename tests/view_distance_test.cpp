@@ -4,12 +4,12 @@
 
 #include "game/view_distance.h"
 
-using nmsc::game::compute_view_distance;
-using nmsc::game::ZoneFogInput;
+using hailstone::game::compute_view_distance;
+using hailstone::game::ZoneFogInput;
 
 TEST_CASE("Actor clip: min((ActorClipPlane x 5 + 25) x 2, Yon)") {
-    using nmsc::game::actor_clip_distance;
-    CHECK(nmsc::game::kDefaultActorClipPlane == 50);
+    using hailstone::game::actor_clip_distance;
+    CHECK(hailstone::game::kDefaultActorClipPlane == 50);
     CHECK(actor_clip_distance(50, 2400.0f) == 550.0f); // the default ActorClipPlane
     CHECK(actor_clip_distance(0, 2400.0f) == 50.0f);
     CHECK(actor_clip_distance(99, 2400.0f) == 1040.0f);
@@ -17,11 +17,11 @@ TEST_CASE("Actor clip: min((ActorClipPlane x 5 + 25) x 2, Yon)") {
 }
 
 TEST_CASE("A spawn with an actor is never a placeholder box, even past the actor clip") {
-    using nmsc::game::spawn_draw;
-    using nmsc::game::SpawnDraw;
+    using hailstone::game::spawn_draw;
+    using hailstone::game::SpawnDraw;
     // Nektulos at night: fog end 400, the default actor clip 550. Will-o-wisps (race 69, WIL) at 460..600 away
     // were drawn as boxes when the actor renderer culled them at the fog end + 50.
-    const float clip = nmsc::game::actor_clip_distance(50, 1500.0f);
+    const float clip = hailstone::game::actor_clip_distance(50, 1500.0f);
     CHECK(spawn_draw(true, true, 30.0f, clip) == SpawnDraw::Model);
     CHECK(spawn_draw(true, true, 476.0f, clip) == SpawnDraw::Model); // past the fog end, inside the clip: drawn
     CHECK(spawn_draw(true, true, 591.0f, clip) == SpawnDraw::Clipped);
@@ -77,7 +77,7 @@ TEST_CASE("Fog end stays inside the far plane") {
 }
 
 TEST_CASE("Camera FOV: 90 units give 63.28 degrees across with square pixels below an aspect of 2") {
-    using nmsc::game::camera_fov;
+    using hailstone::game::camera_fov;
     constexpr double kDeg = 180.0 / 3.14159265358979323846;
     auto f43 = camera_fov(90.0f, 1024, 768);
     CHECK(f43.h == 90.0f);
@@ -90,7 +90,7 @@ TEST_CASE("Camera FOV: 90 units give 63.28 degrees across with square pixels bel
 }
 
 TEST_CASE("Camera FOV: at an aspect of 2 or more the vertical angle is fixed and h is widened") {
-    using nmsc::game::camera_fov;
+    using hailstone::game::camera_fov;
     auto f = camera_fov(90.0f, 2560, 1080);
     CHECK(f.v == doctest::Approx(90.0 * 0.7501876));
     // h = 2 atan(tan(v/2) * aspect) in 512ths of a circle.
@@ -101,7 +101,7 @@ TEST_CASE("Camera FOV: at an aspect of 2 or more the vertical angle is fixed and
 }
 
 TEST_CASE("SetFog: the far-plane margin is 15% of the span from fog start to far") {
-    using nmsc::game::set_fog_distances;
+    using hailstone::game::set_fog_distances;
     auto f = set_fog_distances(400.0f, 5000.0f, 1000.0f, true);
     CHECK(f.x == 400.0f);
     CHECK(f.y == doctest::Approx(1000.0 - 0.15 * 600.0));
@@ -114,14 +114,14 @@ TEST_CASE("SetFog: the far-plane margin is 15% of the span from fog start to far
 }
 
 TEST_CASE("SetFog: no margin with fog off, in region types 5..10 or in rain") {
-    using nmsc::game::set_fog_distances;
+    using hailstone::game::set_fog_distances;
     CHECK(set_fog_distances(400.0f, 5000.0f, 1000.0f, false).y == 5000.0f);
     CHECK(set_fog_distances(400.0f, 5000.0f, 1000.0f, true, {.special_region = true}).y == 5000.0f);
     CHECK(set_fog_distances(400.0f, 5000.0f, 1000.0f, true, {.raining = true}).y == 5000.0f);
 }
 
 TEST_CASE("SetFog: start and end fixes") {
-    using nmsc::game::set_fog_distances;
+    using hailstone::game::set_fog_distances;
     // Both below 0.1: Yon - 50 and Yon - 1, then the margin from start = Yon - 50.
     auto z = set_fog_distances(0.05f, 0.0f, 1000.0f, false);
     CHECK(z.x == 950.0f);

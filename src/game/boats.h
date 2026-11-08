@@ -24,7 +24,7 @@
 
 #include "game/swept_sphere.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct Spawn;
 
@@ -124,4 +124,4 @@ inline constexpr float kHullTieDistance = 0.01f; // units along the sweep that c
 std::uint32_t sweep_hulls(SphereSweep& s, std::span<const VehicleHull> hulls, float radius, std::uint32_t prefer = 0,
                           std::uint32_t skip = 0);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

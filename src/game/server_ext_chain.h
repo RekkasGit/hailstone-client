@@ -9,8 +9,8 @@
 // - handler_command, item_right_click: in order until one takes it.
 // - retry_zone_entry: every member is asked; true when any says so.
 // - yes / no switches (song_blocked, own_begin_cast_line, can_use_all_items, wide_item_links, aa_any_level,
-//   aa_train_all, augment_classes, research_classes, focus_classes, backstab_either_hand, hide_xtarget_slot): true
-//   when any says so.
+//   aa_train_all, augment_classes, research_classes, focus_classes, backstab_either_hand, solo_adventure,
+//   hide_xtarget_slot): true when any says so.
 // - answers (optional values, cast_class, guild_member_classes, level_needed_line, ...): the first member
 //   with one. Where the hook returns the stock value rather than an optional (hide_check_class,
 //   combat_ability_timer, max_vitals_classes), the first member whose answer differs from the stock one.
@@ -32,7 +32,7 @@
 
 #include "game/server_ext.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class ExtensionChain final : public ServerExtension {
 public:
@@ -80,6 +80,7 @@ public:
     bool research_classes(const net::GameConnection& c) const override;
     bool focus_classes(const net::GameConnection& c) const override;
     bool backstab_either_hand(const net::GameConnection& c) const override;
+    bool solo_adventure(const net::GameConnection& c) const override;
     std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection& c, std::uint8_t class_id) const override;
     CharacterVitals character_vitals(const net::GameConnection& c) const override;
     bool item_right_click(net::GameConnection& c, const net::ItemSlot& slot) override;
@@ -109,4 +110,4 @@ private:
     mutable const ServerExtension* rules_owner_ = nullptr;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include <unistd.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 bool write_private_file(const std::filesystem::path& path, std::string_view text) {
     bool ok = false;
@@ -55,4 +55,4 @@ bool make_private_dir(const std::filesystem::path& path) {
 #endif
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

@@ -25,7 +25,7 @@
 #include "net/item_packets.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // MerchantClick_Struct (24 bytes, both directions). The client fills only
 // the two ids (the rest of the original's buffer is stack garbage; we send
@@ -209,4 +209,4 @@ AppPacket encode_adventure_merchant_sell(std::uint32_t npc, std::int16_t slot, s
 // at most the price; 0 when the merchant will not buy it.
 std::uint32_t adventure_sell_price(std::uint32_t ldon_price, std::uint32_t sellback_rate, std::uint32_t ldon_sold);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

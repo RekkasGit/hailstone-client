@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -60,9 +60,9 @@ bool switch_acts_on_touch(std::uint8_t t) {
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::uint32_t floor_actor_filter(const FloorFilterActor& a, bool is_floor_switch, bool* asked) {
     if (asked) *asked = false;
@@ -127,4 +127,4 @@ FloorHitResult collsn_callback_for_floor(const FloorHit& h, const mechanics::Fpu
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

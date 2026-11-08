@@ -31,7 +31,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint8_t kUpperBones = 0; // GetBoneGroup(0): ActorClient +0x174
 inline constexpr std::uint8_t kLowerBones = 1; // GetBoneGroup(1): ActorClient +0x170
@@ -127,4 +127,4 @@ struct LayerModeInput {
 // start it (blend), 3 keep the playing one (only its speed is set).
 std::uint8_t new_style_layer_mode(const LayerModeInput& in);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

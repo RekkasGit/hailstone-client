@@ -27,7 +27,7 @@
 #include "audio/music_manager.h"
 #include "audio/sound_control.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 // One SoundEmitter: the fields GiveTime reads.
 struct Emitter {
@@ -143,4 +143,4 @@ private:
     CrtRand rand_;
 };
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

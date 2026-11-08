@@ -1,6 +1,6 @@
 #include "game/spell_book.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 using K = SpellBookCall::Kind;
@@ -51,4 +51,4 @@ void spell_book_on_show(const SpellBookState& s, bool shown, std::vector<SpellBo
     call(c, K::SidlOnShow);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

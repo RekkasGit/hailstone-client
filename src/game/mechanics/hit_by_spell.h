@@ -40,7 +40,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics::hit {
+namespace hailstone::game::mechanics::hit {
 
 // An object the callees know by address (a character, a PcClient, an item,
 // a text), for the calls that only pass it on.
@@ -390,4 +390,4 @@ bool is_valid_spell_id(std::uint32_t id);                      // IsValidSpellID
 std::uint8_t spell_affects(const Spell* spell, std::int32_t spa); // EQ_Spell::SpellAffects: index + 1, or 0
 bool effect_index_used(const Spell& spell, std::uint32_t index); // EQ_Spell::IsEffectIndexUsed @0x433f80
 
-} // namespace nmsc::game::mechanics::hit
+} // namespace hailstone::game::mechanics::hit

@@ -1,7 +1,7 @@
 // The player's own HP (net::GameConnection::own_hp, set by app/stats_ui.cpp share_own_hp_items): EQEmu's OP_HPUpdate
 // for the player leaves out the items' HP (SendHPUpdate: GetHP() - itembonuses.HP), which Cur_HP / Max_HP add back
 // from the character's item sums; a server extension's vitals are already the whole value. The windows read it here;
-// Me.CurrentHPs (mq_tlo_test), hailstone.player (lua_plugin_test) and NmscPlayer (native_extension_test) read the same.
+// Me.CurrentHPs (mq_tlo_test), hailstone.player (lua_plugin_test) and HailstonePlayer (native_extension_test) read the same.
 // Against the mock server.
 #include <doctest/doctest.h>
 
@@ -15,9 +15,9 @@
 #include "mock_server/harness.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
-namespace mech = nmsc::game::mechanics;
+using namespace hailstone;
+using namespace hailstone::test;
+namespace mech = hailstone::game::mechanics;
 
 namespace {
 

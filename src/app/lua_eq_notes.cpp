@@ -12,7 +12,7 @@
 #include "game/option_commands.h"
 #include "platform/paths.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -91,4 +91,4 @@ bool player_notes_add(StockWindow& w, std::string_view note) {
     return notes && notes->add(note);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

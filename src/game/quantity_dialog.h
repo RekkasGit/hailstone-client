@@ -25,7 +25,7 @@
 #include <optional>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct QuantityOpen {
     std::int32_t min = 0, max = 0, start = 0;
@@ -71,4 +71,4 @@ struct QuantityLimits {
 QuantityLimits merchant_buy_limits(std::int32_t merchant_quantity, std::int32_t stack_size, bool spell_scroll);
 inline QuantityLimits merchant_sell_limits(std::int32_t stack_count) { return {stack_count, stack_count}; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -17,8 +17,8 @@
 #include "net/packet_io.h"
 #include "net/zone_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
+using namespace hailstone;
+using namespace hailstone::net;
 
 namespace {
 
@@ -558,8 +558,8 @@ TEST_CASE("name_sprite_shows_guild: SetNameSpriteState's guild line (bGuildShowA
 }
 
 TEST_CASE("ReportSuccessfulHit's animation on the target") {
-    using nmsc::game::HitAnimInput;
-    using nmsc::game::hit_animation;
+    using hailstone::game::HitAnimInput;
+    using hailstone::game::hit_animation;
     HitAnimInput h;
     h.type = 1;
     h.damage = 5;
@@ -585,8 +585,8 @@ TEST_CASE("ReportSuccessfulHit's animation on the target") {
 }
 
 TEST_CASE("ReportSuccessfulHit's shared tail: a landed hit") {
-    using nmsc::game::HitAnimInput;
-    using nmsc::game::hit_landed;
+    using hailstone::game::HitAnimInput;
+    using hailstone::game::hit_landed;
     HitAnimInput h;
     h.type = 1;
     h.damage = 5;
@@ -617,10 +617,10 @@ TEST_CASE("ReportSuccessfulHit's shared tail: a landed hit") {
 }
 
 TEST_CASE("ReportSuccessfulHit's environmental hits: animation, line and sound") {
-    using nmsc::game::EnvHitInput;
-    using nmsc::game::environment_hit;
-    using nmsc::game::hit_animation;
-    using nmsc::game::HitAnimInput;
+    using hailstone::game::EnvHitInput;
+    using hailstone::game::environment_hit;
+    using hailstone::game::hit_animation;
+    using hailstone::game::HitAnimInput;
     HitAnimInput h;
     h.damage = 20;
     h.local_stand_state = 115; // the local player's state does not matter for these
@@ -697,4 +697,30 @@ TEST_CASE("ReportSuccessfulHit's environmental hits: animation, line and sound")
     e = environment_hit(s, in);
     CHECK(e.text.empty());
     CHECK(e.fall_hit_sound);
+}
+
+TEST_CASE("npc_name_colour: an NPC's name takes its consider colour, and only with the option on") {
+    game::Spawn rat;
+    rat.id = 2;
+    rat.name = "a_rat01";
+    rat.race = 34;
+    rat.level = 1;
+    rat.is_npc = true;
+    rat.gender = 2;
+    // The rat is white to a level 1 character (see the consider test above).
+    CHECK(game::npc_name_colour(rat, 1, 0, true) == game::con_rgb(game::Con::White));
+    // Each con gives its own colour: a rat far above the player cons red.
+    game::Spawn big = rat;
+    big.level = 20;
+    CHECK(game::npc_name_colour(big, 1, 0, true) == game::con_rgb(game::con_level(big, 1, 0)));
+    CHECK(game::npc_name_colour(big, 1, 0, true) != game::npc_name_colour(rat, 1, 0, true));
+    // The option off keeps the stock colours.
+    CHECK_FALSE(game::npc_name_colour(rat, 1, 0, false).has_value());
+    // Players and corpses are not NPC names: the caller keeps their colours.
+    game::Spawn player = rat;
+    player.is_npc = false;
+    CHECK_FALSE(game::npc_name_colour(player, 1, 0, true).has_value());
+    game::Spawn corpse = rat;
+    corpse.is_corpse = true;
+    CHECK_FALSE(game::npc_name_colour(corpse, 1, 0, true).has_value());
 }

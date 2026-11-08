@@ -20,8 +20,8 @@
 #include "assets/zone.h"
 #include "core/game_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 

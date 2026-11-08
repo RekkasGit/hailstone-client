@@ -10,8 +10,8 @@
 #include "net/reliable_channel.h"
 #include "vector_files.h"
 
-using namespace nmsc::net;
-using nmsc::test::Json;
+using namespace hailstone::net;
+using hailstone::test::Json;
 
 namespace {
 
@@ -161,7 +161,7 @@ std::string check_give_time(const Json& rec) {
 } // namespace
 
 TEST_CASE("vectors: UdpReliableChannel_GiveTime (the resend timer)") {
-    nmsc::test::each_vector("UdpReliableChannel_GiveTime.jsonl", check_give_time);
+    hailstone::test::each_vector("UdpReliableChannel_GiveTime.jsonl", check_give_time);
 }
 
 TEST_CASE("reliable channel: acknowledgements blend the round trip and grow it on duplicates") {

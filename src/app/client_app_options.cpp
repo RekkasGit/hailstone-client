@@ -2,8 +2,9 @@
 // frame settings (window mode, resolution, vertical sync, frame caps, field of view, UI scale).
 
 #include "app/client_app_internal.h"
+#include "game/appearance.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -337,6 +338,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "news_last_read") return config_.get_int("news.last_read", 0);
     if (o == "news_automatic") return config_.get_bool("news.automatic", false) ? 1 : 0;
     if (o == "npc_names") return npc_names_ ? 1 : 0;
+    // Hailstone: NPC names in their consider colour, on by default (draw_nameplates).
+    if (o == "con_name_colour") return con_name_colour_ ? 1 : 0;
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -345,6 +348,9 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "tab_skip_pets") return config_.get_bool("target.skip_pets", true) ? 1 : 0;
     // Hailstone: Tab's NPC cycle takes only the NPCs in the player's line of sight (game/targeting.h), on by default.
     if (o == "tab_line_of_sight") return config_.get_bool("target.line_of_sight", true) ? 1 : 0;
+    // Hailstone: a book spell dropped on a gem that holds another spell memorizes over it (app/lua_eq_spellbook.cpp
+    // gem_takes_book_spell), on by default; off, the gem refuses it as the original's does.
+    if (o == "replace_gem_spell") return config_.get_bool("spells.replace_gem", true) ? 1 : 0;
     // Hailstone: auto attack stays on past the target's death while the extended target list holds a spawn
     // (net::GameConnection::set_attack_until_xtarget_clear), off by default.
     if (o == "attack_until_xtarget_clear") return config_.get_bool("combat.attack_until_xtarget_clear", false) ? 1 : 0;
@@ -422,6 +428,11 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.save(config_path_);
         return;
     }
+    if (o == "replace_gem_spell") {
+        config_.set_bool("spells.replace_gem", v != 0);
+        config_.save(config_path_);
+        return;
+    }
     if (o == "attack_until_xtarget_clear") {
         config_.set_bool("combat.attack_until_xtarget_clear", v != 0);
         config_.save(config_path_);
@@ -449,6 +460,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "news_last_read" || o == "news_automatic") {
         if (o == "news_last_read") config_.set_int("news.last_read", v);
         else config_.set_bool("news.automatic", v != 0);
+        config_.save(config_path_);
+        return;
+    }
+    if (o == "con_name_colour") {
+        con_name_colour_ = v != 0;
+        config_.set_bool("display.con_name_colour", v != 0);
         config_.save(config_path_);
         return;
     }
@@ -546,6 +563,10 @@ void ClientApp::apply_settings() {
     assets::texture_overrides().set_material_maps(config_.get_bool("display.material_maps", true));
     pc_names_ = config_.get_bool("display.pc_names", true);
     npc_names_ = config_.get_bool("display.npc_names", true);
+    con_name_colour_ = config_.get_bool("display.con_name_colour", true);
+    // display.extra_shields (Hailstone, a deliberate difference): later shields on the shield point, not in the hand.
+    // Read at start only: dressed models are cached.
+    if (!settings_applied_) game::set_extra_shields(config_.get_bool("display.extra_shields", true));
     own_name_ = config_.get_bool("display.own_name", true);
     player_menu_ = config_.get_bool("mouse.player_menu", true);
     // CEverQuest's constructor: ShowNamesLevel 0..6, anything else 4; ShowSpellEffects 0 / 1, else 1.
@@ -609,4 +630,4 @@ void ClientApp::use_character_settings(const std::filesystem::path& character_di
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

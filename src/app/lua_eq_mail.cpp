@@ -20,7 +20,7 @@
 #include "game/feature_restrictions.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -512,4 +512,4 @@ void add_mail_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<MailAddressBookWindow>(Book::Ignore));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // Sets where reports go (a copy of `dir` is kept in a fixed buffer; the folder is created at the report) and
 // installs the handlers. Call once, after the log is open.
@@ -46,4 +46,4 @@ std::size_t format_crash_name(char* out, std::size_t size, std::int64_t unix_sec
 std::size_t format_crash_report(char* out, std::size_t size, std::int64_t unix_seconds, const char* what,
                                 const char* log_path, const char* recent, const char* build = nullptr);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

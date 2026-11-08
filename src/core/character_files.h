@@ -30,7 +30,7 @@
 #include "core/ini_file.h"
 #include "platform/paths.h"
 
-namespace nmsc {
+namespace hailstone {
 
 class GameDir;
 
@@ -97,4 +97,4 @@ bool save_chat_setting(const std::filesystem::path& chat_ini, std::string_view s
 bool save_chat_settings(const std::filesystem::path& chat_ini, std::string_view section,
                         std::initializer_list<std::pair<std::string_view, std::string>> values);
 
-} // namespace nmsc
+} // namespace hailstone

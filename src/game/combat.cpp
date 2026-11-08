@@ -10,7 +10,7 @@
 #include "game/coords.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -124,6 +124,11 @@ Con con_from_server(std::uint32_t level) {
     case 18: return Con::LightBlue;
     default: return Con::None;
     }
+}
+
+std::optional<std::uint32_t> npc_name_colour(const Spawn& s, int my_level, std::int32_t pvp_rules, bool enabled) {
+    if (!enabled || !s.is_npc || s.is_corpse) return std::nullopt;
+    return con_rgb(con_level(s, my_level, pvp_rules));
 }
 
 std::uint32_t con_rgb(Con con) {
@@ -589,4 +594,4 @@ std::optional<std::uint32_t> pick_spawn(const WorldState& world, const glm::vec3
     return best;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

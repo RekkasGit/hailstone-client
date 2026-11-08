@@ -9,9 +9,9 @@
 #include "game/placement.h"
 #include "net/real_estate_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::game;
 
 namespace {
 

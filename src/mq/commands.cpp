@@ -12,7 +12,7 @@
 #include "net/game_connection.h"
 #include "plugin/policy.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -260,4 +260,4 @@ bool Commands::check(const std::string& line) {
     return allowed(need, env_, word.empty() ? std::string("text") : word);
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

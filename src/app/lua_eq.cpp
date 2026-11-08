@@ -47,7 +47,7 @@
 #include "ui/ui_ini.h"
 #include "ui/ui_textures.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 bool chat_window_used(int slot);  // app/lua_eq_chat.cpp: chat window 1..32 is open
 void chat_window_closed(int slot); // its close button: the window goes with its tabs
@@ -1522,6 +1522,9 @@ int SpellGemClick(lua_State* L) {
         return 1;
     }
     bool right = phase == "right" || phase == "rightup";
+    // The empty gem's spell select menu opens at the gem (HandleSpellRightClick): the gem's hit box the script just
+    // tested, not the rectangle some earlier ClickChild or ClickSlot left.
+    if (right) note_click_rect(m.host);
     lua_pushboolean(L, w && w->gem_click(m.host, id, right));
     return 1;
 }
@@ -2954,4 +2957,4 @@ void EqApi::register_functions(lua_State* L) {
     gate_eq_calls(L);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

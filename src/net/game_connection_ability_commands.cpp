@@ -11,7 +11,7 @@
 #include "net/game_connection.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -143,4 +143,4 @@ void GameConnection::melody_command(const std::string& args) {
 
 // ---------------------------------------------------------------- mounts
 
-} // namespace nmsc::net
+} // namespace hailstone::net

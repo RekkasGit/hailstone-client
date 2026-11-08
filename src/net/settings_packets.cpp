@@ -3,7 +3,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -33,4 +33,4 @@ AppPacket encode(const HailstoneSettings& v) {
     return AppPacket(kOpHailstoneSettings, w.take());
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

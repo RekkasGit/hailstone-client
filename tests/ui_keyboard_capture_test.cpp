@@ -9,7 +9,7 @@
 
 #include "ui/imgui_layer.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -120,3 +120,18 @@ TEST_CASE("UI keyboard: an edit box being typed in, a modal dialog and an explic
     ui.frame(kAway, false, modal);
     CHECK(ui.frame(kAway, false, modal));
 }
+
+TEST_CASE("UI keys: Ctrl is Ctrl in the windows on every system (no macOS Cmd swap)") {
+    Ui ui;
+    ui::configure_keys();
+    ImGuiIO& io = ImGui::GetIO();
+    CHECK_FALSE(io.ConfigMacOSXBehaviors);
+    io.DisplaySize = ImVec2(640, 480);
+    io.DeltaTime = 1.0f / 60.0f;
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    ImGui::NewFrame();
+    CHECK(io.KeyCtrl);
+    CHECK_FALSE(io.KeySuper);
+    ImGui::EndFrame();
+}
+

@@ -20,7 +20,7 @@
 #include "net/game_connection.h"
 #include "ui/ui_ini.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1109,11 +1109,28 @@ private:
 
 // ---------------------------------------------------------------- PointMerchantWnd (CPointMerchantWnd)
 
+// A click on a good in either point merchant's item list (CPointMerchantWnd::WndNotification @0x71d350,
+// CNewPointMerchantWnd::WndNotification @0x6fea70): message 3 (a right click) on columns 0..2 inspects the good with
+// Send_OP_ItemLinkResponse(item id, its name, 0), or with Shift or Ctrl (GetKeyboardFlags & 0xc) shows it in the item
+// preview (Send_OP_ItemPreviewRequest @0x6ffc20); a left click with Shift or Ctrl inspects as well as selecting.
+// The lists hold only the goods' ids and names, so the item display waits for the server's OP_ItemLinkResponse.
+void point_merchant_good_click(net::GameConnection& c, std::uint32_t item_id, const std::string& name, bool right, int column) {
+    const ImGuiIO& io = ImGui::GetIO();
+    bool flags = io.KeyShift || io.KeyCtrl;
+    if (right) {
+        if (column >= 3) return;
+        if (flags) c.preview_item_id(item_id);
+        else c.request_item_link(item_id, name, 0, false);
+    } else if (flags) {
+        c.request_item_link(item_id, name, 0, false);
+    }
+}
+
 // A point (alternate currency) merchant (a right click on a class-70 NPC). CPointMerchantWnd is not decoded; this
 // follows its XML over EQEmu's OP_AltCurrencyMerchantReply: the goods (PointMerchant_ItemList: name, cost), the
 // merchant's currency and how much of it the player holds, Purchase (OP_AltCurrencyPurchase), Sell for the item
 // clicked in the inventory while the window is open (its worth asked with OP_AltCurrencySellSelection, then
-// OP_AltCurrencySell), Done. Equip is not built.
+// OP_AltCurrencySell), Done, and a right click on a good inspects it. Equip is not built.
 class PointMerchantWindow : public StockWindow {
 public:
     PointMerchantWindow() : StockWindow("PointMerchantWnd", false) {}
@@ -1181,8 +1198,12 @@ public:
         }
         return nullptr;
     }
-    bool list_click(EqHost&, std::string_view id, int row, bool, int) override {
-        if (id == "PointMerchant_ItemList") selected_ = row;
+    bool list_click(EqHost& host, std::string_view id, int row, bool right, int column) override {
+        if (id == "PointMerchant_ItemList") {
+            selected_ = row;
+            if (const auto* item = host.conn ? selected(host.conn->point_merchant()) : nullptr)
+                point_merchant_good_click(*host.conn, item->item_id, item->name, right, column);
+        }
         return id == "PointMerchant_ItemList" || id == "PointMerchant_PointList";
     }
     bool click(EqHost& host, std::string_view id, std::string_view button, bool) override {
@@ -1216,7 +1237,7 @@ private:
 // NewPointMerchantWnd for EQEmu's adventure merchants (classes 59, 61, 67, 68; the window's own code is not decoded):
 // the goods with their cost and LDoN theme, the points available (LDoN points from OP_AdventurePointsUpdate, PvP
 // points from OP_PVPStats, crystals from OP_CrystalCountUpdate), Purchase for the selected item and Sell for the held item, at the RoF2 client's
-// sell-back price.
+// sell-back price; a right click on a good inspects it.
 class NewPointMerchantWindow : public StockWindow {
 public:
     NewPointMerchantWindow() : StockWindow("NewPointMerchantWnd", false) {}
@@ -1269,9 +1290,11 @@ public:
         }
         return &items_;
     }
-    bool list_click(EqHost&, std::string_view id, int row, bool, int) override {
+    bool list_click(EqHost& host, std::string_view id, int row, bool right, int column) override {
         if (id != "NewPointMerchant_ItemList") return false;
         selected_ = row;
+        if (const auto* item = host.conn ? selected(host.conn->adventure_merchant()) : nullptr)
+            point_merchant_good_click(*host.conn, item->item_id, item->name, right, column);
         return true;
     }
     bool click(EqHost& host, std::string_view id, std::string_view button, bool) override {
@@ -1320,4 +1343,4 @@ void add_market_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<NewPointMerchantWindow>());
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

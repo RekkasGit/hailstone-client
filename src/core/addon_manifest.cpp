@@ -5,7 +5,7 @@
 #include "core/addon_source.h"
 #include "core/update_manifest.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -230,4 +230,4 @@ std::optional<AddonManifest> parse_addon_manifest(std::string_view text, std::st
     return m;
 }
 
-} // namespace nmsc
+} // namespace hailstone

@@ -24,14 +24,14 @@
 #else
 #if __has_include(<execinfo.h>)
 #include <execinfo.h>
-#define NMSC_HAVE_BACKTRACE 1
+#define HAILSTONE_HAVE_BACKTRACE 1
 #endif
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 namespace {
 constexpr std::size_t kCrashStackSize = 64 * 1024;
@@ -331,7 +331,7 @@ bool write_crash_report(const char* what) {
         if (n <= 0) break;
         done += static_cast<std::size_t>(n);
     }
-#ifdef NMSC_HAVE_BACKTRACE
+#ifdef HAILSTONE_HAVE_BACKTRACE
     // The stack (addr2line -e hailstone <offset> names a "+0x..." frame).
     static const char kStack[] = "\nstack:\n";
     if (::write(fd, kStack, sizeof kStack - 1) > 0) {
@@ -360,7 +360,7 @@ void install_crash_handler(const std::filesystem::path& dir) {
     ss.ss_sp = alt_stack;
     ss.ss_size = sizeof alt_stack;
     sigaltstack(&ss, nullptr);
-#ifdef NMSC_HAVE_BACKTRACE
+#ifdef HAILSTONE_HAVE_BACKTRACE
     // The first backtrace loads the unwinder (it allocates): done now, not in the handler.
     void* frame[1];
     backtrace(frame, 1);
@@ -403,4 +403,4 @@ CrashStack::~CrashStack() {
 #endif
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

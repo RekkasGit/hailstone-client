@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 namespace {
 

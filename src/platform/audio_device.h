@@ -11,7 +11,7 @@
 
 struct SDL_AudioStream;
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class AudioDevice {
 public:
@@ -35,4 +35,4 @@ private:
     float buffer_[4096 * 2];
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

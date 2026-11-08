@@ -29,7 +29,7 @@
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -1105,4 +1105,4 @@ void register_pregame_api(lua_State* L, EqHost& host, ScreenReplacements& screen
     luaL_setfuncs(L, fns, 2);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

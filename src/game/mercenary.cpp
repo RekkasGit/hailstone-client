@@ -6,7 +6,7 @@
 
 #include "core/msvc_atoi.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -631,4 +631,4 @@ MercSuspendButton merc_suspend_button(const MercManager& m, bool in_combat, bool
     return b;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,8 +11,9 @@
 // (PathOptions::open_doors). A door whose click teleports cannot be told apart in RoF2's door record, so the option
 // exists to turn this off (docs/unknowns.md).
 //
-// The mesh is read from the cache at the zone-in when there is a file for the zone, and otherwise built when it is
-// first wanted (a /nav, the overlay, the Navigation TLO's path questions), or at the zone-in with nav.prebuild. A
+// The mesh is read from the cache at the zone-in when there is a file for the zone, and otherwise built at the
+// zone-in (nav.prebuild, on by default in the client) or, with it off, when it is first wanted (a /nav, the overlay,
+// the Navigation TLO's path questions). A
 // walk asked for before its tiles are there waits for them; a walk to a spawn asks the server for its path meanwhile
 // (OP_FindPersonRequest, as /find asks it, but quietly: no path drawn, no sound; GameConnection::request_quiet_path),
 // which a stock EQEmu server answers from its own navigation mesh when it has one. A walk that needs a new path while
@@ -33,15 +34,15 @@
 
 struct ImDrawList;
 
-namespace nmsc::assets { class ZoneRegions; }
-namespace nmsc::game {
+namespace hailstone::assets { class ZoneRegions; }
+namespace hailstone::game {
 class CollisionMesh;
 struct Door;
 struct Spawn;
-} // namespace nmsc::game
-namespace nmsc::nav { class ZoneNav; }
+} // namespace hailstone::game
+namespace hailstone::nav { class ZoneNav; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class Navigator final : public nav::NavControl {
 public:
@@ -67,7 +68,7 @@ public:
         // The zone's line of sight between two points (world), for /stick's straight walk; null: never straight.
         std::function<bool(const glm::vec3&, const glm::vec3&)> line_of_sight;
         int threads = 2;
-        bool prebuild = false; // build at the zone-in, not when first wanted
+        bool prebuild = false; // build at the zone-in, not when first wanted (the client turns it on: nav.prebuild)
         bool assist_follow = true; // /follow's mesh help (hailstone.ini nav.follow)
     };
     explicit Navigator(Env env);
@@ -276,4 +277,4 @@ private:
     std::filesystem::path cache_file_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

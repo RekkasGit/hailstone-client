@@ -18,7 +18,7 @@
 #include "net/game_connection.h"
 #include "net/opcodes.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class AugmentProbe {
 public:
@@ -107,4 +107,4 @@ private:
     Clock::time_point since_{Clock::now()}, at_{};
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

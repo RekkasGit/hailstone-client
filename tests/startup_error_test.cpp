@@ -6,7 +6,7 @@
 #include "app/startup_error.h"
 #include "render/gpu_requirements.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -108,3 +108,30 @@ TEST_CASE("startup_error_text: headline, advice, the error and the log") {
     CHECK(contains(other, "What went wrong:\nboom"));
     CHECK_FALSE(contains(other, "The log has more"));
 }
+
+TEST_CASE("Vulkan instance extensions: the portability opt-in only where offered, a missing one named") {
+    using render::choose_instance_extensions;
+    const std::string kSurface = "VK_KHR_surface", kMetal = "VK_EXT_metal_surface",
+                      kPortability = "VK_KHR_portability_enumeration";
+    // SDL on macOS asks for all three. MoltenVK loaded directly offers no portability enumeration: the instance is
+    // made without it (and without its flag), not refused.
+    auto direct = choose_instance_extensions({kSurface, kMetal, kPortability}, {kSurface, kMetal, "VK_EXT_debug_utils"});
+    CHECK(direct.enable == std::vector<std::string>{kSurface, kMetal});
+    CHECK(direct.missing.empty());
+    CHECK_FALSE(direct.portability);
+    // Through the Vulkan loader it is offered: enabled once, with its flag, whether or not SDL asked.
+    auto loader = choose_instance_extensions({kSurface, kMetal, kPortability}, {kSurface, kMetal, kPortability});
+    CHECK(loader.enable == std::vector<std::string>{kSurface, kMetal, kPortability});
+    CHECK(loader.portability);
+    auto unasked = choose_instance_extensions({kSurface}, {kSurface, kPortability});
+    CHECK(unasked.enable == std::vector<std::string>{kSurface, kPortability});
+    CHECK(unasked.portability);
+    // Another wanted one the library lacks is named, once.
+    auto lacking = choose_instance_extensions({kSurface, "VK_KHR_xlib_surface", "VK_KHR_xlib_surface"}, {kSurface});
+    CHECK(lacking.enable == std::vector<std::string>{kSurface});
+    CHECK(lacking.missing == std::vector<std::string>{"VK_KHR_xlib_surface"});
+    // The error it makes is the no-Vulkan dialog's.
+    CHECK(app::classify_startup_error("vkCreateInstance: the Vulkan library lacks VK_KHR_xlib_surface") ==
+          app::StartupProblem::NoVulkan);
+}
+

@@ -8,7 +8,7 @@
 // The connection asks one chain of extensions (game/server_ext_chain.h): the plugins' (net::ConnectionOptions::
 // plugins; compiled plugins, plugin/native_plugins.h, and Lua plugins, mq/lua_hailstone.cpp), each while it says it
 // is active. With no active member the chain gives every hook's default: the stock client. A plugin's packets,
-// commands, chat filter and per-frame work are the plugin interface's own callbacks (sdk/nmsc_plugin.h), not hooks
+// commands, chat filter and per-frame work are the plugin interface's own callbacks (sdk/hailstone_plugin.h), not hooks
 // here. docs/plugins.md.
 
 #include <cstdint>
@@ -21,14 +21,14 @@
 
 #include "game/tracking.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 class GameConnection;
 struct Item;
 struct ItemSlot;
 struct WhoResponse;
-} // namespace nmsc::net
+} // namespace hailstone::net
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellData;
 struct Spawn;
@@ -153,6 +153,10 @@ public:
     // secondary, for a server whose backstab takes the better hand (the NMS server source does when multiclassing
     // is on). Stock and the Project Triune patch check the primary alone, so this is a deliberate difference.
     virtual bool backstab_either_hand(const net::GameConnection&) const { return false; }
+    // An adventure recruiter's Request goes out from a player in no group or raid, for a server that takes solo
+    // adventures (the Project Triune client's patch sets the adventure group size to 1). Stock EQEmu drops such a
+    // request unanswered, so the client stops it with its own line.
+    virtual bool solo_adventure(const net::GameConnection&) const { return false; }
     // The classes whose max HP / mana / endurance formulas the server takes the best of (the stats window's
     // comparison); stock: the profile's class.
     virtual std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const {
@@ -192,4 +196,4 @@ public:
 // The stock RoF2 client: every hook's default.
 ServerExtension& stock_server_extension();
 
-} // namespace nmsc::game
+} // namespace hailstone::game

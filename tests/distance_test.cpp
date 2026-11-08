@@ -2,8 +2,8 @@
 
 #include "game/distance.h"
 
-using nmsc::game::player_distance;
-using nmsc::game::true_distance;
+using hailstone::game::player_distance;
+using hailstone::game::true_distance;
 
 TEST_CASE("TrueDistance: 3D with z_scale 1, 2D with z_scale 0, scaled height otherwise") {
     glm::vec3 a(0, 0, 0), b(3, 4, 12);

@@ -6,7 +6,7 @@
 #include "game/appearance.h"
 #include "game/mechanics/item_stats.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -75,4 +75,4 @@ Appearance preview_appearance(Appearance a, const net::Item& item, const net::It
     return a;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

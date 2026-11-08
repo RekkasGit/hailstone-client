@@ -21,7 +21,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The EQSwitch fields ProcessSwitches reads and writes (offsets in comments).
 struct Switch {
@@ -86,4 +86,4 @@ bool switch_is_static(std::uint8_t type);
 void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std::uint32_t now_ms, SwitchQueries& q,
                       const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

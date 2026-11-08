@@ -7,7 +7,7 @@
 
 #include "game/cameras.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 namespace {
 
@@ -241,4 +241,29 @@ TEST_CASE("CENTERVIEW: the overhead's pitch back to -100, the others' look-at fl
     CHECK(c[kCameraChase].f.look_pitch);
     center_view(kCameraTether, c[kCameraTether]);
     CHECK(c[kCameraTether].f.look_pitch);
+}
+
+TEST_CASE("wheel_follow_position: the camera behind the player stops where the sweep does, without steps") {
+    const glm::vec3 eye(0.0f, 0.0f, 5.0f), back(-1.0f, 0.0f, 0.0f);
+    CHECK(wheel_follow_position(eye, back, 15.0f, kOpen) == glm::vec3(-15.0f, 0.0f, 5.0f));
+    CHECK(wheel_follow_position(eye, back, 15.0f, {}) == glm::vec3(-15.0f, 0.0f, 5.0f));
+    // A wall at x = wall - 0.25 stops the sphere's centre; the radius asked for is the original's 0.25.
+    float wall = -6.0f;
+    float radius = 0.0f;
+    const CameraSweep walled = [&](const glm::vec3& from, const glm::vec3& to, float r) -> std::optional<glm::vec3> {
+        radius = r;
+        const float stop = wall + r;
+        return to.x < stop ? glm::vec3(stop, from.y, to.z) : to;
+    };
+    CHECK(wheel_follow_position(eye, back, 15.0f, walled).x == doctest::Approx(-5.75f));
+    CHECK(radius == 0.25f);
+    // Moving a little toward the wall moves the camera as little: no jump between steps.
+    const glm::vec3 a = wheel_follow_position(eye, back, 15.0f, walled);
+    const glm::vec3 b = wheel_follow_position(eye + glm::vec3(-0.1f, 0.0f, 0.0f), back, 15.0f, walled);
+    CHECK(glm::distance(a, b) <= 0.1f + 1e-4f);
+    // A refused sweep keeps the camera at the eye (never through the scenery).
+    const CameraSweep refused = [](const glm::vec3&, const glm::vec3&, float) -> std::optional<glm::vec3> {
+        return std::nullopt;
+    };
+    CHECK(wheel_follow_position(eye, back, 15.0f, refused) == eye);
 }

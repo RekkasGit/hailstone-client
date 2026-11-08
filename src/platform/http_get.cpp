@@ -19,7 +19,7 @@
 #include <mutex>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 namespace {
 
@@ -564,4 +564,4 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
 
 #endif
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

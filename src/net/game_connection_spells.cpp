@@ -25,13 +25,23 @@
 #include "net/ability_packets.h"
 #include "game/race_models.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
 std::string spell_name(const game::SpellTable& table, std::uint32_t id) {
     const auto* s = table.get(id);
     return s ? s->name : "spell " + std::to_string(id);
+}
+
+// How long after its OP_BeginCast's cast time a spell's OP_Action still counts as that cast's landing (the server's
+// tick and the latency), and how long a proc's added cast stage covers its other targets' landings.
+constexpr std::int64_t kCastLandingSlackMs = 3000;
+constexpr std::int64_t kProcLandingMs = 500;
+
+// A bard song's skill (brass, singing, stringed, percussion, wind): its pulses land without a cast of their own.
+bool is_song_skill(std::uint8_t skill) {
+    return skill == 12 || skill == 41 || skill == 49 || skill == 54 || skill == 70;
 }
 
 } // namespace
@@ -799,6 +809,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 sound_cues_.push_back(c);
                 // The cast stage's particles, for the cast time.
                 effect_cues_.push_back({0, b->caster_id, 0, b->spell_id, static_cast<std::int32_t>(b->cast_time)});
+                cast_stage_shown_[b->caster_id] = {b->spell_id, now + b->cast_time + kCastLandingSlackMs};
             }
             bool bard = it != world_.spawns.end() && it->second.class_id == 8;
             if (b->caster_id == me) {
@@ -896,6 +907,22 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 c.target = a->target;
                 c.spell = a->spell_id;
                 sound_cues_.push_back(c);
+                // Hailstone: a spell landing with no OP_BeginCast before it (EQEmu sends one for a buff's proc but
+                // not for an item, weapon or augment proc, Mob::TryWeaponProc) gets the cast stage at its source as
+                // a cast would. The original plays only the impact here (EQPlayer::TriggerSpellEffect @0x593d10).
+                // Only the first of a landing's two OP_Actions (flag 4 marks the second), not a bard song's pulse.
+                if (const game::SpellData* sp = spell_table_->get(a->spell_id);
+                    sp && a->source != 0 && (a->effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
+                    auto shown = cast_stage_shown_.find(a->source);
+                    if (shown == cast_stage_shown_.end() || shown->second.first != a->spell_id ||
+                        now > shown->second.second) {
+                        SpellEffectCue cue{0, a->source, 0, a->spell_id, 0};
+                        cue.proc = true;
+                        effect_cues_.push_back(cue);
+                        // An area proc's other targets, landing with it, share this one.
+                        cast_stage_shown_[a->source] = {a->spell_id, now + kProcLandingMs};
+                    }
+                }
                 // The impact stage on the target (played for the target, as
                 // the landing path passes it as both caster and target).
                 effect_cues_.push_back({2, a->target, a->target, a->spell_id, 0, a->source});
@@ -1020,4 +1047,4 @@ void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

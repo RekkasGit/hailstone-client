@@ -3,7 +3,7 @@
 #include "app/perf_ui.h"
 #include "core/frame_sections.h"
 
-using namespace nmsc::app;
+using namespace hailstone::app;
 
 TEST_CASE("perf: a hitch is 2.5 times the typical frame, 20 ms at least") {
     CHECK_FALSE(is_hitch(60.0f, 0.0f)); // no typical time yet
@@ -29,7 +29,7 @@ TEST_CASE("perf: the sections of a hitch follow its phases") {
 }
 
 TEST_CASE("perf: frame sections add up by name and are emptied when taken") {
-    namespace fs = nmsc::core::frame_sections;
+    namespace fs = hailstone::core::frame_sections;
     fs::take();
     fs::add("a", 1.0f);
     fs::add("b", 2.0f);

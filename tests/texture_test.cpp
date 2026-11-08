@@ -8,8 +8,8 @@
 #include "core/byte_io.h"
 #include "game_files.h"
 
-using namespace nmsc::assets;
-using nmsc::ByteWriter;
+using namespace hailstone::assets;
+using hailstone::ByteWriter;
 
 namespace {
 
@@ -436,8 +436,8 @@ TEST_CASE("Textures over 8192 x 8192 texels are refused before decoding (no 1 Gi
     CHECK(error.find("dimensions") != std::string::npos);
 }
 
-TEST_CASE("Real textures from a classic zone decode" * doctest::skip(!nmsc::test::game_dir())) {
-    auto archive = PfsArchive::open(nmsc::test::game_dir()->find("qeynos2.s3d").value());
+TEST_CASE("Real textures from a classic zone decode" * doctest::skip(!hailstone::test::game_dir())) {
+    auto archive = PfsArchive::open(hailstone::test::game_dir()->find("qeynos2.s3d").value());
     int count = 0;
     for (const auto& name : archive.names()) {
         if (!name.ends_with(".bmp") && !name.ends_with(".dds")) continue;
@@ -455,8 +455,8 @@ TEST_CASE("Real textures from a classic zone decode" * doctest::skip(!nmsc::test
     CHECK(count > 50);
 }
 
-TEST_CASE("Real textures from an EQG archive decode" * doctest::skip(!nmsc::test::game_dir())) {
-    auto archive = PfsArchive::open(nmsc::test::game_dir()->find("broodlands.eqg").value());
+TEST_CASE("Real textures from an EQG archive decode" * doctest::skip(!hailstone::test::game_dir())) {
+    auto archive = PfsArchive::open(hailstone::test::game_dir()->find("broodlands.eqg").value());
     auto data = archive.read("swmp_canopy_trim.dds");
     REQUIRE(data);
     auto img = decode_ok(*data);
@@ -530,11 +530,11 @@ TEST_CASE("TGA truecolour and RLE") {
     }
 }
 
-TEST_CASE("Real TGA and 8-bit BMP decode" * doctest::skip(!nmsc::test::game_dir())) {
-    auto sky = PfsArchive::open(nmsc::test::game_dir()->find("sky.s3d").value());
+TEST_CASE("Real TGA and 8-bit BMP decode" * doctest::skip(!hailstone::test::game_dir())) {
+    auto sky = PfsArchive::open(hailstone::test::game_dir()->find("sky.s3d").value());
     auto tga = decode_ok(sky.read("glare.tga").value());
     CHECK(tga.format == PixelFormat::RGBA8);
-    auto chr = PfsArchive::open(nmsc::test::game_dir()->find("gfaydark_chr.s3d").value());
+    auto chr = PfsArchive::open(hailstone::test::game_dir()->find("gfaydark_chr.s3d").value());
     auto data = chr.read("batch0001.bmp").value();
     CHECK(describe_texture(data) == "BMP 8-bit");
     auto img = decode_ok(data);

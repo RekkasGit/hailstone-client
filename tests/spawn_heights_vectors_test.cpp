@@ -21,9 +21,9 @@
 #include "game_files.h"
 #include "vector_files.h"
 
-using nmsc::test::Json;
-namespace g = nmsc::game;
-namespace mech = nmsc::game::mechanics;
+using hailstone::test::Json;
+namespace g = hailstone::game;
+namespace mech = hailstone::game::mechanics;
 
 namespace {
 
@@ -33,16 +33,16 @@ mech::Fpu fpu_of(const Json& r) {
 
 std::string hex(std::uint32_t v) { return std::format("{:#010x}", v); }
 
-float f32(const Json& j) { return nmsc::test::f32_of(j); }
+float f32(const Json& j) { return hailstone::test::f32_of(j); }
 
 // "" or "<name> <have> want <want>".
 std::string same(const char* name, float have, const Json& want) {
-    std::uint32_t h = std::bit_cast<std::uint32_t>(have), w = nmsc::test::f32_bits(want);
+    std::uint32_t h = std::bit_cast<std::uint32_t>(have), w = hailstone::test::f32_bits(want);
     return h == w ? "" : std::format("{} {} want {}; ", name, hex(h), hex(w));
 }
 
 std::string same64(double have, const Json& want) {
-    std::uint64_t h = std::bit_cast<std::uint64_t>(have), w = nmsc::test::f64_bits(want);
+    std::uint64_t h = std::bit_cast<std::uint64_t>(have), w = hailstone::test::f64_bits(want);
     return h == w ? "" : std::format("value {:#018x} want {:#018x}", h, w);
 }
 
@@ -76,7 +76,7 @@ std::string heights_differ(const g::SpawnHeights& s, const Json& out) {
 } // namespace
 
 TEST_CASE("vectors: SetHeights") {
-    nmsc::test::each_vector("SetHeights.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("SetHeights.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         g::SpawnHeights s;
         s.height = f32(in["height"]);
@@ -89,7 +89,7 @@ TEST_CASE("vectors: SetHeights") {
 }
 
 TEST_CASE("vectors: ComputeSpecialHeights") {
-    nmsc::test::each_vector("ComputeSpecialHeights.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("ComputeSpecialHeights.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         float scale = f32(in["scale"]), eye = f32(in["eye"]), avatar = f32(in["avatar_height"]),
               length = f32(in["length"]);
@@ -101,7 +101,7 @@ TEST_CASE("vectors: ComputeSpecialHeights") {
 }
 
 TEST_CASE("vectors: ChangeHeight") {
-    nmsc::test::each_vector("ChangeHeight.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("ChangeHeight.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         const bool mounted = in["mounted"].truthy();
         g::SpawnHeights heights[2];
@@ -143,7 +143,7 @@ TEST_CASE("vectors: ChangeHeight") {
 }
 
 TEST_CASE("vectors: GetCollisionVolumeRadius (FUN_005062a0)") {
-    nmsc::test::each_vector("GetCollisionVolumeRadius.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("GetCollisionVolumeRadius.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         double v = mech::collision_volume_radius(f32(in["avatar_height"]), in["type"].i32() == 1,
                                                  in["race"].u32(), in["is_mount_race"].truthy(), fpu_of(r));
@@ -152,7 +152,7 @@ TEST_CASE("vectors: GetCollisionVolumeRadius (FUN_005062a0)") {
 }
 
 TEST_CASE("vectors: CalcScaleFactorForHeight") {
-    nmsc::test::each_vector("CalcScaleFactorForHeight.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("CalcScaleFactorForHeight.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         double v = g::calc_scale_factor_for_height(f32(in["height"]), in["new_style_model"].truthy(),
                                                    in["old_model_scale"].truthy(), fpu_of(r));
@@ -161,7 +161,7 @@ TEST_CASE("vectors: CalcScaleFactorForHeight") {
 }
 
 TEST_CASE("vectors: GetEyeHeight") {
-    nmsc::test::each_vector("GetEyeHeight.jsonl", [](const Json& r) {
+    hailstone::test::each_vector("GetEyeHeight.jsonl", [](const Json& r) {
         const Json& in = r["in"];
         g::EyeInputs e;
         e.uses_new_style_model = in["uses_new_style_model"].truthy();
@@ -260,7 +260,7 @@ TEST_CASE("spawn heights: racedata.txt and moddat.ini") {
     CHECK(tables.roffset("ELF") == 3.125f);
     CHECK(tables.fpc_offset("trm") == -0.6f);
     CHECK(tables.fpc_offset("HUM") == 0.0f); // none: 0
-    if (auto game = nmsc::test::game_dir()) {
+    if (auto game = hailstone::test::game_dir()) {
         auto racedata = game->read("racedata.txt");
         auto moddat = game->read("Resources/moddat.ini");
         REQUIRE(racedata);

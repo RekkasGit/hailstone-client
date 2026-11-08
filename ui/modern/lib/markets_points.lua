@@ -2,7 +2,7 @@
 -- NewPointMerchantWnd, adventure points and crystals): the merchant and how much of its currency you hold, the
 -- goods as a sortable table with a search (a cost above what you hold in red), Purchase, Sell (for the item on your
 -- cursor; the offer on hover) and Done. Everything is the window's children: a row click selects in the game's list,
--- the buttons send from its handler.
+-- the buttons send from its handler, and a right click on a good inspects it (the original's list right click).
 --   draw(cfg, w, h, s)  cfg = { window, prefix, currency() -> name, icon() -> tex.. | nil, columns (extra) }
 local W = dofile("lib/widgets.lua")
 local M = dofile("lib/markets.lua")
@@ -65,6 +65,7 @@ function P.Draw(cfg, w, h, s)
       local c = cost(r)
       return (r.texts[1] or "") .. "\n" .. T.Thousands(c) .. " " .. label
         .. (short(r) and ("\nYou need " .. T.Thousands(c - have) .. " more") or "")
+        .. "\nRight-click to inspect"
     end,
   })
 

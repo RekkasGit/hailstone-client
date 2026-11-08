@@ -353,11 +353,14 @@ local function displayTab()
     check("own_name", "Show My Name",
       "Hailstone: your own name over your head in the third-person views, with your title and guild as /shownames sets them for everyone.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
+    check("con_name_colour", "Con-Coloured NPC Names", "Hailstone: NPC names take their consider colour, as your target's does. Off keeps them yellow.")
     check("show_target_ring", "Show 3D Target Ring", "A colored ring appears around your current target's feet.")
     check("tab_skip_pets", "Tab Skips Pets",
       "Hailstone: the NPC target keys (Tab, F8) skip players' pets and mercenaries.")
     check("tab_line_of_sight", "Tab Needs Line of Sight",
       "Hailstone: the NPC target keys (Tab, F8) skip NPCs you cannot see, behind walls or the ground.")
+    check("replace_gem_spell", "Drop Replaces a Memorized Spell",
+      "Hailstone: a spell dragged from the spell book onto a gem that holds another spell memorizes in its place. Off, forget the old spell first, as in the original.")
     check("hotbutton_extras", "More Hot Button States",
       "Hailstone: hot buttons of the Actions window's skills show their timers, Melee Attack lights while auto attack is on, Sit while sitting.")
     check("offer_layout_copy", "Offer Layouts to New Characters",
@@ -820,7 +823,7 @@ ui.window("Options", function()
   style.Push()
   local w, b = C.window, C.frameBorder
   ui.PushStyleColor(ui.Col.WindowBg, w[1], w[2], w[3], w[4])
-  local visible, open = ui.Begin("Options##nmsc", true, ui.WindowFlags.NoCollapse)
+  local visible, open = ui.Begin("Options##hailstone", true, ui.WindowFlags.NoCollapse)
   if esc.Frame(WINDOW) then open = false end
   -- the controls' outline (inside the window only: its own edge keeps the hairline)
   ui.PushStyleColor(ui.Col.Border, b[1], b[2], b[3], b[4])

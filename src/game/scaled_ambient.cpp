@@ -5,7 +5,7 @@
 #include "game/collision.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -62,4 +62,4 @@ float ScaledAmbient::update(std::uint32_t now_ms, const glm::vec3& position, con
     return level_;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

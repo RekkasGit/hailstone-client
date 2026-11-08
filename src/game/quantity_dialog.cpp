@@ -1,6 +1,6 @@
 #include "game/quantity_dialog.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 using K = QuantityCall::Kind;
@@ -69,4 +69,4 @@ QuantityLimits merchant_buy_limits(std::int32_t merchant_quantity, std::int32_t 
     return {max, spell_scroll ? 1 : max};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 // x87's NaN choice: M(). Intermediates are doubles rounded at the record's
 // precision; only the stores (fstp dword) round to float.
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -97,4 +97,4 @@ void vehicle_local_to_world(const VehiclePose& v, VehicleBody& b, const VehicleF
     b.speed_z = to_f(t2);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

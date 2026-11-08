@@ -18,7 +18,7 @@
 
 #include "net/real_estate_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kReNone = 0xffffffffu;
 
@@ -158,4 +158,4 @@ double re_upkeep_days(const RealEstateManager& m, const net::ReRecord& r);
 // RealEstate_FormatTimeRemaining @0x740a50 ("Unlimited", "Expired", "1w 1d", "3d", "<1d").
 std::string re_format_time_left(double days);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

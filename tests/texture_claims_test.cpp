@@ -7,7 +7,7 @@
 
 #include "render/texture_claims.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 TEST_CASE("Texture claims: a dropped job gives its claims back; installed textures stay claimed") {
     auto claims = std::make_shared<TextureClaims>();

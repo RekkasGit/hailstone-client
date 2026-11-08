@@ -12,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kChatChannelCount = 57;  // ChannelMap's size (SetChannelMap's bound 0x39)
 inline constexpr int kChatChannelOther = 22;  // GetChannelFromColor's answer for any colour it does not list
@@ -108,4 +108,4 @@ struct CycleReply {
 CycleReply cycle_reply(std::string_view input, const std::vector<std::string>& names, int& index, bool newer,
                        const std::string& tell_word, const std::string& rtarget_word);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

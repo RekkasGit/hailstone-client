@@ -23,7 +23,7 @@
 
 #include "net/marketplace_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -230,4 +230,4 @@ private:
     std::uint32_t next_id_ = 3;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

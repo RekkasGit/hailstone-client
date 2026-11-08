@@ -2,7 +2,7 @@
 
 #include "game/mechanics/character.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 constexpr std::uint32_t kSwimming = 50; // EQ skill ids
@@ -45,4 +45,4 @@ MovementFacts movement_facts(const Character& ch) {
     return f;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

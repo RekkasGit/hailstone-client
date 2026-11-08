@@ -20,9 +20,9 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kSpellLoadouts = 10;
 inline constexpr int kLoadoutGems = 12;
@@ -72,4 +72,4 @@ private:
     bool dirty_ = false;
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

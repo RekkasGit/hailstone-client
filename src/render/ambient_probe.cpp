@@ -7,7 +7,7 @@
 
 #include "assets/zone.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 std::int64_t AmbientProbe::key(int x, int y, int z) {
     return (static_cast<std::int64_t>(x & 0x1fffff) << 42) | (static_cast<std::int64_t>(y & 0x1fffff) << 21) |
@@ -76,4 +76,4 @@ glm::vec4 ProbeBlend::update(const glm::vec4& sample, float dt) {
     return current_;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

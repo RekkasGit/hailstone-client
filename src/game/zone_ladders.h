@@ -25,9 +25,9 @@
 #include "game/mechanics/ladder.h"
 #include "game/object_collision.h"
 
-namespace nmsc::assets { struct Zone; }
+namespace hailstone::assets { struct Zone; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // EQObject_Construct's test: the tag's first six characters are LADDER, in any case.
 bool is_ladder_actor(std::string_view tag);
@@ -47,4 +47,4 @@ struct ZoneLadder {
 // placement's scale is used, as for a ground object (app/world_objects_ladder.cpp).
 std::vector<ZoneLadder> zone_ladders(const assets::Zone& zone);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

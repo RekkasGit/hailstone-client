@@ -17,9 +17,9 @@
 #include "render/point_shadows.h"
 #include "render/shadows.h"
 
-namespace nmsc::platform { class Window; }
+namespace hailstone::platform { class Window; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // Optional device capabilities the renderers adapt to.
 struct DeviceCaps {
@@ -93,7 +93,9 @@ struct AoView {
     float near_plane = 1.0f;
     float far_plane = 1000.0f;
     float radius = 4.0f;    // world units: well under a character's height (6), or legs smear the ground
-    float intensity = 4.0f;
+    // ao_visibility's scale (shaders/ao_kernel.glsl): 12 puts a contact corner's shade near the old kernel's (4 with
+    // its x5 and 1/|v| weight) at mid range, while a low-poly face's shallow creases stay unshaded.
+    float intensity = 12.0f;
 };
 
 // Parses display.tonemap's values (none, agx, aces); unknown names give None.
@@ -427,4 +429,4 @@ private:
     std::string gpu_name_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

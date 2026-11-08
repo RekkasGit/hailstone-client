@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -316,4 +316,4 @@ LinkAllChat link_all_into_chat(const std::string& typed, const std::vector<std::
     return r;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

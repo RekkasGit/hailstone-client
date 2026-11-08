@@ -14,7 +14,7 @@
 
 #include <zlib.h>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace png_detail {
 
@@ -74,4 +74,4 @@ inline bool write_png_rgba(const std::filesystem::path& path, std::span<const st
     return static_cast<bool>(out);
 }
 
-} // namespace nmsc
+} // namespace hailstone

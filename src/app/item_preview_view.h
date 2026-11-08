@@ -18,9 +18,9 @@
 #include "assets/character.h"
 #include "render/vk_context.h"
 
-namespace nmsc::render { class ActorRenderer; }
+namespace hailstone::render { class ActorRenderer; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ItemPreviewView {
 public:
@@ -85,4 +85,4 @@ private:
     glm::vec2 pan_{0.0f};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

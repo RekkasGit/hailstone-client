@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct ClientOptions {
     std::string game_dir;
@@ -60,4 +60,4 @@ struct ClientOptions {
 // The playable client: login, server and character select, then the zone.
 int run_client(const ClientOptions& options);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

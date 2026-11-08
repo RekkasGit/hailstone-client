@@ -13,7 +13,7 @@
 #include "game/world_state.h"
 #include "mq/tlo.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -200,4 +200,4 @@ std::vector<const game::Spawn*> search_spawns(const SpawnSearch& q, const game::
     return out;
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

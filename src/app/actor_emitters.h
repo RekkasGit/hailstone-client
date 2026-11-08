@@ -33,10 +33,10 @@
 #include "game/particles.h"
 #include "render/particle_renderer.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { struct CharacterMesh; }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { struct CharacterMesh; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ActorEmitters {
 public:
@@ -90,4 +90,4 @@ private:
     std::uint32_t next_key_ = 1;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

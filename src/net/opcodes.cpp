@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -15,9 +15,9 @@ struct Entry {
 };
 
 constexpr Entry kTable[] = {
-#define NMSC_OP(name, value) {#name, value},
+#define HAILSTONE_OP(name, value) {#name, value},
 #include "net/opcodes_rof2.inc"
-#undef NMSC_OP
+#undef HAILSTONE_OP
 };
 static_assert(std::size(kTable) == static_cast<std::size_t>(Op::Count_));
 
@@ -63,4 +63,4 @@ const char* op_name(Op op) {
     return i < std::size(kTable) ? kTable[i].name : "Unknown";
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

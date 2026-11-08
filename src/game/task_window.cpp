@@ -13,7 +13,7 @@
 #include "game/merchant.h"
 #include "platform/local_time.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -349,4 +349,4 @@ std::optional<TaskCompassMark> task_compass_mark(const TaskState& s, std::uint32
     return std::nullopt;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -18,9 +18,9 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::assets { class ZoneRegions; }
+namespace hailstone::assets { class ZoneRegions; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The side of `plane` (xyz . p + w) a point is on: >= 0 is kept.
 inline float plane_side(const glm::vec4& plane, const glm::vec3& p) { return glm::dot(glm::vec3(plane), p) + plane.w; }
@@ -228,4 +228,4 @@ std::optional<std::vector<BaryPolygon>> split_off_ground(const GroundGrid& groun
 // The distance from `p` to the box, in the horizontal plane.
 float distance_xy(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

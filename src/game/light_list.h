@@ -14,16 +14,16 @@
 
 #include <glm/vec3.hpp>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 struct EmitterDefinition;
 struct PointLight;
-} // namespace nmsc::assets
-namespace nmsc::game {
+} // namespace hailstone::assets
+namespace hailstone::game {
 class Inventory;
 class ParticleSystem;
-} // namespace nmsc::game
+} // namespace hailstone::game
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct LightSource {
     glm::vec3 position{0.0f}; // world coordinates (game/coords.h)
@@ -65,4 +65,4 @@ std::vector<LightSource> particle_lights(const ParticleSystem& particles,
                                          const std::function<glm::vec3(const std::string& texture)>& texture_color,
                                          std::size_t max);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

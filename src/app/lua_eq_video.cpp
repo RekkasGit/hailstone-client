@@ -8,7 +8,7 @@
 #include "app/lua_eq_windows.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -136,4 +136,4 @@ private:
 
 void add_video_windows(std::vector<std::unique_ptr<StockWindow>>& out) { out.push_back(std::make_unique<VideoModesWindow>()); }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

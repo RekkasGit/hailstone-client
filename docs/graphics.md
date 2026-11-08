@@ -50,8 +50,9 @@ not whenever the surface's `currentExtent` differs from the window's size.
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes
-on into the same targets (stored and loaded, the multisampled ones too) with `ZonePhase::Translucent`: the water
-first, then the blended and additive draws.
+on into the same targets (stored and loaded, the multisampled ones too): the grass (opaque, but left out of the copies
+so the target ring lies on the ground under it), then `ZonePhase::Translucent`: the water first, then the blended and
+additive draws.
 
 The scene target holds linear colour. The classic lighting computes in display (sRGB) values as the classic renderer does
 and converts at the end of each shader; the modern lighting computes in linear HDR.
@@ -124,7 +125,9 @@ The flames are found in the zone's data (`assets/zone_fires.h`), in three forms 
 - An EQG zone's environment emitters, `<zone>_EnvironmentEmitters.txt` (`Name^EmitterDefIdx^X^Y^Z^[AlwaysVisible^]
   Lifespan`, positions in the zone's own frame) over `environmentemittersnew.edd`. `assets::load_zone` adds them to
   the zone's particle fixtures, pointing up, so both lightings draw them (they were not drawn at all before): torches,
-  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow, lavastorm).
+  braziers and also their smoke, mist and the like. A few classic zones have the file too (frozenshadow). A
+  revamped zone loaded from its RoF2 `.s3d` (`assets::is_revamped_zone_name`: nektulos, arena...) takes none: the
+  file beside it is the live `.eqg`'s, and its torches and campfires would burn in mid-air in the old zone.
   Their flames are the definitions with a flame sprite (`FlameD.dds`, `new_flame.dds`, `new_fire.dds`, `fire01.dds`,
   `fire01_gray.dds`, `flamegray.dds`) and no "lava" in the name (nor an `mml_instance_flame` one); their hue comes from the definition's start colour
   (vald_bluetorch is FlameD.dds in 10, 10, 255), or for a grey one from its name (cob_brazier_green).
@@ -171,6 +174,13 @@ lands the spell, on players and NPCs alike. Stock EQEmu sends the landing only t
 (75 units) of the struck spawn, but the begin cast within `Range:BeginCast` (200), so between the two a bystander sees
 the caster's cast stage and no impact; the original client gets no more from the server. A server owner who wants
 the impact seen from further raises that rule.
+
+Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
+first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
+a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the
+impact for them (`EQPlayer::TriggerSpellEffect`). An OP_Action counts as a cast's landing for 3 s after its
+OP_BeginCast's cast time; a bard song's pulses get no cast stage. The proc's bolt or comet, in the modern lighting,
+leaves at the landing as another's spell's does.
 
 Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client
 does not read): the Options window's Particles section has three more Off / Low / Medium / High choices, each scaling
@@ -304,8 +314,9 @@ The ring at the current target's feet (`render/target_ring_renderer.h`, `shaders
 the target's con) and its radius follow the original; how it is drawn and how it moves are Hailstone's own (the
 original turns four UV-animated circles).
 
-It is a decal on the scene's depth, drawn just after `VkContext::begin_translucent` (the classic lighting, which has
-no other use for the depth copy, takes it for the ring when there is one). A box round the ring, from 1 + 0.6 radii
+It is a decal on the scene's depth, drawn after `VkContext::begin_translucent` (the classic lighting, which has no
+other use for the depth copy, takes it for the ring when there is one). The copy is taken before the grass is drawn,
+so the ring lies on the ground and is drawn over the blades; traced over the blades themselves it broke into a coil. A box round the ring, from 1 + 0.6 radii
 below the feet to as far above, is drawn without culling or depth test; the fragment shader keeps its far faces and
 rebuilds each pixel's scene point from the depth copy. A surface less than 60 degrees from level within that height of
 the feet takes the ring, so it follows the ground, slopes and steps, and anything standing in front of it hides it: a
@@ -501,8 +512,10 @@ intensity; updated every frame, in every zone type, with or without a sky):
   up to 128/512 (three quarters of them) or 128 to 256/512 the rest, at (1 - r1)^2 of MaxSpeed. Its ground is the first
   surface a line from 1200 units above it to 500 below meets (`CollisionMesh::first_hit`: transparent surfaces
   ignored, passable ones hit, back faces skipped), so drops stop on roofs and tree tops and never reach the ground
-  under them. Here back faces are hit too (unlike the classic client): a roof with nothing over it, such as the East
-  Commonlands tunnel's under a mountain with no top, would otherwise let the rain through to the floor. A drop that lands on ground whose normal z is at most 0.8 never splashes again. Landed columns farther
+  under them. Here back faces below the drop are hit too (unlike the classic client): a roof with nothing over it, such
+  as the East Commonlands tunnel's under a mountain with no top, would otherwise let the rain through to the floor.
+  Only below it: a zone's ceiling facing down over the sky (East Commonlands' at z 719) would otherwise be the ground
+  of every drop, which would land as it started, and no rain or snow would be seen at all. A drop that lands on ground whose normal z is at most 0.8 never splashes again. Landed columns farther
   than 200 units from the camera are let go. p is the server's intensity x 0.01 (1..10 gives 0.01..0.10), moving at
   0.25 a second, so intensity 5 is 375 drops a second.
 - **Colour:** each particle a random blend of the sky's two precipitation colours for its kind (CSky +0x38: the
@@ -516,7 +529,11 @@ intensity; updated every frame, in every zone type, with or without a sky):
   shows the rain plainly. The modern lighting stretches each upright streak over the distance its drop falls in
   0.08 s (about 5 units at full speed, as a camera's motion blur), draws it at least 1.5 pixels wide, and has the
   precipitation manager start three times as many drops (its spawn rate; the 7500-particle pool and the column reuse
-  are the original's). The classic lighting keeps the original's.
+  are the original's). The snowflakes, 0.15 units across and in each frame of their atlas a thin outline (about 8 %
+  of it opaque), are a pixel or two a few units off, where the texture's small mips average the outline away: the
+  modern style draws a facing particle at least 2.5 pixels across both ways, and below 8 pixels of its own size fades
+  it into a soft round dot (fully a dot at 4), so the falling snow shows as specks. The classic lighting keeps the
+  original's.
 
 - **The world (modern, `WeatherLook`):**
   - **Transitions:** the original's precipitation reaches the server's intensity within a second; the look eases it.
@@ -790,10 +807,15 @@ specks against the sky.
   sampled with a 1.5-texel normal offset and 3 x 3 hardware-filtered comparisons, fading out over the last 15 %. The
   sun term of the zone, character and object shaders is multiplied by it.
 
-- **Ambient occlusion** (`shaders/ao.frag`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
+- **Ambient occlusion** (`shaders/ao.frag`, `shaders/ao_kernel.glsl`, `render/vk_context.h` AoView): after McGuire et al.'s scalable AO, on
   the resolved depth: view positions rebuilt from the reverse-Z projection terms, the normal from the nearer
   neighbour on each axis, 12 samples on a spiral within 4 world units (more smears the ground under characters) (at most a tenth of the screen height),
-  turned by a 4 x 4 ordered pattern; the post pass averages the 4 x 4 block weighted by depth and darkens the scene
+  turned by a 4 x 4 ordered pattern; each sample takes the bounded angular kernel (cubic distance falloff times the
+  sample's horizon above the surface), and at close range the kernel's world-space radius shrinks to the pixel cap's
+  own world size, so near samples cannot darken out of proportion. An angular bias of 0.1 keeps almost coplanar
+  samples from shadowing themselves. The samples' shade is scaled by AoView's intensity 12 over the 12 samples: the
+  bounded kernel weighs a mid-range sample less than the old one (whose weight grew as 1/|v|, which blotched the
+  near ones black), and 12 keeps a contact corner's shade near the old depth (tests/lighting_test.cpp). The post pass averages the 4 x 4 block weighted by depth and darkens the scene
   by it (strength 0.85) before the exposure. Applied to everything, not to the ambient alone (there is no depth
   prepass), so it is kept to contact shadows.
 
@@ -998,6 +1020,12 @@ At run time:
 - `display.material_maps` (on by default) and the viewer's `--no-material-maps` turn the maps off.
 - Every viewer, the model viewer too, takes `--textures`.
 
+## Name plates
+
+NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the colour Hailstone's target plate already uses) instead of this client's yellow (255, 220, 120). Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the yellow for NPC names. The target keeps its consider colour in both settings.
+
+Neither colour is the original's: PlayerClient::SetNameSpriteTint gives every NPC but a mercenary one fixed tint (0xad, 0xb8, 0x17) and only flashes the target's toward white; the con-coloured target plate is Hailstone's look too (`draw_nameplates`). Which name sprites are drawn, and their parts: docs/mechanics.md "Name sprites".
+
 ## Settings
 
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
@@ -1036,6 +1064,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.background_fps` | 0, 10 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`) |
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
+| `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides), read as each zone loads |
 | `display.fov` | fov units | none | the camera's field of view in 512ths of a circle (none: the classic 90, 63.3 degrees across below an aspect of 2); the Options window shows degrees, 45 .. 120 |
 | `ui.scale` | percent, 0 | 0 | the UI's scale (0: the display's); read at start-up; `--ui-scale` takes precedence |

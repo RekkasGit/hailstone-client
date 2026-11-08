@@ -5,7 +5,7 @@
 // frame, draws them and passes the player's clicks back to the connection.
 // Drawn by app::ItemUi, which owns the item icons.
 //
-// Testing aid: NMSC_COMMERCE_TEST in the environment drives the windows
+// Testing aid: HAILSTONE_COMMERCE_TEST in the environment drives the windows
 // once in the zone (for screenshots):
 //   merchant       open the nearest merchant within reach, select its first
 //                  item and the first general-slot item for selling
@@ -20,10 +20,10 @@
 
 #include "ui/commerce_windows.h"
 
-namespace nmsc::ui { class ItemIconCache; }
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::ui { class ItemIconCache; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class CommerceUi {
 public:
@@ -39,4 +39,4 @@ private:
     std::chrono::steady_clock::time_point test_since_{};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

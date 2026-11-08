@@ -8,7 +8,7 @@
 #include "core/game_dir.h"
 #include "game/map_data.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace fs = std::filesystem;
 
@@ -103,4 +103,4 @@ std::vector<std::string> map_skins(const MapFolders& f) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -3,7 +3,7 @@
 
 #include <bit>
 
-namespace nmsc::game::mechanics::useskill {
+namespace hailstone::game::mechanics::useskill {
 
 namespace {
 
@@ -550,4 +550,4 @@ void Run::main_switch() {
 
 void use_skill(State& s, std::uint32_t skill, Queries& q) { Run(s, skill, q).go(); }
 
-} // namespace nmsc::game::mechanics::useskill
+} // namespace hailstone::game::mechanics::useskill

@@ -16,9 +16,9 @@
 #include "game/anim_layers.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
-namespace mech = nmsc::game::mechanics;
+namespace mech = hailstone::game::mechanics;
 
 namespace {
 
@@ -208,6 +208,22 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
                 st.posture = true;
                 return start("P02", mech::kOldSitStand, true, 1.0f, false, 100.0f);
             }
+        } else if (in.stand_state == 111 || (in.stand_state == 100 && from == 111)) {
+            // PlayerZoneClient::ChangePosition @0x5a0bc0: crouching plays the duck (0x18) once, unless it or the
+            // duck walk (0x16) is playing; standing up from a crouch plays it backward. A plain Play, not a held
+            // posture: the choice below takes over when there is something else to play (a walk, a jump), and
+            // otherwise leaves it (a still ducking spawn asks nothing, nor does a still one after the duck).
+            const bool down = in.stand_state == 111;
+            if (in.new_style) {
+                const std::uint8_t duck = mech::old_to_new_anim(mech::kOldDuck);
+                const std::uint8_t walk = mech::old_to_new_anim(mech::kOldDuckWalk);
+                if (!down || (st.anim != duck && st.anim != walk))
+                    if (auto c = start_new(duck, !down, 1.0f, false)) return *c;
+            } else if (has_clip(mech::old_anim_clip(mech::kOldDuck)) &&
+                       (!down || (st.anim != mech::kOldDuck && st.anim != mech::kOldDuckWalk))) {
+                return start(std::string(mech::old_anim_clip(mech::kOldDuck)), mech::kOldDuck, !down, 1.0f, false,
+                             100.0f);
+            }
         }
     }
     st.stand_state = in.stand_state;
@@ -369,4 +385,4 @@ std::string action_clip(std::uint8_t action, const std::function<bool(std::strin
     return !alt.empty() && has_clip(alt) ? alt : std::string{};
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

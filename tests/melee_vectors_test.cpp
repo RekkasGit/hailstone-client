@@ -17,9 +17,9 @@
 #include "game/mechanics/melee.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
-namespace ml = nmsc::game::mechanics::melee;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
+namespace ml = hailstone::game::mechanics::melee;
 
 namespace {
 
@@ -35,16 +35,16 @@ std::string check_range(const Json& r) {
     const Json& in = r["in"];
     auto spawn = [](const Json& j) {
         ml::RangeSpawn s;
-        s.melee_radius = nmsc::test::f32_of(j["melee_radius"]);
-        s.scale = nmsc::test::f32_of(j["scale"]);
-        s.height = nmsc::test::f32_of(j["height"]);
+        s.melee_radius = hailstone::test::f32_of(j["melee_radius"]);
+        s.scale = hailstone::test::f32_of(j["scale"]);
+        s.height = hailstone::test::f32_of(j["height"]);
         return s;
     };
     ml::RangeSpawn a = spawn(in["a"]), b = spawn(in["b"]);
     const ml::RangeSpawn* pb = in["b_is_a"].truthy() ? &a : &b;
     float got = ml::melee_range(in["a_present"].truthy() ? &a : nullptr, in["b_present"].truthy() ? pb : nullptr,
                                 fpu_of(r));
-    std::uint32_t want = nmsc::test::f32_bits(r["out"]["range"]);
+    std::uint32_t want = hailstone::test::f32_bits(r["out"]["range"]);
     std::uint32_t have = std::bit_cast<std::uint32_t>(got);
     // A NaN's payload as the x87 left it.
     if (have != want) return std::format("range {} want {}", hex(have), hex(want));
@@ -316,8 +316,8 @@ public:
         const Json* c = take("player_distance");
         arg(c, "z_scale_bits", 0);
         if (!target) error += "player_distance without a target; ";
-        return f_.add(static_cast<double>(nmsc::test::f32_of(in_["distance"])),
-                      static_cast<double>(nmsc::test::f32_of(in_["distance_extra"])));
+        return f_.add(static_cast<double>(hailstone::test::f32_of(in_["distance"])),
+                      static_cast<double>(hailstone::test::f32_of(in_["distance_extra"])));
     }
     bool hit_anyway() override { return in_["hit_anyway"].truthy(); }
     std::uint8_t can_i_hit(const ml::Spawn* target, float range) override {
@@ -445,12 +445,12 @@ std::string check_do_attack(const Json& r) {
 
 } // namespace
 
-TEST_CASE("MeleeRange vectors (__get_melee_range)") { nmsc::test::each_vector("MeleeRange.jsonl", check_range); }
-TEST_CASE("ModifyAttackSpeed vectors") { nmsc::test::each_vector("ModifyAttackSpeed.jsonl", check_attack_speed); }
-TEST_CASE("GetHandToHandDelay vectors") { nmsc::test::each_vector("GetHandToHandDelay.jsonl", check_hand_to_hand); }
-TEST_CASE("CheckDoubleAttack vectors") { nmsc::test::each_vector("CheckDoubleAttack.jsonl", check_double_attack); }
-TEST_CASE("CheckDualWield vectors") { nmsc::test::each_vector("CheckDualWield.jsonl", check_dual_wield); }
-TEST_CASE("DoAttack vectors (call by call)") { nmsc::test::each_vector("DoAttack.jsonl", check_do_attack); }
+TEST_CASE("MeleeRange vectors (__get_melee_range)") { hailstone::test::each_vector("MeleeRange.jsonl", check_range); }
+TEST_CASE("ModifyAttackSpeed vectors") { hailstone::test::each_vector("ModifyAttackSpeed.jsonl", check_attack_speed); }
+TEST_CASE("GetHandToHandDelay vectors") { hailstone::test::each_vector("GetHandToHandDelay.jsonl", check_hand_to_hand); }
+TEST_CASE("CheckDoubleAttack vectors") { hailstone::test::each_vector("CheckDoubleAttack.jsonl", check_double_attack); }
+TEST_CASE("CheckDualWield vectors") { hailstone::test::each_vector("CheckDualWield.jsonl", check_dual_wield); }
+TEST_CASE("DoAttack vectors (call by call)") { hailstone::test::each_vector("DoAttack.jsonl", check_do_attack); }
 
 // ---------------------------------------------------------------- DoAttack and the swing timers (unit tests)
 

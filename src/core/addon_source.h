@@ -19,7 +19,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 struct AddonSource {
     std::string owner;
@@ -53,4 +53,4 @@ bool addon_download_allowed(std::string_view url);
 // A package's address: `file` itself when it is an address, else the file beside the manifest at `manifest_url`.
 std::string addon_url_beside(std::string_view manifest_url, std::string_view file);
 
-} // namespace nmsc
+} // namespace hailstone

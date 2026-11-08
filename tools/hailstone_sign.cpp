@@ -31,7 +31,7 @@
 #include "platform/http_get.h"
 #include "platform/private_file.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {

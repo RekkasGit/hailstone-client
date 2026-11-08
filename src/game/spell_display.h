@@ -8,7 +8,7 @@
 #include <functional>
 #include <string>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 struct SpellData;
@@ -34,4 +34,4 @@ SpellDisplay build_spell_display(const SpellData& spell, const SpellDisplayConte
 // FormatDurationHMS @0x897a40: "%dh %dm %ds", "%dh %dm", "%dh %ds", "%dh", "%dm %ds", "%dm" or "%ds".
 std::string format_duration_hms(std::int32_t seconds);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

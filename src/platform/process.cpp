@@ -29,7 +29,7 @@
 #endif
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 unsigned long process_id() {
 #if defined(_WIN32)
@@ -133,4 +133,4 @@ std::string system_description() {
     return out;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

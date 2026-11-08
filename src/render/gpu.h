@@ -9,9 +9,9 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
-namespace nmsc::assets { struct Image; }
+namespace hailstone::assets { struct Image; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 class VkContext;
 
@@ -82,4 +82,4 @@ private:
     std::vector<PendingTexture> textures_;
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

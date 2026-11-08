@@ -17,7 +17,7 @@
 #include <span>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::size_t kSpellRecordSize = 0x4ed;
 inline constexpr std::size_t kSpellCrcBytes = 0x4e8; // EQ_Spell_CalcCRC checksums +0..+0x4e7
@@ -41,4 +41,4 @@ std::uint32_t mem_checker1(std::span<const std::uint8_t> data);
 // reordered to b1 | b3 << 8 | b0 << 16 | b2 << 24.
 std::uint32_t spell_record_crc(const SpellRecord& record);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

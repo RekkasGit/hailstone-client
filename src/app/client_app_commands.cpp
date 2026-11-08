@@ -19,7 +19,7 @@
 #include "game/slash_commands.h"
 #include "game/xtarget.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -570,4 +570,4 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

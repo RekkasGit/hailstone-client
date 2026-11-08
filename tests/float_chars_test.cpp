@@ -6,7 +6,7 @@
 
 #include "core/float_chars.h"
 
-using nmsc::detail::strtod_from_chars;
+using hailstone::detail::strtod_from_chars;
 
 namespace {
 template <typename T> std::from_chars_result parse(std::string_view s, T& v) {
@@ -64,7 +64,7 @@ TEST_CASE("float_from_chars fallback agrees with std::from_chars where both exis
         CAPTURE(s);
         double a = 1.0, b = 1.0;
         auto ra = strtod_from_chars(s.data(), s.data() + s.size(), a);
-        auto rb = nmsc::float_from_chars(s.data(), s.data() + s.size(), b);
+        auto rb = hailstone::float_from_chars(s.data(), s.data() + s.size(), b);
         CHECK(ra.ec == rb.ec);
         CHECK(ra.ptr == rb.ptr);
         if (ra.ec == std::errc() && !std::isnan(a)) CHECK(a == b);

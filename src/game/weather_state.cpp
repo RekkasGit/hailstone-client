@@ -4,7 +4,7 @@
 #include <bit>
 #include <cmath>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -258,4 +258,4 @@ void weather_lightning_strike(WeatherState& w, const WeatherDisplay& display, We
     w.next_strike = now + static_cast<std::uint32_t>(fx.rand() % 1000);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

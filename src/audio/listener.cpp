@@ -5,7 +5,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 
@@ -190,4 +190,4 @@ bool legal_player_race(std::int32_t race, std::int32_t spawn_race) {
     return r <= 12 || r == 128 || r == 130 || r == 330 || r == 522;
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

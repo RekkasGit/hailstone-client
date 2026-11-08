@@ -14,7 +14,7 @@
 #include "game/slash_commands.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -647,4 +647,4 @@ void GameConnection::re_show_plot(std::uint32_t re) {
     ++re_ui_.changes;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

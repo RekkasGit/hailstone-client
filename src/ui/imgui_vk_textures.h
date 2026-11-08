@@ -5,7 +5,7 @@
 
 #include "ui/texture_ids.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 inline VkDescriptorSet add_imgui_texture(VkSampler sampler, VkImageView view, VkImageLayout layout) {
     VkDescriptorSet set = ImGui_ImplVulkan_AddTexture(sampler, view, layout);
@@ -17,4 +17,4 @@ inline void remove_imgui_texture(VkDescriptorSet set) {
     ImGui_ImplVulkan_RemoveTexture(set);
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

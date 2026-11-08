@@ -32,19 +32,19 @@
 
 struct lua_State;
 
-namespace nmsc::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; }
-namespace nmsc::game { class HotButtonStore; struct HotButton; namespace mechanics { class Character; } }
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { class CharacterLibrary; struct CharacterModel; }
-namespace nmsc::mq { class ScriptHost; class Registry; struct Context; }
-namespace nmsc::ui {
+namespace hailstone::net { class GameConnection; struct Item; struct ItemSlot; struct CharCreate; }
+namespace hailstone::game { class HotButtonStore; struct HotButton; namespace mechanics { class Character; } }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { class CharacterLibrary; struct CharacterModel; }
+namespace hailstone::mq { class ScriptHost; class Registry; struct Context; }
+namespace hailstone::ui {
 class UiTextures; class UiIni; struct ChatView; struct ServerSelectView; struct LoginView; struct CharacterSelectView;
 struct CharacterCreateView;
 }
-namespace nmsc::game { struct ItemLink; struct QuantityOpen; struct Spawn; class CharCreateLook; }
+namespace hailstone::game { struct ItemLink; struct QuantityOpen; struct Spawn; class CharCreateLook; }
 
-namespace nmsc::plugin { class UiBridge; class WebAccess; }
-namespace nmsc::app {
+namespace hailstone::plugin { class UiBridge; class WebAccess; }
+namespace hailstone::app {
 
 class ActionsUi;
 class Gamepad;
@@ -102,6 +102,11 @@ struct EqHost {
     // lists (eq.OptionChoices: "resolution").
     std::function<std::optional<int>(std::string_view option)> find_option;
     std::function<std::vector<std::string>(std::string_view option)> option_choices;
+    // Whether a book spell dropped or clicked onto gem `gem` (0-based) starts memorizing there: an empty usable gem,
+    // or (Hailstone, option replace_gem_spell, on by default) one that holds another spell, which the server forgets
+    // as it memorizes the new one (Client::MemSpell). The original refuses a gem that holds a spell
+    // (StartSpellMemorization bReplace 0). Defined in lua_eq_spellbook.cpp.
+    bool gem_takes_book_spell(int gem) const;
     // The spell display windows (SpellDisplayWindow, #2 ..): spell id, shown only while a right button is held.
     std::vector<std::pair<std::int32_t, bool>> spell_displays;
     void show_spell(std::int32_t spell, bool temporary) {
@@ -500,4 +505,4 @@ std::vector<std::pair<game::AutoskillRule, std::string>> autoskill_list(EqHost& 
 // when the player has no such ability or is not in the world. Readiness is the server's and the game's to refuse.
 bool use_ability(EqHost& h, mq::AbilityKind kind, std::string_view name);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -8,7 +8,7 @@
 
 #include <imgui.h>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 std::vector<std::filesystem::path> list_pictures(const std::filesystem::path& dir) {
     static constexpr std::array<std::string_view, 6> kExtensions{".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds"};
@@ -47,4 +47,4 @@ void draw_screen_picture(ImDrawList* list, const ScreenPicture& picture) {
     list->AddImage(reinterpret_cast<ImTextureID>(picture.id), p0, ImVec2(p0.x + size.x, p0.y + size.y));
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

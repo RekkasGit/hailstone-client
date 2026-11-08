@@ -7,9 +7,9 @@
 
 #include "render/look_eviction.h"
 
-using nmsc::render::kLookIdleMs;
-using nmsc::render::kLookSweepMs;
-using nmsc::render::look_idle;
+using hailstone::render::kLookIdleMs;
+using hailstone::render::kLookSweepMs;
+using hailstone::render::look_idle;
 
 TEST_CASE("look_idle: idle long enough and past the frames in flight") {
     CHECK_FALSE(look_idle(100, 1000, 100, 1000, 2));               // drawn this frame
@@ -36,7 +36,7 @@ struct FakeState {
 } // namespace
 
 TEST_CASE("A spawn hidden on purpose keeps the look it wears past kLookIdleMs; drawn again it starts afresh") {
-    using namespace nmsc::render;
+    using namespace hailstone::render;
     auto model = std::make_shared<const FakeModel>();
     auto worn_look = std::make_shared<const FakeMesh>();
     auto idle_look = std::make_shared<const FakeMesh>(); // dressed once, no spawn wears it

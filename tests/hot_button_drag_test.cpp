@@ -11,7 +11,7 @@
 #include "game/hotbuttons.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -87,7 +87,7 @@ TEST_CASE("Window places: a moved window is where it was after the layout is sav
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
     ImGui::GetIO().IniFilename = nullptr;
-    nmsc::test::ScratchDir dir_scratch("layout_test");
+    hailstone::test::ScratchDir dir_scratch("layout_test");
     std::filesystem::path dir = dir_scratch.path();
     std::filesystem::create_directories(dir);
     auto place = [&](const char* code) {

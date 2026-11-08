@@ -15,8 +15,8 @@
 #include "scratch_dir.h"
 #include "wld_fixtures.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 using test::pfs_fixtures::make_pfs;
 
 namespace {
@@ -174,8 +174,8 @@ TEST_CASE("shared character cache: next_zone keeps what was handed out since the
 }
 
 TEST_CASE("shared character cache: libraries of two zones hand out the same global models and appearances" *
-          doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     CharacterArchiveCache cache(false);
     auto first = cache.library_for_zone(game, "qeynos2");
     auto hum = first->model("HUM");
@@ -262,10 +262,10 @@ TEST_CASE("global archive index: CharacterArchiveCache builds it once, and again
 }
 
 TEST_CASE("global archive index: a zone's library resolves as one over all its archives" *
-          doctest::skip(!nmsc::test::game_dir())) {
+          doctest::skip(!hailstone::test::game_dir())) {
     // Every model a zone's own archives define, built through the shared index and through one library over the
     // global and zone archives: the same definition and the same clips. Also the time a zone's library takes.
-    const auto& game = *nmsc::test::game_dir();
+    const auto& game = *hailstone::test::game_dir();
     CharacterArchiveCache cache(true);
     cache.library_for_zone(game, "");
     for (const char* zone : {"qeynos2", "gfaydark", "poknowledge"}) {
@@ -350,8 +350,8 @@ TEST_CASE("character libraries: one zone's dressed on a worker thread while the 
 }
 
 TEST_CASE("character libraries: dressing real models on a worker while the main thread builds others" *
-          doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     CharacterArchiveCache cache(true);
     auto lib = cache.library_for_zone(game, "qeynos2");
     std::size_t textures = 0;

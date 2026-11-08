@@ -8,7 +8,7 @@
 #include "game/social.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -239,4 +239,4 @@ void summon_mount_tick(WorldState& w, MountQueries& q, MountEvents& ev) {
     if (Spawn* mount = spawn_by_partial_name(w, name + std::string(kMountSuffix))) do_stand(w, *me, mount, q, ev);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

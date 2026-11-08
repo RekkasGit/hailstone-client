@@ -8,7 +8,7 @@
 #include <numbers>
 #include "game_files.h"
 
-using namespace nmsc::assets;
+using namespace hailstone::assets;
 
 TEST_CASE("Sky colour entries follow the dome height") {
     CHECK(sky_color_entry(-0.2f) == 16);
@@ -67,8 +67,8 @@ TEST_CASE("Ambient per hour and the sweep heading") {
     CHECK(sky_sweep_heading(3.0f) == doctest::Approx(320.0));
 }
 
-TEST_CASE("sky.s3d: layers per sky index" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("sky.s3d: layers per sky index" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     CHECK_FALSE(load_sky(game, 0));
     CHECK_FALSE(load_sky(game, kMaxSkyIndex + 1));
 
@@ -97,16 +97,16 @@ TEST_CASE("sky.s3d: layers per sky index" * doctest::skip(!nmsc::test::game_dir(
 }
 
 TEST_CASE("procedural sky clouds: weather.ini definitions and patch motion") {
-    nmsc::IniFile sky, weather;
+    hailstone::IniFile sky, weather;
     sky.parse("[SkySetting-default]\nDefaultWeather=DefaultClear\n[SkySetting-moors]\nDefaultWeather=OmensClear\n");
     weather.parse("[WeatherPattern-DefaultClear]\nCloud0=Clear0\nCloud1=Clear1\n"
                   "[Cloud-Clear0]\nTexture=DefaultOrographic\nDesiredCount=4\nVelocityMin=0.0000008\n"
                   "VelocityMax=0.000005\nSpinMin=-0.000005\nSpinMax=0.000005\nRotationMax=6.283\nSizeMin=0.3\n"
                   "SizeMax=0.5\nVisibleAngle=1.36\nElevation=99\nRadius=101\nSubdivisionX=5\nSubdivisionY=5\n"
                   "[Cloud-Clear1]\nTexture=DefaultStratocumulus\nDesiredCount=0\n");
-    CHECK(nmsc::assets::default_weather(sky, "qeynos2") == "DefaultClear");
-    CHECK(nmsc::assets::default_weather(sky, "moors") == "OmensClear");
-    auto clouds = nmsc::assets::weather_clouds(weather, "DefaultClear");
+    CHECK(hailstone::assets::default_weather(sky, "qeynos2") == "DefaultClear");
+    CHECK(hailstone::assets::default_weather(sky, "moors") == "OmensClear");
+    auto clouds = hailstone::assets::weather_clouds(weather, "DefaultClear");
     REQUIRE(clouds.size() == 1); // Clear1 has no patches
     const auto& d = clouds[0];
     CHECK(d.texture == "DefaultOrographic");
@@ -115,24 +115,24 @@ TEST_CASE("procedural sky clouds: weather.ini definitions and patch motion") {
     CHECK(d.visible_angle == doctest::Approx(1.36f));
     CHECK(d.subdivision_x == 5);
     {
-        nmsc::IniFile w;
+        hailstone::IniFile w;
         w.parse("[Cloud-X]\nDesiredCount=-1e30\nSubdivisionX=1e30\nSubdivisionY=nan\n");
-        auto x = nmsc::assets::parse_cloud_definition(w, "X"); // clamped, not cast out of range
+        auto x = hailstone::assets::parse_cloud_definition(w, "X"); // clamped, not cast out of range
         CHECK(x.desired_count == -2147483647 - 1);
         CHECK(x.subdivision_x == 2147483647);
         CHECK(x.subdivision_y == 0);
-        nmsc::IniFile big;
+        hailstone::IniFile big;
         big.parse("[Cloud-X]\nDesiredCount=2000000000\n");
-        CHECK(nmsc::assets::parse_cloud_definition(big, "X").desired_count == nmsc::assets::kMaxCloudPatches);
+        CHECK(hailstone::assets::parse_cloud_definition(big, "X").desired_count == hailstone::assets::kMaxCloudPatches);
     }
 
     // rand() / 32767 x (max - min) + min.
-    CHECK(nmsc::game::cloud_random(0, 2.0f, 4.0f) == 2.0f);
-    CHECK(nmsc::game::cloud_random(32767, 2.0f, 4.0f) == 4.0f);
+    CHECK(hailstone::game::cloud_random(0, 2.0f, 4.0f) == 2.0f);
+    CHECK(hailstone::game::cloud_random(32767, 2.0f, 4.0f) == 4.0f);
 
     // A fill spreads n patches over the visible arc: i (2 VA / n) + (pi/2 - VA).
     int r = 32767;
-    nmsc::game::CloudLayer layer(d, [&] { return r; });
+    hailstone::game::CloudLayer layer(d, [&] { return r; });
     layer.fill();
     REQUIRE(layer.patches().size() == 4);
     const float start = std::numbers::pi_v<float> / 2.0f - 1.36f;
@@ -140,16 +140,16 @@ TEST_CASE("procedural sky clouds: weather.ini definitions and patch motion") {
     CHECK(layer.patches()[3].angle == doctest::Approx(start + 3.0f * 2.0f * 1.36f / 4.0f));
     // Velocity and Spin are radians per ms: angle += v dt (unwrapped),
     // rotation = fmod(rotation + spin dt, 2 pi).
-    nmsc::game::CloudPatch p;
+    hailstone::game::CloudPatch p;
     p.angle = 6.0f;
     p.velocity = 0.000005f;
     p.rotation = 6.0f;
     p.spin = 0.001f;
-    nmsc::game::advance_cloud_patch(p, 1000.0f);
+    hailstone::game::advance_cloud_patch(p, 1000.0f);
     CHECK(p.angle == doctest::Approx(6.005f)); // 0.005 rad per second
     CHECK(p.rotation == doctest::Approx(std::fmod(7.0f, 6.2831854f)));
-    nmsc::game::advance_cloud_patch(p, 1.0e6f);
+    hailstone::game::advance_cloud_patch(p, 1.0e6f);
     CHECK(p.angle > 6.2831854f); // not wrapped
     // Without a Duration a patch never fades.
-    CHECK(nmsc::game::CloudLayer::opacity(p) == 1.0f);
+    CHECK(hailstone::game::CloudLayer::opacity(p) == 1.0f);
 }

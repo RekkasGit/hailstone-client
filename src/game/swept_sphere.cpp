@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -116,4 +116,4 @@ SweepOutput sweep_output(const SphereSweep& s) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

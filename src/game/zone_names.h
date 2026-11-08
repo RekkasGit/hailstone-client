@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // Names from the original client's zone table; empty for unknown ids.
 std::string zone_short_name(std::uint32_t zone_id);
@@ -19,4 +19,4 @@ std::uint32_t zone_expansion(std::uint32_t zone_id);
 // EQWorldData::IsNewbieZone @0x7dc550: flag 0x2 (ids above 1000 masked with 0x7fff).
 bool is_newbie_zone(std::uint32_t zone_id);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

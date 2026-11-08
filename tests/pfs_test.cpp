@@ -6,15 +6,15 @@
 #include "game_files.h"
 #include "pfs_fixtures.h"
 
-using nmsc::assets::PfsArchive;
+using hailstone::assets::PfsArchive;
 
 TEST_CASE("PfsArchive rejects data that is not PFS") {
     std::vector<std::byte> junk(64, std::byte{0x11});
     CHECK_THROWS(PfsArchive::from_memory(junk));
 }
 
-TEST_CASE("PfsArchive reads a classic zone archive" * doctest::skip(!nmsc::test::game_dir())) {
-    auto archive = PfsArchive::open(nmsc::test::game_dir()->find("qeynos2.s3d").value());
+TEST_CASE("PfsArchive reads a classic zone archive" * doctest::skip(!hailstone::test::game_dir())) {
+    auto archive = PfsArchive::open(hailstone::test::game_dir()->find("qeynos2.s3d").value());
     CHECK(archive.contains("qeynos2.wld"));
     CHECK(archive.contains("QEYNOS2.WLD"));
     CHECK(archive.contains("objects.wld"));
@@ -26,15 +26,15 @@ TEST_CASE("PfsArchive reads a classic zone archive" * doctest::skip(!nmsc::test:
     CHECK(std::to_integer<int>((*wld)[1]) == 0x3d);
 }
 
-TEST_CASE("pfs_name_crc names every file of a classic archive" * doctest::skip(!nmsc::test::game_dir())) {
+TEST_CASE("pfs_name_crc names every file of a classic archive" * doctest::skip(!hailstone::test::game_dir())) {
     // qeynos2.s3d has 152 directory entries: 151 files plus the name table.
-    auto archive = PfsArchive::open(nmsc::test::game_dir()->find("qeynos2.s3d").value());
+    auto archive = PfsArchive::open(hailstone::test::game_dir()->find("qeynos2.s3d").value());
     CHECK(archive.names().size() == 151);
 }
 
 TEST_CASE("PfsArchive handles archives with stale names and a 0xffffffff name table" *
-          doctest::skip(!nmsc::test::game_dir())) {
-    auto gd = nmsc::test::game_dir();
+          doctest::skip(!hailstone::test::game_dir())) {
+    auto gd = hailstone::test::game_dir();
     auto velketor = PfsArchive::open(gd->find("velketor_chr.s3d").value());
     CHECK_FALSE(velketor.contains("kael_chr.wld"));
     CHECK(velketor.contains("velketor_chr.wld"));
@@ -45,7 +45,7 @@ TEST_CASE("PfsArchive handles archives with stale names and a 0xffffffff name ta
 namespace {
 // The archive's directory entry for its first file: {crc, offset, size} after the directory's count.
 std::size_t first_entry_at(const std::vector<std::byte>& archive) {
-    nmsc::ByteReader r(archive);
+    hailstone::ByteReader r(archive);
     return r.le<std::uint32_t>() + 4;
 }
 void put_u32(std::vector<std::byte>& b, std::size_t at, std::uint32_t v) {
@@ -54,7 +54,7 @@ void put_u32(std::vector<std::byte>& b, std::size_t at, std::uint32_t v) {
 } // namespace
 
 TEST_CASE("PfsArchive refuses a file size its compressed blocks cannot back, before allocating it") {
-    using namespace nmsc::test::pfs_fixtures;
+    using namespace hailstone::test::pfs_fixtures;
     std::vector<std::byte> text(100, std::byte{'a'});
     auto archive = make_pfs({{"a.txt", text}});
     REQUIRE(PfsArchive::from_memory(archive).read("a.txt").value() == text);
@@ -64,21 +64,21 @@ TEST_CASE("PfsArchive refuses a file size its compressed blocks cannot back, bef
     auto huge = archive;
     put_u32(huge, first_entry_at(huge) + 8, 0x7fffffffu);
     auto a = PfsArchive::from_memory(huge);
-    nmsc::fuzz::arm_allocation_guard(true);
+    hailstone::fuzz::arm_allocation_guard(true);
     bool refused = false, allocated = false;
     try {
         (void)a.read("a.txt");
-    } catch (const nmsc::fuzz::HugeAllocation&) {
+    } catch (const hailstone::fuzz::HugeAllocation&) {
         allocated = true;
     } catch (const std::exception&) {
         refused = true;
     }
-    nmsc::fuzz::arm_allocation_guard(false);
+    hailstone::fuzz::arm_allocation_guard(false);
     CHECK(refused);
     CHECK_FALSE(allocated);
 
     // A block claiming more than 1032 bytes per compressed byte.
-    nmsc::ByteReader r(archive);
+    hailstone::ByteReader r(archive);
     r.seek(first_entry_at(archive) + 4);
     const std::uint32_t data_at = r.le<std::uint32_t>();
     auto bomb = archive;
@@ -89,28 +89,28 @@ TEST_CASE("PfsArchive refuses a file size its compressed blocks cannot back, bef
 }
 
 TEST_CASE("PfsArchive: memory follows the bytes zlib writes, not the size a block declares") {
-    using namespace nmsc::test::pfs_fixtures;
+    using namespace hailstone::test::pfs_fixtures;
     // Within the 1032:1 ratio, 100 KB of junk deflate may declare 103 MB; it used to be zero-filled before zlib
     // failed on the first byte. The guard throws HugeAllocation for any request above 64 MB.
     constexpr std::uint32_t kJunk = 100000;
     constexpr std::uint32_t kDeclared = kJunk * 1032;
-    nmsc::ByteWriter body;
+    hailstone::ByteWriter body;
     body.le<std::uint32_t>(kJunk);
     body.le<std::uint32_t>(kDeclared);
     body.bytes(std::vector<std::byte>(kJunk, std::byte{0x11}));
-    nmsc::ByteWriter names;
+    hailstone::ByteWriter names;
     names.le<std::uint32_t>(1);
     names.le<std::uint32_t>(6);
     names.fixed_string("a.txt", 6);
     auto table = deflate_blocks(names.data(), 3000);
-    nmsc::ByteWriter w;
+    hailstone::ByteWriter w;
     w.le<std::uint32_t>(static_cast<std::uint32_t>(12 + body.size() + table.size()));
     w.le<std::uint32_t>(0x20534650);
     w.le<std::uint32_t>(0x20000);
     w.bytes(body.data());
     w.bytes(table);
     w.le<std::uint32_t>(2);
-    w.le<std::uint32_t>(nmsc::assets::pfs_name_crc("a.txt"));
+    w.le<std::uint32_t>(hailstone::assets::pfs_name_crc("a.txt"));
     w.le<std::uint32_t>(12);
     w.le<std::uint32_t>(kDeclared);
     w.le<std::uint32_t>(0x61580ac9u);
@@ -118,16 +118,16 @@ TEST_CASE("PfsArchive: memory follows the bytes zlib writes, not the size a bloc
     w.le<std::uint32_t>(static_cast<std::uint32_t>(names.size()));
     auto a = PfsArchive::from_memory(w.take());
     REQUIRE(a.contains("a.txt"));
-    nmsc::fuzz::arm_allocation_guard(true);
+    hailstone::fuzz::arm_allocation_guard(true);
     bool refused = false, allocated = false;
     try {
         (void)a.read("a.txt");
-    } catch (const nmsc::fuzz::HugeAllocation&) {
+    } catch (const hailstone::fuzz::HugeAllocation&) {
         allocated = true;
     } catch (const std::exception&) {
         refused = true;
     }
-    nmsc::fuzz::arm_allocation_guard(false);
+    hailstone::fuzz::arm_allocation_guard(false);
     CHECK(refused);
     CHECK_FALSE(allocated);
 
@@ -140,11 +140,11 @@ TEST_CASE("PfsArchive: memory follows the bytes zlib writes, not the size a bloc
 }
 
 TEST_CASE("PfsArchive: a name listed many times is one member") {
-    using namespace nmsc::test::pfs_fixtures;
+    using namespace hailstone::test::pfs_fixtures;
     std::vector<std::byte> text(10, std::byte{'w'});
     auto archive = make_pfs({{"zone.wld", text}, {"other.txt", text}});
     // Rebuild the name table so it lists zone.wld 1000 times (and other.txt once).
-    nmsc::ByteWriter names;
+    hailstone::ByteWriter names;
     names.le<std::uint32_t>(1001);
     for (int i = 0; i < 1000; ++i) {
         names.le<std::uint32_t>(9);
@@ -154,7 +154,7 @@ TEST_CASE("PfsArchive: a name listed many times is one member") {
     names.fixed_string("other.txt", 10);
     auto table = deflate_blocks(names.data(), 1 << 20);
     const std::size_t dir = first_entry_at(archive) - 4;
-    nmsc::ByteWriter w;
+    hailstone::ByteWriter w;
     w.bytes({archive.data(), dir});
     const auto table_at = static_cast<std::uint32_t>(w.size());
     w.bytes(table);
@@ -171,7 +171,7 @@ TEST_CASE("PfsArchive: a name listed many times is one member") {
 }
 
 TEST_CASE("PfsArchive refuses a member or name table larger than any game file") {
-    using namespace nmsc::test::pfs_fixtures;
+    using namespace hailstone::test::pfs_fixtures;
     std::vector<std::byte> text(100, std::byte{'a'});
     auto archive = make_pfs({{"a.txt", text}});
     // Zeros deflate within the ratio check, so the declared size alone has to be refused.

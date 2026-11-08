@@ -19,7 +19,7 @@
 #include "plugin/policy.h"
 #include "platform/crash_log.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -891,4 +891,4 @@ std::vector<ManualAddon> manual_addons(const std::vector<fs::path>& dirs, const 
     return out;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

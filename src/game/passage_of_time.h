@@ -26,7 +26,7 @@
 
 #include "game/mechanics/character_sheet.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellState;
 
@@ -74,4 +74,4 @@ bool one_second_tick_due(const SpellState& spells, std::int64_t now_ms);
 
 inline constexpr std::uint32_t kStrBleedingToDeath = 0x318d; // 12685 "You are bleeding to death!"
 
-} // namespace nmsc::game
+} // namespace hailstone::game

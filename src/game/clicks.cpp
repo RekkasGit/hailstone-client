@@ -1,6 +1,6 @@
 #include "game/clicks.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::uint32_t spawn_pick_mask(const MaskSpawn& s, std::uint8_t option) {
     std::uint32_t flags = s.type == 1 ? 6u : 2u;
@@ -138,4 +138,4 @@ std::uint32_t switch_damage(std::uint8_t type) {
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

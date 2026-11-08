@@ -17,7 +17,7 @@
 #include "net/door_packets.h"
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ItemBase_IsCombineContainer @0x7b0300: a tradeskill container (CContainerWnd's ContainerType 2, Combine).
 bool is_combine_container(std::uint32_t bag_type);
@@ -168,4 +168,4 @@ inline constexpr std::int64_t kRecipeRequestWaitMs = 5000, kCombineWaitMs = 2100
 inline constexpr std::int64_t kBatchSettleMs = 400, kBatchStepMs = 100, kBatchCollectMs = 1500,
                               kBatchAnswerTimeoutMs = 10000;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

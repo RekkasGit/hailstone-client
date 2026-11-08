@@ -26,7 +26,7 @@
 
 struct lua_State;
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct EqHost;
 void register_plugins_api(lua_State* L, EqHost& host);
@@ -35,4 +35,4 @@ void register_plugins_api(lua_State* L, EqHost& host);
 bool run_plugin_menu(EqHost& host, std::size_t i);
 void register_scripts_api(lua_State* L, EqHost& host);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -17,9 +17,9 @@
 
 #include "ui/ui_textures.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct CascadeItemView {
     std::string kind; // "command", "submenu", "separator"
@@ -139,4 +139,4 @@ private:
     void arrange();
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

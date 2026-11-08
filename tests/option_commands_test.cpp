@@ -16,8 +16,8 @@
 #include "platform/local_time.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 TEST_CASE("option commands: word tests") {
     CHECK(is_numeric_string("12"));
@@ -83,7 +83,7 @@ TEST_CASE("option commands: the key commands a locked interface refuses (__Execu
 }
 
 TEST_CASE("option commands: CanUseCommandNow refuses while the interface is locked") {
-    mq_test::World w("nmsc_safelock_test");
+    mq_test::World w("hailstone_safelock_test");
     auto& c = *w.conn;
     using A = net::GameConnectionTestAccess;
     while (c.poll_chat()) {}
@@ -330,24 +330,24 @@ TEST_CASE("option commands: /hotbutton's social store (FUN_004ea9f0)") {
 TEST_CASE("local time: platform::local_time and utc_time break a time down; ctime_text and task_ctime_text format it") {
     // Noon UTC on 2026-10-04 is that date in every time zone (UTC-12 to UTC+14).
     const std::time_t t = 1791115200;
-    auto tm = nmsc::platform::local_time(t);
+    auto tm = hailstone::platform::local_time(t);
     REQUIRE(tm);
     CHECK(tm->tm_year == 126);
     CHECK(tm->tm_mon == 9);
     CHECK(tm->tm_mday == 4);
     std::tm copy = *tm;
     CHECK(std::mktime(&copy) == t);
-    auto utc = nmsc::platform::utc_time(t);
+    auto utc = hailstone::platform::utc_time(t);
     REQUIRE(utc);
     CHECK(utc->tm_year == 126);
     CHECK(utc->tm_mon == 9);
     CHECK(utc->tm_mday == 4);
     CHECK(utc->tm_hour == 12);
     CHECK(utc->tm_min == 0);
-    const std::string line = nmsc::game::ctime_text(t);
+    const std::string line = hailstone::game::ctime_text(t);
     CHECK(line.starts_with("Sun Oct  4 "));
     CHECK(line.ends_with(" 2026"));
-    const std::string task = nmsc::game::task_ctime_text(static_cast<std::uint32_t>(t));
+    const std::string task = hailstone::game::task_ctime_text(static_cast<std::uint32_t>(t));
     CHECK(task.starts_with("Sun Oct 04 "));
     CHECK(task.ends_with(" 2026"));
 }
@@ -355,7 +355,7 @@ TEST_CASE("local time: platform::local_time and utc_time break a time down; ctim
 TEST_CASE("option commands: the chat log keeps its file open, each line on disk at once, another name another file") {
     // OutputTextToLog: one open per log, not per line (a raid's hundreds of lines a second); a log parser reading
     // the file still sees each line as it is written.
-    mq_test::World w("nmsc_chat_log_test");
+    mq_test::World w("hailstone_chat_log_test");
     using A = net::GameConnectionTestAccess;
     net::GameConnection& c = *w.conn;
     auto read = [](const std::filesystem::path& p) {

@@ -8,10 +8,10 @@
 #include "scratch_dir.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("UI packs: folders with a ui.ini, chosen by name with modern as the fallback") {
-    nmsc::test::ScratchDir dir_scratch("ui_packs_test");
+    hailstone::test::ScratchDir dir_scratch("ui_packs_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "modern");
     fs::create_directories(dir / "pad");

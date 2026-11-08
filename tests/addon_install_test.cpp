@@ -10,9 +10,9 @@
 #include "plugin/policy.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::app;
-using namespace nmsc::addon_test;
+using namespace hailstone;
+using namespace hailstone::app;
+using namespace hailstone::addon_test;
 namespace fs = std::filesystem;
 
 namespace {

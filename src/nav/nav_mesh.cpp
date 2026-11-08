@@ -5,7 +5,9 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <unordered_set>
+#include <utility>
 
 #include <DetourCommon.h>
 #include <DetourNavMesh.h>
@@ -17,7 +19,7 @@
 #include "game/collision.h"
 #include "game/mechanics/movement.h"
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 namespace {
 
@@ -174,6 +176,10 @@ std::uint32_t BuildParams::hash() const {
 }
 
 namespace {
+// How far outside the terrain's box a triangle may lie and still be taken (InputGeometry::from_collision): Hailstone's
+// own number, the zone lines' margin in app/navigator.cpp.
+constexpr float kOutsideTerrainMargin = 200.0f;
+
 // A passable triangle that is a water surface: flat (either side up), water just under its middle and none just
 // over it. 1.5 units each way: a surface is drawn on the region's top, and a dock's planks stand higher than that.
 bool is_water_surface(const game::CollisionTriangle& t, float min_up, const InputGeometry::WaterTest& water) {
@@ -192,7 +198,22 @@ std::shared_ptr<const InputGeometry> InputGeometry::from_collision(const game::C
     const float min_up = std::cos(glm::radians(p.max_slope));
     geo->verts_.reserve(mesh.triangle_count() * 9);
     geo->areas_.reserve(mesh.triangle_count());
+    // Objects wholly outside the terrain's box (with a margin) are left out. Zones park the objects they do not use far
+    // under the world: Field of Bone's trees (TREE101_ACTORDEF) stand at z -32768. Nothing walks there, and taken in
+    // they stretch the heightfield past Recast's 13-bit span heights (8191 cells, about 2457 units), so every height
+    // was clamped near the bottom and the whole mesh lay 32000 units under the zone. Movement still collides with them.
+    std::optional<std::pair<glm::vec3, glm::vec3>> keep = mesh.bounds();
+    if (keep) {
+        keep->first -= glm::vec3(kOutsideTerrainMargin);
+        keep->second += glm::vec3(kOutsideTerrainMargin);
+    }
+    auto outside = [&keep](const game::CollisionTriangle& t) {
+        if (!keep) return false;
+        glm::vec3 lo = glm::min(t.v0, glm::min(t.v1, t.v2)), hi = glm::max(t.v0, glm::max(t.v1, t.v2));
+        return glm::any(glm::lessThan(hi, keep->first)) || glm::any(glm::greaterThan(lo, keep->second));
+    };
     for (const game::CollisionTriangle& t : mesh.triangles()) {
+        if (outside(t)) continue;
         // Passable triangles never stop the sweep and are not walked on, but a water surface is swum on: it is
         // ground for the mesh (Water once the areas are marked), so a path can cross water whose bottom is too
         // deep or too steep to walk.
@@ -1148,4 +1169,4 @@ std::optional<std::vector<CachedTile>> decode_cache(std::span<const std::byte> b
     }
 }
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

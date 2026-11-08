@@ -1,11 +1,14 @@
 #include <doctest/doctest.h>
 
+#include <utility>
+#include <vector>
+
 #include "core/ini_file.h"
 #include "game/precipitation.h"
 #include "game/weather.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 
@@ -63,7 +66,7 @@ PrecipitationField::Frame frame(float seconds, float intensity) {
     f.heading = 0.0f;
     f.random = [] { return std::int32_t{0x4000}; };
     // Flat ground at z = 0.
-    f.ground = [](const glm::vec3& a, const glm::vec3& b) -> std::optional<PrecipitationHit> {
+    f.ground = [](const glm::vec3& a, const glm::vec3& b, bool) -> std::optional<PrecipitationHit> {
         if (a.z < 0.0f || b.z > 0.0f) return std::nullopt;
         return PrecipitationHit{a.z / (a.z - b.z), 1.0f};
     };
@@ -136,6 +139,53 @@ TEST_CASE("precipitation: a flake lands, its column is reused, and let go beyond
     far.camera = glm::vec3(1000.0f, 0.0f, 0.0f);
     field.update(far);
     CHECK(field.cached_count() == 0);
+}
+
+// Level planes at heights `zs`: one with up > 0 faces up (a falling line meets its front), else down (its back, met
+// only with back faces).
+PrecipitationGround planes(std::vector<std::pair<float, bool>> zs) {
+    return [zs](const glm::vec3& a, const glm::vec3& b, bool back_faces) -> std::optional<PrecipitationHit> {
+        std::optional<PrecipitationHit> best;
+        for (auto [z, up] : zs) {
+            if (!(a.z >= z && b.z <= z) || (!up && !back_faces)) continue;
+            const float t = (a.z - z) / (a.z - b.z);
+            if (!best || t < best->t) best = PrecipitationHit{t, up ? 1.0f : -1.0f};
+        }
+        return best;
+    };
+}
+
+TEST_CASE("precipitation: a ceiling facing down over the drops is no ground; a back face under one is") {
+    PrecipitationField field;
+    field.set_definitions(defs());
+    field.set_kind(1);
+    // The ground at 0 and a zone's ceiling at 500, facing down (East Commonlands' at z 719): the probe from 1200
+    // units above the drop (at 70) meets the ceiling's back first. The drops must fall to the ground all the same.
+    auto f = frame(0.1f, 0.1f);
+    f.ground = planes({{0.0f, true}, {500.0f, false}});
+    field.update(f);
+    REQUIRE(field.active().size() == 10);
+    CHECK(field.particles()[field.active()[0]].ground.z == doctest::Approx(0.05f).epsilon(0.01));
+    CHECK(field.particles()[field.active()[0]].state == PrecipitationParticle::Falling);
+
+    // A roof seen only from above (its back, facing down) at 30, under the drop: the drop stops on it.
+    PrecipitationField roofed;
+    roofed.set_definitions(defs());
+    roofed.set_kind(1);
+    f.ground = planes({{0.0f, true}, {30.0f, false}, {500.0f, false}});
+    roofed.update(f);
+    REQUIRE(roofed.active().size() == 10);
+    const auto& p = roofed.particles()[roofed.active()[0]];
+    CHECK(p.ground.z == doctest::Approx(30.05f).epsilon(0.001));
+    CHECK_FALSE(p.may_splash); // the back face's normal points down
+
+    // A roof facing up over the drop (it started under it) is its ground, as in the original: it lands at once.
+    PrecipitationField under;
+    under.set_definitions(defs());
+    under.set_kind(1);
+    f.ground = planes({{0.0f, true}, {200.0f, true}});
+    under.update(f);
+    CHECK(under.active().empty());
 }
 
 TEST_CASE("precipitation: the colour is a byte-wise blend, rounded") {

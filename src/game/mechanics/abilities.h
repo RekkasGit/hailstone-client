@@ -29,7 +29,7 @@
 
 #include "game/mechanics/melee.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 class Character;
 
@@ -279,4 +279,4 @@ std::array<std::int32_t, 25> init_innates(std::uint32_t race, std::uint32_t clas
 // The Slam slot: 0 for races 2, 9, 10, 90, 92 and 93 (Barbarian, Troll, Ogre and their variants), else 0xff.
 inline std::int32_t slam_innate(std::uint32_t race) { return init_innates(race, 0)[kInnateSlam]; }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

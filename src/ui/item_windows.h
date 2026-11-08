@@ -22,10 +22,10 @@
 #include "game/inventory.h"
 #include "net/item_packets.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::render { class VkContext; }
+namespace hailstone { class GameDir; }
+namespace hailstone::render { class VkContext; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // Where an icon number lies in the drag-item sheets (pure arithmetic, tested).
 struct IconCell {
@@ -99,4 +99,4 @@ ItemWindowsActions item_windows(ItemWindowsState& state, const ItemWindowsInput&
 // order, simplified), for tests and the window.
 std::vector<std::string> item_info_lines(const net::Item& item);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

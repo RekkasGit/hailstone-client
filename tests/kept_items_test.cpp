@@ -5,7 +5,7 @@
 #include "game/kept_items.h"
 #include "net/item_packets.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("kept items: set, unset and the file's lines") {
     game::KeptItems k;

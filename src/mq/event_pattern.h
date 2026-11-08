@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 class EventPattern {
 public:
@@ -30,4 +30,4 @@ private:
     std::vector<int> order_;
 };
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

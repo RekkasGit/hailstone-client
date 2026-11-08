@@ -4,7 +4,7 @@
 #include <bit>
 #include <cmath>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -115,4 +115,4 @@ SceneFogFrame SceneFog::step(const SceneFogInput& in) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

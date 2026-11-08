@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 void MouseLook::right_down(const MouseLookOptions& o, std::uint32_t now) {
     right_down_at = now;
@@ -63,4 +63,4 @@ PointerStep pointer_step(float x, float y, float dx, float dy, std::int32_t spee
     return s;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

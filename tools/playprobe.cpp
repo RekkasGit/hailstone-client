@@ -75,7 +75,7 @@
 #include "plugin/native_plugins.h"
 #include "plugin/policy.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using Clock = std::chrono::steady_clock;
 
 namespace {

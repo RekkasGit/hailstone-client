@@ -10,7 +10,7 @@
 
 struct ImDrawList;
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 // The name of both folders.
 inline constexpr const char* kPictureFolder = "loadingbackgrounds";
@@ -33,4 +33,4 @@ struct ScreenPicture {
 // cuts the overhang off the bottom (a title at the top stays whole) and a tall one off the sides.
 void draw_screen_picture(ImDrawList* list, const ScreenPicture& picture);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

@@ -4,7 +4,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 AppPacket encode(const GMTraining& v) {
     ByteWriter w;
@@ -70,4 +70,4 @@ AppPacket encode(const GMTrainSkillConfirm& v) {
     return make_packet(Op::GMTrainSkillConfirm, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

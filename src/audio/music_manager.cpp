@@ -5,7 +5,7 @@
 
 #include "audio/zone_emitters.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 MusicSelectResult select_active_entry(std::span<const MusicSelectEntry> entries, int current, bool music_enabled,
                                       float volume) {
@@ -188,4 +188,4 @@ void MusicManager::release_all(EmitterSink& sink) {
     current_ = -1;
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

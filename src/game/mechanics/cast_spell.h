@@ -59,7 +59,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics::cast {
+namespace hailstone::game::mechanics::cast {
 
 // The EQ_Spell fields CastSpell reads.
 struct Spell {
@@ -285,4 +285,4 @@ struct State {
 // packet it sends goes to Queries::send (when connected); `sent` gets a copy.
 std::uint8_t cast_spell(State& s, const Args& a, Queries& q, std::optional<Packet>* sent = nullptr);
 
-} // namespace nmsc::game::mechanics::cast
+} // namespace hailstone::game::mechanics::cast

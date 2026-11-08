@@ -3,7 +3,7 @@
 
 #include "core/wrap_math.h"
 
-namespace nmsc::game::mechanics::gems {
+namespace hailstone::game::mechanics::gems {
 
 std::int32_t get_spell_mem_ticks_left(MemorizeBook& book, MemorizeWorld& w, MemorizeQueries& q) {
     if (book.gem == -1) return 0;
@@ -170,4 +170,4 @@ bool can_use_memorized_spell_slot(bool has_profile, std::int32_t profile_340c, s
     return gem - 8 < static_cast<std::int32_t>(total);
 }
 
-} // namespace nmsc::game::mechanics::gems
+} // namespace hailstone::game::mechanics::gems

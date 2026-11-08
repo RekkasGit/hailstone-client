@@ -30,7 +30,7 @@
 #include <unistd.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 namespace {
 
@@ -418,4 +418,4 @@ bool UdpSocket::wait_readable(std::chrono::milliseconds timeout) const {
 #endif
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

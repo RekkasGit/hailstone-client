@@ -19,9 +19,9 @@
 #include "game/spell_projectiles.h"
 #include "render/spell_fx_renderer.h"
 
-namespace nmsc::net { class GameConnection; struct SpellEffectCue; }
+namespace hailstone::net { class GameConnection; struct SpellEffectCue; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // The projectiles' pieces to draw at `now` (appended to `out`), and their lights, the `max` brightest: shared by the
 // game and the viewer's --spell-bolt.
@@ -55,4 +55,4 @@ private:
     double now_ = 0.0;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

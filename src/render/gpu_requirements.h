@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // What one GPU reports, read from its Vulkan properties and features.
 struct GpuSupport {
@@ -33,4 +33,17 @@ std::vector<std::string> gpu_missing(const GpuSupport& gpu);
 // The error for no usable GPU: every GPU with what it lacks, or that none was found.
 std::string no_usable_gpu_text(const std::vector<GpuSupport>& gpus);
 
-} // namespace nmsc::render
+// The instance extensions to enable, from what the window needs and what the Vulkan library offers.
+// VK_KHR_portability_enumeration is the Vulkan loader's: SDL asks for it on macOS, but MoltenVK loaded directly (the
+// one a macOS release ships, platform/paths.h) does not have it and lists its GPU without the opt-in. So it is
+// enabled, with its flag, only where offered, whoever asked. Any other wanted extension the library lacks is
+// `missing`, named in the error rather than left to vkCreateInstance's bare VK_ERROR_EXTENSION_NOT_PRESENT.
+struct InstanceExtensions {
+    std::vector<std::string> enable;
+    std::vector<std::string> missing;
+    bool portability = false; // enable has it: set VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
+};
+InstanceExtensions choose_instance_extensions(const std::vector<std::string>& wanted,
+                                              const std::vector<std::string>& offered);
+
+} // namespace hailstone::render

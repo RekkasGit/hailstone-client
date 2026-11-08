@@ -27,9 +27,9 @@
 #include "game/eq_strings.h"
 #include "game/world_state.h"
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kNoSpell = 0xffffffff;
 inline constexpr std::uint32_t kMaxSpellId = 45000;  // IsValidSpellID: 1..45000
@@ -352,4 +352,4 @@ bool buff_countdown_held(const SpellData* spell, bool timers_on_hold);
 // true (the caller sends OP_MemorizeSpell {book slot, spell, 0}).
 bool scribe_countdown(Scribing& scribing, std::uint32_t& last, std::uint32_t now);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -82,9 +82,9 @@ struct Options {
     std::string screenshot; // save this frame's image and exit (with --frames)
     // --neighbours "N:zone:x:y:z,...": the zone points OP_SendZonepoints would send (server coordinates, 999999
     // keeps), so the viewer draws the neighbour zones past the zone lines (app/neighbour_zones.h).
-    std::optional<std::vector<nmsc::game::ZonePointTarget>> neighbours;
+    std::optional<std::vector<hailstone::game::ZonePointTarget>> neighbours;
     std::optional<glm::vec2> fog; // override fog start/end (viewer only)
-    std::optional<nmsc::game::ZoneFogInput> zone_fog; // viewer: OP_NewZone's fog values (--zone-fog)
+    std::optional<hailstone::game::ZoneFogInput> zone_fog; // viewer: OP_NewZone's fog values (--zone-fog)
     int sky = 1;                  // viewer sky index (0 = none, indoor)
     float time_hour = 12.0f;      // viewer sky time, hour 1..24
     float sky_timescale = 1.0f; // viewer: the sky's TimeScale (cloud motion)
@@ -96,7 +96,7 @@ struct Options {
     float moon_phase = -1.0f;   // --moon P: the moon's phase (0 new, 0.5 full); the viewer's default is full
     float blood_moon = -1.0f;   // --blood-moon B: the blood moon 0..1 (viewer default none)
     float aurora = -1.0f;       // --aurora A: the northern lights 0..1 (viewer default none)
-    std::vector<nmsc::render::FireSource> fires; // --fire X Y Z H W: flames placed by hand (modern)
+    std::vector<hailstone::render::FireSource> fires; // --fire X Y Z H W: flames placed by hand (modern)
     bool no_fire = false;                         // --no-fire: the modern lighting without its flames (timing)
     bool no_grass = false;                        // --no-grass: the viewer without the zone's flora
     float flora_distance = 400.0f;                // --flora-distance: how far the viewer draws the flora
@@ -105,12 +105,12 @@ struct Options {
     bool no_material_maps = false;       // --no-material-maps: a pack's colour without its normal and roughness maps
     int time_type = -1;           // viewer OP_NewZone time_type; -1: 1 with a sky, 0 without
     int vision = 0;               // --vision: 1 infravision, 2 ultravision (the race's innate)
-    nmsc::render::VertexLighting lighting = nmsc::render::VertexLighting::Classic;
-    nmsc::render::SceneOptions scene; // --msaa, --tonemap, --exposure
+    hailstone::render::VertexLighting lighting = hailstone::render::VertexLighting::Classic;
+    hailstone::render::SceneOptions scene; // --msaa, --tonemap, --exposure
     bool modern = false;              // --lighting modern (render/scene_lighting.h)
     bool tonemap_given = false;
     float view_distance = 2.5f;       // --view-distance (render::modern_view)
-    std::optional<nmsc::app::DemoScreen> ui_demo; // show the developer UI demo
+    std::optional<hailstone::app::DemoScreen> ui_demo; // show the developer UI demo
     float ui_scale = 0.0f;                        // > 0 overrides the display scale
     int window_width = 1280, window_height = 720;  // the client window (--window-size)
     std::string user, password, character;        // client auto-login (testing)
@@ -140,7 +140,7 @@ struct Options {
     bool no_audio = false;
     bool no_vsync = false; // present as fast as the GPU draws (frame-time measurements)
     float frame_dt = 0.0f; // > 0: the clock moves this many seconds a frame, not with the wall clock
-    nmsc::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
+    hailstone::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
 };
 
 void usage() {
@@ -321,13 +321,13 @@ Options parse_args(int argc, char** argv) {
             i += 2;
         } else if (arg("--neighbours")) {
             need(1);
-            std::vector<nmsc::game::ZonePointTarget> points;
+            std::vector<hailstone::game::ZonePointTarget> points;
             std::string list = argv[++i];
             std::size_t at = 0;
             while (at < list.size()) {
                 std::size_t end = list.find(',', at);
                 std::string item = list.substr(at, end == std::string::npos ? std::string::npos : end - at);
-                nmsc::game::ZonePointTarget z;
+                hailstone::game::ZonePointTarget z;
                 if (std::sscanf(item.c_str(), "%u:%u:%f:%f:%f", &z.number, &z.zone_id, &z.server_x, &z.server_y,
                                 &z.server_z) == 5)
                     points.push_back(z);
@@ -337,14 +337,14 @@ Options parse_args(int argc, char** argv) {
             o.neighbours = std::move(points);
         } else if (arg("--screenshot")) {
             need(1);
-            o.screenshot = nmsc::platform::screenshot_path(argv[++i]).string();
+            o.screenshot = hailstone::platform::screenshot_path(argv[++i]).string();
         } else if (arg("--fog")) {
             need(2);
             o.fog = glm::vec2(std::strtof(argv[i + 1], nullptr), std::strtof(argv[i + 2], nullptr));
             i += 2;
         } else if (arg("--zone-fog")) {
             need(9);
-            nmsc::game::ZoneFogInput z;
+            hailstone::game::ZoneFogInput z;
             z.fog_enabled = std::atoi(argv[i + 1]) != 0;
             z.fog_color = glm::vec3(std::strtof(argv[i + 2], nullptr), std::strtof(argv[i + 3], nullptr),
                                     std::strtof(argv[i + 4], nullptr)) / 255.0f;
@@ -380,7 +380,7 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--lighting")) {
             need(1);
             std::string m = argv[++i];
-            using nmsc::render::VertexLighting;
+            using hailstone::render::VertexLighting;
             o.lighting = m == "none" ? VertexLighting::None : VertexLighting::Classic;
             o.modern = m == "modern";
         } else if (arg("--msaa")) {
@@ -388,7 +388,7 @@ Options parse_args(int argc, char** argv) {
             o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, 16));
         } else if (arg("--tonemap")) {
             need(1);
-            o.scene.tonemap = nmsc::render::parse_tonemap(argv[++i]);
+            o.scene.tonemap = hailstone::render::parse_tonemap(argv[++i]);
             o.tonemap_given = true;
         } else if (arg("--view-distance")) {
             need(1);
@@ -426,7 +426,7 @@ Options parse_args(int argc, char** argv) {
             o.no_fire = true;
         } else if (arg("--fire")) {
             need(5);
-            nmsc::render::FireSource f;
+            hailstone::render::FireSource f;
             f.base = glm::vec3(std::strtof(argv[i + 1], nullptr), std::strtof(argv[i + 2], nullptr),
                                std::strtof(argv[i + 3], nullptr));
             f.height = std::strtof(argv[i + 4], nullptr);
@@ -463,8 +463,8 @@ Options parse_args(int argc, char** argv) {
             o.scene.exposure = std::strtof(argv[++i], nullptr);
         } else if (arg("--ui-demo")) {
             need(1);
-            nmsc::app::DemoScreen screen{};
-            if (!nmsc::app::parse_demo_screen(argv[++i], screen))
+            hailstone::app::DemoScreen screen{};
+            if (!hailstone::app::parse_demo_screen(argv[++i], screen))
                 throw std::runtime_error(std::string("unknown --ui-demo screen: ") + argv[i]);
             o.ui_demo = screen;
         } else if (arg("--window-size")) {
@@ -595,21 +595,21 @@ Options parse_args(int argc, char** argv) {
                                    std::strtof(argv[i + 3], nullptr));
             i += 3;
         } else if (arg("--verbose")) {
-            nmsc::log::set_level(nmsc::log::Level::Debug);
+            hailstone::log::set_level(hailstone::log::Level::Debug);
         } else if (arg("--help") || arg("-h")) {
             usage();
             std::exit(0);
         } else {
-            nmsc::log::warn("unknown argument: {}", argv[i]);
+            hailstone::log::warn("unknown argument: {}", argv[i]);
         }
     }
     return o;
 }
 
 // mouse/keys are false while the UI has the mouse or keyboard focus.
-void update_camera(nmsc::render::FlyCamera& cam, nmsc::platform::Window& window, float dt, bool mouse = true,
+void update_camera(hailstone::render::FlyCamera& cam, hailstone::platform::Window& window, float dt, bool mouse = true,
                    bool keys = true) {
-    using nmsc::platform::Key;
+    using hailstone::platform::Key;
     const auto& in = window.input();
     bool look = mouse && in.right_button;
     window.set_mouse_captured(look);
@@ -630,7 +630,7 @@ void update_camera(nmsc::render::FlyCamera& cam, nmsc::platform::Window& window,
 } // namespace
 
 int main(int argc, char** argv) {
-    using namespace nmsc;
+    using namespace hailstone;
     // An error that ends the run is shown in a dialog too (app/startup_error.h), but not in the test drives that stop
     // after some frames, which nobody is there to close.
     bool error_dialog = true;
@@ -657,6 +657,7 @@ int main(int argc, char** argv) {
         // A crash leaves logs/crash-<time>.txt with the last log lines (platform/crash_log.h).
         platform::install_crash_handler(platform::logs_dir());
         move_old_ui_settings();
+        rename_old_window_ids_in(platform::imgui_ini());
         // The folders a player drops plugins, scripts, textures and maps into exist from the first start.
         for (const auto& dir : platform::create_data_dirs()) log::warn("could not create {}", dir.string());
         if (opts.game_dir.empty() && viewer) {
@@ -889,8 +890,9 @@ int main(int argc, char** argv) {
             if (const auto& map = weather_sky.current_map(); map && kind >= 0 && kind < 12)
                 f.colours = {game::colour_cell(*map, 4 + 2 * kind), game::colour_cell(*map, 5 + 2 * kind)};
             f.random = [&] { return std::uniform_int_distribution<std::int32_t>(0, 0x7fff)(weather_random); };
-            f.ground = [&](const glm::vec3& a, const glm::vec3& b) -> std::optional<game::PrecipitationHit> {
-                auto hit = weather_ground->first_hit(a, b, true);
+            f.ground = [&](const glm::vec3& a, const glm::vec3& b,
+                           bool back_faces) -> std::optional<game::PrecipitationHit> {
+                auto hit = weather_ground->first_hit(a, b, back_faces);
                 if (!hit) return std::nullopt;
                 return game::PrecipitationHit{hit->t, hit->normal.z};
             };

@@ -5,7 +5,7 @@
 
 #include "ui/code_syntax.h"
 
-using namespace nmsc::ui;
+using namespace hailstone::ui;
 
 namespace {
 

@@ -12,9 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc { class GameDir; }
+namespace hailstone { class GameDir; }
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 inline constexpr int kSkillCount = 100;  // CSkillMgr: skills 0..99
 inline constexpr int kCapClasses = 36;   // SkillCaps classes 0..35
@@ -78,4 +78,4 @@ struct GameTables {
     bool load(const GameDir& game);
 };
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

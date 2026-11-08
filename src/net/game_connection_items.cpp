@@ -22,7 +22,7 @@
 #include "net/opcodes.h"
 #include "net/trade_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1101,4 +1101,4 @@ bool GameConnection::refuse_kept(const Item* item, std::string_view verb) {
     return true;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

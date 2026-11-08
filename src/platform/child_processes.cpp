@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 ChildProcesses::~ChildProcesses() {
     for (SDL_Process* p : children_) SDL_DestroyProcess(p); // the SDL object only, not the program
@@ -32,4 +32,4 @@ void ChildProcesses::poll() {
     });
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

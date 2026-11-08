@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -84,4 +84,4 @@ void place_flora(const FloraTile& tile, std::span<const eqg::EcoFloraLayer> laye
     }
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

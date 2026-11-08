@@ -19,7 +19,7 @@
 #include <functional>
 #include <optional>
 
-namespace nmsc::game::mechanics::gems {
+namespace hailstone::game::mechanics::gems {
 
 inline constexpr std::int32_t kMemorizeTicks = 92;   // StartSpellMemorization: 0x5c
 inline constexpr std::int32_t kAaMemorizeBoost = 286; // HasAlternateAbility(0x11e): a bard's step doubles
@@ -176,4 +176,4 @@ inline bool gem_castable(std::uint32_t now, std::uint32_t gem_timer, std::uint32
     return now > gem_timer && now > recovery;
 }
 
-} // namespace nmsc::game::mechanics::gems
+} // namespace hailstone::game::mechanics::gems

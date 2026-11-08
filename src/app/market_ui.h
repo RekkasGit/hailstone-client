@@ -5,15 +5,15 @@
 // lua_eq_mail.cpp; ui.cpp_windows=1 keeps them): the inspect window, the
 // confirmation question, a book's text, the trader window (/trader), a
 // trader's shop, the bazaar search (/bazaar) and the barter window appear
-// while their state is open; the mail window with NMSC_MAIL_WINDOW=1 (or
+// while their state is open; the mail window with HAILSTONE_MAIL_WINDOW=1 (or
 // once mail arrives).
 
 #include <cstdint>
 #include <string>
 
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class MarketUi {
 public:
@@ -33,4 +33,4 @@ private:
     int price_[4] = {};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

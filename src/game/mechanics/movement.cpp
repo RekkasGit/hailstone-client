@@ -8,7 +8,7 @@
 #include "core/wrap_math.h"
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -595,7 +595,7 @@ private:
 };
 
 constexpr std::uint8_t kStandStanding = 100, kStandFrozen = 102, kStandLooting = 105, kStandSitting = 110,
-                       kStandDucking = 111, kStandDead = 120;
+                       kStandDucking = 111, kStandLying = 115, kStandDead = 120;
 
 } // namespace
 
@@ -636,6 +636,7 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
     c.stand_state = ch.dead      ? kStandDead
                     : ch.sitting ? kStandSitting
                     : ch.looting ? kStandLooting
+                    : ch.lying   ? kStandLying
                     : ch.frozen  ? kStandFrozen
                     : crouching  ? kStandDucking
                                  : kStandStanding;
@@ -760,4 +761,4 @@ bool MovementController::swim_jump(bool jump, bool surface_clear, std::uint32_t 
     return j.jumped;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

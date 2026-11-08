@@ -10,7 +10,7 @@
 #include "app/lua_eq_windows.h"
 #include "core/game_dir.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 std::string load_stml_page(const GameDir* game, const std::string& path, std::string* title) {
     // CStmlWnd::LoadPage: the page's text; its <HEAD> (ParseSTMLHead: the <TITLE>) is kept apart.
@@ -113,4 +113,4 @@ void help_window_set_file(StockWindow& w, EqHost& host, const std::string& file)
     if (auto* h = dynamic_cast<HelpWindow*>(&w)) h->set_file(host, file);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

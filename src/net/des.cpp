@@ -3,7 +3,7 @@
 // Straightforward table-driven DES from the FIPS 46-3 tables. Bit numbers in
 // the tables count from 1 = most significant bit, as in the standard.
 
-namespace nmsc::net::des {
+namespace hailstone::net::des {
 
 namespace {
 
@@ -148,4 +148,4 @@ std::optional<std::vector<std::byte>> zero_cbc_decrypt(std::span<const std::byte
     return out;
 }
 
-} // namespace nmsc::net::des
+} // namespace hailstone::net::des

@@ -9,7 +9,7 @@
 #include "game/spell_description.h"
 #include "game/spells.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 std::string format_duration_hms(std::int32_t seconds) {
     std::int32_t h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60;
@@ -78,4 +78,4 @@ SpellDisplay build_spell_display(const SpellData& spell, const SpellDisplayConte
     return d;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -3,7 +3,7 @@
 #include "app/client_app_internal.h"
 #include "game/interact.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 // Items: a right click on a corpse loots it, as in the original; I toggles the inventory (the original's default
 // key); clicked chat links ask for the item.
@@ -214,4 +214,4 @@ void ClientApp::draw_items() {
     // (INVENTORY, I by default, goes through the key map: key_command.)
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

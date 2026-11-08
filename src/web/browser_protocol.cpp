@@ -5,17 +5,17 @@
 #include <type_traits>
 #include <utility>
 
-#include "../../sdk/nmsc_byte_io.h"
+#include "../../sdk/hailstone_byte_io.h"
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 // The type byte is the message's index in the variant plus one: the order of Message is the wire's.
 static_assert(std::variant_size_v<Message> < 255);
 
 namespace {
 
-using nmsc::ByteReader;
-using nmsc::ByteWriter;
+using hailstone::ByteReader;
+using hailstone::ByteWriter;
 
 void str(ByteWriter& w, const std::string& s) {
     w.le(static_cast<std::uint32_t>(s.size()));
@@ -430,4 +430,4 @@ std::optional<Message> MessageReader::next() {
     return m;
 }
 
-} // namespace nmsc::web
+} // namespace hailstone::web

@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kTrackPlayer = 0x100, kTrackPet = 0x200, kTrackMerc = 0x400, kTrackHidden = 0x80;
 // The con colour bits DoTrackFilter sets (and the ranger's filter mask uses).
@@ -92,4 +92,4 @@ using TrackingAllowedFn = bool (*)(std::uint8_t class_id, std::uint32_t class_ma
 bool stock_tracking_allowed(std::uint8_t class_id, std::uint32_t class_mask, std::uint32_t tracking_skill);
 TrackingAllowedFn& tracking_allowed();
 
-} // namespace nmsc::game
+} // namespace hailstone::game

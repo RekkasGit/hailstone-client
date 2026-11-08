@@ -8,7 +8,7 @@
 #include "net/settings_packets.h"
 #include "plugin/policy.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using plugin::FileKind;
 using plugin::Policy;
 namespace fs = std::filesystem;
@@ -77,7 +77,7 @@ allow = Example.org, wiki.example.net
 }
 
 TEST_CASE("server_rules: none without hailstone.cfg; its own scripts and plugins listed; a changed cfg gives defaults") {
-    fs::path dir = fs::temp_directory_path() / "nmsc_server_rules_test";
+    fs::path dir = fs::temp_directory_path() / "hailstone_server_rules_test";
     fs::remove_all(dir);
     fs::create_directories(dir);
     std::string cfg = "[scripts]\nplayer = on\n";
@@ -248,7 +248,7 @@ TEST_CASE("settings packets: request layout, answer round trip, later fields ign
 }
 
 TEST_CASE("policy: an add-on's caps are a ceiling on what its files get") {
-    using namespace nmsc::plugin;
+    using namespace hailstone::plugin;
     CHECK(parse_caps_strict("read, ui") == (kCapRead | kCapUi));
     CHECK(parse_caps_strict("all") == kCapAll);
     CHECK(parse_caps_strict("none") == 0u);

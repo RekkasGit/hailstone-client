@@ -8,7 +8,7 @@
 #include "game/item_sort.h"
 #include "net/item_packets.h"
 
-using namespace nmsc;
+using namespace hailstone;
 using net::Item;
 using net::ItemSlot;
 

@@ -9,7 +9,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The zone's values as sent in OP_NewZone (first fog slot).
 struct ZoneFogInput {
@@ -118,4 +118,4 @@ struct CameraFov {
 // wider it passes (min(2 atan(tan(v/2) aspect) in units, 200), v = 0.7501876 F).
 CameraFov camera_fov(float fov_units, int width, int height);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

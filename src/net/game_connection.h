@@ -98,16 +98,16 @@
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::game::mechanics { struct GameTables; }
-namespace nmsc::game::mechanics { struct LiveState; }
+namespace hailstone { class GameDir; }
+namespace hailstone::game::mechanics { struct GameTables; }
+namespace hailstone::game::mechanics { struct LiveState; }
 
-namespace nmsc::game::mechanics { class Character; }
-namespace nmsc::game { struct FacialFeatures; }
+namespace hailstone::game::mechanics { class Character; }
+namespace hailstone::game { struct FacialFeatures; }
 
-namespace nmsc::plugin { class Hooks; }
+namespace hailstone::plugin { class Hooks; }
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct MemorizeSpell;
 
@@ -256,6 +256,9 @@ struct SpellEffectCue {
     std::int32_t duration_ms = 0; // the requested duration (the cast time for stage 0)
     std::uint32_t source = 0;     // the impact stage's caster (OP_Action's source)
     double delay = 0.0;           // seconds to hold it back (app/spell_bolts.h: a projectile still on its way)
+    // Hailstone: a cast stage the client adds for a spell that landed without an OP_BeginCast (an item, weapon or
+    // augment proc; GameConnection::handle_spell). Not a cast the player is making: no held projectile for it.
+    bool proc = false;
 };
 
 // The local player's points and progress, from OP_PlayerProfile and the
@@ -441,6 +444,9 @@ public:
     // The local player's position (world coordinates, game/coords.h) and heading (0..512).
     // Sent as OP_ClientUpdate under the original client's rules.
     void set_player_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, bool moving);
+    // Where the local player (and the mount it rides) is drawn this frame: the camera's place between the game
+    // clock's steps (game::WorldState::set_local_drawn). Nothing is sent.
+    void set_player_drawn(const glm::vec3& position, float heading) { world_.set_local_drawn(position, heading); }
     // What set_player_motion last gave: whether the player is moving, and the heading (0..512).
     bool player_moving() const { return moving_; }
     float player_heading() const { return heading_; }
@@ -2642,8 +2648,9 @@ private:
     void handle_channel_message(const ChannelMessage& m);
     void handle_special_message(const SpecialMessage& m);
     // `keep_target`: the target CastSpell would change (a pet or owner spell) stays (Handle_OP_ItemVerifyReply's
-    // dispatch restores pinstTarget).
-    void cast_spell_slot(int gem, std::uint32_t spell, const ItemSlot* item_slot = nullptr, bool keep_target = false);
+    // dispatch restores pinstTarget). `send`: CastSpell's sixth argument, whether OP_CastSpell goes out.
+    void cast_spell_slot(int gem, std::uint32_t spell, const ItemSlot* item_slot = nullptr, bool keep_target = false,
+                         bool send = true);
     void handle_item_verify_reply(const ItemVerifyReply& r);
     void apply_poison_tick();                          // DoPassageOfTime's poison block
     void handle_apply_poison(const ApplyPoison& r);    // Handle_OP_ApplyPoison
@@ -2995,6 +3002,9 @@ private:
     std::uint32_t door_moves_seen_ = 0;
     std::vector<SoundCue> sound_cues_;
     std::vector<SpellEffectCue> effect_cues_;
+    // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
+    // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
+    std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
     std::int32_t drunkenness_ = 0; // PcBase's drunkenness as HitBySpell's SPA 160 sets it
@@ -3259,4 +3269,4 @@ private:
     bool respawn_chosen_ = false;
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

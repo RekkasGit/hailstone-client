@@ -9,7 +9,7 @@
 #include "core/build_info.h"
 #include "core/changelog.h"
 
-using nmsc::changelog_section;
+using hailstone::changelog_section;
 
 TEST_CASE("changelog_section takes the version's entries") {
     const char* text = "# Changelog\n"
@@ -43,11 +43,11 @@ TEST_CASE("changelog_section: no such version, a prefix of one, or no file") {
 
 TEST_CASE("changelog_section: the repository's CHANGELOG.md has this release's section") {
     // What a release ships (CMake installs CHANGELOG.md): a release whose section is missing would show no notes.
-    std::ifstream in(NMSC_SOURCE_DIR "/CHANGELOG.md", std::ios::binary);
+    std::ifstream in(HAILSTONE_SOURCE_DIR "/CHANGELOG.md", std::ios::binary);
     REQUIRE(in);
     std::ostringstream text;
     text << in.rdbuf();
-    CHECK_FALSE(changelog_section(text.str(), nmsc::release_version()).empty());
+    CHECK_FALSE(changelog_section(text.str(), hailstone::release_version()).empty());
 }
 
 TEST_CASE("changelog_section: random and cut-off input reads without a crash") {

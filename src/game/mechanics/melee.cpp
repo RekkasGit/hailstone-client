@@ -6,7 +6,7 @@
 
 #include "core/wrap_math.h"
 
-namespace nmsc::game::mechanics::melee {
+namespace hailstone::game::mechanics::melee {
 
 namespace {
 
@@ -679,4 +679,4 @@ void swing_ready(AttackState& s, std::uint32_t now, AttackQueries& q) {
     if (now - s.last_secondary >= secondary_delay) s.secondary_ready = true;
 }
 
-} // namespace nmsc::game::mechanics::melee
+} // namespace hailstone::game::mechanics::melee

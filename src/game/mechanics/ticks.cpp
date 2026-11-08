@@ -1,6 +1,6 @@
 #include "game/mechanics/ticks.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 std::int32_t apply_mana_regen_tick(std::int32_t stored, std::int32_t current, std::int32_t maximum,
                                    const std::function<std::int32_t()>& regen) {
@@ -176,4 +176,4 @@ std::int32_t process_affects(AffectState& st, AffectQueries& q) {
     return 0;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

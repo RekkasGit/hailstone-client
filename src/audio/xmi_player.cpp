@@ -7,7 +7,7 @@
 
 #include "core/log.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 // The most events one tick may run. Counted loops nest four deep with counts up to 127, so a body that takes no time
@@ -238,4 +238,4 @@ std::unique_ptr<Source> make_xmi_source(std::shared_ptr<SoundFont> font, assets:
     return std::make_unique<XmiSource>(std::move(font), std::move(seq), loops);
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

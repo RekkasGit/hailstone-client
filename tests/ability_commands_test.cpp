@@ -12,7 +12,7 @@
 #include "game/hotbuttons.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 
@@ -104,7 +104,7 @@ TEST_CASE("the combat ability buttons are kept in [CombatAbilities]") {
 }
 
 TEST_CASE("/melody builds the bard twist and plays it in order") {
-    mq_test::World w("nmsc_melody_test");
+    mq_test::World w("hailstone_melody_test");
     auto& c = *w.conn;
     // Not a bard: nothing.
     c.melody_command("1 2");
@@ -128,7 +128,7 @@ TEST_CASE("/melody builds the bard twist and plays it in order") {
 
 TEST_CASE("/melody: a gem number of ten digits or more wraps in 32 bits") {
     // The digits accumulate as core::msvc_atoi's do; a signed product overflowed (undefined behaviour).
-    mq_test::World w("nmsc_melody_wrap_test");
+    mq_test::World w("hailstone_melody_wrap_test");
     auto& c = *w.conn;
     A::profile(c)->class_ = 8;
     // 4294967309 is 13 (no such gem: nothing is clicked), 2147483648 is negative and left out.
@@ -137,7 +137,7 @@ TEST_CASE("/melody: a gem number of ten digits or more wraps in 32 bits") {
 }
 
 TEST_CASE("/autofire needs a target and swaps auto attack for auto fire") {
-    mq_test::World w("nmsc_autofire_test");
+    mq_test::World w("hailstone_autofire_test");
     auto& c = *w.conn;
     drain(c);
     A::world(c).target_id = 0;
@@ -163,7 +163,7 @@ TEST_CASE("/autofire needs a target and swaps auto attack for auto fire") {
 TEST_CASE("attack_until_xtarget_clear: auto attack outlives the target while the extended target list has more") {
     // The original (DeathReport: the target died): auto attack goes off.
     {
-        mq_test::World w("nmsc_attack_hold_off_test");
+        mq_test::World w("hailstone_attack_hold_off_test");
         auto& c = *w.conn;
         c.receive_zone_packet_for_test(xtarget_slot(0, 10, "a_rat01"));
         c.receive_zone_packet_for_test(xtarget_slot(1, 11, "Fippy_Darkpaw000"));
@@ -173,7 +173,7 @@ TEST_CASE("attack_until_xtarget_clear: auto attack outlives the target while the
     }
     // The option: on while Fippy is left, off once Fippy dies too.
     {
-        mq_test::World w("nmsc_attack_hold_on_test");
+        mq_test::World w("hailstone_attack_hold_on_test");
         auto& c = *w.conn;
         c.set_attack_until_xtarget_clear(true);
         c.receive_zone_packet_for_test(xtarget_slot(0, 10, "a_rat01"));
@@ -189,7 +189,7 @@ TEST_CASE("attack_until_xtarget_clear: auto attack outlives the target while the
     }
     // Nothing else on the list: off at once, as without the option.
     {
-        mq_test::World w("nmsc_attack_hold_empty_test");
+        mq_test::World w("hailstone_attack_hold_empty_test");
         auto& c = *w.conn;
         c.set_attack_until_xtarget_clear(true);
         c.receive_zone_packet_for_test(xtarget_slot(0, 10, "a_rat01"));
@@ -198,7 +198,7 @@ TEST_CASE("attack_until_xtarget_clear: auto attack outlives the target while the
     }
     // A new target taken while held: the usual rules from then on (the list emptying does not stop the attack).
     {
-        mq_test::World w("nmsc_attack_hold_retarget_test");
+        mq_test::World w("hailstone_attack_hold_retarget_test");
         auto& c = *w.conn;
         c.set_attack_until_xtarget_clear(true);
         c.receive_zone_packet_for_test(xtarget_slot(0, 10, "a_rat01"));
@@ -216,7 +216,7 @@ TEST_CASE("attack_until_xtarget_clear: auto attack outlives the target while the
 TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target list that attacks becomes the target") {
     // No target: the attacker on the list is taken (a miss counts).
     {
-        mq_test::World w("nmsc_auto_target_hit_test");
+        mq_test::World w("hailstone_auto_target_hit_test");
         auto& c = *w.conn;
         REQUIRE(c.auto_target_xtarget());
         A::world(c).target_id = 0;
@@ -228,7 +228,7 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
     }
     // A target held: unchanged.
     {
-        mq_test::World w("nmsc_auto_target_held_test");
+        mq_test::World w("hailstone_auto_target_held_test");
         auto& c = *w.conn;
         c.receive_zone_packet_for_test(xtarget_slot(0, 11, "Fippy_Darkpaw000"));
         c.receive_zone_packet_for_test(hit_on_me(11));
@@ -237,7 +237,7 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
     }
     // An attacker that is not on the list, or a player: nothing.
     {
-        mq_test::World w("nmsc_auto_target_off_list_test");
+        mq_test::World w("hailstone_auto_target_off_list_test");
         auto& c = *w.conn;
         A::world(c).target_id = 0;
         c.receive_zone_packet_for_test(hit_on_me(11));
@@ -247,7 +247,7 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
     }
     // The target dies: the other attacker still on the list is taken; one only on the list (never hit) is not.
     {
-        mq_test::World w("nmsc_auto_target_death_test");
+        mq_test::World w("hailstone_auto_target_death_test");
         auto& c = *w.conn;
         c.receive_zone_packet_for_test(xtarget_slot(0, 10, "a_rat01"));
         c.receive_zone_packet_for_test(xtarget_slot(1, 11, "Fippy_Darkpaw000"));
@@ -270,7 +270,7 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
     }
     // The option off: the original's behaviour.
     {
-        mq_test::World w("nmsc_auto_target_disabled_test");
+        mq_test::World w("hailstone_auto_target_disabled_test");
         auto& c = *w.conn;
         c.set_auto_target_xtarget(false);
         A::world(c).target_id = 0;
@@ -282,7 +282,7 @@ TEST_CASE("auto_target_xtarget: with no target, an NPC on the extended target li
 }
 
 TEST_CASE("face_on_attack: the attack key turns the player to the target only when the option is on") {
-    mq_test::World w("nmsc_face_on_attack_test");
+    mq_test::World w("hailstone_face_on_attack_test");
     auto& c = *w.conn;
     REQUIRE(c.world().target_id == 10);
     c.set_auto_attack(false); // the test world starts attacking
@@ -305,7 +305,7 @@ TEST_CASE("face_on_attack: the attack key turns the player to the target only wh
 }
 
 TEST_CASE("/stopdisc and /dismount") {
-    mq_test::World w("nmsc_stopdisc_test");
+    mq_test::World w("hailstone_stopdisc_test");
     auto& c = *w.conn;
     drain(c);
     // No discipline: nothing said.
@@ -318,8 +318,8 @@ TEST_CASE("/stopdisc and /dismount") {
     CHECK(c.mount_id() == 0);
     // A mount race NPC named "<name>`s_Mount00" is the mount once their actors are made (MakeRiderMountUp);
     // another race is not.
-    auto actors = [](const nmsc::game::Spawn&) {
-        return std::optional<nmsc::game::WorldState::ActorModel>(nmsc::game::WorldState::ActorModel{true, false});
+    auto actors = [](const hailstone::game::Spawn&) {
+        return std::optional<hailstone::game::WorldState::ActorModel>(hailstone::game::WorldState::ActorModel{true, false});
     };
     auto& sp = A::world(c).spawns[40];
     sp.id = 40;
@@ -348,7 +348,7 @@ TEST_CASE("/stopdisc and /dismount") {
 TEST_CASE("CYCLE_XTARGET after the server shrank the list past the cursor ends") {
     // The cursor at slot 7 of 10; the list then shrinks to 5 (or 0) empty slots: the cycle used to look for its start
     // forever. The cursor stays in the list, and the cycle looks at every slot once.
-    mq_test::World w("nmsc_xtarget_shrink_test");
+    mq_test::World w("hailstone_xtarget_shrink_test");
     auto& c = *w.conn;
     auto response = [](std::uint32_t max, std::int32_t slot, std::uint32_t id) {
         ByteWriter b;
@@ -378,4 +378,27 @@ TEST_CASE("CYCLE_XTARGET after the server shrank the list past the cursor ends")
     c.receive_zone_packet_for_test(response(5, 2, 11));
     c.target_next_xtarget();
     CHECK(c.world().target_id == 11);
+}
+
+TEST_CASE("a spawn killed while moving stops where it died (PlayerZoneClient::IDied zeroes its velocities)") {
+    mq_test::World w("hailstone_death_stops_motion_test");
+    auto& c = *w.conn;
+    auto& rat = A::world(c).spawns[10];
+    rat.velocity = glm::vec3(2.0f, -1.0f, 0.5f);
+    rat.speed_run = 0.7f;
+    rat.speed_heading = 3.0f;
+    rat.fly_mode = 2;
+    rat.update_time = 100.0;
+    c.receive_zone_packet_for_test(death_of(10));
+    CHECK(rat.is_corpse);
+    CHECK(rat.velocity == glm::vec3(0.0f));
+    CHECK(rat.speed_run == 0.0f);
+    CHECK(rat.speed_heading == 0.0f);
+    CHECK(rat.fly_mode == 0);
+    // Stepped within the 12 s after its last update, the corpse stays put.
+    const glm::vec3 at = rat.position;
+    const float heading = rat.heading;
+    A::world(c).smooth(0.5f, 101.0);
+    CHECK(rat.position == at);
+    CHECK(rat.heading == heading);
 }

@@ -30,20 +30,20 @@
 #include "plugin/ui_bridge.h"
 #include "plugin/web_access.h"
 
-#define NMSC_HOST
-#include "nmsc_plugin.h"
+#define HAILSTONE_HOST
+#include "hailstone_plugin.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace fs = std::filesystem;
 
 namespace {
 
-static_assert(NMSC_CAP_READ == kCapRead && NMSC_CAP_COMMANDS == kCapCommands && NMSC_CAP_TARGET == kCapTarget &&
-              NMSC_CAP_ACTIONS == kCapActions && NMSC_CAP_MOVE == kCapMove && NMSC_CAP_CHAT == kCapChat &&
-              NMSC_CAP_EVENTS == kCapEvents && NMSC_CAP_UI == kCapUi && NMSC_CAP_PACKETS == kCapPackets &&
-              NMSC_CAP_EXTEND == kCapExtend && NMSC_CAP_LOGIN == kCapLogin && NMSC_CAP_NET == kCapNet &&
-              NMSC_CAP_WEB == kCapWeb);
+static_assert(HAILSTONE_CAP_READ == kCapRead && HAILSTONE_CAP_COMMANDS == kCapCommands && HAILSTONE_CAP_TARGET == kCapTarget &&
+              HAILSTONE_CAP_ACTIONS == kCapActions && HAILSTONE_CAP_MOVE == kCapMove && HAILSTONE_CAP_CHAT == kCapChat &&
+              HAILSTONE_CAP_EVENTS == kCapEvents && HAILSTONE_CAP_UI == kCapUi && HAILSTONE_CAP_PACKETS == kCapPackets &&
+              HAILSTONE_CAP_EXTEND == kCapExtend && HAILSTONE_CAP_LOGIN == kCapLogin && HAILSTONE_CAP_NET == kCapNet &&
+              HAILSTONE_CAP_WEB == kCapWeb);
 
 #if defined(_WIN32)
 constexpr const char* kExt = ".dll";
@@ -67,12 +67,12 @@ bool iequal(std::string_view a, std::string_view b) {
            });
 }
 
-mq::Value from_c(const NmscValue& v) {
+mq::Value from_c(const HailstoneValue& v) {
     switch (v.kind) {
-    case NMSC_BOOL: return mq::Value::boolean(v.i != 0);
-    case NMSC_INT: return mq::Value::integer(v.i);
-    case NMSC_FLOAT: return mq::Value::number(v.f);
-    case NMSC_STRING: return mq::Value::string(v.s ? v.s : "");
+    case HAILSTONE_BOOL: return mq::Value::boolean(v.i != 0);
+    case HAILSTONE_INT: return mq::Value::integer(v.i);
+    case HAILSTONE_FLOAT: return mq::Value::number(v.f);
+    case HAILSTONE_STRING: return mq::Value::string(v.s ? v.s : "");
     default: return mq::Value::nil();
     }
 }
@@ -110,7 +110,7 @@ struct Loaded;
 class NativeExtension;
 
 namespace {
-NmscSpawn spawn_struct(const net::GameConnection& c, const game::Spawn& s);
+HailstoneSpawn spawn_struct(const net::GameConnection& c, const game::Spawn& s);
 template <std::size_t N> void copy_name(char (&dst)[N], const std::string& src);
 } // namespace
 
@@ -179,7 +179,7 @@ struct Loaded {
     Sha256Digest hash{};
     std::uint32_t caps = 0;
     SDL_SharedObject* lib = nullptr;
-    NmscHost table{};
+    PluginHostApi table{};
     Hooks::Owner owner = 0;
     std::vector<std::string> tlos;
 
@@ -195,20 +195,20 @@ struct Loaded {
     int (*incoming_chat)(const char*, std::uint32_t) = nullptr;
     int (*filter_chat)(const char*, std::uint32_t) = nullptr;
     void (*update_imgui)() = nullptr;
-    int (*packet)(int, int, NmscPacket*) = nullptr;
-    const NmscHooks* (*hooks_fn)() = nullptr;
+    int (*packet)(int, int, HailstonePacket*) = nullptr;
+    const HailstoneHooks* (*hooks_fn)() = nullptr;
 
     // ABI 2, the server extension: the plugin's hook table (fields past its size stay null), what its setters set,
     // and its member of env.extensions.
-    NmscHooks hooks{};
+    HailstoneHooks hooks{};
     bool active = true;
     std::uint32_t flags = 0;
-    std::optional<NmscVitals> vitals;
+    std::optional<HailstoneVitals> vitals;
     std::shared_ptr<NativeExtension> extension;
     int chain_id = 0;
-    bool extend_denied = false; // said once that it lacks NMSC_CAP_EXTEND
-    bool read_denied = false;   // ... NMSC_CAP_READ (the readers)
-    bool web_denied = false;    // ... NMSC_CAP_WEB (web_*)
+    bool extend_denied = false; // said once that it lacks HAILSTONE_CAP_EXTEND
+    bool read_denied = false;   // ... HAILSTONE_CAP_READ (the readers)
+    bool web_denied = false;    // ... HAILSTONE_CAP_WEB (web_*)
     std::atomic<bool> thread_warned{false}; // said once that it called the host from another thread
     std::vector<std::string> threw_at;       // the callbacks that let an exception out (said once each)
 
@@ -258,7 +258,7 @@ private:
 };
 
 // Runs f, a call into the plugin, with its capabilities (Busy). A plugin must not let a C++ exception out of its
-// code (sdk/nmsc_plugin.h); one that does is caught here and the call answers R{} (nothing, 0, NULL, false). That is
+// code (sdk/hailstone_plugin.h); one that does is caught here and the call answers R{} (nothing, 0, NULL, false). That is
 // as far as it goes: an exception from a plugin built with another compiler or runtime may not unwind through the
 // C interface into the client at all.
 template <typename F> auto guarded(Loaded& l, const char* where, F&& f) -> decltype(f()) {
@@ -315,13 +315,13 @@ public:
     std::optional<std::vector<std::string>> who_lines(const net::GameConnection&,
                                                       const net::WhoResponse& r) const override {
         if (!l_ || !h().who_lines) return std::nullopt;
-        std::vector<NmscWhoEntry> entries;
+        std::vector<HailstoneWhoEntry> entries;
         for (const auto& e : r.entries)
             entries.push_back({e.name.c_str(), e.guild.c_str(), e.zone_name.c_str(), e.account.c_str(), e.flags,
                                e.class_, e.level, e.race, e.zone_id, e.format, e.rank_string, e.zone_string});
-        NmscWho w{};
-        w.size = sizeof(NmscWho);
-        w.entry_size = sizeof(NmscWhoEntry);
+        HailstoneWho w{};
+        w.size = sizeof(HailstoneWho);
+        w.entry_size = sizeof(HailstoneWhoEntry);
         w.count = static_cast<std::uint32_t>(entries.size());
         w.entries = entries.data();
         w.title_string = r.title_string;
@@ -330,7 +330,7 @@ public:
         w.footer_count = r.footer_count;
         for (int i = 0; i < 3; ++i) w.footer_values[i] = r.footer_values[i];
         std::vector<std::string> lines;
-        NmscLineFn add = [](void* ctx, const char* line) {
+        HailstoneLineFn add = [](void* ctx, const char* line) {
             static_cast<std::vector<std::string>*>(ctx)->emplace_back(line ? line : "");
         };
         if (!run(h().who_lines, &w, add, static_cast<void*>(&lines))) return std::nullopt;
@@ -391,8 +391,8 @@ public:
     std::optional<game::MapSpawnMark> map_spawn(const net::GameConnection& c, const game::Spawn& s,
                                                 const game::MapSpawnMark& defaults) const override {
         if (!l_ || !h().map_spawn) return std::nullopt;
-        const NmscSpawn spawn = spawn_struct(c, s);
-        NmscMapSpawn m{};
+        const HailstoneSpawn spawn = spawn_struct(c, s);
+        HailstoneMapSpawn m{};
         m.size = sizeof m;
         m.color = defaults.rgb;
         m.layer = defaults.layer;
@@ -406,22 +406,23 @@ public:
         const char* t = run(h().combat_effect_label);
         return t ? std::optional<std::string>(t) : std::nullopt;
     }
-    bool can_use_all_items(const net::GameConnection&) const override { return flag(NMSC_FLAG_ITEMS_ANY_CLASS); }
-    bool wide_item_links(const net::GameConnection&) const override { return flag(NMSC_FLAG_WIDE_ITEM_LINKS); }
+    bool can_use_all_items(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_ITEMS_ANY_CLASS); }
+    bool wide_item_links(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_WIDE_ITEM_LINKS); }
     std::uint32_t guild_member_classes(const net::GameConnection&, std::uint32_t class_value) const override {
         return l_ && h().guild_member_classes ? run(h().guild_member_classes, class_value) : 0;
     }
     std::uint8_t hide_check_class(const net::GameConnection&, std::uint8_t class_id) const override {
-        return flag(NMSC_FLAG_HIDE_ANY_CLASS) ? std::uint8_t{9} : class_id; // 9 Rogue: sneaking keeps Hide
+        return flag(HAILSTONE_FLAG_HIDE_ANY_CLASS) ? std::uint8_t{9} : class_id; // 9 Rogue: sneaking keeps Hide
     }
-    bool aa_any_level(const net::GameConnection&) const override { return flag(NMSC_FLAG_AA_ANY_LEVEL); }
-    bool aa_train_all(const net::GameConnection&) const override { return flag(NMSC_FLAG_AA_TRAIN_ALL); }
-    bool augment_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_AUGMENT_CLASSES); }
-    bool research_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_RESEARCH_CLASSES); }
-    bool focus_classes(const net::GameConnection&) const override { return flag(NMSC_FLAG_FOCUS_CLASSES); }
+    bool aa_any_level(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AA_ANY_LEVEL); }
+    bool aa_train_all(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AA_TRAIN_ALL); }
+    bool augment_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_AUGMENT_CLASSES); }
+    bool research_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_RESEARCH_CLASSES); }
+    bool focus_classes(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_FOCUS_CLASSES); }
     bool backstab_either_hand(const net::GameConnection&) const override {
-        return flag(NMSC_FLAG_BACKSTAB_EITHER_HAND);
+        return flag(HAILSTONE_FLAG_BACKSTAB_EITHER_HAND);
     }
+    bool solo_adventure(const net::GameConnection&) const override { return flag(HAILSTONE_FLAG_SOLO_ADVENTURE); }
     std::vector<std::uint8_t> max_vitals_classes(const net::GameConnection&, std::uint8_t class_id) const override {
         std::uint32_t mask = l_ && h().vitals_classes ? run(h().vitals_classes, class_id) : 0;
         if (!mask) return {class_id};
@@ -433,16 +434,16 @@ public:
     game::CharacterVitals character_vitals(const net::GameConnection&) const override {
         game::CharacterVitals v;
         if (!l_ || !l_->vitals) return v;
-        const NmscVitals& n = *l_->vitals;
+        const HailstoneVitals& n = *l_->vitals;
         auto set = [&](std::optional<std::int32_t>& f, std::uint32_t bit, std::int32_t value) {
             if (n.has & bit) f = value;
         };
-        set(v.max_hp, NMSC_VITAL_MAX_HP, n.max_hp);
-        set(v.cur_hp, NMSC_VITAL_CUR_HP, n.cur_hp);
-        set(v.max_mana, NMSC_VITAL_MAX_MANA, n.max_mana);
-        set(v.cur_mana, NMSC_VITAL_CUR_MANA, n.cur_mana);
-        set(v.max_endurance, NMSC_VITAL_MAX_ENDURANCE, n.max_endurance);
-        set(v.cur_endurance, NMSC_VITAL_CUR_ENDURANCE, n.cur_endurance);
+        set(v.max_hp, HAILSTONE_VITAL_MAX_HP, n.max_hp);
+        set(v.cur_hp, HAILSTONE_VITAL_CUR_HP, n.cur_hp);
+        set(v.max_mana, HAILSTONE_VITAL_MAX_MANA, n.max_mana);
+        set(v.cur_mana, HAILSTONE_VITAL_CUR_MANA, n.cur_mana);
+        set(v.max_endurance, HAILSTONE_VITAL_MAX_ENDURANCE, n.max_endurance);
+        set(v.cur_endurance, HAILSTONE_VITAL_CUR_ENDURANCE, n.cur_endurance);
         return v;
     }
     const game::SkillRules* skill_rules(const net::GameConnection&) const override {
@@ -468,13 +469,13 @@ public:
     }
     bool item_right_click(net::GameConnection&, const net::ItemSlot& slot) override {
         if (!l_ || !h().item_right_click) return false;
-        NmscItemSlot s{slot.type, slot.slot, slot.sub, slot.aug};
-        return run(h().item_right_click, static_cast<const NmscItemSlot*>(&s)) != 0;
+        HailstoneItemSlot s{slot.type, slot.slot, slot.sub, slot.aug};
+        return run(h().item_right_click, static_cast<const HailstoneItemSlot*>(&s)) != 0;
     }
     std::optional<std::string> merchant_level(const net::GameConnection&, const net::Item& item) const override;
 
 private:
-    const NmscHooks& h() const { return l_->hooks; }
+    const HailstoneHooks& h() const { return l_->hooks; }
     bool flag(std::uint32_t f) const { return l_ && (l_->flags & f) != 0; }
     // Calls into the plugin with its capabilities, not unloaded under it; an exception it lets out is the stock
     // answer (R{}).
@@ -546,7 +547,7 @@ void h_do_command(void* h, const char* line) {
 
 // MQ's AddCommand, with the 'commands' capability. The client's own commands are not the plugin's to take
 // (Hooks::reserved_command); another plugin's or script's name is taken over, as in MQ.
-int h_add_command(void* h, const char* name, NmscCommandFn fn, void* user) {
+int h_add_command(void* h, const char* name, HailstoneCommandFn fn, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !fn) return 0;
     if (!l.can(kCapCommands)) {
@@ -584,7 +585,7 @@ int h_parse(void* h, const char* text, char* out, std::size_t out_size) {
     return copy_out(mq::parse_macro_data(l.host->env.context(), text), out, out_size);
 }
 
-int h_add_tlo(void* h, const char* name, NmscTloFn fn, void* user) {
+int h_add_tlo(void* h, const char* name, HailstoneTloFn fn, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !*name || !fn || !l.host->env.registry) return 0;
     mq::Registry& reg = *l.host->env.registry;
@@ -595,14 +596,14 @@ int h_add_tlo(void* h, const char* name, NmscTloFn fn, void* user) {
     mq::Type& t = reg.type(std::string("plugin:") + name);
     Loaded* lp = &l;
     t.to_value = [lp, fn, user](const mq::Context&, const mq::Value& self) {
-        NmscValue out{};
+        HailstoneValue out{};
         if (!guarded(*lp, "a TLO", [&] { return fn(user, self.s.c_str(), nullptr, nullptr, &out) != 0; }))
             return mq::Value::nil();
         return from_c(out);
     };
     t.any_member = [lp, fn, user](const mq::Context&, const mq::Value& self, std::string_view member,
                                   std::string_view index) {
-        NmscValue out{};
+        HailstoneValue out{};
         std::string m(member), i(index);
         if (!guarded(*lp, "a TLO", [&] { return fn(user, self.s.c_str(), m.c_str(), i.c_str(), &out) != 0; }))
             return mq::Value::nil();
@@ -635,17 +636,17 @@ int h_send_packet(void* h, int stream, std::uint16_t opcode, const void* data, s
         l.denied("send_packet", kCapPackets);
         return 0;
     }
-    if (!l.host->env.send || (stream != NMSC_STREAM_WORLD && stream != NMSC_STREAM_ZONE)) return 0;
+    if (!l.host->env.send || (stream != HAILSTONE_STREAM_WORLD && stream != HAILSTONE_STREAM_ZONE)) return 0;
     net::AppPacket p(opcode);
     if (size) {
         p.data.resize(size);
         std::memcpy(p.data.data(), data, size);
     }
-    l.host->env.send(stream == NMSC_STREAM_WORLD ? Stream::World : Stream::Zone, p);
+    l.host->env.send(stream == HAILSTONE_STREAM_WORLD ? Stream::World : Stream::Zone, p);
     return 1;
 }
 
-int h_resize_packet(void* h, NmscPacket* p, std::size_t size) {
+int h_resize_packet(void* h, HailstonePacket* p, std::size_t size) {
     Loaded& l = Loaded::of(h);
     if (!p || !l.current_packet || size > 0x100000) return 0;
     l.current_packet->data.resize(size);
@@ -668,7 +669,7 @@ void* h_imgui_context(void* h) {
 // ---- ABI 2: the server extension
 
 // A struct the plugin passes for the client to fill: it gets what both know (its `size`, the client's sizeof).
-// (NmscWebState's size is a size_t, the others' a uint32_t: each keeps its own.)
+// (HailstoneWebState's size is a size_t, the others' a uint32_t: each keeps its own.)
 template <typename T> int give(T* out, const T& full) {
     using Size = decltype(T::size);
     if (!out || out->size < sizeof(Size)) return 0;
@@ -684,8 +685,8 @@ template <std::size_t N> void copy_name(char (&dst)[N], const std::string& src) 
     dst[n] = '\0';
 }
 
-NmscItem item_struct(const net::Item& it) {
-    NmscItem v{};
+HailstoneItem item_struct(const net::Item& it) {
+    HailstoneItem v{};
     v.size = sizeof v;
     v.id = it.id;
     copy_name(v.name, it.name);
@@ -708,8 +709,8 @@ bool same_name(const std::string& a, const std::string& b) {
            });
 }
 
-NmscSpawn spawn_struct(const net::GameConnection& c, const game::Spawn& s) {
-    NmscSpawn v{};
+HailstoneSpawn spawn_struct(const net::GameConnection& c, const game::Spawn& s) {
+    HailstoneSpawn v{};
     v.size = sizeof v;
     v.id = s.id;
     copy_name(v.name, s.name);
@@ -777,7 +778,7 @@ void h_set_character_classes(void* h, const char* name, std::uint32_t mask) {
     if (net::GameConnection* c = connection_of(l)) c->set_character_classes(name, mask);
 }
 
-void h_set_pet_list(void* h, const NmscPet* pets, std::size_t count) {
+void h_set_pet_list(void* h, const HailstonePet* pets, std::size_t count) {
     Loaded& l = Loaded::of(h);
     if (!may_extend(l, "set_pet_list")) return;
     net::GameConnection* c = connection_of(l);
@@ -787,7 +788,7 @@ void h_set_pet_list(void* h, const NmscPet* pets, std::size_t count) {
     c->set_pet_list(std::move(list));
 }
 
-void h_set_vitals(void* h, const NmscVitals* v) {
+void h_set_vitals(void* h, const HailstoneVitals* v) {
     Loaded& l = Loaded::of(h);
     if (!may_extend(l, "set_vitals")) return;
     if (!v) {
@@ -801,31 +802,31 @@ void h_set_vitals(void* h, const NmscVitals* v) {
     if (!c) return;
     net::PlayerStatus& ps = c->player_status_mut();
     auto points = [](std::int32_t x) { return static_cast<std::uint32_t>(std::max(x, 0)); };
-    if (v->has & NMSC_VITAL_CUR_HP) ps.hp = points(v->cur_hp);
-    if (v->has & NMSC_VITAL_MAX_HP) ps.max_hp = points(v->max_hp);
-    if (v->has & NMSC_VITAL_CUR_MANA) ps.mana = points(v->cur_mana);
-    if (v->has & NMSC_VITAL_MAX_MANA) ps.max_mana = points(v->max_mana);
-    if (v->has & NMSC_VITAL_CUR_ENDURANCE) ps.endurance = points(v->cur_endurance);
-    if (v->has & NMSC_VITAL_MAX_ENDURANCE) ps.max_endurance = points(v->max_endurance);
+    if (v->has & HAILSTONE_VITAL_CUR_HP) ps.hp = points(v->cur_hp);
+    if (v->has & HAILSTONE_VITAL_MAX_HP) ps.max_hp = points(v->max_hp);
+    if (v->has & HAILSTONE_VITAL_CUR_MANA) ps.mana = points(v->cur_mana);
+    if (v->has & HAILSTONE_VITAL_MAX_MANA) ps.max_mana = points(v->max_mana);
+    if (v->has & HAILSTONE_VITAL_CUR_ENDURANCE) ps.endurance = points(v->cur_endurance);
+    if (v->has & HAILSTONE_VITAL_MAX_ENDURANCE) ps.max_endurance = points(v->max_endurance);
 }
 
 // ---- ABI 2: the plugin's Lua windows
 
 } // namespace
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin
 
-// The C handles of a call's arguments and result (sdk/nmsc_plugin.h), outside any namespace as declared there.
-struct NmscArgs {
-    const std::vector<nmsc::plugin::UiValue>* values = nullptr;
+// The C handles of a call's arguments and result (sdk/hailstone_plugin.h), outside any namespace as declared there.
+struct HailstoneArgs {
+    const std::vector<hailstone::plugin::UiValue>* values = nullptr;
 };
-struct NmscOut {
-    nmsc::plugin::UiValue root;
+struct HailstoneOut {
+    hailstone::plugin::UiValue root;
     bool has_root = false;
-    std::vector<nmsc::plugin::UiValue*> open; // the arrays and tables being filled
+    std::vector<hailstone::plugin::UiValue*> open; // the arrays and tables being filled
     std::string key;                          // a table's next key (out_key)
 };
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 namespace {
 
 bool may_ui(Loaded& l, const char* what) {
@@ -834,29 +835,29 @@ bool may_ui(Loaded& l, const char* what) {
     return false;
 }
 
-// A UiValue as an NmscValue: arrays and tables as NMSC_TABLE (read their fields with arg_field).
-int value_out(const UiValue& v, NmscValue* out) {
+// A UiValue as an HailstoneValue: arrays and tables as HAILSTONE_TABLE (read their fields with arg_field).
+int value_out(const UiValue& v, HailstoneValue* out) {
     if (!out) return 0;
-    *out = NmscValue{};
+    *out = HailstoneValue{};
     switch (v.kind) {
     case UiValue::Kind::Nil: return 0;
-    case UiValue::Kind::Bool: out->kind = NMSC_BOOL, out->i = v.b ? 1 : 0; break;
-    case UiValue::Kind::Int: out->kind = NMSC_INT, out->i = v.i; break;
-    case UiValue::Kind::Number: out->kind = NMSC_FLOAT, out->f = v.n; break;
-    case UiValue::Kind::String: out->kind = NMSC_STRING, out->s = v.s.c_str(); break;
+    case UiValue::Kind::Bool: out->kind = HAILSTONE_BOOL, out->i = v.b ? 1 : 0; break;
+    case UiValue::Kind::Int: out->kind = HAILSTONE_INT, out->i = v.i; break;
+    case UiValue::Kind::Number: out->kind = HAILSTONE_FLOAT, out->f = v.n; break;
+    case UiValue::Kind::String: out->kind = HAILSTONE_STRING, out->s = v.s.c_str(); break;
     case UiValue::Kind::Array:
-    case UiValue::Kind::Table: out->kind = NMSC_TABLE; break;
+    case UiValue::Kind::Table: out->kind = HAILSTONE_TABLE; break;
     }
     return 1;
 }
 
-int h_add_ui_function(void* h, const char* name, NmscUiFn fn, void* user) {
+int h_add_ui_function(void* h, const char* name, HailstoneUiFn fn, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !*name || !fn || !l.host->env.ui || !may_ui(l, "add_ui_function")) return 0;
     Loaded* lp = &l;
     l.host->env.ui->add_function(l.name, name, [lp, fn, user](const std::vector<UiValue>& args) {
-        NmscArgs a{&args};
-        NmscOut out;
+        HailstoneArgs a{&args};
+        HailstoneOut out;
         const int ok = guarded(*lp, "a UI function", [&] { return fn(user, &a, &out); });
         return ok && out.has_root ? std::move(out.root) : UiValue{};
     });
@@ -868,14 +869,14 @@ void h_remove_ui_function(void* h, const char* name) {
     if (name && l.host->env.ui) l.host->env.ui->remove_function(l.name, name);
 }
 
-std::size_t h_arg_count(void*, const NmscArgs* a) { return a && a->values ? a->values->size() : 0; }
+std::size_t h_arg_count(void*, const HailstoneArgs* a) { return a && a->values ? a->values->size() : 0; }
 
-int h_arg(void*, const NmscArgs* a, std::size_t index, NmscValue* out) {
+int h_arg(void*, const HailstoneArgs* a, std::size_t index, HailstoneValue* out) {
     if (!a || !a->values || index >= a->values->size()) return 0;
     return value_out((*a->values)[index], out);
 }
 
-int h_arg_field(void*, const NmscArgs* a, std::size_t index, const char* key, NmscValue* out) {
+int h_arg_field(void*, const HailstoneArgs* a, std::size_t index, const char* key, HailstoneValue* out) {
     if (!a || !a->values || !key || index >= a->values->size()) return 0;
     const UiValue* f = (*a->values)[index].field(key);
     return f ? value_out(*f, out) : 0;
@@ -883,7 +884,7 @@ int h_arg_field(void*, const NmscArgs* a, std::size_t index, const char* key, Nm
 
 // Where the result's next value goes: the root, the open array's next item, or the open table's field under the
 // last out_key; null when there is no place (a second root, a table value without a key).
-UiValue* out_slot(NmscOut* o) {
+UiValue* out_slot(HailstoneOut* o) {
     if (!o) return nullptr;
     if (o->open.empty()) {
         if (o->has_root) return nullptr;
@@ -897,19 +898,19 @@ UiValue* out_slot(NmscOut* o) {
     return &c->fields.back().value;
 }
 
-void h_out_value(void*, NmscOut* o, const NmscValue* v) {
+void h_out_value(void*, HailstoneOut* o, const HailstoneValue* v) {
     UiValue* slot = v ? out_slot(o) : nullptr;
     if (!slot) return;
     switch (v->kind) {
-    case NMSC_BOOL: *slot = UiValue::boolean(v->i != 0); break;
-    case NMSC_INT: *slot = UiValue::integer(v->i); break;
-    case NMSC_FLOAT: *slot = UiValue::number(v->f); break;
-    case NMSC_STRING: *slot = UiValue::string(v->s ? v->s : ""); break;
+    case HAILSTONE_BOOL: *slot = UiValue::boolean(v->i != 0); break;
+    case HAILSTONE_INT: *slot = UiValue::integer(v->i); break;
+    case HAILSTONE_FLOAT: *slot = UiValue::number(v->f); break;
+    case HAILSTONE_STRING: *slot = UiValue::string(v->s ? v->s : ""); break;
     default: break; // nil
     }
 }
 
-void out_begin(NmscOut* o, UiValue::Kind kind) {
+void out_begin(HailstoneOut* o, UiValue::Kind kind) {
     if (!o || o->open.size() >= 32) return; // deep enough for any window
     UiValue* slot = out_slot(o);
     if (!slot) return;
@@ -917,19 +918,19 @@ void out_begin(NmscOut* o, UiValue::Kind kind) {
     o->open.push_back(slot); // its parent is not changed while it is open, so the pointer holds
 }
 
-void h_out_begin_array(void*, NmscOut* o) { out_begin(o, UiValue::Kind::Array); }
-void h_out_begin_table(void*, NmscOut* o) { out_begin(o, UiValue::Kind::Table); }
+void h_out_begin_array(void*, HailstoneOut* o) { out_begin(o, UiValue::Kind::Array); }
+void h_out_begin_table(void*, HailstoneOut* o) { out_begin(o, UiValue::Kind::Table); }
 
-void h_out_key(void*, NmscOut* o, const char* key) {
+void h_out_key(void*, HailstoneOut* o, const char* key) {
     if (o && key) o->key = key;
 }
 
-void h_out_end(void*, NmscOut* o) {
+void h_out_end(void*, HailstoneOut* o) {
     if (o && !o->open.empty()) o->open.pop_back();
 }
 
-int h_add_option(void* h, const char* name, const char* label, int min, int max, NmscOptionGetFn get,
-                 NmscOptionSetFn set, void* user) {
+int h_add_option(void* h, const char* name, const char* label, int min, int max, HailstoneOptionGetFn get,
+                 HailstoneOptionSetFn set, void* user) {
     Loaded& l = Loaded::of(h);
     if (!name || !*name || !get || !set || !l.host->env.ui || !may_ui(l, "add_option")) return 0;
     Loaded* lp = &l;
@@ -969,10 +970,10 @@ const net::GameConnection* readable(Loaded& l, const char* what) {
     return connection_of(l);
 }
 
-int h_get_player(void* h, NmscPlayer* out) {
+int h_get_player(void* h, HailstonePlayer* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_player");
     if (!c) return 0;
-    NmscPlayer v{};
+    HailstonePlayer v{};
     v.size = sizeof v;
     const auto& w = c->world();
     v.spawn_id = w.player_id;
@@ -1014,10 +1015,10 @@ std::uint32_t h_combat_ability(void* h, std::int32_t index) {
     return c ? c->combat_ability(index) : 0;
 }
 
-int h_server_info(void* h, NmscServer* out) {
+int h_server_info(void* h, HailstoneServer* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "server_info");
     if (!c || c->ticket().world_host.empty()) return 0;
-    NmscServer v{};
+    HailstoneServer v{};
     v.size = sizeof v;
     if (const auto saved = c->saved_server()) {
         copy_name(v.name, saved->name);
@@ -1029,14 +1030,14 @@ int h_server_info(void* h, NmscServer* out) {
     return give(out, v);
 }
 
-int h_get_spawn(void* h, std::uint32_t id, NmscSpawn* out) {
+int h_get_spawn(void* h, std::uint32_t id, HailstoneSpawn* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_spawn");
     if (!c) return 0;
     auto it = c->world().spawns.find(id);
     return it == c->world().spawns.end() ? 0 : give(out, spawn_struct(*c, it->second));
 }
 
-int h_next_spawn(void* h, std::uint32_t after_id, NmscSpawn* out) {
+int h_next_spawn(void* h, std::uint32_t after_id, HailstoneSpawn* out) {
     Loaded& l = Loaded::of(h);
     const net::GameConnection* c = readable(l, "next_spawn");
     if (!c) return 0;
@@ -1063,12 +1064,12 @@ int h_next_spawn(void* h, std::uint32_t after_id, NmscSpawn* out) {
     return 0;
 }
 
-int h_get_spell(void* h, std::uint32_t id, NmscSpell* out) {
+int h_get_spell(void* h, std::uint32_t id, HailstoneSpell* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_spell");
     if (!c) return 0;
     const game::SpellData* s = c->spell_table().get(id);
     if (!s) return 0;
-    NmscSpell v{};
+    HailstoneSpell v{};
     v.size = sizeof v;
     v.id = s->id;
     copy_name(v.name, s->name);
@@ -1085,7 +1086,7 @@ int h_get_spell(void* h, std::uint32_t id, NmscSpell* out) {
     return give(out, v);
 }
 
-int h_get_item(void* h, const NmscItemSlot* slot, NmscItem* out) {
+int h_get_item(void* h, const HailstoneItemSlot* slot, HailstoneItem* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_item");
     if (!c || !slot) return 0;
     net::ItemSlot s{slot->type, slot->slot, slot->sub, slot->aug, 0, 0};
@@ -1093,13 +1094,13 @@ int h_get_item(void* h, const NmscItemSlot* slot, NmscItem* out) {
     return it ? give(out, item_struct(*it)) : 0;
 }
 
-int h_get_buff(void* h, std::uint32_t index, NmscBuff* out) {
+int h_get_buff(void* h, std::uint32_t index, HailstoneBuff* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_buff");
     if (!c) return 0;
     const auto& buffs = c->spell_state().buffs;
     if (index >= buffs.size()) return 0;
     const game::BuffSlot& b = buffs[index];
-    NmscBuff v{};
+    HailstoneBuff v{};
     v.size = sizeof v;
     v.spell_id = b.empty() ? 0 : b.spell;
     v.tics = b.tics;
@@ -1108,13 +1109,13 @@ int h_get_buff(void* h, std::uint32_t index, NmscBuff* out) {
     return give(out, v);
 }
 
-int h_get_xtarget(void* h, std::uint32_t index, NmscXTarget* out) {
+int h_get_xtarget(void* h, std::uint32_t index, HailstoneXTarget* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget");
     if (!c) return 0;
     const auto& slots = c->xtargets().slots;
     if (index >= slots.size()) return 0;
     const game::XTargetSlot& x = slots[index];
-    NmscXTarget v{};
+    HailstoneXTarget v{};
     v.size = sizeof v;
     v.type = x.type;
     v.status = x.status;
@@ -1131,7 +1132,7 @@ int h_eqstr(void* h, std::uint32_t id, const char* const* args, std::size_t coun
     return copy_out(c->strings().format(id, a), out, out_size);
 }
 
-// The connection for an action, with NMSC_CAP_ACTIONS; null without either.
+// The connection for an action, with HAILSTONE_CAP_ACTIONS; null without either.
 net::GameConnection* acting(Loaded& l, const char* what) {
     if (!l.can(kCapActions)) {
         l.denied(what, kCapActions);
@@ -1140,7 +1141,7 @@ net::GameConnection* acting(Loaded& l, const char* what) {
     return connection_of(l);
 }
 
-int h_right_click_item(void* h, const NmscItemSlot* slot, std::uint32_t class_id) {
+int h_right_click_item(void* h, const HailstoneItemSlot* slot, std::uint32_t class_id) {
     net::GameConnection* c = acting(Loaded::of(h), "right_click_item");
     if (!c || !slot) return 0;
     c->right_click_item_original(net::ItemSlot{slot->type, slot->slot, slot->sub, slot->aug, 0, 0}, {},
@@ -1259,7 +1260,7 @@ void h_set_hot_bar_page(void* h, std::int32_t bar, std::int32_t page) {
     if (l.host->env.set_hot_bar_page) l.host->env.set_hot_bar_page(bar, page);
 }
 
-// ---- the plugin's TCP connections (NMSC_CAP_NET)
+// ---- the plugin's TCP connections (HAILSTONE_CAP_NET)
 
 Loaded::Tcp* find_tcp(Loaded& l, std::int32_t handle) {
     for (auto& t : l.tcp)
@@ -1273,7 +1274,7 @@ std::int32_t h_tcp_open(void* h, const char* address, std::uint16_t port) {
         l.denied("tcp_open", kCapNet);
         return 0;
     }
-    if (!address || !*address || l.tcp.size() >= NMSC_TCP_MAX) return 0;
+    if (!address || !*address || l.tcp.size() >= HAILSTONE_TCP_MAX) return 0;
     std::string error;
     auto conn = PluginTcp::open(address, port, error); // a name is looked up off the frame (plugin/plugin_tcp.h)
     if (!conn) {
@@ -1398,14 +1399,14 @@ int h_web_message(void* h, std::uint32_t tab, char* out, std::size_t out_size) {
     auto m = w->take_message(web_owner(l), tab);
     return m ? copy_out(*m, out, out_size) : -1;
 }
-int h_web_state(void* h, std::uint32_t tab, NmscWebState* out) {
+int h_web_state(void* h, std::uint32_t tab, HailstoneWebState* out) {
     Loaded& l = Loaded::of(h);
     WebAccess* w = web_of(l, "web_state");
     if (!w || !out) return 0;
     auto s = w->state(web_owner(l), tab);
     if (!s) return 0;
     // Grown at its end like the other structs: a plugin built with a shorter one gets what both know.
-    NmscWebState full{};
+    HailstoneWebState full{};
     full.size = sizeof full;
     copy_out(s->url, full.url, sizeof full.url);
     copy_out(s->title, full.title, sizeof full.title);
@@ -1422,7 +1423,7 @@ int h_web_view(void* h, std::uint32_t tab, float width, float height) {
     return w->view(web_owner(l), l.caps, tab, width, height) ? 1 : 0;
 }
 
-// Host functions are for the client's thread, inside one of the plugin's callbacks (sdk/nmsc_plugin.h): the client's
+// Host functions are for the client's thread, inside one of the plugin's callbacks (sdk/hailstone_plugin.h): the client's
 // state is not locked. Called from another thread one does nothing and returns 0 / NULL; the log says so once per
 // plugin.
 void off_thread(void* h) {
@@ -1448,12 +1449,17 @@ template <auto F> constexpr auto main_only = &MainOnly<F>::call;
 template <typename F> F symbol(SDL_SharedObject* lib, const char* name) {
     return reinterpret_cast<F>(SDL_LoadFunction(lib, name));
 }
+// One of the SDK's own exports: hailstone_plugin_<what>, or nmsc_plugin_<what> as plugins built up to 0.6 name it.
+template <typename F> F sdk_symbol(SDL_SharedObject* lib, const std::string& what) {
+    if (F f = symbol<F>(lib, ("hailstone_plugin_" + what).c_str())) return f;
+    return symbol<F>(lib, ("nmsc_plugin_" + what).c_str());
+}
 
 } // namespace
 
 std::optional<std::string> NativeExtension::merchant_level(const net::GameConnection&, const net::Item& item) const {
     if (!l_ || !h().list_level) return std::nullopt;
-    const NmscItem v = item_struct(item);
+    const HailstoneItem v = item_struct(item);
     const char* t = run(h().list_level, &v);
     return t ? std::optional<std::string>(t) : std::nullopt;
 }
@@ -1597,16 +1603,17 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.caps = caps;
     p.lib = SDL_LoadObject(copy.string().c_str());
     if (!p.lib) return refuse(std::format("{} did not load: {}", name, SDL_GetError()));
-    auto abi = symbol<std::uint32_t (*)()>(p.lib, "nmsc_plugin_abi");
-    auto set_host = symbol<void (*)(const NmscHost*)>(p.lib, "nmsc_plugin_set_host");
+    auto abi = sdk_symbol<std::uint32_t (*)()>(p.lib, "abi");
+    auto set_host = sdk_symbol<void (*)(const PluginHostApi*)>(p.lib, "set_host");
     if (!abi || !set_host) {
         SDL_UnloadObject(p.lib);
-        return refuse(name + " is not a Hailstone plugin (no nmsc_plugin_abi / nmsc_plugin_set_host; use NMSC_PLUGIN)");
+        return refuse(name +
+                      " is not a Hailstone plugin (no hailstone_plugin_abi / hailstone_plugin_set_host; use HAILSTONE_PLUGIN)");
     }
     // Older ABIs load (the tables only grow at their end); a newer one needs a newer client.
-    if (std::uint32_t got = abi(); got < 1 || got > NMSC_PLUGIN_ABI) {
+    if (std::uint32_t got = abi(); got < 1 || got > HAILSTONE_PLUGIN_ABI) {
         SDL_UnloadObject(p.lib);
-        return refuse(std::format("{} was built for plugin ABI {}, this client has {}", name, got, NMSC_PLUGIN_ABI));
+        return refuse(std::format("{} was built for plugin ABI {}, this client has {}", name, got, HAILSTONE_PLUGIN_ABI));
     }
     p.initialize = symbol<void (*)()>(p.lib, "InitializePlugin");
     p.shutdown = symbol<void (*)()>(p.lib, "ShutdownPlugin");
@@ -1620,11 +1627,11 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.incoming_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnIncomingChat");
     p.filter_chat = symbol<int (*)(const char*, std::uint32_t)>(p.lib, "OnFilterChat");
     p.update_imgui = symbol<void (*)()>(p.lib, "OnUpdateImGui");
-    p.packet = symbol<int (*)(int, int, NmscPacket*)>(p.lib, "OnPacket");
-    p.hooks_fn = symbol<const NmscHooks* (*)()>(p.lib, "nmsc_plugin_hooks");
+    p.packet = symbol<int (*)(int, int, HailstonePacket*)>(p.lib, "OnPacket");
+    p.hooks_fn = sdk_symbol<const HailstoneHooks* (*)()>(p.lib, "hooks");
 
-    p.table.abi = NMSC_PLUGIN_ABI;
-    p.table.size = sizeof(NmscHost);
+    p.table.abi = HAILSTONE_PLUGIN_ABI;
+    p.table.size = sizeof(PluginHostApi);
     p.table.host = &p;
     p.table.caps = main_only<h_caps>;
     p.table.name = main_only<h_name>;
@@ -1751,10 +1758,10 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
                 for (Direction dir : {Direction::In, Direction::Out})
                     hooks.on_packet(p.owner, st, dir, 0, scoped([lp, st, dir](net::AppPacket& pk) {
                         if (!lp->can(kCapPackets)) return Flow::Continue;
-                        NmscPacket c{pk.opcode, reinterpret_cast<std::uint8_t*>(pk.data.data()), pk.data.size()};
+                        HailstonePacket c{pk.opcode, reinterpret_cast<std::uint8_t*>(pk.data.data()), pk.data.size()};
                         net::AppPacket* before = std::exchange(lp->current_packet, &pk);
-                        int drop = lp->packet(st == Stream::World ? NMSC_STREAM_WORLD : NMSC_STREAM_ZONE,
-                                              dir == Direction::In ? NMSC_IN : NMSC_OUT, &c);
+                        int drop = lp->packet(st == Stream::World ? HAILSTONE_STREAM_WORLD : HAILSTONE_STREAM_ZONE,
+                                              dir == Direction::In ? HAILSTONE_IN : HAILSTONE_OUT, &c);
                         lp->current_packet = before;
                         pk.opcode = c.opcode;
                         if (c.size < pk.data.size()) pk.data.resize(c.size);
@@ -1789,16 +1796,16 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     // vitals as one member of the chain each connection asks.
     if (lp->hooks_fn) {
         bool threw = true;
-        const NmscHooks* t = guarded(*lp, "nmsc_plugin_hooks", [&] {
-            const NmscHooks* r = lp->hooks_fn();
+        const HailstoneHooks* t = guarded(*lp, "hailstone_plugin_hooks", [&] {
+            const HailstoneHooks* r = lp->hooks_fn();
             threw = false;
             return r;
         });
-        if (threw) return failed("nmsc_plugin_hooks", true);
+        if (threw) return failed("hailstone_plugin_hooks", true);
         if (t && t->size >= sizeof(std::uint32_t))
-            std::memcpy(&lp->hooks, t, std::min<std::size_t>(t->size, sizeof(NmscHooks)));
-        lp->hooks.size = sizeof(NmscHooks);
-        if (!lp->can(kCapExtend)) may_extend(*lp, "nmsc_plugin_hooks");
+            std::memcpy(&lp->hooks, t, std::min<std::size_t>(t->size, sizeof(HailstoneHooks)));
+        lp->hooks.size = sizeof(HailstoneHooks);
+        if (!lp->can(kCapExtend)) may_extend(*lp, "hailstone_plugin_hooks");
         // The command line rewrite: on the hook bus, ahead of the commands, while the plugin is active.
         if (lp->hooks.command_line && lp->can(kCapExtend))
             hooks.on_command_line(p.owner, scoped([lp](std::string& line) {
@@ -1997,4 +2004,4 @@ void NativePlugins::Impl::command(std::string_view args) {
     say("[Plugin] usage: /plugin list | /plugin <name> [load|unload]");
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

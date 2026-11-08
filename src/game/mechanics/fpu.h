@@ -35,7 +35,7 @@
 #include <limits>
 #include <optional>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 enum class FpuPrecision : std::uint8_t {
     Single24, // in game (Direct3D 9 default)
@@ -175,4 +175,4 @@ inline double x87_div(const Fpu& f, const X87& a, const X87& b) {
     return f.div(a.v, b.v);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

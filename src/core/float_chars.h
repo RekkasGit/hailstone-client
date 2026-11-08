@@ -12,7 +12,7 @@
 #include <system_error>
 #include <type_traits>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace detail {
 
@@ -63,4 +63,4 @@ std::from_chars_result float_from_chars(const char* first, const char* last, T& 
 #endif
 }
 
-} // namespace nmsc
+} // namespace hailstone

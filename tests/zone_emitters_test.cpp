@@ -8,8 +8,8 @@
 #include "audio/zone_emitters.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::audio;
+using namespace hailstone;
+using namespace hailstone::audio;
 
 namespace {
 

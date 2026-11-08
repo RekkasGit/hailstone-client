@@ -9,7 +9,7 @@
 #include "platform/paths.h"
 #include "platform/window.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 std::optional<assets::Image> read_window_icon(const std::filesystem::path& file, std::string* error) {
     auto fail = [&](std::string why) -> std::optional<assets::Image> {
@@ -41,4 +41,4 @@ void apply_window_icon(platform::Window& window) {
                     std::span(reinterpret_cast<const std::uint8_t*>(px.data()), px.size()));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

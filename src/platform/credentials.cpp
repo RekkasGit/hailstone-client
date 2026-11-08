@@ -14,7 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 std::string credential_server(std::string_view host, int port) {
     std::string out;
@@ -249,4 +249,4 @@ CredentialStore& system_credentials() {
     return store;
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

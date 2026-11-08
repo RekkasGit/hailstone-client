@@ -15,7 +15,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The EQCamera_User fields the original writes (the camera object's offsets).
 struct UserCamera {
@@ -112,4 +112,4 @@ CCreateResult char_create_camera_tick(UserCamera& cam, int customization_page, c
 float table_sin(float heading);
 float table_cos(float heading);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

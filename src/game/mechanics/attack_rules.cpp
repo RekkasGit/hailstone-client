@@ -1,6 +1,6 @@
 #include "game/mechanics/attack_rules.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -151,4 +151,4 @@ bool allowed_to_attack(const AttackSpawn& self, const AttackSpawn* target_arg, s
     return pvp_range(r);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

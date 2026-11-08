@@ -26,12 +26,12 @@
 #include "game/mechanics/switches.h"
 #include "game/swept_sphere.h"
 
-namespace nmsc::assets { class ZoneRegions; }
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::assets { class ZoneRegions; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::game::mechanics { class Character; }
+namespace hailstone::game::mechanics { class Character; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 struct MovementKeys {
     bool forward = false, back = false;
@@ -292,4 +292,4 @@ private:
     bool at_helm_ = false;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

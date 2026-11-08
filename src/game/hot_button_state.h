@@ -36,7 +36,7 @@
 #include "game/hotbuttons.h"
 #include "game/spell_gem.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class HotButtonStateQueries {
 public:
@@ -114,4 +114,4 @@ void update_hot_button(HotButtonDisplay& d, const HotButton& b, HotButtonStateQu
 void update_skill_button(ButtonCoolDown& cd, bool& checked, std::uint32_t skill, HotButtonStateQueries& q);
 bool weapon_button_checked(bool melee, HotButtonStateQueries& q, bool extras);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

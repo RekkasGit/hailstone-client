@@ -18,7 +18,7 @@
 // Each section names the original's code it follows (rof2decomp export/_globals.c: CItemDisplayWnd_BuildItemInfo
 // and the helpers it calls; the eqgame.exe disassembly where the decompiler dropped arguments).
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace m = mechanics;
 
@@ -873,4 +873,4 @@ ItemDisplayLayout layout_item_display(const ItemDisplay& d, const ItemDisplayFra
     return l;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -1,8 +1,10 @@
 #include "net/aa_packets.h"
 
+#include <algorithm>
+
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -111,8 +113,9 @@ std::optional<RespondAA> decode_respond_aa(const AppPacket& p) {
         RespondAA v;
         v.spent = r.le<std::uint32_t>();
         for (auto& a : v.assigned) a = r.le<std::uint32_t>();
-        // Handle_OP_RespondAA reads up to 300 slots and stops at the end of the packet.
-        for (int i = 0; i < game::kOwnedAbilities && r.remaining() >= 12; ++i) {
+        // Handle_OP_RespondAA reads up to 300 slots and stops at the end of the packet. Deliberate difference:
+        // every slot is read, for servers that send more than 300 (game::kOwnedAbilities).
+        while (r.remaining() >= 12) {
             game::OwnedAbility o;
             o.id = r.le<std::uint32_t>();
             o.value = r.le<std::uint32_t>();
@@ -127,8 +130,9 @@ AppPacket encode(const RespondAA& v) {
     ByteWriter w;
     w.le(v.spent);
     for (auto a : v.assigned) w.le(a);
-    for (int i = 0; i < game::kOwnedAbilities; ++i) {
-        game::OwnedAbility o = i < static_cast<int>(v.owned.size()) ? v.owned[static_cast<std::size_t>(i)] : game::OwnedAbility{};
+    const std::size_t slots = std::max(v.owned.size(), static_cast<std::size_t>(game::kOwnedAbilities));
+    for (std::size_t i = 0; i < slots; ++i) {
+        game::OwnedAbility o = i < v.owned.size() ? v.owned[i] : game::OwnedAbility{};
         w.le(o.id);
         w.le(o.value);
         w.le(o.charges);
@@ -196,4 +200,4 @@ AppPacket encode(const AATimer& v) {
     return make_packet(Op::AAAction, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

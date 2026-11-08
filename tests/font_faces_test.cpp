@@ -9,7 +9,7 @@
 #include "scratch_dir.h"
 #include "ui/font_faces.h"
 
-using namespace nmsc::ui;
+using namespace hailstone::ui;
 
 namespace {
 
@@ -114,7 +114,7 @@ TEST_CASE("font faces: a family's regular and bold files, by name in any case") 
 
 TEST_CASE("font faces: a file whose name is not ASCII is found") {
     // On Windows path::string() is in the ANSI code page and throws for a name it cannot show; the scan must not.
-    nmsc::test::ScratchDir dir("font_faces");
+    hailstone::test::ScratchDir dir("font_faces");
     const std::filesystem::path file = dir.path() / std::filesystem::path(u8"Schrift-\u00e4\u65e5\u672c.ttf");
     {
         auto bytes = font_file("Test Sans", "Regular");
@@ -133,7 +133,7 @@ TEST_CASE("font faces: a file whose name is not ASCII is found") {
 // old code too, where the 4 GB image usually allocates and the read then falls short: the sparse-file case below is
 // the one that shows the fix.)
 TEST_CASE("font faces: the name table at any offset, and a broken offset is no face") {
-    nmsc::test::ScratchDir dir("font_faces_offset");
+    hailstone::test::ScratchDir dir("font_faces_offset");
     auto write = [&](const std::string& name, const std::vector<unsigned char>& d) {
         const auto path = dir.path() / name;
         std::ofstream(path, std::ios::binary)
@@ -165,7 +165,7 @@ TEST_CASE("font faces: the name table at any offset, and a broken offset is no f
 // offset's sum with its length wrapping in 32 bits. Read into an image of its own size, it is found; an image sized
 // from that sum was a few bytes long and the table was read 4 GB past it (a crash even without the sanitizer).
 TEST_CASE("font faces: a name table near 4 GB in, its end past 32 bits, is read into a buffer of its size") {
-    nmsc::test::ScratchDir dir("font_faces_sparse");
+    hailstone::test::ScratchDir dir("font_faces_sparse");
     std::vector<unsigned char> plain = font_file("Edge Sans", "Regular");
     const std::uint32_t offset = 0xfffffff0u;
     REQUIRE(plain.size() - 28 > 0x10); // so offset + length passes 2^32

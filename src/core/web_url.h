@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc::web {
+namespace hailstone::web {
 
 // The host of an http:// or https:// address, lower-cased, without user info or port ("" when the address is not
 // one: another scheme, no host, a space or control character anywhere in it, or a host with a character outside
@@ -24,4 +24,4 @@ inline bool url_allowed(std::string_view url, const std::vector<std::string>& al
     return !host.empty() && host_allowed(host, allow);
 }
 
-} // namespace nmsc::web
+} // namespace hailstone::web

@@ -31,7 +31,7 @@
 
 #include "game/hotbuttons.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kStrPet = 6700; // "Pet" (string 0x1a2c)
 inline constexpr int kPetWindowButtons = 14;   // Pet0_Button .. Pet13_Button
@@ -175,4 +175,4 @@ struct PetButtonFace {
 std::optional<bool> pet_hot_button_checked(std::string_view label, std::string_view pet_word,
                                            std::span<const PetButtonFace> buttons);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 enum class BinaryFormat { Unknown, Elf, Pe, MachO };
 
@@ -30,4 +30,4 @@ bool binary_fits_platform(const BinaryHeader& header, std::string_view platform)
 // The library file extension of a platform's plugins (".so", ".dll", ".dylib"; "" unknown).
 std::string_view plugin_extension(std::string_view platform);
 
-} // namespace nmsc
+} // namespace hailstone

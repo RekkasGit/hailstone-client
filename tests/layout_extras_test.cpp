@@ -24,14 +24,14 @@
 #include "render/pipeline_cache.h"
 
 namespace fs = std::filesystem;
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 struct TempDir {
     fs::path path;
     explicit TempDir(const char* tag) {
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = fs::temp_directory_path() / (std::string("nmsc_extras_") + tag + "_" + std::to_string(stamp));
+        path = fs::temp_directory_path() / (std::string("hailstone_extras_") + tag + "_" + std::to_string(stamp));
         fs::create_directories(path);
     }
     ~TempDir() {
@@ -244,10 +244,10 @@ TEST_CASE("Crash log: the last log lines and the report file") {
 
 #ifndef _WIN32
 #if defined(__SANITIZE_ADDRESS__)
-#define NMSC_TEST_ASAN 1
+#define HAILSTONE_TEST_ASAN 1
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
-#define NMSC_TEST_ASAN 1
+#define HAILSTONE_TEST_ASAN 1
 #endif
 #endif
 
@@ -262,7 +262,7 @@ int use_up_stack(int depth) {
     return use_up_stack(depth + 1) + pad[0];
 }
 
-// Runs `crash` in a child process that has a SIGSEGV handler of its own (exit status 42) installed before the crash
+// Runs `crash` in a child process that has a SIGSEGV and SIGBUS handler of its own (exit status 42) installed before the crash
 // handler; the child's exit status, or -1 when it did not exit by itself.
 int crash_in_child(const fs::path& logs, void (*crash)()) {
     pid_t pid = ::fork();
@@ -273,6 +273,7 @@ int crash_in_child(const fs::path& logs, void (*crash)()) {
         sigemptyset(&earlier.sa_mask);
         earlier.sa_flags = SA_ONSTACK;
         sigaction(SIGSEGV, &earlier, nullptr);
+        sigaction(SIGBUS, &earlier, nullptr); // macOS: a thread's stack overflow hits its guard page as SIGBUS
         platform::install_crash_handler(logs);
         crash();
         ::_exit(1);
@@ -297,7 +298,7 @@ TEST_CASE("Crash log: after the report the handler that was there before still r
     CHECK(crash_files(tmp.path / "logs") == 1);
 }
 
-#ifndef NMSC_TEST_ASAN // AddressSanitizer reports a stack overflow its own way
+#ifndef HAILSTONE_TEST_ASAN // AddressSanitizer reports a stack overflow its own way
 TEST_CASE("Crash log: a stack overflow on a thread with a CrashStack is reported") {
     TempDir tmp("crash_thread");
     CHECK(crash_in_child(tmp.path / "logs", [] {

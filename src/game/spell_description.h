@@ -27,7 +27,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct SpellData;
 namespace mechanics { class Character; }
@@ -72,4 +72,4 @@ std::string spell_description_text(const SpellData& spell, std::string_view text
                                    const mechanics::Character* character, std::int32_t player_level,
                                    std::uint8_t player_class);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

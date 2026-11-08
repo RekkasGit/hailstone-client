@@ -3,7 +3,7 @@
 
 #include "render/descriptor_limits.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 TEST_CASE("descriptor limits: Intel's Windows driver, plain sets: its 64 samplers per stage, less the shadow set's") {
     // An Iris Xe (i5-1135G7) on Intel's Windows driver, as vulkaninfo gave them.

@@ -3,7 +3,7 @@
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 using detail::decode_with;
 
@@ -228,4 +228,4 @@ std::optional<std::uint16_t> decode_bind_wound(const AppPacket& p) {
     });
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

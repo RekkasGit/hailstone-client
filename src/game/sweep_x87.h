@@ -30,7 +30,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class SweepX87 {
 public:
@@ -277,4 +277,4 @@ private:
 #include "game/sweep_x87.inc"
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

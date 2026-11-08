@@ -22,7 +22,7 @@
 #include "app/lua_eq_windows.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -144,4 +144,4 @@ void register_inventory_manager_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

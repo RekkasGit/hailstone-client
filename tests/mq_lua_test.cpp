@@ -2,7 +2,9 @@
 // server's rules.
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <fstream>
+#include <thread>
 
 #include <imgui.h>
 
@@ -16,13 +18,13 @@
 #include "plugin/web_access.h"
 #include "web/browser_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
 
 struct Host {
-    mq_test::World world{"nmsc_mq_lua_test"};
+    mq_test::World world{"hailstone_mq_lua_test"};
     fs::path lua_dir = world.dir / "lua";
     fs::path config_dir = world.dir / "config";
     plugin::Hooks hooks;
@@ -767,11 +769,11 @@ TEST_CASE("TLO completion: TLO names, members through the live value and its typ
     CHECK(h.reg.complete(h.ctx, "Nope.X").empty());
 }
 
-#ifdef NMSC_MOCK_WEB_HELPER
+#ifdef HAILSTONE_MOCK_WEB_HELPER
 // mq.web (mq/lua_mq_web.cpp) over the app's WebService and the stand-in helper (tests/mock_web_helper.cpp): the
 // script's own tab on the server's sites, a message both ways; without 'web', an error.
 TEST_CASE("MQ Lua: mq.web opens the script's own tabs, on the server's sites, under 'web'") {
-    web::BrowserHost browser([] { return web::process_transport({NMSC_MOCK_WEB_HELPER}); });
+    web::BrowserHost browser([] { return web::process_transport({HAILSTONE_MOCK_WEB_HELPER}); });
     app::WebService web({[&] { return &browser; }, [] { return nullptr; }, [] { return std::string(); },
                          [] { return std::vector<std::string>{"example.org"}; }, [] {}});
     {
@@ -793,9 +795,13 @@ print('url ' .. mq.web.state(tab).url)
 while true do mq.delay(1000) end
 )");
         REQUIRE(h.scripts->run("page", {}));
-        for (int i = 0; i < 3000 && !h.printed_line("url https://www.example.org/"); ++i) {
+        // A real helper process answers through real pipes: wait by the wall clock, not a count of pulses (a slow
+        // machine, such as the macOS runner, starts the process later than 3000 quick pulses took).
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (!h.printed_line("url https://www.example.org/") && std::chrono::steady_clock::now() < until) {
             browser.poll(0);
             h.pulses(1, 10);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         CHECK(h.printed_line("open true"));
         CHECK(h.printed_line("elsewhere true"));

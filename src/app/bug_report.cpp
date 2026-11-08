@@ -8,11 +8,12 @@
 #include <span>
 #include <system_error>
 
+#include "core/file_time.h"
 #include "core/log.h"
 #include "core/zip_write.h"
 #include "platform/local_time.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 namespace fs = std::filesystem;
@@ -61,7 +62,7 @@ std::time_t file_time(const fs::path& path) {
     std::error_code ec;
     const auto t = fs::last_write_time(path, ec);
     if (ec) return 0;
-    return std::chrono::system_clock::to_time_t(std::chrono::clock_cast<std::chrono::system_clock>(t));
+    return file_time_to_time_t(t);
 }
 
 // The player's screenshots from the window before `time`, newest first.
@@ -432,4 +433,4 @@ void mark_crash_reported(const fs::path& crash) {
     if (fs::exists(dump, ec)) fs::rename(dump, fs::path(stem.string() + ".reported.dmp"), ec);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

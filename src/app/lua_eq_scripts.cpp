@@ -18,7 +18,7 @@
 #include "plugin/policy.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -204,4 +204,4 @@ void register_scripts_api(lua_State* L, EqHost& host) {
     lua_pop(L, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

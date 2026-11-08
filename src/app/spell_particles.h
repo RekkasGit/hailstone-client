@@ -25,12 +25,12 @@
 #include "game/particles.h"
 #include "render/particle_renderer.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { struct CharacterModel; }
-namespace nmsc::render { class ActorRenderer; }
-namespace nmsc::net { class GameConnection; struct SpellEffectCue; }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { struct CharacterModel; }
+namespace hailstone::render { class ActorRenderer; }
+namespace hailstone::net { class GameConnection; struct SpellEffectCue; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class SpellParticles {
 public:
@@ -90,4 +90,4 @@ private:
     void play(net::GameConnection& conn, const Held& cue, const render::ActorRenderer* actors);
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

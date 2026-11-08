@@ -11,9 +11,9 @@
 #include "net/ability_packets.h"
 #include "net/item_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 
 namespace {
 
@@ -283,10 +283,13 @@ TEST_CASE("item clicks: CastSpell's attune and CanUseItem checks refuse quietly 
     auto table = std::make_shared<game::SpellTable>();
     REQUIRE(table->parse(line) == 1);
 
+    // A 30 s recast of its own (type -1): an instant item cast that gets through sets it (@0x43c5b0).
     auto clicky = [](std::uint32_t id, const char* name, std::int16_t slot, std::uint32_t type) {
         Item it = make_item(id, name, slot);
         it.effects[kEffectClick].effect = 500;
         it.effects[kEffectClick].type = type;
+        it.effects[kEffectClick].extra[2] = 30;
+        it.effects[kEffectClick].extra[3] = 0xffffffffu;
         it.charges = 1;
         return it;
     };
@@ -307,7 +310,7 @@ TEST_CASE("item clicks: CastSpell's attune and CanUseItem checks refuse quietly 
     auto& conn = rig.conn;
     REQUIRE(rig.to_zone());
     conn.set_spell_table_for_test(table);
-    auto casts = [&] { return MockEqServer::count(rig.server.zone_log, Op::CastSpell); };
+    auto recast = [&](std::int16_t slot) { return conn.item_recast_timer(conn.inventory().at(ItemSlot::possessions(slot))); };
     auto reply = [&](std::int16_t slot) {
         drain_chat(conn);
         conn.receive_zone_packet_for_test(encode(ItemVerifyReply{ItemSlot::possessions(slot), 0, 0}));
@@ -319,15 +322,67 @@ TEST_CASE("item clicks: CastSpell's attune and CanUseItem checks refuse quietly 
     CHECK(reply(27).empty());
     CHECK(reply(28).empty());
     CHECK(reply(29).empty());
-    CHECK(casts() == 0);
+    CHECK(recast(27) == 0);
+    CHECK(recast(28) == 0);
+    CHECK(recast(29) == 0);
 
-    // Attuned, the eye casts from a general slot.
+    // Attuned, the eye casts from a general slot: locally only, its recast timer set, and nothing sent.
     reply(30);
-    REQUIRE(rig.until([&] { return casts() == 1; }));
-    const AppPacket* sent = last_of(rig.server.zone_log, Op::CastSpell);
-    CHECK(u32_at(*sent, 0) == 12);  // the item gem
-    CHECK(u32_at(*sent, 4) == 500);
-    CHECK(u32_at(*sent, 12) == (30u | 0xffffu << 16));
+    CHECK(recast(30) >= static_cast<std::uint32_t>(std::time(nullptr)) + 29);
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::CastSpell) == 0);
+}
+
+TEST_CASE("item clicks: the reply casts without OP_CastSpell; the server cast it on the request (@0x4bff71)") {
+    // EQEmu casts the click on OP_ItemVerifyRequest and answers with spell 0. The original's CastSpell from the reply
+    // passes 0 as its send argument, so an instant clicky without a recast is not cast a second time.
+    std::vector<std::string> f(237, "0");
+    f[0] = "500";
+    f[1] = "Test Click";
+    f[9] = "100";
+    f[86] = "254";
+    f[98] = "6";   // self
+    f[213] = "1";  // in combat
+    f[214] = "1";  // out of combat
+    std::string line;
+    for (std::size_t i = 0; i < f.size(); ++i) line += (i ? "^" : "") + f[i];
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(line) == 1);
+
+    Item instant = make_item(1300, "Instant Clicky", 27);
+    instant.effects[kEffectClick].effect = 500;
+    instant.effects[kEffectClick].type = 1; // click from anywhere
+    instant.charges = 1;                    // no recast
+    Item slow = instant;
+    slow.id = 1301;
+    slow.name = "Slow Clicky";
+    slow.slot = ItemSlot::possessions(28);
+    slow.effects[kEffectClick].extra[1] = 3000; // a 3 s item cast time
+    Rig rig(with_items({instant, slow}));
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    conn.set_spell_table_for_test(table);
+    auto count = [&](Op op) { return MockEqServer::count(rig.server.zone_log, op); };
+
+    // The instant one: one request, the reply, no OP_CastSpell and nothing left pending; it can be clicked again.
+    for (int n = 1; n <= 2; ++n) {
+        conn.right_click_item(ItemSlot::possessions(27));
+        REQUIRE(rig.until([&] { return count(Op::ItemVerifyRequest) == n; }));
+        conn.receive_zone_packet_for_test(encode(ItemVerifyReply{ItemSlot::possessions(27), 0, 0}));
+        rig.run_for(std::chrono::milliseconds(30));
+        CHECK(count(Op::CastSpell) == 0);
+        CHECK(conn.spell_state().pending == 0);
+        CHECK_FALSE(conn.spell_state().casting.casting());
+    }
+
+    // The 3 s one: the cast bar runs locally, still without OP_CastSpell.
+    conn.right_click_item(ItemSlot::possessions(28));
+    REQUIRE(rig.until([&] { return count(Op::ItemVerifyRequest) == 3; }));
+    conn.receive_zone_packet_for_test(encode(ItemVerifyReply{ItemSlot::possessions(28), 0, 0}));
+    rig.run_for(std::chrono::milliseconds(30));
+    CHECK(count(Op::CastSpell) == 0);
+    CHECK(conn.spell_state().casting.casting());
+    CHECK(conn.spell_state().casting.spell == 500);
+    CHECK(conn.spell_state().casting.cast_time == 3000);
 }
 
 TEST_CASE("auto inventory: worn stacks first, then a worn slot by the class check alone (AutoInventoryCursorItem)") {

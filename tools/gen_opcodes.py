@@ -7,7 +7,7 @@ Use stock EQEmu's conf (an unmodified checkout's utils/patches/). A custom
 server's own opcodes belong to its plugin, not to this table.
 
 The conf lists `OP_Name=0xNNNN` lines (a trailing `# comment` is allowed).
-Each becomes `NMSC_OP(Name, 0xNNNN)` in file order; the OP_ prefix is
+Each becomes `HAILSTONE_OP(Name, 0xNNNN)` in file order; the OP_ prefix is
 dropped. Values of 0x0000 mean "not used by RoF2". Names are unique in the
 conf; when several names share one wire value, net::from_wire() returns the
 first in file order. The output is checked in; this script is not run by the
@@ -50,7 +50,7 @@ def main() -> int:
         f"// {len(entries)} opcodes; 0x0000 means the name has no RoF2 wire value.",
         "",
     ]
-    lines += [f"NMSC_OP({name}, 0x{value:04x})" for name, value in entries]
+    lines += [f"HAILSTONE_OP({name}, 0x{value:04x})" for name, value in entries]
     out.write_text("\n".join(lines) + "\n", encoding="ascii")
     print(f"wrote {len(entries)} opcodes to {out}")
     return 0

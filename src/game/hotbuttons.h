@@ -20,9 +20,9 @@
 
 #include "game/lua_social.h"
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kHotBars = 10, kHotPages = 10, kHotButtons = 12;
 inline constexpr int kSocialPages = 10, kSocialButtons = 12, kSocialLines = 5;
@@ -111,4 +111,4 @@ int store_social(HotButtonStore& store, std::string_view name, std::string_view 
 // The section of a bar: "HotButtons", "HotButtons2" ... "HotButtons10".
 std::string hot_button_section(int bar);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

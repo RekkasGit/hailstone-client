@@ -20,7 +20,7 @@
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

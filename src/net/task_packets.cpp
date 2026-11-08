@@ -2,7 +2,7 @@
 
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -430,4 +430,4 @@ AppPacket encode_shared_task_quit() {
     return make_packet(Op::SharedTaskQuit, std::move(w));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

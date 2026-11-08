@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // What a cache must have been made by (VkPhysicalDeviceProperties).
 struct PipelineCacheDevice {
@@ -44,4 +44,4 @@ std::vector<std::byte> load_pipeline_cache(const std::filesystem::path& path, co
 bool save_pipeline_cache(const std::filesystem::path& path, std::span<const std::byte> data,
                          const PipelineCacheDevice& device);
 
-} // namespace nmsc::render
+} // namespace hailstone::render

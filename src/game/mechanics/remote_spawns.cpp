@@ -7,7 +7,7 @@
 #include <cfloat>
 #include <cmath>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -191,4 +191,4 @@ void step_remote_spawn(RemoteBody& b, float elapsed_ms, bool npc) {
     b.position.y = integrate_axis(b.position.y, v.y, dt);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

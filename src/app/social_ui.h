@@ -9,9 +9,9 @@
 
 #include "ui/social_windows.h"
 
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class SocialUi {
 public:
@@ -31,4 +31,4 @@ private:
     std::chrono::steady_clock::time_point raid_invite_seen_{}, guild_invite_seen_{};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

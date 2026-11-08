@@ -10,11 +10,11 @@
 #include "app/commerce_ui.h"
 #include "ui/item_windows.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::render { class VkContext; }
-namespace nmsc::net { class GameConnection; }
+namespace hailstone { class GameDir; }
+namespace hailstone::render { class VkContext; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ItemUi {
 public:
@@ -54,4 +54,4 @@ private:
     CommerceUi commerce_; // merchant, trade and give windows (app/commerce_ui.h)
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

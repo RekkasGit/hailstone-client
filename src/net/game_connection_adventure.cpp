@@ -8,7 +8,7 @@
 #include "net/game_connection.h"
 #include "net/packet_io.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -33,8 +33,9 @@ bool GameConnection::open_adventure_recruiter(std::uint32_t npc) {
 
 void GameConnection::adventure_request(std::uint32_t risk, std::uint32_t type) {
     if (state_ != ConnectionState::InZone || !adventure_.recruiter) return;
-    if (!group_.active && !raid_.active) {
-        // EQEmu drops a request from a character in no group or raid without an answer.
+    if (!group_.active && !raid_.active && !server_ext().solo_adventure(*this)) {
+        // EQEmu drops a request from a character in no group or raid without an answer; a server extension's
+        // solo_adventure switch lets it go out (game/server_ext.h).
         adventure_.npc_text = "You must be in a group or raid to request an adventure."; // this client's line
         return;
     }
@@ -114,4 +115,4 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -5,7 +5,7 @@
 #include "net/ability_packets.h"
 #include "net/notice_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 void GameConnection::handle_ability(Op op, const AppPacket& p) {
     switch (op) {
@@ -61,4 +61,4 @@ std::optional<AppPacket> GameConnection::poll_ability_packet() {
     return p;
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

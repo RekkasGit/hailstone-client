@@ -6,7 +6,7 @@
 
 #include "render/shadow_chunks.h"
 
-using namespace nmsc::render;
+using namespace hailstone::render;
 
 namespace {
 

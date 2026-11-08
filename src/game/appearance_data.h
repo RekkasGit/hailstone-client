@@ -16,7 +16,7 @@
 
 #include "game/actor_look.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // ColorTable_LoadFromIni @0x574b60: [Data] Number, Value1..ValueN (default
 // 0xffffff), each stored | 0xff000000. ColorTable_GetEntry @0x574b40 returns
@@ -99,4 +99,4 @@ struct AppearanceData {
 // local player, a group or raid member: whether hero's forge is hidden.
 inline bool new_armor_filtered(std::uint32_t filter, bool npc) { return (filter & (npc ? 0x10u : 0x08u)) == 0; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

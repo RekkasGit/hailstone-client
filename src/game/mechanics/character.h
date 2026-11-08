@@ -39,7 +39,7 @@
 #include "game/mechanics/item_sums.h"
 #include "game/mechanics/tables.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // The SpellCache: buff, worn-item and AA totals by (SPA, subindex).
 struct EffectCache {
@@ -306,4 +306,4 @@ std::int32_t total_effect(const CharacterSheet& sheet, const GameTables& tables,
                           std::int32_t spa, bool include_items = true, std::int32_t subindex = 0,
                           bool include_aa = true, bool include_buffs = true);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

@@ -7,7 +7,7 @@
 #include "core/ini_file.h"
 #include "core/saturate.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -77,4 +77,4 @@ std::vector<CloudDefinition> load_zone_clouds(const GameDir& game, std::string_v
     return weather_clouds(weather, default_weather(sky, zone));
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

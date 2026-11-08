@@ -24,7 +24,7 @@
 #include "game/eq_strings.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // PcClient::GetConLevel's values.
 enum class Con : std::uint8_t { None = 0, Gray, Green, LightBlue, DarkBlue, White, Yellow, Red };
@@ -61,6 +61,10 @@ std::uint32_t con_chat_color(Con con);
 Con con_from_server(std::uint32_t level);
 // Screen colour for UI (0xRRGGBB).
 std::uint32_t con_rgb(Con con);
+// The colour an NPC's name is drawn in when display.con_name_colour is on (a deliberate difference, docs/graphics.md
+// "Name plates"): its consider colour. nullopt for everything else, and for every spawn while the option is off, so
+// the caller keeps the stock colours.
+std::optional<std::uint32_t> npc_name_colour(const Spawn& s, int my_level, std::int32_t pvp_rules, bool enabled);
 
 // BuildConsiderMessage: "<name> <standing> -- <difficulty>". faction is the
 // server's (remapped) standing 1..9; short_form is Consider_Struct +16 (the
@@ -242,4 +246,4 @@ std::uint32_t next_npc(const WorldState& world, const glm::vec3& from, float yaw
 std::optional<std::uint32_t> pick_spawn(const WorldState& world, const glm::vec3& origin, const glm::vec3& dir,
                                         float max_distance, std::uint32_t skip);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

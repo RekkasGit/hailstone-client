@@ -6,7 +6,8 @@
 // naming rules (<code><part><variant><piece>, faces in the piece's tens
 // digit, robes 10..16 -> body mesh <code>01 with CLK04..CLK10 textures,
 // helm meshes <code>HE<nn>, items IT<n> on the R_POINT / L_POINT /
-// SHIELD_POINT bones) follow OpenEQ
+// SHIELD_POINT bones) follow OpenEQ, except which secondary is a shield
+// (CDisplay::IsShield, game::is_shield_model)
 // crates/openeq-assets/src/character/appearance.rs (MIT OR Apache-2.0); see
 // THIRD_PARTY.md. Format notes: docs/formats/characters.md ("Appearance").
 
@@ -26,7 +27,7 @@
 #include "game/appearance_data.h"
 #include "game/race_models.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -604,13 +605,9 @@ void CharacterLibrary::attach_items(const CharacterModel& model, const game::App
         auto held = item_mesh(number);
         if (!held) continue;
         const CharacterMesh* item = &held->mesh;
-        // The spawn has no item type: a secondary whose textures say
-        // "shield" goes on the shield point (OpenEQ's rule).
-        bool shield = false;
-        if (slot == game::kSlotSecondary)
-            for (const auto& m : item->materials)
-                for (const auto& f : m.frames)
-                    if (lower(f).find("shield") != std::string::npos) shield = true;
+        // PlayerClient::SetHeldModel puts a secondary on the shield point when CDisplay::IsShield knows its model
+        // number, whatever its textures are called.
+        const bool shield = slot == game::kSlotSecondary && game::is_shield_model(number);
         int bone = -1;
         if (model.eqg) {
             const char* names[] = {shield ? "ARML_SHLD" : (slot == game::kSlotSecondary ? "ARML_WEAP" : "ARMR_WEAP"),
@@ -684,4 +681,4 @@ void CharacterLibrary::attach_items(const CharacterModel& model, const game::App
     }
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

@@ -8,7 +8,7 @@
 
 #include "core/game_dir.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 inline const GameDir* game_dir() {
     static std::unique_ptr<GameDir> dir = [] {
@@ -18,4 +18,4 @@ inline const GameDir* game_dir() {
     return dir.get();
 }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

@@ -20,7 +20,7 @@
 #include "fuzz_support.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

@@ -3,7 +3,7 @@
 
 #include "core/ascii_case.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 TEST_CASE("icompare orders as strcasecmp does in the C locale") {
     CHECK(icompare("Apple", "apple") == 0);

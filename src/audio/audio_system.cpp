@@ -13,7 +13,7 @@
 #include "core/log.h"
 #include "platform/audio_device.h"
 
-namespace nmsc::audio {
+namespace hailstone::audio {
 
 namespace {
 
@@ -498,4 +498,4 @@ void AudioSystem::drop_spawn_loops_except(const std::vector<std::uint32_t>& aliv
     }
 }
 
-} // namespace nmsc::audio
+} // namespace hailstone::audio

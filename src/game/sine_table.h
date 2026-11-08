@@ -5,7 +5,7 @@
 // quadrant entries written exactly (rof2decomp notes/eqgraphicsdx9.md, The
 // sine table). Angles are in 512ths of a turn.
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // CMath vtable +0x00 (sin) and +0x04 (cos), 0x100b92e0 / 0x100b9340: the
 // 512-entry float tables, linearly interpolated. sin floors negative
@@ -18,4 +18,4 @@ float cmath_cos_interp(float x);
 float cmath_sin(float x);
 float cmath_cos(float x);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -13,7 +13,7 @@
 #include <cstring>
 #include <limits>
 
-namespace nmsc::game::mechanics::hit {
+namespace hailstone::game::mechanics::hit {
 
 namespace {
 
@@ -1072,4 +1072,4 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
     return 1;
 }
 
-} // namespace nmsc::game::mechanics::hit
+} // namespace hailstone::game::mechanics::hit

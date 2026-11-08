@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -128,4 +128,4 @@ void update_hot_button(HotButtonDisplay& d, const HotButton& b, HotButtonStateQu
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -19,7 +19,7 @@
 #include "net/player_packets.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -444,4 +444,4 @@ void GameConnection::offlinemode_command() {
     if (state_ == ConnectionState::InZone) send_zone(AppPacket(kOpOfflineMode));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

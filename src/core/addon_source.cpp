@@ -2,7 +2,7 @@
 
 #include <array>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -187,4 +187,4 @@ std::string addon_url_beside(std::string_view manifest_url, std::string_view fil
            std::string(file);
 }
 
-} // namespace nmsc
+} // namespace hailstone

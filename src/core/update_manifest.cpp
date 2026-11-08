@@ -2,7 +2,7 @@
 
 #include <charconv>
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 
@@ -192,4 +192,4 @@ std::vector<UpdatePackage> packages_for(const UpdateManifest& manifest, std::str
     return out;
 }
 
-} // namespace nmsc
+} // namespace hailstone

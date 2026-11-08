@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 std::vector<CellChunk> merge_cell_chunks(std::span<const CellChunk> chunks, std::vector<std::uint32_t>& indices) {
     std::vector<std::uint32_t> order(chunks.size());
@@ -34,4 +34,4 @@ std::vector<CellChunk> merge_cell_chunks(std::span<const CellChunk> chunks, std:
     return out;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

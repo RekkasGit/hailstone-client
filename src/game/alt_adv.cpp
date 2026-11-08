@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 bool AltAbility::class_allowed(std::uint32_t cls) const {
     if (cls - 1 > 15) return false;
@@ -112,7 +112,6 @@ void AltAdvState::set_owned(std::uint32_t spent_points, const std::array<std::ui
                             std::vector<OwnedAbility> list) {
     spent = spent_points;
     assigned = assigned_points;
-    if (list.size() > kOwnedAbilities) list.resize(kOwnedAbilities);
     owned = std::move(list);
 }
 
@@ -172,4 +171,4 @@ std::vector<const AltAbility*> AltAdvState::visible(std::int32_t type, std::uint
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -4,7 +4,7 @@
 #include <charconv>
 #include <cstdint>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -185,4 +185,4 @@ std::optional<LuaSocialFile> import_lua_social(std::string_view text) {
 
 std::string lua_social_file_name(int index) { return std::to_string(index + 1) + ".lua"; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

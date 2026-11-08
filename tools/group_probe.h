@@ -29,7 +29,7 @@
 #include "net/pet_packets.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::probe {
+namespace hailstone::probe {
 
 class GroupProbe {
 public:
@@ -370,4 +370,4 @@ private:
     bool pet_engaged_ = false;
 };
 
-} // namespace nmsc::probe
+} // namespace hailstone::probe

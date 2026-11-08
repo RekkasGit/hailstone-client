@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct CombatAbilityEntry {
     std::int32_t index = 0; // the profile's combat ability n (PcBase::GetCombatAbility)
@@ -41,4 +41,4 @@ inline constexpr std::int32_t kCombatAbilityMenuIdBase = 10000;
 std::vector<CombatAbilityMenuGroup> build_combat_ability_menu(
     const std::vector<CombatAbilityEntry>& abilities, const std::function<std::string(std::int32_t)>& category_name);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

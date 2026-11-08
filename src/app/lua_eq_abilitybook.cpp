@@ -45,7 +45,7 @@
 #include "game/mechanics/character.h"
 #include "net/game_connection.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -702,4 +702,4 @@ void register_ability_book_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

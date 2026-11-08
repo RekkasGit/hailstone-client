@@ -7,7 +7,7 @@
 
 #include "core/step_clock.h"
 
-using nmsc::core::StepClock;
+using hailstone::core::StepClock;
 
 namespace {
 

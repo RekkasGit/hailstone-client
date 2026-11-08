@@ -16,9 +16,9 @@
 #include "game/gamepad_bindings.h"
 #include "platform/gamepad.h"
 
-namespace nmsc { class Config; }
+namespace hailstone { class Config; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // docs/gamepad.md section 2: game (the pad plays), menu (it drives ImGui's navigation in the focused window),
 // cursor (it moves and clicks a mouse pointer).
@@ -93,4 +93,4 @@ private:
     std::function<bool(float, float, int)> rumble_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

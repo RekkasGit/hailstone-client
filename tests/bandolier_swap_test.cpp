@@ -14,8 +14,8 @@
 #include "net/packet_io.h"
 #include "net/player_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 using net::ItemSlot;
 
 namespace {

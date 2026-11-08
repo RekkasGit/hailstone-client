@@ -12,7 +12,7 @@
 #include "net/chat_server.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -264,4 +264,4 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
     }
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

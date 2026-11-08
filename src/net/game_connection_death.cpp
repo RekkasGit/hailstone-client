@@ -12,7 +12,7 @@
 #include "net/packet_io.h"
 #include "net/player_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -128,6 +128,12 @@ void GameConnection::handle_death(const Death& d) {
     dead->is_corpse = true;
     dead->hp_percent = 0;
     dead->stand_state = 115;
+    // IDied zeroes the velocities (+0x70..+0x78, speed_run +0x7c, speed_heading +0x8c) and sets fly mode 0, so a
+    // spawn killed while moving drops where it died instead of sliding on with the last update's motion.
+    dead->velocity = glm::vec3(0.0f);
+    dead->speed_run = 0.0f;
+    dead->speed_heading = 0.0f;
+    dead->fly_mode = 0;
     // The death text: ours in colour 0x115 and on the screen, others' in 0x116 when reported.
     while (chat_at < r.chat.size()) {
         std::uint32_t color = r.chat[chat_at].color;
@@ -414,4 +420,4 @@ void GameConnection::save_tick() {
     if (++save_ticks_ > 300) send_save(0xf);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

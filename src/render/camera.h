@@ -12,7 +12,7 @@
 #include "render/shadows.h"
 #include "render/vk_context.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct FlyCamera {
     glm::vec3 position{0.0f};
@@ -77,4 +77,4 @@ struct FlyCamera {
     }
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

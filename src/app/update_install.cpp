@@ -13,7 +13,7 @@
 #include "core/log.h"
 #include "core/zip_read.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace fs = std::filesystem;
 
@@ -564,4 +564,4 @@ std::vector<std::string> retire_old_release_files(const fs::path& install_dir,
     return removed;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

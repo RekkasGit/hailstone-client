@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <optional>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 struct Extent {
     std::uint32_t width = 0, height = 0;
@@ -36,4 +36,4 @@ inline bool swapchain_outdated(Extent window, Extent requested, std::optional<Ex
     return surface && *surface != swapchain;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

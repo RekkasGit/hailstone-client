@@ -13,9 +13,9 @@
 #include "game/mechanics/tables.h"
 #include "game/spells.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
-using namespace nmsc::game::mechanics;
+using namespace hailstone;
+using namespace hailstone::game;
+using namespace hailstone::game::mechanics;
 
 namespace {
 

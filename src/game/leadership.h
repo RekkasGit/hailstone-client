@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr int kLeadershipAbilities = 32, kLeadershipRanks = 6, kFirstRaidAbility = 16;
 inline constexpr double kGroupLeadershipExpPerPoint = 1000, kRaidLeadershipExpPerPoint = 2000;
@@ -42,4 +42,4 @@ bool leadership_passive(int ability);
 // button of type 11 runs Leadership_ActivateAbility(value / 8, value % 8)).
 inline constexpr std::int32_t leadership_hot_button_value(int ability, int n) { return ability * 8 + n; }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

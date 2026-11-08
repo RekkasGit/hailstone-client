@@ -22,7 +22,7 @@
 #include "assets/spell_effects.h"
 #include "assets/wld.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 // The texture a cloud's 0x26 sprite resolves to (0x26 -> 0x05 -> 0x04 -> 0x03).
 struct ParticleTexture {
@@ -50,4 +50,4 @@ EmitterDefinition particle_cloud_definition(const wld::ParticleCloud& cloud, con
 // truncated angle masked to 0..127.
 float particle_tan(float angle);
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

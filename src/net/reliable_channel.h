@@ -24,7 +24,7 @@
 #include <span>
 #include <vector>
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct ReliableSlot {
     bool used = false;          // +0x18 data non-null
@@ -102,4 +102,4 @@ std::int64_t reliable_widen(const ReliableChannel& ch, std::uint16_t sequence);
 // The original's clamp of a 64-bit time difference to an int.
 std::int32_t reliable_elapsed(std::int64_t a, std::int64_t b);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

@@ -21,7 +21,7 @@
 
 #include "platform/crash_log.h"
 
-namespace nmsc::core {
+namespace hailstone::core {
 
 template <class Key, class Result>
 class LatestJobs {
@@ -154,4 +154,4 @@ private:
     std::thread thread_; // last: starts after the members above are made
 };
 
-} // namespace nmsc::core
+} // namespace hailstone::core

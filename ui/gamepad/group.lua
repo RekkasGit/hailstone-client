@@ -22,7 +22,7 @@ local invited = false
 ui.window("Group", function()
   if not eq.InGame() then return end
   local inv = eq.ChildShown(GW, "FollowButton") == true
-  if inv and not invited then pad.focus("Group invitation##nmsc_invite") end
+  if inv and not invited then pad.focus("Group invitation##hailstone_invite") end
   invited = inv
   if not GPSTATE.groupOpen then return end
   if W.begin("Group", { w = 900, h = 720, title = "Group", hints = { { "a", "Select" }, { "b", "Close" } } }) then

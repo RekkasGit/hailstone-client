@@ -13,12 +13,12 @@
 #include "net/game_connection.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 TEST_CASE("Mail address book window: add, modify, delete, saved and read back") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("mail_windows_test");
+    hailstone::test::ScratchDir dir_scratch("mail_windows_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     GameDir game(dir / "game");
@@ -101,7 +101,7 @@ TEST_CASE("Mail address book window: add, modify, delete, saved and read back") 
 
 TEST_CASE("Mail ignore list window: the address book's Ignore button, its own book and IgnoreList.txt") {
     ImGuiContext* ctx = ImGui::CreateContext();
-    nmsc::test::ScratchDir dir_scratch("mail_ignore_test");
+    hailstone::test::ScratchDir dir_scratch("mail_ignore_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game" / "userdata");
     {

@@ -16,7 +16,7 @@
 #include "ui/lua/lua_host.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
+using namespace hailstone;
 namespace fs = std::filesystem;
 
 namespace {
@@ -37,7 +37,7 @@ void frame(ui::lua::LuaUi& lua) {
 TEST_CASE("Chat window script: new windows and tabs draw without script errors") {
     fs::path src = ui_dir() / "modern";
     REQUIRE(fs::exists(src / "chat.lua"));
-    nmsc::test::ScratchDir dir_scratch("chat_ui_test");
+    hailstone::test::ScratchDir dir_scratch("chat_ui_test");
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);

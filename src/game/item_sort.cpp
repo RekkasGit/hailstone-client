@@ -5,7 +5,7 @@
 #include <map>
 #include <tuple>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 using net::Item;
 using net::ItemSlot;
@@ -214,4 +214,4 @@ std::optional<std::vector<SortClick>> plan_sort(const Inventory& inv, const std:
     return clicks;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

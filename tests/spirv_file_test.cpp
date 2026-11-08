@@ -6,7 +6,7 @@
 #include "render/spirv_file.h"
 #include "scratch_dir.h"
 
-using nmsc::render::read_spirv_file;
+using hailstone::render::read_spirv_file;
 
 namespace {
 void write(const std::filesystem::path& p, std::size_t size) {
@@ -16,7 +16,7 @@ void write(const std::filesystem::path& p, std::size_t size) {
 } // namespace
 
 TEST_CASE("read_spirv_file: whole words only; a truncated file is refused, not read past its buffer") {
-    nmsc::test::ScratchDir dir("spirv");
+    hailstone::test::ScratchDir dir("spirv");
     write(dir.path() / "good.spv", 8);
     auto words = read_spirv_file(dir.path() / "good.spv");
     CHECK(words == std::vector<std::uint32_t>{0x07070707u, 0x07070707u});

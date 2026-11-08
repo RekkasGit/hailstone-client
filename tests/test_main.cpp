@@ -4,13 +4,15 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "core/env.h"
+
 namespace {
 
-// With NMSC_TEST_TRACE set, each test case's name goes to stderr as it starts. A crash that ends the process at once
+// With HAILSTONE_TEST_TRACE set, each test case's name goes to stderr as it starts. A crash that ends the process at once
 // (on Windows a fast fail, 0xc0000409) loses the buffered report on stdout, so without this a CI log cannot say which
 // test it was in. stderr is unbuffered, and the name is flushed before the test runs.
 struct TraceListener : doctest::IReporter {
-    const bool on = std::getenv("NMSC_TEST_TRACE") != nullptr;
+    const bool on = hailstone::core::env("TEST_TRACE") != nullptr;
 
     explicit TraceListener(const doctest::ContextOptions&) {}
 
@@ -34,4 +36,4 @@ struct TraceListener : doctest::IReporter {
 
 } // namespace
 
-REGISTER_LISTENER("nmsc_trace", 1, TraceListener);
+REGISTER_LISTENER("hailstone_trace", 1, TraceListener);

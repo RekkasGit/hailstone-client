@@ -6,7 +6,7 @@
 #include "core/ascii_case.h"
 #include "core/atomic_file.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace fs = std::filesystem;
 
@@ -93,4 +93,4 @@ bool forget_plugin_consent(const fs::path& profile_dir, std::string_view name, c
     return write_plugin_approvals(profile_dir, all);
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

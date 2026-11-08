@@ -12,9 +12,9 @@
 
 #include "game/swept_sphere.h"
 
-namespace nmsc::assets { struct Mesh; }
+namespace hailstone::assets { struct Mesh; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct ObjectShape {
     std::vector<glm::vec3> tris; // solid triangles, 3 vertices each, model space (sight and floor probes)
@@ -53,4 +53,4 @@ std::optional<float> floor_under(const ObjectShape& shape, const glm::mat4& inve
                                  float step_up);
 
 
-} // namespace nmsc::game
+} // namespace hailstone::game

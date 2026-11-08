@@ -1,8 +1,11 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
-// Screen-space ambient occlusion (render/vk_context.h AoView), after McGuire et al.'s scalable AO: view positions
-// rebuilt from the depth, the normal from the nearer neighbour on each axis, a spiral of samples within `radius`
-// turned by a 4 x 4 ordered pattern (the post pass's 4 x 4 blur averages the pattern away).
+#include "ao_kernel.glsl"
+
+// Screen-space ambient occlusion (render/vk_context.h AoView): view positions rebuilt from depth, the normal from
+// the nearer neighbour on each axis, and bounded angular occlusion over a spiral of samples within `radius`.
+// The spiral follows McGuire et al.'s scalable AO; a 4 x 4 ordered pattern turns it (the post pass averages it away).
 
 layout(set = 0, binding = 0) uniform sampler2D depth_map;
 
@@ -52,7 +55,8 @@ void main() {
     }
     const float bayer[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
     float angle0 = bayer[(p.x & 3) + (p.y & 3) * 4] / 16.0 * kTau;
-    float r2 = radius * radius;
+    // Match the world-space kernel to the pixel-radius cap at close range.
+    radius = ao_kernel_radius(radius, r_px, -P.z, pc.projection.y, float(g_size.y));
     float bias = 0.002 * -P.z;
     float sum = 0.0;
     for (int i = 0; i < kSamples; ++i) {
@@ -62,9 +66,7 @@ void main() {
         if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, g_size))) continue;
         if (texelFetch(depth_map, q, 0).r <= 0.0) continue;
         vec3 v = view_pos(q) - P;
-        float vv = dot(v, v);
-        float f = max(r2 - vv, 0.0);
-        sum += f * f * f * max((dot(v, n) - bias) / (vv + 0.01), 0.0);
+        sum += ao_sample(v, n, radius, bias);
     }
-    o_ao = max(0.0, 1.0 - sum * pc.params.y * 5.0 / (r2 * r2 * r2 * float(kSamples)));
+    o_ao = ao_visibility(sum, pc.params.y, float(kSamples));
 }

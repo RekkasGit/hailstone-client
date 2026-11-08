@@ -9,7 +9,7 @@
 
 #include "core/log.h"
 
-namespace nmsc {
+namespace hailstone {
 
 bool write_file_atomic(const std::filesystem::path& path, std::string_view text) {
     namespace fs = std::filesystem;
@@ -63,4 +63,4 @@ std::optional<std::string> read_text_file(const std::filesystem::path& path) {
     return std::move(s).str();
 }
 
-} // namespace nmsc
+} // namespace hailstone

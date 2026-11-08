@@ -7,7 +7,7 @@
 
 #include "core/log.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 std::unique_ptr<AudioDevice> AudioDevice::open(Render render, std::uint32_t rate, std::uint32_t buffer_frames) {
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
@@ -55,4 +55,4 @@ void AudioDevice::callback(void* self, SDL_AudioStream* stream, int additional, 
     }
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

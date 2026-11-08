@@ -26,7 +26,7 @@
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -551,4 +551,4 @@ void add_item_display_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
             n, n == 0 ? std::string("ItemDisplayWindow") : "ItemDisplayWindow#" + std::to_string(n + 1)));
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -6,15 +6,16 @@
 #include <ctime>
 #include <imgui.h>
 
+#include "core/env.h"
 #include "game/bazaar.h"
 #include "game/mail.h"
 #include "net/game_connection.h"
 #include "ui/lua/lua_host.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 MarketUi::MarketUi() {
-    if (const char* w = std::getenv("NMSC_MAIL_WINDOW")) mail_open_ = *w && *w != '0';
+    if (const char* w = hailstone::core::env("MAIL_WINDOW")) mail_open_ = *w && *w != '0';
 }
 
 void MarketUi::draw(net::GameConnection& conn, bool dev_windows) {
@@ -187,4 +188,4 @@ void MarketUi::draw_mail(net::GameConnection& conn) {
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

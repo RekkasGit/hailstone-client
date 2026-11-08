@@ -8,14 +8,14 @@ frame:
 |---|---|---|
 | **Lua windows**: the game's windows, rewritten in Lua (`ui/<pack>/*.lua`, `src/ui/lua`) | ships with the client | always on |
 | **MacroQuest Lua scripts**: automation with MQ's `mq` module, `/lua run <name>` | the server's `scripts/`, then `scripts/` (then the install's) | the server's `hailstone.cfg` |
-| **Compiled plugins**: shared libraries with MQ-style callbacks (`sdk/nmsc_plugin.h`) | the server's `plugins/`, then `plugins/` or `plugins/<name>/` (then the install's) | the server's `hailstone.cfg` |
+| **Compiled plugins**: shared libraries with MQ-style callbacks (`sdk/hailstone_plugin.h`) | the server's `plugins/`, then `plugins/` or `plugins/<name>/` (then the install's) | the server's `hailstone.cfg` |
 
 A player installs scripts and plugins from GitHub with the add-on manager on the login screen (docs/addons.md), or
 puts them in the folders by hand. An add-on gets no more than the capabilities its manifest declares (below).
 
 The folders are in the Hailstone folder (`docs/layout.md`). A compiled plugin's binary can sit directly in
 `plugins/` or in its own folder `plugins/<name>/`; that folder, under the Hailstone folder, is also where
-`nmsc->config_dir` points, so the plugin keeps its settings beside its binary. A script's `mq.pickle` files go to
+`host->config_dir` points, so the plugin keeps its settings beside its binary. A script's `mq.pickle` files go to
 `scripts/config/` (`mq.configDir`) when the script may do everything, and to a folder of its own,
 `scripts/config/<script>/`, when it may not (an add-on with a ceiling, the player's scripts under a server's
 `player_caps`). Such a script reads and writes only there, so it cannot change or read the settings of a script
@@ -272,13 +272,13 @@ A script can extend the client as a compiled plugin does, with no native code: t
 
 | | |
 |---|---|
-| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `NmscHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`). A hooks table with a metatable is read through it, in a protected call: an error in its `__index` ends the script |
-| `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand` (`extend`) |
+| `hailstone.hooks{ name = function(...) ... end }` | answers the core's questions, by the names of the compiled plugins' `HailstoneHooks` (below): `is_spellcaster()`, `spell_level_needed(spell_id, class)`, `song_blocked(bard_level)`, `skill_gate(skill, mask, profile_skill)`, `who_lines(who)`, `label(id, text)`, `item_right_click(slot)`, `list_level(item)`, ... nil keeps the stock answer (`extend`). A hooks table with a metatable is read through it, in a protected call: an error in its `__index` ends the script |
+| `set_active(on)`, `set_flag(name, on)` | the switches: `wide_item_links`, `items_any_class`, `hide_any_class`, `aa_any_level`, `aa_train_all`, `augment_classes`, `research_classes`, `focus_classes`, `backstab_either_hand`, `solo_adventure` (`extend`) |
 | `set_player_classes(mask)`, `set_character_classes(name, mask)`, `set_pet_list{{spawn =, class =}}`, `set_vitals{max_hp =, ...}` | what the server knows (`extend`) |
 | `on_packet(stream, direction, opcode, fn)` | `fn(opcode, data)` for each such packet (`'world'` / `'zone'`, `'in'` / `'out'`, opcode 0 all): `true` drops it, a string replaces its data. With Lua's `string.pack` / `string.unpack` a script reads and writes any layout (`packets`) |
 | `send_packet(stream, opcode, data)` | a packet to the server (`packets`) |
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `eq.Plugin("<script name>")` |
-| `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `NmscPlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
+| `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
 | `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (below) |
 | `server_rule(section, key)` | a setting from a section of the server's `hailstone.cfg` that is not the client's own (`[autocombat] hunter = off`), as written; nil when the server has no `hailstone.cfg` or does not set it |
@@ -387,18 +387,20 @@ Faces run only when `faces` is on, and always with `read` alone.
 
 ## Compiled plugins
 
-A plugin is a `.dll`, `.so` or `.dylib` built against `sdk/nmsc_plugin.h`, a plain C interface that works
-with any compiler. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
+A plugin is a `.dll`, `.so` or `.dylib` built against `sdk/hailstone_plugin.h`, a plain C interface that works
+with any compiler. On macOS the client loads only `.dylib`: CMake names a `MODULE` library `.so` there, so a
+plugin's own build sets `CMAKE_SHARED_MODULE_SUFFIX` to `.dylib` (or the target's `SUFFIX`); the client's build does
+this for the plugins built in its tree. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
 
 ```c
-#include "nmsc_plugin.h"
-NMSC_PLUGIN   /* the two required exports and the `nmsc` host table */
+#include "hailstone_plugin.h"
+HAILSTONE_PLUGIN   /* the two required exports and the `host` global (the host table) */
 
 static void hello(void* user, const char* args) { WriteChatf("Hello, %s!", *args ? args : "world"); }
 
-NMSC_EXPORT void InitializePlugin(void) { AddCommand("/hello", hello, 0); }
-NMSC_EXPORT void ShutdownPlugin(void) { RemoveCommand("/hello"); }
-NMSC_EXPORT void OnPulse(void) { /* every frame */ }
+HAILSTONE_EXPORT void InitializePlugin(void) { AddCommand("/hello", hello, 0); }
+HAILSTONE_EXPORT void ShutdownPlugin(void) { RemoveCommand("/hello"); }
+HAILSTONE_EXPORT void OnPulse(void) { /* every frame */ }
 ```
 
 Callbacks:
@@ -410,7 +412,20 @@ Callbacks:
 Host functions: `WriteChatf`, `DoCommand(f)`, `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`, `ParseMacroData` (`${...}`, so the
 plugin can read any TLO), `AddTopLevelObject` (a TLO with members the plugin answers; refused, as in MQ, when the name is already a TLO, so a
 plugin cannot replace `Me` or another plugin's TLO), `RemoveTopLevelObject` (only a TLO the plugin added itself),
-`nmsc->send_packet`, `nmsc->resize_packet`, `nmsc->config_dir`, `nmsc->caps`, `nmsc->imgui_context`.
+`host->send_packet`, `host->resize_packet`, `host->config_dir`, `host->caps`, `host->imgui_context`.
+
+The host table is a `PluginHostApi`: a struct of the client's functions, one per plugin, handed over by
+`hailstone_plugin_set_host` before `InitializePlugin` and kept in the global `host`. Each function takes the table's own
+`host->host` first, which tells the client which plugin is calling.
+
+**The names up to 0.6.** The SDK was `nmsc_plugin.h` and `nmsc_byte_io.h`, with `NmscHost` and the other `Nmsc*`
+types, the `NMSC_*` macros, the global `nmsc`, the namespace `nmsc` for `ByteReader` / `ByteWriter`, and the exports
+`nmsc_plugin_abi`, `nmsc_plugin_set_host` and `nmsc_plugin_hooks`. A plugin written against them builds unchanged:
+the two old headers are still in `sdk/`, include the new ones and add the old names back (`nmsc` is a macro for
+`host`; define `NMSC_NO_OLD_GLOBAL` before the include to leave the name free). A built plugin loads unchanged: the
+client looks for each export under its new name, then its old one. `HAILSTONE_PLUGIN` exports the two required
+functions under both names, so a plugin built with this SDK loads in a 0.6 client too; one with hooks that should
+work there exports `nmsc_plugin_hooks` as well.
 
 The client calls a plugin on its own thread, and the host functions are for that thread only, from inside one of the
 plugin's callbacks (`InitializePlugin`, `OnPulse`, a command, a hook, ...): the client's state has no locks. A call
@@ -420,7 +435,7 @@ on a thread of its own hands its results over and acts on them in `OnPulse`.
 A C++ plugin must not let an exception out of anything the client calls (callbacks, commands, TLOs, hooks, UI
 functions, options). The client catches what it can: the call counts as unanswered (a TLO is NULL, a hook gives the
 stock answer), the chat window says so once and the log names each place once, and an exception out of
-`InitializePlugin` or `nmsc_plugin_hooks` unloads the plugin with everything it registered. That is best effort: an
+`InitializePlugin` or `hailstone_plugin_hooks` unloads the plugin with everything it registered. That is best effort: an
 exception crossing a C interface is undefined behaviour, and one from a plugin built with another compiler or runtime
 may end the client.
 
@@ -435,7 +450,7 @@ cl /LD /I path\to\hailstone\sdk MyPlugin.c                                    # 
 MacroQuest's own plugin sources do not build as they are. They read the game executable's memory layouts (`pLocalPlayer`,
 `PSPAWNINFO`, ...), which this client does not have. Port them to TLO reads (`ParseMacroData`) and the callbacks
 above. A plugin that draws with Dear ImGui must be built with the client's Dear ImGui version and call
-`ImGui::SetCurrentContext(nmsc->imgui_context(nmsc->host))`.
+`ImGui::SetCurrentContext(host->imgui_context(host->host))`.
 
 ### Server extensions (ABI 2)
 
@@ -443,7 +458,7 @@ A server whose players used a patched client (a DLL beside eqgame.exe, a changed
 same changes as a plugin, with no change to Hailstone itself. With the `extend` capability a plugin can:
 
 - **answer the core's questions** where such a client differs from the stock one: export
-  `const NmscHooks* nmsc_plugin_hooks(void)`, a table of functions, each optional. They cover spell levels, songs,
+  `const HailstoneHooks* hailstone_plugin_hooks(void)`, a table of functions, each optional. They cover spell levels, songs,
   memorised gems, combat ability timers and whether their cool-down takes the reuse focus, the class used for casts,
   skill checks and tracking, the guild class column, `/who` output, labels, the item display's Level Needed line and
   extended target slots. A function that returns 0 (or NULL) leaves the stock answer.
@@ -453,7 +468,9 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   (`augment_classes`), the research containers (`research_classes`) and focus effects (`focus_classes`: SPA 411,
   an AA's classes, and no Bard / pure melee focus filter), and Backstab with a piercer in either hand, not only the
   primary (`backstab_either_hand`, for a server whose backstab uses the better hand; a client older than the switch
-  ignores it).
+  ignores it), and an adventure recruiter's Request from a player in no group or raid (`solo_adventure`, for a server
+  that takes solo adventures; stock EQEmu drops such a request unanswered, so without the switch the client stops it
+  with its own line; an older client ignores the switch).
 - **tell the client what its server knows**:
   - `set_player_classes` and `set_character_classes`: multiclass masks, which the client shows as "War/Clr" in the
     window title, character select and the guild window;
@@ -491,7 +508,7 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   `characters/<world>/<character>/plugin-config/<name>/` (0 before there is one). `config_dir` stays the folder for
   every server. `write_chat_color` writes a line in one of the game's own chat colours, and `zone_name` gives a zone's
   short name.
-- **read and write packets** with the SDK's `nmsc_byte_io.h` (C++20, header only): the `ByteReader` and `ByteWriter`
+- **read and write packets** with the SDK's `hailstone_byte_io.h` (C++20, header only): the `ByteReader` and `ByteWriter`
   the client itself uses.
 - **connect** (with `net`) to a service the server runs beside the game, such as its card game's: see Connections
   below.
@@ -504,9 +521,9 @@ kind of answer combines). `tests/plugins/ExtendTest.c` uses each part.
 Compatibility: the host table and the hook table carry their size and only grow at their end. A plugin built for an
 older ABI loads in a newer client; one built for a newer ABI does not load in an older client. ABI 3 added the web
 pages (`web_*`, "Web pages" below); a plugin built with this SDK reports ABI 3, so a client older than that does not
-load it. Calls added to the host table since then keep ABI 3: test `NMSC_HOST_HAS(nmsc, open_bank)` before such a
-call, since a client older than the call has a shorter table. The structs a plugin passes to be filled (`NmscPlayer`, `NmscSpawn`,
-..., `NmscWebState`) carry their size too and the client fills what both know; `NmscWebState`'s `size` is a `size_t`
+load it. Calls added to the host table since then keep ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` before such a
+call, since a client older than the call has a shorter table. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
+..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
 
 ### Connections (ABI 2)
@@ -516,7 +533,7 @@ own and works the same on every platform. Nothing waits on the network:
 
 | Function | What |
 |---|---|
-| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `NMSC_TCP_MAX` = 8 open). A name is looked up in the background, the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why |
+| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `HAILSTONE_TCP_MAX` = 8 open). A name is looked up in the background, the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why |
 | `tcp_state(handle)` | 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the other side) |
 | `tcp_send(handle, data, size)` | takes every byte (what the system cannot take yet waits in the client and goes out at the next `tcp_*` call) and returns the count, or -1 once closed |
 | `tcp_recv(handle, out, size)` | what has arrived: the count, 0 for nothing yet, -1 once closed with nothing left |
@@ -692,7 +709,7 @@ How plugins load:
 **In this repository:** `plugins/example/` (MQ2Example, plain C). The NMS server's client is a plugin in its own
 repository (projecthailstone/hailstone-nms: C++, the SDK alone; its docs/nms.md), released as an add-on, and so is
 Project Triune's (private). Either, cloned into `plugins/<name>/`, is built with the client and its tests join
-`nmsc_tests` (docs/layout.md "Builds and installs"). The client itself has no server's code. Any other plugin or
+`hailstone_tests` (docs/layout.md "Builds and installs"). The client itself has no server's code. Any other plugin or
 script lives in a repository of its own too and is installed with the add-on manager (docs/addons.md "For authors").
 
 **Server admins:** a compiled plugin is native code. The capabilities limit what the client's host table lets it

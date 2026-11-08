@@ -25,7 +25,7 @@
 #include "net/task_packets.h"
 #include "net/training_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1108,4 +1108,4 @@ void GameConnection::shared_task_invite_expedition() {
         if (!in_shared_task(tasks_, m.name)) shared_task_add_player(m.name);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

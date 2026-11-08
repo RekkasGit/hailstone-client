@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace {
 bool iequal(std::string_view a, std::string_view b) {
@@ -142,4 +142,4 @@ void UiBridge::remove(std::string_view plugin, Kind kind) {
     std::erase_if(folders_, [&](const auto& f) { return iequal(f.first, tag); });
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

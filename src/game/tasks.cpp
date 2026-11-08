@@ -9,7 +9,7 @@
 #include "game/eq_strings.h"
 #include "game/mechanics/tables.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 Task* TaskState::find(std::uint32_t type, std::uint32_t sequence) {
     for (Task& t : tasks)
@@ -176,5 +176,5 @@ std::string task_description_text(const Task& task, const std::function<std::str
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game
 

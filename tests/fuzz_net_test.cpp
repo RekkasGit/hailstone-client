@@ -1,7 +1,7 @@
 // Fuzz-style tests for the network parsers: every typed per-opcode decoder, the SOE session codec (datagram decode,
 // decompression, combined/fragment splitting and reassembly, session response) and the login-server reply parsers.
 // Inputs are deterministic: truncations of fixed patterns at many lengths plus seeded mutations. Run the suite with
-// -DNMSC_SANITIZE=ON to also catch out-of-bounds reads and undefined behaviour.
+// -DHAILSTONE_SANITIZE=ON to also catch out-of-bounds reads and undefined behaviour.
 
 #include <doctest/doctest.h>
 
@@ -55,18 +55,18 @@
 #include "net/tribute_packets.h"
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
-#if defined(NMSC_HAS_NMS)
+#if defined(HAILSTONE_HAS_NMS)
 #include "nms_packets.h"
 #endif
-#if defined(NMSC_HAS_TRIUNE)
+#if defined(HAILSTONE_HAS_TRIUNE)
 #include "triune_packets.h"
 #include "triune_windows.h"
 #endif
 #include "platform/udp_socket.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::net::login_codec;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::net::login_codec;
 using fuzz::Bytes;
 using fuzz::Rng;
 using fuzz::Throws;
@@ -80,13 +80,13 @@ struct Decoder {
 
 const std::vector<Decoder>& decoders() {
     static const std::vector<Decoder> list = {
-#define NMSC_FUZZ_DECODER(fn) {#fn, [](const AppPacket& p) { (void)fn(p); }},
-#define NMSC_FUZZ_PLUGIN_DECODER(ns, fn) {#fn, [](const AppPacket& p) { (void)::ns::fn(p.data); }},
-#define NMSC_FUZZ_GAME_DECODER(fn) {#fn, [](const AppPacket& p) { ::nmsc::fuzz_game::feed(&::nmsc::game::fn, p.data); }},
+#define HAILSTONE_FUZZ_DECODER(fn) {#fn, [](const AppPacket& p) { (void)fn(p); }},
+#define HAILSTONE_FUZZ_PLUGIN_DECODER(ns, fn) {#fn, [](const AppPacket& p) { (void)::ns::fn(p.data); }},
+#define HAILSTONE_FUZZ_GAME_DECODER(fn) {#fn, [](const AppPacket& p) { ::hailstone::fuzz_game::feed(&::hailstone::game::fn, p.data); }},
 #include "fuzz_decoders.inc"
-#undef NMSC_FUZZ_GAME_DECODER
-#undef NMSC_FUZZ_PLUGIN_DECODER
-#undef NMSC_FUZZ_DECODER
+#undef HAILSTONE_FUZZ_GAME_DECODER
+#undef HAILSTONE_FUZZ_PLUGIN_DECODER
+#undef HAILSTONE_FUZZ_DECODER
     };
     return list;
 }

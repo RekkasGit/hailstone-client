@@ -5,8 +5,8 @@
 #include "game/atlas.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 TEST_CASE("Atlas pages: TinyXML elements with bare attribute values (AtlasWnd_LoadPage)") {
     AtlasPage p = parse_atlas_page("<Background Image = \"Atlas_bkg_256.tga\" CX = 128 CY = 128 />\n"

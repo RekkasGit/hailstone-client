@@ -10,7 +10,7 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 
@@ -220,4 +220,4 @@ std::optional<Image> decode_texture_map(std::string_view name, const std::option
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

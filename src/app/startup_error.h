@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // The kinds of error a player can do something about; Other for the rest.
 enum class StartupProblem {
@@ -28,4 +28,4 @@ StartupProblem classify_startup_error(std::string_view what);
 // The dialog's text for `what`; `log` is named at the end when it is not empty.
 std::string startup_error_text(std::string_view what, const std::filesystem::path& log);
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -15,7 +15,7 @@
 
 namespace {
 
-using namespace nmsc;
+using namespace hailstone;
 
 void hexdump(bool sent, std::span<const std::byte> p) {
     std::printf("%s %zu bytes\n", sent ? ">>" : "<<", p.size());
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
         }
     }
     if (argc - i >= 4 && std::strcmp(argv[i], "login") == 0) {
-        if (verbose) nmsc::log::set_level(nmsc::log::Level::Debug);
+        if (verbose) hailstone::log::set_level(hailstone::log::Level::Debug);
         return login(argv[i + 1], argv[i + 2], argv[i + 3], argc - i >= 5 ? argv[i + 4] : nullptr, verbose);
     }
     std::fprintf(stderr, "usage: netprobe [-v] login HOST[:PORT] USER PASS [SERVER_NAME]\n");

@@ -4,7 +4,7 @@
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -573,15 +573,18 @@ int ClientApp::run() {
                 }
                 flora_renderer_->set_pushers(pushers);
             }
-            if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
-            lap.mark("flora draw");
             const std::unordered_set<std::uint32_t>* modelled = nullptr;
             if (actor_renderer_) modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit);
             lap.mark("actors draw");
             if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
             lap.mark("spawns draw");
+            // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
+            // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
+            // in the depth buffer.
+            if (modern || (in_game && target_ring_shown())) vk_.begin_translucent(*f);
+            if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
+            lap.mark("flora draw");
             if (modern) {
-                vk_.begin_translucent(*f);
                 if (zone_renderer_)
                     zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
                 if (neighbours) neighbours_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
@@ -682,4 +685,4 @@ int run_client(const ClientOptions& options) {
     return code;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

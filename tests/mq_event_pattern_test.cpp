@@ -11,7 +11,7 @@
 #include "mq/event_pattern.h"
 #include "mq/tlo.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

@@ -19,10 +19,10 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc { class GameDir; }
-namespace nmsc::render { class VkContext; }
+namespace hailstone { class GameDir; }
+namespace hailstone::render { class VkContext; }
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 class UiTextures {
 public:
@@ -111,4 +111,4 @@ std::optional<GridCell> grid_index_cell(int index, int frames, int frame_w, int 
 // The icon sheets of uifiles/default (item icons dragitem*, spell icons spells*, gem icons gemicons*), by file name.
 bool is_icon_file(std::string_view name);
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

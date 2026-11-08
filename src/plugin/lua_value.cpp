@@ -10,7 +10,7 @@
 
 #include "core/log.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace {
 
@@ -213,4 +213,4 @@ void push_value(lua_State* L, const UiValue& v, int depth) {
     push(L, v, depth);
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

@@ -11,7 +11,7 @@
 
 #include "net/world_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr std::uint32_t kFeatureRefusedColor = 0x14f;
 inline constexpr std::int32_t kFeatureSendMail = 6;       // "ability to send mail"
@@ -29,4 +29,4 @@ std::int32_t feature_membership_level(std::int32_t feature, const std::optional<
 // Empty for a feature past the table.
 std::string feature_refused_message(std::int32_t feature, const std::optional<net::MembershipDetails>& details);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

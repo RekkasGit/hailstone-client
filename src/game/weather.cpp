@@ -1,6 +1,6 @@
 #include "game/weather.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -71,4 +71,4 @@ void Weather::update(double now, bool outdoor, const std::function<std::int32_t(
     precipitation_.update(ms);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

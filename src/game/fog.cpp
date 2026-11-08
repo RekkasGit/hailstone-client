@@ -6,7 +6,7 @@
 
 #include "assets/sky.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -402,4 +402,4 @@ float fog_factor(float distance, std::int32_t start, std::int32_t end, float den
     return std::exp(-(x * x));
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

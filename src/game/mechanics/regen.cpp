@@ -7,7 +7,7 @@
 
 #include "game/spells.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -231,4 +231,4 @@ std::int32_t Character::endurance_regen(bool include_items, bool no_rest) const 
     return add(aa, regen);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

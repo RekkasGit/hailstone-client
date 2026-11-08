@@ -10,7 +10,7 @@
 
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // Visible equipment slots (WearChange / spawn order).
 enum EquipSlot : std::uint8_t {
@@ -81,4 +81,16 @@ struct HeadModel {
 };
 HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t material, std::uint32_t hero_forge = 0);
 
-} // namespace nmsc::game
+// CDisplay::IsShield @0x489d70: whether a secondary's item model IT<n> is a shield, which PlayerClient::SetHeldModel
+// shows on bone slot 5 (<code>SHIELD_POINT_DAG / ARML_SHLD) instead of slot 4 (L_POINT / ARML_WEAP). A fixed list of
+// model numbers; a model named like a shield but not on it (the Haunting Nightmares ornament IT101064) is held in the
+// hand. The original asks Resources\ActorTagInfo.txt's table first when that file loaded; RoF2 ships none.
+// Hailstone (a deliberate difference, display.extra_shields, on by default): with `extra_shields` set, also the
+// models of later shields the list lacks (shield_models.inc, tools/gen_shield_models.py), which RoF2 holds in the
+// hand like a weapon.
+bool is_shield_model(std::uint32_t item_model);
+bool is_stock_shield_model(std::uint32_t item_model);
+// display.extra_shields, set once at start (dressed models are cached).
+void set_extra_shields(bool on);
+
+} // namespace hailstone::game

@@ -13,7 +13,7 @@
 #include "core/byte_io.h"
 #include "core/windows_names.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 constexpr std::uint32_t kLocalSig = 0x04034b50, kCentralSig = 0x02014b50, kEndSig = 0x06054b50;
@@ -294,4 +294,4 @@ bool ZipReader::extract_to_file(const ZipEntry& entry, const std::filesystem::pa
     return ok;
 }
 
-} // namespace nmsc
+} // namespace hailstone

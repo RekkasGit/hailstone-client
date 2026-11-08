@@ -11,7 +11,7 @@
 
 #include <cstdint>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 struct AttackCharacter;
 
@@ -79,4 +79,4 @@ bool allowed_to_attack(const AttackSpawn& self, const AttackSpawn* target, std::
 // the same side.
 bool not_on_same_deity(const AttackSpawn* self, const AttackSpawn* other, bool spell, bool other_is_gm);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

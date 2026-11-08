@@ -7,7 +7,7 @@
 #include "game/merchant.h"
 #include "net/game_connection.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 constexpr std::int64_t kItemJobStepMs = 60; // between two clicks
@@ -149,4 +149,4 @@ void GameConnection::update_item_job() {
     click_slot(c.slot, true, false);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

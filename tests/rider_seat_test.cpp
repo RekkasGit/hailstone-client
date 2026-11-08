@@ -6,8 +6,8 @@
 #include "game_files.h"
 #include "render/actor_renderer.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -88,8 +88,8 @@ TEST_CASE("a rider is drawn in its mount's bone frame, without its own scale") {
     CHECK_FALSE(standing.attached);
 }
 
-TEST_CASE("the shipped mounts' rider dags" * doctest::skip(!nmsc::test::game_dir())) {
-    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "");
+TEST_CASE("the shipped mounts' rider dags" * doctest::skip(!hailstone::test::game_dir())) {
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "");
     // The Luclin horse names its rider dag after itself; the EQG mounts have CHEST03_MOUNT01.
     for (const char* code : {"HSM", "HSN"}) {
         auto m = lib.model(code);

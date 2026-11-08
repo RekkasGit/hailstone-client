@@ -11,7 +11,7 @@
 
 #include "core/latest_jobs.h"
 
-using nmsc::core::LatestJobs;
+using hailstone::core::LatestJobs;
 
 namespace {
 

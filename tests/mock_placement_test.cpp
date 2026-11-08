@@ -5,9 +5,9 @@
 #include "mock_server/harness.h"
 #include "net/real_estate_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::net;
+using namespace hailstone::test;
 
 namespace {
 

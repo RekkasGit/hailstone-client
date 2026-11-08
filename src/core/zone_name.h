@@ -9,7 +9,7 @@
 
 #include "core/windows_names.h"
 
-namespace nmsc {
+namespace hailstone {
 
 // Whether `name` is a zone short name that is a plain file name everywhere: not empty, only ASCII letters, digits
 // and '_', and not a Windows device name ("con", "lpt1").
@@ -20,4 +20,4 @@ inline bool is_zone_short_name(std::string_view name) {
     return !is_windows_device_name(name);
 }
 
-} // namespace nmsc
+} // namespace hailstone

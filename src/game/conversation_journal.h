@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 struct JournalEntry {
     std::int32_t time = 0;     // +0: when it was last said (time32)
@@ -89,4 +89,4 @@ private:
 // Utf8ToUpper as the journal's searches use it (ASCII letters).
 std::string journal_upper(std::string s);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

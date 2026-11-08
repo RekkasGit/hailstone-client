@@ -359,12 +359,12 @@ starts from when it has none.
 
 ## Builds and installs
 
-A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`, `browser/` (with `NMSC_BROWSER`),
-the runtime DLLs on Windows, and
+A build makes the same folder at `build/hailstone/`: the binary, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`, `browser/` (with `HAILSTONE_BROWSER`),
+the runtime DLLs on Windows, `libMoltenVK.dylib` on macOS, and
 the example plugin in `plugins/`. The server plugins are kept in repositories of their own and reach players as
 add-ons (docs/addons.md): the NMS server's (projecthailstone/hailstone-nms) and the Project Triune server's (private).
 Cloned into `plugins/nms/` or `plugins/projecttriune/` (which this repository ignores), each is built into the
-same folder under `build/hailstone/plugins/`, and its tests join `nmsc_tests`. Run it as
+same folder under `build/hailstone/plugins/`, and its tests join `hailstone_tests`. Run it as
 `build/hailstone/hailstone`. Since that folder is writable, a dev build
 keeps its `hailstone.ini`, logs and servers beside the binary. The tools (`pfsdump`, `hailstone_check` ...) and the tests
 stay in `build/`.
@@ -372,7 +372,8 @@ stay in `build/`.
 `cmake --install build --prefix <dir>` writes the shipped parts only: `<dir>/hailstone(.exe)`, `shaders/`, `ui/`, `icons/`, `pictures/`, `CHANGELOG.md`,
 `browser/` (about 390 MB on Linux with `libcef.so` stripped), and
 the shared libraries the build made (SDL3 when it was fetched), which the binary finds through an rpath of its own
-folder. The example plugin is a separate component (`--component examples`), and so are the server plugins when
+folder. On macOS the install also has `libMoltenVK.dylib` and its `MoltenVK-LICENSE.txt`: macOS has no Vulkan of its
+own, so the client ships MoltenVK and loads it by its path beside the binary (`platform::bundled_vulkan_library`). The example plugin is a separate component (`--component examples`), and so are the server plugins when
 checked out (`--component nms`, `--component projecttriune`). A release includes no server plugin. An install over the same folder
 replaces only the shipped parts (the binary, `shaders/`, the shipped UI packs ...); the player's files beside them stay. The updater
 (docs/updater.md) installs a release the same way, from zips that hold only the shipped parts, and refuses any
@@ -380,7 +381,8 @@ package that would write one of the player's files or folders (`app::is_player_p
 `logs/`, `maps/`, `scripts/`, `textures/`, `ui/settings/`, `ui/loadingbackgrounds/` ...). A folder that has a
 CMakeCache.txt beside it (a dev build's `build/hailstone/`) never updates itself.
 
-CI builds nothing (docs/ci.md); a release's folder is installed and packed locally (docs/updater.md "Making a
+CI builds nothing but macOS (docs/ci.md); a release's folder is installed and packed locally, the macOS one from
+the macOS workflow's artifact (docs/updater.md "Making a
 release"), without the server plugins.
 
 ## The first start

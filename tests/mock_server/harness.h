@@ -18,7 +18,7 @@
 #include "mock_server/mock_eqemu.h"
 #include "net/game_connection.h"
 
-namespace nmsc::test {
+namespace hailstone::test {
 
 // An empty directory standing in for the RoF2 install: GameConnection reads its data files from it and, when they
 // are missing, warns and runs with built-in defaults. (Tests that need real files use tests/game_files.h and
@@ -34,7 +34,7 @@ public:
         static int counter = 0;
         auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
         path_ = std::filesystem::temp_directory_path() /
-                ("nmsc_mock_game_" + std::to_string(stamp) + "_" + std::to_string(counter++));
+                ("hailstone_mock_game_" + std::to_string(stamp) + "_" + std::to_string(counter++));
         std::filesystem::create_directories(path_);
         std::ofstream(path_ / "eqstr_us.txt") << "EQST0002\n"
                                               << "1410 SAY %1%2: %3\n"
@@ -142,4 +142,4 @@ inline bool has_line(const std::vector<net::ChatEvent>& lines, const std::string
     return false;
 }
 
-} // namespace nmsc::test
+} // namespace hailstone::test

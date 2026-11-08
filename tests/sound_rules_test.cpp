@@ -2,8 +2,8 @@
 
 #include "game/sound_rules.h"
 
-using namespace nmsc;
-using namespace nmsc::game;
+using namespace hailstone;
+using namespace hailstone::game;
 
 namespace {
 

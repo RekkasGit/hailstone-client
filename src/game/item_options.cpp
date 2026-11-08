@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -143,4 +143,4 @@ std::uint32_t adventure_purchase_question(std::uint32_t type, std::int32_t quant
     return (quantity == 1 ? s.one : s.several) + (cost != 1 ? 1u : 0u);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

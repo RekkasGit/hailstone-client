@@ -28,7 +28,7 @@
 #include "net/pet_packets.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace {
 
@@ -1411,4 +1411,4 @@ void GameConnection::buy_leadership(std::uint32_t ability) {
     send_zone(encode_purchase_leadership(ability));
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

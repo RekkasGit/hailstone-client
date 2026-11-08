@@ -20,7 +20,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct EnvDamage {
     std::uint32_t spawn_id = 0; // the client writes its 16-bit spawn id and zeroes the rest
@@ -54,4 +54,4 @@ AppPacket encode(const FindPersonRequest& r);
 std::optional<std::vector<glm::vec3>> decode_find_person_reply(const AppPacket& p);
 AppPacket encode_find_person_reply(const std::vector<glm::vec3>& path);             // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

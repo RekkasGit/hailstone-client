@@ -25,7 +25,7 @@
 
 #include <cstdint>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 class Character;
 
@@ -47,4 +47,4 @@ struct MovementFacts {
 // Everything above from a built character.
 MovementFacts movement_facts(const Character& ch);
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

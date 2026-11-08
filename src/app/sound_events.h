@@ -18,17 +18,17 @@
 #include "game/sound_rules.h"
 #include "game/world_state.h"
 
-namespace nmsc {
+namespace hailstone {
 class GameDir;
 }
-namespace nmsc::net {
+namespace hailstone::net {
 class GameConnection;
 }
-namespace nmsc::audio {
+namespace hailstone::audio {
 class AudioSystem;
 }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class SoundEvents {
 public:
@@ -65,4 +65,4 @@ private:
     audio::CrtRand rand_{static_cast<std::uint32_t>(0x5eed)};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

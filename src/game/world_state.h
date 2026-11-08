@@ -18,7 +18,7 @@
 
 #include "game/spawn_heights.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // What a spawn looks like (spawn packet, OP_WearChange, OP_Illusion). Slots
 // are the nine visible ones: 0 head, 1 chest, 2 arms, 3 wrists, 4 hands,
@@ -223,8 +223,16 @@ struct WorldState {
     // `vehicle_under` (optional) gives the vehicle whose deck is under a point (0: none): a spawn an update puts
     // there rides it (game/boats.h).
     using VehicleFn = std::function<std::uint32_t(const glm::vec3&)>;
+    // The local player and the mount it rides (controlled_id) are not eased: they are drawn where set_local_drawn put
+    // them this frame, else at their position.
     void smooth(float dt, double now, const FloorFn& floor = {}, const RegionFn& region = {},
                 const VehicleFn& vehicle_under = {});
+    // Where the local player is drawn this frame: where the camera is, between the game clock's last two steps
+    // (app/client_app_player.cpp). Sets the drawn place and heading (0..512) of the player and of the mount it rides at
+    // once, so the eye on a mount follows it in the same frame; the next smooth keeps them and forgets the call.
+    // Easing them as other spawns are would draw the body behind the camera.
+    void set_local_drawn(const glm::vec3& position, float heading);
+    bool local_drawn = false;
     // The vehicles' part of smooth (game/boats.h), run before the local player moves so it is carried by, and
     // collides with, the boat where it is drawn this frame; smooth then leaves them alone.
     void smooth_vehicles(float dt, double now);
@@ -254,4 +262,4 @@ struct WorldState {
     }
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

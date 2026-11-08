@@ -5,7 +5,7 @@
 #include "game/scene_light.h"
 #include "render/zone_renderer.h"
 
-using namespace nmsc::game;
+using namespace hailstone::game;
 
 TEST_CASE("CMath tables: exact quadrants, truncated and interpolated lookups") {
     CHECK(cmath_sin(0.0f) == 0.0f);
@@ -75,7 +75,7 @@ TEST_CASE("Scene light: ambient by time type, the vision floor and SpecialAmbien
 }
 
 TEST_CASE("point light term of the region shaders (MPL path)") {
-    using nmsc::game::point_light_term;
+    using hailstone::game::point_light_term;
     const glm::vec3 up(0, 0, 1);
     // Straight above at half the radius: facing 1, falloff 1 - 0.25.
     glm::vec3 c = point_light_term({0, 0, 50}, {0.5f, 0.4f, 0.2f}, 100.0f, {0, 0, 0}, up);
@@ -92,25 +92,25 @@ TEST_CASE("point light term of the region shaders (MPL path)") {
 
 TEST_CASE("EQG effect time and the MultiPassLighting setting") {
     // a_fTime = (T mod 100000) x 0.001 s; k = fmod(a_fTime, 100).
-    CHECK(nmsc::render::effect_scroll_seconds(0) == 0.0f);
-    CHECK(nmsc::render::effect_scroll_seconds(12345) == doctest::Approx(12.345f));
-    CHECK(nmsc::render::effect_scroll_seconds(100000) == 0.0f);
-    CHECK(nmsc::render::effect_scroll_seconds(1234567) == doctest::Approx(34.567f));
+    CHECK(hailstone::render::effect_scroll_seconds(0) == 0.0f);
+    CHECK(hailstone::render::effect_scroll_seconds(12345) == doctest::Approx(12.345f));
+    CHECK(hailstone::render::effect_scroll_seconds(100000) == 0.0f);
+    CHECK(hailstone::render::effect_scroll_seconds(1234567) == doctest::Approx(34.567f));
     // First character t/T/1 on, anything else off (CRender::ReadIniRenderSettings).
-    CHECK(nmsc::render::multipass_lighting_setting("1"));
-    CHECK(nmsc::render::multipass_lighting_setting("TRUE"));
-    CHECK(nmsc::render::multipass_lighting_setting("true"));
-    CHECK_FALSE(nmsc::render::multipass_lighting_setting("0"));
-    CHECK_FALSE(nmsc::render::multipass_lighting_setting("FALSE"));
-    CHECK_FALSE(nmsc::render::multipass_lighting_setting(""));
-    CHECK_FALSE(nmsc::render::multipass_lighting_setting("yes"));
+    CHECK(hailstone::render::multipass_lighting_setting("1"));
+    CHECK(hailstone::render::multipass_lighting_setting("TRUE"));
+    CHECK(hailstone::render::multipass_lighting_setting("true"));
+    CHECK_FALSE(hailstone::render::multipass_lighting_setting("0"));
+    CHECK_FALSE(hailstone::render::multipass_lighting_setting("FALSE"));
+    CHECK_FALSE(hailstone::render::multipass_lighting_setting(""));
+    CHECK_FALSE(hailstone::render::multipass_lighting_setting("yes"));
 }
 
 #include "game/scaled_ambient.h"
 #include "game/scene_fog.h"
 
 TEST_CASE("GetScaledAmbient: the level follows the probed target at 0.004 per ms") {
-    nmsc::game::ScaledAmbient a;
+    hailstone::game::ScaledAmbient a;
     // No collision: every probe misses, the target is the 0.1 floor (probed once more than 1000 ms in).
     CHECK(a.update(500, glm::vec3(0.0f), nullptr) == 1.0f);
     float l = a.update(1500, glm::vec3(0.0f), nullptr);
@@ -122,7 +122,7 @@ TEST_CASE("GetScaledAmbient: the level follows the probed target at 0.004 per ms
 }
 
 TEST_CASE("Scene fog per frame: region fog, the fog-off zone and the sky flag") {
-    using namespace nmsc::game;
+    using namespace hailstone::game;
     ZoneFogInput z;
     z.fog_enabled = true;
     z.fog_color = glm::vec3(230.0f, 255.0f, 200.0f) / 255.0f;

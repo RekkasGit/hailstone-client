@@ -22,7 +22,7 @@
 #include "core/log.h"
 #include "game/zone_names.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace wld {
 
@@ -599,4 +599,4 @@ Zone load_classic_zone(const GameDir& game, std::string_view name_view, const Zo
     return zone;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

@@ -6,7 +6,7 @@
 #include "game/spells.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace mech = mechanics;
 
@@ -100,4 +100,4 @@ bool allowed_to_attack(const AttackCheckInput& in) {
     return mech::allowed_to_attack(*me, target, in.spell, in.rules, q);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

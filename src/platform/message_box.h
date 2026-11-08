@@ -5,9 +5,9 @@
 
 #include <string>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // Shows `text` under `title` and waits for OK. Does nothing when the system has no way to show one.
 void show_error_box(const std::string& title, const std::string& text);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

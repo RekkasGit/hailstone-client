@@ -11,7 +11,7 @@
 #include "app/lua_eq.h"
 #include "game/mechanics/character.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -55,4 +55,4 @@ void register_stats_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

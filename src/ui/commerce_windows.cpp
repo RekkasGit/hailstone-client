@@ -11,7 +11,7 @@
 #include "game/merchant.h"
 #include "ui/item_windows.h"
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 using net::Item;
 using net::ItemSlot;
@@ -83,7 +83,7 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
         ImGui::SetNextWindowSize(ImVec2(em * 26.0f, em * 34.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.9f);
         bool open = true;
-        if (ImGui::Begin(std::format("{}###nmsc_merchant", m->name).c_str(), &open, ImGuiWindowFlags_NoSavedSettings)) {
+        if (ImGui::Begin(std::format("{}###hailstone_merchant", m->name).c_str(), &open, ImGuiWindowFlags_NoSavedSettings)) {
             ImGui::TextColored(kDim, "Merchant items (%zu)", m->items.size());
             ImGui::BeginChild("stock", ImVec2(0, em * 16.0f), ImGuiChildFlags_Borders);
             for (const auto& [mslot, item] : m->items) {
@@ -182,8 +182,8 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.9f);
         bool open = true;
-        std::string title = t->with_npc ? std::format("Give: {}###nmsc_trade", t->partner_name)
-                                        : std::format("Trade: {}###nmsc_trade", t->partner_name);
+        std::string title = t->with_npc ? std::format("Give: {}###hailstone_trade", t->partner_name)
+                                        : std::format("Trade: {}###hailstone_trade", t->partner_name);
         if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
             if (!t->with_npc) {
                 ImGui::TextColored(t->their_ready ? kGreen : kDim, "%s%s", t->partner_name.c_str(),
@@ -227,7 +227,7 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y - em * 9.0f),
                                 ImGuiCond_Always, ImVec2(0.5f, 1.0f));
         ImGui::SetNextWindowBgAlpha(0.8f);
-        if (ImGui::Begin("##nmsc_give", nullptr,
+        if (ImGui::Begin("##hailstone_give", nullptr,
                          ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
                              ImGuiWindowFlags_NoFocusOnAppearing)) {
             if (ImGui::Button(std::format("Give {} to {}", held->name, in.target_name).c_str())) act.give_to = in.target_id;
@@ -239,7 +239,7 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + em * 2.0f, vp->WorkPos.y + em * 6.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.9f);
         bool open = true;
-        if (ImGui::Begin(std::format("Bank: {}###nmsc_bank", b->name).c_str(), &open,
+        if (ImGui::Begin(std::format("Bank: {}###hailstone_bank", b->name).c_str(), &open,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextColored(kDim, "Bank (%d slots; right click a bag to show it)", b->slots);
             for (std::int16_t n = 0; n < b->slots; ++n) {
@@ -321,7 +321,7 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
         }
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.4f),
                                 ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-        if (ImGui::Begin("Quantity###nmsc_quantity", nullptr,
+        if (ImGui::Begin("Quantity###hailstone_quantity", nullptr,
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
             ImGui::SetNextItemWidth(em * 12.0f);
             ImGui::SliderInt("##qty", &st.quantity, 0, static_cast<int>(q->max));
@@ -340,4 +340,4 @@ CommerceWindowsActions commerce_windows(CommerceWindowsState& st, const Commerce
     return act;
 }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

@@ -39,7 +39,7 @@
 #include "net/game_connection.h"
 #include "ui/ui_textures.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -184,10 +184,10 @@ int SpellBookSwap(lua_State* L) {
 int SpellBookMemorize(lua_State* L) {
     auto& h = host(L);
     int slot = static_cast<int>(luaL_checkinteger(L, 1)), gem = static_cast<int>(luaL_checkinteger(L, 2));
-    // HandleSpellLeftClick's StartSpellMemorization(slot, gem, bReplace 0) @0x75bf30: a gem that holds a spell is
-    // refused (forget it first); the book is never written over.
-    if (h.conn && gem >= 0 && gem < game::kSpellGems &&
-        h.conn->spell_state().gems[static_cast<std::size_t>(gem)].spell == game::kNoSpell) {
+    // HandleSpellLeftClick's StartSpellMemorization(slot, gem, bReplace 0) @0x75bf30 refuses a gem that holds a
+    // spell; Hailstone's replace_gem_spell lets it through (EqHost::gem_takes_book_spell). The book is never
+    // written over.
+    if (h.gem_takes_book_spell(gem)) {
         h.conn->memorize(slot, gem);
         if (h.cursor_spell && *h.cursor_spell == slot) h.cursor_spell.reset();
     }
@@ -301,6 +301,14 @@ int DeleteSpellSet(lua_State* L) {
 
 } // namespace
 
+bool EqHost::gem_takes_book_spell(int gem) const {
+    if (!conn || gem < 0 || gem >= game::kSpellGems) return false;
+    if (conn->spell_state().gems[static_cast<std::size_t>(gem)].spell == game::kNoSpell) return true;
+    // Hailstone: a deliberate difference (docs/mechanics.md "Spell gems"). A stock EQEmu server's MemSpell forgets
+    // the gem's spell before memorizing the new one, and GameConnection's forget handler keeps quiet for it.
+    return !get_option || get_option("replace_gem_spell") != 0;
+}
+
 void register_spellbook_api(lua_State* L, EqHost& h) {
     static const luaL_Reg fns[] = {{"SpellBook", SpellBook},       {"SpellBookState", SpellBookState},
                                    {"SpellIcon", SpellIcon},       {"SpellBookClick", SpellBookClick},
@@ -315,4 +323,4 @@ void register_spellbook_api(lua_State* L, EqHost& h) {
     luaL_setfuncs(L, fns, 1);
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

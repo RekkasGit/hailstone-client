@@ -12,7 +12,7 @@
 
 #include "core/msvc_atoi.h"
 
-namespace nmsc::assets::wld {
+namespace hailstone::assets::wld {
 
 namespace {
 
@@ -177,4 +177,4 @@ std::vector<DetailBatch> detail_batches(const Mesh& mesh, std::uint32_t material
     return out;
 }
 
-} // namespace nmsc::assets::wld
+} // namespace hailstone::assets::wld

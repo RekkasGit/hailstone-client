@@ -13,9 +13,9 @@
 
 #include <glm/vec3.hpp>
 
-namespace nmsc::game { struct Spawn; struct WorldState; struct GroupState; }
+namespace hailstone::game { struct Spawn; struct WorldState; struct GroupState; }
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 struct SpawnSearch {
     enum class Kind : std::uint8_t { Any, Pc, Npc, Corpse, NpcCorpse, PcCorpse, Pet, Mercenary };
@@ -44,4 +44,4 @@ glm::vec3 spawn_position(const game::Spawn& s);
 std::vector<const game::Spawn*> search_spawns(const SpawnSearch& search, const game::WorldState& world,
                                               const game::GroupState* group);
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

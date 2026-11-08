@@ -20,7 +20,7 @@
 #include <optional>
 #include <vector>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // StandState values (PlayerClient +0x35c): the book refuses 105 (looting), 115 (dead or feigned) and 102.
 inline constexpr std::uint8_t kStandStanding = 100, kStandSitting = 110, kStandLooting = 105, kStandDead = 115,
@@ -66,4 +66,4 @@ bool spell_book_about_to_show(SpellBookState& s, std::vector<SpellBookCall>& cal
 // CSpellBookWnd::OnShow: `shown` is the window's new state.
 void spell_book_on_show(const SpellBookState& s, bool shown, std::vector<SpellBookCall>& calls);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

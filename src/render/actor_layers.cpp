@@ -6,7 +6,7 @@
 #include "game/anim_layers.h"
 #include "game/mechanics/anim_select.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 namespace mech = game::mechanics;
 
@@ -239,4 +239,4 @@ bool ActorLayers::split() const {
            up.blend != lo.blend || (up.previous && up.previous_time != lo.previous_time);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

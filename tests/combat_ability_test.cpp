@@ -11,8 +11,8 @@
 #include "game/spell_record.h"
 #include "game/spells.h"
 
-using namespace nmsc;
-using namespace nmsc::game::mechanics::combat_ability;
+using namespace hailstone;
+using namespace hailstone::game::mechanics::combat_ability;
 
 namespace {
 

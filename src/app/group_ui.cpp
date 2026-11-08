@@ -9,7 +9,7 @@
 #include "net/game_connection.h"
 #include "net/pet_packets.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -179,4 +179,4 @@ void GroupUi::draw(net::GameConnection& conn) {
     }
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

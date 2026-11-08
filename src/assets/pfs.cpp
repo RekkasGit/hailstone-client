@@ -9,7 +9,7 @@
 #include "core/byte_io.h"
 #include "core/game_dir.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace {
 constexpr std::uint32_t kMagic = 0x20534650; // "PFS "
@@ -179,4 +179,4 @@ std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {
     return out;
 }
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

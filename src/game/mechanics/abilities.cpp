@@ -13,14 +13,14 @@
 #include "game/mechanics/use_skill.h"
 #include "game/server_ext.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
 constexpr SkillTableEntry kSkillTable[100] = {
-#define NMSC_SKILL_TIMER(id, reuse, damage, combat) {reuse, damage, combat},
+#define HAILSTONE_SKILL_TIMER(id, reuse, damage, combat) {reuse, damage, combat},
 #include "game/mechanics/skill_timers.inc"
-#undef NMSC_SKILL_TIMER
+#undef HAILSTONE_SKILL_TIMER
 };
 constexpr SkillTableEntry kNoSkill{};
 
@@ -929,4 +929,4 @@ std::array<std::int32_t, 25> init_innates(std::uint32_t race, std::uint32_t clas
     return slots;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

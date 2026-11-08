@@ -10,7 +10,7 @@
 #include "core/config.h"
 #include "platform/open_folder.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 UiDemo::~UiDemo() {
     std::error_code ec;
@@ -343,11 +343,11 @@ void UiDemo::draw(const DemoFrameInput& in) {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - 8.0f, vp->WorkPos.y + vp->WorkSize.y - 8.0f),
                             ImGuiCond_Always, ImVec2(1.0f, 1.0f));
     ImGui::SetNextWindowBgAlpha(0.5f);
-    ImGui::Begin("##nmsc_demo_hint", nullptr,
+    ImGui::Begin("##hailstone_demo_hint", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
     ImGui::TextDisabled("UI demo  F1 login  F2 servers  F3 chars  F4 no chars  F5 loading  F6 in game  F7 items");
     ImGui::End();
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

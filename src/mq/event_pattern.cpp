@@ -5,7 +5,7 @@
 
 #include "mq/tlo.h"
 
-namespace nmsc::mq {
+namespace hailstone::mq {
 
 namespace {
 
@@ -89,4 +89,4 @@ std::optional<std::vector<std::string>> EventPattern::match(std::string_view lin
     return args;
 }
 
-} // namespace nmsc::mq
+} // namespace hailstone::mq

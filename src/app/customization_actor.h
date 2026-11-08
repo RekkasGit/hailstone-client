@@ -16,7 +16,7 @@
 #include "game/player_customization.h"
 #include "game/world_state.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class SpawnActor : public game::CustomizationActor {
 public:
@@ -164,4 +164,4 @@ private:
     EqHost& host_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

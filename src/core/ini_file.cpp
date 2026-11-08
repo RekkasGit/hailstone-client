@@ -10,7 +10,7 @@
 
 #include "core/atomic_file.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 std::string_view trim(std::string_view s) {
@@ -165,4 +165,4 @@ void IniFile::erase_section(std::string_view section) {
     std::erase_if(sections_, [&](const Section& s) { return iequal(s.name, clean); });
 }
 
-} // namespace nmsc
+} // namespace hailstone

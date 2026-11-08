@@ -7,7 +7,7 @@
 
 #include "app/server_links.h"
 
-using nmsc::app::ServerLinks;
+using hailstone::app::ServerLinks;
 
 namespace {
 

@@ -30,7 +30,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class CollisionMesh;
 
@@ -54,4 +54,4 @@ private:
     glm::vec3 last_position_{0.0f};
 };
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -4,16 +4,16 @@
 #include <iterator>
 #include <set>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
 constexpr RaceModel kRaceModels[] = {
-#define NMSC_RACE_MODEL(race, gender, code, flags, fallback) {race, gender, code, flags, fallback},
-#define NMSC_ANIM_SOURCE(model, donor)
+#define HAILSTONE_RACE_MODEL(race, gender, code, flags, fallback) {race, gender, code, flags, fallback},
+#define HAILSTONE_ANIM_SOURCE(model, donor)
 #include "game/race_models.inc"
-#undef NMSC_ANIM_SOURCE
-#undef NMSC_RACE_MODEL
+#undef HAILSTONE_ANIM_SOURCE
+#undef HAILSTONE_RACE_MODEL
 };
 
 struct AnimSource {
@@ -21,11 +21,11 @@ struct AnimSource {
     std::string_view donor;
 };
 constexpr AnimSource kAnimSources[] = {
-#define NMSC_RACE_MODEL(race, gender, code, flags, fallback)
-#define NMSC_ANIM_SOURCE(model, donor) {model, donor},
+#define HAILSTONE_RACE_MODEL(race, gender, code, flags, fallback)
+#define HAILSTONE_ANIM_SOURCE(model, donor) {model, donor},
 #include "game/race_models.inc"
-#undef NMSC_ANIM_SOURCE
-#undef NMSC_RACE_MODEL
+#undef HAILSTONE_ANIM_SOURCE
+#undef HAILSTONE_RACE_MODEL
 };
 
 const RaceModel* exact(std::uint16_t race, std::uint8_t gender) {
@@ -104,4 +104,4 @@ std::size_t race_model_race_count() {
     return races.size();
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

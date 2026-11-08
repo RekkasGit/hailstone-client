@@ -20,13 +20,14 @@
 #include "assets/eqg.h"
 #include "assets/pfs.h"
 #include "assets/zone.h"
+#include "core/env.h"
 #include "core/game_dir.h"
 #include "core/log.h"
 #include "game/collision.h"
 #include "game/zone_lines.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -262,7 +263,7 @@ int main(int argc, char** argv) {
         if (!std::strcmp(argv[1], "--shaders")) return survey_shaders(argc, argv);
         if (!std::strcmp(argv[1], "--zone")) {
             if (game_dir.empty()) throw std::runtime_error("--zone needs EQ_GAME_DIR or --game-dir");
-            if (std::getenv("NMSC_DEBUG")) log::set_level(log::Level::Debug);
+            if (hailstone::core::env("DEBUG")) log::set_level(log::Level::Debug);
             GameDir game(game_dir);
             return load_zones(game, std::vector<std::string>(argv + 2, argv + argc));
         }

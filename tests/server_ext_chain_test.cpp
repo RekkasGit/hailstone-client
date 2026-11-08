@@ -12,7 +12,7 @@
 #include "game/spells.h"
 #include "net/game_connection.h"
 
-using namespace nmsc;
+using namespace hailstone;
 
 namespace {
 

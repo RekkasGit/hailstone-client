@@ -11,7 +11,7 @@
 #include <span>
 #include <vector>
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 struct AppPacket {
     std::uint16_t opcode = 0;
@@ -21,4 +21,4 @@ struct AppPacket {
     AppPacket(std::uint16_t op, std::vector<std::byte> payload = {}) : opcode(op), data(std::move(payload)) {}
 };
 
-} // namespace nmsc::net
+} // namespace hailstone::net

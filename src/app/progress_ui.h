@@ -2,9 +2,9 @@
 
 // Temporary ImGui debug windows for the progress systems (AAs, training, tasks) until the Lua UI
 // (branch ui-lua) replaces them: the training window and the task select window appear while the
-// server has one open; the AA / task / skills panel with NMSC_PROGRESS_WINDOWS=1.
+// server has one open; the AA / task / skills panel with HAILSTONE_PROGRESS_WINDOWS=1.
 //
-// Testing aid: NMSC_PROGRESS_TEST in the environment drives the systems once in the zone:
+// Testing aid: HAILSTONE_PROGRESS_TEST in the environment drives the systems once in the zone:
 //   train     open the nearest guildmaster within reach, train the first row the checks allow,
 //             then close the window
 //   aa        set the AA experience to 50 %, then back to 0, and log the AA table
@@ -15,9 +15,9 @@
 #include <chrono>
 #include <string>
 
-namespace nmsc::net { class GameConnection; }
+namespace hailstone::net { class GameConnection; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 class ProgressUi {
 public:
@@ -35,4 +35,4 @@ private:
     std::chrono::steady_clock::time_point test_since_{}, step_since_{};
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

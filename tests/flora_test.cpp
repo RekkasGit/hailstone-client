@@ -10,8 +10,8 @@
 #include "assets/zone.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 
 namespace {
 
@@ -191,8 +191,8 @@ TEST_CASE("radial flora: a tile's seed is the signed products' wrapped value, wo
             }
 }
 
-TEST_CASE("radial flora: Blightfire Moors' plants" * doctest::skip(!nmsc::test::game_dir())) {
-    const auto& game = *nmsc::test::game_dir();
+TEST_CASE("radial flora: Blightfire Moors' plants" * doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
     Zone zone = load_zone(game, "moors");
     CHECK(zone.flora.definitions.size() >= 10);
     CHECK(zone.flora.instances.size() > 100000);

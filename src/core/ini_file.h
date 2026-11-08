@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace nmsc {
+namespace hailstone {
 
 class IniFile {
 public:
@@ -46,4 +46,4 @@ private:
     std::vector<Section> sections_;
 };
 
-} // namespace nmsc
+} // namespace hailstone

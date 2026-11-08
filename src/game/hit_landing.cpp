@@ -16,7 +16,7 @@
 #include "game/spells.h"
 #include "game/world_state.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace hit = mechanics::hit;
 
@@ -478,4 +478,4 @@ HitLandingResult land_spell(const hit::Hit& h, const HitLandingContext& ctx) {
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

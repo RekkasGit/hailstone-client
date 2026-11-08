@@ -33,7 +33,7 @@
 
 #include "game/mechanics/fpu.h"
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 // One MovementStats entry (SDoCollisionMovementStats, 0x74 bytes): the
 // physics block before (+0x64..+0x90), the target, the floor height before
@@ -174,4 +174,4 @@ void normalize_vector(float v[3], const Fpu& fpu = Fpu{});
 bool keep_in_scene(CollisionSpawn& spawn, bool collision_loaded, const Vec3f& min, const Vec3f& max,
                    const Fpu& fpu = Fpu{});
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

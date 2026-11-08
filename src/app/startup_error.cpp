@@ -1,6 +1,6 @@
 #include "app/startup_error.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace {
 
@@ -80,4 +80,4 @@ std::string startup_error_text(std::string_view what, const std::filesystem::pat
     return text;
 }
 
-} // namespace nmsc::app
+} // namespace hailstone::app

@@ -11,7 +11,7 @@
 
 #include "mq/lua_mq.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 void ClientApp::draw_text_overlay() {
     // CTextOverlay::Draw @0x41f610 (game/text_overlay.h): the line wrapped in {x0 + W/4, y0 + 0.33 H, x0 + 3W/4, y1},
@@ -119,6 +119,10 @@ void ClientApp::draw_nameplates(const glm::mat4& view_proj, VkExtent2D extent) {
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
         ImVec2 size = ImGui::CalcTextSize(label.c_str());
         ImU32 color = s.is_corpse ? IM_COL32(170, 170, 170, 255) : s.is_npc ? IM_COL32(255, 220, 120, 255) : IM_COL32(140, 190, 255, 255);
+        // Hailstone (option con_name_colour, a deliberate difference; docs/graphics.md "Name plates"): an NPC's name takes
+        // its consider colour, as the target plate below does. Off: this client's yellow (neither is the original's tint).
+        if (auto rgb = game::npc_name_colour(s, conn_->player_status().level, conn_->pvp_rules(), con_name_colour_))
+            color = IM_COL32((*rgb >> 16) & 0xff, (*rgb >> 8) & 0xff, *rgb & 0xff, 255);
         // PlayerClient::SetNameSpriteTint: an NPC with IsMercenary (+0x208) gets (0x11, 0xb5, 0xe1).
         if (s.is_npc && !s.is_corpse && s.mercenary) color = IM_COL32(0x11, 0xb5, 0xe1, 255);
         if (id == world.target_id) {
@@ -440,4 +444,4 @@ void ClientApp::lua_social_command(std::string_view args) {
     eq_host_.lua_social_edit = social;
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

@@ -6,7 +6,7 @@
 
 #include "core/config.h"
 
-namespace nmsc {
+namespace hailstone {
 
 namespace {
 constexpr char kRecentSeparator = '|'; // not allowed in a Windows path, and rare elsewhere
@@ -141,4 +141,4 @@ void request_asset_folder_pick(Config& config, bool pick) {
 
 bool asset_folder_pick_requested(const Config& config) { return config.get_bool("assets.pick", false); }
 
-} // namespace nmsc
+} // namespace hailstone

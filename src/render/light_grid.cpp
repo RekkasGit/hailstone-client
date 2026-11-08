@@ -4,7 +4,7 @@
 #include <cmath>
 #include <limits>
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 LightGrid build_light_grid(std::span<const assets::PointLight> lights, float cell, std::uint32_t max_per_cell) {
     LightGrid grid;
@@ -61,4 +61,4 @@ LightGrid build_light_grid(std::span<const assets::PointLight> lights, float cel
     return grid;
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

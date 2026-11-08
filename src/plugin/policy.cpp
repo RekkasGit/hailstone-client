@@ -15,7 +15,7 @@
 #include "core/log.h"
 #include "game/slash_commands.h"
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 namespace {
 
@@ -446,4 +446,4 @@ ButtonRules Policy::button_rules() const {
     return r;
 }
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

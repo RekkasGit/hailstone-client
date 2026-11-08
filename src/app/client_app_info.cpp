@@ -21,7 +21,7 @@
 #include "plugin/policy.h"
 #include "web/page_rules.h"
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 namespace client_internal {
 
@@ -217,4 +217,4 @@ void ClientApp::outputfile_command(const std::string& args) {
 
 } // namespace client_internal
 
-} // namespace nmsc::app
+} // namespace hailstone::app

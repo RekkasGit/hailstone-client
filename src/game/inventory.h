@@ -16,7 +16,7 @@
 
 #include "net/item_packets.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class Inventory {
 public:
@@ -92,4 +92,4 @@ std::string coin_text(std::uint32_t platinum, std::uint32_t gold, std::uint32_t 
 // split shares are printed with it.
 std::string coin_amounts_text(std::uint32_t platinum, std::uint32_t gold, std::uint32_t silver, std::uint32_t copper);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

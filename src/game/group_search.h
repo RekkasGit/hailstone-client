@@ -29,9 +29,9 @@
 #include <string_view>
 #include <vector>
 
-namespace nmsc { class IniFile; }
+namespace hailstone { class IniFile; }
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The group info page's class boxes, GIP_<abbr>Checkbox (the strings @0x9e9714.. sub_00676670 formats) and the
 // class each one stands for (ClassSortOrder_GetClassId).
@@ -80,4 +80,4 @@ bool group_search_filtered(const GroupSearchFilters& f, const std::string& name,
                            const std::function<bool(const std::string&)>& ignored,
                            const std::function<bool(const std::string&)>& is_friend);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

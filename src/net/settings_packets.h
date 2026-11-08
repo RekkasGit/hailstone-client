@@ -12,7 +12,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 inline constexpr std::uint32_t kHailstoneSettingsMagic = 0x50534d4e; // "NMSP" on the wire
 inline constexpr std::uint16_t kOpHailstoneSettingsRequest = 0x1424;
@@ -28,4 +28,4 @@ AppPacket encode_hailstone_settings_request();
 std::optional<HailstoneSettings> decode_hailstone_settings(const AppPacket& p);
 AppPacket encode(const HailstoneSettings& v); // server direction, for tests
 
-} // namespace nmsc::net
+} // namespace hailstone::net

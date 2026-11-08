@@ -18,10 +18,10 @@
 #include "assets/sky_weather.h"
 #include "game/cloud_patches.h"
 
-namespace nmsc { class GameDir; }
-namespace nmsc::assets { struct Sky; }
+namespace hailstone { class GameDir; }
+namespace hailstone::assets { struct Sky; }
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // The sky state for one frame, from the game clock (see SkyClock in game/).
 struct SkyFrame {
@@ -113,4 +113,4 @@ private:
                      bool atmosphere);
 };
 
-} // namespace nmsc::render
+} // namespace hailstone::render

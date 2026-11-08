@@ -13,10 +13,10 @@
 #include "game/mechanics/anim_select.h"
 #include "vector_files.h"
 
-using namespace nmsc::game::mechanics;
-using nmsc::test::Json;
-using nmsc::test::f32_bits;
-using nmsc::test::f32_of;
+using namespace hailstone::game::mechanics;
+using hailstone::test::Json;
+using hailstone::test::f32_bits;
+using hailstone::test::f32_of;
 
 namespace {
 
@@ -33,7 +33,7 @@ std::string hex(std::uint32_t v) {
 } // namespace
 
 TEST_CASE("SelectMovementAnim vectors") {
-    nmsc::test::each_vector("SelectMovementAnim.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("SelectMovementAnim.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         const Json& out = r["out"];
         MovementAnimInput m;
@@ -95,7 +95,7 @@ TEST_CASE("SelectMovementAnim vectors") {
 }
 
 TEST_CASE("OldModelAnimSpeed vectors") {
-    nmsc::test::each_vector("OldModelAnimSpeed.jsonl", [](const Json& r) -> std::string {
+    hailstone::test::each_vector("OldModelAnimSpeed.jsonl", [](const Json& r) -> std::string {
         const Json& in = r["in"];
         double got = old_model_anim_speed(in["anim"].i32(), f32_of(in["speed"]), in["race"].i32(),
                                           in["gender"].i32(), in["new_model"].truthy(), in["display_129"].truthy(),
@@ -296,9 +296,9 @@ struct Model {
     }
 };
 
-nmsc::game::SpawnAnimChoice frame(nmsc::game::SpawnAnimState& st, const nmsc::game::SpawnAnimInput& in, const Model& m,
+hailstone::game::SpawnAnimChoice frame(hailstone::game::SpawnAnimState& st, const hailstone::game::SpawnAnimInput& in, const Model& m,
                                   bool done = false, int roll = 50) {
-    return nmsc::game::choose_spawn_animation(
+    return hailstone::game::choose_spawn_animation(
         st, in, [&](std::string_view c) { return m.has(c); }, done, [roll] { return roll; });
 }
 
@@ -306,8 +306,8 @@ nmsc::game::SpawnAnimChoice frame(nmsc::game::SpawnAnimState& st, const nmsc::ga
 
 TEST_CASE("Classic models: walk, run, backward, still") {
     Model m{{"P01", "O01", "L01", "L02", "P02", "P07", "O03", "L03", "L04", "L05"}};
-    nmsc::game::SpawnAnimState st;
-    nmsc::game::SpawnAnimInput in;
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
     in.race = 1;
     in.walk_speed = 0.46f;
     in.now_ms = 1000;
@@ -344,8 +344,8 @@ TEST_CASE("Classic models: walk, run, backward, still") {
 
 TEST_CASE("Classic models: sitting down and standing up") {
     Model m{{"P01", "O01", "L01", "L02", "P02", "P07", "O03"}};
-    nmsc::game::SpawnAnimState st;
-    nmsc::game::SpawnAnimInput in;
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
     in.race = 1;
     in.now_ms = 100;
     CHECK(frame(st, in, m).clip == "P01");
@@ -368,8 +368,40 @@ TEST_CASE("Classic models: sitting down and standing up") {
     CHECK(c.reverse);
 }
 
+TEST_CASE("Classic models: ducking while still (ChangePosition @0x5a0bc0)") {
+    Model m{{"P01", "O01", "L01", "L06", "L08"}};
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
+    in.race = 1;
+    in.walk_speed = 0.46f;
+    in.now_ms = 100;
+    CHECK(frame(st, in, m).clip == "P01");
+    // Crouching without moving plays L08 once, and it stays.
+    in.stand_state = 111;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "L08");
+    CHECK(c.restart);
+    CHECK_FALSE(c.reverse);
+    CHECK_FALSE(c.loop);
+    in.now_ms = 20000;
+    c = frame(st, in, m, true);
+    CHECK(c.clip == "L08");
+    CHECK_FALSE(c.restart);
+    // Moving ducked: the duck walk; crouching again then does not replay L08.
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    CHECK(frame(st, in, m).clip == "L06");
+    // Standing up: L08 backward.
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    in.stand_state = 100;
+    c = frame(st, in, m);
+    CHECK(c.clip == "L08");
+    CHECK(c.reverse);
+}
+
 TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not name") {
-    using nmsc::game::classic_plain_stand_after;
+    using hailstone::game::classic_plain_stand_after;
     // FUN_004b0860 @0x4b0860, read from the exe.
     for (int a : {0x20, 1, 5, 0xb, 0x10, 0x11, 0x22, 0x2a, 0x2f, 0x4b, 0xfe})
         CHECK(classic_plain_stand_after(static_cast<std::uint8_t>(a)));
@@ -377,8 +409,8 @@ TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not na
         CHECK_FALSE(classic_plain_stand_after(static_cast<std::uint8_t>(a)));
 
     Model m{{"P01", "P08", "O01", "O02", "L01", "L02"}};
-    nmsc::game::SpawnAnimState st;
-    nmsc::game::SpawnAnimInput in;
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
     in.race = 1;
     in.walk_speed = 0.46f;
     in.now_ms = 1000;
@@ -408,7 +440,7 @@ TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not na
     CHECK(c.clip == "O02");
     // A model without P08 / O02 keeps P01 / O01.
     Model plain{{"P01", "O01", "L01", "L02"}};
-    nmsc::game::SpawnAnimState st2;
+    hailstone::game::SpawnAnimState st2;
     in.now_ms = 1000;
     in.velocity = {0.3f, 0.4f, 0.0f};
     in.speed_run = 0.7f;
@@ -421,7 +453,7 @@ TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not na
     in.now_ms = 7100;
     CHECK(frame(st2, in, plain, false, 90).clip == "O01");
     // An action left as the animation playing decides too: after a social (S06, 0x30) P08, after a slash P01.
-    nmsc::game::SpawnAnimState st3;
+    hailstone::game::SpawnAnimState st3;
     in.now_ms = 1000;
     st3.anim = 0x30;
     CHECK(frame(st3, in, m).clip == "P08");
@@ -447,8 +479,8 @@ TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not na
 
 TEST_CASE("Climbing (CollidingType 6): L07 / CLMB up, reversed down") {
     Model m{{"P01", "L01", "L07"}};
-    nmsc::game::SpawnAnimState st;
-    nmsc::game::SpawnAnimInput in;
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
     in.race = 1;
     in.now_ms = 1000;
     in.colliding_type = 6;
@@ -465,7 +497,7 @@ TEST_CASE("Climbing (CollidingType 6): L07 / CLMB up, reversed down") {
     CHECK(frame(st, in, m).clip != "L07");
     // New-style: CLMB.
     Model n{{"STND_BA_1", "CLMB_BA_1"}};
-    nmsc::game::SpawnAnimState sn;
+    hailstone::game::SpawnAnimState sn;
     in.new_style = true;
     in.colliding_type = 6;
     in.velocity = {0, 0, 0.5f};
@@ -476,8 +508,8 @@ TEST_CASE("Climbing (CollidingType 6): L07 / CLMB up, reversed down") {
 
 TEST_CASE("New-style models: the sequences' tracks") {
     Model m{{"STND_BA_1", "WALK_BA_1", "NRUN_BA_1", "SWIM_BA_1", "NSIT_BA_1", "STNG_BA_1"}};
-    nmsc::game::SpawnAnimState st;
-    nmsc::game::SpawnAnimInput in;
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
     in.new_style = true;
     in.race = 522;
     in.walk_speed = 0.46f;
@@ -510,15 +542,35 @@ TEST_CASE("New-style models: the sequences' tracks") {
     CHECK(frame(st, in, m, true).clip == "NSIT_BA_1");
 }
 
+TEST_CASE("New-style models: ducking while still plays CRCH") {
+    Model m{{"STND_BA_1", "WALK_BA_1", "CRCH_BA_1"}};
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
+    in.new_style = true;
+    in.race = 522;
+    in.now_ms = 1000;
+    CHECK(frame(st, in, m).clip == "STND_BA_1");
+    in.stand_state = 111;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "CRCH_BA_1");
+    CHECK_FALSE(c.reverse);
+    in.now_ms = 1100;
+    CHECK(frame(st, in, m, true).clip == "CRCH_BA_1");
+    in.stand_state = 100;
+    c = frame(st, in, m);
+    CHECK(c.clip == "CRCH_BA_1");
+    CHECK(c.reverse);
+}
+
 TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
-    using nmsc::game::NewStyleTrackInput;
+    using hailstone::game::NewStyleTrackInput;
     Model m{{"STND_BA_1", "STND_1H_1", "STDA_BA_1", "IDLE_BA_1", "IDLE_BA_2", "IDLE_BA_3", "SLPR_BA_1",
              "SLPR_1H_1", "SL2H_2H_1", "KICK_BA_1"}};
     auto has = [&](std::string_view c) { return m.has(c); };
     int r = 0;
     auto rand = [&] { return r; };
     auto track = [&](std::uint8_t code, NewStyleTrackInput in = {}) {
-        return nmsc::game::new_style_track(code, in, has, rand).clip;
+        return hailstone::game::new_style_track(code, in, has, rand).clip;
     };
     CHECK(track(0x50) == "SLPR_BA_1");
     CHECK(track(0x54) == "SLPR_BA_1"); // BLSC -> SLSC -> SLPR
@@ -550,7 +602,7 @@ TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
 
 TEST_CASE("OP_Animation actions: the clip, else FUN_004b1210's replacement") {
     auto clip = [](std::uint8_t action, const Model& m) {
-        return nmsc::game::action_clip(action, [&](std::string_view c) { return m.has(c); });
+        return hailstone::game::action_clip(action, [&](std::string_view c) { return m.has(c); });
     };
     Model rat{{"P01", "L01", "C01", "C05", "D01"}};
     CHECK(clip(5, rat) == "C05");
@@ -573,7 +625,7 @@ TEST_CASE("OP_Animation actions: the clip, else FUN_004b1210's replacement") {
     // New-style models: the old-style number's sequence (0xaaf5c8).
     Model eqg{{"STND_BA_1", "SLPR_BA_1", "SLSC_BA_1", "KICK_BA_1", "FLCH_BA_1"}};
     auto nclip = [&](std::uint8_t action) {
-        return nmsc::game::action_clip(action, [&](std::string_view c) { return eqg.has(c); }, true);
+        return hailstone::game::action_clip(action, [&](std::string_view c) { return eqg.has(c); }, true);
     };
     CHECK(nclip(5) == "SLPR_BA_1");
     CHECK(nclip(6) == "SLSC_BA_1");

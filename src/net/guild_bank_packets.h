@@ -13,7 +13,7 @@
 
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 inline constexpr int kGuildBankDepositSlots = 40; // RoF2 GUILD_BANK_DEPOSIT_SIZE
 inline constexpr int kGuildBankMainSlots = 200;   // GUILD_BANK_MAIN_SIZE
@@ -69,4 +69,4 @@ AppPacket encode_guild_bank_item(GuildBankAction action, std::uint32_t banker, s
 AppPacket encode_guild_bank_permissions(std::uint32_t banker, std::int32_t key, std::uint32_t item_id,
                                         GuildBankPermission permission, std::string_view member);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

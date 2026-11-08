@@ -22,7 +22,7 @@
 #include "net/game_connection.h"
 #include "net/spell_packets.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 namespace cast = game::mechanics::cast;
 
@@ -498,7 +498,8 @@ std::uint32_t GameConnection::discipline_reuse_timer(std::int32_t id) const {
                : 0;
 }
 
-void GameConnection::cast_spell_slot(int gem, std::uint32_t id, const ItemSlot* item_slot, bool keep_target) {
+void GameConnection::cast_spell_slot(int gem, std::uint32_t id, const ItemSlot* item_slot, bool keep_target,
+                                     bool send) {
     const auto now = now_ms();
     // CharacterZoneClient::CastSpell(gem, spell, no item, ..., send, no position).
     cast::State st;
@@ -521,7 +522,7 @@ void GameConnection::cast_spell_slot(int gem, std::uint32_t id, const ItemSlot* 
     a.slot = static_cast<std::uint8_t>(gem);
     a.spell_id = static_cast<std::int32_t>(id);
     a.item_location = {0xffffffffu, 0xffffffffu, 0x0000ffffu}; // no item: the gem's invalid index (all -1)
-    a.send_packet = 1;
+    a.send_packet = send ? 1 : 0;
     cast::Item view{};
     if (item_slot) {
         if (const Item* item = inventory_.at(*item_slot)) {
@@ -572,4 +573,4 @@ void GameConnection::cast_spell_slot(int gem, std::uint32_t id, const ItemSlot* 
         log::debug("cast {}: started, nothing sent", id);
 }
 
-} // namespace nmsc::net
+} // namespace hailstone::net

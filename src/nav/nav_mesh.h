@@ -30,9 +30,9 @@ class dtNavMesh;
 class dtNavMeshQuery;
 class dtQueryFilter;
 
-namespace nmsc::game { class CollisionMesh; }
+namespace hailstone::game { class CollisionMesh; }
 
-namespace nmsc::nav {
+namespace hailstone::nav {
 
 // Polygon areas (Detour area ids, < 64) and flags. The areas come from the zone's regions once a tile is added
 // (NavMesh::mark_areas): the builder marks every polygon Ground.
@@ -245,4 +245,4 @@ std::vector<std::byte> encode_cache(const CacheHeader& h, std::span<const Cached
 // The tiles when the file's header matches `expect` (hashes and grid), else nullopt. Never throws.
 std::optional<std::vector<CachedTile>> decode_cache(std::span<const std::byte> bytes, const CacheHeader& expect);
 
-} // namespace nmsc::nav
+} // namespace hailstone::nav

@@ -6,7 +6,7 @@
 
 #include "game/race_models.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -206,4 +206,4 @@ std::uint32_t PlayerCustomization::base_color(std::int32_t race, std::int32_t he
     return e ? e->base_color : 0;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

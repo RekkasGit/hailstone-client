@@ -6,8 +6,8 @@
 #include "audio/xmi_player.h"
 #include "game_files.h"
 
-using namespace nmsc;
-using namespace nmsc::assets;
+using namespace hailstone;
+using namespace hailstone::assets;
 using Ev = audio::XmiSequencer::Event;
 
 namespace {

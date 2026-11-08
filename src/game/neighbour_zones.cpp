@@ -9,7 +9,7 @@
 #include "assets/regions.h"
 #include "game/coords.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -462,4 +462,4 @@ float distance_xy(const glm::vec3& p, const glm::vec3& lo, const glm::vec3& hi) 
     return std::sqrt(dx * dx + dy * dy);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

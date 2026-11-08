@@ -11,7 +11,7 @@
 #include "game/mechanics/anim_select.h"
 #include "game/sine_table.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -397,4 +397,4 @@ void MissileList::update(std::uint32_t now, const MissileWorld& world) {
     }
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

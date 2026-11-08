@@ -19,11 +19,11 @@
 #include "mq/tlo.h"
 #include "mq_test_world.h"
 
-using namespace nmsc;
-using namespace nmsc::test;
+using namespace hailstone;
+using namespace hailstone::test;
 
 TEST_CASE("TLO: Me.AbilityReady, CombatAbilityReady, AltAbilityReady and their timers") {
-    mq_test::World world{"nmsc_mq_abilities_test"};
+    mq_test::World world{"hailstone_mq_abilities_test"};
     mq::Registry reg;
     mq::register_game_tlos(reg);
     mq::Context ctx;
@@ -196,7 +196,7 @@ TEST_CASE("ability_state finds an owned, activated AA by name or group among man
 }
 
 TEST_CASE("TLO: Target.Buff and the rest from OP_TargetBuffs, the states by spell effect, Me's own buffs") {
-    mq_test::World world{"nmsc_mq_target_buffs_test"};
+    mq_test::World world{"hailstone_mq_target_buffs_test"};
     mq::Registry reg;
     mq::register_game_tlos(reg);
     mq::Context ctx;
@@ -253,7 +253,7 @@ TEST_CASE("TLO: Target.Buff and the rest from OP_TargetBuffs, the states by spel
 }
 
 TEST_CASE("TLO: Spawn.LineOfSight and LineOfSight[y,x,z:y,x,z]") {
-    mq_test::World world{"nmsc_mq_los_test"};
+    mq_test::World world{"hailstone_mq_los_test"};
     mq::Registry reg;
     mq::register_game_tlos(reg);
     mq::Context ctx;

@@ -8,7 +8,7 @@
 
 #include "core/ini_file.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -201,4 +201,4 @@ int store_social(HotButtonStore& store, std::string_view name, std::string_view 
     return -1;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

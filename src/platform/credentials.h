@@ -11,7 +11,7 @@
 #include <string_view>
 #include <utility>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 class CredentialStore {
 public:
@@ -60,4 +60,4 @@ private:
     std::map<std::pair<std::string, std::string>, std::string> saved_;
 };
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

@@ -5,7 +5,7 @@
 // Main thread only, as ImGui's draw calls are.
 #include <unordered_set>
 
-namespace nmsc::ui {
+namespace hailstone::ui {
 
 inline std::unordered_set<const void*>& live_texture_ids() {
     static std::unordered_set<const void*> ids;
@@ -17,4 +17,4 @@ inline void texture_id_added(const void* id) {
 inline void texture_id_removed(const void* id) { live_texture_ids().erase(id); }
 inline bool texture_id_live(const void* id) { return id && live_texture_ids().contains(id); }
 
-} // namespace nmsc::ui
+} // namespace hailstone::ui

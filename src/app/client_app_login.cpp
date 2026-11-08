@@ -10,8 +10,9 @@
 #include "platform/open_folder.h"
 #include "plugin/policy.h"
 #include "plugin/ui_bridge.h"
+#include "core/env.h"
 
-namespace nmsc::app::client_internal {
+namespace hailstone::app::client_internal {
 
 namespace {
 
@@ -465,10 +466,10 @@ void ClientApp::update_login() {
         // 6018 (failed attempts) after the login, or 6028 when Play picked a server for another locale.
         if (!login_->notice().empty()) server_view_.status = {login_->notice(), login_->error_id() != 0};
         screen_ = Screen::Servers;
-        // A test login plays the first world at once (NMSC_SERVER_SELECT=1 keeps the server select up: testing); a
+        // A test login plays the first world at once (HAILSTONE_SERVER_SELECT=1 keeps the server select up: testing); a
         // box login the world played last on this server (the server select's quick connect), else the first.
         if ((!opts_.auto_user.empty() || box_play_) && !auto_play_sent_ && !servers_.empty() &&
-            !std::getenv("NMSC_SERVER_SELECT")) {
+            !hailstone::core::env("SERVER_SELECT")) {
             auto_play_sent_ = true;
             server_view_.busy = true;
             const net::ServerInfo* world = &servers_.front();
@@ -578,7 +579,7 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
     net::ConnectionOptions copts;
     if (automation_) {
         copts.hooks = &automation_->hooks();
-        copts.plugins = automation_->extensions(); // the plugins' server extensions (sdk/nmsc_plugin.h, ABI 2)
+        copts.plugins = automation_->extensions(); // the plugins' server extensions (sdk/hailstone_plugin.h, ABI 2)
     }
     // The character's files: the saved profile's folder, or for a test login one made from the world's name.
     files_profile_ = server_profile_.id.empty()
@@ -919,4 +920,4 @@ void ClientApp::update_connection() {
     }
 }
 
-} // namespace nmsc::app::client_internal
+} // namespace hailstone::app::client_internal

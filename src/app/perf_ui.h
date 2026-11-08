@@ -15,10 +15,10 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::net { class GameConnection; struct SessionStats; }
-namespace nmsc::render { struct ZoneRenderStats; struct ActorRenderStats; class VkContext; }
+namespace hailstone::net { class GameConnection; struct SessionStats; }
+namespace hailstone::render { struct ZoneRenderStats; struct ActorRenderStats; class VkContext; }
 
-namespace nmsc::app {
+namespace hailstone::app {
 
 // The main loop's phases, in the order run() marks them.
 enum class FramePhase : std::uint8_t {
@@ -94,4 +94,4 @@ private:
     NetRate world_rate_, zone_rate_;
 };
 
-} // namespace nmsc::app
+} // namespace hailstone::app

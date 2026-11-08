@@ -29,7 +29,7 @@
 #include "assets/pfs.h"
 #include "core/game_dir.h"
 
-namespace nmsc::assets {
+namespace hailstone::assets {
 
 namespace eqg_character {
 
@@ -200,4 +200,4 @@ private:
     std::optional<std::unordered_map<std::string, std::pair<std::string, std::string>>> layered_parts_; // read once
 };
 
-} // namespace nmsc::assets
+} // namespace hailstone::assets

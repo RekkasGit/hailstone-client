@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace nmsc::plugin {
+namespace hailstone::plugin {
 
 struct WebState {
     std::string url, title;
@@ -54,4 +54,4 @@ public:
     virtual void close_owner(const std::string& owner) = 0;
 };
 
-} // namespace nmsc::plugin
+} // namespace hailstone::plugin

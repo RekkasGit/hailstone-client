@@ -1,6 +1,6 @@
 #include "platform/mouse_capture.h"
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 void MouseCapture::set(bool captured, Cursor& cursor) {
     if (captured == captured_) return;
@@ -24,4 +24,4 @@ void MouseCapture::set_held(bool captured, float x, float y) {
     if (captured) hold_at(x, y);
 }
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

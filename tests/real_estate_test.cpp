@@ -12,9 +12,9 @@
 #include "game/real_estate.h"
 #include "net/real_estate_packets.h"
 
-using namespace nmsc;
-using namespace nmsc::net;
-using nmsc::game::RealEstateManager;
+using namespace hailstone;
+using namespace hailstone::net;
+using hailstone::game::RealEstateManager;
 
 namespace {
 

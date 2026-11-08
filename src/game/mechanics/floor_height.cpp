@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -98,4 +98,4 @@ double get_player_floor_height(FloorCache& c, const std::array<float, 3>& p, boo
     return static_cast<double>(c.floor);
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

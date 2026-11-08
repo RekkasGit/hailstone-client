@@ -4,8 +4,8 @@
 
 #include "core/byte_io.h"
 
-using nmsc::ByteReader;
-using nmsc::ByteWriter;
+using hailstone::ByteReader;
+using hailstone::ByteWriter;
 
 namespace {
 template <std::size_t N> std::array<std::byte, N> bytes(const unsigned char (&raw)[N]) {

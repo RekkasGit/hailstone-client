@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <string>
 
-namespace nmsc::platform {
+namespace hailstone::platform {
 
 // A file:// URL for an absolute path: '/' separators, a third '/' before a Windows drive ("file:///C:/EQ"), and
 // every byte but letters, digits and -._~/: percent-encoded.
@@ -16,4 +16,4 @@ bool open_folder(const std::filesystem::path& folder);
 // Hands the address to the system (its web browser for http(s)); false, logged, when the system refuses it.
 bool open_url(const std::string& url);
 
-} // namespace nmsc::platform
+} // namespace hailstone::platform

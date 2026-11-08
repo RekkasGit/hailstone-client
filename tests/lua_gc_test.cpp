@@ -15,7 +15,7 @@
 namespace fs = std::filesystem;
 
 TEST_CASE("Lua UI: the collector runs in the frame's slices and keeps the heap bounded") {
-    nmsc::test::ScratchDir scratch("lua_gc_test");
+    hailstone::test::ScratchDir scratch("lua_gc_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     // A live table of about 2 MB, and a few hundred KB of garbage each frame, as the shipped windows make.
@@ -32,7 +32,7 @@ TEST_CASE("Lua UI: the collector runs in the frame's slices and keeps the heap b
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua_State* L = lua.state();
         auto frame = [&] {
             ImGui::GetIO().DisplaySize = ImVec2(800, 600);
@@ -61,7 +61,7 @@ TEST_CASE("Lua UI: the garbage made during a cycle spread over frames does not c
     // A sweep in slices over many frames ends with the garbage made meanwhile still in the heap. Taken as live, it
     // raised the next cycle's start and the heap went past the bound below (in a night's play, with more garbage each
     // frame, to 9 GB). A fixed number of steps a frame spreads the cycles the same way on every machine.
-    nmsc::test::ScratchDir scratch("lua_gc_spread_test");
+    hailstone::test::ScratchDir scratch("lua_gc_spread_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "garbage.lua") << "keep = {}\n"
@@ -77,7 +77,7 @@ TEST_CASE("Lua UI: the garbage made during a cycle spread over frames does not c
     int w = 0, h = 0;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
     {
-        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
         lua.set_gc_steps_for_test(8);
         lua_State* L = lua.state();
         auto frame = [&] {
@@ -116,7 +116,7 @@ TEST_CASE("Lua UI: the live heap is what the cycle found reachable, not the garb
     }
     REQUIRE(cycles == 1);
     const std::size_t count = static_cast<std::size_t>(lua_gc(L, LUA_GCCOUNT)) * 1024;
-    const std::size_t found = nmsc::ui::lua::gc_live_bytes(L);
+    const std::size_t found = hailstone::ui::lua::gc_live_bytes(L);
     CHECK(count > live + live / 2); // the sweep's garbage is still there
     CHECK(found < live + live / 4);  // and is not counted
     CHECK(found > live / 2);

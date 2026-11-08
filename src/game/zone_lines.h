@@ -20,7 +20,7 @@
 
 #include "assets/regions.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 // The text DoTeleport gets for a zone-line region named `tag`.
 std::string region_teleport_text(std::string_view tag);
@@ -114,4 +114,4 @@ private:
 // (docs/unknowns.md), so the feet plus 0.25 is used.
 inline constexpr float kRegionProbeHeight = 0.25f;
 
-} // namespace nmsc::game
+} // namespace hailstone::game

@@ -20,7 +20,7 @@
 #include <string>
 #include <string_view>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 class EqStrings;
 
@@ -66,4 +66,4 @@ struct CommandLine {
 };
 CommandLine parse_command_line(std::string_view line, bool gm, const EqStrings* strings = nullptr);
 
-} // namespace nmsc::game
+} // namespace hailstone::game

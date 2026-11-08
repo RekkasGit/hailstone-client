@@ -9,7 +9,7 @@
 
 #include "render/spirv_file.h"
 
-namespace nmsc::render {
+namespace hailstone::render {
 
 // Back-face culling of EQ geometry. The original culls counter-clockwise
 // triangles (D3DCULL_CCW, set at device init by FUN_100916d0 and again by
@@ -70,4 +70,4 @@ inline void image_barrier(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-} // namespace nmsc::render
+} // namespace hailstone::render

@@ -18,7 +18,7 @@
 #include "net/opcodes.h"
 #include "net/packet.h"
 
-namespace nmsc::net {
+namespace hailstone::net {
 
 // ---------------------------------------------------------------- duels
 
@@ -416,4 +416,4 @@ struct VetClaimReply {
 };
 std::optional<VetClaimReply> decode_vet_claim_reply(const AppPacket& p);
 
-} // namespace nmsc::net
+} // namespace hailstone::net

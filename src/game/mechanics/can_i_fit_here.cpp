@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace nmsc::game::mechanics {
+namespace hailstone::game::mechanics {
 
 namespace {
 
@@ -142,4 +142,4 @@ bool must_collide_still(const StillSpawn& s) {
     return false;
 }
 
-} // namespace nmsc::game::mechanics
+} // namespace hailstone::game::mechanics

@@ -17,8 +17,8 @@
 #include "game/mechanics/use_skill.h"
 #include "vector_files.h"
 
-using nmsc::test::Json;
-namespace us = nmsc::game::mechanics::useskill;
+using hailstone::test::Json;
+namespace us = hailstone::game::mechanics::useskill;
 
 namespace {
 
@@ -60,7 +60,7 @@ void read_world(World& w, const Json& in, const Json& record) {
     me.combat_skill_used = {m["combat_skill_used_0"].i32(), m["combat_skill_used_1"].i32()};
     me.next_intimidate_time = m["next_intimidate_time"].i32();
     me.intimidate_count = static_cast<std::uint8_t>(m["intimidate_count"].i32());
-    using nmsc::test::f32_bits;
+    using hailstone::test::f32_bits;
     me.y = f32_bits(m["y"]);
     me.x = f32_bits(m["x"]);
     me.z = f32_bits(m["z"]);
@@ -110,8 +110,8 @@ void read_world(World& w, const Json& in, const Json& record) {
     s.compass_window = g["compass_window"].truthy();
     s.hide_position = {0x11111111, 0x22222222, 0x33333333};
     s.send_count = 1000;
-    s.precision = record["precision"].text == "x87-24" ? nmsc::game::mechanics::FpuPrecision::Single24
-                                                       : nmsc::game::mechanics::FpuPrecision::Double53;
+    s.precision = record["precision"].text == "x87-24" ? hailstone::game::mechanics::FpuPrecision::Single24
+                                                       : hailstone::game::mechanics::FpuPrecision::Double53;
 }
 
 const char* obj_name(us::Obj o) {
@@ -173,7 +173,7 @@ public:
     }
     void arg_f(const Json* c, const char* key, std::uint32_t bits) {
         if (!c || !error.empty() || (*c)[key].is_null()) return;
-        if (nmsc::test::f32_bits((*c)[key]) != bits) error = std::string((*c)["fn"].text) + "." + key + " differs";
+        if (hailstone::test::f32_bits((*c)[key]) != bits) error = std::string((*c)["fn"].text) + "." + key + " differs";
     }
     std::int32_t ret(const Json* c) { return c ? (*c)["ret"].i32() : 0; }
     std::string role(const us::Spawn* p) const {
@@ -519,13 +519,13 @@ public:
         arg_s(c, "a", role(&a));
         arg_s(c, "b", role(&b));
         arg_f(c, "extra", extra);
-        return c ? nmsc::test::f32_bits((*c)["ret"]) : 0;
+        return c ? hailstone::test::f32_bits((*c)["ret"]) : 0;
     }
     std::uint32_t get_melee_range(us::Spawn& a, us::Spawn& b) override {
         auto* c = take("get_melee_range");
         arg_s(c, "a", role(&a));
         arg_s(c, "b", role(&b));
-        return c ? nmsc::test::f32_bits((*c)["ret"]) : 0;
+        return c ? hailstone::test::f32_bits((*c)["ret"]) : 0;
     }
 
 private:
@@ -564,14 +564,14 @@ std::string check(const Json& r) {
 } // namespace
 
 TEST_CASE("UseSkill_Combat vectors: combat abilities, bash, slam, taunt") {
-    nmsc::test::each_vector("UseSkill_Combat.jsonl", check);
+    hailstone::test::each_vector("UseSkill_Combat.jsonl", check);
 }
 TEST_CASE("UseSkill_Activity vectors: hide, sneak, feign death, sense heading, tracking, intimidation, LDoN") {
-    nmsc::test::each_vector("UseSkill_Activity.jsonl", check);
+    hailstone::test::each_vector("UseSkill_Activity.jsonl", check);
 }
 TEST_CASE("UseSkill_Target vectors: begging, pick pockets, disarm, locks and traps") {
-    nmsc::test::each_vector("UseSkill_Target.jsonl", check);
+    hailstone::test::each_vector("UseSkill_Target.jsonl", check);
 }
 TEST_CASE("UseSkill_Gather vectors: bind wound, forage, fishing") {
-    nmsc::test::each_vector("UseSkill_Gather.jsonl", check);
+    hailstone::test::each_vector("UseSkill_Gather.jsonl", check);
 }

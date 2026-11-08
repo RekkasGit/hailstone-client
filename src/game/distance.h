@@ -18,7 +18,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 inline constexpr float kMissingDistance = -1e27f;
 
@@ -39,4 +39,4 @@ inline float player_distance(const glm::vec3* a, const glm::vec3* b, float z_sca
     return true_distance(*a, *b, z_scale);
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game

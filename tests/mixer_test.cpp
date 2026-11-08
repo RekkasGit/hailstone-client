@@ -22,8 +22,8 @@
 #include "pfs_fixtures.h"
 #include "scratch_dir.h"
 
-using namespace nmsc;
-using namespace nmsc::audio;
+using namespace hailstone;
+using namespace hailstone::audio;
 
 namespace {
 

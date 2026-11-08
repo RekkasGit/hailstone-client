@@ -1,6 +1,6 @@
 #include "game/sound_rules.h"
 
-namespace nmsc::game {
+namespace hailstone::game {
 
 namespace {
 
@@ -334,4 +334,4 @@ std::array<std::int32_t, 3> old_spell_effect_sounds(std::span<const std::byte> r
     return out;
 }
 
-} // namespace nmsc::game
+} // namespace hailstone::game
