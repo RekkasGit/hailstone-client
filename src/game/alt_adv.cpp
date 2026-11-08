@@ -112,7 +112,6 @@ void AltAdvState::set_owned(std::uint32_t spent_points, const std::array<std::ui
                             std::vector<OwnedAbility> list) {
     spent = spent_points;
     assigned = assigned_points;
-    if (list.size() > kOwnedAbilities) list.resize(kOwnedAbilities);
     owned = std::move(list);
 }
 

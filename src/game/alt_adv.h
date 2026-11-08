@@ -64,7 +64,8 @@ struct AltAbility {
     bool activated() const { return spell > 0; }
 };
 
-// One owned rank (the profile's 300 slots at +0x36a4 / OP_RespondAA).
+// One owned rank (the profile's 300 slots at +0x36a4 / OP_RespondAA). The client keeps
+// every owned rank the server lists, with no cap: see kOwnedAbilities.
 struct OwnedAbility {
     std::uint32_t id = 0;      // the rank id (0 = empty)
     std::uint32_t value = 0;   // EQEmu: the points spent (OP_RespondAA) or the rank count (profile)
@@ -72,6 +73,10 @@ struct OwnedAbility {
 };
 
 inline constexpr int kAATimers = 100;     // PcBase_SetAATimer's bound
+// The slots a stock server sends in OP_RespondAA (EQEmu's MAX_PP_AA_ARRAY, the
+// original's reader stops there too). Deliberate difference: the client reads
+// every slot the packet holds, since some servers send more than 300; the
+// packet's size (net/session_codec.h kMaxFragmentedPayload) bounds the list.
 inline constexpr int kOwnedAbilities = 300;
 
 // What CanTrainAbility needs about the player.

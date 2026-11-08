@@ -26,14 +26,15 @@ AppPacket encode_send_aa_table(const game::AltAbility& a); // server direction, 
 
 // OP_RespondAA (Z→C, AATable_Struct, 24 + 300 × 12 bytes): points spent,
 // five assigned values (EQEmu: the spent count, then four zeros), then the
-// owned ranks {id, value, charges}. Empty slots (id 0) are dropped.
+// owned ranks {id, value, charges}. Empty slots (id 0) are dropped. Every slot
+// in the packet is read, not only the stock 300 (game::kOwnedAbilities).
 struct RespondAA {
     std::uint32_t spent = 0;
     std::array<std::uint32_t, 5> assigned{};
     std::vector<game::OwnedAbility> owned;
 };
 std::optional<RespondAA> decode_respond_aa(const AppPacket& p);
-AppPacket encode(const RespondAA& v); // server direction, for tests (pads to 300 slots)
+AppPacket encode(const RespondAA& v); // server direction, for tests (pads to 300 slots, more when owned has more)
 
 // OP_AAExpUpdate (Z→C, 12 bytes): AA experience (0..330), unspent points, the
 // percentage of experience going to AAs (a byte; EQEmu's AltAdvStats_Struct
