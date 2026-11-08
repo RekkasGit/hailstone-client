@@ -716,7 +716,8 @@ const assets::CharacterMesh* ActorRenderer::drawn_mesh(std::uint32_t id) const {
 
 bool ActorRenderer::standing(const ActorDraw& a) {
     if (!a.model || !a.clip) return a.model != nullptr;
-    return a.clip == a.model->clip("P01") || a.clip == a.model->clip("O01") || a.clip == a.model->clip("");
+    return a.clip == a.model->clip("P01", a.holding) || a.clip == a.model->clip("O01", a.holding) ||
+           a.clip == a.model->clip("");
 }
 
 bool ActorRenderer::drawn_standing(std::uint32_t id) const {
@@ -731,7 +732,7 @@ bool ActorRenderer::drawn_playing(std::uint32_t id, std::string_view code, float
 
 bool ActorRenderer::playing(const ActorDraw& a, std::string_view code, float& time) {
     if (!a.model) return false;
-    const assets::AnimationClip* clip = a.model->clip(code);
+    const assets::AnimationClip* clip = a.model->clip(code, a.holding);
     if (!clip) return false;
     // The time into the clip's current play (a looping clip's time runs on past its length).
     auto into = [&](float t, bool loop) {
@@ -1229,7 +1230,9 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         }
         const auto* rm = game::find_race_model(s.race, s.gender);
         const bool new_style = model->eqg && rm && (rm->flags & game::kNewStyleModel);
-        auto has_clip = [&](std::string_view c) { return model->clip(c) != nullptr; };
+        // A tunic-point model plays its holding variants while the spawn holds anything (CharacterModel::clip).
+        const bool holding = game::holds_item(s.appearance);
+        auto has_clip = [&](std::string_view c) { return model->clip(c, holding) != nullptr; };
         auto rand_int = [this] { return static_cast<int>(rng_() & 0x7fff); }; // the C rand()'s range
         const game::Spawn* mount = nullptr;
         if (auto m = s.mount_id ? world.spawns.find(s.mount_id) : world.spawns.end(); m != world.spawns.end())
@@ -1277,8 +1280,8 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         if (choice.restart && !s.is_npc) // players only: NPCs would flood the log
             log::debug("animation: {} ({}) plays {} (rate {:.3f}{}{})", s.name, id, choice.clip, choice.rate,
                        choice.reverse ? ", reversed" : "", choice.loop ? "" : ", once");
-        const assets::AnimationClip* motion = choice.clip.empty() ? nullptr : model->clip(choice.clip);
-        if (!motion) motion = &model->first_clip({"P01", "O01", "L01"});
+        const assets::AnimationClip* motion = choice.clip.empty() ? nullptr : model->clip(choice.clip, holding);
+        if (!motion) motion = &model->first_clip({"P01", "O01", "L01"}, holding);
         st.motion_clip = motion;
         // A stand request that played P08 from +0x10c4 leaves 0x20 or 0x47 there (FUN_004b15b0's idle path).
         if (!new_style && layers.follow_up == game::mechanics::kOldStandAfter) layers.follow_up = choice.follow_up;
@@ -1291,7 +1294,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         req.speed_run = speed_run;
         req.follow_up_after = choice.follow_up;
         if (s.is_corpse || s.stand_state == 115) {
-            req.base = &model->first_clip({"D05", "D04", "P01"});
+            req.base = &model->first_clip({"D05", "D04", "P01"}, holding);
             req.base_anim = 0x10; // D05
             req.loop = false;
             req.corpse = true;
@@ -1301,7 +1304,8 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             // at its run speed or faster; a model without the clip falls back as FUN_004b1210 does (0x4e to 0x4a,
             // 0x4a to standing). The rider animation is queued on the legs: an action plays on the upper body.
             const bool full_run = mount->run_speed <= mount->speed_run;
-            req.base = full_run ? &model->first_clip({"L10", "P09", "P01"}) : &model->first_clip({"P09", "P01"});
+            req.base = full_run ? &model->first_clip({"L10", "P09", "P01"}, holding)
+                                : &model->first_clip({"P09", "P01"}, holding);
             req.base_anim = full_run ? 0x4e : 0x4a;
         } else {
             req.base = motion;
@@ -1325,7 +1329,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1};
             std::uint8_t playing = s.action;
             std::string code = game::action_clip(s.action, has_clip, new_style, track_in, rand_int, &playing);
-            const assets::AnimationClip* c = code.empty() ? nullptr : model->clip(code);
+            const assets::AnimationClip* c = code.empty() ? nullptr : model->clip(code, holding);
             const bool started = c && layers.start_action(c, playing, s.action_speed / 10.0f, req);
             log::debug("animation: {} ({}) action {} speed {} -> {}{}", s.name, id, s.action, s.action_speed,
                        code.empty() ? "nothing" : code,
@@ -1345,6 +1349,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         a.yaw = game::heading_to_yaw(heading);
         a.scale = scale;
         a.clip = lower.clip;
+        a.holding = holding;
         a.time = lower.shown_time();
         a.loop = lower.loop;
         a.previous_clip = lower.blend < 1.0f ? lower.previous : nullptr;
