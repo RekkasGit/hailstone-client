@@ -681,8 +681,9 @@ find affect slot 1600). Each record is replayed call for call against the record
   by default; `EqHost::gem_takes_book_spell`): a usable gem that holds another spell takes it too, and the memorize
   runs as into an empty one. At 0 ticks OP_MemorizeSpell goes out for that gem; a stock EQEmu server's
   `Client::MemSpell` forgets the old spell (OP_MemorizeSpell 2, no "You forget" since the gem is being replaced)
-  and memorizes the new. The gem keeps the old spell until then. Double-click and the Memorize button still pick an
-  empty gem.
+  and memorizes the new. The gem keeps the old spell until then. The modern book's double-click and Memorize button
+  take the gem picked in its strip, full or not, else the first empty one; with every gem full and none picked, its
+  status line says how to replace one.
 - Live: `GameConnection::memorize_tick` and `handle_memorize_spell`; the hit-by-spell buff path
   (`game/hit_landing.*`) calls `find_affect_slot`, and the buff it writes appears at once
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.
