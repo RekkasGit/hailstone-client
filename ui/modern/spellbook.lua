@@ -164,11 +164,18 @@ local function spellIcon(id)
   return tex, u0, v0, u1, v1
 end
 
--- The gem a double-click or the Memorize button uses: the one picked while it is empty (the game memorizes only into
--- an empty gem; a drop onto a full one replaces its spell only with Hailstone's replace_gem_spell), else the first
--- empty usable one.
+-- Whether a gem that holds a spell takes another (Hailstone's replace_gem_spell, EqHost::gem_takes_book_spell); the
+-- game memorizes only into an empty gem.
+local function replaces()
+  return eq.Option("replace_gem_spell") ~= 0
+end
+
+-- The gem a double-click or the Memorize button uses: the one picked, while it is empty or replace_gem_spell lets a
+-- full one take the spell; else the first empty usable one.
 local function gemFor(st)
-  if targetGem and targetGem < st.usableGems and (st.gems[targetGem + 1] or -1) == -1 then return targetGem end
+  if targetGem and targetGem < st.usableGems and ((st.gems[targetGem + 1] or -1) == -1 or replaces()) then
+    return targetGem
+  end
   for g = 0, st.usableGems - 1 do
     if (st.gems[g + 1] or -1) == -1 then return g end
   end
@@ -637,7 +644,14 @@ local function detailsTab(x, y, w, h, s, st)
   local bw = (w - 6 * s) / 2
   local gem = gemFor(st)
   local canMem = not e.gem and gem ~= nil
-  local label = e.gem and ("In gem " .. (e.gem + 1)) or (gem and ("Memorize (gem " .. (gem + 1) .. ")") or "No free gem")
+  local label = "No free gem"
+  if e.gem then
+    label = "In gem " .. (e.gem + 1)
+  elseif gem and (st.gems[gem + 1] or -1) ~= -1 then
+    label = "Replace gem " .. (gem + 1)
+  elseif gem then
+    label = "Memorize (gem " .. (gem + 1) .. ")"
+  end
   if T.Button("##memorize", x, by, x + bw, by + 26 * s, s, label, { primary = canMem, enabled = canMem }) then memorize(e, gem, st) end
   if T.Button("##show", x + bw + 6 * s, by, x + w, by + 26 * s, s, "Spell window") then eq.ShowSpell(e.id) end
   -- the game's spell display text
@@ -982,9 +996,9 @@ local function gemStrip(x, y, w, s, st)
     end
     if ui.IsItemHovered() and not drag then
       if id ~= -1 and byId[id] then
-        local replace = usable and eq.Option("replace_gem_spell") ~= 0 -- Hailstone: a drop memorizes over it
+        local replace = usable and replaces() -- Hailstone: a drop memorizes over it
         ui.SetTooltip(string.format("Gem %d: %s\n%sRight-click to forget", g + 1, byId[id].name,
-          replace and "Drop a spell here to replace it\n" or ""))
+          replace and "Drop a spell here, or click to pick this gem, to replace it\n" or ""))
       elseif usable then
         ui.SetTooltip(string.format("Gem %d (empty)\nDrop a spell here, or click to pick this gem", g + 1))
       else
@@ -1007,6 +1021,13 @@ local function gemStrip(x, y, w, s, st)
     line, col = "Click a gem to memorize " .. bySlot[st.cursorSpell].name, C.accent
   elseif not st.sitting then
     line = "Sit down to memorize or scribe spells."
+  elseif not (editor and tab == "sets") and not gemFor(st) then
+    -- every usable gem holds a spell: a double-click has nowhere to go
+    if replaces() then
+      line = "Your gems are full: drag a spell onto a gem to replace it, or click a gem, then double-click the spell."
+    else
+      line = "Your gems are full: right-click a gem to forget its spell first."
+    end
   elseif editor and tab == "sets" then
     line = "Double-click a spell to add it to the set; drag it onto a slot, or onto a gem to memorize it."
   else
@@ -1027,11 +1048,13 @@ local DIALOG = {
 local function body(x, y, w, h, s)
   refresh()
   if modern_book_tab then tab, modern_book_tab = modern_book_tab, nil end -- the spell bar's "manage sets"
-  -- testing: test.book.tab=details|sets, test.book.select=<spell id> and test.book.edit=<set number>|new|gems
-  -- (the set editor) in ui/settings/modern.txt
+  -- testing: test.book.tab=details|sets, test.book.select=<spell id>, test.book.gem=<gem 1..12> (picked in the
+  -- strip) and test.book.edit=<set number>|new|gems (the set editor) in ui/settings/modern.txt
   local tt, tsel = ui.GetSetting("test.book.tab"), tonumber(ui.GetSetting("test.book.select"))
   if tt then tab = tt end
   if tsel and not sel then sel = tsel end
+  local tgem = tonumber(ui.GetSetting("test.book.gem"))
+  if tgem and not targetGem then targetGem = tgem - 1 end
   local st = eq.SpellBookState() or { gems = {}, usableGems = 8 }
   local myLevel = tonumber((eq.Label(2))) or 1
   if targetGem and targetGem >= (st.usableGems or 8) then targetGem = nil end

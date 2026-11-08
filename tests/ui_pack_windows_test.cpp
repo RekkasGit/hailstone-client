@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -617,6 +618,98 @@ TEST_CASE("UI packs (modern): no two of the spell book's widgets share an ID") {
         CHECK(conflicts == 0);
     }
     ImGui::DestroyContext(ctx);
+}
+
+// With every usable gem full, the details pane's Memorize button (and a double-click, which takes the same gem) has
+// no empty gem to use. A gem picked in the strip takes the spell in place of its own when Hailstone's
+// replace_gem_spell is on ("Replace gem N"); off, the button stays "No free gem" and does nothing, as the original
+// memorizes only into an empty gem. (A bug report: a bard with twelve full gems could only memorize after forgetting
+// one.)
+TEST_CASE("UI packs (modern): the spell book's Memorize replaces the spell of a picked full gem") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    for (bool replace : {true, false}) {
+        INFO("replace_gem_spell " << replace);
+        nmsc::test::ScratchDir dir_scratch("ui_pack_spellbook_replace_test");
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / "modern", fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, "modern");
+            nmsc::test::Rig rig;
+            REQUIRE(rig.to_zone());
+            auto& conn = rig.conn;
+            s.host.conn = &conn;
+            s.host.get_option = [replace](std::string_view o) { return o == "replace_gem_spell" ? (replace ? 1 : 0) : 0; };
+            s.host.find_option = [replace](std::string_view o) -> std::optional<int> {
+                if (o == "replace_gem_spell") return replace ? 1 : 0;
+                return std::nullopt;
+            };
+            // spells 200..212 scribed into book slots 0..12; 200.. memorized into every usable gem, 212 left over
+            std::string lines;
+            for (int i = 0; i <= 12; ++i) {
+                std::vector<std::string> f(237, "0");
+                f[0] = std::to_string(200 + i);
+                f[1] = "Spell " + std::to_string(i);
+                for (std::size_t k = 0; k < f.size(); ++k) lines += (k ? "^" : "") + f[k];
+                lines += "\n";
+            }
+            auto table = std::make_shared<game::SpellTable>();
+            REQUIRE(table->parse(lines) == 13);
+            conn.set_spell_table_for_test(table);
+            REQUIRE(conn.profile());
+            net::PlayerProfile pp = *conn.profile();
+            pp.class_ = 2; // a cleric: the book opens
+            conn.set_profile_for_test(pp);
+            for (std::uint32_t i = 0; i <= 12; ++i)
+                conn.receive_zone_packet_for_test(net::encode(net::MemorizeSpell{i, 200 + i, net::kMemScribe, 0}));
+            const int usable = conn.usable_gems();
+            REQUIRE(usable >= 3);
+            for (int g = 0; g < usable; ++g)
+                conn.receive_zone_packet_for_test(net::encode(net::MemorizeSpell{
+                    static_cast<std::uint32_t>(g), 200 + static_cast<std::uint32_t>(g), net::kMemMemorize, 0}));
+            conn.set_sitting(true);
+            lua_State* L = s.lua.state();
+            REQUIRE(luaL_dostring(L, "eq.ShowWindow('SpellBookWnd', true) ui.SetSetting('test.book.tab', 'details')"
+                                     " ui.SetSetting('test.book.select', '212') ui.SetSetting('test.book.gem', '3')") ==
+                    LUA_OK);
+            s.frames(3);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            ImGuiWindow* book = ImGui::FindWindowByName("###modern.SpellBookWnd");
+            REQUIRE(book != nullptr);
+            // the mouse over the Memorize button, found by its ID
+            ImGuiContext& g = *ImGui::GetCurrentContext();
+            const ImGuiID button = book->GetID("##memorize");
+            bool over = false;
+            const ImVec2 at = book->Pos, size = book->Size;
+            for (float y = at.y + 4; y < at.y + size.y && !over; y += 12) {
+                for (float x = at.x + 4; x < at.x + size.x && !over; x += 16) {
+                    ImGui::GetIO().AddMousePosEvent(x, y);
+                    s.frames(1);
+                    over = g.HoveredId == button;
+                }
+            }
+            REQUIRE(over);
+            ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+            s.frames(1);
+            ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+            s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            if (replace) {
+                REQUIRE(conn.spell_state().memorizing.has_value());
+                CHECK(conn.spell_state().memorizing->gem == 2);
+                CHECK(conn.spell_state().memorizing->spell == 212);
+                CHECK(conn.spell_state().gems[2].spell == 202); // kept until the server answers
+            } else {
+                CHECK_FALSE(conn.spell_state().memorizing.has_value());
+            }
+        }
+        ImGui::DestroyContext(ctx);
+    }
 }
 
 TEST_CASE("UI packs: the inventory's alternate currencies draw, and a row selects the stock list's row") {
