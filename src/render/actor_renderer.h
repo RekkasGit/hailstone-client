@@ -52,6 +52,7 @@ struct ActorDraw {
     const assets::AnimationClip* clip = nullptr;
     float time = 0.0f;
     bool loop = true;
+    bool holding = false; // game::holds_item: the clips are the model's holding variants (CharacterModel::clip)
     const assets::AnimationClip* previous_clip = nullptr;
     float previous_time = 0.0f;
     float blend = 1.0f;

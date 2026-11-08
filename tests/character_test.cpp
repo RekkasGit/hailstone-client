@@ -256,6 +256,47 @@ TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * d
     }
 }
 
+TEST_CASE("a spawn holding something plays the model's variant B, else what it has (FUN_004b1210)") {
+    CharacterModel m;
+    for (const char* c : {"", "P01", "P01B", "C01"}) m.clips[c].frame_count = 2;
+    m.held_aliases["P01"] = "P01B";
+    CHECK(m.clip("P01", true) == &m.clips.at("P01B"));
+    CHECK(m.clip("P01", false) == &m.clips.at("P01"));
+    // No variant B: column 0's clip.
+    CHECK(m.clip("C01", true) == &m.clips.at("C01"));
+    CHECK(m.clip("C02", true) == nullptr);
+    CHECK(&m.first_clip({"P01"}, true) == &m.clips.at("P01B"));
+    // PlayerClient_UpdateHoldingAnimation: either hand's model sets the column.
+    hailstone::game::Appearance a;
+    CHECK_FALSE(hailstone::game::holds_item(a));
+    a.material[hailstone::game::kSlotSecondary] = 101064;
+    CHECK(hailstone::game::holds_item(a));
+    a.material[hailstone::game::kSlotSecondary] = 0;
+    a.material[hailstone::game::kSlotPrimary] = 10;
+    CHECK(hailstone::game::holds_item(a));
+}
+
+TEST_CASE("a Luclin model holding something raises its shield arm (variant B)" * doctest::skip(!hailstone::test::game_dir())) {
+    // InitAnimationTracks binds the tunic-point models' A..H tracks to holding columns 0..7; the Dark Elf female
+    // holding a sword and a shield stands in P01B, whose shield point is well above P01A's, where the arm hangs.
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
+    auto m = lib.model("DAF");
+    REQUIRE(m);
+    REQUIRE(m->find_bone("TUNIC_POINT_TRACK") >= 0);
+    const auto* held = m->clip("P01", true);
+    const auto* empty = m->clip("P01", false);
+    REQUIRE(held);
+    REQUIRE(empty);
+    CHECK(held == m->clip("P01B"));
+    CHECK(held != empty);
+    const int shield = m->find_bone("SHIELD_POINT_TRACK");
+    REQUIRE(shield >= 0);
+    std::vector<glm::mat4> a, b;
+    m->sample(*empty, 0.0f, true, a);
+    m->sample(*held, 0.0f, true, b);
+    CHECK(b[static_cast<std::size_t>(shield)][3].z > a[static_cast<std::size_t>(shield)][3].z + 0.25f);
+}
+
 TEST_CASE("zone_character_archives: RoF2's and the live client's _chr.txt entries") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() /

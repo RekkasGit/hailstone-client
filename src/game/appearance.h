@@ -93,4 +93,11 @@ bool is_stock_shield_model(std::uint32_t item_model);
 // display.extra_shields, set once at start (dressed models are cached).
 void set_extra_shields(bool on);
 
+// PlayerClient_UpdateHoldingAnimation @0x58d780: whether a spawn's holding column (+0x334) is other than 0, which
+// on a tunic-point model plays its variant B tracks (assets::CharacterModel::held_aliases). The column is 1..7 when
+// either hand's model kind (+0x119c / +0x11a0, FUN_00489ec0) is set, and a kind is 0 only for no model.
+inline bool holds_item(const Appearance& a) {
+    return a.material[kSlotPrimary] != 0 || a.material[kSlotSecondary] != 0;
+}
+
 } // namespace hailstone::game

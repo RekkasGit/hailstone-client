@@ -130,9 +130,16 @@ const AnimationClip* CharacterModel::clip(std::string_view c) const {
     return it == clips.end() ? nullptr : &it->second;
 }
 
-const AnimationClip& CharacterModel::first_clip(std::initializer_list<std::string_view> codes) const {
+const AnimationClip* CharacterModel::clip(std::string_view c, bool holding) const {
+    if (holding)
+        if (auto a = held_aliases.find(c); a != held_aliases.end())
+            if (auto it = clips.find(a->second); it != clips.end()) return &it->second;
+    return clip(c);
+}
+
+const AnimationClip& CharacterModel::first_clip(std::initializer_list<std::string_view> codes, bool holding) const {
     for (auto c : codes)
-        if (const auto* a = clip(c)) return *a;
+        if (const auto* a = clip(c, holding)) return *a;
     return clips.at("");
 }
 
@@ -1060,6 +1067,11 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
         }
         for (auto& [c, clip] : aliases) m.clips.insert_or_assign(c, std::move(clip));
     }
+    // InitAnimationTracks @0x407800 binds a tunic-point model's variants A..H to holding columns 0..7, so a spawn
+    // holding something plays its B tracks (held_aliases).
+    if (m.find_bone("TUNIC_POINT_TRACK") >= 0)
+        for (const auto& [c, clip] : m.clips)
+            if (c.size() == 4 && c[3] == 'B' && clip.frame_count > 0) m.held_aliases.emplace(c.substr(0, 3), c);
     m.clips.emplace("", std::move(rest));
 
     // Rest-pose bounds.
