@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Modern UI: a link in a text, such as [South Ro] in a chat line or an NPC's reply, is underlined as a whole when the mouse is on it, not only the word under the mouse, and a link that wraps onto the next row is underlined on both rows
+
 ## 0.6.0-beta (2026-11-07)
 
 - Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview
