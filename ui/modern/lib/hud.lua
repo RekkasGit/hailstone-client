@@ -46,6 +46,7 @@ local function keysOf(window)
   if not k then
     k = { scale = "hud.scale." .. window, alpha = "hud.alpha." .. window, pos = "hud.pos." .. window,
       size = "hud.size." .. window, lock = "hud.lock." .. window, fades = "hud.fades." .. window,
+      rolled = "hud.rolled." .. window,
       test = "test.pos." .. window, id = "###modern." .. window }
     shared.keys[window] = k
   end
@@ -549,11 +550,14 @@ end
 --   opts.size(s) -> w, h         the contents' size in design pixels
 --   opts.place(W, H, w, h, s, x, y) -> x, y   the first place (x, y: where the stock window sits)
 --   opts.onClose()               instead of hiding the game window
---   opts.closable = false        no close box (a window only the server closes: the respawn choices)
+--   opts.closable = false        no close box (a window only the server closes: the respawn choices), and no roll-up
+--   opts.rollup = false          no roll-up button (a question to answer: a confirmation, a quantity)
 --   opts.key                     the place's key when one script draws several windows of one screen name
 --   opts.resizable = { minW, minH }   resized from its right and bottom edges (hud.size.<window>, design pixels);
 --                                body gets the current contents' size
--- Every dialog's bottom-right corner scales it (hud.scale.<window>), text and all.
+-- Every dialog's bottom-right corner scales it (hud.scale.<window>), text and all. A dialog with a close box also
+-- has a roll-up button beside it (and a double click on its title bar): rolled up, only the title bar is drawn
+-- (hud.rolled.<window>, kept until it is unrolled, closing and opening it again included).
 --   body(x, y, w, h, s)          draws the contents at that screen rectangle
 function hud.Dialog(screen, title, opts, body)
   local key = opts.key or screen
@@ -629,22 +633,40 @@ function hud.Dialog(screen, title, opts, body)
   style.Push()
   ui.PushStyleVar(ui.StyleVar.WindowPadding, 10 * s, 8 * s)
   ui.PushStyleVar(ui.StyleVar.Alpha, alpha)
-  local flags = ui.WindowFlags.NoSavedSettings | ui.WindowFlags.NoCollapse | ui.WindowFlags.NoResize
+  local flags = ui.WindowFlags.NoSavedSettings | ui.WindowFlags.NoResize
       | ui.WindowFlags.NoScrollbar | ui.WindowFlags.NoScrollWithMouse
   if not opts.resizable then flags = flags | ui.WindowFlags.AlwaysAutoResize end
+  -- the roll-up: ImGui's collapse button beside the close box, the state kept in the setting (applied every frame,
+  -- so a click or a double click on the title bar, which ImGui applies after it, still toggles it)
+  local rollable = opts.closable ~= false and opts.rollup ~= false
+  local rolled = false
+  if rollable then
+    rolled = Setting(k.rolled) == "1"
+    ui.SetNextWindowCollapsed(rolled, ui.Cond.Always)
+  else
+    flags = flags | ui.WindowFlags.NoCollapse
+  end
   local gameTitle = eq.WindowTitle(screen)
   if gameTitle and gameTitle ~= "" and not opts.keepTitle then title = gameTitle end
   local failure = nil
-  local visible, open = ui.Begin(windowName(k, title), opts.closable ~= false or nil, flags)
+  local visible, open = ui.Begin(windowName(k, title), opts.closable ~= false or nil, flags, rollable)
   if opts.closable == false then open = true
   elseif esc.Frame(key) then open = false end
   ui.PopStyleVar(2)
+  if rollable and ui.IsWindowCollapsed() ~= rolled then ui.SetSetting(k.rolled, rolled and "" or "1") end
+  -- its place and rectangle (the fade's mouse-over test), rolled up too: only the title bar is there then
+  local wx, wy = ui.GetWindowPos()
+  do
+    local ww, wh = ui.GetWindowSize()
+    noteRect(key, wx, wy, ww, wh)
+  end
+  if math.abs(wx - x) >= 1 or math.abs(wy - y) >= 1 then
+    ui.SetSetting(k.pos, string.format("%d,%d", math.floor(wx), math.floor(wy)))
+  end
   if visible then
-    local wx, wy = ui.GetWindowPos()
     do -- an opaque layer of the window colour: the scene, and the text of windows behind, showed through the window
       -- colour alone; the Opacity setting fades it with the rest
       local ww, wh = ui.GetWindowSize()
-      noteRect(key, wx, wy, ww, wh)
       local wc = T.color.window
       ui.DrawRectFilled(wx, wy, wx + ww, wy + wh, wc[1], wc[2], wc[3], alpha, 8)
     end
@@ -654,9 +676,6 @@ function hud.Dialog(screen, title, opts, body)
     ui.PushStyleColor(ui.Col.Border, fb[1], fb[2], fb[3], fb[4])
     ui.PushStyleVar(ui.StyleVar.FrameBorderSize, 1)
     ui.PushStyleVar(ui.StyleVar.Alpha, alpha) -- the contents fade with the window (not its menu, below)
-    if math.abs(wx - x) >= 1 or math.abs(wy - y) >= 1 then
-      ui.SetSetting(k.pos, string.format("%d,%d", math.floor(wx), math.floor(wy)))
-    end
     ui.SetWindowFontScale(ownScale)
     T.ResetRightClick()
     local cx, cy = ui.GetCursorScreenPos()
@@ -749,6 +768,7 @@ function hud.Dialog(screen, title, opts, body)
       end
       if opts.closable ~= false then
         ui.Separator()
+        if rollable and ui.MenuItem("Roll up") then ui.SetSetting(k.rolled, "1") end
         if ui.MenuItem("Close") then open = false end
         esc.MenuItem(key)
       end

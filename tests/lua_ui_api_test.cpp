@@ -873,3 +873,70 @@ function open() return (OPEN.A and "A" or "") .. (OPEN.B and "B" or "") .. (OPEN
     }
     ImGui::DestroyContext(ctx);
 }
+
+// ui.Begin's collapseRight puts the collapse button beside the close box for that window alone (the style's
+// WindowMenuButtonPosition is put back); ui.SetNextWindowCollapsed / ui.IsWindowCollapsed roll it up and say so.
+TEST_CASE("Lua UI: a window rolls up, its collapse button at the right") {
+    nmsc::test::ScratchDir scratch("lua_ui_api_collapse_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "roll.lua") << "ui.window('Roll', function()\n"
+                                       "  ui.SetNextWindowPos(40, 50, ui.Cond.Always)\n"
+                                       "  ui.SetNextWindowSize(200, 150, ui.Cond.Always)\n"
+                                       "  if ROLL ~= nil then ui.SetNextWindowCollapsed(ROLL, 3) end\n"
+                                       "  ui.Begin('Roll###roll', true, 0, true)\n"
+                                       "  rolled = ui.IsWindowCollapsed()\n"
+                                       "  ui.End()\n"
+                                       "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        nmsc::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        auto frames = [&](int n) {
+            for (int i = 0; i < n; ++i) {
+                ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+                ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+                ImGui::NewFrame();
+                lua.frame();
+                ImGui::Render();
+            }
+        };
+        auto rolled = [&] {
+            lua_getglobal(L, "rolled");
+            const bool v = lua_toboolean(L, -1) != 0;
+            lua_pop(L, 1);
+            return v;
+        };
+        frames(2);
+        CHECK(ImGui::GetStyle().WindowMenuButtonPosition == ImGuiDir_Left);
+        CHECK_FALSE(rolled());
+        // (a cond of more than one flag, which ImGui asserts on, is taken as Always)
+        REQUIRE(luaL_dostring(L, "ROLL = true") == LUA_OK);
+        frames(2);
+        CHECK(rolled());
+        ImGuiWindow* win = ImGui::FindWindowByName("###roll");
+        REQUIRE(win);
+        CHECK(win->Collapsed);
+        // the collapse button left of the close box, at the title bar's right
+        const ImGuiStyle& st = ImGui::GetStyle();
+        const float fs = win->TitleBarHeight - st.FramePadding.y * 2;
+        const ImVec2 at(win->Pos.x + win->Size.x - st.FramePadding.x - fs - st.ItemInnerSpacing.x - fs / 2,
+                        win->Pos.y + st.FramePadding.y + fs / 2);
+        REQUIRE(luaL_dostring(L, "ROLL = nil") == LUA_OK);
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMousePosEvent(at.x, at.y);
+        frames(1);
+        io.AddMouseButtonEvent(0, true);
+        frames(1);
+        io.AddMouseButtonEvent(0, false);
+        frames(2);
+        CHECK_FALSE(rolled());
+        CHECK(ImGui::GetStyle().WindowMenuButtonPosition == ImGuiDir_Left);
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}

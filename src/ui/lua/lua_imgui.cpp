@@ -67,11 +67,17 @@ bool guarded(const ImGuiWindow *w) {
 // A script's window flags: ImGui's public ones. From 1 << 24 they are its own (ChildWindow, Tooltip, Popup, Modal,
 // ChildMenu: "Don't use!"); Popup without an open popup indexes OpenPopupStack out of bounds.
 int WindowFlags(lua_State *L, int i) { return I(L, i) & ((1 << 24) - 1); }
-// visible, open = ui.Begin(title [, open [, flags]])   open: nil = no close button
+// visible, open = ui.Begin(title [, open [, flags [, collapseRight]]])   open: nil = no close button;
+// collapseRight: the title bar's collapse (roll-up) button at its right, beside the close button (ImGui's
+// WindowMenuButtonPosition, for this window alone), not at its left
 int Begin(lua_State *L) {
 	bool hasOpen = !lua_isnoneornil(L, 2);
 	bool open = B(L, 2, true);
+	ImGuiStyle &style = ImGui::GetStyle();
+	const ImGuiDir menuButton = style.WindowMenuButtonPosition;
+	if (lua_toboolean(L, 4)) style.WindowMenuButtonPosition = ImGuiDir_Right;
 	bool visible = ImGui::Begin(S(L, 1), hasOpen ? &open : nullptr, WindowFlags(L, 3));
+	style.WindowMenuButtonPosition = menuButton;
 	if (g_guard && g_guardLuaFrame == ImGui::GetFrameCount() && LuaUi::drawing_window() == g_guardLuaWindow &&
 		pack_code(L))
 		guard(ImGui::GetCurrentWindow());
@@ -84,6 +90,15 @@ int BeginChild(lua_State *L) { return Ret(L, ImGui::BeginChild(S(L, 1), ImVec2(F
 int EndChild(lua_State *) { ImGui::EndChild(); return 0; }
 int SetNextWindowSize(lua_State *L) { ImGui::SetNextWindowSize(ImVec2(F(L, 1), F(L, 2)), I(L, 3, ImGuiCond_FirstUseEver)); return 0; }
 int SetNextWindowPos(lua_State *L) { ImGui::SetNextWindowPos(ImVec2(F(L, 1), F(L, 2)), I(L, 3, ImGuiCond_FirstUseEver)); return 0; }
+// ui.SetNextWindowCollapsed(collapsed [, cond])   rolled up to its title bar (cond: ui.Cond, default Always)
+int SetNextWindowCollapsed(lua_State *L) {
+	int cond = I(L, 2, ImGuiCond_Always);
+	if (cond <= 0 || (cond & (cond - 1)) != 0 || cond > ImGuiCond_Appearing) cond = ImGuiCond_Always; // (ImGui asserts on more than one)
+	ImGui::SetNextWindowCollapsed(B(L, 1), cond);
+	return 0;
+}
+// ui.IsWindowCollapsed() -> the current window is rolled up to its title bar
+int IsWindowCollapsed(lua_State *L) { return Ret(L, ImGui::IsWindowCollapsed()); }
 int SetNextWindowBgAlpha(lua_State *L) { ImGui::SetNextWindowBgAlpha(F(L, 1)); return 0; }
 int SetWindowFontScale(lua_State *L) { ImGui::SetWindowFontScale(F(L, 1, 1)); return 0; }
 
@@ -956,7 +971,7 @@ void register_ui_api(lua_State *L) {
 	static const luaL_Reg fns[] = {
 		{"Begin", Begin}, {"End", End}, {"BeginChild", BeginChild}, {"EndChild", EndChild},
 		{"SetNextWindowSize", SetNextWindowSize}, {"SetNextWindowPos", SetNextWindowPos},
-		{"SetNextWindowBgAlpha", SetNextWindowBgAlpha}, {"SetWindowFontScale", SetWindowFontScale},
+		{"SetNextWindowBgAlpha", SetNextWindowBgAlpha}, {"SetNextWindowCollapsed", SetNextWindowCollapsed}, {"IsWindowCollapsed", IsWindowCollapsed}, {"SetWindowFontScale", SetWindowFontScale},
 		{"Text", Text}, {"TextColored", TextColored}, {"TextDisabled", TextDisabled}, {"TextWrapped", TextWrapped},
 		{"SeparatorText", SeparatorText}, {"LabelText", LabelText}, {"BulletText", BulletText},
 		{"CalcTextSize", CalcTextSize},

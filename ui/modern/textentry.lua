@@ -12,6 +12,7 @@ local WINDOW = "TextEntryWnd"
 local focus = true -- focus the box when the prompt opens
 
 local WINDOW_OPTS = {
+  rollup = false, -- (a question to answer: kept whole)
   size = function() return 360, 120 end,
   resizable = { 240, 110 },
   place = K.Centered,

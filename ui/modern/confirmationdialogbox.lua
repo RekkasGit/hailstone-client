@@ -10,6 +10,7 @@ local C = T.color
 local WINDOW = "ConfirmationDialogBox"
 
 local WINDOW_OPTS = {
+  rollup = false, -- (a question to answer: kept whole)
   size = function() return 380, 160 end,
   resizable = { 260, 120 },
   place = K.Centered,

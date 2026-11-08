@@ -16,6 +16,7 @@ local function total()
 end
 
 local WINDOW_OPTS = {
+  rollup = false, -- (a question to answer: kept whole)
   size = function() return 380, 230 end,
   resizable = { 320, 200 },
   keepTitle = true,
