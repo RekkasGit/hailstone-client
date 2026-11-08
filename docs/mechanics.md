@@ -1272,6 +1272,10 @@ it does nothing). Which group plays what:
   animation, else 0x47, so the next stand is P08 (a follow-up of 0x47 plays P08 and is reset the same way). The
   layers keep an OP_Animation action as +0x10c0 until it ends (FUN_004b15b0 writes +0x10c0 only for what it
   starts), unless a walk or run took the legs under it; so after a social the stand is P08, after an attack P01.
+- Ducking (PlayerZoneClient::ChangePosition @0x5a0bc0): a change to 'o' (111) plays the duck 0x18 (L08; CRCH on
+  a new-style model) once, unless it or the duck walk 0x16 (L06 / CWLK) is playing; 'd' (100) from 'o' plays it
+  backward. A plain play, not a held posture: a walk or a jump replaces it, and a still ducking spawn asks for
+  nothing more, so the crouch shows without moving (`game::choose_spawn_animation`).
 - Climbing: the local player's CollidingType (+0x24, 6 on a ladder) reaches FUN_004afe60 / SelectMovementAnim, which
   play L07 / CLMB forward going up and reversed going down. Other spawns' +0x24 is 0 here (docs/unknowns.md).
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`: CollisionPass's

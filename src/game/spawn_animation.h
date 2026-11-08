@@ -9,7 +9,9 @@
 // FUN_004afc90's rate. The posture changes (rof2decomp batch 248, row 65):
 // sitting down plays P02 (STNG on new-style models) once, then P07 (NSIT)
 // is held with O03 (SIDL) as the fidget; standing up plays P02 reversed
-// (STDG on new-style models).
+// (STDG on new-style models). Crouching plays the duck (L08, CRCH) once and
+// standing up from it plays it backward (ChangePosition @0x5a0bc0), so a
+// spawn ducks without moving.
 //
 // Pure: the renderer gives the spawn's state and which clips its model has,
 // and gets the clip code, direction and rate.
