@@ -1,8 +1,7 @@
 #pragma once
 
 // OP_Death 0x6517 as the original handles it: Handle_OP_Death @0x532b50
-// (CEverQuest::ReportDeath), rof2decomp batch 263 (re/src/game/net/
-// death_report.cpp; notes/connection-and-network.md 6.5). Checked against
+// (CEverQuest::ReportDeath). Checked against
 // the original's vectors (Handle_OP_Death).
 //
 // The record: +0 dead id, +4 killer id, +0x10 spell, +0x14 skill (byte),
@@ -49,7 +48,7 @@ struct DeathCall {
     enum class Fn : std::uint8_t {
         SendDuelDecline,      // OP_DuelDecline {dead id, our id} (when connected)
         TradeCancelAndClose,  // CTradeWnd_CancelAndClose
-        BankWindowClose,      // FUN_006275f0(0)
+        BankWindowClose,      // 0x6275f0(0)
         LootResetSession,     // our death
         SendTrackTarget,      // Send_OP_TrackTarget(-1, 0)
         SetAutoAttackOff,
@@ -72,7 +71,7 @@ struct DeathResult {
     std::uint8_t hit_type = 0;
     std::int32_t hit_spell = 0, hit_damage = 0;
     bool hit_report = false;
-    bool local_died = false;          // FUN_00531730: auto attack off, level and max HP noted, tip 31 later
+    bool local_died = false;          // 0x531730: auto attack off, level and max HP noted, tip 31 later
     bool merchant_window_closed = false, trainer_window_closed = false;
     bool duel_ended = false;          // 0xddf7e4 / e8 / ec cleared
     bool target_cleared = false;

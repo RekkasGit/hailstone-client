@@ -83,7 +83,7 @@ std::size_t ClassLevelTable::parse(std::string_view text) {
         auto f = fields(line);
         f.resize(10);
         auto level = static_cast<std::uint32_t>(c_atoi(f[0]));
-        if (level > 100) return; // `cmp edi, 0x64; ja` @0x7ea530
+        if (level > 100) return; // above 100 @0x7ea530
         auto cls = static_cast<std::uint32_t>(c_atoi(f[1]));
         ClassLevelRow r;
         r.base_hp = c_atof(f[2]);

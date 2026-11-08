@@ -769,7 +769,7 @@ private:
     void update_listener();
     game::SceneFogFrame scene_fog_frame(float sky_hour, double t);
     void update_music();
-    // The `eq` table of the Lua UI over this client's state (the rof2ui scripts' game API).
+    // The `eq` table of the Lua UI over this client's state.
     void register_eq_api(lua_State* L);
     void trace_spawn(float dt);
     void draw_nameplates(const render::FrameInfo& frame, const glm::mat4& view_proj, VkExtent2D extent, float far_plane);

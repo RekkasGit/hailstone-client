@@ -1,13 +1,12 @@
 #pragma once
 
-// Guild ranks and their permissions, as the original keeps them (rof2decomp batch 257,
-// re/src/game/world/guild_ranks.cpp; vectors GuildRank_Compare, GuildRank_HasPermission,
+// Guild ranks and their permissions, as the original keeps them (vectors GuildRank_Compare, GuildRank_HasPermission,
 // LocalPC_HasGuildPermission):
 //   - ranks run 1 (leader) .. 8 (recruit); GuildRank_Compare @0x7ff390 compares them the other way round when
 //     both are non-zero;
 //   - the rank permission table is the guild manager's +0x9318: a leading dword, then two dwords of bits per rank
 //     (dword[1 + rank * 2 + permission / 32], bit permission % 32). HandleWorldMessage_Guild @0x425d30 fills it from
-//     OP_GuildUpdate action 5 {+0x50 rank, +0x54 permission, +0x58 byte value} with FUN_007d95e0 (set or clear the
+//     OP_GuildUpdate action 5 {+0x50 rank, +0x54 permission, +0x58 byte value} with 0x7d95e0 (set or clear the
 //     bit); EQEmu sends every rank's permissions 1..GUILD_MAX_FUNCTIONS that way on zoning in (Client::SendGuildRanks)
 //     and again on a change.
 
@@ -18,15 +17,15 @@ namespace hailstone::game {
 
 // GuildRank_Compare @0x7ff390: b - a when both ranks are non-zero, else a - b (32-bit wrapping).
 std::int32_t guild_rank_compare(std::int32_t a, std::int32_t b);
-// FUN_007d7360: compare(rank, other) > 0. Send_OP_GuildPromote refuses (eqstr 0x204) when it holds for (the new
+// 0x7d7360: compare(rank, other) > 0. Send_OP_GuildPromote refuses (eqstr 0x204) when it holds for (the new
 // rank, your rank).
 bool guild_rank_above(std::int32_t rank, std::int32_t other);
-// FUN_007d73c0: compare(rank, other) >= 0. Send_OP_GuildDemote stops silently when it holds for (rank + 1, rank).
+// 0x7d73c0: compare(rank, other) >= 0. Send_OP_GuildDemote stops silently when it holds for (rank + 1, rank).
 bool guild_rank_at_least(std::int32_t rank, std::int32_t other);
-// FUN_007d7380: false unless both members are given, else compare(a's rank, b's rank) >= 0.
+// 0x7d7380: false unless both members are given, else compare(a's rank, b's rank) >= 0.
 bool guild_member_rank_at_least(const std::int32_t* a_rank, const std::int32_t* b_rank);
 
-// The dword FUN_007d96c0 reads for (rank, permission): 1 + rank * 2 + permission / 32 (C division), wrapping in 32
+// The dword 0x7d96c0 reads for (rank, permission): 1 + rank * 2 + permission / 32 (C division), wrapping in 32
 // bits, and the bit of it: permission % 32 (C remainder), the shift taken mod 32.
 std::int32_t guild_permission_word_index(std::int32_t rank, std::int32_t permission);
 bool guild_permission_bit(std::uint32_t word, std::int32_t permission);
@@ -38,7 +37,7 @@ struct GuildPermissions {
 
     // GuildRank_HasPermission @0x7d96c0.
     bool has(std::int32_t rank, std::int32_t permission) const;
-    // FUN_007d95e0 (OP_GuildUpdate action 5): sets or clears the bit.
+    // 0x7d95e0 (OP_GuildUpdate action 5): sets or clears the bit.
     void set(std::int32_t rank, std::int32_t permission, bool value);
     void clear() { words = {}; }
 };

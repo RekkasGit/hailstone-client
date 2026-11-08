@@ -1,7 +1,7 @@
 // Using items: a right click on an item slot (CInvSlot::HandleRButtonUp @0x697250), /useitem (Cmd_useitem
 // @0x479200) and the potion belt send OP_ItemVerifyRequest; the server's OP_ItemVerifyReply
-// (Handle_OP_ItemVerifyReply @0x4bf800) eats, drinks, applies a poison or casts the item's click effect (rof2decomp
-// notes/items-and-inventory.md §4, read again from the disassembly).
+// (Handle_OP_ItemVerifyReply @0x4bf800) eats, drinks, applies a poison or casts the item's click effect (read
+// from the disassembly).
 #include "net/game_connection.h"
 
 #include <algorithm>
@@ -177,8 +177,9 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
         }
         const bool vowel = !item->name.empty() && is_vowel(item->name[0]);
         system(drink ? (vowel ? 8502 : 12078) : (vowel ? 8501 : 12075), {item->name}, kChatFood);
-        // FoodDuration x 100 / 2 in the original's 32 bits (imul, then idiv): a duration past 2^31 / 100 wraps as it
-        // does there, written with wrapped_div so that no compiler folds it as if nothing wrapped (AGENTS.md).
+        // FoodDuration x 100 / 2 in the original's 32 bits (the product wraps, the division is signed): a duration past
+        // 2^31 / 100 wraps as it does there, written with wrapped_div so that no compiler folds it as if nothing
+        // wrapped (AGENTS.md).
         // The add wraps in 32 bits too: the level is whatever the server last sent (OP_Stamina can carry any u32),
         // so it is done unsigned, never as a signed add that could overflow.
         const std::int32_t gain = core::wrapped_div(static_cast<std::uint32_t>(item->cast_time_) * 100u, 2);
@@ -197,7 +198,7 @@ void GameConnection::handle_item_verify_reply(const ItemVerifyReply& r) {
             return;
         }
         system(12081, {item->name}, kChatFood);
-        // FUN_007bf990(the Alcohol Tolerance skill when known, else 0): drunkenness +
+        // 0x7bf990(the Alcohol Tolerance skill when known, else 0): drunkenness +
         // ftol(max(0, 270 - skill) / 270 x 30 + 10), at most 200.
         const std::int32_t tolerance = skill_value(66) > 0 ? skill_value(66) : 0;
         const std::int32_t x = std::max(0, 270 - tolerance);
@@ -373,7 +374,7 @@ Item* GameConnection::valid_cast_item() {
 void GameConnection::preview_item(const Item* item) {
     if (state_ != ConnectionState::InZone) return;
     item_preview_.open = true; // vtable +0xd8 (1, 1, 1)
-    if (!item) { // FUN_006ff980(0, 1): the view and its buttons hidden, the label shown
+    if (!item) { // 0x6ff980(0, 1): the view and its buttons hidden, the label shown
         item_preview_.show = false;
         item_preview_.item.reset();
         ++item_preview_.serial;
@@ -394,7 +395,7 @@ void GameConnection::preview_item_id(std::uint32_t item_id) {
 }
 
 void GameConnection::handle_item_preview(const AppPacket& p) {
-    // HandleWorldMessage case 0x7f80 (0xb07f, the marketplace's, is not handled: no marketplace): FUN_006ffa70.
+    // HandleWorldMessage case 0x7f80 (0xb07f, the marketplace's, is not handled: no marketplace): 0x6ffa70.
     auto r = decode_item_preview(p);
     if (!r) {
         log::warn("could not decode the item preview ({} bytes)", p.data.size());

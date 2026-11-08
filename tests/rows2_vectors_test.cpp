@@ -1,4 +1,4 @@
-// rof2decomp batch 254's vectors (recorded from the original eqgame.exe): the /who class text, the target types
+// The original's vectors (recorded from eqgame.exe): the /who class text, the target types
 // that need a target, the chat garbler and bad word filter, GetPlayerFromPartialName and /follow's step.
 
 #include <doctest/doctest.h>
@@ -22,7 +22,7 @@ using hailstone::test::Json;
 namespace {
 
 // The vectors' mocked random helpers, replayed in call order (in.calls); a call of another helper than the one
-// the port makes is a mismatch.
+// the client makes is a mismatch.
 class ReplayRandom : public hailstone::game::ChatRandom {
 public:
     explicit ReplayRandom(const Json& calls) : calls_(calls) {}
@@ -41,7 +41,7 @@ private:
             return 1;
         }
         const Json& c = calls_[at_++];
-        if (c["fn"].text != fn && error.empty()) error = std::format("call {} is {}, the port made {}", at_, c["fn"].text, fn);
+        if (c["fn"].text != fn && error.empty()) error = std::format("call {} is {}, the client made {}", at_, c["fn"].text, fn);
         return c["ret"].i32();
     }
     const Json& calls_;

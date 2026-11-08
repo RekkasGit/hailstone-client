@@ -13,7 +13,7 @@ namespace {
 // Two's complement wrap for the original's 32-bit IMUL/ADD.
 std::int32_t wrap32(std::uint32_t v) { return static_cast<std::int32_t>(v); }
 
-// The item header's ItemBase fields (rof2decomp notes §9 and the
+// The item header's ItemBase fields (the original's
 // ItemClient_UnSerializeItemTree reader @0x5553b0): ornament icon → +0x84,
 // unknowna1 → +0xf0 ArmorType, ornament hero model → +0x48 NewArmorID,
 // unknown063 → +0x138 Tint, unknowna4 → +0x7c RealEstateID.
@@ -37,7 +37,7 @@ std::int64_t total_copper(const net::Coins& c) {
 }
 
 bool take_money(net::Coins& coins, std::int64_t amount) {
-    // The profile keeps the coins as int32; so does this port.
+    // The profile keeps the coins as int32; so does this client.
     auto copper = static_cast<std::int32_t>(coins.copper), silver = static_cast<std::int32_t>(coins.silver),
          gold = static_cast<std::int32_t>(coins.gold), plat = static_cast<std::int32_t>(coins.platinum);
     auto store = [&] {

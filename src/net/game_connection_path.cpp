@@ -52,13 +52,13 @@ void GameConnection::send_find(const game::FindRequest& r, bool found) {
 }
 
 void GameConnection::find_person_request() {
-    // FUN_0059a9c0 (zoning's position reset): the request again while a path is shown.
+    // 0x59a9c0 (zoning's position reset): the request again while a path is shown.
     if (path_.active()) send_find(path_.request(eq_time()), false);
 }
 
 void GameConnection::find_target(const std::string& name) {
     // A client extension: RoF2's /find (Cmd_find @0x4f4250) is the GM command OP_GMFind. Here it finds a path as
-    // FUN_0059da00 does (GetSpawnByName, then PlayerPath_FindSpawn: the player faces the path), to the named spawn
+    // 0x59da00 does (GetSpawnByName, then PlayerPath_FindSpawn: the player faces the path), to the named spawn
     // (its name with or without EQEmu's number, any case) or else the target.
     const game::Spawn* me = world_.player();
     if (state_ != ConnectionState::InZone || !me) return;

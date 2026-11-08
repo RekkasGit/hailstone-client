@@ -1,5 +1,5 @@
 // Per-tick regeneration: CharacterZoneClient::GetHPRegen @0x4527f0, GetManaRegen @0x452df0 and
-// GetEnduranceRegen @0x448ec0 (rof2decomp re/src/game/character/regen.cpp, replaced and tested), with the
+// GetEnduranceRegen @0x448ec0 (checked against the original's vectors), with the
 // x87 scalings of the spawn's regen modifiers through Fpu.
 #include "game/mechanics/character.h"
 
@@ -17,7 +17,7 @@ std::int32_t add(std::int32_t a, std::int32_t b) {
 double d(std::int32_t v) { return static_cast<double>(v); }
 double f(float v) { return static_cast<double>(v); }
 
-// fild value / fmul 100.0f / fmul modifier / fmul 0.01f / fadd 0.5f / __ftol2_sse
+// value * 100.0f * modifier * 0.01f + 0.5f, truncated
 std::int32_t scale_by_modifier(const Fpu& fpu, std::int32_t value, float modifier) {
     double x = fpu.mul(d(value), 100.0);
     x = fpu.mul(x, f(modifier));
@@ -25,13 +25,13 @@ std::int32_t scale_by_modifier(const Fpu& fpu, std::int32_t value, float modifie
     x = fpu.add(x, 0.5);
     return Fpu::ftol(x);
 }
-// fild value / fmul modifier / fadd 0.5f / __ftol2_sse
+// value * modifier + 0.5f, truncated
 std::int32_t scale_half_up(const Fpu& fpu, std::int32_t value, float modifier) {
     return Fpu::ftol(fpu.add(fpu.mul(d(value), f(modifier)), 0.5));
 }
-// fild value / fmul dword k / __ftol2_sse
+// value * k, truncated
 std::int32_t scale(const Fpu& fpu, std::int32_t value, float k) { return Fpu::ftol(fpu.mul(d(value), f(k))); }
-// fild minutes / fmul 1.5f / fimul regen / __ftol2_sse
+// minutes * 1.5f * regen, truncated
 std::int32_t scale_minutes(const Fpu& fpu, std::int32_t minutes, std::int32_t regen) {
     return Fpu::ftol(fpu.mul(fpu.mul(d(minutes), 1.5), d(regen)));
 }
@@ -39,6 +39,28 @@ std::int32_t scale_minutes(const Fpu& fpu, std::int32_t minutes, std::int32_t re
 std::optional<std::int32_t> fast_regen(std::int32_t value, std::int32_t divisor) {
     if (divisor == 0 || (value == INT32_MIN && divisor == -1)) return std::nullopt;
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(value / divisor) * 6u);
+}
+
+// The classes whose mana regen counts WIS rather than INT (the class table at 0x453210): cleric, paladin, ranger,
+// druid, shaman and beastlord.
+bool regen_uses_wisdom(std::uint8_t class_id) {
+    switch (class_id) {
+    case 2: case 3: case 4: case 6: case 10: case 15: return true;
+    default: return false;
+    }
+}
+
+// A monk's carried weight before the endurance penalty: the cap of the highest level band passed, else 30.
+std::int32_t monk_weight_cap(std::int32_t level) {
+    struct Band {
+        std::int32_t above_level;
+        std::int32_t cap;
+    };
+    static constexpr Band kBands[] = {{94, 57}, {89, 56}, {84, 55}, {79, 54}, {64, 53}, {63, 50}, {61, 47},
+                                      {59, 45}, {54, 40}, {50, 38}, {44, 36}, {29, 34}, {14, 32}};
+    for (const Band& band : kBands)
+        if (level > band.above_level) return band.cap;
+    return 30;
 }
 
 } // namespace
@@ -175,9 +197,9 @@ std::int32_t Character::mana_regen(bool include_items, bool no_rest) const {
             std::int32_t items = cached_item(0xf, 0);
             std::int32_t more = cached_item(0x1a1, 0);
             items = add(add(items, d_.mana_regen), more);
-            std::uint32_t cls = static_cast<std::uint32_t>(sheet_.class_id) - 2;
-            bool wis = cls <= 0xd && (cls == 0 || cls == 1 || cls == 2 || cls == 4 || cls == 8 || cls == 0xd);
-            std::int32_t stat = (wis ? heroic(&DerivedStats::heroic_wis) : heroic(&DerivedStats::heroic_int)) / 25;
+            const std::int32_t caster_stat = regen_uses_wisdom(sheet_.class_id) ? heroic(&DerivedStats::heroic_wis)
+                                                                                : heroic(&DerivedStats::heroic_int);
+            std::int32_t stat = caster_stat / 25;
             items = add(items, stat);
             std::int32_t limit = add(add(total_effect(0x13e), stat), 15);
             if (items > limit) items = limit;
@@ -198,19 +220,8 @@ std::int32_t Character::endurance_regen(bool include_items, bool no_rest) const 
     if (sheet_.has_owner) {
         if ((sheet_.food == 0 || sheet_.drink == 0) && sheet_.spawn_type == SpawnType::PC) regen = 0;
         if (!sheet_.attacking && regen > 0) regen = add(regen, regen / 2);
-        bool over;
-        if (sheet_.class_id == 7) {
-            static constexpr std::int32_t kSteps[][2] = {{0xe, 0x20}, {0x1d, 0x22}, {0x2c, 0x24}, {0x32, 0x26},
-                                                         {0x36, 0x28}, {0x3b, 0x2d}, {0x3d, 0x2f}, {0x3f, 0x32},
-                                                         {0x40, 0x35}, {0x4f, 0x36}, {0x54, 0x37}, {0x59, 0x38},
-                                                         {0x5e, 0x39}};
-            std::int32_t cap = 0x1e;
-            for (const auto& step : kSteps)
-                if (level > step[0]) cap = step[1];
-            over = d_.weight > cap;
-        } else {
-            over = d_.weight > d_.stats.str;
-        }
+        const std::int32_t weight_limit = sheet_.class_id == 7 ? monk_weight_cap(level) : d_.stats.str;
+        const bool over = d_.weight > weight_limit;
         if (sheet_.running) regen = add(regen, level / -15);
         if (over) regen = add(regen, level / -15);
         if (include_items) {

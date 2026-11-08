@@ -68,7 +68,7 @@ Image to_rgba8(const Image& image);
 // keeps level 0's share of texels at or above `coverage_ref` on every level, so alpha-tested foliage does not thin
 // out with distance. Other formats are left unchanged.
 // `grow_transparent` false keeps level 0's colour under transparent texels as stored: a DDS's alpha channel is not a
-// colour key, and an opaque material (EQG Opaque_* shaders, notes/eqgraphicsdx9.md) draws that colour (the hero's
+// colour key, and an opaque material (EQG Opaque_* shaders, docs/graphics.md) draws that colour (the hero's
 // forge plate generic_plate_blue_c.dds keeps most of its picture under alpha 0). A palette index 0 key (an 8-bit
 // BMP decoded masked) has no colour worth keeping, and is grown over.
 void build_color_mips(Image& image, float coverage_ref = 0.5f, bool grow_transparent = true);

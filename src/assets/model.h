@@ -52,8 +52,7 @@ enum class EqgShader : std::uint8_t {
     WldDetail,
 };
 
-// The e_* material properties the EQG effects read
-// (rof2decomp notes/eqgraphicsdx9.md, EQG material shaders).
+// The e_* material properties the EQG material shaders read.
 struct EffectParams {
     glm::vec4 slide{0.0f}; // e_fSlide1X, e_fSlide1Y, e_fSlide2X, e_fSlide2Y: texture units per second
     // Extra textures by class: Water/LavaH {Normal0, Environment0};

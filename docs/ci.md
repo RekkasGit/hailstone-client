@@ -119,7 +119,7 @@ Windows release is made from (docs/updater.md "Making a release").
 
 ## clang-tidy
 
-Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/(?!game/sweep_x87).*\.cpp$'` with the root `.clang-tidy`; the CI job that did this is in the workflow's history.
+Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`; the CI job that did this is in the workflow's history.
 
 ## macOS arm64
 

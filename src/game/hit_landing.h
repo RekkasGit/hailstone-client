@@ -2,7 +2,7 @@
 
 // A spell landing on the player: OP_Action type 231 with effect flag 4 goes
 // through PlayerZoneClient::IWasHit @0x5a07b0 to EQ_Character::HitBySpell
-// (game/mechanics/hit_by_spell.h). This runs the port with the client's state
+// (game/mechanics/hit_by_spell.h). This runs those rules with the client's state
 // behind its callees and reports what the client applies itself.
 //
 // What the callees answer here (docs/unknowns.md, Spells):
@@ -79,7 +79,7 @@ struct HitLandingResult {
     std::vector<int> removed_buffs;    // buff slots RemoveAffect cleared
     std::vector<PlacedBuff> placed_buffs; // the buff HitBySpell placed (after the removals)
     std::vector<std::int32_t> sounds;  // PlayerClient::PlaySound(wave) at the player, in order
-    bool buff_timers_on_hold = false;  // SPA 0x1b4 landed: FUN_004325e0(1), the spawn's +0x22d
+    bool buff_timers_on_hold = false;  // SPA 0x1b4 landed: 0x4325e0(1), the spawn's +0x22d
     bool feigned = false;              // SPA 74 landed: StopCastAndFeignDeath (the twist, the cast, lie down)
     // PlayerClient_RecordPositionSample(kind, 0, 0) on the player, in order (3 teleport, 7 knock-back, 9 spell move).
     std::vector<std::uint32_t> position_samples;

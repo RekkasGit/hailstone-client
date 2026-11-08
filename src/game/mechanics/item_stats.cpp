@@ -228,19 +228,19 @@ std::int32_t item_ac(const net::Item& item, bool recurse) {
 }
 
 std::uint8_t item_type_to_skill(std::uint32_t item_type) {
-    switch (item_type & 0xff) {
-    case 0: return 1;
-    case 1: return 3;
-    case 2: return 36;
-    case 3: return 0;
-    case 4: return 2;
-    case 5: case 6: case 27: case 28: return 7;
-    case 7: case 19: return 51;
-    case 9: return 231;
-    case 10: return 15;
-    case 35: return 77;
-    default: return 28;
-    }
+    // The item types that train a skill other than hand to hand, ordered by the skill.
+    struct TypeSkill {
+        std::uint8_t type;
+        std::uint8_t skill;
+    };
+    static constexpr TypeSkill kTrains[] = {
+        {3, 0},  {0, 1},  {4, 2},  {1, 3},  {5, 7},  {6, 7},   {27, 7},
+        {28, 7}, {10, 15}, {2, 36}, {7, 51}, {19, 51}, {35, 77}, {9, 231},
+    };
+    const auto type = static_cast<std::uint8_t>(item_type & 0xff);
+    for (const TypeSkill& row : kTrains)
+        if (row.type == type) return row.skill;
+    return 28; // hand to hand
 }
 
 } // namespace hailstone::game::mechanics

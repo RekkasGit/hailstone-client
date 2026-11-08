@@ -43,7 +43,7 @@ void TextOverlay::display(std::string text, std::int32_t colour, std::int32_t pr
 }
 
 namespace {
-// trunc(elapsed / span x alpha), the x87's chop of fild / fdivp / fimul.
+// trunc(elapsed / span x alpha), truncated as the x87 does it.
 std::int32_t part(std::uint32_t elapsed, std::uint32_t span, std::int32_t alpha) {
     double v = static_cast<double>(elapsed) / static_cast<double>(span) * static_cast<double>(alpha);
     return static_cast<std::int32_t>(v);

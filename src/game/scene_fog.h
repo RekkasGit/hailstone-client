@@ -3,7 +3,7 @@
 // The per-frame fog and scene light, as the original runs them each frame:
 // RealRender_World -> CDisplay_UpdateSky (outdoor time types) or directly
 // CDisplay_UpdateSkyWeatherAndFog -> CDisplay_ApplyWeatherFog ->
-// CDisplay::SetFog -> CRender::SetFog (game/fog.h has the exact ports).
+// CDisplay::SetFog -> CRender::SetFog (game/fog.h follows them exactly).
 //
 // SceneFog keeps what the original keeps between frames: the smoothed light
 // level (0xac2de4), the fog colour CEverQuest +0x38e60..68, CDisplay's fog

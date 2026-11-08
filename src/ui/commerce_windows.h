@@ -2,7 +2,7 @@
 
 // Developer merchant, trade, give and bank windows and the quantity dialog drawn with Dear ImGui until the
 // stock UI engine (M5): what CMerchantWnd, CTradeWnd and CGiveWnd show
-// (rof2decomp: re/src/game/ui/child_items/cmerchantwnd.inc and the
+// (CMerchantWnd's child items and the
 // functions named in net/game_connection_commerce.cpp). Like
 // ui/item_windows.h they draw from game state and return what the player
 // asked for; none of them does networking.

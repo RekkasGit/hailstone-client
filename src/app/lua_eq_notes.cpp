@@ -1,4 +1,4 @@
-// PlayerNotesWindow (CPlayerNotesWnd, rof2decomp export/CPlayerNotesWnd.c): one multi-line edit box
+// PlayerNotesWindow (CPlayerNotesWnd): one multi-line edit box
 // (PlayerNotesInput, at most 10000 characters) over notes.txt, which /note (Cmd_note @0x4f5e50) adds dated lines to.
 // The original keeps notes.txt in the game folder; here it is in the data folder (docs/layout.md), read when first
 // needed, written when the window hides and after each /note (CPlayerNotesWnd::SaveNotes).

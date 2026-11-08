@@ -1,4 +1,4 @@
-// rof2decomp batch 262's vectors (recorded from eqgame.exe): the pick
+// The original's vectors (recorded from eqgame.exe): the pick
 // wrapper's exclusions, a left click on a spawn and a click on a door
 // (game/clicks.h), plus checks of the DLL half (game/picking.h), which has no
 // vectors.
@@ -30,7 +30,7 @@ std::string diff(const std::vector<std::string>& got, const std::vector<std::str
     return "calls: got [" + join(got) + "] want [" + join(want) + "]";
 }
 
-// ---- FUN_0048b5c0
+// ---- 0x48b5c0
 
 std::string check_pick_call(const Json& rec) {
     const Json& in = rec["in"];
@@ -81,7 +81,7 @@ std::vector<std::string> left_click_calls(const LeftClickResult& r) {
         case F::IsTargetable: out.push_back("IsTargetable"); break;
         case F::TipActivate: out.push_back(std::format("CTipWnd::Activate {} {}", c.a, c.b)); break;
         case F::IsGuildmasterForMyClass: out.push_back("IsGuildmasterForMyClass"); break;
-        case F::GuildmasterString: out.push_back(std::format("FUN_005151b0 {}", c.a)); break;
+        case F::GuildmasterString: out.push_back(std::format("0x5151b0 {}", c.a)); break;
         case F::TrimName: out.push_back("trimName"); break;
         case F::GetString: out.push_back(std::format("getString {} {}", c.a, c.b)); break;
         case F::BuildString: out.push_back(std::format("BuildStringFromEQSTR {}", c.a)); break;
@@ -97,7 +97,7 @@ std::vector<std::string> recorded_left_click_calls(const Json& calls) {
     for (const Json& c : calls.items) {
         const std::string& fn = c["fn"].text;
         if (fn == "CTipWnd::Activate") out.push_back(std::format("{} {} {}", fn, c["tip"].i32(), c["a1"].i32()));
-        else if (fn == "FUN_005151b0") out.push_back(std::format("{} {}", fn, c["class"].i32()));
+        else if (fn == "0x5151b0") out.push_back(std::format("{} {}", fn, c["class"].i32()));
         else if (fn == "getString") out.push_back(std::format("{} {} {}", fn, c["id"].i32(), c["a1"].i32()));
         else if (fn == "BuildStringFromEQSTR") out.push_back(std::format("{} {}", fn, c["id"].i32()));
         else if (fn == "dsp_chat")

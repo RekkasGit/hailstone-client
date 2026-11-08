@@ -1,7 +1,7 @@
 #pragma once
 
-// The appearance data files the original client reads at start-up
-// (rof2decomp notes/appearance.md): the colour tables (Resources/npct.ini,
+// The appearance data files the original client reads at start-up:
+// the colour tables (Resources/npct.ini,
 // itmt.ini), the hero's forge tables (Resources/NewArmorTagData.txt,
 // NewArmorAdjData.txt) and Resources/PlayerCustomization.txt.
 
@@ -39,7 +39,7 @@ public:
     // most two letters) '*' (the race table's codes with flag 0x20), 'L'
     // (0x20 without 8) or 'N' (0x28), then 'M' / 'F' for one gender. Every
     // code gets its own record and a later line replaces an earlier one
-    // (FUN_00574560 removes the old record before FUN_00574980 adds).
+    // (0x574560 removes the old record before 0x574980 adds).
     void parse_tags(std::string_view text);
     // NewArmorAdjData.txt: "code, part, sx, sy, sz, tx, ty, tz, rx, ry, rz[,
     // variant]" -> RotationYawPitchRoll(rx°, ry°, rz°), rows 0..2 scaled,

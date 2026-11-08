@@ -1,7 +1,7 @@
 #pragma once
 
 // Missiles: arrows, thrown weapons and spell bolts in flight (EQMissile,
-// eqgame 0x4ff7d0..0x5022e1; rof2decomp Ghidra, traced for this port).
+// eqgame 0x4ff7d0..0x5022e1).
 //
 // The server sends each one as OP_SomeItemPacketMaybe (0x747c, 116 bytes;
 // EQEmu's Mob::ProjectileAnimation / SendItemAnimation). The client never makes
@@ -27,7 +27,7 @@
 //    launch (+0x104: the source's attack animation, below) and makes the
 //    actor (CDisplay::CreateActor with the model name);
 //  - with one, when more than 32 ms passed since the last step (+0x54):
-//    EQMissile::MissileAI @0x4ffb10 (homing), the physics step FUN_008d2790
+//    EQMissile::MissileAI @0x4ffb10 (homing), the physics step 0x8d2790
 //    (PhysicsObject at +4, vtable 0x9cef90) and CDisplay::MoveMissile
 //    @0x5019c0 (the actor's motion, the hit and the end).
 //
@@ -48,7 +48,7 @@
 // (+0x40 stays 0), and ProcessMissile ends an item type 9 missile whose spell
 // fails IsValidSpellID @0x4ad150 (1..45000) before it makes the actor, so the
 // original shows nothing for them; here every item type 9 missile is dropped
-// likewise. What the original does with a valid spell is not ported (no
+// likewise. What the original does with a valid spell is not modelled (no
 // server sends one): its lifetime from the spell's duration, the start on the
 // target for the area target types, the projectile stage (DoSpellEffect stage
 // 1), MoveMissile's area pulses (HitActor on the spawns in range every 2 s,
@@ -175,7 +175,7 @@ float missile_actor_scale(const std::string& model, std::int32_t zone_id);
 void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world);
 // EQMissile::MissileAI.
 void missile_ai(Missile& m, std::uint32_t now, const MissileWorld& world);
-// FUN_008d2790: the physics step.
+// 0x8d2790: the physics step.
 void missile_physics(Missile& m, std::uint32_t now);
 // CDisplay::MoveMissile: false when the missile ends.
 bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world);

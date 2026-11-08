@@ -122,34 +122,54 @@ WhoParse parse_who_args(const std::string& args, const WhoContext& ctx, const Eq
     return out;
 }
 
+namespace {
+
+constexpr std::uint32_t kNoClassName = 0x5cc;
+
+// The string table keeps classes 1..15 in its own order: by id, but Shadow Knight (5) ahead of Ranger (4).
+std::uint32_t class_string_slot(std::int32_t class_id) {
+    if (class_id == 4) return 4;
+    if (class_id == 5) return 3;
+    return static_cast<std::uint32_t>(class_id - 1);
+}
+
+// Which title a level past 50 earns: 51..54, 55..59, 60..64, 65..69, 70..74, 75 up.
+std::size_t title_bracket(std::int32_t level) {
+    if (level >= 75) return 5;
+    if (level >= 70) return 4;
+    if (level >= 65) return 3;
+    if (level >= 60) return 2;
+    if (level >= 55) return 1;
+    return 0;
+}
+
+// Classes 1..15: the name, then its first three titles, four ids apart per slot; the later three titles each in a
+// run of their own, one id per slot.
+std::uint32_t classic_class_eqstr(std::uint32_t slot, bool title, std::int32_t level) {
+    const std::uint32_t name = 0x5de + 4 * slot;
+    if (!title) return name;
+    const std::size_t bracket = title_bracket(level);
+    if (bracket < 3) return name + 1 + static_cast<std::uint32_t>(bracket);
+    static constexpr std::uint32_t kLaterRuns[3] = {0x167b, 0x171a, 0x1f64};
+    return kLaterRuns[bracket - 3] + slot;
+}
+
+} // namespace
+
 std::uint32_t kunark_class_eqstr(std::int32_t class_id, std::int32_t level, bool base_name) {
-    if (level < 51 || base_name) {
-        switch (class_id) {
-        case 1: return 0x5de;  case 2: return 0x5e2;  case 3: return 0x5e6;  case 4: return 0x5ee;
-        case 5: return 0x5ea;  case 6: return 0x5f2;  case 7: return 0x5f6;  case 8: return 0x5fa;
-        case 9: return 0x5fe;  case 10: return 0x602; case 11: return 0x606; case 12: return 0x60a;
-        case 13: return 0x60e; case 14: return 0x612; case 15: return 0x616; case 16: return 0x169f;
-        case 20: return 0x5cf; case 21: return 0x5d0; case 22: return 0x5d1; case 23: return 0x5d3;
-        case 24: return 0x5d2; case 25: return 0x5d4; case 26: return 0x5d5; case 27: return 0x5d6;
-        case 28: return 0x5d7; case 29: return 0x5d8; case 30: return 0x5d9; case 31: return 0x5da;
-        case 32: return 0x5db; case 33: return 0x5dc; case 34: return 0x5dd; case 35: return 0x16a0;
-        case 40: return 0x5ce; case 41: return 0x5cd;
-        default: return 0x5cc;
-        }
+    const bool title = level >= 51 && !base_name;
+    if (class_id >= 1 && class_id <= 15) return classic_class_eqstr(class_string_slot(class_id), title, level);
+    if (class_id == 16) { // Berserker, added later: its strings sit apart
+        static constexpr std::uint32_t kBerserkerTitles[6] = {0x16a1, 0x16a2, 0x16a3, 0x16a4, 0x1719, 0x1f73};
+        return title ? kBerserkerTitles[title_bracket(level)] : 0x169f;
     }
-    // The titles for 51..54, 55..59, 60..64, 65..69, 70..74 and 75 up.
-    static constexpr std::uint32_t kTitles[16][6] = {
-        {0x5df, 0x5e0, 0x5e1, 0x167b, 0x171a, 0x1f64},  {0x5e3, 0x5e4, 0x5e5, 0x167c, 0x171b, 0x1f65},
-        {0x5e7, 0x5e8, 0x5e9, 0x167d, 0x171c, 0x1f66},  {0x5ef, 0x5f0, 0x5f1, 0x167f, 0x171e, 0x1f68},
-        {0x5eb, 0x5ec, 0x5ed, 0x167e, 0x171d, 0x1f67},  {0x5f3, 0x5f4, 0x5f5, 0x1680, 0x171f, 0x1f69},
-        {0x5f7, 0x5f8, 0x5f9, 0x1681, 0x1720, 0x1f6a},  {0x5fb, 0x5fc, 0x5fd, 0x1682, 0x1721, 0x1f6b},
-        {0x5ff, 0x600, 0x601, 0x1683, 0x1722, 0x1f6c},  {0x603, 0x604, 0x605, 0x1684, 0x1723, 0x1f6d},
-        {0x607, 0x608, 0x609, 0x1685, 0x1724, 0x1f6e},  {0x60b, 0x60c, 0x60d, 0x1686, 0x1725, 0x1f6f},
-        {0x60f, 0x610, 0x611, 0x1687, 0x1726, 0x1f70},  {0x613, 0x614, 0x615, 0x1688, 0x1727, 0x1f71},
-        {0x617, 0x618, 0x619, 0x1689, 0x1728, 0x1f72},  {0x16a1, 0x16a2, 0x16a3, 0x16a4, 0x1719, 0x1f73}};
-    if (class_id < 1 || class_id > 16) return 0x5cc;
-    int bracket = level < 55 ? 0 : level < 60 ? 1 : level < 65 ? 2 : level < 70 ? 3 : level < 75 ? 4 : 5;
-    return kTitles[class_id - 1][bracket];
+    if (title) return kNoClassName;
+    // The GM classes 20..35 and the banker and merchant kinds 40, 41 have a name only.
+    if (class_id >= 20 && class_id <= 34) return 0x5cf + class_string_slot(class_id - 19);
+    if (class_id == 35) return 0x16a0;
+    if (class_id == 40) return 0x5ce;
+    if (class_id == 41) return 0x5cd;
+    return kNoClassName;
 }
 
 std::string who_class_text(const EqStrings& strings, std::int32_t class_id, std::int32_t level) {
@@ -219,7 +239,7 @@ std::vector<std::string> format_who_response(const net::WhoResponse& r, const Eq
             std::string zone;
             if (e.zone_string != 0xffffffff)
                 zone = str(strings, e.zone_string, {(e.zone_id >> 15) & 1 ? e.zone_name : zone_short_name(e.zone_id)});
-            // FUN_0044d420: the class name, with its level title above 50 (who_class_text). NMS class masks
+            // 0x44d420: the class name, with its level title above 50 (who_class_text). NMS class masks
             // list their classes instead.
             std::string klass;
             if (multiclass_masks && e.class_ != 0) {
@@ -626,7 +646,7 @@ AnonChange anonymous_command(int flags, std::string_view args, std::string_view 
 }
 
 AnonChange roleplay_command(int flags, std::string_view args, std::string_view off, std::string_view on) {
-    bool roleplaying = (flags & kRoleplayFlag) != 0; // FUN_0058b720
+    bool roleplaying = (flags & kRoleplayFlag) != 0; // 0x58b720
     bool want = !starts_with_word(args, off, 3) && (starts_with_word(args, on, 2) || !roleplaying);
     if (want && !roleplaying && (flags & kAnonFlag)) return {flags, 8873, false}; // 0x22a9
     int f = want ? flags | kRoleplayFlag : flags & ~kRoleplayFlag;

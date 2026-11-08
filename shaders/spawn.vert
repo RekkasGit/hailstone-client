@@ -19,7 +19,7 @@ layout(location = 0) out vec3 v_color;
 layout(location = 1) out vec3 v_world;
 layout(location = 2) out float v_fog;
 
-// The effects' fog (rof2decomp notes/eqgraphicsdx9.md, RegionC1 vs_1_1): per
+// The effects' fog (RegionC1 vs_1_1): per
 // vertex, f = clamp((|eye - pos| - FogStart) FogRangeInv fFogRange, 0, fFogRange)
 // with FogRangeInv = 1 / (end - start), fFogRange = 10, and
 // oFog = exp(-(f FogDensity)^2) (1: no fog); the pixel is lerp(fog, colour, oFog).

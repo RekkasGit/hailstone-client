@@ -1,7 +1,7 @@
 #pragma once
 
 // The procedural sky's cloud patches (CCloudPatch), as the graphics DLL moves
-// them (rof2decomp notes/eqgraphicsdx9.md, Sky):
+// them:
 //   - time base: dt_ms = GetTickCount() delta x TimeScale (1.0), 1 on the
 //     first frame and when the delta is 0 (CSkyBase_UpdateFrameTime @0x100c2130);
 //   - per frame (CCloudPatch_Update @0x10030020): angle += Velocity dt (not
@@ -10,7 +10,7 @@
 //   - spawning (CCloudDefinition_SpawnPatch @0x10027eb0): every value is
 //     rand() / 32767 x (max - min) + min, drawn separately; a fill places
 //     patch i of n at i (2 VisibleAngle / n) + (pi / 2 - VisibleAngle);
-//   - fades (FUN_100295f0): in 5000 ms or 0, hold Duration x 1000 ms (0 ->
+//   - fades (0x100295f0): in 5000 ms or 0, hold Duration x 1000 ms (0 ->
 //     never times out), out 5000 ms.
 
 #include <cstdint>

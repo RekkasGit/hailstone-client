@@ -109,7 +109,7 @@ JournalCategory* ConversationJournal::set_category(const std::string& name, cons
     JournalCategory* c = id != -1 ? category(id) : nullptr;
     if (!c) {
         auto n = std::make_unique<JournalCategory>();
-        std::int32_t free = 0; // FUN_0047a550: the lowest id not in use
+        std::int32_t free = 0; // 0x47a550: the lowest id not in use
         while (free < 1000000 && category(free)) ++free;
         n->id = free;
         categories_.push_back(std::move(n));
@@ -195,7 +195,7 @@ int ConversationJournal::load(const std::filesystem::path& base) {
     }
     line.clear();
     while (!std::feof(hdr)) {
-        if (line.rfind("+CAT", 0) == 0) { // FUN_0047ad30
+        if (line.rfind("+CAT", 0) == 0) { // 0x47ad30
             std::string id, name, desc;
             if (read_line(hdr, id, 0x7ff) && read_line(hdr, name, 0x7ff) && read_line(hdr, desc, 0x7ff))
                 set_category(strip_newline(name.substr(0, 0xf)), strip_newline(desc.substr(0, 0xff)), core::msvc_atoi(id));

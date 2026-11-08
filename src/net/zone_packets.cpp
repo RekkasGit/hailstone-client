@@ -1,5 +1,5 @@
 // Written from EQEmu rof2.cpp/rof2_structs.h (read as reference, no code copied)
-// and the rof2decomp notes; OpenEQ crates/openeq-net/src/zone.rs was studied to
+// and the original client; OpenEQ crates/openeq-net/src/zone.rs was studied to
 // cross-check the OP_ClientUpdate offsets (THIRD_PARTY.md).
 
 #include "net/zone_packets.h"

@@ -3,7 +3,7 @@
 // Packets between players and the small per-player commands: duels, inspect,
 // surname, corpse summoning and dragging, shielding, the key ring, /rewind,
 // the bandolier and reading books. Layouts follow the original's senders and
-// readers (rof2decomp export; addresses at each struct) and the NMS server's
+// readers (addresses at each struct) and the NMS server's
 // EQEmu RoF2 translator (common/patches/rof2.cpp, rof2_structs.h, zone/
 // client_packet.cpp). Per-packet notes: docs/protocol/rof2-packets.md
 // "Duels, inspect and player commands".

@@ -4,7 +4,7 @@
 // them: the info lines (IDW_ItemInfo1..12: the name, the flags, the classes, races, deities and slots), the stat
 // grid (IDW_Row<r>Col<c>Stat / Value, 26 rows of 3 columns, filled column by column in two blocks), the heroic
 // bonuses beside their values (IDW_Heroic<n>) and the description STML (CItemDisplayWnd_CreateEffectsString
-// @0x6a6810 with UpdateStrings @0x69ae30). rof2decomp export/_globals.c and the disassembly; docs/unknowns.md lists
+// @0x6a6810 with UpdateStrings @0x69ae30), read from the disassembly; docs/unknowns.md lists
 // what is not ported.
 
 #include <array>
@@ -53,7 +53,7 @@ struct ItemDisplayContext {
     std::function<std::optional<std::pair<std::string, std::string>>(std::int32_t id, bool guild)> trophy_benefit;
 };
 
-// The heroic values' colour (FUN_0069b3d0).
+// The heroic values' colour (0x69b3d0).
 inline constexpr std::uint32_t kHeroicArgb = 0xffd6b228;
 
 struct ItemDisplayCell {
@@ -102,7 +102,7 @@ struct ItemDisplayFrameIn {
     int text_width = 0;
 };
 
-// Where CItemDisplayWnd places its children (FUN_0069b590 and the end of BuildItemInfo, @006ad8e4..@006adcf4), in
+// Where CItemDisplayWnd places its children (0x69b590 and the end of BuildItemInfo, @006ad8e4..@006adcf4), in
 // the description page's pixels, and the size it gives itself: CXWnd::Resize(width, height) @006adce8, the whole
 // window with its frame and title bar.
 struct ItemDisplayLayout {
@@ -117,7 +117,7 @@ struct ItemDisplayLayout {
 };
 ItemDisplayLayout layout_item_display(const ItemDisplay& d, const ItemDisplayFrameIn& in);
 
-// FUN_007e8a10: the damage bonus the player's class and level give a weapon (the Dmg Bon line).
+// 0x7e8a10: the damage bonus the player's class and level give a weapon (the Dmg Bon line).
 std::int32_t weapon_damage_bonus(std::int32_t level, std::uint8_t player_class, const net::Item& item);
 
 } // namespace hailstone::game

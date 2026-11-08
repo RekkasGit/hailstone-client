@@ -225,7 +225,7 @@ struct EcoLayer {
 };
 
 // CEcoTextureLayer_ComputeCoverage @0x100ee790, one texel of one layer
-// (rof2decomp notes/eqgraphicsdx9.md, EQG heightmap texturing): the weight
+// of the EQG heightmap texturing: the weight
 // from the height band, the slope band, the LAYERINGMAP byte and the
 // BLENDMAP byte (negative = no map), or nullopt when the layer skips the texel.
 std::optional<float> eco_layer_weight(const EcoLayer& layer, float height, std::int32_t slope,
@@ -245,7 +245,7 @@ std::optional<std::size_t> nearest_painted_tile(std::int32_t lng, std::int32_t l
                                                 const std::map<std::pair<std::int32_t, std::int32_t>, std::size_t>& painted,
                                                 std::int32_t reach = 16);
 
-// An animated EQG texture's sidecar, `<texture>.txt` (rof2decomp notes/eqgraphicsdx9.md): the frame count, the time
+// An animated EQG texture's sidecar, `<texture>.txt`: the frame count, the time
 // a frame shows in ms, then the frames' file names, the first being the texture itself. bloodfalls' blood01_c.txt is
 // 10, 200, blood01_c.dds .. blood10_c.dds. The count wins over a longer list (chambers' ra_blood01_n_001.txt says 9
 // and lists 10); nullopt when there are fewer than two frames.
@@ -255,7 +255,7 @@ struct TextureAnimation {
 };
 std::optional<TextureAnimation> parse_texture_animation(std::span<const std::byte> data);
 
-// An .eco flora layer (*FLORAPART *LAYER), as the DLL's layer reader FUN_10107a60 stores it: the flora definition
+// An .eco flora layer (*FLORAPART *LAYER), as the DLL's layer reader 0x10107a60 stores it: the flora definition
 // (*FLORA, +0x14), the texture layer whose mask it grows on (*TEXTURELAYER, +0x18), the height band (+0x20..+0x28),
 // the slope band (+0x2c..+0x34), *DENSITY (+0x38, float), *ITERATIONS (+0x3c), *MINSCALE / *MAXSCALE (+0x40 /
 // +0x44) and *MINALPHA (+0x58, a byte).

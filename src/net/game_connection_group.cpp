@@ -1,5 +1,5 @@
 // GameConnection: groups and pets. The client rules follow the original's
-// handlers in the rof2decomp Ghidra export (addresses below); the packets are
+// handlers (addresses below); the packets are
 // net/group_packets.h and net/pet_packets.h, the state game/group.h.
 
 #include <algorithm>
@@ -117,7 +117,7 @@ public:
     }
     void set_member_role(int m, std::int32_t role, std::uint8_t on) override {
         // CGroupBase_SetMemberRole @0x7d6200: roles 1 main tank, 2 main assist, 3 puller (a mercenary only tanks); a
-        // role taken is first cleared from every member (each clearing printed too); then FUN_0054dd70 code 4:
+        // role taken is first cleared from every member (each clearing printed too); then 0x54dd70 code 4:
         // "%1 is now %2" 0x1da9 / 0x1daa (the member's trimmed name and GroupRole_GetName), colour 0x111. Nothing
         // changes without a leader or when the member already has that state.
         if (m < 0 || m >= 6 || role < 0 || role > 3 || g_.leader.empty()) return;
@@ -504,7 +504,7 @@ void GameConnection::handle_group(Op op, const AppPacket& p) {
             }
             group_.leader = u->leader;
             group_.active = true;
-            // The group you invited into being: the group finder's posts end (FUN_005166f0 → FUN_00678550).
+            // The group you invited into being: the group finder's posts end (0x5166f0 → 0x678550).
             if (creating_group_) {
                 group_search_joined_group();
                 creating_group_ = false;
@@ -638,7 +638,7 @@ void GameConnection::accept_group_invite() {
     f.invitee = character_;
     f.unknown148 = group_.invite_cookie;
     send_zone(encode(f, !group_.invite_via_first_opcode));
-    group_search_joined_group(); // the group finder's posts end (FUN_00678550)
+    group_search_joined_group(); // the group finder's posts end (0x678550)
     creating_group_ = false;
     group_.inviter.clear();
     group_.invite_via_first_opcode = false;
@@ -875,7 +875,7 @@ std::uint32_t GameConnection::group_member_roles(int slot) const {
 }
 
 void GameConnection::grouproles_command(const std::string& args) {
-    // Cmd_grouproles @0x4f8360 (rof2decomp re/src/game/commands/grouproles_command.cpp).
+    // Cmd_grouproles @0x4f8360.
     if (!can_use_command_now()) return;
     if (!group_.active) return system(0xcdc, {}, 0xd);
     if (args.empty()) {
@@ -995,7 +995,7 @@ bool GameConnection::leadership_command(std::string_view h, const std::string& a
     if (state_ != ConnectionState::InZone) return false;
     if (h == "Cmd_grouproles") { grouproles_command(args); return true; }
     if (h == "Cmd_groupleader") { groupleader_command(); return true; }
-    // rof2decomp re/src/game/commands/leadership_commands.cpp: Gates of Discord first (else 0x2264, colour 0xf).
+    // The leadership commands: Gates of Discord first (else 0x2264, colour 0xf).
     if (h == "Cmd_gmarknpc") { mark_npc_command(args, 0, 0x2265); return true; } // /gmarknpc and /marknpc
     if (h == "Cmd_rmarknpc") { mark_npc_command(args, 0x10, 0x2266); return true; }
     if (h == "Cmd_inspectbuffs") {
@@ -1032,7 +1032,7 @@ bool GameConnection::leadership_command(std::string_view h, const std::string& a
 bool GameConnection::has_gates_of_discord() const { return profile_ && (profile_->expansions & 0x40) != 0; }
 
 bool GameConnection::group_has_players(int n) const {
-    // FUN_00443630 → GetNumPlayersInGroup(0) @0x7d5c10: the members whose +0x14 byte is clear (taken here as the
+    // 0x443630 → GetNumPlayersInGroup(0) @0x7d5c10: the members whose +0x14 byte is clear (taken here as the
     // members that are not offline).
     if (!group_.active) return false;
     int count = 0;
@@ -1053,38 +1053,45 @@ bool GameConnection::leadership_has_rank(int ability, std::int32_t rank) const {
 }
 
 bool GameConnection::is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const {
-    // FUN_0057f760 / FUN_0057f790 / FUN_0057f7c0: the character's own spawn id among the profile's three.
+    // 0x57f760 / 0x57f790 / 0x57f7c0: the character's own spawn id among the profile's three.
     const std::uint32_t me = world_.player_id;
     return me && std::find(ids.begin(), ids.end(), me) != ids.end();
 }
 
 bool GameConnection::leadership_ability_active(int ability, std::int32_t rank) const {
-    // Leadership_IsAbilityActive @0x55eb70 (rof2decomp re/src/game/character/leadership_bonus.cpp): Gates of Discord
+    // Leadership_IsAbilityActive @0x55eb70: Gates of Discord
     // and the rank, then per ability.
     if (!has_gates_of_discord() || !leadership_has_rank(ability, rank)) return false;
+    // Who may use each ability, by ability id; an id not listed (3, 0xf, past 0x1d) is never active.
+    enum class Who : std::uint8_t { None, Group, GroupLeader, GroupMarker, GroupAssist, Raid, RaidLeader, RaidMarker,
+                                    RaidWaypointer };
+    static constexpr Who kWho[] = {
+        Who::GroupMarker, Who::Group, Who::GroupAssist, Who::None, Who::GroupLeader, Who::GroupLeader,  // 0..5
+        Who::Group, Who::Group, Who::Group, Who::Group, Who::Group, Who::Group, Who::Group, Who::Group, // 6..0xd
+        Who::Group, Who::None,                                                                          // 0xe, 0xf
+        Who::RaidMarker, Who::Raid, Who::RaidWaypointer, Who::RaidLeader, Who::RaidLeader,              // 0x10..0x14
+        Who::RaidLeader, Who::Raid, Who::Raid, Who::Raid, Who::Raid, Who::Raid, Who::Raid, Who::Raid,   // 0x15..0x1c
+        Who::Raid,                                                                                      // 0x1d
+    };
+    if (ability < 0 || static_cast<std::size_t>(ability) >= std::size(kWho)) return false;
     const std::uint32_t me = world_.player_id;
-    const bool leader = group_.is_leader(character_);     // FUN_00443670
+    const bool leader = group_.is_leader(character_);     // 0x443670
     const bool raid_leader = raid_.active && iequals(raid_.leader, character_);
-    switch (ability) {
-    case 0: // mark NPC: the group leader or its marker (FUN_0057f700: the profile's +0x218)
-        return group_has_players(3) && (leader || (me && leadership_.group_marker == me));
-    case 1: case 6: case 7: case 8: case 9: case 10: case 11: case 12: case 13: case 14:
-        return group_has_players(3);
-    case 2: // the main assist (FUN_0057f730: +0x21c)
-        return group_has_players(3) && (leader || (me && leadership_.group_assist == me));
-    case 4: case 5:
-        return group_has_players(3) && leader;
-    case 0x10: // the raid's mark NPC: the raid leader or one of its markers (FUN_0057f790)
+    const Who who = kWho[static_cast<std::size_t>(ability)];
+    if (who == Who::None) return false;
+    if (who == Who::Group) return group_has_players(3);
+    if (who == Who::GroupLeader) return group_has_players(3) && leader;
+    // mark NPC (0): the group leader or its marker (0x57f700: the profile's +0x218)
+    if (who == Who::GroupMarker) return group_has_players(3) && (leader || (me && leadership_.group_marker == me));
+    // the main assist (2; 0x57f730: +0x21c)
+    if (who == Who::GroupAssist) return group_has_players(3) && (leader || (me && leadership_.group_assist == me));
+    if (who == Who::Raid) return raid_has_players(18);
+    if (who == Who::RaidLeader) return raid_leader && raid_has_players(18);
+    // the raid's mark NPC (0x10): the raid leader or one of its markers (0x57f790)
+    if (who == Who::RaidMarker)
         return (raid_leader || is_raid_delegate(leadership_.raid_markers)) && raid_has_players(18);
-    case 0x12: // the raid leader or one of the third set (FUN_0057f7c0)
-        return (raid_leader || is_raid_delegate(leadership_.raid_waypointers)) && raid_has_players(18);
-    case 0x13: case 0x14: case 0x15:
-        return raid_leader && raid_has_players(18);
-    case 0x11: case 0x16: case 0x17: case 0x18: case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d:
-        return raid_has_players(18);
-    default:
-        return false;
-    }
+    // 0x12: the raid leader or one of the third set (0x57f7c0)
+    return (raid_leader || is_raid_delegate(leadership_.raid_waypointers)) && raid_has_players(18);
 }
 
 void GameConnection::check_group_size() {
@@ -1106,7 +1113,7 @@ void GameConnection::activate_leadership_ability(int ability, std::int32_t param
     const bool target_pc = t && !t->is_npc && !t->is_corpse; // Type 0
     const std::uint32_t me = world_.player_id;
     const bool raid_leader = raid_.active && iequals(raid_.leader, character_); // CRaid__IsRaidLeader_on_instCRaid
-    // FUN_004493c0 on the target's name (CharacterZoneClient_IsSelfOrGroupMember).
+    // 0x4493c0 on the target's name (CharacterZoneClient_IsSelfOrGroupMember).
     auto in_group = [&](const game::Spawn& s) { return s.id == me || group_.slot_of(base_name(s.name)) >= 0; };
     auto refuse = [&](std::uint32_t id) { system(id, {}, 0xd); };
     auto send = [&](int a, std::int32_t p) {
@@ -1202,7 +1209,7 @@ void GameConnection::mark_npc_command(const std::string& args, int ability, std:
 }
 
 void GameConnection::find_path_to_player(const std::string& name) {
-    // Leadership_FindPathToPlayer @0x55eee0 (rof2decomp re/src/game/commands/leadership_path.cpp): Find Path to PC
+    // Leadership_FindPathToPlayer @0x55eee0: Find Path to PC
     // (group ability 13, raid ability 28); a raid member through the raid (a raid of 18), else a group member through
     // the group (a group of 3). The path is the server's (OP_FindPersonRequest, as /find).
     bool group = leadership_has_rank(13, 1);
@@ -1342,7 +1349,7 @@ void GameConnection::set_leadership_exp(bool on) {
 }
 
 bool GameConnection::leadership_hot_button_enabled(int ability, int n) const {
-    // FUN_00560180 (CLeadershipWnd_UpdateAbilityDescription's hot buttons 1..3): FUN_0055fb60 is the character's own
+    // 0x560180 (CLeadershipWnd_UpdateAbilityDescription's hot buttons 1..3): 0x55fb60 is the character's own
     // rank (PcBase +0x1da0).
     if (game::leadership_passive(ability) || ability < 0 || ability >= game::kLeadershipAbilities) return false;
     const auto& def = game::leadership_hot_button_def(ability);

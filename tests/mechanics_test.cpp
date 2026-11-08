@@ -1,5 +1,5 @@
 // The character rules (src/game/mechanics): hand-computed expectations from
-// the formulas of rof2decomp's rewritten functions (see each case), including
+// the original's formulas (see each case for the function), including
 // the cases where the original's 24-bit x87 precision gives a different
 // result than IEEE doubles.
 #include <doctest/doctest.h>

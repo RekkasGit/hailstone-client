@@ -713,7 +713,7 @@ void ClientApp::update_player(float dt) {
             float radius = game::mechanics::sweep_radius(game::mechanics::SweepRadiusSpawn{floor_offset_, me->race});
             movement_.set_collision_radius(radius);
             movement_.set_race(me->race);
-            // FUN_00406740: the duck track's length (L08, or CRCH_BA_1 on an EQG skeleton: the actor's vtable +0xbc, as
+            // 0x406740: the duck track's length (L08, or CRCH_BA_1 on an EQG skeleton: the actor's vtable +0xbc, as
             // the bone groups ask it) caps the jump's crouch window.
             std::optional<double> duck;
             if (actor_renderer_)

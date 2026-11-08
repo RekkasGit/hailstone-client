@@ -1,7 +1,6 @@
-// Augments: the fit test against the original's vectors (rof2decomp re/test/vectors/ItemBase_CanGemFitInSlot.jsonl;
+// Augments: the fit test against the original's vectors (ItemBase_CanGemFitInSlot.jsonl;
 // a fixed subset of it is kept in tests/data, the whole file is read when the vectors directory is there), the
-// OP_AugmentItem / OP_AugmentInfo layouts, the insert / remove / swap / destroy rules and the socket rows
-// (rof2decomp notes/augments.md).
+// OP_AugmentItem / OP_AugmentInfo layouts, the insert / remove / swap / destroy rules and the socket rows.
 #include <doctest/doctest.h>
 
 #include <format>
@@ -91,6 +90,7 @@ TEST_CASE("CanGemFitInSlot: the kept vector subset") {
     std::map<int, int> codes;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
+        test::normalise_recorded_names(line);
         ++n;
         Json r = test::parse_json(line);
         ++codes[r["out"]["value"].i32()];
@@ -562,7 +562,7 @@ TEST_CASE("Augments travel as children; a type-0x67 packet refreshes displays of
     CHECK(st.info[1].id == 24136);
 }
 
-TEST_CASE("stats-disabled bytes: FUN_007b28a0 and the stat sums' disabled children") {
+TEST_CASE("stats-disabled bytes: 0x7b28a0 and the stat sums' disabled children") {
     using namespace hailstone::game;
     net::Item host;
     host.item_class = 0;

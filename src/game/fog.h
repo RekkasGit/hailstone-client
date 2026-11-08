@@ -1,15 +1,14 @@
 #pragma once
 
-// The original client's fog and per-frame scene light, exactly: rof2decomp
-// batch 264 (re/src/game/display/fog.cpp, notes/eqgraphicsdx9.md "Fog margin
-// argument" and "eqgame side"), checked against the original's vectors
+// The original client's fog and per-frame scene light, exactly, checked
+// against the original's vectors
 // (tests/fog_vectors_test.cpp: CalcFogFadeMargin, SetFog,
 // UpdateSkyWeatherAndFog).
 //
 //   CDisplay_CalcFogFadeMargin @0x48ac00   the margin SetFog takes off the far plane
 //   CDisplay::SetFog @0x48ae80             distance fixes, the fade, the sky flag, CRender::SetFog's arguments
 //   CDisplay_UpdateSkyWeatherAndFog @0x4942b0  per frame: ambient, light level, vision floors, fog colour
-//   CDisplay_ApplyWeatherFog @0x518400     the fog distances by camera region (rof2decomp batch 233)
+//   CDisplay_ApplyWeatherFog @0x518400     the fog distances by camera region
 //
 // The originals keep values on the x87 stack between steps; here they are
 // doubles run through mechanics::Fpu at the FPU's precision (24-bit in game)

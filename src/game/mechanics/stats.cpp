@@ -1,17 +1,17 @@
 // Stats, resists, caps, hit points / mana / endurance, armor class, haste,
 // weight: CharacterZoneClient::ProcessAllStats and the functions it runs.
 //
-// Sources (rof2decomp, replaced and differential-tested unless noted):
-//  - re/src/game/character/stats.cpp (heroic getters, basesave_*, CalcSavePhysical, racial bonus, mod caps)
-//  - re/src/game/character/stat_calc.cpp (CalcSave*, CalcSTR..CalcWIS, Cur_Mana/Cur_Endurance, ComputeDefense,
-//    GetStatCap, MaxAirSupply, GetMaxLevel, GetClassACBonus)
-//  - re/src/game/character/vitals.cpp (class/level table, Max_HP, Max_Mana, Max_Endurance, Cur_HP)
-//  - re/src/game/character/carried_weight_eh.cpp (CalcCarriedWeight, CalculateWeight, CalcAGI)
-//  - re/src/game/character/calc_ac_eh.cpp (CalcAC), item_haste_eh.cpp (CalcItemHaste),
-//    pack_item_scans_eh.cpp + item_stat_adds.inc (food and drink stats), character_lookups.cpp (CanUseItem)
-//  - ProcessAllStats @0x4547e0 itself: NOT rewritten; ported from the Ghidra export and the disassembly
-//    (FUN_00585190, the recommended-level scaling, from the disassembly).
-// The x87 formulas follow rof2decomp re/include/rof2/x87.h instruction by instruction through Fpu.
+// Checked against the original's vectors unless noted:
+//  - the heroic getters, basesave_*, CalcSavePhysical, the racial bonus, the mod caps
+//  - CalcSave*, CalcSTR..CalcWIS, Cur_Mana/Cur_Endurance, ComputeDefense,
+//    GetStatCap, MaxAirSupply, GetMaxLevel, GetClassACBonus
+//  - the class/level table, Max_HP, Max_Mana, Max_Endurance, Cur_HP
+//  - CalcCarriedWeight, CalculateWeight, CalcAGI
+//  - CalcAC, CalcItemHaste,
+//    the food and drink stats, CanUseItem
+//  - ProcessAllStats @0x4547e0 itself: no vectors; worked from the disassembly
+//    (0x585190, the recommended-level scaling, too).
+// The x87 formulas follow the original's instructions one by one through Fpu.
 #include "game/mechanics/character.h"
 #include "core/wrap_math.h"
 #include "game/mechanics/item_sums.h"
@@ -56,7 +56,7 @@ std::int32_t race_bit(std::uint32_t race) {
     return 0x11;
 }
 
-// Diminishing returns of the mana and endurance stats (vitals.cpp).
+// Diminishing returns of the mana and endurance stats (Max_Mana, Max_Endurance).
 std::int32_t stat_with_diminishing_returns(std::int32_t stat) {
     if (stat > 100) {
         if (stat > 200) stat = add(stat, -(add(stat, -200) / 2));
@@ -130,7 +130,7 @@ bool Character::can_use_item(const net::Item& item, bool prestige) const {
 // and prestige.
 bool Character::usable_for_stats(const net::Item& item) const { return can_use_item(item, true); }
 
-// FUN_00585190 (CharacterZoneClient vtable +0x34): an item stat of an item with a recommended level or skill
+// 0x585190 (CharacterZoneClient vtable +0x34): an item stat of an item with a recommended level or skill
 // above the character's, scaled down: floor(level / recLevel * value + 0.5), at least 1; or with the skill
 // (GetSkillWithItemMods) below the recommended skill, the raw skill (at least 1) / recSkill instead.
 std::int32_t Character::recommended_item_value(const net::Item& item, std::int32_t value, std::uint8_t skill) const {
@@ -140,7 +140,7 @@ std::int32_t Character::recommended_item_value(const net::Item& item, std::int32
     double ratio;
     std::int32_t rec = item_recommended_level(item);
     if (rec != 0 && sheet_.level < rec) {
-        // fild level / fstp dword (exact) / fild rec / fdivr
+        // level (exact as a float) / rec
         ratio = fpu_.div(d(sheet_.level), d(rec));
     } else {
         std::int32_t rec_skill = item_recommended_skill(item);
@@ -150,7 +150,7 @@ std::int32_t Character::recommended_item_value(const net::Item& item, std::int32
         if (raw < 1) raw = 1;
         ratio = fpu_.div(d(raw), d(rec_skill));
     }
-    // fimul value / fadd 0.5f / fstp qword / _floor / __ftol2_sse
+    // ratio * value + 0.5f, stored as a double, _floor, truncated
     double x = fpu_.add(fpu_.mul(ratio, d(value)), 0.5);
     std::int32_t r = Fpu::ftol(std::floor(x));
     return r < 1 ? 1 : r;
@@ -198,14 +198,14 @@ std::int32_t Character::cap_stat(std::int32_t value, int index) const {
 }
 
 std::int32_t Character::mod_cap(int index) {
-    switch (index) {
-    case 4: case 6: case 7: case 8: case 12: case 13: return 35;
-    case 5: case 10: case 17: case 19: case 20: case 21: case 22: case 23: case 24: return 100;
-    case 9: return 25;
-    case 11: return 150;
-    case 18: case 25: return 125;
-    default: return -1;
-    }
+    // The caps of the mod indices 4..25; -1 (none) for the others.
+    static constexpr std::int32_t kCaps[22] = {
+        35,  100, 35,  35,  35,  25,  100, 150, 35,  35,  // 4..13
+        -1,  -1,  -1,  100, 125,                          // 14..18
+        100, 100, 100, 100, 100, 100, 125,                // 19..25
+    };
+    if (index < 4 || index > 25) return -1;
+    return kCaps[static_cast<std::size_t>(index - 4)];
 }
 
 std::int32_t Character::cap_mod(std::int32_t value, int index) const {
@@ -352,7 +352,7 @@ std::int32_t Character::stat_sum(bool include_buffs, std::int32_t spa, std::int3
 std::int32_t Character::drunk_scaled(bool include_buffs, std::int32_t total) const {
     if (!sheet_.is_pc() || !include_buffs || sheet_.drunkenness == 0) return total;
     double factor = fpu_.sub(1.0, fpu_.mul(d(sheet_.drunkenness), 0.005));
-    if (!(0.2 < factor || 0.2 == factor)) factor = 0.2; // fcom / test ah, 0x41: keep the factor unless below 0.2
+    if (!(0.2 < factor || 0.2 == factor)) factor = 0.2; // keep the factor unless below 0.2
     return Fpu::ftol(fpu_.mul(factor, d(total)));
 }
 
@@ -411,7 +411,7 @@ std::int32_t Character::calc_agi(bool b) {
     if (b && sheet_.is_pc() && (sheet_.expansions & kExpansionHeroicStats))
         agility += static_cast<std::uint32_t>(d_.heroic_agi);
     float factor = calculate_weight();
-    // fld factor / fimul agility / __ftol2_sse
+    // factor * agility, truncated
     std::int32_t result = Fpu::ftol(fpu_.mul(f(factor), d(static_cast<std::int32_t>(agility))));
     d_.uncapped.agi = result;
     return cap_stat(result, 2);
@@ -432,7 +432,7 @@ std::int32_t Character::max_hp(bool include_buffs, int arg) const {
     std::int32_t stamina = include_buffs ? d_.stats.sta : d_.stats_no_buffs.sta;
     if (stamina > 255) stamina = add(stamina, -255) / 2 + 255;
     const ClassLevelRow* r = tables_.class_levels.row(sheet_.level, sheet_.class_id);
-    hp = add(hp, Fpu::ftol(fpu_.mul(r ? r->hp_per_stamina : 0.0, d(stamina)))); // fld qword / fimul / ftol
+    hp = add(hp, Fpu::ftol(fpu_.mul(r ? r->hp_per_stamina : 0.0, d(stamina)))); // a double times the integer, truncated
     std::int32_t percent = total_effect(214, true, 0, true, include_buffs);
     hp = add(hp, core::wrapped_mul_div(percent, hp, 10000));
     // Leadership: the owner (virtual +0x4c) missing or with expansion bit 0x40.
@@ -498,7 +498,7 @@ std::int32_t Character::max_endurance(bool include_buffs) const {
 }
 
 namespace {
-// x87 PercentOf (Cur_Mana @0x4443ac): fild pct / fmul 0.01f / fimul max / fadd 0.99f / __ftol2_sse.
+// x87 PercentOf (Cur_Mana @0x4443ac): pct * 0.01f * max + 0.99f, truncated.
 std::int32_t percent_of(const Fpu& fpu, std::int32_t pct, std::int32_t max) {
     double x = fpu.mul(d(pct), f(0.01f));
     x = fpu.mul(x, d(max));
@@ -540,7 +540,7 @@ std::int32_t Character::cur_hp(bool update, int arg) const {
     return hp > 10000000 ? 10000000 : hp;
 }
 
-// Cur_Mana / Cur_Endurance (CurrentPool in stat_calc.cpp).
+// Cur_Mana / Cur_Endurance.
 std::int32_t Character::pool_current(bool update, std::int32_t max, std::int32_t stored, std::int32_t cap_spa,
                                      std::int32_t* out) const {
     bool clamp = update && !sheet_.zoning;
@@ -576,7 +576,7 @@ std::int32_t Character::cur_endurance(bool update, std::int32_t* stored) const {
 // ---- weight ----
 
 std::int32_t Character::calc_carried_weight() const {
-    // Each step rounds to a float where the original stores one (fstp dword).
+    // Each step rounds to a float where the original stores one.
     auto tenth = [&](std::int32_t w) { return Fpu::to_float(fpu_.mul(d(w), f(0.1f))); };
     double total = 0.0;
     for (int slot = 0; slot < kPossessionSlots; ++slot) {
@@ -593,7 +593,7 @@ std::int32_t Character::calc_carried_weight() const {
         }
     }
     std::int32_t effect = total_effect(221, true, 0, true, true);
-    // fild effect / fld total / fmul st(1) / fxch / fmul 0.01f / fsubp: total - effect * total * 0.01f
+    // total - effect * total * 0.01f
     double x = fpu_.sub(total, fpu_.mul(fpu_.mul(d(effect), total), f(0.01f)));
     if (x > 32766.0) x = 32766.0;
     else if (x < 0.0) x = 0.0; // NaN is kept, as the x87 compares leave it
@@ -638,7 +638,7 @@ float Character::calculate_weight() const {
 
 namespace {
 // The first plain item of an item type in the general slots 23..32 or the bags there
-// (FindPackItemOfType, pack_item_scans_eh.cpp).
+// (FindPackItemOfType).
 const net::Item* find_pack_item(const CharacterSheet& s, std::uint32_t item_type) {
     for (int slot = net::kSlotGeneral1; slot <= net::kSlotGeneral10; ++slot) {
         const net::Item* item = s.item(slot);
@@ -655,6 +655,35 @@ const net::Item* find_pack_item(const CharacterSheet& s, std::uint32_t item_type
     }
     return nullptr;
 }
+// A monk's weight limit and the light-weight threshold under it, by the highest level band passed.
+struct MonkWeight {
+    std::int32_t limit;
+    std::int32_t threshold;
+};
+MonkWeight monk_weight(std::int32_t level) {
+    struct Band {
+        std::int32_t above_level;
+        MonkWeight weight;
+    };
+    static constexpr Band kBands[] = {
+        {99, {58, 35}}, {94, {57, 34}}, {89, {56, 33}}, {84, {55, 32}}, {79, {54, 31}}, {74, {53, 30}},
+        {69, {53, 28}}, {64, {53, 26}}, {63, {50, 24}}, {61, {47, 24}}, {59, {45, 24}}, {54, {40, 20}},
+        {50, {38, 18}}, {44, {36, 17}}, {29, {34, 16}}, {14, {32, 15}},
+    };
+    for (const Band& band : kBands)
+        if (level > band.above_level) return band.weight;
+    return {30, 14};
+}
+
+// The rogue's and beastlord's agility factor: 1 below 80, then one more at 85, 90 and 100.
+std::int32_t agility_factor(std::int32_t agility) {
+    if (agility >= 100) return 5;
+    if (agility >= 90) return 4;
+    if (agility >= 85) return 3;
+    if (agility >= 80) return 2;
+    return 1;
+}
+
 } // namespace
 
 std::int32_t Character::class_ac_bonus(std::int32_t agility) const {
@@ -663,16 +692,9 @@ std::int32_t Character::class_ac_bonus(std::int32_t agility) const {
     std::int32_t bonus = 0;
     std::int32_t level = sheet_.level;
     if (sheet_.class_id == 7) {
-        static constexpr struct { int above, limit, threshold; } kMonk[] = {
-            {14, 32, 15}, {29, 34, 16}, {44, 36, 17}, {50, 38, 18}, {54, 40, 20}, {59, 45, 24}, {61, 47, 24},
-            {63, 50, 24}, {64, 53, 26}, {69, 53, 28}, {74, 53, 30}, {74, 53, 30}, {79, 54, 31}, {84, 55, 32},
-            {89, 56, 33}, {94, 57, 34}, {99, 58, 35}};
-        std::int32_t limit = 30, threshold = 14;
-        for (const auto& row : kMonk)
-            if (level > row.above) {
-                limit = row.limit;
-                threshold = row.threshold;
-            }
+        const MonkWeight band = monk_weight(level);
+        const std::int32_t limit = band.limit;
+        const std::int32_t threshold = band.threshold;
         std::int32_t weight = d_.weight;
         double base = d(level + 5);
         if (weight < limit - 1) {
@@ -695,21 +717,13 @@ std::int32_t Character::class_ac_bonus(std::int32_t agility) const {
             double v = fpu_.mul(fpu_.mul(fpu_.mul(base, 4.0), 1.0 / 3.0), fraction);
             bonus -= Fpu::ftol(v);
         }
-    } else if (sheet_.class_id == 9) {
-        if (agility > 75 && level > 29) {
-            std::int32_t v = level - 26;
-            v = agility < 80 ? v : agility < 85 ? v * 2 : agility < 90 ? v * 3 : agility < 100 ? v * 4 : v * 5;
-            bonus = std::min(v / 4, 12);
-        }
-    } else if (sheet_.class_id == 15) {
-        if (level > 10) {
-            std::int32_t v = level - 6;
-            v = agility < 80 ? v : agility < 85 ? v * 2 : agility < 90 ? v * 3 : agility < 100 ? v * 4 : v * 5;
-            bonus = std::min(v / 5, 16);
-        }
+    } else if (sheet_.class_id == 9 && agility > 75 && level > 29) { // rogue
+        bonus = std::min((level - 26) * agility_factor(agility) / 4, 12);
+    } else if (sheet_.class_id == 15 && level > 10) { // beastlord
+        bonus = std::min((level - 6) * agility_factor(agility) / 5, 16);
     }
-    if (sheet_.race == 128) return (level > 35 ? 35 : level < 10 ? 10 : level) + bonus;
-    return bonus;
+    if (sheet_.race != 128) return bonus;
+    return std::clamp(level, 10, 35) + bonus; // Iksar
 }
 
 std::int32_t Character::sum_worn_item_ac(std::int32_t item_type) const {
@@ -813,38 +827,38 @@ std::int32_t Character::max_air_supply() const {
     return air > percent ? percent : air;
 }
 
+namespace {
+// The level cap the highest expansion bit set brings (bits 0..18; higher bits count for nothing): 50 without one.
+std::int32_t expansion_level_cap(std::uint32_t expansions) {
+    static constexpr std::uint8_t kCapByBit[19] = {60, 60, 60, 65, 65, 65, 65, 70, 70, 70,
+                                                   70, 75, 75, 80, 85, 85, 90, 95, 100};
+    for (std::size_t bit = 19; bit-- > 0;)
+        if ((expansions >> bit) & 1u) return kCapByBit[bit];
+    return 50;
+}
+} // namespace
+
 std::int32_t Character::max_level() const {
     if (hooks.max_level)
         if (auto v = hooks.max_level()) return *v;
-    static constexpr struct { std::uint32_t mask; std::int32_t level; } kCaps[] = {
-        {0x40000, 100}, {0x20000, 95}, {0x10000, 90}, {0xc000, 85}, {0x2000, 80}, {0x1800, 75},
-        {0x780, 70},    {0x78, 65},    {0x7, 60}};
-    std::int32_t cap = 50;
-    if (sheet_.level_cap_100) {
-        cap = 100;
-    } else {
-        for (const auto& c : kCaps)
-            if (sheet_.expansions & c.mask) {
-                cap = c.level;
-                break;
-            }
-    }
-    std::int32_t o = sheet_.level_cap_override;
-    return o > 0 && o < cap ? o : cap;
+    const std::int32_t cap = sheet_.level_cap_100 ? 100 : expansion_level_cap(sheet_.expansions);
+    const std::int32_t lower = sheet_.level_cap_override;
+    if (lower <= 0 || lower >= cap) return cap;
+    return lower;
 }
 
 std::int32_t Character::invis_level(int kind) const {
-    std::int32_t classic = 12, fixed = 314;
-    if (kind == 1) {
-        classic = 28;
-        fixed = 315;
-    } else if (kind == 2) {
-        classic = 29;
-        fixed = 316;
-    }
-    std::int32_t from_fixed = total_effect(fixed);
-    std::int32_t from_classic = total_effect(classic);
-    return total_effect(from_classic > from_fixed ? classic : fixed);
+    // Each kind's classic and newer SPA: 0 (and anything but 1, 2) normal, 1 vs undead, 2 vs animals.
+    struct InvisSpas {
+        std::int32_t classic;
+        std::int32_t newer;
+    };
+    static constexpr InvisSpas kKinds[3] = {{12, 314}, {28, 315}, {29, 316}};
+    const InvisSpas& spas = kKinds[kind == 1 || kind == 2 ? static_cast<std::size_t>(kind) : 0];
+    // The newer one is totalled first, as the original asks.
+    const std::int32_t newer_total = total_effect(spas.newer);
+    const std::int32_t classic_total = total_effect(spas.classic);
+    return total_effect(classic_total > newer_total ? spas.classic : spas.newer);
 }
 
 namespace {
@@ -877,8 +891,8 @@ private:
 
 void Character::process_all_stats() {
     d_ = {};
-    // The item sums (item_sums.h, the exact port): the worn slots 0..0x15,
-    // then the 21 other lookups (FUN_0042def0 x5, FUN_0042df20 x10, the
+    // The item sums (item_sums.h, following the original exactly): the worn slots 0..0x15,
+    // then the 21 other lookups (0x42def0 x5, 0x42df20 x10, the
     // virtuals +0x4c x2 and +0x54 x4).
     std::array<StatItem, 0x16> worn_items;
     std::array<const StatItem*, 0x16> worn{};

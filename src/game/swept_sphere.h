@@ -1,9 +1,8 @@
 #pragma once
 
-// The original's swept-sphere collision: what s3dCollideActorSweep @0x476560
-// does with a CCollisionInfoSphere and CCollision::CollideActor
-// (EQGraphicsDX9.dll 0x100b9ed0), from rof2decomp notes/eqgraphicsdx9.md
-// ("Collision"):
+// The movement sweep's collision: what s3dCollideActorSweep @0x476560 does
+// with a CCollisionInfoSphere and CCollision::CollideActor
+// (EQGraphicsDX9.dll 0x100b9ed0), as the original's behaviour is described:
 //  - the sphere (radius: the moving actor's bounding radius) moves from
 //    `start` along `delta`; t is a fraction of delta and starts at 1;
 //  - a triangle is skipped when it is passable (WLD polygon flag 0x10, EQG
@@ -19,12 +18,12 @@
 //    normalize(normalize(dir - n (dir . n)) + 0.01 n) for
 //    max((1 - t) |delta| |s . dir|, 0.0001).
 //
-// The maths is the original's, exactly (game/sweep_x87.h: CCollisionInfoBase's
-// constructor, CCollisionInfoSphere::vf0 with SweptSphereTriangle and its edge,
-// capsule and vertex cases, GetClampPoint and ComputeSkitter, checked
-// against rof2decomp batch 250's vectors). The DLL side (the zone mesh's
-// records and their culls, the actor tests) follows notes/eqgraphicsdx9.md
-// without vectors.
+// The geometry (the sphere against one triangle with its face, edge and
+// vertex cases, GetClampPoint and ComputeSkitter) is game/sphere_sweep.h:
+// Hailstone's own implementation, which agrees with the original's recorded
+// results within a small tolerance, not bit for bit. The DLL side (the zone
+// mesh's records and their culls, the actor tests) follows the described
+// behaviour, without recordings.
 
 #include <cstdint>
 
@@ -80,11 +79,11 @@ struct CollisionTriangle {
 };
 
 // The leaf's per-triangle filter (TTerrainCollisionTester<Sphere> vf0's
-// checks), then the info's slot 0 @0x7a28e0 (exact). Returns true on a hit,
+// checks), then the info's slot 0 @0x7a28e0 (game/sphere_sweep.h). Returns true on a hit,
 // with the sweep's t, normal and collided updated.
 bool collide_triangle(SphereSweep& sweep, const CollisionTriangle& tri);
 
-// FUN_00509130's rule for vectors: zero when the length is within 2^-23 of 0.
+// 0x509130's rule for vectors: zero when the length is within 2^-23 of 0.
 glm::vec3 normalize_or_zero(const glm::vec3& v);
 
 // s3dCollideActorSweep's outputs from a finished sweep: the clamp point

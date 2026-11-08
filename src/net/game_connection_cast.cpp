@@ -1,5 +1,5 @@
 // GameConnection: casting a memorized spell. CCastSpellWnd::HandleSpellLeftClick @0x6488f0 gates the gem, then
-// CharacterZoneClient::CastSpell @0x43a830 runs as game/mechanics/cast_spell.h ports it, with this file's
+// CharacterZoneClient::CastSpell @0x43a830 runs as game/mechanics/cast_spell.h implements it, with this file's
 // CastQueries as its live adapter: each callee the original calls is answered from the client's state, and the
 // ones the client has no state for are answered neutrally (docs/unknowns.md, "Spells / the cast checks").
 
@@ -289,7 +289,7 @@ public:
         return bits(game::player_distance(&a, &b, 0.0f));
     }
     cast::Handle spawn_character_pc(cast::Spawn& s) override { return s.spawn_id == c_.world_.player_id ? 1 : 0; }
-    // FUN_0059ed50 (target type 12, a race list) is not ported (docs/unknowns.md): it passes.
+    // 0x59ed50 (target type 12, a race list) is not ported (docs/unknowns.md): it passes.
     bool target_type_12_check(cast::Spawn&) override { return true; }
     bool is_self_or_group_member(cast::Handle pc, const cast::Spawn* who) override {
         if (!who) return pc == 1; // the caster's own name in the target's PcClient: the target is the caster
@@ -434,7 +434,7 @@ public:
     std::int32_t level() override { return c_.pstatus_.level; }
     std::uint32_t deity() override { return c_.profile_ ? c_.profile_->deity : 0; }
     // AltAttack (PlayerZoneClient +0x340): the original's code only clears it (here, DoAttack) and copies it
-    // (FUN_00598480, the spawn copy); nothing sets it, so it is always 0.
+    // (0x598480, the spawn copy); nothing sets it, so it is always 0.
     bool take_alt_attack() override { return false; }
     std::uint32_t combat_ability_timer(std::int32_t id) override {
         return id >= 0 && id < game::mechanics::combat_ability::kTimers

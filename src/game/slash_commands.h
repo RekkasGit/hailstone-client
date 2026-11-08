@@ -1,7 +1,7 @@
 #pragma once
 
-// The original client's slash command table and how it reads a typed line
-// (rof2decomp:notes/ui-chat-commands.md §2): CEverQuest::InterpretCmd
+// The original client's slash command table and how it reads a typed line:
+// CEverQuest::InterpretCmd
 // @0x51fce0 matches the first word against the 391 commands of
 // __CommandList @0x00acd5a8 (384 here: the voice macro commands /vplay
 // /vtell /vgroup /vraid are left out, as this client has no voice macros,

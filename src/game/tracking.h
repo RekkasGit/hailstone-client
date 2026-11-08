@@ -1,7 +1,7 @@
 #pragma once
 
-// The tracking window's list (CTrackingWnd): exact ports of rof2decomp batch 267 (re/src/game/ui/tracking_list.cpp)
-// and of the OP_Track reply parser SetTrackingList @0x77a930 with the std::sort it runs, checked against
+// The tracking window's list (CTrackingWnd): follows the original's list functions
+// and the OP_Track reply parser SetTrackingList @0x77a930 with the std::sort it runs, checked against
 // TrackSort.jsonl, CTrackingWnd_GetTrackColor.jsonl, CTrackingWnd_OnProcessFrame.jsonl and
 // CTrackingWnd_SetTrackingList.jsonl.
 //
@@ -39,7 +39,7 @@ struct TrackEntry {
 };
 using TrackList = std::array<TrackEntry, kTrackEntries>;
 
-// The seven sort predicates (std::sort's less; FUN_00779080..00779190): 0 reply order; 1 names A..Z; 2 nearest
+// The seven sort predicates (std::sort's less; 0x779080..00779190): 0 reply order; 1 names A..Z; 2 nearest
 // first; 3 players first, then level high to low; 4 names Z..A; 5 farthest first; 6 players first, then level low
 // to high (a player `a` is always less, even against a player). Names compare as _stricmp.
 bool track_less(int order, const TrackEntry& a, const TrackEntry& b);
@@ -76,7 +76,7 @@ struct TrackFilter {
     bool pets = true;             // 0xddfcb5 (/trackpets)
     bool mercs = true;            // 0xddfcb4 (/trackmercs)
 };
-// The con bit of FUN_007be930's colour (1 grey .. 7 red; else none).
+// The con bit of 0x7be930's colour (1 grey .. 7 red; else none).
 std::uint32_t track_con_bit(std::uint32_t standard_color);
 // DoTrackFilter for one used entry: the con bit replaces the low 7 bits, 0x80 when the filters hide it. `in_group`
 // answers whether a spawn id is a group member's; `pet_owner` gives a pet's owner id (0 when unknown).

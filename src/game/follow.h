@@ -1,6 +1,6 @@
 #pragma once
 
-// One step of /follow: PlayerClient::FollowPlayerAI @0x58d3c0 (rof2decomp batch 254, checked against its
+// One step of /follow: PlayerClient::FollowPlayerAI @0x58d3c0 (checked against its
 // FollowPlayerAI vectors). The original runs it every frame while the follow link (+0xe40) is set; it turns the
 // player toward the followed spawn and sets the follow movement flags (0xddf720 move, 0xddf670 run) that the
 // movement code reads like held keys.
@@ -51,7 +51,7 @@ inline constexpr std::uint32_t kStrFollowDead = 12692, kStrFollowTooFar = 12693;
 FollowStep follow_step(const FollowInput& in, const mechanics::Fpu& fpu = mechanics::Fpu{});
 
 // __get_bearing @0x4ef250: the heading (0..511.5) from (y1, x1) toward (y2, x2), as the x87 computes it at the
-// given precision (fpatan itself always gives 64 bits). Returned unrounded (in the precision's range).
+// given precision (the x87's arctangent itself always gives 64 bits). Returned unrounded (in the precision's range).
 double x87_bearing(float y1, float x1, float y2, float x2, const mechanics::Fpu& fpu);
 
 } // namespace hailstone::game

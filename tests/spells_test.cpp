@@ -456,7 +456,7 @@ TEST_CASE("The game's spells_us.txt" * doctest::skip(test::game_dir() == nullptr
 }
 
 TEST_CASE("SPA 57: SpellCache_GetBuffValue(57, k) holds the levitate effects with Base2 k") {
-    // CacheBuffSlotEffects keys SPA 57 by Base2 (rof2decomp batch 247): k = 0 is levitation (mode 2), k = 1
+    // CacheBuffSlotEffects keys SPA 57 by Base2: k = 0 is levitation (mode 2), k = 1
     // levitation while running (mode 5); an inverted buff (type 4) subtracts.
     game::SpellData lev, run;
     lev.id = 261;
@@ -491,7 +491,7 @@ TEST_CASE("SPA 57: SpellCache_GetBuffValue(57, k) holds the levitate effects wit
     CHECK(ch2.cached_buff(57, 1) == 0);
 }
 
-TEST_CASE("A spell's target-type colour (FUN_004ad890: the gem tint and the memorize menu's rows)") {
+TEST_CASE("A spell's target-type colour (0x4ad890: the gem tint and the memorize menu's rows)") {
     using hailstone::game::spell_target_color;
     CHECK(spell_target_color(5, 0) == 0xffde2121u);  // single target (the default)
     CHECK(spell_target_color(6, 0) == 0xffcede29u);  // self

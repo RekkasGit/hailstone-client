@@ -205,7 +205,7 @@ const WorldObjects::Model* WorldObjects::model_for(const std::string& raw) {
                         owned = assets::eqg::build_mesh(assets::eqg::parse_model(*data, false), base, stats);
                         mesh = &*owned;
                         read = [a](std::string_view file) { return a->read(file); };
-                        // The EQGM loader (FUN_100624e0) reads the model's .pts and .prt beside it.
+                        // The EQGM loader (0x100624e0) reads the model's .pts and .prt beside it.
                         auto pts = a->read(lower(base) + ".pts");
                         auto prt = a->read(lower(base) + ".prt");
                         if (pts && prt) {
@@ -418,7 +418,7 @@ void WorldObjects::update(const net::GameConnection& conn) {
 
 const WorldObjects::Model* WorldObjects::placed_model(const std::string& tag) {
     // CDisplay::CreateActor (EQPlacedItem_CreateActor passes the fallbacks on): "_ACTORDEF" for a short tag, IT63,
-    // then RED_BLOB (rof2decomp N 48.1).
+    // then RED_BLOB.
     std::string def = upper(game::create_actor_definition(tag));
     const Model* m = def.ends_with("_ACTORDEF") ? model_for(def) : nullptr;
     for (const char* fallback : game::kCreateActorFallbacks)

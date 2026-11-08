@@ -1,4 +1,4 @@
-// rof2decomp batch 265's vectors (recorded from eqgame.exe): the chat input mode (game/chat_input.h), con levels
+// The original's vectors (recorded from eqgame.exe): the chat input mode (game/chat_input.h), con levels
 // under the PvP rule sets (game/combat.h), region name flags (game/zone_lines.h), IsOkToTransact and
 // Handle_OP_TradeRequest (game/trade_rules.h) and Handle_OP_GroupInvite2 (game/group_rules.h).
 #include <doctest/doctest.h>
@@ -91,7 +91,7 @@ TransactState transact_state(const Json& in) {
 
 } // namespace
 
-TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
+TEST_CASE("vectors: CEverQuest_SetChatInputMode (0x518230)") {
     hailstone::test::each_vector("CEverQuest_SetChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;
@@ -100,7 +100,7 @@ TEST_CASE("vectors: CEverQuest_SetChatInputMode (FUN_00518230)") {
     });
 }
 
-TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (FUN_0051ebf0, the Enter key)") {
+TEST_CASE("vectors: CEverQuest_ToggleChatInputMode (0x51ebf0, the Enter key)") {
     hailstone::test::each_vector("CEverQuest_ToggleChatInputMode.jsonl", [](const Json& rec) {
         ChatInputWorld w = chat_world(rec["in"]);
         std::vector<ChatInputCall> calls;

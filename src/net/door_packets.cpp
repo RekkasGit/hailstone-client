@@ -1,5 +1,5 @@
 // Written from EQEmu rof2.cpp / rof2_structs.h (read as reference, no code
-// copied) and the rof2decomp export of the original's readers and writers
+// copied) and the original's readers and writers
 // (EQSwitch::LoadSwitchSounds, EQSwitch::UseSwitch, CEverQuest::LMouseUp).
 
 #include "net/door_packets.h"

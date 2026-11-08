@@ -3,7 +3,7 @@
 // The item preview's 3D view (CObjectPreviewWnd's OPW_ViewRenderArea, game/item_preview.h): a copy of the player
 // wearing the previewed item, or the item's own model, drawn by a renderer of its own into an image of its own each
 // frame the window asks for it (before the scene), which the window then shows. The original's view is its own
-// CRender camera on the preview actor (FUN_005770f0, FUN_00576120's fit, the OPW_ buttons and mouse turning, panning
+// CRender camera on the preview actor (0x5770f0, 0x576120's fit, the OPW_ buttons and mouse turning, panning
 // and zooming it); here an orbit camera fits the model's bounds and the buttons, drags and wheel move it (their steps
 // are this client's; docs/unknowns.md).
 
@@ -32,7 +32,7 @@ public:
 
     const assets::CharacterLibrary& library() const { return *library_; }
     // What to show: `model` dressed as `mesh` (null: its own geometry), or nothing. A new subject resets the camera
-    // (FUN_00576120).
+    // (0x576120).
     void set_subject(std::shared_ptr<const assets::CharacterModel> model, std::shared_ptr<const assets::CharacterMesh> mesh,
                      float scale, float z_offset);
     // The item alone: its model `number` (IT<n>) on a one-bone stand-in; false when the item has no model.

@@ -18,7 +18,7 @@ constexpr const char* kError = "#ERR";            // 0xa10228
 
 using Ctx = SpellDescriptionContext;
 
-// "%d" of |value| (cdq / xor / sub: INT_MIN stays negative).
+// "%d" of |value| (a two's-complement magnitude: INT_MIN stays negative).
 std::string number(std::int32_t value) {
     auto sign = static_cast<std::uint32_t>(value >> 31);
     auto magnitude = static_cast<std::int32_t>((static_cast<std::uint32_t>(value) ^ sign) - sign);
@@ -53,7 +53,7 @@ std::int32_t slot_value(const Ctx& c, std::uint32_t slot, std::int32_t raw, bool
     return value;
 }
 
-std::optional<std::string> handle_base(std::string_view token, const Ctx& c) { // '#' FUN_004fbef0
+std::optional<std::string> handle_base(std::string_view token, const Ctx& c) { // '#' 0x4fbef0
     auto slot = slot_of(token);
     if (!slot) return std::nullopt;
     const Ctx::Slot& s = c.slots[*slot];
@@ -74,7 +74,7 @@ std::optional<std::string> handle_base(std::string_view token, const Ctx& c) { /
     return number(value);
 }
 
-std::optional<std::string> handle_base2(std::string_view token, const Ctx& c) { // '$' FUN_004fc070
+std::optional<std::string> handle_base2(std::string_view token, const Ctx& c) { // '$' 0x4fc070
     auto slot = slot_of(token);
     if (!slot) return std::nullopt;
     const Ctx::Slot& s = c.slots[*slot];
@@ -82,14 +82,14 @@ std::optional<std::string> handle_base2(std::string_view token, const Ctx& c) { 
     return number(slot_value(c, *slot, s.base2, hp, hp ? lowest_level(c) : 0));
 }
 
-std::optional<std::string> handle_max(std::string_view token, const Ctx& c) { // '@' FUN_004fbe10
+std::optional<std::string> handle_max(std::string_view token, const Ctx& c) { // '@' 0x4fbe10
     auto slot = slot_of(token);
     if (!slot) return std::nullopt;
     const Ctx::Slot& s = c.slots[*slot];
     return number(slot_value(c, *slot, s.max, hp_spa(s.spa), kNoLevel));
 }
 
-std::optional<std::string> handle_duration(std::string_view token, const Ctx& c) { // '%' FUN_004e1bb0
+std::optional<std::string> handle_duration(std::string_view token, const Ctx& c) { // '%' 0x4e1bb0
     std::uint32_t ticks = 0;
     char first = token.empty() ? '\0' : token[0];
     char up = first >= 'a' && first <= 'z' ? static_cast<char>(first - 32) : first; // _toupper, C locale

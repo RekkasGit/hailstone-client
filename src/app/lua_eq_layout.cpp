@@ -12,7 +12,7 @@ namespace hailstone::app {
 
 namespace {
 
-// CLoadskinWnd @0x6bc050 (rof2decomp export CLoadskinWnd.c): SkinList, LoadButton (disabled at first) and INIButton
+// CLoadskinWnd @0x6bc050: SkinList, LoadButton (disabled at first) and INIButton
 // (a check box, checked at first). AboutToShow runs CLoadskinWnd_FillSkinList @0x6bc240: the folders of UIFiles\ as
 // rows, the one the UI ini's [Main] UISkin names selected, Load enabled when it was found. WndNotification
 // @0x6bc400: a click on the list enables Load; Load runs /loadskin "<the selected row> <1 / 0: INIButton checked>".
@@ -68,12 +68,12 @@ private:
     bool load_enabled_ = false, ini_ = true;
 };
 
-// CLayoutCopyWnd @0x6b5ec0 (rof2decomp export CLayoutCopyWnd.c): LC_LayoutsList (columns File 180 and Mode 140),
+// CLayoutCopyWnd @0x6b5ec0: LC_LayoutsList (columns File 180 and Mode 140),
 // LC_CopyButton and the LC_CopyHotButton / LC_CopyHotButtonLoadouts / LC_CopySocials check boxes. AboutToShow
-// (FUN_006b6620) fills the list from the layouts found (EqHost::layout_sources, FUN_006b6580). WndNotification
+// (0x6b6620) fills the list from the layouts found (EqHost::layout_sources, 0x6b6580). WndNotification
 // @0x6b5af0: Copy, with a row selected, asks 6332 (the window's dialog 100, Yes / No, 60 s); the yes posts message
-// 0x4646 to the main window (FUN_006b5b80), whose handler copies the selected layout with the three boxes
-// (FUN_006b5bb0, __CopyLayout: EqHost::copy_layout) and prints the refusal it gives.
+// 0x4646 to the main window (0x6b5b80), whose handler copies the selected layout with the three boxes
+// (0x6b5bb0, __CopyLayout: EqHost::copy_layout) and prints the refusal it gives.
 //
 // Hailstone additions, not in the original:
 // - LC_CopyChatCheckBox and LC_CopyOptionsCheckBox copy the chat settings and the game options, which this client
@@ -81,7 +81,7 @@ private:
 // - activate(0) is the offer at a character's first entry into the world (ClientApp's zone-in, when it has no UI.ini
 //   and the game folder no UI_<name>_<server>.ini): shown only when the option offer_layout_copy is on (hailstone.ini
 //   ui.offer_layout_copy, on by default) and another character of this server has a layout. The original only opens
-//   the window from the Options window and /copylayout (rof2decomp: pinstCLayoutCopyWnd's only Activate callers are
+//   the window from the Options window and /copylayout (pinstCLayoutCopyWnd's only Activate callers are
 //   COptionsWnd's OGP_LayoutCopyButton and Cmd_copylayout). The offer selects the character played last and checks
 //   every box, since a new character has nothing of its own to lose; LC_FirstVisitText says why the window came up
 //   and LC_OfferCheckBox turns the offer off.

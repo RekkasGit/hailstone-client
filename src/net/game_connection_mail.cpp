@@ -157,7 +157,7 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         mail_set_forwarding(client_option(game::ClientOption::MailForwarding));
         break;
     case K::MailboxChange: {
-        // FUN_00521210: "You switched to mailbox %1." (4534) and the headers are fetched.
+        // 0x521210: "You switched to mailbox %1." (4534) and the headers are fetched.
         int n = f.empty() ? -1 : std::atoi(f[0].c_str());
         if (n < 0) {
             system(4535, {f.empty() ? std::string() : f[0]});
@@ -186,7 +186,7 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         break;
     }
     case K::MailHeader: {
-        // FUN_00533650 → MailMgr_OnHeader @0x4698b0 (the current mailbox only).
+        // 0x533650 → MailMgr_OnHeader @0x4698b0 (the current mailbox only).
         if (f.size() < 8 || std::atoi(f[0].c_str()) != mail_.current) break;
         game::MailHeader h;
         h.id = to_u32(f[3]);
@@ -198,11 +198,11 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         break;
     }
     case K::MailNew: {
-        // FUN_00533780 → MailMgr_OnNewMail @0x469a30: another mailbox gets 4533 ("You received a new message in
+        // 0x533780 → MailMgr_OnNewMail @0x469a30: another mailbox gets 4533 ("You received a new message in
         // your primary mailbox.", colour 15) and nothing else; the current one 4547 ("New mail from %1: \"%2\".",
         // colour 10), the "YouveGotMail" sound and the header. The lines need NewMailNotificationInChatWindow
-        // (MailMgr +0xe0, set by FUN_004688f0 from the options' mail page), the sound NewMailAudioNotification
-        // (+0xe1, FUN_00468900).
+        // (MailMgr +0xe0, set by 0x4688f0 from the options' mail page), the sound NewMailAudioNotification
+        // (+0xe1, 0x468900).
         if (f.size() < 6) break;
         int box = std::atoi(f[0].c_str());
         bool notify = client_option(game::ClientOption::NewMailNotify);
@@ -226,7 +226,7 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         break;
     }
     case K::MailBody: {
-        // FUN_0051a600 → MailMgr_OnMessageBody @0x46db20.
+        // 0x51a600 → MailMgr_OnMessageBody @0x46db20.
         if (f.size() < 3 || std::atoi(f[0].c_str()) != mail_.current) break;
         bool ok = f.size() < 4 || f[3] != "0";
         if (!ok) {
@@ -245,7 +245,7 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         break;
     }
     case K::MailDelivery: {
-        // FUN_00521180: 4530 "Message sent." or 4531 "Mail delivery failure to %1 (subject: %2)".
+        // 0x521180: 4530 "Message sent." or 4531 "Mail delivery failure to %1 (subject: %2)".
         if (f.size() < 4) break;
         if (f[3] == "1") {
             system(4530);

@@ -11,6 +11,7 @@
 #include "assets/zone.h"
 #include "game/collision.h"
 #include "game/mechanics/collision_movement.h"
+#include "game/sphere_sweep.h"
 #include "game/swept_sphere.h"
 #include "game_files.h"
 
@@ -118,6 +119,65 @@ TEST_CASE("the swept sphere stops 0.001 short of a wall and skitters along it") 
     CHECK(ao.skitter_dir.x < 0.0f); // the 0.01 n pushes off the wall
     float length = std::sqrt(800.0f);
     CHECK(ao.skitter_dist == doctest::Approx((1.0f - a.t) * length * std::sqrt(0.5f)).epsilon(1e-4));
+}
+
+TEST_CASE("the sphere sweep's face, edge and vertex cases") {
+    namespace sw = hailstone::game::sweep;
+    // The triangle A (0,0,0) B (10,0,0) C (5,10,0) in the plane z = 0; its record normal faces -z.
+    const glm::vec3 a(0, 0, 0), b(10, 0, 0), c(5, 10, 0), n(0, 0, -1);
+    auto hit = [&](glm::vec3 from, glm::vec3 delta, float r) {
+        return sw::sphere_triangle<float>(from, delta, 1.0f / glm::length(delta), 1.0f, r, n, a, b, c);
+    };
+    // Face: the sphere's lowest point reaches the plane at z = -1.
+    auto face = hit({5, 3, -5}, {0, 0, 8}, 1.0f);
+    REQUIRE(face.hit);
+    CHECK(face.t == doctest::Approx(0.5f));
+    CHECK(face.normal.z == doctest::Approx(-1.0f));
+    // Edge: the centre path passes 0.5 outside edge AB and meets its cylinder where z = -sqrt(1 - 0.25).
+    auto edge = hit({5, -0.5f, -5}, {0, 0, 5}, 1.0f);
+    REQUIRE(edge.hit);
+    CHECK(edge.t == doctest::Approx((5.0f - std::sqrt(0.75f)) / 5.0f));
+    CHECK(edge.normal.y == doctest::Approx(-0.5f));
+    // Vertex: beyond B and outside both its edges, the path meets the sphere around B.
+    auto vertex = hit({10.6f, -0.5f, -5}, {0, 0, 5}, 1.0f);
+    REQUIRE(vertex.hit);
+    CHECK(vertex.t == doctest::Approx((5.0f - std::sqrt(1.0f - 0.36f - 0.25f)) / 5.0f));
+    // Missing it altogether.
+    CHECK_FALSE(hit({5, -3, -5}, {0, 0, 8}, 1.0f).hit);
+    // Already across the plane over the face: a hit at once, the record normal.
+    auto across = hit({5, 3, -0.5f}, {1, 0, 0}, 1.0f);
+    REQUIRE(across.hit);
+    CHECK(across.t == 0.0f);
+    // A centre already inside an edge's capsule: touching at once when it leaves the cylinder within the move,
+    // nothing when it does not; moving out through the far end touches at once, through the start end when it leaves.
+    CHECK(hit({5, -0.5f, -0.3f}, {0, 10, 0}, 1.0f).t == 0.0f);
+    CHECK_FALSE(hit({5, -0.5f, -0.3f}, {0, 1, 0}, 1.0f).hit);
+    CHECK(hit({5, -0.3f, -0.3f}, {6, 0.3f, 0}, 1.0f).t == 0.0f);
+    auto out_start = hit({5, -0.3f, -0.3f}, {-6, 0.3f, 0}, 1.0f);
+    REQUIRE(out_start.hit);
+    CHECK(out_start.t == doctest::Approx(0.9923f).epsilon(1e-3));
+    // A sphere holding the edge's start vertex, moving toward it: a hit at once, its contact assumed.
+    auto held = hit({0.5f, -0.5f, -0.3f}, {-1, 1, 0}, 1.0f);
+    CHECK(held.hit);
+    CHECK(held.contact_assumed);
+    // The double version agrees.
+    auto d = sw::sphere_triangle<double>({5, -0.5, -5}, {0, 0, 5}, 0.2, 1.0, 1.0, {0, 0, -1}, {0, 0, 0}, {10, 0, 0},
+                                         {5, 10, 0});
+    CHECK(d.t == doctest::Approx(static_cast<double>(edge.t)));
+}
+
+TEST_CASE("the clamp point and the skitter keep NaN and huge inputs as the original does") {
+    namespace sw = hailstone::game::sweep;
+    // A NaN path gives a NaN stop, not the start.
+    glm::vec3 nan(std::nanf(""), 0, 0);
+    CHECK(std::isnan(sw::clamp_point<float>({1, 2, 3}, nan, 0.5f).x));
+    // Lengths of vectors near the float range do not overflow.
+    glm::vec3 stop = sw::clamp_point<float>({0, 2e37f, 0}, {0, -6e37f, 0}, 1.0f);
+    CHECK(stop.y == doctest::Approx(-4e37f));
+    // Moving straight along the normal: no slide, not a slide along n.
+    sw::Skitter<float> k = sw::skitter<float>({0, 0, -1}, {0, 0, -5}, 0.5f, {0, 0, -1});
+    CHECK(k.distance == 0.0f);
+    CHECK(k.direction == glm::vec3(0.0f));
 }
 
 TEST_CASE("passable polygons and back faces do not block the sweep") {
@@ -253,11 +313,11 @@ TEST_CASE("walls of a WLD and an EQG zone block and slide" * doctest::skip(!hail
 }
 
 TEST_CASE("a type 1 volume's radius is the model's +0x38 x the model scale x COFactor") {
-    // rof2decomp tools/re/model_radius.py: HUM's +0x38 5.5696 (classic), 5.1781 (Luclin); a human's scale 1.2.
+    // The model definitions' +0x38 read from the shipped archives: HUM's 5.5696 (classic), 5.1781 (Luclin); a human's scale 1.2.
     CHECK(mech::model_sweep_radius(5.5696f, 1.2f) == doctest::Approx(6.6835).epsilon(1e-4));
     CHECK(mech::model_sweep_radius(5.1781f, 1.2f) == doctest::Approx(6.2137).epsilon(1e-4));
     CHECK(mech::model_sweep_radius(5.5696f, 1.2f, 0.5f) == doctest::Approx(3.3418).epsilon(1e-4));
-    // The stand-in the client sweeps with: FUN_005062a0's player value.
+    // The stand-in the client sweeps with: 0x5062a0's player value.
     CHECK(mech::sweep_radius({3.75f, 1}) == doctest::Approx(1.78125));
 }
 

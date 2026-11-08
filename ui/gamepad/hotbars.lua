@@ -105,7 +105,7 @@ local function tile(window, n, i, x0, y0, size)
   local key = eq.WindowText(window, id) or ""
   if key ~= "" then
     T.font(12)
-    T.draw(x1 - T.px(4) - ui.CalcTextSize(key), y0 + T.px(2), key, C.faint) -- top right, as the game's (FUN_005506b0)
+    T.draw(x1 - T.px(4) - ui.CalcTextSize(key), y0 + T.px(2), key, C.faint) -- top right, as the game's (0x5506b0)
     T.unfont()
   end
   -- dragging it off takes it on the cursor

@@ -5,7 +5,7 @@
 // BZR_<name>_<server>.ini file, trader mode), the bazaar search window
 // (CBazaarSearchWnd: the trader list and the results) and the window's text
 // log. GameConnection (net/game_connection_market.cpp) sends and receives;
-// the rules here are the original's (rof2decomp export, addresses below).
+// the rules here are the original's (addresses below).
 
 #include <array>
 #include <cstdint>
@@ -31,7 +31,7 @@ inline bool is_bazaar_zone(std::uint32_t zone_id) {
 }
 inline constexpr std::uint8_t kBagTraderSatchel = 51; // ItemBase_GetContainerType 0x33
 
-// FUN_005101b0 (the trader spot test of FUN_004431a0): the switch's type (EQSwitch +0x26) is 0x99 or 0x9b, the
+// 0x5101b0 (the trader spot test of 0x4431a0): the switch's type (EQSwitch +0x26) is 0x99 or 0x9b, the
 // bazaar's trader stalls (0x9a is not one).
 inline bool is_trader_stall(std::uint8_t switch_type) { return switch_type == 0x99 || switch_type == 0x9b; }
 
@@ -78,7 +78,7 @@ struct BazaarLine {
 struct TraderState {
     bool window_open = false;        // CBazaarWnd shown (it only opens in the bazaar)
     bool trader = false;             // bIsMerchant: trader mode is on
-    bool start_pending = false;      // DAT_00f70d70: an OP_Trader start is waiting for TraderAck2
+    bool start_pending = false;      // 0xf70d70: an OP_Trader start is waiting for TraderAck2
     std::vector<TraderSlot> slots;   // in satchel order, at most 200
     int selected = -1;               // selectedSlot
     std::uint32_t entered_price = 0; // curItemPrice: the money buttons, in copper

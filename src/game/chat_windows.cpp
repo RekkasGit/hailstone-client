@@ -9,14 +9,80 @@ namespace hailstone::game {
 
 namespace {
 
-// GetChannelFromColor's table for the colours 0x100..0x15e (rof2decomp re/src/game/ui/chat_channel_colors.inc).
+// GetChannelFromColor's table for the colours 0x100..0x15e: each channel with the colours that go to it. A colour
+// not listed (and any colour outside the range) goes to kChatChannelOther.
 constexpr std::int32_t kFirstColor = 0x100, kLastColor = 0x15e;
-constexpr std::array<std::uint8_t, kLastColor - kFirstColor + 1> kChannelFromColor{
-    0,  1,  2,  4,  5,  6,  7,  8,  10, 9,  24, 23, 25, 22, 11, 31, 22, 22, 22, 22, 22, 28, 29, 26,
-    27, 50, 22, 40, 39, 22, 22, 42, 36, 37, 22, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 30, 38, 32,
-    33, 34, 35, 0,  1,  2,  4,  5,  6,  7,  8,  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 22, 3,
-    43, 46, 22, 44, 45, 41, 47, 49, 51, 52, 53, 22, 22, 22, 54, 22, 22, 4,  55, 22, 8,  4,  56,
+struct ChannelColors {
+    std::uint8_t channel;
+    std::array<std::int32_t, 4> colors; // 0 ends the list
 };
+constexpr ChannelColors kColorsByChannel[] = {
+    {0, {0x100, 0x133}},
+    {1, {0x101, 0x134}},
+    {2, {0x102, 0x135}},
+    {3, {0x147}},
+    {4, {0x103, 0x136, 0x159, 0x15d}},
+    {5, {0x104, 0x137}},
+    {6, {0x105, 0x138}},
+    {7, {0x106, 0x139}},
+    {8, {0x107, 0x13a, 0x15c}},
+    {9, {0x109}},
+    {10, {0x108}},
+    {11, {0x10e}},
+    {12, {0x123, 0x13b}},
+    {13, {0x124, 0x13c}},
+    {14, {0x125, 0x13d}},
+    {15, {0x126, 0x13e}},
+    {16, {0x127, 0x13f}},
+    {17, {0x128, 0x140}},
+    {18, {0x129, 0x141}},
+    {19, {0x12a, 0x142}},
+    {20, {0x12b, 0x143}},
+    {21, {0x12c, 0x144}},
+    {23, {0x10b}},
+    {24, {0x10a}},
+    {25, {0x10c}},
+    {26, {0x117}},
+    {27, {0x118}},
+    {28, {0x115}},
+    {29, {0x116}},
+    {30, {0x12d}},
+    {31, {0x10f}},
+    {32, {0x12f}},
+    {33, {0x130}},
+    {34, {0x131}},
+    {35, {0x132}},
+    {36, {0x120}},
+    {37, {0x121}},
+    {38, {0x12e}},
+    {39, {0x11c}},
+    {40, {0x11b}},
+    {41, {0x14d}},
+    {42, {0x11f}},
+    {43, {0x148}},
+    {44, {0x14b}},
+    {45, {0x14c}},
+    {46, {0x149}},
+    {47, {0x14e}},
+    {49, {0x14f}},
+    {50, {0x119}},
+    {51, {0x150}},
+    {52, {0x151}},
+    {53, {0x152}},
+    {54, {0x156}},
+    {55, {0x15a}},
+    {56, {0x15e}},
+};
+
+constexpr std::array<std::uint8_t, kLastColor - kFirstColor + 1> channel_from_color_table() {
+    std::array<std::uint8_t, kLastColor - kFirstColor + 1> table{};
+    for (auto& channel : table) channel = static_cast<std::uint8_t>(kChatChannelOther);
+    for (const ChannelColors& row : kColorsByChannel)
+        for (std::int32_t color : row.colors)
+            if (color != 0) table[static_cast<std::size_t>(color - kFirstColor)] = row.channel;
+    return table;
+}
+constexpr auto kChannelFromColor = channel_from_color_table();
 
 using M = ChatFilterMenu;
 constexpr ChatFilterItem kFilterItems[] = {

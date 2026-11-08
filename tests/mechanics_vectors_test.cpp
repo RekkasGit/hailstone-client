@@ -1,13 +1,13 @@
-// Test vectors recorded from the original eqgame.exe by rof2decomp's harness
-// (rof2decomp re/test/vectors/README.md): each <Function>.jsonl record holds a
+// Test vectors recorded from the original eqgame.exe: each <Function>.jsonl
+// record holds a
 // function's inputs, the values its callees returned (mocks in the original's
 // run: in.calls / in.virtual_calls / in.lookups) and its outputs. Each record
 // becomes a CharacterSheet plus Character::hooks that replay those callee
-// values, and the port's output must equal the original's exactly, under the
+// values, and the client's output must equal the original's exactly, under the
 // record's x87 precision ("x87-24" or "x87-53").
 //
-// The directory is HAILSTONE_VECTORS_DIR, else rof2decomp/re/test/vectors beside
-// the source tree (tests/vector_files.h); skipped without it.
+// The directory is HAILSTONE_VECTORS_DIR (tests/vector_files.h); skipped
+// without it.
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -682,7 +682,7 @@ void process_all_stats_check(const Json& rec, Record& r, Result& res) {
     if (const Json* haste = r.calls.take("calc_item_haste", {}))
         res.check("item haste argument", sums.at(0x124), (*haste)["item_haste"].i32());
     res.check("scaler calls in order", q.scale_mismatches, 0);
-    // The adjuster: the recorded notes, in call order (rof2decomp's FakeAdjust: value / 2 + kind * adjust_factor).
+    // The adjuster: the recorded notes, in call order (the recording's fake adjuster: value / 2 + kind * adjust_factor).
     const Json& bonus = out["bonus"];
     std::int32_t factor = in["adjust_factor"].i32();
     Tape* vt = &r.virtual_calls;
@@ -934,7 +934,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
     auto dir = vectors_dir();
     std::error_code ec;
     if (!dir || !fs::is_directory(*dir, ec)) {
-        MESSAGE("no rof2decomp test vectors (HAILSTONE_VECTORS_DIR); skipped");
+        MESSAGE("no recorded test vectors (HAILSTONE_VECTORS_DIR); skipped");
         return;
     }
     auto table = checkers();
@@ -952,6 +952,7 @@ TEST_CASE("Character mechanics test vectors from the original client") {
         while (std::getline(f, line)) {
             ++n;
             if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
+            hailstone::test::normalise_recorded_names(line);
             Json j;
             try {
                 j = hailstone::test::parse_json(line);

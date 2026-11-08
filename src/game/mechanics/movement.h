@@ -5,37 +5,36 @@
 // jump, swim jump, levitation, falling and fall damage, air supply. The
 // physics integration is game/mechanics/physics.h.
 //
-// Exact ports of functions rof2decomp has rewritten and tested against the
-// original (re/src/... file in brackets):
-//   CharacterZoneClient::eqspa_movement_rate @0x439570  [game/character/movement_rate.cpp]
-//   EQ_Character::CalculateWeight @0x44cdd0             [game/character/carried_weight_eh.cpp]
-//   CharacterZoneClient_CalcCarriedWeight @0x44d020     [same]
-//   PlayerClient::SetAccel @0x58b980                    [game/spawn/physics_steps_s10.cpp]
-//   PhysicsObject vf14 (strafe) @0x59dd20               [same]
-//   PlayerClient::DoSwimJump @0x58c940                  [game/spawn/spawn_helpers2_s9.cpp]
-//   PlayerClient_CanSwimJumpNow @0x59fb60               [game/spawn/player_helpers_s10.cpp]
-//   CharacterZoneClient_UpdateLevitationState @0x433480 [game/character/hp_levitation.cpp]
-//   PcClient::MaxAirSupply @0x581da0                    [game/character/stat_calc.cpp]
-//   PlayerZoneClient::IHaveFallen @0x58cd20             [game/spawn/physics_helpers_s10.cpp]
-//   PlayerZoneClient_LandingAndFallCheck @0x506e20      [game/spawn/physics_env.cpp; physics.h]
-//   PlayerClient_IsSwimSurfaceClear @0x506bb0          [game/spawn/fling_swim_s10.cpp]
-//   EQ_Character::CanIBreathe @0x448b00                 [game/character/misc_character_checks.cpp]
-//   PlayerZoneClient::InitSneakMod @0x58b8f0            [game/spawn/spawn_helpers_s9.cpp]
+// Follow the original exactly and are checked against its vectors:
+//   CharacterZoneClient::eqspa_movement_rate @0x439570
+//   EQ_Character::CalculateWeight @0x44cdd0
+//   CharacterZoneClient_CalcCarriedWeight @0x44d020
+//   PlayerClient::SetAccel @0x58b980
+//   PhysicsObject vf14 (strafe) @0x59dd20
+//   PlayerClient::DoSwimJump @0x58c940
+//   PlayerClient_CanSwimJumpNow @0x59fb60
+//   CharacterZoneClient_UpdateLevitationState @0x433480
+//   PcClient::MaxAirSupply @0x581da0
+//   PlayerZoneClient::IHaveFallen @0x58cd20
+//   PlayerZoneClient_LandingAndFallCheck @0x506e20      [physics.h]
+//   PlayerClient_IsSwimSurfaceClear @0x506bb0
+//   EQ_Character::CanIBreathe @0x448b00
+//   PlayerZoneClient::InitSneakMod @0x58b8f0
 // with vectors (tests/movement_vectors_test.cpp): CEverQuest::ProcessControls
 // @0x52bbd0 and GetSwimmingSpeed @0x5134c0 (game/mechanics/controls.h).
-// Checked against the original's vectors although not rewritten (its hit
-// record leaves bytes unwritten, rof2decomp batch 240):
+// Checked against the original's vectors too (its hit record leaves bytes
+// unwritten):
 //   CharacterZoneClient_ApplyFallDamage @0x45ac60
-// Not rewritten in rof2decomp; ported here from the original's disassembly
+// Without vectors; worked from the original's disassembly
 // (each step names its address), with unit tests worked from it:
 //   CEverQuest::DoMainLoop's jump @0x53e84e..0x53edaf (main_loop_jump)
 //   PcClient::ProcessAirSupply @0x584ac0
 //   LocalPlayer_ApplyEnvironmentRegionDamage @0x459860
 //
-// Float math: the exact ports take the x87 precision (game/mechanics/fpu.h;
-// in game 24-bit, the default) and round where the original stores a float;
-// rof2decomp's test vectors cover both precisions. The controller runs at
-// 24-bit precision.
+// Float math: the functions that follow the original exactly take the x87
+// precision (game/mechanics/fpu.h; in game 24-bit, the default) and round where
+// the original stores a float; the recorded vectors cover both precisions. The
+// controller runs at 24-bit precision.
 
 #include <cstdint>
 #include <optional>
@@ -118,10 +117,10 @@ inline std::int32_t movement_rate_effect(std::int32_t spa99, std::int32_t spa3) 
 // rider (a mount) ramps by rate_scale (0xde0a68) * 50 * its run speed over
 // 400 rising / 200 falling, or 1500 when the rider has no PcClient or the
 // PcClient's virtual +0x80 holds (@0x57d190: the OP_RestState combat byte
-// +0x31bc; the PcClient is FUN_0059f730's: the rider's +0x2cc, its
+// +0x31bc; the PcClient is 0x59f730's: the rider's +0x2cc, its
 // CharacterBase virtual base's +0x4c thunk @0x57d1e0), stopping at the target.
 struct AccelRider {
-    bool has_pc = false;   // the rider's PcClient (FUN_0059f730 on its +0x3c)
+    bool has_pc = false;   // the rider's PcClient (0x59f730 on its +0x3c)
     bool pc_flag = false;  // that PcClient's virtual +0x80: in combat (OP_RestState)
 };
 float set_accel(float current, float target, bool immediate, std::optional<AccelRider> rider, float rate_scale,
@@ -131,14 +130,14 @@ float set_accel(float current, float target, bool immediate, std::optional<Accel
 // 1.092006 + SPA 290 / 100.
 float cap_speed_multiplier(float speed_multiplier, std::int32_t spa290, const Fpu& fpu = Fpu{});
 
-// GetSwimmingSpeed @0x5134c0 (rof2decomp batch 243): base * 2.15 rounded
+// GetSwimmingSpeed @0x5134c0: base * 2.15 rounded
 // to float, + Swimming * 0.01 * 1.5, returned on the FPU stack unrounded.
 // Both factors are data (0xad82e4, 0xad82e0). `scaled_base` gets the
 // rounded product the original stores back into its argument.
 double swimming_speed(float base, std::int32_t swimming_skill, const Fpu& fpu = Fpu{}, float speed_scale = 2.15f,
                       float skill_scale = 1.5f, float* scaled_base = nullptr);
 
-// FUN_00516cd0 (batch 243): a physics block's pitch (+0x2c) += delta, then
+// 0x516cd0: a physics block's pitch (+0x2c) += delta, then
 // at most 128 and at least -128 (-64 when the local player's mount is the
 // controlled player); the clamps compare the unrounded sum.
 float add_physics_pitch(float pitch, float delta, bool riding_controlled_mount, const Fpu& fpu = Fpu{});
@@ -211,13 +210,13 @@ struct SwimJump {
 SwimJump do_swim_jump(bool jump, bool surface_clear, float swim_strength, float speed_z, std::uint32_t now,
                       std::uint32_t next_swim, const Fpu& fpu = Fpu{});
 
-// PlayerClient_IsSwimSurfaceClear @0x506bb0 (rof2decomp game/spawn/fling_swim_s10.cpp, differential-tested): the
+// PlayerClient_IsSwimSurfaceClear @0x506bb0 (checked against the original's vectors): the
 // point it probes, one AvatarHeight (+0x138) ahead of the spawn along its Heading (+0x80) and 1 below its z: the
 // original's y + round(table cos(heading) x height), table sin(heading) x height + x and z - 1, each stored as a
 // float (in world coordinates: x gets the cosine). `spawn` is the spawn's position (its z: the feet plus
 // AvatarHeight).
 glm::vec3 swim_probe_point(const glm::vec3& spawn, float heading, float avatar_height, const Fpu& fpu = Fpu{});
-// Then: clear unless the scene graph's +0x4c (IsPointInWorld) accepts the point and FUN_0048c890 (scene graph +0x1c,
+// Then: clear unless the scene graph's +0x4c (IsPointInWorld) accepts the point and 0x48c890 (scene graph +0x1c,
 // the region lookup without a prefix) gives a region type whose low byte is not 0 there. The type is asked only for
 // a point in the world.
 inline bool swim_surface_clear(bool in_world, std::uint8_t region_type) { return !in_world || region_type == 0; }
@@ -232,7 +231,7 @@ public:
     virtual bool mount_race() = 0;                // PlayerBase_IsMountRace @0x8cf970
     virtual std::uint8_t stand_state() = 0;       // +0x35c
     virtual void change_position(std::uint8_t state) = 0; // PlayerZoneClient::ChangePosition @0x5a0bc0 (may refuse)
-    // With an actor (+0x1024): FUN_00406740, min(500, the crouch animation's length + 1) (animation 0x18 on
+    // With an actor (+0x1024): 0x406740, min(500, the crouch animation's length + 1) (animation 0x18 on
     // old-style models, 0x7a on new-style ones); 500 without one.
     virtual std::uint32_t crouch_window() = 0;
     virtual bool feet_on_ground() = 0;            // PlayerBase::MyFeetAreOnGround @0x8cfca0
@@ -269,10 +268,10 @@ struct JumpSpawn {
 // its own jump. A jump sends OP_Jump and costs min(50, Max_Endurance / 10) endurance.
 void main_loop_jump(JumpState& state, JumpSpawn& spawn, JumpQueries& q, std::uint32_t now, const Fpu& fpu = Fpu{});
 
-// FUN_00406740, the jump's crouch window: the actor definition's duck track (row 0x18 on old-style models, slot 0)
+// 0x406740, the jump's crouch window: the actor definition's duck track (row 0x18 on old-style models, slot 0)
 // gives its length (track vf0, truncated with a chop control word), plus 1, at most 500; 500 without the track.
 std::uint32_t jump_crouch_window(std::optional<double> duck_track_length);
-// The clip FUN_00406740 reads: by the actor's HasNewStyleHierarchicalModel (vtable +0xbc), row 0x7a - 0x4f (CRCH)
+// The clip 0x406740 reads: by the actor's HasNewStyleHierarchicalModel (vtable +0xbc), row 0x7a - 0x4f (CRCH)
 // of a new-style table or row 0x18 (L08) of a classic one, slot 0 (column 0, BA; variant 1), the track
 // FindAnimationTrackForModel @0x406830 binds as "CRCH_BA_1".
 std::string_view jump_duck_clip(bool new_style_hierarchy);
@@ -288,7 +287,7 @@ std::int32_t max_air_supply(std::int32_t stamina, std::int32_t spa246, std::uint
 bool can_breathe(std::uint8_t head_wet, bool no_air_zone, std::uint32_t race, std::int32_t spa14);
 // PcClient::ProcessAirSupply @0x584ac0 (once a second, for a player spawn): breathing refills AirSupply (PcBase
 // +0x2084, from the profile at zone-in) to MaxAirSupply; otherwise it counts down, and at 1 or less it becomes 0 and
-// drowning does Max_HP x 0.125 (fild / fmul qword / __ftol2) damage, type 0xfb, when that is above 0.
+// drowning does Max_HP x 0.125 (times a double, truncated) damage, type 0xfb, when that is above 0.
 struct AirSupply {
     std::int32_t air = 0;
     std::int32_t drowning_damage = 0; // TakeEnvironmentalDamage when > 0
@@ -322,7 +321,7 @@ FallDamage apply_fall_damage(const FallDamageInput& in, const Fpu& fpu = Fpu{});
 // it returned 1 or more, else 0x72 (nullopt: no sound).
 std::optional<std::int32_t> fall_sound(bool has_pc, std::uint8_t spawn_type, std::int32_t damage_result);
 
-// fld / fstp dword: the value a float becomes when the original passes it
+// A float copied through the FPU: the value a float becomes when the original passes it
 // through the FPU (IHaveFallen's damage argument, SetAccel's immediate
 // target): a signalling NaN comes out quiet.
 float through_fpu(float v);
@@ -348,7 +347,7 @@ struct ControlInput {
     bool forward = false, back = false;       // FORWARD / BACK (or auto run bits)
     bool turn_left = false, turn_right = false;
     bool strafe_left = false, strafe_right = false;
-    bool jump = false;                        // JUMP went down this frame (DAT_00de0d8c)
+    bool jump = false;                        // JUMP went down this frame (0xde0d8c)
     bool mouse_look = false;                  // __MouseLook: turn keys strafe
     bool move_down = false;                   // CMD_MOVE_DOWN (cmd 449, 0xde148c) held
     bool both_buttons = false;                // 0xddf673: both mouse buttons down (moves forward)
@@ -380,10 +379,10 @@ struct CharacterInput {
     bool looting = false;       // StandState 105 (kneeling at a corpse: no movement)
     bool lying = false;         // StandState 115 (feigning death): no movement; /sit or /stand gets up
     bool dead = false;
-    bool gm_flag = false;       // DAT_00ddf654 / 0xddf790: no endurance check
+    bool gm_flag = false;       // 0xddf654 / 0xddf790: no endurance check
     bool interface_locked = false; // /safelock (0xe15dac): ProcessControls does nothing
     std::int32_t race = 0;      // PlayerClient vf88, the race shown (0x8e / 0x8f never jump)
-    std::uint32_t crouch_window = kJumpWindowMs; // FUN_00406740 (jump_crouch_window) on the controlled spawn's actor
+    std::uint32_t crouch_window = kJumpWindowMs; // 0x406740 (jump_crouch_window) on the controlled spawn's actor
     // The local player rides: the body is its mount (pinstControlledPlayer), which has the player as rider. The
     // speeds, the modifier and the race above are then the mount's, the rest the rider's.
     bool riding = false;

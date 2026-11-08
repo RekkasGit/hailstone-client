@@ -38,7 +38,7 @@ bool AltAdvState::meets_prerequisites(const AltAbility& a) const {
     }
     if (a.prereq_groups.empty()) return true;
     if (a.prereq_groups[0] > 0) {
-        // FUN_004a2170: prerequisite i is met by an owned rank of that ability at the required rank or above.
+        // 0x4a2170: prerequisite i is met by an owned rank of that ability at the required rank or above.
         auto meets = [&](std::size_t i, const AltAbility& o) {
             return i < a.prereq_groups.size() && i < a.prereq_ranks.size() && a.prereq_groups[i] == o.group &&
                    o.rank >= a.prereq_ranks[i];

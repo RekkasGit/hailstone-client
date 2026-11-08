@@ -1,4 +1,4 @@
-// The radial flora (assets/flora.h): the .eco *FLORAPART and RadialFloraDefs.rfd readers and FUN_101084e0's placement.
+// The radial flora (assets/flora.h): the .eco *FLORAPART and RadialFloraDefs.rfd readers and 0x101084e0's placement.
 #include <doctest/doctest.h>
 
 #include <limits>

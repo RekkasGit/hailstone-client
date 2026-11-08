@@ -5,12 +5,11 @@
 // OP_Animation action. The packets are in net/zone_packets.h; the state lives
 // in net::GameConnection.
 //
-// Sources: rof2decomp re/src/game/world/consider_message.cpp
-// (BuildConsiderMessage @0x522e20), re/src/game/spawn/con_level.cpp
-// (PcClient::GetConLevel @0x577cb0), eqgame.exe FUN_007be930/@0x7be770 (the
-// consider table, read from the disassembly), the exported decompilation of
+// Sources: the original's BuildConsiderMessage @0x522e20,
+// PcClient::GetConLevel @0x577cb0, eqgame.exe 0x7be930/@0x7be770 (the
+// consider table, read from the disassembly),
 // CEverQuest::ReportSuccessfulHit @0x52ee40, SetDefaultDamageDescByRace
-// @0x5143c0 and Handle_OP_Death (rof2decomp export/). Message templates come
+// @0x5143c0 and Handle_OP_Death. Message templates come
 // from eqstr_us.txt.
 
 #include <array>
@@ -30,9 +29,9 @@ namespace hailstone::game {
 enum class Con : std::uint8_t { None = 0, Gray, Green, LightBlue, DarkBlue, White, Yellow, Red };
 
 // The standard consider colour of a spawn of level `theirs` for a player of
-// level `mine` (FUN_007be930: a 106 × 106 table built by @0x7be770).
+// level `mine` (0x7be930: a 106 × 106 table built by @0x7be770).
 Con standard_con(int theirs, int mine);
-// PcClient::GetConLevel @0x577cb0 over its inputs (rof2decomp batch 265,
+// PcClient::GetConLevel @0x577cb0 over its inputs (vectors
 // PcClient_GetConLevel.jsonl): 0 for a spawn of type 2+ (corpses), with its
 // virtual +0x50 set, or with its virtual +0x98 set unless +0x1e60 is 1 and
 // +0x122a is set; a non-player gets the standard colour; a player under PvP
@@ -44,7 +43,7 @@ struct ConLevelInput {
     std::int32_t pvp_rules = 0;     // 0xdcee70
     std::int32_t my_level = 0;      // the character's level (CharacterBase virtual +0x68)
     std::int32_t their_level = 0;   // PlayerZoneClient::GetLevel's byte
-    std::uint32_t standard = 0;     // FUN_007be930(theirs, mine): standard_con
+    std::uint32_t standard = 0;     // 0x7be930(theirs, mine): standard_con
     std::uint8_t spawn_type = 0;    // +0x125: 0 player, 1 NPC, 2+ corpses
     bool virtual_50 = false;        // spawn virtual +0x50 (set: con 0)
     bool virtual_98 = false;        // spawn virtual +0x98 (set: con 0 unless the next two hold)
@@ -93,12 +92,12 @@ enum class HitReport : std::uint8_t { YourHits, YourMisses, YouBeingHit, YouBein
 struct HitLine {
     HitReport kind = HitReport::OthersHits;
     std::string text;     // the full sentence (mode 0)
-    std::string verb;     // the original's a2 (local_106c)
-    std::string victim;   // a3 (local_136c)
-    std::string attacker; // a4 (local_e44)
+    std::string verb;     // the original's a2 (the verb)
+    std::string victim;   // a3 (the victim's name)
+    std::string attacker; // a4 (the attacker's name)
     std::int32_t damage = 0;
-    bool i_attack = false;       // the attacker is the player (bVar3)
-    bool on_me = false;          // the target is the player (bVar4)
+    bool i_attack = false;       // the attacker is the player
+    bool on_me = false;          // the target is the player
     bool npc_hit_itself = false; // an NPC (type 1) is its own attacker: a hit is not reported
 };
 std::optional<HitLine> damage_report(const EqStrings& strings, const WorldState& world, std::uint32_t target,
@@ -109,7 +108,7 @@ std::optional<HitLine> damage_report(const EqStrings& strings, const WorldState&
 // exactly when the player's pet hit (even unreported); an NPC hitting itself never shows; a miss on the player is
 // hidden under filter 16 (@0x530768), the player's own under filter 13 (@0x5305ce), and somebody else's on
 // somebody else under filter 14 (@0x53078b) is shown exactly when the player's pet missed.
-// `by_my_pet`: the attacker is the player's pet (the local player's PetID, ReportSuccessfulHit's bVar7; its lines
+// `by_my_pet`: the attacker is the player's pet (the local player's PetID, ReportSuccessfulHit's by-my-pet flag; its lines
 // are coloured 0x148). The original also counts a temporary pet whose MasterID is the player (bTempPet +0x3dc),
 // which this client does not receive.
 bool hit_line_shown(const HitLine& line, bool by_my_pet, const ChatFilters& filters, bool report = true);
@@ -153,7 +152,7 @@ struct HitAnimInput {
 std::optional<std::uint8_t> hit_animation(const HitAnimInput& in);
 
 // ReportSuccessfulHit's shared tail (@0x5311ee) runs its landed-hit half when
-// the target is not a corpse and local_13a0 is above 0: the damage of a melee
+// the target is not a corpse and the landed damage is above 0: the damage of a melee
 // hit (types below 231) or of any type above 231, a spell's (231) only when
 // it is detrimental. Then: on the local player the spell book closes and a
 // kneeling (105), sitting (110) or mounted player stands (100); the target's

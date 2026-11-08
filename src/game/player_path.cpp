@@ -104,7 +104,7 @@ void PlayerPath::set_settings(const PathSettings& s, float avatar_height) {
     movers_.clear(); // PlayerPath_DestroyEmitters
 }
 
-// FUN_0059a910 (and the same fields in PlayerPath_Stop, the failed reply and PlayerPath_Update's zone change).
+// 0x59a910 (and the same fields in PlayerPath_Stop, the failed reply and PlayerPath_Update's zone change).
 void PlayerPath::clear() {
     active_ = false;
     face_ = false;
@@ -183,7 +183,7 @@ PlayerPath::Reply PlayerPath::handle_reply(std::span<const glm::vec3> points, st
     Reply out;
     const std::size_t count = points.size();
     if (count < 2) {
-        // FUN_00599f60: a point within FLT_EPSILON of (0, 0, 0) is no point.
+        // 0x599f60: a point within FLT_EPSILON of (0, 0, 0) is no point.
         if (count == 1) {
             const glm::vec3& p = points[0];
             constexpr float e = 1.1920929e-07f;
@@ -202,7 +202,7 @@ PlayerPath::Reply PlayerPath::handle_reply(std::span<const glm::vec3> points, st
     finished_ = false;
     dest_ = points[0];
     points_.clear();
-    // The floor under a point: FUN_008d4120 (a sphere dropped from 1 above), else FUN_008d42e0 (within 50 above).
+    // The floor under a point: 0x8d4120 (a sphere dropped from 1 above), else 0x8d42e0 (within 50 above).
     auto on_floor = [&](const glm::vec3& p) -> std::optional<float> {
         if (gm || !floor) return std::nullopt;
         if (auto f = floor(p, 1.0f)) return *f + floor_offset_;
@@ -262,7 +262,7 @@ PlayerPath::Reply PlayerPath::handle_reply(std::span<const glm::vec3> points, st
     return out;
 }
 
-// FUN_0059cfa0: every 500 ms that the player moved more than 2, the path is cut after the lowest point (from 1) within
+// 0x59cfa0: every 500 ms that the player moved more than 2, the path is cut after the lowest point (from 1) within
 // OpaqueStart of the player; then it is extended to the player (points every ControlSegmentLength) or its last point
 // is moved there.
 void PlayerPath::trim(const glm::vec3& player) {
@@ -294,7 +294,7 @@ void PlayerPath::trim(const glm::vec3& player) {
     points_.back() = player;
 }
 
-// FUN_0059a5f0: the movers slide toward the destination at EmitterSpeed; every EmitterPeriod a new one starts
+// 0x59a5f0: the movers slide toward the destination at EmitterSpeed; every EmitterPeriod a new one starts
 // EmitterStartCoordinate short of the trim point (or the oldest is reused).
 void PlayerPath::move_emitters(std::uint32_t now_ms, std::uint32_t dt) {
     if (settings_.max_emitters == 0) return;
@@ -318,7 +318,7 @@ void PlayerPath::move_emitters(std::uint32_t now_ms, std::uint32_t dt) {
 }
 
 int PlayerPath::line_alpha(float distance) const {
-    // FUN_0059b040: (1 - fade) x opaque x Alpha, rounded.
+    // 0x59b040: (1 - fade) x opaque x Alpha, rounded.
     float opaque = (distance - settings_.opaque_start) / (settings_.opaque_end - settings_.opaque_start);
     opaque = opaque > 0.0f ? std::min(opaque, 1.0f) : 0.0f;
     float range = fade_far_ - fade_near_;
@@ -377,7 +377,7 @@ PlayerPath::Update PlayerPath::update(const glm::vec3& player, std::uint32_t now
     twist_ += settings_.twist_speed * t;
     phase_ += settings_.sine_speed * t;
     frame_ms_ = now_ms;
-    // FUN_0059a7c0: movers off the path stop emitting.
+    // 0x59a7c0: movers off the path stop emitting.
     float total = total_;
     for (auto& m : movers_) m.shown = !(total < m.coordinate || m.coordinate < 0.0f);
     return out;
@@ -391,7 +391,7 @@ void PlayerPath::walk(const glm::vec3& eye, std::uint32_t now_ms) {
     float along = 0.0f;
     auto at = [&](int i) -> const glm::vec3& { return points_[static_cast<std::size_t>(std::clamp(i, 0, last))]; };
     const auto& s = settings_;
-    // FUN_0059b040's point: the sine wobble at its distance along the path, its alpha and scale.
+    // 0x59b040's point: the sine wobble at its distance along the path, its alpha and scale.
     auto wobble = [&](const glm::vec3& p, float coord) {
         return p + glm::vec3(std::sin(s.sine_period.x * coord + phase_.x) * s.sine_radius.x,
                              std::sin(s.sine_period.y * coord + phase_.y) * s.sine_radius.y,
@@ -408,7 +408,7 @@ void PlayerPath::walk(const glm::vec3& eye, std::uint32_t now_ms) {
         lp.scale = std::sin(period != 0.0f ? std::fmod(twist, period) : twist) * (s.scale_max - s.scale_min) + s.scale_min;
         line_.push_back(lp);
     };
-    // FUN_0059ab60: the movers whose coordinate is on [a, b) go on the curve v0 .. v3 there.
+    // 0x59ab60: the movers whose coordinate is on [a, b) go on the curve v0 .. v3 there.
     auto place = [&](float a, float b, const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3) {
         for (auto& m : movers_) {
             if (!(a <= m.coordinate && m.coordinate < b)) continue;
@@ -436,7 +436,7 @@ void PlayerPath::walk(const glm::vec3& eye, std::uint32_t now_ms) {
             glm::vec3 a = p1, b = p2;
             if (step * step <= dist2(p0, p1)) a = p1 + glm::normalize(p0 - p1) * s.curve_scale;
             if (step * step <= dist2(p3, p2)) b = p2 + glm::normalize(p3 - p2) * s.curve_scale;
-            // FUN_0059b220.
+            // 0x59b220.
             place(along, along + len, a, p1, p2, b);
             float frac = step / len, piece = len * frac;
             for (float t = frac; t < 0.99f; t += frac) {

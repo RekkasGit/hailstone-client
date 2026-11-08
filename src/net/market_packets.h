@@ -6,7 +6,7 @@
 // OP_BuyerItems). RoF2 has no OP_TraderBuy of its own: purchases travel as
 // OP_TraderShop action 10. Layouts follow the original's senders and readers
 // (CBazaarWnd, CBazaarSearchWnd, CBazaarConfirmationWnd, CMerchantWnd and
-// HandleWorldMessage_Bazaar @0x4ba870 in the rof2decomp export) and the NMS
+// HandleWorldMessage_Bazaar @0x4ba870 in eqgame.exe) and the NMS
 // server's EQEmu RoF2 translator (common/patches/rof2.cpp ENCODE/DECODE of
 // these opcodes, rof2_structs.h RoF2BazaarTraderBuyerActions, zone/
 // trading.cpp). Per-packet notes: docs/protocol/rof2-packets.md "Bazaar".
@@ -50,7 +50,7 @@ std::optional<TraderBegin> decode_trader_begin(const AppPacket& p);
 // @0x638030), 11 asks for the trader's own listing (after TraderAck2).
 AppPacket encode_trader_action(std::uint32_t action);
 
-// The 32-byte price message (FUN_006377c0 / CBazaarWnd::WndNotification and
+// The 32-byte price message (0x6377c0 / CBazaarWnd::WndNotification and
 // Send_OP_Trader_00638d80): action 3 (a price change; 0 removes the item) or
 // 20 (reconcile, sent for every slot after a sale), the item GUID, a dword
 // (the item's count for action 20), the price.
@@ -221,7 +221,7 @@ std::optional<BazaarResults> decode_bazaar_results(const AppPacket& p);
 AppPacket encode(const BazaarResults& v); // server direction, for tests
 
 // OP_TraderDelItem (29 bytes): {u32, u32 trader id, char[17] GUID, u32}; the
-// item leaves the open trader window (FUN_006ef450).
+// item leaves the open trader window (0x6ef450).
 struct TraderDelItem {
     std::uint32_t trader_id = 0;
     std::string serial;
@@ -256,7 +256,7 @@ inline constexpr std::uint32_t kBuyerSearchResults = 0x00, kBarterSearchAction =
 // One buy line, the original's 0xb8-byte BarterBuyLine: written by BarterBuyLine_WriteToBuffer @0x7d7060 (u32 slot,
 // u8 enabled; when enabled u32 item id, the name, u32 icon, u32 quantity, u8 toggle, u32 cost, u32 n, n × {u32 id,
 // u32 quantity, u32 icon, name}, u32 buyer spawn id, u32 buyer character id, u32 zone, buyer name) and read back by
-// FUN_007d6ef0 (each field only while the packet holds it, so EQEmu's lines without the last four read as zeros; a
+// 0x7d6ef0 (each field only while the packet holds it, so EQEmu's lines without the last four read as zeros; a
 // line that is not enabled stops after the flag and keeps the defaults, icon 500).
 struct BuyLineTrade {
     std::uint32_t item_id = 0, quantity = 0, icon = 0; // +0, +4, +8
@@ -294,7 +294,7 @@ struct BarterInspectReply {
 std::optional<BarterInspectReply> decode_barter_inspect_reply(const AppPacket& p);
 
 // OP_BuyerItems 14 {14, u32, the line} (a viewed buyer's line, CBarterMerchantWnd_UpdateBuyLine) and 7 {7, u32,
-// the line} (our own line, FUN_00422970). EQEmu writes 14 as {14, slot, slot, line} and 7 as {7, 0, line}; its
+// the line} (our own line, 0x422970). EQEmu writes 14 as {14, slot, slot, line} and 7 as {7, 0, line}; its
 // removals {7 / 14, 0, slot, 0} read as a line that is not enabled.
 std::optional<BuyLine> decode_buy_line(const AppPacket& p);
 AppPacket encode_buy_line(std::uint32_t action, const BuyLine& v); // server direction (EQEmu's layout), for tests
@@ -313,8 +313,8 @@ AppPacket encode_buyer_appearance(const BuyerAppearance& v); // server direction
 // 1 + (the line's zone != the current zone).
 inline constexpr std::uint32_t kBarterAtBuyer = 0, kBarterInBazaar = 1, kBarterOutsideBazaar = 2;
 
-// A sale's record, the original's 0x178-byte struct (constructor FUN_004232b0, BarterBuyLine_Serialize @0x62ad20
-// writes it, FUN_00423500 reads it): six u32 (+0 method, +4 result, +8 buyer spawn id, +0xc buyer character id,
+// A sale's record, the original's 0x178-byte struct (constructor 0x4232b0, BarterBuyLine_Serialize @0x62ad20
+// writes it, 0x423500 reads it): six u32 (+0 method, +4 result, +8 buyer spawn id, +0xc buyer character id,
 // +0x10, +0x14), three strings (+0x18 buyer [64], +0x58 item [32], +0x78 seller [64]), the buy line (+0xb8), u32
 // +0x170 and u32 +0x174.
 struct BuyerSale {
@@ -334,7 +334,7 @@ struct BuyerSale {
 // same bytes: method, 4 B, buyer spawn id, buyer character id, 11 B (+0x10, +0x14 and the three empty strings), the
 // line (with method 0, 13 bytes for the buyer fields), the quantity, 4 B.
 AppPacket encode(const BuyerSale& v);
-// The record after the action (the original's FUN_00423500), for a sale and its result.
+// The record after the action (the original's 0x423500), for a sale and its result.
 std::optional<BuyerSale> decode_buyer_sale(const AppPacket& p);
 // OP_BuyerItems 9 / 10, zone → client (Handle_OP_BuyerItems): 9 our sale's answer, 10 a buy made by our buyer mode.
 // Case 9 reads +4 as the result: 0 success (Barter_ReportItemSold with +0x174 items, buyer name +0x18), 1 failed,
@@ -371,7 +371,7 @@ inline constexpr std::size_t kBarterSearchSize = 84;
 AppPacket encode(const BarterSearch& v);
 
 // OP_BuyerItems 1 (CBarterSearchWnd_HandleSearchResults @0x62cdd0): {u32 1, the search text, u32 transaction id,
-// u32, u32, u8 (FUN_0062e430), u32 count, count × the line with its buyer fields}. EQEmu writes the zone as u16 zone
+// u32, u32, u8 (0x62e430), u32 count, count × the line with its buyer fields}. EQEmu writes the zone as u16 zone
 // and u16 instance, which the original reads as the u32 at +0x74.
 struct BarterSearchResults {
     std::string text;
@@ -449,8 +449,8 @@ struct BuyerGreeting {
 std::optional<BuyerGreeting> decode_buyer_greeting(const AppPacket& p);
 
 // The barter search window's buyers (CBarterSearchWnd's hash +0x220, keyed by character id): OP_Barter 0x1a {0x1a,
-// u32 zone, u32 character id, u32 spawn id, char[64] name} adds one (FUN_0062d620; EQEmu
-// BuyerAddBuyertoBarterWindow_Struct), 0x1b {0x1b, character id} removes one (FUN_0062d670), OP_BuyerItems 0x19
+// u32 zone, u32 character id, u32 spawn id, char[64] name} adds one (0x62d620; EQEmu
+// BuyerAddBuyertoBarterWindow_Struct), 0x1b {0x1b, character id} removes one (0x62d670), OP_BuyerItems 0x19
 // {0x19, u32 count, count × {u32 zone, u32 character id, u32 spawn id, name}} replaces them all
 // (CBarterSearchWnd_HandleBuyerList; EQEmu never sends it).
 struct BarterBuyer {

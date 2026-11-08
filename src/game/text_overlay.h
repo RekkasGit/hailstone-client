@@ -2,7 +2,7 @@
 
 // The large centre-screen text (CTextOverlay, CBroadcast::Get @0x41f3a0): one line at a time, shown with
 // CTextOverlay::DisplayText @0x41f840 (text, colour, priority, alpha, fade-in ms, fade-out ms, hold ms) and faded by
-// its Draw @0x41f610. Read from the disassembly (rof2decomp has no rewrite):
+// its Draw @0x41f610. Read from the disassembly:
 //   - DisplayText (@0x41f430): while a text shows, a new one with a lower priority (signed) is ignored; otherwise it
 //     replaces it: start = now, fading in, the colour index mapped to an RGB (table below), alpha 0;
 //   - Draw: once the hold time (from the start) has passed, the fade-out starts; fading in, the alpha is

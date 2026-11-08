@@ -1,7 +1,6 @@
 #pragma once
 
-// CChatWindowManager's routing tables (rof2decomp export/CChatWindowManager.c, re/src/game/ui/chat_channel_colors.cpp,
-// re/src/game/chat/chat_context_menu.inc, export/CChatWindow.c's WndNotification): every line a chat window shows
+// CChatWindowManager's routing tables (and CChatWindow's WndNotification): every line a chat window shows
 // goes by its colour (dsp_chat's) to one of 57 chat channels (GetChannelFromColor @0x6504c0), and the channel to one
 // window (ChannelMap, +0x8c; the main window unless the Filters menu moved it). The tables here are the original's
 // data; app/lua_eq_chat.cpp keeps the windows.
@@ -83,7 +82,7 @@ inline constexpr std::uint32_t kStrWindow = 6643, kStrScrollbar = 6047, kStrNewC
 // character instead and loses it.
 std::string tell_menu_text(std::string name, const std::string& tell_word);
 
-// The reply keys' list (__LastTell: 50 names, the newest first) and its index (DAT_00de21d8, back to 0 with each
+// The reply keys' list (__LastTell: 50 names, the newest first) and its index (0xde21d8, back to 0 with each
 // LastTell_Add).
 inline constexpr std::uint32_t kStrNoTellsToReply = 12364, kStrNoTellsToTarget = 12365;
 // LastTell_CycleIndex @0x4e1fe0: with no names false (the caller shows 12364) and the index stays. `newer` (its

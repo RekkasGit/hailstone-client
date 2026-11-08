@@ -22,7 +22,7 @@ constexpr float kMountRoom = 3.0f;         // 0x9c3920
 double fl(std::uint32_t bits) { return static_cast<double>(std::bit_cast<float>(bits)); }
 std::uint32_t bits_of(float f) { return std::bit_cast<std::uint32_t>(f); }
 
-// fld dword / fstp dword: a copy through the FPU quiets a signalling NaN.
+// A copy through the FPU quiets a signalling NaN.
 std::uint32_t fpu_copy(std::uint32_t bits) {
     float f = std::bit_cast<float>(bits);
     if (std::isnan(f)) return bits | 0x00400000u;
@@ -42,7 +42,7 @@ std::int32_t cached_total(const State& s, Queries& q, std::int32_t spa) {
     return static_cast<std::int32_t>(t);
 }
 
-// A PC caster's range: Range + GetFocusRangeModifier (fiadd), stored as a float, at most 5 x Range (compared at the
+// A PC caster's range: Range + GetFocusRangeModifier (an int), stored as a float, at most 5 x Range (compared at the
 // x87's precision before the store) (@0x43b7bf and its copies).
 std::uint32_t focus_range(const Fpu& fpu, const Spell& sp, Queries& q) {
     std::int32_t focus = q.focus_range_modifier(sp);

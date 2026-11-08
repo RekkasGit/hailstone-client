@@ -8,15 +8,13 @@
 // decides locally whether a skill may be used, prints the original's messages
 // and names the packet to send. The server decides the outcome.
 //
-// Sources: the Ghidra export of eqgame.exe (rof2decomp:export/, UseSkill
+// Checked against the original's UseSkill
 // @0x45b2d0, PlayerZoneClient::DoAttack @0x5a5000, CanIHit @0x5a2940,
 // CanUseCombatSkill @0x5a2f10, CanMeleeAttackNow @0x5a0600, __get_melee_range
 // @0x4ddeb0, __get_bearing @0x4ef250, the CSkillMgr accessors @0x5ba1b0..
 // @0x5bae40, CharacterZoneClient_GetSkillReuseTime @0x4427f0,
-// CharacterZoneClient::DoPassageOfTime @0x45daf0's timer loops),
-// rof2decomp:notes/combat-and-movement.md §2 and rof2decomp's tested rewrite
-// of PlayerZoneClient::ModifyAttackSpeed (re/src/game/character/
-// attack_speed_eh.cpp). UseSkill itself is the vector-checked port in
+// CharacterZoneClient::DoPassageOfTime @0x45daf0's timer loops) and
+// PlayerZoneClient::ModifyAttackSpeed @0x5a2c20. UseSkill itself is the vector-checked port in
 // game/mechanics/use_skill.h; use_skill() below answers its callees from a
 // SkillContext. Gaps: docs/unknowns.md "Abilities".
 
@@ -213,7 +211,7 @@ struct SkillResult {
     bool stop_auto_fire = false;             // SetAutoRangeAttack(0) (feign death; DoAttack(11) with auto fire on)
     bool open_tracking_window = false;
     bool track_request = false;              // Send_OP_Track (the tracking window was already open)
-    bool compass_reset = false;              // FUN_0065b650: the compass's error back to 0 (game/compass.h)
+    bool compass_reset = false;              // 0x65b650: the compass's error back to 0 (game/compass.h)
     bool visibility_changed = false;         // EQ_Character::UpdateMyVisibleStatus
     bool used = false;                       // a timer started or a request went out
     std::vector<int> removed_buffs;          // RemovePCAffectex(affect, 0): buff slots to clear locally
@@ -236,7 +234,7 @@ float melee_range(const SkillActor* a, const SkillActor* b);
 bool can_i_hit(const SkillContext& ctx, float extra_range, SkillResult& out);
 // PlayerZoneClient::CanUseCombatSkill @0x5a2f10 for slot 100.
 bool can_use_combat_skill(const SkillContext& ctx, std::uint32_t skill);
-// PlayerZoneClient::DoAttack @0x5a5000 for the local player (the port in game/mechanics/melee.h) on this context:
+// PlayerZoneClient::DoAttack @0x5a5000 for the local player (game/mechanics/melee.h) on this context:
 // slots 13 / 14 (auto attack; the swings go to SkillResult::swings) and 100 (a combat skill: OP_CombatAbility).
 // `skill` is the argument as passed (DoAttack compares its low byte). Returns the original's al.
 bool do_attack(const SkillContext& ctx, SkillState& state, std::uint8_t slot, std::uint32_t skill, SkillResult& out);
@@ -247,7 +245,7 @@ bool do_attack_skill(const SkillContext& ctx, SkillState& state, std::uint32_t s
 // (melee::swing_ready).
 void attack_on_reset(const SkillContext& ctx, SkillState& state, bool attack_on);
 void swing_ready(const SkillContext& ctx, SkillState& state);
-// CharacterZoneClient::UseSkill @0x45b2d0: the exact port (game/mechanics/use_skill.h) run on this context, its
+// CharacterZoneClient::UseSkill @0x45b2d0: the original's rules (game/mechanics/use_skill.h) run on this context, its
 // callees answered from it (DoAttack(100, ...) is do_attack_skill, CanIHit can_i_hit, the timers SkillTimers) and
 // its messages, packets and state changes collected in the result.
 SkillResult use_skill(const SkillContext& ctx, SkillState& state, std::uint32_t skill);
@@ -257,9 +255,9 @@ std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState
 
 // CharacterZoneClient::HasSkill @0x44a1b0's value (GetAdjustedSkill). With a class mask and skill rules on the sheet
 // (CharacterSheet::skill_rules from the server extension), those rules first; the NMS plugin's are the NMS patch's
-// HasSkill detour (the NMS plugin's nms_rules.h, in its own repository; notes/nms-dinput8.md §3.8): a profile skill
-// of -1 and Tracking without Ranger, Druid or Bard give 0; otherwise GetAdjustedSkill runs with the class it picks
-// for the skill (Rogue for Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
+// HasSkill detour (the NMS plugin's nms_rules.h, in its own repository): a profile skill of -1 and Tracking without
+// Ranger, Druid or Bard give 0; otherwise GetAdjustedSkill runs with the class it picks for the skill (Rogue for
+// Backstab, ...), else the profile's (Bard). GetAdjustedSkill itself is not hooked.
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill);
 
 // The Actions window's lists: skills the player has (CharacterZoneClient::HasSkill @0x44a1b0: adjusted skill
@@ -270,7 +268,7 @@ std::vector<std::uint32_t> usable_skills(const Character& ch, bool combat);
 // 0xff = not) for a race and class. The client fills them itself (EQEmu sends them all 0xff): when the local player's
 // actor is made (and on an illusion, EQPlayer::do_change_form, with the actor's current race) and when a buff with
 // SPA 65 or 66 fades. Both callers keep slot 10 (+0x3258, regeneration) as it was. The race's GetRawSkillCap pass
-// (its argument 1 path) and FUN_005bac00's string are left out.
+// (its argument 1 path) and 0x5bac00's string are left out.
 inline constexpr std::size_t kInnateInfravision = 6;  // +0x3248 (eqstr 6617 'Infravision')
 inline constexpr std::size_t kInnateSlam = 11;        // +0x325c
 inline constexpr std::size_t kInnateUltravision = 13; // +0x3264 (eqstr 6622 'Ultravision')

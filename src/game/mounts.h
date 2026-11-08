@@ -1,8 +1,7 @@
 #pragma once
 
 // Riding: how a rider and its mount are linked and unlinked (EQPlayer::GetMount +0x154 / PlayerBase_GetRider
-// +0x158 as Spawn::mount_id / rider_id), ported from the disassembly (rof2decomp re/src/game/spawn/mount_banner.cpp
-// and mount_attach.cpp; do_stand @0x593f20, the dismount @0x590510 (vtable +0x60, misnamed SlideIceFriction),
+// +0x158 as Spawn::mount_id / rider_id), as the original does it (do_stand @0x593f20, the dismount @0x590510 (vtable +0x60, misnamed SlideIceFriction),
 // PlayerClient::ClearVehicleMountLinks @0x5a0400, EQPlayer::do_change_form's re-seat @0x597110..0x5974d2).
 //
 // There is no mount packet: a mount is an NPC named "<rider>`s_Mount00" of a mount race (EQEmu's Horse, summoned by
@@ -29,7 +28,7 @@ std::string mount_name_for(std::string_view rider);
 // characters gives an empty name (the original writes its 0 before the buffer then; nothing is found either way).
 std::optional<std::string> rider_name_for_mount(std::string_view mount);
 
-// FUN_0058dde0: the rider's model cannot ride: its race (vf88) is not 367, 522 or 1, it has an actor and the actor
+// 0x58dde0: the rider's model cannot ride: its race (vf88) is not 367, 522 or 1, it has an actor and the actor
 // definition has no tunic point (+0x34). PlayerClient_IsHumanActorDef @0x58dd50: a mount race drawn as the
 // HUM / HUF fallback.
 bool riding_blocked(const Spawn& s);

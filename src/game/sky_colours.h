@@ -3,8 +3,7 @@
 // The graphics DLL's procedural sky (CSky) as the scene's light and fog read
 // it: the weather patterns' colour maps keyed by time of day, the weather
 // transition blend, sun / moon / bounce colours and the area fog. Source:
-// rof2decomp batch 270, notes/eqgraphicsdx9.md "Sky: the procedural CSky"
-// (read from EQGraphicsDX9.dll; tools/dx9/sky_reference.py prints the same
+// the procedural CSky (read from EQGraphicsDX9.dll; tools/dx9/sky_reference.py prints the same
 // values from the game's files).
 //
 //   CResourceManager::CreateSky @0x10059db0   one CSky for the whole session (CDisplay::InitWorld)
@@ -62,7 +61,7 @@ std::optional<ColourMap> parse_colour_map(std::span<const std::byte> dds);
 std::uint32_t blend_colour(std::uint32_t a, std::uint32_t b, std::uint32_t w);
 ColourMap blend_colour_map(const ColourMap& a, const ColourMap& b, std::uint32_t w);
 
-// (uint32)trunc(v * 65536.0f), as the DLL's fistp under a chop control word:
+// (uint32)trunc(v * 65536.0f), as the DLL stores it under a chop control word:
 // a key's start or length, or the day fraction's tick t.
 std::uint32_t sky_ticks(float v);
 

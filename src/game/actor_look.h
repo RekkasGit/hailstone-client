@@ -1,11 +1,10 @@
 #pragma once
 
-// The original client's ActorClient appearance functions (rof2decomp batch
-// 266, notes/appearance.md): tints, Luclin hair / beard parts and colours,
-// classic body materials, armour textures, hero's forge pieces and helms.
-// Each function is ported from the original's disassembly (rof2decomp's
-// differential-tested rewrites in re/src/game/spawn/) and checked against
-// the vectors recorded from eqgame.exe (tests/appearance_vectors_test.cpp).
+// The original client's ActorClient appearance functions: tints, Luclin
+// hair / beard parts and colours, classic body materials, armour textures,
+// hero's forge pieces and helms. Each function follows the original's
+// behaviour and is checked against the vectors recorded from eqgame.exe
+// (tests/appearance_vectors_test.cpp).
 //
 // The functions work on an ActorLook (the ActorClient fields they read and
 // write) and talk to the model through ActorEnv, which stands for the
@@ -96,8 +95,8 @@ public:
     virtual ~ActorEnv() = default;
     // Model virtuals (CHierarchicalModel, EQGraphicsDX9.dll).
     // +0xbc: true for the new (EQG / HD) models, which take UpdateNewArmorSlot
-    // and the "<code>_HAIR_nn" parts (notes/appearance.md calls it the
-    // old-model check; the armour functions show which way it goes).
+    // and the "<code>_HAIR_nn" parts (an old-model check read the other
+    // way; the armour functions show which way it goes).
     virtual bool new_model() = 0;
     virtual bool has_dag(std::int32_t dag) = 0;   // +0x1a4
     virtual bool has_part(std::int32_t dag) = 0;  // +0x1a8 returns the dag's part

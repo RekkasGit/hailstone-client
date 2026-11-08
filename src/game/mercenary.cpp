@@ -20,7 +20,7 @@ std::vector<std::uint8_t> u32_payload(std::uint32_t v) {
             static_cast<std::uint8_t>(v >> 24)};
 }
 
-// The list readers' u32 (FUN_0056bf90 and the handlers): read when it fits, else the value stays.
+// The list readers' u32 (0x56bf90 and the handlers): read when it fits, else the value stays.
 bool read_u32(std::span<const std::uint8_t> d, std::size_t& pos, std::uint32_t& out) {
     if (pos + 4 > d.size()) return false;
     out = le32(d.data() + pos);

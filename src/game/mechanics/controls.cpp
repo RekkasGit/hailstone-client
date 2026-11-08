@@ -62,7 +62,7 @@ void Controls::strafe(bool can_move, std::uint8_t mode, bool rider_partner) {
     if (can_move && at_or_above_floor()) {
         s_.strafing = mode;
         float w = s_.controlled_is_local ? weight() : 1.0f;
-        // fld weight / fadd st, st / fst scale; halved (fmul 0.5) sneaking, with the speed modifier below 0
+        // weight + weight, stored as the scale (kept unrounded); halved sneaking, with the speed modifier below 0
         // or ducking.
         double v = x87_add(f_, st(w), st(w));
         s_.strafe_scale = static_cast<float>(v);
@@ -94,7 +94,7 @@ void Controls::turn(std::int32_t& count, bool right) {
                                                                   : kTurnLimit;
     if (count > limit) count = limit;
     auto rate = right ? static_cast<std::int32_t>(0u - static_cast<std::uint32_t>(count)) : count;
-    cp().speed_heading = static_cast<float>(rate); // fild / fstp
+    cp().speed_heading = static_cast<float>(rate); // the integer stored as a float
 }
 
 void Controls::turn_key(bool can_move, bool key, std::uint8_t bit, std::uint8_t mode, std::int32_t& count,
@@ -116,7 +116,7 @@ void Controls::camera_heading(bool key, bool add) {
     if (!q_.camera_active()) return;
     s_.strafing = 0;
     double heading = q_.camera_heading();
-    double step = x87_mul(f_, st(s_.rate_scale), mem(12.0f)); // fld rate / fmul 12.0f
+    double step = x87_mul(f_, st(s_.rate_scale), mem(12.0f)); // rate * 12.0f
     double v = add ? x87_add(f_, heading, step) : x87_sub(f_, heading, step);
     q_.set_camera_heading(static_cast<float>(fix_heading(static_cast<float>(v), f_)));
 }
@@ -225,7 +225,7 @@ float Controls::forward(float s0) {
 float Controls::backward(float s0) {
     ControlSpawn& p = cp();
     if (q_.player_vf58(ControlWho::Controlled)) {
-        p.speed_run = -through_fpu(p.walk_speed); // fld / fchs / fstp
+        p.speed_run = -through_fpu(p.walk_speed); // copied through the FPU, negated
         if (below_floor()) p.speed_run = 0.0f;
         return through_fpu(p.speed_run);
     }
@@ -261,7 +261,7 @@ void Controls::look(bool key, std::int32_t& count, bool down) {
     if (!key) return;
     count = wrap_inc(count);
     if (count > kLookLimit) count = kLookLimit;
-    // fild count / fmul rate / [fchs] / fstp.
+    // count * rate, [negated,] stored as a float.
     auto delta = [&] {
         double d = x87_mul(f_, static_cast<double>(count), mem(s_.rate_scale));
         return static_cast<float>(down ? -d : d);
@@ -270,7 +270,7 @@ void Controls::look(bool key, std::int32_t& count, bool down) {
     q_.add_pitch(ControlWho::Local, delta());
 }
 
-// fld a / fsub b / fabs / fcomp threshold: not below it.
+// |a - b| not below the threshold.
 bool Controls::moved_at_least(float a, float b, float threshold) {
     double d = std::fabs(x87_sub(f_, st(a), mem(b)));
     return d >= static_cast<double>(threshold);

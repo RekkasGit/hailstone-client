@@ -643,7 +643,7 @@ Delete in the inbox sends TRASH, in the trash DELETED; Purge sends DELETED for t
 
 ### Marketplace (`net/marketplace_packets.h`, `GameConnection` in `net/game_connection_marketplace.cpp`, rules in `game/marketplace.{h,cpp}`)
 
-The in-game store (CMarketplaceWnd). Stock EQEmu has none of these opcodes (they are not in `patch_RoF2.conf`): a server that sells through the window answers the original client's opcodes, so the same server works for this client and for an unmodified RoF2 client. Layouts are the original's readers and senders (rof2decomp `notes/housing-and-market.md` section 9, its `refs/nms-release-extras/offsets/Market.h` section 44, and the disassembly of HandleWorldMessage's cases). The funding pages (Add Funds, credit cards) went to the publisher's web service and are not offered. Unit-tested and mock-server tested; not tried live.
+The in-game store (CMarketplaceWnd). Stock EQEmu has none of these opcodes (they are not in `patch_RoF2.conf`): a server that sells through the window answers the original client's opcodes, so the same server works for this client and for an unmodified RoF2 client. Layouts are the original's readers and senders (NMS-Release-Extras' `offsets/Market.h` section 44 and the disassembly of HandleWorldMessage's cases). The funding pages (Add Funds, credit cards) went to the publisher's web service and are not offered. Unit-tested and mock-server tested; not tried live.
 
 The catalog, funding and state feeds are read as the original's `CUnSerializeBuffer` reads them: every field on its own bounds check, so a short packet leaves what it lacks at the defaults (MarketplaceItem's ctor) and goes on with the next field. Catalog strings are NUL-terminated and cut to the node's buffer (name 127, the 64-byte one 63, the rest 1023 characters); the cursor still skips the whole string. The state feed's string is a u32 length and the bytes.
 
@@ -732,7 +732,7 @@ Not built: the ownership transfer offer and its answer (0x5df8 from the server, 
 
 ### Real estate: housing, guild halls, placed objects (`net/real_estate_packets.h`, `GameConnection` in `net/game_connection_real_estate.cpp`, state in `game/real_estate.{h,cpp}`)
 
-None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends none of them. A server with housing, such as Project Triune, sends them with the original's numbers. The layouts come from rof2decomp's `notes/housing-and-market.md` and were checked against the decompile; where the two disagree, the decompile wins (the corrections are listed below). Records use u32-length strings with no NUL. Placed objects, escrow and the fixed bodies use NUL-terminated strings. The original reads fail-open, so a short packet leaves defaults and misreads the rest. Hailstone refuses a short packet instead.
+None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends none of them. A server with housing, such as Project Triune, sends them with the original's numbers. The layouts come from NMS-Release-Extras' research headers (`Housing.h`, `HousingNpc.h`; THIRD_PARTY.md) and were checked against the original client's code; where the two disagree, the client's code wins (the corrections are listed below). Records use u32-length strings with no NUL. Placed objects, escrow and the fixed bodies use NUL-terminated strings. The original reads fail-open, so a short packet leaves defaults and misreads the rest. Hailstone refuses a short packet instead.
 
 | Op | Dir | Payload | Effect |
 |---|---|---|---|
@@ -750,7 +750,7 @@ None of these opcodes are in EQEmu's RoF2 table, and a stock EQEmu server sends 
 | 0x5a63 | both | the 0xbc-byte body (+0x0c the giver) | "Do you wish to accept %1 from %2?" (7636, 5 min); the answer echoes it with +0xb9 = yes (a no also prints 7638) |
 | 0x1045 / 0x2a9e | Z→C | EQPlacedItem {cstr tag, u8 NPC item, u32, u32, cstr key, u32 re, u32 item, f32 scale, heading, pitch, roll, x, y, z, u8 no collision, u8 wall only, u8 no free mode, u32 wall allowed, 7 × u32} / ≥ 0x28 B with re at +0x20, item at +0x24 | a placed object added or updated / removed |
 | 0x49df | Z→C | u32 n × {u32 id, f32[16] row-major local → world, 5 × i32} | the areas, replaced |
-| 0x21ec | both | 768 B: cstr key, slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x2c name (reply), 40 entries at +0x6c of {type, parameter, text id, sub-menu parameter} (request: 0xff), +0x2ec a filter byte (request: 1), +0x2f0 / +0x2f4 the click, +0x2f8 one more field | an estate item's context menu (ShowItemContextMenu @0x7375f0, FUN_00542a90) |
+| 0x21ec | both | 768 B: cstr key, slot {-1, -1, 0xffff} at +0x14, +0x20 re, +0x24 item, +0x2c name (reply), 40 entries at +0x6c of {type, parameter, text id, sub-menu parameter} (request: 0xff), +0x2ec a filter byte (request: 1), +0x2f0 / +0x2f4 the click, +0x2f8 one more field | an estate item's context menu (ShowItemContextMenu @0x7375f0, 0x542a90) |
 | 0x050c / 0x51e3 / 0x64a3 / 0x7ad1 | C→Z | {re, item, the entry's parameter} / 0x7ad1 {re, item, 140 zero bytes} | the menu's entry types 8, 9, 0x13 and 5; meaning not known |
 | 0x58c7 | both | C→Z {re, item}; Z→C an item | inspect |
 | 0x2b35 | Z→C | u8 mode | toggles the plot search window (only in a neighborhood: 8078 otherwise) |
@@ -769,7 +769,7 @@ Occupancy, once a second (`RealEstateManagerClient_Process`):
 
 The buy, sell and transfer checks print the original's refusals before anything is sent; the server makes the final decision.
 
-Where the decompile corrects the note:
+Where the client's code corrects the headers:
 - Escrow is one serialized object in both directions, not a fixed struct.
 - The server's escrow reply sets the *cursor's* coin, not the purse.
 - The house is found from the current estate, before the yard.
@@ -778,7 +778,7 @@ Where the decompile corrects the note:
 - Unlisted 0x1228 codes print 5223.
 - The search request is 224 bytes.
 
-Placement mode (`game/placement.{h,cpp}`) follows FUN_005ae160's modes (collision, wall, cursor, free) and checks the item's box against the areas named in the reply's code map: an area holding all 8 corners with code 0 allows it; otherwise the last such area's code, otherwise the root estate's code, or 1. A player inside the box gives 0x1c. A 0x1228 {0} or 0x6213 ends it, and so does a zone change. Escape cancelling it is Hailstone's own.
+Placement mode (`game/placement.{h,cpp}`) follows 0x5ae160's modes (collision, wall, cursor, free) and checks the item's box against the areas named in the reply's code map: an area holding all 8 corners with code 0 allows it; otherwise the last such area's code, otherwise the root estate's code, or 1. A player inside the box gives 0x1c. A 0x1228 {0} or 0x6213 ends it, and so does a zone change. Escape cancelling it is Hailstone's own.
 
 Not built: the ghost's fit to walls and surfaces (ItemPlacement_UpdatePosition), free mode's mouse moves, the 0x21ea NPC-item binding to a placement, the polls, `/outputfile realestate`'s rows.
 

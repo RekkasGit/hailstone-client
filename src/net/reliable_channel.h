@@ -2,8 +2,7 @@
 
 // The original client's reliable channel timer and acknowledgements
 // (UdpLibrary's UdpReliableChannel, linked into eqgame.exe):
-// rof2decomp:notes/connection-and-network.md §7.4a, rewritten in
-// re/src/game/net/udp_reliable_give_time.cpp and udp_reliable_send.cpp, and
+// its GiveTime and send paths, reimplemented from their observed behaviour and
 // checked against UdpReliableChannel_GiveTime.jsonl.
 //
 // The resend timeout is T = min(percent * rtt / 100 + adjust, cap); the

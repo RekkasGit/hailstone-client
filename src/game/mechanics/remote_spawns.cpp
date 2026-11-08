@@ -16,7 +16,7 @@ std::int32_t signed_bits(std::uint32_t value, int high, int low) {
     return static_cast<std::int32_t>(value << (31 - high)) >> (31 - high + low);
 }
 
-// fild value / fmul unit / fstp.
+// value * unit, stored as a float.
 float scaled(std::int32_t value, float unit, const Fpu& f) {
     return static_cast<float>(f.mul(static_cast<double>(value), static_cast<double>(unit)));
 }
@@ -41,7 +41,7 @@ void unpack_spawn_position(SpawnPhysics& p, const PackedPosition& w, const Unpac
     p.speed_heading = scaled(signed_bits(w[3], 9, 0), kTurnScale, f);
     if (!zr.spawn) return;
     if (zr.levitating && !zr.keep_level) {
-        // fld z / fsub old / fabs / fcomp 5: above 5 (an unordered compare keeps the old z).
+        // |z - old| above 5 (an unordered compare keeps the old z).
         double moved = std::fabs(x87_sub(f, z, p.z));
         if (moved > static_cast<double>(kZJump)) p.z = z;
     } else {
@@ -49,7 +49,7 @@ void unpack_spawn_position(SpawnPhysics& p, const PackedPosition& w, const Unpac
     }
     if (!zr.keep_z_global) {
         if (zr.vf54) {
-            p.z = through_fpu(old_z); // fld / fstp: quiet
+            p.z = through_fpu(old_z); // copied through the FPU: quiet
             p.speed_z = 0.0f;
         }
     } else if (zr.vf54) {

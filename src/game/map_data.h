@@ -1,7 +1,7 @@
 #pragma once
 
-// The in-game map's data and rules as the original's MapViewMap keeps them (rof2decomp export/MapViewMap.c,
-// export/CMapViewWnd.c, export/_globals.c; the helpers decompiled at the addresses given below). Pure state: the
+// The in-game map's data and rules as the original's MapViewMap keeps them (MapViewMap, CMapViewWnd
+// and the helpers at the addresses given below). Pure state: the
 // files are read and written by the caller (app/lua_eq_map.cpp), the drawing is the caller's too.
 //
 // Map files: <maps dir>/<zone>.txt is layer 0 (the base map), <zone>_1.txt .. <zone>_3.txt layers 1..3
@@ -82,7 +82,7 @@ MapLayerParse parse_map_layer(std::string_view text, int layer, std::string& lab
 // (is_zone_short_name: a name with a separator, "..", a drive or a device name would name a file elsewhere).
 std::string map_layer_file_name(std::string_view zone, int layer);
 
-// A label's place candidates (MapLabel_PlacementRect @0x6c8290, rof2decomp re/src/game/ui/map_labels.cpp): the
+// A label's place candidates (MapLabel_PlacementRect @0x6c8290): the
 // rectangle {l, t, r, b} of a w x h text at anchor 0..23 around (x, y).
 std::array<int, 4> map_label_rect(unsigned anchor, int x, int y, int w, int h);
 
@@ -103,7 +103,7 @@ public:
     std::uint32_t my_color = 0xff000000;             // +0x270: the player
     std::uint32_t group_color = 0xff000000;          // +0x274
     std::uint32_t path_color = 0xffff0000;           // +0x278: find path
-    bool failed_find = false;                        // +0x27c: a failed find's X is shown (FUN_006c92e0)
+    bool failed_find = false;                        // +0x27c: a failed find's X is shown (0x6c92e0)
     glm::vec3 failed_point{0.0f};                    // +0x280: its point (world coordinates, the original's Y, X, Z)
     int failed_kind = 0;                             // +0x28c: the find's kind (5: a map location)
     std::deque<MapLine*> marked_lines;               // +0x290, newest first
@@ -142,9 +142,9 @@ public:
     void zoom_in();
     void zoom_out();
 
-    // The whole map (FUN_006ca9e0): the marked lines and label, every line and label, the line being walked.
+    // The whole map (0x6ca9e0): the marked lines and label, every line and label, the line being walked.
     void clear();
-    // Load (FUN_006cf8a0's MapViewMap::Load): each layer 0..3 that `read` returns text for is added; layer 0's
+    // Load (0x6cf8a0's MapViewMap::Load): each layer 0..3 that `read` returns text for is added; layer 0's
     // extents go to set_zone_extents; labels are measured. Then the labels are placed again.
     void load(const std::function<std::optional<std::string>(int layer)>& read, const MapMeasure& measure);
     // The current zone's box (CDisplay_LoadWorldExtents -> CMapViewWnd_LoadZoneMap): the terrain's min / max in
@@ -165,36 +165,36 @@ public:
     // ---- editing (the map toolbar)
     // MapViewMap::AddLabel @0x6cc620 (on the current zone only): on the active layer, measured, at the list's head.
     void add_label(const glm::vec3& pos, std::uint32_t argb, int size, const std::string& text, const MapMeasure& measure);
-    // FUN_006c7f90: start a line at p.
+    // 0x6c7f90: start a line at p.
     void start_line(const glm::vec3& p);
-    // FUN_006cab70: a line from the current point to p (when the original's test passes), p the new current point.
+    // 0x6cab70: a line from the current point to p (when the original's test passes), p the new current point.
     void add_point(const glm::vec3& p);
-    // FUN_006caa70: add_point, then the line ends.
+    // 0x6caa70: add_point, then the line ends.
     void end_line(const glm::vec3& p);
     // MapViewMap::Clear @0x6c7fd0: removes the marked lines.
     void remove_marked_lines();
-    // FUN_006c8040: removes the marked label.
+    // 0x6c8040: removes the marked label.
     void remove_marked_label();
-    // FUN_006cbee0 (confirmation 100): every line and label of the active layer.
+    // 0x6cbee0 (confirmation 100): every line and label of the active layer.
     void clear_active_layer();
-    // FUN_006c8b80: marks a line once; null clears the marks.
+    // 0x6c8b80: marks a line once; null clears the marks.
     void mark_line(MapLine* line);
     bool is_marked(const MapLine* line) const;
     // MapViewMap::JoinLinesAtIntersect @0x6c8db0: with exactly two marked lines meeting within 500 units, moves the
     // nearer ends to the crossing (ctrl: the first marked line's only). False: nothing joined (the caller prints
     // string 0x3ad0).
     bool join_lines_at_intersect(bool ctrl);
-    // FUN_006c8bf0: the marked lines' colour.
+    // 0x6c8bf0: the marked lines' colour.
     void set_marked_lines_color(std::uint32_t rgb);
-    // Re-measures a label (FUN_006cac60) after its text or size changed.
+    // Re-measures a label (0x6cac60) after its text or size changed.
     static void measure_label(MapLabel& label, const MapMeasure& measure);
     MapLabel* label_by_id(int id);
 
     // ---- each frame
-    // FUN_006cd270: the scale and the centre. The zone's box is fitted into 472 x 360 pixels; zoomed, the map is
-    // centred, on the current zone, on the find box while the find holds the map (`find_box`, FUN_006ccef0), else on
+    // 0x6cd270: the scale and the centre. The zone's box is fitted into 472 x 360 pixels; zoomed, the map is
+    // centred, on the current zone, on the find box while the find holds the map (`find_box`, 0x6ccef0), else on
     // the player (`player`, map coordinates) without a selected label; or on the box of the player and the selected
-    // label (`label_box`). The boxes are min/max of the original's Y and X (FUN_006cbfa0).
+    // label (`label_box`). The boxes are min/max of the original's Y and X (0x6cbfa0).
     void precalc(const std::optional<glm::vec2>& player, const std::optional<glm::vec4>& label_box,
                  const std::optional<glm::vec4>& find_box = std::nullopt);
     // MapViewMap::TransformPoint @0x6c87a0: map (x, y) to pixels of a cw x ch client area.
@@ -203,7 +203,7 @@ public:
     glm::vec2 world_coordinates(float px, float py, float cw, float ch) const;
     // sub_006cafa0 and PreCalcRenderValues: the labels' text places in a cw x ch client area at origin (ox, oy).
     void place_labels(float cw, float ch, int ox, int oy, int clip_r, int clip_b);
-    // FUN_006cc010: zoom so the box (the original's minY, maxY, minX, maxX) fills 60..80% of the client (70..85%
+    // 0x6cc010: zoom so the box (the original's minY, maxY, minX, maxX) fills 60..80% of the client (70..85%
     // and up to x20 for find).
     void zoom_to_fit(float min_y, float max_y, float min_x, float max_x, bool find, float cw, float ch);
 

@@ -1,5 +1,5 @@
 // Written from EQEmu rof2.cpp / rof2_structs.h (read as reference, no code
-// copied) and the rof2decomp notes. OpenEQ crates/openeq-net/src/inventory.rs
+// copied) and the original client's item handling. OpenEQ crates/openeq-net/src/inventory.rs
 // was studied to cross-check the block sizes (THIRD_PARTY.md).
 
 #include "net/item_packets.h"

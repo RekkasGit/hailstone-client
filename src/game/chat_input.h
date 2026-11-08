@@ -1,7 +1,7 @@
 #pragma once
 
-// The chat input mode and the fixed key slots 479..499: exact ports of rof2decomp batch 265
-// (re/src/game/ui/chat_input_mode.cpp), checked against CEverQuest_SetChatInputMode.jsonl and
+// The chat input mode and the fixed key slots 479..499, as the original keeps them, checked against
+// CEverQuest_SetChatInputMode.jsonl and
 // CEverQuest_ToggleChatInputMode.jsonl.
 //
 // __InChatMode: 0 while the active chat window's input line has the keys,
@@ -36,11 +36,11 @@ struct ChatInputCall {
     std::uint32_t held_mask = 0;  // ExecuteCmd(0 = AUTORUN, key down 1, mask)
 };
 
-// FUN_00518230 @0x518230: sets the mode when it changes. With an active chat window, mode 1 takes the focus from
+// 0x518230: sets the mode when it changes. With an active chat window, mode 1 takes the focus from
 // its input line; any other mode gives it the focus and, with movement keys held, AUTORUN with the held mask
 // (forward 1, else backward 2; turn left 4, else turn right 8; 0x10 while 0xddf704 is set) keeps the player moving.
 void set_chat_input_mode(ChatInputWorld& w, std::int32_t mode, std::vector<ChatInputCall>& calls);
-// FUN_0051ebf0 @0x51ebf0 (slot 488, Enter): from mode 0 the input line loses the focus and the mode becomes 1
+// 0x51ebf0 (slot 488, Enter): from mode 0 the input line loses the focus and the mode becomes 1
 // (no AUTORUN); from any other mode set_chat_input_mode(0).
 void toggle_chat_input_mode(ChatInputWorld& w, std::vector<ChatInputCall>& calls);
 

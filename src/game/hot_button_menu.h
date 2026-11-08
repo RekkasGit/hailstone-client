@@ -1,33 +1,33 @@
 #pragma once
 
-// A hotbutton's mouse and its context menu (rof2decomp FUN_005536b0 @0x5536b0, CHotButton's WndNotification for its
+// A hotbutton's mouse and its context menu (0x5536b0, CHotButton's WndNotification for its
 // button; the menu CHotButtonWnd_BuildContextMenus @0x54ef20 builds once into 0xade708, CHotButton_UpdateContextMenu
 // @0x550e30 fits it to the button, CHotButton_ShowContextMenu @0x551360 pops it up at the mouse).
 //
 // The mouse (the button's CButtonWnd notifications, CButtonWnd vf18..vf21):
 //  - a left (XWM_LCLICK) or quick right click (XWM_RCLICK, on the right button's release) on an empty button opens
 //    the menu, unless something is on the cursor (CCursorAttachment::IsActive);
-//  - else a left click puts the cursor's hotbutton there (FUN_00552e00) or runs the button (DoHotButton(n, 1)), a
-//    quick right click runs FUN_0054fc10 (game/hot_button_press.h) except on items (types 5, 12, 13: the item slot
+//  - else a left click puts the cursor's hotbutton there (0x552e00) or runs the button (DoHotButton(n, 1)), a
+//    quick right click runs 0x54fc10 (game/hot_button_press.h) except on items (types 5, 12, 13: the item slot
 //    child takes its own right click);
 //  - the right button held 500 ms (XWM_RCLICKHOLD, __ProcessMouseEvents) opens the menu on any button.
 //
-// The menu's rows (eqstr; the item id the menu sends; UpdateContextMenu shows a row or hides it, FUN_0085bc70):
+// The menu's rows (eqstr; the item id the menu sends; UpdateContextMenu shows a row or hides it, 0x85bc70):
 //   7661 Activate     0x1b58  a button other than a krono slot (13): DoHotButton(n, 0)
 //   5371 Consume      0x1b61  a krono slot: DoHotButton(n, 0)
 //   7668 Inspect      0x1b5d  a spell gem holding a spell (its spell display, CSpellDisplayManager::ShowSpell), an item
-//                             (5, 12, 13: its item display, FUN_006949d0)
-//   7662 Clear        0x1b59  a button: ClearHotButtonSlot, saved (FUN_00550c50)
-//   7671 Change Size  0x1b60  always: the bar's button size (FUN_0068a170: CQuantityWnd "Percent")
-//   7664 Assign Icon  0x1b5a  a button: CIconSelectionWnd on the button's icon (FUN_0068f330); its answer (0x28)
-//                             sets the icon, saved (FUN_00550040)
+//                             (5, 12, 13: its item display, 0x6949d0)
+//   7662 Clear        0x1b59  a button: ClearHotButtonSlot, saved (0x550c50)
+//   7671 Change Size  0x1b60  always: the bar's button size (0x68a170: CQuantityWnd "Percent")
+//   7664 Assign Icon  0x1b5a  a button: CIconSelectionWnd on the button's icon (0x68f330); its answer (0x28)
+//                             sets the icon, saved (0x550040)
 //   7672 Clear Icon   0x1b5b  a button with an icon (+0x64 != -1): icon (-1, -1), saved
 //   7665 Assign Label 0x1b5c  a button: CTextEntryWnd "Enter label:" (7669), 0..15 characters, starting from the
 //                             button's text; OK (0x26, 1) renames the social of a social button (< 120; SaveSocialsToIni)
 //                             or sets the button's label (63 characters), saved
 //   7663 Assign Social        always: "Page %1" (7666) 1..10, each with the page's 12 socials by name or "<New Social>"
 //                             (7677); item 0x1b8a + n makes the button social n (type 4), saved, and an unnamed
-//                             social opens the social editor on it (FUN_00758bb0)
+//                             social opens the social editor on it (0x758bb0)
 //   7667 Memorize             (with the cast spell window) a spell gem without a spell: the gem's spell select
 //                             menu (CCastSpellWnd::MakeSpellSelectMenu); item 10000 + spell memorizes it there
 //                             (CCastSpellWnd_TryMemorizeFromCursor)
@@ -54,11 +54,11 @@ enum class HotButtonMouse { LeftClick, RightClick, RightHeld };
 enum class HotButtonMouseAction {
     None,       // nothing here (the item slot's own right click, or a right click with nothing to do)
     Menu,       // CHotButton_ShowContextMenu
-    Drop,       // FUN_00552e00: the cursor's hotbutton goes here
+    Drop,       // 0x552e00: the cursor's hotbutton goes here
     Press,      // DoHotButton(n, 1)
-    RightClick, // FUN_0054fc10
+    RightClick, // 0x54fc10
 };
-// FUN_005536b0's choice for a mouse notification; `cursor` is CCursorAttachment::IsActive.
+// 0x5536b0's choice for a mouse notification; `cursor` is CCursorAttachment::IsActive.
 HotButtonMouseAction hot_button_mouse(const HotButton& b, HotButtonMouse m, bool cursor);
 
 // Which of the menu's rows CHotButton_UpdateContextMenu leaves shown for the button. `gem_spell`: a spell gem button
@@ -79,12 +79,12 @@ bool assign_social(HotButtonStore& store, HotButton& b, std::int32_t social);
 bool assign_label(HotButtonStore& store, HotButton& b, const std::string& text);
 
 // CInvSlotWnd::HandleLButtonHeld @0x699c30 (vtable 0x9eb920 slot 16; the button held down inside the slot) calls
-// FUN_006947f0, which puts a hotbutton for the slot on the cursor when nothing is on it (CCursorAttachment::
+// 0x6947f0, which puts a hotbutton for the slot on the cursor when nothing is on it (CCursorAttachment::
 // RemoveAttachment @0x660f30 answers 1 only then) and the slot is a possessions slot (or the Krono slot, not here):
 //  - an item there and neither Shift nor Ctrl (GetKeyboardFlags & 0xc): an item link (attachment type 14, hotbutton
-//    type 12, FUN_0054ee90) with the item's GUID and item id and no slot (index -1), in a bag or not;
+//    type 12, 0x54ee90) with the item's GUID and item id and no slot (index -1), in a bag or not;
 //  - else, a top-level slot only (sub-index -1): the slot itself (attachment 8, hotbutton 5), with or without an item.
-// No label and no icon of its own (the attachment's text is empty, FUN_00552e00 then sets the icon to (-1, -1)).
+// No label and no icon of its own (the attachment's text is empty, 0x552e00 then sets the icon to (-1, -1)).
 // Nullopt where the original attaches nothing.
 std::optional<HotButton> inventory_hot_button(const net::ItemSlot& slot, const net::Item* item, bool shift_or_ctrl);
 

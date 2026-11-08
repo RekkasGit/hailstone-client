@@ -1,8 +1,8 @@
 // GameConnection: the bank window (CBankWnd), coin moves (CEverQuest::MoveMoney)
 // and the bank's Auto button. Item moves into and out of the bank go
 // through click_slot (net/game_connection_items.cpp) with the rules in
-// game/bank.h. Sources are rof2decomp's export of eqgame.exe (CBankWnd.c,
-// CEverQuest.c, _globals.c), at each function below.
+// game/bank.h. They follow the original's CBankWnd and CEverQuest functions
+// named at each function below.
 //
 // The window has no packets of its own: RightClickedOnPlayer @0x536d80 calls
 // CBankWnd::Activate(banker) for a class 40 spawn when no banker is active
@@ -113,7 +113,7 @@ std::uint32_t* GameConnection::coin_pile(int location, int type) {
 }
 
 bool GameConnection::move_coin(int from, int to, int from_type, int to_type, std::uint32_t amount) {
-    // CEverQuest::MoveMoney @0x51ad70 (game::move_money, rof2decomp batch 261; types here are the wire's, 0 copper
+    // CEverQuest::MoveMoney @0x51ad70 (game::move_money; types here are the wire's, 0 copper
     // .. 3 platinum, the original's coins 3 - type). The packet carries the amount asked, not the converted one
     // (the server converts again, as EQEmu's OPMoveCoin does).
     if (state_ != ConnectionState::InZone || from_type < 0 || from_type > 3 || to_type < 0 || to_type > 3) return false;
@@ -165,7 +165,7 @@ std::int32_t GameConnection::inventory_coin(int coin) const {
 
 game::MoneyButtonOut GameConnection::inventory_money_button(int coin, std::int32_t amount,
                                                             const std::array<std::int32_t, 4>* button_rect) {
-    // CInventoryWnd::ClickedMoneyButton @0x692890 (rof2decomp batch 261).
+    // CInventoryWnd::ClickedMoneyButton @0x692890.
     game::MoneyButtonIn in;
     in.coin = coin;
     in.amount = amount;

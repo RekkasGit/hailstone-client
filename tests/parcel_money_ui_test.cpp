@@ -1,4 +1,4 @@
-// The merchant's Parcels page and the inventory's coin buttons (FUN_00698290 before CInventoryWnd::ClickedMoneyButton's
+// The merchant's Parcels page and the inventory's coin buttons (0x698290 before CInventoryWnd::ClickedMoneyButton's
 // quantity dialog; app/lua_eq_items.cpp, GameConnection::parcel_coin_button / set_parcel_money) over the eq API,
 // against the mock server.
 #include <doctest/doctest.h>

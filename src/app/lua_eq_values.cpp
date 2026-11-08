@@ -14,7 +14,7 @@
 #include "net/game_connection.h"
 
 // Each case names the original's switch case (the label function's byte-table index, or the gauge type) and what
-// it reads. rof2decomp: export/_globals.c (__GetLabelFromEQ, __GetGaugeValueFromEQ), notes/experience-and-aa.md.
+// it reads (__GetLabelFromEQ, __GetGaugeValueFromEQ).
 
 namespace hailstone::app {
 
@@ -129,10 +129,10 @@ LabelValue aggro_pct(int pct) {
     return v;
 }
 
-// FUN_00761560: the meter is locked on a spawn other than its target.
+// 0x761560: the meter is locked on a spawn other than its target.
 bool aggro_locked_elsewhere(const net::GameConnection::Aggro& a) { return a.lock_id != 0 && a.lock_id != a.target_id; }
 
-// The worn primary's skill as FUN_00584f60 picks it: a common (type 0) item that is a weapon gives
+// The worn primary's skill as 0x584f60 picks it: a common (type 0) item that is a weapon gives
 // ItemTypeToSkill of its item type, anything else hand to hand (28).
 std::uint32_t attack_skill(const mechanics::Character& ch) {
     const auto& primary = ch.sheet().possessions[13];
@@ -161,7 +161,7 @@ std::int32_t offense_value(const mechanics::Character& ch, std::uint32_t skill, 
     return std::max(v, 1);
 }
 
-// FUN_00453f50 (skill, include buffs): the weapon skill with its item mods (when the character has the skill),
+// 0x453f50 (skill, include buffs): the weapon skill with its item mods (when the character has the skill),
 // (2 * stat - 150) / 3 for STR (DEX for archery 7 and throwing 51) of 75 and above, the items' ATK (+0x110) and the
 // spell cache's item ATK capped at 250 + SPA 341, and the buffs' ATK (SPA 2; spell 2434 moves 100 of it to the capped
 // part). Not kept: the leadership offense enhancement (Leadership_GetOffenseEnhancementBonus, no packet source) and
@@ -257,7 +257,7 @@ LabelValue stock_label(const EqHost& host, int type) {
         v.argb = ch->stats().weight > ch->stats().stats.str ? 0xffff0000 : kGrey;
         return v;
     }
-    case 25: return int_value(ch ? ch->stats().stats.str : 0); // case 0x18: FUN_00442bf0, the weight limit
+    case 25: return int_value(ch ? ch->stats().stats.str : 0); // case 0x18: 0x442bf0, the weight limit
     case 26: return int_value(static_cast<std::int64_t>(static_cast<long double>(ps.exp) * 0.303031), 0, false, 100); // case 0x19
     case 27: return int_value(static_cast<std::int64_t>(static_cast<long double>(ps.aa_exp) * 0.303031), 0, false, 100); // case 0x1a
     case 73: { // case 0x26: the last name (green for a group leader)
@@ -267,10 +267,10 @@ LabelValue stock_label(const EqHost& host, int type) {
     }
     case 74:                                                  // case 0x27: the title (PlayerBase +0x3dd)
         return {world.player() ? world.player()->title : std::string(), std::nullopt};
-    case 22: { // case 0x15: the displayed AC (FUN_00580330), green / red against it without AC buffs
+    case 22: { // case 0x15: the displayed AC (0x580330), green / red against it without AC buffs
         if (!ch) return int_value(0);
         std::int64_t x = static_cast<std::int64_t>(ch->compute_defense(true)) + ch->stats().ac;
-        // (x * 1000) * 0x9abf9f49 >> 32, + x * 1000, sar 9, + the sign bit: x * 1000 / 847
+        // x * 1000 / 847, the signed division by a multiply with 0x9abf9f49 and shifts, as the original computes it
         std::int64_t v = x * 1000;
         std::int64_t hi = (v * static_cast<std::int64_t>(static_cast<std::int32_t>(0x9abf9f49))) >> 32;
         std::int64_t q = (hi + v) >> 9;
@@ -279,7 +279,7 @@ LabelValue stock_label(const EqHost& host, int type) {
                              ch->total_effect(0x37, true, 0, false, true);
         return int_value(q, q - buffs, true);
     }
-    case 23: { // case 0x16: ATK, FUN_00584f60(1): (offense + attack) * 1000 / 744, against it without SPA 2
+    case 23: { // case 0x16: ATK, 0x584f60(1): (offense + attack) * 1000 / 744, against it without SPA 2
         if (!ch) return int_value(0);
         std::uint32_t skill = attack_skill(*ch);
         std::int64_t atk = (static_cast<std::int64_t>(offense_value(*ch, skill, true)) + attack_value(*ch, c, skill)) * 1000 / 744;
@@ -776,14 +776,14 @@ GaugeValue stock_gauge(const EqHost& host, int type) {
     }
     case 28: { // the respawn timer (case 0x1c): with the respawn window up and the corpse's time set,
         // trunc((1 - min(now - corpse time + 500, total) / total) * 1000), total = CRespawnWnd +0x230 (the packet's
-        // time remaining, FUN_0074e9a0's second argument). A total of 0 divides by zero in the original (x87: NaN or
+        // time remaining, 0x74e9a0's second argument). A total of 0 divides by zero in the original (x87: NaN or
         // inf, __ftol2_sse gives INT_MIN): drawn empty here.
         const auto& rw = c.respawn_window();
         if (!rw) return {-1, {}};
         if (rw->time_remaining_ms == 0) return {0, {}};
         std::int64_t total = static_cast<std::int32_t>(rw->time_remaining_ms);
         std::int64_t e = std::min<std::int64_t>(c.respawn_age_ms() + 500, total);
-        double f = (1.0 - static_cast<double>(e) / static_cast<double>(total)) * 1000.0; // fild, fidiv, fsubr, fmul 1000.0f
+        double f = (1.0 - static_cast<double>(e) / static_cast<double>(total)) * 1000.0;
         return {static_cast<int>(f), {}};
     }
     case 29: { // case 0x1d: the combat timer, min(seconds left, 30) * 1000 / 30; -1 (not drawn) once none is left
@@ -801,8 +801,8 @@ GaugeValue stock_gauge(const EqHost& host, int type) {
 
 GaugeFill gauge_fill(int value) {
     if (value == -2) return {1000, 0xff800000u};
-    if (value >= -110 && value <= -10) return {(value + 110) * 10, 0xff800080u}; // fadd 110.0f, fmul 10.0f
-    if (value >= -2000 && value <= -1000) return {value + 2000, 0xffc08080u};    // fadd 2000.0f
+    if (value >= -110 && value <= -10) return {(value + 110) * 10, 0xff800080u};
+    if (value >= -2000 && value <= -1000) return {value + 2000, 0xffc08080u};
     if (value < 0) return {};
     return {std::min(value, 1000), std::nullopt};
 }

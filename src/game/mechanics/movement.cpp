@@ -21,13 +21,13 @@ std::int32_t wrap_mul(std::int32_t a, std::int32_t b) {
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(a) * static_cast<std::uint32_t>(b));
 }
 std::int32_t wrap_neg(std::int32_t a) { return static_cast<std::int32_t>(0u - static_cast<std::uint32_t>(a)); }
-// idiv: truncating; the original faults on a zero divisor and on INT_MIN / -1 (0 and INT_MIN here).
+// Signed division, truncating; the original faults on a zero divisor and on INT_MIN / -1 (0 and INT_MIN here).
 std::int32_t idiv(std::int32_t a, std::int32_t b) {
     if (b == 0) return 0;
     if (b == -1) return wrap_neg(a);
     return a / b;
 }
-// idiv(wrap_mul(a, b), d) without the pattern MSVC folds (core/wrap_math.h).
+// The wrapped product a * b divided by d (signed) without the pattern MSVC folds (core/wrap_math.h).
 std::int32_t mul_idiv(std::int32_t a, std::int32_t b, std::int32_t d) {
     if (d == 0 || d == -1) return idiv(wrap_mul(a, b), d);
     return core::wrapped_mul_div(a, b, d);
@@ -49,7 +49,7 @@ std::uint32_t bits_of(float v) {
 // An x87 operand: its value, and whether it was a signalling NaN when loaded
 // (converting it to double already made it quiet).
 void stop(SpawnSpeeds& s, std::int32_t rate) {
-    s.speed_multiplier = static_cast<float>(rate); // fild / fstp
+    s.speed_multiplier = static_cast<float>(rate); // the integer stored as a float
     s.speed_run = s.speed_y = s.speed_x = s.speed_heading = 0.0f;
 }
 
@@ -77,11 +77,11 @@ bool apply_movement_rate(std::int32_t rate, bool running, const Spa271Caches& sp
     }
     if (rate < -65) rate = -65;
     std::int32_t magnitude = rate < 0 ? -rate : rate;
-    // fild |rate| / fmul 0.01f / fst percent / fmul RunSpeed / fstp.
+    // |rate| * 0.01f (stored as the percent, kept unrounded) * RunSpeed, stored as a float.
     double p = f.mul(static_cast<double>(magnitude), static_cast<double>(kHundredth));
     auto percent = static_cast<float>(p);
     spawn.speed_multiplier = static_cast<float>(f.mul(p, static_cast<double>(spawn.run_speed)));
-    if (rate < 0) spawn.speed_multiplier = -spawn.speed_multiplier; // fchs
+    if (rate < 0) spawn.speed_multiplier = -spawn.speed_multiplier;
     if (running) {
         std::uint32_t sum = static_cast<std::uint32_t>(spa271.buff) + static_cast<std::uint32_t>(spa271.aa);
         if (items_count) sum += static_cast<std::uint32_t>(spa271.item);
@@ -113,16 +113,16 @@ float set_accel(float current, float target, bool immediate, std::optional<Accel
                 float run_speed, const Fpu& f) {
     if (target == current) return current;
     if (immediate || !rider) return through_fpu(target);
-    // fld scale / fmul 50.0f / fmul RunSpeed / fstp.
+    // scale * 50.0f * RunSpeed, stored as a float.
     auto rate = static_cast<float>(x87_mul(f, x87_mul(f, X87(rate_scale), X87(50.0)), X87(run_speed)));
     bool rising = current < target;
     double divisor = (!rider->has_pc || rider->pc_flag) ? 1500.0 : (rising ? 400.0 : 200.0);
-    double step = x87_div(f, X87(rate), X87(divisor)); // fld divisor / fdivr rate
+    double step = x87_div(f, X87(rate), X87(divisor)); // rate / divisor
     if (rising) {
-        double next = x87_add(f, X87(step), X87(current)); // fadd / fst
+        double next = x87_add(f, X87(step), X87(current)); // rounds to float only when stored
         return static_cast<double>(target) < next ? through_fpu(target) : static_cast<float>(next);
     }
-    double next = x87_sub(f, X87(current), X87(step)); // fsubr
+    double next = x87_sub(f, X87(current), X87(step));
     return static_cast<double>(target) > next ? through_fpu(target) : static_cast<float>(next);
 }
 
@@ -136,16 +136,16 @@ float cap_speed_multiplier(float speed_multiplier, std::int32_t spa290, const Fp
 
 double swimming_speed(float base, std::int32_t swimming_skill, const Fpu& f, float speed_scale, float skill_scale,
                       float* scaled_base) {
-    // fld scale / fmul base / fstp base.
+    // scale * base, stored as the base.
     auto scaled = static_cast<float>(x87_mul(f, static_cast<double>(through_fpu(speed_scale)), X87(base)));
     if (scaled_base) *scaled_base = scaled;
-    // fild skill / fmul qword 0.01 / fmul scale / fadd base.
+    // skill * 0.01 (a double) * scale + base.
     double skill = f.mul(static_cast<double>(swimming_skill), 0.01);
     return x87_add(f, x87_mul(f, skill, X87(skill_scale)), X87(scaled));
 }
 
 float add_physics_pitch(float pitch, float delta, bool riding_controlled_mount, const Fpu& f) {
-    // fld pitch / fadd delta / fst pitch; fcom 128.0f; fcomp minimum.
+    // pitch + delta, stored as the pitch; the unrounded sum compared with 128.0f and the minimum.
     double sum = x87_add(f, static_cast<double>(through_fpu(pitch)), X87(delta));
     float minimum = riding_controlled_mount ? -64.0f : -128.0f;
     if (128.0 < sum) return 128.0f;
@@ -172,7 +172,7 @@ float calculate_weight(const WeightInput& in, const Fpu& f) {
     float factor = 1.0f;
     int threshold = in.low_level_exempt_off ? 0 : 3;
     if (static_cast<double>(in.max_hp) > static_cast<double>(hpf) && in.level > threshold) {
-        double ratio = f.div(hpf, static_cast<float>(in.max_hp)); // fld max / fdivr hp
+        double ratio = f.div(hpf, static_cast<float>(in.max_hp)); // hp / max
         if (static_cast<double>(0.2f) > ratio && 50.0f > hpf) factor = 0.5f;
         else if (ratio < static_cast<double>(0.33f) && hpf < 100.0f) factor = 0.75f;
     }
@@ -202,7 +202,7 @@ std::uint32_t encumbrance_message(std::int32_t& shown, std::int32_t carried, std
 
 std::int32_t calc_carried_weight(std::span<const CarriedItem> items, std::int32_t spa221, const Fpu& f) {
     float total = 0.0f;
-    auto tenth = [&](std::int32_t w) { // fild / fmul 0.1f / fstp
+    auto tenth = [&](std::int32_t w) { // w * 0.1f, stored as a float
         return static_cast<float>(f.mul(static_cast<double>(w), static_cast<double>(0.1f)));
     };
     for (const CarriedItem& item : items) {
@@ -263,7 +263,7 @@ AirSupply process_air_supply(std::int32_t air, bool breathe, std::int32_t max_ai
                              const Fpu& f) {
     if (breathe) return {max_air, 0};
     if (air >= 1) return {air - 1, 0};
-    // fild Max_HP / fmul qword 0.125 / __ftol2.
+    // Max_HP * 0.125 (a double), truncated.
     std::int32_t damage = Fpu::ftol(f.mul(static_cast<double>(max_hp), 0.125));
     return {0, damage > 0 ? damage : 0};
 }
@@ -272,13 +272,13 @@ AirSupply process_air_supply(std::int32_t air, bool breathe, std::int32_t max_ai
 
 FallDamage apply_fall_damage(const FallDamageInput& in, const Fpu& f) {
     FallDamage out;
-    // fild CurrWeight / fmul 0.01f / fadd v / fsub 1.5f, kept on the FPU.
+    // CurrWeight * 0.01f + v - 1.5f, never rounded to a float.
     double v = f.sub(f.add(f.mul(static_cast<double>(in.carried), static_cast<double>(kHundredth)), in.fall_speed), 1.5);
     std::int32_t damage = 0;
     if (v >= 9.0) {
         damage = kLethalFall;
     } else if (0.0 < v) {
-        damage = Fpu::ftol(f.mul(f.mul(10.0, v), v)); // fld 10.0f / fmul st(1) / fmulp
+        damage = Fpu::ftol(f.mul(f.mul(10.0, v), v)); // 10 * v * v
         if (damage > 0) {
             std::int32_t agi = in.heroic_agi_bonus;
             damage = wrap_add(damage, wrap_neg(mul_idiv(agi, damage, wrap_add(agi, 1000))));
@@ -309,14 +309,14 @@ SwimJump do_swim_jump(bool jump, bool surface_clear, float swim_strength, float 
     if (!jump) return out;
     out.surface_probed = true;
     if (!surface_clear) return out;
-    // fld SwimStrength / fmul 3.0f / fadd SpeedZ / fstp.
+    // SwimStrength * 3.0f + SpeedZ, stored as a float.
     out.speed_z = static_cast<float>(x87_add(f, X87(x87_mul(f, X87(swim_strength), X87(3.0))), X87(speed_z)));
     out.jumped = true;
     return out;
 }
 
 glm::vec3 swim_probe_point(const glm::vec3& spawn, float heading, float avatar_height, const Fpu& f) {
-    // fld Heading / table +0xc (cos) / fmul height / fstp ahead; fld Heading / table +8 (sin) / fmul height (kept);
+    // cos(Heading) (table +0xc) * height stored as ahead; sin(Heading) (table +8) * height kept unrounded;
     // y + ahead, that + x, z - 1, each stored.
     auto ahead = static_cast<float>(x87_mul(f, X87(static_cast<double>(table_cos(heading))), X87(avatar_height)));
     double side = x87_mul(f, X87(static_cast<double>(table_sin(heading))), X87(avatar_height));
@@ -369,7 +369,7 @@ constexpr std::int32_t kJumpMaxCost = 50;
 } // namespace
 
 std::uint32_t jump_crouch_window(std::optional<double> length) {
-    // fistp qword under a chop control word, the low dword; inc; `cmp esi, 0x1f4; ja` keeps 500.
+    // Truncated to 64 bits, the low dword; plus one; above 500 (unsigned) keeps 500.
     if (!length || !(*length > -2147483648.0 && *length < 2147483648.0)) return kJumpWindowMs;
     std::uint32_t w = static_cast<std::uint32_t>(static_cast<std::int32_t>(std::trunc(*length))) + 1u;
     return w > kJumpWindowMs ? kJumpWindowMs : w;
@@ -399,7 +399,7 @@ void main_loop_jump(JumpState& g, JumpSpawn& s, JumpQueries& q, std::uint32_t no
     if (g.jump_started == 0) return;
     const std::uint32_t window = q.crouch_window();
     auto dirty = [&] { (s.local ? g.local_dirty : g.other_dirty) = true; };
-    // fld +0x10 / fmul 1.65f [/ fmulp CalculateWeight] / fadd SpeedZ / fstp SpeedZ.
+    // +0x10 * 1.65f [* CalculateWeight] + SpeedZ, stored as SpeedZ.
     auto lift = [&] {
         double weight = s.local ? q.calculate_weight() : 1.0;
         double v = x87_mul(f, X87(s.jump_strength), X87(kJumpScale));
@@ -419,7 +419,7 @@ void main_loop_jump(JumpState& g, JumpSpawn& s, JumpQueries& q, std::uint32_t no
             s.speed_z = static_cast<float>(x87_add(f, X87(s.speed_z), X87(kJumpSwimLift)));
             return;
         }
-        // fldz / fcom SpeedRun: moving forward (0 < SpeedRun; NaN is not) jumps at once.
+        // Moving forward (0 < SpeedRun; NaN is not) jumps at once.
         if (0.0f < s.speed_run) {
             g.jump_started = 0;
             if (!q.feet_on_ground()) return;
@@ -431,7 +431,7 @@ void main_loop_jump(JumpState& g, JumpSpawn& s, JumpQueries& q, std::uint32_t no
             spend();
             return;
         }
-        // fcomp SpeedRun: moving back drops the jump; still (or NaN) crouches.
+        // Moving back drops the jump; still (or NaN) crouches.
         if (0.0f > s.speed_run) {
             g.jump_started = 0;
             return;
@@ -518,7 +518,7 @@ public:
         ev_.swim_jumped = ctl_.swim_jump(true, ctl_.swim_surface_clear, now_) || ev_.swim_jumped;
     }
     void proc_mouse(bool) override {}
-    // FUN_00516cd0 on that spawn's Angle (+0x84): at least -64 for both while the local player's mount is the
+    // 0x516cd0 on that spawn's Angle (+0x84): at least -64 for both while the local player's mount is the
     // controlled player (@0x516cd0 asks pinstLocalPlayer's GetMount), else -128. Riding, the mount's pitch is the
     // body's; the rider's own is overwritten on its next physics step (PhysicsObject::vf8 @0x59e170: the local
     // rider's Angle = its mount actor's pitch, vf8c), so the rider and the camera look where the mount does.
@@ -603,7 +603,7 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
     ControlEvents ev;
     PhysicsBody& b = body;
     b.dead = ch.dead;
-    // ProcessControls (controls.h, the exact port) on the local player.
+    // ProcessControls (controls.h, the original's rules) on the local player.
     ControlsState& s = controls_;
     // The held keys are the key handlers' (command()); the drivers' keys add to them for this frame.
     const ControlKeys held = s.keys;
@@ -641,7 +641,7 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
                     : crouching  ? kStandDucking
                                  : kStandStanding;
     if (ch.riding) {
-        // The mount stands (FUN_004b15b0 keeps a mount race's StandState at 100); a frozen rider (stunned, the
+        // The mount stands (0x4b15b0 keeps a mount race's StandState at 100); a frozen rider (stunned, the
         // PcBase's +0xfc) keeps it still. The rider is the local player of ProcessControls' questions.
         c.stand_state = ch.frozen || ch.dead ? kStandFrozen : kStandStanding;
         c.sneaking = false;

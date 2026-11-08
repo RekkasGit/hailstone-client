@@ -796,7 +796,7 @@ void h_set_vitals(void* h, const HailstoneVitals* v) {
         return;
     }
     l.vitals = *v;
-    // As the server's client writes them into its profile (the NMS patch's FUN_10153300): the player's current
+    // As the server's client writes them into its profile (the NMS patch's 0x10153300): the player's current
     // points now, until the next update changes them. Negative values count as 0 there.
     net::GameConnection* c = connection_of(l);
     if (!c) return;

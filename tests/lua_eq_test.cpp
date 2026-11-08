@@ -26,7 +26,7 @@
 
 using namespace hailstone;
 
-TEST_CASE("eq_percent: FUN_004b37a0, cur / (max * 0.01f) truncated") {
+TEST_CASE("eq_percent: 0x4b37a0, cur / (max * 0.01f) truncated") {
     CHECK(app::eq_percent(59, 59) == 100);
     CHECK(app::eq_percent(0, 59) == 0);
     CHECK(app::eq_percent(5, 0) == 0);

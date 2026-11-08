@@ -1,9 +1,9 @@
 #pragma once
 
 // Training skills and languages at a guildmaster: the training window's rows
-// (CTrainWnd::SetGMData @0x7824a0), the cost (FUN_00584a30), the checks
-// before a train request (PcZoneClient_CanTrainSkillOrLanguage @0x5855a0,
-// rof2decomp re/src/game/character/can_train.cpp) and which languages a
+// (CTrainWnd::SetGMData @0x7824a0), the cost (0x584a30), the checks
+// before a train request (PcZoneClient_CanTrainSkillOrLanguage @0x5855a0)
+// and which languages a
 // character may learn (PcClient::checkLang @0x581800). Pure rules; the
 // packets are handled in net/game_connection_progress.cpp.
 
@@ -48,13 +48,13 @@ struct TraineeView {
     std::function<std::int32_t(std::uint32_t)> language; // CharacterBase +0x14 bytes
     // CSkillMgr::GetSkillCap(no character, level 100, class, skill).
     std::function<std::int32_t(std::uint32_t)> class_cap;
-    // FUN_005baa20: the level the class first gets the skill (0 never).
+    // 0x5baa20: the level the class first gets the skill (0 never).
     std::function<std::int32_t(std::uint32_t)> min_level;
     // PcClient::AtSkillLimit @0x584e50 (the value >= pc_skill_limit); unset: not checked.
     std::function<bool(std::uint32_t)> at_skill_limit;
 };
 
-// What PcZoneClient::GetPcSkillLimit @0x584be0 asks of the character (rof2decomp batch 257, vector GetPcSkillLimit).
+// What PcZoneClient::GetPcSkillLimit @0x584be0 asks of the character (recorded vector GetPcSkillLimit).
 struct SkillLimitView {
     std::int32_t level = 0;   // the virtual base's virtual +0x68 (passed to GetSkillCap as the level)
     std::uint8_t class_id = 0; // profile +0x3374
@@ -68,7 +68,7 @@ struct SkillLimitView {
 
 // PcZoneClient::GetPcSkillLimit @0x584be0: the skill cap; for a tradeskill (60, 61, 63, 64, 65, 68, 69) that is not
 // level capped, 200 once at least 1 + SPA 263 of the other ones are above 200; for a specialization (43..47,
-// FUN_005ba150), the first limit (50, or 5 x highest level - 300 above level 70, or above 64 with the highest level
+// 0x5ba150), the first limit (50, or 5 x highest level - 300 above level 70, or above 64 with the highest level
 // above 70) when at least one (two with SPA 248) of the other specializations is above it, else the second (100,
 // or 5 x highest - 250) when any is above that, else the cap.
 std::int32_t pc_skill_limit(const SkillLimitView& who, std::uint32_t skill);
@@ -83,7 +83,7 @@ bool can_learn_language(const TraineeView& who, std::uint32_t language);
 std::vector<TrainingRow> training_rows(const TraineeView& who, const std::array<std::uint32_t, kTrainSkills>& skill_caps,
                                        const std::array<std::uint8_t, kTrainLanguages>& language_caps);
 
-// FUN_00584a30: the cost in copper to train `value` (the current skill or language value) one point:
+// 0x584a30: the cost in copper to train `value` (the current skill or language value) one point:
 // (value - 10)^3 / 100, 0 at 10 or below.
 std::int32_t training_cost(std::int32_t value);
 

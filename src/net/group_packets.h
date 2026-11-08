@@ -5,7 +5,7 @@
 // and endurance percentages. Layouts follow the NMS server's RoF2 translator
 // (common/patches/rof2.cpp ENCODE/DECODE, rof2_structs.h) and, for
 // pass-through opcodes, common/eq_packet_structs.h. What the client sends and
-// when follows the original (rof2decomp export: DoGroupInvite @0x524ee0,
+// when follows the original (DoGroupInvite @0x524ee0,
 // Handle_OP_GroupInvite2 @0x525400, Send_OP_GroupFollow2 @0x525690,
 // Cmd_disband @0x4e8c50, Cmd_makeleader @0x4ef340, HandleWorldMessage_Group
 // @0x578000, CGroupBase_HandleGroupUpdateB @0x7d6320). Per-packet notes are in

@@ -1,6 +1,6 @@
 // The mercenary windows: MMTW_MerchantWnd (CMercenaryMerchantWnd), MMGW_ManageWnd (CMercenaryManageWnd) and
 // MIW_InfoWnd (the info window) over GameConnection's mercenary manager (game/mercenary.h,
-// net/game_connection_merc.cpp). What each child shows follows rof2decomp notes/mercenaries.md §4: the merchant's
+// net/game_connection_merc.cpp). What each child shows follows the original's: the merchant's
 // type combo and subtype list (CMercenaryMerchantWnd_FillMercTypeList @0x6ecbb0), the costs as cost / 10 platinum
 // and cost % 10 gold, the manage window's buttons by state (CMercenaryManageWnd_UpdateButtons @0x6e5770, the
 // suspend button @0x6e63b0), TimeLeftText and its tooltip, and the owned list (the fill at 0x6e6c70).
@@ -155,7 +155,7 @@ private:
         auto e = entries(host);
         row_ = row >= 0 && static_cast<std::size_t>(row) < e.size() ? row : -1;
         stance_row_ = 0;
-        if (row_ >= 0) host.conn->merc_select_entry(e[static_cast<std::size_t>(row_)]); // FUN_00566b00
+        if (row_ >= 0) host.conn->merc_select_entry(e[static_cast<std::size_t>(row_)]); // 0x566b00
     }
 
     std::uint32_t serial_ = 0;

@@ -34,18 +34,47 @@ PickCall pick_call(const PickCallInput& in) {
 }
 
 std::uint32_t guildmaster_string_id(std::int32_t c) {
-    // FUN_005151b0's table (rof2decomp re/src/game/core/lookup_005151b0.inc).
-    static constexpr std::uint32_t k1to16[] = {0x5de, 0x5e2, 0x5e6, 0x5ee, 0x5ea, 0x5f2, 0x5f6, 0x5fa,
-                                               0x5fe, 0x602, 0x606, 0x60a, 0x60e, 0x612, 0x616, 0x169f};
-    static constexpr std::uint32_t k20to35[] = {0x5cf, 0x5d0, 0x5d1, 0x5d3, 0x5d2, 0x5d4, 0x5d5, 0x5d6,
-                                                0x5d7, 0x5d8, 0x5d9, 0x5da, 0x5db, 0x5dc, 0x5dd, 0x16a0};
-    if (c >= 1 && c <= 16) return k1to16[c - 1];
-    if (c >= 20 && c <= 35) return k20to35[c - 20];
+    // 0x5151b0's table: classes 1..15 take every fourth id from 0x5de, their guildmasters 20..34 every id from
+    // 0x5cf, both with the fourth and the fifth swapped; the Berserker (16) and its guildmaster (35) came later.
+    auto swap_fourth_fifth = [](std::int32_t i) { return i == 3 ? 4 : i == 4 ? 3 : i; };
+    if (c >= 1 && c <= 15) return 0x5de + 4 * static_cast<std::uint32_t>(swap_fourth_fifth(c - 1));
+    if (c == 16) return 0x169f;
+    if (c >= 20 && c <= 34) return 0x5cf + static_cast<std::uint32_t>(swap_fourth_fifth(c - 20));
+    if (c == 35) return 0x16a0;
     if (c == 40) return 0x5ce;
     if (c == 41) return 0x5cd;
     if (c == 66) return 0x17de;
     return 0x998;
 }
+
+namespace {
+
+// The click lines' description by the spawn's +0xeb9 (0, 1 or anything else).
+std::uint32_t by_eb9(std::uint8_t eb9, std::uint32_t zero, std::uint32_t one, std::uint32_t other) {
+    if (eb9 == 0) return zero;
+    return eb9 == 1 ? one : other;
+}
+
+// The classes whose click lines are fixed (the bankers, the merchants and the like): the kind and the description.
+struct ClassClickLines {
+    std::uint8_t class_id;
+    std::uint32_t kind;
+    std::uint32_t what;
+};
+constexpr ClassClickLines kClassClickLines[] = {
+    {0x28, 0x5ce, 0x1a83},
+    {0x29, 0x5cd, 0x1a82},
+    {0x3c, 0x253, 0x1a7f},
+    {0x3d, 0x1d7f, 0x1a80},
+};
+
+const ClassClickLines* fixed_class_lines(std::uint8_t c) {
+    for (const ClassClickLines& row : kClassClickLines)
+        if (row.class_id == c) return &row;
+    return nullptr;
+}
+
+} // namespace
 
 LeftClickResult left_clicked_on_player(const LeftClickInput& in, std::uint32_t guildmaster_string) {
     using F = LeftClickCall::Fn;
@@ -73,40 +102,35 @@ LeftClickResult left_clicked_on_player(const LeftClickInput& in, std::uint32_t g
     }
     bool show = false;
     bool named = true;
-    if (s.type == 0) {
-        kind = 0x1a88;
-        what = s.is_local_player ? 0x1a8b : s.eb9 == 0 ? 0x1a89 : s.eb9 == 1 ? 0x1a8a : 0x1a8d;
+    auto my_guildmaster = [&](std::uint8_t c) {
+        if (c < 0x14 || c > 0x22) return false;
+        calls.push_back({F::IsGuildmasterForMyClass});
+        return s.guildmaster_for_my_class;
+    };
+    auto set_lines = [&](std::uint32_t k, std::uint32_t w) {
+        kind = k;
+        what = w;
         show = true;
+    };
+    const ClassClickLines* fixed = s.type == 0 || s.virtual_58 ? nullptr : fixed_class_lines(s.class_id);
+    if (s.type == 0) {
+        set_lines(0x1a88, s.is_local_player ? 0x1a8b : by_eb9(s.eb9, 0x1a89, 0x1a8a, 0x1a8d));
     } else if (s.virtual_58) {
         named = false;
-        kind = 0x180c;
-        what = 0x1a7e;
-        show = true;
+        set_lines(0x180c, 0x1a7e);
+    } else if (fixed) {
+        set_lines(fixed->kind, fixed->what);
+    } else if (my_guildmaster(s.class_id)) {
+        calls.push_back({F::GuildmasterString, s.class_id});
+        kind = guildmaster_string;
+        what = 0x1a84;
+        show = kind != 0;
+    } else if (s.type >= 2 && s.race < 0x64) {
+        set_lines(0x1a6f, 0x1a7d);
+    } else if (s.race < kRaceAlwaysClickTargetable && targetable()) {
+        set_lines(0x1a70, by_eb9(s.eb9, 0x1a8e, 0x1a8f, 0x1a85));
     } else {
-        std::uint8_t c = s.class_id;
-        if (c == 0x28) {
-            kind = 0x5ce, what = 0x1a83, show = true;
-        } else if (c == 0x29) {
-            kind = 0x5cd, what = 0x1a82, show = true;
-        } else if (c == 0x3c) {
-            kind = 0x253, what = 0x1a7f, show = true;
-        } else if (c == 0x3d) {
-            kind = 0x1d7f, what = 0x1a80, show = true;
-        } else if (c >= 0x14 && c <= 0x22 &&
-                   (calls.push_back({F::IsGuildmasterForMyClass}), s.guildmaster_for_my_class)) {
-            calls.push_back({F::GuildmasterString, c});
-            kind = guildmaster_string;
-            what = 0x1a84;
-            show = kind != 0;
-        } else if (s.type >= 2 && s.race < 0x64) {
-            kind = 0x1a6f, what = 0x1a7d, show = true;
-        } else if (s.race < kRaceAlwaysClickTargetable && targetable()) {
-            kind = 0x1a70;
-            what = s.eb9 == 0 ? 0x1a8e : s.eb9 == 1 ? 0x1a8f : 0x1a85;
-            show = true;
-        } else {
-            show = kind != 0 && what != 0;
-        }
+        show = kind != 0 && what != 0;
     }
     if (show && in.click_lines) {
         out.lines = true;
@@ -129,13 +153,18 @@ LeftClickResult left_clicked_on_player(const LeftClickInput& in, std::uint32_t g
 }
 
 std::uint32_t switch_damage(std::uint8_t type) {
-    switch (type) {
-    case 115: case 116: case 130: case 135: return 4;
-    case 120: case 125: return 30;
-    case 140: case 145: case 150: case 151: return 10;
-    case 146: case 152: return 50;
-    default: return 0;
-    }
+    // The trap types that hurt, by type; every other switch does no damage.
+    struct TrapDamage {
+        std::uint8_t type;
+        std::uint32_t damage;
+    };
+    static constexpr TrapDamage kTraps[] = {
+        {115, 4},  {116, 4},  {120, 30}, {125, 30}, {130, 4},  {135, 4},
+        {140, 10}, {145, 10}, {146, 50}, {150, 10}, {151, 10}, {152, 50},
+    };
+    for (const TrapDamage& trap : kTraps)
+        if (trap.type == type) return trap.damage;
+    return 0;
 }
 
 } // namespace hailstone::game

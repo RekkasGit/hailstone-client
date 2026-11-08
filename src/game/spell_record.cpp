@@ -280,8 +280,10 @@ SpellRecord unknown_spell_record() {
     r.text(0x47a, std::string_view("An unknown spell is gone.", 26));
     // NOLINTEND(bugprone-string-constructor)
     r.u8(0x26b, 0);
-    for (std::uint32_t off : {0x154u, 0x17cu, 0x180u, 0x184u, 0x1a4u, 0x1a8u, 0x1b4u, 0x1b8u, 0x1bcu, 0x1c0u, 0x1c4u,
-                              0x1ccu, 0x16cu, 0x1acu, 0x1b0u, 0x1d4u, 0x1d8u, 0x1dcu, 0x4e4u})
+    // Then these dwords are cleared (none overlaps another, so the order does not matter): 0x1a4..0x1c4 in a run,
+    // and the rest one by one.
+    for (std::uint32_t off = 0x1a4; off <= 0x1c4; off += 4) r.i32(off, 0);
+    for (std::uint32_t off : {0x154u, 0x16cu, 0x17cu, 0x180u, 0x184u, 0x1ccu, 0x1d4u, 0x1d8u, 0x1dcu, 0x4e4u})
         r.i32(off, 0);
     r.u16(0x241, 0);
     r.u8(0x4da, 0);
@@ -320,8 +322,8 @@ std::uint32_t mem_checker1(std::span<const std::uint8_t> data) { return ~mem_che
 
 std::uint32_t spell_record_crc(const SpellRecord& record) {
     std::uint32_t crc = mem_checker0(std::span<const std::uint8_t>(record.data(), kSpellCrcBytes));
-    std::uint32_t b0 = crc & 0xff, b1 = crc >> 8 & 0xff, b2 = crc >> 16 & 0xff, b3 = crc >> 24;
-    return b1 | b3 << 8 | b0 << 16 | b2 << 24;
+    // The CRC's bytes 0..3 go to bytes 2, 0, 3, 1 of the result.
+    return (crc >> 8 & 0x000000ffu) | (crc >> 16 & 0x0000ff00u) | (crc << 16 & 0x00ff0000u) | (crc << 8 & 0xff000000u);
 }
 
 } // namespace hailstone::game

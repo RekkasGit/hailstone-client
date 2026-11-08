@@ -8,13 +8,11 @@
 // PlayerPhysics::IntegrateHeading @0x8d1e80 and PlayerBase::MyFeetAreOnGround
 // @0x8cfca0. Collision (DoCollisionMovement) is the caller's.
 //
-// Sources: rof2decomp re/src/game/spawn/physics_helpers_s10.cpp (rewritten and
-// tested: MyFeetAreOnGround, vf0, vf4, PushAlongHeading), physics_steps_s10.cpp
-// (SetAccel, the strafe vf14), batch 240's physics_step_eh.cpp and
-// physics_env.cpp (Step, GetEnvCoefficients, LandingAndFallCheck: the exact
-// ports at the end of this header) and batch 246's physics_friction.cpp (vf3,
-// ApplyFriction, SlowInMode5); each step names its address. All of them are
-// checked against the original's vectors (tests/movement_vectors_test.cpp).
+// Sources: the original's MyFeetAreOnGround, vf0, vf4, PushAlongHeading,
+// SetAccel, the strafe vf14, Step, GetEnvCoefficients, LandingAndFallCheck (at
+// the end of this header, following the original exactly), vf3, ApplyFriction
+// and SlowInMode5; each step names its address. All of them are checked against
+// the original's vectors (tests/movement_vectors_test.cpp).
 //
 // Units are the original's: positions in world units, velocities in world
 // units per physics tick, where one tick is 50 ms (Step: dt = elapsed_ms *
@@ -23,9 +21,10 @@
 // heading 0 faces +Y; here heading 0 faces +X, counterclockwise, so the
 // original's "cos(heading) to Y, sin(heading) to X" is "cos to x, sin to y".
 //
-// Float math: the original runs on the x87 FPU, which Direct3D 9 sets to
-// 24-bit precision, so every operation rounds to a float; this code computes
-// in float in the same order. The exact ports take the precision (fpu.h).
+// Float math: the original runs on the x87 FPU, which Direct3D 9 sets to 24-bit
+// precision, so every operation rounds to a float; this code computes in float
+// in the same order. The functions that follow the original exactly take the
+// precision (fpu.h).
 //
 // Friction and the run-speed push are applied once per call (per frame), not
 // scaled by the elapsed time, exactly as in the original: like the original,
@@ -97,7 +96,7 @@ struct PhysicsBody {
     bool dead = false;             // StandState 120: Step's vf13 stops the speeds
     float fall_start_z = -1e27f;   // +0x20c: the feet's z where a fall began (LandingAndFallCheck)
     float buoyancy = 0.0f;         // 0xddfd78: 2.0 while CMD_MOVE_DOWN is held (ProcessControls)
-    float walk_speed = 0.0f;       // +0x330: vf64, which FUN_008d0800 compares with SpeedRun
+    float walk_speed = 0.0f;       // +0x330: vf64, which 0x8d0800 compares with SpeedRun
     std::int32_t colliding_type = 0; // +0x24 CollidingType: DoCollisionMovement zeroes it on every step
                                      // that is not still; a door hit sets 3 (the switch's actor type)
 };
@@ -146,12 +145,11 @@ void push_along_heading(PhysicsBody& body, float amount);
 float heading_sin(float heading);
 float heading_cos(float heading);
 
-// ------------------------------------------------- exact ports (batch 240)
+// ------------------------------------------------- the original's Step, env, landing
 //
-// rof2decomp batch 240 rewrote PhysicsObject::Step, GetEnvCoefficients and
-// LandingAndFallCheck (re/src/game/spawn/physics_step_eh.cpp and
-// physics_env.cpp) and recorded vectors from the original for all three.
-// The functions below are those rewrites, on the original's own fields, with
+// PhysicsObject::Step, GetEnvCoefficients and LandingAndFallCheck, with
+// vectors recorded from the original for all three.
+// The functions below follow them on the original's own fields, with
 // every question the original asks a virtual or another function turned
 // into a query, so tests/movement_vectors_test.cpp can feed them the
 // recorded answers. env_coefficients() and the controller's landing run on
@@ -184,7 +182,7 @@ class EnvQueries {
 public:
     virtual ~EnvQueries() = default;
     virtual bool spawn_vf90() = 0;            // PlayerClient +0x90 (a race check): gravity although not walking
-    virtual bool possibly_stuck() = 0;        // FUN_008cfc90: PlayerBase +0x124
+    virtual bool possibly_stuck() = 0;        // 0x8cfc90: PlayerBase +0x124
     virtual bool collision_zone_loaded() = 0; // pinstCollision +0x44 (asked up to three times)
     virtual float gravity() = 0;              // the physics manager's +0x10
     virtual bool mount_race() = 0;            // PlayerBase_IsMountRace
@@ -196,7 +194,7 @@ public:
     virtual bool controlled() = 0;            // PlayerClient +0x6c: this is pinstControlledPlayer
     virtual bool spawn_vf50() = 0;            // PlayerClient +0x50: race and gender info set
     virtual float floor_at(float y, float x, float z) = 0; // the physics manager's +0x14: -1e27 without a floor
-    virtual bool rising() = 0;                // FUN_008d0800
+    virtual bool rising() = 0;                // 0x8d0800
     virtual float buoyancy() = 0;             // this->vf15(spawn, &out)
 };
 
@@ -234,7 +232,7 @@ public:
     virtual bool spawn_vf58() = 0;          // PlayerClient +0x58
     virtual bool player_spawn() = 0;        // IsSpawnInfoPlayerSpawn
     virtual std::int32_t sound_race() = 0;  // PlayerClient +0x88 (0x7f: no landing sound)
-    virtual bool rider_zone_client() = 0;   // FUN_0058cfb0: a non-player spawn's rider
+    virtual bool rider_zone_client() = 0;   // 0x58cfb0: a non-player spawn's rider
     virtual bool no_recovery() = 0;         // PlayerClient +0x7c
     // CDisplay::GetFloorHeight from (y, x, z) down; -1e27 without a floor.
     virtual float floor_below(float y, float x, float z) = 0;
@@ -255,7 +253,7 @@ struct LandingResult {
     bool land_sound = false;         // sound 0x72
     bool vehicle_fall_sent = false;  // 0x65c7: a flung player spawn landed
     bool fling_stopped = false;      // PlayerClient +0x30(0)
-    // FUN_005024b0: placed on a recovered floor (y, x, z, heading).
+    // 0x5024b0: placed on a recovered floor (y, x, z, heading).
     std::optional<glm::vec4> placed;
 };
 
@@ -263,7 +261,7 @@ struct LandingResult {
 LandingResult landing_and_fall_check(LandingSpawn& spawn, LandingQueries& q, const LandingWorld& world,
                                      const Fpu& fpu = Fpu{});
 
-// The math table (CMath, rof2decomp notes/eqgraphicsdx9.md): 512 floats,
+// The math table (CMath): 512 floats,
 // cos(i * pi/256) at +4 and sin at +0x804, the quadrant entries exact; its
 // vtable +8 (sin) and +0xc (cos) return table[(int)trunc(angle) & 511], with
 // no interpolation. heading_sin / heading_cos above use it.
@@ -280,7 +278,7 @@ public:
     virtual void add_push(float push[3]) = 0;                     // PhysicsObject vf4 (+0x10), with a spawn
 };
 
-// PhysicsObject::vf3 @0x8d2040 (rof2decomp batch 246): with a SpeedRun that
+// PhysicsObject::vf3 @0x8d2040: with a SpeedRun that
 // is not 0, push[0] += cos(heading) * SpeedRun and push[1] += sin(heading) *
 // SpeedRun (the products unrounded), and with a camera angle that is not 0,
 // push[2] += vf0(sin(angle) * SpeedRun); with a spawn vf4 adds to the push;

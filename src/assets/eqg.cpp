@@ -727,8 +727,7 @@ std::vector<HeightmapObject> parse_tog(std::span<const std::byte> data) {
             // CEQTerrainObject::UpdateActorTransform @0x100a3060 passes the
             // degrees x 1.4222 to the actor's Rz(a) Ry(-b) Rx(c) without the
             // pre-negation .zon placements get, so the Y angle turns the other
-            // way (rof2decomp notes/eqgraphicsdx9.md, EQG placement tilt;
-            // medium confidence, see docs/unknowns.md).
+            // way (medium confidence, see docs/unknowns.md).
             out.push_back({model, heightmap_transform(pos, {rot.x, -rot.y, rot.z}, scale)});
         }
     }

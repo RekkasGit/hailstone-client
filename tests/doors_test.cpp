@@ -733,7 +733,7 @@ float ride(std::uint8_t type, int frames) {
 TEST_CASE("a rising elevator (a floor switch) lifts its rider through the floor test, not a carry") {
     // Type 0x3b rises 0.45 per tick: after 20 one-tick frames about 9 units; the rider's cache is reset each frame
     // and its floor follows the top. Type 0x3c (not a floor switch) rises too, but a rider standing still keeps its
-    // cached floor (the original's behaviour; notes/lifts.md).
+    // cached floor (the original's behaviour).
     float up = ride(0x3b, 20);
     CHECK(up > 12.0f);
     float stale = ride(0x3c, 20);

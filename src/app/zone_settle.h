@@ -1,8 +1,8 @@
 #pragma once
 
 // The loading screen's last stretch after a zone-in. The original loads everything it shows before it leaves the
-// loading screen (ProcessGame's zone-in runs to "Initialization complete." with the zone, its actors and the UI built,
-// rof2decomp notes/connection-and-network.md §5), so nothing appears afterwards. This client builds some of it as the
+// loading screen (ProcessGame's zone-in runs to "Initialization complete." with the zone, its actors and the UI built),
+// so nothing appears afterwards. This client builds some of it as the
 // world is first drawn: the characters' appearances (built on render::ActorRenderer's worker, put up within its build
 // budget), the light shadows' cubes one a frame (render::kPointShadowBuildsPerFrame), the UI pack's windows on their
 // first frame. So once the network's zone-in is done (OP_ClientReady sent) the game runs and draws as usual behind the

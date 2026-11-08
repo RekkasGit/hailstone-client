@@ -87,7 +87,7 @@ TEST_CASE("soundassets.txt, mp3index.txt") {
     auto wide = parse_sound_assets("99999999999999999999^Big.WAV\n");
     REQUIRE(wide.size() == 1);
     CHECK(wide.contains(1661992959));
-    // The named lines (FUN_004ab800 gives each a free id; FUN_004ab700 finds it by name).
+    // The named lines (0x4ab800 gives each a free id; 0x4ab700 finds it by name).
     auto n = parse_named_sound_assets("1^Unknown\nYouveGotMail^mail1.wav\r\n39^Death_M.WAV\n");
     REQUIRE(n.size() == 1);
     CHECK(n.at("YouveGotMail") == "mail1.wav");

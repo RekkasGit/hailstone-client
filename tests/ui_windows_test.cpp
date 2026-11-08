@@ -150,7 +150,7 @@ TEST_CASE("Tip window: the duel tip, its history and the show options") {
     CHECK_FALSE(t.api->activate_tip(0x5b));
 }
 
-TEST_CASE("Social editor: FUN_00758bb0 fills it, a colour button, Clear, Accept writes the social") {
+TEST_CASE("Social editor: 0x758bb0 fills it, a colour button, Clear, Accept writes the social") {
     const GameDir* game = test::game_dir();
     if (!game) return;
     Harness t(*game);
@@ -190,7 +190,7 @@ TEST_CASE("Social editor: FUN_00758bb0 fills it, a colour button, Clear, Accept 
     CHECK(app::social_text_color(20) == app::Rgb{0x60 / 255.0f, 0x60 / 255.0f, 0x60 / 255.0f});
 }
 
-TEST_CASE("Hotbutton menu: FUN_005536b0's clicks and the rows CHotButton_UpdateContextMenu shows") {
+TEST_CASE("Hotbutton menu: 0x5536b0's clicks and the rows CHotButton_UpdateContextMenu shows") {
     using A = game::HotButtonMouseAction;
     using M = game::HotButtonMouse;
     game::HotButton empty, social, item, krono, gem;
@@ -285,7 +285,7 @@ TEST_CASE("Hotbutton menu: FUN_005536b0's clicks and the rows CHotButton_UpdateC
     CHECK(t.host.text_entry->max_chars == 15);
     t.host.text_entry->done("Greet");
     CHECK(store.social(1).name == "Greet");
-    // a left click on it runs it; a quick right click is FUN_0054fc10's (the social editor again)
+    // a left click on it runs it; a quick right click is 0x54fc10's (the social editor again)
     pressed = -1;
     CHECK(t.api->click_hot_button("HotButtonWnd", "HB_Button4", "left"));
     CHECK(pressed == 3);

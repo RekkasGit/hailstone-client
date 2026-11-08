@@ -2,8 +2,7 @@
 
 // The graphics DLL's sine and cosine tables (CMath, eqgame unk_pinstSinCosTable):
 // 512 floats per turn, built by CMath::InitSinCosTables @0x100b9680 with the
-// quadrant entries written exactly (rof2decomp notes/eqgraphicsdx9.md, The
-// sine table). Angles are in 512ths of a turn.
+// quadrant entries written exactly. Angles are in 512ths of a turn.
 
 namespace hailstone::game {
 
@@ -13,8 +12,7 @@ namespace hailstone::game {
 float cmath_sin_interp(float x);
 float cmath_cos_interp(float x);
 
-// CMath vtable +0x08 / +0x0c: table[(int)trunc(x) & 511], no interpolation
-// (notes/eqgraphicsdx9.md, The sine table).
+// CMath vtable +0x08 / +0x0c: table[(int)trunc(x) & 511], no interpolation.
 float cmath_sin(float x);
 float cmath_cos(float x);
 

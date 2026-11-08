@@ -1,7 +1,7 @@
 // The real estate windows (CRealEstatePurchaseWnd, CRealEstateManageWnd, CRealEstateItemsWnd,
 // CRealEstateNeighborhoodWnd, CRealEstatePlotSearchWnd) over the connection's real estate state
 // (net/game_connection_real_estate.cpp, game/real_estate.h). What each shows and sends follows the original's
-// functions named below (rof2decomp notes/housing-and-market.md §6 and the decompile); the packs draw them
+// functions named below; the packs draw them
 // (ui/<pack>/realestate*.lua). Child ids are this client's, the windows being the packs' own.
 
 #include <algorithm>
@@ -111,7 +111,7 @@ void fill_cost_combo(const GameConnection& c, std::uint32_t group, ComboData& co
 }
 
 bool owns_plot(const GameConnection& c, const net::ReRecord* r) {
-    // FUN_004d6b10: a house or crate stands for its plot (the nearest plot above it); a player plot whose owner is
+    // 0x4d6b10: a house or crate stands for its plot (the nearest plot above it); a player plot whose owner is
     // the player.
     const auto& m = c.real_estate();
     for (int i = 0; r && i < 10; ++i) {
@@ -222,7 +222,7 @@ public:
         if (id != "UpkeepCombo") return false;
         combo(host, id);
         upkeep_.selected = index;
-        // The upkeep choice of an owned yard: escrow action 2 with the entry's key (FUN_005aee30's check is the
+        // The upkeep choice of an owned yard: escrow action 2 with the entry's key (0x5aee30's check is the
         // server's here); for others the combo goes back to the record's.
         const net::ReRecord* yard = host.conn->real_estate().record(host.conn->real_estate().occupancy().yard);
         if (yard && index >= 0 && index < static_cast<int>(upkeep_keys_.size()) &&
@@ -258,7 +258,7 @@ public:
         } else if (id == "ManageButton") c.real_estate_command("manage");
         else if (id == "ItemsButton") c.real_estate_command("items");
         else if (id == "OptOutCheck") {
-            // 0x6573 {the yard, the box's new state} (FUN_005b09d0's check is the server's here).
+            // 0x6573 {the yard, the box's new state} (0x5b09d0's check is the server's here).
             const net::ReRecord* yard = c.real_estate().record(c.real_estate().occupancy().yard);
             if (yard) c.re_opt_out(!yard->opt_out);
         } else return false;
@@ -274,7 +274,7 @@ private:
         return host.conn->real_estate().record(host.conn->real_estate_ui().purchase_re);
     }
     State state(EqHost& host, const net::ReRecord& r, const net::ReDefinition& d) {
-        // SetPlotInfo: +0x22c buyable (not owned and a price), +0x22d manage (FUN_004ff6c0's access 0xc, read here
+        // SetPlotInfo: +0x22c buyable (not owned and a price), +0x22d manage (0x4ff6c0's access 0xc, read here
         // as the player's own plot or GM), +0x22e the owner's (the player's plot, GM, or a guild plot of the
         // player's guild), +0x22f transfer (the owner's, not a guild plot).
         const auto& c = *host.conn;
@@ -507,7 +507,7 @@ private:
         host.conn->re_save_access(host.conn->real_estate().occupancy().yard, a);
     }
     static std::string group_name(std::uint32_t g) {
-        // The seven access groups in table order (the rof2decomp note's reading of the live saves).
+        // The seven access groups in table order (as read from the live saves).
         static const char* kGroups[] = {"Everyone", "Visitor", "Acquaintance", "Friend", "Trustee", "Co-Owner", "Reserved"};
         return g < 7 ? kGroups[g] : std::to_string(g);
     }
@@ -803,7 +803,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// RealEstatePlotSearchWnd: the name search (FUN_0074b920), the PlotList ReadSearchResults @0x74c4c0 fills, and Go
+// RealEstatePlotSearchWnd: the name search (0x74b920), the PlotList ReadSearchResults @0x74c4c0 fills, and Go
 // (WndNotification @0x74c110: with mode +0x24c set 0x796c, else /find kind 4).
 class PlotSearchWindow : public StockWindow {
 public:

@@ -2,8 +2,8 @@
 
 // CharacterZoneClient::UseSkill @0x45b2d0 (9935 bytes): the /doability path. It decides locally whether a skill
 // may be used, starts its reuse timer, prints the original's messages and sends the skill's packet; the server
-// decides the outcome. Ported from the disassembly and checked against the original's vectors (rof2decomp
-// b1538ef4: UseSkill_Combat / _Activity / _Target / _Gather; tests/use_skill_vectors_test.cpp), which list every
+// decides the outcome. Worked from the disassembly and checked against the original's vectors
+// (UseSkill_Combat / _Activity / _Target / _Gather; tests/use_skill_vectors_test.cpp), which list every
 // callee in call order with its answer.
 //
 // The order, in short:
@@ -146,7 +146,7 @@ public:
     virtual void set_activity(std::int32_t kind, std::int32_t spawn) = 0;          // Send_OP_TrackTarget_004ed870
     virtual std::int32_t rand_nbr() = 0;                                           // Random
     virtual std::int32_t random_low_high(std::int32_t low, std::int32_t high) = 0; // RandomNumberLowHigh
-    virtual void compass_reset() = 0;                                              // FUN_0065b650
+    virtual void compass_reset() = 0;                                              // 0x65b650
     virtual void send_track() = 0;                                                 // Send_OP_Track
     virtual std::int32_t not_on_same_deity(Spawn& self, Spawn& other, std::int32_t a1) = 0;
     virtual std::int32_t get_level(Spawn& spawn) = 0;                              // PlayerZoneClient::GetLevel (al)

@@ -1,7 +1,6 @@
 #pragma once
 
-// Pressing a hot button and what follows: exact ports of rof2decomp batch 267 (re/src/game/ui/do_hot_button.cpp,
-// hot_button_socials.cpp), checked against CHotButtonWnd_DoHotButton.jsonl, CHotButton_RightClick.jsonl and
+// Pressing a hot button and what follows, as the original does it, checked against CHotButtonWnd_DoHotButton.jsonl, CHotButton_RightClick.jsonl and
 // Social_Stop.jsonl.
 //
 // CHotButtonWnd::DoHotButton @0x68c8b0: a stunned local player (stand state 0x66) or a pending item request
@@ -81,10 +80,10 @@ public:
     virtual std::int32_t combat_ability(std::int32_t index) = 0;    // PcBase::GetCombatAbility
     virtual bool spell_exists(std::int32_t spell) = 0;              // the spell manager's +0xc
     virtual void do_combat_ability(std::int32_t spell) = 0;         // PcZoneClient::doCombatAbility(spell, 1)
-    virtual void set_current_social(std::int32_t social) = 0;       // FUN_006143a0
+    virtual void set_current_social(std::int32_t social) = 0;       // 0x6143a0
     virtual void leadership_ability(std::int32_t group, std::int32_t ability) = 0;
     virtual std::optional<HotButtonSlot> find_inv_slot(std::int32_t slot, std::int32_t bag_slot) = 0;
-    virtual std::optional<HotButtonSlot> find_krono_slot() = 0;     // FUN_00697ec0
+    virtual std::optional<HotButtonSlot> find_krono_slot() = 0;     // 0x697ec0
     virtual void inv_slot_right_click(std::int32_t x, std::int32_t y) = 0; // CInvSlot::HandleRButtonUp
     virtual void who() = 0;
     virtual void group_follow() = 0;                                // Send_OP_GroupFollow2
@@ -106,7 +105,7 @@ public:
 // CHotButtonWnd::DoHotButton(index, mouse) for the record pressed.
 void do_hot_button(HotButtonGlobals& g, const HotButtonRecord& r, std::int32_t mouse, HotButtonQueries& q);
 
-// ---- a right click (FUN_0054fc10) and the socials' queue
+// ---- a right click (0x54fc10) and the socials' queue
 
 class HotButtonRightClickQueries {
 public:
@@ -126,7 +125,7 @@ struct HotButtonRightClick {
     bool gem_window = false;              // +0x228
     std::int32_t no_spell_info = 0;       // 0xddf794
 };
-// FUN_0054fc10: a social that is queued stops (Social_Stop(-1, 0)), one with a running cooldown has it cleared
+// 0x54fc10: a social that is queued stops (Social_Stop(-1, 0)), one with a running cooldown has it cleared
 // (Social_Stop(n, 1)), otherwise the social editor opens; an ability (120 + group) opens the AA window on it; items
 // (5, 12, 13) get the slot's right click; a spell gem (7) its spell display unless 0xddf794. Always true.
 bool hot_button_right_click(const HotButtonRightClick& c, HotButtonRightClickQueries& q);
@@ -138,7 +137,7 @@ struct SocialQueue {
     std::int32_t line = 0;
     std::uint32_t last_tick = 0; // 0xb824c0
 };
-// FUN_006143b0 (Social_Stop; /stopsocial): social -1 means the queued one; below 120 and on page < 10 with a
+// 0x6143b0 (Social_Stop; /stopsocial): social -1 means the queued one; below 120 and on page < 10 with a
 // button < 12 (C division by 12) its cooldown and the counters clear. Returns the record index cleared
 // (records -1..-13 lie before the table; the multiplication by 0x51c wraps as the original's), nullopt when none;
 // then, unless keep_queued, nothing stays queued.

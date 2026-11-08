@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Collision with walls is now computed by Hailstone's own code for the sphere sweep. It agrees with the original client within a tiny margin; in rare cases where the player only just grazes an edge or a corner, a step may now stop or pass where it did not before
 - Characters with the Luclin models now stand, walk and fight with their arms ready when they hold a weapon or a shield, as on the original client: a shield used to hang low at the hip in the empty-handed pose
 - Add-ons can now be tools, programs of their own that work beside Hailstone: install one from Add-ons on the login screen like a script or plugin, and press Start on its row. The first is Hailstone Texture Studio, which builds HD textures from your own game files on your graphics card (twice or four times the size, with normal and roughness maps for the modern lighting, using the PBRify upscaler)
 - Options (Graphics, Textures; the gamepad UI's Display) picks the texture pack Hailstone uses, or Off for the game's own textures, from the next start; Texture Studio... starts the studio once it is installed

@@ -3,8 +3,8 @@
 // Who may attack, or cast a spell on, whom: PlayerZoneClient::AllowedToAttack
 // @0x5a2360 and PlayerZoneClient::NotOnSameDeity @0x59e8d0 (the PvP rules).
 //
-// Exact port of rof2decomp's rewrite (re/src/game/spawn/attack_rules.cpp),
-// checked against PlayerZoneClient_AllowedToAttack.jsonl (batch 252), whose
+// Checked against the original's vectors,
+// PlayerZoneClient_AllowedToAttack.jsonl, whose
 // records list every callee's answer in call order. The original asks its
 // callees (the attacker virtual, levels, masters, spells, deities, the group)
 // through AttackQueries, in its order.
@@ -61,7 +61,7 @@ public:
     virtual bool spell_affects(const AttackSpell& s, std::int32_t attribute) = 0; // EQ_Spell::SpellAffects
     virtual const AttackSpawn* spawn_by_id(std::uint32_t id) = 0;          // PlayerManagerClient::GetSpawnByID
     virtual bool not_on_same_deity(const AttackSpawn& self, const AttackSpawn& other, const AttackSpell* spell) = 0;
-    virtual bool has_owner(const AttackSpawn& target) = 0;                 // FUN_0059f730 non-null
+    virtual bool has_owner(const AttackSpawn& target) = 0;                 // 0x59f730 non-null
     virtual bool is_corpse(const AttackSpawn& s) = 0;                      // PlayerClient::IsCorpse
     virtual bool is_self_or_group_member(const AttackSpawn& s) = 0;        // CharacterZoneClient_IsSelfOrGroupMember
     virtual bool is_newbie_zone(std::uint32_t zone) = 0;                   // EQWorldData::IsNewbieZone

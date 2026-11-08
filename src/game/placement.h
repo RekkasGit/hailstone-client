@@ -1,10 +1,9 @@
 #pragma once
 
 // Placed real estate objects in the world, and item placement mode as ItemPlacement keeps it (the singleton at
-// ItemPlacement_GetInstance @0x558540; rof2decomp notes/housing-and-market.md §5.8, §7.7; the decompile of
-// EQPlacedItem_CreateActor @0x504b60, the 0x626e reply @0x4d058a, ItemPlacement_SetMode @0x557330, its predicate
-// FUN_005ae160, ItemPlacement_ResetRotation @0x558970, ItemPlacement_AdjustScale @0x558a70 / ResetScale @0x558b30,
-// FUN_00558820's 90-degree turns, the listener's validation FUN_005ae010 and AreaManager::Query @0x4b2bf0, and
+// ItemPlacement_GetInstance @0x558540; EQPlacedItem_CreateActor @0x504b60, the 0x626e reply @0x4d058a, ItemPlacement_SetMode @0x557330, its predicate
+// 0x5ae160, ItemPlacement_ResetRotation @0x558970, ItemPlacement_AdjustScale @0x558a70 / ResetScale @0x558b30,
+// 0x558820's 90-degree turns, the listener's validation 0x5ae010 and AreaManager::Query @0x4b2bf0, and
 // Send_Opcode_0x711a @0x5b1f90). Pure logic: no network, no Vulkan.
 
 #include <cstdint>
@@ -23,7 +22,7 @@ namespace hailstone::game {
 inline glm::vec3 placed_world_position(const net::RePlacedItem& o) { return o.server_pos; }
 // The actor's transform: translated to its position, turned by (heading, pitch, roll) through the actor's vf74
 // (CActorData::SetEulerRotation512, as for doors and ground objects: Rz(heading) Ry(-pitch) Rx(roll), 0..512),
-// scaled by +0x7c (FUN_00504830). A scale that is not a positive number draws at 1.
+// scaled by +0x7c (0x504830). A scale that is not a positive number draws at 1.
 glm::mat4 placed_transform(const net::RePlacedItem& o);
 // The actor flags: collision off when +0x98 is set (the flags | 5); the client sets it for NPC items.
 inline bool placed_solid(const net::RePlacedItem& o) { return !o.no_collision && !o.npc_item; }
@@ -36,9 +35,9 @@ bool npc_item_menu_in_reach(const glm::vec3& spawn, const glm::vec3& player, std
                             std::uint32_t current_estate);
 
 // Placement modes (ItemPlacement +0x04): the key commands set 0 collision, 1 wall, 2 cursor, 3 free; Toggle Mode
-// steps 0..5 to the next allowed one. 4 and 5 are never allowed (FUN_005ae160).
+// steps 0..5 to the next allowed one. 4 and 5 are never allowed (0x5ae160).
 enum class PlaceMode : std::int32_t { Collision = 0, Wall = 1, Cursor = 2, Free = 3 };
-// FUN_005ae160: collision and cursor unless the object is wall-only and allows walls; wall only when it allows walls
+// 0x5ae160: collision and cursor unless the object is wall-only and allows walls; wall only when it allows walls
 // (+0x9c == 1); free unless +0x9a or an NPC item.
 bool place_mode_allowed(int mode, const net::RePlacedItem& o);
 // The eqstr ItemPlacement_ShowModeChanged names (5266 collision, 5286 wall, 5267 cursor, 5268 free).
@@ -69,19 +68,19 @@ public:
     // ItemPlacement_SetMode: -1 steps to the next allowed mode; a mode not allowed is refused (false: the caller
     // prints ItemPlacement_ShowModeNotAllowed's eqstr 5270 with the mode's name).
     bool set_mode(int mode);
-    // FUN_00558820 (the 90-degree keys pass 128 on one axis): adds to (heading, pitch, roll), each kept in 0..512
-    // (the body of FUN_00558820 is not traced: the wrap is this client's).
+    // 0x558820 (the 90-degree keys pass 128 on one axis): adds to (heading, pitch, roll), each kept in 0..512
+    // (the body of 0x558820 is not traced: the wrap is this client's).
     void rotate(float heading, float pitch, float roll);
     // ItemPlacement_ResetRotation(x, y, wheel) (the three reset keys): outside wall mode x sets the heading to
     // +0xb0, y the pitch to +0xb4, the roll keeps its value. In wall mode only the wheel key acts, on the heading or
-    // the pitch by FUN_005043e0 (not traced): nothing here.
+    // the pitch by 0x5043e0 (not traced): nothing here.
     void reset_rotation(bool heading, bool pitch, bool roll);
     // ItemPlacement_AdjustScale: not for NPC items; clamped to [+0xa0, +0xa4]. ResetScale: +0xa8.
     void adjust_scale(float delta);
     void reset_scale();
     // Where the ghost is (the app moves it with the mouse, as UpdatePosition places the actor), world coordinates.
     void move_to(const glm::vec3& world);
-    // The listener's validation (FUN_005ae010's area query; its surface and player-overlap tests are the app's):
+    // The listener's validation (0x5ae010's area query; its surface and player-overlap tests are the app's):
     // recomputes code() from the areas, the root estate and the ghost's local bounds.
     void validate(const std::vector<net::ReArea>& areas, std::uint32_t root, const glm::vec3& lo, const glm::vec3& hi);
     // A refusal the app found (0x1d not flat, 0x1c on a player) after the area query passed.

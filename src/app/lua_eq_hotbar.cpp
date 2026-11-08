@@ -1,5 +1,5 @@
 // The hot bar window's own menu and settings, a hotbutton's Change Size / Assign Icon, and the icon selection window
-// (app/lua_eq_hotbar.h; rof2decomp export/CHotButtonWnd.c, CIconSelectionWnd.c, _globals.c).
+// (app/lua_eq_hotbar.h; the original's CHotButtonWnd and CIconSelectionWnd).
 
 #include "app/lua_eq_hotbar.h"
 
@@ -96,7 +96,7 @@ public:
         if (g_icon_selection == this) g_icon_selection = nullptr;
     }
 
-    // FUN_0068f330 on bar / button's {icon type, icon} at x, y (the button's centre).
+    // 0x68f330 on bar / button's {icon type, icon} at x, y (the button's centre).
     void open(EqHost& host, int bar, int button, float x, float y) {
         if (!host.hot_buttons) return;
         ranges(host);
@@ -189,7 +189,7 @@ public:
         } else if (id == "ISW_PageRight_Button") {
             sel_.page_right();
         } else if (id == "ISW_Accept_Button") {
-            // sub_0068e710: hidden, and the owner's WndNotification(this, 0x28, {type, selected}): FUN_00550040 sets the
+            // sub_0068e710: hidden, and the owner's WndNotification(this, 0x28, {type, selected}): 0x550040 sets the
             // button's icon (on the page it shows now) and saves.
             open_ = false;
             if (owner_ && host.hot_buttons && host.set_hot_button) {
@@ -416,7 +416,7 @@ void open_hot_bar_menu(EqHost& host, int bar, float x, float y) {
     });
     spinner.check = s.spinner;
     rows.push_back(std::move(spinner));
-    // 0x1a90 Open New Bar (FUN_0068b6f0): enabled while a bar is hidden; shows the first (its Show stored)
+    // 0x1a90 Open New Bar (0x68b6f0): enabled while a bar is hidden; shows the first (its Show stored)
     int hidden = -1;
     for (int b = 0; b < game::kHotBars && hidden < 0; ++b)
         if (StockWindow* w = g_bars[static_cast<std::size_t>(b)].window; w && !w->shown(host)) hidden = b;

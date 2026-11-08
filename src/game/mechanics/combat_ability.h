@@ -1,8 +1,7 @@
 #pragma once
 
-// Combat abilities (disciplines): PcZoneClient::doCombatAbility @0x5808c0 from the exe's disassembly, and the
-// rof2decomp ports of the checks it calls (re/src/game/character/combat_abilities.cpp,
-// re/src/game/character/character_lookups.cpp) and of Cmd_discipline (re/src/game/commands/ability_commands.cpp).
+// Combat abilities (disciplines): PcZoneClient::doCombatAbility @0x5808c0 from the exe's disassembly, with the
+// checks it calls and Cmd_discipline as the original makes them.
 //
 // Times are Unix seconds (Util::FastTime); the reuse timers are the ready times (profile +0x69bc, ids 0..19).
 

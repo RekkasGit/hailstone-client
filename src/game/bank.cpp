@@ -66,7 +66,7 @@ bool has_lore_item(const Item& item, const Inventory& inv, bool contents) {
             if (has_lore_item(b.item, inv, true)) return true;
     if (!item.is_lore()) return false;
     for (const auto& [key, there] : inv.items()) {
-        // PcClient_OwnsLoreItemDefinition (rof2decomp batch 254): every profile's possessions with their bag
+        // PcClient_OwnsLoreItemDefinition: every profile's possessions with their bag
         // contents, the bank, limbo, alt storage, mail (the last flag) and real estate; not the shared bank or
         // the archived items.
         if (key.first != net::kInvPossessions && key.first != net::kInvBank && key.first != net::kInvLimbo &&

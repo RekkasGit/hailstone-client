@@ -89,7 +89,7 @@ struct ItemWindowsActions {
 
 // Opens an item information window for an item (from a link or a right click).
 void show_item_info(ItemWindowsState& state, net::Item item);
-// FUN_006ae710(item, 0) @006ae710: every open item information window whose item has the same serial (+0xf8: the
+// 0x6ae710(item, 0) @006ae710: every open item information window whose item has the same serial (+0xf8: the
 // header's instance_id and parcel_item_id) shows `item` from now on (SetItem again, in place).
 void refresh_item_info(ItemWindowsState& state, const net::Item& item);
 

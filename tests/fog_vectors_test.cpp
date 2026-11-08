@@ -1,10 +1,10 @@
-// The fog and per-frame scene light (game/fog.h) against the original's vectors (rof2decomp batch 264):
+// The fog and per-frame scene light (game/fog.h) against the original's vectors (recorded from eqgame.exe):
 // CDisplay_CalcFogFadeMargin (1500), CDisplay::SetFog (3000) and CDisplay_UpdateSkyWeatherAndFog (3000).
 //
 // Each record holds the original's inputs (its arguments and the globals it read), the answers of the mocked
 // callees (the CSky's virtuals, the actor's GetScaledAmbient, TotalEffect) and what it wrote, at 24- or 53-bit x87
 // precision. UpdateSkyWeatherAndFog's records use the game's own hour tables; they must equal the client's
-// (assets::sky_hour_ambient), which the port then reads.
+// (assets::sky_hour_ambient), which the client then reads.
 #include <doctest/doctest.h>
 
 #include <bit>
@@ -35,11 +35,11 @@ std::string hex(std::uint64_t v) {
     return s.str();
 }
 
-// The callee answers "a + b, unrounded" (fld dword a / fadd dword b at the record's precision).
+// The callee answers "a + b, unrounded" (a loaded, b a memory operand, at the record's precision).
 double plus(const Fpu& fpu, const Json& a, const Json& b) {
     using hailstone::game::mechanics::X87;
     std::uint32_t ab = f32_bits(a);
-    if ((ab & 0x7f800000u) == 0x7f800000u && (ab & 0x7fffffu)) ab |= 0x400000u; // fld quiets
+    if ((ab & 0x7f800000u) == 0x7f800000u && (ab & 0x7fffffu)) ab |= 0x400000u; // quiet on load
     return hailstone::game::mechanics::x87_add(fpu, X87(static_cast<double>(std::bit_cast<float>(ab))),
                                           X87(std::bit_cast<float>(f32_bits(b))));
 }

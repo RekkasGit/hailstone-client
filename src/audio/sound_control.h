@@ -22,7 +22,7 @@ struct SoundControl {
 };
 
 // What the "Miles Fast 2D Positional Audio" provider the original opens (msssoft.m3d of MSS 6.5b, its sample update
-// @0x22401a50, read for this port; SoundManager_InitMilesDrivers @0x5c02c0) makes of a 3D sample: the two channel
+// @0x22401a50, read for this client; SoundManager_InitMilesDrivers @0x5c02c0) makes of a 3D sample: the two channel
 // levels it gives AIL_set_sample_volume_levels, which mss32 mixes as linear amplitudes. `offset` is the sample's
 // position minus the listener's, `face` and `right` the listener's unit facing and right vectors (Miles' right is
 // up x face; the original's up is (0, 0, -1)):

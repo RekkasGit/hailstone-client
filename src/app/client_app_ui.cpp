@@ -160,7 +160,7 @@ void ClientApp::draw_ui(float fps) {
             create_view_ = {};
             create_choice_ = {}; // the model is dressed for creation again
             char_create_look_ = {};
-            // The combinations the account's expansions allow (FUN_007f2d00, as the stock page's): the race, class,
+            // The combinations the account's expansions allow (0x7f2d00, as the stock page's): the race, class,
             // deity and start zone lists all come from these.
             if (const auto& data = conn_->char_create_data()) {
                 for (const auto& c : data->combos) {

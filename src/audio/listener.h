@@ -1,7 +1,7 @@
 #pragma once
 
-// Where the sound listener is and which room it is in, as the original computes them (rof2decomp batch 256,
-// re/src/game/audio/listener_music.cpp; checked against the original's vectors in tests/audio_vectors_test.cpp):
+// Where the sound listener is and which room it is in, as the original computes them (checked against
+// the original's vectors in tests/audio_vectors_test.cpp):
 //
 //  - CDisplay::RealRender_World @0x49ca83 passes the local player's position (+0x64 y, +0x68 x, +0x6c z) with the
 //    camera's heading (512 units a turn) to EqSoundManager::SetListenerLocation @0x4a94a0, which hands Miles
@@ -12,7 +12,7 @@
 //    outside (1). Indoors is CDisplay +0x28ec, which CDisplay::SetupEmitterEnvironment @0x48a500 sets when the player
 //    actor's scaled ambient is below 0.48: every frame, as its 500 ms gate compares last check - now (unsigned),
 //    which only holds back a clock that went backwards. RealRender_World runs it every frame unless a special environment is set
-//    (CDisplay +0x2d68): FUN_0048a480 sets room type 0x16 when the head goes under water (HeadWet 5) and 0x17 when
+//    (CDisplay +0x2d68): 0x48a480 sets room type 0x16 when the head goes under water (HeadWet 5) and 0x17 when
 //    the player is stunned (CharacterZoneClient_ApplyStun); leaving the water and PrepareForRepop run the update
 //    again, which clears it.
 //  - EqSoundManager::SetListenerEnvironmentLow / High / Outside give the SoundManager the zone's room type for that
@@ -33,7 +33,7 @@ namespace hailstone::audio {
 // Listener environments (EqSoundManager +0xff8; emitters with an environment only play in theirs).
 enum ListenerEnvironment : std::int32_t { kEnvironmentOutside = 1, kEnvironmentHigh = 2, kEnvironmentLow = 3 };
 
-// The special room types FUN_0048a480 sets (EAX environments 22 and 23).
+// The special room types 0x48a480 sets (EAX environments 22 and 23).
 constexpr std::int32_t kRoomUnderwater = 0x16, kRoomDrugged = 0x17;
 
 // CDisplay_UpdateListenerEnvironment: nothing without a local player.
@@ -74,8 +74,8 @@ ListenerLocation eq_listener_location(std::uint32_t y, std::uint32_t x, std::uin
                                       game::mechanics::FpuPrecision precision = game::mechanics::FpuPrecision::Single24);
 
 // SoundManager::SetListenerLocation: what it stores (+0..+0xc) and, with a 3D listener, the Miles position and
-// orientation: face (cos a, sin a, 0), up (0, 0, -1), the sine and cosine from fsin / fcos (as the x87 computes
-// them: its 66-bit pi for the reduction, and an operand of 2^63 or more left as it is).
+// orientation: face (cos a, sin a, 0), up (0, 0, -1), the sine and cosine as the x87 computes
+// them (its 66-bit pi for the reduction, and an operand of 2^63 or more left as it is).
 struct ListenerOrientation {
     std::uint32_t stored[4]{};   // x, y, z, angle
     std::uint32_t position[3]{}; // AIL_set_3D_position
@@ -84,7 +84,7 @@ struct ListenerOrientation {
 };
 ListenerOrientation sound_manager_listener(std::uint32_t x, std::uint32_t y, std::uint32_t z, std::uint32_t angle);
 
-// fsin / fcos of a float operand, rounded to a float (bits).
+// The x87 sine / cosine of a float operand, rounded to a float (bits).
 std::uint32_t x87_fsin(std::uint32_t operand);
 std::uint32_t x87_fcos(std::uint32_t operand);
 

@@ -1,8 +1,6 @@
 // Movement animation choice and playback rate (game/mechanics/anim_select.h).
-// Sources: rof2decomp re/src/game/spawn/movement_animation.cpp (batch 248:
-// PlayerAnimation_SelectMovementAnim @0x5888a0, FUN_0058af10, FUN_004afc90)
-// and re/src/game/spawn/player_animation_update.cpp (batch 213:
-// FUN_004afe60). The float steps follow the original's x87 instruction order;
+// Follows the original's PlayerAnimation_SelectMovementAnim @0x5888a0,
+// 0x58af10, 0x4afc90 and 0x4afe60. The float steps follow the original's x87 instruction order;
 // comments give the addresses.
 #include "game/mechanics/anim_select.h"
 
@@ -35,7 +33,7 @@ double round24_wide(double v) {
     return static_cast<double>(static_cast<float>(v * scale)) / scale;
 }
 
-// fsqrt at the FPU's precision. The operand always has at most the
+// The square root at the FPU's precision. The operand always has at most the
 // precision's bits (a float or an earlier result), so the double square root
 // rounded again to 24 bits is the correctly rounded result.
 double x87_sqrt(const Fpu& fpu, double v) {
@@ -45,10 +43,10 @@ double x87_sqrt(const Fpu& fpu, double v) {
     return fpu.precision() == FpuPrecision::Double53 ? r : round24_wide(r);
 }
 
-// fstp dword.
+// Stored as a float.
 float store(double v) { return static_cast<float>(v); }
 
-// fcomp: st0 < operand (C0 set, C2 clear: ((status >> 8) & 5) == 1). NaN: false.
+// The loaded value below the operand, ordered (NaN: false).
 bool below(double st0, double operand) { return st0 < operand; }
 
 // sqrt((y*y + x*x) + z*z) as 0x588a9a / 0x588c2b form it: loads x, y, z;
@@ -61,7 +59,7 @@ double length3(const Fpu& f, float y, float x, float z) {
     return x87_sqrt(f, x87_add(f, X87(s), X87(zz)));
 }
 
-// 0x588a26: CMath sqrt (EQGraphicsDX9 CMath::vf4: fld, fsqrt) of y*y + x*x
+// 0x588a26: CMath sqrt (EQGraphicsDX9 CMath::vf4: the square root at the precision) of y*y + x*x
 // stored as a float, * 0.5 + 1, stored. (x*x first; y*y into y's slot; the
 // sum's destination is y*y.)
 float ground_rate(const Fpu& f, float y, float x) {
@@ -80,7 +78,7 @@ double stride_value(const Fpu& f, const MovementAnimInput& in, bool shrink) {
     return s;
 }
 
-// FUN_004afc90's decision: 0 keep, 1 double, 2 * 0.75.
+// 0x4afc90's decision: 0 keep, 1 double, 2 * 0.75.
 int old_speed_rule(std::int32_t anim, std::int32_t race, std::int32_t gender, bool styled, bool display_129) {
     bool late = false;
     if (race != 0x14a) {
@@ -103,8 +101,8 @@ int old_speed_rule(std::int32_t anim, std::int32_t race, std::int32_t gender, bo
 // The sequence table at 0xaae3d8 (0x28-byte rows for codes 0x4f..0xb6; read
 // from the exe): the tag (+0x10 from 0xaae3dc), the fallback sequence (-8),
 // the priority (-4), blend in / out (+0 / +4, ms), the layer kind (-0xc,
-// FUN_0058afa0's choice of layers) and the flags +0x19 (FUN_005885e0: the
-// stand after it may be the combat stand) and +0x1a (FUN_00589770: column 5
+// 0x58afa0's choice of layers) and the flags +0x19 (0x5885e0: the
+// stand after it may be the combat stand) and +0x1a (0x589770: column 5
 // may fall back to column 0);
 // with the new-to-old map at 0xaaf428 (the old-style number of each code).
 struct Sequence {
@@ -245,7 +243,7 @@ bool is_jump_animation(std::uint8_t anim, bool new_style) {
 std::string_view old_anim_clip(std::uint8_t old) { return old > 0 && old < 0x4f ? kOldNames[old] : std::string_view{}; }
 
 bool movement_still(float y, float x, float z, const Fpu& f) {
-    // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; fcomp 0.01.
+    // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; compared with 0.01.
     double yy = x87_mul(f, X87(y), X87(y));
     double xx = x87_mul(f, X87(x), X87(x));
     double s = x87_add(f, X87(xx), X87(yy));
@@ -256,7 +254,7 @@ bool movement_still(float y, float x, float z, const Fpu& f) {
 bool new_style_can_idle(std::int32_t a) { return a == 0x6e || a == 0x70 || a == 0x76; }
 
 IdleAnimResult choose_idle_animation(const IdleAnimInput& in) {
-    // The rewrite's order (idle_animation.cpp); the start is the low byte of 0xa1e344 (0xfe).
+    // The original's order; the start is the low byte of 0xa1e344 (0xfe).
     IdleAnimResult res;
     std::uint8_t anim = kNoAnimation;
     float speed = 1.0f;
@@ -636,9 +634,9 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
 double old_model_anim_speed(std::int32_t anim, float speed, std::int32_t race, std::int32_t gender, bool new_model,
                             bool display_129, const Fpu& f) {
     switch (old_speed_rule(anim, race, gender, new_model, display_129)) {
-    case 1: return x87_add(f, X87(speed), X87(speed)); // fadd st0, st0
+    case 1: return x87_add(f, X87(speed), X87(speed)); // speed + speed
     case 2: return x87_mul(f, X87(speed), X87(kThreeQuarters));
-    default: return static_cast<double>(speed); // fld dword
+    default: return static_cast<double>(speed);
     }
 }
 
@@ -648,7 +646,7 @@ namespace hailstone::game::mechanics {
 
 namespace {
 
-// FUN_0059f750 @0x59f750: the old-style models' choice (read from the disassembly; its jump table at 0x59f854 /
+// 0x59f750: the old-style models' choice (read from the disassembly; its jump table at 0x59f854 /
 // 0x59f87c).
 std::uint8_t old_attack_animation(const AttackAnimInput& in) {
     std::uint32_t a;
@@ -685,7 +683,7 @@ std::uint8_t old_attack_animation(const AttackAnimInput& in) {
     return static_cast<std::uint8_t>(a);
 }
 
-// FUN_0059f8d0 @0x59f8d0: the new-style models' choice (its jump table at 0x59fa40 / 0x59fa6c).
+// 0x59f8d0: the new-style models' choice (its jump table at 0x59fa40 / 0x59fa6c).
 std::uint8_t new_attack_animation(const AttackAnimInput& in) {
     const bool primary = in.slot == 0xd, secondary = in.slot == 0xe;
     std::uint32_t a = secondary ? 0x55 : 0x52; // STSC / STPR

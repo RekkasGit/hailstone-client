@@ -3,15 +3,15 @@
 // The original client's x87 arithmetic, reproduced bit for bit on any CPU.
 //
 // eqgame.exe computes its float formulas on the x87 FPU. Every arithmetic
-// result is rounded to the precision in the FPU control word; loads (fild,
-// fld dword/qword) are exact. EQGraphicsDX9.dll creates its Direct3D 9 device
-// without D3DCREATE_FPU_PRESERVE (CreateDevice behaviour flags 0x24 / 0x84 /
-// 0x44 | 4 at EQGraphicsDX9.dll 0x10098f80..0x10098fbd), so Direct3D switches
-// the main thread, which also runs the game logic, to 24-bit (single)
-// precision: in game every x87 add, subtract, multiply and divide rounds its
-// result to a 24-bit mantissa (round to nearest even). Under the default
-// 53-bit precision (tools, tests of the rewrite outside the game) the results
-// are those of IEEE doubles.
+// result is rounded to the precision in the FPU control word; loads (of an
+// integer, a float or a double) are exact. EQGraphicsDX9.dll creates its
+// Direct3D 9 device without D3DCREATE_FPU_PRESERVE (CreateDevice behaviour
+// flags 0x24 / 0x84 / 0x44 | 4 at EQGraphicsDX9.dll 0x10098f80..0x10098fbd), so
+// Direct3D switches the main thread, which also runs the game logic, to 24-bit
+// (single) precision: in game every x87 add, subtract, multiply and divide
+// rounds its result to a 24-bit mantissa (round to nearest even). Under the
+// default 53-bit precision (tools, tests outside the game) the results are
+// those of IEEE doubles.
 //
 // Fpu reproduces both. Its operands are always exact (they are integers, float
 // or double constants, or earlier results), so:
@@ -23,7 +23,7 @@
 //    multiply and the division remainder) breaks the one case where rounding
 //    the double again would differ: a double that lies exactly halfway between
 //    two floats.
-// __ftol2_sse (fstp qword, cvttsd2si) truncates toward zero; values outside
+// __ftol2_sse (through a double) truncates toward zero; values outside
 // the int32 range give 0x80000000.
 //
 // The mechanics files are built with -ffp-contract=off (CMakeLists.txt) so
@@ -69,7 +69,7 @@ public:
         return round24(q, err);
     }
 
-    // fsqrt: the exact root rounded once (a negative operand gives the x87's
+    // The square root: the exact root rounded once (a negative operand gives the x87's
     // default NaN, 0xfff8... like sqrtsd). In 24-bit mode the operand has at
     // most 24 significant bits, so the remainder's sign settles a tie.
     double sqrt(double a) const {
@@ -84,7 +84,7 @@ public:
         if (!(v > -2147483649.0 && v < 2147483648.0)) return std::numeric_limits<std::int32_t>::min();
         return static_cast<std::int32_t>(v);
     }
-    // fstp dword: a value stored to a float (round to nearest even).
+    // A value stored to a float (round to nearest even).
     static double to_float(double v) { return static_cast<double>(static_cast<float>(v)); }
 
 private:
@@ -117,7 +117,7 @@ private:
 };
 
 // An x87 operand: a value, and whether it is a float in memory that holds a
-// signalling NaN (a value on the FPU stack is always quiet: fld quiets it).
+// signalling NaN (a value loaded onto the FPU stack is always quiet).
 inline bool is_signalling(float f) {
     std::uint32_t b;
     std::memcpy(&b, &f, 4);

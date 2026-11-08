@@ -1,5 +1,5 @@
 // Spell gems and buff stacking (game/mechanics/spell_gems.h, find_affect_slot.h) against the original's vectors
-// (rof2decomp batch 260): CSpellBookWnd_GetSpellMemTicksLeft (3000), CSpellBookWnd_FinishMemorizing (600),
+// (recorded from eqgame.exe): CSpellBookWnd_GetSpellMemTicksLeft (3000), CSpellBookWnd_FinishMemorizing (600),
 // Handle_OP_MemorizeSpell (2500), PcZoneClient_IsLinkedSpellTimerReady (600), EQ_Spell_StackingSpaTables (529),
 // CharacterZoneClient_CanUseMemorizedSpellSlot (1500) and CharacterZoneClient_FindAffectSlot (1600).
 //
@@ -7,7 +7,7 @@
 // answers. The port runs against a replay: each callee it calls must be the record's next call with the same
 // arguments, and gets the recorded answer; then every recorded output is compared. Two outputs of
 // Handle_OP_MemorizeSpell start from values the record does not hold (the casting gem byte and the cast item's
-// dirty byte): they are compared only when the port writes them. FindAffectSlot runs the real stacking rules:
+// dirty byte): they are compared only when the client writes them. FindAffectSlot runs the real stacking rules:
 // CalcAffectChange is the client's CalcAffectChangeGeneric (Character::calc_affect_change; the records' spells have
 // no distance modifier and no formula 123, 137 or 138).
 #include <doctest/doctest.h>

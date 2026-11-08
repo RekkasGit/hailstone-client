@@ -1,5 +1,5 @@
 // GameConnection: real estate (player housing, guild halls, placed objects) as RealEstateManagerClient and the
-// CRealEstate*Wnd windows handle it (rof2decomp notes/housing-and-market.md; the decompile of the functions named
+// CRealEstate*Wnd windows handle it (the functions named
 // below). The state is game::RealEstateManager; the packets net/real_estate_packets.h. A stock EQEmu server sends
 // none of these; a server with housing (Project Triune) sends them with the original's numbers.
 
@@ -45,7 +45,7 @@ bool GameConnection::handle_real_estate(const AppPacket& p) {
     case kOpReNop1:
     case kOpReNop2: return true;
     case kOpReCatalog: {
-        // 0x2698: ReadDefsFromPacket, ReadCostsFromPacket, FUN_005aaad0.
+        // 0x2698: ReadDefsFromPacket, ReadCostsFromPacket, 0x5aaad0.
         auto v = decode_re_catalog(p);
         if (!v) return bad();
         m.set_catalog(std::move(*v));
@@ -89,7 +89,7 @@ bool GameConnection::handle_real_estate(const AppPacket& p) {
         return true;
     }
     case kOpReItemSummaryUpdate:
-        // FUN_005afe00 with 0x1097: u32 id, then FUN_005ab4b0's update of a known summary (not decoded here; the
+        // 0x5afe00 with 0x1097: u32 id, then 0x5ab4b0's update of a known summary (not decoded here; the
         // rows themselves come again on 0x1cef / 0x2cf7).
         changed();
         return true;
@@ -205,7 +205,7 @@ bool GameConnection::handle_real_estate(const AppPacket& p) {
         return true;
     }
     case kOpReNpcItem: {
-        // FUN_005996e0 then +0x18 → spawn +0x198 (its estate), +0x1c → spawn +0x420 (its item): the creature of a
+        // 0x5996e0 then +0x18 → spawn +0x198 (its estate), +0x1c → spawn +0x420 (its item): the creature of a
         // placed NPC item (a merchant, a pet), which RMouseUp then treats as the item. The binding of a placement
         // session whose guid this is (ItemPlacement +0x24 / +0x28) is not built (docs/unknowns.md).
         auto v = decode_re_npc_item(p);
@@ -229,7 +229,7 @@ bool GameConnection::handle_real_estate(const AppPacket& p) {
         return true;
     }
     case kOpReOffer: {
-        // FUN_005ad760 keeps the 0xbc-byte body; eqstr 7636 "Do you wish to accept %1 from %2?" (%1 the estate's
+        // 0x5ad760 keeps the 0xbc-byte body; eqstr 7636 "Do you wish to accept %1 from %2?" (%1 the estate's
         // name, else "this real estate"; %2 the text at +0x0c) for 5 minutes. The answer is
         // ConfirmationDialog_HandleResponse's 0x89.
         auto v = decode_re_transaction(p);
@@ -279,7 +279,7 @@ bool GameConnection::handle_real_estate(const AppPacket& p) {
     }
     case kOpRePlace: {
         // HandleWorldMessage @0x4d058a: the object, its index, the flags and the area codes, the latch released
-        // (FUN_005adb60), then BeginPlacement.
+        // (0x5adb60), then BeginPlacement.
         auto v = decode_re_place_reply(p);
         if (!v) return bad();
         m.clear_pending();
@@ -304,7 +304,7 @@ void GameConnection::real_estate_tick() {
 
 void GameConnection::reset_real_estate_for_zone() {
     // The records, catalog, areas and placed objects come again on arrival (the bring-up order); the character's
-    // owned lists are the profile's and stay. Where the original resets its manager (FUN_005b1cf0's callers) is not
+    // owned lists are the profile's and stay. Where the original resets its manager (0x5b1cf0's callers) is not
     // traced (docs/unknowns.md).
     auto lists = std::array{real_estate_.owned(game::RealEstateManager::OwnedList::A),
                             real_estate_.owned(game::RealEstateManager::OwnedList::B),
@@ -332,7 +332,7 @@ void GameConnection::set_real_estate_window(ReWindow w, bool open) {
     case ReWindow::Neighborhood: re_ui_.neighborhood_open = open; break;
     case ReWindow::PlotSearch:
         // CRealEstatePlotSearchWnd::AboutToShow @0x74bb00: only in a neighborhood (the root's type group 5), else
-        // eqstr 8078; showing it sends the empty name search (FUN_0074ba70 → FUN_0074b920("", 1)).
+        // eqstr 8078; showing it sends the empty name search (0x74ba70 → 0x74b920("", 1)).
         if (open) {
             if (!game::re_is_neighborhood_type(real_estate_.occupancy().root_type)) {
                 system(0x1f8e, {}, 0xd);
@@ -383,23 +383,23 @@ bool GameConnection::re_can_purchase(std::uint32_t re, bool verbose) {
     if (!r) return false;
     ReType type = m.definition_type(r->definition);
     if (!game::re_is_owner_type(type)) return false;
-    // FUN_005ad900: the PC's vt+0x90, read here as the GM flag (docs/unknowns.md).
+    // 0x5ad900: the PC's vt+0x90, read here as the GM flag (docs/unknowns.md).
     if (player_is_gm()) return true;
     auto say = [&](std::uint32_t id) {
         if (verbose) system(id, {}, 0xd);
         return false;
     };
-    // FUN_005b5b60: under a guild plot the account needs 0x20000, else 0x10000 (the PC's vt+0x5c: the expansions).
+    // 0x5b5b60: under a guild plot the account needs 0x20000, else 0x10000 (the PC's vt+0x5c: the expansions).
     // Both walks up go through find_up, at most 10 steps as the manager's others (FindChildAtPosition): a parent
-    // cycle from the server (A under B under A) would otherwise loop for ever. Whether FUN_005b5b60 / FUN_005b5130
+    // cycle from the server (A under B under A) would otherwise loop for ever. Whether 0x5b5b60 / 0x5b5130
     // bound their own walks is not traced (docs/unknowns.md); a chain of at most 10 is walked the same.
     const bool guild_area = m.find_up(r, kGuildPlotMask) != nullptr;
     if (!guild_area && !(world_expansions_ & kExpansionPlayerPlot)) return say(0x14c3);
     if (guild_area && !(world_expansions_ & kExpansionGuildPlot)) return say(0x1536);
-    // FUN_005b5b90 (a guild plot under feature restriction 10) prints a line FUN_007dbc50 builds: not traced; such
+    // 0x5b5b90 (a guild plot under feature restriction 10) prints a line 0x7dbc50 builds: not traced; such
     // accounts are refused by the server instead.
     if (m.already_owned(re)) return say(0x191b);
-    // FUN_005b5130: the nearest neighborhood's guild, when it has one, must be the player's (5317).
+    // 0x5b5130: the nearest neighborhood's guild, when it has one, must be the player's (5317).
     if (const ReRecord* up = m.find_up(r, kNeighborhoodMask))
         if (up->guild_id != -1 && static_cast<std::uint32_t>(up->guild_id) != guild_.guild_id) return say(0x14c5);
     if (type != ReType::GuildPlot) return true;
@@ -417,7 +417,7 @@ void GameConnection::re_purchase(std::uint32_t price_key, std::uint32_t upkeep_k
 }
 
 bool GameConnection::re_can_sell(bool verbose) {
-    // RealEstate_CanSellCurrentPlot @0x5b3430 on the current estate, FUN_005b7fa0's checks as far as they are
+    // RealEstate_CanSellCurrentPlot @0x5b3430 on the current estate, 0x5b7fa0's checks as far as they are
     // traced: a player plot must be the player's (2), a guild plot needs 0x20000 (8) and the player's guild (9);
     // then a guild plot needs guild permission 28 (0x2f5). Its other refusals (3, 5, 6, 7, 10..13) are the server's.
     const game::RealEstateManager& m = real_estate_;
@@ -452,7 +452,7 @@ void GameConnection::re_sell() {
 
 bool GameConnection::re_can_transfer(bool verbose) {
     // RealEstate_CanTransferPlotToTarget @0x5b1380: a current estate and a player target (eqstr 3278 otherwise);
-    // FUN_005b50b0: a player plot the player owns (2 if not; anything else 1).
+    // 0x5b50b0: a player plot the player owns (2 if not; anything else 1).
     const game::RealEstateManager& m = real_estate_;
     if (!world_.player() || m.pending()) return false;
     const ReRecord* r = m.record(m.occupancy().current);
@@ -483,7 +483,7 @@ void GameConnection::re_opt_out(bool opt_out) {
 }
 
 void GameConnection::re_escrow(ReEscrowAction action, std::vector<ReEscrow::Entry> entries) {
-    // CRealEstateManageWnd::SendEscrowFromCursor @0x741ee0: for the yard, and only an owned one (FUN_005b41d0). A
+    // CRealEstateManageWnd::SendEscrowFromCursor @0x741ee0: for the yard, and only an owned one (0x5b41d0). A
     // deposit with no entries given takes the cursor's coin (one denomination, platinum first) and empties it.
     if (state_ != ConnectionState::InZone) return;
     std::uint32_t yard = real_estate_.occupancy().yard;
@@ -554,7 +554,7 @@ void GameConnection::re_request_menu(std::string_view key, std::uint32_t re, std
 
 bool GameConnection::re_request_placed_menu(std::uint32_t re, std::uint32_t item, const glm::vec3& actor,
                                             float actor_radius, std::int32_t x, std::int32_t y) {
-    // CEverQuest::RMouseUp (not while placing): the player's +0x64.. and height; FUN_00542a90's body.
+    // CEverQuest::RMouseUp (not while placing): the player's +0x64.. and height; 0x542a90's body.
     const game::Spawn* me = world_.player();
     if (!me || placement_.active() || state_ != ConnectionState::InZone) return false;
     if (!game::placed_menu_in_reach(actor, actor_radius, position_, me->heights.height, re, real_estate_.occupancy().current))
@@ -571,7 +571,7 @@ std::optional<std::pair<std::uint32_t, std::uint32_t>> GameConnection::re_npc_it
 
 bool GameConnection::re_request_npc_item_menu(std::uint32_t spawn_id, std::int32_t x, std::int32_t y) {
     // RMouseUp's ClickedPlayer arm: a spawn with +0x198 != -1, within 60 or its estate the current one; the menu
-    // unless (no Shift and) the spawn's own right click applies within 20 (FUN_0059eee0 / FUN_0059ef30, not traced:
+    // unless (no Shift and) the spawn's own right click applies within 20 (0x59eee0 / 0x59ef30, not traced:
     // here the menu always).
     auto ids = re_npc_item(spawn_id);
     auto sp = world_.spawns.find(spawn_id);

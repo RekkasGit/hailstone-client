@@ -1,4 +1,4 @@
-// GameConnection: the guild bank as CGuildBankWnd keeps it (rof2decomp export/CGuildBankWnd.c and its helpers at
+// GameConnection: the guild bank as CGuildBankWnd keeps it (its functions and its helpers at
 // 0x67c9c0..0x67f860), over EQEmu's packets (net/guild_bank_packets.h). The window is app/lua_eq_social.cpp's
 // GuildBankWnd. The server keeps the bank and sends each slot's change to the guild's members in the zone.
 
@@ -30,7 +30,7 @@ bool iequals(std::string_view a, std::string_view b) {
 } // namespace
 
 const GuildBankItem* GameConnection::guild_bank_item(std::int32_t key) const {
-    // FUN_0067cb30: the main area's slot 0..199 or the deposits' 0..39 the key names, else none.
+    // 0x67cb30: the main area's slot 0..199 or the deposits' 0..39 the key names, else none.
     if (key == -1) return nullptr;
     auto slot = static_cast<std::size_t>(key & 0xffff);
     const auto& b = guild_bank_;
@@ -40,7 +40,7 @@ const GuildBankItem* GameConnection::guild_bank_item(std::int32_t key) const {
 }
 
 bool GameConnection::guild_bank_mine(std::int32_t key) const {
-    // FUN_0067d550: a deposit you made, or a main-area item for you alone (single member, its member your name).
+    // 0x67d550: a deposit you made, or a main-area item for you alone (single member, its member your name).
     const GuildBankItem* it = guild_bank_item(key);
     if (!it || !profile_) return false;
     if (key != -1 && (key & 0xffff0000) == 0) return iequals(std::string_view(it->donator).substr(0, 64), character_);
@@ -48,7 +48,7 @@ bool GameConnection::guild_bank_mine(std::int32_t key) const {
 }
 
 bool GameConnection::guild_bank_can_withdraw(std::int32_t key) const {
-    // FUN_0067d5c0: your own item; else with permission 14 a deposit, or a main-area item that is public, or public if
+    // 0x67d5c0: your own item; else with permission 14 a deposit, or a main-area item that is public, or public if
     // usable and usable by you.
     const GuildBankItem* it = guild_bank_item(key);
     if (!it) return false;
@@ -61,12 +61,12 @@ bool GameConnection::guild_bank_can_withdraw(std::int32_t key) const {
 }
 
 bool GameConnection::guild_bank_can_view(std::int32_t key) const {
-    // FUN_0067d650: permission 15, or your own item.
+    // 0x67d650: permission 15, or your own item.
     return has_guild_permission(game::kGuildPermBankView) || guild_bank_mine(key);
 }
 
 bool GameConnection::in_guild_hall_zone() const {
-    // EQWorldData FUN_007dc710: the zone's flag 0x80000000 (the guild hall 345 and the player guild halls 737, 738,
+    // EQWorldData 0x7dc710: the zone's flag 0x80000000 (the guild hall 345 and the player guild halls 737, 738,
     // 751).
     std::uint32_t zone = zone_id();
     if (zone > 1000) zone &= 0x7fff; // the instance bit, as the predicates strip it
@@ -74,9 +74,9 @@ bool GameConnection::in_guild_hall_zone() const {
 }
 
 bool GameConnection::guild_bank_allowed() const {
-    // FUN_0067e560: in a guild (or no player yet), and in a guild hall zone: one not instanced (FUN_007dc760: bit 15
-    // of the zone word clear) always; an instanced one (FUN_007dc7b0) only when it is the player's guild's, the
-    // guild of the root estate's guild plot (FUN_0067f860: FindChildAtPosition(root, 0x80, 0) +0x24).
+    // 0x67e560: in a guild (or no player yet), and in a guild hall zone: one not instanced (0x7dc760: bit 15
+    // of the zone word clear) always; an instanced one (0x7dc7b0) only when it is the player's guild's, the
+    // guild of the root estate's guild plot (0x67f860: FindChildAtPosition(root, 0x80, 0) +0x24).
     const game::Spawn* me = world_.player();
     if (me && !guild_.in_guild()) return false;
     if (!in_guild_hall_zone()) return false;
@@ -197,7 +197,7 @@ void GameConnection::handle_guild_bank(Op op, const AppPacket& p) {
     if (!v) return;
     switch (v->kind) {
     case GuildBankMessage::Update: {
-        // FUN_0067c9c0 fills the slot (an empty one when not shown) and the list is redrawn; no answer counted.
+        // 0x67c9c0 fills the slot (an empty one when not shown) and the list is redrawn; no answer counted.
         auto& area = v->area == GuildBankArea::Main ? b.main : b.deposit;
         std::size_t size = v->area == GuildBankArea::Main ? kGuildBankMainSlots : kGuildBankDepositSlots;
         if (area.size() < size) area.resize(size);

@@ -5,9 +5,7 @@
 // and the other item lookups, the worn-only copies and their caps, and the
 // copies and adjustments the derived stats start from.
 //
-// Exact port of rof2decomp batch 242 (re/src/game/character/
-// process_all_stats_eh.cpp and its generated stat table
-// process_all_stats.inc), checked against the original's vectors
+// Follows the original exactly, checked against its vectors
 // (tests/mechanics_vectors_test.cpp). The sums live where the original keeps
 // them, so they are indexed by the original's field offsets: ItemSums::at()
 // takes a CharacterZoneClient offset (+0x24..+0x198), base_at() a
@@ -62,8 +60,8 @@ StatItem stat_item(const net::Item& item);
 // lookup finds nothing.
 struct ItemSources {
     std::span<const StatItem* const> worn;     // unk_Container_GetItem slots 0..0x15
-    std::span<const StatItem* const> source_b; // FUN_0042def0 (5)
-    std::span<const StatItem* const> source_c; // FUN_0042df20 (10)
+    std::span<const StatItem* const> source_b; // 0x42def0 (5)
+    std::span<const StatItem* const> source_c; // 0x42df20 (10)
     std::span<const StatItem* const> own_4c;   // the character's virtual +0x4c (2)
     std::span<const StatItem* const> own_54;   // the character's virtual +0x54 (4)
 };
@@ -79,13 +77,13 @@ public:
     virtual std::int32_t deity() = 0;          // GetDeity of that PcBase
     virtual std::int32_t limit(std::int32_t which) = 0; // CharacterBase virtual +0 (0x13: prestige, -1 none)
     virtual std::uint8_t item_type_to_skill(std::int32_t item_type) = 0;
-    // FUN_004424f0: the character's virtual +0x34 (the recommended-level scaler).
+    // 0x4424f0: the character's virtual +0x34 (the recommended-level scaler).
     virtual std::int32_t recommended_scale(const StatItem& item, std::int32_t value, std::uint32_t skill) = 0;
-    // FUN_004437d0: the damage bonus slot (0..8) of a skill.
+    // 0x4437d0: the damage bonus slot (0..8) of a skill.
     virtual std::uint32_t damage_slot(std::int32_t skill) = 0;
 };
 
-// FUN_004437d0.
+// 0x4437d0.
 std::uint32_t damage_bonus_slot(std::int32_t skill);
 
 struct ItemSums {
@@ -98,7 +96,7 @@ struct ItemSums {
 };
 
 // ClearSums, the worn items, KeepWornSums and the other lookups (the pack
-// items, CharacterZoneClient::sub_0044b150, are the caller's: not rewritten).
+// items, CharacterZoneClient::sub_0044b150, are the caller's).
 // The endurance upkeep (+0x94) is left as it is.
 void sum_item_stats(ItemSums& sums, const ItemSources& sources, ItemSumQueries& q);
 

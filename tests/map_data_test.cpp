@@ -234,7 +234,7 @@ TEST_CASE("Map editing: lines walked, marked, joined and cleared") {
     m.active_layer = 2;
     m.current_color = 0xff102030;
     m.start_line(glm::vec3(0, 0, 0));
-    // FUN_006cab70 compares the current point with max + p (here 1000 + p).
+    // 0x6cab70 compares the current point with max + p (here 1000 + p).
     m.add_point(glm::vec3(-1000, 0, 0)); // |0 - 0| and |0 - 1000|: added
     REQUIRE(m.lines.size() == 1);
     CHECK(m.lines.front().layer == 2);

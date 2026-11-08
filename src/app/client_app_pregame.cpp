@@ -1,8 +1,8 @@
 // ClientApp: the scene behind character select and creation.
 //
-// The original (rof2decomp) keeps a world display up before the game: CEverQuest::StartNetworkGame @0x53bdd0 makes
+// The original keeps a world display up before the game: CEverQuest::StartNetworkGame @0x53bdd0 makes
 // the local PC and player (pinstLocalPlayer = pinstModelPlayer) at 0, 0, 7 in zone 0xbe and starts the world display
-// there (FUN_0049d920: "clz", the CharSelectZone; Yon 5000), FUN_00517840 puts the camera (Cameras[7]) on it;
+// there (0x49d920: "clz", the CharSelectZone; Yon 5000), 0x517840 puts the camera (Cameras[7]) on it;
 // DoCharacterSelection @0x53aac0 sets the time to 12:00, the sun light, no shadows, Yon 2500 and fog 150 .. 2500
 // (grey 200), and CharSelect_PositionCameraForModel(0). The model player is the character selected
 // (CCharacterListWnd::SelectCharacter @0x42fec0: renamed, class, level, deity, zone, then
@@ -85,7 +85,7 @@ void ClientApp::load_pre_game_scene() {
     pre_game_feature_ = 0;
     pre_game_step_ = 0.0;
     pre_game_saved_fov_ = camera_.fov_units;
-    // FUN_00517840: SetCameraType(7) and the first placement.
+    // 0x517840: SetCameraType(7) and the first placement.
     game::Spawn* p = model_player();
     pre_game_world_->set_heights(*p);
     game::start_network_game_camera(pre_game_camera_, p->heights.view_height);

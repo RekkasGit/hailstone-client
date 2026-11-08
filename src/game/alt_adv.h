@@ -6,7 +6,7 @@
 // (OP_RespondAA @0x4bec60, OP_AAExpUpdate @0x4b70c0, the profile), the reuse
 // timers (OP_AAAction from the server, Handle_OP_AAAction @0x4b5bd0) and the
 // original's rules for what may be trained and when an ability is ready.
-// rof2decomp:notes/experience-and-aa.md; docs/protocol/rof2-packets.md "Alternate advancement".
+// docs/protocol/rof2-packets.md "Alternate advancement".
 // Pure state and rules; the packets are handled in net/game_connection_progress.cpp.
 
 #include <array>
@@ -101,7 +101,7 @@ struct AAFilter {
     std::int32_t category = 0;   // +0xc
 };
 
-// CAAWnd_FilterAccepts @0x6085b0 (rof2decomp batch 257, vector CAAWnd_FilterAccepts): whether the list shows
+// CAAWnd_FilterAccepts @0x6085b0 (vector CAAWnd_FilterAccepts): whether the list shows
 // `a` (true for none). In order: trainable only needs CanTrainAbility (`can_train`, asked only then); kind 1 needs
 // a spell (+0x4c > 0); kind 2 needs no spell or a first persistent effect (AltAbility_FirstPersistentEffect
 // @0x42e1a0: the effect list's head value, 0 for an empty list); a positive category must equal +0x8c, a positive
@@ -140,12 +140,12 @@ struct AltAdvState {
     std::array<std::int64_t, kAATimers> timers{}; // PcBase_SetAATimer: when each timer last started (time() s)
     bool timers_seen = false;
 
-    // OP_SendAATable (FUN_004a3c00 adds the rank; a known id is replaced).
+    // OP_SendAATable (0x4a3c00 adds the rank; a known id is replaced).
     void add(AltAbility a) { table[a.id] = std::move(a); }
     const AltAbility* get(std::uint32_t id) const;
     // PcZoneClient::HasAlternateAbility @0x582670: the rank id is in the owned list.
     bool has(std::uint32_t id) const;
-    // FUN_004a3d70: the owned rank of an ability (by group id), or null.
+    // 0x4a3d70: the owned rank of an ability (by group id), or null.
     const AltAbility* owned_rank(std::int32_t group) const;
     // The owned rank of the ability `a` belongs to, 0 when none.
     std::int32_t owned_rank_number(const AltAbility& a) const;

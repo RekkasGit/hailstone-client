@@ -1,7 +1,7 @@
 #pragma once
 
 // Melee timing, range and the attack itself as the original client runs them
-// (rof2decomp batch 258, notes/combat-and-movement.md §2):
+// (docs/mechanics.md):
 //  - __get_melee_range @0x4ddeb0 (with PlayerZoneClient_GetScaledMeleeRadius
 //    @0x59f720): max(14, (radius_a * scale_a + radius_b * scale_b) * 0.75) +
 //    2 + |AvatarHeight_a - AvatarHeight_b|, at most 75, each step stored as a
@@ -15,7 +15,7 @@
 //  - PlayerZoneClient::CanIHit @0x5a2940 (with PlayerBase_DistanceSquared3D
 //    @0x4dde50 and __get_bearing @0x4ef250), CanMeleeAttackNow @0x5a0600;
 //  - PlayerZoneClient::DoAttack @0x5a5000 (slots 11 ranged, 13 primary, 14
-//    secondary, 100 combat skill and 101 a strike; rof2decomp batch 269);
+//    secondary, 100 combat skill and 101 a strike);
 //  - the swing timers of CharacterZoneClient::DoPassageOfTime @0x45daf0: the
 //    attack-on reset (@0x45db76) and the ready flags 0xde0864 / 0xde0865
 //    (@0x45e3be..@0x45e804) that CEverQuest::ProcessControls (controls.h)
@@ -23,10 +23,10 @@
 // The first five and DoAttack are checked against the original's vectors
 // (MeleeRange, ModifyAttackSpeed, GetHandToHandDelay, CheckDoubleAttack,
 // CheckDualWield, DoAttack call by call; tests/melee_vectors_test.cpp);
-// CanIHit, CanMeleeAttackNow and the timers are ported from the disassembly
+// CanIHit, CanMeleeAttackNow and the timers follow the original's code
 // (no vectors). Every callee the original calls through
 // a pointer is a query, in the original's order; x87 steps run at the FPU's
-// precision (fpu.h). __get_bearing's fpatan is the one step not emulated bit
+// precision (fpu.h). __get_bearing's arctangent is the one step not emulated bit
 // for bit: it runs in long double (the x87's 64-bit significand), so only a
 // facing exactly on the 80 / 256 limit could come out differently.
 
@@ -137,7 +137,7 @@ struct Spawn {
 };
 
 // An item reference as DoAttack and DoPassageOfTime hand it around (the VePointer an unk_Container_GetItem or
-// AttackWeaponRef_GetItem lookup fills): opaque to the port, answered by the queries. kNoItem is a null pointer,
+// AttackWeaponRef_GetItem lookup fills): opaque to the client, answered by the queries. kNoItem is a null pointer,
 // kFistItem the fist pseudo-item (the ItemClient at 0xe6427c, whose definition is FistDefinition).
 using ItemRef = std::int32_t;
 inline constexpr ItemRef kNoItem = -1, kFistItem = -2;
@@ -247,7 +247,7 @@ public:
     virtual std::int32_t item_type(ItemRef item) = 0;  // ItemClient::GetItemType
     virtual std::uint8_t is_weapon(ItemRef item) = 0;  // ItemBase_IsWeapon
     // ItemBase_GetDelay @0x7b06d0 (ItemDefinition +0x182 Delay): a weapon's delay in tenths of a second; a
-    // hand-to-hand (type 0x16) item, the fist above all, keeps a skill there instead (rof2decomp's rewrite and
+    // hand-to-hand (type 0x16) item, the fist above all, keeps a skill there instead (the recorded
     // vectors call it the item's skill, get_item_skill).
     virtual std::uint32_t item_delay(ItemRef item) = 0;
     virtual std::int32_t item_range(ItemRef item) = 0; // ItemBase_GetRange(1)
@@ -263,7 +263,7 @@ public:
     virtual std::uint32_t skill_reuse_time(std::uint32_t skill) = 0; // CharacterZoneClient_GetSkillReuseTime
     virtual void set_skill_timer_duration(std::uint32_t skill, std::uint32_t ms) = 0; // CSkillMgr
     virtual void chat2(std::uint32_t eqstr) = 0;       // StringTable::getString + CEverQuest::dsp_chat_2
-    // CDisplay::PlayerDistance(this, target, 0): the x87's st0 (unrounded beyond the precision).
+    // CDisplay::PlayerDistance(this, target, 0): the x87 result (unrounded beyond the precision).
     virtual double player_distance(const Spawn* target) = 0;
     virtual bool hit_anyway() = 0;                     // the byte 0xddf654: CanIHit failures are ignored
     virtual std::uint8_t can_i_hit(const Spawn* target, float range) = 0; // PlayerZoneClient::CanIHit
@@ -285,23 +285,23 @@ inline constexpr std::int32_t kNoModel = -1;
 // a combat skill through the fist, 101 with the primary (or the fist). `skill` is the argument as passed: the
 // original compares and forwards its low byte, and hands the whole dword to GetSkillBaseDamage (slot 100); `slot`
 // is read as a byte. Returns the original's al: 1 also when it was too early or there was no weapon to swing.
-// rof2decomp batch 269's vectors (DoAttack, 1200) check it call by call.
+// The original's vectors (DoAttack, 1200) check it call by call.
 bool do_attack(AttackState& s, Spawn& me, const Spawn* target, std::uint32_t slot, std::uint32_t skill,
                AttackQueries& q, const Fpu& fpu);
 
 // ---------------------------------------------------------------- ranged attacks
 
-// PlayerZoneClient::HandleAmmo @0x5a35b0 (rof2decomp re/src/game/spawn/ammo_eh.cpp): 0 throw the range item, 1
+// PlayerZoneClient::HandleAmmo @0x5a35b0: 0 throw the range item, 1
 // shoot the ammo, 2 neither (or the thrown stack, see do_ranged_attack). A range item not of type 0x13 (thrown), 5
 // (bow) or 6 gives 0 with a range, else 2. Without ammo: a thrown stack above 1 gives 2 for a player (+0x125 0), a
 // single one 0. With ammo: a thrown range item whose ammo is the same item gives whether the ammo's stack is above
 // 0; a bow with arrows (0x1b) or type 6 with 0x1c, stacked, gives 1; a thrown range item with any stacked ammo 2.
 // Anything else prints eqstr 12875 (0x324b, "You have run out of ammo!!", dsp_chat_2) and gives 2.
 std::uint8_t handle_ammo(const Spawn& me, AttackQueries& q);
-// PlayerZoneClient::DoRangedAttack @0x5a4920 (rof2decomp re/src/game/spawn/ranged_attack_eh.cpp): false without a
+// PlayerZoneClient::DoRangedAttack @0x5a4920: false without a
 // range item. By HandleAmmo: 0 throws the range item (SendCombatAbilityAttack(target, range item, 11, -1), model 8
 // "0"); 1 shoots the ammo (the attack with the ammo, model 7 "0", model 8 the range item's, else the primary's
-// (slot 14 in the rewrite's naming), else "0"); 2 throws a type 0x13 range item (model 7 from slot 13, model 8 as
+// (slot 14), else "0"); 2 throws a type 0x13 range item (model 7 from slot 13, model 8 as
 // for 1). Without a target false (after the ammo check); otherwise true.
 bool do_ranged_attack(const Spawn& me, const Spawn* target, AttackQueries& q);
 

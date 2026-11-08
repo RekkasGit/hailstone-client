@@ -69,7 +69,7 @@ BagMovePlan plan_bag_move(const net::Item& cursor, const net::Item& target, bool
         const bool consents = bag_fit(bag, list[i].item) == 1; // ItemClient::CanGoInBag
         bool found = false;
         if (consents && list[i].item.stackable()) {
-            // FUN_005713d0 over the bag's slots.
+            // 0x5713d0 over the bag's slots.
             for (int s = 0; s < bag.bag_slots && !found; ++s) {
                 const net::Item* there = left_in(to_cursor, s);
                 if (!there || !can_stack_with(list[i].item, *there)) continue;
@@ -102,7 +102,7 @@ BagMovePlan plan_bag_move(const net::Item& cursor, const net::Item& target, bool
             }
         }
         if (consents && !found) {
-            // FUN_0056f5c0: the first empty slot no entry has taken.
+            // 0x56f5c0: the first empty slot no entry has taken.
             for (int s = 0; s < bag.bag_slots; ++s) {
                 if (left_in(to_cursor, s) || taken(to_cursor, s)) continue;
                 list[i].move.to_sub = s;

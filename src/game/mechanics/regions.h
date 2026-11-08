@@ -3,8 +3,7 @@
 // Where the original samples a spawn's regions, and what a change of the
 // region under its feet does.
 //
-// Exact ports of rof2decomp batch 245 (re/src/game/spawn/collision_height.cpp,
-// check_region_change_eh.cpp), checked against the original's vectors
+// Follows the original exactly, checked against its vectors
 // (tests/movement_vectors_test.cpp). A spawn's z is its feet plus
 // AvatarHeight; the probes (docs/unknowns.md rows 20, 21 and 40):
 //   body  z (PlayerClient::sub_00506d20, BodyEnvironmentChange)

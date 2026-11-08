@@ -309,7 +309,7 @@ TEST_CASE("real estate: occupancy follows the root, the areas, then the house, y
 }
 
 TEST_CASE("real estate: a crate search over child lists that repeat and name themselves ends") {
-    // FUN_005b45b0 walks the child lists depth first, 10 deep. A plot listing itself 1000 times branched 1000 ways
+    // 0x5b45b0 walks the child lists depth first, 10 deep. A plot listing itself 1000 times branched 1000 ways
     // at every level (1000^10 calls, a frozen client); each record's children are walked once per depth now.
     RealEstateManager m = town();
     m.set_areas({box(7, {100, 100, 0}, {86, 86, 350})});

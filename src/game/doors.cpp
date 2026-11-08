@@ -1,4 +1,4 @@
-// A port of the original client's switch (door) rules; sources in game/doors.h.
+// The original client's switch (door) rules, followed exactly; sources in game/doors.h.
 
 #include "game/doors.h"
 

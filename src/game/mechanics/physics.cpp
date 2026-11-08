@@ -71,8 +71,8 @@ namespace {
 // The game's answers for the local player (GetEnvCoefficients' queries):
 // a player spawn in a loaded zone, not stuck, controlled, never a corpse or
 // a mount, with no ladders. PlayerClient +0x58 is IsSmallBoatRace (false for
-// players); the buoyancy is ProcessControls' 0xddfd78; FUN_008d0800 is mode 5
-// with vf64 (the walk speed) at least SpeedRun (rof2decomp's answers to
+// players); the buoyancy is ProcessControls' 0xddfd78; 0x8d0800 is mode 5
+// with vf64 (the walk speed) at least SpeedRun (the analysis's answers to
 // docs/unknowns.md; +0x90 is taken as false). The levitation floor probe
 // answers `hover_floor`.
 class PlayerEnv final : public EnvQueries {
@@ -132,7 +132,7 @@ void push_along_heading(PhysicsBody& body, float amount) {
 
 glm::vec3 step(PhysicsBody& body, const Environment& env, float elapsed_ms, const glm::vec2& strafe,
                float hover_floor) {
-    float dt = elapsed_ms * kTicksPerMs; // fild elapsed / fmul 0.02f
+    float dt = elapsed_ms * kTicksPerMs;
     if (!(dt <= kMaxStepTicks)) dt = kMaxStepTicks;
     if (body.dead) {
         body.speed_run = 0.0f;
@@ -166,7 +166,7 @@ glm::vec3 step(PhysicsBody& body, const Environment& env, float elapsed_ms, cons
     return body.feet - from;
 }
 
-// ------------------------------------------------- exact ports (batch 240)
+// ------------------------------------------------- the original's Step, env, landing
 
 namespace {
 
@@ -180,7 +180,7 @@ constexpr float kNoFloor = LandingSpawn::kNoFloor;
 constexpr float kLandSpeed = -2.5f;       // 0x9c8328
 constexpr float kQueryTop = 32000.0f;     // 0x9cf840
 
-// fld / fstp: a signalling NaN comes out quiet.
+// A float copied through the FPU: a signalling NaN comes out quiet.
 float quiet(float v) {
     if (!std::isnan(v)) return v;
     std::uint32_t b;
@@ -203,7 +203,7 @@ std::optional<EnvCoefficients> water(std::uint8_t wet) {
 // The floor probe of the levitation paths (ProbeFloor): z - drop, raised to
 // the spawn's floor when below it, asked at (y, x, z) rounded.
 double probe_floor(const EnvSpawn& s, const EnvObject& o, float drop, EnvQueries& q, const Fpu& f) {
-    double z = x87_sub(f, st(o.z), drop); // fld z / fsub drop
+    double z = x87_sub(f, st(o.z), drop);
     if (z < static_cast<double>(s.floor_height)) z = st(s.floor_height).v;
     return quiet(q.floor_at(quiet(o.y), quiet(o.x), static_cast<float>(z)));
 }
@@ -223,7 +223,7 @@ std::optional<EnvCoefficients> get_env_coefficients(bool walking, std::int32_t m
         // or a body that sinks (else 0 * dt).
         double g = st(q.gravity()).v;
         if (s.body_wet < 5) {
-            // fmul dt / fsubr SpeedZ.
+            // SpeedZ - gravity * dt.
             o.speed_z = static_cast<float>(x87_sub(f, o.speed_z, x87_mul(f, g, dt)));
         } else {
             bool falls = q.mount_race() || q.corpse() || s.sinks_in_water;
@@ -274,7 +274,7 @@ std::optional<EnvCoefficients> get_env_coefficients(bool walking, std::int32_t m
     } else if (q.spawn_vf58() && 0.4f < depth) {
         o.speed_z = static_cast<float>(x87_sub(f, o.speed_z, x87_mul(f, st(dt), 0.1f)));
     }
-    // this->vf15's buoyancy (fld / fchs / fadd).
+    // this->vf15's buoyancy, negated, plus SpeedZ.
     o.speed_z = static_cast<float>(x87_add(f, -st(q.buoyancy()).v, o.speed_z));
     return c;
 }
@@ -321,7 +321,7 @@ LandingResult landing_and_fall_check(LandingSpawn& s, LandingQueries& q, const L
     }
     // Under the world: a non-player spawn in a zone with a recovery is put
     // back on the first floor below the safe height (searched from 32000).
-    if (x87_sub(f, s.z, st(height)) >= static_cast<double>(w.world_bottom)) return r; // fld height / fsubr z
+    if (x87_sub(f, s.z, st(height)) >= static_cast<double>(w.world_bottom)) return r; // z - height
     if (q.no_recovery() || s.type == 0 || w.zone_type == 0) return r;
     double limit = x87_sub(f, st(w.safe_floor), kHoverDrop);
     auto recovery = [&](float from, float& found) {
@@ -343,7 +343,7 @@ LandingResult landing_and_fall_check(LandingSpawn& s, LandingQueries& q, const L
 
 float elapsed_steps(std::uint32_t now, std::uint32_t last, const Fpu& f) {
     auto elapsed = static_cast<std::int32_t>(now - last);
-    double v = elapsed; // fild
+    double v = elapsed; // read as signed
     if (elapsed < 0) v = f.add(v, 4294967296.0);
     return static_cast<float>(f.mul(v, static_cast<double>(kTicksPerMs)));
 }
@@ -352,7 +352,7 @@ float integrate_axis(float position, float speed, float dt, const Fpu& f) {
     return static_cast<float>(x87_add(f, position, x87_mul(f, st(speed), st(dt))));
 }
 
-// ------------------------------------------------- exact ports (batch 246)
+// ------------------------------------------------- the original's friction
 
 namespace {
 
@@ -386,7 +386,7 @@ std::size_t table_index(float angle) {
 
 constexpr float kTinySpeed = 1.1920929e-07f; // 0x9c3388: 2^-23
 
-// ScaleNonZero: v[0] and v[1] by a, v[2] by b, each unless it is 0 (fucompp: a
+// ScaleNonZero: v[0] and v[1] by a, v[2] by b, each unless it is 0 (an equality test: a
 // NaN is scaled). value_first is vf3's operand order (v * a, v * b);
 // ApplyFriction's is a * v. v[1] is a * v in both.
 void scale_non_zero(float v[3], float a, float b, bool value_first, const Fpu& f) {
@@ -405,7 +405,7 @@ float table_cos(float angle) { return math_table().cos[table_index(angle)]; }
 void run_speed_push(float speed_run, float heading, float camera_angle, float push[3], bool spawn, float a, float b,
                     PushQueries& q, const Fpu& f) {
     if (!(speed_run == 0.0f)) {
-        float speed = quiet(speed_run); // fld / fstp into a temporary
+        float speed = quiet(speed_run); // copied through the FPU into a temporary: quiet
         push[0] = static_cast<float>(x87_add(f, x87_mul(f, X87(q.cos(quiet(heading))), X87(speed)), X87(push[0])));
         push[1] = static_cast<float>(x87_add(f, x87_mul(f, X87(q.sin(quiet(heading))), X87(speed)), X87(push[1])));
         if (!(camera_angle == 0.0f)) {

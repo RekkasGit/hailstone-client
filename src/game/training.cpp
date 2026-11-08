@@ -37,7 +37,7 @@ constexpr std::int32_t kLanguageLevels[25 * 15 + 1] = {
     30,
 };
 
-// FUN_004dc5b0: the tradeskills a guildmaster teaches only up to 20 (eqstr 117 above that).
+// 0x4dc5b0: the tradeskills a guildmaster teaches only up to 20 (eqstr 117 above that).
 bool trade_skill_limit(std::uint32_t skill) {
     switch (skill) {
     case 0x39: case 0x3b: case 0x3c: case 0x3d: case 0x3f: case 0x40: case 0x41: case 0x44: case 0x45:
@@ -84,7 +84,7 @@ std::vector<TrainingRow> training_rows(const TraineeView& who, const std::array<
 }
 
 std::int32_t training_cost(std::int32_t value) {
-    // 32-bit sub, imul, imul, idiv: a skill past 1301 wraps the cube (the server's value is uncapped).
+    // A 32-bit difference cubed, divided signed: a skill past 1301 wraps the cube (the server's value is uncapped).
     auto v = static_cast<std::int32_t>(static_cast<std::uint32_t>(value) - 10u);
     if (v < 0) v = 0;
     const auto u = static_cast<std::uint32_t>(v);
@@ -104,7 +104,7 @@ std::int32_t pc_skill_limit(const SkillLimitView& who, std::uint32_t skill) {
             if (other != skill && value(other) > 200) ++over;
         if (over >= allowed) cap = 200;
     }
-    if (skill < 0x2b || skill > 0x2f) return cap; // FUN_005ba150: the specializations
+    if (skill < 0x2b || skill > 0x2f) return cap; // 0x5ba150: the specializations
     std::int32_t level = who.level;
     std::int32_t highest = who.highest_level ? static_cast<std::uint8_t>(who.highest_level()) : 0;
     std::int32_t first = 50, second = 100;

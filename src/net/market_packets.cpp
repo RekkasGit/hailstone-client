@@ -203,7 +203,7 @@ std::optional<TraderClick> decode_trader_click(const AppPacket& p) {
         TraderClick v;
         v.action = r.le<std::uint32_t>();
         v.trader_id = r.le<std::uint32_t>();
-        v.approval = r.le<std::uint8_t>(); // (char)param_3[2]
+        v.approval = r.le<std::uint8_t>(); // the third byte of the trader record
         return v;
     });
 }
@@ -466,7 +466,7 @@ struct LenientReader {
         if (!has(1)) return fallback;
         return std::to_integer<std::uint8_t>(data[pos++]);
     }
-    // CUnSerializeBuffer::GetString(dst, max) / FUN_0062e430's string: up to max - 1 characters; a string without its
+    // CUnSerializeBuffer::GetString(dst, max) / 0x62e430's string: up to max - 1 characters; a string without its
     // terminator in the packet reads as empty and moves nothing.
     std::string str(std::size_t max) {
         std::size_t n = 0;
@@ -478,7 +478,7 @@ struct LenientReader {
     }
 };
 
-// FUN_007d6ef0: a buy line; a line that is not enabled keeps the defaults after its flag.
+// 0x7d6ef0: a buy line; a line that is not enabled keeps the defaults after its flag.
 BuyLine read_line(LenientReader& r) {
     BuyLine v;
     v.slot = r.u32();
@@ -507,7 +507,7 @@ BuyLine read_line(LenientReader& r) {
     return v;
 }
 
-// A buy line's names are read back into 64-byte fields (FUN_007d6ef0, GetString(.., 64); EQEmu's
+// A buy line's names are read back into 64-byte fields (0x7d6ef0, GetString(.., 64); EQEmu's
 // DECODE(OP_BuyerItems) strcpy's a sold line's item name into char[64]): at most 63 characters.
 void write_name(ByteWriter& w, std::string_view s) { detail::write_cstring(w, s.substr(0, 63)); }
 
@@ -645,7 +645,7 @@ AppPacket encode(const BuyerSale& v) {
 
 namespace {
 
-// FUN_00423500: the sale record from the reader's place.
+// 0x423500: the sale record from the reader's place.
 BuyerSale read_sale(LenientReader& r) {
     BuyerSale v;
     v.method = r.u32();
@@ -896,7 +896,7 @@ std::optional<BuyerGreeting> decode_buyer_greeting(const AppPacket& p) {
 
 namespace {
 
-// FUN_006368c0: {u32 zone, u32 character id, u32 spawn id, name}.
+// 0x6368c0: {u32 zone, u32 character id, u32 spawn id, name}.
 BarterBuyer read_buyer(LenientReader& r) {
     BarterBuyer b;
     b.zone = r.u32();

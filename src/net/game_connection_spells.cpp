@@ -1,5 +1,5 @@
 // GameConnection: spells. Casting, memorizing, buffs and spell messages, as
-// the original client does them online (rof2decomp:notes/spell-casting.md):
+// the original client does them online:
 // the client gates a cast, starts its cast bar, locks the gems for 10 s and
 // sends OP_CastSpell; the server decides everything else and ends every cast
 // with OP_ManaChange, then sends OP_MemorizeSpell(3) with the real recast.
@@ -87,7 +87,7 @@ void GameConnection::init_spells_from_profile() {
     for (std::size_t i = 0; i < profile_->mem_spells.size() && i < static_cast<std::size_t>(game::kSpellGems); ++i) {
         spells_.gems[i].spell = profile_->mem_spells[i];
         // spellSlotRefresh is the gem's remaining refresh in ms: the profile load makes it absolute (+ __EQGetTime)
-        // and zone-in copies it into PlayerClient +0x2e8 (rof2decomp batch 260).
+        // and zone-in copies it into PlayerClient +0x2e8.
         if (i < profile_->gem_refresh.size()) spells_.gems[i].ready = profile_->gem_refresh[i] + eq_now;
     }
     spells_.recovery_ready = 0;
@@ -224,7 +224,7 @@ public:
     std::uint8_t spell_level_needed(std::int32_t id, std::uint8_t class_id) override {
         // EQ_Spell::GetSpellLevelNeeded (a missing record: 255), through the NMS patch's detour on an NMS server:
         // GetSpellMemTicksLeft is not hooked, but its first step asks for the profile class's level, which the
-        // detour answers with the mask's minimum (notes/nms-dinput8.md §3.11).
+        // detour answers with the mask's minimum.
         const game::SpellData* s = id >= 0 ? spells_.get(static_cast<std::uint32_t>(id)) : nullptr;
         if (!s) return 0xff;
         return level_needed_(*s, class_id);

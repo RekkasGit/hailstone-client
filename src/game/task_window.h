@@ -1,14 +1,14 @@
 #pragma once
 
-// The quest journal's contents as CTaskWnd builds them (rof2decomp export/CTaskWnd.c and the CTaskWnd_* functions in
-// export/_globals.c; CTaskEntry / CTaskElement / PCTaskStatus as eqlib-rof2's TaskSystem.h lays them out):
+// The quest journal's contents as CTaskWnd builds them (CTaskWnd and the CTaskWnd_* functions;
+// CTaskEntry / CTaskElement / PCTaskStatus as eqlib-rof2's TaskSystem.h lays them out):
 //   - the task list (TASK_TaskList; CTaskWnd_RebuildTaskLists @0x7720e0, CTaskWnd_CollectTaskRows @0x76ed40,
 //     CTaskWnd_SortAndFillTaskList @0x771600, CTaskWnd_AddTaskRow @0x76f080, the timers @0x76ee20 / @0x76ef90);
 //   - the objectives (TASK_TaskElementList; CTaskWnd_FillObjectiveList @0x76f2c0);
 //   - the description (TASK_Description; CTaskWnd_BuildTaskDetailsSTML @0x770200);
 //   - the quest history (QUEST_TaskList / QUEST_TaskElementList; CTaskWnd_FillHistoryList @0x76fb90,
 //     CTaskWnd_FillHistoryElements @0x76f700);
-//   - the compass mark for a task's NPC (FUN_0076ff70).
+//   - the compass mark for a task's NPC (0x76ff70).
 // Pure functions over game::TaskState; app/lua_eq_progress.cpp's TaskWindow keeps the window's own state.
 
 #include <cstdint>
@@ -51,8 +51,8 @@ std::vector<TaskListRow> collect_task_rows(const TaskState& s, std::uint32_t typ
 
 // The list's sort (WndNotification 0xf, a click on a column's header: column 1 sorts by title (key 0), column 2 by
 // time left (key 1), column 0 keeps the key; the same key again flips the direction): qsort (the CRT's, VS2010:
-// msvc_qsort below) with FUN_0076f970 / FUN_0076f9b0 (titles, strcmp, ascending / descending) or FUN_0076f9f0 /
-// FUN_0076fa50 (key 1: two rows whose times differ compare as 1 / -1 whatever their order, equal times by title).
+// msvc_qsort below) with 0x76f970 / 0x76f9b0 (titles, strcmp, ascending / descending) or 0x76f9f0 /
+// 0x76fa50 (key 1: two rows whose times differ compare as 1 / -1 whatever their order, equal times by title).
 void sort_task_rows(std::vector<TaskListRow>& rows, int key, bool ascending);
 
 // The VS2010 CRT's qsort (@0x8dd9d0, shortsort @0x8dd940): its exact swaps, so an inconsistent comparator (the
@@ -105,7 +105,7 @@ std::vector<TaskWindowRow> history_element_rows(const std::vector<TaskElement>& 
                                                 const std::function<std::string(const TaskElement&)>& element_text,
                                                 const std::function<std::string(std::uint32_t)>& zone_name);
 
-// CTaskWnd_BuildTaskDetailsSTML @0x770200: the description (FUN_00481960's text: task_description_text) and
+// CTaskWnd_BuildTaskDetailsSTML @0x770200: the description (0x481960's text: task_description_text) and
 // "<BR><BR>" when there is one; then, when the task shows its reward (+0xff0) and has any (coin, experience, an
 // item, points): 3477 "Reward(s):<BR>", the coin in words (FormatMoneyWords) + "<BR>", 138 "You gain
 // experience!!" + "<BR>", the reward item's link + "<BR>", and "<points> " followed by, for a shared task
@@ -118,7 +118,7 @@ std::string task_details_stml(const Task& t, const EqStrings& strings,
 std::uint32_t task_abandon_eqstr(std::uint32_t type);
 inline constexpr int kTaskAbandonTimeoutMs = 10000;
 
-// FUN_0076ff70: the compass mark for the first unfinished deliver (1) or speak-with (4) element of the task or the
+// 0x76ff70: the compass mark for the first unfinished deliver (1) or speak-with (4) element of the task or the
 // shared task (types 0 and 1, in slot order) whose TargetZoneID list is empty or holds the current zone and whose
 // target name (lower-cased, spaces as '_', split at ';') is part of an NPC's name (strstr over spawn names, the
 // first NPC in spawn order); the element found is (task id, slot).

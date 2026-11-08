@@ -3,9 +3,9 @@
 // The player's items as the client keeps them: possessions (equipment,
 // general inventory, cursor), bank, shared bank, with bag contents inside
 // their bags; plus the item rules the original checks before it moves an
-// item (rof2decomp:notes/items-and-inventory.md §2, §3). The server has the
+// item. The server has the
 // final word; the client moves items locally first and the server corrects
-// it with item packets, OP_MoveItem or OP_DeleteItem (§2.5).
+// it with item packets, OP_MoveItem or OP_DeleteItem.
 
 #include <cstdint>
 #include <map>

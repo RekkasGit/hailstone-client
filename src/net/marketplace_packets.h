@@ -6,7 +6,7 @@
 // original's readers and senders (CEverQuest::HandleWorldMessage's cases 0x1e9f @0x4d2969, 0x09bf @0x4d2aef, 0x4b7f
 // @0x4d2b3e, 0x77a7 @0x4d2c73, 0x0a37 @0x4d2ee9, 0x0114 @0x4d30ef; MarketplaceItem_Deserialize @0x7f8a30,
 // MarketplaceFund_Deserialize @0x7f9170, CMarketplaceWnd::WndNotification @0x6e1f70, AboutToShow @0x6e35d0) as the
-// rof2decomp notes (housing-and-market.md section 9) record them. Per-packet notes: docs/protocol/rof2-packets.md
+// original reads and sends them. Per-packet notes: docs/protocol/rof2-packets.md
 // "Marketplace".
 //
 // The catalog, funding and state feeds are read the way the original's CUnSerializeBuffer reads them: every field

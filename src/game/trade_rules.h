@@ -1,7 +1,7 @@
 #pragma once
 
 // The trade window's ready flags (CTradeWnd +0x2f8 the partner's, +0x2f9
-// ours): exact ports of rof2decomp batch 253 (re/src/game/ui/trade_offer.cpp),
+// ours): follows the original's offer handling,
 // checked against the CTradeWnd_*.jsonl vectors. Every change to our own
 // offer (coin clicked or dropped in, an item moved into or out of a trade
 // slot) and every change to the partner's coin clears both flags; the
@@ -40,7 +40,7 @@ bool trade_clicked_money_button(TradeFlags& f, std::uint8_t cursor_type, const s
 bool trade_drop_cursor_money(TradeFlags& f, std::uint8_t cursor_type, const std::array<std::int32_t, 4>& cursor,
                              TradeMoneyMove& move);
 
-// ---- who may trade (rof2decomp batch 265: CEverQuest_IsOkToTransact.jsonl, Handle_OP_TradeRequest.jsonl)
+// ---- who may trade (the recorded vectors CEverQuest_IsOkToTransact.jsonl, Handle_OP_TradeRequest.jsonl)
 
 // CEverQuest::IsOkToTransact @0x51c970's inputs, in the order it checks them (no messages).
 enum TransactWindow : std::uint8_t {

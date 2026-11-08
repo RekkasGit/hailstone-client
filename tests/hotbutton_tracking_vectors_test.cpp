@@ -1,4 +1,4 @@
-// rof2decomp batch 267's vectors (recorded from eqgame.exe): pressing a hot button, its right click and the
+// The original's vectors (recorded from eqgame.exe): pressing a hot button, its right click and the
 // socials' queue (game/hot_button_press.h), and the tracking window's list (game/tracking.h).
 #include <doctest/doctest.h>
 
@@ -242,7 +242,7 @@ TEST_CASE("vectors: CHotButtonWnd_DoHotButton") {
     });
 }
 
-TEST_CASE("vectors: CHotButton_RightClick (FUN_0054fc10)") {
+TEST_CASE("vectors: CHotButton_RightClick (0x54fc10)") {
     hailstone::test::each_vector("CHotButton_RightClick.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];
@@ -275,7 +275,7 @@ TEST_CASE("vectors: CHotButton_RightClick (FUN_0054fc10)") {
     });
 }
 
-TEST_CASE("vectors: Social_Stop (FUN_006143b0)") {
+TEST_CASE("vectors: Social_Stop (0x6143b0)") {
     hailstone::test::each_vector("Social_Stop.jsonl", [](const Json& rec) -> std::string {
         const Json& in = rec["in"];
         const Json& out = rec["out"];

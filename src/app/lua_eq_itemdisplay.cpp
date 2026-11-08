@@ -1,10 +1,10 @@
 // The item display windows (ItemDisplayWindow, ItemDisplayWindow#2 ..): CItemDisplayWnd over game/item_display.h.
 // The text is what CItemDisplayWnd_BuildItemInfo builds; the places of the info lines, the stat grid, the heroic
-// bonuses, the Modified button and the description are those it gives them (FUN_0069b590 and the end of
+// bonuses, the Modified button and the description are those it gives them (0x69b590 and the end of
 // BuildItemInfo), so the window is drawn "live" (eq.ChildRect), at the size it gives itself there
 // (CXWnd::Resize @006adce8: eq.WindowClient; game::layout_item_display). The augment sockets are
 // CItemDisplayWnd_UpdateAugmentSlots @0x69f240's rows (game/augments.h) and their input CItemDisplayWnd::
-// WndNotification @006ae870's (rof2decomp notes/augments.md §3, §4).
+// WndNotification @006ae870's.
 
 #include <cfloat>
 #include <charconv>
@@ -202,7 +202,7 @@ public:
             return std::array<int, 4>{kX[col - 1], l->row_top(row), kW[col - 1], 20};
         }
         if (int n = index_after(id, "IDW_Heroic"); n >= 1) {
-            // FUN_0069b3d0: right of the value it belongs to, 40 wide.
+            // 0x69b3d0: right of the value it belongs to, 40 wide.
             int k = 0;
             for (int r = 1; r <= game::ItemDisplay::kRows; ++r)
                 for (int c = 1; c <= 3; ++c)
@@ -259,7 +259,7 @@ public:
             return true;
         }
         if (id == "IDW_Appearance_Socket_Buy_Button")
-            return button == "left"; // FUN_006dcc00(0x432) opens the marketplace, which this client does not have
+            return button == "left"; // 0x6dcc00(0x432) opens the marketplace, which this client does not have
         if (button == "rightup" && !outside && ImGui::GetIO().KeyAlt) {
             // XWM_RCLICK with Alt on any control: Send_OP_ItemPreviewRequest(the window's item) and the preview shown.
             if (host.conn) host.conn->preview_item(item(host));
@@ -385,7 +385,7 @@ private:
         for (const auto& c : it->contents) sig += "/" + std::to_string(c.index) + ":" + std::to_string(c.item.id);
         if (cached_ && cached_id_ == it->id && cached_serial_ == sig && now - built_ms_ < 1000) return &*cached_;
         const net::GameConnection& c = *host.conn;
-        // BuildItemInfo's FUN_007b28a0 on the shown item (the stats-disabled bytes: game/augments.h), with
+        // BuildItemInfo's 0x7b28a0 on the shown item (the stats-disabled bytes: game/augments.h), with
         // GetGameFeature(UseItem) and GetGameFeature(Ornament); the item's header slot is its ItemGlobalIndex.
         net::Item& shown = (*host.item_displays)[static_cast<std::size_t>(n_)];
         game::update_stats_disabled(shown, c.game_feature(0x13), c.game_feature(0x15),
@@ -422,7 +422,7 @@ private:
         return &*cached_;
     }
 
-    // The layout BuildItemInfo last gave the window, done again for a pending BuildItemInfo(item, flags). FUN_0069b590
+    // The layout BuildItemInfo last gave the window, done again for a pending BuildItemInfo(item, flags). 0x69b590
     // always places the grid again; with flags 0 (@006ad921) the rest only moves, and the window only resizes, when
     // the Modified button's row has come below the description's top (it grew).
     const game::ItemDisplayLayout* layout(EqHost& host) {
@@ -501,10 +501,10 @@ std::string deity_desc(const net::GameConnection& c, std::uint32_t deity) {
 // ---------------------------------------------------------------- ObjectPreviewWnd (CObjectPreviewWnd)
 
 // CObjectPreviewWnd @0x7005a0 over GameConnection::item_preview() (game/item_preview.h): shown by a preview request
-// (and its close box: AboutToHide stops the view), hidden on zoning (OnPreZone). The reply's FUN_006ff980 shows the
+// (and its close box: AboutToHide stops the view), hidden on zoning (OnPreZone). The reply's 0x6ff980 shows the
 // view (OPW_ViewRenderArea, app/item_preview_view.h) and its eleven buttons when there is something to show, else
 // the "No item preview available." label. WndNotification @0x6ffb20 hands the buttons to the view's controller
-// (FUN_005770f0's object, not decoded): here the pan buttons move the view a tenth of its size, the rotate buttons
+// (0x5770f0's object, not decoded): here the pan buttons move the view a tenth of its size, the rotate buttons
 // turn it 15 degrees, the zoom buttons scale the distance by 0.8 / 1.25, Reset fits it again; the Lua drags turn and
 // pan it and the wheel zooms it, as the buttons' tooltips say.
 class ObjectPreviewWindow : public StockWindow {

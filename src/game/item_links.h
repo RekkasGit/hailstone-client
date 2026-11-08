@@ -1,7 +1,7 @@
 #pragma once
 
 // Item links inside chat text. A link is `\x12` + tag code + body + visible
-// text + `\x12` (rof2decomp:notes/eqgame-patches.md §1). Tag code '0' is an
+// text + `\x12`. Tag code '0' is an
 // item: its body is the item id and six augment ids as hex, then is-evolving
 // (1 digit), evolve group (4 hex), evolve level (2 hex), ornament icon
 // (5 hex) and the link hash (8 hex).

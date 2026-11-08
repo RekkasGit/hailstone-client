@@ -1,7 +1,7 @@
 #pragma once
 
-// The `eq` table of the Lua UI packs (ui/<pack>): rof2decomp's rof2ui scripts were written against the original client's
-// CXWnd tree (rof2decomp re/src/ui/lua_eq*.cpp); here the same functions, with the same arguments and returns,
+// The `eq` table of the Lua UI packs (ui/<pack>): the scripts are written against the original client's
+// CXWnd tree; here the same functions, with the same arguments and returns,
 // answer from this client's own state. A stock window is a model (app/lua_eq_windows.h) keyed by its XML screen
 // name, and each of its children by its XML ScreenID: what the original window's code would have set on that
 // child (text, shown, enabled, art, gauge) is computed from GameConnection, the spell, item and group state, and a
@@ -71,7 +71,7 @@ struct EqHost {
     std::function<void(int bar, int button, bool mouse)> press_hot_button;
     // The text a hotbutton shows (its label, or the skill / spell / item name the original fills in).
     std::function<std::string(int bar, int button)> hot_button_label;
-    // A quick right click on a hotbutton (FUN_0054fc10: a social's stop or editor, an item's use, ...).
+    // A quick right click on a hotbutton (0x54fc10: a social's stop or editor, an item's use, ...).
     std::function<void(int bar, int button)> hot_button_menu;
     // The hotbutton CCursorAttachment carries (dragged from the Actions or AA window or off a bar; a click on a
     // hotbutton puts it there), putting a button on bar 0..9, button 0..11 of the bar's current page (saved), and
@@ -144,7 +144,7 @@ struct EqHost {
     std::function<bool()> target_in_melee_range;
     // A script holds autoskill off (Automation::autoskill_held): it uses nothing meanwhile.
     std::function<bool()> autoskill_held;
-    // The social editor (SocialEditWnd, FUN_00758bb0) on social 0..119; EqApi sets it.
+    // The social editor (SocialEditWnd, 0x758bb0) on social 0..119; EqApi sets it.
     std::function<void(std::int32_t social)> open_social_editor;
     int social_editing = -1; // the social SocialEditWnd is open on (0..119), -1 while it is closed
     // Lua socials (app/lua_eq_luasocial.cpp): the script host they run in, MQ's TLOs for the editor's completion, and
@@ -253,7 +253,7 @@ struct EqHost {
         std::vector<float> row_y; // each row's top inside the menu (GameMenus fills it)
     };
     std::vector<GameMenu> menus;
-    // FUN_00761f10, CContextMenuManager::PopupMenu @0x862220's test: context menus open only with the ContextMenus
+    // 0x761f10, CContextMenuManager::PopupMenu @0x862220's test: context menus open only with the ContextMenus
     // option (0xde0d51) and, in game, the player not down (game::context_menus_open).
     bool context_menus() const;
     void open_menu(float x, float y, std::vector<MenuRow> rows) {
@@ -286,7 +286,7 @@ struct EqHost {
     std::function<void(int tip)> activate_tip;
     // A window's Activate on another stock window (the inventory's Face button: CPlayerCustomizationWnd).
     std::function<void(std::string_view screen)> show_window;
-    // The layout copy window (app/lua_eq_layout.cpp, EqApi's port of __CopyLayout): the layouts there are to copy
+    // The layout copy window (app/lua_eq_layout.cpp, EqApi's __CopyLayout): the layouts there are to copy
     // (a UI ini and the resolution its keys are stored for: "1280x1024", "Windowed"), and the copy, which answers
     // the eqstr of a refusal and its arguments (none: copied).
     struct LayoutSource {

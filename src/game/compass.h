@@ -33,7 +33,7 @@ public:
     // character (the window then does nothing but count the hold down). A window that was hidden the frame before
     // picks a target first (AboutToShow, vtable +0xdc = 0x65bb80).
     void process(std::uint32_t now_ms, bool shown, std::int32_t skill, const Rand& rand);
-    // A successful Sense Heading (FUN_0065b650).
+    // A successful Sense Heading (0x65b650).
     void sense_heading() {
         error_ = 0;
         hold_ = 5000;

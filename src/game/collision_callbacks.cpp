@@ -85,12 +85,12 @@ std::uint32_t floor_actor_filter(const FloorFilterActor& a, bool is_floor_switch
         }
     }
     if (a.volume_type == 0 || a.volume_type == 1) return 1;
-    return a.volume_radius == 0.0 ? 1 : 0; // fldz; fucompp; not NaN
+    return a.volume_radius == 0.0 ? 1 : 0; // equal to 0, not NaN
 }
 
 FloorHitResult collsn_callback_for_floor(const FloorHit& h, const mechanics::Fpu& f) {
     FloorHitResult r;
-    // fld height; fadd 2.0; fcomp distance; sete: height + 2.0 > distance.
+    // height + 2.0 > distance.
     auto within = [&] {
         double s = mechanics::x87_add(f, mechanics::X87(h.player_height), mechanics::X87(2.0f));
         float d = h.distance;

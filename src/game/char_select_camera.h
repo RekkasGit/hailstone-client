@@ -1,11 +1,11 @@
 #pragma once
 
 // The camera of character select and creation (and of the player customization window in game): EverQuest::Cameras[7],
-// an EQCamera_User, as the original places it around the model player. Ported from rof2decomp:
+// an EQCamera_User, as the original places it around the model player. Follows:
 //   unk_InitCameras @0x5338a0 (Cameras[7] is an EQCamera_User, vftable 0x9d1148), its virtuals: +4 reset @0x542550,
 //   +8 update EQCamera_User::vf2 @0x798c90, +0xc..+0x28 the setters @0x542580..0x5425f0;
-//   FUN_00517840 (StartNetworkGame: SetCameraType(7) and the first placement);
-//   CDisplay::SetCCreateCamera / CharSelect_PositionCameraForModel @0x4950f0 (re/src/game/spawn/char_create_camera.cpp);
+//   0x517840 (StartNetworkGame: SetCameraType(7) and the first placement);
+//   CDisplay::SetCCreateCamera / CharSelect_PositionCameraForModel @0x4950f0;
 //   DoCharacterSelection @0x53aac0's 50 ms turn (CharCreateRotateOn) and DoNewCharacterCreation @0x53a760's;
 //   the customization window's face camera (CPlayerCustomizationWnd AboutToShow @0x715cf0, sub_00714850).
 // Positions are world (zone file) coordinates (game/coords.h): the original's +0x64 / +0x68 are world x / y.
@@ -64,7 +64,7 @@ struct CCreateInputs {
     std::uint8_t can_be_bald = 1; // PlayerClient::CanBeBald (game/player_customization.h)
     float heading = 0.0f;         // PlayerBase +0x80
     float size = 6.0f;            // +0x13c Height
-    float view_height = 0.0f;     // +0x190 ViewHeight (FUN_00506330)
+    float view_height = 0.0f;     // +0x190 ViewHeight (0x506330)
     float ccc_distance = 2.5f;    // ModDat_GetCCCDis(model code): moddat.ini CCCDis, 2.5 without one
     float ccc_height = -1.0f;     // ModDat_GetCCCHt: CCCHt, -1.0 without one
 };
@@ -76,11 +76,10 @@ struct CCreateResult {
 // CDisplay::SetCCreateCamera(mode) @0x4950f0: mode 0 the whole model at character select (field of view 90; height
 // -(ViewHeight x 0.33); distance Height + 2 + 6, or + 7 for Trolls, Ogres and Iksar); mode 100 the face (the
 // customization window), 2 / 3 the hair pages; others take field of view 70. A new-style model takes moddat.ini's
-// CCCDis / CCCHt; an old one the per race and gender constants of the original (re/src/game/spawn/char_create_camera
-// .cpp lists them).
+// CCCDis / CCCHt; an old one the per race and gender constants of the original.
 CCreateResult set_ccreate_camera(UserCamera& cam, int mode, const CCreateInputs& in);
 
-// FUN_00517840 (StartNetworkGame, before character select): SetCameraType(7), distance 6, height -(ViewHeight x
+// 0x517840 (StartNetworkGame, before character select): SetCameraType(7), distance 6, height -(ViewHeight x
 // 0.33), heading 456, pitch 0, +0x28 0, field of view 90.
 void start_network_game_camera(UserCamera& cam, float view_height);
 

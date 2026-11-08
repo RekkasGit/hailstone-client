@@ -9,9 +9,8 @@
 // while it moves and turns. The position a player sends while on a vehicle is
 // in the vehicle's frame too (PackPlayerPositionUpdateOnVehicle @0x4fa650).
 //
-// Exact ports of rof2decomp batch 252 (re/src/game/spawn/vehicle_riders.cpp),
-// checked against Vehicle_WorldToLocal.jsonl / Vehicle_LocalToWorld.jsonl at
-// both x87 precisions; rof2decomp notes/combat-and-movement.md §3.5.
+// Follow the original exactly, checked against its vectors
+// (Vehicle_WorldToLocal.jsonl / Vehicle_LocalToWorld.jsonl) at both x87 precisions.
 
 #include <array>
 

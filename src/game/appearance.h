@@ -2,9 +2,8 @@
 
 // Spawn appearance rules that do not depend on the model files: which
 // dressing path a spawn uses and how armour updates change it. Sources:
-// rof2decomp notes/spawns-races-models.md §2.8 (OP_WearChange), §3 row 30
-// (EQPlayer::UnSerializeSpawn) and §4 (PlayerClient::ApplyBodyTexture,
-// RefreshEquipSlot, SetHead).
+// the original's OP_WearChange handling, EQPlayer::UnSerializeSpawn and
+// PlayerClient::ApplyBodyTexture, RefreshEquipSlot and SetHead.
 
 #include <cstdint>
 
@@ -42,7 +41,7 @@ void normalize_appearance(Appearance& a, std::uint32_t race);
 // (docs/unknowns.md); SwapBodyMaterial itself has no race rule.
 Appearance drawn_appearance(const Appearance& a, std::uint32_t race);
 
-// OP_WearChange (§2.8). Returns false when the client ignores it: a body
+// OP_WearChange. Returns false when the client ignores it: a body
 // slot of a spawn with a fixed body texture, or a slot >= 9.
 bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
                        std::uint32_t tint);
@@ -63,14 +62,14 @@ std::uint32_t effective_material(const Appearance& a, int slot);
 // (1-6) is dressed with.
 int luclin_armor_slot(const Appearance& a, std::uint32_t race, int slot);
 
-// FUN_0040a5b0 (ActorBase, @0x40a5b0): the head material ids 0xf0 / 0xf1 of
+// 0x40a5b0 (ActorBase, @0x40a5b0): the head material ids 0xf0 / 0xf1 of
 // the old models by the actor's race and gender (female: gender 1): 0xf0 is a
 // per-race helm item, 0xf1 the head 3 (Ogres a helm, Barbarians the 0xf0 one);
 // any other id, or a race outside 1-12 and 128, stays as it is.
 std::uint32_t map_head_material(std::uint32_t race, std::uint8_t gender, std::uint32_t id);
 
 // What PlayerClient::SwapHead @0x594210 puts on an old (classic) model for
-// head material `material` (rof2decomp batch 248, row 30): the head mesh
+// head material `material`: the head mesh
 // <code>HE<variant>, plus an item IT<item> held on the head point when
 // item != 0. 0xf0..0xff map through map_head_material; a result still
 // >= 0xf0 is that item with HE00. 7 is 2 (3 for Iksar). Vah Shir (130) wear
@@ -95,7 +94,7 @@ void set_extra_shields(bool on);
 
 // PlayerClient_UpdateHoldingAnimation @0x58d780: whether a spawn's holding column (+0x334) is other than 0, which
 // on a tunic-point model plays its variant B tracks (assets::CharacterModel::held_aliases). The column is 1..7 when
-// either hand's model kind (+0x119c / +0x11a0, FUN_00489ec0) is set, and a kind is 0 only for no model.
+// either hand's model kind (+0x119c / +0x11a0, 0x489ec0) is set, and a kind is 0 only for no model.
 inline bool holds_item(const Appearance& a) {
     return a.material[kSlotPrimary] != 0 || a.material[kSlotSecondary] != 0;
 }

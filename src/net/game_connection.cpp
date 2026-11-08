@@ -38,12 +38,12 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-// HandleWorldMessage's attack lock messages (rof2decomp notes/combat-and-movement.md §2.4).
+// HandleWorldMessage's attack lock messages.
 constexpr std::uint16_t kOpAttackLock = 0x57da;
 constexpr std::uint16_t kOpAttackUnlock = 0x4d09;
 
 // The original client sends its position at most every 280 ms while it can
-// move (rof2decomp:notes/combat-and-movement.md §3.4, CEverQuest::DoMainLoop @0x53e0c1).
+// move (CEverQuest::DoMainLoop @0x53e0c1).
 constexpr auto kPositionInterval = std::chrono::milliseconds(280);
 // RequestZoneChangeStatus @0x5203c0 waits up to 180 s for the answer to one OP_ZoneChange (@0x52050e).
 // RequestZoneChangeStatusBlocking @0x52cee0 sends it again 500 ms after a "not ready" answer (-1) while
@@ -51,7 +51,7 @@ constexpr auto kPositionInterval = std::chrono::milliseconds(280);
 constexpr auto kZoneChangeAnswerWait = std::chrono::seconds(180);
 constexpr auto kZoneChangeRetryLimit = std::chrono::milliseconds(7000);
 constexpr auto kZoneChangeRetryDelay = std::chrono::milliseconds(500);
-// The hand-offs (rof2decomp notes/connection-and-network.md 4.4, 6.1, 6.2): after OP_WorldComplete world has 30 s to
+// The hand-offs (docs/protocol/session.md): after OP_WorldComplete world has 30 s to
 // drop the link (NetMgr_WaitForDisconnect @0x4caca3); after a zone change's OP_DeleteSpawn the zone has 120 s
 // (WaitForWorldDisconnect @0x51a4d0); after a camp's OP_Logout 3 s (@0x45ecf3), then OP_DeleteSpawn and the 120 s.
 constexpr auto kWorldDropWait = std::chrono::seconds(30);
@@ -87,7 +87,7 @@ GameConnection::GameConnection(const GameDir& game, ConnectionOptions options) :
 
 namespace {
 
-// SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (fild, fmul, fdiv, __ftol2: truncated), so nothing wraps; the
+// SetSpawnHP @0x4bd0e0: cur * 100.0 / max on the x87 (truncated), so nothing wraps; the
 // 64-bit integer quotient is the same for every int32 pair. A spawn still alive (cur >= 1) shows at least 1%; at or
 // below 0 it keeps that value (here 0, the percentage being unsigned).
 std::uint8_t spawn_hp_percent(std::int64_t cur, std::int64_t max) {
@@ -245,14 +245,14 @@ void GameConnection::update() {
         while (auto p = zone_session_ ? zone_session_->receive() : std::nullopt)
             if (!options_.hooks || options_.hooks->packet(plugin::Stream::Zone, plugin::Direction::In, *p) == plugin::Flow::Continue)
                 handle_zone(*p);
-        // CTaskWnd::OnProcessFrame: the task compass mark looked for again once marked (FUN_0076ff70).
+        // CTaskWnd::OnProcessFrame: the task compass mark looked for again once marked (0x76ff70).
         if (task_compass_dirty_ && state_ == ConnectionState::InZone) update_task_compass();
         if (zone_session_ && zone_exit_ != ZoneExit::None && zone_session_->state() != SessionState::Disconnected &&
             Clock::now() >= zone_exit_deadline_) {
             if (zone_exit_ == ZoneExit::CampLogout) {
                 // The zone kept the link 3 s after OP_Logout: DoMainLoop's exit (exit reason 0x1e6) records the
                 // position, saves (SavePCForce(0): OP_SaveOnZoneReq), sends OP_DeleteSpawn and waits again.
-                // Neither goes out when the link is down (the connection's status +0x8c, FUN_00542380) or while the
+                // Neither goes out when the link is down (the connection's status +0x8c, 0x542380) or while the
                 // respawn window is up (PlayerZoneClient RespawnTimer).
                 if (!respawn_) {
                     send_zone(encode_save_on_zone(save_request(0)));
@@ -470,7 +470,7 @@ void GameConnection::handle_world(const AppPacket& p) {
     case Op::LogServer:
         // WorldAuthenticationHandler::OnRoutePacket: the rule set dword at +4 goes to 0xdcee70 (and 0xddfd2c), the
         // byte at +8 to 0xdcee74. Its readers: con levels, AllowedToAttack, casting, HitBySpell, resists, steal, bind
-        // wound, invites, the death coin rule and the PvP windows (rof2decomp batch 265).
+        // wound, invites, the death coin rule and the PvP windows.
         if (auto l = decode_log_server(p)) {
             pvp_rules_ = l->pvp;
             spell_scribe_allowed_ = l->spell_scribe;
@@ -882,7 +882,7 @@ void GameConnection::update_server_rules() {
 
 void GameConnection::maybe_request_client_spawn() {
     // The client asks for the rest of the zone once it has its own spawn and
-    // the weather (rof2decomp:notes/connection-and-network.md §5), and the server's files have come.
+    // the weather, and the server's files have come.
     if (client_spawn_requested_ || !own_spawn_seen_ || !weather_seen_) return;
     if (server_files_ && !server_files_->finished()) return;
     client_spawn_requested_ = true;
@@ -996,7 +996,7 @@ void GameConnection::finish_zone_in() {
     state_ = ConnectionState::InZone;
     status_.clear();
     report_state_ = 1; // Cmd_report's 0xddf640, set at each zone-in (the 0x345d step)
-    // ProcessGame's zone-in after a death (CEverQuest +0x39580, set by FUN_00531730): the death tip, once.
+    // ProcessGame's zone-in after a death (CEverQuest +0x39580, set by 0x531730): the death tip, once.
     if (death_tip_pending_) {
         death_tip_pending_ = false;
         window_toggle_ = "tip:31";
@@ -1014,7 +1014,7 @@ void GameConnection::finish_zone_in() {
     if (entered) send_zone(encode_hailstone_guild({}));
     // And the server's settings for the client; a server without Hailstone's script does not answer.
     if (entered) send_zone(encode_hailstone_settings_request());
-    // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (FUN_0076ff50).
+    // DoMainLoop after ReadyEnterWorld: the task window rebuilt and the task compass mark looked for (0x76ff50).
     ++tasks_.revision;
     task_compass_dirty_ = true;
 }
@@ -1159,7 +1159,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                        (client_options_.get(game::ClientOption::Roleplaying) << 1);
             if (s->anon != kept) keep_anon_flags(s->anon);
             // The local player is made from its own spawn record (msg_eq_netplayer): its packed position, not
-            // the profile's floats (rof2decomp notes/spawn-heights.md, zone-in position).
+            // the profile's floats.
             position_ = game::server_to_world({s->motion.x, s->motion.y, s->motion.z});
             heading_ = s->motion.heading;
             motion_known_ = true;
@@ -1284,7 +1284,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         if (auto ill = decode_illusion(p)) {
             auto it = world_.spawns.find(ill->spawn_id);
             if (it != world_.spawns.end()) {
-                // do_change_form (rof2decomp notes §2.9): 0xff / -1 keep a field.
+                // do_change_form: 0xff / -1 keep a field.
                 game::Spawn& sp = it->second;
                 game::Appearance& a = sp.appearance;
                 if (ill->race != 0xffff && ill->race != 0) sp.race = ill->race;
@@ -1928,7 +1928,7 @@ void GameConnection::set_player_motion(const glm::vec3& position, float heading,
     if (glm::distance(position, last_sent_position_) > 0.01f || moving != moving_) motion_dirty_ = true;
     float dh = std::abs(heading - last_sent_heading_);
     if (std::min(dh, 512.0f - dh) >= 2.0f) motion_dirty_ = true;
-    // PlayerAnimation_SelectMovementAnim (run when FUN_004afe60 finds the player moving: squared speed 0.01 or
+    // PlayerAnimation_SelectMovementAnim (run when 0x4afe60 finds the player moving: squared speed 0.01 or
     // more) deactivates an open spell book unless the horizontal speed is below 0.001 on both axes.
     if (spell_book_open_ && glm::dot(velocity, velocity) >= 0.01f &&
         (std::abs(velocity.x) >= 0.001f || std::abs(velocity.y) >= 0.001f))
@@ -2124,7 +2124,7 @@ void GameConnection::set_auto_attack(bool on) {
 }
 
 void GameConnection::set_auto_fire(bool on) {
-    // SetAutoRangeAttack @0x520b40 (rof2decomp re/src/game/commands/misc_helpers8.cpp).
+    // SetAutoRangeAttack @0x520b40.
     const bool changed = auto_fire_ != on;
     auto_fire_ = on;
     if (attack_locked_) auto_attack_ = auto_fire_ = false; // 0xddf70c clears both flags (+0x83f92 as a word)
@@ -2139,7 +2139,7 @@ void GameConnection::set_auto_fire(bool on) {
 }
 
 void GameConnection::autofire_command() {
-    // cmd_autofire @0x4fb9b0 (rof2decomp re/src/game/commands/autofire_eh.cpp).
+    // cmd_autofire @0x4fb9b0.
     if (state_ != ConnectionState::InZone) return;
     if (!world_.target_id) {
         system(12697, {}, 0x12f); // You must first click on the being you wish to attack!
@@ -2232,7 +2232,7 @@ void GameConnection::consider() {
 }
 
 void GameConnection::report_hit(const game::HitLine& line, std::uint32_t source, bool report) {
-    // ReportSuccessfulHit's bVar7: the attacker is the player's pet (PetID).
+    // ReportSuccessfulHit's pet flag: the attacker is the player's pet (PetID).
     const bool by_my_pet = source != 0 && source == pets_.focused;
     if (!game::hit_line_shown(line, by_my_pet, chat_filters_, report)) return;
     // ReportHit_*: the category's display mode picks the full, short or number-only line.
@@ -2282,7 +2282,7 @@ bool GameConnection::set_stand_state(std::uint32_t state, bool room_to_stand) {
         remove_mount_affect();
         mount_events(ev);
     }
-    motion_dirty_ = true; // a sit/stand change marks the position dirty (combat-and-movement.md §3.4)
+    motion_dirty_ = true; // a sit/stand change marks the position dirty
     return true;
 }
 

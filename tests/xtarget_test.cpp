@@ -1,5 +1,5 @@
 // The extended target list's client rules and the extended target window's role strings and role sets
-// (game/xtarget.h), checked against the original's functions (rof2decomp export, addresses in the header).
+// (game/xtarget.h), checked against the original's functions (addresses in the header).
 
 #include <doctest/doctest.h>
 

@@ -1,4 +1,4 @@
-// rof2decomp batch 266's vectors (recorded from the original eqgame.exe over a fake model whose virtual calls are
+// The original's vectors (recorded from eqgame.exe over a fake model whose virtual calls are
 // logged): NPC tints, faces, beards, Luclin hair / beard parts and colours, classic body materials, new-model and
 // old-model armour with hero's forge pieces and helms (game/actor_look.h). Each record's model calls and table
 // lookups are compared in order, field by field.
@@ -56,7 +56,7 @@ std::string compare_list(const char* what, const Json& want, const std::vector<F
 std::string num(std::int64_t v) { return std::to_string(v); }
 std::string str(const std::string& s) { return "\"" + s + "\""; }
 
-// The fake model and tables of rof2decomp's appearance_paths_test.cpp, recording every call.
+// The fake model and tables the vectors were recorded over, recording every call.
 struct Recorder : game::ActorEnv {
     bool is_new = false;
     bool dags = true;
@@ -73,8 +73,8 @@ struct Recorder : game::ActorEnv {
     bool mock_refresh_hair = false;
     std::vector<Fields> lookups, fheb;
 
-    // One fake call: its fixed fields, and the text / colour fields the fake writes (rof2decomp
-    // appearance_paths_test.cpp, PCall's name, name2 and color).
+    // One fake call: its fixed fields, and the text / colour fields the fake writes (the
+    // record's name, name2 and color).
     struct Raw {
         Fields fixed;
         std::string name, name2;

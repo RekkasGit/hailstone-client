@@ -1,5 +1,5 @@
 // The HUD windows: player, target, group, buffs, songs, spell gems, casting bar and hot bars. Each model follows
-// the original window class (rof2decomp export/C*.c): which children its OnProcessFrame / Update* shows, what it
+// the original window class: which children its OnProcessFrame / Update* shows, what it
 // sets on them, and what its WndNotification does for a click.
 
 #include <algorithm>
@@ -372,7 +372,7 @@ public:
         if (!host.conn || button != "left") return false;
         auto& c = *host.conn;
         // CGroupWnd::WndNotification
-        // FUN_0067ae00: the member row a child belongs to (its gauges and labels end in the row number).
+        // 0x67ae00: the member row a child belongs to (its gauges and labels end in the row number).
         auto row_of = [](std::string_view child) {
             for (std::string_view p : {"Gauge", "HPLabel", "HPPercLabel"})
                 if (child.rfind(p, 0) == 0 && child.size() == p.size() + 1) return child.back() - '0';
@@ -383,7 +383,7 @@ public:
         else if (id == "DeclineButton" || id == "DisbandButton") c.group_disband();
         else if (id == "LFGButton") c.group_search_toggle_from_group_window(); // the group finder
         else if (int n = row_of(id); n >= 1 && n <= 5) {
-            // A click on a member's row: LocalPlayer_TargetSelfOrPet(row) (FUN_0058d230 with FUN_0067ae00's row),
+            // A click on a member's row: LocalPlayer_TargetSelfOrPet(row) (0x58d230 with 0x67ae00's row),
             // as F2..F6 do; it also selects the row /disband reads (group_member_targeted()).
             c.target_group_member(n);
         } else return false;
@@ -597,7 +597,7 @@ public:
     }
 
 private:
-    // SetSpellGemTint (FUN_004ad890: by target type) and the tint stage (game/spell_gem.h).
+    // SetSpellGemTint (0x4ad890: by target type) and the tint stage (game/spell_gem.h).
     std::array<float, 4> tint_of(const game::SpellData& s, int g) const {
         game::SpellGemTints tints = game::spell_gem_tints(game::spell_target_color(s.target_type, s.ae_duration));
         const game::SpellGemDisplay& d = gems_[static_cast<std::size_t>(g)];
@@ -638,7 +638,7 @@ void memorize_from_menu(EqHost& host, std::uint32_t spell, std::int32_t gem) {
 // CCastSpellWnd::RecacheCategorizedSpells @0x648200 and MakeSpellSelectMenu @0x646f90: the book's spells (slots
 // 0..719) filed as CategorizeSpell files them (game/combat_ability_menu.h's order: categories and subcategories by
 // name, spells by level, highest first), each "%02d - %s" with id 10000 + the spell in the spell's target-type
-// colour (FUN_004ad890, the gem tint's); choosing one memorizes it into `gem`. Empty: the book has no categorized
+// colour (0x4ad890, the gem tint's); choosing one memorizes it into `gem`. Empty: the book has no categorized
 // spell (no menu).
 std::vector<EqHost::MenuRow> spell_select_rows(EqHost& host, std::int32_t gem) {
     std::vector<EqHost::MenuRow> rows;
@@ -721,7 +721,7 @@ void open_hot_button_menu(EqHost& host, int bar, int button, float x, float y) {
                 const std::uint32_t s = gem_spell(host, r.slot);
                 if (s != game::kNoSpell) host.show_spell(static_cast<std::int32_t>(s), false);
             } else if (host.conn) {
-                // FUN_006949d0: the slot's item in an item display; a krono slot (its CInvSlotWnd's location
+                // 0x6949d0: the slot's item in an item display; a krono slot (its CInvSlotWnd's location
                 // eItemContainerKrono) without an item asks the server for the Krono's: Send_OP_ItemLinkResponse(88888,
                 // "Krono", 0), flag 2 with Shift.
                 const auto at = game::hot_button_item_slot(host.conn->inventory(), r);
@@ -731,16 +731,16 @@ void open_hot_button_menu(EqHost& host, int bar, int button, float x, float y) {
                     host.conn->request_item_link(net::kKronoItemId, "Krono", 0, ImGui::GetIO().KeyShift);
             }
         });
-    if (shown.clear) add(text(game::kStrHbClear), [save] { save(game::HotButton{}); }); // FUN_00550c50
-    // 0x1b60 Change Size: the bar's CQuantityWnd (FUN_0068a170) at the button's centre (here where the menu opened)
+    if (shown.clear) add(text(game::kStrHbClear), [save] { save(game::HotButton{}); }); // 0x550c50
+    // 0x1b60 Change Size: the bar's CQuantityWnd (0x68a170) at the button's centre (here where the menu opened)
     if (shown.change_size) add(text(game::kStrHbChangeSize), [&host, bar, x, y] { open_hot_bar_size(host, bar, x, y); });
-    // 0x1b5a Assign Icon: CIconSelectionWnd on the button's icon (FUN_0068f330), its Accept (0x28) sets it
+    // 0x1b5a Assign Icon: CIconSelectionWnd on the button's icon (0x68f330), its Accept (0x28) sets it
     if (shown.assign_icon)
         add(text(game::kStrHbAssignIcon), [&host, bar, button, x, y] { open_icon_selection(host, bar, button, x, y); });
     if (shown.clear_icon)
         add(text(game::kStrHbClearIcon), [record, save] {
             game::HotButton r = record();
-            r.icon_type = r.icon_slot = -1; // FUN_00550040({-1, -1})
+            r.icon_type = r.icon_slot = -1; // 0x550040({-1, -1})
             save(r);
         });
     if (shown.assign_label)
@@ -748,7 +748,7 @@ void open_hot_button_menu(EqHost& host, int bar, int button, float x, float y) {
             EqHost::TextEntry e;
             e.prompt = host.conn ? host.conn->strings().format(game::kStrHbEnterLabel, {}) : std::string();
             e.max_chars = game::kHotButtonLabelEntryMax;
-            e.text = host.hot_button_label ? host.hot_button_label(bar, button) : record().label; // FUN_0054faf0
+            e.text = host.hot_button_label ? host.hot_button_label(bar, button) : record().label; // 0x54faf0
             e.done = [&host, record, save](const std::string& t) {
                 game::HotButton r = record();
                 if (game::assign_label(*host.hot_buttons, r, t) && host.actions)
@@ -779,7 +779,7 @@ void open_hot_button_menu(EqHost& host, int bar, int button, float x, float y) {
                             game::HotButton r = record();
                             const bool unnamed = game::assign_social(*host.hot_buttons, r, index);
                             save(r);
-                            if (unnamed && host.open_social_editor) host.open_social_editor(index); // FUN_00758bb0
+                            if (unnamed && host.open_social_editor) host.open_social_editor(index); // 0x758bb0
                         };
                         items.push_back(std::move(ir));
                     }
@@ -829,7 +829,7 @@ public:
         } else if (id == "HB_HorizontalCurrentPageLabel" || id == "HB_VerticalCurrentPageLabel") {
             out.text = std::to_string(host.hot_buttons ? host.hot_buttons->page(bar_) + 1 : 1);
         } else if (int n = index_after(id, "HB_Button"); n >= 1 && n <= game::kHotButtons) {
-            // the key map text FUN_005506b0 draws on the button while ShowKeyMap is on
+            // the key map text 0x5506b0 draws on the button while ShowKeyMap is on
             out.text = hot_bar_settings(bar_).key_map ? hot_button_key_text(host, bar_, n - 1) : std::string();
         }
     }
@@ -856,7 +856,7 @@ public:
         const game::HotButton& b = host.hot_buttons->current(bar_, n - 1);
         if (b.empty()) return HotButtonInfo{};
         HotButtonInfo info = hot_button_info(host, b, host.hot_button_label ? host.hot_button_label(bar_, n - 1) : b.label);
-        // FUN_0054ff40: an icon of the button's own (Assign Icon) is drawn instead of its decal, item or spell icon
+        // 0x54ff40: an icon of the button's own (Assign Icon) is drawn instead of its decal, item or spell icon
         if (b.icon_type != -1)
             if (auto c = hot_button_custom_icon(host, b.icon_type, b.icon_slot)) info.icon = *c;
         const auto now = net::GameConnection::eq_time();
@@ -884,8 +884,8 @@ public:
             game::update_hot_button(displays_[static_cast<std::size_t>(i)], host.hot_buttons->current(bar_, i), q, extras);
     }
 
-    // FUN_005536b0 (game/hot_button_menu.h): an empty button's click and a held right button open the button's menu;
-    // a left click puts the cursor's hotbutton here or runs the button, a quick right click FUN_0054fc10.
+    // 0x5536b0 (game/hot_button_menu.h): an empty button's click and a held right button open the button's menu;
+    // a left click puts the cursor's hotbutton here or runs the button, a quick right click 0x54fc10.
     bool click_hot_button(EqHost& host, std::string_view id, std::string_view button) override {
         int n = index_after(id, "HB_Button");
         if (n < 1 || n > game::kHotButtons) return false;
@@ -905,7 +905,7 @@ public:
             break;
         }
         case A::Drop: {
-            // FUN_00552e00: the cursor's hotbutton goes here; what was here goes on the cursor.
+            // 0x552e00: the cursor's hotbutton goes here; what was here goes on the cursor.
             if (!host.hot_buttons || !host.set_hot_button) return true;
             host.set_hot_button(bar_, n - 1, *host.cursor_button);
             host.cursor_button.reset();

@@ -2,8 +2,8 @@
 
 // The actors' own particle emitters (assets/model_points.h ModelEmitter): an
 // EQG model's `<model>.prt` and a held EQG item's, e.g. a glowing weapon or a
-// creature's flames. FUN_1006b130 / FUN_1006b290 make one through
-// CParticleSystem vtable +0x20 (FUN_10070640, ActorEmittersNew.edd) for each
+// creature's flames. 0x1006b130 / 0x1006b290 make one through
+// CParticleSystem vtable +0x20 (0x10070640, ActorEmittersNew.edd) for each
 // always-on entry (trigger 0, variant below 1) whose model point exists, when
 // the actor is made; it stays with the actor. Here the dressed mesh carries the
 // entries (assets::MeshEmitter) and each drawn actor keeps a persistent emitter

@@ -199,7 +199,7 @@ select (dev_screens.h:192), the `player_classes` mask in the item display, inven
 ## 3. Opcodes
 
 `src/net/opcodes_rof2.inc` is generated from **the NMS server's copy** of `patch_RoF2.conf`, not EQEmu's. Comparing
-it with the stock file (`rof2decomp/refs/eqemu/utils/patches/patch_RoF2.conf`) gives 21 opcodes that only NMS has:
+it with the stock file (EQEmu's `utils/patches/patch_RoF2.conf`) gives 21 opcodes that only NMS has:
 
 | Opcodes | Today handled in |
 |---|---|
@@ -274,7 +274,7 @@ check of the server's files (docs/plugins.md). v2 needs plugins that load at ser
 bit (`login`) for the world-stage hooks.
 
 From reading the code, without a live check: the forced "NMS server" setting is not needed for the checksums. The NMS
-world sends `OP_SendCharacterSets` before each `OP_SendCharInfo`, and the rewrite already waits for it
+world sends `OP_SendCharacterSets` before each `OP_SendCharInfo`, and the client already waits for it
 (nms_extension.cpp:404). So detecting the server is enough, as long as the plugin is loaded by then.
 
 ## 7. Tests and build

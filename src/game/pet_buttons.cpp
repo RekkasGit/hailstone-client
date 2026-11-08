@@ -92,6 +92,24 @@ std::vector<std::uint32_t> pet_commands_to_reissue(const PetToggleStates& states
     return out;
 }
 
+namespace {
+
+// What an ordinary pet needs for a command (0..0x21): to be summoned, a focus effect, or both.
+struct PetNeed {
+    bool summoned;
+    std::int32_t spa; // 0: none; kSpaFeignedMinion is asked with sub 0, kSpaPetCommand with the command
+};
+
+PetNeed pet_need(std::uint32_t command) {
+    if (command == 0x1b) return {true, kSpaFeignedMinion};
+    if (command >= 0x15 && command <= 0x1a) return {true, kSpaPetCommand};
+    if ((command >= 0xf && command <= 0x14) || command >= 0x1f) return {false, kSpaPetCommand};
+    if ((command >= 0xc && command <= 0xe) || command == 0x1d) return {true, 0};
+    return {false, 0}; // 0..0xb, 0x1c, 0x1e
+}
+
+} // namespace
+
 bool can_use_pet_command(const PetCommandQuery& q, std::uint32_t command) {
     if (!q.has_pet) return false;
     auto effect = [&](std::int32_t spa, std::int32_t sub) { return q.effect && q.effect(spa, sub) != 0; };
@@ -104,18 +122,10 @@ bool can_use_pet_command(const PetCommandQuery& q, std::uint32_t command) {
     }
     if (q.property_1f) return command == 0x1d;
     if (command > 0x21) return false;
-    switch (command) {
-    case 0xc: case 0xd: case 0xe: case 0x1d:
-        return q.summoned;
-    case 0x15: case 0x16: case 0x17: case 0x18: case 0x19: case 0x1a:
-        return q.summoned && effect(kSpaPetCommand, sub);
-    case 0x1b:
-        return q.summoned && effect(kSpaFeignedMinion, 0);
-    case 0xf: case 0x10: case 0x11: case 0x12: case 0x13: case 0x14: case 0x1f: case 0x20: case 0x21:
-        return effect(kSpaPetCommand, sub);
-    default: // 0..0xb, 0x1c, 0x1e
-        return true;
-    }
+    const PetNeed need = pet_need(command);
+    if (need.summoned && !q.summoned) return false;
+    if (need.spa == 0) return true;
+    return effect(need.spa, need.spa == kSpaPetCommand ? sub : 0);
 }
 
 PetButtonLayout::PetButtonLayout() {

@@ -120,7 +120,7 @@ TEST_CASE("layout_item_display: the end of CItemDisplayWnd_BuildItemInfo") {
     CHECK(game::layout_item_display(d, in).mod_top == 106);
 }
 
-TEST_CASE("weapon_damage_bonus: FUN_007e8a10") {
+TEST_CASE("weapon_damage_bonus: 0x7e8a10") {
     net::Item one;
     one.item_type = 0;
     one.delay = 30;

@@ -67,8 +67,7 @@ namespace eqg {
 
 // CMaterial::InitFromShaderName @0x10014660 runs case-sensitive substring
 // tests in this order: WaterFall, Water, Terrain, Lava2, Lava, AddAlpha,
-// Alpha, Chroma, then the opaque suffixes (rof2decomp notes/eqgraphicsdx9.md,
-// EQG material shaders). So Opaque_AddAlphaC1Max.fx is additive.
+// Alpha, Chroma, then the opaque suffixes. So Opaque_AddAlphaC1Max.fx is additive.
 EqgShader shader_class(std::string_view shader) {
     if (contains(shader, "WaterFall")) return EqgShader::WaterFall;
     if (contains(shader, "Water")) return EqgShader::Water;

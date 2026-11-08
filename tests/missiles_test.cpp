@@ -93,7 +93,7 @@ TEST_CASE("missile launch animation and delay") {
     CHECK(missile_launch_animation(0, 20, 14, 1) == 5); // an NMS bolt (item type 20, Conjuration)
     CHECK(missile_launch_animation(0, 9, 0, 1) == 44);
     CHECK(missile_launch_animation(10, 0, 0, 0x80) == 6);
-    // New-style sources (FUN_0059f8d0): BATK for arrows, BLPR for others, WATK in water.
+    // New-style sources (0x59f8d0): BATK for arrows, BLPR for others, WATK in water.
     CHECK(missile_launch_animation(0, 27, 7, 522, 0, 0, true) == 0x5d);
     CHECK(missile_launch_animation(0, 20, 14, 522, 0, 0, true) == 0x51);
     CHECK(missile_launch_animation(0, 20, 14, 522, 0, 5, true) == 0x5e);

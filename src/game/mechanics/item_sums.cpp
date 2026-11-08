@@ -11,9 +11,9 @@ std::int32_t add(std::int32_t a, std::int32_t b) {
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(a) + static_cast<std::uint32_t>(b));
 }
 
-// process_all_stats.inc: where each row is summed (a CharacterBase stat
+// The stat rows: where each row is summed (a CharacterBase stat
 // behind the virtual base, or a CharacterZoneClient field) and, for the
-// damage bonuses, the skill whose slot (FUN_004437d0) indexes +0x4c.
+// damage bonuses, the skill whose slot (0x4437d0) indexes +0x4c.
 struct StatRow {
     bool via_base;
     std::uint32_t offset;
@@ -86,9 +86,17 @@ void cap_at(ItemSums& sums, std::uint32_t offset, std::int32_t cap) {
 // +0x12c..+0x198, and those copies capped.
 void keep_worn_sums(ItemSums& sums) {
     for (std::uint32_t at = 0x4a4; at <= 0x4d8; at += 4) sums.base_at(at + 0x6c) = sums.base_at(at);
-    constexpr std::uint32_t kFrom[] = {0x24, 0x28, 0x2c, 0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x98,
-                                       0x48, 0x110, 0x114, 0x118, 0x11c, 0x120, 0x9c, 0x124, 0x128};
-    for (std::uint32_t k = 0; k < std::size(kFrom); ++k) sums.at(0x12c + k * 4) = sums.at(kFrom[k]);
+    // +0x24..+0x44 land in order at +0x12c..+0x14c; the rest, by source, where the original puts them. No copy
+    // reads another's target, so the order is free.
+    for (std::uint32_t k = 0; k < 9; ++k) sums.at(0x12c + k * 4) = sums.at(0x24 + k * 4);
+    struct Copy {
+        std::uint32_t from;
+        std::uint32_t to;
+    };
+    static constexpr Copy kWornCopies[] = {{0x48, 0x154},  {0x98, 0x150},  {0x9c, 0x16c},  {0x110, 0x158},
+                                           {0x114, 0x15c}, {0x118, 0x160}, {0x11c, 0x164}, {0x120, 0x168},
+                                           {0x124, 0x170}, {0x128, 0x174}};
+    for (const Copy& c : kWornCopies) sums.at(c.to) = sums.at(c.from);
     for (std::uint32_t k = 0; k < 9; ++k) sums.at(0x178 + k * 4) = sums.at(0x4c + k * 4);
     if (sums.at(0x12c) < 0) sums.at(0x12c) = 0;
     for (std::uint32_t at : {0x13cu, 0x140u, 0x14cu, 0x154u, 0x150u, 0x168u}) cap_at(sums, at, 35);
@@ -199,15 +207,29 @@ void sum_item_stats(ItemSums& sums, const ItemSources& sources, ItemSumQueries& 
 
 void derive_item_bonuses(ItemSums& sums, const std::function<std::int32_t(std::int32_t value, int kind)>& adjust) {
     if (sums.at(0x24) < 0) sums.at(0x24) = 0;
-    constexpr std::uint32_t kCopies[][2] = {{0xa8, 0x34}, {0xc0, 0x44}, {0xa4, 0x38}, {0xc4, 0x48}, {0xb4, 0x9c},
-                                            {0xb0, 0x98}, {0xac, 0x120}, {0xbc, 0x40}, {0xb8, 0x3c}, {0xa0, 0x30}};
-    for (const auto& c : kCopies) sums.at(c[0]) = sums.at(c[1]);
-    for (std::uint32_t k = 0; k < 9; ++k) sums.at(0x70 + k * 4) = sums.at(0x4c + k * 4);
-    constexpr std::uint32_t kAdjusted[][2] = {{0x34, 6},   {0x38, 4},   {0x44, 0xc},  {0x48, 0xd},  {0x98, 8},
-                                              {0x9c, 9},   {0x120, 7},  {0x3c, 0xa},  {0x40, 0xb},  {0x30, 5},
-                                              {0x4c, 0x11}, {0x50, 0x12}, {0x54, 0x13}, {0x58, 0x14}, {0x5c, 0x15},
-                                              {0x60, 0x16}, {0x64, 0x17}, {0x68, 0x18}, {0x6c, 0x19}};
-    for (const auto& a : kAdjusted) sums.at(a[0]) = adjust(sums.at(a[0]), static_cast<int>(a[1]));
+    // The unadjusted copies, by target (none of them is a source, so their order does not matter).
+    struct Copy {
+        std::uint32_t to;
+        std::uint32_t from;
+    };
+    static constexpr Copy kUnadjusted[] = {{0xa0, 0x30}, {0xa4, 0x38}, {0xa8, 0x34}, {0xac, 0x120}, {0xb0, 0x98},
+                                           {0xb4, 0x9c}, {0xb8, 0x3c}, {0xbc, 0x40}, {0xc0, 0x44}, {0xc4, 0x48}};
+    for (const Copy& c : kUnadjusted) sums.at(c.to) = sums.at(c.from);
+    constexpr std::uint32_t kDamageSlots = 9; // +0x4c.., copied to +0x70..
+    for (std::uint32_t slot = 0; slot < kDamageSlots; ++slot) sums.at(0x70 + slot * 4) = sums.at(0x4c + slot * 4);
+    // Then each sum through the adjustment, in the original's call order: the stats with their kinds, then the
+    // damage slots with kinds 17 and up.
+    struct Adjusted {
+        int kind;
+        std::uint32_t at;
+    };
+    static constexpr Adjusted kStatKinds[] = {{6, 0x34}, {4, 0x38},  {12, 0x44}, {13, 0x48}, {8, 0x98},
+                                              {9, 0x9c}, {7, 0x120}, {10, 0x3c}, {11, 0x40}, {5, 0x30}};
+    for (const Adjusted& a : kStatKinds) sums.at(a.at) = adjust(sums.at(a.at), a.kind);
+    for (std::uint32_t slot = 0; slot < kDamageSlots; ++slot) {
+        const std::uint32_t at = 0x4c + slot * 4;
+        sums.at(at) = adjust(sums.at(at), static_cast<int>(17 + slot));
+    }
 }
 
 } // namespace hailstone::game::mechanics

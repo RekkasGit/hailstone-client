@@ -1,4 +1,4 @@
-// Boats: OP_ControlBoat (rof2decomp batch 252, notes/combat-and-movement.md §3.5).
+// Boats: OP_ControlBoat.
 #include "core/byte_io.h"
 #include "core/log.h"
 #include "net/game_connection.h"

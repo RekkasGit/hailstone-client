@@ -1,7 +1,6 @@
 #pragma once
 
-// The movement sweep's actor callbacks (rof2decomp batch 250,
-// re/src/game/spawn/collision_sweep.cpp; checked against the original's
+// The movement sweep's actor callbacks (checked against the original's
 // vectors in tests/movement_vectors_test.cpp): which actors a moving spawn's
 // sweep tests, and what an actor hit does to the player.
 //
@@ -62,23 +61,23 @@ struct HitActor {
 struct HitResult {
     std::uint32_t ret = 0;                  // 1: the sweep keeps this hit
     std::optional<std::int32_t> colliding_type; // the player's +0x24, when written
-    bool asked_touch = false;               // FUN_00510210 (the switch acts on touch) was asked
+    bool asked_touch = false;               // 0x510210 (the switch acts on touch) was asked
     bool touching_switch = false;           // +0x2d4 = the switch and PlayerClient::TouchingSwitch
 };
 
-// `switch_acts_on_touch` answers FUN_00510210 (switch types 0x33, 0x73,
+// `switch_acts_on_touch` answers 0x510210 (switch types 0x33, 0x73,
 // 0x74, 0x78, 0x7d, 0x82, 0x87, 0x8c, 0x91, 0x92, 0x96..0x98).
 HitResult collision_hit_set_colliding_type(const HitActor& a, bool switch_acts_on_touch);
 
-// FUN_00510210's switch types.
+// 0x510210's switch types.
 bool switch_acts_on_touch(std::uint8_t switch_type);
 
 } // namespace hailstone::game
 
 namespace hailstone::game {
 
-// What FloorActorFilter @0x476280 asks about an actor in the floor sweep's way
-// (rof2decomp batch 251, notes/lifts.md). vf30 is asked once or twice: the
+// What FloorActorFilter @0x476280 asks about an actor in the floor sweep's way.
+// vf30 is asked once or twice: the
 // first answer is `type`, later ones `type_again`.
 struct FloorFilterActor {
     bool mover_present = false;   // the sweep's owner (the spawn)
@@ -119,7 +118,7 @@ struct FloorHit {
 struct FloorHitResult {
     std::uint32_t ret = 0;
     bool touching_switch = false; // pTouchingSwitch (+0x2d4) = the switch
-    bool set_vehicle = false;     // FUN_008cfd10(player, the hit spawn): Vehicle (+0x150)
+    bool set_vehicle = false;     // 0x8cfd10(player, the hit spawn): Vehicle (+0x150)
 };
 FloorHitResult collsn_callback_for_floor(const FloorHit& h, const mechanics::Fpu& fpu = mechanics::Fpu{});
 

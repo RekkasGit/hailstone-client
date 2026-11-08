@@ -1,8 +1,8 @@
 #pragma once
 
 // The original client's character rules (CharacterZoneClient and its
-// helpers in eqgame.exe), ported from rof2decomp's differential-tested
-// rewrite onto a CharacterSheet. One Character evaluates one sheet; the
+// helpers in eqgame.exe), reimplemented on a CharacterSheet and checked
+// against the original's vectors. One Character evaluates one sheet; the
 // member functions are named after the original functions they reproduce,
 // with their addresses in the comments, and keep the original's argument
 // meanings (include_buffs = "with buffs" / "the live value",
@@ -16,17 +16,13 @@
 //
 // Every call the original makes to another of these functions goes through
 // Hooks first, so that a test can replay a recorded call of the original
-// (rof2decomp re/test/vectors: the original ran with its callees mocked) and
-// check one function on its own. Without hooks the port computes everything.
+// (the recorded vectors: the original ran with its callees mocked) and
+// check one function on its own. Without hooks the client computes everything.
 //
-// Sources: rof2decomp re/src/game/character/{effects,stat_calc,stats,vitals,
-// calc_ac_eh,carried_weight_eh,item_haste_eh,regen,skill_caps,adjusted_skill,
-// skill_item_mods_eh,spell_effects,aa_effects_cache,negate_effects_eh,
-// focus_effects_eh,focus_pct}.cpp, re/src/game/spell/{eq_spell,focus_limits}.cpp
-// (all "replaced tested"), and the exe's disassembly / Ghidra export for the
-// functions that are not rewritten yet (CacheBuffSlotEffects @0x436b30,
-// CacheWornItemEffects @0x437780, ProcessAllStats @0x4547e0); see
-// docs/mechanics.md.
+// Sources: the original's functions named in each file, checked against its
+// vectors, and the exe's disassembly for those without vectors
+// (CacheBuffSlotEffects @0x436b30, CacheWornItemEffects @0x437780,
+// ProcessAllStats @0x4547e0); see docs/mechanics.md.
 
 #include <cstdint>
 #include <functional>
@@ -102,7 +98,7 @@ public:
         Hook<std::int32_t, std::uint32_t, bool> skill_with_item_mods; // vtable +0x18 (skill, flag)
         Hook<std::int32_t, std::uint32_t> adjusted_skill, racial_skill_bonus;
         Hook<std::int32_t, std::int32_t, std::int32_t, std::int32_t> skill_cap; // CSkillMgr::GetSkillCap(level, cls, skill)
-        Hook<std::int32_t, std::uint32_t, std::uint32_t> skill_min_level;       // FUN_005baa20(skill, cls)
+        Hook<std::int32_t, std::uint32_t, std::uint32_t> skill_min_level;       // 0x5baa20(skill, cls)
         Hook<std::int32_t, std::uint32_t> skill_entry; // -1 no entry, else EQ_Skill::LevelCappedSkill
         Hook<std::int32_t, std::uint32_t, std::uint32_t, std::uint32_t> skill_cap_cell; // SkillCaps[cls][skill][level]
         Hook<std::int32_t> max_level, base_hp_regen, base_endurance_regen, heroic_sta_bonus, max_effects;
@@ -221,7 +217,7 @@ public:
     std::int32_t invis_level(int kind) const;                // CalcInvisLevel @0x442770
     // CharacterZoneClient::CanUseItem(item, prestige) @0x446470 (level, race, deity, prestige).
     bool can_use_item(const net::Item& item, bool prestige = true) const;
-    // FUN_00585190 (vtable +0x34): an item stat scaled down for a recommended level or skill above the character's.
+    // 0x585190 (vtable +0x34): an item stat scaled down for a recommended level or skill above the character's.
     std::int32_t recommended_item_value(const net::Item& item, std::int32_t value, std::uint8_t skill) const;
 
     // ---- regen (regen.cpp) ----

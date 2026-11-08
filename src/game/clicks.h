@@ -1,9 +1,7 @@
 #pragma once
 
 // The eqgame side of mouse picking and of what a left click on a spawn or a
-// door does (rof2decomp batch 262, notes/eqgraphicsdx9.md "Mouse picking";
-// re/src/game/display/actor_picking.cpp, ui/left_click_player_eh.cpp,
-// ui/clicked_switch_eh.cpp, spawn/actor_instance.cpp). The ray and the
+// door does. The ray and the
 // actor tests (EQGraphicsDX9.dll) are game/picking.h.
 //
 // Checked against the original's vectors: CDisplay_PickActorAtPoint,
@@ -41,7 +39,7 @@ std::uint32_t spawn_pick_mask(const MaskSpawn& s, std::uint8_t click_through_opt
 
 // ---------------------------------------------------------------- the pick wrapper
 
-// FUN_0048b5c0 (CDisplay_PickActorAtPoint): what goes to the DLL.
+// 0x48b5c0 (CDisplay_PickActorAtPoint): what goes to the DLL.
 struct PickCallInput {
     std::int32_t world_state = 1;      // CDisplay +0x2d04: the DLL is called only when it is 1
     std::int32_t camera_type = 0;      // 0xd1fd9c: 0 is first person
@@ -49,7 +47,7 @@ struct PickCallInput {
     bool have_local_player = true;
     bool view_actor_is_local = true;   // the view actor is the local player's actor (+0x101c)
     bool view_actor_nonnull = true;
-    bool have_mount = false;           // FUN_0058cf90: the local player's mount
+    bool have_mount = false;           // 0x58cf90: the local player's mount
     bool mount_has_actor = false;
     std::int32_t x = 0, y = 0;
     std::int32_t screen_left = 0, screen_top = 0; // 0xddf620 / 0xddf624
@@ -58,7 +56,7 @@ struct PickCall {
     bool call_dll = false;
     bool exclude_view = false;  // the view actor is passed as excluded
     bool exclude_mount = false; // and its mount's actor
-    int mount_lookups = 0;      // FUN_0058cf90 calls (0..3)
+    int mount_lookups = 0;      // 0x58cf90 calls (0..3)
     std::int32_t x = 0, y = 0;  // the point relative to the screen rectangle
 };
 PickCall pick_call(const PickCallInput& in);
@@ -93,7 +91,7 @@ struct LeftClickCall {
         IsTargetable,         // PlayerBase::IsTargetable
         TipActivate,          // CTipWnd::Activate(tip, a1)
         IsGuildmasterForMyClass,
-        GuildmasterString,    // FUN_005151b0(class)
+        GuildmasterString,    // 0x5151b0(class)
         TrimName,             // CEverQuest::trimName
         GetString,            // StringTable::getString(id, 0)
         BuildString,          // BuildStringFromEQSTR(id, ...)
@@ -114,9 +112,9 @@ struct LeftClickResult {
     bool drop = false;              // DropItemOrMoneyOnPlayer
     std::vector<LeftClickCall> calls;
 };
-// `guildmaster_string` is FUN_005151b0 (guildmaster_string_id below, or a test's value).
+// `guildmaster_string` is 0x5151b0 (guildmaster_string_id below, or a test's value).
 LeftClickResult left_clicked_on_player(const LeftClickInput& in, std::uint32_t guildmaster_string);
-// FUN_005151b0 @0x5151b0: the "guildmaster of class" string id (classes 1..16, 20..35, 40, 41, 66; else 0x998).
+// 0x5151b0: the "guildmaster of class" string id (classes 1..16, 20..35, 40, 41, 66; else 0x998).
 std::uint32_t guildmaster_string_id(std::int32_t class_id);
 // Races from 2253 on are targetable whatever IsTargetable says.
 inline constexpr std::int32_t kRaceAlwaysClickTargetable = 0x8cd;

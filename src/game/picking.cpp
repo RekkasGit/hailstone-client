@@ -74,7 +74,7 @@ double segment_segment(const dvec3& p1, const dvec3& q1, const dvec3& p2, const 
 } // namespace
 
 float cmath_cot_folded(float angle) {
-    // 0x100b93d0: fistp with truncation, & 0x1ff, quadrants 1 and 2 folded with ~i, & 0x7f; entry
+    // 0x100b93d0: stored as an integer with truncation, & 0x1ff, quadrants 1 and 2 folded with ~i, & 0x7f; entry
     // +0x1088 + 16 i of the table CMath::InitSinCosTables builds (@0x100b9790): cos[i] / sin[i], 1e30 at i = 0.
     auto i = static_cast<std::int32_t>(static_cast<std::int64_t>(std::trunc(angle)) & 0x1ff);
     std::int32_t q = i & 0x180;

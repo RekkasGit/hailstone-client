@@ -53,7 +53,7 @@ void HotButtonSets::save(IniFile& ini) {
 }
 
 void HotButtonSets::sort() {
-    // FUN_00519890: both in use by __stricmp, in use before unused (qsort is not stable; only unused entries and
+    // 0x519890: both in use by __stricmp, in use before unused (qsort is not stable; only unused entries and
     // equal names compare equal, and those do not matter)
     std::stable_sort(sets_.begin(), sets_.end(), [](const HotButtonSet& a, const HotButtonSet& b) {
         if (a.in_use && b.in_use) return compare_no_case(a.name, b.name) < 0;

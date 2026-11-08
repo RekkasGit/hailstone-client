@@ -10,7 +10,7 @@ namespace mech = mechanics;
 
 namespace {
 
-// The three tables FUN_004afb70 fills (byte per old-style number 0..0x4f).
+// The three tables 0x4afb70 fills (byte per old-style number 0..0x4f).
 struct OldTables {
     std::array<bool, 0x50> interruptible{}; // 0xdcece8
     std::array<bool, 0x50> over_legs{};     // 0xdced38
@@ -127,12 +127,12 @@ std::uint8_t new_style_layer_mode(const LayerModeInput& in) {
     if (hold == 1) return 0;
     if (in.completed) return 2;
     if (hold != 3) return 1;
-    // A looping sequence: one of higher priority keeps playing unless it is a movement one (FUN_00589730).
+    // A looping sequence: one of higher priority keeps playing unless it is a movement one (0x589730).
     auto moving = [](std::uint8_t c) {
         return c == 0x68 || c == 0x69 || c == 0x6a || c == 0x6b || c == 0x6c || c == 0x7d || c == 0x7e || c == 0x80;
     };
     if (mech::new_style_priority(playing) > mech::new_style_priority(wanted) && !moving(playing)) return 1;
-    // FUN_005883d0: sitting down / standing up / the seated idle are not cut by a stand or a sit.
+    // 0x5883d0: sitting down / standing up / the seated idle are not cut by a stand or a sit.
     if ((playing == 0x77 || playing == 0x78 || playing == 0x79) && (wanted == 0x6e || wanted == 0x76)) return 1;
     return 2;
 }

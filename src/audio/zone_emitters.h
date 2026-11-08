@@ -1,8 +1,7 @@
 #pragma once
 
 // A zone's sound emitters and music, as the original's EqSoundManager keeps
-// them (rof2decomp export/EqSoundManager.c, SoundEmitter.c, MusicManager.c;
-// re/src/game/audio/eq_sound.cpp):
+// them (EqSoundManager, SoundEmitter, MusicManager):
 //   - SetCurrentZone @0x4ab4c0 loads <zone>.emt (EmitterLoad/EmitterAdd) and,
 //     only when that file cannot be opened, <zone>_sndbnk.eff + _sounds.eff
 //     (LoadOldEmitters @0x4ab150 / CreateOldEmitter @0x4aac30);
@@ -89,7 +88,7 @@ ZoneSoundSet emitters_from_eff(const std::vector<assets::EffSoundRecord>& record
                                const std::function<bool(const std::string&)>& exists, const std::string& label = {});
 
 // The base gain of a classic effect emitter from its level (CreateOldEmitter,
-// FUN_005bdb40): level <= 0 (wrapping negation) gives 0.2 for kind 0 and 1.0
+// 0x5bdb40): level <= 0 (wrapping negation) gives 0.2 for kind 0 and 1.0
 // for kinds 2/3; 1..10000 gives 10^(-level/2000); larger levels are silent.
 float classic_level_gain(std::int32_t level, std::uint8_t kind);
 

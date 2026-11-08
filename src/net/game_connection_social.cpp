@@ -1,6 +1,6 @@
 // GameConnection: the typed-line interpreter, chat, and the social, guild,
 // raid and chat-server commands. What the client does and says follows the
-// original's handlers in the rof2decomp export (addresses at each function;
+// original's handlers (addresses at each function;
 // strings are eqstr ids from eqstr_us.txt); packets are net/social_packets.h
 // and net/chat_server.h, state game/social.h.
 
@@ -402,7 +402,7 @@ bool GameConnection::run_slash_command(std::size_t index, const std::string& arg
     if (merc_command(h, args)) return true;
     if (player_command(h, args)) return true;
     if (market_command(h, args)) return true;
-    // The commands the app ports (app/client_app_commands.cpp).
+    // The commands the app implements (app/client_app_commands.cpp).
     if (client_commands_ && client_commands_(h, args)) return true;
     return false;
 }
@@ -526,7 +526,7 @@ void GameConnection::emote_command(const std::string& args) {
 }
 
 void GameConnection::social_emote(const game::SocialEmote& e, const std::string& args) {
-    // The four standing socials (rof2decomp standing_socials.cpp) need the player standing still.
+    // The four standing socials need the player standing still.
     const game::Spawn* me = world_.player();
     if (chat_blocked_) return; // send_social @0x526935: nothing while 0xddf70d is set
     if (e.needs_standing && (pstatus_.stand_state != 100 || moving_)) return system(13069);
@@ -574,7 +574,7 @@ void GameConnection::social_emote(const game::SocialEmote& e, const std::string&
 // says 1032 / 1410), a language other than common named in it (1411 "in %1", 1412 "in an unknown tongue" below 25 in
 // it) and garbled by the listener's skill; type 0x157 is 0x158 when aimed at the player. A line not garbled from a
 // named speaker goes to the conversation journal when its journal mode is 2, or 1 and it is aimed at the player
-// (CJournalTextWnd's FUN_006b3c00, while the journal window exists: take_journal_lines()).
+// (CJournalTextWnd's 0x6b3c00, while the journal window exists: take_journal_lines()).
 void GameConnection::handle_special_message(const SpecialMessage& m) {
     log::debug("special message: speak mode {} journal mode {} language {} type {} target {} from '{}'", m.speak_mode,
                m.journal_mode, m.language, m.type, m.target_spawn_id, m.sayer);
@@ -612,7 +612,7 @@ void GameConnection::handle_special_message(const SpecialMessage& m) {
 }
 
 void GameConnection::handle_channel_message(const ChannelMessage& m) {
-    // msg_new_text @0x4c0080 (rof2decomp batch 254): the spam flag under filter 31 first.
+    // msg_new_text @0x4c0080: the spam flag under filter 31 first.
     if (m.spam && chat_filters_.mode(game::kFilterSpam) == 1) return;
     if (iequals(m.sender, character_) && m.channel != 20) {
         // Our own line: the original echoed it when sending. Tells come back from the server as the echo (7 / 14):
@@ -862,7 +862,7 @@ void GameConnection::update_afk() {
 
 void GameConnection::lfg_command(const std::string& args) {
     // Cmd_lfgroup @0x4e52e0: "on" / "off" say 13134 / 13135 and send {on, levels 0..100, no comments}; then the
-    // group finder posts its own fields (FUN_00678df0, checked) or takes its post back (FUN_00678250). Anything
+    // group finder posts its own fields (0x678df0, checked) or takes its post back (0x678250). Anything
     // else shows the group finder.
     const bool on = args == fmt_eq(strings_, 12947, {});
     if (!on && args != fmt_eq(strings_, 12946, {})) {
@@ -1469,7 +1469,7 @@ void GameConnection::raid_remove_looter() {
 }
 
 void GameConnection::raid_set_loot_type(const std::string& text) {
-    // CRaid::SetLootType @0x47d9b0 (rof2decomp re/src/game/commands/misc_helpers8.cpp): in a raid; the leader and a
+    // CRaid::SetLootType @0x47d9b0: in a raid; the leader and a
     // single digit, else 5094 (dsp_chat_2); 1..4 other than the current type becomes it and is sent {0x20, me, me}.
     if (!zone_session_ || !raid_.active) return;
     if (!iequals(raid_.leader, character_) || text.size() != 1 || !std::isdigit(static_cast<unsigned char>(text[0])))
@@ -1551,7 +1551,7 @@ void GameConnection::guild_set_alt(const std::string& member, bool on) {
 }
 
 void GameConnection::guild_set_url(const std::string& url) {
-    // FUN_00423b00 keeps it; sent only when it differs from the guild's.
+    // 0x423b00 keeps it; sent only when it differs from the guild's.
     if (!zone_session_ || url == guild_.url) return;
     guild_.url = url;
     send_zone(encode_guild_update_text(0, url));
@@ -1559,7 +1559,7 @@ void GameConnection::guild_set_url(const std::string& url) {
 
 void GameConnection::guild_set_channel(const std::string& channel) {
     if (!zone_session_ || channel == guild_.channel) return;
-    guild_.channel = channel; // FUN_00423b30
+    guild_.channel = channel; // 0x423b30
     send_zone(encode_guild_update_text(1, channel));
 }
 
@@ -1962,7 +1962,7 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
         break;
     case Op::WhoAllResponse:
         if (auto r = decode_who_response(p)) {
-            // A server's client may replace the whole reply with its own lines (the NMS patch: FUN_10198eb0).
+            // A server's client may replace the whole reply with its own lines (the NMS patch: 0x10198eb0).
             auto ext_lines = server_ext().who_lines(*this, *r);
             auto lines = ext_lines ? std::move(*ext_lines) : game::format_who_response(*r, strings_, false);
             for (auto& line : lines)
@@ -2091,9 +2091,9 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
         }
         break;
     case Op::GuildUpdate:
-        // HandleWorldMessage_Guild @0x425d30, OP_GuildUpdate: action 5 (@0x426220): FUN_007d95e0(+0x50 rank, +0x54
+        // HandleWorldMessage_Guild @0x425d30, OP_GuildUpdate: action 5 (@0x426220): 0x7d95e0(+0x50 rank, +0x54
         // permission, byte +0x58) sets or clears the rank's permission bit (EQEmu sends every rank's permissions
-        // this way on zoning in, Client::SendGuildRanks, and on a change); 4: FUN_007d9520(+0x50 rank, +0x54 name)
+        // this way on zoning in, Client::SendGuildRanks, and on a change); 4: 0x7d9520(+0x50 rank, +0x54 name)
         // names a rank; 0 and 1: the guild's web page and chat channel (+0x50).
         if (auto u = decode_guild_update(p)) {
             if (u->action == 5) {

@@ -7,7 +7,7 @@
 // TargetIndicator_LoadIndicatorSettings @0x5c4870. The Options window's Show3dTargetIndicator
 // (TargetIndicator_SetEnabled @0x5c3f10, from DisplayPageWndNotification) and /indicator on|off turn it on and off.
 //
-// The original builds four concentric UV-animated circles (FUN_005c46f0, FUN_005c4430); this client draws the
+// The original builds four concentric UV-animated circles (0x5c46f0, 0x5c4430); this client draws the
 // ring its own way (render/target_ring_renderer.h, docs/graphics.md "The target ring"): only which ring shows, its
 // colour and alpha and its size follow the original. TargetRingLook below is Hailstone's.
 
@@ -46,7 +46,7 @@ struct TargetIndicatorSettings {
 // With no target, or the indicator off, the ring is hidden too.
 std::optional<int> target_ring_section(Con con);
 
-// FUN_005c46f0 @0x5c46f0: the ring's size, the target's AvatarHeight (+0x138; 3 without a target) times its
+// 0x5c46f0: the ring's size, the target's AvatarHeight (+0x138; 3 without a target) times its
 // actor's scale when it has an actor, at least 2.
 float target_ring_radius(float avatar_height, float actor_scale, bool has_actor);
 

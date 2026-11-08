@@ -162,7 +162,7 @@ TEST_CASE("placement: the request, the reply and the confirm on the wire") {
     CHECK(cb->box_b.x == doctest::Approx(-1));
 }
 
-TEST_CASE("placement: modes as FUN_005ae160 allows them") {
+TEST_CASE("placement: modes as 0x5ae160 allows them") {
     RePlacedItem o = chair();
     CHECK(place_mode_allowed(0, o));
     CHECK_FALSE(place_mode_allowed(1, o)); // walls need +0x9c == 1

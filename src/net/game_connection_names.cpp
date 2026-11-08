@@ -1,5 +1,5 @@
-// GameConnection: the name change windows (CNameChangeWnd, CNameChangePetWnd, CNameChangeMercWnd; rof2decomp export
-// CNameChange*Wnd.c, re/src/game/commands/name_commands.cpp, name_change_open_eh.cpp, net/name_handlers.cpp). The
+// GameConnection: the name change windows (CNameChangeWnd, CNameChangePetWnd, CNameChangeMercWnd, their
+// commands and the rename answer's handler). The
 // three are one window with its own strings, opcodes and ini key; the window models are app/lua_eq_names.cpp.
 
 #include <format>
@@ -18,7 +18,7 @@ namespace {
 constexpr std::uint16_t kOpChangeMercName = 0x36db, kOpInvokeMercNameImmediate = 0x63d7, kOpInvokeMercNameLazy = 0x4cd9;
 
 struct NameStrings {
-    const char* ini_key;        // Preferences/<key> (FUN_006fb160 and the window's dialog handler FUN_006fb6a0)
+    const char* ini_key;        // Preferences/<key> (0x6fb160 and the window's dialog handler 0x6fb6a0)
     std::uint32_t remind, open; // the prompt Open(1) / Open(0) shows (0x144a / 0x144b ...)
     std::uint32_t disable;      // the Disable Reminder question (dialog 100, 20 s)
     std::uint32_t confirm;      // the command's question (%1 the name; dialog 0x7c / 0x8c / 0x8d, 10 s)
@@ -40,7 +40,7 @@ void GameConnection::load_name_change_flags() {
 }
 
 void GameConnection::set_name_reminder_disabled(int kind, bool disabled) {
-    // FUN_006fb160 (and the dialog handler's inline copy): a change is written as "%u".
+    // 0x6fb160 (and the dialog handler's inline copy): a change is written as "%u".
     auto& w = name_change_[static_cast<std::size_t>(kind)];
     if (w.reminder_disabled == disabled) return;
     w.reminder_disabled = disabled;
@@ -65,7 +65,7 @@ bool GameConnection::handle_name_change(const AppPacket& p) {
     case Op::InvokeNameChangeLazy: // Handle_OP_InvokeNameChangeLazy @0x4b6bd0: unless the reminder is off
         if (!name_change_[kNameCharacter].reminder_disabled) open_name_change(kNameCharacter, true);
         return true;
-    case Op::InvokeChangePetNameImmediate: // FUN_004b8fe0
+    case Op::InvokeChangePetNameImmediate: // 0x4b8fe0
         set_name_reminder_disabled(kNamePet, false);
         open_name_change(kNamePet, true);
         return true;
@@ -87,7 +87,7 @@ bool GameConnection::handle_name_change(const AppPacket& p) {
         if (p.opcode != kOpChangeMercName) return false;
         kind = kNameMerc;
     }
-    // The rename answer (rof2decomp net/name_handlers.cpp RenameResult): the result at +0x80 (0 refused 5167, 1 done
+    // The rename answer (RenameResult): the result at +0x80 (0 refused 5167, 1 done
     // 5976, -1 5977 and -2 5978 for character names only, -3 5979, -4 5980, -5 5193) printed in colour 0xf; the
     // request is no longer pending; the string shown again as dialog 0xb (OK, 10 s); a successful rename closes the
     // window.
@@ -95,16 +95,20 @@ bool GameConnection::handle_name_change(const AppPacket& p) {
     ByteReader r(p.data);
     r.skip(0x80);
     auto result = static_cast<std::int32_t>(r.le<std::uint32_t>());
+    struct Answer {
+        std::int32_t result;
+        std::uint32_t eqstr;
+        bool character_only;
+    };
+    static constexpr Answer kAnswers[] = {
+        {1, 5976, false}, {0, 5167, false}, {-1, 5977, true}, {-2, 5978, true},
+        {-3, 5979, false}, {-4, 5980, false}, {-5, 5193, false},
+    };
     std::uint32_t id = 0;
-    switch (result) {
-    case 0: id = 5167; break;
-    case 1: id = 5976; break;
-    case -1: id = kind == kNameCharacter ? 5977 : 0; break;
-    case -2: id = kind == kNameCharacter ? 5978 : 0; break;
-    case -3: id = 5979; break;
-    case -4: id = 5980; break;
-    case -5: id = 5193; break;
-    default: break;
+    for (const Answer& ans : kAnswers) {
+        if (ans.result != result) continue;
+        if (!ans.character_only || kind == kNameCharacter) id = ans.eqstr;
+        break;
     }
     if (id) system(id, {}, 0xf);
     auto& w = name_change_[static_cast<std::size_t>(kind)];
@@ -160,14 +164,14 @@ void GameConnection::ask_disable_name_reminder(int kind) {
 void GameConnection::answer_name_change(const Confirmation& c, bool yes) {
     if (!yes) return;
     if (c.id == kConfirmNameReminderOff) {
-        // FUN_006fb6a0 (the window's dialog handler, dialog 100): the reminder off, saved, and the window closed.
+        // 0x6fb6a0 (the window's dialog handler, dialog 100): the reminder off, saved, and the window closed.
         int kind = static_cast<int>(c.data);
         if (kind < 0 || kind >= kNameKinds) return;
         set_name_reminder_disabled(kind, true);
         name_change_[static_cast<std::size_t>(kind)].open = false;
         return;
     }
-    // ConfirmationDialog_HandleResponse 0x7c / 0x8c / 0x8d: the window's request pending (FUN_006fb130(1)), then
+    // ConfirmationDialog_HandleResponse 0x7c / 0x8c / 0x8d: the window's request pending (0x6fb130(1)), then
     // {new name[64], the character's name[64], i32 0} as OP_GMNameChange, OP_ChangePetName or 0x36db; the
     // character's rename also prints 5973.
     if (state_ != ConnectionState::InZone) return;

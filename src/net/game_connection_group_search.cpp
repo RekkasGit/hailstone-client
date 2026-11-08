@@ -59,7 +59,7 @@ void GameConnection::group_search_error(int code) {
 void GameConnection::group_search_post_player(bool update) {
     group_search_prepare();
     auto& gs = group_search_;
-    // GroupSearch_CheckPlayerFields @0x6785b0, then FUN_006783b0: the record from the player page (comments cut to
+    // GroupSearch_CheckPlayerFields @0x6785b0, then 0x6783b0: the record from the player page (comments cut to
     // 63), on, the match filter from the filters window's GSFW_ExclusionSearchCheckbox.
     int from = game::group_search_int(gs.player_min), to = game::group_search_int(gs.player_max);
     if (!game::group_search_range_ok(from, to)) return group_search_error(1);
@@ -71,13 +71,13 @@ void GameConnection::group_search_post_player(bool update) {
     c.match_filter = gs.filters.exclusive;
     gs.lfg = c;
     send_lfg(c);
-    // FUN_00678df0: the post's button hidden (checked), Update shown and disabled, LFG off enabled (unchecked);
-    // FUN_00678ea0 (Update) only disables Update. Both follow from `lfg` here (app/lua_eq_group_search.cpp).
+    // 0x678df0: the post's button hidden (checked), Update shown and disabled, LFG off enabled (unchecked);
+    // 0x678ea0 (Update) only disables Update. Both follow from `lfg` here (app/lua_eq_group_search.cpp).
     if (!update) gs.lfg_remove_checked = false;
 }
 
 void GameConnection::group_search_remove_player() {
-    // FUN_00678250: a zeroed record, off; LFG off disabled and checked, Update hidden, the post shown.
+    // 0x678250: a zeroed record, off; LFG off disabled and checked, Update hidden, the post shown.
     auto& gs = group_search_;
     gs.lfg = LfgCommand{};
     send_lfg(gs.lfg);
@@ -87,7 +87,7 @@ void GameConnection::group_search_remove_player() {
 void GameConnection::group_search_post_group(bool update) {
     group_search_prepare();
     auto& gs = group_search_;
-    // FUN_00679d30: a member who is not the group's leader may not post the group (6715); Update (FUN_00679e00)
+    // 0x679d30: a member who is not the group's leader may not post the group (6715); Update (0x679e00)
     // skips that check.
     if (!update && group_.active && !group_.is_leader(character_)) return group_search_error(3);
     // GroupSearch_CheckGroupFields @0x679370: the range (1), then at least one class (2).
@@ -95,7 +95,7 @@ void GameConnection::group_search_post_group(bool update) {
     std::uint32_t classes = game::group_search_class_mask(gs.roles);
     if (!game::group_search_range_ok(from, to)) return group_search_error(1);
     if (classes == 0) return group_search_error(2);
-    // FUN_006791f0: the record from the group page.
+    // 0x6791f0: the record from the group page.
     LfpCommand c;
     c.comments = comments63(gs.group_comments);
     c.from_level = static_cast<std::uint32_t>(from);
@@ -108,7 +108,7 @@ void GameConnection::group_search_post_group(bool update) {
 }
 
 void GameConnection::group_search_remove_group() {
-    // FUN_00678310: a zeroed record, off.
+    // 0x678310: a zeroed record, off.
     auto& gs = group_search_;
     gs.lfp = LfpCommand{};
     if (state_ == ConnectionState::InZone) send_zone(encode(gs.lfp));
@@ -116,7 +116,7 @@ void GameConnection::group_search_remove_group() {
 
 bool GameConnection::group_search_player_changed() const {
     const auto& gs = group_search_;
-    // FUN_006786a0: the comments (strcmp with the record's 63), or either level, differ from the record's.
+    // 0x6786a0: the comments (strcmp with the record's 63), or either level, differ from the record's.
     return gs.lfg.comments != comments63(gs.player_comments) ||
            static_cast<int>(gs.lfg.from_level) != game::group_search_int(gs.player_min) ||
            static_cast<int>(gs.lfg.to_level) != game::group_search_int(gs.player_max);
@@ -124,7 +124,7 @@ bool GameConnection::group_search_player_changed() const {
 
 bool GameConnection::group_search_group_changed() const {
     const auto& gs = group_search_;
-    // FUN_00679480: as above, and the class mask.
+    // 0x679480: as above, and the class mask.
     return gs.lfp.comments != comments63(gs.group_comments) ||
            static_cast<int>(gs.lfp.from_level) != game::group_search_int(gs.group_min) ||
            static_cast<int>(gs.lfp.to_level) != game::group_search_int(gs.group_max) ||
@@ -156,7 +156,7 @@ void GameConnection::group_search_query_players() {
 void GameConnection::group_search_query_groups() {
     group_search_prepare();
     auto& gs = group_search_;
-    // FUN_00678ed0: Show All 1..100 unfiltered, else the player page's range (6713).
+    // 0x678ed0: Show All 1..100 unfiltered, else the player page's range (6713).
     int from = 1, to = 100;
     if (gs.groups_show_all) {
         gs.groups_query_all = true;
@@ -172,7 +172,7 @@ void GameConnection::group_search_query_groups() {
 }
 
 void GameConnection::group_search_joined_group() {
-    // FUN_00678550 (FUN_00443670: in a group and its leader).
+    // 0x678550 (0x443670: in a group and its leader).
     bool leader = group_.active && group_.is_leader(character_);
     group_search_remove_player();
     if (!leader || group_.count() == game::kGroupSlots) group_search_remove_group();
@@ -203,7 +203,7 @@ bool GameConnection::handle_group_search(const AppPacket& p) {
     auto& gs = group_search_;
     switch (from_wire(p.opcode)) {
     case Op::LFGGetMatchesResponse: {
-        // Handle_OP_LFGGetMatchesResponse @0x4b7a30: the list cleared (FUN_00677370), each entry through
+        // Handle_OP_LFGGetMatchesResponse @0x4b7a30: the list cleared (0x677370), each entry through
         // CGroupSearchWnd_AddLfgMatchRow, which drops the filtered ones unless the query was Show All.
         auto v = decode_lfg_matches(p);
         if (!v) return true;

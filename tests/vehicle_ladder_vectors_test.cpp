@@ -1,5 +1,5 @@
 // Vehicle_WorldToLocal.jsonl, Vehicle_LocalToWorld.jsonl and
-// Ladder_MountClickedLadder.jsonl (rof2decomp batch 252, recorded from
+// Ladder_MountClickedLadder.jsonl (recorded from
 // eqgame.exe) against game/mechanics/vehicle.h and ladder.h; floats bit for
 // bit at the record's x87 precision.
 #include <doctest/doctest.h>
@@ -55,7 +55,7 @@ std::string check_vehicle(const Json& rec, bool to_local) {
 }
 
 // The callees' answers come from the record's call list, in order; each call
-// the port makes is checked against the next recorded one.
+// the client makes is checked against the next recorded one.
 class RecordedLadder final : public LadderQueries {
 public:
     RecordedLadder(const Json& calls, const Json& fits) : calls_(calls), fits_(fits) {

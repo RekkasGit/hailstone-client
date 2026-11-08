@@ -2,7 +2,7 @@
 
 // The original's spawn distance, as used for spell range and interaction checks.
 //
-// Source: rof2decomp batch 48, re/src/game/display/display.cpp:
+// Source: the original's CDisplay:
 //   CDisplay::TrueDistance @0x48c2c0 — sqrt(dx² + dy² + (dz / z_scale)²), or the
 //     2D distance when z_scale is 0. The sum is formed on the x87 stack, stored
 //     as a float, then square-rooted.

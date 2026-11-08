@@ -1,7 +1,7 @@
 #pragma once
 
 // Particle emitter definitions (.edd) and the spell effect stages
-// (spellsnew.eff). Sources: rof2decomp notes/eqgraphicsdx9.md (Particles) and
+// (spellsnew.eff). Sources: the original's particle code and
 // OpenEQ docs/SPELL_EFFECT_FORMAT.md (field meanings where this build was
 // not traced).
 //

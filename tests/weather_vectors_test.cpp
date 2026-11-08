@@ -1,10 +1,10 @@
-// The weather state (game/weather_state.h) against the original's vectors (rof2decomp batch 270):
+// The weather state (game/weather_state.h) against the original's vectors (recorded from eqgame.exe):
 // Weather_HandleWeatherMessage (600), Weather_StartEffect (1500) and Weather_RequestRainSnowToggle (300).
 //
 // Weather_StartEffect's records hold the precipitation manager's virtual calls in order ("virtual_calls": raw 32-bit
 // arguments, object 1 the existing manager, 2 one created now, 3 the resource manager, 4 the camera) and the mocked
 // CDisplay::StopWeather and __EQGetTime calls. Fields the original did not write keep the recorder's random bytes, so
-// the next strike / fade times, the thunder byte and the fog offsets are compared where the port writes them.
+// the next strike / fade times, the thunder byte and the fog offsets are compared where the client writes them.
 #include <doctest/doctest.h>
 
 #include <bit>

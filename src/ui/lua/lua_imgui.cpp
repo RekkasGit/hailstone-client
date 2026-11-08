@@ -1,5 +1,4 @@
-// The `ui` Lua table: Dear ImGui for scripts. Ported from rof2decomp re/src/ui/lua_imgui.cpp (the same API, so the
-// rof2ui window scripts run unchanged). Functions keep ImGui's names; values that ImGui changes through
+// The `ui` Lua table: Dear ImGui for scripts. Functions keep ImGui's names; values that ImGui changes through
 // pointers are returned instead (value, changed = ui.Checkbox("x", value)). Colours are r, g, b, a in 0..1.
 // Textures (for example item icons from eq.ItemIcon) are light userdata.
 #include <algorithm>

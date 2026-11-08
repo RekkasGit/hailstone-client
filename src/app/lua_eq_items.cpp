@@ -72,20 +72,20 @@ void money_click(net::GameConnection& c, int location, int type, std::uint32_t p
     c.move_coin(location, net::kCoinCursor, type, type, ctrl() ? 1u : pile);
 }
 
-// The merchant window as the inventory's coin buttons see it (FUN_00698290 asks for its mail page).
+// The merchant window as the inventory's coin buttons see it (0x698290 asks for its mail page).
 class ParcelPage {
 public:
     virtual ~ParcelPage() = default;
     // The merchant window shows, on its mail (Parcels) page (CMerchantWnd_GetCurrentPageHandler == 2).
     virtual bool parcels_shown(EqHost& host) = 0;
-    // FUN_006f2120: the merchant window's own selected item and its list's selection are cleared.
+    // 0x6f2120: the merchant window's own selected item and its list's selection are cleared.
     virtual void drop_selection() = 0;
 };
 
-// CInventoryWnd::ClickedMoneyButton (GameConnection::inventory_money_button, rof2decomp batch 261): coin on the
+// CInventoryWnd::ClickedMoneyButton (GameConnection::inventory_money_button): coin on the
 // cursor goes into the inventory as this button's coin; otherwise the quantity dialog opens at the button's centre
 // with max = start = the inventory's coins of that type (none: nothing; one, Shift: all, Ctrl: 1 at once) and its
-// answer comes onto the cursor. Before the dialog, on the merchant's Parcels page, FUN_00698290
+// answer comes onto the cursor. Before the dialog, on the merchant's Parcels page, 0x698290
 // (GameConnection::parcel_coin_button): the bag item picked is let go and, with coins of that type, the button is
 // outlined and the merchant window's selection cleared. Hailstone: there the answer is the money picked for sending
 // (GameConnection::set_parcel_money; nothing moves until the page sends it), as there is no SendMoneyWnd to drop
@@ -138,7 +138,7 @@ public:
             out.shown = false; // no Krono and no subscription on this server (KronoManager status never comes)
         } else if (int m = index_after(id, "IW_Money"); m >= 0 && m < 4) {
             out.text = std::to_string(coin_of(c.coins(), coin_type(m)));
-            // the outline FUN_00698290 puts on the button picked for the Parcels page (CButtonWnd +0x259)
+            // the outline 0x698290 puts on the button picked for the Parcels page (CButtonWnd +0x259)
             if (const auto& ms = c.merchant(); ms && ms->open) out.checked = ms->parcel_coin == m;
         } else if (id == "IW_GoodPoints" || id == "IW_EvilPoints") {
             out.text = "0"; // CInventoryWnd_UpdateCrystalCounts: radiant / ebon crystals (not kept by this client)
@@ -261,10 +261,10 @@ private:
 // its slot.
 struct Containers {
     std::vector<net::ItemSlot> open;
-    // CInvSlotMgr +0x2010: set by CloseAllBags, cleared by OpenAllBags; TOGGLE_INV_BAGS (FUN_006989e0) opens while
+    // CInvSlotMgr +0x2010: set by CloseAllBags, cleared by OpenAllBags; TOGGLE_INV_BAGS (0x6989e0) opens while
     // it is set, else closes. The constructor (@0x697d00) sets it, so the first press opens.
     bool all_closed = true;
-    // +0x2011, the same for the bank's bags (FUN_00698d60, CMD_TOGGLE_BANK_BAGS), also set by the constructor.
+    // +0x2011, the same for the bank's bags (0x698d60, CMD_TOGGLE_BANK_BAGS), also set by the constructor.
     bool bank_all_closed = true;
     void toggle(const net::ItemSlot& s) {
         for (auto it = open.begin(); it != open.end(); ++it)
@@ -340,7 +340,7 @@ void toggle_all_bags(EqHost& host) {
     else close_all_bags(host);
 }
 
-// CMD_TOGGLE_BANK_BAGS (FUN_00698d60): by +0x2011, CInvSlotMgr_OpenAllBankBags @0x698a00 or its close (@0x698bf0).
+// CMD_TOGGLE_BANK_BAGS (0x698d60): by +0x2011, CInvSlotMgr_OpenAllBankBags @0x698a00 or its close (@0x698bf0).
 // Open, only while the bank window shows: every bag in the bank's slots (CBankWnd::GetNumBankSlots) and the shared
 // bank's two that is not placeable and not open, then the flag clears. Close: every open bag in those slots closes
 // (CContainerMgr::CloseContainer), then the flag is set.

@@ -1,6 +1,6 @@
 // GameConnection: game commands that act on the player or the target: /shieldgroup, /blockspell, /sheathe, /open,
 // /reveal, /hidecorpses (and the loot window's hide of a looted corpse), /decaycorpse and /setstartcity. Packets in
-// net/player_packets.h and net/spell_packets.h; every function names the original it follows (rof2decomp export of
+// net/player_packets.h and net/spell_packets.h; every function names the original it follows (in
 // eqgame.exe).
 
 #include <algorithm>
@@ -89,7 +89,7 @@ bool GameConnection::game_command(std::string_view h, const std::string& args) {
 }
 
 bool GameConnection::may_shield() {
-    // MayShield (rof2decomp re/src/game/commands/ability_commands.cpp): no merchant, guild master or banker open
+    // MayShield: no merchant, guild master or banker open
     // (0x1aaa) and a warrior of level 30 or more (0xfc1). Colour 0x111.
     if (merchant_ || training_ || bank_) {
         system(6826, {}, kColorCommand);
@@ -268,10 +268,10 @@ void GameConnection::hidecorpses_command(const std::string& args) {
 }
 
 void GameConnection::hide_looted_corpse() {
-    // CLootWnd::AboutToHide @0x6bcd40, with the hide-looted flag: when items are left (FUN_006bee70 counts the
+    // CLootWnd::AboutToHide @0x6bcd40, with the hide-looted flag: when items are left (0x6bee70 counts the
     // loot slots) OP_HideCorpse {4, the corpse}; then a corpse that is not the player's own is hidden here
     // (bHideCorpse, PrepForDestroyPlayer). The original's own-corpse test compares two names it reads through
-    // FUN_0059e520 (not decoded): taken here as the corpse's name holding the player's.
+    // 0x59e520 (not decoded): taken here as the corpse's name holding the player's.
     if (!hide_looted_corpses_ || !loot_) return;
     std::uint32_t corpse = loot_->corpse_id;
     if (!loot_->items.empty()) send_zone(encode_hide_corpse(kHideCorpseThis, corpse));
@@ -419,7 +419,7 @@ void GameConnection::spellscribe_command(const std::string& args) {
 
 void GameConnection::offlinemode_command() {
     // Cmd_offlinemode @0x4e6660: Send_OP_FloatListThing(1) (the position history, which this client does not keep)
-    // and Save(0, 1, 0x25) first. Then a GM (CharacterBase virtual +0x90: FUN_00580300, the spawn's GM flag) or the
+    // and Save(0, 1, 0x25) first. Then a GM (CharacterBase virtual +0x90: 0x580300, the spawn's GM flag) or the
     // Rain of Fear flag (0x40000) else 774; a player in state 0x66 768; not trader (PlayerClient +0x320) nor buyer
     // (+0x3d4) 771. The time is kept (0xddf8ac; the link death within 15 s exits the client), and with
     // Options/OfflineModeConfirm the question 0x8f (13345, Yes / No, 60 s), else opcode 0x53d3 alone (not in

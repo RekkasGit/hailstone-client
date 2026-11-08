@@ -82,7 +82,7 @@ public:
 
     // The listener environment (CDisplay_UpdateListenerEnvironment: 1 outside, 2 high, 3 low): the emitters of
     // other environments stop and the room becomes the zone's preset for it, unless a special room (underwater
-    // 0x16, stunned 0x17; FUN_0048a480) is set.
+    // 0x16, stunned 0x17; 0x48a480) is set.
     void set_listener_environment(std::int32_t environment);
     void set_special_room(std::optional<std::int32_t> room);
     std::int32_t listener_environment() const { return environment_; }
@@ -109,7 +109,7 @@ public:
     // WavePlay(id, control): a wave of the sound table (the zone bank over soundassets.txt).
     void play_wave(std::int32_t id, const SoundControl& control);
     void play_wave_2d(std::int32_t id) { play_wave(id, SoundControl{}); }
-    // A named sound of soundassets.txt ("YouveGotMail"), 2D: FUN_004ab700's id, then WavePlay(id, 0). Nothing
+    // A named sound of soundassets.txt ("YouveGotMail"), 2D: 0x4ab700's id, then WavePlay(id, 0). Nothing
     // when the name is not there.
     void play_named_2d(const std::string& name);
     bool wave_playing(std::int32_t id);

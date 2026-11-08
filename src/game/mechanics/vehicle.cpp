@@ -5,11 +5,11 @@
 #include "game/mechanics/controls.h"
 #include "game/sine_table.h"
 
-// Each helper follows the original's instruction stream (see the rewrite's
-// asm). A value loaded onto the x87 stack (fld) is quiet: S(); a float used
-// as a memory operand (fmul/fadd dword) keeps its signalling flag for the
+// Works at the x87's precision (game/mechanics/fpu.h). A value loaded for
+// arithmetic is quiet: S(); a float used
+// as a memory operand keeps its signalling flag for the
 // x87's NaN choice: M(). Intermediates are doubles rounded at the record's
-// precision; only the stores (fstp dword) round to float.
+// precision; only the stores to a float round to float.
 
 namespace hailstone::game::mechanics {
 
@@ -49,7 +49,7 @@ void vehicle_world_to_local(const VehiclePose& v, VehicleBody& b, const VehicleF
     b.x = to_f(r0);
     b.y = to_f(r1);
     b.z = to_f(r2);
-    // fld angle; fsub vehicle's; fstp.
+    // The angle less the vehicle's, stored as a float.
     b.heading = to_f(x87_sub(f, S(b.heading), M(v.heading)));
     b.pitch = to_f(x87_sub(f, S(b.pitch), M(v.pitch)));
     // 0x8cfe51: v = M v.
@@ -79,7 +79,7 @@ void vehicle_local_to_world(const VehiclePose& v, VehicleBody& b, const VehicleF
     b.x = to_f(c0);
     b.y = to_f(a);
     b.z = to_f(c2);
-    // fld vehicle's; fadd angle; fstp; then __FixHeading of the stored float.
+    // The vehicle's angle plus this one, stored as a float; then __FixHeading of it.
     float h = to_f(x87_add(f, S(v.heading), M(b.heading)));
     b.heading = to_f(fix_heading(static_cast<double>(quiet(h)), f));
     float p = to_f(x87_add(f, S(v.pitch), M(b.pitch)));

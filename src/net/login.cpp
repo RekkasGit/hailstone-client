@@ -13,7 +13,7 @@
 #include "core/log.h"
 #include "net/des.h"
 
-// Login protocol as the original's eqmain.dll speaks it (rof2decomp:notes/eqmain.md): LoginServerAPI's request
+// Login protocol as the original's eqmain.dll speaks it: LoginServerAPI's request
 // counter and pending list, the BaseMessage header, CSPlayerLogin's DES block and the replies' layouts. EQEmu's
 // loginserver (client.cpp, login_types.h) was the earlier source and still the server it is checked against.
 

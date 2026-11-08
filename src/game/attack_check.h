@@ -8,7 +8,7 @@
 // "Abilities"): other spawns' BodyWet and InPvPArea are 0 (only the
 // player's own BodyWet is known); EQWorldData::IsNewbieZone is false; a
 // vehicle race (vtable +0x50, the race data's flag) is a boat race (72, 73,
-// 141); FUN_0059f730 (a target's PcClient owner) is non-null for player
+// 141); 0x59f730 (a target's PcClient owner) is non-null for player
 // spawns; the level-capped character flag is never set.
 
 #include <cstdint>

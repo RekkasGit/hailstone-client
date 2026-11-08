@@ -4,11 +4,10 @@
 // of an item's sockets (CItemDisplayWnd_UpdateAugmentSlots @0x69f240, the augment lines of the description) and the
 // requests the display makes when a socket is clicked (CItemDisplayWnd::InsertAugmentRequest @006a8190,
 // RemoveAugmentRequest @006a86b0, CItemDisplayWnd_HandleAugmentInsert @006a8b70 (swap), sub_006a92c0 (destroy)).
-// rof2decomp:notes/augments.md and items-and-inventory.md §3.5; the fit checks follow rof2decomp
-// re/src/game/item/augment_restrictions.cpp (replaced, checked against the original's vectors). The rules are
+// The fit checks are checked against the original's vectors. The rules are
 // plain functions over net::Item; GameConnection supplies the inventory searches and sends the result.
 //
-// Item fields (ItemDefinition offsets as the notes give them): item_class +0x11a (0 common, 1 bag), item_type
+// Item fields (ItemDefinition offsets): item_class +0x11a (0 common, 1 bag), item_type
 // +0x1d4, classes / races / deity +0x170 / +0x174 / +0x178, equip_slots +0xf0, delay +0x182, material = ArmorProps
 // .Type +0x1d8, aug_sockets +0x1ec (8 bytes each: type, visible +4, and the +5 flag: the socket scales its augment's
 // stats and colours the display's modifiers), aug_type +0x21c, aug_restrict2 = AugSkinTypeMask +0x220,
@@ -53,8 +52,8 @@ inline bool has_solvent(const net::Item& aug) { return aug.aug_distiller != 0; }
 // ItemBase_IsStatsDisabled @007b0520: either of the instance's disable bytes, +0x101 (rank) or +0x100 (the aug
 // texture), is set. Only update_stats_disabled writes them.
 inline bool stats_disabled(const net::Item& item) { return item.rank_disabled || item.aug_texture_disabled; }
-// FUN_007b28a0 (thiscall, item; use_item, ornament), what ProcessAllStats runs on each worn item (slots 0..0x15) and
-// the item display builders (CItemDisplayWnd_BuildItemInfo @0x6a9540, BuildItemDescriptionSTML @0x6a3360, FUN_006a1c70)
+// 0x7b28a0 (thiscall, item; use_item, ornament), what ProcessAllStats runs on each worn item (slots 0..0x15) and
+// the item display builders (CItemDisplayWnd_BuildItemInfo @0x6a9540, BuildItemDescriptionSTML @0x6a3360, 0x6a1c70)
 // on the shown item, with the game features GetGameFeature(0x13 UseItem) and GetGameFeature(0x15 Ornament):
 //  - +0x101 = use_item != -1 and use_item < the definition's Prestige (+0x1d0; 0 for a non-Type-0 item);
 //  - a container (ItemClass 1): each item inside gets the same call, then its +0x100 = 0;
@@ -63,7 +62,7 @@ inline bool stats_disabled(const net::Item& item) { return item.rank_disabled ||
 //  - last, an item at a top-level index (ItemGlobalIndex slot word +0x3c not -1, sub word +0x3e -1) gets +0x100 = 0.
 // `top_level` is that last test for `item` (the children are never top level).
 void update_stats_disabled(net::Item& item, std::int32_t use_item, std::int32_t ornament, bool top_level);
-// FUN_0069bf80: a valid, visible socket (ornaments included) holds an augment (the title's "(Augmented)").
+// 0x69bf80: a valid, visible socket (ornaments included) holds an augment (the title's "(Augmented)").
 bool is_augmented(const net::Item& item);
 
 // ---- the fit test
@@ -139,7 +138,7 @@ AugmentSockets build_augment_sockets(const net::Item& item, const net::Item* cur
 // @006a5931: every valid, visible socket, ornaments included, each followed by <BR>).
 std::string augment_socket_row_text(const net::Item& item, int socket, const AugmentStrings& s, bool highlight);
 std::string augment_description_rows(const net::Item& item, const AugmentStrings& s);
-// FUN_0069d6e0 (ItemType 54): 3357 "This Augmentation fits in slot types: %1" over the AugType bits 1..31 (dbstr
+// 0x69d6e0 (ItemType 54): 3357 "This Augmentation fits in slot types: %1" over the AugType bits 1..31 (dbstr
 // type 16 names, " " before the first and ", " between; 3369 "Fits in all slot types." with 31 or more bits). No
 // <BR>.
 std::string augment_slot_types_line(const net::Item& aug, const AugmentStrings& s);

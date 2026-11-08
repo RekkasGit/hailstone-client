@@ -195,6 +195,35 @@ std::string map_layer_file_name(std::string_view zone, int layer) {
     return name + ".txt";
 }
 
+namespace {
+
+// How far an anchor moves the label along one axis: `sizes` times its size, `halves` times half its size, and
+// `pad` pixels, added in 32-bit unsigned arithmetic as the original does (a negative move wraps).
+struct AxisShift {
+    std::int8_t sizes, halves, pad;
+    std::uint32_t apply(std::uint32_t size, std::uint32_t half_size) const {
+        return static_cast<std::uint32_t>(sizes) * size + static_cast<std::uint32_t>(halves) * half_size +
+               static_cast<std::uint32_t>(pad);
+    }
+};
+struct LabelShift {
+    AxisShift x, y;
+};
+// Per anchor 0..23. Across: centred on the point, 4 to its right, or ending 4 to its left. Down: in steps of the
+// text's height and half height around the point (anchor 0 sits 2 above it, anchor 1 2 below).
+constexpr AxisShift kCentred{0, -1, 0}, kRightOf{0, 0, 4}, kLeftOf{-1, 0, -4};
+constexpr std::array<LabelShift, 24> kLabelShifts{{
+    {kCentred, {-1, 0, -2}}, {kCentred, {0, 0, 2}},
+    {kRightOf, {0, -1, 0}},  {kRightOf, {-1, 0, 0}},  {kRightOf, {0, 0, 0}},
+    {kLeftOf, {0, -1, 0}},   {kLeftOf, {-1, 0, 0}},   {kLeftOf, {0, 0, 0}},
+    {kRightOf, {-1, -1, 0}}, {kRightOf, {0, 1, 0}},   {kLeftOf, {-1, -1, 0}}, {kLeftOf, {0, 1, 0}},
+    {kRightOf, {-2, 0, 0}},  {kRightOf, {1, 0, 0}},   {kLeftOf, {-2, 0, 0}},  {kLeftOf, {1, 0, 0}},
+    {kRightOf, {-2, -1, 0}}, {kRightOf, {1, 1, 0}},   {kLeftOf, {-2, -1, 0}}, {kLeftOf, {1, 1, 0}},
+    {kRightOf, {-3, 0, 0}},  {kRightOf, {2, 0, 0}},   {kLeftOf, {-3, 0, 0}},  {kLeftOf, {2, 0, 0}},
+}};
+
+} // namespace
+
 std::array<int, 4> map_label_rect(unsigned anchor, int x, int y, int w, int h) {
     std::uint32_t ux = static_cast<std::uint32_t>(x), uy = static_cast<std::uint32_t>(y);
     std::uint32_t uw = static_cast<std::uint32_t>(w), uh = static_cast<std::uint32_t>(h);
@@ -208,31 +237,14 @@ std::array<int, 4> map_label_rect(unsigned anchor, int x, int y, int w, int h) {
         o[1] = bottom;
         o[3] = uy;
     }
-    if (anchor <= 23) {
-        std::uint32_t hh = static_cast<std::uint32_t>(half(h));
-        static const std::uint8_t kDx[24] = {0, 0, 1, 1, 1, 2, 2, 2, 1, 1, 2, 2, 1, 1, 2, 2, 1, 1, 2, 2, 1, 1, 2, 2};
-        std::uint32_t dx = kDx[anchor] == 0 ? 0u - static_cast<std::uint32_t>(half(w)) : kDx[anchor] == 1 ? 4u : 0xfffffffcu - uw;
-        static const std::uint8_t kDy[24] = {0, 1, 2, 3, 4, 2, 3, 4, 5, 6, 5, 6, 7, 8, 7, 8, 9, 10, 9, 10, 11, 12, 11, 12};
-        std::uint32_t dy = 0;
-        switch (kDy[anchor]) {
-        case 0: dy = 0xfffffffeu - uh; break;
-        case 1: dy = 2; break;
-        case 2: dy = 0u - hh; break;
-        case 3: dy = 0u - uh; break;
-        case 4: dy = 0; break;
-        case 5: dy = 0u - uh - hh; break;
-        case 6: dy = hh; break;
-        case 7: dy = 0u - 2 * uh; break;
-        case 8: dy = uh; break;
-        case 9: dy = 0u - 2 * uh - hh; break;
-        case 10: dy = hh + uh; break;
-        case 11: dy = 0u - 3 * uh; break;
-        default: dy = 2 * uh; break;
+    if (anchor < kLabelShifts.size()) {
+        const LabelShift& shift = kLabelShifts[anchor];
+        std::uint32_t dx = shift.x.apply(uw, static_cast<std::uint32_t>(half(w)));
+        std::uint32_t dy = shift.y.apply(uh, static_cast<std::uint32_t>(half(h)));
+        for (std::size_t i = 0; i < 4; i += 2) {
+            o[i] += dx;
+            o[i + 1] += dy;
         }
-        o[0] += dx;
-        o[2] += dx;
-        o[1] += dy;
-        o[3] += dy;
     }
     return {static_cast<int>(o[0]), static_cast<int>(o[1]), static_cast<int>(o[2]), static_cast<int>(o[3])};
 }
@@ -420,7 +432,7 @@ void MapView::start_line(const glm::vec3& p) {
 }
 
 void MapView::add_point(const glm::vec3& p) {
-    // The original tests the current point against the zone box's max plus p (FUN_006cab70 @0x6cab8d), not p.
+    // The original tests the current point against the zone box's max plus p (0x6cab70), not p.
     if (!line_active || !current_zone) return;
     if (!(0.9f < std::fabs(current_point.x - (max_x + p.x)) || 0.9f < std::fabs(current_point.y - (max_y + p.y))))
         return;
@@ -475,7 +487,7 @@ bool MapView::join_lines_at_intersect(bool ctrl) {
     if (marked_lines.size() != 2) return false;
     MapLine& b = *marked_lines[0]; // the newer mark
     MapLine& a = *marked_lines[1]; // the older: the one moved with Ctrl
-    // FUN_006c8d30: where the two lines (as infinite lines) cross; parallel within 0.0001: none.
+    // 0x6c8d30: where the two lines (as infinite lines) cross; parallel within 0.0001: none.
     double x1 = a.start.x, y1 = a.start.y, x2 = a.end.x, y2 = a.end.y;
     double x3 = b.start.x, y3 = b.start.y, x4 = b.end.x, y4 = b.end.y;
     double den = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
@@ -597,7 +609,7 @@ int MapView::count_overlaps(int l, int t, int r, int b, const Placed* exclude) c
     return n;
 }
 
-// FUN_006cada0: tries anchors from `anchor` up; the first whose rectangle lies inside the clip rectangle (or any,
+// 0x6cada0: tries anchors from `anchor` up; the first whose rectangle lies inside the clip rectangle (or any,
 // with `force`) and overlaps nothing is taken (placed, the label's offset set, 0 returned). Otherwise the anchor
 // with the fewest overlaps (under 50) as -(anchor + 1), or 1 when every anchor has 50 or more.
 int MapView::try_place(unsigned anchor, int x, int y, MapLabel& label, int cl, int ct, int cr, int cb, bool force) {

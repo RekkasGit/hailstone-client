@@ -1,9 +1,9 @@
 #pragma once
 
-// What the original does to received chat before it shows it (msg_new_text @0x4c0080, rof2decomp batch 254):
+// What the original does to received chat before it shows it (msg_new_text @0x4c0080):
 // the chat filters that drop a line, the bad word filter and broken speech of ChatText_FilterProfanityAndSlur
 // @0x502e10, the listener's language garbling of ChatText_GarbleByLanguageSkill @0x5036f0, and the language
-// prefix. The random numbers come from a ChatRandom, so the vectors (re/test/vectors/ChatText_*.jsonl) can
+// prefix. The random numbers come from a ChatRandom, so the recorded vectors (ChatText_*.jsonl) can
 // replay the original's.
 
 #include <array>

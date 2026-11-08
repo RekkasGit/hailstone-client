@@ -1,8 +1,7 @@
 #pragma once
 
-// The room checks around a spawn's move, exact ports of rof2decomp batch 255
-// (re/src/game/spawn/can_i_fit_here.cpp, notes/collision-sweep.md "Room to
-// stand"), checked against the original's vectors
+// The room checks around a spawn's move, as the original makes them,
+// checked against its vectors
 // (tests/movement_vectors_test.cpp):
 //
 // PlayerZoneClient::CanIFitHere @0x509650: whether the controlled player has
@@ -13,7 +12,7 @@
 // when above 0, else 2 x AvatarHeight): F < C <= F + h + 0.5 refuses (and can
 // start a 2 s auto-duck), C - F >= h fits.
 //
-// FUN_00506c90: whether a spawn that is not moving must still be collided.
+// 0x506c90: whether a spawn that is not moving must still be collided.
 
 #include <array>
 #include <cstdint>
@@ -58,7 +57,7 @@ bool can_i_fit_here(FloorCache& cache, const std::array<float, 3>& position, con
                     bool below_allowed, AutoDuck& duck, std::uint32_t display_time, FitQueries& q,
                     const Fpu& fpu = Fpu{});
 
-// FUN_00506c90's inputs.
+// 0x506c90's inputs.
 struct StillSpawn {
     bool jump_animation = false;  // the animation object's vf24: L03/L04 (old models), JMPA/JMPU (new)
     bool controlled = false;      // vf6c

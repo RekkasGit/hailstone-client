@@ -1,5 +1,5 @@
 // The movement frame's character inputs (game/mechanics/movement_inputs.h) on synthetic characters: each
-// value must come from the exact CharacterZoneClient ports (TotalEffect with buffs and items, STR / STA with
+// value must come from the CharacterZoneClient rules (TotalEffect with buffs and items, STR / STA with
 // items and buffs, adjusted skills, heroic AGI, CalcCarriedWeight with bag reductions, Cur_HP /
 // Max_HP), not from the profile or the buffs' base values. No EQ files are used.
 #include <doctest/doctest.h>

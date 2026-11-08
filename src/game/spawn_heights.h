@@ -3,9 +3,9 @@
 // A spawn's heights: how the original client turns its size, race and model
 // into its model scale, AvatarHeight (its z above its feet), ViewHeight (the
 // eye above the feet) and the rest SetHeights writes, and what follows a size
-// change. Exact ports of the original's x87 arithmetic (game/mechanics/fpu.h),
-// checked against the vectors recorded from eqgame.exe (rof2decomp batch 259,
-// notes/spawn-heights.md; tests/spawn_heights_vectors_test.cpp).
+// change. They follow the original's x87 arithmetic (game/mechanics/fpu.h),
+// checked against the vectors recorded from eqgame.exe
+// (tests/spawn_heights_vectors_test.cpp).
 //
 // The rules the rest of the client follows from them:
 //  - feet = z - AvatarHeight: a spawn at rest has z = floor + AvatarHeight
@@ -115,8 +115,8 @@ struct HeightLink {
     bool has_actor = false;  // PlayerClient +0x101c
     bool mount_race = false; // PlayerBase_IsMountRace
 };
-// What ChangeHeight gives a spawn's actor: its scale (FUN_0040c090, vf78(scale, 1)) and, with an actor, the
-// collision-volume radius (vf48, FUN_005062a0 stored as a float).
+// What ChangeHeight gives a spawn's actor: its scale (0x40c090, vf78(scale, 1)) and, with an actor, the
+// collision-volume radius (vf48, 0x5062a0 stored as a float).
 struct HeightActorUpdate {
     std::size_t spawn = 0; // index into the chain
     float scale = 0.0f;
@@ -163,7 +163,7 @@ template <typename InWorld>
 std::array<float, 3> place_in_world(std::array<float, 3> p, const std::array<float, 3>& safe_point, InWorld&& in_world) {
     if (in_world(p)) return p;
     for (int i = 0; i < 4; ++i) {
-        p[2] = static_cast<float>(static_cast<double>(p[2]) + 2.0); // fadd [2.0]; fstp (exact in either precision)
+        p[2] = static_cast<float>(static_cast<double>(p[2]) + 2.0); // exact in either precision
         if (in_world(p)) return p;
     }
     return safe_point;

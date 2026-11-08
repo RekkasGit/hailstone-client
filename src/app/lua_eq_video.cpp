@@ -12,7 +12,7 @@ namespace hailstone::app {
 
 namespace {
 
-// CVideoModesWnd @0x78a6c0 (rof2decomp export CVideoModesWnd.c): VIDW_VideoResolutionsList (one column
+// CVideoModesWnd @0x78a6c0: VIDW_VideoResolutionsList (one column
 // "Resolution"), VIDW_RefreshRateCombobox, VIDW_BitDepthCombobox and VIDW_AcceptButton. Update @0x789a50: the render
 // interface's modes of at least 640 x 480 (in a window: no larger than the desktop) in 16 or 32 bit formats, each
 // width x height once ("%dx%d"), the current one selected; in full screen the refresh rates of the current one
@@ -20,7 +20,7 @@ namespace {
 // current ones chosen. A click on a row refills the combos for it (sub_0078a090, full screen only). Accept
 // (WndNotification @0x78a370): not while the give, trade or send-money window is open (3192, colour 0xf); otherwise
 // the mode is set (message 0x4644 to the render window) and, in full screen, 6682 ("%1" = 30) asks to keep it for 30
-// seconds; No or no answer goes back to the mode before (FUN_0078a600). The modes are this client's display modes
+// seconds; No or no answer goes back to the mode before (0x78a600). The modes are this client's display modes
 // (the "resolution" option's choices, "W x H (R Hz)"), which are 32 bit.
 class VideoModesWindow : public StockWindow {
 public:

@@ -1,6 +1,6 @@
 // GameConnection: mercenaries. The client mercenary manager (game/mercenary.h) on this connection: the
 // HandleWorldMessage_Mercenary @0x569920 opcodes, the zone-in requests (CDisplay::StartWorldDisplay →
-// Merc_RequestTimerAndData), the per-frame upkeep countdown (CEverQuest::DoMainLoop → FUN_00565930), the liaison's
+// Merc_RequestTimerAndData), the per-frame upkeep countdown (CEverQuest::DoMainLoop → 0x565930), the liaison's
 // right click, the three windows' buttons and the /merc* commands.
 
 #include <algorithm>
@@ -29,7 +29,7 @@ struct GameConnection::MercLink : game::MercHooks {
         log::debug("mercenary event {:#x} ({})", id, argument);
         if (id == 0xd) ++c.merc_list_serial_;
         if (id == 0x17) {
-            // /stance's event (FUN_005671d0): the pair whose +0 is the argument becomes the stance, as the stance
+            // /stance's event (0x5671d0): the pair whose +0 is the argument becomes the stance, as the stance
             // list's choice does (Send_OP_MercenaryCommand with the pair's stance).
             std::vector<std::uint32_t> rows;
             std::int32_t row = -1;
@@ -54,7 +54,7 @@ struct GameConnection::MercLink : game::MercHooks {
     }
     void store_window_visibility(const char*) override {} // the Lua layout stores shown states itself
     std::string currency(bool plural) const {
-        // CDBStr kind 0x11 (one) or 0x12 (more) of the alternate currency (FUN_007f7e70's lookup is taken as the id).
+        // CDBStr kind 0x11 (one) or 0x12 (more) of the alternate currency (0x7f7e70's lookup is taken as the id).
         if (c.merc_.active.alt_currency == 0) return {};
         return c.strings_.db_string(c.merc_.active.alt_currency, plural ? 0x12 : 0x11);
     }
@@ -87,7 +87,7 @@ void GameConnection::merc_zone_in() {
 }
 
 void GameConnection::update_merc() {
-    // FUN_00565930 every frame: the upkeep countdown.
+    // 0x565930 every frame: the upkeep countdown.
     game::merc_tick_upkeep(merc_, eq_time());
 }
 
@@ -151,7 +151,7 @@ void GameConnection::set_merc_window_open(int which, bool open) {
     bool was = merc_windows_[static_cast<std::size_t>(which)];
     merc_windows_[static_cast<std::size_t>(which)] = open;
     if (which == 0 && open) {
-        // FUN_006eca10, the merchant window's show handler: the saved liaison id comes back (0x564a00), then
+        // 0x6eca10, the merchant window's show handler: the saved liaison id comes back (0x564a00), then
         // OP_MercenaryDataRequest asks for the list.
         if (merc_.liaison_id == 0) merc_.liaison_id = merc_.saved_liaison_id;
         with_merc([](game::MercManager& m, game::MercHooks& h) { game::merc_send_data_request(m, h); });

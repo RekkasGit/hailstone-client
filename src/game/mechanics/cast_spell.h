@@ -1,10 +1,9 @@
 #pragma once
 
 // CharacterZoneClient::CastSpell @0x43a830: every check the original makes
-// before it sends OP_CastSpell, the cast it commits and the packet. Ported
-// from the disassembly (rof2decomp:notes/spell-casting.md §2.3; Ghidra's
-// output drops results there) and checked against the original's own vectors
-// (rof2decomp batch 978d6270, CastSpell_Checks / _Buffs / _Items / _Target /
+// before it sends OP_CastSpell, the cast it commits and the packet. Worked
+// from the disassembly and checked against the original's own vectors
+// (CastSpell_Checks / _Buffs / _Items / _Target /
 // _Range / _BodyType / _Send; tests/cast_spell_vectors_test.cpp), which list
 // every callee in order with its answer.
 //
@@ -214,8 +213,8 @@ public:
     virtual bool spell_allowed(Spawn* target, std::int32_t association) = 0;   // SpellManager vtable +8
     virtual std::int32_t focus_range_modifier(const Spell& spell) = 0;         // GetFocusRangeModifier
     virtual std::uint32_t player_distance(Spawn& from, Spawn& to, std::uint32_t extra_bits) = 0; // float bits
-    virtual Handle spawn_character_pc(Spawn& spawn) = 0;                       // FUN_0059f730
-    virtual bool target_type_12_check(Spawn& spawn) = 0;                       // FUN_0059ed50
+    virtual Handle spawn_character_pc(Spawn& spawn) = 0;                       // 0x59f730
+    virtual bool target_type_12_check(Spawn& spawn) = 0;                       // 0x59ed50
     // CharacterZoneClient_IsSelfOrGroupMember on `pc` for a name: the caster's character (who null) or a spawn's.
     virtual bool is_self_or_group_member(Handle pc, const Spawn* who) = 0;
     virtual bool has_property(Spawn& spawn, std::int32_t property, std::int32_t a2, std::int32_t a3) = 0;

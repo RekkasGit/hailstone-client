@@ -1,4 +1,4 @@
-// The chat functions of the eq table (rof2decomp re/src/ui/lua_eq_chat.cpp's contracts) over the client's chat
+// The chat functions of the eq table over the client's chat
 // lines (ui::ChatView), in up to 32 chat windows (the chat manager below). Lines are given to the scripts as STML in the colour the
 // original uses for their channel: the user colour of the channel (eqlib ChatFilters.h USERCOLOR_*: say 256, tell
 // 257, ...) as eqclient.ini [TextColors] User_<n> sets it (n = colour - 255).
@@ -1943,7 +1943,7 @@ void tell_key() {
 
 void chat_history_key(bool older) {
     // __ExecuteCmd cases 53 / 54 (HISTORY_UP / HISTORY_DOWN), while the keys go to the game: the active window's
-    // HistoryBack (FUN_00655930) / HistoryForward fills its input, which then has the keys. The steps are the chat
+    // HistoryBack (0x655930) / HistoryForward fills its input, which then has the keys. The steps are the chat
     // input's Up / Down (eq.ChatHistory); without a line sent before the input only takes the keys.
     auto line = step_history(older);
     ChatState& s = state();
@@ -1954,7 +1954,7 @@ void chat_history_key(bool older) {
 
 void chat_page_key(int dir) {
     // __ExecuteCmd cases 55 / 56 (PAGEUP / PAGEDOWN): the active window's output scrolls by its height less 8
-    // (FUN_00655c30 / FUN_00655c70: SetVScrollPos); the pack's window does it (eq.ChatPage).
+    // (0x655c30 / 0x655c70: SetVScrollPos); the pack's window does it (eq.ChatPage).
     ChatState& s = state();
     s.page = dir < 0 ? -1 : 1;
     s.page_window = active_window();

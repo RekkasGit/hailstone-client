@@ -116,7 +116,7 @@ struct CharacterModel {
     std::map<std::string, std::string, std::less<>> clip_aliases;
     // Models with a tunic point (InitAnimationTracks' +0x34, the Luclin ones): code -> its variant B ("P01" ->
     // "P01B"), the track of holding column 1. PlayerClient_UpdateHoldingAnimation gives a spawn holding anything
-    // a column from 1 to 7, and FUN_004b1210 takes column 1 for those the model has no variant of (no model ships
+    // a column from 1 to 7, and 0x4b1210 takes column 1 for those the model has no variant of (no model ships
     // C..H); with nothing held it plays column 0, `clips` as they are. clip(code, true) follows these.
     std::map<std::string, std::string, std::less<>> held_aliases;
     std::string animation_donor; // model whose clips fill in missing ones, or empty
@@ -140,7 +140,7 @@ struct CharacterModel {
 
     const AnimationClip* clip(std::string_view code) const;
     // The clip a spawn plays for `code`, `holding` when PlayerClient_UpdateHoldingAnimation gives it a column other
-    // than 0: its variant B when the model has one (held_aliases), else clip(code), as FUN_004b1210 falls back.
+    // than 0: its variant B when the model has one (held_aliases), else clip(code), as 0x4b1210 falls back.
     const AnimationClip* clip(std::string_view code, bool holding) const;
     // First of the codes that exists, else the rest pose.
     const AnimationClip& first_clip(std::initializer_list<std::string_view> codes, bool holding = false) const;
@@ -182,8 +182,7 @@ std::shared_ptr<const CharacterArchive> load_character_archive(const GameDir& ga
 
 // The classic character archives the original client loads at start-up, in
 // load order: GlobalLoad.txt's _chr entries (phases 1-4), global5/7_chr,
-// then Resources/GlobalLoad_chr.txt's S3D entries (rof2decomp
-// notes/spawns-races-models.md 5.2). EQG entries are skipped.
+// then Resources/GlobalLoad_chr.txt's S3D entries. EQG entries are skipped.
 // Also the equipment archives (GlobalLoad.txt flag E: gequip*, IT models)
 // and the extended armour textures global17..23_amr. With `luclin`, the
 // Luclin player-model archives enabled in eqclient.ini load after phase 2.
@@ -311,8 +310,7 @@ void append_wld_mesh(const wld::WldFile& wld, const wld::Fragment& mesh, std::si
 // same level and otherwise inserts at the head of the chain, and Find
 // (0x100c7360) takes the first entry with level <= the lookup's maximum (3 at
 // almost every call site): so within one level the first loaded definition
-// wins, and across levels the latest (rof2decomp notes/eqgraphicsdx9.md,
-// Duplicate actor and track definitions). StartWorldDisplay's zone `_chr`
+// wins, and across levels the latest. StartWorldDisplay's zone `_chr`
 // requests pass level 2. CDisplay::InitWorld gives a GlobalLoad.txt line level
 // 0 when its FLAGS start with 'T' and 2 otherwise (@0x492093); every NMS line
 // starts with T, and GlobalLoad_chr.txt's S3D fallbacks load at 0 as well. So

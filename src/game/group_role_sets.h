@@ -1,7 +1,6 @@
 #pragma once
 
-// Group roles as text and /grouproles' named role sets (rof2decomp re/src/game/world/group_roles.cpp,
-// re/src/game/commands/grouproles_command.cpp).
+// Group roles as text and /grouproles' named role sets.
 //  - GroupRole_GetName @0x7d5d20: 1 "Main Tank", 2 "Main Assist", 3 "Puller", else none.
 //  - GroupRoles_FormatList @0x7d5f90: a member's roles, ", "-separated, numbered "<role>(<n>) <name>" or plain;
 //    "None" when it has none.

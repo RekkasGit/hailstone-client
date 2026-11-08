@@ -1,4 +1,4 @@
-// rof2decomp batch 256's vectors (recorded from the original eqgame.exe): the listener's place and room, the
+// The original's vectors (recorded from eqgame.exe): the listener's place and room, the
 // player races of the swim sounds, the music entries and their selection, and the spell effect stage sounds.
 
 #include <doctest/doctest.h>
@@ -138,7 +138,7 @@ TEST_CASE("MusicManager_SelectActiveEntry vectors") {
         const Json& out = r["out"];
         int playing = out["playing"].is_null() ? -1 : out["playing"].i32();
         if (s.playing != playing) return std::format("playing {}, original {}", s.playing, playing);
-        // The calls the port's answer makes, in the original's order.
+        // The calls the client's answer makes, in the original's order.
         std::vector<std::string> got, want;
         if (s.fade_out >= 0) got.push_back(std::format("fade_out {} {}", s.fade_out, s.fade_out_nothing_replaces));
         if (s.fade_in) got.push_back(std::format("fade_in {} {:08x}", s.playing, vec_bits(in["volume"])));

@@ -1,6 +1,6 @@
-// rof2decomp batch 268's vectors (recorded from eqgame.exe, generator re/test/tests/merc_client_vectors.inc): the
+// The original's vectors (recorded from eqgame.exe): the
 // client mercenary manager's handlers, senders and upkeep timer (game/mercenary.h). Each record's mocked calls
-// (chat lines, events, packets, window lookups, reports) are compared in order with what the port reports through
+// (chat lines, events, packets, window lookups, reports) are compared in order with what the client reports through
 // MercHooks; the senders' network outcome (no connection: the "void connection" log unless quieted; a failed send
 // closes the connection) is modelled here as net::Send does it.
 #include <doctest/doctest.h>

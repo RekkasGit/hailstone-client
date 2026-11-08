@@ -15,8 +15,8 @@
 #include "game/spell_description.h"
 #include "game/spells.h"
 
-// Each section names the original's code it follows (rof2decomp export/_globals.c: CItemDisplayWnd_BuildItemInfo
-// and the helpers it calls; the eqgame.exe disassembly where the decompiler dropped arguments).
+// Each section names the original's code it follows (CItemDisplayWnd_BuildItemInfo and the helpers it calls,
+// read from the eqgame.exe disassembly where arguments were unclear).
 
 namespace hailstone::game {
 
@@ -59,8 +59,8 @@ struct Grid {
 
     ItemDisplayCell& cell(int r, int c) { return d.grid[static_cast<std::size_t>(r - 1)][static_cast<std::size_t>(c - 1)]; }
     bool valid(int r) const { return r >= 1 && r <= ItemDisplay::kRows; }
-    // FUN_0069b0d0 / the inline stat-label sets, then FUN_0069b160 (an int: green for a positive modifier, red for
-    // a negative one) or FUN_0069b260 (text: red for a positive modifier, green for a negative one).
+    // 0x69b0d0 / the inline stat-label sets, then 0x69b160 (an int: green for a positive modifier, red for
+    // a negative one) or 0x69b260 (text: red for a positive modifier, green for a negative one).
     void put(int c, const std::string& label, const std::string& value, std::int32_t mod = 0, bool text = false) {
         if (valid(row)) {
             ItemDisplayCell& x = cell(row, c);
@@ -72,7 +72,7 @@ struct Grid {
         ++row;
     }
     void put_int(int c, const std::string& label, std::int32_t v, std::int32_t mod = 0) { put(c, label, std::to_string(v), mod); }
-    // FUN_0069b3d0: "+n" in gold right of the value just written (row - 1).
+    // 0x69b3d0: "+n" in gold right of the value just written (row - 1).
     void heroic(int c, std::int32_t v) {
         int r = row - 1;
         if (!valid(r) || d.heroic_count >= 13) return;
@@ -230,7 +230,7 @@ std::string spell_effect_text(const net::Item& item, const ItemDisplayContext& c
             out += str_args(ctx, 0xbdc, {name_of(e, spell), how}) + "<BR>";
             remember(e, spell);
             if (e.recast_delay() > 0) {
-                // FUN_004f1a70: the recast delay as time text; "Recast Type: n" when it has one.
+                // 0x4f1a70: the recast delay as time text; "Recast Type: n" when it has one.
                 std::uint32_t s = e.recast_delay();
                 std::string t = s >= 60 ? std::format("{}m {}s", s / 60, s % 60) : std::format("{}s", s);
                 std::string line = str_args(ctx, 0x2412, {t});
@@ -412,7 +412,7 @@ std::string collectible_trophy_text(const net::Item& item, const ItemDisplayCont
 
 // CItemDisplayWnd_CreateEffectsString @0x6a6810 (what this client keeps of an item).
 std::string effects_text(const net::Item& item, const ItemDisplayContext& ctx) {
-    std::string a, b, c, d; // local_9e4, local_9d4, local_9dc, local_9f8
+    std::string a, b, c, d; // the original's four text buffers
     std::vector<const net::ItemEffect*> described;
     if (item.item_class == 0) {
         if (item.is_lore() && item.lore_group > 0 && ctx.db_string) {
@@ -432,7 +432,7 @@ std::string effects_text(const net::Item& item, const ItemDisplayContext& ctx) {
             }
             if (item.potion_belt_enabled) d += str(ctx, 0x248a) + "<BR>";
         } else {
-            d += augment_slot_types_line(item, aug_strings(ctx)) + "<BR>"; // FUN_0069d6e0
+            d += augment_slot_types_line(item, aug_strings(ctx)) + "<BR>"; // 0x69d6e0
         }
         if (item.item_type == 20) { // a scroll: the levels each usable class gets the spell at
             const auto& sc = item.effects[net::kEffectScroll];
@@ -674,9 +674,10 @@ ItemDisplay build_item_display(const net::Item& item, const ItemDisplayContext& 
     }
     if (item.power > 0) { // MaxPower: "<power * 100 / max>%", the tooltip "<power>/<max>"
         // The power field this client keeps is the item's maximum; its current power is not sent separately.
-        // Deliberate difference: the original divides an int32 product (instance +0x110 * 100 / GetMaxPower, imul
-        // and idiv), which wraps past 21.4 million. With the current power unknown and the maximum standing in for
-        // it, the wrap would only turn the 100% this can show into a meaningless number, so it multiplies in 64 bits.
+        // Deliberate difference: the original divides an int32 product (instance +0x110 * 100 / GetMaxPower, the
+        // product wrapping, the division signed), which wraps past 21.4 million. With the current power unknown and the
+        // maximum standing in for it, the wrap would only turn the 100% this can show into a meaningless number, so it
+        // multiplies in 64 bits.
         std::uint32_t cur = item.power, max = item.power;
         g.put(2, str(ctx, 0x340b), std::to_string(static_cast<std::uint64_t>(cur) * 100 / max) + "%", 0, true);
         g.cell(g.row - 1, 2).tooltip = std::to_string(cur) + "/" + std::to_string(max);
@@ -828,7 +829,7 @@ int stml_overflow(int len, int base) {
 
 ItemDisplayLayout layout_item_display(const ItemDisplay& d, const ItemDisplayFrameIn& in) {
     ItemDisplayLayout l;
-    // FUN_0069b590: row 1 starts 32 below the last info line (when there are two or more; else at 32), the info
+    // 0x69b590: row 1 starts 32 below the last info line (when there are two or more; else at 32), the info
     // lines keeping their XML places (16 apart from 10, 20 high). A shown appearance socket goes 5 below the last
     // line (@006a9e36) and the grid then starts from its top + 24 instead.
     const int count = static_cast<int>(d.info.size());

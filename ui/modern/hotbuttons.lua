@@ -6,7 +6,7 @@
 -- Show Spinner, Open New Bar); its settings (eq.HotBarSetting) size the tiles, show each tile's key and the pager.
 -- As the game's bar (CHotButtonWnd::OnCompleteMoveOrResize), a bar laid out taller than wide (more rows than
 -- columns: "Buttons per row" in the frame's menu) is vertical, with its pager across the top instead of at the left;
--- the key map text sits in each tile's top-right corner, right-aligned (FUN_005506b0).
+-- the key map text sits in each tile's top-right corner, right-aligned (0x5506b0).
 local hud = dofile("lib/hud.lua")
 local T = hud.T
 local C = T.color

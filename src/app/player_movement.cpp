@@ -31,7 +31,7 @@ namespace mech = game::mechanics;
 namespace {
 
 // Zone flags from the original's zone table (ZoneManager::ZoneManager
-// @0x7dca10, EQZoneInfo +0x198; rof2decomp re/src/game/world/zone_table.inc).
+// @0x7dca10, EQZoneInfo +0x198).
 constexpr std::uint16_t kBazaarZones[] = {151};      // 0x10000000 EQWorldData_IsBazaarZone
 constexpr std::uint16_t kBarterZones[] = {151, 346}; // 0x02000000 EQWorldData_IsBarterZone
 constexpr std::uint16_t kNoAirZones[] = {171};       // 0x00004000 EQWorldData::IsNoAirZone
@@ -111,7 +111,7 @@ std::int32_t carried_weight(const net::GameConnection& conn, std::int32_t spa221
 
 // The movement inputs before the character exists (the first frames after zoning in): the profile's
 // values and the buffs' base values, as the client did before the stats port was wired in. Once the
-// Character is built, mech::movement_facts takes everything from it (the exact ports).
+// Character is built, mech::movement_facts takes everything from it (each following the original exactly).
 mech::MovementFacts fallback_facts(const net::GameConnection& conn, const net::PlayerProfile* prof,
                                    const net::PlayerStatus& st) {
     mech::MovementFacts f;
@@ -227,7 +227,7 @@ public:
     bool has_property(std::uint32_t) override { return false; }
     double height() override { return height_; }
     double collision_radius() override { return radius_; }
-    // FUN_00506c90 (game/mechanics/can_i_fit_here.h): a jump animation, levitation, the auto-duck.
+    // 0x506c90 (game/mechanics/can_i_fit_here.h): a jump animation, levitation, the auto-duck.
     bool moving_state() override { return mech::must_collide_still(still); }
     bool rider() override { return false; }
     void set_rider_stand_time(std::uint32_t) override {}
@@ -275,7 +275,7 @@ public:
                 if (r.touching_switch && touch) touch(d.id);
             }
     }
-    // FUN_00509a00 (DoCollisionMovement @0x508787, when the spawn does not collide): if the spawn's vf6c holds, a
+    // 0x509a00 (DoCollisionMovement @0x508787, when the spawn does not collide): if the spawn's vf6c holds, a
     // still sphere of the actor's radius x 0.5 (r + r x -0.5, 0x9c4e48) at the actor's location against the
     // switches that act on touch; each one hit is the local player's touched switch (0x475c50).
     void no_collide() override {
@@ -330,8 +330,8 @@ public:
                 if (!w.in_world(from)) return static_cast<double>(mech::kNoFloorHeight);
                 MoveWorld::Sweep s = w.world_sweep(from, glm::vec3(at[0], at[1], 32767.0f), r);
                 mech::Fpu fpu;
-                double top = mech::x87_add(fpu, s.out.position.z, r); // fld z'; fld r; fadd st(1), st
-                double start = mech::x87_add(fpu, r, at[2]);            // fadd [z]
+                double top = mech::x87_add(fpu, s.out.position.z, r); // z' + r
+                double start = mech::x87_add(fpu, r, at[2]);            // r + z
                 if (start < top || start == top || std::isnan(start) || std::isnan(top)) return top;
                 return static_cast<double>(mech::kNoFloorHeight);
             }
@@ -361,7 +361,7 @@ public:
         return fits;
     }
     void clear_stuck(std::uint32_t) override {}
-    // FUN_005064c0: z - height below the floor height puts z at floor + height and stops the fall.
+    // 0x5064c0: z - height below the floor height puts z at floor + height and stops the fall.
     bool check_stuck() override {
         float& z = spawn_.physics[2];
         if (!(z - height_ < spawn_.floor_height)) return false;
@@ -380,7 +380,7 @@ public:
     bool is_player_spawn() override { return true; }
     void after_place() override {}
     bool can_swim_jump_now() override { return can_swim_jump_; }
-    bool on_ladder() override { return spawn_.colliding_type == 6; } // FUN_0059fb80
+    bool on_ladder() override { return spawn_.colliding_type == 6; } // 0x59fb80
     void finish_move() override {
         auto box = world_ ? world_->world_box() : std::nullopt;
         Vec3f lo{}, hi{};
@@ -402,7 +402,7 @@ public:
     std::optional<float>* player_ceiling = nullptr; // PlayerClient +0x11b4
     std::uint32_t* standing_on = nullptr;           // PlayerClient +0x150
     std::int32_t* touching = nullptr;               // PlayerClient +0x2d4 (a door id, -1 none)
-    bool* kept_move = nullptr;                      // FUN_00507430 saved the position as the last good one
+    bool* kept_move = nullptr;                      // 0x507430 saved the position as the last good one
     float touch_height = 0.0f;                      // Height (+0x13c), for CollsnCallbackForFloor
     std::int32_t touch_zone = 0;
     std::function<void(std::uint8_t)> touch;        // +0x2d4 = the door, then PlayerClient::TouchingSwitch
@@ -442,7 +442,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
     pc.touch = [this](std::uint8_t id) { touch_now(id); };
     out.fits = pc.can_i_fit_here({body.feet.x, body.feet.y, body.feet.z + floor_offset}, 0);
     if (player_ceiling_)
-        out.room = static_cast<double>(*player_ceiling_) - static_cast<double>(floor_cache_.floor); // fld; fsub
+        out.room = static_cast<double>(*player_ceiling_) - static_cast<double>(floor_cache_.floor);
     return out;
 }
 
@@ -656,8 +656,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         out.messages.push_back(conn.strings().format(msg, {}));
 
     // Levitation (UpdateLevitationState after each effect cache rebuild):
-    // SpellCache_GetBuffValue(57, 0) gives mode 2, else (57, 1) mode 5
-    // (rof2decomp batch 247, re/src/game/character/spell_cache.cpp).
+    // SpellCache_GetBuffValue(57, 0) gives mode 2, else (57, 1) mode 5.
     body.fly_mode = mech::levitation_mode(body.fly_mode, facts.levitate_mode2 != 0, facts.levitate_mode5 != 0,
                                           std::nullopt,
                                           in(kNoLevitateZones, zone));
@@ -762,8 +761,8 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         fall.spa228 = facts.spa228;
         // The zone's no-fall-damage flag (0xddfc6e) comes from OP_NewZone.
         if (const auto& z = conn.zone_info()) fall.no_fall_damage_zone = z->fall_damage_off != 0;
-        // dmg -= dmg * h / (h + 1000) with h = heroic AGI (rof2decomp batch 240,
-        // CharacterZoneClient_ApplyFallDamage @0x45ac60).
+        // dmg -= dmg * h / (h + 1000) with h = heroic AGI
+        // (CharacterZoneClient_ApplyFallDamage @0x45ac60).
         fall.heroic_agi_bonus = facts.heroic_agi;
         float vz = body.velocity.z;
         mech::LandingEvents land = ctl_.land(*floor, fall);
@@ -810,7 +809,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     pc.touch_height = touch_height_;
     pc.touch_zone = touch_zone_;
     pc.touch = [this](std::uint8_t id) { touch_now(id); };
-    // FUN_00506c90's inputs: the jump animation (+0x10c0 L03 / L04, JMPA / JMPU) as the renderer last chose it;
+    // 0x506c90's inputs: the jump animation (+0x10c0 L03 / L04, JMPA / JMPU) as the renderer last chose it;
     // without a drawn model, taken as playing for kJumpWindowMs after a jump.
     pc.still.jump_animation = jump_animation_ ? *jump_animation_
                                               : ctl_.jump_ended() != 0 && now - ctl_.jump_ended() < mech::kJumpWindowMs;
@@ -839,7 +838,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     if (cm.held && body.fly_mode == mech::FlyMode::Ground && body.body_wet == 0 &&
         body.feet.z > body.floor_height + kHeldInAir)
         cs.physics[5] = speed_z;
-    // FUN_00507430 after saving the last good position: PlayerClient_RecordPositionSample(1) there, then
+    // 0x507430 after saving the last good position: PlayerClient_RecordPositionSample(1) there, then
     // Send_OP_FloatListThing(0) (once a second, the samples older than 2 s).
     if (kept_move) {
         const glm::vec3 at(cs.physics[0], cs.physics[1], cs.physics[2]);

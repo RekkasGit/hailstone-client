@@ -19,7 +19,7 @@ namespace {
 constexpr std::uint16_t kOpFellowshipRequest = 0x7121, kOpCampsiteKitRequest = 0x0c12;
 constexpr std::uint32_t kRequestCreate = 1;
 
-// CFellowshipWnd @0x6689f0 (rof2decomp export CFellowshipWnd.c, re/src/game/ui/fellowship_display_eh.cpp):
+// CFellowshipWnd @0x6689f0:
 // CFellowshipWnd_UpdateDisplay @0x667ed0 without a fellowship enables Create and disables Leave, Create Campsite and
 // Destroy Campsite, empties the campsite viewer and the motto (disabled); Make Leader, Remove, Invite, End, Toggle
 // Experience Sharing and Update MOTD are enabled only for the leader, as OnProcessFrame @0x668630 keeps Create (no
@@ -108,7 +108,7 @@ private:
     ListData list_;
 };
 
-// CTributeTrophyWnd @0x7881d0 (rof2decomp export CTributeTrophyWnd.c): AboutToShow @0x788fe0 refuses without the
+// CTributeTrophyWnd @0x7881d0: AboutToShow @0x788fe0 refuses without the
 // House of Thule expansion (the profile's expansion bit 0x10000; 5422 in colour 0xd), else asks for the trophy
 // tribute (opcode 0x51a9, empty; not in EQEmu's RoF2 table) and shows the personal or guild view as its radio
 // buttons say. CTributeWnd_UpdateGuildControls @0x5cb130: the personal view shows the cost, time, favour and career

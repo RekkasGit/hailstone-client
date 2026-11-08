@@ -78,8 +78,8 @@ AnimationFile parse_animation(std::span<const std::byte> data);
 
 // An EQGL (.lay) material layer: a named texture set for one material of a
 // new-style model, "C_<CODE>_S<variant>_M<material + 1>". EQG_LoadFileByMagic
-// @0x10065c00 -> FUN_100645f0 (EQGL v1-4: entries of 10 / 16 / 7 / 8 u32s)
-// -> FUN_10016490 and siblings: entry[0] the name, entry[1..5] texture names
+// @0x10065c00 -> 0x100645f0 (EQGL v1-4: entries of 10 / 16 / 7 / 8 u32s)
+// -> 0x10016490 and siblings: entry[0] the name, entry[1..5] texture names
 // (-1 none), each one's role from the character five from its end ('C'
 // diffuse, 'N' normal, 'E' environment; "X_C.DDS").
 struct Layer {

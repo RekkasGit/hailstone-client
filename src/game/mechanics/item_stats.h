@@ -1,9 +1,8 @@
 #pragma once
 
 // The ItemBase getters the character rules use, on net::Item (the item and
-// its children: augments in a worn item's sockets, contents in a bag).
-// rof2decomp re/src/game/item/item_base_eh.cpp and item_queries_eh.cpp
-// (replaced, tested).
+// its children: augments in a worn item's sockets, contents in a bag),
+// checked against the original's vectors.
 //
 // The instance's stat scale (ItemBase::ScriptIndex, +0x70) is the item
 // header's scaled_value (the header's sixth field, read into +0x70 by the
@@ -58,7 +57,7 @@ std::int32_t item_weight(const net::Item& item);
 // ItemBase_GetSize(recurse) @0x7b2110: the size byte, or for a Type 0 item with recurse the largest size inside it.
 std::uint32_t item_size(const net::Item& item, bool recurse = true);
 // ItemBase::GetItemValue(contents) @0x7ba920: Cost (+0xf4), plus for a Type 0 item with `contents` the
-// GetItemValue(1) of each item inside it (FUN_007b4460's functor over +0xa0, summed with wrap-around).
+// GetItemValue(1) of each item inside it (0x7b4460's functor over +0xa0, summed with wrap-around).
 std::int32_t item_value(const net::Item& item, bool contents = true);
 // ItemBase_GetDmgBonusValue(skill, recurse) @0x7b9800: the damage bonus (+0x508, charm-scaled) when the bonus skill
 // (+0x504) is `skill`, plus with recurse the contents' (in scaling sockets at the aug stat percent). Type 0 only.
@@ -68,7 +67,7 @@ std::int32_t item_dmg_bonus(const net::Item& item, std::int32_t skill, bool recu
 std::int32_t item_potion_slots(const net::Item& item, bool recurse = true);
 // ItemBase_GetAC(1, 0, 1).
 std::int32_t item_ac(const net::Item& item, bool recurse = true);
-// ItemTypeToSkill @0x... (rof2decomp item_base_eh.cpp): the skill an item type trains.
+// ItemTypeToSkill @0x59eb40: the skill an item type trains.
 std::uint8_t item_type_to_skill(std::uint32_t item_type);
 
 } // namespace hailstone::game::mechanics

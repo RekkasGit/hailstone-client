@@ -1,5 +1,5 @@
 // GameConnection: items, inventory moves, looting and item links. The client
-// rules come from rof2decomp:notes/items-and-inventory.md (section numbers
+// rules follow the original's inventory functions (named
 // below); the packets from net/item_packets.h.
 
 #include <algorithm>
@@ -41,8 +41,8 @@ std::uint32_t model_number(const std::string& id_file) {
 
 // ---------------------------------------------------------------- the cursor queue
 
-// CEverQuest_ProcessCursorQueue @0x5321a0 (rof2decomp batch 247, from the
-// disassembly; not rewritten there because OP_MoveItem carries two unset
+// CEverQuest_ProcessCursorQueue @0x5321a0 (from the
+// disassembly; OP_MoveItem carries two unset
 // padding bytes of ItemGlobalIndex_Make, sent as 0 here). With no request
 // pending (IsItemPending < 1):
 //  - coin from opcode 0x3ed4 goes to the purse (the copper total credited),
@@ -118,7 +118,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             if (item_displays_.size() > 16) item_displays_.pop_front();
             break;
         }
-        // CEverQuest_HandleItemPacket @004c2570 (§2.5).
+        // CEverQuest_HandleItemPacket @004c2570.
         if (item.item_type == 13 || item.id < 1) {
             say(1366); // Got a bogus item, deleting it
             break;
@@ -144,7 +144,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             break;
         case kItemPacketLimbo: {
             // ItemPacket_PlaceItemIfSlotEmpty @0x4b9b90: the server's cursor queue sends the next item when the
-            // cursor is free; one for an occupied slot is dropped without a word (rof2decomp batch 247).
+            // cursor is free; one for an occupied slot is dropped without a word.
             ItemSlot at = item.slot;
             if (!inventory_.at(at)) inventory_.put(at, std::move(item));
             break;
@@ -153,7 +153,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             log::debug("item packet {:#x}: {} at {}/{}/{}", ip->type, item.name, item.slot.type, item.slot.slot, item.slot.sub);
             ItemSlot at = item.slot;
             at.aug = -1;
-            // Type 0x67 (Trade): FUN_006ae710(item, 0) re-runs SetItem on every display showing this serial (the
+            // Type 0x67 (Trade): 0x6ae710(item, 0) re-runs SetItem on every display showing this serial (the
             // server keeps the host's serial when it rebuilds it after an augment change, so it refreshes in place).
             if (ip->type == kItemPacketTrade) {
                 item_refreshes_.push_back(item);
@@ -341,7 +341,7 @@ void GameConnection::click_slot(const ItemSlot& slot, bool shift, bool ctrl) {
         if (inventory_.cursor()) trade_drop_cursor();
         return;
     }
-    // CInvSlot::HandleLButtonUp (decomp §2.1). Bank slots exist only in the
+    // CInvSlot::HandleLButtonUp. Bank slots exist only in the
     // open bank window; one beyond CBankWnd::GetNumBankSlots is ignored
     // (InvSlot_IsBankSlotBeyondLimit @00694140), as are shared bank slots
     // beyond the window's two.
@@ -401,7 +401,7 @@ void GameConnection::click_slot(const ItemSlot& slot, bool shift, bool ctrl) {
         const Item* primary = inventory_.at(ItemSlot::possessions(kSlotPrimary));
         const Item* secondary = inventory_.at(ItemSlot::possessions(kSlotSecondary));
         bool dual_wield = profile_ && profile_->skills.size() > 22 && profile_->skills[22] > 0;
-        // CInvSlot::HandleLButtonUp (rof2decomp batch 261, §2.7): CanItemGoInEquipSlot false does nothing, without
+        // CInvSlot::HandleLButtonUp: CanItemGoInEquipSlot false does nothing, without
         // a word; then CanUseItem(cursor, 0, 0), the class check only, else eqstr 6611 (colour 0xd).
         if (!game::can_go_in_equip_slot(*held, slot.slot, primary, secondary, dual_wield, inv_slot_available(slot.slot)))
             return;
@@ -478,7 +478,7 @@ void GameConnection::finish_quantity(std::uint32_t quantity) {
     if (!item) return;
     const ItemSlot cursor = cursor_slot();
     if (quantity < item->stack_count) {
-        // The clone goes into the cursor slot without a check (rof2decomp batch 253: an item already there is
+        // The clone goes into the cursor slot without a check (an item already there is
         // overwritten).
         Item part = *item;
         part.stack_count = quantity;
@@ -663,7 +663,7 @@ void GameConnection::equip_attuned(const ItemSlot& slot) {
 }
 
 void GameConnection::move_into_bag(const ItemSlot& to, bool force_bag) {
-    // CInvSlotMgr::MoveItem's bag path (rof2decomp batch 261, §2.7): a placeable target or cursor bag prints eqstr
+    // CInvSlotMgr::MoveItem's bag path: a placeable target or cursor bag prints eqstr
     // 5311 and fails. Then the list (the cursor item, or each item of a non-empty cursor bag, which stays on the
     // cursor; with bForceBag the target bag's items into the cursor bag too) is resolved as ProcessMove resolves it
     // (game/bag_move.h: stacks first, then the first free slot) and sent as OP_MoveMultipleItems only when every
@@ -744,7 +744,7 @@ void GameConnection::apply_server_move(const MoveItem& m) {
         else inventory_.take(m.from);
         return;
     }
-    // Handle_OP_MoveItem_Apply @0x4c1ba0 (rof2decomp batch 261): only possessions to possessions moves; an invalid
+    // Handle_OP_MoveItem_Apply @0x4c1ba0: only possessions to possessions moves; an invalid
     // `to` deletes a possessions, bank or limbo item; any false result prints eqstr 1389.
     Item* src = inventory_.at(m.from);
     Item* dst = inventory_.at(m.to);

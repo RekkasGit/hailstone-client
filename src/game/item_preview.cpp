@@ -22,18 +22,15 @@ bool worn_in_visible_slot(const net::Item& item) {
 }
 
 int preview_material_slot(int s) {
-    switch (s) {
-    case 2: return 0;
-    case 7: return 2;
-    case 10: return 3;
-    case 12: return 4;
-    case 13: return 7;
-    case 14: return 8;
-    case 17: return 1;
-    case 18: return 5;
-    case 19: return 6;
-    default: return -1;
+    // The inventory slot each material slot 0..8 shows (head, chest, arms, wrist, hands, legs, feet, primary,
+    // secondary); 0x4dcbe0 answers the other way round, -1 for a slot without one.
+    static constexpr int kInventorySlotOfMaterial[] = {2, 17, 7, 10, 12, 18, 19, 13, 14};
+    int material = 0;
+    for (int slot : kInventorySlotOfMaterial) {
+        if (slot == s) return material;
+        ++material;
     }
+    return -1;
 }
 
 std::uint32_t item_model_number(std::string_view id) {

@@ -1,6 +1,6 @@
 #pragma once
 
-// A small JSON reader for the test vectors (rof2decomp re/test/vectors/*.jsonl):
+// A small JSON reader for the recorded test vectors (*.jsonl):
 // objects, arrays, strings, numbers (kept as text, so integers up to 64 bits
 // and %.17g doubles read back exactly), true/false/null. Non-finite floats
 // arrive as the strings "inf", "-inf", "nan" and "nan:0x<bits>".

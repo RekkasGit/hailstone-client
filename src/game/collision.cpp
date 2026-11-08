@@ -22,7 +22,7 @@ bool transparent(assets::BlendMode b) {
 
 bool finite(const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
-// 0x1001fa60: fld t[a] / fadd t[b] / fadd t[c] / fmul 0.33333299 (0x101338cc),
+// 0x1001fa60: (t[a] + t[b] + t[c]) * 0.33333299 (0x101338cc),
 // t[i] = i / 256 (CRender +0x85a0), at the game's 24-bit precision; the
 // caller stores it to a float.
 float vertex_alpha_light(std::uint32_t a, std::uint32_t b, std::uint32_t c) {

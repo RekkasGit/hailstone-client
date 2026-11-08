@@ -160,7 +160,7 @@ TEST_CASE("PlayerPath: a map location's destination takes the player's height; a
     CHECK_FALSE(p.active());
 }
 
-TEST_CASE("PlayerPath: the line fades in near the player and out past the grown length (FUN_0059b040)") {
+TEST_CASE("PlayerPath: the line fades in near the player and out past the grown length (0x59b040)") {
     PlayerPath p;
     p.update({0, 0, 0}, 0, 7); // the zone the frames run in
     p.set_settings(stock(), 6.0f);

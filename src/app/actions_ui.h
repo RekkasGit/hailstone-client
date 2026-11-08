@@ -54,7 +54,7 @@ struct HotButtonHooks {
     std::function<void(game::HotButtonWindow, bool show)> window_show; // Activate / Deactivate
     std::function<bool(int button)> pet_button;                     // the pet window's button n (false: none)
     std::function<void(std::int32_t slot, std::int32_t bag)> use_item; // a right click on an inventory slot
-    std::function<void(std::int32_t social)> open_social_editor;     // CSocialEditWnd (FUN_00758bb0)
+    std::function<void(std::int32_t social)> open_social_editor;     // CSocialEditWnd (0x758bb0)
     std::function<void(std::int32_t group)> show_aa_ability;         // CAAWnd activated, ShowAbility(group)
     std::function<void(std::int32_t gem)> spell_gem_right_click;     // CCastSpellWnd::HandleSpellRightClick
     // Lua socials (game/lua_social.h, mq::ScriptHost): a press runs its Lua; a right click stops it (true when it
@@ -108,7 +108,7 @@ public:
         changed();
     }
     std::string skill_label(net::GameConnection& conn, std::uint32_t skill) const { return skill_name(conn, skill); }
-    // /hotbutton (Cmd_hotbutton @0x4f79b0): FUN_004ea9f0(name, line, colour, -1, 1) on the character's socials, saved;
+    // /hotbutton (Cmd_hotbutton @0x4f79b0): 0x4ea9f0(name, line, colour, -1, 1) on the character's socials, saved;
     // the social's index or -1.
     int store_social(std::string_view name, std::string_view line, std::int32_t color) {
         int index = game::store_social(store_, name, line, color, -1, true);
@@ -122,7 +122,7 @@ public:
         store_.combat_abilities[static_cast<std::size_t>(button)] = value;
         changed();
     }
-    // FUN_00659c80 (a left click on CAW_Button<n + 1>; the keys CMD_OPENING_ATTACK1..8): a button holding an ability
+    // 0x659c80 (a left click on CAW_Button<n + 1>; the keys CMD_OPENING_ATTACK1..8): a button holding an ability
     // runs PcZoneClient::doCombatAbility(GetCombatAbility(value - 0x84), 1). False for an empty one.
     bool use_combat_ability_button(net::GameConnection& conn, int button);
     // The target is within __get_melee_range of the player (the range CanIHit tests; the Ability Book's autoskill).
@@ -152,7 +152,7 @@ public:
     // The character whose file is loaded (its hotbuttons.ini; empty before the first zone-in).
     const std::filesystem::path& char_ini_path() const { return char_ini_path_; }
     void write_char_ini(std::string_view section, std::string_view key, const std::string& value);
-    // __CopyLayout's FUN_0055b930: every key of `sections` in `from` (another character's file) written into this
+    // __CopyLayout's 0x55b930: every key of `sections` in `from` (another character's file) written into this
     // character's (CharacterIni_WriteString), then, with `reload`, the hot buttons and socials read again
     // (LoadCharacterIni).
     void copy_char_ini_sections(const IniFile& from, std::initializer_list<std::string_view> sections, bool reload);
@@ -174,14 +174,14 @@ public:
     // `mouse`: a left click on the button (items of types 5 and 13 then do nothing).
     void hot_button(net::GameConnection& conn, const game::mechanics::Character* ch, const AbilityView& view, int bar,
                     int button, bool mouse = false);
-    // FUN_0054fc10: a right click on a hot button (the socials' stop and cooldown; items' right click).
+    // 0x54fc10: a right click on a hot button (the socials' stop and cooldown; items' right click).
     void hot_button_right_click(net::GameConnection& conn, int bar, int button);
     void set_hooks(HotButtonHooks h) { hooks_ = std::move(h); }
     // The skill a button of types 2, 3 or 9 uses (2 / 3: the [CombatSkills] / [Abilities] list entry), -1 none.
     std::int32_t button_skill(const game::HotButton& b) const;
     // /stopsocial: Social_Stop(-1, 0).
     void stop_social() { game::social_stop(social_queue_, -1, false); }
-    // The social editor's Test: what a hot button's press of social 0..119 does (FUN_006143a0 queues it; a Lua
+    // The social editor's Test: what a hot button's press of social 0..119 does (0x6143a0 queues it; a Lua
     // social runs its Lua instead). The queued social, -1 none.
     void press_social(std::int32_t social);
     std::int32_t current_social() const { return social_queue_.current; }

@@ -1,5 +1,5 @@
-// GameConnection: the original's client, help and report commands the connection keeps (rof2decomp
-// re/src/game/commands): /help, /autojoin (and the chat server's auto join), /uptime, /servertransfer, /report,
+// GameConnection: the original's client, help and report commands the connection keeps:
+// /help, /autojoin (and the chat server's auto join), /uptime, /servertransfer, /report,
 // /vreport, /feedback's window, /guidehelp, /veteranReward, /acompare, /aclearcompare, /lfguild and /paperdoll. The
 // ones that act on the app (/channel, /url, /www, /outputfile) are handed to it (set_client_commands;
 // app/client_app_commands.cpp).
@@ -114,18 +114,25 @@ void GameConnection::help_command(const std::string& args) {
     // Cmd_help @0x4f4520: a class (13120..13124 normal, emote, guild, voice, chat; case ignored) lists the table's
     // commands of that /help category (1, 2, 3, 4, 6) after 13131 and a rule, each "  %s" with its localised name, else
     // its own; anything else gives the help text 13125..13130. Colour 0x111.
-    static constexpr std::uint8_t kCategories[5] = {1, 2, 3, 4, 6};
-    int category = 0;
-    for (int k = 0; k < 5 && !category; ++k)
-        if (game::same_no_case(args, strings_.format(13120 + static_cast<std::uint32_t>(k), {}))) category = kCategories[k];
-    if (!category) {
+    struct HelpTopic {
+        std::uint32_t eqstr;
+        int category;
+    };
+    static constexpr HelpTopic kTopics[] = {{13120, 1}, {13121, 2}, {13122, 3}, {13123, 4}, {13124, 6}};
+    const HelpTopic* topic = nullptr;
+    for (const HelpTopic& t : kTopics) {
+        if (!game::same_no_case(args, strings_.format(t.eqstr, {}))) continue;
+        topic = &t;
+        break;
+    }
+    if (!topic) {
         for (std::uint32_t id = 13125; id <= 13130; ++id) system(id, {}, 0x111);
         return;
     }
     system(13131, {}, 0x111);
     show_chat(std::string(80, '-'), 0x111);
     for (const auto& c : game::slash_commands()) {
-        if (c.category != category) continue;
+        if (c.category != topic->category) continue;
         std::string name = c.name;
         if (c.eqstr >= 0) {
             // LoadStringTables @0x51f14d: the entry's localised name.

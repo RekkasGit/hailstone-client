@@ -127,8 +127,8 @@ void ClientApp::load_zone(const std::string& short_name) {
         // original's outdoor zone types 1, 2 and 5 (CDisplay_UpdateSunLighting).
         // The sky itself does not: it is drawn whenever OP_NewZone's sky byte is
         // set (with the Sky option on and SkyString2 or the zone's short name
-        // non-empty; SetFog and CDisplay_SetSkyEnabled @0x4b37c0, rof2decomp
-        // batch 252); the time type is never read for it.
+        // non-empty; SetFog and CDisplay_SetSkyEnabled @0x4b37c0);
+        // the time type is never read for it.
         outdoor_light_ = z->time_type == 1 || z->time_type == 2 || z->time_type == 5;
         time_type_ = z->time_type;
         sky_renderer_.reset();
@@ -278,7 +278,7 @@ void ClientApp::update_precipitation(float dt, float sky_hour) {
 }
 
 // One frame of CDisplay_UpdateSkyWeatherAndFog -> ApplyWeatherFog -> SetFog (game::SceneFog), with the region type
-// at the camera (the camera driver's FUN_0048c890 after IsPointInWorld; outside the world the last one stays),
+// at the camera (the camera driver's 0x48c890 after IsPointInWorld; outside the world the last one stays),
 // infravision and ultravision (the race's innate slots +0x3248 / +0x3264, SPA 65 / 66) and the player's light level.
 game::SceneFogFrame ClientApp::scene_fog_frame(float sky_hour, double t) {
     game::SceneFogInput in;
@@ -330,7 +330,7 @@ void ClientApp::update_listener() {
     audio_->set_weather(weather_.raining(), weather_.windy());
 
     // PlayerZoneClient's HeadWet change: under water (5) sets room type 0x16 and the special flag
-    // (FUN_0048a480); coming out runs UpdateListenerEnvironment again. (The stun's 0x17 needs a stun state the
+    // (0x48a480); coming out runs UpdateListenerEnvironment again. (The stun's 0x17 needs a stun state the
     // client does not keep.)
     std::uint8_t head_wet = motion_head_wet_;
     if (head_wet != head_wet_) {

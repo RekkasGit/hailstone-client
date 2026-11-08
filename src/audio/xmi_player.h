@@ -3,7 +3,7 @@
 // Plays an XMI sequence (assets/xmi.h) through TinySoundFont with a General
 // MIDI SoundFont; the game ships synthusr.sf2 next to the synthusr.dls the
 // original's Miles synthesiser loads. The timing follows the Miles sequencer
-// (rof2decomp refs/openeq docs/XMI_NATIVE_SELECTION.md, mss32 @0x21116850):
+// (OpenEQ docs/XMI_NATIVE_SELECTION.md, mss32 @0x21116850):
 // 120 ticks a second; each tick first counts down the 32 note slots and
 // releases the expired notes in slot order, then plays the events due; a
 // zero-duration note lasts one tick; the end of the track stops the notes;

@@ -81,7 +81,7 @@ void HotButtonStore::load(const IniFile& ini) {
     for (int bar = 0; bar < kHotBars; ++bar)
         for (int page = 0; page < kHotPages; ++page)
             for (int button = 0; button < kHotButtons; ++button) {
-                // A missing key reads as "*" (DAT_009c572c) and leaves the button empty.
+                // A missing key reads as "*" (the default at 0x9c572c) and leaves the button empty.
                 std::string v = ini.get_string(hot_button_section(bar), key(page, button), "*");
                 at(bar, page, button) = v.empty() || v[0] == '*' ? HotButton{} : parse_hot_button(v);
             }

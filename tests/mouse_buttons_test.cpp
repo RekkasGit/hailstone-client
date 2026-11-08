@@ -1,5 +1,5 @@
 // Mouse buttons beyond left and right as bindable keys: platform::dik_from_sdl_mouse_button gives the original's
-// codes 0xf0..0xf5 (FUN_0051a770), and the key map binds, names, presses and saves them like any key.
+// codes 0xf0..0xf5 (0x51a770), and the key map binds, names, presses and saves them like any key.
 #include <doctest/doctest.h>
 
 #include <vector>

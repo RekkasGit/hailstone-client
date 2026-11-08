@@ -8,7 +8,7 @@
 // ENCODE(OP_ItemPacket), ENCODE/DECODE(OP_MoveItem), (OP_LootItem),
 // DECODE(OP_ItemLinkClick); rof2_structs.h, all #pragma pack(1)) field by
 // field; nothing is read by casting a struct. The client side of each packet
-// is rof2decomp:notes/items-and-inventory.md. Per-packet notes are in
+// follows the original client. Per-packet notes are in
 // docs/protocol/rof2-packets.md section "Items".
 //
 // OpenEQ crates/openeq-net/src/inventory.rs (MIT OR Apache-2.0) was used to
@@ -27,8 +27,8 @@ namespace hailstone::net {
 
 // ---------------------------------------------------------------- slots
 
-// InventorySlot_Struct (12 bytes): the client's ItemGlobalIndex copied as is
-// (rof2decomp items-and-inventory.md §1): i16 type (ItemContainerInstance),
+// InventorySlot_Struct (12 bytes): the client's ItemGlobalIndex copied as is:
+// i16 type (ItemContainerInstance),
 // i16 unknown, i16 slot, i16 bag sub-slot (-1 = none), i16 augment (-1),
 // i16 unknown.
 struct ItemSlot {
@@ -57,7 +57,7 @@ inline constexpr std::size_t kItemSlotSize = 12;
 void write_slot(ByteWriter& w, const ItemSlot& s);
 ItemSlot read_slot(ByteReader& r);
 
-// ItemContainerInstance values (rof2_limits.h invtype, decomp §1).
+// ItemContainerInstance values (rof2_limits.h invtype).
 inline constexpr std::int16_t kInvPossessions = 0, kInvBank = 1, kInvSharedBank = 2, kInvTrade = 3, kInvWorld = 4,
                               kInvLimbo = 5, kInvMerchant = 9, kInvCorpse = 11, kInvRealEstate = 14,
                               kInvAltStorage = 19, kInvArchived = 20, kInvMail = 21;
@@ -256,7 +256,7 @@ struct Item {
 
     // The instance's stats-disabled bytes, ItemBase +0x100 (eqlib bDisableAugTexture) and +0x101 (bRankDisabled):
     // client state, not in the packet (ItemClient_UnSerializeItemTree @0x5553b0 never writes them, the constructor
-    // clears them); FUN_007b28a0 sets them (game::update_stats_disabled).
+    // clears them); 0x7b28a0 sets them (game::update_stats_disabled).
     bool aug_texture_disabled = false;
     bool rank_disabled = false;
 
@@ -269,8 +269,8 @@ struct Item {
     bool is_bag() const { return item_class == 1; }
     bool is_lore() const { return lore_group != 0; } // ItemBase::IsLore (the item part)
     bool no_trade() const { return no_drop == 0; }
-    // Fields ItemDefinition_UnSerialize @0x7f6bf0 reads where EQEmu's RoF2 struct has unknowns (rof2decomp
-    // notes/items-and-inventory.md §9): the Placeable byte and the three after it are one int, the placement flags
+    // Fields ItemDefinition_UnSerialize @0x7f6bf0 reads where EQEmu's RoF2 struct has unknowns:
+    // the Placeable byte and the three after it are one int, the placement flags
     // (+0x5ac: 1 open zones, 2 guild halls, 4 houses, 8 yards, 0x80 guild yards; -1 all); unknown30 is the trophy
     // benefit id (+0x5ec, -1 none); bytes 1 and 2 of unknown37 are Collectible (+0x110) and No Destroy (+0x111).
     std::int32_t placeable_flags() const {
@@ -325,7 +325,7 @@ std::optional<ItemPacket> decode_item_packet(const AppPacket& p);
 AppPacket encode_item_packet(bool link_response, const ItemPacket& v); // server direction, for tests
 
 // OP_ItemPreviewRequest (C->S, 80 bytes; Send_OP_ItemPreviewRequest @0x6fff10 / @0x6ffc20): u32 item id, then for
-// an item with an ornamentation (FUN_007b0700: either IT string, the ornament icon, unknowna1 >= 0, the hero's
+// an item with an ornamentation (0x7b0700: either IT string, the ornament icon, unknowna1 >= 0, the hero's
 // forge model or unknown063 set) char[30] ornament_main (+4), char[30] ornament_off (+0x22), unknowna1 (+0x40),
 // ornament_hero_model (+0x44), unknown063 (+0x48) and the byte +0x4d = 1; otherwise empty strings, -1, 0, 0, 0.
 // EQEmu reads only the id. Without `item` (the id-only sender @0x6ffc20) the defaults.
@@ -343,7 +343,7 @@ AppPacket encode(const ItemPreviewReply& v); // server direction, for tests
 
 // OP_MoveItem (28 bytes, both directions; MoveItem_Struct): from, to,
 // u32 count. The client sends count 0 for a whole-item move or swap and a
-// count only for stack merges and splits (decomp §2.2/2.3); to = invalid
+// count only for stack merges and splits; to = invalid
 // destroys the item. The server's OP_MoveItem moves or (to invalid) deletes.
 // OP_DeleteItem (DeleteItem_Struct) and OP_DeleteCharge (encoded as
 // OP_MoveItem) share the layout.
@@ -357,7 +357,7 @@ AppPacket encode(const MoveItem& v);                        // OP_MoveItem
 AppPacket encode_delete_item(const MoveItem& v);            // OP_DeleteItem
 std::optional<MoveItem> decode_move_item(const AppPacket& p); // either opcode
 
-// OP_MoveMultipleItems (client → zone, Send_OP_MoveMultipleItems @0x56fef0; rof2decomp batch 261,
+// OP_MoveMultipleItems (client → zone, Send_OP_MoveMultipleItems @0x56fef0; the recorded vectors
 // Send_OP_MoveMultipleItems.jsonl): u32 count, then count × 0x24-byte MultiMoveEntry {from (12), to (12), u32
 // count, u32 flags (+0x1c), u32 0 (the room mode +0x20, cleared in the list before sending)}. The Ctrl bag moves
 // (MoveItem with bMoveBagContents). Each index's last two bytes (ItemSlot::unknown01) are padding the original
@@ -444,7 +444,7 @@ AppPacket encode(const ItemLinkClick& v);
 std::optional<ItemLinkClick> decode_item_link_click(const AppPacket& p);
 
 // OP_ItemLinkResponse sent by the client (Send_OP_ItemLinkResponse @0x69baf0; 0x48 bytes): u32 item id, u32 flags
-// (| 2 with shift held), char name[64]; the krono slot's Inspect sends {88888, "Krono", 0} (FUN_006949d0). The
+// (| 2 with shift held), char name[64]; the krono slot's Inspect sends {88888, "Krono", 0} (0x6949d0). The
 // server answers with an item packet (OP_ItemLinkResponse).
 struct ItemLinkRequest {
     std::uint32_t item_id = 0;
@@ -501,7 +501,7 @@ AppPacket encode(const ItemVerifyReply& v); // server direction, for tests
 
 // OP_ApplyPoison (both ways, 12 bytes, RoF2 ApplyPoison_Struct): a TypelessInventorySlot {i16 slot, i16 sub, i16 aug,
 // i16 unknown} and u32 success. DoPassageOfTime @0x45e1e8 sends the poison's top-level slot as ItemIndex(slot, -1, -1)
-// (FUN_00460160); its unknown word and success are stack left-overs there (0 here, and EQEmu reads neither). The
+// (0x460160); its unknown word and success are stack left-overs there (0 here, and EQEmu reads neither). The
 // reply (Handle_OP_ApplyPoison @0x4b5c20) reads only success.
 struct ApplyPoison {
     std::int16_t slot = -1;

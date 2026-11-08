@@ -1,15 +1,15 @@
 // Spell math the client does itself: SpellDuration @0x434420, GetCastingTimeModifier @0x4336d0 and the SPA 127
 // focus (GetFocusCastingTimeModifier @0x42c9a0 with the focus collectors and limit checks).
 //
-// Sources (rof2decomp, replaced and tested): re/src/game/spell/eq_spell.cpp (SpellDuration),
-// re/src/game/character/spell_effects.cpp (GetCastingTimeModifier), re/include/rof2/x87.h (CastTimeAfterReduction),
-// re/src/game/character/focus_effects_eh.cpp (GetBest*Focus, Collect*FocusEffects, GetFocusCastingTimeModifier),
-// re/src/game/character/focus_pct.cpp (GetSpellFocusPct, GetAAFocusPct), re/src/game/spell/focus_limits.cpp
-// (CheckFocusLimit). From the disassembly: EQ_Character::IsSpellcaster_2 @0x4288e0,
-// GetFocusLevelFalloffPct @0x428980, FUN_004acd60 and the focus-type table FUN_004acc50.
+// Checked against the original's vectors: SpellDuration, GetCastingTimeModifier, CastTimeAfterReduction,
+// GetBest*Focus, Collect*FocusEffects, GetFocusCastingTimeModifier, GetSpellFocusPct, GetAAFocusPct and
+// CheckFocusLimit. From the disassembly: EQ_Character::IsSpellcaster_2 @0x4288e0,
+// GetFocusLevelFalloffPct @0x428980, 0x4acd60 and the focus-type table 0x4acc50.
 #include "game/mechanics/character.h"
 
 #include <algorithm>
+#include <array>
+#include <optional>
 #include <vector>
 
 #include "core/wrap_math.h"
@@ -32,7 +32,7 @@ std::int32_t cast_time_share(const SpellData& spell, std::int32_t value) {
     return core::wrapped_div(spell.cast_time * u(value), -100);
 }
 
-// FUN_004acc50: the focus effect types (an AA effect list's focus entries).
+// 0x4acc50: the focus effect types (an AA effect list's focus entries).
 bool is_focus_type(std::int32_t type) {
     if (type == 0xa7 || (type >= 0x7c && type <= 0x85)) return true;
     switch (type) {
@@ -45,14 +45,11 @@ bool is_focus_type(std::int32_t type) {
     }
 }
 
-// The limit types that must have a non-negative base to count (focus_pct.cpp Counts).
+// The limit types that must have a non-negative base to count (GetSpellFocusPct's count).
 bool counts(std::int32_t type, std::int32_t base) {
-    switch (type) {
-    case 0x87: case 0x88: case 0x89: case 0x8b: case 0x181: case 0x193: case 0x194: case 0x19b: case 0x19e: case 0x19f:
-        return base >= 0;
-    default:
-        return false;
-    }
+    static constexpr std::array<std::int32_t, 10> kTypes = {135, 136, 137, 139, 385, 403, 404, 411, 414, 415};
+    if (base < 0) return false;
+    return std::find(kTypes.begin(), kTypes.end(), type) != kTypes.end();
 }
 
 struct LimitState {
@@ -73,7 +70,7 @@ struct LimitState {
             pending[word] &= ~bit;
         }
     }
-    void note(std::int32_t type) { flag = flag || type == 0x19b; } // FUN_004acd60
+    void note(std::int32_t type) { flag = flag || type == 0x19b; } // 0x4acd60
     void finish() {
         for (std::uint32_t w : pending)
             if (w != 0) {
@@ -116,35 +113,44 @@ const FocusPick* best_of(const std::vector<FocusPick>& all) {
     return best;
 }
 
+// SpellDuration's level formulas: the ticks at a caster level for types 1..15, nullopt for any other type.
+std::optional<std::int32_t> duration_ticks(std::uint32_t type, std::int32_t level) {
+    switch (type) {
+    case 4: return 50;
+    case 5: return 2;
+    case 1: return std::max(level >> 1, 1);
+    case 2: return std::max(level >> 1, 1) + 5;
+    case 6: return (level >> 1) + 2;
+    case 12: return std::max(level >> 2, 1);
+    default: break;
+    }
+    // The rest grow linearly: per_level x level + at_zero.
+    struct Linear {
+        std::uint32_t type;
+        std::int32_t per_level;
+        std::int32_t at_zero;
+    };
+    static constexpr Linear kLinear[] = {{7, 1, 0},   {8, 1, 10},   {9, 2, 10}, {10, 3, 10}, {13, 4, 10},
+                                         {14, 5, 10}, {15, 10, 100}, {3, 30, 0}, {11, 30, 90}};
+    for (const Linear& f : kLinear)
+        if (f.type == type) return f.per_level * level + f.at_zero;
+    return std::nullopt;
+}
+
 } // namespace
 
 std::int32_t Character::spell_duration(const SpellData& spell, std::uint8_t level, bool special) const {
     std::uint32_t type = spell.duration_formula;
     std::int32_t ticks = 0;
     if (type != 0) {
-        switch (type) {
-        case 1: ticks = (level & 0xfe) < 2 ? 1 : level >> 1; break;
-        case 2: ticks = ((level & 0xfe) < 2 ? 1 : level >> 1) + 5; break;
-        case 3: ticks = level * 30; break;
-        case 4: ticks = 50; break;
-        case 5: ticks = 2; break;
-        case 6: ticks = (level >> 1) + 2; break;
-        case 7: ticks = level; break;
-        case 8: ticks = level + 10; break;
-        case 9: ticks = level * 2 + 10; break;
-        case 10: ticks = level * 3 + 10; break;
-        case 11: ticks = (level + 3) * 30; break;
-        case 12: ticks = level >> 2 < 1 ? 1 : level >> 2; break;
-        case 13: ticks = level * 4 + 10; break;
-        case 14: ticks = level * 5 + 10; break;
-        case 15: ticks = (level * 5 + 50) * 2; break;
-        case 50: return -1;
-        case 51: return -4;
-        default:
+        if (type == 50) return -1;
+        if (type == 51) return -4;
+        if (auto by_level = duration_ticks(type, level)) {
+            ticks = *by_level;
+        } else {
             if (special) return -2;
             if (type < 200) return 0;
-            ticks = static_cast<std::int32_t>(type);
-            break;
+            ticks = static_cast<std::int32_t>(type); // 200 and up: the type is the duration
         }
         std::uint32_t cap = spell.duration_cap;
         if (cap != 0 && cap < static_cast<std::uint32_t>(ticks)) ticks = static_cast<std::int32_t>(cap);

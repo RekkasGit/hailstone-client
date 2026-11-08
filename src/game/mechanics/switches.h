@@ -5,10 +5,10 @@
 // slide, gates swing), its actor follows, and the spawns near a moving floor
 // switch get their floor cache reset (CollisionCounter = 0), so their next
 // floor test finds the switch's new top: that is all a lift does for its
-// riders (no horizontal carry, no turn; rof2decomp notes/lifts.md).
+// riders (no horizontal carry, no turn).
 //
-// Exact port of rof2decomp batch 251 (re/src/game/world/process_switches.cpp),
-// checked against the original's vectors (tests/movement_vectors_test.cpp),
+// Follows the original exactly,
+// checked against its vectors (tests/movement_vectors_test.cpp),
 // with __FixHeading @0x8d1f50, __HeadingDiff @0x8d1fc0 and
 // EQSwitch::GetCustomMoveDistance @0x50ff20. What the original asks or tells
 // another function (ChangeState, RepopSwitch, RepopFrequency,
@@ -78,7 +78,7 @@ double fix_heading_x87(float heading, const Fpu& fpu = Fpu{});
 double heading_diff_x87(float a, float b, const Fpu& fpu = Fpu{});
 // EQSwitch::GetCustomMoveDistance @0x50ff20: +0x78 when above 0, -it below -3, else 0.
 double custom_move_distance_x87(std::int32_t custom);
-// FUN_005101f0: switch types that never move (0x32..0x3a but 0x35, 0x99..0x9b).
+// 0x5101f0: switch types that never move (0x32..0x3a but 0x35, 0x99..0x9b).
 bool switch_is_static(std::uint8_t type);
 
 // One ProcessSwitches frame: `elapsed_ms` is __EQGetTime minus the last call's (unsigned), `now_ms` the time

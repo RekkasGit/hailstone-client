@@ -6,7 +6,7 @@
 #include "coverage.glsl"
 #include "weather.glsl"
 
-// Zone geometry pixels by effect (rof2decomp notes/eqgraphicsdx9.md):
+// Zone geometry pixels by the original's effect:
 //   0 classic region effects (RegionC1 / RegionOld*): texture x lit colour
 //   1 heightmap terrain tiles (Terrain_NoDetail, _1Detail .. _3Detail)
 //   2 RegionWaterFall   3 RegionLava (and Lava2)   4 RegionTerrain (EQG .ter)

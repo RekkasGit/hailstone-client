@@ -622,13 +622,13 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
 
 void ClientApp::camp_finished(std::uint32_t kind) {
     if (kind == 1) {
-        // /camp desk: exit reason 0x1e5 with DAT_00dd2664 1, and WinMain leaves its front-end loop.
+        // /camp desk: exit reason 0x1e5 with the quit flag at 0xdd2664 1, and WinMain leaves its front-end loop.
         log::info("camped out to the desktop: quitting");
         quit_ = true; // the frame goes on: the connection stays until the client closes
         return;
     }
     if (kind == 2) {
-        // /camp server: 0x1e5 with DAT_00dd2664 0; WinMain runs the front end (eqmain's login) again.
+        // /camp server: 0x1e5 with the quit flag at 0xdd2664 0; WinMain runs the front end (eqmain's login) again.
         log::info("camped out to the server list: the login screen");
         back_to_login("You have camped out.", false);
         return;
@@ -666,7 +666,7 @@ void ClientApp::camp_finished(std::uint32_t kind) {
 }
 
 void ClientApp::window_close_request() {
-    // HandleWindowCloseRequest: GameState 1 or 2 (character select, creation) sets the quit flag (DAT_00dd2664 = 1)
+    // HandleWindowCloseRequest: GameState 1 or 2 (character select, creation) sets the quit flag (0xdd2664 = 1)
     // for WinMain; any other state is Cmd_camp(pinstLocalPlayer, "desktop"), whose first four letters are eqstr
     // 13258's "desk". The login and server screens are eqmain.dll's front end. The loading screens and the
     // disconnected one run no window procedure in the original (their loops wait or Sleep), so the request waits in
@@ -719,9 +719,9 @@ void ClientApp::update_link_death() {
         return;
     }
     if (death.in_game) {
-        // DoMainLoop's exit as after a camp: exit reason 0x1e6 to character select, or 0x1e5 when DAT_00dd2664 is 1
+        // DoMainLoop's exit as after a camp: exit reason 0x1e6 to character select, or 0x1e5 when the quit flag at 0xdd2664 is 1
         // (the desktop) or 2 (the front end). OP_SaveOnZoneReq / OP_DeleteSpawn are not sent: the link is down
-        // (FUN_00542380), and WaitForWorldDisconnect returns at once.
+        // (0x542380), and WaitForWorldDisconnect returns at once.
         camp_finished(death.camp_kind);
     } else {
         // HandleWorldDisconnect(…, 1): GameState 0xff and exit reason 0x1e5, the front end.

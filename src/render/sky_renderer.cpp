@@ -122,13 +122,12 @@ SkyRenderer::SkyRenderer(VkContext& vk, const assets::Sky& sky, const std::files
             }
             d.index_count = static_cast<std::uint32_t>(indices.size()) - d.first_index;
             d.texture = slot_for(m);
-            // RoF2 itself draws the procedural CSky and never loads sky.s3d
-            // (notes/eqgraphicsdx9.md, Sky). For these classic layers the
-            // DLL's legacy render-method table (CRender::InitLegacyRenderMethodTable
-            // @0x1009aa40, read by CMaterial::ResolveTransparency @0x100138d0)
-            // gives 0x8000000d opaque and 0x8000000f translucent at alpha 0x80.
-            // Other methods keep the layer rule: the sun and moon add light,
-            // clouds blend by their method.
+            // RoF2 itself draws the procedural CSky and never loads sky.s3d. For these
+            // classic layers the DLL's legacy render-method table
+            // (CRender::InitLegacyRenderMethodTable @0x1009aa40, read by
+            // CMaterial::ResolveTransparency @0x100138d0) gives 0x8000000d opaque and
+            // 0x8000000f translucent at alpha 0x80. Other methods keep the layer rule:
+            // the sun and moon add light, clouds blend by their method.
             switch (m.raw_render_method) {
             case 0x8000000du: d.pipeline = 0; break;
             case 0x8000000fu: d.pipeline = 1; d.opacity = 128.0f / 255.0f; break;

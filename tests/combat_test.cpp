@@ -253,7 +253,7 @@ TEST_CASE("sitting is OP_SpawnAppearance animation 110, standing 100") {
 
 // ---------------------------------------------------------------- rules
 
-TEST_CASE("standard con colours (FUN_007be930's table)") {
+TEST_CASE("standard con colours (0x7be930's table)") {
     using game::Con;
     using game::standard_con;
     CHECK(standard_con(1, 1) == Con::White);

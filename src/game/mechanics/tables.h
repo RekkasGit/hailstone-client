@@ -28,7 +28,7 @@ struct ClassLevelRow {
     double hp_per_stamina = 0, mana_per_stat = 0, endurance_per_stat = 0;
 };
 
-// FUN_007ea4b0 (BaseData loader): each line level^class^8 values (atoi, atof);
+// 0x7ea4b0 (BaseData loader): each line level^class^8 values (atoi, atof);
 // lines with a level above 100 (unsigned) are skipped; a later line for the
 // same level and class wins (it is pushed in front of the hash bucket).
 // Lookups (ClassLevelData_Get*) answer 0.0 for levels outside 1..100 and for
@@ -55,7 +55,7 @@ public:
     // The raw table value; 0 outside the table.
     std::int32_t cap(std::uint32_t cls, std::uint32_t skill, std::uint32_t level) const;
     // EQ_Skill::MinLevel[cls] for skills 0..77, classes 1..35: the first level
-    // 1..100 whose cap is non-zero, else 0 (FUN_005baa20 / 0x4a8f00).
+    // 1..100 whose cap is non-zero, else 0 (0x5baa20 / 0x4a8f00).
     std::int32_t min_level(std::uint32_t skill, std::uint32_t cls) const;
     bool empty() const { return caps_.empty(); }
 
@@ -67,7 +67,7 @@ private:
 bool skill_level_capped(std::uint32_t skill); // EQ_Skill::LevelCappedSkill (+0x21); false above 99
 bool skill_activated(std::uint32_t skill);    // EQ_Skill::Activated (+0x20)
 std::uint32_t skill_name_eqstr(std::uint32_t skill); // EQ_Skill::nName (+8): the name's eqstr id
-// FUN_005ba230: whether a skill above 252 is held at 252 (GetSkillWithItemMods):
+// 0x5ba230: whether a skill above 252 is held at 252 (GetSkillWithItemMods):
 // skills above 77, and those of the original's byte table at 0x5ba25c.
 bool skill_held_at_252(std::uint32_t skill);
 

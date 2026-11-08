@@ -1,23 +1,23 @@
 #pragma once
 
 // The group finder's rules (CGroupSearchWnd "GroupSearchWnd" @0x676470..0x67aa90, CGroupSearchFiltersWnd
-// "GroupSearchFiltersWnd" @0x674bd0..0x676400; rof2decomp export/CGroupSearchWnd.c, CGroupSearchFiltersWnd.c and the
+// "GroupSearchFiltersWnd" @0x674bd0..0x676400 and the
 // unnamed helpers between them). The window state lives on the connection (GameConnection::group_search()), the
-// window models in app/lua_eq_group_search.cpp. Names given here to the decomp's unnamed functions:
+// window models in app/lua_eq_group_search.cpp. Names given here to the original's unnamed functions:
 //  - ClassSortOrder_GetClassId @0x677c40: the "Want classes" checkbox index (the XML's alphabetical order, Brd .. Wiz)
 //    to the class id.
-//  - GroupSearch_ClassMask @0x678830 (FUN_): the checked boxes as class bits (1 << class id).
-//  - GroupSearch_DefaultLevels @0x6779f0 (FUN_): the level range a new window fills in, level - 5 .. level + 5
+//  - GroupSearch_ClassMask @0x678830: the checked boxes as class bits (1 << class id).
+//  - GroupSearch_DefaultLevels @0x6779f0: the level range a new window fills in, level - 5 .. level + 5
 //    within 1 .. 100.
-//  - GroupSearch_ShowError @0x677ce0 (FUN_): 1 6713 (bad range), 2 6714 (no class), 3 6715 (not the leader), each
+//  - GroupSearch_ShowError @0x677ce0: 1 6713 (bad range), 2 6714 (no class), 3 6715 (not the leader), each
 //    in ConfirmationDialog(0, 0xb, text, flags 1 (OK), 15000 ms).
-//  - GroupSearch_CheckPlayerFields @0x6785b0, GroupSearch_CheckGroupFields @0x679370 (FUN_): the posting checks (0
+//  - GroupSearch_CheckPlayerFields @0x6785b0, GroupSearch_CheckGroupFields @0x679370: the posting checks (0
 //    good, 1 the range, 2 no class).
 //  - CGroupSearchWnd_UpdateQueryButtonText @0x677690: the 15 s lock on both Get Matches buttons.
 //  - CGroupSearchWnd_IsRowFiltered @0x6761a0 with CGroupSearchFiltersWnd_IsExcludedGuild @0x675710 and
-//    CGroupSearchFiltersWnd_IsDesiredGuild @0x6757e0 (FUN_): the additional filters on a result.
+//    CGroupSearchFiltersWnd_IsDesiredGuild @0x6757e0: the additional filters on a result.
 //  - CGroupSearchFiltersWnd::SaveIni @0x6758b0 and LoadIni @0x675b70 (sub_): [ADDITIONALFILTERS] in the character
-//    ini (FUN_00761d60, the file CharacterIni_GetString reads): FilterByPlayerMode (0 none, 1 the ignore list, 2
+//    ini (0x761d60, the file CharacterIni_GetString reads): FilterByPlayerMode (0 none, 1 the ignore list, 2
 //    friends only; default 1), FilterByGuildMode (0 none, 1 excluded guilds, 2 desired guilds; default 0),
 //    FilterByExclusiveSearch (default 0), GUILDEXCLUDED<n> / GUILDDESIRED<n> from 0 up to the first empty one (the
 //    saver writes one empty key past the list's end).
@@ -45,7 +45,7 @@ std::uint32_t group_search_all_classes();
 
 // GroupSearch_DefaultLevels: {from, to}; with no player {1, 100}.
 std::array<int, 2> group_search_default_levels(int level, bool have_player);
-// The range checks (HandleQueryingForPlayers, FUN_00678ed0, the posting checks): to >= 1, from <= 100, from <= to.
+// The range checks (HandleQueryingForPlayers, 0x678ed0, the posting checks): to >= 1, from <= 100, from <= to.
 bool group_search_range_ok(int from, int to);
 // GroupSearch_ShowError's text id for an error code; 0 for none.
 std::uint32_t group_search_error_eqstr(int code);
@@ -74,7 +74,7 @@ struct GroupSearchFilters {
 
 // CGroupSearchWnd_IsRowFiltered: a result for `name` in `guild` (CGuild::GetGuildName's text) is dropped. Each
 // active rule overwrites the answer of the one before (the original's order): the ignore list (BeingIgnored), friends
-// only (not on the friends list, FUN_00516ba0: case ignored), excluded guilds (the guild listed, strcmp), desired
+// only (not on the friends list, 0x516ba0: case ignored), excluded guilds (the guild listed, strcmp), desired
 // guilds (the guild not listed).
 bool group_search_filtered(const GroupSearchFilters& f, const std::string& name, const std::string& guild,
                            const std::function<bool(const std::string&)>& ignored,

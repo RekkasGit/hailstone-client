@@ -289,7 +289,7 @@ void AudioSystem::set_zone(const std::string& short_name) {
 
 void AudioSystem::set_listener(const glm::vec3& position, float angle) {
     // The original works in Miles space, z negated: SetListenerLocation's (y, x, -z), WavePlay's control z and
-    // EmitterAdd / CreateOldEmitter's emitter z (fchs each), so distances are the game's; this client keeps game z.
+    // EmitterAdd / CreateOldEmitter's emitter z (each negated), so distances are the game's; this client keeps game z.
     listener_ = position;
     yaw_ = angle;
 }

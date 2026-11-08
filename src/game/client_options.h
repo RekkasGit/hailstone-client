@@ -131,7 +131,7 @@ inline bool pet_window_refresh(bool& had_pet, bool has_pet, bool popup) {
     return popup;
 }
 
-// FUN_00761f10, CContextMenuManager::PopupMenu @0x862220's test: a context menu (a window's own, the default window
+// 0x761f10, CContextMenuManager::PopupMenu @0x862220's test: a context menu (a window's own, the default window
 // menu among them) opens only with ContextMenus (0xde0d51) on and the player not down (Cur_HP below 1, or the PC's
 // state 3 / 4: knocked out, waiting to respawn).
 inline bool context_menus_open(bool context_menus_option, bool player_down) {

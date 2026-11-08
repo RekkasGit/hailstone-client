@@ -146,13 +146,13 @@ void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inve
         s.fast_regen_mana_divisor = static_cast<std::int32_t>(zone->fast_regen_mana);
         s.fast_regen_endurance_divisor = static_cast<std::int32_t>(zone->fast_regen_endurance);
         s.zone_id = zone->zone_id;
-        // EQWorldData_IsBazaarZone / IsBarterZone: zone flags 0x10000000 / 0x2000000 of the original's zone table
-        // (rof2decomp re/src/game/world/zone_table.inc): bazaar (151) has both, barter (346) the second.
+        // EQWorldData_IsBazaarZone / IsBarterZone: zone flags 0x10000000 / 0x2000000 of the original's zone table:
+        // bazaar (151) has both, barter (346) the second.
         s.bazaar_zone = zone->zone_id == 151;
         s.barter_zone = zone->zone_id == 151 || zone->zone_id == 346;
     }
     // The server's PvP rule set (global 0xdcee70, OP_LogServer +4): CacheBuffSlotEffects scales a player's
-    // negative SPA 46..50 / 370 by 1.5 under any rule set (rof2decomp batch 265).
+    // negative SPA 46..50 / 370 by 1.5 under any rule set.
     s.pvp_ruleset = live.pvp_rules != 0;
 }
 

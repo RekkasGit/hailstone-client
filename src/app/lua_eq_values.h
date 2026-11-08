@@ -35,7 +35,7 @@ struct GaugeFill {
 };
 GaugeFill gauge_fill(int value);
 
-// FUN_004b37a0: cur / (max * 0.01f), truncated; 0 when max is 0.
+// 0x4b37a0: cur / (max * 0.01f), truncated; 0 when max is 0.
 int eq_percent(std::int64_t cur, std::int64_t max);
 // GetValueCompareColor @0x761b20 / LabelFromEQ_FormatIntValue: grey when equal, green above, red below.
 std::uint32_t compare_color(std::int64_t value, std::int64_t base);

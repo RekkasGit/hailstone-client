@@ -1,6 +1,6 @@
-// Test vectors from the original eqgame.exe (rof2decomp re/test/vectors) for
+// Test vectors recorded from the original eqgame.exe for
 // game rules outside the character and movement mechanics: coin, item links,
-// spell CRCs and spell descriptions (rof2decomp batch 247). Without the
+// spell CRCs and spell descriptions. Without the
 // vectors directory (HAILSTONE_VECTORS_DIR) the checks pass with a message.
 #include <doctest/doctest.h>
 
@@ -43,6 +43,7 @@ void each_record(const char* file, const std::function<std::string(const Json& i
     int n = 0, bad = 0;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
+        hailstone::test::normalise_recorded_names(line);
         ++n;
         Json r = hailstone::test::parse_json(line);
         std::string why = check(r["in"], r["out"]);
@@ -163,7 +164,7 @@ TEST_CASE("SpellTable CRCs of the game's spells_us.txt match the original's") {
     if (!table.load(*game)) return;
     CHECK(table.file_crc() != 0);
     CHECK(table.spell_crc(45001) == hailstone::game::spell_record_crc(hailstone::game::unknown_spell_record()));
-    // The vectors' lines come from rof2decomp's copy of spells_us.txt; spells whose line is the same here must
+    // The vectors' lines come from the recording's copy of spells_us.txt; spells whose line is the same here must
     // get the same CRC from the table.
     auto data = game->read("spells_us.txt");
     REQUIRE(data);

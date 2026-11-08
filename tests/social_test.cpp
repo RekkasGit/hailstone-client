@@ -265,7 +265,7 @@ TEST_CASE("who: OP_WhoAllResponse decodes and formats like HandleWhoAllResponse"
     CHECK(lines[2].rfind("* GM * [30 Cleric] Bob (Human) <Knights> ZONE: ", 0) == 0);
     CHECK(lines[3] == " AFK [ANONYMOUS] Anon ");
     CHECK(lines[4] == "There are 2 players in EverQuest.");
-    // Above level 50 the class column carries the level title (FUN_0044d420).
+    // Above level 50 the class column carries the level title (0x44d420).
     d->entries[0].level = 51;
     CHECK(game::format_who_response(*d, s, false)[2].find("[51 Vicar (Cleric)]") != std::string::npos);
     d->entries[0].level = 30;

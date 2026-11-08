@@ -56,7 +56,7 @@ inline constexpr std::int32_t kSoundBankLoopBase = 162;
 // soundassets.txt: lines "id^name[^]"; "Unknown" names are left out.
 std::unordered_map<std::int32_t, std::string> parse_sound_assets(std::string_view text);
 // soundassets.txt's named lines, "name^file" ("YouveGotMail^mail1.wav"): the name -> the file. The original gives
-// each a free wave id and keeps name -> id in the sound manager (+0xbaec, FUN_004ab800); FUN_004ab700 looks a
+// each a free wave id and keeps name -> id in the sound manager (+0xbaec, 0x4ab800); 0x4ab700 looks a
 // name up (-1 when it is not there).
 std::unordered_map<std::string, std::string> parse_named_sound_assets(std::string_view text);
 
@@ -107,8 +107,7 @@ bool is_live_racedata_line(std::string_view line);
 // A live line's gender field: 0, 1, or 2 for both (also when it is empty).
 int live_racedata_gender(std::string_view line);
 
-// spellsnew.eff (SpellEffects_ReadFiles @0x4adeb0, rof2decomp
-// re/src/game/world/spell_effects_read.cpp): 268-byte records, a 64-byte name
+// spellsnew.eff (SpellEffects_ReadFiles @0x4adeb0): 268-byte records, a 64-byte name
 // then three stages (cast, projectile, impact) of 68 bytes that each start with
 // a wave id. A spell's SpellAnim (spells_us.txt field 145) indexes it; index 0
 // and empty names are no effect (SpellMgr_SetSpellExtraData @0x467260).

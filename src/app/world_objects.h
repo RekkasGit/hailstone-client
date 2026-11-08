@@ -101,7 +101,7 @@ public:
                       const std::vector<std::uint8_t>* pass = nullptr) const;
     // The floor test's sweep against the doors FloorActorFilter lets through: floor switches only.
     void sweep_floor_switches(game::SphereSweep& sweep, std::vector<DoorHit>* hits = nullptr) const;
-    // FUN_00509a00's overlap: a still sphere against the switches that act on touch (invisible ones too) (FUN_00510210).
+    // 0x509a00's overlap: a still sphere against the switches that act on touch (invisible ones too) (0x510210).
     void touch_overlap(game::SphereSweep& sweep, std::vector<DoorHit>& hits) const;
 
 

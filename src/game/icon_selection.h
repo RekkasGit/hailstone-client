@@ -7,10 +7,10 @@
 //   type 2  A_MenuIcons          icons 0 .. cells           (0x23 without it)
 //   type 3  A_SpeakingIndicator  icons 0 .. cells           (2 without it; not in the type combo box)
 // where cells = the first frame's columns x rows (its size over CellWidth / CellHeight) x the frame count
-// (FUN_0087a820). IconCache::GetIcon(n) is cell n - base (500 for items) of the grid animation. The range's upper
+// (0x87a820). IconCache::GetIcon(n) is cell n - base (500 for items) of the grid animation. The range's upper
 // end is exclusive in the window's list and range label, inclusive in SetSelectedIcon's clamp (the original's).
 //
-// A hotbutton's Assign Icon (CHotButton's menu item 0x1b5a, FUN_0068f330 @0x68f330) opens it on the button's
+// A hotbutton's Assign Icon (CHotButton's menu item 0x1b5a, 0x68f330) opens it on the button's
 // {icon type, icon} at the button's centre (kept on the screen): owner = the button, page offset 0, SetIconType
 // (a type above 0x7fffffff, the button's -1, is 1: Spell), the type combo set to the type, shown. The window:
 //   ISW_Type_Combobox     Item / Spell / Menu: type = choice, offset 0, SetIconType(choice, -1)
@@ -21,9 +21,9 @@
 //   ISW_Slot_EditBox      the selected icon's number; Enter or a change selects the number typed
 //   ISW_SelectedItem_Button  the selected icon
 //   ISW_Accept_Button     hides, and the owner gets notification 0x28 with {type, selected} (sub_0068e710): the
-//                         hotbutton's icon becomes that, saved (FUN_00550040)
+//                         hotbutton's icon becomes that, saved (0x550040)
 // CIconSelectionWnd_SetIconType @0x68eee0, CIconSelectionWnd_SetSelectedIcon @0x68e7e0,
-// CIconSelectionWnd_UpdateRangeLabel @0x68e8d0, FUN_0068e790 (the page's first and last icon).
+// CIconSelectionWnd_UpdateRangeLabel @0x68e8d0, 0x68e790 (the page's first and last icon).
 
 #include <cstdint>
 #include <optional>
@@ -42,7 +42,7 @@ struct IconCacheRange {
 };
 // InitIconCaches: the range of type 0..3 with the animation's cell count (nullopt: no such animation).
 IconCacheRange icon_cache_range(int type, std::optional<std::int32_t> cells);
-// FUN_0087a820: a grid animation's cells (first frame's columns x rows x frames).
+// 0x87a820: a grid animation's cells (first frame's columns x rows x frames).
 std::int32_t grid_cells(int frame_w, int frame_h, int cell_w, int cell_h, int frames);
 
 class IconSelection {
@@ -50,7 +50,7 @@ public:
     // The caches' ranges (by type; a type without a range has no cache: SetIconType fails).
     std::optional<IconCacheRange> ranges[kIconTypes];
 
-    // FUN_0068f330 without the placing: false (nothing shown) when the type has no cache.
+    // 0x68f330 without the placing: false (nothing shown) when the type has no cache.
     bool open(std::int32_t type, std::int32_t selected);
     // CIconSelectionWnd_SetIconType({type, selected}): false when the type has no cache.
     bool set_type(std::int32_t type, std::int32_t selected);
@@ -64,7 +64,7 @@ public:
     std::int32_t selected() const { return selected_; }
     std::int32_t per_page() const { return per_page_; }
     int per_page_choice() const;
-    // FUN_0068e790: the page's icons, first..last (inclusive; empty when last < first).
+    // 0x68e790: the page's icons, first..last (inclusive; empty when last < first).
     std::int32_t first() const;
     std::int32_t last() const;
     int page_number() const;          // ISW_PageIndex_Label

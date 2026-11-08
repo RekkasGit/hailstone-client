@@ -1,4 +1,4 @@
-// rof2decomp batch 263's vectors (recorded from eqgame.exe): OP_Death's
+// The original's vectors (recorded from eqgame.exe): OP_Death's
 // report (game/death_report.h), the region teleports, the teleport-by-index
 // request and the respawn at bind (game/zoning.h).
 #include <doctest/doctest.h>
@@ -362,7 +362,7 @@ std::string check_teleport_b(const Json& rec) {
         return "floor query args";
     if (actor != out["actor_updated"].truthy()) return "actor_updated";
     if (physics != out["physics_saved"].truthy()) return "physics_saved";
-    // FUN_0059a9c0 sends the request only while pinstPlayerPath has a target (not among the inputs).
+    // 0x59a9c0 sends the request only while pinstPlayerPath has a target (not among the inputs).
     if (!find && out["find_person_request"].truthy()) return "find_person_request";
     if (rewinds != out["rewind_reset_calls"].i32()) return "rewind_reset_calls";
     const Json& m = out["move_to_zone"];

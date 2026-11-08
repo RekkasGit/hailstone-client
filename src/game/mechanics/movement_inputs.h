@@ -1,7 +1,7 @@
 #pragma once
 
 // The character values one movement frame reads (app/player_movement.cpp), taken
-// from a Character (the exact ports of CharacterZoneClient: TotalEffect,
+// from a Character (following CharacterZoneClient exactly: TotalEffect,
 // ProcessAllStats, GetAdjustedSkill, CalcCarriedWeight, the heroic getters)
 // instead of from the raw profile and the buffs' base values.
 //

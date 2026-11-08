@@ -19,7 +19,7 @@ constexpr std::int32_t kThunder = 0x8f;  // the thunder sounds 0x8f / 0x90
 float f(std::uint32_t bits) { return std::bit_cast<float>(bits); }
 std::uint32_t bits(float v) { return std::bit_cast<std::uint32_t>(v); }
 
-// fld dword / fstp dword: a signalling NaN comes out quiet.
+// A float copied through the FPU: a signalling NaN comes out quiet.
 std::uint32_t through_fpu(std::uint32_t b) {
     if ((b & 0x7f800000u) == 0x7f800000u && (b & 0x7fffffu)) b |= 0x400000u;
     return b;
@@ -28,7 +28,7 @@ std::uint32_t through_fpu(std::uint32_t b) {
 // The fade count turned around (StopWeather, Weather_StartEffect's fade-out).
 std::int32_t turned(std::int32_t fade) { return fade <= -1 || fade == 0x100 ? 0 : 0x100 - fade; }
 
-// The global the thunder sound is kept in (kLastThunder, rof2decomp mount_banner.cpp).
+// The global the thunder sound is kept in.
 std::int32_t g_last_thunder = 0;
 
 } // namespace
@@ -82,7 +82,7 @@ void weather_start_effect(const mechanics::Fpu& fpu, WeatherState& w, WeatherDis
             w.thunder = 0;
         }
     }
-    // fild intensity / fmul dword 0.01 / fstp dword.
+    // intensity * 0.01f, stored as a float.
     auto target = static_cast<float>(fpu.mul(static_cast<double>(intensity), static_cast<double>(kPercent)));
     sink.set_intensity(bits(target), env.now, 0);
 }

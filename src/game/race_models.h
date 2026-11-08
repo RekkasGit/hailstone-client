@@ -1,8 +1,7 @@
 #pragma once
 
 // Race and gender -> 3-letter model code, from the original client's table
-// (generated into race_models.inc by tools/gen_race_models.py; source and
-// rules in rof2decomp notes/spawns-races-models.md section 5).
+// (generated into race_models.inc by tools/gen_race_models.py).
 
 #include <cstddef>
 #include <cstdint>
@@ -47,7 +46,7 @@ std::vector<std::string_view> model_codes_with_flags(std::uint8_t flags, std::ui
 // NpcManager_FindRaceGenderByModelCode: the first row with this code, or nullptr.
 const RaceModel* find_model_code(std::string_view code);
 
-// PlayerBase_IsMountRace @0x8cf970 (rof2decomp notes/spawns-races-models.md): the 35 mount races.
+// PlayerBase_IsMountRace @0x8cf970: the 35 mount races.
 bool is_mount_race(std::int32_t race);
 
 // PlayerClient_IsVehicleRace @0x59e530 (vtable +0x50): the race/gender record's (+0x234) flag 0x01, which only the

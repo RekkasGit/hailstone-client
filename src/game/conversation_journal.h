@@ -1,6 +1,6 @@
 #pragma once
 
-// The conversation journal (the NPC journal window's data; rof2decomp _globals ConversationJournal_* and the
+// The conversation journal (the NPC journal window's data; the original's ConversationJournal_* and the
 // 0x47a0e0..0x47ba00 helpers, CJournalTextWnd +0x228): NPCs by name and zone, each with the lines they said to the
 // player (an entry per distinct text: the time and place it was last said and a category), the categories, and the
 // texts kept once each by their CRC (__MemChecker1).
@@ -31,11 +31,11 @@ struct JournalNpc {
     std::int32_t latest = 0;   // +0x44: the newest entry's time
     std::vector<std::unique_ptr<JournalEntry>> entries;
 
-    // FUN_0047a0e0: the entry for `text`, made when new (true), else moved to the newer time and place.
+    // 0x47a0e0: the entry for `text`, made when new (true), else moved to the newer time and place.
     bool add_entry(std::int32_t time, float x, float y, float z, std::uint32_t text, std::int32_t category);
-    // FUN_0047aab0: removes the entry of `text` (the newest time recomputed); its count after, -1 when none.
+    // 0x47aab0: removes the entry of `text` (the newest time recomputed); its count after, -1 when none.
     int remove_entry(std::uint32_t text);
-    // FUN_0047a0a0: the first entry from `from` in `category`, else null.
+    // 0x47a0a0: the first entry from `from` in `category`, else null.
     const JournalEntry* entry_in_category(std::int32_t category, std::size_t from = 0) const;
 };
 
@@ -47,31 +47,31 @@ struct JournalCategory {
 
 class ConversationJournal {
 public:
-    // FUN_0047b2d0: the NPC of (name, zone) (made when new), then its entry for the text (FUN_0047b130: the text
+    // 0x47b2d0: the NPC of (name, zone) (made when new), then its entry for the text (0x47b130: the text
     // kept by its CRC).
     void add(const std::string& npc, std::int32_t zone, std::int32_t time, float x, float y, float z,
              const std::string& text, std::int32_t category);
-    // FUN_0047a4d0 / FUN_0047a3c0: the NPC of (name, zone), made when `create` and none.
+    // 0x47a4d0 / 0x47a3c0: the NPC of (name, zone), made when `create` and none.
     JournalNpc* npc(const std::string& name, std::int32_t zone, bool create);
-    // FUN_0047ab60: removes the NPC of (name, zone).
+    // 0x47ab60: removes the NPC of (name, zone).
     bool remove_npc(const std::string& name, std::int32_t zone);
     const std::vector<std::unique_ptr<JournalNpc>>& npcs() const { return npcs_; }
 
-    // FUN_0047ac60 / FUN_0047ace0: the category `id` (made with the lowest free id, FUN_0047a550, when -1 or none),
+    // 0x47ac60 / 0x47ace0: the category `id` (made with the lowest free id, 0x47a550, when -1 or none),
     // named.
     JournalCategory* set_category(const std::string& name, const std::string& description, std::int32_t id);
-    JournalCategory* category(std::int32_t id);                // FUN_0047a640
-    JournalCategory* category_named(const std::string& name);  // FUN_0047a680 (exact)
-    // FUN_0047a590: removes the category; its entries are left without one.
+    JournalCategory* category(std::int32_t id);                // 0x47a640
+    JournalCategory* category_named(const std::string& name);  // 0x47a680 (exact)
+    // 0x47a590: removes the category; its entries are left without one.
     void remove_category(std::int32_t id);
     const std::vector<std::unique_ptr<JournalCategory>>& categories() const { return categories_; }
 
-    // FUN_0047b020: the text of a CRC ("" when unknown).
+    // 0x47b020: the text of a CRC ("" when unknown).
     const std::string& text(std::uint32_t crc) const;
-    // FUN_0047b060: the first entry of `npc` from `from` whose text holds `upper` (upper case), -1 none.
+    // 0x47b060: the first entry of `npc` from `from` whose text holds `upper` (upper case), -1 none.
     int find_text(const JournalNpc& npc, const std::string& upper, std::size_t from) const;
 
-    // FUN_0047b1f0: empties it.
+    // 0x47b1f0: empties it.
     void clear();
     // 0 loaded; -1 no .txt (a new journal); -2 a .txt but no .hdr.
     int load(const std::filesystem::path& base);

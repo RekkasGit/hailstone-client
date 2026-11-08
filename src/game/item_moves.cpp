@@ -58,13 +58,15 @@ bool can_item_go_in_equip_slot(std::int32_t slot, const EquipItem* item, bool sl
 
 std::int32_t item_race_bit_of(std::int32_t race) {
     if (race < 13) return race;
-    switch (race) {
-    case 128: return 13;
-    case 130: return 14;
-    case 330: return 15;
-    case 522: return 16;
-    default: return 17;
+    // Iksar, Vah Shir, Froglok and Drakkin take the bits after the twelve
+    // classic races; any other race the one after them.
+    static constexpr std::int32_t kLaterRaces[] = {128, 130, 330, 522};
+    std::int32_t bit = 13;
+    for (std::int32_t later : kLaterRaces) {
+        if (later == race) return bit;
+        ++bit;
     }
+    return bit;
 }
 
 bool item_mask_has_bit(std::uint32_t mask, std::int32_t bit) { return (mask & (1u << ((u(bit) - 1u) & 31u))) != 0; }

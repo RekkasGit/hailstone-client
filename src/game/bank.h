@@ -1,10 +1,8 @@
 #pragma once
 
-// The bank as the original client keeps it (CBankWnd, rof2decomp export
-// CBankWnd.c) and the rules it checks before an item goes into or comes out
+// The bank as the original client keeps it (CBankWnd) and the rules it checks before an item goes into or comes out
 // of the bank and the shared bank (CInvSlot::HandleLButtonUp @0x695670, the
-// put-down branch for Location 1 and 2; rof2decomp:notes/items-and-inventory.md
-// §2.1 step 5).
+// put-down branch for Location 1 and 2).
 // Nothing here does networking; net/game_connection_bank.cpp sends the packets.
 
 #include <cstdint>
@@ -18,7 +16,7 @@ namespace hailstone::game {
 
 // Bank slot counts. CDisplay builds CBankWnd from "BigBankWnd" (24 slots,
 // BIGB_BankSlot0..23) when the account has expansion bit 10 (0x400,
-// PcProfile Expansions >> 10 & 1 → DAT_00de09ca) or any of bank slots
+// PcProfile Expansions >> 10 & 1 → the big-bank flag at 0xde09ca) or any of bank slots
 // 16..23 holds an item, else from "BankWnd" (16 slots); CBankWnd::BankSize
 // = 16 + 8 × big. Two shared bank slots (BW_SharedBankSlot0..1).
 inline constexpr int kBankSlotsSmall = 16, kBankSlotsBig = 24, kSharedBankSlots = 2;

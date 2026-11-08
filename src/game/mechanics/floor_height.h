@@ -1,8 +1,8 @@
 #pragma once
 
 // CDisplay::GetPlayerFloorHeight @0x507230 (a thiscall on the spawn): the
-// floor under a spawn, cached. Exact port of rof2decomp batch 251
-// (re/src/game/world/lift_floor.cpp), checked against the original's vectors
+// floor under a spawn, cached. Follows the original exactly, checked against
+// its vectors
 // (tests/movement_vectors_test.cpp). The cache (+0x1060 CollisionCounter,
 // +0x1064 CachedFloorLocation, +0x1070 CachedFloorHeight) holds while x and y
 // are unchanged, z + 0.001 is not below the cached z, (for the controlled
@@ -41,7 +41,7 @@ public:
     virtual bool is_3d() = 0;                              // CDisplay::is3dON
     virtual bool has_vehicle() = 0;                        // PlayerClient +0x150
     virtual bool scene_accepts(const std::array<float, 3>& p) = 0; // pinstSceneGraph vf4c
-    virtual void set_vehicle_none() = 0;                   // FUN_008cfd10(0)
+    virtual void set_vehicle_none() = 0;                   // 0x8cfd10(0)
     virtual void touching_cleared() {}                     // `clear`: pTouchingSwitch = 0
     // s3dCollideSphereWithWorld(from, to, radius, FloorActorFilter, CollsnCallbackForFloor, ...); `actor_normal`:
     // the spawn's actor gets the hit's normal (`clear`). Returns its result (0 in practice) and the stop point's z.

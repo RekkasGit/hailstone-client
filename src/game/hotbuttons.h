@@ -101,7 +101,7 @@ private:
     std::array<Social, kSocialPages * kSocialButtons> socials_{};
 };
 
-// FUN_004ea9f0 @0x4ea9f0 (SocialStore): a social (its name cut to 15 characters, its first line to 255, the colour)
+// 0x4ea9f0 (SocialStore): a social (its name cut to 15 characters, its first line to 255, the colour)
 // in the first empty slot from `start` (0..119, else 0), or with `same_name` the first with that name (stricmp); the
 // other lines are left as they were and the cooldown cleared. Returns its index or -1 (all 120 in use). The original
 // then puts it on the cursor when `start` was 0 (or out of range).

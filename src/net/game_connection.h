@@ -5,7 +5,7 @@
 // creation, entering the world, the zone-in handshake, and then keeps the
 // in-zone state (spawns, chat) and sends the player's movement.
 //
-// Sequence sources: rof2decomp:notes/connection-and-network.md §4–6 and
+// Sequence sources: the original client's connection handling and
 // docs/protocol/rof2-packets.md (from the server's world/client.cpp and
 // zone/client_packet.cpp).
 //
@@ -325,12 +325,12 @@ public:
     // In a zone, the camp's 30 s included (the player is still there): what the plugins see as in_zone.
     bool in_zone() const { return state_ == ConnectionState::InZone || state_ == ConnectionState::Camping; }
     const std::string& error() const { return error_; }
-    // Where a finished camp goes (DAT_00dd2664: 0 character select, 1 the desktop, 2 the server list), once the
+    // Where a finished camp goes (the camp kind at 0xdd2664: 0 character select, 1 the desktop, 2 the server list), once the
     // zone has dropped the link after OP_Logout (state Disconnected, error "Camped out."); nullopt otherwise.
     std::optional<std::uint32_t> camped_out() const { return camped_out_; }
     // A link death (HandleWorldDisconnect @0x51be10): the world or zone link dropped (the 180 s no-data timeout, the
     // server's disconnect) other than at a camp's end or a zone change. In game (DoMainLoop's call, line 0x4a81) the
-    // client goes on as a camp would, with DAT_00dd2664 as it stands: 0 character select, 1 the desktop, 2 the
+    // client goes on as a camp would, with the camp kind at 0xdd2664 as it stands: 0 character select, 1 the desktop, 2 the
     // server list; elsewhere (character select, the zone-in) to the front end. nullopt otherwise.
     struct LinkDeath {
         bool in_game = false;
@@ -514,7 +514,7 @@ public:
     void xtarget_request(int slot, std::uint32_t type, const std::string& name);
     // Send_OP_XTargetAutoAddHaters @0x548850: the list's auto add flag, sent when it changes.
     void set_xtarget_auto_haters(bool on);
-    // FUN_00548960: the slot the window's menu acts on (kept only when in range).
+    // 0x548960: the slot the window's menu acts on (kept only when in range).
     void select_xtarget(int slot);
     // ExtendedTargetList_TargetNextSlot @0x5488f0 (CYCLE_XTARGET): from the last cycled slot, the next one holding
     // a spawn (wrapping) becomes the target.
@@ -579,7 +579,7 @@ public:
     // A one-shot animation on a spawn, as an OP_Animation for it would play it at speed 10 (a missile's
     // launch: Send_OP_Animation_0058f540 -> PlayAttackAnimation on its source).
     void play_animation(std::uint32_t spawn_id, std::uint8_t action);
-    // OP_ControlBoat {spawn id, take_control} (rof2decomp notes/combat-and-movement.md §3.5): take_control 1
+    // OP_ControlBoat {spawn id, take_control}: take_control 1
     // makes that spawn pinstControlledPlayer ("You have the helm, captain.", 1407); release_boat() lets go
     // ({id, 0}). 0: the player itself is controlled.
     std::uint32_t controlled_boat() const { return controlled_boat_; }
@@ -606,8 +606,8 @@ public:
     void set_hit_modes(const game::HitModes& modes) { hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
-    // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition; rof2decomp
-    // re/src/game/spawn/change_position.cpp) for the player: 100 stand, 105
+    // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
+    // for the player: 100 stand, 105
     // kneel (looting, bind wound), 110 sit, 111 crouch, 115 lie down (feign
     // death). Nothing for the same state or for sitting while mounted;
     // otherwise auto attack goes off, and crouch to stand or sit needs
@@ -722,7 +722,7 @@ public:
     // The floor probe the path's points are put on (the zone's collision; null: they stay where the server put them).
     void set_path_floor(game::PlayerPath::FloorFn floor) { path_floor_ = std::move(floor); }
     // /find [name] (a client extension, see game_connection_path.cpp): the path to the named spawn
-    // (PlayerManagerClient::GetSpawnByName, then PlayerPath_FindSpawn, as FUN_0059da00), or to the target; nothing
+    // (PlayerManagerClient::GetSpawnByName, then PlayerPath_FindSpawn, as 0x59da00), or to the target; nothing
     // to find ends the path.
     void find_target(const std::string& name = {});
     // PlayerPath_FindMapLocation (MapViewMap::HandleRButtonDown): the path to a point of the map, world coordinates
@@ -738,9 +738,9 @@ public:
     void request_quiet_path(std::uint32_t spawn_id);
     // The reply once it has come (the destination first, as sent; empty: the server has no path), then nullopt.
     std::optional<std::vector<glm::vec3>> take_quiet_path() { return std::exchange(quiet_path_, std::nullopt); }
-    // FUN_0059a9c0 (zoning's position reset): the request again while a path is shown.
+    // 0x59a9c0 (zoning's position reset): the request again while a path is shown.
     void find_person_request();
-    // A failed find the map shows (FUN_006c92e0: a one-point reply; the map window opens), taken by the map.
+    // A failed find the map shows (0x6c92e0: a one-point reply; the map window opens), taken by the map.
     struct FailedFind {
         glm::vec3 point{0.0f};
         game::FindKind kind = game::FindKind::Spawn;
@@ -1143,7 +1143,7 @@ public:
     void activate_leadership_ability(int ability, std::int32_t parameter);
     bool leadership_ability_active(int ability, std::int32_t rank) const; // Leadership_IsAbilityActive @0x55eb70
     bool has_gates_of_discord() const; // the character's expansion flag 0x40
-    // Whether the leadership window's hot button n (1..3) for the ability is enabled (FUN_00560180: not a passive
+    // Whether the leadership window's hot button n (1..3) for the ability is enabled (0x560180: not a passive
     // ability, n within the ability's count, and the character's own rank n or the ability active at rank n).
     bool leadership_hot_button_enabled(int ability, int n) const;
     // Its text (the record's three words, spaced, then " 1" (only for an ability with more than one hot button),
@@ -1158,14 +1158,14 @@ public:
     struct GroupSearch {
         bool window_open = false, filters_open = false;
         bool prepared = false; // the fields filled in (the window's constructor: sub_00677d30 / sub_00678a50)
-        int info_page = -1;    // the "I am a:" page the group window's LFG button asks for (FUN_00676550); -1 none
+        int info_page = -1;    // the "I am a:" page the group window's LFG button asks for (0x676550); -1 none
         std::string player_comments, player_min, player_max; // PIP_CommentsEditbox, PIP_LevelRange*Editbox
         std::string group_comments, group_min, group_max;    // GIP_
         std::array<bool, 16> roles{};                        // GIP_<abbr>Checkbox (game::kGroupSearchClassBoxes)
         bool players_show_all = false, groups_show_all = false; // PLP_ / GLP_ShowAllCheckbox (else Show Matches)
         LfgCommand lfg;
         LfpCommand lfp;
-        bool lfg_remove_checked = false; // FUN_00678250 checks LFG off, the post unchecks it
+        bool lfg_remove_checked = false; // 0x678250 checks LFG off, the post unchecks it
         std::uint32_t last_query_ms = 0; // +0xe828, the display clock
         bool players_query_all = false, groups_query_all = false; // +0xe824 / +0xe7bc: unfiltered results
         std::vector<LfgMatch> players; // the rows added (CGroupSearchWnd_AddLfgMatchRow)
@@ -1180,21 +1180,21 @@ public:
     // The window's constructor: the level ranges (GroupSearch_DefaultLevels), comments up to 63, all 16 classes,
     // Show Matches; once, with the player known.
     void group_search_prepare();
-    // The "I am a:" pages' buttons (CGroupSearchWnd FUN_00679b70 / FUN_0067a6f0): LFG on (FUN_00678df0) or Update
-    // (FUN_00678ea0), LFG off (FUN_00678250); the group's post (FUN_00679d30, the leader only) or Update
-    // (FUN_00679e00), off (FUN_00678310). A bad field shows GroupSearch_ShowError's dialog and sends nothing.
+    // The "I am a:" pages' buttons (CGroupSearchWnd 0x679b70 / 0x67a6f0): LFG on (0x678df0) or Update
+    // (0x678ea0), LFG off (0x678250); the group's post (0x679d30, the leader only) or Update
+    // (0x679e00), off (0x678310). A bad field shows GroupSearch_ShowError's dialog and sends nothing.
     void group_search_post_player(bool update);
     void group_search_remove_player();
     void group_search_post_group(bool update);
     void group_search_remove_group();
-    // FUN_006786a0 / FUN_00679480: the fields differ from what was posted (the Update button is enabled).
+    // 0x6786a0 / 0x679480: the fields differ from what was posted (the Update button is enabled).
     bool group_search_player_changed() const;
     bool group_search_group_changed() const;
     // Get Matches: HandleQueryingForPlayers @0x679050 (the group page's levels and classes, or Show All: 1..100, all)
-    // and FUN_00678ed0 (the player page's levels, or Show All); both start the 15 s lock.
+    // and 0x678ed0 (the player page's levels, or Show All); both start the 15 s lock.
     void group_search_query_players();
     void group_search_query_groups();
-    // FUN_00678550, on joining a group (Send_OP_GroupFollow2) or the group you formed arriving
+    // 0x678550, on joining a group (Send_OP_GroupFollow2) or the group you formed arriving
     // (Handle_OP_GroupUpdateB with bIAmCreatingGroup): LFG off; LFP off too unless you lead a group short of six.
     void group_search_joined_group();
     // CGroupSearchWnd_IsRowFiltered on a name and guild id (CGuild::GetGuildName's text).
@@ -1236,7 +1236,7 @@ public:
     // Send_OP_FloatListThing(force): without `force` at most once a second (PlayerClient +0x1e8c) and only the
     // samples older than 2 s; with it every sample, in as many packets as it takes.
     void send_position_history(bool force);
-    // FUN_0058ff50: Send_OP_FloatListThing(1), then the samples are forgotten (FUN_0056e510).
+    // 0x58ff50: Send_OP_FloatListThing(1), then the samples are forgotten (0x56e510).
     void flush_position_history();
     const game::PositionTracker& position_tracker() const { return position_tracker_; }
     // The zone point table as the original holds it (OP_SendZonePoints rows, zone | instance << 16).
@@ -1283,7 +1283,7 @@ public:
     // guild_member_classes (a class mask: "War/Clr"), else the class's short name.
     std::string guild_member_class(std::uint32_t class_value) const;
     // The class the original's checks see: the profile's, or the extension's (the NMS patch's cast spoof while a
-    // non-bard spell is being cast, FUN_1016b670).
+    // non-bard spell is being cast, 0x1016b670).
     std::uint8_t visible_class() const;
     // EQ_Character::IsSpellcaster for the local character (the extension may answer it).
     bool is_spellcaster() const;
@@ -1384,7 +1384,7 @@ public:
     const std::vector<std::int32_t>& bard_twist() const { return bard_twist_; }
     // Cmd_melody @0x4f5bf0 (/melody 1 2 3 ...): bards only. The twist is cleared; while a spell that is a bard song
     // (BardCastBard) is being cast it only stops (StopCurrentSpellCast(0)); otherwise every number above 0 in the text
-    // (FUN_00594cf0 appends it) joins the twist and its first gem is clicked (HandleSpellLeftClick).
+    // (0x594cf0 appends it) joins the twist and its first gem is clicked (HandleSpellLeftClick).
     void melody_command(const std::string& args);
     // CharacterZoneClient_StopCurrentSpellCast(0) as the twist uses it (game_connection_ability_commands.cpp).
     void stop_current_spell_cast();
@@ -1450,7 +1450,7 @@ public:
         bool hide = false, sneak = false;
     };
     VisibilityCleared take_visibility_cleared() { return std::exchange(visibility_cleared_, {}); }
-    // CharacterZoneClient::MakeMeVisible @0x4592b0 (rof2decomp visible_status.cpp): when invisible, the
+    // CharacterZoneClient::MakeMeVisible @0x4592b0: when invisible, the
     // invisibility effects are removed, the state is sent (SpawnAppearance {me, 3, 0}), hiding ends
     // (Send_OP_Hide: OP_Hide {0}, eqstr 12337) and with `appearance` sneaking too (eqstr 12338,
     // SpawnAppearance {me, 15, 0}).
@@ -1484,7 +1484,7 @@ public:
     bool memorize_set(const std::array<std::int32_t, game::kLoadoutGems>& spells);
     // CCastSpellWnd_TryMemorizeFromCursor @0x75cc70 (a spell select menu's spell for `gem`: the gem's own menu, a
     // hotbutton's Memorize): with something held on the cursor eqstr 3345 (colour 0xf) and nothing else; else the
-    // book slot holding the spell (FUN_0075bc00), CanStartMemming, the book shown (remembering whether it was), and
+    // book slot holding the spell (0x75bc00), CanStartMemming, the book shown (remembering whether it was), and
     // once it shows the memorize is scheduled 500 ms on (CSpellBookWnd +0x254 = 1, +0x294 / +0x298 the book slot and
     // gem, +0x250 the time; OnProcessFrame then StartSpellMemorization(slot, gem, 0)).
     void memorize_from_cursor(std::uint32_t spell, int gem);
@@ -1598,7 +1598,7 @@ public:
     // Send_OP_ItemLinkResponse(id, name, flags) (net/item_packets.h ItemLinkRequest): `shift` adds flag 2.
     void request_item_link(std::uint32_t item_id, const std::string& name, std::uint32_t flags, bool shift);
     std::optional<Item> take_item_display();
-    // An item the server sent again as OP_ItemPacket type 0x67 (CEverQuest_HandleItemPacket @004c2570 → FUN_006ae710
+    // An item the server sent again as OP_ItemPacket type 0x67 (CEverQuest_HandleItemPacket @004c2570 → 0x6ae710
     // @006ae710): every open item display showing the same serial (+0xf8) is set to it in place.
     std::optional<Item> take_item_refresh();
 
@@ -1647,11 +1647,11 @@ public:
     void merchant_unselect() {
         if (merchant_) merchant_->selected.reset();
     }
-    // FUN_00698290 @0x698290, which CInventoryWnd::ClickedMoneyButton calls just before its quantity dialog (no coin
+    // 0x698290, which CInventoryWnd::ClickedMoneyButton calls just before its quantity dialog (no coin
     // on the cursor) while the merchant window shows its mail (Parcels) page; the caller checks the page.
     // CInvSlotMgr::SelectSlot(0): the item picked in the bags is let go and the coin buttons' outline cleared; then
-    // with `have` > 0 coins of that type, coin button `coin` (0 platinum .. 3 copper) is outlined (FUN_006909a0).
-    // (The merchant window's own item and list selection, FUN_006f2120, are the window model's.)
+    // with `have` > 0 coins of that type, coin button `coin` (0 platinum .. 3 copper) is outlined (0x6909a0).
+    // (The merchant window's own item and list selection, 0x6f2120, are the window model's.)
     void parcel_coin_button(int coin, std::int32_t have);
     // Hailstone (a deliberate difference): the quantity dialog's answer after parcel_coin_button is the money picked
     // for sending (MerchantSession::parcel_money), which the page's Send money sends; it stays in the inventory. The
@@ -1699,7 +1699,7 @@ public:
     // cursor; for AskQuantity the caller opens the quantity dialog (max = start = inventory_coin(coin), use_keys,
     // min 0, at the button's centre, x / y of the result) and calls this again with the answer.
     game::MoneyButtonOut inventory_money_button(int coin, std::int32_t amount, const std::array<std::int32_t, 4>* button_rect);
-    // The inventory's coins of a type (coin 0 platinum .. 3 copper; CInventoryWnd FUN_006919e0).
+    // The inventory's coins of a type (coin 0 platinum .. 3 copper; CInventoryWnd 0x6919e0).
     std::int32_t inventory_coin(int coin) const;
     // The bank window's coin, as the original moves it: through the cursor
     // (inventory money button → cursor → bank money button and back).
@@ -1840,7 +1840,7 @@ public:
     std::vector<const game::AltAbility*> aa_list(std::int32_t type, const game::AAFilter& filter) const;
     // AltAdvManager::IsAbilityReady (SPA 264 reduces the reuse time).
     game::AAReadiness aa_readiness(std::uint32_t rank_id) const;
-    // The item recast timers (rof2decomp notes/items-and-inventory.md §3.7), in Util::FastTime seconds (time(0),
+    // The item recast timers, in Util::FastTime seconds (time(0),
     // as the server's ItemSerializationHeader last_cast_time): the item's own (ItemBase +0x34, net::Item
     // last_cast_time) and the profile's 100 by recast type (PcBase +0x6a5c, PcBase_Get/SetItemRecastTimer).
     // PcZoneClient::GetItemRecastTimer @0x580600: the later (unsigned) of the item's own and, for a recast type
@@ -1864,7 +1864,7 @@ public:
         const game::Spawn* me = world_.player();
         return me && me->gm;
     }
-    // FUN_007b28a0 with the features ProcessAllStats passes (UseItem 0x13, Ornament 0x15) over the worn slots
+    // 0x7b28a0 with the features ProcessAllStats passes (UseItem 0x13, Ornament 0x15) over the worn slots
     // 0..0x15 (game/item_stats_disabled.h), as ProcessAllStats' first loop runs it.
     void refresh_worn_stats_disabled();
     // The cast's item location (LaunchSpellData +0xc) as a slot.
@@ -1963,7 +1963,7 @@ public:
     const std::optional<game::TrainingSession>& training() const { return training_; }
     // Send_OP_GMTrainSkill: trains the row (index into training()->rows) after the original's checks.
     bool train(std::size_t row);
-    // The cost in copper of training the row one point (FUN_00584a30).
+    // The cost in copper of training the row one point (0x584a30).
     std::int32_t train_cost(std::size_t row) const;
     // The window's Done / closing: OP_GMEndTraining.
     void close_trainer();
@@ -2029,7 +2029,7 @@ public:
     // Asks for a completed task's elements (OP_TaskHistoryRequest; index into the history list). The window shows a
     // history entry the server already sent from tasks().history without asking again (bElementsReceived).
     void request_task_history(std::uint32_t index);
-    // The task compass mark (FUN_0076ff70, game::task_compass_mark): looked for again after each task change and
+    // The task compass mark (0x76ff70, game::task_compass_mark): looked for again after each task change and
     // zone entry; the compass shows it with the other points.
     const std::optional<game::TaskCompassMark>& task_compass() const { return task_compass_; }
     // CTaskManager::GetElementDescription.
@@ -2061,7 +2061,7 @@ public:
     // A client message by eqstr id (the system colour), as the key commands print them.
     void system_message(std::uint32_t eqstr, std::uint32_t color = 0) { system(eqstr, {}, color); }
     const game::SocialState& social() const { return social_; }
-    // The reply keys' place in last_tells (DAT_00de21d8; game::cycle_last_tell steps it).
+    // The reply keys' place in last_tells (0xde21d8; game::cycle_last_tell steps it).
     int& last_tell_index() { return social_.last_tell_index; }
     // The user gave input this frame (keys, mouse, pad, typing): the AFK keepalive's activity (game/social.h).
     void note_user_activity() { afk_keepalive_.last_input_ms = now_ms(); }
@@ -2171,7 +2171,7 @@ public:
     void toggle_mouse_look_option();
     // Cur_HP below 1, or the PC's state (its virtual base +0x104) 3 or 4: knocked out (PlayerZoneClient::KnockedOut)
     // or dead and waiting to respawn (the local repop). __ProcessMouseEvents @0x539e60 then keeps the mouse from the
-    // world and FUN_00761f10 (CContextMenuManager::PopupMenu's test) opens no context menu. Here the own death, or
+    // world and 0x761f10 (CContextMenuManager::PopupMenu's test) opens no context menu. Here the own death, or
     // Cur_HP (own_hp(): the items' HP included) once the server sent the maximum.
     bool player_down() const { return pstatus_.dead || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
     void send_server_filter();
@@ -2184,7 +2184,7 @@ public:
     // takes the request once.
     enum class QuitRequest : std::uint8_t { None, Quit, Exit };
     QuitRequest take_quit_request() { return std::exchange(quit_request_, QuitRequest::None); }
-    // The original handlers the app ports (windows, chat windows, display and sound settings;
+    // The original handlers the app follows (windows, chat windows, display and sound settings;
     // app/client_app_commands.cpp): called with the handler's name and the arguments for a table command the
     // connection does not handle; true = handled.
     void set_client_commands(std::function<bool(std::string_view handler, const std::string& args)> fn) {
@@ -2379,7 +2379,7 @@ public:
     // (game/feature_restrictions.h).
     bool feature_refused(std::int32_t feature);
     // PlayerClient +0x2d4 (pTouchingSwitch): the door the last floor test found under the player
-    // (CollsnCallbackForFloor), or none. The trader stall check (FUN_004431a0) reads it.
+    // (CollsnCallbackForFloor), or none. The trader stall check (0x4431a0) reads it.
     void set_touching_switch(std::optional<std::uint8_t> door) { touching_switch_ = door; }
     std::optional<std::uint8_t> touching_switch() const { return touching_switch_; }
     void set_profile_for_test(const PlayerProfile& p) { profile_ = p; }
@@ -2480,7 +2480,7 @@ public:
     void set_merc_window_open(int which, bool open);
     // /mercwindows (Cmd_mercwindows): toggles the manage window when allowed.
     void merc_windows_command();
-    // The merchant window: picks a merchant entry (FUN_00566b00 copies it to +0x3c) and the hire button.
+    // The merchant window: picks a merchant entry (0x566b00 copies it to +0x3c) and the hire button.
     void merc_select_entry(std::size_t index);
     void merc_hire(std::uint32_t merc_id);
     // The manage window's buttons.
@@ -2573,12 +2573,12 @@ private:
     void handle_leadership_ability(Op op, const AppPacket& p);
     // The leadership abilities (Leadership_IsAbilityActive @0x55eb70, Leadership_ActivateAbility @0x55f0f0,
     // Leadership_FindPathToPlayer @0x55eee0, their group and raid size checks @0x55ea00 / @0x55ea70).
-    bool group_has_players(int n) const;                    // FUN_00443630: a group of at least n
-    bool raid_has_players(int n) const;                     // FUN_0057f670: a raid of at least n
+    bool group_has_players(int n) const;                    // 0x443630: a group of at least n
+    bool raid_has_players(int n) const;                     // 0x57f670: a raid of at least n
     bool leadership_has_rank(int ability, std::int32_t rank) const; // Leadership_HasAbilityRank
     void check_group_size();                                // 0x2263 with "3" below three players
     void check_raid_size();                                 // 0x2262 with "18"
-    bool is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const; // FUN_0057f760 / 790 / 7c0
+    bool is_raid_delegate(const std::array<std::uint32_t, 3>& ids) const; // 0x57f760 / 790 / 7c0
     void set_target_of_target_window(bool show);            // CTargetOfTargetWnd's Show, through the app
     void find_path_to_player(const std::string& name);
     void send_find_path(const game::Spawn& to, bool face = false); // PlayerPath_FindSpawnByID / FindGroupMember
@@ -2753,7 +2753,7 @@ private:
     void surname_command(const std::string& args);
     void corpse_command(Op op);
     void shield_command(const std::string& args);
-    bool may_shield(); // MayShield (rof2decomp ability_commands.cpp), the checks /shield and /shieldgroup share
+    bool may_shield(); // MayShield, the checks /shield and /shieldgroup share
     // The game commands of net/game_connection_game_commands.cpp: /shieldgroup, /blockspell, /sheathe, /open,
     // /reveal, /hidecorpses, /decaycorpse, /setstartcity.
     bool game_command(std::string_view handler, const std::string& args);
@@ -2798,7 +2798,7 @@ private:
     void handle_barter(const AppPacket& p);
     void handle_buyer_items(const AppPacket& p);
     void bazaar_text(std::uint32_t color, std::string text);
-    bool stall_under_player() const; // FUN_004431a0's switch test (touching_switch_ is a stall)
+    bool stall_under_player() const; // 0x4431a0's switch test (touching_switch_ is a stall)
     void load_trader_slots();
     bool store_trader_price(std::uint32_t price);
     void handle_trader_message(const TraderMessage& m);
@@ -2883,7 +2883,7 @@ private:
     std::chrono::steady_clock::time_point zone_change_started_{}, zone_change_sent_{}, zone_change_retry_at_{};
     game::EqStrings strings_;
 
-    // Movement sending (rof2decomp:notes/combat-and-movement.md §3.4).
+    // Movement sending.
     glm::vec3 position_{0.0f};
     glm::vec3 velocity_{0.0f};
     float heading_ = 0.0f;
@@ -3060,7 +3060,7 @@ private:
     bool garbling_on_ = true;  // 0xddfd50, OP_LogServer +0x14 (EQEmu sends 1)
     bool chat_blocked_ = false; // 0xddf70d
 
-    // CastSpell's state (rof2decomp batch 254).
+    // CastSpell's state.
     std::function<bool(const glm::vec3&, const glm::vec3&)> line_of_sight_;
     TeleportHandler teleport_handler_;
     bool in_combat_ = false;          // PcClient +0x31bc
@@ -3260,7 +3260,7 @@ private:
 
     std::chrono::steady_clock::time_point camp_started_{};
     int camp_notices_ = 0;          // 12684 lines shown (one per 5 s)
-    std::uint32_t camp_kind_ = 0;   // DAT_00dd2664 (Cmd_camp)
+    std::uint32_t camp_kind_ = 0;   // 0xdd2664 (Cmd_camp)
     std::optional<std::uint32_t> camped_out_;
     std::optional<LinkDeath> link_death_;
     std::int32_t air_supply_ = 0;

@@ -119,8 +119,8 @@ TEST_CASE("CreateSpellEmitter: duration, density and capacity rules") {
 }
 
 TEST_CASE("A box-surface particle draws its two free axes, then its face, as the graphics DLL does") {
-    // EQGraphicsDX9.dll's shape 6 (@0x100737be): r1, r2 in -1..1, then the face fistp(u * 6.0) with u in 0..1;
-    // faces 0..4 are -x, +x, -y, +y, -z, anything else (5, and 6 from the rounding) +z.
+    // EQGraphicsDX9.dll's shape 6 (@0x100737be): r1, r2 in -1..1, then the face u * 6.0 rounded to an integer with u in
+    // 0..1; faces 0..4 are -x, +x, -y, +y, -z, anything else (5, and 6 from the rounding) +z.
     for (std::uint32_t seed : {7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u}) {
         std::vector<assets::EmitterDefinition> defs(2);
         defs[1].duration = 1.0f;
@@ -262,7 +262,7 @@ TEST_CASE("Model points: the WLD table and the point matrix") {
     CHECK(assets::find_point(lp, "SPELLPOINT_MOUTH")->offset == glm::vec3(0.08f, 0.6f, 0.0f));
     CHECK(assets::find_point(lp, "SPELLPOINT_LHAND")->bone == "HUMSPELL_POINT_TRACK");
     CHECK(assets::find_point(lp, "SPELLPOINT_RHAND")->bone == "HUMSPELL_POINT_TRACK");
-    // FUN_1006f370: heading 128 turns +X onto +Y; the offset is the translation; the scale applies first.
+    // 0x1006f370: heading 128 turns +X onto +Y; the offset is the translation; the scale applies first.
     assets::ModelPoint p;
     p.offset = {1, 2, 3};
     p.rotation = {128, 0, 0};

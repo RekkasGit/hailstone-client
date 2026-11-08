@@ -1,7 +1,5 @@
-// EQ_Character::HitBySpell (game/mechanics/hit_by_spell.h). Source:
-// rof2decomp re/src/game/spell/hit_by_spell_eh.cpp (batch 249); the exe
-// helpers from re/src/game/character/spell_affect_helpers.cpp (batch 244),
-// re/src/game/spell/eq_spell.cpp and the disassembly of 0x441bb0..0x441f24
+// EQ_Character::HitBySpell (game/mechanics/hit_by_spell.h), checked against
+// the original's vectors; the exe helpers from the disassembly of 0x441bb0..0x441f24
 // (Vec3_Normalize, Vec3_Cross, Ray_SetFromPoints, the CCollisionInfoBase and
 // CCollisionInfoSphere constructors, the matrix helpers). Addresses in the
 // comments are the original's.
@@ -36,14 +34,14 @@ constexpr std::uint32_t kFloorCallback = 0x475f40;  // CollsnCallbackForFloor
 float as_float(std::uint32_t bits) { return std::bit_cast<float>(bits); }
 
 // The x87 helpers. A memory operand keeps its signalling-NaN flag; a value
-// already on the stack (fld'd, or a result) is quiet.
+// already loaded (or a result) is quiet.
 struct Ops {
     const Fpu& f;
     static X87 mem(std::uint32_t bits) { return X87(as_float(bits)); }
     static X87 st(double v) { return X87(v); }
-    static X87 ld(std::uint32_t bits) { return X87(static_cast<double>(as_float(bits))); } // fld dword
+    static X87 ld(std::uint32_t bits) { return X87(static_cast<double>(as_float(bits))); } // quiet on load
     static std::uint32_t store(double v) { return std::bit_cast<std::uint32_t>(static_cast<float>(v)); }
-    // fld / fstp: a signalling NaN comes out quiet.
+    // A copy through the FPU: a signalling NaN comes out quiet.
     static std::uint32_t q(std::uint32_t bits) {
         bool snan = (bits & 0x7f800000u) == 0x7f800000u && (bits & 0x007fffffu) != 0 && !(bits & 0x00400000u);
         return snan ? bits | 0x00400000u : bits;
@@ -53,9 +51,9 @@ struct Ops {
     double sub(const X87& a, const X87& b) const { return x87_sub(f, a, b); }
     double mul(const X87& a, const X87& b) const { return x87_mul(f, a, b); }
     double div(const X87& a, const X87& b) const { return x87_div(f, a, b); }
-    // fld a / fadd b / fstp.
+    // a (loaded) + b (a memory operand), stored as a float.
     std::uint32_t fadd(std::uint32_t a, std::uint32_t b) const { return store(add(ld(a), mem(b))); }
-    // fild a / fadd b / fstp.
+    // The integer a + b (a memory operand), stored as a float.
     std::uint32_t fiadd(std::int32_t a, std::uint32_t b) const {
         return store(add(st(static_cast<double>(a)), mem(b)));
     }
@@ -122,11 +120,11 @@ double normalize(std::array<std::uint32_t, 3>& v, const Ops& o) {
     double s = o.add(Ops::st(yy), Ops::st(xx));
     double zz = o.mul(Ops::ld(v[2]), Ops::ld(v[2]));
     double len = o.sqrt(o.add(Ops::st(s), Ops::st(zz)));
-    // fld -eps; fcomp len; test ah,5; jp normalise: when -eps >= len or unordered.
+    // Normalised when -eps >= len or unordered.
     bool unordered = std::isnan(len);
     double lo = as_float(kMinusEpsilon), hi = as_float(kEpsilon);
     bool normalise = unordered || lo >= len;
-    if (!normalise) normalise = !(hi > len); // fld eps; fcomp; test ah,0x41; jne: eps < len or eps == len
+    if (!normalise) normalise = !(hi > len); // eps < len or eps == len
     if (!normalise) {
         v = {0, 0, 0};
         return 0.0;
@@ -146,7 +144,7 @@ void info_ctor(CollisionInfo& c, const std::array<std::uint32_t, 3>& from, const
         c.from[static_cast<std::size_t>(i)] = Ops::q(from[static_cast<std::size_t>(i)]);
         c.to[static_cast<std::size_t>(i)] = Ops::q(to[static_cast<std::size_t>(i)]);
     }
-    // to.y - from.y, to.z - from.z, to.x - from.x (fld to, fsub from).
+    // to.y - from.y, to.z - from.z, to.x - from.x (to loaded, from a memory operand).
     c.delta[1] = Ops::store(o.sub(Ops::ld(to[1]), Ops::mem(from[1])));
     c.delta[2] = Ops::store(o.sub(Ops::ld(to[2]), Ops::mem(from[2])));
     c.delta[0] = Ops::store(o.sub(Ops::ld(to[0]), Ops::mem(from[0])));
@@ -154,7 +152,7 @@ void info_ctor(CollisionInfo& c, const std::array<std::uint32_t, 3>& from, const
     c.fraction = kOne;
     c.direction = {Ops::q(c.delta[0]), Ops::q(c.delta[1]), Ops::q(c.delta[2])};
     double len = normalize(c.direction, o);
-    // fldz; fcom len; test ah,5; jp: 0 >= len or unordered -> +0x34 = 0, not moving.
+    // 0 >= len or unordered -> +0x34 = 0, not moving.
     bool moving = !std::isnan(len) && 0.0 < len;
     c.inverse_length = moving ? Ops::store(o.div(Ops::st(1.0), Ops::st(len))) : 0u;
     c.moving = moving ? 1 : 0;
@@ -432,7 +430,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
             if (is_song_on_self(spell, caster, me_spawn())) {
                 val = hit.song_value;
             } else if (spell->attrib[index] != 0x1b && as_float(hit.modifier) > 0.0f) {
-                // 0x43f562: fild value / fmul modifier / __ftol2_sse.
+                // 0x43f562: value * modifier, truncated.
                 val = ftol(o.mul(Ops::st(static_cast<double>(val)), Ops::mem(hit.modifier)));
             }
             if (me_spawn() == nullptr) return 0;
@@ -782,7 +780,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                             floor_snap(me_spawn(), q, o);
                             q.update_player_actor(me_spawn());
                         }
-                        // 0x440860: fld d / fsub 2 / fst d / fcomp 5.
+                        // 0x440860: d - 2, stored as a float, then compared with 5 unrounded.
                         double next = o.sub(Ops::ld(distance), Ops::mem(kTwo));
                         const std::uint32_t before = distance;
                         distance = Ops::store(next);
@@ -868,7 +866,7 @@ std::uint8_t hit_by_spell(HitState& state, const Hit& hit, const Launch* launch,
                 if (spa != 0x3a && spa != 0x9c && spa != 0x1e && spa != 0x11 && spa != 0x12 && spa != 0x56 &&
                     as_float(hit.modifier) > 0.0f) {
                     modifier_used = Ops::q(hit.modifier);
-                    // 0x440ec9: fld modifier / fimul value / __ftol2_sse.
+                    // 0x440ec9: modifier * value, truncated.
                     val = ftol(o.mul(Ops::ld(hit.modifier), Ops::st(static_cast<double>(val))));
                 }
                 spa = spell->attrib[index];

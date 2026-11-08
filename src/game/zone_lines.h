@@ -7,7 +7,7 @@
 // @0x508c10 with the region's teleport text: an ATP region's
 // "DRNTP00255%05d000000000000000" of atoi(name + 4) (zone point 10 x N), else
 // the region's name. DoTeleport, Teleport_ResolveTeleportIndex and DoTeleportB
-// are game/zoning.h (rof2decomp batch 263).
+// are game/zoning.h.
 
 #include <cstdint>
 #include <functional>
@@ -29,7 +29,7 @@ std::string region_teleport_text(std::string_view tag);
 // nothing) and the teleport text it writes to CDisplay +0x15 when the name sets the teleport bit ("ATP": the
 // DRNTP00255 reference text; otherwise names with "TP" at [3]: the name itself). The region bits 0x20000000,
 // 0x08000000 and 0x04000000 ('M' at [0x1f], 'P' / 'F' at [0x21] of names longer than 32) have no reader but the
-// whole-dword change test of CheckRegionChange (rof2decomp batch 265).
+// whole-dword change test of CheckRegionChange.
 struct RegionNameFlags {
     std::uint32_t flags = 0;
     std::optional<std::string> teleport_name;
@@ -91,8 +91,7 @@ public:
     // Call on zone-in: PlayerZoneClient::ResetVariables sets the last region
     // flags (+0x94, +0x98, +0x9c) to 0xFFFFFFFF for every new spawn, the
     // rebuilt local player included, so the first check after zone-in always
-    // counts as a change: a zone line at the arrival point fires (rof2decomp
-    // batch 265).
+    // counts as a change: a zone line at the arrival point fires.
     // It also holds back the buried boxes the player arrives over (BuriedZoneLine).
     void reset() {
         last_flags_ = kNoRegionFlags;

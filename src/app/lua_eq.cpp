@@ -1,5 +1,5 @@
-// The `eq` functions (app/lua_eq.h). Names, arguments and returns follow rof2decomp re/src/ui/lua_eq.cpp and
-// lua_eq_window.cpp; each function's comment gives its contract. Window functions find the stock window model by
+// The `eq` functions (app/lua_eq.h). Names, arguments and returns follow the
+// original UI scripts' contracts; each function's comment gives its contract. Window functions find the stock window model by
 // screen name (app/lua_eq_windows.h); a window without a model is never shown, so its script draws nothing.
 
 #include "app/lua_eq.h"
@@ -133,7 +133,7 @@ struct EqApi::Impl {
             bool& was = tip_shown[screen_name];
             if (shown && !was) {
                 if (tip == -100) {
-                    // CActionsWnd::OnShow @0x614a20 (FUN_00614510 on the tab box's page): the Abilities page 4,
+                    // CActionsWnd::OnShow @0x614a20 (0x614510 on the tab box's page): the Abilities page 4,
                     // Combat 3, Socials 5, the Main page none
                     auto page = w->tab_page(host, "ACTW_ActionsSubwindows");
                     tip = !page ? -1 : *page == 1 ? 4 : *page == 2 ? 3 : *page == 3 ? 5 : -1;
@@ -152,10 +152,10 @@ struct EqApi::Impl {
             was = shown;
         }
     }
-    // CLayoutCopyWnd's list (FUN_006b6580 / FUN_006b6240): every UI ini (.\UI_*.ini; here every character's UI.ini
+    // CLayoutCopyWnd's list (0x6b6580 / 0x6b6240): every UI ini (.\UI_*.ini; here every character's UI.ini
     // of this server, characters/<world>/<name>/UI.ini) and then defaults.ini, one row per screen size its sections
     // keep a place for (a key that starts with "XPos": the rest of the key), each pair once; not the current file's
-    // own current size (FUN_0055b4c0 / FUN_0055b560). This client always runs windowed ("Windowed").
+    // own current size (0x55b4c0 / 0x55b560). This client always runs windowed ("Windowed").
     // Hailstone difference: the characters' files come newest first (the UI.ini written last: the character played
     // last), not in the original's file order, and name their world when the server has characters on several.
     std::vector<EqHost::LayoutSource> layout_sources() const {
@@ -206,13 +206,13 @@ struct EqApi::Impl {
         if (!layout_defaults.empty()) scan(layout_defaults, "Defaults.ini", {}, {});
         return out;
     }
-    // __CopyLayout @0x55be50 (rof2decomp export, re/src/game/ui/layout_copy_eh.cpp): the current file and size onto
+    // __CopyLayout @0x55be50: the current file and size onto
     // itself is refused (6337); a missing file says 6338; a file with no place for that size 6342. Otherwise every
     // window key kept for that size (XPos, YPos, Width, Height, Minimized and the Restore* keys + the size: the
     // table at 0xe63a98) goes to the current file for the current size, the size-free keys (Show, BGTint.*, BGType,
     // Fades, Delay, Duration, Alpha, FadeToAlpha, Locked, the Global* fades, PercentSize, ShowKeyMap, ShowSpinner:
     // 0xe63a50) as they are; from the source character's file, with the boxes, the sections HotButtons..HotButtons10
-    // (then the hot buttons are read again), HBLoadouts and Socials (FUN_0055b930). Then the windows are placed
+    // (then the hot buttons are read again), HBLoadouts and Socials (0x55b930). Then the windows are placed
     // again from the file (unk_ApplyWindowPositions). Not built: the skins (UISkin / AtlasSkin / MapSkin) and the
     // ViewPort section, which this client does not have, and the HB_<n> hot button files.
     // Hailstone: the Chat and Options boxes also copy the source character's chat.ini and options.ini, which hold
@@ -459,7 +459,7 @@ void push_cell(lua_State* L, const ui::UiTextures::Cell& c) {
 
 } // namespace
 
-// The item table of eq.Item (rof2decomp lua_eq.cpp PushItem).
+// The item table of eq.Item.
 int push_item(lua_State* L, const net::Item* item) {
     if (!item) {
         lua_pushnil(L);
@@ -2279,7 +2279,7 @@ int CursorAttachment(lua_State* L) {
 }
 
 // menus = eq.CascadeMenus()   -- the open EQ menu and submenus: { x, y, w, h, items = { { kind, text, rect, icon,
-// decalW, decalH, textX, enabled, arrow, arrowRect, background } } } (rof2decomp's contract; app/lua_eq_menu.h)
+// decalW, decalH, textX, enabled, arrow, arrowRect, background } } } (app/lua_eq_menu.h)
 int CascadeMenus(lua_State* L) {
     auto& m = Impl::of(L);
     if (!m.host.in_game) m.cascade.close();

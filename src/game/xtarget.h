@@ -4,8 +4,8 @@
 // state is game/group.h's XTargetState) and the extended target window's role strings and role sets
 // (CExtendedTargetWnd_BuildRoleSetString @0x54a050, CExtendedTargetWnd_ApplyRoleSetString @0x54a990, the ten
 // "TargetSet" role sets at 0xe5f834 that ReadCharacterIniSettings / SaveExtendedTargetRoleSetsToIni keep in the
-// character ini's [ExternalTargetRoles]). Ported from the rof2decomp export (_globals.c, CExtendedTargetWnd.c) and
-// re/src/game/ui/xtarget_*.cpp; addresses at each function.
+// character ini's [ExternalTargetRoles]). Follows the original's CExtendedTargetWnd and
+// XTarget_* functions; addresses at each function.
 
 #include <array>
 #include <cstdint>
@@ -58,7 +58,7 @@ std::string xtarget_role_string(const XTargetState& list, std::string_view name,
 // `slot_count` slots the string does not list. False (nothing sent) for any other flag.
 bool xtarget_apply_role_string(std::string_view text, std::size_t slot_count, std::string* name,
                                const XTargetSend& send);
-// FUN_0054a910: the name of a flag-1 role string (at most 23 characters), else empty.
+// 0x54a910: the name of a flag-1 role string (at most 23 characters), else empty.
 std::string xtarget_role_string_name(std::string_view text);
 
 // The ten role sets (0xe5f834, 0x5f7 bytes each: the name +0 (0x19), the role string +0x19 (0x5dc), used +0x5f5,
@@ -78,7 +78,7 @@ struct XTargetRoleSets {
     void load(const std::function<std::string(const std::string& key)>& get);
     // SaveExtendedTargetRoleSetsToIni @0x546410: each set marked to save, as its roles (empty when unused).
     void save(const std::function<void(const std::string& key, const std::string& value)>& put) const;
-    // FUN_00519a80: sorted (used first, by name without case: FUN_00519920), all marked to save, then saved.
+    // 0x519a80: sorted (used first, by name without case: 0x519920), all marked to save, then saved.
     void sort_and_save(const std::function<void(const std::string& key, const std::string& value)>& put);
     // The role set a name saves to (CExtendedTargetWnd::WndNotification 0x26): the used set of that name (any
     // case), else the first unused one; -1 when all ten are used.

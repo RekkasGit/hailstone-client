@@ -2,7 +2,7 @@
 // trader (CMerchantWnd in trader mode, OP_TraderShop) and the bazaar search
 // (CBazaarSearchWnd, CBazaarConfirmationWnd). Packets in
 // net/market_packets.h, state and rules in game/bazaar.h; each function names
-// the original it follows (rof2decomp export of eqgame.exe).
+// the original it follows (in eqgame.exe).
 
 #include <algorithm>
 #include <cctype>
@@ -97,7 +97,7 @@ void GameConnection::load_trader_slots() {
 }
 
 void GameConnection::trader_select(int slot) {
-    // CBazaarWnd::SelectBazaarSlotItem @0x6393e0 (from its disassembly; the decompile drops the loop): the price
+    // CBazaarWnd::SelectBazaarSlotItem @0x6393e0 (from its disassembly, loop included): the price
     // goes to 0; with an item in the slot the first of the 200 slots holding the same item (ItemBase +0xd8..+0xe4,
     // the GUID, or the same ItemBase_GetID and +0x44) becomes the selection and its price goes into the money
     // buttons; an empty slot leaves no selection.
@@ -182,8 +182,8 @@ bool GameConnection::stall_under_player() const {
 int GameConnection::trader_start() {
     // Send_OP_Trader_00639730 @0x639730 (the Begin Trader button): -1 when
     // not in a trader spot (eqstr 6743), -2 when nothing has a price (6754).
-    // The spot is FUN_004431a0: a bazaar zone, and the switch under the player (pTouchingSwitch, +0x2d4, set by the
-    // floor test's CollsnCallbackForFloor) has type 0x99 or 0x9b (FUN_005101b0: EQSwitch +0x26), the stalls.
+    // The spot is 0x4431a0: a bazaar zone, and the switch under the player (pTouchingSwitch, +0x2d4, set by the
+    // floor test's CollsnCallbackForFloor) has type 0x99 or 0x9b (0x5101b0: EQSwitch +0x26), the stalls.
     if (!game::is_bazaar_zone(zone_id()) || !stall_under_player()) {
         bazaar_text(15, eq(strings_, 6743));
         return -1;
@@ -526,7 +526,7 @@ void GameConnection::bazaar_set_hide_traders(bool hide, bool clicked) {
 
 bool GameConnection::market_hidden(const game::Spawn& s) const {
     // PlayerZoneClient::IsInvisible @0x5a1850 for another spawn of type < 2 with HP above 0, after its property 100
-    // check: a trader (+0x320) while CBazaarSearchWnd's Hide Traders is checked (FUN_006334f0) and it is not the
+    // check: a trader (+0x320) while CBazaarSearchWnd's Hide Traders is checked (0x6334f0) and it is not the
     // found trader (+0x24c); else a buyer (+0x3d4) while CBarterSearchWnd's +0x2c0 is set and it is not +0x2bc.
     if (s.id == world_.player_id || s.is_corpse || s.hp_percent == 0) return false;
     if (s.trader) return bazaar_.hide_traders && s.id != bazaar_.found_trader;
@@ -547,7 +547,7 @@ bool GameConnection::feature_refused(std::int32_t feature) {
 namespace {
 
 constexpr std::uint32_t kBarterSound = 0x8a;   // EqSoundManager::WavePlay(0x8a): the reports' cash register
-constexpr std::uint32_t kExpansionBarter = 0x100; // 0xde09c8: the expansion bit FUN_00420e50 needs
+constexpr std::uint32_t kExpansionBarter = 0x100; // 0xde09c8: the expansion bit 0x420e50 needs
 constexpr std::uint32_t kExpansionRoF = 0x40000;  // the character's flag CBarterSearchWnd's Sell needs (eqstr 7728)
 
 std::uint32_t fast_time() { return static_cast<std::uint32_t>(std::time(nullptr)); } // Util::FastTime
@@ -621,7 +621,7 @@ void GameConnection::barter_send_line(const BuyLine& line) {
 
 void GameConnection::barter_reset_editor() {
     // The editor's reset after a create, modify, toggle or remove: the buy line selection cleared, CurrentBuyLine
-    // reset (FUN_007d6920).
+    // reset (0x7d6920).
     barter_window_.line_sel = -1;
     barter_window_.compensation_sel = -1;
     barter_window_.editor = BuyLine{};
@@ -631,7 +631,7 @@ void GameConnection::barter_reset_editor() {
 
 bool GameConnection::open_barter_window() {
     // Cmd_buyer @0x4e6f60 shows the window (its feature check, GameFeatureRestrictions 0xf, is not modelled);
-    // CBarterWnd::AboutToShow @0x6320f0 refuses unless FUN_00420e50 (the expansion bit 0x100, or a server named
+    // CBarterWnd::AboutToShow @0x6320f0 refuses unless 0x420e50 (the expansion bit 0x100, or a server named
     // "test") and the zone is a barter zone; CBarterWnd_InitOnShow @0x6318f0 then loads the lines and the welcome,
     // builds the inventory, clears the item search and the status text.
     if (state_ != ConnectionState::InZone) return false;
@@ -644,7 +644,7 @@ bool GameConnection::open_barter_window() {
     w.editor = BuyLine{};
     w.inventory = game::barter_window_inventory(inventory_);
     w.inventory_sel = w.compensation_sel = w.line_sel = w.item_sel = -1;
-    w.item_results.clear(); // FUN_0062ef10
+    w.item_results.clear(); // 0x62ef10
     w.last_search = fast_time() - 2;
     w.status.clear();
     w.welcome_changed = false;
@@ -666,7 +666,7 @@ game::BarterWindowButtons GameConnection::barter_window_buttons() const {
 }
 
 void GameConnection::barter_item_search(const std::string& text) {
-    // Send_OP_Barter_00631750: the selections and the editor cleared, the result list emptied (FUN_006313d0),
+    // Send_OP_Barter_00631750: the selections and the editor cleared, the result list emptied (0x6313d0),
     // OP_Barter {0, text}, eqstr 6057 to the status text and the log, the search time stamped.
     if (state_ != ConnectionState::InZone) return;
     auto& w = barter_window_;
@@ -1195,7 +1195,7 @@ void GameConnection::handle_barter(const AppPacket& p) {
     auto& w = barter_window_;
     switch (*action) {
     case kBuyerSearchResults:
-        // CBarterWnd_AddSearchResultItem per entry, after the selections and editor reset (FUN_006313d0).
+        // CBarterWnd_AddSearchResultItem per entry, after the selections and editor reset (0x6313d0).
         if (auto items = decode_buyer_item_results(p)) {
             w.item_sel = w.inventory_sel = -1;
             barter_reset_editor();
@@ -1218,7 +1218,7 @@ void GameConnection::handle_barter(const AppPacket& p) {
         w.buyer_mode = false;
         break;
     case kBuyerRemoveItem:
-        // FUN_00420fc0: the line emptied.
+        // 0x420fc0: the line emptied.
         if (auto slot = decode_remove_buy_line(p); slot && *slot < static_cast<std::uint32_t>(game::kBuyLineCount))
             w.lines[*slot] = BuyLine{};
         break;
@@ -1295,13 +1295,13 @@ void GameConnection::handle_buyer_items(const AppPacket& p) {
         }
         break;
     case kBuyerModifyBuyLine:
-        // FUN_00422970: our line stored at its slot.
+        // 0x422970: our line stored at its slot.
         if (auto l = decode_buy_line(p); l && l->slot < static_cast<std::uint32_t>(game::kBuyLineCount)) w.lines[l->slot] = *l;
         break;
     case kBuyerSellItem: {
         // Our sale's answer: result 0 is Barter_ReportItemSold @0x421230 (the search window's line loses the count,
         // the price added to our coin, the cash register, the chat line in colour 0x114); 2 says nothing; the
-        // others their failure text (colour 13). The pending sale ends (FUN_004232f0).
+        // others their failure text (colour 13). The pending sale ends (0x4232f0).
         auto r = decode_buyer_sale_result(p);
         if (!r) break;
         const auto& sale = r->sale;
@@ -1460,7 +1460,7 @@ void GameConnection::handle_market(Op op, const AppPacket& p) {
         handle_buyer_items(p);
         break;
     case Op::TraderDelItem:
-        // Handle_OP_TraderDelItem @0x4b7990 → FUN_006ef450: the item leaves the trader's window.
+        // Handle_OP_TraderDelItem @0x4b7990 → 0x6ef450: the item leaves the trader's window.
         if (auto d = decode_trader_del_item(p); d && merchant_ && merchant_->trader) {
             for (auto it = merchant_->items.begin(); it != merchant_->items.end(); ++it)
                 if (it->second.serial == d->serial) {

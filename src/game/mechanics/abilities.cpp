@@ -89,10 +89,10 @@ std::int32_t server_adjusted_skill(const Character& ch, std::uint32_t skill) {
 std::int32_t adjusted_skill(const Character& ch, std::uint32_t skill) {
     const CharacterSheet& sheet = ch.sheet();
     if (sheet.class_mask == 0 || !sheet.skill_rules || skill >= kSkills) return server_adjusted_skill(ch, skill);
-    // The server extension's HasSkill rules (the NMS patch's detour, notes/nms-dinput8.md §3.8: a profile skill of
-    // -1 and Tracking without Ranger, Druid or Bard have no skill; otherwise the original runs with the class
-    // GetSpoofClassForSkill picks for the skill (Rogue for Backstab / Hide / Sneak ..., Warrior / Monk / ... for
-    // Kick, ...), else the profile's).
+    // The server extension's HasSkill rules (the NMS patch's detour, see the NMS plugin's repository: a profile skill
+    // of -1 and Tracking without Ranger, Druid or Bard have no skill; otherwise the original runs with the class
+    // GetSpoofClassForSkill picks for the skill (Rogue for Backstab / Hide / Sneak ..., Warrior / Monk / ... for Kick,
+    // ...), else the profile's).
     const SkillRules& rules = *sheet.skill_rules;
     if (rules.gate)
         if (auto gate = rules.gate(rules.ctx, static_cast<std::int32_t>(skill), sheet.class_mask, sheet.skills[skill]))
@@ -544,7 +544,7 @@ void swing_ready(const SkillContext& ctx, SkillState& state) {
 std::optional<SkillMessage> check_hide_moved(const SkillContext& ctx, SkillState& state, std::uint8_t class_id) {
     if (!state.hidden && state.activity != static_cast<std::int32_t>(skill::kHide)) return std::nullopt;
     // Truncated as save_position (use_skill.cpp) stored them, through __ftol2 (NaN and out of range: INT_MIN), and
-    // the z difference taken in 32 bits with its wrap and a cdq / xor / sub magnitude (INT_MIN stays negative), so a
+    // the z difference taken in 32 bits with its wrap and a two's-complement magnitude (INT_MIN stays negative), so a
     // corrupt position is defined behaviour. For any position in the int range this is the plain cast and abs.
     const std::int32_t x = Fpu::ftol(static_cast<double>(ctx.me.y)), y = Fpu::ftol(static_cast<double>(ctx.me.x));
     const std::int32_t z = Fpu::ftol(static_cast<double>(ctx.me.z));
@@ -917,7 +917,7 @@ std::array<std::int32_t, 25> init_innates(std::uint32_t race, std::uint32_t clas
     case 128: has(10); has(kInnateInfravision); break;            // Iksar
     default: has(kInnateInfravision); break; // Wood Elf 4/112, Half Elf, Dwarf 8/94, Halfling 11/81, Vah Shir 130...
     }
-    // The class's (param_2).
+    // The class's (the second argument).
     switch (class_id) {
     case 4: has(1); break;            // Ranger
     case 6: has(4); break;            // Druid

@@ -28,8 +28,8 @@ void check_vk(VkResult r) {
     if (r != VK_SUCCESS) log::error("imgui vulkan backend: VkResult {}", static_cast<int>(r));
 }
 
-// EQ UI fonts 1..6 (the <Font> numbers in the stock XML): Arial at these pixel sizes (rof2decomp
-// re/src/ui/overlay.cpp), here the Arial-class font found below.
+// EQ UI fonts 1..6 (the <Font> numbers in the stock XML): Arial at these pixel sizes,
+// here the Arial-class font found below.
 constexpr std::array<float, 7> kEqFontSizes = {0, 10, 12, 13, 14, 16, 20};
 std::array<ImFont*, 7> g_eq_fonts{};
 // The font list a chat window's font indexes (/chatfontsize 0..10, CChatWindow::SetChatFont: CXWndManager +0x118):

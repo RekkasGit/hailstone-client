@@ -26,7 +26,7 @@ namespace hailstone::app {
 
 namespace {
 
-// eqmain.dll's server select (not decompiled: the window is laid out from its XML and acts as the client's own server
+// eqmain.dll's server select (not analysed: the window is laid out from its XML and acts as the client's own server
 // select does): ServerList (Server 400, Status 100: the worlds the login server lists, a world that cannot be joined
 // in red), PlayButton (the selected world, when it can be joined), ExitButton ("LOGOUT": back to the login screen),
 // and LastServerLabel / PlayLastServerButton, the world played last on this login server (hidden without one).
@@ -125,7 +125,7 @@ private:
 
 // ---------------------------------------------------------------- CharacterCreation (CCharacterCreation)
 
-// CCharacterCreation @0x64e2e0 (rof2decomp export CCharacterCreation.c, re/src/game/ui/char_create_buttons_eh.cpp) over
+// CCharacterCreation @0x64e2e0 over
 // world's creation tables (GameConnection::char_create_data, OP_CharacterCreateRequest; CharCreateCombos):
 // - CCharacterCreation_InitRaceClassButtons @0x64e5b0: for each race of the combinations the buttons
 //   CC_Race_<race name>_Button (female) and _Button_Male and an overlay; for each class CC_Class_<class name>_Button.
@@ -134,12 +134,12 @@ private:
 //   UpdateClassButtons @0x64c4a0: the classes of the race's combinations enabled, the current one checked.
 // - A race clicked: CCharacterCreation_SetRace @0x64eeb0 (then RandomizeClass @0x64e060: a random class of the
 //   race's that the account's expansions allow, RandomizeDeity @0x64d970: a random deity of race and class, its start
-//   city kept when the combination still exists, else the first one that does (FUN_0064bee0), and the stats reset).
+//   city kept when the combination still exists, else the first one that does (0x64bee0), and the stats reset).
 //   A class clicked: the class (sub_0064dff0), RandomizeDeity, the deity combo, the stats reset. A gender clicked
 //   (sub_0064d930): the gender; the race buttons follow it.
 // - CC_Deity_Combo (CCharacterCreation_FillDeityCombo @0x64c800: the deities of race and class sorted by name,
 //   GetDeityDesc) and CC_City_Combo (FillStartCityCombo @0x64ca10: the start zones of race, class and deity sorted by
-//   their names): a choice sets the deity (and the city again, FUN_0064d8e0) or the city.
+//   their names): a choice sets the deity (and the city again, 0x64d8e0) or the city.
 // - The help box: a race's dbstr type 8 text, a class's 9, a stat's 10, a deity's 14, a city's 15, with its name in
 //   CC_Help_Label (sub_0064cc50, sub_0064cec0, sub_00649710, sub_00649850, sub_00649970); a right click on a race or
 //   class button shows its help without choosing it.
@@ -147,14 +147,14 @@ private:
 //   CCharacterCreation_ResetStatPoints / sub_0064d670 puts each stat at the allocation's base, the points to spend at
 //   the sum of its default points (a stat with default points is shown in green); Up (sub_0064d770) adds one up to
 //   base + 25 (at most 150), Down (sub_0064d870) takes one back down to the base, a right click on the stat's button
-//   (sub_0064d7f0) spends as much as it can; CCA_Points_Left_Display_Button shows what is left (FUN_00649d50) and the Up buttons are
-//   enabled while points are left and the stat is under its cap (FUN_0064bc00).
+//   (sub_0064d7f0) spends as much as it can; CCA_Points_Left_Display_Button shows what is left (0x649d50) and the Up buttons are
+//   enabled while points are left and the stat is under its cap (0x64bc00).
 // - CC_Get_Name_Button sends OP_RandomNameGenerator {race, gender} and waits for the name (disabled until it comes;
 //   Handle_OP_RandomNameGenerator @0x64ae20 puts it in CC_Name_Edit).
 // - CC_Create_Button (SubmitNameToWorld @0x64db30): the combination checked against the expansions
 //   (CheckExpansionForCombination @0x64b760: 9167 with 9168 race, 9169 class or 9170 city), then with points left 1577
 //   and the stats opened, else the name sent for approval (Send_OP_ApproveName; GameConnection::create_character
-//   creates on its answer). CC_Cancel_Button goes back to the character list (FUN_00649b40).
+//   creates on its answer). CC_Cancel_Button goes back to the character list (0x649b40).
 // - The model player (the pre-game scene's, EqHost::model_player) takes the race, gender and class, and its look
 //   follows CCharacterCreation's (game/char_create_look.h): a race picked ApplyNewPCToPlayer and
 //   RandomizeFacialFeatures, a gender ApplyNewPCToPlayer, a class CCharacterCreation_SetHeritage. CC_Appearance_Button
@@ -227,7 +227,7 @@ public:
     }
     bool combo_select(EqHost& host, std::string_view id, int index) override {
         if (id == "CC_Deity_Combo" && index >= 0 && index < static_cast<int>(deities_.size())) {
-            set_deity(deities_[static_cast<std::size_t>(index)]); // FUN_0064d8e0
+            set_deity(deities_[static_cast<std::size_t>(index)]); // 0x64d8e0
             help(host, 14, deity_, deity_desc(*host.conn, deity_));
             return true;
         }
@@ -404,7 +404,7 @@ private:
     }
     void set_deity(std::uint32_t deity) {
         deity_ = deity;
-        // FUN_0064bee0: the city stays when race, class, deity and city still combine; else the first start zone
+        // 0x64bee0: the city stays when race, class, deity and city still combine; else the first start zone
         // that does. FillStartCityCombo: the start zones by name.
         cities_.clear();
         for (const auto& c : data_.combos)
@@ -433,7 +433,7 @@ private:
                     if (a.index == c.allocation_index) alloc_ = a;
     }
     void sort_deities() {
-        // FUN_0051a020 compares GetDeityDesc's names; the deity ids stand in for them before a connection names them
+        // 0x51a020 compares GetDeityDesc's names; the deity ids stand in for them before a connection names them
         std::sort(deities_.begin(), deities_.end(), [this](std::uint32_t a, std::uint32_t b) {
             return deity_names_ ? deity_names_(a) < deity_names_(b) : a < b;
         });

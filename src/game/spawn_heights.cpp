@@ -33,7 +33,7 @@ constexpr float kTenth = 0.1f;                 // 0x9c4a48
 constexpr float kThreeQuarters = 0.75f;        // 0x9c59f8
 constexpr std::int32_t kRaceFroglok = 330;     // 0x14a
 
-// fld dword / fstp dword: a signalling NaN comes out quiet.
+// A float copied through the FPU: a signalling NaN comes out quiet.
 float quiet(float v) {
     std::uint32_t b;
     std::memcpy(&b, &v, 4);
@@ -245,21 +245,21 @@ bool set_heights(SpawnHeights& s, const HeightInputs& in, float view_offset, flo
         }
         s.height = height;
     }
-    float avatar0 = quiet(in.roffset); // ModDat_GetROffset's st0 into +0x138
-    // fld Height; fmul first; [fmul second]; fst +0x31c; fmul [+0x138]; fstp +0x138.
+    float avatar0 = quiet(in.roffset); // ModDat_GetROffset's result into +0x138
+    // Height * first [* second], stored as +0x31c (kept unrounded); that * [+0x138], stored as +0x138.
     double scale = in.new_style_model ? x87_mul(f, X87(height), X87(kSixth)) : x87_mul(f, X87(height), X87(kOldModelFactor));
     if (in.new_style_model && !in.old_model_scale) scale = x87_mul(f, scale, X87(kNewModelFactor));
     if (!in.new_style_model && in.old_model_scale) scale = x87_mul(f, scale, X87(kOldModelSwitched));
     s.model_scale = to_f(scale);
     s.avatar_height = to_f(x87_mul(f, scale, X87(avatar0)));
-    s.view_height = to_f(x87_mul(f, X87(kViewHeight), X87(s.model_scale))); // FUN_00506330 x [+0x31c]
+    s.view_height = to_f(x87_mul(f, X87(kViewHeight), X87(s.model_scale))); // 0x506330 x [+0x31c]
 
     float new_scale = kNoScale;
     float eye = quiet(s.view_height);
     float avatar = quiet(s.avatar_height);
     float length = quiet(s.length);
     compute_special_heights(in.race, new_scale, eye, avatar, length, f);
-    // fld eye; fld viewOffset; fadd st(1), st; fxch; fstp +0x190; fstp +0x274.
+    // eye + viewOffset stored as +0x190; viewOffset stored as +0x274.
     s.view_height = to_f(x87_add(f, X87(eye), X87(view_offset)));
     s.camera_offset = quiet(view_offset);
     s.animation_scale = quiet(anim_scale);
@@ -307,11 +307,11 @@ double calc_scale_factor_for_height(float height, bool new_style_model, bool old
 
 double eye_height(const EyeInputs& in, const Fpu& f) {
     if (in.uses_new_style_model) {
-        // fld [def +0x48]; fmul [+0x31c]; fadd [+0x274].
+        // [def +0x48] * [+0x31c] + [+0x274].
         return x87_add(f, x87_mul(f, X87(in.definition_eye), X87(in.model_scale)), X87(in.camera_offset));
     }
-    float avatar = quiet(in.avatar_height); // fld [+0x138]; fstp [temp]
-    double v = x87_sub(f, X87(quiet(in.view_height)), X87(avatar)); // FUN_00506330; fsub [temp]
+    float avatar = quiet(in.avatar_height); // [+0x138] copied through the FPU into a temporary
+    double v = x87_sub(f, X87(quiet(in.view_height)), X87(avatar)); // 0x506330 less the temporary
     if (in.mounted) v = x87_add(f, v, X87(in.race == kRaceFroglok ? 1.0f : 0.5f));
     return v;
 }
@@ -334,7 +334,7 @@ std::optional<float> actor_height_fixup(std::int32_t race, float height) {
     };
     static constexpr Fix kFixes[] = {{7, 5.5f, 5.3f}, {9, 8.0f, 7.5f}, {10, 9.0f, 8.8f}, {128, 6.0f, 6.5f}, {330, 6.0f, 5.0f}};
     for (const Fix& x : kFixes)
-        if (x.race == race && height == x.from) return x.to; // fucompp: a NaN never matches
+        if (x.race == race && height == x.from) return x.to; // a NaN never matches
     return std::nullopt;
 }
 

@@ -1,8 +1,8 @@
 // Character appearance: armour and face textures, helm and robe meshes,
 // tints and held items on a CharacterModel.
 //
-// Sources: rof2decomp notes/spawns-races-models.md §4 (ApplyBodyTexture,
-// RefreshEquipSlot, SetHead) for which value drives which part; the texture
+// Sources: the original's ApplyBodyTexture, RefreshEquipSlot and SetHead
+// for which value drives which part; the texture
 // naming rules (<code><part><variant><piece>, faces in the piece's tens
 // digit, robes 10..16 -> body mesh <code>01 with CLK04..CLK10 textures,
 // helm meshes <code>HE<nn>, items IT<n> on the R_POINT / L_POINT /
@@ -65,8 +65,7 @@ int part_slot(std::string_view part) {
 }
 
 // SwapBodyMaterial's colour is the tint's RGB with alpha 0xff, and the
-// palette's SetTint1 treats RGB 0 as untinted (rof2decomp notes/appearance.md
-// section 1); the alpha byte the server sends does not matter.
+// palette's SetTint1 treats RGB 0 as untinted; the alpha byte the server sends does not matter.
 bool tint_visible(std::uint32_t tint) { return (tint & 0x00ffffffu) != 0; }
 
 std::string appearance_key(const CharacterModel& m, const game::Appearance& a) {
@@ -168,7 +167,7 @@ void CharacterLibrary::build_item_mesh(std::uint32_t number, std::optional<ItemM
         out = actor_mesh(code);
     } else if (eqg_) {
         // An EQG item (OnDemandResources EQGM): its pieces in its own space, held rigidly; its .pts and .prt
-        // beside it in the archive part_mesh opened (the EQGM loader reads both, FUN_100624e0).
+        // beside it in the archive part_mesh opened (the EQGM loader reads both, 0x100624e0).
         if (auto file = eqg_->part_mesh(code)) {
             ItemMesh item;
             item.eqg = true;
@@ -246,7 +245,7 @@ namespace {
 
 // The head (PlayerClient::SwapHead's old-model path, game::head_model): NPC
 // bodies take HeadType; PC-model races their head armour, only with
-// show_helm. The race and gender are the model code's (FUN_0040a5b0 reads the
+// show_helm. The race and gender are the model code's (0x40a5b0 reads the
 // actor's).
 // The PC race and gender whose model code this is (0 for other models).
 std::pair<std::uint32_t, std::uint8_t> pc_race_of(const CharacterModel& model) {
@@ -353,8 +352,8 @@ CharacterMesh CharacterLibrary::dress_wld(const CharacterModel& model, const gam
                     // exists; otherwise the head keeps what SwapNPCMaterials'
                     // loop left: up to 4 tries of the same HeadType head DAG
                     // (SwapHead ignores the face), then the head's variation
-                    // when the DAG took, else TextureType's (rof2decomp batch
-                    // 248, row 29; PlayerClient::sub_0058f9c0's texture rule
+                    // when the DAG took, else TextureType's (checked against the recorded vectors;
+                    // PlayerClient::sub_0058f9c0's texture rule
                     // is read as that variant's material when it exists).
                     if (body_texture) {
                         for (std::uint32_t v : {std::uint32_t{a.texture}, std::uint32_t{a.helm}}) {
@@ -408,7 +407,7 @@ CharacterMesh CharacterLibrary::dress_wld(const CharacterModel& model, const gam
     // SwapHead's head DAG (actor +0x14c, CHierarchicalActor @0x10043250): once the head mesh took, every palette
     // material named HELM* or CHAIN* (a Barbarian's BAMHE0003*, BAMHE0004* and CHAIN01*) takes the head's armour
     // colour (SetTint1: black is untinted). SwapHead does nothing for a PC race without show helm; Vah Shir wear
-    // their helms as items. The "keep head" flag FUN_0040a5b0 gives some female and Erudite helms reaches the DLL
+    // their helms as items. The "keep head" flag 0x40a5b0 gives some female and Erudite helms reaches the DLL
     // only to be passed on to the actor's child (+0x58), so it changes nothing.
     const std::uint32_t race = pc_race_of(model).first;
     const bool head_dag = race != 130 && (race == 0 || body_texture || a.show_helm);

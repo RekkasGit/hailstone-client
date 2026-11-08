@@ -1,6 +1,6 @@
 // An inventory slot onto a hot bar (game/hot_button_menu.h inventory_hot_button, hot_button_item_slot): the left
 // button held on a slot puts an item link or an inventory slot hotbutton on the cursor (CInvSlotWnd::
-// HandleLButtonHeld, FUN_006947f0), a click on a bar puts it there (FUN_00552e00), and a link finds its item where it
+// HandleLButtonHeld, 0x6947f0), a click on a bar puts it there (0x552e00), and a link finds its item where it
 // is now. The Lua side (eq.ClickSlot "leftheld", eq.BagSlotClick) against the mock server.
 #include <doctest/doctest.h>
 

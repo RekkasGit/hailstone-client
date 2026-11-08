@@ -1,6 +1,5 @@
-// CharacterZoneClient::FindAffectSlot and its stacking rules (game/mechanics/find_affect_slot.h). The main
-// function keeps the block structure of rof2decomp's rewrite (its labels carry the original's addresses), so every
-// check runs in the original's order.
+// CharacterZoneClient::FindAffectSlot and its stacking rules (game/mechanics/find_affect_slot.h). Every check
+// runs in the original's order; the comments give its addresses.
 #include "game/mechanics/find_affect_slot.h"
 
 namespace hailstone::game::mechanics::affect {
@@ -66,6 +65,11 @@ bool is_res_effect_spell(std::int32_t id) { return id == 0x2f4 || id == 0x331f |
 std::uint8_t spell_level_needed(const Spell& s, std::int32_t class_id) {
     if (static_cast<std::uint32_t>(class_id) - 1u > 34) return s.class_level[1];
     return s.class_level[static_cast<std::size_t>(class_id)];
+}
+
+// The existing buff's SPAs the slot loop passes over when it has a bard level and the new spell has none.
+bool bard_only_exempt_spa(std::int32_t spa) {
+    return spa == 0 || spa == 0xf || spa == 0x64 || spa == 0x14e || spa == 0x1a1;
 }
 
 std::uint32_t bard_cast_bard(const Spell* s, std::uint32_t class_id) {
@@ -259,25 +263,20 @@ Affect* find_affect_slot(Character* self, std::int32_t spell_id, Spawn* caster, 
         for (j = 0;;) {
             if (spa_at(existing, j) == 0xfe || spa_at(spell, j) == 0xfe) goto next_buff;
             if (spa_at(spell, j) == 0x2d) goto blocked;
-            {
-                std::int32_t spa = spa_at(existing, j);
-                if ((spa == 0xf || spa == 0x1a1 || spa == 0 || spa == 0x64 || spa == 0x14e) &&
-                    spell_level_needed(*existing, 8) != 0xff && spell_level_needed(*spell, 8) == 0xff)
-                    goto next_slot;
-            }
+            if (bard_only_exempt_spa(spa_at(existing, j)) && spell_level_needed(*existing, 8) != 0xff &&
+                spell_level_needed(*spell, 8) == 0xff)
+                goto next_slot;
             if (spa_at(existing, j) != spa_at(spell, j)) goto next_slot;
             if (is_spa_stacking(spa_at(existing, j)) && base_at(existing, j) > base_at(spell, j)) goto blocked;
             if (is_spa_ignored_by_stacking(spa_at(spell, j))) goto next_slot;
             {
                 std::int32_t spa = spa_at(spell, j);
                 if (spa > 0x1a0) {
-                    switch (static_cast<std::uint32_t>(spa - 0x1bc)) {
-                    case 0: *slot = static_cast<std::int32_t>(j); goto next_slot;
-                    case 6: goto larger_max;
-                    case 7:
-                    case 8: goto smaller_max;
-                    default: goto rules;
-                    }
+                    if (spa == 0x1c2) goto larger_max;
+                    if (spa == 0x1c3 || spa == 0x1c4) goto smaller_max;
+                    if (spa != 0x1bc) goto rules;
+                    *slot = static_cast<std::int32_t>(j);
+                    goto next_slot;
                 }
                 if (spa == 0x1a0) goto non_negative;
                 if (spa > 0xa2) {
@@ -421,20 +420,16 @@ drop_one: // 0x43dee4
     return nullptr;
 
 same_spell: // 0x43d572: an existing copy of the spell at buff i
-    if (level < effect->level) {
-        if (affects(spell, 0x1bc)) {
-            *slot = i;
-            return get_effect(i, q);
-        }
-        *slot = -1;
-        return nullptr;
+    {
+        // A lower-level cast takes the slot only with SPA 0x1bc; a same or higher one unless it has 0x43, 0x65
+        // or 0x71.
+        const bool refused = level < effect->level
+                                 ? !affects(spell, 0x1bc)
+                                 : affects(spell, 0x43) || affects(spell, 0x65) || affects(spell, 0x71);
+        if (refused) goto blocked;
+        *slot = i;
+        return get_effect(i, q);
     }
-    if (affects(spell, 0x43) || affects(spell, 0x65) || affects(spell, 0x71)) {
-        *slot = -1;
-        return nullptr;
-    }
-    *slot = i;
-    return get_effect(i, q);
 
 blocked: // 0x43da03 / 0x43d5ff / 0x43d5bf
     *slot = -1;

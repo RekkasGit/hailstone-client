@@ -1,4 +1,4 @@
-// Death, the respawn at bind, teleports by index and camping (rof2decomp batch 263; game/death_report.h,
+// Death, the respawn at bind, teleports by index and camping (game/death_report.h,
 // game/zoning.h).
 #include <cctype>
 #include <chrono>
@@ -114,7 +114,7 @@ void GameConnection::handle_death(const Death& d) {
             report_hit(*line, d.killer_id, r.hit_report);
     if (d.damage > 0 && d.attack_skill < 231) melee_sound(d.spawn_id, d.killer_id, static_cast<std::int32_t>(d.damage));
     if (r.local_died) {
-        death_tip_pending_ = true; // FUN_00531730: CEverQuest +0x39580 = 1 (the death tip at the next zone-in)
+        death_tip_pending_ = true; // 0x531730: CEverQuest +0x39580 = 1 (the death tip at the next zone-in)
         pstatus_.dead = true;
         pstatus_.hp = 0;
         set_auto_attack(false);
@@ -183,7 +183,7 @@ void GameConnection::handle_zone_to_bind(const AppPacket& p) {
     h.update_spell_gems = [] {};
     h.stop_death_music = [] {};
     h.rewind_reset = [] {};
-    h.send_position_list = [&] { flush_position_history(); }; // FUN_0058ff50
+    h.send_position_list = [&] { flush_position_history(); }; // 0x58ff50
     h.move_to_zone = [&](const game::MoveToZoneCall& m) { move_to_zone(m); };
     h.local_view_setup = [] {};
     h.restore_camera = [] {};

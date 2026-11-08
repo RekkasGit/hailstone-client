@@ -1,6 +1,6 @@
 #pragma once
 
-// The quantity dialog (CQuantityWnd): exact port of rof2decomp batch 253's
+// The quantity dialog (CQuantityWnd): follows the original's
 // CQuantityWnd::Open @0x725b00 and its accept (sub_00725ab0), checked against
 // CQuantityWnd_Open.jsonl; and the callers' limits (HandleBuy, HandleSell,
 // answered from their disassembly).

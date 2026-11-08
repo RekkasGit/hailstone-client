@@ -75,7 +75,7 @@ std::uint32_t place_query(const std::vector<net::ReArea>& areas,
     for (int i = 0; i < 8; ++i) {
         glm::vec3 c{(i & 1) ? hi.x : lo.x, (i & 2) ? hi.y : lo.y, (i & 4) ? hi.z : lo.z};
         // In the space RealEstateManager's occupancy tests the areas in (the server's axes); the original passes
-        // the actor's own position and box (FUN_005ae010), and which axes the area matrices use is open.
+        // the actor's own position and box (0x5ae010), and which axes the area matrices use is open.
         corners[i] = world_to_server(glm::vec3(transform * glm::vec4(c, 1.0f)));
     }
     bool found = false;
@@ -83,7 +83,7 @@ std::uint32_t place_query(const std::vector<net::ReArea>& areas,
     for (const auto& a : areas) {
         auto it = codes.find(a.id);
         if (it == codes.end()) continue;
-        // FUN_008d2b00: every corner in the area.
+        // 0x8d2b00: every corner in the area.
         bool all = std::all_of(std::begin(corners), std::end(corners),
                                [&](const glm::vec3& c) { return RealEstateManager::point_in_area(a, c); });
         if (!all) continue;
@@ -103,7 +103,7 @@ void Placement::begin(const net::RePlaceReply& reply) {
     index_ = reply.index;
     b1_ = reply.b1, b2_ = reply.b2, b3_ = reply.b3;
     c1_ = reply.c1, c2_ = reply.c2, c3_ = reply.c3;
-    // AreaManager map 2 (FUN_004d5b90 clears it first; FUN_008d6c50 inserts).
+    // AreaManager map 2 (0x4d5b90 clears it first; 0x8d6c50 inserts).
     for (const auto& [key, value] : reply.codes) codes_[key] = value;
     mode_ = static_cast<int>(PlaceMode::Cursor);
     if (!place_mode_allowed(mode_, ghost_)) set_mode(-1);

@@ -202,7 +202,7 @@ void ClientApp::sync_item_preview(PreviewSlot& slot, const net::GameConnection::
         }
     }
     const game::Spawn* me = conn_->world().player();
-    // FUN_00577700: on a copy of the player (FUN_005769a0) or the item's own model (FUN_00577440); built again for a
+    // 0x577700: on a copy of the player (0x5769a0) or the item's own model (0x577440); built again for a
     // new reply or when the player's own look changed.
     if (ip->serial == slot.serial && (!ip->on_player || !me || me->appearance == slot.look)) return;
     slot.serial = ip->serial;

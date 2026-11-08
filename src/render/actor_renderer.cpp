@@ -68,7 +68,7 @@ VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
 // in and the old one out linearly over (new.blendIn + current.blendOut) / 2
 // ms (PlayerAnimation_SelectMovementAnim @0x5890d8, table 0xaae3d8): every
 // record is 100/100 except STND and IDLE (blendIn 250), so 100 ms, or 175 ms
-// into STND (P01) / IDLE (O01) (rof2decomp notes/eqgraphicsdx9.md). The clip
+// into STND (P01) / IDLE (O01). The clip
 // and rate come from game/spawn_animation.h.
 
 } // namespace
@@ -1283,7 +1283,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         const assets::AnimationClip* motion = choice.clip.empty() ? nullptr : model->clip(choice.clip, holding);
         if (!motion) motion = &model->first_clip({"P01", "O01", "L01"}, holding);
         st.motion_clip = motion;
-        // A stand request that played P08 from +0x10c4 leaves 0x20 or 0x47 there (FUN_004b15b0's idle path).
+        // A stand request that played P08 from +0x10c4 leaves 0x20 or 0x47 there (0x4b15b0's idle path).
         if (!new_style && layers.follow_up == game::mechanics::kOldStandAfter) layers.follow_up = choice.follow_up;
 
         // What both bone groups play without an action.
@@ -1299,9 +1299,9 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             req.loop = false;
             req.corpse = true;
         } else if (mount) {
-            // FUN_004b15b0 on a rider: its movement and idle animations become the mount race's rider animation
+            // 0x4b15b0 on a rider: its movement and idle animations become the mount race's rider animation
             // (racedata.txt's last field, empty in the shipped file: 0x4a, P09), or 0x4e (L10) while the mount runs
-            // at its run speed or faster; a model without the clip falls back as FUN_004b1210 does (0x4e to 0x4a,
+            // at its run speed or faster; a model without the clip falls back as 0x4b1210 does (0x4e to 0x4a,
             // 0x4a to standing). The rider animation is queued on the legs: an action plays on the upper body.
             const bool full_run = mount->run_speed <= mount->speed_run;
             req.base = full_run ? &model->first_clip({"L10", "P09", "P01"}, holding)
@@ -1337,7 +1337,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             if (started) st.anim.anim = playing;
         }
         layers.step(req, dt);
-        // Classic models: FUN_004b15b0 sets +0x10c0 only for a request it starts, so while the layers keep an
+        // Classic models: 0x4b15b0 sets +0x10c0 only for a request it starts, so while the layers keep an
         // action the action is the animation playing that the next stand and idle requests look at
         // (game::classic_plain_stand_after); a walk or run the legs took under it is.
         if (!new_style && layers.action && !layers.legs_took_motion) st.anim.anim = layers.action_anim;
@@ -1403,7 +1403,7 @@ std::optional<bool> ActorRenderer::jump_animation_playing(std::uint32_t id) cons
 const std::vector<std::uint8_t>& ActorRenderer::bone_groups(const assets::CharacterModel& model) {
     auto [it, fresh] = bone_groups_.try_emplace(&model);
     if (fresh) {
-        // FUN_004090f0 / FUN_00409260 by the actor's HasNewStyleHierarchicalModel (vtable +0xbc): the EQG skeletons'
+        // 0x4090f0 / 0x409260 by the actor's HasNewStyleHierarchicalModel (vtable +0xbc): the EQG skeletons'
         // callback or the classic one, on each bone's tag.
         it->second.reserve(model.bone_names.size());
         for (const auto& name : model.bone_names)

@@ -1,10 +1,11 @@
 #include "game/mechanics/switches.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
 // Values "on the stack" are doubles (quiet); a float in memory goes in as
-// X87(float). Operands are passed in the order the instruction combines them.
+// X87(float). Operands are passed in the order the original combines them.
 
 namespace hailstone::game::mechanics {
 
@@ -20,7 +21,7 @@ constexpr float kRiderReach = 20.0f;    // 0xac1a6c
 constexpr float kTwoTo32 = 4294967296.0f; // 0x9c3eac
 constexpr std::uint32_t kTriggeredMs = 60000;
 
-float tf(float v) { // fld / fstp dword
+float tf(float v) { // a float copied through the FPU: a signalling NaN comes out quiet
     std::uint32_t b;
     std::memcpy(&b, &v, 4);
     if ((b & 0x7f800000u) == 0x7f800000u && (b & 0x007fffffu)) b |= 0x00400000u;
@@ -39,38 +40,37 @@ Cmp cmp(double a, double b) {
     return {a < b, a == b};
 }
 
-// fld dt; fmul speed; fadd angle (add) or fsubr angle; fstp.
+// dt * speed, added to the angle or taken from it, stored as a float.
 float turned(const Fpu& f, float dt, float speed, float angle, bool add) {
     double p = x87_mul(f, st(dt), X87(speed));
     return to_f(add ? x87_add(f, p, X87(angle)) : x87_sub(f, X87(angle), p));
 }
 
-// __HeadingDiff(a, b) then fld limit; fcom st(1); test ah, 0x41; setnp: limit <= diff (not unordered).
+// __HeadingDiff(a, b) then limit <= diff (unordered: false).
 bool turn_done(const Fpu& f, float a, float b, float limit) {
     Cmp c = cmp(static_cast<double>(limit), heading_diff_x87(tf(a), tf(b), f));
     return c.c0 != c.c3;
 }
 
-// The lifts' and platforms' step: a coordinate *c between its base b and b + travel (see the rewrite's
-// StepToward). Returns true when done.
+// The lifts' and platforms' step: a coordinate *c between its base b and b + travel. Returns true when done.
 bool step_toward(const Fpu& f, float& c, float b, double travel, double open, double close, float dt, bool opening) {
     double d = travel;
-    double t = x87_add(f, st(b), d); // fld D; fld b; fadd st, st(1)
-    Cmp z = cmp(0.0, d);             // fldz; fcomp st(2)
+    double t = x87_add(f, st(b), d);
+    Cmp z = cmp(0.0, d);
     if (!(z.c0 || z.c3)) d = -d;     // not (0 < D, equal, unordered): |D|
     if (opening) {
-        double p = x87_mul(f, open, X87(dt));          // fld open; fmul dt
-        double v = x87_add(f, p, X87(c));              // fadd c
-        c = to_f(v);                                   // fst c
-        double diff = std::fabs(x87_sub(f, v, X87(b))); // fsub b; fabs
-        if (cmp(diff, d).c0) return false;             // fcomp st(2); test ah, 1: below or unordered
+        double p = x87_mul(f, open, X87(dt));
+        double v = x87_add(f, p, X87(c));
+        c = to_f(v);                                   // rounds to float here; v stays unrounded
+        double diff = std::fabs(x87_sub(f, v, X87(b)));
+        if (cmp(diff, d).c0) return false;             // below or unordered
         c = to_f(t);
         return true;
     }
-    double p = x87_mul(f, close, X87(dt)); // fld close; fmul dt
-    double v = x87_sub(f, X87(c), p);      // fsubr c
-    c = to_f(v);                           // fst c
-    double diff = std::fabs(x87_sub(f, v, t)); // fsubrp st(1): v - T
+    double p = x87_mul(f, close, X87(dt));
+    double v = x87_sub(f, X87(c), p);
+    c = to_f(v);                           // rounds to float here; v stays unrounded
+    double diff = std::fabs(x87_sub(f, v, t)); // v - T
     if (cmp(diff, d).c0) return false;
     c = tf(b);
     return true;
@@ -81,19 +81,19 @@ std::uint32_t swing(const Fpu& f, Switch& sw, float& angle, float base, float ti
     double s = st(sw.spin);
     double a = st(sw.spin_accel);
     if (sw.state == 2) {
-        sw.swing_speed = to_f(x87_add(f, st(sw.swing_speed), a)); // fld v; fadd st, st(1); fstp v
-        if (sw.swing_stop) sw.swing_speed = to_f(s);              // fst v (the spin)
+        sw.swing_speed = to_f(x87_add(f, st(sw.swing_speed), a));
+        if (sw.swing_stop) sw.swing_speed = to_f(s);              // the spin
         Cmp za = cmp(0.0, a);
         bool parity_even = za.c0 == za.c3; // 0 > a, or unordered
         if (!parity_even) {
-            Cmp sv = cmp(s, static_cast<double>(sw.swing_speed)); // fcom [v]
+            Cmp sv = cmp(s, static_cast<double>(sw.swing_speed)); // against the stored float
             if (sv.c0 != sv.c3) return 2;                          // s <= v: open
         }
-        // fcompp: 0 vs a.
+        // 0 against a.
         if (za.c0 || za.c3) {
             // 0 <= a or unordered: move.
         } else {
-            Cmp sv = cmp(s, static_cast<double>(sw.swing_speed)); // fcomp [v]
+            Cmp sv = cmp(s, static_cast<double>(sw.swing_speed)); // against the stored float
             if (!sv.c0) return 2;                                  // not below (and ordered): open
         }
         angle = to_f(x87_add(f, x87_mul(f, st(sw.swing_speed), X87(ticks)), X87(angle)));
@@ -104,16 +104,16 @@ std::uint32_t swing(const Fpu& f, Switch& sw, float& angle, float base, float ti
         return sw.swing_stop ? 4 : 0;
     }
     // Closing (and any other state).
-    double v = x87_sub(f, st(sw.swing_speed), a); // fld v; fsub st, st(1)
-    sw.swing_speed = to_f(v);                      // fst v
+    double v = x87_sub(f, st(sw.swing_speed), a);
+    sw.swing_speed = to_f(v);                      // rounds to float here; v stays unrounded
     if (sw.swing_stop) {
-        double w = x87_add(f, a, v);                   // faddp st(1)
-        sw.swing_speed = to_f(w);                      // fst v
-        double p = x87_mul(f, w, X87(ticks));          // fmul ticks
-        double n = x87_add(f, st(angle), p);           // fld angle; fadd st, st(1)
-        Cmp zp = cmp(0.0, p);                          // fldz; fcom st(3)
+        double w = x87_add(f, a, v);
+        sw.swing_speed = to_f(w);                      // rounds to float here; w stays unrounded
+        double p = x87_mul(f, w, X87(ticks));
+        double n = x87_add(f, st(angle), p);
+        Cmp zp = cmp(0.0, p);
         double b = st(base);
-        Cmp ba = cmp(b, static_cast<double>(angle));   // fld base; fcomp [angle]
+        Cmp ba = cmp(b, static_cast<double>(angle));   // against the stored angle
         bool reached;
         if (!(zp.c0 || zp.c3)) {
             // p < 0.
@@ -218,18 +218,14 @@ void move_switch(const Fpu& f, Switch& sw, float dt, SwitchQueries& q) {
         sw.heading = turned(f, dt, speed, sw.heading, opening);
         float h = to_f(fix_heading_x87(sw.heading, f));
         sw.heading = h;
-        if (opening) {
-            if (turn_done(f, h, sw.base_heading, limit)) {
-                sw.heading = tf(target);
-                q.change_state(sw, 1);
-            }
-        } else if (turn_done(f, h, target, limit)) {
-            sw.heading = tf(sw.base_heading);
-            q.change_state(sw, 0);
-        }
+        // Opening stops by the base heading and snaps to the target; closing the other way round.
+        const float stop_by = opening ? sw.base_heading : target;
+        if (!turn_done(f, h, stop_by, limit)) return;
+        sw.heading = tf(opening ? target : sw.base_heading);
+        q.change_state(sw, opening ? 1 : 0);
         return;
     }
-    if (type == 0x28 || type == 0x1e || type == 0x23 || type == 0x82 || type == 0x24) {
+    if (type == 0x1e || type == 0x23 || type == 0x24 || type == 0x28 || type == 0x82) {
         float speed = 8.0f;
         float turn = limit;
         switch (type) {
@@ -337,13 +333,20 @@ bool near_switch(const Fpu& f, const SwitchSpawn& s, float radius, float cy, flo
     return !c.c0 && !c.c3;
 }
 
+// The switch types that act on touch (0x510210): 0x33 and the trap types from 0x73 to 0x98 that have a case.
+bool acts_on_touch(std::uint8_t type) {
+    if (type == 0x33) return true;
+    static constexpr std::uint8_t kTraps[] = {0x73, 0x74, 0x78, 0x7d, 0x82, 0x87, 0x8c, 0x91, 0x92, 0x96, 0x97, 0x98};
+    return std::find(std::begin(kTraps), std::end(kTraps), type) != std::end(kTraps);
+}
+
 } // namespace
 
 double fix_heading_x87(float heading, const Fpu& f) {
     double h = st(heading);
     if (!cmp(h, kFullTurn).c0) { // not below 512 (and ordered): subtract, at most six times
         for (int i = 0;; ++i) {
-            h = x87_sub(f, h, static_cast<double>(kFullTurn)); // fsub st, st(2)
+            h = x87_sub(f, h, static_cast<double>(kFullTurn));
             if (i > 5) return 0.0;
             if (cmp(h, kFullTurn).c0) break;
         }
@@ -351,20 +354,20 @@ double fix_heading_x87(float heading, const Fpu& f) {
     Cmp z = cmp(0.0, h);
     if (z.c0 || z.c3) return h; // 0 <= h, or unordered
     for (int i = 0;; ++i) {
-        h = x87_add(f, h, static_cast<double>(kFullTurn)); // fadd st, st(2)
+        h = x87_add(f, h, static_cast<double>(kFullTurn));
         if (i > 5) return 0.0;
         Cmp c = cmp(h, 0.0);
-        if (!(c.c0 && !c.c3)) return h; // test ah, 5; jnp: loop only while below (ordered)
+        if (!(c.c0 && !c.c3)) return h; // loop only while below (ordered)
     }
 }
 
 double heading_diff_x87(float a, float b, const Fpu& f) {
-    double x = st(b), y = st(a);       // fld b; fld a
-    Cmp c = cmp(y, x);                 // fcom st(1); test ah, 0x41; je: a > b keeps the order
-    double d = (!c.c0 && !c.c3) ? x87_sub(f, y, x) : x87_sub(f, x, y); // fsubrp st(1)
-    Cmp h = cmp(static_cast<double>(kHalfTurn), d); // fld 256; fcomp st(1); test ah, 5; jp
+    double x = st(b), y = st(a);
+    Cmp c = cmp(y, x);                 // a > b keeps the order
+    double d = (!c.c0 && !c.c3) ? x87_sub(f, y, x) : x87_sub(f, x, y);
+    Cmp h = cmp(static_cast<double>(kHalfTurn), d); // 256 against d
     if (!(h.c0 && !h.c3)) return d;   // 256 > d, equal or unordered
-    return -x87_sub(f, d, X87(kFullTurn)); // fsub 512; fchs
+    return -x87_sub(f, d, X87(kFullTurn)); // -(d - 512)
 }
 
 double custom_move_distance_x87(std::int32_t v) {
@@ -377,12 +380,12 @@ bool switch_is_static(std::uint8_t t) { return (t >= 0x32 && t <= 0x3a && t != 0
 
 void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std::uint32_t now_ms, SwitchQueries& q,
                       const Fpu& f) {
-    // 0x48d55a: the unsigned milliseconds (fild, + 2^32 when negative) * 0.02.
+    // 0x48d55a: the unsigned milliseconds (read as signed, + 2^32 when negative) * 0.02.
     double e = static_cast<double>(static_cast<std::int32_t>(elapsed_ms));
     if (static_cast<std::int32_t>(elapsed_ms) < 0) e = x87_add(f, e, X87(kTwoTo32));
     float dt = to_f(x87_mul(f, e, X87(kTickScale)));
     float radius = kDefaultRadius;
-    float centre[2] = {0.0f, 0.0f}; // the original's uninitialised slots, as the rewrite
+    float centre[2] = {0.0f, 0.0f}; // the original's uninitialised slots, taken as 0
     for (Switch* p : switches) {
         if (kMaxTicks < dt) break;
         Switch& sw = *p;
@@ -415,14 +418,7 @@ void process_switches(std::span<Switch*> switches, std::uint32_t elapsed_ms, std
             continue;
         }
         if (sw.state == 0 || (sw.state == 1 && type < 0x64)) continue;
-        bool touch = false;
-        switch (sw.type) { // FUN_00510210
-        case 0x33: case 0x73: case 0x74: case 0x78: case 0x7d: case 0x82: case 0x87: case 0x8c: case 0x91: case 0x92:
-        case 0x96: case 0x97: case 0x98:
-            touch = true;
-            break;
-        default: break;
-        }
+        bool touch = acts_on_touch(sw.type);
         bool floor = q.is_floor_switch(sw);
         if (floor) {
             auto r = q.actor_radius(sw);

@@ -34,7 +34,7 @@ std::vector<glm::vec3> GameConnection::compass_points() const {
     // zone-file order (it swaps the server's).
     if (adventure_.data.assigned && adventure_.data.compass) v.push_back({adventure_.data.x, adventure_.data.y, adventure_.data.z});
     if (path_.active() && !path_.points().empty()) v.push_back(path_.points().front()); // the path's destination end
-    if (task_compass_) v.push_back(task_compass_->position); // the task NPC (FUN_0076ff70)
+    if (task_compass_) v.push_back(task_compass_->position); // the task NPC (0x76ff70)
     return v;
 }
 

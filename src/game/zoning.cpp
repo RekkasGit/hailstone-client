@@ -71,7 +71,7 @@ ResolvedTeleport resolve_teleport_index(std::string_view text, std::int32_t inde
         zone = 0xff;
     }
     if (zone == 0xff) {
-        // FUN_00513420: the first row with that number gives the position, the zone and the request dword;
+        // 0x513420: the first row with that number gives the position, the zone and the request dword;
         // without one, the position is zeroed and the zone is -1, and the teleport fails.
         const ZonePointRow* row = nullptr;
         for (const auto& z : zone_points)
