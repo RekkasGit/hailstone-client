@@ -41,15 +41,6 @@ bool has_layer(const char* name) {
                        [&](const VkLayerProperties& l) { return std::strcmp(l.layerName, name) == 0; });
 }
 
-bool has_instance_extension(const char* name) {
-    std::uint32_t count = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
-    std::vector<VkExtensionProperties> exts(count);
-    vkEnumerateInstanceExtensionProperties(nullptr, &count, exts.data());
-    return std::any_of(exts.begin(), exts.end(),
-                       [&](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, name) == 0; });
-}
-
 VkShaderModule load_module(VkDevice device, const std::filesystem::path& path) {
     return create_shader_module(device, path);
 }
@@ -234,9 +225,26 @@ void VkContext::create_instance(bool validation) {
                                  std::to_string(VK_API_VERSION_MAJOR(version)) + "." +
                                  std::to_string(VK_API_VERSION_MINOR(version)));
 
-    std::vector<const char*> extensions = window_.required_instance_extensions();
+    // What the window needs, as the library offers it (render/gpu_requirements.h: the portability opt-in only where
+    // the loader has it, a missing one named).
+    std::vector<std::string> wanted;
+    for (const char* name : window_.required_instance_extensions()) wanted.emplace_back(name);
+    std::uint32_t offered_count = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &offered_count, nullptr);
+    std::vector<VkExtensionProperties> offered_props(offered_count);
+    vkEnumerateInstanceExtensionProperties(nullptr, &offered_count, offered_props.data());
+    std::vector<std::string> offered;
+    for (const VkExtensionProperties& e : offered_props) offered.emplace_back(e.extensionName);
+    const InstanceExtensions chosen = choose_instance_extensions(wanted, offered);
+    if (!chosen.missing.empty()) {
+        std::string names;
+        for (const std::string& name : chosen.missing) names += (names.empty() ? "" : ", ") + name;
+        throw std::runtime_error("vkCreateInstance: the Vulkan library lacks " + names);
+    }
+    std::vector<const char*> extensions;
+    for (const std::string& name : chosen.enable) extensions.push_back(name.c_str());
     std::vector<const char*> layers;
-    VkInstanceCreateFlags flags = 0;
+    VkInstanceCreateFlags flags = chosen.portability ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0;
 
     if (validation) {
         if (has_layer("VK_LAYER_KHRONOS_validation")) {
@@ -247,10 +255,10 @@ void VkContext::create_instance(bool validation) {
             validation = false;
         }
     }
-    // MoltenVK (macOS) is a non-conformant implementation and must be opted into.
-    if (has_instance_extension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
-        extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-        flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    {
+        std::string names;
+        for (const char* name : extensions) names += (names.empty() ? "" : " ") + std::string(name);
+        log::info("Vulkan instance extensions: {}", names);
     }
 
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};

@@ -1,5 +1,7 @@
 #include "render/gpu_requirements.h"
 
+#include <algorithm>
+
 namespace nmsc::render {
 
 std::vector<std::string> gpu_missing(const GpuSupport& gpu) {
@@ -37,6 +39,24 @@ std::string no_usable_gpu_text(const std::vector<GpuSupport>& gpus) {
         }
     }
     return text;
+}
+
+InstanceExtensions choose_instance_extensions(const std::vector<std::string>& wanted,
+                                              const std::vector<std::string>& offered) {
+    static const std::string kPortability = "VK_KHR_portability_enumeration";
+    auto has = [](const std::vector<std::string>& list, const std::string& name) {
+        return std::find(list.begin(), list.end(), name) != list.end();
+    };
+    InstanceExtensions out;
+    for (const std::string& name : wanted) {
+        if (name == kPortability || has(out.enable, name) || has(out.missing, name)) continue;
+        (has(offered, name) ? out.enable : out.missing).push_back(name);
+    }
+    if (has(offered, kPortability)) {
+        out.enable.push_back(kPortability);
+        out.portability = true;
+    }
+    return out;
 }
 
 } // namespace nmsc::render
