@@ -50,8 +50,9 @@ not whenever the surface's `currentExtent` differs from the window's size.
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes
-on into the same targets (stored and loaded, the multisampled ones too) with `ZonePhase::Translucent`: the water
-first, then the blended and additive draws.
+on into the same targets (stored and loaded, the multisampled ones too): the grass (opaque, but left out of the copies
+so the target ring lies on the ground under it), then `ZonePhase::Translucent`: the water first, then the blended and
+additive draws.
 
 The scene target holds linear colour. The classic lighting computes in display (sRGB) values as the classic renderer does
 and converts at the end of each shader; the modern lighting computes in linear HDR.
@@ -313,8 +314,9 @@ The ring at the current target's feet (`render/target_ring_renderer.h`, `shaders
 the target's con) and its radius follow the original; how it is drawn and how it moves are Hailstone's own (the
 original turns four UV-animated circles).
 
-It is a decal on the scene's depth, drawn just after `VkContext::begin_translucent` (the classic lighting, which has
-no other use for the depth copy, takes it for the ring when there is one). A box round the ring, from 1 + 0.6 radii
+It is a decal on the scene's depth, drawn after `VkContext::begin_translucent` (the classic lighting, which has no
+other use for the depth copy, takes it for the ring when there is one). The copy is taken before the grass is drawn,
+so the ring lies on the ground and is drawn over the blades; traced over the blades themselves it broke into a coil. A box round the ring, from 1 + 0.6 radii
 below the feet to as far above, is drawn without culling or depth test; the fragment shader keeps its far faces and
 rebuilds each pixel's scene point from the depth copy. A surface less than 60 degrees from level within that height of
 the feet takes the ring, so it follows the ground, slopes and steps, and anything standing in front of it hides it: a

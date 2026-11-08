@@ -60,8 +60,8 @@ public:
     // through the grass); at most kMaxPushers, nearest first. Kept until changed.
     void set_pushers(std::span<const glm::vec4> pushers);
 
-    // The plants within reach() of `camera`, nearest tiles first, in the opaque part of the scene (before
-    // VkContext::begin_translucent). `lighting`: the frame's (modern: lit in the shaders with the sun's shadow, the
+    // The plants within reach() of `camera`, nearest tiles first, opaque, just after VkContext::begin_translucent
+    // (its depth copy holds the ground without them, for the target ring) and before the water. `lighting`: the frame's (modern: lit in the shaders with the sun's shadow, the
     // sky, the lamps and the haze; classic: the scene's ambient and sun). Returns how many were drawn.
     std::uint32_t draw(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera, double seconds,
                        const SceneLighting& lighting, bool modern);
