@@ -234,6 +234,28 @@ TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" 
     CHECK(reach < 6.0f);
 }
 
+TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * doctest::skip(!nmsc::test::game_dir())) {
+    // global_chr's classic ELF has C10, C11 and T07..T09, the Luclin ELF has not; the few bone names the two share
+    // lent a Luclin human those clips with every other bone in the rest pose: a T-pose.
+    auto lib = CharacterLibrary::load(*nmsc::test::game_dir(), "", true);
+    for (const char* code : {"HUF", "HUM", "HIF", "ERM"}) {
+        CAPTURE(code);
+        auto m = lib.model(code);
+        REQUIRE(m);
+        REQUIRE(m->source.find("global_chr.s3d") == std::string::npos); // the Luclin model
+        for (const char* clip : {"C10", "C11", "T07", "T08", "T09"}) {
+            CAPTURE(clip);
+            const auto* c = m->clip(clip);
+            // Its own clip, or none; never a one-frame borrowed one.
+            if (c) CHECK((!c->borrowed || c->frame_count > 1));
+        }
+        // What the Luclin donor has is still lent.
+        const auto* p01 = m->clip("P01");
+        REQUIRE(p01);
+        CHECK(p01->frame_count > 1);
+    }
+}
+
 TEST_CASE("zone_character_archives: RoF2's and the live client's _chr.txt entries") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() /
