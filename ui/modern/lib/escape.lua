@@ -1,6 +1,7 @@
--- "Close with Esc": a window's right-click menu item (hud.esc.<window>, off until ticked). The key bound to the
--- client's CLOSE_TOP_WINDOW (Escape unless rebound) then closes the frontmost window that has it ticked: the one
--- opened or clicked last. One press closes one window.
+-- "Close with Esc": a window's right-click menu item (hud.esc.<window>). The key bound to the client's
+-- CLOSE_TOP_WINDOW (Escape unless rebound) then closes the frontmost window that has it ticked: the one opened or
+-- clicked last. One press closes one window. It is ticked from the start for the windows in DEFAULT_ON (the ones
+-- opened to look at something and put away again), off until ticked for the rest; unticking one saves "0".
 --
 -- A Hailstone choice, per window: the original's escapable windows are not traced (docs/unknowns.md).
 --
@@ -20,7 +21,19 @@ local E = {}
 
 local function settingKey(key) return "hud.esc." .. key end
 
-function E.On(key) return ui.GetSetting(settingKey(key)) == "1" end
+-- Ticked until the player unticks them: the inventory, the AA window, the ability and spell books, every bag
+-- (inventory, bank and world containers) and the zone map (not the minimap, which is a frame of the HUD).
+local DEFAULT_ON = {
+  InventoryWindow = true, AAWindow = true, AbilityBookWnd = true, SpellBookWnd = true, MapViewWnd = true,
+  WorldContainer = true,
+}
+for i = 1, 36 do DEFAULT_ON["Bag" .. i] = true end
+
+function E.On(key)
+  local v = ui.GetSetting(settingKey(key))
+  if v == nil or v == "" then return DEFAULT_ON[key] == true end
+  return v == "1"
+end
 
 function E.MenuItem(key)
   local on = E.On(key)

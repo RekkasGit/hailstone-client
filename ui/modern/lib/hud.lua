@@ -19,7 +19,7 @@
 -- "Lock" (one frame, or all of them) stops both. Layout mode (the right-click menu) also shows the frames that
 -- hide while empty (target, group, extended targets, buffs), outlined, so they can be placed too. "Snap to grid"
 -- (lib/snap.lua) lines up the frames and dialogs a drag places. A window that can be closed has "Close with Esc" in
--- its right-click menu (lib/escape.lua, off until ticked).
+-- its right-click menu (lib/escape.lua; some windows have it ticked from the start).
 
 local T = dofile("lib/theme.lua")
 local style = dofile("lib/style.lua")

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern UI: Escape now closes the inventory, the AA window, the ability and spell books, every bag and the map (not the minimap) without ticking anything. Untick "Close with Esc" in a window's right-click menu to keep it open on Escape
 - Humans, high elves, erudites, dark elves, half elves, barbarians, gnomes, halflings, trolls, ogres, iksar and skeletons with the Luclin models no longer snap into a T-pose when they throw, round kick or use a monk strike (flying kick, dragon punch, eagle strike), and some zone creatures (Coldain, Kerran and others) no longer T-pose in some of their animations. Those animations were taken from another model's skeleton that mostly does not match. Such a model now plays the replacement the original client uses for an animation a model lacks
 - A character feigning death can no longer walk, turn, strafe or jump: it used to slide along the ground still lying down. Stand up with `/sit` or `/stand` (the forward key does not stand you up, as on the original client)
 - Modern UI: windows with a title bar (inventory, bags, merchant, spell book, AA, guild, map and the rest) have a roll-up button beside their X. A click, or a double click on the title bar, rolls the window up to its title bar and back; it stays rolled up until you unroll it, even after closing and opening it again. Hot bars, spell gems and the other HUD frames, and yes/no or quantity prompts, have none
