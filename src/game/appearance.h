@@ -81,4 +81,10 @@ struct HeadModel {
 };
 HeadModel head_model(std::uint32_t race, std::uint8_t gender, std::uint32_t material, std::uint32_t hero_forge = 0);
 
+// CDisplay::IsShield @0x489d70: whether a secondary's item model IT<n> is a shield, which PlayerClient::SetHeldModel
+// shows on bone slot 5 (<code>SHIELD_POINT_DAG / ARML_SHLD) instead of slot 4 (L_POINT / ARML_WEAP). A fixed list of
+// model numbers; a model named like a shield but not on it (the Haunting Nightmares ornament IT101064) is held in the
+// hand. The original asks Resources\ActorTagInfo.txt's table first when that file loaded; RoF2 ships none.
+bool is_shield_model(std::uint32_t item_model);
+
 } // namespace nmsc::game
