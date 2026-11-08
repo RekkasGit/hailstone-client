@@ -26,6 +26,10 @@ rasterised, so there is no separate tool and no hand-made file.
 - Passable triangles (WLD polygon flag 0x10, EQG flag 1) are left out; the sweep never hits them. The exception is
   a water surface: a flat passable triangle with water 1.5 under its middle and none 1.5 over it. It is ground for
   the mesh, so a path can cross water whose bottom is too deep or too steep to walk ("Water" below).
+- Triangles wholly outside the terrain's box, 200 units round it, are left out. Zones park the objects they do not
+  use far under the world (Field of Bone's trees stand at z -32768); taken in, they stretched the heightfield past
+  Recast's span heights (8191 cells, about 2457 units) and the whole mesh was built 32000 units under the zone. The
+  movement sweep still has them.
 - A triangle whose record normal faces up within 55 degrees is ground. A floor stops a fall only when its normal faces
   up (the sweep skips back faces), so a triangle facing down is never ground, only an obstacle.
 - Agent: height 6, radius 2, climb 4, cells of 0.6 x 0.3, tiles of 128 cells (76.8 units). These are not the

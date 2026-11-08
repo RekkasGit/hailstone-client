@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Field of Bone now has a working navigation mesh: `/nav`, `/stick` and the overlay found nothing there, because the trees the zone hides far under the world pulled the whole mesh down with them. A zone's mesh already saved by an earlier version is built again by itself
 - A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
 
 ## 0.6.0-beta (2026-11-07)

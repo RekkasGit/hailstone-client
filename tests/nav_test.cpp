@@ -29,6 +29,7 @@
 #include "nav/nav_mesh.h"
 #include "nav/path_follower.h"
 #include "nav/zone_nav.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include "plugin/hooks.h"
 #include "game_files.h"
 #include "scratch_dir.h"
@@ -1011,6 +1012,42 @@ TEST_CASE("nav: the Navigation TLO") {
     CHECK(h.p("${Navigation.PathLength[loc 0 3 4]}") == "5.00");
     h.ctx.nav = nullptr;
     CHECK(h.p("${Navigation}") == "NULL");
+}
+
+TEST_CASE("nav: an object parked far under the world is left out, so the mesh stays on the ground") {
+    // Field of Bone parks the trees it does not use at z -32768. Taken in, they stretched the heightfield past
+    // Recast's span heights and the whole mesh lay 32000 units under the zone.
+    auto quad = [](assets::Mesh& m, float x0, float x1, float h) {
+        auto base = static_cast<std::uint32_t>(m.vertices.size());
+        for (auto [x, y] : {std::pair{x0, x0}, {x1, x0}, {x1, x1}, {x0, x1}}) {
+            assets::Vertex v;
+            v.position = {x, y, h};
+            m.vertices.push_back(v);
+        }
+        for (std::uint32_t i : {0u, 2u, 1u, 0u, 3u, 2u}) m.indices.push_back(base + i); // facing up
+        m.materials.push_back({});
+        m.materials[0].frames = {"x.bmp"};
+        m.parts.push_back({0, static_cast<std::uint32_t>(m.indices.size()), 0});
+    };
+    assets::Zone zone;
+    zone.terrain.emplace_back();
+    quad(zone.terrain.back(), 0, 100, 0);
+    quad(zone.objects["TREE"], -5, 5, 0);
+    assets::Placement parked;
+    parked.actor = "TREE";
+    parked.transform = glm::translate(glm::mat4(1.0f), glm::vec3(50, 50, -32768));
+    zone.placements.push_back(parked);
+    game::CollisionMesh collision = game::CollisionMesh::build(zone);
+    REQUIRE(collision.triangle_count() == 4); // movement still has the tree
+    auto geo = nav::InputGeometry::from_collision(collision, {});
+    CHECK(geo->triangle_count() == 2);
+    CHECK(geo->bmin().y == doctest::Approx(0.0f)); // Recast's y is the world's z
+    nav::ZoneNav::Config cfg;
+    nav::ZoneNav z(geo, cfg, [](const glm::vec3&) { return nav::Area::Ground; });
+    z.finish();
+    std::optional<glm::vec3> on = z.mesh().nearest({50, 50, 0});
+    REQUIRE(on.has_value());
+    CHECK(std::abs(on->z) < 1.0f); // the ground, within a cell or two
 }
 
 // ---- Real zones (EQ_GAME_DIR) ----
