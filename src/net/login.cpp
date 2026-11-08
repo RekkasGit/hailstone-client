@@ -163,6 +163,9 @@ LoginResult parse_login_reply(std::span<const std::byte> data) {
     res.success = base.success;
     res.error_id = base.error_id;
     res.text = base.text;
+    // A refusal is shown by its error id alone. login.eqemulator.net's refusal (error 107) is a 40-byte body that
+    // ends inside the offer fields, and the stock client shows its error, so the rest is not read when it failed.
+    if (!res.success) return res;
     r.skip(2);
     res.account_id = r.le<std::uint32_t>();
     res.session_key = r.cstring();
@@ -250,6 +253,8 @@ const char* builtin_text(std::int32_t id) {
     case 102: return "Something went wrong, and the login server did not say what.";
     case 103: return "The login server took too long to answer.";
     case 105: return "That account name or password is not valid. Check them and try again.";
+    case 106: return "The login server has no account with that name.";
+    case 107: return "That password is not right for this account.";
     case 111: return "A character of yours is still in play on that server. Wait about a minute for it to leave, then try again.";
     case 112: return "The server closed the connection, most likely because you were idle for too long.";
     case 114: return "A character on this account is still in the world as an offline trader. One account can have only one character in the world at a time, on any server. Remove that character so you can log in?";

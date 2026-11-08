@@ -174,6 +174,14 @@ TEST_CASE("login reply: the key is read to its NUL; failures keep their id") {
     CHECK(login_error_text(105).find("not valid") != std::string::npos);
     CHECK_THROWS(login_codec::parse_login_reply(hex("0300000000")));
 
+    // login.eqemulator.net's refusal, as it sent it: error 107 in 39 bytes, shorter than a whole reply.
+    auto short_refusal = hex("03000000000200000000"
+                             "9b765973643c809f1a04a779f157eeb66489a68c643c809f1a04a779f157eeb66489a68c643c80");
+    auto refused = login_codec::parse_login_reply(short_refusal);
+    CHECK_FALSE(refused.success);
+    CHECK(refused.error_id == 107);
+    CHECK(refused.session_key.empty());
+
     // A body that is not whole blocks is decrypted rounded up (the original's DecryptBody).
     auto odd = eqemu_login_reply(3, true, 101, 7, "KEY", 0);
     odd.resize(10 + 60);

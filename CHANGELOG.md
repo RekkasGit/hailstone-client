@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
+
 ## 0.6.0-beta (2026-11-07)
 
 - Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview
