@@ -108,4 +108,10 @@ private:
 // ui.CaptureKeyboard) keep them.
 bool keyboard_for_ui(int requested);
 
+// The current ImGui context's keys as on Windows on every system: Ctrl is Ctrl in the windows, as in the game's own
+// keys, the original client and the Ctrl-clicks the windows use (on items, loot, the spell gems). ImGui's macOS
+// default would make Cmd the windows' Ctrl, with Mac-style text editing; a deliberate difference from a usual Mac
+// program, so a Ctrl-click means the same in a window as in the game.
+void configure_keys();
+
 } // namespace nmsc::ui

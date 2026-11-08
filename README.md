@@ -57,7 +57,7 @@ xattr -dr com.apple.quarantine ~/Downloads/hailstone      # the folder you unzip
 ~/Downloads/hailstone/hailstone
 ```
 
-The macOS build is experimental: it is built and its tests run, but it has not been played on a Mac yet, and the in-game browser is not in it (web links open in your browser).
+The macOS build is experimental: it is built and its tests run, but it has not been played on a Mac yet, and the in-game browser is not in it (web links open in your browser). Ctrl works as on Windows, in the windows as in the game (Ctrl-click, Ctrl+C and Ctrl+V); Cmd is not used as Ctrl.
 
 ## Building from source
 

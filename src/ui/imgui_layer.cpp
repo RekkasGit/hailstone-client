@@ -126,6 +126,7 @@ ImGuiLayer::ImGuiLayer(platform::Window& window, render::VkContext& vk, const Im
     io.ConfigErrorRecovery = true;
     io.ConfigErrorRecoveryEnableAssert = false;
     io.ConfigErrorRecoveryEnableTooltip = true;
+    configure_keys();
 
     if (!ImGui_ImplSDL3_InitForVulkan(window_.sdl_window())) throw std::runtime_error("ImGui_ImplSDL3_InitForVulkan failed");
     window_.set_event_listener([](const SDL_Event& ev) { ImGui_ImplSDL3_ProcessEvent(&ev); });
@@ -427,6 +428,8 @@ void ImGuiLayer::end_frame_without_render() {
 
 bool ImGuiLayer::wants_mouse() const { return ImGui::GetIO().WantCaptureMouse; }
 bool ImGuiLayer::wants_keyboard() const { return keyboard_for_ui(keyboard_request_); }
+
+void configure_keys() { ImGui::GetIO().ConfigMacOSXBehaviors = false; }
 
 bool keyboard_for_ui(int requested) {
     const ImGuiIO& io = ImGui::GetIO();
