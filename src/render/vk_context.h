@@ -235,6 +235,10 @@ public:
     // The pipeline cache every pipeline is made with: read from cache/pipelines.bin when the device is made and
     // written back when the context goes (render/pipeline_cache.h).
     VkPipelineCache pipeline_cache() const { return pipeline_cache_; }
+    // The scene's depth the post pass reads (the resolved one under MSAA), in shader-read layout from begin_overlay to
+    // the end of the frame, and the nearest-clamped sampler for it: the name plates test their text against it.
+    VkImageView overlay_depth_view() const { return (depth_resolved_.image ? depth_resolved_ : depth_).view; }
+    VkSampler post_sampler() const { return post_sampler_; }
 
     VkInstance instance() const { return instance_; }
     VkDevice device() const { return device_; }

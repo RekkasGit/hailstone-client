@@ -345,6 +345,8 @@ add_library(hailstone_engine STATIC
   src/platform/child_processes.cpp
   src/platform/helper_process.cpp
   src/render/vk_context.cpp
+  src/app/plate_test.cpp
+  src/app/nameplate_layer.cpp
   src/render/gpu_requirements.cpp
   src/render/pipeline_cache.cpp
   src/render/gpu.cpp
@@ -462,6 +464,7 @@ add_library(hailstone_engine STATIC
   src/game/combat_ability_menu.cpp
   src/game/cursor_drop.cpp
   src/game/item_options.cpp
+  src/game/nameplate_overlap.cpp
   src/game/option_commands.cpp
   src/game/output_file.cpp
   src/ui/lua/lua_host.cpp
@@ -710,6 +713,8 @@ hailstone_add_shaders(hailstone_shaders
   shaders/post.vert
   shaders/post.frag
   shaders/ao.frag
+  shaders/plate_depth.vert
+  shaders/plate_depth.frag
   shaders/bloom_down.frag
   shaders/bloom_up.frag
   shaders/fsr_easu.frag
@@ -1023,6 +1028,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/appearance_test.cpp
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
+    tests/plate_test_test.cpp
+    tests/nameplate_overlap_test.cpp
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp

@@ -354,6 +354,12 @@ local function displayTab()
       "Hailstone: your own name over your head in the third-person views, with your title and guild as /shownames sets them for everyone.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
     check("con_name_colour", "Con-Coloured NPC Names", "Hailstone: NPC names take their consider colour, as your target's does. Off keeps them yellow.")
+    check("target_plate_highlight", "Highlight Target Name",
+      "Hailstone: makes your target's name easy to spot, on a dark background with a coloured edge and a small bouncing arrow above it. Turn it off to show the name as plain text in its colour.")
+    check("target_plate_through_walls", "Target Name Through Walls",
+      "Hailstone: your target's name stays visible behind walls and other things in the way. Off, it is hidden like any other name, as in the original client.")
+    check("plate_overlap_fade", "Fade Overlapping Names",
+      "Hailstone: when names pile up on top of each other, the ones behind fade out so the nearest stay readable. Your target's name never fades. Turn it off to draw every name at full strength.")
     check("show_target_ring", "Show 3D Target Ring", "A colored ring appears around your current target's feet.")
     check("tab_skip_pets", "Tab Skips Pets",
       "Hailstone: the NPC target keys (Tab, F8) skip players' pets and mercenaries.")

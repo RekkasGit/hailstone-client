@@ -974,6 +974,12 @@ race. Off, the original's checks apply.
   the original shows the title window's chosen title and suffix on the player's own sprite while that window is open.
 - Their colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
   (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
+- Hailstone's own, not the original's: a plate's text is hidden wherever the scene (geometry, doors, characters) is
+  nearer, pixel by pixel (not by a line of sight to one point above the head), and a name behind the scene is not drawn; of names that overlap on the screen
+  the nearer is drawn over the farther and the covered one fades. The target's name is never faded and stays at its
+  natural head position; the scene hides it like any other unless `display.target_plate_through_walls` (Options >
+  Display "Target Name Through Walls", off by default) is on, a sight of the target the original does not give. Its highlight is switchable (`display.target_plate_highlight`, Options > Display "Highlight Target Name", on by default):
+  docs/graphics.md "Name plates".
 
 ## Chat keys, the PvP rule set, trade and group invites
 
