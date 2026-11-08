@@ -11,6 +11,7 @@
 - An NPC or player killed while moving now drops where it died: its corpse used to slide on for a moment in the direction it had been moving
 - A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
 - A character with more than 300 different AAs now sees all of them. Some servers allow more than 300, but the client used to keep only the first 300, so the rest were missing from the AA window and their bonuses from the character sheet
+- Dropping a spell from the spell book onto a gem that already holds a spell now memorizes the new spell in its place: you no longer have to forget the old one first. Clicking a spell picked up from the book onto a full gem does the same. Options > Interface "Drop Replaces a Memorized Spell" (gamepad UI: "Gem replaces spell") turns it off, back to the original's way
 - Modern UI: hovering the spell book's Memorize ("In gem N") button no longer shows a red "MESSAGE FROM DEAR IMGUI: 2 visible items with conflicting ID" box. The button and the Memorized filter shared an ID
 - Your stats no longer drop to zero while you camp: during the countdown the inventory and character windows showed 0 for every stat until the camp ended or was cancelled
 - Ducking now crouches you at once, standing still: the crouch used to show only once you started moving. Standing up from a duck plays the crouch backward. Other players and NPCs that duck show it the same way

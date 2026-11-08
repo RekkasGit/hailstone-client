@@ -359,6 +359,8 @@ local function displayTab()
       "Hailstone: the NPC target keys (Tab, F8) skip players' pets and mercenaries.")
     check("tab_line_of_sight", "Tab Needs Line of Sight",
       "Hailstone: the NPC target keys (Tab, F8) skip NPCs you cannot see, behind walls or the ground.")
+    check("replace_gem_spell", "Drop Replaces a Memorized Spell",
+      "Hailstone: a spell dragged from the spell book onto a gem that holds another spell memorizes in its place. Off, forget the old spell first, as in the original.")
     check("hotbutton_extras", "More Hot Button States",
       "Hailstone: hot buttons of the Actions window's skills show their timers, Melee Attack lights while auto attack is on, Sit while sitting.")
     check("offer_layout_copy", "Offer Layouts to New Characters",
