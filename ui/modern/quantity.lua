@@ -14,6 +14,7 @@ local wasShown = false
 local focusBox, boxActive = false, false
 
 local WINDOW_OPTS = {
+  rollup = false, -- (a question to answer: kept whole)
   size = function() return 250, 118 end,
   resizable = { 200, 110 },
   place = function(W_, H, w, h, s, x, y) return openX or x, openY or y end,

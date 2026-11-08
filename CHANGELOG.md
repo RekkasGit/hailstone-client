@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern UI: windows with a title bar (inventory, bags, merchant, spell book, AA, guild, map and the rest) have a roll-up button beside their X. A click, or a double click on the title bar, rolls the window up to its title bar and back; it stays rolled up until you unroll it, even after closing and opening it again. Hot bars, spell gems and the other HUD frames, and yes/no or quantity prompts, have none
 - A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
 
 ## 0.6.0-beta (2026-11-07)

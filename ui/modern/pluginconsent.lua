@@ -20,6 +20,7 @@ ui.window("Server Plugins", function()
   hud.Dialog(WINDOW, "Allow this server's plugin?", {
     shown = q ~= nil,
     keepTitle = true,
+    rollup = false, -- (a question to answer: kept whole)
     size = function() return 460, 150 + 38 * (q and #q.plugins or 1) end,
     place = K.Centered,
     onClose = function() eq.AnswerPluginConsent(nil) end,

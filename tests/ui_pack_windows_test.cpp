@@ -1415,6 +1415,72 @@ TEST_CASE("UI packs (modern): a dialog's corner scales it, its edge resizes it")
     ImGui::DestroyContext(ctx);
 }
 
+// A dialog's roll-up button sits beside its close box (ImGui's collapse button at the right of the title bar): a click
+// rolls it up to its title bar and keeps that in hud.rolled.<window>, through closing and opening it again; a second
+// click unrolls it. A question to answer (rollup = false) has none.
+TEST_CASE("UI packs (modern): a dialog rolls up from the button beside its close box") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    nmsc::test::ScratchDir dir_scratch("ui_pack_dialog_rollup_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        lua_State* L = s.lua.state();
+        auto run = [&](const char* code) {
+            REQUIRE(luaL_dostring(L, code) == LUA_OK);
+            std::string v = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return v;
+        };
+        run("ui.SetSetting('test.pos.AAWindow', '40,40') eq.ShowWindow('AAWindow', true)");
+        s.frames(3);
+        ImGuiWindow* win = ImGui::FindWindowByName("Alternate Advancement###modern.AAWindow");
+        REQUIRE(win);
+        CHECK_FALSE(win->Collapsed);
+        CHECK((win->Flags & ImGuiWindowFlags_NoCollapse) == 0);
+        const float fullHeight = win->Size.y;
+        ImGuiIO& io = ImGui::GetIO();
+        auto clickRollup = [&] {
+            // where ImGui puts it with WindowMenuButtonPosition = Right: left of the close box
+            const ImGuiStyle& st = ImGui::GetStyle();
+            const float fs = win->TitleBarHeight - st.FramePadding.y * 2;
+            const ImVec2 at(win->Pos.x + win->Size.x - st.FramePadding.x - fs - st.ItemInnerSpacing.x - fs / 2,
+                            win->Pos.y + st.FramePadding.y + fs / 2);
+            io.AddMousePosEvent(at.x, at.y);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, false);
+            s.frames(1);
+            io.AddMousePosEvent(-1000, -1000);
+            s.frames(2);
+        };
+        clickRollup();
+        CHECK(win->Collapsed);
+        CHECK(win->Size.y < fullHeight / 2);
+        CHECK(run("return ui.GetSetting('hud.rolled.AAWindow')") == "1");
+        CHECK(run("return tostring(eq.WindowShown('AAWindow'))") == "true"); // (rolled up, not closed)
+        // closed and opened again: still rolled up
+        run("eq.ShowWindow('AAWindow', false)");
+        s.frames(2);
+        run("eq.ShowWindow('AAWindow', true)");
+        s.frames(2);
+        CHECK(win->Active);
+        CHECK(win->Collapsed);
+        clickRollup();
+        CHECK_FALSE(win->Collapsed);
+        CHECK(run("return ui.GetSetting('hud.rolled.AAWindow') or ''") == "");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The gamepad pack's shared pieces that every window calls each frame, against the way they worked before they were
 // made cheaper: T.fit (a binary search; never half a UTF-8 character), G.wrapped (a line measured whole only near the
 // width; maxLines lines drawn, the bottom of all), CH.testOpen (off for good once test.show is empty in the world).
