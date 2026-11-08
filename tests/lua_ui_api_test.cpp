@@ -888,8 +888,8 @@ TEST_CASE("Modern UI libs: Close with Esc is on by default for the put-away wind
 PRESS = false
 eq = { TakeCloseTopWindow = function() local p = PRESS; PRESS = false; return p end }
 local esc = dofile("lib/escape.lua")
-NAMES = { "Other", "InventoryWindow", "Bag7" }
-OPEN = { Other = true, InventoryWindow = true, Bag7 = true }
+NAMES = { "Other", "InventoryWindow", "Bag7", "ItemDisplayWindow#3" }
+OPEN = { Other = true, InventoryWindow = true, Bag7 = true, ["ItemDisplayWindow#3"] = true }
 for i, name in ipairs(NAMES) do
   ui.window(name, function()
     if not OPEN[name] then return end
@@ -934,7 +934,8 @@ end
             frames(3);
         };
         frames(2);
-        // nothing saved: the inventory and the bag close, the other window does not
+        // nothing saved: the inventory, the bag and the item display close, the other window does not
+        press();
         press();
         press();
         CHECK(lua_do("return open()") == "Other ");
