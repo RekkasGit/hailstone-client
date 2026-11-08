@@ -11,6 +11,7 @@
 - A character with more than 300 different AAs now sees all of them. Some servers allow more than 300, but the client used to keep only the first 300, so the rest were missing from the AA window and their bonuses from the character sheet
 - Modern UI: hovering the spell book's Memorize ("In gem N") button no longer shows a red "MESSAGE FROM DEAR IMGUI: 2 visible items with conflicting ID" box. The button and the Memorized filter shared an ID
 - Your stats no longer drop to zero while you camp: during the countdown the inventory and character windows showed 0 for every stat until the camp ended or was cancelled
+- Ducking now crouches you at once, standing still: the crouch used to show only once you started moving. Standing up from a duck plays the crouch backward. Other players and NPCs that duck show it the same way
 
 ## 0.6.0-beta (2026-11-07)
 

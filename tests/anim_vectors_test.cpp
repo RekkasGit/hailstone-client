@@ -368,6 +368,38 @@ TEST_CASE("Classic models: sitting down and standing up") {
     CHECK(c.reverse);
 }
 
+TEST_CASE("Classic models: ducking while still (ChangePosition @0x5a0bc0)") {
+    Model m{{"P01", "O01", "L01", "L06", "L08"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.race = 1;
+    in.walk_speed = 0.46f;
+    in.now_ms = 100;
+    CHECK(frame(st, in, m).clip == "P01");
+    // Crouching without moving plays L08 once, and it stays.
+    in.stand_state = 111;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "L08");
+    CHECK(c.restart);
+    CHECK_FALSE(c.reverse);
+    CHECK_FALSE(c.loop);
+    in.now_ms = 20000;
+    c = frame(st, in, m, true);
+    CHECK(c.clip == "L08");
+    CHECK_FALSE(c.restart);
+    // Moving ducked: the duck walk; crouching again then does not replay L08.
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    CHECK(frame(st, in, m).clip == "L06");
+    // Standing up: L08 backward.
+    in.velocity = {0, 0, 0};
+    in.speed_run = 0;
+    in.stand_state = 100;
+    c = frame(st, in, m);
+    CHECK(c.clip == "L08");
+    CHECK(c.reverse);
+}
+
 TEST_CASE("Classic models: P08 / O02 after an animation FUN_004b0860 does not name") {
     using nmsc::game::classic_plain_stand_after;
     // FUN_004b0860 @0x4b0860, read from the exe.
@@ -508,6 +540,26 @@ TEST_CASE("New-style models: the sequences' tracks") {
     CHECK_FALSE(c.loop);
     in.now_ms = 1100;
     CHECK(frame(st, in, m, true).clip == "NSIT_BA_1");
+}
+
+TEST_CASE("New-style models: ducking while still plays CRCH") {
+    Model m{{"STND_BA_1", "WALK_BA_1", "CRCH_BA_1"}};
+    nmsc::game::SpawnAnimState st;
+    nmsc::game::SpawnAnimInput in;
+    in.new_style = true;
+    in.race = 522;
+    in.now_ms = 1000;
+    CHECK(frame(st, in, m).clip == "STND_BA_1");
+    in.stand_state = 111;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "CRCH_BA_1");
+    CHECK_FALSE(c.reverse);
+    in.now_ms = 1100;
+    CHECK(frame(st, in, m, true).clip == "CRCH_BA_1");
+    in.stand_state = 100;
+    c = frame(st, in, m);
+    CHECK(c.clip == "CRCH_BA_1");
+    CHECK(c.reverse);
 }
 
 TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
