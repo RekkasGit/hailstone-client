@@ -379,3 +379,26 @@ TEST_CASE("CYCLE_XTARGET after the server shrank the list past the cursor ends")
     c.target_next_xtarget();
     CHECK(c.world().target_id == 11);
 }
+
+TEST_CASE("a spawn killed while moving stops where it died (PlayerZoneClient::IDied zeroes its velocities)") {
+    mq_test::World w("nmsc_death_stops_motion_test");
+    auto& c = *w.conn;
+    auto& rat = A::world(c).spawns[10];
+    rat.velocity = glm::vec3(2.0f, -1.0f, 0.5f);
+    rat.speed_run = 0.7f;
+    rat.speed_heading = 3.0f;
+    rat.fly_mode = 2;
+    rat.update_time = 100.0;
+    c.receive_zone_packet_for_test(death_of(10));
+    CHECK(rat.is_corpse);
+    CHECK(rat.velocity == glm::vec3(0.0f));
+    CHECK(rat.speed_run == 0.0f);
+    CHECK(rat.speed_heading == 0.0f);
+    CHECK(rat.fly_mode == 0);
+    // Stepped within the 12 s after its last update, the corpse stays put.
+    const glm::vec3 at = rat.position;
+    const float heading = rat.heading;
+    A::world(c).smooth(0.5f, 101.0);
+    CHECK(rat.position == at);
+    CHECK(rat.heading == heading);
+}
