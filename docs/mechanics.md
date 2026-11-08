@@ -687,6 +687,10 @@ find affect slot 1600). Each record is replayed call for call against the record
   (`HitLandingResult::feigned`) and `GameConnection::land_spell_on_me` does the rest. EQEmu's SE_FeignDeath only rolls
   the base and marks the client feigned; it sends no appearance, so the client's own is what lies the character down
   for everyone (`tests/feign_death_spell_test.cpp`).
+- Lying feigned (StandState 115, from the skill or the spell) the player cannot move: ProcessControls moves, turns,
+  strafes and jumps only standing (100) or ducking (111), and the forward key's auto-stand (AllowAutoStand) stands only a
+  sitting player (110), so a feigned one stays down until /sit or /stand (CEverQuest::Sit: anything but standing or
+  ducking stands up). The client hands ProcessControls the feigned state as 115 (`CharacterInput::lying`).
 
 ## Kept items: Hailstone's Keep mark
 

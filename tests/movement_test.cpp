@@ -906,6 +906,39 @@ TEST_CASE("Controller: LookSpring, AllowAutoStand's forward key and AllowAutoDuc
     CHECK_FALSE(ev.crouch_changed);
 }
 
+TEST_CASE("Controller: feigning death (StandState 115) holds the player still; the forward key does not stand it") {
+    MovementController m;
+    m.reset({0, 0, 0}, 0.0f);
+    CharacterInput ch;
+    ch.endurance = ch.max_endurance = 1000;
+    ch.lying = true;
+    ControlInput in;
+    in.forward = true;
+    in.forward_sits = true; // AllowAutoStand stands a sitting player only
+    in.turn_left = true;
+    in.strafe_right = true;
+    in.jump = true;
+    ControlEvents ev = m.controls(in, ch, 10000);
+    CHECK(m.stand_state() == 115);
+    CHECK(m.body.speed_run == 0.0f);
+    CHECK(m.body.speed_heading == 0.0f);
+    CHECK(m.strafe_mode() == 0);
+    CHECK_FALSE(ev.jumped);
+    CHECK_FALSE(ev.sit_toggle);
+    CHECK_FALSE(m.crouching);
+    in = {};
+    in.back = true;
+    m.controls(in, ch, 10010);
+    CHECK(m.body.speed_run == 0.0f);
+    // Stood up (/sit or /stand), the same keys move it.
+    ch.lying = false;
+    in = {};
+    in.forward = true;
+    m.controls(in, ch, 10020);
+    CHECK(m.stand_state() == 100);
+    CHECK(m.body.speed_run == 0.7f);
+}
+
 TEST_CASE("the jump's crouch window: the duck track's length + 1, at most 500 (FUN_00406740)") {
     CHECK(jump_crouch_window(std::nullopt) == 500);
     CHECK(jump_duck_clip(false) == "L08");
