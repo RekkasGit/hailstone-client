@@ -86,6 +86,48 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("eq API: a right click on a spell gem notes the gem's hit box, not an earlier click's rectangle") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int fw = 0, fh = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &fw, &fh);
+    {
+        test::ScratchDir dir("lua_eq_args_gem_rect");
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        app::EqApi api(host);
+        api.load_layout(dir.path() / "defaults.ini", dir.path() / "UI_Test_Server.ini", {});
+        lua_State* L = luaL_newstate();
+        luaL_openlibs(L);
+        lua_newtable(L);
+        api.register_functions(L);
+        lua_setglobal(L, "eq");
+        ImGui::NewFrame();
+        api.begin_frame();
+        ImGui::SetNextWindowPos(ImVec2(300, 200));
+        ImGui::SetNextWindowSize(ImVec2(400, 200));
+        ImGui::Begin("gem rect");
+        ImGui::SetCursorScreenPos(ImVec2(320, 220));
+        ImGui::InvisibleButton("##gem", ImVec2(40, 40));
+        host.click_rect = {5, 6, 7, 8}; // an earlier ClickChild / ClickSlot's
+        run(L, "return eq.SpellGemClick('CSPW_Spell0', 'right')");
+        CHECK(host.click_rect[0] == doctest::Approx(320.0f));
+        CHECK(host.click_rect[1] == doctest::Approx(220.0f));
+        CHECK(host.click_rect[2] == doctest::Approx(360.0f));
+        CHECK(host.click_rect[3] == doctest::Approx(260.0f));
+        // the other phases (the press, the held button) leave it alone
+        host.click_rect = {5, 6, 7, 8};
+        run(L, "return eq.SpellGemClick('CSPW_Spell0', 'rightdown')");
+        CHECK(host.click_rect[0] == doctest::Approx(5.0f));
+        ImGui::End();
+        ImGui::EndFrame();
+        lua_close(L);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("eq API: its handlers on the host, and the chat's UI ini, go with it") {
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
