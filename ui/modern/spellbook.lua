@@ -165,7 +165,8 @@ local function spellIcon(id)
 end
 
 -- The gem a double-click or the Memorize button uses: the one picked while it is empty (the game memorizes only into
--- an empty gem), else the first empty usable one.
+-- an empty gem; a drop onto a full one replaces its spell only with Hailstone's replace_gem_spell), else the first
+-- empty usable one.
 local function gemFor(st)
   if targetGem and targetGem < st.usableGems and (st.gems[targetGem + 1] or -1) == -1 then return targetGem end
   for g = 0, st.usableGems - 1 do
@@ -981,7 +982,9 @@ local function gemStrip(x, y, w, s, st)
     end
     if ui.IsItemHovered() and not drag then
       if id ~= -1 and byId[id] then
-        ui.SetTooltip(string.format("Gem %d: %s\nRight-click to forget", g + 1, byId[id].name))
+        local replace = usable and eq.Option("replace_gem_spell") ~= 0 -- Hailstone: a drop memorizes over it
+        ui.SetTooltip(string.format("Gem %d: %s\n%sRight-click to forget", g + 1, byId[id].name,
+          replace and "Drop a spell here to replace it\n" or ""))
       elseif usable then
         ui.SetTooltip(string.format("Gem %d (empty)\nDrop a spell here, or click to pick this gem", g + 1))
       else

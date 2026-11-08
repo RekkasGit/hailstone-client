@@ -675,6 +675,14 @@ find affect slot 1600). Each record is replayed call for call against the record
   slot); else the open effect slot (songs from max - 21, the last slot for a discipline) and, for a beneficial
   spell, the first droppable buff. Buffs of an unknown spell are cleared on the way. GetEffect gives slot 0 for an
   index outside 0..96.
+- A book spell dropped or clicked onto a gem (HandleSpellLeftClick, StartSpellMemorization(slot, gem, bReplace 0)
+  @0x75bf30): the original memorizes only into an empty gem and refuses one that holds a spell. Enhancement (option
+  `replace_gem_spell`, hailstone.ini `spells.replace_gem`, Options > Interface "Drop Replaces a Memorized Spell", on
+  by default; `EqHost::gem_takes_book_spell`): a usable gem that holds another spell takes it too, and the memorize
+  runs as into an empty one. At 0 ticks OP_MemorizeSpell goes out for that gem; a stock EQEmu server's
+  `Client::MemSpell` forgets the old spell (OP_MemorizeSpell 2, no "You forget" since the gem is being replaced)
+  and memorizes the new. The gem keeps the old spell until then. Double-click and the Memorize button still pick an
+  empty gem.
 - Live: `GameConnection::memorize_tick` and `handle_memorize_spell`; the hit-by-spell buff path
   (`game/hit_landing.*`) calls `find_affect_slot`, and the buff it writes appears at once
   (`HitLandingResult::placed_buffs`); the spawn's slot query (vtable +0xdc) answers 0 there.

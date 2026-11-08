@@ -532,10 +532,10 @@ public:
             }
         } else if (host.cursor_spell) {
             // HandleSpellLeftClick with a book spell on the cursor: StartSpellMemorization(slot, gem, 0), which
-            // refuses a gem that already holds a spell (bReplace 0, @0x75bfea). The spell stays on the cursor until
-            // the memorize is sent.
-            if (g < c.usable_gems() && c.spell_state().gems[static_cast<std::size_t>(g)].spell == game::kNoSpell)
-                c.memorize(*host.cursor_spell, g);
+            // refuses a gem that already holds a spell (bReplace 0, @0x75bfea); Hailstone's replace_gem_spell
+            // memorizes over it (EqHost::gem_takes_book_spell). The spell stays on the cursor until the memorize is
+            // sent.
+            if (g < c.usable_gems() && host.gem_takes_book_spell(g)) c.memorize(*host.cursor_spell, g);
         } else {
             c.clear_bard_twist(); // CCastSpellWnd::WndNotification: PlayerClient_ClearBardTwist first
             c.cast_gem(g);        // HandleSpellLeftClick
