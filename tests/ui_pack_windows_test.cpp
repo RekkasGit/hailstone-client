@@ -1408,9 +1408,9 @@ TEST_CASE("UI packs (gamepad): an invitation to a group keeps the client's own p
     ImGui::DestroyContext(ctx);
 }
 
-// Every dialog's bottom-right corner scales it, a resizable one's too (the AA window): the scale grows, its size
-// in design pixels stays, and the window grows with it. Its right edge still changes its size.
-TEST_CASE("UI packs (modern): a dialog's corner scales it, its edge resizes it") {
+// A resizable dialog's bottom-right corner resizes it (the AA window): its size in design pixels grows on both
+// axes and its scale stays (the scale is the right-click menu's). Its right edge changes the width alone.
+TEST_CASE("UI packs (modern): a dialog's corner and edge resize it, neither scales it") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
     nmsc::test::ScratchDir dir_scratch("ui_pack_dialog_corner_test");
     fs::path dir = dir_scratch.path();
@@ -1451,18 +1451,85 @@ TEST_CASE("UI packs (modern): a dialog's corner scales it, its edge resizes it")
             io.AddMousePosEvent(-1000, -1000);
             s.frames(3);
         };
-        // the corner: a larger scale, the same design size, a larger window
+        // the corner: a larger design size on both axes, the scale untouched
         drag(ImVec2(win->Pos.x + win->Size.x - 4, win->Pos.y + win->Size.y - 4), 120, 90);
-        const float scale = std::stof(setting("hud.scale.AAWindow"));
-        CHECK(scale > 1.1f);
-        CHECK(setting("hud.size.AAWindow") == "600,450");
-        CHECK(win->Size.x == doctest::Approx(before.x * scale).epsilon(0.03));
-        // the right edge: a wider design size, the same scale
-        const ImVec2 scaled = win->Size;
+        CHECK(setting("hud.scale.AAWindow").empty());
+        int sw = 0, sh = 0;
+        REQUIRE(std::sscanf(setting("hud.size.AAWindow").c_str(), "%d,%d", &sw, &sh) == 2);
+        CHECK(sw > 680);
+        CHECK(sh > 510);
+        CHECK(win->Size.x > before.x + 80);
+        CHECK(win->Size.y > before.y + 60);
+        // the right edge: a wider design size, the height and scale unchanged
+        const ImVec2 grown = win->Size;
         drag(ImVec2(win->Pos.x + win->Size.x - 2, win->Pos.y + win->Size.y / 2), 60, 0);
-        CHECK(std::stof(setting("hud.scale.AAWindow")) == doctest::Approx(scale));
-        CHECK(win->Size.x > scaled.x + 30);
-        CHECK(win->Size.y == doctest::Approx(scaled.y).epsilon(0.01));
+        CHECK(setting("hud.scale.AAWindow").empty());
+        CHECK(win->Size.x > grown.x + 30);
+        CHECK(win->Size.y == doctest::Approx(grown.y).epsilon(0.01));
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// A resizable HUD frame's bottom-right corner resizes it (the chat): a larger design size, the scale untouched. A
+// frame sized to what it shows (the player) has no corner grip: a drag there moves it and leaves its scale alone.
+TEST_CASE("UI packs (modern): a frame's corner resizes it, never scales it") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    nmsc::test::ScratchDir dir_scratch("ui_pack_frame_corner_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        lua_State* L = s.lua.state();
+        auto setting = [&](const char* name) {
+            REQUIRE(luaL_dostring(L, (std::string("return ui.GetSetting('") + name + "') or ''").c_str()) == LUA_OK);
+            std::string v = lua_tostring(L, -1);
+            lua_settop(L, 0);
+            return v;
+        };
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.Chat1', '400,200') ui.SetSetting('test.pos.Chat1', '40,300') "
+                                 "ui.SetSetting('test.pos.PlayerWindow', '600,40')") == LUA_OK);
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMousePosEvent(-1000, -1000);
+        s.frames(3);
+        ImGuiWindow* chat = ImGui::FindWindowByName("###modern.Chat1");
+        ImGuiWindow* player = ImGui::FindWindowByName("Player###modern.PlayerWindow");
+        REQUIRE(chat);
+        REQUIRE(player);
+        auto drag = [&](ImVec2 from, float dx, float dy) {
+            io.AddMousePosEvent(from.x, from.y);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            for (int i = 1; i <= 10; ++i) {
+                io.AddMousePosEvent(from.x + dx * static_cast<float>(i) / 10, from.y + dy * static_cast<float>(i) / 10);
+                s.frames(1);
+            }
+            io.AddMouseButtonEvent(0, false);
+            s.frames(1);
+            io.AddMousePosEvent(-1000, -1000);
+            s.frames(3);
+        };
+        const ImVec2 before = chat->Size;
+        drag(ImVec2(chat->Pos.x + chat->Size.x - 4, chat->Pos.y + chat->Size.y - 4), 100, 60);
+        CHECK(setting("hud.scale.Chat1").empty());
+        int sw = 0, sh = 0;
+        REQUIRE(std::sscanf(setting("hud.size.Chat1").c_str(), "%d,%d", &sw, &sh) == 2);
+        CHECK(sw > 460);
+        CHECK(sh > 230);
+        CHECK(chat->Size.x > before.x + 60);
+        CHECK(chat->Size.y > before.y + 30);
+        const ImVec2 playerSize = player->Size;
+        drag(ImVec2(player->Pos.x + player->Size.x - 4, player->Pos.y + player->Size.y - 4), 80, 40);
+        CHECK(setting("hud.scale.PlayerWindow").empty());
+        CHECK(player->Size.x == doctest::Approx(playerSize.x));
+        CHECK(player->Size.y == doctest::Approx(playerSize.y));
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);

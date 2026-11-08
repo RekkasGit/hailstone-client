@@ -15,7 +15,8 @@
 -- the character's UI ini, so switching back to Classic finds the stock layout untouched.
 --
 -- Moving and sizing, with no title bar: drag a frame by any spot that is not a button, slot or bar (or anywhere
--- with Alt held); drag its bottom-right corner to resize it (the chat changes size, other frames their scale).
+-- with Alt held); a frame that can change size (the chat) does so from its right and bottom edges and its
+-- bottom-right corner. The scale is the right-click menu's.
 -- "Lock" (one frame, or all of them) stops both. Layout mode (the right-click menu) also shows the frames that
 -- hide while empty (target, group, extended targets, buffs), outlined, so they can be placed too. "Snap to grid"
 -- (lib/snap.lua) lines up the frames and dialogs a drag places. A window that can be closed has "Close with Esc" in
@@ -285,8 +286,7 @@ local function menu(window, title, opts)
   end
   ui.Separator()
   ui.TextDisabled("Drag an empty spot, or Alt+drag, to move")
-  ui.TextDisabled("Drag the bottom-right corner to scale")
-  if opts.resizable then ui.TextDisabled("Drag the right or bottom edge to resize") end
+  if opts.resizable then ui.TextDisabled("Drag an edge or the bottom-right corner to resize") end
   ui.TextDisabled("Alt+right-click always opens this menu")
 end
 
@@ -348,8 +348,8 @@ end
 --   opts.menu()                  extra rows for the right-click menu
 --   opts.inputs = false          the frame never takes the mouse (moved in layout mode only)
 --   opts.hideWhen() -> true      not drawn this frame unless in layout mode (an empty target frame)
---   opts.resizable = { minW, minH }   its right and bottom edges change its size (hud.size.<window>); the corner
---                                grip scales it, as every frame's does
+--   opts.resizable = { minW, minH }   its right and bottom edges and its bottom-right corner change its size
+--                                (hud.size.<window>); a frame without it has no grip (its scale is the menu's)
 --   opts.onClose()               a frame that can be put away (not a HUD piece): an X in its top right corner calls it
 --   body(x, y, w, h, s)          draws into the frame's screen rectangle
 function hud.Window(screen, title, opts, body)
@@ -477,35 +477,30 @@ function hud.Window(screen, title, opts, body)
         local g = snap.Grid()
         if g then snap.DrawGrid(g, c) end
       end
-      -- the corner grip: shown while the frame is hovered
-      local g = math.max(12, 14 * s)
-      local hovered = ui.IsMouseHoveringRect(wx, wy, wx + w, wy + h)
       if opts.resizable then
-        -- a resizable frame's right and bottom edges change its size (design pixels), its corner its scale as
-        -- every frame's and dialog's does
+        -- the right and bottom edges and the corner grip (shown while the frame is hovered) change its size in design
+        -- pixels; the scale is the right-click menu's
+        local g = math.max(12, 14 * s)
+        local hovered = ui.IsMouseHoveringRect(wx, wy, wx + w, wy + h)
         local e = math.max(5, 6 * s)
         local minW, minH = opts.resizable[1], opts.resizable[2]
         frameEdge(st, "##resizeright", wx + w - e, wy, wx + w, wy + h - g, true, s, minW, minH)
         frameEdge(st, "##resizebottom", wx, wy + h - e, wx + w - g, wy + h, false, s, minW, minH)
-      end
-      T.Hit("##resize", wx + w - g, wy + h - g, wx + w, wy + h)
-      local active, over = ui.IsItemActive(), ui.IsItemHovered()
-      if hovered or active then
-        local c = T.color.accent
-        local a = (active or over) and 1 or 0.45
-        for n = 1, 3 do
-          local d = n * 3.5 * s
-          ui.DrawLine(wx + w - d - 3 * s, wy + h - 3 * s, wx + w - 3 * s, wy + h - d - 3 * s, c[1], c[2], c[3], a, 1.5)
+        T.Hit("##resize", wx + w - g, wy + h - g, wx + w, wy + h)
+        local active, over = ui.IsItemActive(), ui.IsItemHovered()
+        if hovered or active then
+          local c = T.color.accent
+          local a = (active or over) and 1 or 0.45
+          for n = 1, 3 do
+            local d = n * 3.5 * s
+            ui.DrawLine(wx + w - d - 3 * s, wy + h - 3 * s, wx + w - 3 * s, wy + h - d - 3 * s, c[1], c[2], c[3], a, 1.5)
+          end
         end
-      end
-      if over and not active then ui.SetTooltip("Drag to scale") end
-      if active and ui.IsMouseDragging(ui.Mouse.Left) then
-        -- a resizable frame still sized by the layout keeps that size in design pixels, so the scale zooms it whole
-        if opts.resizable and fit then ui.SetSetting(k.size, string.format("%.0f,%.0f", w / s, h / s)) end
-        -- the frame's scale follows the corner (the larger of the two stretches), kept on its top-left corner
-        local f = math.max((w + io.mouseDX) / w, (h + io.mouseDY) / h)
-        local scale = math.max(0.5, math.min(2.5, num(k.scale, 1.0) * f))
-        ui.SetSetting(k.scale, string.format("%.3f", scale))
+        if over and not active then ui.SetTooltip("Drag to resize") end
+        if active and ui.IsMouseDragging(ui.Mouse.Left) then
+          local nw, nh = math.max(minW, (w + io.mouseDX) / s), math.max(minH, (h + io.mouseDY) / s)
+          ui.SetSetting(k.size, string.format("%.0f,%.0f", nw, nh))
+        end
       end
     end
     ui.PopStyleVar()
@@ -555,7 +550,8 @@ end
 --   opts.key                     the place's key when one script draws several windows of one screen name
 --   opts.resizable = { minW, minH }   resized from its right and bottom edges (hud.size.<window>, design pixels);
 --                                body gets the current contents' size
--- Every dialog's bottom-right corner scales it (hud.scale.<window>), text and all. A dialog with a close box also
+-- A resizable dialog's bottom-right corner resizes it as its edges do; its scale (hud.scale.<window>, text and all)
+-- is the right-click menu's slider, or Ctrl+mouse wheel over it. A dialog with a close box also
 -- has a roll-up button beside it (and a double click on its title bar): rolled up, only the title bar is drawn
 -- (hud.rolled.<window>, kept until it is unrolled, closing and opening it again included).
 --   body(x, y, w, h, s)          draws the contents at that screen rectangle
@@ -625,8 +621,8 @@ function hud.Dialog(screen, title, opts, body)
     savedW, savedH = tonumber(a), tonumber(b)
     savedW = savedW and math.max(savedW, opts.resizable[1])
     savedH = savedH and math.max(savedH, opts.resizable[2])
-    -- its size is kept in design pixels and set every frame: a new scale (the corner, the menu's Scale, Ctrl+wheel,
-    -- the UI scale) zooms the whole window, not only what is in it; its edges (below) change the size
+    -- its size is kept in design pixels and set every frame: a new scale (the menu's Scale, Ctrl+wheel, the UI
+    -- scale) zooms the whole window, not only what is in it; its edges and corner (below) change the size
     ui.SetNextWindowSize((savedW or dw) * s, (savedH or dh) * s, ui.Cond.Always)
   end
   local alpha = windowAlpha(key, k, false)
@@ -691,14 +687,12 @@ function hud.Dialog(screen, title, opts, body)
     ui.SetCursorPos(cpx, cpy)
     local c = T.color.accent
     local windowHovered = ui.IsWindowHovered(ui.HoveredFlags.ChildWindows)
-    -- the corner grip: dragging it changes the window's scale, the same in every dialog. A window sized to its
-    -- contents has it inside them (so the auto-resize does not grow around it), a resizable one at its own corner.
-    local g = math.max(12, 14 * s)
-    local gx, gy, gw, gh -- the corner, and the size the drag is measured against
     if opts.resizable then
+      -- the right and bottom edges, below the title bar and short of the corner, and the corner grip change its size
+      -- (design pixels); a dialog sized to its contents has no grip
+      local g = math.max(12, 14 * s)
       local ww, wh = ui.GetWindowSize()
-      gx, gy, gw, gh = wx + ww, wy + wh, ww, wh
-      -- the right and bottom edges change its size (design pixels), below the title bar and short of the corner
+      local gx, gy = wx + ww, wy + wh
       local e = math.max(5, 6 * s)
       local curW, curH = savedW or dw, savedH or dh
       local minW, minH = opts.resizable[1], opts.resizable[2]
@@ -711,31 +705,26 @@ function hud.Dialog(screen, title, opts, body)
         ui.SetSetting(k.size, string.format("%.0f,%.0f", nw, nh))
       end
       ui.EdgeButton("##dlgresize", gx - g, gy - g, gx, gy)
+      local active, over = ui.IsItemActive(), ui.IsItemHovered()
       gx, gy = gx - 3 * s, gy - 3 * s -- (the lines clear of the rounded corner)
-    else
-      gx, gy, gw, gh = cx + w, cy + h, w, h
-      ui.SetNextItemAllowOverlap()
-      T.Hit("##dlgresize", gx - g, gy - g, gx, gy)
-    end
-    local active, over = ui.IsItemActive(), ui.IsItemHovered()
-    if windowHovered or active then
-      local a = (active or over) and 1 or 0.35
-      for n = 1, 3 do
-        local d = n * 3.5 * s
-        ui.DrawLine(gx - d, gy, gx, gy - d, c[1], c[2], c[3], a, 1.5)
+      if windowHovered or active then
+        local a = (active or over) and 1 or 0.35
+        for n = 1, 3 do
+          local d = n * 3.5 * s
+          ui.DrawLine(gx - d, gy, gx, gy - d, c[1], c[2], c[3], a, 1.5)
+        end
       end
-    end
-    if over and not active then ui.SetTooltip("Drag to scale") end
-    if active and ui.IsMouseDragging(ui.Mouse.Left) then
-      local f = math.max((gw + io.mouseDX) / gw, (gh + io.mouseDY) / gh)
-      local scale = math.max(0.6, math.min(2.0, num(k.scale, 1.0) * f))
-      ui.SetSetting(k.scale, string.format("%.3f", scale))
+      if over and not active then ui.SetTooltip("Drag to resize") end
+      if active and ui.IsMouseDragging(ui.Mouse.Left) then
+        local nw, nh = math.max(minW, (ww + io.mouseDX) / s), math.max(minH, (wh + io.mouseDY) / s)
+        ui.SetSetting(k.size, string.format("%.0f,%.0f", nw, nh))
+      end
     end
     ui.SetCursorPos(cpx, cpy)
     if not opts.resizable then ui.Dummy(w, h) end -- the contents' size, for the auto-resize
     ui.SetWindowFontScale(1)
     ui.PopStyleVar() -- the contents' Alpha
-    -- Ctrl+wheel over the window zooms it, as its corner does
+    -- Ctrl+wheel over the window zooms it, as the menu's Scale does
     if io.ctrl and (io.wheel or 0) ~= 0 and ui.IsWindowHovered(ui.HoveredFlags.ChildWindows) then
       local scale = math.max(0.6, math.min(2.0, num(k.scale, 1.0) * 1.1 ^ io.wheel))
       ui.SetSetting(k.scale, string.format("%.3f", scale))
@@ -773,8 +762,7 @@ function hud.Dialog(screen, title, opts, body)
         esc.MenuItem(key)
       end
       ui.Separator()
-      ui.TextDisabled("Drag the bottom-right corner to scale")
-      if opts.resizable then ui.TextDisabled("Drag the right or bottom edge to resize") end
+      if opts.resizable then ui.TextDisabled("Drag an edge or the bottom-right corner to resize") end
       ui.TextDisabled("Ctrl+mouse wheel to zoom")
       ui.EndPopup()
     end

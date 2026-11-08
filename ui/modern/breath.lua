@@ -1,6 +1,6 @@
 -- Air meter: replaces the game's BreathWindow (shown by the game while you are short of air: under water). A small
 -- borderless frame like the cast bar: "Air" and the percent left over a bar (the game's gauge, EQType 8) that turns
--- from cyan to red as the air runs out, pulsing in the last quarter. Moves by dragging, scales from its corner.
+-- from cyan to red as the air runs out, pulsing in the last quarter. Moves by dragging; its scale is the right-click menu's.
 local hud = dofile("lib/hud.lua")
 local T = hud.T
 local C = T.color
