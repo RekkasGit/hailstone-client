@@ -683,6 +683,9 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     ci.auto_duck = auto_duck_.active != 0;
     ch.sitting = conn.sitting();
     ch.looting = st.stand_state == net::kStandLooting;
+    // Feigning (115) reaches ProcessControls as itself: neither standing nor ducking, it cannot move, and the
+    // forward key's auto-stand (sitting only) leaves it lying.
+    ch.lying = st.stand_state == net::kStandLying;
     // The crouch is the player's stand state (111), from the DUCK key or the standing jump.
     ctl_.crouching = conn.player_status().stand_state == net::kStandCrouching;
     last_ch_ = ch;

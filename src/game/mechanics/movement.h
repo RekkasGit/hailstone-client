@@ -378,6 +378,7 @@ struct CharacterInput {
     bool frozen = false;        // StandState 102, stunned, or sitting: no movement
     bool sitting = false;       // StandState 110 (ProcessControls' forward key stands it up)
     bool looting = false;       // StandState 105 (kneeling at a corpse: no movement)
+    bool lying = false;         // StandState 115 (feigning death): no movement; /sit or /stand gets up
     bool dead = false;
     bool gm_flag = false;       // DAT_00ddf654 / 0xddf790: no endurance check
     bool interface_locked = false; // /safelock (0xe15dac): ProcessControls does nothing

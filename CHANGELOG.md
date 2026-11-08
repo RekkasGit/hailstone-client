@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A character feigning death can no longer walk, turn, strafe or jump: it used to slide along the ground still lying down. Stand up with `/sit` or `/stand` (the forward key does not stand you up, as on the original client)
 - Modern UI: windows with a title bar (inventory, bags, merchant, spell book, AA, guild, map and the rest) have a roll-up button beside their X. A click, or a double click on the title bar, rolls the window up to its title bar and back; it stays rolled up until you unroll it, even after closing and opening it again. Hot bars, spell gems and the other HUD frames, and yes/no or quantity prompts, have none
 - Field of Bone now has a working navigation mesh: `/nav`, `/stick` and the overlay found nothing there, because the trees the zone hides far under the world pulled the whole mesh down with them. A zone's mesh already saved by an earlier version is built again by itself
 - The navigation mesh of a zone you have not been to yet now starts building as soon as you zone in, instead of waiting for the first `/nav` or the overlay (a `/stick` close to its target never asked for it). `nav.prebuild=0` in `hailstone.ini` brings back the old way
