@@ -684,6 +684,9 @@ end
 -- What can be done with a row, and what it may do (greyed out, for reading).
 local function addonActions(r, back)
   local items = {}
+  if r.canStart then
+    items[#items + 1] = { label = "Start", sub = "It opens a window of its own", fn = function() eq.LoginDo("addonStart", r.name) end }
+  end
   if r.group == "installed" then
     if r.canUpdate then
       local what = r.state == "approval" and "Approve and update" or r.state == "modified" and "Update anyway"
@@ -745,12 +748,15 @@ local function addonsPage(v, x0, y, x1, w)
     y = lines("A " .. o.kind .. (o.author ~= "" and (" by " .. o.author) or "") .. ", from " .. o.source
       .. (o.installedVersion ~= "" and ("  ·  installed now: " .. o.installedVersion) or ""), x0, y, x1)
     y = lines(o.description, x0, y, x1)
-    y = lines("It asks to: " .. table.concat(o.caps, "; ") .. ".", x0, y, x1, false, 4)
+    if o.kind ~= "tool" then y = lines("It asks to: " .. table.concat(o.caps, "; ") .. ".", x0, y, x1, false, 4) end
     y = lines(o.key ~= "" and ("Signed with key " .. o.key .. ": later versions must carry it.")
       or "Not signed: later versions come from whoever controls the repository.", x0, y, x1)
     if o.kind == "plugin" then
       y = lines("A plugin is a program: these permissions limit what it does through Hailstone, not what it can do "
         .. "on your computer. Install only plugins you trust.", x0, y, x1, true)
+    elseif o.kind == "tool" then
+      y = lines("A tool is a program of its own: it runs on your computer with your rights, outside Hailstone, which "
+        .. "starts it when you ask. Install only tools you trust.", x0, y, x1, true)
     end
     y = lines(o.blocked, x0, y, x1, true)
     P.at(x0, y)

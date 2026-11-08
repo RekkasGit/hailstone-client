@@ -62,6 +62,14 @@ std::string path_text(const std::filesystem::path& p) {
     return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
 }
 
+// An installed tool whose program is in its folder.
+bool tool_program_there(const std::filesystem::path& data, const InstalledAddon& a) {
+    if (a.kind != AddonKind::Tool) return false;
+    std::error_code ec;
+    return std::filesystem::is_regular_file(
+        addon_folder(data, a.kind, a.name) / addon_tool_program(a.name, update_platform()), ec);
+}
+
 } // namespace
 
 void ClientApp::start_addons() {
@@ -252,7 +260,7 @@ void ClientApp::update_addons() {
     // What this server does with the player's own: its hailstone.cfg as the last login left it.
     const plugin::Rules& rules = addons_rules_;
     auto server_note = [&](AddonKind kind, const std::string& name, std::uint32_t caps) -> std::string {
-        if (profile.empty()) return {};
+        if (profile.empty() || kind == AddonKind::Tool) return {}; // a tool is no server's business: it is not run in it
         for (const auto& s : server_addons_)
             if (s.kind == kind && s.name == name) return "This server has its own " + name + ": that one runs there.";
         if (!rules.configured) return {};
@@ -291,6 +299,7 @@ void ClientApp::update_addons() {
                         s.state == AddonState::Modified || s.state == AddonState::Failed);
         r.can_remove = s.installed && s.state != AddonState::Downloading && s.state != AddonState::Checking;
         r.folder = path_text(addon_folder(data, a.kind, a.name));
+        r.can_start = s.installed && tool_program_there(data, a);
         v.rows.push_back(std::move(r));
     }
     // Without the manager the installed ones are still listed (and can be removed).
@@ -311,6 +320,7 @@ void ClientApp::update_addons() {
             r.signed_ = a.key.has_value();
             r.can_remove = true;
             r.folder = path_text(addon_folder(data, a.kind, a.name));
+            r.can_start = tool_program_there(data, a);
             v.rows.push_back(std::move(r));
         }
     for (const ManualAddon& m : manual_addons_) {
@@ -342,6 +352,36 @@ void ClientApp::update_addons() {
         r.folder = path_text(login_view_.servers_dir / profile / (s.kind == AddonKind::Script ? "scripts" : "plugins"));
         v.rows.push_back(std::move(r));
     }
+}
+
+bool ClientApp::texture_studio_installed() const {
+    // Its program only (the Options window asks each frame): starting it checks the add-on's record too.
+    InstalledAddon a;
+    a.name = std::string(kTextureStudio);
+    a.kind = AddonKind::Tool;
+    return tool_program_there(platform::data_dir(), a);
+}
+
+bool ClientApp::start_addon_tool(std::string_view name, std::string* error) {
+    const std::filesystem::path data = platform::data_dir();
+    const auto all = read_installed_addons(data);
+    const InstalledAddon* a = find_addon(all, name);
+    if (!a || a->kind != AddonKind::Tool || !tool_program_there(data, *a)) {
+        if (error) *error = std::string(name) + " is not installed (Add-ons, on the login screen)";
+        return false;
+    }
+    const std::filesystem::path program =
+        addon_folder(data, a->kind, a->name) / addon_tool_program(a->name, update_platform());
+    tools_.poll();
+    std::string why;
+    // The data folder by name: the tool reads and writes the player's (settings, packs, the game folder chosen).
+    if (!tools_.start({path_text(program), "--data-dir", path_text(data)}, why)) {
+        log::warn("Add-ons: cannot start {}: {}", path_text(program), why);
+        if (error) *error = "Could not start " + a->name + ": " + why;
+        return false;
+    }
+    log::info("Add-ons: started {}", path_text(program));
+    return true;
 }
 
 void ClientApp::addons_login_action(ui::LoginAction action) {
@@ -475,6 +515,13 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
         std::error_code ec;
         if (std::filesystem::is_regular_file(p, ec)) p = p.parent_path(); // a script or plugin that is one file
         if (!platform::open_folder(p)) v.status = {"Could not open " + row->folder, true};
+        break;
+    }
+    case A::AddonStart: {
+        if (!row || !row->can_start) break;
+        std::string why;
+        if (start_addon_tool(row->name, &why)) v.status = {row->name + " is starting.", false};
+        else v.status = {why, true};
         break;
     }
     case A::AddonPage: {

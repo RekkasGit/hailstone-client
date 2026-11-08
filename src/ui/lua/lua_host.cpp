@@ -83,6 +83,7 @@ struct LuaUi::Impl {
     fs::path dir;      // the scripts
     fs::path root;     // dofile paths are relative to it (the UI's folder)
     std::vector<LuaUi::Folder> folders; // more folders of windows (plugins'), set_folders
+    std::vector<std::string> entries;   // set_entry_scripts: the only scripts of the UI's folder loaded (none: all)
     bool folders_changed = false;
     fs::path settings_file;
     std::vector<Script> scripts;
@@ -421,12 +422,18 @@ struct LuaUi::Impl {
 
     void scan_folder(const std::string& tag, const fs::path& folder, bool force_all) {
         std::error_code ec;
-        std::vector<fs::path> files;
-        for (const auto& e : fs::directory_iterator(folder, ec))
-            if (e.is_regular_file(ec) && e.path().extension() == ".lua") files.push_back(e.path());
-        std::sort(files.begin(), files.end());
-        for (const fs::path& p : files) {
-            std::string name = tag.empty() ? p.filename().string() : tag + "/" + p.filename().string();
+        std::vector<std::pair<fs::path, std::string>> files; // each file and its name in errors
+        if (tag.empty() && !entries.empty()) {
+            for (const std::string& e : entries)
+                if (fs::is_regular_file(folder / e, ec)) files.emplace_back(folder / e, e);
+        } else {
+            for (const auto& e : fs::directory_iterator(folder, ec))
+                if (e.is_regular_file(ec) && e.path().extension() == ".lua")
+                    files.emplace_back(e.path(), tag.empty() ? e.path().filename().string()
+                                                             : tag + "/" + e.path().filename().string());
+            std::sort(files.begin(), files.end());
+        }
+        for (const auto& [p, name] : files) {
             Script* s = nullptr;
             for (Script& x : scripts)
                 if (x.file == name) s = &x;
@@ -1371,6 +1378,8 @@ void LuaUi::add_eq_api(const Registrar& r) {
 }
 
 void LuaUi::set_show_control(bool show) { impl_->show_control = show; }
+
+void LuaUi::set_entry_scripts(std::vector<std::string> files) { impl_->entries = std::move(files); }
 
 void LuaUi::set_folders(std::vector<Folder> folders) {
     bool same = folders.size() == impl_->folders.size() &&

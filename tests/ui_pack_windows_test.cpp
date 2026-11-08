@@ -16,6 +16,8 @@
 #include <tuple>
 #include <vector>
 
+#include <set>
+
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <lua.hpp>
@@ -264,6 +266,17 @@ TEST_CASE("UI packs: each draws the login, server select and character select sc
             server.name = "map";
             server.consent = "denied";
             login.addons.rows.push_back(server);
+            // An installed tool (a program of its own): Start.
+            ui::AddonRowView tool;
+            tool.name = "texstudio";
+            tool.kind = "tool";
+            tool.group = "installed";
+            tool.version = "1.0.0";
+            tool.source = "owner/texstudio";
+            tool.state = "uptodate";
+            tool.can_remove = tool.can_start = true;
+            tool.folder = "/x/tools/texstudio";
+            login.addons.rows.push_back(tool);
             // The store (docs/addons.md "Finding add-ons"): an item in each state, then the list being fetched, then
             // an empty one.
             for (const char* state : {"install", "update", "installed", "manual", "unavailable"}) {
@@ -284,6 +297,13 @@ TEST_CASE("UI packs: each draws the login, server select and character select sc
             login.addons.browsed = true;
             s.frames(3);
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            // A tool's install card: no permissions, the program's warning.
+            login.addons.offer->kind = "tool";
+            login.addons.offer->caps.clear();
+            s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            login.addons.offer->kind = "plugin";
+            login.addons.offer->caps = {"read the game state", "draw windows"};
             if (std::string(pack) == "modern") {
                 // the list of their own, then back to the store
                 REQUIRE(luaL_dostring(s.lua.state(), "ui.SetSetting('test.addontab', 'mine')") == LUA_OK);
@@ -2230,6 +2250,55 @@ TEST_CASE("UI packs (modern): the raid leader drags a member onto another group"
         rig.run_for(std::chrono::milliseconds(100));
         CHECK(count(net::kRaidMoveGroup, "Bravo", 3) == 0);
         CHECK(count(net::kRaidCmdLock, me, 0) == 1); // (locked once only)
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("UI packs (modern): the Options window's Textures section picks the texture pack and starts the studio") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir dir_scratch("ui_pack_textures_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        std::set<std::string> asked;
+        s.host.find_option = [&](std::string_view o) -> std::optional<int> {
+            asked.insert(std::string(o));
+            if (o == "texture_pack") return 2;
+            if (o == "texture_studio") return 1;
+            return std::nullopt;
+        };
+        s.host.option_choices = [](std::string_view o) {
+            return o == "texture_pack" ? std::vector<std::string>{"Off", "default", "hd"} : std::vector<std::string>{};
+        };
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('OptionsWindow', true)") == LUA_OK);
+        s.frames(3);
+        // a click on the Graphics tab (found in the window's tab bar)
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        std::optional<ImVec2> at;
+        for (int i = 0; i < g.TabBars.GetMapSize() && !at; ++i)
+            if (ImGuiTabBar* bar = g.TabBars.TryGetMapData(i))
+                for (ImGuiTabItem& tab : bar->Tabs)
+                    if (std::string_view(ImGui::TabBarGetTabName(bar, &tab)) == "Graphics")
+                        at = ImVec2(bar->BarRect.Min.x + tab.Offset + tab.Width / 2, (bar->BarRect.Min.y + bar->BarRect.Max.y) / 2);
+        REQUIRE(at);
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMousePosEvent(at->x, at->y);
+        s.frames(1);
+        io.AddMouseButtonEvent(0, true);
+        s.frames(1);
+        io.AddMouseButtonEvent(0, false);
+        s.frames(3);
+        CHECK(asked.contains("texture_pack"));
+        CHECK(asked.contains("texture_studio")); // the Texture Studio button is offered
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);

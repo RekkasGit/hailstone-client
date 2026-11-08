@@ -86,6 +86,8 @@ bool is_safe_server_file_path(std::string_view path) {
     return ext_in(lower(path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1)), kRefused).empty();
 }
 
+bool is_safe_file_path_shape(std::string_view path) { return is_safe_path_shape(path); }
+
 std::string_view plugin_platform() { return kPlatform; }
 
 std::optional<std::string> server_file_destination(std::string_view path, bool* other_platform) {

@@ -253,6 +253,7 @@ void emit_addons(Out& o, const ui::AddonsView& a) {
         o.boolean("signed", r.signed_);
         o.boolean("canUpdate", r.can_update);
         o.boolean("canRemove", r.can_remove);
+        o.boolean("canStart", r.can_start);
         o.str("folder", r.folder);
         o.close(i);
     }
@@ -433,9 +434,9 @@ void emit_login(Out& o, const ui::LoginView& v) {
 //     server (the picked server's name), suggestions {name ("" a server's suggestion), source, text, fromServer} (the
 //     picked server's suggested add-ons the player does not have: docs/addons.md "Suggested add-ons"), offer {name, kind, version, author, description, source, page, notes, key
 //     (the signing key's start, "" unsigned), installedVersion, blocked (why not, "" it can), caps (in words)},
-//     rows {name, kind ("script"/"plugin"), group ("installed", "manual", "server"), version, source, page, author,
+//     rows {name, kind ("script"/"plugin"/"tool"), group ("installed", "manual", "server"), version, source, page, author,
 //     description, state, stateText, newVersion, caps, newCaps, modified, note, autoUpdate, signed, canUpdate,
-//     canRemove, folder, consent (the server's compiled plugins: "allowed", "denied", "unasked"; else "")}.
+//     canRemove, canStart (an installed tool: eq.LoginDo "addonStart"), folder, consent (the server's compiled plugins: "allowed", "denied", "unasked"; else "")}.
 int LoginScreen(lua_State* L) {
     EqHost& h = host_of(L);
     if (!h.login || plugin_window()) {
@@ -532,6 +533,7 @@ SavedAccount* account_named(ui::LoginView& v, std::string_view username) {
 //   "addonRemove", n   remove add-on n (ask first; only the installed ones: never the server's)
 //   "addonAuto", n, on  auto-update for add-on n
 //   "addonFolder", n   open row n's folder; "addonPage" [, n]: its page (none: the offer's)
+//   "addonStart", n    start the installed tool n (its row's canStart)
 //   "addonCheck"       look for newer versions now
 //   "addonRevoke", n   the server's compiled plugin n no longer runs there (consent "allowed")
 //   "addonAskAgain", n the next visit asks again about the server's compiled plugin n (consent "denied")
@@ -578,7 +580,7 @@ int LoginDo(lua_State* L) {
                                                              "addonAuto",    "addonFolder",  "addonPage",
                                                              "addonRevoke",  "addonAskAgain", "addonSuggestLook",
                                                              "addonSuggestLater", "addonSuggestNever",
-                                                             "addonBrowse",  "addonStoreLook"};
+                                                             "addonBrowse",  "addonStoreLook", "addonStart"};
         if (std::find(std::begin(kAddonActions), std::end(kAddonActions), what) == std::end(kAddonActions))
             return luaL_error(L, "eq.LoginDo: no action %s", lua_tostring(L, 1));
         if (what != "addonBrowse") luaL_optstring(L, 2, ""); // (addonBrowse's is a flag: any value)
@@ -639,6 +641,9 @@ int LoginDo(lua_State* L) {
                      return it.source == name && (it.state == "install" || it.state == "update");
                  });
             if (ok) action = A::AddonStoreLook;
+        } else if (what == "addonStart") {
+            ok = row && row->can_start;
+            if (ok) action = A::AddonStart;
         } else if (what == "addonFolder") {
             ok = row && !row->folder.empty();
             if (ok) action = A::AddonFolder;

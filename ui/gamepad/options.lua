@@ -220,8 +220,10 @@ local PAGES = {
       optionRow("Lighting", "lighting", { "Modern", "Classic" }),
       optionRow("Max camera zoom", "max_camera_distance", { 10, 150, 10, " units" }),
       optionRow("Ground floating NPCs", "ground_npcs", "bool"),
+      -- the texture pack (display.texture_folder, from the next start): Off, then each folder of textures/
+      optionRow("Texture pack (next start)", "texture_pack", eq.OptionChoices("texture_pack")),
     }
-    for i = 1, 11 do if list[i] then rows[#rows + 1] = list[i] end end
+    for i = 1, 12 do if list[i] then rows[#rows + 1] = list[i] end end
     return rows
   end },
   { "Audio", function()

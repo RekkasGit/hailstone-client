@@ -1,7 +1,8 @@
-# Add-ons: scripts and plugins from GitHub
+# Add-ons: scripts, plugins and tools from GitHub
 
-The add-on manager lets a player install a MacroQuest Lua script or a compiled plugin (docs/plugins.md) by pasting a
-GitHub link on the login screen, without opening the Hailstone folder, and keeps it up to date. It is a Hailstone
+The add-on manager lets a player install a MacroQuest Lua script, a compiled plugin (docs/plugins.md) or a tool (a
+program of its own, below) by pasting a GitHub link on the login screen, without opening the Hailstone folder, and
+keeps it up to date. It is a Hailstone
 feature with no counterpart in the original client. It is built on the updater's parts (docs/updater.md): the HTTPS
 download (`platform/http_get`), the zip reader (`core/zip_read`), SHA-256 and Ed25519 (`core/ed25519`).
 
@@ -80,6 +81,31 @@ turn comes, not as the check found it at its start: an add-on removed meanwhile 
 installed again), and one whose auto-update was switched off is offered, not taken. Switched off while its update
 downloads, the update is not installed at the login screen either (the row offers it). An update keeps the add-on's
 auto-update switch as it is at install time.
+
+## Tools
+
+A tool is a program of its own that works beside Hailstone, with its files: Hailstone Texture Studio
+(projecthailstone/hailstone-texstudio), which builds HD texture packs from the player's game files on their graphics
+card, is the first. It installs, updates and is removed as any add-on, into `tools/<name>/`, and the client never
+loads or runs anything of it itself:
+
+- **Start** on its row (My add-ons; the gamepad pack's row menu; the client's own add-ons window) starts its program,
+  `tools/<name>/<name>` (`<name>.exe` on Windows), with `--data-dir <the data folder>`, so it reads and writes the
+  player's Hailstone folder (`hailstone.ini`, `textures/`, its own settings) wherever it was started from. It runs as a
+  program of its own and is left running when Hailstone quits (`ClientApp::start_addon_tool`).
+- **Options** start the one tool it knows of: Graphics, Textures, **Texture Studio...** once the add-on `texstudio`
+  is installed; until then that row says to install it from Add-ons.
+- **Its card** asks for no permissions, and says instead that a tool runs on the computer with the player's rights,
+  outside Hailstone: the capability ceiling means nothing to a program of its own, so a tool's manifest says
+  `caps none` and one that asks for any is refused.
+- **What its package holds** (What is checked, below): its program at the top, named after it and a program for this
+  platform by its header (never run at the install); this platform's shared libraries beside it (an SDL it was built
+  with, `libSDL3.so.0`); and data and Lua anywhere (the tool's own: the client runs none of it). Nothing else that runs:
+  no second program, no shell or system scripts, no libraries in folders or for another platform. On Linux and macOS
+  the program alone is made runnable.
+
+An older Hailstone refuses a tool's manifest ("the kind is script or plugin"). A tool needs a release of Hailstone
+that has this section.
 
 ## Finding add-ons
 
@@ -167,12 +193,12 @@ signature <128 hex digits>
 |---|---|
 | `hailstone-addon 1` | the first line; another version needs a newer Hailstone |
 | `name` | 1 to 32 letters, digits, `-` and `_`, starting with a letter or digit: its folder, `scripts/<name>/` or `plugins/<name>/`; a plugin's library is named after it |
-| `kind` | `script` or `plugin` |
+| `kind` | `script`, `plugin` or `tool` |
 | `version`, `min_client` | SemVer (`core/version.h`); `min_client` is optional |
 | `author`, `description` | optional, one line each of at most 200 bytes |
-| `caps` | what it needs (docs/plugins.md "Capabilities"); required, and the ceiling below |
+| `caps` | what it needs (docs/plugins.md "Capabilities"); required, and the ceiling below; a tool's is `none` |
 | `notes` | optional: its release notes |
-| `package <platform> <size> <sha256> <file>` | a script has one, for `any`; a plugin one for each platform it is built for (`linux-x64`, `windows-x64`, `macos-arm64` ...). The file is a name beside the manifest's address (the same release's asset, or the same branch's file) or an https address on GitHub |
+| `package <platform> <size> <sha256> <file>` | a script has one, for `any`; a plugin or a tool one for each platform it is built for (`linux-x64`, `windows-x64`, `macos-arm64` ...). The file is a name beside the manifest's address (the same release's asset, or the same branch's file) or an https address on GitHub |
 | `key`, `signature` | optional, together: Ed25519 over every byte before the `signature` line, which ends the file |
 
 Unknown records are skipped, for later versions. A known record that does not parse refuses the whole manifest.
@@ -258,15 +284,16 @@ Everything is checked before anything is written; any failure refuses the whole 
 | Check | |
 |---|---|
 | The manifest | a strict parse within 64 KiB; the parser is in the libFuzzer zip target and the random-input tests |
-| The capabilities | each word one this Hailstone knows, and at least one (`plugin::parse_caps_strict`) |
+| The capabilities | each word one this Hailstone knows, and at least one (`plugin::parse_caps_strict`); a tool none |
 | The name | not another add-on's (any case), not a folder or file already in `scripts/` or `plugins/` (installed by hand or with Hailstone), whichever kind the add-on is: a script never takes a compiled plugin's name, nor a plugin a script's (their windows run as different owners, docs/plugins.md "Plugin windows", but the player would not tell them apart), not `config` for a script. A `plugins/<name>/` that holds no library (only the settings a plugin left there, as after an update took out a plugin an older release shipped) is not taken: the install goes in beside those files |
-| The client | `min_client` against `release_version()`; a plugin needs a package for `update_platform()` |
+| The client | `min_client` against `release_version()`; a plugin or a tool needs a package for `update_platform()` |
 | The signature | unsigned add-ons are refused when `addons.allow_unsigned` is off |
 | The package | its size and SHA-256 against the manifest (a larger download is cut off at once) |
-| The zip | `core/zip_read`: names that stay in the folder, the zip-bomb cut-off, CRC-32; at most 4096 files and 64 MiB (a script) or 512 MiB (a plugin) unpacked; no two names that differ only in case |
-| What it holds | what a server may send into the same folder (`net::server_file_destination`): no programs but a plugin's library, Lua only in a script or in a plugin's `ui/`, no hidden or device names. A script has `init.lua` at its top. A plugin has exactly one library at its top, named after it (`<name>.so`, `lib<name>.so` ...) |
+| The zip | `core/zip_read`: names that stay in the folder, the zip-bomb cut-off, CRC-32; at most 4096 files and 64 MiB (a script) or 512 MiB (a plugin or a tool) unpacked; no two names that differ only in case |
+| What it holds | what a server may send into the same folder (`net::server_file_destination`): no programs but a plugin's library, Lua only in a script or in a plugin's `ui/`, no hidden or device names. A script has `init.lua` at its top. A plugin has exactly one library at its top, named after it (`<name>.so`, `lib<name>.so` ...). A tool: see Tools (its own rules, `unpack_tool`; the names' shape as the server's files, `net::is_safe_file_path_shape`) |
 | The Lua | every `.lua` compiles as text (`luaL_loadbufferx(..., "t")`, not run): syntax errors and precompiled chunks are refused at the install, not at the first run |
 | The library | its header (ELF, PE or Mach-O, a universal file too; `core/binary_header.h`) is a shared library for this platform's system and architecture. It is never loaded at the install; its ABI is checked at load, as for any plugin |
+| A tool's program | its header is a program for this platform (`program_fits_platform`: ELF `ET_EXEC` or `ET_DYN`, as a position-independent program is; a PE executable image that is not a DLL; a Mach-O `MH_EXECUTE`). It is never run at the install |
 
 ### Signatures
 
@@ -293,6 +320,7 @@ addons/
   installed.prev.txt installed.txt as it was before an install or a removal rewrote it, until that has finished
 scripts/<name>/   an installed script
 plugins/<name>/   an installed plugin
+tools/<name>/     an installed tool (its program, its libraries, its data)
 ```
 
 - **An update replaces only the files the add-on shipped.** A file the older version shipped and the newer one does
@@ -332,14 +360,14 @@ in the Modern pack `test.addontab=store` (or `mine`) picks its tab.
 |---|---|
 | `core/addon_manifest.*` | the manifest |
 | `core/addon_source.*` | GitHub links, the manifest's addresses, the hosts a download may end on |
-| `core/binary_header.*` | a library's format and architecture |
+| `core/binary_header.*` | a library's or a program's format and architecture |
 | `core/addon_index.*` | the add-on index and which of its add-ons a login's worlds are for |
 | `app/addon_suggest.*` | which suggestions the player sees, and the ones put away |
 | `app/addon_install.*` | what a package may hold, the Lua and library checks, `installed.txt`, the journaled install and removal, the ceilings |
 | `app/addon_manager.*` | the worker: fetch, check, download, unpack; `install_ready` on the main thread; the store's manifests (`browse`); the server's and the hand-installed lists |
-| `app/client_app_addons.cpp` | the client's part: the view, the actions, when files may move |
+| `app/client_app_addons.cpp` | the client's part: the view, the actions, when files may move, starting a tool (`start_addon_tool`) |
 | `plugin/policy.*` | `Ceiling`, `parse_caps_strict`, `caps_described` |
-| `app/lua_eq_pregame.cpp` | `view.addons`, `eq.LoginSet("addonLink" \| "addonsOpen")`, `eq.LoginDo("addonInspect" \| "addonInstall" \| "addonCancel" \| "addonUpdate" \| "addonRemove" \| "addonAuto" \| "addonFolder" \| "addonPage" \| "addonCheck" \| "addonRevoke" \| "addonAskAgain" \| "addonSuggestLook" \| "addonSuggestLater" \| "addonSuggestNever" \| "addonBrowse" \| "addonStoreLook")`, `view.addons.suggestions`, `view.addons.store`; `eq.ServerSelect().addonHint` |
+| `app/lua_eq_pregame.cpp` | `view.addons`, `eq.LoginSet("addonLink" \| "addonsOpen")`, `eq.LoginDo("addonInspect" \| "addonInstall" \| "addonCancel" \| "addonUpdate" \| "addonRemove" \| "addonAuto" \| "addonFolder" \| "addonPage" \| "addonCheck" \| "addonRevoke" \| "addonAskAgain" \| "addonSuggestLook" \| "addonSuggestLater" \| "addonSuggestNever" \| "addonBrowse" \| "addonStoreLook" \| "addonStart")`, `view.addons.suggestions`, `view.addons.store`; `eq.ServerSelect().addonHint` |
 | `ui/modern/login.lua`, `ui/gamepad/login.lua`, `ui/dev_screens.cpp` | the panel, and the suggestions under the login card |
 | `ui/modern/serverselect.lua`, `ui/gamepad/serverselect.lua` | the server select's line about a suggested add-on |
 

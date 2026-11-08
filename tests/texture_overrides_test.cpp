@@ -354,3 +354,29 @@ TEST_CASE("texture packs: by content hash before name, the masked variant, maps,
     CHECK_FALSE(o.has_hashed());
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("texture overrides: the Options window's texture pack choice") {
+    hailstone::test::ScratchDir dir("texture_packs");
+    const std::filesystem::path packs = dir.path() / "textures";
+    std::filesystem::create_directories(packs / "hd");
+    std::filesystem::create_directories(packs / "default");
+    std::filesystem::create_directories(packs / "hd-high");
+    std::ofstream(packs / "notes.txt") << "not a pack";
+    const auto names = texture_pack_names(packs);
+    CHECK(names == std::vector<std::string>{"default", "hd", "hd-high"});
+    CHECK(texture_pack_names(dir.path() / "missing").empty());
+    // the choice list is "Off", then the names
+    CHECK(texture_pack_choice("off", names) == 0);
+    CHECK(texture_pack_choice("OFF", names) == 0);
+    CHECK(texture_pack_choice("", names) == 1); // the pack "default"
+    CHECK(texture_pack_choice("hd-high", names) == 3);
+    CHECK(texture_pack_choice("/somewhere/else", names) == -1);
+    CHECK(texture_pack_choice("gone", names) == -1);
+    CHECK(texture_pack_value(0, names) == "off");
+    CHECK(texture_pack_value(1, names) == "");
+    CHECK(texture_pack_value(2, names) == "hd");
+    CHECK_FALSE(texture_pack_value(4, names));
+    CHECK_FALSE(texture_pack_value(-1, names));
+    // each choice stores what reads back as itself
+    for (int c = 0; c <= 3; ++c) CHECK(texture_pack_choice(*texture_pack_value(c, names), names) == c);
+}

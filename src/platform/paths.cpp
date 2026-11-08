@@ -98,6 +98,7 @@ std::optional<std::filesystem::path> g_test_data_dir;
 std::string g_data_dir_reason;
 
 std::string g_data_dir_problem;
+std::string g_given_reason; // use_data_dir's
 
 std::filesystem::path chosen_data_dir() {
     static const std::filesystem::path dir = [] {
@@ -143,11 +144,19 @@ DataDirChoice choose_data_dir(const std::filesystem::path& install, const std::f
 }
 
 std::string data_dir_reason() {
+    {
+        std::lock_guard lock(g_data_dir_mutex);
+        if (g_test_data_dir && !g_given_reason.empty()) return g_given_reason;
+    }
     chosen_data_dir();
     return g_data_dir_reason;
 }
 
 std::string data_dir_problem() {
+    {
+        std::lock_guard lock(g_data_dir_mutex);
+        if (g_test_data_dir) return {}; // (the folder another Hailstone runs from, or a test's)
+    }
     chosen_data_dir();
     return g_data_dir_problem;
 }
@@ -167,8 +176,17 @@ bool data_dir_is_portable() {
 
 void set_data_dir_for_tests(std::filesystem::path dir) {
     std::lock_guard lock(g_data_dir_mutex);
+    g_given_reason.clear();
     if (dir.empty()) g_test_data_dir.reset();
     else g_test_data_dir = std::move(dir);
+}
+
+void use_data_dir(std::filesystem::path dir, std::string reason) {
+    std::error_code ec;
+    auto abs = std::filesystem::absolute(dir, ec);
+    std::lock_guard lock(g_data_dir_mutex);
+    g_test_data_dir = ec ? std::move(dir) : std::move(abs);
+    g_given_reason = std::move(reason);
 }
 
 std::filesystem::path shaders_dir() { return install_dir() / "shaders"; }

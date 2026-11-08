@@ -623,6 +623,21 @@ TEST_CASE("eq.LoginScreen: the add-on manager's view and its actions (docs/addon
     CHECK(v.addons.choice == "hud");
     CHECK(ui("return eq.LoginDo('addonPage', 'autoloot')") == "true");
     CHECK(ui("return eq.LoginDo('addonCheck')") == "true");
+    // Only an installed tool starts.
+    ui.host.login_action.reset();
+    CHECK(ui("return eq.LoginDo('addonStart', 'autoloot')") == "false");
+    CHECK_FALSE(ui.host.login_action);
+    ui::AddonRowView tool = installed;
+    tool.name = "texstudio";
+    tool.kind = "tool";
+    tool.can_start = true;
+    v.addons.rows.push_back(tool);
+    CHECK(ui("return eq.LoginScreen().addons.rows[3].canStart") == "true");
+    CHECK(ui("return eq.LoginScreen().addons.rows[1].canStart") == "false");
+    CHECK(ui("return eq.LoginDo('addonStart', 'texstudio')") == "true");
+    CHECK(ui.host.login_action == static_cast<int>(A::AddonStart));
+    CHECK(v.addons.choice == "texstudio");
+    v.addons.rows.pop_back();
     // While a login is under way nothing is removed.
     v.busy = true;
     CHECK(ui("return eq.LoginDo('addonRemove', 'autoloot')") == "false");

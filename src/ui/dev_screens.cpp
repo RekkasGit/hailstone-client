@@ -447,8 +447,10 @@ LoginAction addons_window(AddonsView& a, bool busy, bool* open) {
         else ImGui::TextDisabled("from %s", o.source.c_str());
         if (!o.description.empty()) ImGui::TextWrapped("%s", o.description.c_str());
         if (!o.installed_version.empty()) ImGui::Text("Installed now: %s", o.installed_version.c_str());
-        ImGui::TextUnformatted("It asks to:");
-        list(o.caps);
+        if (o.kind != "tool") {
+            ImGui::TextUnformatted("It asks to:");
+            list(o.caps);
+        }
         ImGui::TextWrapped("%s", o.key.empty() ? "Not signed: later versions are taken from whoever controls the "
                                                  "repository."
                                                : ("Signed with key " + o.key + ": later versions must carry it.").c_str());
@@ -456,6 +458,10 @@ LoginAction addons_window(AddonsView& a, bool busy, bool* open) {
             ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
                                "A plugin is a program: the permissions limit what it does through Hailstone, not what "
                                "it can do on your computer. Install only plugins you trust.");
+        else if (o.kind == "tool")
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
+                               "A tool is a program of its own: it runs on your computer with your rights, outside "
+                               "Hailstone, which starts it when you ask. Install only tools you trust.");
         if (!o.blocked.empty()) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", o.blocked.c_str());
         ImGui::BeginDisabled(!o.blocked.empty());
         if (ImGui::Button(o.installed_version.empty() ? "Install" : "Install this version")) action = LoginAction::AddonInstall;
@@ -604,6 +610,10 @@ LoginAction addons_window(AddonsView& a, bool busy, bool* open) {
                 if (!r.folder.empty()) {
                     if (r.group == "installed") ImGui::SameLine();
                     if (ImGui::Button("Open folder")) choose(r.name, LoginAction::AddonFolder);
+                }
+                if (r.can_start) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("Start")) choose(r.name, LoginAction::AddonStart);
                 }
                 ImGui::TreePop();
             }

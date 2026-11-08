@@ -523,6 +523,7 @@ local function currentPreset()
 end
 
 local msaaAtStart -- anti-aliasing changes at the next start: the setting the client started with
+local packAtStart -- so does the texture pack
 
 local function graphicsTab()
   msaaAtStart = msaaAtStart or eq.Option("msaa")
@@ -585,6 +586,34 @@ local function graphicsTab()
     slider("max_camera_distance", "Max Camera Zoom", 10, 150, function(v) return string.format("%d units", v) end,
       "How far the mouse wheel zooms the camera out behind you. The default is 60.")
   end)
+  -- Texture packs (display.texture_folder): a folder of the Hailstone folder's textures/, such as an HD pack built by
+  -- Hailstone Texture Studio (a tool add-on, docs/addons.md), read at the next start.
+  local pack = eq.Option("texture_pack")
+  if pack ~= nil then
+    packAtStart = packAtStart or pack
+    section("Textures", function()
+      row("Texture Pack", "Replacement textures from a folder of Hailstone's textures folder. Off: the game's own.",
+        function()
+          local choices = eq.OptionChoices("texture_pack")
+          if ui.BeginCombo("##texture_pack", choices[pack + 1] or "A folder of its own") then
+            for i, name in ipairs(choices) do
+              if ui.Selectable(name, i == pack + 1) then eq.SetOption("texture_pack", i - 1) end
+            end
+            ui.EndCombo()
+          end
+        end)
+      if pack ~= packAtStart then note("Restart the game to change the texture pack.") end
+      ui.TableNextRow()
+      ui.TableNextColumn()
+      ui.TableNextColumn()
+      if eq.Option("texture_studio") == 1 then
+        if ui.Button("Texture Studio...", 0, 0) then eq.SetOption("texture_studio", 1) end
+        tip("Builds an HD texture pack from your own game files on your graphics card (a program of its own).")
+      else
+        ui.TextDisabled("Texture Studio builds HD packs: install it from Add-ons on the login screen.")
+      end
+    end)
+  end
   if ui.Button("Restore Default Graphics", 0, 0) then
     -- (anti-aliasing and the lighting mode stay as they are)
     eq.SetOption("view_distance", 6)

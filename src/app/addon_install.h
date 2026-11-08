@@ -1,7 +1,7 @@
 #pragma once
 
-// Installing and removing add-ons (docs/addons.md): a Lua script into scripts/<name>/ or a compiled plugin into
-// plugins/<name>/ of the Hailstone folder, from a package the add-on manager (app/addon_manager.h) downloaded and
+// Installing and removing add-ons (docs/addons.md): a Lua script into scripts/<name>/, a compiled plugin into
+// plugins/<name>/ or a tool (a program of its own) into tools/<name>/ of the Hailstone folder, from a package the add-on manager (app/addon_manager.h) downloaded and
 // checked against its manifest. A Hailstone feature with no original counterpart. Everything of its own lives in
 // <data>/addons/:
 //   installed.txt   each add-on: where it came from, its version, key, capabilities, and every file it put in with
@@ -12,7 +12,9 @@
 //   download/       the downloaded packages
 // Nothing a package holds is trusted: what it may hold is what a server may send into the same folder
 // (net::server_file_destination), a script needs an init.lua, a plugin exactly one library of this platform named
-// after it (read from its header, never loaded), and every Lua file must compile as text (no precompiled chunks).
+// after it (read from its header, never loaded), and every Lua file must compile as text (no precompiled chunks). A
+// tool holds one program of this platform named after it at its top (read from its header, never run), may hold
+// this platform's libraries beside it and data anywhere, and nothing else that runs.
 
 #include <cstdint>
 #include <filesystem>
@@ -47,9 +49,11 @@ struct InstalledAddon {
 };
 
 std::filesystem::path addons_dir(const std::filesystem::path& data_dir);
-// scripts/<name> or plugins/<name> under the data folder.
+// scripts/<name>, plugins/<name> or tools/<name> under the data folder.
 std::filesystem::path addon_folder(const std::filesystem::path& data_dir, AddonKind kind, std::string_view name);
-std::string_view addon_kind_word(AddonKind kind); // "script", "plugin"
+std::string_view addon_kind_word(AddonKind kind); // "script", "plugin", "tool"
+// A tool's program in its package and its folder for `platform`: <name>.exe on Windows, <name> elsewhere.
+std::string addon_tool_program(std::string_view name, std::string_view platform);
 
 std::vector<InstalledAddon> read_installed_addons(const std::filesystem::path& data_dir);
 bool write_installed_addons(const std::filesystem::path& data_dir, const std::vector<InstalledAddon>& addons);

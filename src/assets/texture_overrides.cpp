@@ -145,6 +145,30 @@ std::filesystem::path texture_folder_setting(std::string_view value, const std::
     return p.is_absolute() ? p : packs / p;
 }
 
+std::vector<std::string> texture_pack_names(const std::filesystem::path& packs) {
+    std::vector<std::string> out;
+    std::error_code ec;
+    for (std::filesystem::directory_iterator it(packs, ec), end; !ec && it != end; it.increment(ec))
+        if (it->is_directory(ec)) out.push_back(it->path().filename().string());
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+int texture_pack_choice(std::string_view value, const std::vector<std::string>& names) {
+    if (lower(value) == "off") return 0;
+    const std::string name = value.empty() ? std::string("default") : std::string(value);
+    for (std::size_t i = 0; i < names.size(); ++i)
+        if (names[i] == name) return static_cast<int>(i + 1);
+    return -1;
+}
+
+std::optional<std::string> texture_pack_value(int choice, const std::vector<std::string>& names) {
+    if (choice < 0 || choice > static_cast<int>(names.size())) return std::nullopt;
+    if (choice == 0) return std::string("off");
+    const std::string& name = names[static_cast<std::size_t>(choice - 1)];
+    return name == "default" ? std::string() : name;
+}
+
 TextureOverrides& texture_overrides() {
     static TextureOverrides overrides;
     return overrides;

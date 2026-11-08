@@ -41,6 +41,9 @@ DataDirChoice choose_data_dir(const std::filesystem::path& install, const std::f
 bool data_dir_is_portable();
 // Replaces data_dir() until called again; an empty path goes back to the normal choice.
 void set_data_dir_for_tests(std::filesystem::path dir);
+// The data folder of the Hailstone that started this program (a tool add-on in <data>/tools/<name>/, docs/addons.md,
+// is told it with --data-dir): replaces the choice for the rest of the run; data_dir_reason() says `reason`.
+void use_data_dir(std::filesystem::path dir, std::string reason);
 // True when a file can be created in `dir` (which must exist); a probe file is written and removed.
 bool is_writable_dir(const std::filesystem::path& dir);
 

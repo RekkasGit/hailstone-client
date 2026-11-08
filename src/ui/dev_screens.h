@@ -74,7 +74,7 @@ std::string update_status_text(const UpdateNotice& notice);
 // The add-on manager's (app/addon_manager.h, docs/addons.md) part of the login screen, a Hailstone screen: a GitHub
 // link pasted in, the install card of the add-on it names, and the list of scripts and plugins with what each can do.
 struct AddonOfferView {
-    std::string name, kind, version, author, description; // kind: "script" or "plugin"
+    std::string name, kind, version, author, description; // kind: "script", "plugin" or "tool"
     std::string source, page, notes;                      // owner/repo, its page, its release notes
     std::string key;               // the signing key's first 16 hex digits ("" not signed)
     std::string installed_version; // "" a new add-on; else this replaces that version
@@ -90,7 +90,7 @@ struct AddonSuggestionView {
     bool from_server = false;
 };
 struct AddonRowView {
-    std::string name, kind;   // kind: "script" or "plugin"
+    std::string name, kind;   // kind: "script", "plugin" or "tool"
     std::string group;        // "installed" (by the manager), "manual" (by hand), "server" (the picked server's own)
     std::string version, source, page, author, description;
     std::string state;        // installed: app/addon_manager.h addon_state_word; else ""
@@ -110,6 +110,7 @@ struct AddonRowView {
     std::uint32_t approve_caps = 0;
     std::string approve_version;
     bool can_remove = false;  // installed and not busy (the server's own never)
+    bool can_start = false;   // an installed tool whose program is there: AddonStart starts it
     std::string folder;       // its folder or file, to open
 };
 // An add-on of the add-on index, in the store (docs/addons.md "Finding add-ons"): what its manifest says, and what the
@@ -210,13 +211,15 @@ struct LoginView {
 // addons.choice, AddonAskAgain forgets the answer so that the next visit asks (plugin/consent.h). The AddonSuggest*
 // actions are for the suggestion whose source is addons.choice: Look opens its install card, Later puts it away for
 // this run, Never for good on this server. AddonBrowse fetches the store's list (again with choice_on);
-// AddonStoreLook opens the install card of the store item whose source is addons.choice.
+// AddonStoreLook opens the install card of the store item whose source is addons.choice; AddonStart starts the
+// installed tool addons.choice.
 enum class LoginAction {
     None, Submit, Quit, Save, Delete, OpenAssets, UseGameFolder, BrowseGameFolder, LoginBox, AccountsChanged,
     ForgetAccount, PlayCharacter, MusicChanged,
     UpdateDownload, UpdateRestart, UpdateSkip, UpdateNotes, OpenProject,
     AddonInspect, AddonInstall, AddonCancel, AddonUpdate, AddonRemove, AddonAuto, AddonFolder, AddonPage, AddonCheck,
-    AddonRevoke, AddonAskAgain, AddonSuggestLook, AddonSuggestLater, AddonSuggestNever, AddonBrowse, AddonStoreLook
+    AddonRevoke, AddonAskAgain, AddonSuggestLook, AddonSuggestLater, AddonSuggestNever, AddonBrowse, AddonStoreLook,
+    AddonStart
 };
 
 // A row of the login screen's Characters list: a character one of the server's accounts was seen to have.

@@ -121,6 +121,11 @@ public:
     // The "Lua UI" control window (scripts on/off, reload, the ImGui demo): a developer window, off by default.
     void set_show_control(bool show);
 
+    // Only these scripts of the UI's folder load, by their path in it ("tools/texstudio.lua"), instead of every *.lua
+    // at its top: a program other than the client drawing its own screen in a pack's look, with the pack's lib/
+    // (tools/texstudio). Call before the first frame. Their dofile paths stay relative to the UI's folder.
+    void set_entry_scripts(std::vector<std::string> files);
+
     // More folders of windows besides the UI's own: a loaded plugin's ui/<pack>/ (app: plugin::UiBridge). Each
     // folder's *.lua load like the UI's (named "<tag>/<file>" in errors), their dofile paths are relative to their
     // folder, and a folder no longer listed takes its windows with it. Applied at the next frame.

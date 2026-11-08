@@ -957,7 +957,11 @@ logs how many textures it replaced.
 ### Built packs (tools/texpack)
 
 `texpack` and `tools/texpack/upscale.py` build an HD pack of every texture in the player's own asset folder. The
-pack is derived from the game's files, so it is built on each machine and never shipped.
+pack is derived from the game's files, so it is built on each machine and never shipped. Hailstone Texture Studio
+(projecthailstone/hailstone-texstudio, a tool add-on: docs/addons.md "Tools") does the same in one program with a
+window, on any GPU through ncnn's Vulkan compute, with no Python to install; the rules below are its too
+(`src/texpack`, which `texpack` and the studio share: the scan, the upscale rules behind `texpack::Model`, the
+three-stage build and the pack's files).
 
 1. `texpack export ASSETDIR WORK` writes each distinct texture once, keyed by `texture_content_hash` of its file:
    61,474 in the RoF2 install (from 2,709 archives, in about a minute). It writes `WORK/src/<hash>.png` upright, with
@@ -1065,7 +1069,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |
-| `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides), read as each zone loads |
+| `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides): the folder indexed at start, its files read as each zone loads; the Options window's Textures section (from the next start) and Hailstone Texture Studio set it |
 | `display.fov` | fov units | none | the camera's field of view in 512ths of a circle (none: the classic 90, 63.3 degrees across below an aspect of 2); the Options window shows degrees, 45 .. 120 |
 | `ui.scale` | percent, 0 | 0 | the UI's scale (0: the display's); read at start-up; `--ui-scale` takes precedence |
 

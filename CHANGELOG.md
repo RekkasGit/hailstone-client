@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add-ons can now be tools, programs of their own that work beside Hailstone: install one from Add-ons on the login screen like a script or plugin, and press Start on its row. The first is Hailstone Texture Studio, which builds HD textures from your own game files on your graphics card (twice or four times the size, with normal and roughness maps for the modern lighting, using the PBRify upscaler)
+- Options (Graphics, Textures; the gamepad UI's Display) picks the texture pack Hailstone uses, or Off for the game's own textures, from the next start; Texture Studio... starts the studio once it is installed
 - The target ring now lies flat on the ground in grass: it used to twist into a coil, traced over the grass blades instead of the ground under them
 - Ornament shields such as the Haunting Nightmares Shield Ornament are held the way the original client holds them: the pumpkin face now looks outward. Hailstone used to strap any secondary whose texture was named "shield" onto the forearm, turned round so its back faced out
 - Shields newer than the original client are worn on the forearm, not gripped in the hand like a weapon. The original client knows only the shields of its own time, so it holds about a third of an EQEmu server's shields in the hand. `display.extra_shields=0` in `hailstone.ini` brings back the original's way
