@@ -23,7 +23,7 @@ a separate patcher before the game started. The code is `src/app/updater.*` (che
   quits, installs and starts the new version.
 - **Skip** writes `update.skip=<version>`: that release is not offered again, a newer one is. Skip pressed while the
   notice shows, before its automatic download has begun, stops that download from starting.
-- A release with no package for the player's system (say, no macOS build) is shown with its Release notes only.
+- A release with no package for the player's system (say, no Linux arm64 build) is shown with its Release notes only.
 - The notice is part of the login view (`ui::LoginView::update`), so the Modern and Gamepad packs (`ui/*/login.lua`,
   `view.update`, `eq.LoginDo("updateDownload" | "updateRestart" | "updateSkip" | "updateNotes")`) and the client's own
   ImGui screen all show it the same way (`ui::update_notice_text`). The corner is `view.about` (`version`, `build`,
@@ -162,12 +162,14 @@ The install waits while the box set's other windows run (they use the same files
 ## Making a release
 
 1. Set the version (`project(VERSION)`, `NMSC_VERSION_LABEL`) and build each platform's Release, with
-   `-DNMSC_BROWSER=ON`, on a clean checkout of the release commit. Both are built on Linux (docs/ci.md):
+   `-DNMSC_BROWSER=ON`, on a clean checkout of the release commit (docs/ci.md):
    - Linux x64 in the `hailstone-linux-build:24.04` container (`tools/docker/linux.Dockerfile`), so it runs on
      Ubuntu 24.04 and newer;
-   - Windows x64 with MSVC under Wine (`tools/docker/msvc_build.sh`, docs/ci.md "MSVC under Wine").
+   - Windows x64 with MSVC under Wine (`tools/docker/msvc_build.sh`, docs/ci.md "MSVC under Wine");
+   - macOS arm64 by the macOS workflow, started on the release commit (`gh workflow run macos.yml -f ref=<commit>`,
+     docs/ci.md "macOS arm64"). It builds, tests, installs and signs ad hoc; its artifact is step 2's folder.
 
-   Run each platform's `nmsc_tests` (Windows under Wine) before going on.
+   Run each platform's `nmsc_tests` (Windows under Wine) before going on; the macOS workflow runs its own.
 2. Install each platform's client (without the server plugins, which are released as add-ons by their own
    repositories' `tools/release.sh`):
 
@@ -176,6 +178,13 @@ The install waits while the box set's other windows run (they use the same files
    ```
 
    On Windows, the default install also writes zlib's `bin/`, `include/` and `lib/`; leave them out of `dist/`.
+   For macOS, unpack the workflow's artifact instead, into a folder of its own:
+
+   ```sh
+   gh run download <run> -n hailstone-macos-arm64 -D dist-macos && tar -C dist-macos -xf dist-macos/hailstone-macos-arm64.tar
+   ```
+
+   and pass `--platform macos-arm64 --dist dist-macos/hailstone` in step 3.
 3. Make each platform's download, with the same `--out` for every platform:
 
    ```sh
@@ -226,8 +235,13 @@ file already there.
   update cannot tell the files that were shipped from the player's own, and removes nothing. From the second update
   on, files a release drops are removed.
 - **Untested platforms.** The Windows paths (WinHTTP, renaming a running `hailstone.exe`) have only been checked to
-  compile: they have not run. macOS has no release builds; an app bundle would need its own install step and code
-  signing.
+  compile: they have not run.
+- **macOS.** The release is a plain folder like Linux's (`hailstone` beside `libMoltenVK.dylib`, `libSDL3.0.dylib`
+  and the shipped folders), signed ad hoc only: no Developer ID and no notarization, by choice. A download is
+  quarantined, so Gatekeeper refuses it until the player clears that (README.md "Download"). The updater's own
+  downloads (libcurl) are not quarantined, and it installs into the folder as on Linux. An app bundle would need
+  its own install step (the binary is in `Contents/MacOS/`, while `install_dir()` would be `Contents/Resources/`)
+  and is not made. No macOS release has been run on a Mac yet, nor its update.
 - **Downloads start over.** A broken-off download starts again from the beginning (no HTTP range requests). A
   package already downloaded whole is kept.
 - **Other Hailstone windows.** Windows the client did not start itself (not the box set's) are not seen; on Linux they

@@ -172,6 +172,15 @@ void set_data_dir_for_tests(std::filesystem::path dir) {
 }
 
 std::filesystem::path shaders_dir() { return install_dir() / "shaders"; }
+std::filesystem::path bundled_vulkan_library(const std::filesystem::path& install) {
+#if defined(__APPLE__)
+    std::error_code ec;
+    if (auto lib = install / "libMoltenVK.dylib"; std::filesystem::is_regular_file(lib, ec)) return lib;
+#else
+    (void)install;
+#endif
+    return {};
+}
 std::filesystem::path ui_packs_dir() { return install_dir() / "ui"; }
 std::filesystem::path icons_dir() { return install_dir() / "icons"; }
 std::filesystem::path pictures_dir() { return install_dir() / "pictures"; }

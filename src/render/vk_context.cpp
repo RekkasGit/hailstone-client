@@ -187,7 +187,10 @@ Tonemap parse_tonemap(std::string_view name) {
 }
 
 VkContext::VkContext(platform::Window& window, bool validation) : window_(window) {
-    vk_check(volkInitialize(), "volkInitialize (is a Vulkan driver installed?)");
+    if (auto loader = window_.bundled_vulkan_loader())
+        volkInitializeCustom(loader); // the MoltenVK a macOS release ships, as the window loaded it
+    else
+        vk_check(volkInitialize(), "volkInitialize (is a Vulkan driver installed?)");
     create_instance(validation);
     surface_ = window_.create_surface(instance_);
     pick_physical_device();

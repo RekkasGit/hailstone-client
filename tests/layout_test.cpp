@@ -161,6 +161,23 @@ TEST_CASE("Layout: the data folder is the Hailstone folder, or a problem to repo
     CHECK(choose(bundle).problem.empty());
 }
 
+TEST_CASE("Layout: the Vulkan driver shipped beside the binary is MoltenVK on macOS only") {
+    test::ScratchDir tmp("vulkan_lib");
+    // No file: the system's Vulkan, everywhere.
+    CHECK(platform::bundled_vulkan_library(tmp.path()).empty());
+    write(tmp.path() / "libMoltenVK.dylib", "dylib");
+#if defined(__APPLE__)
+    CHECK(platform::bundled_vulkan_library(tmp.path()) == tmp.path() / "libMoltenVK.dylib");
+    // A folder by that name is not a library.
+    test::ScratchDir dir_named("vulkan_dir");
+    fs::create_directories(dir_named.path() / "libMoltenVK.dylib");
+    CHECK(platform::bundled_vulkan_library(dir_named.path()).empty());
+#else
+    // Elsewhere the graphics driver brings Vulkan, and a stray file changes nothing.
+    CHECK(platform::bundled_vulkan_library(tmp.path()).empty());
+#endif
+}
+
 TEST_CASE("Layout: file names and profile ids made safe") {
     CHECK(sanitize_file_name("Soandso") == "Soandso");
     CHECK(sanitize_file_name("a/b\\c:d*e") == "a_b_c_d_e");

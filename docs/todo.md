@@ -139,7 +139,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] The repository (or a public one for releases) has to be public: GitHub answers 404 to the client for a private one's releases. Public from 0.5.0-beta (AGENTS.md "Git workflow").
 - [x] A release key (`hailstone_sign keygen`, the public half in `update-key.pub`); until then builds have no updates.
 - [ ] The updater on Windows: WinHTTP and the install's renames of the running `hailstone.exe` and its DLLs (compiles; not run).
-- [ ] A release job in CI (packages, manifest, signature, upload), and macOS (an app bundle's own install and code signing).
+- [ ] A release job in CI (packages, manifest, signature, upload).
+- [x] macOS arm64 releases: a plain folder like Linux's with MoltenVK beside the binary, built, tested and signed ad hoc by the macOS workflow (docs/ci.md "macOS arm64"), packed and signed into the manifest locally. No Developer ID or notarization, by choice: players clear the quarantine (README.md).
+- [ ] macOS on a Mac: the client run on Apple Silicon (MoltenVK's device features, the window, input, audio, the Keychain), and an update installed there. Only the build and the headless tests have run.
+- [ ] macOS: the startup error for a missing Vulkan names the graphics card makers' drivers (app/startup_error.cpp); on macOS it would be the missing `libMoltenVK.dylib`.
 - [ ] Downloads that resume (HTTP range requests) instead of starting over.
 
 ### Add-ons (docs/addons.md)

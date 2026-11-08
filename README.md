@@ -35,11 +35,11 @@ Work in progress and known gaps are tracked in the [plan](https://github.com/pro
 
 | | Minimum |
 |---|---|
-| **Operating system** | Linux x64: Ubuntu 24.04 or a distribution of the same age or newer (the release is built against its glibc). Windows x64: Windows 10 version 1903 or later. macOS and arm64: build from source (no release packages yet). |
-| **Graphics** | A GPU and driver with Vulkan 1.3, dynamic rendering, synchronization2 and descriptor indexing (runtime descriptor arrays, non-uniform sampled image indexing, partially bound and variable-count bindings), and separate depth and stencil layouts (every Vulkan 1.2 driver has them). On macOS, MoltenVK. |
+| **Operating system** | Linux x64: Ubuntu 24.04 or a distribution of the same age or newer (the release is built against its glibc). Windows x64: Windows 10 version 1903 or later. macOS on Apple Silicon (arm64): macOS 13.3 or later; experimental, not yet tried on a Mac. Intel Macs and Linux or Windows on arm64: build from source (no release packages). |
+| **Graphics** | A GPU and driver with Vulkan 1.3, dynamic rendering, synchronization2 and descriptor indexing (runtime descriptor arrays, non-uniform sampled image indexing, partially bound and variable-count bindings), and separate depth and stencil layouts (every Vulkan 1.2 driver has them). On macOS, MoltenVK, which comes with Hailstone. |
 | **Game data** | Your own RoF2-compatible game folder: a RoF2 install or a current live one. Hailstone reads it and never writes to it. We highly encourage an EverQuest subscription if you use its files. |
 | **Server** | An EQEmu server that accepts RoF2 clients. |
-| **Network** | UDP to the login and world servers. Automatic updates need HTTPS: on Linux the system's libcurl. |
+| **Network** | UDP to the login and world servers. Automatic updates need HTTPS: on Linux and macOS the system's libcurl (macOS always has it). |
 | **Input** | Keyboard and mouse, or a gamepad. |
 
 To check a GPU, run `vulkaninfo --summary` and look for `apiVersion` 1.3 or higher, or look the GPU up on [vulkan.gpuinfo.org](https://vulkan.gpuinfo.org). If no GPU qualifies, Hailstone says so in a dialog that names each GPU and what it lacks; `hailstone/logs/hailstone.log` has the same. Textures in BC formats are used directly where the GPU supports them and decoded on the CPU otherwise, so GPUs without BC support still run.
@@ -48,7 +48,16 @@ Memory, VRAM and CPU minimums have not been measured yet.
 
 ## Download
 
-Release packages for Linux x64 and Windows x64 are on the [releases page](https://github.com/projecthailstone/hailstone-client/releases). Unzip one anywhere and run `hailstone` (`hailstone.exe` on Windows). Hailstone updates itself from then on.
+Release packages for Linux x64 and Windows x64 (and macOS arm64 from the release after 0.6.0-beta) are on the [releases page](https://github.com/projecthailstone/hailstone-client/releases). Unzip one anywhere and run `hailstone` (`hailstone.exe` on Windows). Hailstone updates itself from then on.
+
+On macOS the download is not signed with an Apple Developer ID, so macOS refuses to open it at first ("cannot be opened" or "damaged"). After unzipping, clear the download's quarantine once in Terminal, then start Hailstone from the folder:
+
+```sh
+xattr -dr com.apple.quarantine ~/Downloads/hailstone      # the folder you unzipped
+~/Downloads/hailstone/hailstone
+```
+
+The macOS build is experimental: it is built and its tests run, but it has not been played on a Mac yet, and the in-game browser is not in it (web links open in your browser).
 
 ## Building from source
 

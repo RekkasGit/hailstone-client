@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- macOS on Apple Silicon: a download for macOS 13.3 and later, with Vulkan (MoltenVK) included. It is experimental and not yet tried on a Mac, and it is not signed with an Apple Developer ID: after unzipping, run `xattr -dr com.apple.quarantine` on the folder once (README.md). The in-game browser is not in it yet; links open in your browser
+
 ## 0.6.0-beta (2026-11-07)
 
 - Lost Dungeons of Norrath merchants (and the other adventure and alternate currency merchants) now let you inspect their goods: right-click one to see its details, as with any other item (Y in the gamepad UI). Shift or Ctrl+right-click shows it in the item preview

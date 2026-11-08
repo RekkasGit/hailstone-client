@@ -1,0 +1,87 @@
+name: macOS arm64
+
+# The one platform that cannot be built on the developer's Linux machine (docs/ci.md): GitHub's Apple Silicon runner
+# builds the client, runs nmsc_tests and keeps the installed folder as the run's artifact. A release's zip, manifest
+# line and signature are still made locally from that folder (docs/updater.md "Making a release"); the release key
+# never comes here. Started by hand, for a release or a check, or by a push to a macos/** branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The commit, tag or branch to build
+        required: false
+        default: ''
+  push:
+    branches: ['macos/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}-${{ inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build, test and install
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Dependencies are fetched by cmake/Dependencies.cmake (FetchContent, pinned); keep their sources between runs.
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps/*-src
+          key: deps-macos-arm64-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+      - name: Install tools
+        run: brew install ninja glslang
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      # No game folder or recorded vectors here: the tests that need them pass without checking anything.
+      - name: Test
+        run: build/nmsc_tests
+
+      - name: Install
+        run: cmake --install build --prefix dist/hailstone
+
+      # Apple Silicon runs no unsigned code. The linker signs each binary ad hoc, but the install's rpath edits can
+      # leave that signature stale, so every Mach-O file is signed ad hoc again. No Developer ID: players clear the
+      # download's quarantine themselves (README.md).
+      - name: Sign ad hoc
+        run: |
+          find dist/hailstone -type f -print0 | while IFS= read -r -d '' f; do
+            if file -b "$f" | grep -q 'Mach-O'; then
+              codesign --force --sign - "$f"
+              codesign --verify --strict "$f"
+            fi
+          done
+
+      # Every library the client loads at start is the system's or one beside it.
+      - name: Check the binary's libraries
+        run: |
+          otool -L dist/hailstone/hailstone
+          if otool -L dist/hailstone/hailstone | tail -n +2 | awk '{print $1}' | grep -vE '^(/usr/lib/|/System/|@rpath/|@executable_path/)'; then
+            echo "a library outside the system and the folder"; exit 1
+          fi
+          ls -l dist/hailstone
+
+      # A tar, since an artifact's zip drops the files' Unix permissions (the executable bit).
+      - name: Pack
+        run: tar -C dist -cf hailstone-macos-arm64.tar hailstone
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hailstone-macos-arm64
+          path: hailstone-macos-arm64.tar
+          retention-days: 14
