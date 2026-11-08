@@ -596,6 +596,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         poison_interacting_ = false;
         spells_.memorizing.reset();
         spells_.others.clear();
+        cast_stage_shown_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
         loot_.reset();

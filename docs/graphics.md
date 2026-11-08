@@ -174,6 +174,13 @@ lands the spell, on players and NPCs alike. Stock EQEmu sends the landing only t
 the caster's cast stage and no impact; the original client gets no more from the server. A server owner who wants
 the impact seen from further raises that rule.
 
+Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
+first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
+a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the
+impact for them (`EQPlayer::TriggerSpellEffect`). An OP_Action counts as a cast's landing for 3 s after its
+OP_BeginCast's cast time; a bard song's pulses get no cast stage. The proc's bolt or comet, in the modern lighting,
+leaves at the landing as another's spell's does.
+
 Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client
 does not read): the Options window's Particles section has three more Off / Low / Medium / High choices, each scaling
 the spell particle density for the stages played from then on (`game::spell_fx_source`, `display.spell_particles_self`,
