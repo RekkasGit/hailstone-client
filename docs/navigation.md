@@ -146,8 +146,10 @@ and the step into the lair. Without the links the walk stopped about 850 units s
 
 ### When it is built
 
-At the zone-in only when the zone has a cache file, or with `nav.prebuild=1` in `hailstone.ini`. Otherwise it is built
-when first wanted: a `/nav`, the overlay or the Navigation TLO's path questions. The tiles are built on worker threads (`nav.threads`, default 2, at most
+At the zone-in: read from the zone's cache file when there is one, and built otherwise, so a new zone's mesh is under
+way before anything asks for it (a `/stick` near its target walks straight and never asks). `nav.prebuild=0` in
+`hailstone.ini` turns the build at the zone-in off; the mesh is then built when first wanted: a `/nav`, the overlay or
+the Navigation TLO's path questions. The tiles are built on worker threads (`nav.threads`, default 2, at most
 8), nearest the player first, and a walk asked for meanwhile starts when its tiles are there. A walk to a spawn asks
 the server for its path meanwhile, when there is no mesh under the player yet: the same `OP_FindPersonRequest` as
 `/find`, but quiet (`GameConnection::request_quiet_path`: no path drawn, no sound, no chat line). A stock EQEmu server

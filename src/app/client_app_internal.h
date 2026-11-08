@@ -458,7 +458,8 @@ public:
             if (conn_ && conn_->follow_target()) conn_->stop_follow(false);
         };
         nenv.threads = std::clamp(config_.get_int("nav.threads", 2), 1, 8);
-        nenv.prebuild = config_.get_bool("nav.prebuild", false);
+        // On by default: a zone with no cached mesh starts building it at the zone-in, so it is there when first wanted.
+        nenv.prebuild = config_.get_bool("nav.prebuild", true);
         nenv.assist_follow = config_.get_bool("nav.follow", true);
         nav_ = std::make_unique<Navigator>(std::move(nenv));
         AutomationEnv aenv;

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Field of Bone now has a working navigation mesh: `/nav`, `/stick` and the overlay found nothing there, because the trees the zone hides far under the world pulled the whole mesh down with them. A zone's mesh already saved by an earlier version is built again by itself
+- The navigation mesh of a zone you have not been to yet now starts building as soon as you zone in, instead of waiting for the first `/nav` or the overlay (a `/stick` close to its target never asked for it). `nav.prebuild=0` in `hailstone.ini` brings back the old way
 - A login the server refuses now shows the server's reason (such as a wrong password) instead of "malformed login packet 0x0018". The public EQEmu login server (login.eqemulator.net) sends a shorter refusal than the client expected
 
 ## 0.6.0-beta (2026-11-07)

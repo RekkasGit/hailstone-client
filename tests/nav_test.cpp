@@ -553,6 +553,25 @@ TEST_CASE("nav: the navigator waits for the mesh, walks round the wall and arriv
     CHECK_FALSE(h.nav.path_length({500, 500, 0}).has_value());
 }
 
+TEST_CASE("nav: with prebuild, a zone with no cache starts building its mesh at the zone-in") {
+    Scene scene = walled_room();
+    game::CollisionMesh collision = scene.collision();
+    app::Navigator::Env e;
+    e.prebuild = true; // the client's default (hailstone.ini nav.prebuild)
+    app::Navigator nav{std::move(e)};
+    nav.zone_loaded(collision, nullptr, {});
+    CHECK(nav.status().tiles_total > 0); // nothing asked for it: no walk, no overlay
+    CHECK_FALSE(nav.status().active);
+    auto start = std::chrono::steady_clock::now();
+    while (!nav.status().mesh_complete && std::chrono::steady_clock::now() - start < std::chrono::seconds(30)) {
+        app::Navigator::Frame f;
+        f.feet = {20, 20, 0};
+        nav.frame(f);
+        std::this_thread::yield();
+    }
+    CHECK(nav.status().mesh_complete);
+}
+
 TEST_CASE("nav: a walk to ground the mesh cannot reach says so, and how far short it stopped") {
     NavHarness h;
     Scene s;
