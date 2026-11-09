@@ -1,7 +1,8 @@
 -- Map: replaces the game's MapViewWnd (opened and closed by the game: the map key, the minimap, the EQ menu). The
 -- zone's map in a resizable window (eq.DrawZoneMap: the stock map's lines and labels, the group, a /find path, the
 -- player; north up), with:
---   * zoom with the wheel (around the cursor) or the buttons, Fit (the whole zone), Follow (centred on you);
+--   * zoom with the wheel (around the cursor, or around you while following) or the buttons, Fit (the whole zone),
+--     Follow (centred on you; zooming keeps it, panning stops it);
 --   * dragging pans, a double click centres there;
 --   * markers of your own, kept per zone (ui/settings/modern.txt, map.markers.<zone>): right-click the map to put
 --     one there, or "Mark my spot"; the list at the right centres on one, renames or removes it;
@@ -270,8 +271,9 @@ local function body(x, y, w, h, s)
       local z = math.max(ZMIN, math.min(ZMAX, M.zoom * (io.wheel > 0 and 1.25 or 0.8)))
       local k2 = k * z / M.zoom
       M.zoom = z
-      if z > ZMIN then
-        M.follow = false
+      if M.follow then
+        -- following: zoom around you and keep following (only a drag or a double click stops it)
+      elseif z > ZMIN then
         M.cx, M.cy = ax - (mouseX - ccx) / k2, ay - (mouseY - ccy) / k2
       else
         M.cx, M.cy = nil, nil
