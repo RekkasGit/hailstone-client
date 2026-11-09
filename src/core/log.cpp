@@ -120,6 +120,9 @@ std::size_t copy_recent_lines(char* out, std::size_t size) {
 }
 
 std::string_view escape_controls(std::string_view message, std::string& scratch) {
+    // A line break goes on over an indented line (a Lua traceback stays readable), which no "[level] " line starts
+    // as (app/bug_report.cpp redact_chat takes such lines with the chat line they follow).
+    static constexpr std::string_view kContinuation = "\n  ";
     auto control = [](char c) {
         const auto b = static_cast<unsigned char>(c);
         return (b < 0x20 && b != '\t') || b == 0x7f;
@@ -131,8 +134,11 @@ std::string_view escape_controls(std::string_view message, std::string& scratch)
     for (auto it = first; it != message.end(); ++it) {
         const char c = *it;
         if (!control(c)) scratch.push_back(c);
-        else if (c == '\n') scratch += "\\n";
-        else if (c == '\r') scratch += "\\r";
+        else if (c == '\n') scratch += kContinuation;
+        else if (c == '\r' && it + 1 != message.end() && it[1] == '\n') {
+            scratch += kContinuation; // "\r\n" is one line break
+            ++it;
+        } else if (c == '\r') scratch += "\\r";
         else {
             const auto b = static_cast<unsigned char>(c);
             scratch += "\\x";

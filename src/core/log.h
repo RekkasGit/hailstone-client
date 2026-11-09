@@ -27,9 +27,10 @@ void close_file();
 // NUL-terminated); the length written. It takes no lock and allocates nothing, so a crash handler may call it
 // (platform/crash_log.h); a line written meanwhile may come out mixed.
 std::size_t copy_recent_lines(char* out, std::size_t size);
-// The message as write() puts it in a line: control characters (C0 but tab, and DEL) written \n, \r or \xHH, so a
-// server's text with a line break or a NUL in it cannot make a line of its own or cut one short. UTF-8 is left as
-// it is, and so is a backslash. Without a control character it is `message` itself (`scratch` is not touched, so
+// The message as write() puts it: a line break ("\n" or "\r\n") goes on over a line indented two spaces, and the
+// other control characters (C0 but tab, and DEL) are written \r or \xHH, so a server's text with a line break or a
+// NUL in it cannot make a "[level] ..." line of its own or cut one short. UTF-8 is left as it is, and so is a
+// backslash. Without a control character it is `message` itself (`scratch` is not touched, so
 // nothing is allocated); else the escaped text, in `scratch`.
 std::string_view escape_controls(std::string_view message, std::string& scratch);
 
