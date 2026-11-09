@@ -30,6 +30,9 @@ SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const
     settings_ = game::spell_particle_settings(value("SpellParticleDensity"), value("SpellParticleOpacity"));
     eqclient_density_ = settings_.density;
     if (auto path = game.find("Resources/SPOffsets.ini")) sp_offsets_.load(*path);
+    if (auto moddat = game.read("Resources/moddat.ini"))
+        heights_ = game::parse_height_tables({}, std::string_view(reinterpret_cast<const char*>(moddat->data()),
+                                                                  moddat->size()));
     spell_points_ = assets::SpellPoints([this](std::string_view section, std::string_view key) {
         std::optional<float> v;
         if (auto text = sp_offsets_.get(section, key)) v = std::strtof(text->c_str(), nullptr);
@@ -107,11 +110,29 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
         return s.display_valid ? s.display_position : s.position;
     };
     particles_.update(dt, [&](std::uint32_t id, std::int32_t pt) -> std::optional<game::EmitterAttachment> {
-        if (pt >= 0 && actors)
-            if (auto m = point_world(*actors, id, pt)) return game::EmitterAttachment{glm::vec3((*m)[3]), glm::mat3(*m)};
-        if (auto p = position(id)) return game::EmitterAttachment{*p, std::nullopt};
-        return std::nullopt;
+        auto it = world.spawns.find(id);
+        if (it == world.spawns.end()) return std::nullopt;
+        game::EmitterAttachment a;
+        // The actor's root GetScaleFactor (its model scale) and GetParticleScaleFactor (moddat.ini PESFactor).
+        if (it->second.heights.model_scale > 0.0f) a.actor_scale = it->second.heights.model_scale;
+        if (actors) {
+            if (const assets::CharacterModel* model = actors->drawn_model(id)) a.particle_scale = particle_scale(*model);
+            if (pt >= 0)
+                if (auto m = point_world(*actors, id, pt)) {
+                    a.position = glm::vec3((*m)[3]);
+                    a.axes = glm::mat3(*m);
+                }
+            glm::mat4 t;
+            if (actors->drawn_transform(id, t)) a.actor_axes = glm::mat3(t);
+        }
+        // Without its model drawn, a pointed emitter keeps to the spawn's place.
+        if (pt >= 0 && !a.position) a.position = position(id);
+        return a;
     });
+}
+
+float SpellParticles::particle_scale(const assets::CharacterModel& model) const {
+    return heights_.pes_factor(model.code);
 }
 
 namespace {
@@ -222,7 +243,14 @@ std::optional<game::StageActor> SpellParticles::stage_actor(const net::GameConne
         if (const assets::CharacterModel* model = actors->drawn_model(id)) {
             a.points = spell_points_.of(*model).mask;
             if (auto chest = point_world(*actors, id, 1)) a.chest = glm::vec3((*chest)[3]);
+            a.particle_scale = particle_scale(*model);
         }
+    if (floor_) {
+        // Attach 12's z: GetPlayerFloorHeight at the chest's x and y (the spawn's without a chest), from 0.1 above
+        // the spawn.
+        const glm::vec3 at = a.points & 2u ? glm::vec3(a.chest.x, a.chest.y, a.position.z) : a.position;
+        a.floor = floor_(at + glm::vec3(0.0f, 0.0f, 0.1f));
+    }
     return a;
 }
 

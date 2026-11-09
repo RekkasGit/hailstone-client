@@ -63,6 +63,7 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         r.position = glm::vec3((bone * me.local)[3]);
         r.actor = a.id;
         r.bone_point = static_cast<std::int32_t>(i);
+        r.point_only = true;
         r.persistent = duration_ms < 0;
         particles_.create(r);
         return r.key;
@@ -149,7 +150,10 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         glm::mat4 bone;
         if (!bone_world(id, me.bone, bone)) return std::nullopt;
         glm::mat4 m = bone * me.local;
-        return game::EmitterAttachment{glm::vec3(m[3]), glm::mat3(m)};
+        game::EmitterAttachment at;
+        at.position = glm::vec3(m[3]);
+        at.axes = glm::mat3(m);
+        return at;
     });
     if (renderer_) renderer_->prepare(particles_);
 }

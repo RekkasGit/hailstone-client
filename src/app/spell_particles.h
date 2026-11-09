@@ -13,6 +13,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -25,6 +26,7 @@
 #include "core/ini_file.h"
 #include "game/light_list.h"
 #include "game/particles.h"
+#include "game/spawn_heights.h"
 #include "game/spell_effect_timers.h"
 #include "render/particle_renderer.h"
 
@@ -60,6 +62,9 @@ public:
         source_density_[static_cast<std::size_t>(source)] = std::clamp(density, 0.0f, 1.0f);
     }
     float source_density(game::SpellFxSource source) const { return source_density_[static_cast<std::size_t>(source)]; }
+    // The floor below a point (attach 12's GetPlayerFloorHeight): the zone's collision, when it is loaded.
+    using FloorFn = std::function<std::optional<float>(const glm::vec3&)>;
+    void set_floor(FloorFn floor) { floor_ = std::move(floor); }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
 
@@ -70,7 +75,12 @@ private:
     // The point's world matrix on a spawn as last drawn.
     std::optional<glm::mat4> point_world(const render::ActorRenderer& actors, std::uint32_t id, int point);
 
+    // GetParticleScaleFactor: the model's moddat.ini PESFactor.
+    float particle_scale(const assets::CharacterModel& model) const;
+
     std::vector<assets::SpellEffect> effects_;
+    game::HeightTables heights_; // moddat.ini's PESFactors
+    FloorFn floor_;
     IniFile sp_offsets_; // Resources\SPOffsets.ini
     assets::SpellPoints spell_points_;
     game::ParticleSystem particles_;
