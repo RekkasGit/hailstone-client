@@ -181,3 +181,50 @@ TEST_CASE("PlayerPath: the line fades in near the player and out past the grown 
     CHECK(p.fade_near() == doctest::Approx(120.0f));
     CHECK(p.fade_far() == doctest::Approx(200.0f));
 }
+
+TEST_CASE("Path.ini: steps of zero or less, and values that are not numbers, fall back to the defaults") {
+    IniFile ini;
+    ini.parse("[Path]\nSegmentLength=0\nControlSegmentLength=-3\nMergeDistance=nan\nLODFactor=-1\n");
+    PathSettings s = load_path_settings(&ini);
+    CHECK(s.segment_length == 5.0f);
+    CHECK(s.control_segment_length == 5.0f);
+    CHECK(s.merge_distance == 5.0f);
+    CHECK(s.lod_factor == 0.0f);
+    IniFile kept;
+    kept.parse("[Path]\nMergeDistance=0\nLODFactor=0.5\nSegmentLength=0.25\n");
+    PathSettings k = load_path_settings(&kept);
+    CHECK(k.merge_distance == 0.0f); // no merging, as the original would read it
+    CHECK(k.lod_factor == 0.5f);
+    CHECK(k.segment_length == 0.25f);
+}
+
+TEST_CASE("PlayerPath: a reply whose every point is dropped is a failed find, not a path") {
+    PlayerPath p;
+    p.update({0, 0, 0}, 0, 7);
+    p.set_settings(stock(), 6.0f);
+    p.find_spawn(5, false);
+    const float nan = std::nanf("");
+    std::vector<glm::vec3> reply = {{100, 0, 0}, {nan, 0, 0}, {0, nan, 0}};
+    auto r = p.handle_reply(reply, 1000, true, {});
+    CHECK(r.failed);
+    CHECK_FALSE(r.started);
+    CHECK_FALSE(p.active());
+    CHECK(p.points().empty());
+    CHECK(p.update({0, 0, 0}, 1100, 7).arrived == false);
+}
+
+TEST_CASE("PlayerPath: a tiny LODFactor and a far jump end their loops") {
+    IniFile ini;
+    ini.parse("[Path]\nControlSegmentLength=10\nMergeDistance=1\nSegmentLength=2\nLODFactor=0.0000001\n");
+    PlayerPath p;
+    p.update({0, 0, 0}, 0, 7);
+    p.set_settings(load_path_settings(&ini), 6.0f);
+    p.find_spawn(5, false);
+    std::vector<glm::vec3> reply = {{100, 0, 0}, {0, 0, 0}, {100, 0, 0}};
+    REQUIRE(p.handle_reply(reply, 1000, true, {}).started);
+    p.update({1, 0, 0}, 1600, 7);
+    CHECK(p.line().size() < 256 * (p.points().size() + 1));
+    // The player far away: trim's fill stops at the reply's point limit.
+    p.update({-1e9f, 0, 0}, 2200, 7);
+    CHECK(p.points().size() <= 10002);
+}

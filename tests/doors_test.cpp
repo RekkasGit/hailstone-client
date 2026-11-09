@@ -598,6 +598,19 @@ TEST_CASE("a closed door blocks the doorway; swung open it does not") {
     CHECK(game::blocks(shape, open, glm::inverse(open), 1.0f, {95.0f, 195.0f, 5.0f}, {95.0f, 205.0f, 5.0f}));
 }
 
+TEST_CASE("a mesh part that reaches past its index list is read up to the list's end") {
+    auto m = box_mesh({0, 0, 0}, {1, 1, 1});
+    m.parts[0].index_count += 300; // a damaged count
+    auto shape = game::ObjectShape::from_mesh(m);
+    CHECK(shape.tris.size() == 36);
+    m.parts[0].first_index = 0xfffffff0u; // and a start past the end
+    m.parts[0].index_count = 0x20u;
+    CHECK(game::ObjectShape::from_mesh(m).tris.empty());
+    assets::Zone z;
+    z.terrain.push_back(m);
+    CHECK(game::CollisionMesh::build(z).triangle_count() == 0);
+}
+
 TEST_CASE("a lift is a floor") {
     auto shape = game::ObjectShape::from_mesh(box_mesh({-5.0f, -5.0f, -1.0f}, {5.0f, 5.0f, 0.0f}));
     game::Door lift;

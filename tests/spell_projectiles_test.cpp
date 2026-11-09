@@ -1,6 +1,8 @@
 // game/spell_projectiles.h: which spells fly or fall, and the projectiles timed to the server's landings.
 #include <doctest/doctest.h>
 
+#include <cmath>
+
 #include "game/spell_projectiles.h"
 #include "game/spells.h"
 
@@ -168,4 +170,17 @@ TEST_CASE("a server-flown bolt follows its missile and bursts where it ends") {
     CHECK(p.landed(80, style, 1, 2, 2.2) == 0.0);
     // Another's missile with no remembered cast of a server-flown spell is not followed.
     CHECK_FALSE(p.follow_missile(6, 9, 2, 2.2));
+}
+
+TEST_CASE("projectiles: a distance or time that is not a number gives the shortest flight, not a NaN") {
+    ProjectileStyle style;
+    CHECK(SpellProjectiles::bolt_flight(style, std::nanf("")) == SpellProjectiles::kMinFlight);
+    CHECK(SpellProjectiles::bolt_flight(style, INFINITY) == SpellProjectiles::kMaxFlight);
+    Projectile p;
+    p.launch_at = 1.0;
+    p.arrive_at = std::nan("");
+    CHECK(SpellProjectiles::flight(p, 1.5) == 1.0f);
+    p.arrive_at = 2.0;
+    CHECK(SpellProjectiles::flight(p, std::nan("")) == 1.0f);
+    CHECK(SpellProjectiles::flight(p, 1.5) == doctest::Approx(0.5f));
 }

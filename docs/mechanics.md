@@ -1046,6 +1046,9 @@ Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle
 - PvP rule set (OP_LogServer +4): con levels (rules 1 / 2 / 4: below -4 / -8 / -5 levels 1, from 5 / 9 / 6 levels 7,
   else 5; every rule but 0 then clamps levels up to 5), who may attack whom (see `attack_rules.*`), CastSpell 210,
   hit-by-spell, resist debuffs x 1.5, steal, bind wound 145, invites by deity team under rule 4, the death coin rule.
+  Under rules 4 and 6 a detrimental spell between players below level 6 is refused in a newbie zone
+  (EQWorldData::IsNewbieZone, `game::is_newbie_zone`): every known spawn's Zone (+0x210) is taken as the current zone
+  (the zone id, the instance in the high 16 bits; the low 15 bits are kept above 1000).
 - Region flags start at 0xFFFFFFFF on zone-in, so the first region change check always counts as a change.
 - Trade: [Options] Trade (2 everyone, 1 group, 0 no one), is-ok-to-transact in its order, the refusal OP_TradeBusy
   and 1447; CastSpell asks the same check.

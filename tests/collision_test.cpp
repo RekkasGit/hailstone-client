@@ -246,3 +246,43 @@ TEST_CASE("ground_below and roof_above see what is drawn: a tunnel roof is no gr
     CHECK(hidden.floor_below({10, 10, 5}, 0).value() == doctest::Approx(0));
     CHECK(!hidden.ground_below({10, 10, 5}).has_value());
 }
+
+TEST_CASE("a triangle too large for the grid is met by every query") {
+    using hailstone::game::CollisionTriangle;
+    // About 300 x 300 cells of 64: listed in no cell, only among the huge ones.
+    auto up = [](float z) { return CollisionTriangle::make({10000, -10000, z}, {-10000, -10000, z}, {-10000, 10000, z}, 0); };
+    auto down = [](float z) { return CollisionTriangle::make({-10000, 10000, z}, {-10000, -10000, z}, {10000, -10000, z}, 0); };
+    auto mesh = CollisionMesh::from_triangles({up(0), down(40)});
+    CHECK(mesh.floor_below({0, 0, 10}, 0).value() == doctest::Approx(0));
+    CHECK(mesh.ceiling_above({0, 0, 10}).value() == doctest::Approx(40));
+    auto above = mesh.surfaces_above({0, 0, 10});
+    REQUIRE(above.size() == 1);
+    CHECK(above[0].z == doctest::Approx(40));
+    CHECK(mesh.ground_below({0, 0, 10}).value() == doctest::Approx(0));
+    CHECK(mesh.roof_above({0, 0, 10}).value() == doctest::Approx(40));
+    CHECK_FALSE(mesh.line_of_sight({0, 0, 10}, {0, 0, -10}));
+    CHECK(mesh.line_of_sight({0, 0, 10}, {50, 50, 20}));
+    auto hit = mesh.first_hit({0, 0, 10}, {0, 0, -10});
+    REQUIRE(hit);
+    CHECK(hit->t == doctest::Approx(0.5f));
+}
+
+TEST_CASE("for_each_on_segment and the sweeps meet each triangle once, also from inside another query") {
+    using hailstone::game::CollisionTriangle;
+    // A wall spanning several cells, crossed along its length.
+    auto mesh = CollisionMesh::from_triangles({CollisionTriangle::make({0, 0, 0}, {300, 0, 0}, {300, 0, 50}, 0),
+                                               CollisionTriangle::make({0, 0, 0}, {300, 0, 50}, {0, 0, 50}, 0)});
+    int outer = 0, inner = 0;
+    mesh.for_each_on_segment({-10, 0, 25}, {310, 0, 25}, [&](const CollisionTriangle&) {
+        ++outer;
+        mesh.for_each_on_segment({-10, 0, 25}, {310, 0, 25}, [&](const CollisionTriangle&) { ++inner; });
+    });
+    CHECK(outer == 2);
+    CHECK(inner == 4);
+    // Asked again, the marks of the last query do not hide anything.
+    int again = 0;
+    mesh.for_each_on_segment({-10, 0, 25}, {310, 0, 25}, [&](const CollisionTriangle&) { ++again; });
+    CHECK(again == 2);
+    auto s = hailstone::game::SphereSweep::make({150, 20, 25}, {150, -20, 25}, 2.0f); // into the walls' +y faces
+    CHECK(mesh.sweep_sphere_hit(s) >= 0);
+}

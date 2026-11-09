@@ -150,14 +150,18 @@ std::string buy_line_price_text(const net::BuyLine& line) {
 }
 
 std::uint32_t barter_set_price_coin(std::uint32_t price, int coin, std::uint32_t v) {
+    // In 64 bits, then the cap: a large answer (a script's, the dev window's) wrapped in 32 bits could come out under
+    // it as some other price.
+    const std::uint64_t p = price, n = v;
+    std::uint64_t out = p;
     switch (coin) {
-    case 0: price = price % 1000 + v * 1000; break;
-    case 1: price = (v + (price / 1000) * 10) * 100 + price % 100; break;
-    case 2: price = price % 10 + (v + (price / 100) * 10) * 10; break;
-    case 3: price = price - price % 10 + v; break;
+    case 0: out = p % 1000 + n * 1000; break;
+    case 1: out = (n + (p / 1000) * 10) * 100 + p % 100; break;
+    case 2: out = p % 10 + (n + (p / 100) * 10) * 10; break;
+    case 3: out = p - p % 10 + n; break;
     default: break;
     }
-    return std::min(price, kMaxBuyPrice);
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(out, kMaxBuyPrice));
 }
 
 std::string barter_report(std::string_view verb, std::string_view preposition, const net::BuyLine& line,

@@ -1,7 +1,9 @@
 #include "game/bazaar.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <format>
+#include <limits>
 
 #include "core/msvc_atoi.h"
 
@@ -62,7 +64,9 @@ std::array<std::uint32_t, 4> split_price(std::uint32_t copper) {
 }
 
 std::uint32_t join_price(std::uint32_t platinum, std::uint32_t gold, std::uint32_t silver, std::uint32_t copper) {
-    return copper + (silver + (gold + platinum * 10) * 10) * 10;
+    // In 64 bits and held at the largest 32-bit price: a field too large wrapped to some smaller price.
+    const std::uint64_t v = std::uint64_t{copper} + (std::uint64_t{silver} + (std::uint64_t{gold} + std::uint64_t{platinum} * 10) * 10) * 10;
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(v, std::numeric_limits<std::uint32_t>::max()));
 }
 
 std::string coin_compact(std::int64_t copper) {

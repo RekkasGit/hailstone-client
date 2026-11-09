@@ -2169,6 +2169,7 @@ bool GameConnection::allowed_to_attack(std::uint32_t target, std::int32_t spell)
     in.target_id = target;
     in.spell = spell;
     in.my_level = static_cast<std::uint8_t>(pstatus_.level);
+    in.zone = static_cast<std::uint32_t>(zone_id()) | (static_cast<std::uint32_t>(zone_instance()) << 16);
     in.rules.pvp_rules = pvp_rules_;
     in.self_or_group_member = [this](const std::string& name) { return group_.has_member(name); };
     return game::allowed_to_attack(in);
