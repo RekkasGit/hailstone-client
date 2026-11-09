@@ -287,6 +287,16 @@ void ClientApp::apply_font_face() {
     ui_.set_font_face(files.regular, files.bold);
 }
 
+void ClientApp::apply_plate_font() {
+    ui::FontFiles files;
+    if (!plate_style_.face.empty()) {
+        files = ui::find_font_family(font_faces(), plate_style_.face);
+        if (files.regular.empty()) files.regular = files.bold; // a face with only a bold file
+        if (files.regular.empty()) log::warn("fonts: no face \"{}\" for the name plates; the UI's font stays", plate_style_.face);
+    }
+    ui_.set_plate_font(files.regular, files.bold, static_cast<float>(plate_style_.size), plate_style_.bold);
+}
+
 std::vector<std::string> ClientApp::option_choices(std::string_view name) const {
     std::vector<std::string> out;
     // The texture packs (display.texture_folder): "Off", then each folder of textures/.
@@ -297,6 +307,11 @@ std::vector<std::string> ClientApp::option_choices(std::string_view name) const 
     // The Options window's font list (EnumerateSystemFonts): "Default" (the Arial-class font), then every family.
     if (name == "font_face") {
         out.push_back("Default");
+        for (auto& f : ui::font_families(font_faces())) out.push_back(f);
+    }
+    // The name plates' font list: "Same as UI", then every family.
+    if (name == "plate_font_face") {
+        out.push_back("Same as UI");
         for (auto& f : ui::font_families(font_faces())) out.push_back(f);
     }
     // The asset folder the game runs with (one entry; "asset_folder_pick" changes it on the login screen).
@@ -351,6 +366,16 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "plate_overlap_fade") return plate_overlap_fade_ ? 1 : 0;
     // Hailstone: the target's name is not hidden by walls (draw_nameplates), off by default.
     if (o == "target_plate_through_walls") return target_plate_through_walls_ ? 1 : 0;
+    // Hailstone: the name plates' text (game/nameplate_style.h); the face is its place in
+    // option_choices("plate_font_face"), 0 the UI's, -1 one not in the list.
+    if (auto v = game::plate_style_option(plate_style_, o)) return v;
+    if (o == "plate_font_face") {
+        if (plate_style_.face.empty()) return 0;
+        auto choices = option_choices("plate_font_face");
+        for (std::size_t i = 1; i < choices.size(); ++i)
+            if (game::same_no_case(choices[i], plate_style_.face)) return static_cast<int>(i);
+        return -1;
+    }
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -499,6 +524,17 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.save(config_path_);
         return;
     }
+    if (o == "plate_font_face") {
+        auto choices = option_choices("plate_font_face");
+        if (v < 0 || v >= static_cast<int>(choices.size())) return;
+        plate_style_.face = v == 0 ? std::string() : choices[static_cast<std::size_t>(v)];
+    }
+    if (o == "plate_font_face" || game::set_plate_style_option(plate_style_, o, v)) {
+        game::store_plate_style(plate_style_, config_);
+        config_.save(config_path_);
+        apply_plate_font();
+        return;
+    }
     if (o == "target_plate_highlight") {
         target_plate_highlight_ = v != 0;
         config_.set_bool("display.target_plate_highlight", v != 0);
@@ -639,6 +675,8 @@ void ClientApp::apply_settings() {
     viewport_.reset();
     if (auto text = config_.get("display.viewport")) viewport_ = game::parse_viewport(*text);
     apply_font_face();
+    plate_style_ = game::load_plate_style(config_);
+    apply_plate_font();
     actor_clip_plane_ = std::max(config_.get_int("display.actor_clip_plane", game::kDefaultActorClipPlane), 0);
     mouse_invert_y_ = config_.get_bool("mouse.invert_y", false);
     mouse_wheel_zoom_ = config_.get_bool("mouse.wheel_zoom", true);

@@ -372,6 +372,24 @@ local function displayTab()
     check("offer_layout_copy", "Offer Layouts to New Characters",
       "Hailstone: a character's first time in the world opens Copy Layout, to start from another character's windows, hot buttons and settings.")
   end)
+  -- Hailstone's name plate text (game/nameplate_style.h; docs/graphics.md "Name plates"): the names over heads in
+  -- their own face and size. Changes show at once.
+  section("Name Plates", function()
+    local faces = eq.OptionChoices("plate_font_face")
+    if faces and #faces > 0 then
+      combo("plate_font_face", "Font", faces,
+        "Hailstone: the face the names over players and NPCs are drawn in. Same as UI follows Current Font.")
+    end
+    slider("plate_font_size", "Size", 8, 48, nil, "Hailstone: how big the names are, in points (15 is the UI's size).")
+    check("plate_font_bold", "Bold",
+      "Hailstone: names in the face's bold. A face with no bold is thickened instead.")
+    combo("plate_edge", "Edge", { "Shadow", "Outline", "None" },
+      "Hailstone: the dark edge that keeps names readable over bright scenery: a drop shadow, an outline all round, or none.")
+    slider("plate_far_scale", "Size at Distance", 25, 100, pct,
+      "Hailstone: how big a name is at the farthest names are shown, against one close by. 100 % keeps every name the same size.")
+    slider("plate_tag_scale", "Guild and Owner Lines", 50, 100, pct,
+      "Hailstone: the size of the lines under a name (a player's guild, an NPC's role or a pet's owner), against the name's.")
+  end)
   -- Hailstone's target ring settings (app/target_ring.cpp; docs/graphics.md "The target ring"): its colour for each
   -- con (the colour picker, eq.ClickChild TargetRingColor<n>), how opaque and how bright it is, and its cues.
   section("Target Ring", function()

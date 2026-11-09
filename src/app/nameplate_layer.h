@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 
+#include "game/nameplate_style.h"
 #include "render/vk_context.h"
 
 namespace hailstone::app {
@@ -29,6 +30,17 @@ struct NameplateText {
     bool through_walls = false;     // never hidden by the scene (the target's, option target_plate_through_walls)
     bool highlight = false;         // the dark plate, edge and marker (the target's, option target_plate_highlight)
     float alpha = 1.0f;             // 0..1 on everything drawn (an overlapped name fades, game/nameplate_overlap.h)
+    float scale = 1.0f;             // on the style's size (option plate_far_scale, game::plate_distance_factor)
+};
+
+// How every plate's text is drawn (game/nameplate_style.h): the defaults are ImGui's current font at its size with a
+// drop shadow, the look before the options.
+struct NameplateDrawStyle {
+    ImFont* font = nullptr;         // nullptr: ImGui's current font
+    float size = 0.0f;              // ImGui pixels; 0: the font's own size
+    bool faux_bold = false;         // each letter struck twice, a pixel apart (a face with no bold file)
+    game::PlateEdge edge = game::PlateEdge::Shadow;
+    float tag_scale = 1.0f;         // the lines under the name, on the name's size
 };
 
 class NameplateLayer {
@@ -44,7 +56,9 @@ public:
     void begin(const render::FrameInfo& frame, ImDrawList* dl, const glm::vec4& view, float near_plane, float far_plane);
     void draw(const NameplateText& plate);
     // The name's box under pos: the widest line by the lines' height (what the overlap rules measure).
-    static glm::vec2 size_of(const NameplateText& plate);
+    glm::vec2 size_of(const NameplateText& plate) const;
+    // From the next draw (the client's, set each frame from its options).
+    void set_style(const NameplateDrawStyle& style) { style_ = style; }
     // Off: plates are drawn plain (the viewer's --plate-test-no-depth, the reference of its comparison).
     void set_depth_test(bool on) { depth_test_ = on; }
     // The alpha where the scene hides text: 0 (the viewer's default) drops it; only the viewer's test sets it.
@@ -64,6 +78,8 @@ private:
     static void bind(const ImDrawList*, const ImDrawCmd* cmd);
     void create(const std::filesystem::path& shader_dir);
     void paint(const NameplateText& plate) const;
+    ImFont* font() const;
+    float name_size(const NameplateText& plate) const; // the name's text size in ImGui pixels
 
     render::VkContext& vk_;
     VkDevice device_;
@@ -82,6 +98,7 @@ private:
     bool usable_ = false; // the pipeline was made
     bool depth_test_ = true;
     float occluded_alpha_ = 0.0f;
+    NameplateDrawStyle style_;
     // This frame's.
     std::uint32_t slot_ = 0;
     ImDrawList* dl_ = nullptr;

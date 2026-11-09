@@ -10,6 +10,8 @@
 
 #include <volk.h>
 
+struct ImFont;
+
 namespace hailstone::platform { class Window; }
 namespace hailstone::render { class VkContext; struct FrameInfo; }
 
@@ -50,6 +52,9 @@ public:
     // The UI font's face (/fontface, ui.font_face; ui/font_faces.h): its regular and bold files (empty: the
     // Arial-class font found), for every font from the next frame.
     void set_font_face(const std::filesystem::path& regular, const std::filesystem::path& bold);
+    // The name plates' font (game/nameplate_style.h): its face's regular and bold files (empty: the UI font's), its
+    // size in points at 100 % scale and whether it is bold, from the next frame (plate_font()).
+    void set_plate_font(const std::filesystem::path& regular, const std::filesystem::path& bold, float size, bool bold_face);
 
     // The gamepad (a client extension, docs/gamepad.md): on, ImGui's gamepad navigation runs on the window's pad (menu
     // mode: the SDL3 backend drives it); off, ImGui gets nothing from the pad. Applied at the next new_frame. The pad's
@@ -87,6 +92,9 @@ private:
     void build_fonts();
     float font_size_ = 15.0f;
     std::filesystem::path font_path_, face_, face_bold_;
+    std::filesystem::path plate_face_, plate_face_bold_; // set_plate_font's
+    float plate_size_ = 15.0f;
+    bool plate_bold_ = false;
     bool fonts_dirty_ = false;
     bool frame_open_ = false;
     int keyboard_request_ = -1; // the last frame's SetNextFrameWantCaptureKeyboard (-1: none), read before NewFrame
@@ -107,6 +115,13 @@ private:
 // the pad, and a frame that asked for the keys (`requested` == 1: the last frame's SetNextFrameWantCaptureKeyboard,
 // ui.CaptureKeyboard) keep them.
 bool keyboard_for_ui(int requested);
+
+// The name plates' font as ImGuiLayer::set_plate_font set it (nullptr when the built-in font stands in: draw with
+// ImGui's font at plate_font_size()), and its size in ImGui's pixels. plate_font_faux_bold: bold was asked for and
+// the face has no bold file, so the plates strike each letter twice.
+ImFont* plate_font();
+float plate_font_size();
+bool plate_font_faux_bold();
 
 // The current ImGui context's keys as on Windows on every system: Ctrl is Ctrl in the windows, as in the game's own
 // keys, the original client and the Ctrl-clicks the windows use (on items, loot, the spell gems). ImGui's macOS

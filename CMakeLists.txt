@@ -472,6 +472,7 @@ add_library(hailstone_engine STATIC
   src/game/cursor_drop.cpp
   src/game/item_options.cpp
   src/game/nameplate_overlap.cpp
+  src/game/nameplate_style.cpp
   src/game/option_commands.cpp
   src/game/output_file.cpp
   src/ui/lua/lua_host.cpp
@@ -1043,6 +1044,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/combat_test.cpp
     tests/plate_test_test.cpp
     tests/nameplate_overlap_test.cpp
+    tests/nameplate_style_test.cpp
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
