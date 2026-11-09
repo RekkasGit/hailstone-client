@@ -18,13 +18,23 @@ TEST_CASE("multiclass: the class masks an extension sets") {
 
     // Character select: by name, 0 = the character's own class only.
     CHECK(c.classes_mask("Bob") == 0);
+    CHECK(c.characters_serial() == 0);
     c.set_character_classes("Bob", 0x3);
     CHECK(c.classes_mask("Bob") == 0x3);
+    // A change of a mask changes the character list's serial (the character select's rows are built again), the
+    // same mask again does not.
+    const std::uint32_t serial = c.characters_serial();
+    CHECK(serial != 0);
+    c.set_character_classes("Bob", 0x3);
+    CHECK(c.characters_serial() == serial);
     c.set_character_classes("Bob", 0);
     CHECK(c.classes_mask("Bob") == 0);
+    CHECK(c.characters_serial() != serial);
     c.set_character_classes("Bob", 0x5);
+    const std::uint32_t before_clear = c.characters_serial();
     c.clear_character_classes();
     CHECK(c.classes_mask("Bob") == 0);
+    CHECK(c.characters_serial() != before_clear);
 
     // The player: the mask set, else the profile's class.
     net::PlayerProfile p;

@@ -57,9 +57,11 @@ TEST_CASE("mock login: login, server list and play hand over a world ticket") {
     CHECK(rig.client.login_result().session_key == "ABCDEFGHIJ");
     CHECK(rig.client.sequence() == 3); // handshake 2, login 3 (docs/protocol/login.md, Sequence numbers)
 
+    CHECK(rig.client.servers_serial() == 0);
     rig.client.request_server_list();
     REQUIRE(rig.until_state(LoginState::ServerList));
     CHECK(rig.client.sequence() == 4);
+    CHECK(rig.client.servers_serial() != 0); // (the server select is built again when it changes)
     REQUIRE(rig.client.servers().size() == 1);
     CHECK(rig.client.servers()[0].name == "Mock EQEmu");
     CHECK(rig.client.servers()[0].address == "127.0.0.1");
@@ -106,6 +108,9 @@ TEST_CASE("mock login: the ticket gets a GameConnection through world authentica
     CHECK(rig.server.login_infos[0].session_key == "ABCDEFGHIJ");
     REQUIRE(conn.characters().size() == 1);
     CHECK(conn.characters()[0].name == "Gennro");
+    // The character select is built again when this changes (each list, unique in the process).
+    CHECK(conn.characters_serial() != 0);
+    CHECK(conn.characters_serial() != rig.client.servers_serial());
 }
 
 TEST_CASE("mock login: a refused password keeps the server's error id") {

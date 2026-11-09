@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "core/character_files.h"
+#include "core/process_serial.h"
 #include "core/server_profile.h"
 #include "game/alt_adv.h"
 #include "game/augments.h"
@@ -347,11 +348,18 @@ public:
 
     // ---- character select ----
     const std::vector<CharacterSelectEntry>& characters() const { return characters_; }
+    // Changes with each character list and each change of a character's classes (classes_mask), unique in the
+    // process; 0 before the first list.
+    std::uint32_t characters_serial() const { return characters_serial_; }
     // Hailstone's multiclass support: a character's classes as a bit mask (bit c-1 = class c), by name, as the
     // server's extension set them (set_character_classes); 0 = its class only (stock servers).
     std::uint32_t classes_mask(const std::string& name) const;
     void set_character_classes(const std::string& name, std::uint32_t mask);
-    void clear_character_classes() { character_classes_.clear(); }
+    void clear_character_classes() {
+        if (character_classes_.empty()) return;
+        character_classes_.clear();
+        characters_serial_ = core::next_process_serial();
+    }
     const std::optional<CharCreateData>& char_create_data() const { return create_data_; }
     // The account's expansions (OP_ExpansionInfo's mask; 0xde09d4), none before world sends them.
     std::uint32_t world_expansions() const { return world_expansions_; }
@@ -2869,6 +2877,7 @@ private:
     bool tributes_requested_ = false; // Tribute_SendPendingRequests' flags (+0x1c, +0x60): once per session
 
     std::vector<CharacterSelectEntry> characters_;
+    std::uint32_t characters_serial_ = 0;
     // server_ext(): ConnectionOptions::plugins.
     game::ExtensionChain ext_chain_;
     std::map<std::string, std::uint32_t, std::less<>> character_classes_; // set_character_classes

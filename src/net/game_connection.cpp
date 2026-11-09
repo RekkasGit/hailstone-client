@@ -17,6 +17,7 @@
 #include "core/server_profile.h"
 #include "core/zone_name.h"
 #include "core/log.h"
+#include "core/process_serial.h"
 #include "game/appearance.h"
 #include "game/boats.h"
 #include "game/race_models.h"
@@ -481,6 +482,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         auto list = decode_character_select(p);
         if (!list) { fail("could not read the character list"); return; }
         characters_ = std::move(*list);
+        characters_serial_ = core::next_process_serial();
         bool first = state_ == ConnectionState::WorldAuth;
         state_ = ConnectionState::CharacterSelect;
         status_.clear();
@@ -655,8 +657,10 @@ std::uint32_t GameConnection::classes_mask(const std::string& name) const {
 }
 
 void GameConnection::set_character_classes(const std::string& name, std::uint32_t mask) {
+    if (classes_mask(name) == mask) return;
     if (mask) character_classes_[name] = mask;
     else character_classes_.erase(name);
+    characters_serial_ = core::next_process_serial();
 }
 
 std::string GameConnection::guild_member_class(std::uint32_t class_value) const {

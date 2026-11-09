@@ -697,6 +697,7 @@ private:
     std::string wanted_ui_pack() const;
     void update_login();
     // The login server's worlds into server_view_: favourites first, then by name; the picked world stays picked.
+    void take_server_list();
     void list_worlds();
     // Marks or unmarks the server select's row as a favourite (hailstone.ini login.favorite_worlds.<profile>).
     void toggle_favorite_world(int row);
@@ -1067,6 +1068,12 @@ private:
     std::string box_world_; // the world to play (empty: the last played on the server, else the first)
     std::string box_character_;
     std::string listed_characters_; // what note_listed_characters() wrote last (a signature)
+    // The pre-game screens are built again when what they show changes, not each frame: the connection's
+    // characters_serial() and the login's servers_serial() last built from, and when the server select's add-on
+    // hint (which reads the server's folder) was last made.
+    std::uint32_t characters_listed_serial_ = 0;
+    std::uint32_t servers_listed_serial_ = 0;
+    Clock::time_point server_hint_at_{};
     std::vector<std::string> worlds_noted_; // the worlds the login server listed, as set_listed_worlds() last had them
     platform::ChildProcesses box_clients_; // the box set's other windows
     platform::ChildProcesses tools_;       // the tool add-ons the player started (left running when Hailstone quits)
@@ -1461,6 +1468,7 @@ private:
     double pre_game_step_ = 0.0;                     // the 50 ms camera step's clock
     float pre_game_saved_fov_ = 0.0f;                // the in-game camera's field of view, put back after
     std::string pre_game_shown_;                     // what the model shows ("" nothing yet)
+    std::pair<std::uint32_t, int> pre_game_shown_for_{}; // the characters_serial() and row it was built from
     std::array<std::uint32_t, 3> pre_game_model_key_{}; // race, gender, class it was switched to
     std::array<std::uint32_t, 3> create_choice_{};      // the client's own creation screen's race, gender, class
     int pre_game_zoom_ = -1, pre_game_feature_ = 0;      // the customization camera last placed
