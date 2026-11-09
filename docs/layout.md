@@ -56,7 +56,10 @@ hailstone/
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
                              opacity, locks: the `hud.*` settings);
                              eqlog.txt (or /log on <name>: <name>.txt), the chat log; plugin-config/<plugin>/ a
-                             plugin's files for the character (character_config_dir; the NMS plugin's itemrules.ini)
+                             plugin's files for the character (character_config_dir; the NMS plugin's itemrules.ini);
+                             /outputfile's dumps (the original writes them in the game folder), under any name
+                             but those of the settings files above (any case; a chat log's name is allowed, as in
+                             the original; is_kept_character_file)
   notes.txt                  the notes window's text (/note)
   web/                       the in-game browser's data: web/<profile>/ one server's cookies and cache, cef.log
                              CEF's log (docs/browser.md)
@@ -433,9 +436,12 @@ A crash (a fatal signal on Linux and macOS, an unhandled exception on Windows, o
 `logs/crash-<YYYYMMDD>-<HHMMSS>.txt` (UTC) with the build (`core/build_info.h`: the version and commit), the time,
 what happened, the log's path and its last 16 lines, then the stack where glibc has one (`addr2line -e hailstone
 <+offset>` names a frame of a build with symbols); on Windows a minidump, `crash-<...>.dmp`, goes beside it
-(`platform/crash_log.h`). The minidump holds the threads' stacks and registers and the module list, enough for a
-symbolised stack, and no heap: the memory the stacks point at (a password, the session key, a plugin's `auth_key`) is
-left out, since the dump goes into bug reports unchanged. The log itself is flushed line by line, so it holds the rest. A stack overflow is reported
+(`platform/crash_log.h`). The minidump holds the threads' call stacks and registers and the module list, enough for a
+symbolised stack, and no secret, since the dump goes into bug reports unchanged: no heap, so not the memory the stacks
+point at (the password field, the session key, a plugin's `auth_key`), and of the stacks only the pointers a stack
+trace needs (`MiniDumpFilterMemory`), so no bytes a frame copied either; the locals' values are lost with them. The
+client itself is on the heap, and the password leaves its fields (overwritten) once the login server has taken it: a
+saved one is read from the keyring again when the login screen comes back. The log itself is flushed line by line, so it holds the rest. A stack overflow is reported
 on the main thread and on the threads that make a `CrashStack` (the network session's, the sound loader's, navigation's,
 the add-on manager's, the updater's, the neighbour zones' and the appearances' workers, `core/latest_jobs.h`). After
 the report the handler that was there before runs: the default one (a core dump, the crash exit status), a sanitizer's
@@ -466,7 +472,7 @@ Discord's 10 MiB upload limit: what does not fit (the screenshots first, then a 
 name, which on Linux is the system account name, written `<user>` where it is a folder name elsewhere
 (`/run/media/<user>/`). The logs and the crash report also have the words of every chat line (`[info] chat: ...`:
 tells, guild, group and channel chat, other players' words) taken out; the line itself stays, for its time and
-order. A Windows `.dmp` is binary and goes in unchanged (it carries no heap, see above); screenshots are not touched.
+order. A Windows `.dmp` is binary and goes in unchanged (it carries no heap and no stack data, see above); screenshots are not touched.
 
 On Windows the programs carry a manifest that makes UTF-8 their ANSI code page (Windows 10 1903 and later; MSVC-style
 linkers, `cmake/utf8.manifest`), so a data or install folder with any characters in its name works; the folder

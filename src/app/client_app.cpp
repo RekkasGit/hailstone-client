@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
+#include "core/wipe.h"
 
 namespace hailstone::app {
 
@@ -686,15 +687,17 @@ int ClientApp::run() {
 
 } // namespace client_internal
 
-int run_client(const ClientOptions& options) {
+int run_client(ClientOptions& options) {
     int code = 0;
     client_internal::ClientApp::UpdateExit update;
     {
         // Without --game-dir or EQ_GAME_DIR the asset folder comes from hailstone.ini or the picker
-        // (choose_asset_folder).
-        client_internal::ClientApp app(options);
-        code = app.run();
-        update = app.update_exit();
+        // (choose_asset_folder). On the heap: a Windows crash dump holds the threads' stacks, and the client's
+        // members (the login fields, the session key) must not be in it.
+        auto app = std::make_unique<client_internal::ClientApp>(options);
+        core::wipe(options.auto_password);
+        code = app->run();
+        update = app->update_exit();
     }
     // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now.
     if (update.install) finish_update_at_exit(update.restart);

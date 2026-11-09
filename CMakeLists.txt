@@ -911,6 +911,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/culling_test.cpp
     tests/shadow_chunks_test.cpp
     tests/wrap_math_test.cpp
+    tests/wipe_test.cpp
+    tests/log_escape_test.cpp
     tests/step_clock_test.cpp
     tests/frame_rate_test.cpp
     tests/particle_view_test.cpp

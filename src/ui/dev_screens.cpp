@@ -17,6 +17,7 @@
 
 #include "core/ascii_case.h"
 #include "core/config.h"
+#include "core/wipe.h"
 #include "game/eq_names.h"
 #include "game/zone_names.h"
 #include "game/gamepad_bindings.h"
@@ -1165,7 +1166,7 @@ std::string credential_server(const LoginView& view) { return platform::credenti
 
 void pick_account(LoginView& view, std::string_view username) {
     view.username = std::string(username);
-    view.password.clear();
+    core::wipe(view.password);
     view.save_password = false;
     const SavedAccount* a = nullptr;
     for (const auto& acc : view.accounts)
@@ -1326,6 +1327,7 @@ std::optional<ServerProfile> store_login_settings(LoginView& view, Config& confi
     // What was typed stays, even when the username is not remembered.
     view.username = std::move(username);
     view.password = std::move(password);
+    core::wipe(password);
     return p;
 }
 
