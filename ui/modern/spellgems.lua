@@ -1,7 +1,7 @@
 -- Spell bar: replaces the game's CastSpellWnd. The memorized spells as a row (or column) of icon tiles with their
 -- category colour, the refresh shading over a gem that is not ready, and the spell book button at the end.
 -- The gems act as the game's: click casts (or memorizes the spell on the cursor), a quick right click forgets the
--- spell, holding the right button shows the spell, dragging puts the spell on a hot button.
+-- spell, holding the right button shows its display; releasing over it keeps it open. Dragging makes a hot button.
 local hud = dofile("lib/hud.lua")
 local T = hud.T
 local C = T.color
@@ -9,16 +9,45 @@ local WINDOW = "CastSpellWnd"
 local GEMS = 12
 local VERTICAL = "hud.vertical." .. WINDOW
 
+-- Find this spell's visible display, not an old ImGui rectangle left behind by a closed window.
+local function overSpellDisplay(spell)
+  local title = eq.SpellDetails(spell)
+  if not title then return false end
+  for n = 1, 6 do
+    local window = n == 1 and "SpellDisplayWindow" or ("SpellDisplayWindow#" .. n)
+    if eq.WindowShown(window) and eq.WindowTitle(window) == title then
+      local x, y, w, h = ui.FindWindowRect("###modern." .. window)
+      local mx, my = ui.GetMousePos()
+      if x and mx >= x and mx < x + w and my >= y and my < y + h then return true end
+    end
+  end
+  return false
+end
+
 -- Each gem's: its child, number, the record eq.GemInfo fills (its looks this frame), its tint ring and right button.
 local all = {}
 for i = 0, GEMS - 1 do
   local id = "CSPW_Spell" .. i
+  local heldSpell
   all[i + 1] = {
     id = id, hit = "##" .. id, n = i + 1, info = {}, ring = { 1, 1, 1, 0.9 }, icon = { radius = 6 },
     -- (a quick right click forgets the spell only when let go on the gem: slid off, or the gem gone mid-press
     -- (T.RightPressFrame's outside), it does nothing, as a hot button's)
     onClick = function(phase, outside)
       if phase == "rightup" and outside then return end
+      if phase == "rightheld" then
+        local state = eq.SpellBookState()
+        heldSpell = state and state.gems and state.gems[i + 1]
+      end
+      -- Hailstone: releasing over the display keeps it; elsewhere it closes as in the original.
+      if phase == "rightupheld" then
+        local spell = heldSpell
+        heldSpell = nil
+        local keep = spell and spell ~= -1 and overSpellDisplay(spell)
+        eq.SpellGemClick(id, phase)
+        if keep then eq.ShowSpell(spell) end
+        return
+      end
       eq.SpellGemClick(id, phase)
     end,
   }

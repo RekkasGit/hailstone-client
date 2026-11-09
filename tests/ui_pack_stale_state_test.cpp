@@ -198,6 +198,62 @@ TEST_CASE("UI packs (modern): a right click slid off a spell gem forgets nothing
     CHECK(r.no_errors());
 }
 
+TEST_CASE("UI packs (modern): held spell gem display stays only when released over it") {
+    PackRig r("modern");
+    r.run(kGems);
+    r.run(R"lua(
+eq.SpellBookState = function() return { gems = { 200, -1 } } end
+local shown = eq.WindowShown
+local rect = ui.FindWindowRect
+eq.WindowShown = function(window)
+  if window == 'SpellDisplayWindow' then return fake.display end
+  return shown(window)
+end
+eq.SpellDetails = function() return 'Test spell' end
+eq.WindowTitle = function() return fake.otherTitle and 'Another spell' or 'Test spell' end
+ui.FindWindowRect = function(name)
+  if name == '###modern.SpellDisplayWindow' then return 100, 100, 200, 100 end
+  return rect(name)
+end
+eq.SpellGemClick = function(id, phase)
+  calls[#calls + 1] = 'gem ' .. id .. ' ' .. phase
+  if phase == 'rightheld' and id == 'CSPW_Spell0' then fake.display = true end
+  if phase == 'rightupheld' then fake.display = false end
+end
+eq.ShowSpell = function(id) calls[#calls + 1] = 'show ' .. id fake.display = true end
+)lua");
+    r.s->frames(3);
+    const ImVec2 gem = r.centre("##CSPW_Spell0");
+    r.mouse_to(gem);
+    r.button(ImGuiMouseButton_Right, true, 35);
+    CHECK(r.truth("fake.display"));
+    r.mouse_to(ImVec2(gem.x, gem.y - 300));
+    r.button(ImGuiMouseButton_Right, false);
+    CHECK_FALSE(r.truth("fake.display"));
+    CHECK_FALSE(r.called("show 200"));
+    r.run("calls = {}");
+    r.mouse_to(gem);
+    r.button(ImGuiMouseButton_Right, true, 35);
+    r.mouse_to(ImVec2(150, 150));
+    r.button(ImGuiMouseButton_Right, false);
+    CHECK(r.truth("fake.display"));
+    CHECK(r.called("show 200"));
+    CHECK(r.called("rightupheld"));
+    r.run("calls = {} fake.display = false fake.otherTitle = true");
+    r.mouse_to(gem);
+    r.button(ImGuiMouseButton_Right, true, 35);
+    r.mouse_to(ImVec2(150, 150));
+    r.button(ImGuiMouseButton_Right, false);
+    CHECK_FALSE(r.called("show 200"));
+    r.run("fake.otherTitle = false");
+    r.run("calls = {} fake.display = false");
+    r.mouse_to(r.centre("##CSPW_Spell1"));
+    r.button(ImGuiMouseButton_Right, true, 35);
+    r.button(ImGuiMouseButton_Right, false);
+    CHECK_FALSE(r.called("show"));
+    CHECK(r.no_errors());
+}
+
 TEST_CASE("UI packs (modern): a spell dragged from a book that closed memorizes nothing on a gem") {
     PackRig r("modern");
     r.run(kGems);
