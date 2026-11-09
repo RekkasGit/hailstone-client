@@ -186,6 +186,9 @@ public:
     bool empty() const { return definitions_.empty(); }
     const std::vector<assets::EmitterDefinition>& definitions() const { return definitions_; }
     const std::vector<Emitter>& emitters() const { return emitters_; }
+    // particle_glows (game/light_list.h) of each definition, worked out once when it is added: the zone's lights
+    // ask it of every emitter each frame.
+    bool glows(std::size_t definition) const { return definition < glows_.size() && glows_[definition]; }
 
     // CreateSpellEmitter: the emitter's duration in ms, or 0 when none was
     // created (index out of range, density <= 0).
@@ -226,6 +229,7 @@ private:
     float random(float a, float b);
 
     std::vector<assets::EmitterDefinition> definitions_;
+    std::vector<bool> glows_; // per definition (glows)
     std::vector<Emitter> emitters_;
     std::mt19937 rng_{1};
     std::optional<glm::vec3> viewer_;
