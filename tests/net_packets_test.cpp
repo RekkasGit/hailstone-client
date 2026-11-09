@@ -2,6 +2,7 @@
 
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -96,6 +97,17 @@ TEST_CASE("OP_SendLoginInfo is 464 bytes with account\\0key and the zoning flag 
     p = encode(li);
     CHECK(byte_at(p, 188) == 0);
     CHECK(decode_login_info(p)->custom_files_key == "key1");
+}
+
+TEST_CASE("OP_SendLoginInfo: a key that does not fit keeps the field's last NUL") {
+    LoginInfo li{"12345", std::string(57, 'K'), false, ""}; // 5 + 1 + 57 + 1 = 64: fits
+    CHECK(login_info_fits(li));
+    CHECK(decode_login_info(encode(li))->session_key == li.session_key);
+    li.session_key.push_back('K');
+    CHECK_FALSE(login_info_fits(li));
+    AppPacket p = encode(li);
+    CHECK(byte_at(p, 63) == 0);
+    CHECK(decode_login_info(p)->session_key == std::string(57, 'K'));
 }
 
 TEST_CASE("OP_EnterWorld client record is 72 bytes") {
@@ -1190,6 +1202,14 @@ TEST_CASE("find: the request is 40 bytes; the reply's points come in order") {
     auto none = hailstone::net::decode_find_person_reply(hailstone::net::AppPacket(hailstone::net::to_wire(hailstone::net::Op::FindPersonReply)));
     REQUIRE(none);
     CHECK(none->empty());
+    // A point that is not a number or is infinite is dropped; the others stay in order.
+    std::vector<glm::vec3> bad{{1, 2, 3}, {std::nanf(""), 0, 0}, {0, INFINITY, 0}, {4, 5, 6}};
+    auto kept = hailstone::net::decode_find_person_reply(hailstone::net::encode_find_person_reply(bad));
+    REQUIRE(kept);
+    REQUIRE(kept->size() == 3); // the destination (4, 5, 6) first, then (1, 2, 3) and (4, 5, 6)
+    CHECK((*kept)[0] == glm::vec3(4, 5, 6));
+    CHECK((*kept)[1] == glm::vec3(1, 2, 3));
+    CHECK((*kept)[2] == glm::vec3(4, 5, 6));
 }
 
 TEST_CASE("pvp: stats (4612 bytes), the leaderboard (8024) and the crystal counts") {

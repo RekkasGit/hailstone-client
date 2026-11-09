@@ -3,6 +3,7 @@
 // What a sound is played with: the original's SoundControl (SoundControl::SoundControl @0x5bead0), and
 // the distance rule of its 3D voices. Shared by the zone emitters, the event sounds and the mixer.
 
+#include <algorithm>
 #include <cstdint>
 
 #include <glm/glm.hpp>
@@ -82,6 +83,15 @@ inline SoundControl spawn_sound_control(const glm::vec3& position, float height,
         c.pool = 3;
     }
     return c;
+}
+
+// How far a spawn's sounds reach: its one-shots (spawn_sound_control, 12 x height) and its loop (EqMobileEmitter's
+// 24 x max(height/2, 2), AudioSystem::set_spawn_loop), past which both are muted. Hailstone's (app/sound_events.cpp):
+// the walking of a spawn farther than this plus `margin` is not turned into sounds at all.
+inline bool spawn_out_of_hearing(const glm::vec3& listener, const glm::vec3& position, float height, float margin) {
+    const float reach = std::max(height * 0.5f * 24.0f, std::max(height * 0.5f, 2.0f) * 24.0f) + margin;
+    const glm::vec3 d = position - listener;
+    return !(glm::dot(d, d) <= reach * reach); // (NaN: out)
 }
 
 // The SoundManager's instance pools (SoundManager_InitMilesDrivers @0x5c02c0 with 16 3D and 6 2D voices, then

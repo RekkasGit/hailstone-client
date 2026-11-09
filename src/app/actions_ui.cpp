@@ -150,8 +150,8 @@ void ActionsUi::enter_zone(const std::filesystem::path& hot_buttons_ini) {
     state_.sneaking = state_.hidden = state_.fishing = false;
     state_.activity = -1;
     loadouts_fresh_ = true;
+    save_character(); // what waited for save_if_due, before the zone (or the next character's file)
     if (who == loaded_for_) return;
-    save_character();
     loaded_for_ = who;
     char_ini_path_ = hot_buttons_ini;
     char_ini_.load(char_ini_path_);
@@ -198,7 +198,19 @@ bool ActionsUi::set_hot_button_spec(int bar, int page, int button, const std::st
     return true;
 }
 
+bool ActionsUi::save_if_due(std::int64_t now_ms) {
+    if (!dirty_) {
+        dirty_seen_ms_.reset();
+        return false;
+    }
+    if (!dirty_seen_ms_) dirty_seen_ms_ = now_ms;
+    if (now_ms - *dirty_seen_ms_ < kSaveDelayMs) return false;
+    save_character();
+    return true;
+}
+
 void ActionsUi::save_character() {
+    dirty_seen_ms_.reset();
     if (!dirty_ || char_ini_path_.empty()) return;
     store_.save(char_ini_);
     sets_.save(char_ini_);
@@ -668,6 +680,8 @@ void ActionsUi::hot_button_right_click(net::GameConnection& conn, int bar, int b
 }
 
 void ActionsUi::update(net::GameConnection& conn, const mech::Character* ch, const AbilityView& view) {
+    // Last frame's changes (the windows' clicks, the plugins' and Lua's edits), once they have waited a little.
+    save_if_due(net::GameConnection::now_ms());
     // The spell sets, /grouproles' role sets and the group finder's filters live on the connection and in this
     // character file ([SpellLoadouts], [GroupRoleLoadouts], [ADDITIONALFILTERS]): read at every zone-in (the
     // connection may be new), written back here when they change (SaveSpellLoadoutsToIni,
@@ -736,7 +750,6 @@ void ActionsUi::update(net::GameConnection& conn, const mech::Character* ch, con
     if (auto m = mech::check_hide_moved(ctx, state_, hide_class)) message(conn, *m);
     if (state_.fishing && static_cast<std::int32_t>(ctx.now - state_.fishing_eta) >= 0) state_.fishing = false;
     conn.note_hide_state(state_.hidden, state_.sneaking);
-    if (dirty_) save_character();
 }
 
 void ActionsUi::melee_timers(net::GameConnection& conn, const mech::Character* ch, const AbilityView& view) {

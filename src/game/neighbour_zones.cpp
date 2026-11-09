@@ -358,22 +358,36 @@ void seam_band(const Seam& seam, const glm::vec3& zone_lo, const glm::vec3& zone
 
 GroundGrid sample_ground(const glm::vec2& lo, const glm::vec2& hi, float cell,
                          const std::function<std::optional<float>(float x, float y)>& floor) {
-    GroundGrid g;
+    GroundSampler sampler(lo, hi, cell);
+    sampler.step(floor, [] { return true; });
+    return sampler.take();
+}
+
+GroundSampler::GroundSampler(const glm::vec2& lo, const glm::vec2& hi, float cell) {
+    GroundGrid& g = grid_;
     g.origin = lo;
     g.cell = cell;
     g.width = std::max(0, static_cast<int>(std::ceil((hi.x - lo.x) / cell)));
     g.height = std::max(0, static_cast<int>(std::ceil((hi.y - lo.y) / cell)));
     if (g.width == 0 || g.height == 0 || static_cast<std::size_t>(g.width) * static_cast<std::size_t>(g.height) > 4'000'000) {
         g.width = g.height = 0;
-        return g;
+        return;
     }
     g.heights.assign(static_cast<std::size_t>(g.width) * static_cast<std::size_t>(g.height),
                      std::numeric_limits<float>::quiet_NaN());
-    for (int y = 0; y < g.height; ++y)
+}
+
+bool GroundSampler::step(const std::function<std::optional<float>(float x, float y)>& floor,
+                         const std::function<bool()>& more) {
+    GroundGrid& g = grid_;
+    for (bool first = true; row_ < g.height && (first || more()); first = false, ++row_) {
+        const int y = row_;
         for (int x = 0; x < g.width; ++x)
-            if (auto h = floor(lo.x + (static_cast<float>(x) + 0.5f) * cell, lo.y + (static_cast<float>(y) + 0.5f) * cell))
+            if (auto h = floor(g.origin.x + (static_cast<float>(x) + 0.5f) * g.cell,
+                               g.origin.y + (static_cast<float>(y) + 0.5f) * g.cell))
                 g.heights[static_cast<std::size_t>(y) * static_cast<std::size_t>(g.width) + static_cast<std::size_t>(x)] = *h;
-    return g;
+    }
+    return done();
 }
 
 std::optional<float> GroundGrid::height_at(float x, float y) const {

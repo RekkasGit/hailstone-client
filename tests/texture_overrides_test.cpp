@@ -14,6 +14,7 @@
 #include "assets/texture_overrides.h"
 #include "core/byte_io.h"
 #include "core/png_write.h"
+#include "fuzz_support.h"
 #include "scratch_dir.h"
 
 using namespace hailstone;
@@ -224,6 +225,49 @@ TEST_CASE("png: a header the image data cannot fill, or too many pixels, is refu
     auto big = decode_png(png(1024, 1024, 1, 0, 0, rows), &why);
     REQUIRE(big);
     CHECK(pixel(*big, 1023, 1023) == Px{0, 0, 0, 255});
+}
+
+TEST_CASE("png: rows are inflated one at a time, the filtered stream never held whole") {
+    // 4096 x 2048 RGBA at 16 bits: 64 MiB of filtered rows for a 32 MiB image. Decoding once held the rows twice
+    // (inflated and unfiltered) besides the image; the allocation guard fails any single request over 64 MiB.
+    const std::uint32_t w = 4096, h = 2048;
+    std::vector<unsigned char> rows;
+    rows.reserve((std::size_t{w} * 8 + 1) * h);
+    for (std::uint32_t y = 0; y < h; ++y) {
+        rows.push_back(y == 0 ? 0 : 2); // none, then up
+        for (std::uint32_t x = 0; x < w * 8; ++x) rows.push_back(y == 0 ? static_cast<unsigned char>(x * 7) : 0);
+    }
+    auto file = png(w, h, 16, 6, 0, rows);
+    rows = {};
+    std::string why;
+    hailstone::fuzz::arm_allocation_guard(true);
+    std::optional<Image> img;
+    bool huge = false;
+    try {
+        img = decode_png(file, &why);
+    } catch (const hailstone::fuzz::HugeAllocation&) {
+        huge = true;
+    }
+    hailstone::fuzz::arm_allocation_guard(false);
+    CHECK_FALSE(huge);
+    REQUIRE_MESSAGE(img, why);
+    // Each channel's high byte: pixel x's bytes are 8x .. 8x + 7, so R, G, B, A are (8x) * 7, (8x + 2) * 7, ...
+    CHECK(pixel(*img, 1, h - 1) == Px{56, 70, 84, 98});
+    CHECK(pixel(*img, 0, 0) == Px{0, 14, 28, 42});
+}
+
+TEST_CASE("png: a stream that ends before the image, or runs on past it, is refused") {
+    std::string why;
+    std::vector<unsigned char> lines = {0, 1, 2, 0, 3, 4};
+    REQUIRE(decode_png(png(2, 2, 8, 0, 0, lines)));
+    auto short_lines = lines;
+    short_lines.pop_back();
+    CHECK_FALSE(decode_png(png(2, 2, 8, 0, 0, short_lines), &why));
+    CHECK(why == "bad image data");
+    auto long_lines = lines;
+    long_lines.push_back(9);
+    CHECK_FALSE(decode_png(png(2, 2, 8, 0, 0, long_lines), &why));
+    CHECK(why == "bad image data");
 }
 
 TEST_CASE("png: Adam7 interlacing puts each pass's pixels back in place") {

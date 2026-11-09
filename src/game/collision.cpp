@@ -44,6 +44,57 @@ std::optional<float> height_in(const CollisionTriangle& tri, const glm::vec2& q)
     return u * tri.v0.z + v * tri.v1.z + w * tri.v2.z;
 }
 
+// Which triangles a query has met, for the queries that walk several grid cells (a triangle is listed in each cell
+// its box overlaps). A stamp per triangle, kept per thread (the neighbour zones' loader queries its meshes off the
+// main thread) and grown once to the largest mesh, so a query neither allocates nor clears the zone's count; a
+// query started from inside another's callback on the same thread gets its own marks.
+class SeenTriangles {
+public:
+    explicit SeenTriangles(std::size_t count) : marks_(marks()), nested_(marks_.busy) {
+        if (nested_) {
+            local_.assign(count, false);
+            return;
+        }
+        marks_.busy = true;
+        if (marks_.stamp.size() < count) marks_.stamp.resize(count, 0);
+        if (++marks_.generation == 0) { // wrapped: old stamps could match again
+            std::fill(marks_.stamp.begin(), marks_.stamp.end(), 0u);
+            marks_.generation = 1;
+        }
+    }
+    ~SeenTriangles() {
+        if (!nested_) marks_.busy = false;
+    }
+    SeenTriangles(const SeenTriangles&) = delete;
+    SeenTriangles& operator=(const SeenTriangles&) = delete;
+
+    // True the first time t is asked.
+    bool first(std::uint32_t t) {
+        if (nested_) {
+            if (local_[t]) return false;
+            local_[t] = true;
+            return true;
+        }
+        if (marks_.stamp[t] == marks_.generation) return false;
+        marks_.stamp[t] = marks_.generation;
+        return true;
+    }
+
+private:
+    struct Marks {
+        std::vector<std::uint32_t> stamp;
+        std::uint32_t generation = 0;
+        bool busy = false;
+    };
+    static Marks& marks() {
+        thread_local Marks m;
+        return m;
+    }
+    Marks& marks_;
+    bool nested_;
+    std::vector<bool> local_;
+};
+
 } // namespace
 
 CollisionMesh CollisionMesh::build(const assets::Zone& zone) {
@@ -62,6 +113,8 @@ CollisionMesh CollisionMesh::build(const assets::Zone& zone) {
                 mesh.materials[part.material].blend == assets::BlendMode::Invisible)
                 flags |= kTriangleInvisible;
             for (std::uint32_t i = 0; i + 2 < part.index_count; i += 3) {
+                // A part reaching past the index list (a damaged file) ends there.
+                if (std::size_t{part.first_index} + i + 2 >= mesh.indices.size()) break;
                 auto ia = mesh.indices[part.first_index + i], ib = mesh.indices[part.first_index + i + 1],
                      ic = mesh.indices[part.first_index + i + 2];
                 if (ia >= world.size() || ib >= world.size() || ic >= world.size()) continue;
@@ -118,7 +171,7 @@ void CollisionMesh::index() {
         glm::vec3 hi = glm::max(glm::max(tri.v0, tri.v1), tri.v2);
         const auto x0 = cell_of(lo.x), x1 = cell_of(hi.x), y0 = cell_of(lo.y), y1 = cell_of(hi.y);
         if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 4096) {
-            big_.push_back(t); // a huge triangle: tested by every sweep
+            big_.push_back(t); // a huge triangle: tested by every query
             continue;
         }
         for (auto x = x0; x <= x1; ++x)
@@ -126,84 +179,77 @@ void CollisionMesh::index() {
     }
 }
 
+template <class Fn>
+void CollisionMesh::for_each_at(const glm::vec3& p, Fn&& fn) const {
+    if (auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y))); it != cells_.end())
+        for (std::uint32_t t : it->second) fn(triangles_[t]);
+    // A triangle too large for the grid is in no cell (index()), so every point query tests it too.
+    for (std::uint32_t t : big_) fn(triangles_[t]);
+}
+
 std::optional<float> CollisionMesh::floor_below(const glm::vec3& p, float step_up) const {
-    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
-    if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
     const float limit = p.z + step_up;
-    for (std::uint32_t t : it->second) {
-        const auto& tri = triangles_[t];
-        if (!movement_solid(tri)) continue;
+    for_each_at(p, [&](const CollisionTriangle& tri) {
+        if (!movement_solid(tri)) return;
         // Barycentric test in XY, then the plane height at (x, y).
         glm::vec2 a(tri.v0), b(tri.v1), c(tri.v2), q(p);
         float d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-        if (std::abs(d) < 1e-6f) continue; // vertical or degenerate
+        if (std::abs(d) < 1e-6f) return; // vertical or degenerate
         float u = ((b.y - c.y) * (q.x - c.x) + (c.x - b.x) * (q.y - c.y)) / d;
         float v = ((c.y - a.y) * (q.x - c.x) + (a.x - c.x) * (q.y - c.y)) / d;
         float w = 1.0f - u - v;
-        if (u < 0.0f || v < 0.0f || w < 0.0f) continue;
+        if (u < 0.0f || v < 0.0f || w < 0.0f) return;
         float z = u * tri.v0.z + v * tri.v1.z + w * tri.v2.z;
         if (z <= limit && (!best || z > *best)) best = z;
-    }
+    });
     return best;
 }
 
 std::optional<float> CollisionMesh::ceiling_above(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
-    if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
-    for (std::uint32_t t : it->second) {
-        const auto& tri = triangles_[t];
-        if (!movement_solid(tri)) continue;
+    for_each_at(p, [&](const CollisionTriangle& tri) {
+        if (!movement_solid(tri)) return;
         glm::vec2 a(tri.v0), b(tri.v1), c(tri.v2), q(p);
         float d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-        if (std::abs(d) < 1e-6f) continue;
+        if (std::abs(d) < 1e-6f) return;
         float u = ((b.y - c.y) * (q.x - c.x) + (c.x - b.x) * (q.y - c.y)) / d;
         float v = ((c.y - a.y) * (q.x - c.x) + (a.x - c.x) * (q.y - c.y)) / d;
         float w = 1.0f - u - v;
-        if (u < 0.0f || v < 0.0f || w < 0.0f) continue;
+        if (u < 0.0f || v < 0.0f || w < 0.0f) return;
         float z = u * tri.v0.z + v * tri.v1.z + w * tri.v2.z;
         if (z > p.z && (!best || z < *best)) best = z;
-    }
+    });
     return best;
 }
 
 std::vector<CollisionMesh::SurfaceHit> CollisionMesh::surfaces_above(const glm::vec3& p) const {
     std::vector<SurfaceHit> out;
-    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
-    if (it == cells_.end()) return out;
-    for (std::uint32_t t : it->second) {
-        const auto& tri = triangles_[t];
-        if (!probe_solid(tri)) continue;
+    for_each_at(p, [&](const CollisionTriangle& tri) {
+        if (!probe_solid(tri)) return;
         if (const auto z = height_in(tri, glm::vec2(p)); z && *z > p.z) out.push_back({*z, tri.normal});
-    }
+    });
     std::sort(out.begin(), out.end(), [](const SurfaceHit& a, const SurfaceHit& b) { return a.z < b.z; });
     return out;
 }
 
 std::optional<float> CollisionMesh::ground_below(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
-    if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
-    for (std::uint32_t t : it->second) {
-        const auto& tri = triangles_[t];
-        if (!probe_solid(tri) || (tri.flags & kTriangleInvisible) || !(tri.normal.z > 0.0f)) continue;
+    for_each_at(p, [&](const CollisionTriangle& tri) {
+        if (!probe_solid(tri) || (tri.flags & kTriangleInvisible) || !(tri.normal.z > 0.0f)) return;
         const auto z = height_in(tri, glm::vec2(p));
         if (z && *z <= p.z && (!best || *z > *best)) best = z;
-    }
+    });
     return best;
 }
 
 std::optional<float> CollisionMesh::roof_above(const glm::vec3& p) const {
-    auto it = cells_.find(cell_key(cell_of(p.x), cell_of(p.y)));
-    if (it == cells_.end()) return std::nullopt;
     std::optional<float> best;
-    for (std::uint32_t t : it->second) {
-        const auto& tri = triangles_[t];
-        if (!probe_solid(tri) || (tri.flags & kTriangleInvisible)) continue;
+    for_each_at(p, [&](const CollisionTriangle& tri) {
+        if (!probe_solid(tri) || (tri.flags & kTriangleInvisible)) return;
         const auto z = height_in(tri, glm::vec2(p));
         if (z && *z > p.z && (!best || *z < *best)) best = z;
-    }
+    });
     return best;
 }
 
@@ -219,8 +265,9 @@ bool CollisionMesh::line_of_sight(const glm::vec3& a, const glm::vec3& b) const 
     if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 256) return true; // too long to bother
     // Only the box's cells the segment passes over (within a unit, for rounding): a triangle it crosses is listed in
     // the cell under the crossing (index() lists a triangle in every cell its box overlaps), so the others cannot
-    // change the answer. A diagonal sight line's box held up to 256 cells, most of them nowhere near it; the
-    // nameplates ask this for every name in view each frame.
+    // change the answer; a triangle too large for the grid is in no cell and is tested after them. A diagonal sight
+    // line's box held up to 256 cells, most of them nowhere near it; the nameplates ask this for every name in view
+    // each frame.
     const glm::vec2 from(a), dir(d);
     auto passes_over = [&](std::int32_t x, std::int32_t y) {
         constexpr float kMargin = 1.0f;
@@ -240,31 +287,34 @@ bool CollisionMesh::line_of_sight(const glm::vec3& a, const glm::vec3& b) const 
         }
         return true;
     };
+    auto blocks = [&](const CollisionTriangle& tri) {
+        if (!probe_solid(tri)) return false;
+        // Moller-Trumbore, hits strictly inside the segment.
+        glm::vec3 e1 = tri.v1 - tri.v0, e2 = tri.v2 - tri.v0;
+        glm::vec3 pv = glm::cross(d, e2);
+        float det = glm::dot(e1, pv);
+        if (std::abs(det) < 1e-8f) return false;
+        float inv = 1.0f / det;
+        glm::vec3 tv = a - tri.v0;
+        float u = glm::dot(tv, pv) * inv;
+        if (u < 0.0f || u > 1.0f) return false;
+        glm::vec3 qv = glm::cross(tv, e1);
+        float v = glm::dot(d, qv) * inv;
+        if (v < 0.0f || u + v > 1.0f) return false;
+        float hit = glm::dot(e2, qv) * inv;
+        return hit > 0.001f && hit < 0.999f;
+    };
     for (auto x = x0; x <= x1; ++x) {
         for (auto y = y0; y <= y1; ++y) {
             if (!passes_over(x, y)) continue;
             auto it = cells_.find(cell_key(x, y));
             if (it == cells_.end()) continue;
-            for (std::uint32_t t : it->second) {
-                const auto& tri = triangles_[t];
-                if (!probe_solid(tri)) continue;
-                // Moller-Trumbore, hits strictly inside the segment.
-                glm::vec3 e1 = tri.v1 - tri.v0, e2 = tri.v2 - tri.v0;
-                glm::vec3 pv = glm::cross(d, e2);
-                float det = glm::dot(e1, pv);
-                if (std::abs(det) < 1e-8f) continue;
-                float inv = 1.0f / det;
-                glm::vec3 tv = a - tri.v0;
-                float u = glm::dot(tv, pv) * inv;
-                if (u < 0.0f || u > 1.0f) continue;
-                glm::vec3 qv = glm::cross(tv, e1);
-                float v = glm::dot(d, qv) * inv;
-                if (v < 0.0f || u + v > 1.0f) continue;
-                float hit = glm::dot(e2, qv) * inv;
-                if (hit > 0.001f && hit < 0.999f) return false;
-            }
+            for (std::uint32_t t : it->second)
+                if (blocks(triangles_[t])) return false;
         }
     }
+    for (std::uint32_t t : big_)
+        if (blocks(triangles_[t])) return false;
     return true;
 }
 
@@ -296,13 +346,12 @@ std::optional<CollisionMesh::SegmentHit> CollisionMesh::first_hit(const glm::vec
 void CollisionMesh::for_each_on_segment(const glm::vec3& a, const glm::vec3& b,
                                         const std::function<void(const CollisionTriangle&)>& fn) const {
     if (!finite(a) || !finite(b)) return;
-    std::vector<bool> seen(triangles_.size(), false);
+    SeenTriangles seen(triangles_.size());
     auto visit = [&](std::int32_t x, std::int32_t y) {
         auto it = cells_.find(cell_key(x, y));
         if (it == cells_.end()) return;
         for (std::uint32_t t : it->second) {
-            if (seen[t]) continue;
-            seen[t] = true;
+            if (!seen.first(t)) continue;
             if (triangles_[t].flags & kTriangleLadderSlab) continue; // the movement's alone
             fn(triangles_[t]);
         }
@@ -344,7 +393,9 @@ void CollisionMesh::for_each_near_sweep(const SphereSweep& s, Fn&& fn) const {
     if (!finite(lo) || !finite(hi)) return;
     const auto x0 = cell_of(lo.x), x1 = cell_of(hi.x), y0 = cell_of(lo.y), y1 = cell_of(hi.y);
     if ((std::int64_t{x1} - x0 + 1) * (std::int64_t{y1} - y0 + 1) > 4096) return; // a sweep across the zone: not a move
-    std::vector<std::uint32_t> seen;
+    const bool several = x1 > x0 || y1 > y0;
+    std::optional<SeenTriangles> seen;
+    if (several) seen.emplace(triangles_.size());
     for (auto x = x0; x <= x1; ++x) {
         for (auto y = y0; y <= y1; ++y) {
             auto it = cells_.find(cell_key(x, y));
@@ -354,10 +405,7 @@ void CollisionMesh::for_each_near_sweep(const SphereSweep& s, Fn&& fn) const {
                 glm::vec3 tlo = glm::min(glm::min(tri.v0, tri.v1), tri.v2), thi = glm::max(glm::max(tri.v0, tri.v1), tri.v2);
                 if (tlo.x > hi.x || thi.x < lo.x || tlo.y > hi.y || thi.y < lo.y || tlo.z > hi.z || thi.z < lo.z) continue;
                 // A triangle spanning several cells is listed in each of them.
-                if (x1 > x0 || y1 > y0) {
-                    if (std::find(seen.begin(), seen.end(), t) != seen.end()) continue;
-                    seen.push_back(t);
-                }
+                if (several && !seen->first(t)) continue;
                 fn(t);
             }
         }

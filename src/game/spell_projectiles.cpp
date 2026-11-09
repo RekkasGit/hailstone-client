@@ -200,6 +200,8 @@ double SpellProjectiles::landed(std::uint32_t spell, const ProjectileStyle& styl
 
 double SpellProjectiles::bolt_flight(const ProjectileStyle& style, float distance) {
     if (style.element == SpellElement::Lightning) return kMinFlight;
+    // A distance that is not a number (a spawn at a NaN position) passes std::clamp unchanged: the shortest flight.
+    if (std::isnan(distance)) return kMinFlight;
     return std::clamp(static_cast<double>(distance / kBoltSpeed), kMinFlight, kMaxFlight);
 }
 
@@ -274,8 +276,10 @@ glm::vec3 SpellProjectiles::path_point(const Projectile& p, float s) {
 
 float SpellProjectiles::flight(const Projectile& p, double now) {
     double span = p.arrive_at - p.launch_at;
-    if (span <= 1e-6) return 1.0f;
-    return static_cast<float>(std::clamp((now - p.launch_at) / span, 0.0, 1.0));
+    if (!(span > 1e-6)) return 1.0f; // NaN too
+    const double f = (now - p.launch_at) / span;
+    if (std::isnan(f)) return 1.0f;
+    return static_cast<float>(std::clamp(f, 0.0, 1.0));
 }
 
 void SpellProjectiles::update(double now, const ProjectileWorld& world) {

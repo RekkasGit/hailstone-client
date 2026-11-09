@@ -373,6 +373,9 @@ TEST_CASE("barter manager: the price buttons, the price text and the reports") {
     CHECK(game::barter_set_price_coin(12345, 3, 0) == 12340);
     CHECK(game::barter_set_price_coin(0, 1, 15) == 1500);
     CHECK(game::barter_set_price_coin(0, 0, 1000000) == game::kMaxBuyPrice);
+    // A platinum count that wraps in 32 bits (4294968 x 1000 = 2^32 + 704) is still over the cap.
+    CHECK(game::barter_set_price_coin(0, 0, 4294968u) == game::kMaxBuyPrice);
+    CHECK(game::barter_set_price_coin(0, 1, 0xffffffffu) == game::kMaxBuyPrice);
     BuyLine l = bone_chips();
     CHECK(game::buy_line_price_text(l) == "1s 5c + items");
     l.trade_items.clear();

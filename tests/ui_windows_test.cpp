@@ -615,7 +615,9 @@ TEST_CASE("Bazaar search: the row's own Buy button, Find Trader and Hide Traders
     world.spawns[43].id = 43, world.spawns[43].trader = true;
     world.spawns[44].id = 44; // not a trader
     CHECK_FALSE(t.conn.market_hidden(world.spawns[43]));
+    CHECK_FALSE(t.conn.market_hides_any()); // (the frame then asks no spawn)
     t.conn.bazaar_set_hide_traders(true, false); // as the UI ini's HideTraders loads it
+    CHECK(t.conn.market_hides_any());
     CHECK_FALSE(t.conn.market_hidden(world.spawns[41]));
     CHECK(t.conn.market_hidden(world.spawns[43]));
     CHECK_FALSE(t.conn.market_hidden(world.spawns[44]));
@@ -631,6 +633,8 @@ TEST_CASE("Bazaar search: the row's own Buy button, Find Trader and Hide Traders
     t.conn.barter_search_set_hide(true, true);
     CHECK(t.conn.barter_search_state().found_buyer == 0xffffffffu);
     CHECK(t.conn.market_hidden(world.spawns[45]));
+    t.conn.bazaar_set_hide_traders(false, false);
+    CHECK(t.conn.market_hides_any()); // Hide Buyers alone
 }
 
 TEST_CASE("Loot window: Link All, Loot All and Done without a loot session do nothing") {

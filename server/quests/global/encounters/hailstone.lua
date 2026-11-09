@@ -514,6 +514,8 @@ local zone_chunk_limit = limiter(1) -- one id, 0: the whole zone
 -- Piece requests over the limits (take_piece), by character id: { first, last, keys, [n] = {id, index, offset,
 -- length} }, served in order from the FILES_TIMER timer as the limit allows.
 local waiting     = {}
+local waiting_order = nil -- waiting's character ids, sorted; nil once a character joins or leaves it
+local request_limit = limiter(1) -- piece requests a character makes, counted before any work is done
 local files_timer = false
 local files_empty_logged = false -- build_client_files logged an empty list
 local windows   = package.config:sub(1, 1) == "\\"
@@ -623,8 +625,13 @@ local function hash_client_files(paths)
 		out = run("cd " .. sh_quote(FILES_DIR) .. " && xargs -d '\\n' -a " .. name .. " sha256sum -- 2>/dev/null; rm -f " .. name)
 	end
 	for line in (out or ""):gmatch("[^\r\n]+") do
-		local hex, path = line:match("^(%x+)  (.+)$")
+		-- GNU sha256sum starts the line of a name holding a backslash or a line break with a backslash, and writes
+		-- those as \\, \n (and \r in newer coreutils) in the name.
+		local escaped, hex, path = line:match("^(\\?)(%x+)  (.+)$")
 		if hex and #hex == 64 then
+			if escaped ~= "" then
+				path = path:gsub("\\(.)", { ["\\"] = "\\", n = "\n", r = "\r" })
+			end
 			hashes[path] = hex:lower()
 		end
 	end
@@ -906,6 +913,7 @@ local function hold_request(client, char_id, req)
 	if q == nil then
 		q = { first = 1, last = 0, keys = {} }
 		waiting[char_id] = q
+		waiting_order = nil
 	end
 	local key = req[1] .. ":" .. req[2] .. ":" .. req[3]
 	if q.keys[key] then
@@ -935,11 +943,14 @@ local served_last = nil -- the character id served last
 
 local function serve_waiting()
 	local list  = eq.get_entity_list()
-	local order = {}
-	for char_id in pairs(waiting) do
-		order[#order + 1] = char_id
+	if waiting_order == nil then
+		waiting_order = {}
+		for char_id in pairs(waiting) do
+			waiting_order[#waiting_order + 1] = char_id
+		end
+		table.sort(waiting_order)
 	end
-	table.sort(order)
+	local order = waiting_order
 	local start = 1
 	if served_last ~= nil then
 		for k = 1, #order do
@@ -955,6 +966,7 @@ local function serve_waiting()
 		local client = list:GetClientByCharID(char_id)
 		if client == nil or not client.valid then
 			waiting[char_id] = nil
+			waiting_order = nil
 		else
 			turn[#turn + 1] = char_id
 			clients[char_id] = client
@@ -975,6 +987,7 @@ local function serve_waiting()
 				served_last = char_id
 				if q.first > q.last then
 					waiting[char_id] = nil
+					waiting_order = nil
 				else
 					again[#again + 1] = char_id
 				end
@@ -1007,6 +1020,21 @@ end
 local FILES_LISTS, FILES_LIST_SECONDS = 8, 60
 local list_limit = limiter(FILES_LIST_SECONDS)
 
+-- Whether the zone's limit has room for a piece this second (take_piece's zone half, counting nothing).
+local function zone_has_room()
+	local zone = setting("files_chunks_per_second_zone") or 0
+	return zone <= 0 or window(zone_chunk_limit, 0).count < zone
+end
+
+-- Piece requests a character may make in a second before any work is done for them: twice what the limits let it
+-- be sent, plus its held ones. An honest client asks once for each piece that comes (and again for one lost), so it
+-- never comes near this; a flood of requests is dropped here instead of rescanning the held ones at every packet.
+local function files_requests_max()
+	local own  = setting("files_chunks_per_second") or 0
+	local zone = setting("files_chunks_per_second_zone") or 0
+	return 2 * math.max(own, zone, 1024) + FILES_WAIT_MAX
+end
+
 local function on_files_request(client, packet)
 	if packet:GetSize() < 12 or packet:ReadInt32(0) ~= FILES_MAGIC then
 		return
@@ -1032,11 +1060,19 @@ local function on_files_request(client, packet)
 		-- order asked. While any client's requests wait, every request joins them and they are served in turn at
 		-- once, so a client asking at the start of a second cannot take the zone's whole limit ahead of those held.
 		local char_id = client:CharacterID()
+		local ok, first_over = allow(request_limit, char_id, files_requests_max())
+		if not ok then
+			if first_over then
+				log(string.format("%s asks for file pieces too often; the rest of this second's requests are dropped", client:GetCleanName()))
+			end
+			return
+		end
 		local req = { packet:ReadInt32(8), packet:ReadInt32(12), packet:ReadInt32(16), packet:ReadInt32(20) }
 		local others = next(waiting) ~= nil
 		if others or not take_piece(char_id) then
 			hold_request(client, char_id, req)
-			if others then
+			-- Nothing can go while the zone's limit is spent this second: the timer serves them once it has room.
+			if others and zone_has_room() then
 				serve_waiting()
 			end
 			return
@@ -1084,15 +1120,16 @@ local function on_unhandled_opcode(e)
 	if op ~= OP_SETTINGS_REQUEST then
 		return
 	end
-	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= MAGIC then
-		log(string.format("Hailstone request 0x%04x of size %d without the NMSP magic", op, packet:GetSize()))
-		return
-	end
+	-- Counted before anything else, the log line of a bad one too: a flood of them is dropped unlogged.
 	local ok, first_over = allow(settings_limit, e.self:CharacterID(), SETTINGS_MAX)
 	if not ok then
 		if first_over then
 			log(string.format("%s asks for the settings too fast; the rest of %d s are dropped", e.self:GetCleanName(), SETTINGS_SECONDS))
 		end
+		return
+	end
+	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= MAGIC then
+		log(string.format("Hailstone request 0x%04x of size %d without the NMSP magic", op, packet:GetSize()))
 		return
 	end
 	send_settings(e.self)
@@ -1109,7 +1146,7 @@ function event_encounter_load(e)
 end
 
 function event_encounter_unload(e)
-	waiting, files_timer, served_last = {}, false, nil
+	waiting, waiting_order, files_timer, served_last = {}, nil, false, nil
 	eq.unregister_player_event("hailstone", Event.unhandled_opcode)
 	eq.unregister_player_event("hailstone", Event.signal)
 end

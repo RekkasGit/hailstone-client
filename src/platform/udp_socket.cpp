@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <deque>
 #include <format>
 #include <memory>
 #include <mutex>
@@ -98,6 +99,7 @@ SockLen to_sockaddr(const Endpoint& ep, sockaddr_storage& ss) {
     sin6.sin6_family = AF_INET6;
     sin6.sin6_port = htons(ep.port);
     std::memcpy(&sin6.sin6_addr, ep.address.data(), 16);
+    sin6.sin6_scope_id = ep.scope_id; // a link-local address names its interface
     std::memcpy(&ss, &sin6, sizeof sin6);
     return static_cast<SockLen>(sizeof sin6);
 }
@@ -118,6 +120,7 @@ std::optional<Endpoint> from_sockaddr(const sockaddr* sa) {
         ep.family = Endpoint::Family::V6;
         std::memcpy(ep.address.data(), &sin6.sin6_addr, 16);
         ep.port = ntohs(sin6.sin6_port);
+        ep.scope_id = sin6.sin6_scope_id;
         return ep;
     }
     return std::nullopt;
@@ -144,6 +147,7 @@ std::string Endpoint::address_string() const {
         if (i) out += ':';
         out += std::format("{:x}", (address[i] << 8) | address[i + 1]);
     }
+    if (scope_id != 0) out += std::format("%{}", scope_id);
     return out;
 }
 
@@ -205,19 +209,23 @@ std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t 
 
 namespace {
 
-// resolve_async's threads. A finished thread is joined when the next lookup starts, and at exit. One still in
-// getaddrinfo at exit cannot be cut off and may wait out the resolver's timeout (tens of seconds with an unreachable
-// name server), so it is not waited for: it is detached and left to the process's end, and WinsockInit then skips
-// WSACleanup so the socket library is not shut down under it. Its `done` must own what it touches (a shared_ptr), as
-// it may run after the caller is gone. ensure_init() is called before this is first made, so this is destroyed
-// first.
+// resolve_async's threads, at most kMaxThreads at once: more lookups wait in a queue, and a thread that finishes one
+// takes the next (a script that looks up many names starts no thread per name). A finished thread is joined when the
+// next lookup starts, and at exit. One still in getaddrinfo at exit cannot be cut off and may wait out the
+// resolver's timeout (tens of seconds with an unreachable name server), so it is not waited for: it is detached and
+// left to the process's end, and WinsockInit then skips WSACleanup so the socket library is not shut down under it.
+// The lookups still queued then never run. Their `done` must own what it touches (a shared_ptr), as it may run after
+// the caller is gone. ensure_init() is called before this is first made, so this is destroyed first.
 class Lookups {
 public:
+    static constexpr std::size_t kMaxThreads = 4;
+
     ~Lookups() {
         std::vector<Entry> all;
         {
-            std::lock_guard lock(mutex_);
+            std::lock_guard lock(shared_->mutex);
             all.swap(entries_);
+            shared_->queue.clear();
         }
         for (auto& e : all) {
             if (!e.thread.joinable()) continue;
@@ -230,7 +238,7 @@ public:
         }
     }
     void start(std::function<void()> fn) {
-        std::lock_guard lock(mutex_);
+        std::lock_guard lock(shared_->mutex);
         for (auto it = entries_.begin(); it != entries_.end();) {
             if (it->done->load()) {
                 it->thread.join();
@@ -239,12 +247,25 @@ public:
                 ++it;
             }
         }
+        if (entries_.size() >= kMaxThreads) {
+            shared_->queue.push_back(std::move(fn));
+            return;
+        }
         auto done = std::make_shared<std::atomic<bool>>(false);
         Entry e;
         e.done = done;
-        e.thread = std::thread([fn = std::move(fn), done] {
-            fn();
-            done->store(true);
+        // The thread holds the queue's state, not this, so a thread left running at exit outlives it safely.
+        e.thread = std::thread([fn = std::move(fn), done, shared = shared_]() mutable {
+            for (;;) {
+                fn();
+                std::lock_guard held(shared->mutex);
+                if (shared->queue.empty()) {
+                    done->store(true); // under the lock: start() sees it done only once it takes no more
+                    return;
+                }
+                fn = std::move(shared->queue.front());
+                shared->queue.pop_front();
+            }
         });
         entries_.push_back(std::move(e));
     }
@@ -254,8 +275,12 @@ private:
         std::thread thread;
         std::shared_ptr<std::atomic<bool>> done;
     };
-    std::mutex mutex_;
-    std::vector<Entry> entries_;
+    struct Shared {
+        std::mutex mutex;
+        std::deque<std::function<void()>> queue; // lookups waiting for a thread
+    };
+    std::shared_ptr<Shared> shared_ = std::make_shared<Shared>();
+    std::vector<Entry> entries_; // guarded by shared_->mutex
 };
 
 } // namespace
@@ -296,6 +321,7 @@ void UdpSocket::close() {
 
 bool UdpSocket::open(Endpoint::Family family, std::string& error, const Endpoint* bind_to) {
     close();
+    error_.clear();
     if (!ensure_init()) {
         error = "socket library initialisation failed";
         return false;
@@ -349,6 +375,7 @@ std::optional<Endpoint> UdpSocket::local_endpoint() const {
 
 bool UdpSocket::send_to(const Endpoint& to, std::span<const std::byte> data) {
     if (!is_open()) return false;
+    error_.clear(); // last_error() is this call's, not an earlier one's
     sockaddr_storage ss;
     SockLen len = to_sockaddr(to, ss);
 #ifdef _WIN32
@@ -368,6 +395,7 @@ bool UdpSocket::send_to(const Endpoint& to, std::span<const std::byte> data) {
 
 std::optional<std::size_t> UdpSocket::recv_from(std::span<std::byte> buffer, Endpoint& from) {
     if (!is_open()) return std::nullopt;
+    error_.clear();
     for (;;) {
         sockaddr_storage ss{};
         SockLen len = sizeof ss;

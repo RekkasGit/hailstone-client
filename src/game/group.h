@@ -49,8 +49,10 @@ struct GroupState {
     // OP_GroupUpdate: adds the name in the first free slot unless it is already
     // there (HandleWorldMessage_Group). Returns true when it was added.
     bool add(const std::string& name, std::uint32_t level, bool merc, const std::string& owner);
-    // OP_GroupDisbandOther: removes the name. Returns true when it was there.
-    bool remove(const std::string& name);
+    // OP_GroupDisbandOther: removes the name, and the leader with it when the leader leaves; `spawn_id` (0: not known)
+    // drops that member's mana and endurance. The last member gone, there is no group (clear). Returns true when the
+    // name was there.
+    bool remove(const std::string& name, std::uint32_t spawn_id = 0);
     // OP_GroupDisbandYou / leaving the zone: no group.
     void clear();
 };

@@ -70,6 +70,7 @@ struct AddonOffer {
     AddonManifest manifest;
     std::uint32_t caps = 0;    // what it asks for
     std::string installed_version; // "" a new add-on; else this replaces that version
+    bool older = false;        // older than the installed version: install_offer needs older_ok
     std::string blocked;       // why it cannot be installed ("" it can)
     bool suggested = false;    // opened from a suggestion (docs/addons.md "Suggested add-ons")
 };
@@ -140,8 +141,10 @@ public:
     // add-on index.
     void inspect(std::string link, std::optional<AddonExpect> expect = std::nullopt);
     void cancel_offer();
-    // The player said yes to the offer: download, check and stage it (installed by install_ready()).
-    void install_offer();
+    // The player said yes to the offer: download, check and stage it (installed by install_ready()). An offer older
+    // than the installed version (AddonOffer::older) needs `older_ok`, the player's second yes; without it the offer
+    // stays and the message says why.
+    void install_offer(bool older_ok = false);
     // Looks for newer versions of the add-ons with auto-update on (`now`: whatever the interval says, and every
     // add-on).
     void check_updates(bool now);

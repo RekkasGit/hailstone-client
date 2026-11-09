@@ -224,3 +224,25 @@ TEST_CASE("Character files: a copy that fails leaves no world folder, and the ne
           std::map<std::string, std::string>{{"UI.ini", "windows"}, {"hotbuttons.ini", "buttons"}});
 }
 #endif
+
+TEST_CASE("character files: /outputfile may not take the names of the files kept in the folder") {
+    // Every file CharacterFiles names, in any case, and the UI packs' layouts.
+    CharacterFiles f{std::filesystem::path("c")};
+    for (const auto& p : {f.ui_ini(), f.hot_buttons(), f.trader_prices(), f.barter_lines(), f.barter_log(),
+                          f.address_book(), f.ignore_list(), f.guild_notes(), f.chat_ini(), f.options_ini(),
+                          f.chat_history(), f.scripts_ini(), f.kept_items(), f.settings(), f.ui_settings("modern")}) {
+        CAPTURE(p.filename().string());
+        CHECK(is_kept_character_file(p.filename().string()));
+    }
+    CHECK(is_kept_character_file("SCRIPTS.INI"));
+    CHECK(is_kept_character_file("Hailstone.ini"));
+    CHECK(is_kept_character_file("UI-Gamepad.TXT"));
+    CHECK(is_kept_character_file("plugin-config"));
+    // The writers' default names and anything else are written.
+    CHECK_FALSE(is_kept_character_file("Bob-Inventory.txt"));
+    CHECK_FALSE(is_kept_character_file("RaidRoster-20261109-1200.txt"));
+    CHECK_FALSE(is_kept_character_file("scripts.ini.txt"));
+    CHECK_FALSE(is_kept_character_file("ui.txt"));
+    CHECK_FALSE(is_kept_character_file("eqlog.txt")); // a chat log, as the original's fopen would replace
+}
+

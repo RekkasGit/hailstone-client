@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <set>
 #include <tuple>
@@ -239,6 +240,74 @@ TEST_CASE("zone flora: no plants under a roof or a ceiling") {
     ZoneFlora water;
     place_zone_flora(zone, rules, defs, water);
     CHECK(water.instances.empty());
+}
+
+TEST_CASE("zone flora: roofs across the whole zone still cover, and their cell references stay bounded") {
+    std::vector<eqg::FloraDefinition> defs = {definition("grass", 2.0f)};
+    auto rules = parse_zone_flora_rules("ground grass* 10 grass\nground roof* 0\n");
+    Zone zone;
+    zone.terrain.push_back(square("grass.bmp", 100.0f));
+    // 600 roof triangles each across 180,000 units at z 20: every one lies over 7.9 million cover cells, which once
+    // wrapped the 32-bit cell totals and wrote past the cell index. They are tested at every point instead.
+    Mesh huge = square("roof.bmp", 180000.0f);
+    for (auto& v : huge.vertices) v.position += glm::vec3(-90000.0f, -90000.0f, 20.0f);
+    for (int i = 0; i < 600; ++i) zone.terrain.push_back(huge);
+    ZoneFlora flora;
+    place_zone_flora(zone, rules, defs, flora);
+    CHECK(flora.instances.empty());
+
+    // 20,000 roof pieces of 31 x 31 cells over the ground: more references than the grid holds. The first fill it
+    // and cover the ground; those past the bound are no cover, and nothing is written out of range.
+    Zone many;
+    many.terrain.push_back(square("grass.bmp", 100.0f));
+    Mesh roof = square("roof.bmp", 1980.0f);
+    for (auto& v : roof.vertices) v.position += glm::vec3(-940.0f, -940.0f, 30.0f);
+    Mesh roofs = roof;
+    roofs.indices.clear();
+    roofs.vertices.clear();
+    for (int i = 0; i < 20000; ++i) {
+        const auto base = static_cast<std::uint32_t>(roofs.vertices.size());
+        roofs.vertices.insert(roofs.vertices.end(), roof.vertices.begin(), roof.vertices.end());
+        for (std::uint32_t k : {0u, 1u, 2u}) roofs.indices.push_back(base + k);
+    }
+    roofs.parts = {{0, static_cast<std::uint32_t>(roofs.indices.size()), 0, true}};
+    many.terrain.push_back(roofs);
+    ZoneFlora covered;
+    place_zone_flora(many, rules, defs, covered);
+    // Each roof is the square's first triangle (0, 1, 2), over the ground's half y <= x: plants grow on the rest.
+    CHECK(covered.instances.size() > 400);
+    CHECK(covered.instances.size() < 600);
+    for (const auto& p : covered.instances) CHECK(p.position.x < p.position.y);
+}
+
+TEST_CASE("zone flora: non-finite and absurd vertices grow nothing and cover nothing") {
+    std::vector<eqg::FloraDefinition> defs = {definition("grass", 2.0f)};
+    auto rules = parse_zone_flora_rules("ground grass* 10 grass\nground roof* 0\n");
+    Zone zone;
+    zone.terrain.push_back(square("grass.bmp", 100.0f));
+    ZoneFlora plain;
+    place_zone_flora(zone, rules, defs, plain);
+    REQUIRE(plain.instances.size() > 900);
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    // Damaged ground: NaN, infinity, and a finite triangle a billion units across (once split into 4^10 pieces,
+    // each walked over millions of tiles).
+    for (glm::vec3 bad : {glm::vec3(nan, 0, 0), glm::vec3(inf, 0, 0), glm::vec3(0, -inf, 0), glm::vec3(1e9f, 1e9f, 0)}) {
+        Mesh m = square("grass.bmp", 100.0f);
+        m.vertices[2].position = bad; // in both its triangles
+        zone.terrain.push_back(m);
+        Mesh r = square("roof.bmp", 100.0f);
+        for (auto& v : r.vertices) v.position.z = 10.0f;
+        r.vertices[1].position = bad;
+        zone.terrain.push_back(r);
+    }
+    ZoneFloraGrower grower(zone, rules, defs, {});
+    CHECK(grower.triangles() < 100);
+    ZoneFlora flora;
+    place_zone_flora(zone, rules, defs, flora);
+    // The roofs' sane triangle (0, 2, 3) still covers the ground's half y >= x.
+    CHECK(flora.instances.size() > 400);
+    CHECK(flora.instances.size() < 600);
+    for (const auto& p : flora.instances) CHECK(p.position.x > p.position.y);
 }
 
 TEST_CASE("zone flora: tile by tile, each plant once, in the tile its foot is in") {

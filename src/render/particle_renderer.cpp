@@ -322,15 +322,14 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
         for (auto [sx, sy] : {std::pair{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}})
             out[count++] = v(sx, sy);
     };
-    struct Batch { std::uint32_t first, count; int pipeline; };
-    std::vector<Batch> batches;
+    std::vector<Batch>& batches = batches_;
+    batches.clear();
     // Only what can show: a particle outside the camera's view is not lit, sorted or built (it was, every one of
     // them, every frame).
     const Frustum frustum = frustum_from(view_proj);
     // The definitions' texture slots and flipbook grids, looked up once a frame rather than once a particle.
-    // `loading`: its texture is not up yet (prepare), so its particles are not drawn rather than drawn white.
-    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; bool loading = false; };
-    std::vector<DefinitionLook> looks(particles.definitions().size());
+    std::vector<DefinitionLook>& looks = looks_;
+    looks.assign(particles.definitions().size(), DefinitionLook{});
     auto look = [&](std::size_t definition) -> const DefinitionLook& {
         DefinitionLook& l = looks[definition];
         if (!l.known) {
@@ -342,8 +341,8 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
     if (modern) {
         // Every particle in one stream, back to front by distance (the nearest kept when there are too many).
         const glm::vec3 camera(modern->camera);
-        struct Item { float dist2; std::uint32_t emitter, particle; };
-        std::vector<Item> order;
+        std::vector<OrderItem>& order = order_;
+        order.clear();
         for (std::size_t ei = 0; ei < particles.emitters().size(); ++ei) {
             if (ei < hidden.size() && hidden[ei]) continue;
             const auto& ps = particles.emitters()[ei].particles;
@@ -354,12 +353,12 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
                 order.push_back({glm::dot(d, d), static_cast<std::uint32_t>(ei), static_cast<std::uint32_t>(pi)});
             }
         }
-        std::sort(order.begin(), order.end(), [](const Item& a, const Item& b) { return a.dist2 > b.dist2; });
-        if (order.size() > kMaxVertices / 6) order.erase(order.begin(), order.end() - kMaxVertices / 6);
+        keep_nearest_back_to_front(order, kMaxVertices / 6);
         // Light sources stay unlit; the haze takes away their light. Smoke and dust are lit and hazed.
-        std::vector<std::int8_t> lit_by_definition(particles.definitions().size(), -1);
+        std::vector<std::int8_t>& lit_by_definition = lit_by_definition_;
+        lit_by_definition.assign(particles.definitions().size(), -1);
         const ParticleLight scene_light(*modern);
-        for (const Item& item : order) {
+        for (const OrderItem& item : order) {
             const auto& e = particles.emitters()[item.emitter];
             if (look(e.definition).loading) continue;
             const auto& d = particles.definitions()[e.definition];

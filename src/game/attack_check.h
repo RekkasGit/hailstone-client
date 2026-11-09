@@ -28,6 +28,9 @@ struct AttackCheckInput {
     std::uint32_t target_id = 0;
     std::int32_t spell = mechanics::kMeleeAttack;
     std::uint8_t my_level = 0;       // the player's level (the profile's)
+    // The zone every known spawn is in (their Zone +0x210): the zone id, the instance in the high 16 bits, as the
+    // client's other zone dwords (DoTeleportB's); IsNewbieZone keeps the low 15 bits of one above 1000.
+    std::uint32_t zone = 0;
     mechanics::AttackRules rules;    // the server's PvP rule set (OP_NewZone / world) and the duel
     std::function<bool(const std::string& name)> self_or_group_member;
 };

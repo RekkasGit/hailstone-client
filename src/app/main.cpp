@@ -33,6 +33,7 @@
 #include "core/config.h"
 #include "core/game_dir.h"
 #include "core/log.h"
+#include "core/wipe.h"
 #include "game/scene_fog.h"
 #include "game/light_list.h"
 #include "game/scene_light.h"
@@ -157,7 +158,8 @@ void usage() {
         "  --classic-dir DIR  another install (EverQuest Legends) for the classic zones a live one lacks\n"
         "                     (the client: else hailstone.ini assets.classic)\n"
         "  --user U --password P --character C\n"
-        "                     log in and enter the world without clicks (testing)\n"
+        "                     log in and enter the world without clicks (testing: the password shows in\n"
+        "                     the process list to anyone on this computer; use a test account's)\n"
         "  --host H --port P  the login server for --user (default: the dev server; never the\n"
         "                     remembered one), as a transient server that is not saved\n"
         "  --server S         pick the saved server S (its id, the servers/<id> folder, or its name) on\n"
@@ -741,6 +743,7 @@ int main(int argc, char** argv) {
             c.clip_plane = opts.clip_plane;
             c.auto_user = opts.user;
             c.auto_password = opts.password;
+            core::wipe(opts.password); // run_client wipes c's copy once the client has it
             c.auto_host = opts.host;
             c.auto_port = opts.port;
             c.server = opts.server;

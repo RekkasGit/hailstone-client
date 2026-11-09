@@ -78,6 +78,7 @@ public:
     // The listener: the local player's position and the camera's angle in radians (audio/listener.h's
     // eq_listener_location); and the time of day: stored hour 1..24 (night outside 5..18).
     void set_listener(const glm::vec3& position, float angle);
+    const glm::vec3& listener() const { return listener_; }
     void set_hour(int stored_hour);
 
     // The listener environment (CDisplay_UpdateListenerEnvironment: 1 outside, 2 high, 3 low): the emitters of
@@ -99,8 +100,12 @@ public:
     const ZoneEmitters& weather_emitters() const { return weather_; }
     static constexpr std::int32_t kRainWave = 159, kWindWave = 158;
 
-    // EqSoundManager::SetMusicSelection(id, on): a global music entry (audio/music_manager.h) on or off.
+    // EqSoundManager::SetMusicSelection(id, on): a global music entry (audio/music_manager.h) on or off. Asked
+    // before the global music is set up (global_music_ready), it is kept and applied then.
     void music_selection(std::int32_t id, bool on);
+    // LoadGlobalMusic's entries are set: once the sound archives' index is built (update(), or set_zone, which
+    // waits for it). Not in the constructor, where the checks for the files waited on the index's build.
+    bool global_music_ready() const { return global_music_set_; }
     const MusicManager& music() const { return music_; }
 
     // Once a frame: emitters, music and the 3D voices.
@@ -143,6 +148,8 @@ private:
     MilesLevels levels(const SoundControl& c) const;
     void place(std::uint32_t voice, const SoundControl& c);
     std::shared_ptr<SoundFont> font();
+    // LoadGlobalMusic @0x4aa860 (waits for the sound archives' index), then the selections asked for before it.
+    void set_up_global_music();
 
     const GameDir& game_;
     AudioSettings settings_;
@@ -166,6 +173,9 @@ private:
     std::unordered_map<std::string, std::vector<assets::XmiSequence>> xmi_; // .xmi files, parsed on first use
     // The global music entries' files: with the zone's, read ahead on the sound library's worker (play_music).
     std::vector<std::string> global_music_files_;
+    bool global_music_set_ = false;
+    std::int32_t global_music_rand_ = 0; // rand() after srand(FastTime()), at start as in the original
+    std::vector<std::pair<std::int32_t, bool>> pending_selections_; // music_selection's, before set_up_global_music
     std::vector<std::string> global_wave_files_; // LoadGlobalWaves' (kept by SoundLibrary::drop_idle_waves)
     MusicManager music_;
     RoomPresets rooms_;

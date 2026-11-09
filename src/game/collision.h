@@ -127,6 +127,9 @@ private:
         return static_cast<std::int32_t>(f);
     }
     void index();
+    // fn(triangle) for every triangle listed in the grid cell under (p.x, p.y), then the huge ones.
+    template <class Fn>
+    void for_each_at(const glm::vec3& p, Fn&& fn) const;
     // fn(index) for every triangle the swept sphere's box touches, once each, then the huge ones.
     template <class Fn>
     void for_each_near_sweep(const SphereSweep& s, Fn&& fn) const;

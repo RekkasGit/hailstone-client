@@ -22,10 +22,13 @@ inline constexpr float kPlateCoveredAlpha = 0.10f;
 
 // Far to near, targets last; ties preserve the input order.
 std::vector<std::size_t> plate_draw_order(const std::vector<PlateBox>& boxes);
+// The same into `out` (its capacity kept from call to call).
+void plate_draw_order(const std::vector<PlateBox>& boxes, std::vector<std::size_t>& out);
 
 // Largest fraction of a name's box covered by any single nearer name. Under 10% coverage it is fully visible;
 // from 20% on it has 10% alpha, with smoothstep in between. A target stays fully visible at any depth.
 std::vector<float> plate_target_alpha(const std::vector<PlateBox>& boxes);
+void plate_target_alpha(const std::vector<PlateBox>& boxes, std::vector<float>& out);
 
 // Whether the scene hides this name where it is nearer (docs/graphics.md "Name plates"): every name, the target's too,
 // unless it is the target and the option target_plate_through_walls (Hailstone's, off by default) is on. The

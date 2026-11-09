@@ -133,10 +133,20 @@ bool move_file(const fs::path& from, const fs::path& to, std::string* error) {
     return !ec;
 }
 
-// Moves a file out of the way into update/trash/ (removed at the next start, when nothing has it open).
+bool is_directory_entry(const fs::path& p) {
+    std::error_code ec;
+    return fs::symlink_status(p, ec).type() == fs::file_type::directory;
+}
+
+// Moves a file out of the way into update/trash/ (removed at the next start, when nothing has it open). Never a
+// folder: an update moves files only, and a folder in the way holds files it did not put there.
 void trash(const fs::path& install_dir, const fs::path& file) {
     std::error_code ec;
-    if (!fs::exists(file, ec)) return;
+    if (!fs::exists(fs::symlink_status(file, ec))) return;
+    if (is_directory_entry(file)) {
+        log::warn("Update: rolling back: {} is a folder, not a file the update moved; it stays", file.string());
+        return;
+    }
     // A name of its own each time: an earlier run's trash may still be there, held open by a program still running.
     static int n = 0;
     const auto stamp = std::chrono::system_clock::now().time_since_epoch().count();
@@ -146,21 +156,45 @@ void trash(const fs::path& install_dir, const fs::path& file) {
     if (!move_file(file, to, &why)) log::warn("Update: {}", why);
 }
 
+// The journal's lines that were written whole: a line is written before its move, so one cut off by a crash (no
+// newline yet) names a move that never began, and may be any part of a name ("added ui" of "added ui/x.lua").
+std::vector<std::pair<std::string, std::string>> journal_lines(const std::string& text) {
+    std::vector<std::pair<std::string, std::string>> out;
+    std::size_t at = 0;
+    for (std::size_t nl; (nl = text.find('\n', at)) != std::string::npos; at = nl + 1) {
+        std::string_view line(text.data() + at, nl - at);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        auto [what, name] = split(line);
+        if (what != "moved" && what != "removed" && what != "added") continue;
+        // The journal is the client's own file, but a damaged one moves nothing outside the folder, nothing of the
+        // player's and no folder (an update writes files only, never these).
+        if (!is_safe_zip_path(name) || name.ends_with('/') || is_player_path(name)) {
+            log::warn("Update: rolling back: the journal's \"{}\" is not a file an update moves; skipped", line);
+            continue;
+        }
+        out.emplace_back(std::string(what), std::string(name));
+    }
+    return out;
+}
+
 // Undoes the moves the journal lists, last first, and puts installed.txt back.
 void roll_back(const fs::path& install_dir) {
     const fs::path dir = update_dir(install_dir);
     auto text = read_text_file(dir / "journal.txt");
-    auto lines = text ? lines_of(*text) : std::vector<std::string>{};
+    auto lines = text ? journal_lines(*text) : std::vector<std::pair<std::string, std::string>>{};
     std::reverse(lines.begin(), lines.end());
-    for (const auto& line : lines) {
-        auto [what, name] = split(line);
+    for (const auto& [what, name] : lines) {
         const fs::path target = install_dir / rel(name);
         if (what == "moved" || what == "removed") {
             // The line is written before its move: with no saved copy the move never happened, and the file at
             // `target` is still the original, so it stays.
             const fs::path saved = dir / "previous" / rel(name);
             std::error_code ec;
-            if (!fs::exists(saved, ec)) continue;
+            if (!fs::exists(fs::symlink_status(saved, ec)) || is_directory_entry(saved)) continue;
+            if (is_directory_entry(target)) {
+                log::warn("Update: rolling back: {} is a folder now; its old file is not put back", target.string());
+                continue;
+            }
             trash(install_dir, target);
             std::string why;
             if (!move_file(saved, target, &why)) log::warn("Update: rolling back: {}", why);

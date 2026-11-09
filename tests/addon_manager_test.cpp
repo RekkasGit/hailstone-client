@@ -149,6 +149,37 @@ TEST_CASE("addon_manager: a link's manifest is the install card, and yes install
     CHECK(again.offer->installed_version == "1.0.0");
 }
 
+// A link to an older release than the one installed (a tag, or a release taken back) shows as older, and only the
+// player's second yes installs it.
+TEST_CASE("addon_manager: an older version from a link needs an explicit yes") {
+    Harness h;
+    h.publish("1.2.0", "read,ui");
+    h.start();
+    h.install();
+    h.publish("1.0.0", "read,ui");
+    AddonsStatus s = h.inspect("owner/autoloot");
+    REQUIRE(s.offer);
+    CHECK(s.offer->older);
+    CHECK(s.offer->installed_version == "1.2.0");
+    CHECK(s.offer->blocked.empty());
+    h.manager->install_offer(); // the plain yes: not enough
+    h.manager->wait_idle();
+    s = h.manager->status();
+    REQUIRE(s.offer); // still up
+    CHECK(s.message.find("older") != std::string::npos);
+    CHECK_FALSE(h.manager->has_ready());
+    CHECK(read_installed_addons(h.dir.path())[0].version == "1.2.0");
+    h.manager->install_offer(true);
+    h.manager->wait_idle();
+    REQUIRE(h.manager->has_ready());
+    REQUIRE(h.manager->install_ready().size() == 1);
+    CHECK(read_installed_addons(h.dir.path())[0].version == "1.0.0");
+    // The same version again, or a newer one, is no downgrade.
+    s = h.inspect("owner/autoloot");
+    REQUIRE(s.offer);
+    CHECK_FALSE(s.offer->older);
+}
+
 TEST_CASE("addon_manager: links that are not add-ons, and what an offer cannot install") {
     Harness h;
     h.start();

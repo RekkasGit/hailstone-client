@@ -119,8 +119,8 @@ std::vector<LightSource> particle_lights(const ParticleSystem& particles,
     };
     std::vector<Glow> glows;
     for (const Emitter& e : particles.emitters()) {
+        if (e.particles.empty() || !particles.glows(e.definition)) continue;
         const auto& d = particles.definitions()[e.definition];
-        if (e.particles.empty() || !particle_glows(d)) continue;
         Glow g;
         // Each particle by its opacity and size: a cloud of sparks lights less than a sheet of flame.
         auto weight = [](const Particle& p) {

@@ -4,6 +4,8 @@
 #include <cmath>
 #include <numbers>
 
+#include "game/light_list.h"
+
 namespace hailstone::game {
 
 namespace {
@@ -140,7 +142,10 @@ glm::uvec2 flipbook_grid(std::uint32_t frames) {
 }
 
 ParticleSystem::ParticleSystem(std::vector<assets::EmitterDefinition> definitions, std::uint32_t seed)
-    : definitions_(std::move(definitions)), rng_(seed) {}
+    : definitions_(std::move(definitions)), rng_(seed) {
+    glows_.reserve(definitions_.size());
+    for (const auto& d : definitions_) glows_.push_back(particle_glows(d));
+}
 
 float ParticleSystem::random(float a, float b) {
     return a + (b - a) * std::uniform_real_distribution<float>(0.0f, 1.0f)(rng_);
@@ -204,6 +209,7 @@ bool ParticleSystem::has(std::uint32_t key) const {
 }
 
 std::size_t ParticleSystem::add_definition(assets::EmitterDefinition d) {
+    glows_.push_back(particle_glows(d));
     definitions_.push_back(std::move(d));
     return definitions_.size() - 1;
 }
@@ -334,9 +340,17 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
             float rate = d.ticks_per_second;
             if (viewer_) rate *= emission_distance_factor(d.reduce_distance, e.capacity, glm::distance(*viewer_, e.origin));
             e.tick_accumulator += dt * rate;
+            const std::uint32_t per_tick = scaled(d.per_tick);
             while (e.tick_accumulator >= 1.0f) {
+                // A full emitter (or one emitting nothing a tick) adds nothing more this frame, as no particle ages
+                // until after the loop: the ticks left are skipped at once, keeping the fraction, rather than run one
+                // by one after a long frame (seconds of ticks).
+                if (per_tick == 0 || e.particles.size() >= e.capacity) {
+                    e.tick_accumulator = std::isfinite(e.tick_accumulator) ? std::fmod(e.tick_accumulator, 1.0f) : 0.0f;
+                    break;
+                }
                 e.tick_accumulator -= 1.0f;
-                spawn(e, scaled(d.per_tick));
+                spawn(e, per_tick);
             }
         }
         for (auto& p : e.particles) {

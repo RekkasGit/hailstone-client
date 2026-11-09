@@ -47,6 +47,8 @@ std::uint32_t eq_crc32(std::span<const std::byte> data) {
 
 // ---------------------------------------------------------------- LoginInfo
 
+bool login_info_fits(const LoginInfo& v) { return v.account_id.size() + 1 + v.session_key.size() + 1 <= 64; }
+
 AppPacket encode(const LoginInfo& v) {
     // login_info[64] holds "<account>\0<key>\0"; the original client builds
     // "login\0password\0\0" (WorldAuthenticate @00561e50) and sets +0xc0 = 0xcc.
@@ -54,7 +56,8 @@ AppPacket encode(const LoginInfo& v) {
     std::string login = v.account_id;
     login.push_back('\0');
     login += v.session_key;
-    w.fixed_string(login, 64);
+    // The last byte stays a NUL, so world never reads the key on into the next field.
+    w.fixed_string(std::string_view(login).substr(0, 63), 64);
     w.fixed_string(v.custom_files_key, 124); // unknown064[124]
     w.le<std::uint8_t>(v.zoning ? 1 : 0);   // +188
     w.zeros(3);

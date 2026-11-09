@@ -426,3 +426,29 @@ TEST_CASE("neighbour zones: z is the ground difference most seam points agree on
     auto there3 = floors_by_point(points, {{}, {}, {}, {}, {}, {0}, {0}, {0}, {0}}, first.offset.y);
     CHECK(!refine_offset(hinted, seam, lines, std::nullopt, points, here3, there3).ground);
 }
+
+TEST_CASE("neighbour zones: the ground past the seam sampled a row at a time is the grid sampled at once") {
+    auto floor = [](float x, float y) -> std::optional<float> {
+        if (x > 40.0f && y > 40.0f) return std::nullopt; // a hole
+        return x * 0.25f - y;
+    };
+    const glm::vec2 lo(-10.0f, 5.0f), hi(110.0f, 77.0f);
+    const GroundGrid whole = sample_ground(lo, hi, 16.0f, floor);
+    GroundSampler sampler(lo, hi, 16.0f);
+    int steps = 0;
+    while (!sampler.step(floor, [] { return false; })) ++steps; // one row each
+    CHECK(steps + 1 == whole.height);
+    const GroundGrid rows = sampler.take();
+    REQUIRE(rows.width == whole.width);
+    REQUIRE(rows.height == whole.height);
+    REQUIRE(rows.heights.size() == whole.heights.size());
+    for (std::size_t i = 0; i < rows.heights.size(); ++i) {
+        if (std::isnan(whole.heights[i])) CHECK(std::isnan(rows.heights[i]));
+        else CHECK(rows.heights[i] == whole.heights[i]);
+    }
+    // An empty band: done at once, an empty grid.
+    GroundSampler none(lo, lo, 16.0f);
+    CHECK(none.done());
+    CHECK(none.step(floor, [] { return true; }));
+    CHECK(none.take().empty());
+}

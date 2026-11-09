@@ -103,8 +103,9 @@ struct FakeServer {
 };
 
 // Runs a sync against the fake server until it finishes.
-ServerFileSync::State run(const fs::path& profile, FakeServer& server, bool* changed = nullptr) {
-    ServerFileSync sync(profile, [&](net::AppPacket p) { server.receive(p); });
+ServerFileSync::State run(const fs::path& profile, FakeServer& server, bool* changed = nullptr,
+                          ServerFileSync::Limits limits = {}, std::string* error = nullptr) {
+    ServerFileSync sync(profile, [&](net::AppPacket p) { server.receive(p); }, limits);
     auto now = ServerFileSync::Clock::now();
     sync.start(now);
     for (int steps = 0; !sync.finished() && steps < 100000; ++steps) {
@@ -120,6 +121,7 @@ ServerFileSync::State run(const fs::path& profile, FakeServer& server, bool* cha
         sync.handle(*reply, now);
     }
     if (changed) *changed = sync.changed();
+    if (error) *error = sync.error();
     return sync.state();
 }
 } // namespace
@@ -305,6 +307,34 @@ TEST_CASE("server files: download, keep, replace, delete") {
     CHECK(run(dir.path, server, &changed) == ServerFileSync::State::Done);
     CHECK_FALSE(fs::exists(assets / "spells_us.txt"));
     CHECK(fs::exists(assets / "mine.txt"));
+}
+
+TEST_CASE("server files: a file over the size limit is refused; a list over the total limit writes nothing") {
+    TempDir dir("limits");
+    fs::path assets = dir.path / "assets";
+    FakeServer server;
+    server.files["big.txt"] = std::string(2000, 'b');
+    server.files["small.txt"] = "small";
+    ServerFileSync::Limits limits;
+    limits.max_file = 1000;
+    CHECK(run(dir.path, server, nullptr, limits) == ServerFileSync::State::Done);
+    CHECK_FALSE(fs::exists(assets / "big.txt"));
+    CHECK(read(assets / "small.txt") == "small");
+
+    // Three files of 600 bytes, at most 1000 in all: nothing asked for, nothing in .download/, the old files stay.
+    server.files.clear();
+    server.files["a.txt"] = std::string(600, 'a');
+    server.files["b.txt"] = std::string(600, 'b');
+    server.files["small.txt"] = std::string(600, 'c');
+    server.list_id = 8;
+    server.pieces = 0;
+    limits.max_total = 1000;
+    std::string error;
+    CHECK(run(dir.path, server, nullptr, limits, &error) == ServerFileSync::State::Failed);
+    CHECK(error.find("more than the limit") != std::string::npos);
+    CHECK(server.pieces == 0);
+    CHECK_FALSE(fs::exists(dir.path / ".download"));
+    CHECK(read(assets / "small.txt") == "small");
 }
 
 TEST_CASE("server files: a file the player put there by hand is taken as is when it matches") {

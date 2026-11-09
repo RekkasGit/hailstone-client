@@ -281,10 +281,12 @@ add_library(hailstone_engine STATIC
   src/platform/crash_log.cpp
   src/platform/local_time.cpp
   src/platform/private_file.cpp
+  src/platform/durable_file.cpp
   src/platform/process.cpp
   src/game/eq_names.cpp
   src/ui/font_faces.cpp
   src/ui/imgui_layer.cpp
+  src/ui/imgui_vk_textures.cpp
   src/ui/web_textures.cpp
   src/ui/asset_picker.cpp
   src/ui/dev_screens.cpp
@@ -872,6 +874,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/env_test.cpp
     tests/sdk_old_names_test.cpp
     tests/private_file_test.cpp
+    tests/durable_file_test.cpp
     tests/server_script_test.cpp
     tests/server_tools_test.cpp
     tests/float_chars_test.cpp
@@ -909,6 +912,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/culling_test.cpp
     tests/shadow_chunks_test.cpp
     tests/wrap_math_test.cpp
+    tests/wipe_test.cpp
+    tests/log_escape_test.cpp
     tests/step_clock_test.cpp
     tests/frame_rate_test.cpp
     tests/particle_view_test.cpp
@@ -924,6 +929,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/latest_jobs_test.cpp
     tests/character_share_test.cpp
     tests/light_grid_test.cpp
+    tests/retire_queue_test.cpp
     tests/weather_test.cpp
     tests/texture_overrides_test.cpp
     tests/layout_test.cpp
@@ -961,6 +967,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/npc_collision_test.cpp
     tests/mounts_test.cpp
     tests/world_state_smooth_test.cpp
+    tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
     tests/ui_rules_vectors_test.cpp
     tests/net_login_test.cpp
@@ -996,6 +1003,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/pet_hot_buttons_test.cpp
     tests/lua_slot_info_test.cpp
     tests/social_editor_test.cpp
+    tests/app_frame_work_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp

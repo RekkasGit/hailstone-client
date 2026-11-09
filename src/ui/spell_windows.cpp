@@ -78,7 +78,10 @@ const SpellIconCache::Sheet* SpellIconCache::sheet(int number) {
                                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             if (!s->set) {
                 log::warn("spell icons: no descriptor left for {}", name);
-                s->texture.destroy(vk_.device(), vk_.allocator());
+                // Its upload may still be on the GPU.
+                vk_.retire([texture = s->texture, device = vk_.device(), allocator = vk_.allocator()]() mutable {
+                    texture.destroy(device, allocator);
+                });
                 s.reset();
             }
         } else {

@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
 using namespace hailstone::render;
 
@@ -95,4 +97,33 @@ TEST_CASE("particles: the frame's light is the light each particle was given") {
     SceneLighting dark{};
     dark.params = glm::vec4(1.0f, 0.0f, 0.0f, 0.05f);
     CHECK(ParticleLight(dark).at({0, 0, 0}).r == doctest::Approx(0.05f));
+}
+
+TEST_CASE("Modern particle stream: the nearest kept past the cap, back to front, as a full sort kept them") {
+    struct Item {
+        float dist2;
+        int id;
+    };
+    std::vector<Item> items;
+    std::uint32_t seed = 12345;
+    for (int i = 0; i < 500; ++i) {
+        seed = seed * 1664525u + 1013904223u;
+        items.push_back({static_cast<float>(seed % 100000u), i});
+    }
+    // The old way: everything sorted far to near, the farthest dropped.
+    std::vector<Item> full = items;
+    std::sort(full.begin(), full.end(), [](const Item& a, const Item& b) { return a.dist2 > b.dist2; });
+    full.erase(full.begin(), full.end() - 120);
+    std::vector<Item> kept = items;
+    keep_nearest_back_to_front(kept, 120);
+    REQUIRE(kept.size() == 120);
+    for (std::size_t i = 0; i < kept.size(); ++i) CHECK(kept[i].dist2 == full[i].dist2);
+    CHECK(std::is_sorted(kept.begin(), kept.end(), [](const Item& a, const Item& b) { return a.dist2 > b.dist2; }));
+    // Under the cap: all of them, sorted.
+    std::vector<Item> few = {{1.0f, 0}, {9.0f, 1}, {4.0f, 2}};
+    keep_nearest_back_to_front(few, 120);
+    REQUIRE(few.size() == 3);
+    CHECK(few[0].id == 1);
+    CHECK(few[1].id == 2);
+    CHECK(few[2].id == 0);
 }

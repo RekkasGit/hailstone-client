@@ -603,6 +603,17 @@ TEST_CASE("eq.LoginScreen: the add-on manager's view and its actions (docs/addon
     v.addons.offer->blocked.clear();
     CHECK(ui("return eq.LoginDo('addonInstall')") == "true");
     CHECK(ui.host.login_action == static_cast<int>(A::AddonInstall));
+    CHECK_FALSE(v.addons.choice_on);
+    // An older version than the installed one: only with "older", the player's yes to going back.
+    ui.host.login_action.reset();
+    v.addons.offer->older = true;
+    CHECK(ui("return eq.LoginScreen().addons.offer.older") == "true");
+    CHECK(ui("return eq.LoginDo('addonInstall')") == "false");
+    CHECK_FALSE(ui.host.login_action);
+    CHECK(ui("return eq.LoginDo('addonInstall', 'older')") == "true");
+    CHECK(ui.host.login_action == static_cast<int>(A::AddonInstall));
+    CHECK(v.addons.choice_on);
+    v.addons.offer->older = false;
 
     // A row's actions are for that row; the server's own cannot be removed, updated or switched.
     CHECK(ui("return eq.LoginDo('addonUpdate', 'autoloot')") == "true");

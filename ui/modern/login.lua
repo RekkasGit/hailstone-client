@@ -431,11 +431,17 @@ local function offerCard(o, s, bh)
   if o.kind == "plugin" or o.kind == "tool" then
     ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, o.kind == "tool" and TOOL_WARNING or PLUGIN_WARNING)
   end
+  if o.older then
+    ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, string.format(
+      "This is an older version than the one installed (%s): installing it goes back to %s.",
+      o.installedVersion, o.version))
+  end
   if o.blocked ~= "" then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, o.blocked) end
   ui.PopTextWrapPos()
   ui.Dummy(0, 2 * s)
-  if P.Primary(o.installedVersion == "" and "Install" or "Install this version", 0, bh, o.blocked == "") then
-    eq.LoginDo("addonInstall")
+  local label = o.older and "Install the older version" or (o.installedVersion == "" and "Install" or "Install this version")
+  if P.Primary(label, 0, bh, o.blocked == "") then
+    eq.LoginDo("addonInstall", o.older and "older" or nil)
     addonTab = "mine" -- (where it shows up, with its progress)
   end
   ui.SameLine()

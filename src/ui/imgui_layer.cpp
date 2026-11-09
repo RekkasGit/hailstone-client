@@ -18,6 +18,7 @@
 #include "core/log.h"
 #include "platform/window.h"
 #include "render/vk_context.h"
+#include "ui/imgui_vk_textures.h"
 #include "ui/lua/lua_host.h"
 
 namespace hailstone::ui {
@@ -134,12 +135,14 @@ ImGuiLayer::ImGuiLayer(platform::Window& window, render::VkContext& vk, const Im
     // (apply_pad_navigation), never opening pads itself.
     ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_Manual, nullptr, 0);
 
-    // The font plus user textures: item icon sheets (ui/item_windows.h: up to 222 dragitem sheets), spell icons,
-    // and the stock UI art the Lua windows draw (ui/ui_textures.h: the uifiles/default files they use).
-    VkDescriptorPoolSize pool_size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024};
+    // The backend's own textures (the font atlas, made again as it grows). The client's (item icon sheets, spell
+    // icons, the stock UI art the Lua windows draw, browser tabs) come from pools of their own that grow as they fill
+    // (ui/imgui_vk_textures.h).
+    constexpr std::uint32_t kBackendSets = 32;
+    VkDescriptorPoolSize pool_size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kBackendSets};
     VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pi.maxSets = 1024;
+    pi.maxSets = kBackendSets;
     pi.poolSizeCount = 1;
     pi.pPoolSizes = &pool_size;
     if (vkCreateDescriptorPool(vk_.device(), &pi, nullptr, &pool_) != VK_SUCCESS)
@@ -168,10 +171,12 @@ ImGuiLayer::ImGuiLayer(platform::Window& window, render::VkContext& vk, const Im
     info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &color_format_;
     info.CheckVkResultFn = check_vk;
     if (!ImGui_ImplVulkan_Init(&info)) throw std::runtime_error("ImGui_ImplVulkan_Init failed");
+    init_imgui_textures(vk_.device());
 }
 
 ImGuiLayer::~ImGuiLayer() {
     vk_.wait_idle();
+    shutdown_imgui_textures();
     window_.set_event_listener({});
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();

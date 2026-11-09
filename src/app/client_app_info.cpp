@@ -9,6 +9,7 @@
 #include "app/client_app_internal.h"
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
+#include "core/character_files.h"
 #include "core/log.h"
 #include "core/server_profile.h"
 #include "core/web_url.h"
@@ -125,12 +126,19 @@ bool ClientApp::client_info_command(std::string_view h, const std::string& args)
 
 void ClientApp::outputfile_command(const std::string& args) {
     // Cmd_outputfile @0x4febd0: no argument: 3487 (colour 0). The first word picks the writer, the second is the file
-    // (here a name in the character's folder; none: the writer's default name).
+    // (here a name in the character's folder; none: the writer's default name). The original fopens the name as it is
+    // given, in the game folder; Hailstone writes only in the character's folder and refuses the names of the files
+    // it keeps there (a Hailstone difference: the original lets the dump replace its own ini files).
     net::GameConnection& c = *conn_;
     if (args.empty()) return c.show_eqstr(game::kStrOutputFileUsage);
     std::string_view rest = args;
     std::string what = game::next_cmd_arg(rest).substr(0, 0x31);
     std::string file = game::next_cmd_arg(rest).substr(0, 0xff);
+    if (!file.empty() && is_kept_character_file(sanitize_file_name(file))) {
+        c.ui_message(std::format("/outputfile: {} holds this character's settings; give the file another name.",
+                                 sanitize_file_name(file)));
+        return;
+    }
     CharacterFiles files = c.own_files();
     auto write = [&](const std::string& name, const std::string& text) {
         if (files.empty()) return;

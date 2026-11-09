@@ -297,9 +297,12 @@ bool write_crash_report(const char* what) {
     BOOL ok = WriteFile(h, g_report, static_cast<DWORD>(length), &written, nullptr);
     CloseHandle(h);
     if (g_exception && at >= 4) {
-        // crash-<date>.dmp beside it: the threads' stacks and registers and the module list, for a debugger. No heap:
-        // MiniDumpWithIndirectlyReferencedMemory would add the memory the stacks point at (the password, the session
-        // key, a plugin's auth_key), and the dump goes into bug reports as it is.
+        // crash-<date>.dmp beside it: the threads' call stacks and registers and the module list, for a debugger.
+        // The dump goes into bug reports as it is, so it holds no secret: no heap (MiniDumpWithIndirectlyReferenced-
+        // Memory would add what the stacks point at: the password field, the session key, a plugin's auth_key), and
+        // MiniDumpFilterMemory keeps of the stacks only the pointers a stack trace needs, so a short password in a
+        // std::string's own storage, or one a frame copied, is not in it either. The cost is the locals' values.
+        // The client itself lives on the heap (run_client) and wipes the password once the login server has it.
         path[at - 3] = L'd';
         path[at - 2] = L'm';
         path[at - 1] = L'p';
@@ -310,7 +313,7 @@ bool write_crash_report(const char* what) {
             mei.ExceptionPointers = g_exception;
             mei.ClientPointers = FALSE;
             MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump,
-                              static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpWithThreadInfo),
+                              static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpFilterMemory),
                               &mei, nullptr, nullptr);
             CloseHandle(dump);
         }

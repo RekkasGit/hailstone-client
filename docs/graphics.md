@@ -47,6 +47,23 @@ where it does not, a screenshot is refused with a log line (and a chat line for 
 invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
 not whenever the surface's `currentExtent` differs from the window's size.
 
+Uploads do not wait for the GPU. `render::UploadBatch::submit` records its copies (and mip blits) into a command buffer
+of their own and submits it on the frame's queue with a fence of its own (`VkContext::submit_upload`); the barriers
+it ends with (copy writes to vertex input, index, vertex and fragment shader reads; images to shader-read layout) make
+the results visible to every later submission on the queue, so a model, texture or icon sheet put up while a frame is
+recorded is drawn by that frame. Its staging buffers go once its fence signals, checked at each frame's start and each
+upload; past 256 MB of staging in flight the oldest uploads are waited for. `VkContext::immediate_submit` stays
+synchronous, for the context's own one-off work. What a frame in flight (or an upload) may still use is handed to
+`VkContext::retire` instead of destroyed after `vkDeviceWaitIdle`: it goes once the frame being recorded, every
+upload submitted before and any `frames_ahead` more are done (`render/retire_queue.h`; the UI's textures take one
+more frame, as ImGui's draw lists are built before their frame begins). A `ZoneRenderer` is let go this way, so a
+neighbour zone freed mid-frame no longer stalls the frame. A recreated swapchain is made with `oldSwapchain`, and the
+old one and its present semaphores are retired two frames on: `vkDeviceWaitIdle` does not cover a present's wait.
+
+The ImGui textures (`ui/imgui_vk_textures.h`: the UI art, icon sheets, browser tabs) come from descriptor pools of the
+client's own, a new one made when they fill, with a set layout defined as the backend's. `ui::UiTextures` keeps at
+most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
+
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes
@@ -269,7 +286,11 @@ outdoor vertices carry none).
 by 128-unit tile (`assets::ZoneFloraGrower`); the renderer grows the tiles within reach as they come into it, nearest
 first and for at most 3 ms a frame, and lets go of those well past it. Each piece's plants come from its own seeded
 sequence, so a tile grows the same plants every time and a zone costs memory by the reach, not by its size (South
-Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load.
+Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load. A damaged
+mesh is bounded: a triangle with a non-finite vertex or one over 100,000 units out (the zones lie within some 20,000)
+neither grows plants nor covers any, the ground is cut into at most 2 million pieces, and the cover test holds at most
+16 million cell references, a triangle over more than 1,024 of its 64-unit cells (at most 256 such) being tested at
+every point instead. A triangle past those bounds is no cover.
 
 They are looks only: collision, line of sight, the navigation mesh and picking do not see them.
 `tools/florascan GAME_DIR flora ZONE...` lists, per zone, the rules it takes and the plants on each ground texture
@@ -918,8 +939,11 @@ in filler: the ground, hills and walls their builders put past each line, often 
 - **Loading**: once the zone is entered and the zone points are in, the nearest qualifying neighbour whose line is
   within the view distance plus 1500 units loads on a background thread at a lower priority (`ZoneRenderer::prepare`:
   the geometry, chunks and decoded textures with their mip chains, capped at 128 texels across; no detail passes,
-  material maps or multi-pass lights); the frame uploads it when ready. At most two are loaded; one goes when the
-  camera is 3500 units past the view distance from its line, all of them on zoning or with the setting off. A load
+  material maps or multi-pass lights); the frame uploads it when ready. Before the load starts, this zone's ground
+  past the seam (the grid of `game::split_off_ground`) is sampled on the frame's thread, about 1 ms of rows a frame
+  (`game::GroundSampler`), since the loader must not touch this zone. At most two are loaded; one is no longer drawn
+  when the camera is 3500 units past the view distance from its line, and is freed when another needs its room, on
+  zoning or with the setting off (freeing one waits for the GPU, which would hitch a frame of play). A load
   cut off by zoning or quitting stops at its next step (after reading the zone, after its collision mesh, and
   between `prepare`'s meshes and materials, `ZoneRenderOptions::cancelled`), so the wait for its thread is short;
   reading the zone's files is not broken off. It is fogged by this zone's haze, as it is drawn with this zone's
@@ -970,7 +994,9 @@ window, on any GPU through ncnn's Vulkan compute, with no Python to install; the
 three-stage build and the pack's files).
 
 1. `texpack export ASSETDIR WORK` writes each distinct texture once, keyed by `texture_content_hash` of its file:
-   61,474 in the RoF2 install (from 2,709 archives, in about a minute). It writes `WORK/src/<hash>.png` upright, with
+   61,474 in the RoF2 install (from 2,709 archives, in about a minute). A member named `.bmp`, `.dds` or `.tga` is
+   read whole; any other is taken only when its first four bytes (`PfsArchive::read_prefix`, which inflates no more)
+   are a DDS or BMP magic, so the scan no longer inflates every mesh, WLD and sound. It writes `WORK/src/<hash>.png` upright, with
    `<hash>.m.png`, the masked variant of an 8-bit BMP whose palette index 0 is used, `<hash>.k.png`, the variant
    without its colour key of a texture painted on one (`remove_color_key`), and `WORK/manifest.jsonl`,
    holding the names, archives, size, stored format and alpha kind.

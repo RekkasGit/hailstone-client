@@ -304,6 +304,15 @@ TEST_CASE("UI packs: each draws the login, server select and character select sc
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             login.addons.offer->kind = "plugin";
             login.addons.offer->caps = {"read the game state", "draw windows"};
+            // An older version than the one installed: its warning and the button that says so.
+            login.addons.offer->installed_version = "1.4.0";
+            login.addons.offer->older = true;
+            login.addons.offer->blocked.clear();
+            s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            login.addons.offer->older = false;
+            login.addons.offer->installed_version.clear();
+            login.addons.offer->blocked = "an add-on named autoloot is installed already";
             if (std::string(pack) == "modern") {
                 // the list of their own, then back to the store
                 REQUIRE(luaL_dostring(s.lua.state(), "ui.SetSetting('test.addontab', 'mine')") == LUA_OK);

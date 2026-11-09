@@ -1,6 +1,8 @@
 #include "app/lua_eq_plugins.h"
 
+#include <new>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <lua.hpp>
@@ -42,6 +44,52 @@ std::string target_owner(const EqHost& h, std::string_view name) {
 // "Plugin windows").
 bool may_reach(std::string_view owner) { return caller().empty() || iequals(caller(), owner); }
 
+// A call's arguments and result, in a userdata on the stack that the state owns (its __gc destroys them): Lua is
+// built as C, and a push that fails (the UI state's memory limit) longjmps past this frame, whose own vectors and
+// values would never be destroyed. Made before any of them, so that it is the only place they live.
+struct CallBox {
+    std::vector<UiValue> args;
+    UiValue result;
+};
+constexpr const char* kCallBoxMeta = "hailstone.eq.plugin_call";
+
+int call_box_gc(lua_State* L) {
+    static_cast<CallBox*>(lua_touserdata(L, 1))->~CallBox();
+    return 0;
+}
+
+CallBox& push_call_box(lua_State* L) {
+    if (luaL_newmetatable(L, kCallBoxMeta)) {
+        lua_pushcfunction(L, call_box_gc);
+        lua_setfield(L, -2, "__gc");
+    }
+    void* mem = lua_newuserdatauv(L, sizeof(CallBox), 0);
+    auto* box = new (mem) CallBox(); // (nothing after this raises: the metatable is set, the box is the state's)
+    lua_rotate(L, -2, 1);
+    lua_setmetatable(L, -2);
+    return *box;
+}
+
+// The call itself, its arguments the stack's from `first` to `last`: the result on top (nil without one).
+int call_plugin(lua_State* L, const EqHost& h, const char* owner, std::string_view name, int first, int last) {
+    CallBox& box = push_call_box(L);
+    for (int i = first; i <= last; ++i) box.args.push_back(to_value(L, i)); // (to_value never raises)
+    bool found = false;
+    if (h.plugin_ui) {
+        auto r = h.plugin_ui->call(owner, name, box.args);
+        if (r) {
+            box.result = std::move(*r);
+            found = true;
+        }
+    }
+    if (!found) {
+        lua_pushnil(L);
+        return 1;
+    }
+    push_value(L, box.result);
+    return 1;
+}
+
 // p.fn(...): upvalue 1 the host, 2 the owner's tag, 3 the function's name; the arguments are the call's.
 int plugin_fn(lua_State* L) {
     EqHost& h = host_of(L);
@@ -51,16 +99,12 @@ int plugin_fn(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    for (int i = 1; i <= lua_gettop(L); ++i) ui::lua::unview(L, i); // (to_value reads tables raw)
-    std::vector<UiValue> args;
-    for (int i = 1; i <= lua_gettop(L); ++i) args.push_back(to_value(L, i));
-    auto r = h.plugin_ui ? h.plugin_ui->call(owner, name ? name : "", args) : std::nullopt;
-    if (!r) {
+    if (static_cast<std::size_t>(lua_gettop(L)) > plugin::UiBridge::kMaxCallArgs) { // (the bridge refuses them too)
         lua_pushnil(L);
         return 1;
     }
-    push_value(L, *r);
-    return 1;
+    for (int i = 1; i <= lua_gettop(L); ++i) ui::lua::unview(L, i); // (to_value reads tables raw)
+    return call_plugin(L, h, owner, name ? name : "", 1, lua_gettop(L));
 }
 
 // p.call("fn", ...)
@@ -72,16 +116,12 @@ int plugin_call(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    for (int i = 2; i <= lua_gettop(L); ++i) ui::lua::unview(L, i); // (to_value reads tables raw)
-    std::vector<UiValue> args;
-    for (int i = 2; i <= lua_gettop(L); ++i) args.push_back(to_value(L, i));
-    auto r = h.plugin_ui ? h.plugin_ui->call(owner, name, args) : std::nullopt;
-    if (!r) {
+    if (static_cast<std::size_t>(lua_gettop(L) - 1) > plugin::UiBridge::kMaxCallArgs) {
         lua_pushnil(L);
         return 1;
     }
-    push_value(L, *r);
-    return 1;
+    for (int i = 2; i <= lua_gettop(L); ++i) ui::lua::unview(L, i); // (to_value reads tables raw)
+    return call_plugin(L, h, owner, name, 2, lua_gettop(L));
 }
 
 // The plugin object's __index: p.call, p.name, p.owner, and p.<fn> as a function calling it.

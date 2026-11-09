@@ -92,14 +92,18 @@ Bytes compress_body(ByteSpan body) {
     return out;
 }
 
-std::optional<Bytes> decompress_body(ByteSpan body, std::size_t max_size) {
-    if (body.empty()) return Bytes{};
+namespace {
+
+// decompress_body's work, appending the plain bytes to `out` (decode_datagram builds its result in one buffer).
+bool decompress_append(ByteSpan body, std::size_t max_size, Bytes& out) {
+    if (body.empty()) return true;
     std::uint8_t flag = u8(body[0]);
     if (flag == 0xa5) {
-        if (body.size() - 1 > max_size) return std::nullopt;
-        return Bytes(body.begin() + 1, body.end());
+        if (body.size() - 1 > max_size) return false;
+        out.insert(out.end(), body.begin() + 1, body.end());
+        return true;
     }
-    if (flag != 0x5a) return std::nullopt;
+    if (flag != 0x5a) return false;
 
     // Every compressed datagram passes here, so the inflater and its output room are kept per thread and reused
     // (inflateReset) instead of being set up, zero-filled and freed each time; the result is copied out at its size.
@@ -113,7 +117,7 @@ std::optional<Bytes> decompress_body(ByteSpan body, std::size_t max_size) {
         }
     };
     thread_local Inflater inf;
-    if (!inf.ok || inflateReset(&inf.z) != Z_OK) return std::nullopt;
+    if (!inf.ok || inflateReset(&inf.z) != Z_OK) return false;
     if (inf.room.size() < max_size + 1) inf.room.resize(max_size + 1);
     z_stream& z = inf.z;
     z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(body.data() + 1));
@@ -122,8 +126,17 @@ std::optional<Bytes> decompress_body(ByteSpan body, std::size_t max_size) {
     z.avail_out = static_cast<uInt>(max_size + 1);
     int rc = inflate(&z, Z_FINISH);
     std::size_t produced = z.total_out;
-    if (rc != Z_STREAM_END || produced > max_size) return std::nullopt;
-    return Bytes(inf.room.begin(), inf.room.begin() + static_cast<std::ptrdiff_t>(produced));
+    if (rc != Z_STREAM_END || produced > max_size) return false;
+    out.insert(out.end(), inf.room.begin(), inf.room.begin() + static_cast<std::ptrdiff_t>(produced));
+    return true;
+}
+
+} // namespace
+
+std::optional<Bytes> decompress_body(ByteSpan body, std::size_t max_size) {
+    Bytes out;
+    if (!decompress_append(body, max_size, out)) return std::nullopt;
+    return out;
 }
 
 bool is_encodable(ByteSpan packet) {
@@ -169,19 +182,27 @@ std::optional<Bytes> decode_datagram(const SessionParams& params, ByteSpan datag
         if (crc_bytes == 2) got &= 0xffff;
         if (got != want) return std::nullopt;
     }
-    Bytes out(body.begin(), body.end());
+    // Built in one buffer: the XOR pass works in place on a copy of the datagram, and the compression pass inflates
+    // from whatever holds the bytes now (the datagram itself when it runs first) into a new buffer behind the header.
     std::size_t head = header_size(body);
+    Bytes out;
+    bool owned = false; // out holds the bytes so far; else they are still `body`
     for (int i = 1; i >= 0; --i) {
         EncodePass pass = params.passes[static_cast<std::size_t>(i)];
         if (pass == EncodePass::Compression) {
-            auto plain = decompress_body(ByteSpan(out).subspan(head));
-            if (!plain) return std::nullopt;
-            out.resize(head);
-            out.insert(out.end(), plain->begin(), plain->end());
+            ByteSpan from = owned ? ByteSpan(out) : body;
+            Bytes plain;
+            plain.assign(from.begin(), from.begin() + static_cast<std::ptrdiff_t>(head));
+            if (!decompress_append(from.subspan(head), kMaxDecodedSize, plain)) return std::nullopt;
+            out = std::move(plain);
+            owned = true;
         } else if (pass == EncodePass::Xor) {
+            if (!owned) out.assign(body.begin(), body.end());
+            owned = true;
             xor_decode(std::span(out).subspan(head), params.encode_key);
         }
     }
+    if (!owned) out.assign(body.begin(), body.end());
     return out;
 }
 
@@ -430,6 +451,17 @@ void InboundStream::consume(ByteSpan packet, std::vector<Bytes>& out) {
             fragment_.reserve(std::min<std::size_t>(fragment_total_, 1u << 20));
         in_fragment_ = true;
     }
+    // A piece that runs past the declared total (a first one longer than its own total, say) leaves the payload's
+    // end unknown just as a missing total does: cutting it there and reading the next piece as a new first one would
+    // reassemble garbage. A stock server never sends one (EQEmu's pieces add up to the total exactly).
+    const std::uint64_t had = discarding_ ? skipped_ : fragment_.size();
+    if (body.size() > fragment_total_ - had) {
+        log::warn("session: a fragment runs {} bytes past its payload's total of {}; the stream cannot continue",
+                  body.size() - (fragment_total_ - had), fragment_total_);
+        reset_fragment();
+        broken_ = true;
+        return;
+    }
     if (discarding_) {
         // Its pieces are counted, not kept, so the stream stays in step for the payload after it.
         skipped_ += body.size();
@@ -437,7 +469,6 @@ void InboundStream::consume(ByteSpan packet, std::vector<Bytes>& out) {
     } else {
         fragment_.insert(fragment_.end(), body.begin(), body.end());
         if (fragment_.size() < fragment_total_) return;
-        fragment_.resize(fragment_total_);
         out.push_back(std::move(fragment_));
     }
     reset_fragment();

@@ -28,8 +28,10 @@
 #include <optional>
 #include <random>
 #include <set>
+#include <span>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 
 #include <SDL3/SDL_filesystem.h>
 #include <imgui.h>
@@ -43,6 +45,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "game/nameplate_overlap.h"
 #include "game/sky_colours.h"
@@ -613,6 +616,7 @@ public:
             }
             login_view_.username = opts_.auto_user;
             login_view_.password = opts_.auto_password;
+            core::wipe(opts_.auto_password); // the copy in the fields is the one start_login uses and lets go
             start_login();
         } else if (!opts_.account.empty()) {
             start_account_login();
@@ -659,9 +663,16 @@ private:
     // *error why not (not installed, its program gone, or the system would not start it).
     bool start_addon_tool(std::string_view name, std::string* error);
     // Hailstone Texture Studio's add-on name (projecthailstone/hailstone-texstudio): Options' "Texture Studio..."
-    // starts it once it is installed.
+    // starts it once it is installed, from that repository and signed with the project's add-on key
+    // (kTextureStudioKey, the key the add-on index lists for the project's add-ons): the button starts a program by
+    // name, so another add-on that took the name, or an unsigned one, is not started from it (its row's Start still
+    // works, where the player sees what it is).
     static constexpr std::string_view kTextureStudio = "texstudio";
+    static constexpr std::string_view kTextureStudioRepo = "projecthailstone/hailstone-texstudio";
+    static constexpr std::string_view kTextureStudioKey =
+        "1cec1c02c81c578912f0b8dcae84277c60ddb80271cfa28793cc06bc7ae51608";
     bool texture_studio_installed() const;
+    bool start_texture_studio(std::string* error);
 public:
     struct UpdateExit {
         bool install = false; // a downloaded update is installed now
@@ -695,6 +706,7 @@ private:
     std::string wanted_ui_pack() const;
     void update_login();
     // The login server's worlds into server_view_: favourites first, then by name; the picked world stays picked.
+    void take_server_list();
     void list_worlds();
     // Marks or unmarks the server select's row as a favourite (hailstone.ini login.favorite_worlds.<profile>).
     void toggle_favorite_world(int row);
@@ -1026,6 +1038,16 @@ private:
     // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
     // first use.
     std::unique_ptr<NameplateLayer> plate_layer_; // draw_nameplates, made at its first use
+    // draw_nameplates' lists, kept for their capacity (and the plates' strings for theirs): the first plate_count_.
+    struct PlateEntry {
+        std::uint32_t id = 0;
+        NameplateText plate;
+    };
+    std::vector<PlateEntry> plates_;
+    std::size_t plate_count_ = 0;
+    std::vector<game::PlateBox> plate_boxes_;
+    std::vector<float> plate_alpha_;
+    std::vector<std::size_t> plate_order_;
     ui::ImGuiLayer ui_;
     bool quit_ = false;
     bool close_pending_ = false; // a window close request held through a loading screen
@@ -1055,6 +1077,12 @@ private:
     std::string box_world_; // the world to play (empty: the last played on the server, else the first)
     std::string box_character_;
     std::string listed_characters_; // what note_listed_characters() wrote last (a signature)
+    // The pre-game screens are built again when what they show changes, not each frame: the connection's
+    // characters_serial() and the login's servers_serial() last built from, and when the server select's add-on
+    // hint (which reads the server's folder) was last made.
+    std::uint32_t characters_listed_serial_ = 0;
+    std::uint32_t servers_listed_serial_ = 0;
+    Clock::time_point server_hint_at_{};
     std::vector<std::string> worlds_noted_; // the worlds the login server listed, as set_listed_worlds() last had them
     platform::ChildProcesses box_clients_; // the box set's other windows
     platform::ChildProcesses tools_;       // the tool add-ons the player started (left running when Hailstone quits)
@@ -1249,7 +1277,11 @@ private:
     float flora_reach_ = render::kFloraReach;
     std::vector<render::FireSource> zone_fires_;
     std::vector<render::FireSource> zone_mesh_fires_; // the flame meshes' alone (no particle clouds)
-    std::vector<render::FireSource> frame_fires_;
+    std::vector<render::FireSource> frame_fires_;            // the zone's with the moving ones', when there are any
+    std::span<const render::FireSource> frame_fire_list_;    // what the flames draw this frame
+    std::vector<assets::ZoneFire> moving_fires_;             // the doors' and objects' this frame (capacity kept)
+    std::vector<std::pair<float, glm::vec4>> flora_near_;    // the spawns standing in the grass (capacity kept)
+    std::vector<glm::vec4> flora_pushers_;
     render::SceneLighting frame_lighting_{}; // this frame's lighting, for the flames' haze and depth terms
     std::unique_ptr<SpellParticles> spell_particles_;       // spell stage particles (app/spell_particles.h)
     std::unique_ptr<SpellBolts> spell_bolts_;               // the modern lighting's bolts and comets (app/spell_bolts.h)
@@ -1445,6 +1477,7 @@ private:
     double pre_game_step_ = 0.0;                     // the 50 ms camera step's clock
     float pre_game_saved_fov_ = 0.0f;                // the in-game camera's field of view, put back after
     std::string pre_game_shown_;                     // what the model shows ("" nothing yet)
+    std::pair<std::uint32_t, int> pre_game_shown_for_{}; // the characters_serial() and row it was built from
     std::array<std::uint32_t, 3> pre_game_model_key_{}; // race, gender, class it was switched to
     std::array<std::uint32_t, 3> create_choice_{};      // the client's own creation screen's race, gender, class
     int pre_game_zoom_ = -1, pre_game_feature_ = 0;      // the customization camera last placed

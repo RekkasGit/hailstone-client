@@ -11,6 +11,7 @@
 #include "core/sha256.h"
 #include "mq/commands.h"
 #include "mq/parse.h"
+#include "platform/tcp_socket.h"
 #include "plugin/native_plugins.h"
 #include "mq_test_world.h"
 #include "plugin_consent_helper.h"
@@ -546,6 +547,50 @@ TEST_CASE("native plugins: host functions from another thread do nothing; the ca
     CHECK(name == "another thread");
     CHECK(plugin::caller_caps() == plugin::kCapRead);
     CHECK(plugin::caller_name() == "script");
+}
+
+TEST_CASE("native plugins: a connection opened with 'net' closes when the policy takes 'net' away") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    platform::TcpListener listener;
+    std::string error;
+    REQUIRE(listener.listen(platform::Endpoint::v4(127, 0, 0, 1, 0), error));
+    h.run("/probetcp " + std::to_string(listener.local_endpoint()->port));
+    REQUIRE(h.printed_line("[Probe] tcp open 1"));
+    h.run("/probetcpsend 1");
+    CHECK((h.printed_line("[Probe] tcp send 5 state 0") || h.printed_line("[Probe] tcp send 5 state 1")));
+    // Everything but 'net': it stays loaded, and its connection is gone.
+    h.approve(plugin::kCapAll & ~plugin::kCapNet);
+    h.plugins->policy_changed({"*"});
+    REQUIRE(h.plugins->loaded("HostProbe"));
+    h.run("/probetcpsend 1");
+    CHECK(h.printed_line("[Probe] tcp send -1 state -1"));
+    h.run("/probetcp " + std::to_string(listener.local_endpoint()->port));
+    CHECK(h.printed_line("[Probe] tcp open 0"));
+}
+
+TEST_CASE("native plugins: has_plugin knows a plugin on disk or loaded, in any case") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    CHECK(h.plugins->has_plugin("mq2example"));
+    CHECK_FALSE(h.plugins->has_plugin("nosuch"));
+    REQUIRE(h.plugins->load("MQ2Example"));
+    CHECK(h.plugins->has_plugin("MQ2EXAMPLE"));
+}
+
+TEST_CASE("native plugins: a line a script or plugin wrote is not incoming chat") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("MQ2Example"));
+    plugin::ChatLine spam{"buy spam now", 0, 0};
+    spam.from_code = true;
+    spam.origin_caps = plugin::kCapRead;
+    CHECK(h.hooks.chat(spam) == plugin::Flow::Continue); // neither OnFilterChat's drop
+    CHECK(h.p("${Example.Chats}") == "0");               // nor OnIncomingChat
+    plugin::ChatLine server{"buy spam now", 0, 0};
+    CHECK(h.hooks.chat(server) == plugin::Flow::Drop);
+    CHECK(h.p("${Example.Chats}") == "1");
 }
 
 TEST_CASE("native plugins: an exception out of a plugin is caught; out of InitializePlugin it leaves nothing behind") {

@@ -284,6 +284,26 @@ TEST_CASE("group state: add, remove, leader, full") {
     CHECK(g.count() == 0);
 }
 
+TEST_CASE("group state: the leader leaving clears the leader; the last one leaving ends the group") {
+    game::GroupState g;
+    CHECK(g.add("Alpha", 1, false, {}));
+    CHECK(g.add("Beta", 1, false, {}));
+    g.leader = "Alpha";
+    g.mana_percent[7] = 50;
+    g.endurance_percent[7] = 60;
+    g.mana_percent[8] = 70;
+    CHECK(g.remove("alpha", 7));
+    CHECK(g.leader.empty());
+    CHECK(g.active);
+    CHECK_FALSE(g.mana_percent.contains(7));
+    CHECK_FALSE(g.endurance_percent.contains(7));
+    CHECK(g.mana_percent.contains(8));
+    CHECK(g.remove("Beta"));
+    CHECK_FALSE(g.active);
+    CHECK(g.mana_percent.empty());
+    CHECK_FALSE(g.remove("Beta"));
+}
+
 TEST_CASE("pets: /pet words as cmd_pet reads them") {
     using game::parse_pet_command;
     auto c = [](const char* s) { return parse_pet_command(s); };

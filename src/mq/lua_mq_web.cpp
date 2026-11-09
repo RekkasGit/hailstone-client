@@ -40,7 +40,9 @@ void check(lua_State* L, const char* what) {
     if (!Script::of(L).host->env.web) luaL_error(L, "%s: this client has no browser", what);
 }
 
-// Made only once every argument is read: Lua is built as C, so an argument error longjmps past C++ objects.
+// Made only once every argument is read: Lua is built as C, so an argument error longjmps past C++ objects. What a
+// function pushes while it lives it pushes under HostWork, so a push is not refused at the script's memory limit and
+// raises past it only when the system itself is out of memory.
 Caller caller(lua_State* L) {
     const Script& s = Script::of(L);
     return {*s.host->env.web, "script:" + s.name, s.caps};
@@ -63,6 +65,7 @@ int l_open(lua_State* L) {
     const int w = static_cast<int>(luaL_optinteger(L, 2, 800)), h = static_cast<int>(luaL_optinteger(L, 3, 600));
     std::uint32_t id = 0;
     {
+        HostWork unlimited(Script::of(L));
         std::string why;
         Caller c = caller(L);
         id = c.web.open(c.owner, c.caps, url, w, h, &why);
@@ -83,6 +86,7 @@ int l_navigate(lua_State* L) {
     const char* url = luaL_checkstring(L, 2);
     bool ok = false;
     {
+        HostWork unlimited(Script::of(L));
         std::string why;
         Caller c = caller(L);
         ok = c.web.navigate(c.owner, c.caps, tab, url, &why);
@@ -141,6 +145,7 @@ int l_text(lua_State* L) {
 int l_messages(lua_State* L) {
     check(L, "mq.web.messages");
     const std::uint32_t tab = tab_arg(L, 1);
+    HostWork unlimited(Script::of(L)); // (a message is at most 1 MB, and at most 8 MB wait: web_access.h)
     Caller c = caller(L);
     lua_newtable(L);
     lua_Integer n = 0;
@@ -154,6 +159,7 @@ int l_messages(lua_State* L) {
 int l_state(lua_State* L) {
     check(L, "mq.web.state");
     const std::uint32_t tab = tab_arg(L, 1);
+    HostWork unlimited(Script::of(L));
     Caller c = caller(L);
     auto st = c.web.state(c.owner, tab);
     if (!st) {
@@ -180,6 +186,7 @@ int l_state(lua_State* L) {
 
 int l_tabs(lua_State* L) {
     check(L, "mq.web.tabs");
+    HostWork unlimited(Script::of(L));
     Caller c = caller(L);
     lua_newtable(L);
     lua_Integer n = 0;

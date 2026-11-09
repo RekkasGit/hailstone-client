@@ -65,6 +65,26 @@ void inflate_append(std::span<const std::byte> in, std::size_t size, std::vector
     out.resize(start + produced);
     if (r != Z_STREAM_END || produced != size) throw std::runtime_error("zlib block did not inflate to its declared size");
 }
+
+// Inflates the first `out.size()` bytes of one zlib stream, the rest left alone. Throws when it holds fewer.
+void inflate_prefix(std::span<const std::byte> in, std::span<std::byte> out) {
+    if (out.empty()) return;
+    z_stream z{};
+    z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(in.data()));
+    z.avail_in = static_cast<uInt>(in.size());
+    if (inflateInit(&z) != Z_OK) throw std::runtime_error("inflateInit failed");
+    z.next_out = reinterpret_cast<Bytef*>(out.data());
+    z.avail_out = static_cast<uInt>(out.size());
+    int r = Z_OK;
+    while (r == Z_OK && z.avail_out > 0) {
+        const uInt before = z.avail_out;
+        r = inflate(&z, Z_NO_FLUSH);
+        if (r == Z_OK && z.avail_out == before) r = Z_BUF_ERROR; // input ran out
+    }
+    const bool full = z.avail_out == 0;
+    inflateEnd(&z);
+    if (!full) throw std::runtime_error("zlib block is shorter than its declared size");
+}
 } // namespace
 
 std::uint32_t pfs_name_crc(std::string_view name) {
@@ -149,6 +169,30 @@ std::optional<std::vector<std::byte>> PfsArchive::read(std::string_view name) co
     auto it = by_name_.find(GameDir::normalize(name));
     if (it == by_name_.end()) return std::nullopt;
     return inflate_entry(it->second);
+}
+
+std::optional<std::vector<std::byte>> PfsArchive::read_prefix(std::string_view name, std::size_t max) const {
+    auto it = by_name_.find(GameDir::normalize(name));
+    if (it == by_name_.end()) return std::nullopt;
+    const Entry& e = it->second;
+    if (e.size > kMaxMemberSize) throw std::runtime_error(label_ + ": PFS file is larger than any game file");
+    // At most the member's declared size, itself capped above: `max` cannot make this allocate more.
+    std::vector<std::byte> out(std::min<std::size_t>(max, e.size));
+    ByteReader r(data_);
+    r.seek(e.offset);
+    std::size_t have = 0;
+    for (std::uint64_t total = 0; have < out.size();) {
+        auto deflated = r.le<std::uint32_t>();
+        auto inflated = r.le<std::uint32_t>();
+        if (inflated > e.size - total) throw std::runtime_error(label_ + ": PFS block overruns its file");
+        if (inflated > std::uint64_t{deflated} * kMaxDeflateRatio)
+            throw std::runtime_error(label_ + ": PFS block is larger than its compressed bytes can hold");
+        const std::size_t n = std::min<std::size_t>(inflated, out.size() - have);
+        inflate_prefix(r.bytes(deflated), std::span<std::byte>(out).subspan(have, n));
+        have += n;
+        total += inflated;
+    }
+    return out;
 }
 
 std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {

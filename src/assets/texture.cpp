@@ -549,13 +549,13 @@ std::string describe_bmp(const BmpHeader& h) {
     return s;
 }
 
-// Decodes RLE8/RLE4 into one palette index per pixel, bottom-up row order as
-// stored. Pixels never written stay index 0.
-std::vector<std::uint8_t> decode_rle(ByteReader& r, std::uint32_t w, std::uint32_t h, bool rle4) {
-    std::vector<std::uint8_t> idx(std::size_t(w) * h, 0);
+// Decodes RLE8/RLE4, calling store(row, x, palette index) for each pixel written, rows bottom-up as stored. The
+// caller fills the pixels never written with index 0.
+template <typename Store>
+void decode_rle(ByteReader& r, std::uint32_t w, std::uint32_t h, bool rle4, Store&& store) {
     std::uint32_t x = 0, y = 0;
     auto put = [&](std::uint8_t v) {
-        if (x < w && y < h) idx[std::size_t(y) * w + x] = v;
+        if (x < w && y < h) store(y, x, v);
         ++x;
     };
     while (y < h) {
@@ -582,7 +582,6 @@ std::vector<std::uint8_t> decode_rle(ByteReader& r, std::uint32_t w, std::uint32
             if (nbytes & 1) r.skip(1);
         }
     }
-    return idx;
 }
 
 Image decode_bmp(std::span<const std::byte> data, const TextureOptions& options) {
@@ -642,6 +641,10 @@ Image decode_bmp(std::span<const std::byte> data, const TextureOptions& options)
     if (rle) {
         // Each escape is at least two bytes; a delta skips at most 255 rows.
         if (ht > (r.remaining() / 2 + 1) * 255) fail("BMP pixel data truncated");
+        // A run writes at most 255 pixels for its two bytes. Only deltas and an early end of bitmap leave more
+        // unwritten, and no encoder writes a whole image so: a size far past what its runs could fill is a forged
+        // header (no RLE bitmap is in the game's files, docs/formats/textures.md).
+        if (std::uint64_t{w} * ht > (std::uint64_t{r.remaining()} + 512) * 128) fail("BMP RLE data too short for its size");
     } else if (r.remaining() < stride * (ht - 1) + last_row) {
         fail("BMP pixel data truncated");
     }
@@ -657,9 +660,10 @@ Image decode_bmp(std::span<const std::byte> data, const TextureOptions& options)
     };
 
     if (rle) {
-        auto idx = decode_rle(r, w, ht, h.compression == BI_RLE4);
         for (std::uint32_t y = 0; y < ht; ++y)
-            for (std::uint32_t x = 0; x < w; ++x) store_index(ht - 1 - y, x, idx[std::size_t(y) * w + x]);
+            for (std::uint32_t x = 0; x < w; ++x) store_index(y, x, 0);
+        decode_rle(r, w, ht, h.compression == BI_RLE4,
+                   [&](std::uint32_t y, std::uint32_t x, std::uint8_t i) { store_index(ht - 1 - y, x, i); });
     } else {
         for (std::uint32_t row = 0; row < ht; ++row) {
             auto src = data.subspan(h.data_offset + row * stride, row + 1 == ht ? last_row : stride);

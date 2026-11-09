@@ -165,6 +165,17 @@ TEST_CASE("mock server: world auth, character select and zone-in, with the origi
     check_full_zone_in(rig);
 }
 
+TEST_CASE("mock server: a session key too long for OP_SendLoginInfo fails the world login, nothing sent") {
+    Rig rig;
+    auto ticket = rig.server.ticket();
+    ticket.session_key = std::string(61, 'K'); // "77\0" + 61 + "\0" is 65 bytes: one too many
+    rig.conn.start(ticket);
+    REQUIRE(rig.until_state(net::ConnectionState::Disconnected));
+    CHECK(rig.conn.error().find("session key is too long") != std::string::npos);
+    rig.run_for(50ms);
+    CHECK(rig.server.login_infos.empty());
+}
+
 TEST_CASE("mock server: the same zone-in with the zone stream compressed and XORed") {
     // EQEmu may compress the zone stream (Network:CompressZoneStream); the profile alone is ~25 KB, so this also
     // reassembles dozens of compressed fragments.
