@@ -126,6 +126,44 @@ TEST_CASE("/melody builds the bard twist and plays it in order") {
     CHECK(c.current_bard_twist_gem() == 0);
 }
 
+TEST_CASE("a gem click while a bard song plays stops the song; the next click is free to cast") {
+    // HandleSpellLeftClick @0x6488f0: not ready or casting, with a bard song playing, ClearBardTwist and
+    // StopCurrentSpellCast(0); anything else "You haven't recovered yet...". The song's cast stays set after it lands
+    // (OP_ManaChange keepcasting), so without the stop a bard could never cast again.
+    mq_test::World w("hailstone_bard_song_click_test");
+    auto& c = *w.conn;
+    auto& sp = A::spells(c);
+    A::profile(c)->class_ = 8;
+    sp.gems[2].spell = 3373; // Test Chant, a song
+    c.melody_command("3 1");
+    sp.casting = {};
+    sp.casting.spell = 3373;
+    sp.casting.slot = 2;
+    sp.gems[2].ready = 0xffffffffu; // not ready either: the song still stops
+    sp.recovery_ready = 0xffffffffu;
+    drain(c);
+    c.cast_gem(0);
+    CHECK_FALSE(sp.casting.casting());
+    CHECK(c.bard_twist().empty());
+    CHECK(sp.recovery_ready == 0);
+    CHECK(sp.gems[2].ready == 0); // a song without a recast unlocks with the song's end
+    CHECK(drain(c).size() == 1);  // 12687 Your song ends.
+
+    // Not a song (Minor Healing, cast by a bard): refused, and the cast goes on.
+    sp.casting.spell = 200;
+    sp.casting.slot = 0;
+    c.cast_gem(1);
+    CHECK(sp.casting.spell == 200);
+    CHECK(drain(c).size() == 1); // 12029
+
+    // The same song for a cleric is not a song: refused.
+    A::profile(c)->class_ = 2;
+    sp.casting.spell = 3373;
+    c.cast_gem(0);
+    CHECK(sp.casting.spell == 3373);
+    CHECK(drain(c).size() == 1);
+}
+
 TEST_CASE("/melody: a gem number of ten digits or more wraps in 32 bits") {
     // The digits accumulate as core::msvc_atoi's do; a signed product overflowed (undefined behaviour).
     mq_test::World w("hailstone_melody_wrap_test");

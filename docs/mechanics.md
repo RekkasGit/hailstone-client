@@ -680,6 +680,10 @@ find affect slot 1600). Each record is replayed call for call against the record
   `can_use_memorized_spell_slot`: gems < 8, then g - 8 < the SPA 326 total (AA + buff + item); no profile or
   profile +0x340c: all. Readiness: the click needs now > gem timer and now > recovery; the tint not casting, a valid
   spell, now >= both and the linked timer ready. The focus reuse mod only shortens the overlay's total (taken as 0).
+- A gem click that cannot cast (gem or recovery not ready, or a cast running) while a bard song plays stops the song
+  (ClearBardTwist, StopCurrentSpellCast(0): "Your song ends.") instead of "You haven't recovered yet..."; the next
+  click casts. A song stays cast after it lands (EQEmu's OP_ManaChange during it has keepcasting set), so this is
+  how a bard changes songs (`GameConnection::cast_gem`).
 - `find_affect_slot`, in order: a player caster's stack-blocked check (an existing SPA 148 blocks the SPA its base
   names in the slot its calc names, up to |max|); a copy of the same spell is refreshed in place (a lower level
   refused unless SPA 444; SPA 67 / 101 / 113 refuse), except a stackable DoT from another caster, which takes a slot

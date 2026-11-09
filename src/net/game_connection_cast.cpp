@@ -378,6 +378,15 @@ void GameConnection::cast_gem(int gem) {
     if (id == game::kNoSpell || !spell_table_->get(id)) return;
     // HandleSpellLeftClick @0x6488f0.
     if (!spells_.gem_castable(gem, eq_time()) || spells_.casting.casting()) {
+        // A bard song stays cast while it plays (the server's OP_ManaChange keeps it going): a click on any gem
+        // stops it (ClearBardTwist, StopCurrentSpellCast(0)) and the next click casts.
+        const game::SpellData* playing =
+            spells_.casting.casting() ? spell_table_->get(spells_.casting.spell) : nullptr;
+        if (playing && bard_song(*playing)) {
+            clear_bard_twist();
+            stop_current_spell_cast();
+            return;
+        }
         spell_message(12029); // You haven't recovered yet...
         return;
     }

@@ -87,6 +87,8 @@ struct World {
             // Spell effects (86.., bases 20..): a mez (SPA 31) and a slow to 70% (SPA 11), detrimental.
             f << spell_line({{0, "3001"}, {1, "Test Mesmerize"}, {17, "8"}, {20, "1"}, {83, "0"}, {86, "31"}}) << "\n";
             f << spell_line({{0, "3002"}, {1, "Test Slow"}, {17, "30"}, {20, "70"}, {83, "0"}, {86, "11"}}) << "\n";
+            // A bard song (the Bard level, column 111, 1).
+            f << spell_line({{0, "3373"}, {1, "Test Chant"}, {13, "1000"}, {17, "3"}, {83, "0"}, {111, "1"}}) << "\n";
         }
         // Two AA names (dbstr type 1), for the tests of hailstone.alt_abilities.
         std::ofstream(dir / "dbstr_us.txt") << "9001^1^Innate Strength^0^\n9002^1^Mystical Shielding^0^\n";
