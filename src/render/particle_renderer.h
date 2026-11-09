@@ -9,7 +9,9 @@
 // writes, soft where they meet the scene (VkContext::begin_translucent's depth copy, so drawn after it), in the haze,
 // and the alpha-blended ones (smoke, dust) lit by the scene's sky, sun or moon and point lights.
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -80,6 +82,18 @@ struct Frustum;
 // half-diagonal, against the frustum. Conservative, as the zone's chunk tests: nothing that shows is dropped.
 bool particle_in_view(const Frustum& view, const glm::vec3& position, float width, float height, float size_factor);
 
+// The modern stream's order: back to front by `dist2` (the farthest first), keeping the `cap` nearest when there are
+// more. Past the cap only the kept ones are sorted (std::nth_element picks them first).
+template <class Item> void keep_nearest_back_to_front(std::vector<Item>& items, std::size_t cap) {
+    auto farther = [](const Item& a, const Item& b) { return a.dist2 > b.dist2; };
+    if (items.size() > cap) {
+        std::nth_element(items.begin(), items.begin() + static_cast<std::ptrdiff_t>(cap), items.end(),
+                         [](const Item& a, const Item& b) { return a.dist2 < b.dist2; });
+        items.resize(cap);
+    }
+    std::sort(items.begin(), items.end(), farther);
+}
+
 class ParticleRenderer {
 public:
     static constexpr std::uint32_t kMaxTextures = 512; // at most; fewer where the device allows fewer
@@ -138,6 +152,17 @@ private:
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline pipelines_[4]{}; // bit 0: additive, bit 1: no depth write
     VkPipeline modern_pipeline_ = VK_NULL_HANDLE; // premultiplied: both kinds in one sorted stream, no depth write
+
+    // draw()'s lists, kept so their memory is reused frame to frame: the modern stream's particles in order, each
+    // definition's texture slot and flipbook grid (`loading`: its texture is not up yet, so its particles are not
+    // drawn rather than drawn white), and whether its particles are lit (-1 not known yet).
+    struct OrderItem { float dist2; std::uint32_t emitter, particle; };
+    struct DefinitionLook { std::uint32_t tex = 0; glm::uvec2 grid{1}; bool known = false; bool loading = false; };
+    struct Batch { std::uint32_t first, count; int pipeline; };
+    std::vector<OrderItem> order_;
+    std::vector<DefinitionLook> looks_;
+    std::vector<std::int8_t> lit_by_definition_;
+    std::vector<Batch> batches_;
 
     // Textures asked for and not put up yet (lower case), and the thread reading and decoding them
     // (load_particle_texture). Last, so it stops first: its jobs use game_.
