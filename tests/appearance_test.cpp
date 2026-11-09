@@ -128,13 +128,27 @@ TEST_CASE("display.extra_shields puts later shields on the shield point (Hailsto
     // RoF2's own still count.
     CHECK(is_shield_model(200));
     CHECK(is_shield_model(14000));
-    // Left out: the IT63 placeholder, a weapon's model a few shields borrow, a model only an ornament uses.
+    // Models only ornaments use, shaped like a shield: a round one, and one whose grip makes it too thick for the
+    // measure (tools/gen_shield_models.py SEEN_SHIELDS).
+    CHECK(is_shield_model(13908));
+    CHECK(is_shield_model(100081));
+    CHECK(is_shield_model(100109));
+    // Left out: the IT63 placeholder, weapons' models a few shields borrow (IT7, a rod; IT10201; IT10650, a spear), and
+    // weapon ornaments' models (an axe, a sword, a mace), and the Haunting Nightmares Shield Ornament's, held in the hand
+    // face outward as RoF2 holds it (HAND_ORNAMENTS).
     CHECK_FALSE(is_shield_model(63));
+    CHECK_FALSE(is_shield_model(7));
     CHECK_FALSE(is_shield_model(10201));
+    CHECK_FALSE(is_shield_model(10650));
+    CHECK_FALSE(is_shield_model(13925));
+    CHECK_FALSE(is_shield_model(100069));
+    CHECK_FALSE(is_shield_model(100105));
     CHECK_FALSE(is_shield_model(101064));
+    CHECK_FALSE(is_shield_model(101068));
     CHECK_FALSE(is_shield_model(0));
     // Switched off: RoF2's list alone.
     hailstone::game::set_extra_shields(false);
+    CHECK_FALSE(is_shield_model(13908));
     CHECK_FALSE(is_shield_model(11224));
     CHECK(is_shield_model(200));
     hailstone::game::set_extra_shields(true);

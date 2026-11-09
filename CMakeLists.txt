@@ -84,6 +84,11 @@ option(HAILSTONE_BROWSER "Build the in-game browser's helper on CEF" ${HAILSTONE
 # The clang-cl build did not crash there; it takes the same flag.
 if(MSVC)
   string(REPLACE "/EHsc" "/EHs" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  # The Visual Studio generator hands cl.exe a project's files in one call; /MP compiles them in parallel. Ninja and
+  # clang-cl compile one file per call, so it changes nothing there.
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    add_compile_options(/MP)
+  endif()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
