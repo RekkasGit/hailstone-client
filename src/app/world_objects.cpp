@@ -456,12 +456,13 @@ std::optional<WorldObjects::PlacedBounds> WorldObjects::ghost_bounds() const {
     return PlacedBounds{ghost_->center, ghost_->bound, ghost_->model->shape.lo, ghost_->model->shape.hi};
 }
 
-void WorldObjects::set_missiles(const std::vector<game::Missile>& missiles) {
+void WorldObjects::set_missiles(const std::vector<game::Missile>& missiles,
+                                const std::function<bool(std::uint32_t serial)>& hidden) {
     constexpr float kUnit = 2.0f * std::numbers::pi_v<float> / 512.0f;
     missile_actors_.clear();
     missile_transforms_.clear();
     for (const game::Missile& m : missiles) {
-        if (!m.has_actor) continue;
+        if (!m.has_actor || (hidden && hidden(m.serial))) continue;
         const Model* model = model_for(m.packet.model);
         if (!model) model = model_for("IT63");
         if (!model) model = model_for("RED_BLOB");

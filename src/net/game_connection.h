@@ -2389,6 +2389,8 @@ public:
     // PlayerZoneClient::IsInvisible @0x5a1850's market part: with Hide Traders a trader other than the one Find
     // Trader found, with Hide Buyers a buyer other than the one Find found, is not drawn, named or clicked.
     bool market_hidden(const game::Spawn& spawn) const;
+    // Whether market_hidden can hide anyone (Hide Traders or Hide Buyers checked): with neither, no spawn is asked.
+    bool market_hides_any() const;
     // The membership refuses `feature` (GetGameFeature(feature) == 0): its line in colour 0x14f, true
     // (game/feature_restrictions.h).
     bool feature_refused(std::int32_t feature);

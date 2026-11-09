@@ -28,8 +28,10 @@
 #include <optional>
 #include <random>
 #include <set>
+#include <span>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 
 #include <SDL3/SDL_filesystem.h>
 #include <imgui.h>
@@ -1026,6 +1028,16 @@ private:
     // Declared after vk_, so it is destroyed before the Vulkan device it holds objects of: draw_nameplates makes it at its
     // first use.
     std::unique_ptr<NameplateLayer> plate_layer_; // draw_nameplates, made at its first use
+    // draw_nameplates' lists, kept for their capacity (and the plates' strings for theirs): the first plate_count_.
+    struct PlateEntry {
+        std::uint32_t id = 0;
+        NameplateText plate;
+    };
+    std::vector<PlateEntry> plates_;
+    std::size_t plate_count_ = 0;
+    std::vector<game::PlateBox> plate_boxes_;
+    std::vector<float> plate_alpha_;
+    std::vector<std::size_t> plate_order_;
     ui::ImGuiLayer ui_;
     bool quit_ = false;
     bool close_pending_ = false; // a window close request held through a loading screen
@@ -1249,7 +1261,11 @@ private:
     float flora_reach_ = render::kFloraReach;
     std::vector<render::FireSource> zone_fires_;
     std::vector<render::FireSource> zone_mesh_fires_; // the flame meshes' alone (no particle clouds)
-    std::vector<render::FireSource> frame_fires_;
+    std::vector<render::FireSource> frame_fires_;            // the zone's with the moving ones', when there are any
+    std::span<const render::FireSource> frame_fire_list_;    // what the flames draw this frame
+    std::vector<assets::ZoneFire> moving_fires_;             // the doors' and objects' this frame (capacity kept)
+    std::vector<std::pair<float, glm::vec4>> flora_near_;    // the spawns standing in the grass (capacity kept)
+    std::vector<glm::vec4> flora_pushers_;
     render::SceneLighting frame_lighting_{}; // this frame's lighting, for the flames' haze and depth terms
     std::unique_ptr<SpellParticles> spell_particles_;       // spell stage particles (app/spell_particles.h)
     std::unique_ptr<SpellBolts> spell_bolts_;               // the modern lighting's bolts and comets (app/spell_bolts.h)
