@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <cmath>
 
 #include <cstring>
@@ -7,6 +9,7 @@
 #include <random>
 #include <vector>
 
+#include "app/zone_particles.h"
 #include "assets/model_points.h"
 #include "assets/pfs.h"
 #include "assets/spell_effects.h"
@@ -402,4 +405,58 @@ TEST_CASE("particle billboard modes: facing, standing on the axis, flat") {
     render::particle_basis(2, axes, glm::vec3(10, 0, -2), right, up);
     CHECK(right == glm::vec3(1, 0, 0));
     CHECK(up == glm::vec3(0, -1, 0)); // lying in the ground plane
+}
+
+namespace {
+
+// A flame cloud rising from a point: `lifetime` s particles at 60 a second, rising at 0.5..2 units/s and speeding up
+// by `accel` units/s², 1 unit wide and 1..6 tall.
+hailstone::assets::EmitterDefinition rising_flame(float lifetime, float accel) {
+    hailstone::assets::EmitterDefinition d;
+    d.name = "test_flame";
+    d.texture = "new_fire.dds";
+    d.additive = 1;
+    d.lifetime = lifetime;
+    d.per_tick = 6;
+    d.ticks_per_second = 10.0f;
+    d.motion[0] = {0.5f, 2.0f, accel};
+    d.height_start = 1.0f;
+    d.height_end = 6.0f;
+    d.width_end = 1.0f;
+    return d;
+}
+
+} // namespace
+
+TEST_CASE("measure_flame_cloud: a long-lived cloud is measured once its oldest particles have risen") {
+    using namespace hailstone;
+    // Record 0 is the EDD's "None".
+    game::ParticleSystem sim({assets::EmitterDefinition{}, rising_flame(5.0f, 2.0f), rising_flame(0.5f, 0.0f)});
+    const glm::mat4 at = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 200.0f, 300.0f));
+
+    // Rising for 5 s: 2.5..10 units at the start speed and 25 more from the acceleration. After only a second or two
+    // the cloud would be under 10 units, and potranquility's emitters stacked 10 apart would burn as separate flames.
+    auto tall = app::measure_flame_cloud(sim, 1, at);
+    CHECK(tall.height > 20.0f);
+    CHECK(tall.height < 40.0f);
+    // Relative to the node, its translation left out: the foot is the newest particles' quads, up to 6 units tall.
+    CHECK(tall.base.z > -3.0f);
+    CHECK(tall.base.z < 0.5f);
+    CHECK(std::abs(tall.base.x) < 1.0f);
+
+    // A short-lived one is no taller than its particles go: 1 unit of rise and a 6-unit quad at most.
+    auto small = app::measure_flame_cloud(sim, 2, at);
+    CHECK(small.height > 0.5f);
+    CHECK(small.height < 5.0f);
+}
+
+TEST_CASE("an environment emitter's fixture holds a lifetime of particles") {
+    using namespace hailstone;
+    // Duration 0, as in most of environmentemittersnew.edd: created for 9999 s, its capacity covers 5 s of 6 per tick
+    // at 10 ticks a second. With its own duration of 0 it held 7, and burnt in puffs.
+    game::ParticleSystem ps({assets::EmitterDefinition{}, rising_flame(5.0f, 2.0f)});
+    REQUIRE(ps.add_fixture(1, glm::mat4(1.0f)));
+    CHECK(ps.emitters()[0].capacity == 1u + 6u * 51u);
+    for (int i = 0; i < 100; ++i) ps.update(0.05f, {});
+    CHECK(ps.emitters()[0].particles.size() > 250u);
 }

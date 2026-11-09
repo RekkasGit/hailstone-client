@@ -97,6 +97,9 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
                                                       bool full = false);
 
+// The duration a zone fixture's emitter is created with (add_fixture), ms.
+inline constexpr std::int32_t kFixtureDurationMs = 9999000;
+
 // CEmitterDef::CreateEmitter's duration in seconds.
 float emitter_duration_seconds(float edd_duration, std::int32_t requested_ms);
 // The particle capacity: the x87 detail is not traced; here initial + per tick
@@ -191,7 +194,10 @@ public:
     // the node's world matrix, along emitter_axes, scaled by the node's scale
     // when the definition's +0x6c is set. It is persistent: the DLL creates
     // it with 9999 s and the actor keeps it while the object stands; here it
-    // never runs out. Returns false for a definition index out of range.
+    // never runs out. Its duration and capacity are those of a 9999 s request
+    // (emitter_duration_seconds), so an EDD definition without a duration of
+    // its own (an environment emitter, duration 0) holds a lifetime's worth of
+    // particles, not one tick's. Returns false for a definition index out of range.
     bool add_fixture(std::size_t definition, const glm::mat4& node_world, std::uint32_t key = 0);
     // The viewer's position for the distance-scaled emission rate
     // (emission_distance_factor); nullopt (the default) emits at full rate.

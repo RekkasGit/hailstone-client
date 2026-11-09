@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - A face seen up close no longer shows dark lines across it with the modern lighting: an erudite's forehead had a sharp V-shaped crease, and faces had dark lines over the cheeks and under the eyes. The ambient occlusion picked out the folds of the low-poly head that its smooth shading hides; it now fades out on anything closer than about twice a character's height to the camera
 - Collision with walls is now computed by Hailstone's own code for the sphere sweep. It agrees with the original client within a tiny margin; in rare cases where the player only just grazes an edge or a corner, a step may now stop or pass where it did not before
 - Characters with the Luclin models now stand, walk and fight with their arms ready when they hold a weapon or a shield, as on the original client: a shield used to hang low at the hip in the empty-handed pose

@@ -178,7 +178,7 @@ bool ParticleSystem::add_fixture(std::size_t definition, const glm::mat4& node, 
     // The owner scale getter: the first row's length (+0x6c: the actor's scale applies).
     float s = glm::length(rot[0]);
     e.scale = d.actor_scales_size && std::isfinite(s) && s > 0.0f ? s : 1.0f;
-    e.duration = emitter_duration_seconds(d.duration, 0);
+    e.duration = emitter_duration_seconds(d.duration, kFixtureDurationMs);
     e.capacity = emitter_capacity(d, e.duration);
     e.persistent = true;
     emitters_.push_back(std::move(e));
