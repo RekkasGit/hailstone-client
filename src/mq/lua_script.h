@@ -3,6 +3,7 @@
 // The script host's insides (mq/lua_mq.h), shared by its files: lua_mq.cpp (the mq module, running scripts) and
 // lua_hailstone.cpp (the hailstone module: scripts as plugins). Not for use elsewhere.
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -151,6 +152,7 @@ struct Script {
     bool closing = false; // close() runs: the state's last code may give the client nothing more
     std::size_t memory = 0;
     int limited = 0;              // >0: the script's own code runs (ScriptRun), so kMemoryLimit holds
+    int runs = 0;                 // the ScriptRuns alive now (each in a host frame, so each ends)
     lua_State* resumed = nullptr; // the host's thread it resumes now: the only one preempt_hook yields
     plugin::Hooks::Owner owner = 0;
     Clock::time_point slice_start{};
@@ -237,16 +239,22 @@ struct Script {
 // While it lives, the script's own code runs (a lua_resume or lua_pcall of the host's): an allocation past
 // kMemoryLimit fails, and the error it raises is caught there. Outside it the host's own pushes and reads, which
 // nothing would catch (a script state has no panic handler that could carry on), are never refused.
+// It lives in the host's frame around the lua_resume or lua_pcall, which catches the script's errors, so it always
+// ends, and it puts back the values it found: what a HostWork further in left behind when an error longjmped past
+// its destructor (Lua is built as C) is undone here at the latest (and sooner by repair_limit).
 struct ScriptRun {
     Script& s;
     lua_State* before;
+    int before_limited;
     // `thread`: the host's coroutine resumed (preempt_hook may yield it); null for a pcall on the main state.
-    explicit ScriptRun(Script& sc, lua_State* thread = nullptr) : s(sc), before(sc.resumed) {
-        ++s.limited;
+    explicit ScriptRun(Script& sc, lua_State* thread = nullptr) : s(sc), before(sc.resumed), before_limited(sc.limited) {
+        s.limited = std::max(before_limited, 0) + 1;
+        ++s.runs;
         if (thread) s.resumed = thread;
     }
     ~ScriptRun() {
-        --s.limited;
+        s.limited = before_limited;
+        --s.runs;
         s.resumed = before;
     }
     ScriptRun(const ScriptRun&) = delete;
@@ -254,7 +262,9 @@ struct ScriptRun {
 };
 
 // The host's own work on a script's state while its code runs further up the stack (a bind its mq.cmd started):
-// unprotected, so no allocation is refused until it ends.
+// unprotected, so no allocation is refused until it ends. Its destructor is skipped if an error longjmps past it (a
+// system out of memory, the only error its work can raise): the limit then comes back at the next instruction hook
+// (repair_limit) or when the ScriptRun around it ends, not never.
 struct HostWork {
     Script& s;
     int before;
@@ -263,6 +273,13 @@ struct HostWork {
     HostWork(const HostWork&) = delete;
     HostWork& operator=(const HostWork&) = delete;
 };
+
+// While Lua code of the script runs (a hook fires only then), a ScriptRun is around it and no HostWork is (a
+// HostWork's work runs no Lua instructions but under a ScriptRun of its own): an unlimited state then is one a
+// skipped HostWork destructor left, and the limit comes back. Called by the instruction hooks; cheap.
+inline void repair_limit(Script& s) {
+    if (s.runs > 0 && s.limited <= 0) s.limited = 1;
+}
 
 // The capability check of the script's functions (mq.*, hailstone.*): a Lua error when the script may not do `cap`.
 // Nothing but reading works in a closing state or in a Lua social's dry run (which notes its commands and waits, and

@@ -12,6 +12,7 @@
 #include "core/sha256.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
+#include "mq/lua_script.h" // ScriptRun, HostWork (the host's insides)
 #include "mq_test_world.h"
 #include "scratch_dir.h"
 #include "app/web_service.h"
@@ -1539,4 +1540,29 @@ TEST_CASE("Lua socials: hailstone.server_dir in a dry run gives the folder and m
     CHECK_FALSE(fs::exists(r.dir / "plugin-config"));
     CHECK(h.scripts->press_button(press("hailstone.server_dir()")));
     CHECK(fs::is_directory(dir));
+}
+
+TEST_CASE("MQ Lua: the memory limit comes back after an error skipped a HostWork's end") {
+    mq::Script s;
+    alignas(mq::HostWork) unsigned char buf[sizeof(mq::HostWork)];
+    {
+        mq::ScriptRun run(s);
+        CHECK(s.limited == 1);
+        new (buf) mq::HostWork(s); // its destructor never runs, as when an error longjmps past it
+        CHECK(s.limited == 0);
+        mq::repair_limit(s); // the next instruction hook
+        CHECK(s.limited == 1);
+        new (buf) mq::HostWork(s);
+    }
+    CHECK(s.limited == 0); // the ScriptRun put back what it found
+    mq::repair_limit(s);   // outside any run: nothing to repair
+    CHECK(s.limited == 0);
+    {
+        mq::ScriptRun run(s);
+        CHECK(s.limited == 1);
+        mq::ScriptRun inner(s);
+        CHECK(s.limited == 2);
+    }
+    CHECK(s.limited == 0);
+    CHECK(s.runs == 0);
 }

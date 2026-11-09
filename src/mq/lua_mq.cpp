@@ -86,6 +86,7 @@ void* limited_alloc(void* ud, void* ptr, std::size_t old_size, std::size_t new_s
 // coroutine.resume with no values, mid-work): there only the runaway check holds.
 void preempt_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
+    repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
     if (ran >= kSliceMs && L == s.resumed && lua_isyieldable(L)) {
         lua_yield(L, 0);

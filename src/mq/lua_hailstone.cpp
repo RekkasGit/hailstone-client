@@ -48,6 +48,7 @@ constexpr std::int64_t kHookMs = 50; // a hook, packet or UI function call runs 
 
 void runaway_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
+    repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
     if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
 }
