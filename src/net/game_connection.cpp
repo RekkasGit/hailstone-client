@@ -1347,6 +1347,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::BuffCreate:
     case Op::TargetBuffs:
     case Op::Action:
+        handle_spell(op, p);
+        break;
     case Op::DeleteSpell:
     case Op::SwapSpell:
     case Op::ColoredText:

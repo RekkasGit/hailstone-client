@@ -897,6 +897,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
         break;
     case Op::Action:
         if (auto a = decode_action(p)) {
+            uint16_t source = a->source;
             if (a->type == 231) {
                 log::debug("action: spell {} {} -> {} flag {}", a->spell_id, a->source, a->target, a->effect_flag);
                 // The caster's animation (PlayerZoneClient::IWasHit → TriggerSpellEffect); visuals later.
@@ -913,6 +914,20 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 // Only the first of a landing's two OP_Actions (flag 4 marks the second), not a bard song's pulse.
                 if (const game::SpellData* sp = spell_table_->get(a->spell_id);
                     sp && a->source != 0 && (a->effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
+                   
+                    //Play the animation for the spell that was specified
+                    play_animation(source, sp->casting_anim);
+                    //if this is us doing a local play, broadcast the animation out to the rest of the zone
+                    //as the server won't send it out by default.
+                    if (source == world_.player_id)
+                    {
+                        Animation za;
+                        za.spawn_id = static_cast<std::uint16_t>(world_.player_id);
+                        za.action = static_cast<std::uint8_t>(sp->casting_anim);
+                        za.speed = 10;
+                        send_zone(encode(za));
+                    }
+
                     auto shown = cast_stage_shown_.find(a->source);
                     if (shown == cast_stage_shown_.end() || shown->second.first != a->spell_id ||
                         now > shown->second.second) {
@@ -921,6 +936,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                         effect_cues_.push_back(cue);
                         // An area proc's other targets, landing with it, share this one.
                         cast_stage_shown_[a->source] = {a->spell_id, now + kProcLandingMs};
+                       
                     }
                 }
                 // The impact stage on the target (played for the target, as
@@ -930,6 +946,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 // EQ_Character::HitBySpell (game/hit_landing.h).
                 if (a->target == world_.player_id && (a->effect_flag & 4) != 0 && profile_ && spell_table_)
                     land_spell_on_me(*a, now);
+                    
             }
         }
         break;
