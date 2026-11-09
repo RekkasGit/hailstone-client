@@ -291,7 +291,11 @@ those, so `evil.exe.` would land as `evil.exe`), Windows device names (`CON`, `P
 refused on every platform; `core/windows_names.h`, which the zip reader of updates and add-ons applies too), and programs and scripts (`.exe`,
 `.dll`, `.so`, `.lua` ...) are refused, except Lua and data in `scripts/` and this platform's libraries and data in
 `plugins/` (other platforms' are skipped). What those may do is the server's `hailstone.cfg`'s (docs/plugins.md).
-Files the player added by hand stay unless the server lists the same name; one that matches
+How much it may write is bounded too, since a size in the list is the server's word (up to 4 GB a file, 65536
+files): a file over `assets.server_files_max_file_mb` (hailstone.ini, default 2048) is refused like an unsafe name,
+and when what is to come adds up to more than `assets.server_files_max_total_mb` (default 16384) the sync fails
+before anything is written, leaving the old files (`ServerFileSync::Limits`). These are Hailstone's bounds, far above
+the largest server measured (below). Files the player added by hand stay unless the server lists the same name; one that matches
 the server's hash is kept as is. Checking those (a file of the right size that `server_files.txt` does not vouch for,
 or one left complete in `.download/`) means hashing it: that is done 16 MB a frame, so a folder of large files copied
 in by hand keeps the loading screen drawing (**Checking the server's files**, with the files done) instead of freezing it. A server without the script does not answer, and after 5 s (30 s for a server that

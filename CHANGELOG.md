@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A server's files are now bounded on your disk: one file over 2 GB is not downloaded, and a server whose files to download add up to more than 16 GB is refused before anything is written, keeping the files you have. `assets.server_files_max_file_mb` and `assets.server_files_max_total_mb` in `hailstone.ini` change the limits
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following
 - Erudites and other characters whose Luclin model borrows another race's animations keep their own face: an erudite no longer bares its teeth with parted lips, frowns or wears its beard in front of its mouth. The lips, jaw and brows took the wood elf's places from the borrowed animations

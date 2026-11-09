@@ -587,8 +587,17 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
                          : server_profile_.id;
     copts.profile_id = files_profile_;
     // A saved server's client files come at the first zone-in, into its assets/ (net/server_files.h).
-    if (!server_profile_.id.empty())
+    if (!server_profile_.id.empty()) {
         copts.server_files_dir = profile_assets_dir(server_profile_.id, login_view_.servers_dir).parent_path();
+        // Bounds on what the server may make this write (net/server_files.h), in MB; 0 or less keeps the default.
+        auto mb = [&](std::string_view key, std::uint64_t fallback) {
+            const int v = config_.get_int(key, 0);
+            return v > 0 ? static_cast<std::uint64_t>(v) << 20 : fallback;
+        };
+        copts.server_files_limits.max_file = mb("assets.server_files_max_file_mb", copts.server_files_limits.max_file);
+        copts.server_files_limits.max_total =
+            mb("assets.server_files_max_total_mb", copts.server_files_limits.max_total);
+    }
     if (stats_ui_) stats_ui_->forget(); // its player reads the last connection's spell table
     conn_ = std::make_unique<net::GameConnection>(game_, copts);
     eq_host_.conn = conn_.get(); // the last connection is gone

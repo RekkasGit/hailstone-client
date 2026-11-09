@@ -232,8 +232,9 @@ void GameConnection::update() {
             // The first zone-in of the login brings the server's client files first (net/server_files.h): the zone
             // knows the client once it has OP_ZoneEntry, and keeps it connecting while the files come.
             if (!options_.server_files_dir.empty() && !server_files_) {
-                server_files_ = std::make_unique<ServerFileSync>(options_.server_files_dir,
-                                                                 [this](AppPacket p) { send_zone(std::move(p)); });
+                server_files_ = std::make_unique<ServerFileSync>(
+                    options_.server_files_dir, [this](AppPacket p) { send_zone(std::move(p)); },
+                    options_.server_files_limits);
                 zone_session_->set_no_hold(true); // the pieces asked and acknowledged without the 150 ms hold
                 server_files_->start(ServerFileSync::Clock::now());
             }
