@@ -39,7 +39,10 @@ struct Texture {
 enum class TextureUse : std::uint8_t { Data, Color, OpaqueColor };
 
 // Collects uploads of device-local buffers and textures and performs them in
-// one submission. Staging memory is freed by submit().
+// one submission. submit() does not wait for it (VkContext::submit_upload): the
+// frames submitted after it see the results, and its staging memory is freed
+// once the GPU is done with it. A target destroyed soon after goes through
+// VkContext::retire (or after VkContext::wait_idle).
 // The CPU half of UploadBatch::texture for a colour texture: the image with its mip chain built (and its colour key
 // taken out, or made opaque), or nullopt when the image goes up as it is. Safe on any thread; an image it returns
 // uploads unchanged as TextureUse::Data.

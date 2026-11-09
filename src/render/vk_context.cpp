@@ -193,6 +193,11 @@ VkContext::VkContext(platform::Window& window, bool validation) : window_(window
 
 VkContext::~VkContext() {
     if (device_) vkDeviceWaitIdle(device_);
+    // Every upload is done and every retired object can go (before the allocator does).
+    uploads_.all_done([this](const Upload& u) { recycle_upload(u); });
+    retired_.flush();
+    for (VkFence f : free_fences_) vkDestroyFence(device_, f, nullptr);
+    free_fences_.clear();
     if (upload_pool_) vkDestroyCommandPool(device_, upload_pool_, nullptr);
     for (auto& f : frames_) {
         if (f.in_flight) vkDestroyFence(device_, f.in_flight, nullptr);
@@ -880,6 +885,84 @@ void VkContext::create_frames() {
     vk_check(vkCreateCommandPool(device_, &p, nullptr, &upload_pool_), "vkCreateCommandPool");
 }
 
+void VkContext::wait_idle() {
+    vkDeviceWaitIdle(device_);
+    // Every frame submitted is done; one being recorded is not (what it recorded so far may still be drawn).
+    frames_done_ = recording_ ? frames_begun_ - 1 : frames_begun_;
+    uploads_.all_done([this](const Upload& u) { recycle_upload(u); });
+    retired_.collect({frames_done_, uploads_.completed()});
+}
+
+void VkContext::retire(std::function<void()> release, std::uint32_t frames_ahead) {
+    const GpuPoint at{frames_begun_ + frames_ahead, uploads_.last()};
+    // Nothing in flight can use it (right after wait_idle, between frames): it goes now, as it did after a wait.
+    if (gpu_point_reached(at, {frames_done_, uploads_.completed()})) {
+        if (release) release();
+        return;
+    }
+    retired_.push(at, std::move(release));
+}
+
+void VkContext::retire_after_upload(std::uint64_t serial, std::function<void()> release) {
+    retired_.push({0, serial}, std::move(release));
+}
+
+void VkContext::recycle_upload(const Upload& u) {
+    vkFreeCommandBuffers(device_, upload_pool_, 1, &u.cmd);
+    if (vkResetFences(device_, 1, &u.fence) == VK_SUCCESS) free_fences_.push_back(u.fence);
+    else vkDestroyFence(device_, u.fence, nullptr);
+}
+
+void VkContext::collect_retired() {
+    uploads_.poll([this](const Upload& u) { return vkGetFenceStatus(device_, u.fence) == VK_SUCCESS; },
+                  [this](const Upload& u) { recycle_upload(u); });
+    retired_.collect({frames_done_, uploads_.completed()});
+}
+
+std::uint64_t VkContext::submit_upload(const std::function<void(VkCommandBuffer)>& record, VkDeviceSize staging_bytes) {
+    VkCommandBufferAllocateInfo a{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    a.commandPool = upload_pool_;
+    a.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    a.commandBufferCount = 1;
+    Upload u;
+    vk_check(vkAllocateCommandBuffers(device_, &a, &u.cmd), "vkAllocateCommandBuffers");
+    try {
+        VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vk_check(vkBeginCommandBuffer(u.cmd, &begin), "vkBeginCommandBuffer");
+        record(u.cmd);
+        vk_check(vkEndCommandBuffer(u.cmd), "vkEndCommandBuffer");
+        if (!free_fences_.empty()) {
+            u.fence = free_fences_.back();
+            free_fences_.pop_back();
+        } else {
+            VkFenceCreateInfo fi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+            vk_check(vkCreateFence(device_, &fi, nullptr, &u.fence), "vkCreateFence");
+        }
+        VkCommandBufferSubmitInfo cmd_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
+        cmd_info.commandBuffer = u.cmd;
+        VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
+        submit.commandBufferInfoCount = 1;
+        submit.pCommandBufferInfos = &cmd_info;
+        vk_check(vkQueueSubmit2(queue_, 1, &submit, u.fence), "vkQueueSubmit2");
+    } catch (...) {
+        // Nothing reached the GPU: the buffer and the fence (unsignalled) can go back.
+        vkFreeCommandBuffers(device_, upload_pool_, 1, &u.cmd);
+        if (u.fence) free_fences_.push_back(u.fence);
+        throw;
+    }
+    const std::uint64_t serial = uploads_.submitted(u, staging_bytes);
+    // What is done goes; past the staging cap (a zone's whole upload at once), the oldest are waited for.
+    collect_retired();
+    while (uploads_.bytes_in_flight() > kMaxStagingInFlight && uploads_.pending() > 1) {
+        uploads_.wait_oldest(
+            [this](const Upload& w) { vk_check(vkWaitForFences(device_, 1, &w.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences"); },
+            [this](const Upload& w) { recycle_upload(w); });
+        retired_.collect({frames_done_, uploads_.completed()});
+    }
+    return serial;
+}
+
 void VkContext::immediate_submit(const std::function<void(VkCommandBuffer)>& record) {
     VkCommandBufferAllocateInfo a{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     a.commandPool = upload_pool_;
@@ -952,7 +1035,7 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
     if (resize_pending_) recreate_swapchain();
     // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again.
     if (VkRect2D area = scene_area(); area.extent.width != view_extent_.width || area.extent.height != view_extent_.height) {
-        vkDeviceWaitIdle(device_);
+        wait_idle();
         destroy_scene_targets();
         create_scene_targets();
     } else {
@@ -961,6 +1044,9 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
 
     Frame& f = frames_[frame_index_];
     vk_check(vkWaitForFences(device_, 1, &f.in_flight, VK_TRUE, UINT64_MAX), "vkWaitForFences");
+    // That fence was the frame kFramesInFlight before this one's: it and every frame before it are done.
+    frames_done_ = std::max(frames_done_, frames_done_at(frames_begun_ + 1, kFramesInFlight));
+    collect_retired();
 
     std::uint32_t image_index = 0;
     VkResult r = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, f.image_available, VK_NULL_HANDLE, &image_index);
@@ -977,6 +1063,7 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
     vk_check(vkBeginCommandBuffer(f.cmd, &begin), "vkBeginCommandBuffer");
 
     ++frames_begun_;
+    recording_ = true;
     return FrameInfo{f.cmd, scene_extent_, scene_area_.offset, image_index, frame_index_};
 }
 
@@ -1410,6 +1497,7 @@ void VkContext::end_frame(const FrameInfo& frame) {
     submit.signalSemaphoreInfoCount = 1;
     submit.pSignalSemaphoreInfos = &signal;
     vk_check(vkQueueSubmit2(queue_, 1, &submit, f.in_flight), "vkQueueSubmit2");
+    recording_ = false;
 
     VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present.waitSemaphoreCount = 1;

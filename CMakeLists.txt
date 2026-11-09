@@ -924,6 +924,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/latest_jobs_test.cpp
     tests/character_share_test.cpp
     tests/light_grid_test.cpp
+    tests/retire_queue_test.cpp
     tests/weather_test.cpp
     tests/texture_overrides_test.cpp
     tests/layout_test.cpp
