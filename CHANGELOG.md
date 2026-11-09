@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Settings, saved lists and the add-ons' and updater's own files are now written to the disk before they replace the old ones, so a power cut right after a save leaves the old file or the new one, never an empty one
+- An update cut off by a crash is undone more carefully: a damaged or half-written line of its journal no longer moves a whole folder (such as `ui/`, with your UI settings in `ui/settings/`) or any of your own files out of the way
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following
 - Erudites and other characters whose Luclin model borrows another race's animations keep their own face: an erudite no longer bares its teeth with parted lips, frowns or wears its beard in front of its mouth. The lips, jaw and brows took the wood elf's places from the borrowed animations

@@ -153,7 +153,11 @@ The install waits while the box set's other windows run (they use the same files
 
 - **`installing`** (the client died mid-install): the journal is undone and the old version is back. A `moved` or
   `removed` line with nothing in `previous/` is a move that never happened (the line is written first), so the file
-  in place, the original, stays. If this binary is the new one, the old one is started and this one quits.
+  in place, the original, stays. If this binary is the new one, the old one is started and this one quits. Only the
+  journal's whole lines are undone: a last line without its newline was cut off as it was written, before its move,
+  and may be part of a name (`added ui` of `added ui/x.lua`). A line whose name is not a file's path inside the
+  folder (`is_safe_zip_path`) or is one of the player's paths is skipped, and a folder is never moved: an update
+  moves files only, so a folder where a line points holds what it did not put there (`ui/settings/` under `ui/`).
 - **`pending`:** each start of the new version is counted, and reaching the login screen ends the count
   (`update_started_fine` removes `previous/`). If two starts never reached it, the third rolls the update back, writes
   `failed.txt`, starts the old version and quits; the old version shows why (`note.txt`).
