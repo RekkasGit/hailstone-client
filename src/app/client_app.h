@@ -57,7 +57,8 @@ struct ClientOptions {
     std::string update_note;
 };
 
-// The playable client: login, server and character select, then the zone.
-int run_client(const ClientOptions& options);
+// The playable client: login, server and character select, then the zone. options.auto_password is wiped once the
+// client has taken it (core/wipe.h).
+int run_client(ClientOptions& options);
 
 } // namespace hailstone::app

@@ -43,6 +43,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/wipe.h"
 #include "app/nameplate_layer.h"
 #include "game/nameplate_overlap.h"
 #include "game/sky_colours.h"
@@ -613,6 +614,7 @@ public:
             }
             login_view_.username = opts_.auto_user;
             login_view_.password = opts_.auto_password;
+            core::wipe(opts_.auto_password); // the copy in the fields is the one start_login uses and lets go
             start_login();
         } else if (!opts_.account.empty()) {
             start_account_login();

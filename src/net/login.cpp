@@ -11,6 +11,7 @@
 
 #include "core/byte_io.h"
 #include "core/log.h"
+#include "core/wipe.h"
 #include "net/des.h"
 
 // Login protocol as the original's eqmain.dll speaks it: LoginServerAPI's request
@@ -334,6 +335,7 @@ LoginClient::~LoginClient() = default;
 
 void LoginClient::start(const std::string& host, std::uint16_t port, std::string user, std::string password) {
     start(std::vector<Host>{{host, port}}, std::move(user), std::move(password));
+    core::wipe(password); // a short one's bytes stay in the moved-from string's own storage, on the stack
 }
 
 void LoginClient::start(std::vector<Host> hosts, std::string user, std::string password) {
@@ -341,6 +343,7 @@ void LoginClient::start(std::vector<Host> hosts, std::string user, std::string p
     host_index_ = 0;
     user_ = std::move(user);
     password_ = std::move(password);
+    core::wipe(password);
     error_.clear();
     error_id_ = 0;
     notice_.clear();
@@ -467,9 +470,8 @@ void LoginClient::handle(const AppPacket& packet) {
             send_request(login_op::Login, options_.login_timeout, [&](std::uint32_t s) {
                 return login_codec::login_request(s, user, password);
             });
-            std::fill(password.begin(), password.end(), '\0');
-            std::fill(password_.begin(), password_.end(), '\0');
-            password_.clear();
+            core::wipe(password);
+            core::wipe(password_);
             state_ = LoginState::Authenticating;
             break;
         }

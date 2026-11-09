@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Windows crash dumps attached to bug reports no longer hold your password: the dump keeps only what a call stack needs, and the client forgets the password once the login server has taken it (a saved password still fills in again from the system keyring when you are back at the login screen)
 - `/outputfile` refuses a file name that is one of the character's own settings files (`hailstone.ini`, `scripts.ini`, `hotbuttons.ini`, `UI.ini` and the others, in any case): `/outputfile inventory scripts.ini` used to overwrite the character's autorun list
 - Text from the server with line breaks or other control characters in it (a refused web link, for one) is written into `hailstone.log` and crash reports as `\n`, `\r` or `\xHH`, so it cannot pass itself off as lines of the log
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting

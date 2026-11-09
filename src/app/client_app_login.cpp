@@ -11,6 +11,7 @@
 #include "plugin/policy.h"
 #include "plugin/ui_bridge.h"
 #include "core/env.h"
+#include "core/wipe.h"
 
 namespace hailstone::app::client_internal {
 
@@ -107,6 +108,7 @@ void ClientApp::start_box_login() {
     }
     login_view_.username = set.front().username;
     login_view_.password = passwords.front();
+    for (auto& pw : passwords) core::wipe(pw);
     login_view_.save_password = set.front().save_password;
     box_play_ = true;
     box_character_ = set.front().character;
@@ -434,6 +436,9 @@ void ClientApp::update_login() {
     case net::LoginState::LoggedIn:
         // The server took the password: now it is kept, when the account saves it (a box window's already is).
         if (opts_.auto_user.empty() && opts_.account.empty()) ui::save_login_password(login_view_);
+        // And it leaves the fields: nothing needs it again (a saved one comes back from the keyring on the login
+        // screen, return_to_login), and a crash dump or bug report from in game must not hold it.
+        core::wipe(login_view_.password);
         login_view_.status = {"Getting the server list...", false};
         login_->request_server_list();
         break;
