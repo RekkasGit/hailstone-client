@@ -57,7 +57,8 @@ synchronous, for the context's own one-off work. What a frame in flight (or an u
 `VkContext::retire` instead of destroyed after `vkDeviceWaitIdle`: it goes once the frame being recorded, every
 upload submitted before and any `frames_ahead` more are done (`render/retire_queue.h`; the UI's textures take one
 more frame, as ImGui's draw lists are built before their frame begins). A `ZoneRenderer` is let go this way, so a
-neighbour zone freed mid-frame no longer stalls the frame.
+neighbour zone freed mid-frame no longer stalls the frame. A recreated swapchain is made with `oldSwapchain`, and the
+old one and its present semaphores are retired two frames on: `vkDeviceWaitIdle` does not cover a present's wait.
 
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and

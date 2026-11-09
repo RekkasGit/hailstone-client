@@ -302,7 +302,7 @@ private:
     void create_device();
     void create_pipeline_cache();
     void save_pipeline_cache_file();
-    void create_swapchain();
+    void create_swapchain(VkSwapchainKHR old = VK_NULL_HANDLE);
     void destroy_swapchain();
     void recreate_swapchain();
     void create_frames();

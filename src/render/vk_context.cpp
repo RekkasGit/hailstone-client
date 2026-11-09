@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <format>
 #include <string>
+#include <utility>
 
 #include "core/log.h"
 #include "core/png_write.h"
@@ -488,7 +489,7 @@ void VkContext::save_pipeline_cache_file() {
         log::warn("could not write the pipeline cache {}", pipeline_cache_path_.string());
 }
 
-void VkContext::create_swapchain() {
+void VkContext::create_swapchain(VkSwapchainKHR old) {
     VkSurfaceCapabilitiesKHR caps;
     vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_, &caps), "surface capabilities");
 
@@ -554,6 +555,7 @@ void VkContext::create_swapchain() {
         }
     }
     info.clipped = VK_TRUE;
+    info.oldSwapchain = old; // retired by this call, whether it succeeds or not
     vk_check(vkCreateSwapchainKHR(device_, &info, nullptr, &swapchain_), "vkCreateSwapchainKHR");
     log::debug("swapchain: {}x{}, present mode {}", extent_.width, extent_.height, static_cast<int>(info.presentMode));
 
@@ -856,9 +858,23 @@ void VkContext::destroy_swapchain() {
 }
 
 void VkContext::recreate_swapchain() {
-    vkDeviceWaitIdle(device_);
-    destroy_swapchain();
-    create_swapchain();
+    wait_idle();
+    destroy_scene_targets();
+    for (VkImageView v : views_) vkDestroyImageView(device_, v, nullptr);
+    views_.clear();
+    images_.clear();
+    // The old swapchain and its render_finished semaphores may still be in use by presentation after the device is
+    // idle (vkDeviceWaitIdle does not cover a present's semaphore wait), and nothing signals when that ends without
+    // VK_EXT_swapchain_maintenance1's present fences. So they go once the frames in flight on the new swapchain are
+    // done: presentation of the old images, queued before those frames on the same queue, is over by then.
+    VkSwapchainKHR old = std::exchange(swapchain_, VK_NULL_HANDLE);
+    std::vector<VkSemaphore> semaphores = std::move(render_finished_);
+    render_finished_.clear();
+    retired_.push({frames_begun_ + kFramesInFlight, uploads_.last()}, [device = device_, old, semaphores] {
+        for (VkSemaphore s : semaphores) vkDestroySemaphore(device, s, nullptr);
+        if (old) vkDestroySwapchainKHR(device, old, nullptr);
+    });
+    create_swapchain(old);
     resize_pending_ = false;
 }
 
