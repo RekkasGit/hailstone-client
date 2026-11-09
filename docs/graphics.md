@@ -60,6 +60,10 @@ more frame, as ImGui's draw lists are built before their frame begins). A `ZoneR
 neighbour zone freed mid-frame no longer stalls the frame. A recreated swapchain is made with `oldSwapchain`, and the
 old one and its present semaphores are retired two frames on: `vkDeviceWaitIdle` does not cover a present's wait.
 
+The ImGui textures (`ui/imgui_vk_textures.h`: the UI art, icon sheets, browser tabs) come from descriptor pools of the
+client's own, a new one made when they fill, with a set layout defined as the backend's. `ui::UiTextures` keeps at
+most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
+
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes

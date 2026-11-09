@@ -1,11 +1,13 @@
 // render/retire_queue.h: when what the CPU let go of may be destroyed (VkContext::retire, the uploads' staging
-// buffers), and the uploads in flight counted done in order.
+// buffers), and the uploads in flight counted done in order. ui/ui_textures.h: which file the UI art cache lets go.
 #include <doctest/doctest.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "render/retire_queue.h"
+#include "ui/ui_textures.h"
 
 using namespace hailstone::render;
 
@@ -113,4 +115,18 @@ TEST_CASE("Frames done: the frame kFramesInFlight back once a frame waited for i
     CHECK(frames_done_at(10, 2) == 8);
     CHECK(gpu_point_reached({0, 0}, {0, 0}));
     CHECK_FALSE(gpu_point_reached({1, 0}, {0, 5}));
+}
+
+TEST_CASE("UI art cache: the file asked for least recently is the one let go") {
+    struct File {
+        std::uint64_t used = 0;
+    };
+    std::map<std::string, File> files;
+    CHECK(hailstone::ui::least_recently_used(files, [](const File& f) { return f.used; }) == files.end());
+    files["a.tga"] = {5};
+    files["b.tga"] = {2};
+    files["c.tga"] = {9};
+    auto oldest = hailstone::ui::least_recently_used(files, [](const File& f) { return f.used; });
+    REQUIRE(oldest != files.end());
+    CHECK(oldest->first == "b.tga");
 }

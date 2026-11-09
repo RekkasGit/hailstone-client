@@ -204,12 +204,13 @@ UiTextures::UiTextures(render::VkContext& vk, const GameDir& game) : vk_(vk), ga
 
 UiTextures::~UiTextures() {
     vk_.wait_idle();
-    for (auto* map : {&files_, &pictures_})
-        for (auto& [name, e] : *map) {
-            if (!e) continue;
-            if (e->set) ui::remove_imgui_texture(e->set);
-            e->texture.destroy(vk_.device(), vk_.allocator());
-        }
+    auto destroy = [&](std::unique_ptr<Entry>& e) {
+        if (!e) return;
+        if (e->set) ui::remove_imgui_texture(e->set);
+        e->texture.destroy(vk_.device(), vk_.allocator());
+    };
+    for (auto& [name, f] : files_) destroy(f.entry);
+    for (auto& [name, e] : pictures_) destroy(e);
     if (sampler_) vkDestroySampler(vk_.device(), static_cast<VkSampler>(sampler_), nullptr);
 }
 
@@ -237,12 +238,33 @@ const UiTextures::Texture* UiTextures::game_file(std::string_view relative) {
 }
 
 const UiTextures::Texture* UiTextures::load(const std::string& key, const std::string& path) {
-    if (auto it = files_.find(key); it != files_.end()) return it->second ? &it->second->info : nullptr;
+    ++lookups_;
+    if (auto it = files_.find(key); it != files_.end()) {
+        it->second.used = lookups_;
+        return it->second.entry ? &it->second.entry->info : nullptr;
+    }
+    // Room for it: the file asked for least recently goes.
+    while (files_.size() >= kMaxFiles) {
+        auto oldest = least_recently_used(files_, [](const File& f) { return f.used; });
+        log::debug("ui art: {} let go ({} files held)", oldest->first, files_.size());
+        retire(std::move(oldest->second.entry));
+        files_.erase(oldest);
+    }
     std::unique_ptr<Entry> e;
     if (auto data = game_.read(path)) e = make(*data, path);
     else log::warn("ui art: {} is missing", path);
-    auto& slot = files_[key] = std::move(e);
-    return slot ? &slot->info : nullptr;
+    File& slot = files_[key] = File{std::move(e), lookups_};
+    return slot.entry ? &slot.entry->info : nullptr;
+}
+
+void UiTextures::retire(std::unique_ptr<Entry> e) {
+    if (!e) return;
+    if (e->set) texture_id_removed(reinterpret_cast<const void*>(e->set));
+    // A draw list of the frame being built may hold it: it goes after that frame too.
+    vk_.retire([set = e->set, texture = e->texture, device = vk_.device(), allocator = vk_.allocator()]() mutable {
+        if (set) ui::remove_imgui_texture(set);
+        texture.destroy(device, allocator);
+    }, 1);
 }
 
 std::unique_ptr<UiTextures::Entry> UiTextures::make(std::span<const std::byte> data, const std::string& what) {
@@ -265,7 +287,7 @@ std::unique_ptr<UiTextures::Entry> UiTextures::make(std::span<const std::byte> d
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if (!e->set) {
         log::warn("ui art: no descriptor left for {}", what);
-        e->texture.destroy(vk_.device(), vk_.allocator());
+        retire(std::move(e)); // its upload may still be on the GPU
         return nullptr;
     }
     e->info.id = reinterpret_cast<void*>(e->set);

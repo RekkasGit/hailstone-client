@@ -7,7 +7,8 @@
 //   spell icons  A_SpellIcons spells01.tga..  : 40 x 40 cells, 6 x 6 per sheet, across each row first
 //   gem icons    A_SpellGems  gemicons01.tga..: 24 x 24 cells, 10 x 10 per sheet, across each row first (the spell's
 //                                              SpellIcon, EQ_Spell +0x168: CSpellGemWnd::Init / SetSpellIconIndex)
-// Files load on first use and stay loaded.
+// Files load on first use and stay loaded, up to kMaxFiles: past that the one asked for least recently goes (a
+// script may ask eq.UiTexture for any file), its texture once the frames that may draw it are done.
 
 #include <cstdint>
 #include <filesystem>
@@ -34,6 +35,10 @@ public:
         void* id = nullptr;
         float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
     };
+
+    // The files (and game_file pictures) held at most, loaded or not found: well past the stock UI's art and icon
+    // sheets, so a UI does not load the same file again and again.
+    static constexpr std::size_t kMaxFiles = 1024;
 
     UiTextures(render::VkContext& vk, const GameDir& game);
     ~UiTextures();
@@ -75,11 +80,19 @@ private:
     const Texture* load(const std::string& key, const std::string& path);
     // Decodes and uploads; null (with a warning naming `what`) when it cannot.
     std::unique_ptr<Entry> make(std::span<const std::byte> data, const std::string& what);
+    // Lets the entry's texture go once no frame may draw it (VkContext::retire); the Lua bindings stop drawing its
+    // ID at once.
+    void retire(std::unique_ptr<Entry> e);
 
     render::VkContext& vk_;
     const GameDir& game_;
     void* sampler_ = nullptr; // VkSampler
-    std::map<std::string, std::unique_ptr<Entry>> files_;
+    struct File {
+        std::unique_ptr<Entry> entry; // null: missing or not decoded
+        std::uint64_t used = 0;       // lookups_ when last asked for
+    };
+    std::map<std::string, File> files_;
+    std::uint64_t lookups_ = 0;
     std::map<std::string, std::unique_ptr<Entry>> pictures_; // by path
     std::vector<std::string> picture_order_;                 // the oldest first
     struct Frame {
@@ -110,5 +123,14 @@ std::optional<GridCell> grid_index_cell(int index, int frames, int frame_w, int 
                                         bool vertical);
 // The icon sheets of uifiles/default (item icons dragitem*, spell icons spells*, gem icons gemicons*), by file name.
 bool is_icon_file(std::string_view name);
+
+// The cache's rule (tested): the entry of `map` whose `used(value)` is lowest, the one asked for least recently; end()
+// for an empty map.
+template <class Map, class Used> typename Map::iterator least_recently_used(Map& map, Used&& used) {
+    auto oldest = map.end();
+    for (auto it = map.begin(); it != map.end(); ++it)
+        if (oldest == map.end() || used(it->second) < used(oldest->second)) oldest = it;
+    return oldest;
+}
 
 } // namespace hailstone::ui

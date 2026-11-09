@@ -285,6 +285,7 @@ add_library(hailstone_engine STATIC
   src/game/eq_names.cpp
   src/ui/font_faces.cpp
   src/ui/imgui_layer.cpp
+  src/ui/imgui_vk_textures.cpp
   src/ui/web_textures.cpp
   src/ui/asset_picker.cpp
   src/ui/dev_screens.cpp
