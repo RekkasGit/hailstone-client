@@ -166,9 +166,10 @@ server doors (never spawned) still show no flame.
 ## Particles
 
 `render::ParticleRenderer` draws the particles of the spells, the actors' emitters and the zone's clouds as
-camera-facing quads built on the CPU from `game::ParticleSystem`; the emitters behave the same in both lightings. The
-classic lighting draws them as the EDD flags say: emitter by emitter, additive or alpha-blended, writing
-depth unless the definition turns that off. The modern lighting draws every particle of a renderer in one stream,
+quads built on the CPU from `game::ParticleSystem`; the emitters behave the same in both lightings, as the graphics
+DLL's update does (docs/formats/particles.md). The classic lighting draws them as the DLL does: emitter by emitter,
+additive or alpha-blended, none writing depth, nothing nearer than 2 units or beyond 500 along the view. The modern
+lighting draws them past 500 units (Hailstone's: its view reaches further). The modern lighting draws every particle of a renderer in one stream,
 sorted back to front by distance from the camera (the nearest kept when there are too many), with premultiplied
 blending so the additive ones (alpha 0) and the blended ones mix in that order, and without depth writes. It draws
 after `VkContext::begin_translucent`: a particle fades where it meets the scene (the depth copy) over a quarter of its
@@ -180,10 +181,12 @@ smoke (a texture with "smoke" in its name, the Luclin chimneys' `CSMOKE.DDS`) is
 night. Each renderer sorts only its own particles: the zone's clouds, the actors' and the spells' are still drawn one
 renderer after the other.
 
-The EDD's billboard mode (+0x70; `render::particle_basis`, this client's reading of the records' names) turns the
-quad: 0 faces the camera; 1 stands along the emitter's axis and turns about it towards the eye (rays, teleport
-columns, lopingplains' fire pits); 2 lies flat in the emitter's transverse plane (the gate spells' rune circles, the
-ice and crocus paths, gears, water rings), fading into what it lies on over a quarter unit instead of its size.
+The EDD's billboard mode (+0x70; `render::particle_corners`, as the DLL's quad builder places the corners) turns the
+quad: 0 faces the camera, turned clockwise on the screen by a spinning particle's rotation; 1 is a streak along the
+particle's axis, its length the particle's height, widened on the screen's x only (rays, teleport columns,
+lopingplains' fire pits); 2 lies flat on the world's horizontal plane, turned by the rotation (the gate spells' rune
+circles, the ice and crocus paths, gears, water rings), fading into what it lies on over a quarter unit instead of its
+size in the modern lighting. The depth offset (+0xd0) brings a quad that much nearer along the view.
 
 An EQG model's emitters started by an animation (`.prt` trigger 1; docs/formats/particles.md) start each time it
 starts or loops round on the actor (`ActorRenderer::drawn_playing`), after the entry's delay, and emit for about one

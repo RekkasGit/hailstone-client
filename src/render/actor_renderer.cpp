@@ -755,6 +755,13 @@ bool ActorRenderer::drawn_bone(std::uint32_t id, int bone, glm::mat4& world) con
     return it != last_draws_.end() && bone_world(it->second, bone, world);
 }
 
+bool ActorRenderer::drawn_transform(std::uint32_t id, glm::mat4& world) const {
+    auto it = last_draws_.find(id);
+    if (it == last_draws_.end() || !it->second.model) return false;
+    world = instance_matrix(it->second);
+    return true;
+}
+
 bool ActorRenderer::bone_world(const ActorDraw& a, int bone, glm::mat4& world) {
     if (!a.model || !a.clip || bone < 0) return false;
     std::vector<assets::BonePose> local, previous;
