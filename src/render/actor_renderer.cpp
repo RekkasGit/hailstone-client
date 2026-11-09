@@ -785,6 +785,17 @@ bool ActorRenderer::seat_rider(const ActorDraw& mount, ActorDraw& rider, const g
     return true;
 }
 
+bool ActorRenderer::rider_top(const ActorDraw& a, glm::vec3& top) {
+    if (!a.attached || !a.model) return false;
+    top = glm::vec3(a.parent * glm::vec4(0.0f, 0.0f, a.model->bounds_max.z, 1.0f));
+    return true;
+}
+
+bool ActorRenderer::drawn_rider_top(std::uint32_t id, glm::vec3& top) const {
+    auto it = last_draws_.find(id);
+    return it != last_draws_.end() && rider_top(it->second, top);
+}
+
 bool ActorRenderer::spawn_pose(std::uint32_t id, SpawnPose& out) const {
     out = {};
     auto it = last_draws_.find(id);

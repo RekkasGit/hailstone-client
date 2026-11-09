@@ -106,3 +106,22 @@ TEST_CASE("the shipped mounts' rider dags" * doctest::skip(!hailstone::test::gam
         CHECK(m->bone_names[static_cast<std::size_t>(b)] == "CHEST03_MOUNT01");
     }
 }
+
+TEST_CASE("a seated rider's top is its model's top in the mount's bone frame (its name plate's height)") {
+    auto horse = model_with("HRS", {"ROOT_BONE", "CHEST03_MOUNT01"});
+    auto ogre = model_with("OGM", {"OGM_TRACK"});
+    ogre.bounds_max = glm::vec3(1.0f, 1.0f, 3.0f);
+    render::ActorDraw mount;
+    mount.model = &horse;
+    mount.clip = horse.clip("");
+    mount.position = glm::vec3(10.0f, 0.0f, 0.0f);
+    mount.scale = 2.0f;
+    render::ActorDraw rider;
+    rider.model = &ogre;
+    rider.clip = ogre.clip("");
+    glm::vec3 top;
+    CHECK_FALSE(render::ActorRenderer::rider_top(rider, top)); // standing: the spawn's own place gives it
+    REQUIRE(render::ActorRenderer::seat_rider(mount, rider, nullptr));
+    REQUIRE(render::ActorRenderer::rider_top(rider, top));
+    CHECK(near(top, {12.0f, 0.0f, 4.0f + 3.0f * 2.0f})); // the seat (12, 0, 4), the top 3 at the mount's scale 2
+}

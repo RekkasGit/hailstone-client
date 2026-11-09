@@ -226,6 +226,11 @@ public:
     // Seats `rider` on `mount` as it is posed (PlayerClient_AttachRiderToMount): on the mount's dag 0xe
     // (CharacterModel::mount_point_bone). False, leaving the rider as it is, when the mount has no such dag.
     static bool seat_rider(const ActorDraw& mount, ActorDraw& rider, const game::HeightTables* tables);
+    // The top of a seated rider (attached by seat_rider): its model's rest-pose top in the mount's bone frame it is
+    // drawn in, where a standing actor's is its spawn's place plus that top. False when `a` is not seated.
+    static bool rider_top(const ActorDraw& a, glm::vec3& top);
+    // The same for a spawn as it was last drawn; false when it was not drawn seated on a mount.
+    bool drawn_rider_top(std::uint32_t id, glm::vec3& top) const;
     // The bone frames of an instance before skinning (its clip blended with the previous one; the upper body's
     // bones from upper_clip when it has one), model space.
     static void pose_bones(const ActorDraw& a, std::vector<assets::BonePose>& local,
