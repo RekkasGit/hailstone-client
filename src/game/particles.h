@@ -104,6 +104,8 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
 
 // The duration a zone fixture's emitter is created with (add_fixture), ms.
 inline constexpr std::int32_t kFixtureDurationMs = 9999000;
+// The duration an actor's own emitter is created with (CActor::vf126 @0x1003a950), ms.
+inline constexpr std::int32_t kActorEmitterDurationMs = 5000000;
 
 // CEmitterDef::CreateEmitter's duration in seconds.
 float emitter_duration_seconds(float edd_duration, std::int32_t requested_ms);

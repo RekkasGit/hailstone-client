@@ -55,9 +55,10 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         game::SpellEmitterRequest r;
         r.emitter = static_cast<std::int32_t>(me.emitter.emitter);
         r.key = next_key_++;
-        // The duration the DLL passes is an x87 value not traced; the entry's own 5000 ms is taken. It sets the
-        // particle capacity; the emitter itself lasts as long as the actor.
-        r.duration_ms = duration_ms >= 0 ? duration_ms : me.emitter.duration_ms;
+        // CActor::vf126 @0x1003a950 creates an actor's emitter for 5,000,000 ms (past 4,000 s the DLL keeps it
+        // going), at the actor density and opacity, scale 1; the entry's own +0x58 is not passed. It sets the
+        // particle capacity and what a lifetime below 0 lasts; the emitter itself lasts as long as the actor.
+        r.duration_ms = duration_ms >= 0 ? duration_ms : game::kActorEmitterDurationMs;
         r.density = settings_.density;
         r.opacity = settings_.opacity;
         r.position = glm::vec3((bone * me.local)[3]);

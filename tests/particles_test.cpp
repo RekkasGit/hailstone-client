@@ -654,3 +654,17 @@ TEST_CASE("moddat.ini PESFactor: the particle scale of a model") {
     CHECK(t.pes_factor("bas") == 0.5f);
     CHECK(t.pes_factor("HUM") == 1.0f);
 }
+
+TEST_CASE("an actor's own emitter is made for 5,000 s, not its entry's 5 s") {
+    // CActor::vf126 passes 5,000,000 ms whatever the .prt entry's +0x58 (5000) says: a lifetime below 0 then lasts
+    // the emitter's time, and the ring holds a lifetime of ticks, not five seconds' worth.
+    hailstone::assets::EmitterDefinition d;
+    d.initial_count = 1;
+    d.per_tick = 4;
+    d.ticks_per_second = 10.0f;
+    d.lifetime = 8.0f;
+    const float duration = hailstone::game::emitter_duration_seconds(0.0f, hailstone::game::kActorEmitterDurationMs);
+    CHECK(duration == doctest::Approx(5000.0f));
+    CHECK(hailstone::game::emitter_counts(d, 1.0f, duration).capacity == (80 + 1) * 4);
+    CHECK(hailstone::game::emitter_counts(d, 1.0f, 5.0f).capacity == 1 + 50 * 4);
+}
