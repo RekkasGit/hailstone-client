@@ -279,6 +279,10 @@ void ExtensionChain::label_text(const net::GameConnection& c, int id, std::strin
     each(c, [&](const ServerExtension& e) { return e.label_text(c, id, text), false; });
 }
 
+void ExtensionChain::nameplate_text(const net::GameConnection& c, const Spawn& spawn, std::string& text) const {
+    each(c, [&](const ServerExtension& e) { return e.nameplate_text(c, spawn, text), false; });
+}
+
 bool ExtensionChain::hide_xtarget_slot(const net::GameConnection& c, int slot) const {
     return each(c, [&](const ServerExtension& e) { return e.hide_xtarget_slot(c, slot); });
 }

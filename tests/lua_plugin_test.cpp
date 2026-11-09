@@ -140,6 +140,55 @@ mq.bind('/exton', function() hs.set_active(true) end)
 
 } // namespace
 
+TEST_CASE("Lua plugin: nameplate text hooks follow the script lifetime") {
+    Host h;
+    auto& c = *h.world.conn;
+    const auto& rat = c.world().spawns.at(10);
+    h.write("plate.lua", R"lua(
+require('hailstone').hooks{
+  nameplate = function(spawn, text)
+    if spawn.npc and not spawn.corpse then return text .. ' [' .. spawn.level .. ']' end
+  end,
+}
+)lua");
+    REQUIRE(h.scripts->run("plate", {}));
+    h.scripts->pulse();
+    std::string text = "rat";
+    h.chain.nameplate_text(c, rat, text);
+    CHECK(text == "rat [2]");
+    text = "corpse";
+    h.chain.nameplate_text(c, c.world().spawns.at(13), text);
+    CHECK(text == "corpse");
+    h.scripts->stop("plate");
+    text = "rat";
+    h.chain.nameplate_text(c, rat, text);
+    CHECK(text == "rat");
+}
+
+TEST_CASE("Lua plugin: the nameplate hook's spawn table is reused and refilled for every plate") {
+    Host h;
+    auto& c = *h.world.conn;
+    h.write("plate_reuse.lua", R"lua(
+local first
+require('hailstone').hooks{
+  nameplate = function(spawn, text)
+    first = first or spawn
+    return tostring(rawequal(first, spawn)) .. ':' .. spawn.id .. ':' .. spawn.name .. ':' .. tostring(spawn.corpse)
+  end,
+}
+)lua");
+    REQUIRE(h.scripts->run("plate_reuse", {}));
+    h.scripts->pulse();
+    const auto& rat = c.world().spawns.at(10);
+    const auto& corpse = c.world().spawns.at(13);
+    std::string a = "x", b = "x";
+    h.chain.nameplate_text(c, rat, a);
+    h.chain.nameplate_text(c, corpse, b);
+    // The same table both times, and nothing of the first spawn left in the second.
+    CHECK(a == "true:10:" + rat.name + ":false");
+    CHECK(b == "true:13:" + corpse.name + ":true");
+}
+
 TEST_CASE("Lua plugin: the hailstone module's extension, packets, UI and readers; it stays after its main chunk") {
     Host h;
     net::GameConnection& c = *h.world.conn;

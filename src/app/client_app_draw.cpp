@@ -142,6 +142,7 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (!s.title.empty() && (!player || level > 3)) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
+        conn_->server_ext().nameplate_text(*conn_, s, label);
         plate.pos = glm::vec2(px, py);
         plate.depth = clip.w;
         plate.lines.clear();

@@ -7,6 +7,7 @@
 - A player riding a mount has their name above their head, not down where they sit
 - Options > Display has a **Name Plates** section for the names over players and NPCs: their font, size, bold, a shadow, outline or no edge, smaller names farther away, and the size of the guild and owner lines under them. The defaults look as before
 - Modern spell bar: spell information opened by holding the right mouse button stays open if released over the display
+- Lua add-ons can change the text of a name plate in the world through a new `nameplate` hook, for example to add a level
 - Add-ons: when `addons/installed.txt` is lost or damaged, the add-ons it listed no longer run with every permission as though you had put them in by hand. It now has a copy, `installed.bak.txt`, that it is put back from at the next start; an add-on that neither file has whole gets no permissions, and nothing is installed, updated or removed until the file is put right (the log says so)
 - Add-ons: a link to an older version than the one installed now says so on its card, and installs only with **Install the older version**
 - Options' Texture Studio... starts the studio only when it is the real one (from projecthailstone/hailstone-texstudio, signed with its key); another add-on named `texstudio` can still be started from its row in Add-ons
