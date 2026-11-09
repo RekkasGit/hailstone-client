@@ -12,6 +12,7 @@
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
 #include "plugin/lua_value.h"
+#include "net/item_packets.h"
 #include "scratch_dir.h"
 
 using namespace hailstone;
@@ -64,6 +65,17 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
         api.register_functions(L);
         lua_setglobal(L, "eq");
         api.begin_frame();
+        host.spell_displays = {{200, false}, {201, true}};
+        std::vector<net::Item> displays(2);
+        displays[0].id = 123;
+        displays[0].name = "Example";
+        displays[1].id = 456;
+        host.item_displays = &displays;
+        CHECK(run(L, "return eq.DisplaySpellId(2)") == "201");
+        CHECK(run(L, "return eq.DisplaySpellId(3)") == "nil");
+        CHECK(run(L, "return eq.DisplayItemData(1).id") == "123");
+        CHECK(run(L, "return eq.DisplayItemData(2).id") == "456");
+        CHECK(run(L, "return eq.DisplayItemData(0)") == "nil");
         auto fails = [&](const std::string& call) { return run(L, "return (pcall(" + call + "))") == "false"; };
         CHECK(fails("eq.WindowPlaced, 'Chat1', 10, 'x'"));
         CHECK(fails("eq.FindItems, 'all'"));

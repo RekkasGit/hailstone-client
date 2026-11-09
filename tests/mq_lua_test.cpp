@@ -112,6 +112,27 @@ struct Host {
 
 } // namespace
 
+TEST_CASE("MQ Lua: spell data exposes raw display fields") {
+    Host h;
+    h.write("spell_fields.lua", R"(
+local hs = require('hailstone')
+local s = assert(hs.spell(3001))
+assert(s.id == 3001 and s.name == 'Test Mesmerize')
+assert(s.range == 0 and s.ae_range == 0 and s.push_back == 0)
+assert(s.duration_cap == 8 and s.duration_formula == 0)
+assert(s.spell_type == 0 and s.resist == 0 and s.resist_adj == 0)
+assert(s.spell_icon == 0 and s.category == 0 and s.subcategory == 0)
+assert(s.cast_on_you == '' and s.cast_on_other == '' and s.wear_off == '')
+assert(#s.effects == 12 and s.effects[1].effect == 31 and s.effects[1].base == 1)
+assert(s.effects[1].base2 == 0 and s.effects[1].max == 0 and s.effects[1].formula == 0)
+assert(hs.spell(45000) == nil)
+print('spell fields ok')
+)");
+    REQUIRE(h.scripts->run("spell_fields", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("spell fields ok"));
+}
+
 TEST_CASE("MQ Lua: mq.TLO, print, mq.cmd, mq.parse and the script's arguments") {
     Host h;
     h.write("hello.lua", R"(
