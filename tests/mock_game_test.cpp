@@ -542,9 +542,19 @@ TEST_CASE("mock server: camping sits, sends OP_Camp and ends when the zone drops
     CHECK(conn.state() == ConnectionState::InZone);
     CHECK(has_line(rig.chat(), "[12290]")); // no template in the fixture file: the id in brackets
 
+    // So does the sit key (and moving forward while sitting, ProcessControls' auto stand): CEverQuest::Sit.
     conn.camp();
     REQUIRE(conn.state() == ConnectionState::Camping);
-    REQUIRE(rig.until([&] { return server.camp_requests == 2; }));
+    REQUIRE(conn.sitting());
+    rig.chat();
+    conn.sit_toggle();
+    CHECK(conn.state() == ConnectionState::InZone);
+    CHECK(!conn.sitting());
+    CHECK(has_line(rig.chat(), "[12290]"));
+
+    conn.camp();
+    REQUIRE(conn.state() == ConnectionState::Camping);
+    REQUIRE(rig.until([&] { return server.camp_requests == 3; }));
     // The camp saves first (Save(0, 1, 0x21): OP_Save), then OP_Camp {0}.
     CHECK(in_order(server.zone_log, {Op::Save, Op::Camp}));
     auto save = std::find_if(server.zone_log.rbegin(), server.zone_log.rend(),
@@ -553,7 +563,7 @@ TEST_CASE("mock server: camping sits, sends OP_Camp and ends when the zone drops
     auto sv = decode_save(*save);
     REQUIRE(sv);
     CHECK(sv->kind == 0x21);
-    CHECK(MockEqServer::count(server.zone_log, Op::Save) == 2);
+    CHECK(MockEqServer::count(server.zone_log, Op::Save) == 3);
     // The zone dropping the link during the camp's 30 s is the original's link death (DoMainLoop's
     // HandleWorldDisconnect), not a camp's end: the app shows the disconnected screen, then goes the camp's way.
     server.zone.send_disconnect();

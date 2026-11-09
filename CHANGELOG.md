@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `/camp` can be stopped again by standing with the sit/stand key or by moving forward, as on the original client. Before, only the Stand button or a second `/camp` stopped it
 - Name plates sit above the head instead of over it: a name's bottom edge is at the head, so larger names and the guild line under it grow upward
 - A player riding a mount has their name above their head, not down where they sit
 - Options > Display has a **Name Plates** section for the names over players and NPCs: their font, size, bold, a shadow, outline or no edge, smaller names farther away, and the size of the guild and owner lines under them. The defaults look as before
