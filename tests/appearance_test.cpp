@@ -133,9 +133,12 @@ TEST_CASE("display.extra_shields puts later shields on the shield point (Hailsto
     CHECK(is_shield_model(13908));
     CHECK(is_shield_model(100081));
     CHECK(is_shield_model(100109));
-    // Left out: the IT63 placeholder, weapons' models a few shields borrow (IT7, a rod; IT10201; IT10650, a spear), and
-    // weapon ornaments' models (an axe, a sword, a mace), and the Haunting Nightmares Shield Ornament's, held in the hand
-    // face outward as RoF2 holds it (HAND_ORNAMENTS).
+    // The Haunting and Grim Nightmares Shield Ornaments, which RoF2 holds in the hand (not on its list), are worn on
+    // the forearm like the other shield ornaments.
+    CHECK(is_shield_model(101064));
+    CHECK(is_shield_model(101068));
+    // Left out: the IT63 placeholder, weapons' models a few shields borrow (IT7, a mace; IT10201, a staff, rod or book;
+    // IT10650, a dagger), and weapon ornaments' models (an axe, a sword, a mace).
     CHECK_FALSE(is_shield_model(63));
     CHECK_FALSE(is_shield_model(7));
     CHECK_FALSE(is_shield_model(10201));
@@ -143,8 +146,6 @@ TEST_CASE("display.extra_shields puts later shields on the shield point (Hailsto
     CHECK_FALSE(is_shield_model(13925));
     CHECK_FALSE(is_shield_model(100069));
     CHECK_FALSE(is_shield_model(100105));
-    CHECK_FALSE(is_shield_model(101064));
-    CHECK_FALSE(is_shield_model(101068));
     CHECK_FALSE(is_shield_model(0));
     // Switched off: RoF2's list alone.
     hailstone::game::set_extra_shields(false);

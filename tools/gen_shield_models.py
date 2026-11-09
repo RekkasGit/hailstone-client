@@ -24,11 +24,10 @@ thick (the shields above measure at most 3.0 and 0.43). A model with no EQG
 mesh, or none in the folders given, stays out. SEEN_SHIELDS are ornament models
 that are shields to the eye but fail the measure: a grip standing off the back
 makes them thick, horns or spikes leave the box mostly empty. Every model the
-measure lets in was looked at as well (drawn from its broad side). HAND_ORNAMENTS
-stay in the hand whatever they measure: the Haunting Nightmares Shield Ornament
-(IT101064, and IT101068, its mesh in the second colours), which RoF2 holds in the
-hand with its pumpkin face outward and which turns its iron back outward on the
-shield point (seen in game).
+measure lets in was looked at as well (drawn from its broad side). SEEN_SHIELDS
+also holds the Haunting and Grim Nightmares Shield Ornaments (IT101064, IT101068):
+RoF2 holds them in the hand with the pumpkin face outward, Hailstone wears them on
+the forearm like the other shield ornaments (its iron back then faces outward).
 
 The input is the items table of an EQEmu (PEQ) database, one "idfile<TAB>itemtype"
 row per item, and the game folders to measure ornament models in (read only):
@@ -51,8 +50,7 @@ SHIELD_LONG = 3.0
 SHIELD_THICK = 0.45
 SHIELD_FILL = 0.44
 FILL_GRID = 48
-SEEN_SHIELDS = {100005, 100109, 100118, 100119, 100122, 100123, 100169}
-HAND_ORNAMENTS = {101064, 101068}
+SEEN_SHIELDS = {100005, 100109, 100118, 100119, 100122, 100123, 100169, 101064, 101068}
 PFS_NAMES_CRC = 0x61580AC9
 
 
@@ -184,7 +182,7 @@ for m, kinds in uses.items():
     if kinds[SHIELD] * 2 > held:
         models.append(m)
 ornaments = [m for m, kinds in uses.items()
-             if m != 0 and not stock_shield(m) and set(kinds) == {AUGMENT} and m not in HAND_ORNAMENTS]
+             if m != 0 and not stock_shield(m) and set(kinds) == {AUGMENT}]
 shapes = model_shapes(args.game_dir, ornaments) if args.game_dir else {}
 for m in ornaments:
     if (shapes.get(m) and all(shield_shaped(e) for e in shapes[m])) or (args.game_dir and m in SEEN_SHIELDS):
