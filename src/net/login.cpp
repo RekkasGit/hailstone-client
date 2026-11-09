@@ -56,8 +56,13 @@ AppPacket player_login(std::uint32_t sequence, const std::string& user, const st
     return {login_op::Login, w.take()};
 }
 
+// A login reply inflates to at most this (the largest, a server list, is a few KB); larger is refused.
+constexpr std::size_t kMaxInflated = std::size_t{1} << 20;
+
 std::vector<std::byte> inflate_all(std::span<const std::byte> in) {
-    std::vector<std::byte> out(std::max<std::size_t>(in.size() * 4, 256));
+    // Capped from the start: a body over 256 KB would otherwise start past the cap, which is checked only when the
+    // buffer fills.
+    std::vector<std::byte> out(std::min(std::max<std::size_t>(in.size() * 4, 256), kMaxInflated));
     z_stream z{};
     need(inflateInit(&z) == Z_OK, "zlib init");
     z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(in.data()));
@@ -65,8 +70,8 @@ std::vector<std::byte> inflate_all(std::span<const std::byte> in) {
     int rc = Z_OK;
     while (rc == Z_OK) {
         if (z.total_out == out.size()) {
-            if (out.size() >= (1u << 20)) break;
-            out.resize(out.size() * 2);
+            if (out.size() >= kMaxInflated) break;
+            out.resize(std::min(out.size() * 2, kMaxInflated));
         }
         z.next_out = reinterpret_cast<Bytef*>(out.data() + z.total_out);
         z.avail_out = static_cast<uInt>(out.size() - z.total_out);

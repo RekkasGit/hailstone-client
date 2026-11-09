@@ -184,9 +184,16 @@ void GameConnection::update() {
             info.account_id = std::to_string(ticket_.account_id);
             info.session_key = ticket_.session_key;
             info.zoning = zoning_;
-            send_world(encode(info));
-            if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
-            status_ = "Logging in to " + ticket_.server_name;
+            if (!login_info_fits(info)) {
+                // EQEmu's login server sends a 10-character key; a longer one cannot be sent whole.
+                const std::size_t room = info.account_id.size() < 62 ? 62 - info.account_id.size() : 0;
+                fail(std::format("the login server's session key is too long for the world login ({} bytes, at most {})",
+                                 info.session_key.size(), room));
+            } else {
+                send_world(encode(info));
+                if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
+                status_ = "Logging in to " + ticket_.server_name;
+            }
             // Zoning keeps state_ == Zoning; the world's OP_EnterWorld reply moves it on.
         }
         while (auto p = world_session_ ? world_session_->receive() : std::nullopt)
