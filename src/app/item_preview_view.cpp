@@ -177,7 +177,12 @@ void* ItemPreviewView::image(int width, int height) {
     want_height_ = std::min(height, 2048);
     want_slot_ = vk_.next_frame_slot();
     Target& t = targets_[want_slot_];
-    if (!t.set) make_target(t, want_width_, want_height_); // the descriptor set must exist now; it is drawn later
+    // The descriptor set must exist now; it is drawn later. When add_imgui_texture found none (out of memory for a
+    // pool), nothing is drawn (null) and the set is asked for again on the next call, not the images made again.
+    if (!t.set) {
+        if (!t.out) make_target(t, want_width_, want_height_);
+        else t.set = ui::add_imgui_texture(sampler_, t.out_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
     return t.set;
 }
 

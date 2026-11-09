@@ -94,6 +94,11 @@ std::optional<SoundLibrary::Location> SoundLibrary::locate(const std::string& lo
 
 bool SoundLibrary::exists(const std::string& name) { return locate(lower_case(name)).has_value(); }
 
+bool SoundLibrary::index_ready() const {
+    std::lock_guard lock(mutex_);
+    return index_ready_ || stop_;
+}
+
 std::shared_ptr<const assets::PfsArchive> SoundLibrary::archive(int index) {
     std::lock_guard lock(archive_mutex_);
     for (auto it = open_.begin(); it != open_.end(); ++it)

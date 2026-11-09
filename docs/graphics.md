@@ -47,6 +47,23 @@ where it does not, a screenshot is refused with a log line (and a chat line for 
 invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
 not whenever the surface's `currentExtent` differs from the window's size.
 
+Uploads do not wait for the GPU. `render::UploadBatch::submit` records its copies (and mip blits) into a command buffer
+of their own and submits it on the frame's queue with a fence of its own (`VkContext::submit_upload`); the barriers
+it ends with (copy writes to vertex input, index, vertex and fragment shader reads; images to shader-read layout) make
+the results visible to every later submission on the queue, so a model, texture or icon sheet put up while a frame is
+recorded is drawn by that frame. Its staging buffers go once its fence signals, checked at each frame's start and each
+upload; past 256 MB of staging in flight the oldest uploads are waited for. `VkContext::immediate_submit` stays
+synchronous, for the context's own one-off work. What a frame in flight (or an upload) may still use is handed to
+`VkContext::retire` instead of destroyed after `vkDeviceWaitIdle`: it goes once the frame being recorded, every
+upload submitted before and any `frames_ahead` more are done (`render/retire_queue.h`; the UI's textures take one
+more frame, as ImGui's draw lists are built before their frame begins). A `ZoneRenderer` is let go this way, so a
+neighbour zone freed mid-frame no longer stalls the frame. A recreated swapchain is made with `oldSwapchain`, and the
+old one and its present semaphores are retired two frames on: `vkDeviceWaitIdle` does not cover a present's wait.
+
+The ImGui textures (`ui/imgui_vk_textures.h`: the UI art, icon sheets, browser tabs) come from descriptor pools of the
+client's own, a new one made when they fill, with a set layout defined as the backend's. `ui::UiTextures` keeps at
+most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
+
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
 the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes

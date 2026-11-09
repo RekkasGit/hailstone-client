@@ -74,7 +74,7 @@ The timer starts on the first update, in range or not. Emitters of another perio
 
 ### Global music
 
-Fifteen entries, set at start-up:
+Fifteen entries, set at start-up: in this client once the sound archives are indexed (`AudioSystem::set_up_global_music`, from the first update after the worker has opened every `snd*.pfs`, or at the first zone, which waits for it), since choosing a file checks whether it exists and the constructor waited on the index for that. A selection made before then (the login theme) is kept and applied when the entries are set; the combat theme's rand() is still drawn at start-up.
 
 | Entry | Asset | Priority | Fades in / replaced / stopped (ms) | Played |
 |---|---|---|---|---|

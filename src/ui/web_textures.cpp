@@ -37,7 +37,8 @@ WebTextures::~WebTextures() {
 
 WebTextures::View WebTextures::texture(std::uint32_t tab, web::Layer layer) const {
     auto it = entries_.find({tab, layer});
-    if (it == entries_.end() || !it->second.ready) return {};
+    // No set (none could be made: record tries again each frame): nothing to draw yet.
+    if (it == entries_.end() || !it->second.ready || !it->second.set) return {};
     return {it->second.set, it->second.width, it->second.height};
 }
 
@@ -112,6 +113,8 @@ void WebTextures::record(const render::FrameInfo& frame, web::BrowserHost& host)
                 if (e.image) retire(e);
                 e = make(img.width, img.height);
             }
+            // add_imgui_texture found no descriptor set (out of memory for a pool): tried again until one is made.
+            if (e.image && !e.set) e.set = ui::add_imgui_texture(sampler_, e.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             if (!e.ready) dirty = {{0, 0, img.width, img.height}}; // a new texture takes all of it
             if (dirty.empty()) continue;
             Job job{&e, &img, {}};

@@ -15,6 +15,7 @@
 
 #include "render/pipeline_cache.h"
 #include "render/point_shadows.h"
+#include "render/retire_queue.h"
 #include "render/shadows.h"
 
 namespace hailstone::platform { class Window; }
@@ -204,9 +205,24 @@ public:
     }
     Vsync vsync() const { return vsync_; }
 
-    // Records commands into a one-off command buffer and waits for them to finish.
+    // Records commands into a one-off command buffer and waits for them to finish: for work whose result the CPU
+    // needs at once. Uploads go through submit_upload.
     void immediate_submit(const std::function<void(VkCommandBuffer)>& record);
-    void wait_idle() const { vkDeviceWaitIdle(device_); }
+    // Records commands into a one-off command buffer and submits them on the frame's queue without waiting: queue
+    // order (and the barriers the commands end with) makes what they write visible to every frame submitted after,
+    // the one being recorded included. Returns the upload's serial, for retire_after_upload; `staging_bytes` is what
+    // the upload keeps alive until it is done (past kMaxStagingInFlight in flight, the oldest uploads are waited for).
+    std::uint64_t submit_upload(const std::function<void(VkCommandBuffer)>& record, VkDeviceSize staging_bytes);
+    // Runs `release` (destroying Vulkan objects) once the GPU is done with everything submitted so far and the frame
+    // being recorded: for what a frame in flight, or an upload, may still use. `frames_ahead`: frames not begun yet
+    // that may use it too (1 for the UI's textures: ImGui's draw lists are built before their frame begins). Main
+    // thread only.
+    void retire(std::function<void()> release, std::uint32_t frames_ahead = 0);
+    // Runs `release` once upload `serial` (submit_upload's) is done: its staging buffers.
+    void retire_after_upload(std::uint64_t serial, std::function<void()> release);
+    // Waits for the device to be idle; what was retired is released.
+    void wait_idle();
+    static constexpr VkDeviceSize kMaxStagingInFlight = VkDeviceSize{256} << 20;
     // The frame slot the next begin_frame_commands uses (per-frame resources picked before it, by the UI).
     std::uint32_t next_frame_slot() const { return frame_index_; }
     // How many frames begin_frame_commands has begun (the one being recorded included). When it reads n, every frame
@@ -286,7 +302,7 @@ private:
     void create_device();
     void create_pipeline_cache();
     void save_pipeline_cache_file();
-    void create_swapchain();
+    void create_swapchain(VkSwapchainKHR old = VK_NULL_HANDLE);
     void destroy_swapchain();
     void recreate_swapchain();
     void create_frames();
@@ -426,6 +442,19 @@ private:
     Vsync vsync_ = Vsync::On;
 
     VkCommandPool upload_pool_ = VK_NULL_HANDLE;
+    // submit_upload's submissions in flight, what waits for them or for the frames (retire), and the last frame known
+    // done on the GPU (render/retire_queue.h).
+    struct Upload {
+        VkFence fence = VK_NULL_HANDLE;
+        VkCommandBuffer cmd = VK_NULL_HANDLE;
+    };
+    UploadTracker<Upload> uploads_;
+    std::vector<VkFence> free_fences_;
+    RetireQueue retired_;
+    std::uint64_t frames_done_ = 0;
+    bool recording_ = false; // frame frames_begun_ is being recorded (begun, not yet submitted)
+    void recycle_upload(const Upload& u);
+    void collect_retired();
     bool screenshots_supported_ = false; // the swapchain was made with TRANSFER_SRC
     std::filesystem::path screenshot_path_;
     std::uint32_t screenshot_max_width_ = 0;

@@ -286,6 +286,7 @@ add_library(hailstone_engine STATIC
   src/game/eq_names.cpp
   src/ui/font_faces.cpp
   src/ui/imgui_layer.cpp
+  src/ui/imgui_vk_textures.cpp
   src/ui/web_textures.cpp
   src/ui/asset_picker.cpp
   src/ui/dev_screens.cpp
@@ -928,6 +929,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/latest_jobs_test.cpp
     tests/character_share_test.cpp
     tests/light_grid_test.cpp
+    tests/retire_queue_test.cpp
     tests/weather_test.cpp
     tests/texture_overrides_test.cpp
     tests/layout_test.cpp

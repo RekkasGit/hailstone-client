@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <span>
 #include <vector>
 
 #include "render/light_grid.h"
@@ -50,4 +53,37 @@ TEST_CASE("light grid: no lights, no grid") {
     render::LightGrid g = render::build_light_grid({}, 64.0f);
     CHECK(g.width == 0);
     CHECK(g.cells.empty());
+}
+
+TEST_CASE("light grid: a light with a NaN or infinite place or reach is left out, the grid stays in bounds") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    std::vector<assets::PointLight> lights = {
+        {{nan, 0.0f, 0.0f}, {1, 1, 1}, 50.0f},
+        {{0.0f, 0.0f, 0.0f}, {1, 1, 1}, inf},
+        {{0.0f, inf, 0.0f}, {1, 1, 1}, 10.0f},
+        {{10.0f, 10.0f, 0.0f}, {1, 1, 1}, nan},
+        {{3.0e38f, 0.0f, 0.0f}, {1, 1, 1}, 1.0e38f}, // its reach past the float range
+        {{0.0f, 0.0f, 0.0f}, {1, 1, 1}, 20.0f},     // the one usable
+    };
+    render::LightGrid g = render::build_light_grid(lights, 64.0f);
+    REQUIRE(g.width > 0);
+    CHECK(std::size_t(g.width) * g.height <= render::kMaxGridCells);
+    CHECK(g.cells.size() == std::size_t(g.width) * g.height);
+    CHECK(lights_in(g, {0.0f, 0.0f}) == std::vector<std::uint32_t>{5});
+    for (std::uint32_t i : g.indices) CHECK(i == 5);
+    // Only unusable lights: no grid; a bad cell size: none either.
+    CHECK(render::build_light_grid(std::span(lights).first(5), 64.0f).cells.empty());
+    CHECK(render::build_light_grid(lights, nan).cells.empty());
+    CHECK(render::build_light_grid(lights, 0.0f).cells.empty());
+}
+
+TEST_CASE("light grid: lights spread across nearly the float range get coarse cells, within the cell count") {
+    std::vector<assets::PointLight> lights = {{{-1.0e38f, -1.0e38f, 0.0f}, {1, 1, 1}, 10.0f},
+                                              {{1.0e38f, 1.0e38f, 0.0f}, {1, 1, 1}, 10.0f}};
+    render::LightGrid g = render::build_light_grid(lights, 64.0f);
+    REQUIRE(g.width > 0);
+    CHECK(std::isfinite(g.cell));
+    CHECK(std::size_t(g.width) * g.height <= render::kMaxGridCells);
+    CHECK(g.cells.size() == std::size_t(g.width) * g.height);
 }

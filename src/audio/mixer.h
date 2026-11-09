@@ -128,6 +128,17 @@ private:
         };
         Comb combs[2][4];
         AllPass allpasses[2][2];
+        // Delay lines made outside the mixer's lock (set_reverb), for adopt to swap in.
+        struct Lines {
+            std::vector<float> predelay;
+            std::vector<float> combs[2][4];
+            std::vector<float> allpasses[2][2];
+        };
+        // Whether every line has its length for `rate` and the pre-delay.
+        bool sized_for(std::uint32_t rate, float predelay_s) const;
+        static Lines make_lines(std::uint32_t rate, float predelay_s);
+        void adopt(Lines& lines);
+        // The room's feedback and damping; allocates only for a line not sized (adopt) beforehand.
         void configure(std::uint32_t rate, float decay_s, float damping, float predelay_s);
         void process(const float* in, float* out, std::size_t frames);
     };

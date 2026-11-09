@@ -612,3 +612,87 @@ TEST_CASE("Spawn sounds: a spawn beyond the reach of its steps and loop is out o
     CHECK_FALSE(spawn_out_of_hearing({10, 10, 10}, {10, 10, 130}, 6.0f, 50.0f));
     CHECK(spawn_out_of_hearing({0, 0, 0}, {std::nanf(""), 0, 0}, 6.0f, 50.0f));
 }
+
+TEST_CASE("Mixer: the reverb's lines made outside the lock: a new pre-delay sounds, and the same room keeps its tail") {
+    std::vector<float> out(2 * 4800);
+    Mixer m(48000, 8);
+    // A short click into the room, then silence: what follows is the reverb's tail.
+    m.set_reverb(1.0f, 2.0f, 0.2f, 0.01f);
+    auto id = m.play(constant(48000, 480, 0.5f), 1.0f, 0, 1, Bus::Effects);
+    REQUIRE(id != 0);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    // The same room again (another decay): the tail goes on, the lines are not made again.
+    m.set_reverb(1.0f, 3.0f, 0.2f, 0.01f);
+    m.render(out.data(), 4800);
+    auto energy = [&] {
+        float e = 0.0f;
+        for (float x : out) e += x * x;
+        return e;
+    };
+    CHECK(energy() > 0.0f);
+    // A longer pre-delay: a new pre-delay line (the combs keep their tail); a new click is heard through it.
+    m.set_reverb(1.0f, 2.0f, 0.2f, 0.05f);
+    m.render(out.data(), 4800);
+    CHECK(std::all_of(out.begin(), out.end(), [](float x) { return std::isfinite(x); }));
+    id = m.play(constant(48000, 480, 0.5f), 1.0f, 0, 1, Bus::Effects);
+    REQUIRE(id != 0);
+    m.set_send(id, 1.0f);
+    m.render(out.data(), 4800);
+    std::fill(out.begin(), out.end(), 0.0f);
+    m.render(out.data(), 4800);
+    CHECK(energy() > 0.0f);
+    CHECK(std::all_of(out.begin(), out.end(), [](float x) { return std::isfinite(x); }));
+    // Off and on again keeps working.
+    m.set_reverb(0.0f, 2.0f, 0.2f, 0.05f);
+    m.render(out.data(), 4800);
+    m.set_reverb(0.5f, 1.0f, 0.5f, 0.0f);
+    m.render(out.data(), 4800);
+    CHECK(std::all_of(out.begin(), out.end(), [](float x) { return std::isfinite(x); }));
+}
+
+TEST_CASE("Mixer: finished voices are reaped in one pass, the live ones kept in order") {
+    std::vector<float> out(2 * 512);
+    Mixer m(48000, 16);
+    std::vector<std::uint32_t> ids;
+    for (int i = 0; i < 16; ++i) ids.push_back(m.play(constant(48000, 48000, 0.01f), 1.0f, 0, 0, Bus::Effects));
+    for (auto id : ids) REQUIRE(id != 0);
+    CHECK(m.play(constant(48000, 48000, 0.01f), 1.0f, 0, 0, Bus::Effects) == 0); // full
+    // Every other one stopped: the next play reaps them all and finds room.
+    for (std::size_t i = 0; i < ids.size(); i += 2) m.stop(ids[i]);
+    m.render(out.data(), 512);
+    CHECK(m.voice_count() == 8);
+    std::vector<std::uint32_t> more;
+    for (int i = 0; i < 8; ++i) more.push_back(m.play(constant(48000, 48000, 0.01f), 1.0f, 0, 0, Bus::Effects));
+    for (auto id : more) CHECK(id != 0);
+    CHECK(m.voice_count() == 16);
+    for (std::size_t i = 1; i < ids.size(); i += 2) CHECK(m.alive(ids[i]));
+    for (std::size_t i = 0; i < ids.size(); i += 2) CHECK_FALSE(m.alive(ids[i]));
+}
+
+TEST_CASE("Audio system: the global music is set once the sound archives are indexed; a selection made before stays") {
+    test::ScratchDir dir("audio_global_music");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "eqtheme.mp3", std::ios::binary) << "not an mp3";
+    auto pfs = test::pfs_fixtures::make_pfs({{"gl.xmi", std::vector<std::byte>(16, std::byte{0})}});
+    std::ofstream(dir.path() / "snd2.pfs", std::ios::binary)
+        .write(reinterpret_cast<const char*>(pfs.data()), static_cast<std::streamsize>(pfs.size()));
+    GameDir game(dir.path());
+    AudioSystem audio(game, AudioSettings{}, false);
+    // The login screen's theme, asked for at once: kept until the entries are set if the index is still being built.
+    audio.music_selection(kMusicLogin, true);
+    audio.library().wait_idle(); // the index is built
+    audio.update(20);
+    CHECK(audio.global_music_ready());
+    const MusicEntry* playing = audio.music().playing();
+    REQUIRE(playing);
+    CHECK(playing->id == kMusicLogin);
+    CHECK(playing->file == "eqtheme.mp3");
+    // gl.xmi, found only in the archive, gives the other entries theirs.
+    audio.music_selection(kMusicBank, true);
+    audio.music_selection(kMusicLogin, false);
+    playing = audio.music().playing();
+    REQUIRE(playing);
+    CHECK(playing->id == kMusicBank);
+    CHECK(playing->file == "gl.xmi");
+}

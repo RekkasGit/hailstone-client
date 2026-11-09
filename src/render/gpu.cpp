@@ -169,7 +169,12 @@ Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
 
 void UploadBatch::submit() {
     if (buffers_.empty() && textures_.empty()) return;
-    vk_.immediate_submit([&](VkCommandBuffer cmd) {
+    // Not waited for: the frames after it on the queue see what it wrote (the barriers below), and its staging
+    // buffers go once its fence is signalled (VkContext::retire_after_upload).
+    VkDeviceSize staged = 0;
+    for (const auto& b : buffers_) staged += b.staging.size;
+    for (const auto& t : textures_) staged += t.staging.size;
+    const std::uint64_t serial = vk_.submit_upload([&](VkCommandBuffer cmd) {
         for (auto& b : buffers_) {
             VkBufferCopy copy{0, 0, b.target.size};
             vkCmdCopyBuffer(cmd, b.staging.buffer, b.target.buffer, 1, &copy);
@@ -226,11 +231,16 @@ void UploadBatch::submit() {
         dep.memoryBarrierCount = 1;
         dep.pMemoryBarriers = &mb;
         vkCmdPipelineBarrier2(cmd, &dep);
-    });
-    for (auto& b : buffers_) b.staging.destroy(vk_.allocator());
-    for (auto& t : textures_) t.staging.destroy(vk_.allocator());
+    }, staged);
+    std::vector<Buffer> staging;
+    staging.reserve(buffers_.size() + textures_.size());
+    for (auto& b : buffers_) staging.push_back(b.staging);
+    for (auto& t : textures_) staging.push_back(t.staging);
     buffers_.clear();
     textures_.clear();
+    vk_.retire_after_upload(serial, [allocator = vk_.allocator(), staging]() mutable {
+        for (Buffer& b : staging) b.destroy(allocator);
+    });
 }
 
 } // namespace hailstone::render
