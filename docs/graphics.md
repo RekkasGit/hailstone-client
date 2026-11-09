@@ -1068,6 +1068,19 @@ Where geometry hides a name its pixels are dropped; there is no ghost in the cli
 
 Every name stays at its natural projected head position. There is no stacking, distance fade, height timer or runtime tuning command in this version.
 
+How the names' text looks is Hailstone's to choose (the original's name sprites have one fixed font), set in Options > Display "Name Plates" (`game/nameplate_style.h`, hailstone.ini keys `display.plate_*`, kept per character like the other display options). The defaults draw the names as before these options:
+
+| Option | Key | Default | What it does |
+|---|---|---|---|
+| `plate_font_face` | `display.plate_font_face` | empty | A font family from the system's (as /fontface lists them); empty, or a face not found, is the UI's font. |
+| `plate_font_size` | `display.plate_font_size` | 15 | Points at 100 % UI scale, 8 to 48. The names get a font of their own in the atlas at this size, so a large name is not an enlarged small one. |
+| `plate_font_bold` | `display.plate_font_bold` | 0 | The face's bold file; a face with none is struck twice, a pixel apart. |
+| `plate_edge` | `display.plate_edge` | 0 | 0 a drop shadow one pixel down and right, 1 a dark outline all round (thicker for larger names), 2 none. |
+| `plate_far_scale` | `display.plate_far_scale` | 100 | The size of a name at the plates' range (250 units), in % of its size; it falls evenly with the head's distance from the camera (`game::plate_distance_factor`), 25 to 100. 100 keeps every name one size. |
+| `plate_tag_scale` | `display.plate_tag_scale` | 100 | The lines under the name (a guild, an NPC's owner line) in % of the name's size, 50 to 100. |
+
+The overlap fade measures each name's box at the size it is drawn. A change rebuilds the font atlas at the next frame, as /fontface does.
+
 Names that overlap each other are drawn from the farthest to the nearest, so the nearer lies over the farther (a deliberate difference; the original's name sprites sort by depth and nothing more). What a nearer box covers fades to `game::kPlateCoveredAlpha` (0.1), by the largest share of its box that one nearer box covers: nothing under `game::kPlateFadeFrom` (10 %), all of it from `game::kPlateFadeTo` (20 %), smoothstep between (`game/nameplate_overlap.h`). The alpha follows its goal smoothly (tau 0.3 s). The target is never faded and stays at its projected head at full alpha.
 
 The target's highlight (the dark plate, the edge in its colour and the bobbing marker) is the option `target_plate_highlight` (Options > Display "Highlight Target Name", `display.target_plate_highlight`, default on); off, the target's name is plain in its colour. If the pipeline cannot be made (a missing shader) the log says so and the names are drawn over the scene. Offline check (the zone viewer, no server; needs a GPU, a display and the game folder, so not in `hailstone_tests`): `tools/probe_test.py --hailstone build/hailstone/hailstone --game-dir DIR` runs the viewer twice in the Bazaar. `--plate-test` draws test names (magenta) through the same `NameplateLayer` as the client, each placed from the CPU's rays into the zone (`app/plate_test.h`) so that it is known what the scene should do to it: in front of everything it covers, behind it all, or in between. `--plate-test-no-depth` draws the same names with no depth test. The script counts the magenta pixels of each name in both screenshots: a front name must keep 95 % of them, a behind name lose all but 2 %, a partial one lose some. The CPU side is in `tests/plate_test_test.cpp`.

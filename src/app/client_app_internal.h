@@ -1322,6 +1322,7 @@ private:
     bool plate_overlap_fade_ = true; // Hailstone: a covered name fades (display.plate_overlap_fade)
     bool target_plate_through_walls_ = false; // Hailstone: the target's name shown behind walls (display.target_plate_through_walls)
     bool target_plate_highlight_ = true; // Hailstone: the target's name on a dark plate with a marker (display.target_plate_highlight)
+    game::PlateStyle plate_style_;    // Hailstone: the name plates' font, size, edge and shrink (game/nameplate_style.h)
     int show_names_ = 4;              // __ShowNames (/shownames 1..6, display.show_names): the player name sprite's parts
     bool spell_effects_ = true;       // ShowSpellEffects (/showspelleffects, display.spell_effects): spell particles
     // EnvironmentParticleDensity (/particledensity and the Options window's combo; display.environment_particle_density,
@@ -1349,6 +1350,9 @@ private:
     const std::vector<ui::FontFace>& font_faces() const;
     mutable std::optional<std::vector<ui::FontFace>> font_faces_;
     void apply_font_face();
+    // The name plates' font (plate_style_) to the UI's atlas (ui::ImGuiLayer::set_plate_font): its face looked up in
+    // font_faces() like the UI's; empty or not found, the UI's font.
+    void apply_plate_font();
     // The particle densities by kind ("spell", "environment", "actor"): the setting, applied to its emitters (and saved
     // as display.<kind>_particle_density, 0..1).
     float particle_density(std::string_view kind) const;

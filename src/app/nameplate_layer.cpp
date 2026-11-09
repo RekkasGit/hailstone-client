@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <cstring>
 
 #include <imgui_impl_vulkan.h>
@@ -209,11 +210,20 @@ void NameplateLayer::draw(const NameplateText& plate) {
     dl_->AddCallback(ImDrawCallback_ResetRenderState, nullptr);   // and ImGui's own pipeline again
 }
 
-glm::vec2 NameplateLayer::size_of(const NameplateText& p) {
-    const ImVec2 name = ImGui::CalcTextSize(p.name.c_str());
-    float w = name.x;
-    for (const auto& line : p.lines) w = std::max(w, ImGui::CalcTextSize(line.c_str()).x);
-    return {w, name.y * static_cast<float>(1 + p.lines.size())};
+ImFont* NameplateLayer::font() const { return style_.font ? style_.font : ImGui::GetFont(); }
+
+float NameplateLayer::name_size(const NameplateText& p) const {
+    const float base = style_.size > 0.0f ? style_.size : font()->FontSize;
+    return base * std::max(p.scale, 0.01f);
+}
+
+glm::vec2 NameplateLayer::size_of(const NameplateText& p) const {
+    ImFont* f = font();
+    const float size = name_size(p), tag = size * style_.tag_scale;
+    const float bold = style_.faux_bold ? 1.0f : 0.0f;
+    float w = f->CalcTextSizeA(size, FLT_MAX, 0.0f, p.name.c_str()).x + bold;
+    for (const auto& line : p.lines) w = std::max(w, f->CalcTextSizeA(tag, FLT_MAX, 0.0f, line.c_str()).x + bold);
+    return {w, size + tag * static_cast<float>(p.lines.size())};
 }
 
 void NameplateLayer::paint(const NameplateText& p) const {
@@ -223,14 +233,38 @@ void NameplateLayer::paint(const NameplateText& p) const {
         const float a = static_cast<float>((c >> IM_COL32_A_SHIFT) & 0xff) * std::clamp(p.alpha, 0.0f, 1.0f);
         return (c & ~IM_COL32_A_MASK) | (static_cast<ImU32>(a + 0.5f) << IM_COL32_A_SHIFT);
     };
-    const ImU32 shadow = fade(IM_COL32(0, 0, 0, 200)), color = fade(p.color);
-    const ImVec2 size = ImGui::CalcTextSize(p.name.c_str());
+    ImFont* f = font();
+    const float fs = name_size(p), tag = fs * style_.tag_scale;
+    const ImU32 color = fade(p.color);
+    // The edge: a drop shadow one pixel down and right (the look before the options), or a dark outline around each
+    // letter, thicker for a larger name.
+    const ImU32 edge = fade(style_.edge == game::PlateEdge::Outline ? IM_COL32(0, 0, 0, 220) : IM_COL32(0, 0, 0, 200));
+    const float ring = std::max(1.0f, std::round(fs / 16.0f));
+    auto text = [&](ImVec2 at, float size, ImU32 c, const char* s) {
+        dl_->AddText(f, size, at, c, s);
+        if (style_.faux_bold) dl_->AddText(f, size, ImVec2(at.x + 1.0f, at.y), c, s);
+    };
+    auto line = [&](float y, float size, const std::string& s) {
+        const float w = f->CalcTextSizeA(size, FLT_MAX, 0.0f, s.c_str()).x + (style_.faux_bold ? 1.0f : 0.0f);
+        const ImVec2 at(px - w * 0.5f, y);
+        if (style_.edge == game::PlateEdge::Shadow) {
+            text(ImVec2(at.x + 1, at.y + 1), size, edge, s.c_str());
+        } else if (style_.edge == game::PlateEdge::Outline) {
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    if (dx || dy)
+                        text(ImVec2(at.x + static_cast<float>(dx) * ring, at.y + static_cast<float>(dy) * ring), size,
+                             edge, s.c_str());
+        }
+        text(at, size, color, s.c_str());
+    };
     if (p.highlight) {
         // The target: its colour on a dark plate edged in that colour, with a marker bobbing above it (Hailstone's
         // look, not the original's; its ring: ClientApp::draw_target_ring).
-        const float fs = ImGui::GetFontSize();
+        const ImU32 shadow = fade(IM_COL32(0, 0, 0, 200));
+        const float w = f->CalcTextSizeA(fs, FLT_MAX, 0.0f, p.name.c_str()).x;
         const float padx = fs * 0.45f, pady = fs * 0.12f;
-        ImVec2 a(px - size.x * 0.5f - padx, py - pady), b(px + size.x * 0.5f + padx, py + size.y + pady);
+        ImVec2 a(px - w * 0.5f - padx, py - pady), b(px + w * 0.5f + padx, py + fs + pady);
         dl_->AddRectFilled(a, b, fade(IM_COL32(0, 0, 0, 150)), fs * 0.35f);
         dl_->AddRect(a, b, color, fs * 0.35f, 0, std::max(1.5f, fs * 0.1f));
         const float bob = std::abs(std::sin(static_cast<float>(ImGui::GetTime()) * 4.0f)) * fs * 0.3f;
@@ -239,14 +273,11 @@ void NameplateLayer::paint(const NameplateText& p) const {
         dl_->AddTriangleFilled(ImVec2(t0.x, t0.y + 1.5f), ImVec2(t1.x, t1.y + 1.5f), ImVec2(t2.x, t2.y + 1.5f), shadow);
         dl_->AddTriangleFilled(t0, t1, t2, color);
     }
-    dl_->AddText(ImVec2(px - size.x * 0.5f + 1, py + 1), shadow, p.name.c_str());
-    dl_->AddText(ImVec2(px - size.x * 0.5f, py), color, p.name.c_str());
-    float y = py + size.y;
-    for (const auto& line : p.lines) {
-        const ImVec2 ls = ImGui::CalcTextSize(line.c_str());
-        dl_->AddText(ImVec2(px - ls.x * 0.5f + 1, y + 1), shadow, line.c_str());
-        dl_->AddText(ImVec2(px - ls.x * 0.5f, y), color, line.c_str());
-        y += size.y;
+    line(py, fs, p.name);
+    float y = py + fs;
+    for (const auto& l : p.lines) {
+        line(y, tag, l);
+        y += tag;
     }
 }
 
