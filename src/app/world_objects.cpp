@@ -104,6 +104,9 @@ void WorldObjects::set_zone(const assets::Zone* zone, std::shared_ptr<const asse
     placed_tags_.clear();
     ghost_.reset();
     instances_.clear();
+    // The missiles' emitter meshes were the old models' (Model::emitters, freed above).
+    missile_actors_.clear();
+    missile_transforms_.clear();
     prepared_ = false;
 }
 
