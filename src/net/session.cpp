@@ -62,6 +62,7 @@ public:
     explicit SessionImpl(SessionOptions options) : opt_(std::move(options)) {
         std::random_device rd;
         rng_.seed((static_cast<std::uint64_t>(rd()) << 32) ^ rd());
+        init_hooks();
     }
 
     ~SessionImpl() override {
@@ -315,6 +316,7 @@ private:
         peer_ = {};
         state_ = SessionState::Disconnected;
         error_.clear();
+        failed_sends_ = 0;
         params_ = {};
         next_out_ = 0;
         pending_.clear();
@@ -394,7 +396,14 @@ private:
         if (deaf_) return; // simulate_link_loss
         if (opt_.trace) opt_.trace(true, packet);
         Bytes datagram = soe::encode_datagram(params_, packet);
-        if (!socket_.send_to(peer_, datagram)) log::warn("session: {}", socket_.last_error());
+        if (!socket_.send_to(peer_, datagram)) {
+            // Logged once an outage (the network gone while Wi-Fi drops fails every datagram), then summed up when
+            // a send works again: one line, not one a datagram.
+            if (failed_sends_++ == 0) log::warn("session: {} (further send errors are counted)", socket_.last_error());
+        } else if (failed_sends_ != 0) {
+            log::info("session: sending works again after {} failed datagrams", failed_sends_);
+            failed_sends_ = 0;
+        }
         last_send_ = now_();
         ++datagrams_sent_;
         bytes_sent_ += datagram.size();
@@ -491,14 +500,13 @@ private:
         return filled;
     }
 
-    // UdpReliableChannel_GiveTime: sends new reliable packets within the window and resends overdue ones.
-    void pump_reliable(Clock::time_point now) {
-        channel_.queued_packets = static_cast<std::int32_t>(pending_.size());
-        ReliableChannelHooks hooks;
-        hooks.max_unacked_age = kReliableTimeoutMs;
-        hooks.fill = [this](ReliableChannel& ch, std::int32_t bytes) { return fill_slots(ch, bytes); };
-        hooks.packet_length = [this](std::int32_t index) { return channel_.slots[static_cast<std::size_t>(index)].length; };
-        hooks.send = [this](std::span<const std::uint8_t>, const ReliableSlot& slot) {
+    // The channel's callbacks, made once: they only call back into this session, and the service thread runs
+    // pump_reliable every pass.
+    void init_hooks() {
+        hooks_.max_unacked_age = kReliableTimeoutMs;
+        hooks_.fill = [this](ReliableChannel& ch, std::int32_t bytes) { return fill_slots(ch, bytes); };
+        hooks_.packet_length = [this](std::int32_t index) { return channel_.slots[static_cast<std::size_t>(index)].length; };
+        hooks_.send = [this](std::span<const std::uint8_t>, const ReliableSlot& slot) {
             // The packets are prebuilt with the same header (make_reliable); send them as they are.
             if (slot.send_count > 0)
                 log::debug("session: resending seq {} (try {}, rtt {} ms)",
@@ -507,24 +515,38 @@ private:
                            slot.send_count, channel_.rtt);
             buffered_send(slot_data_[static_cast<std::size_t>(slot.packet)]);
         };
-        hooks.disconnect = [this](std::uint32_t) { fail("reliable data was not acknowledged for 180 s"); };
-        reliable_give_time(channel_, clock_ms(now), hooks);
+        hooks_.disconnect = [this](std::uint32_t) { fail("reliable data was not acknowledged for 180 s"); };
+    }
+
+    // UdpReliableChannel_GiveTime: sends new reliable packets within the window and resends overdue ones.
+    void pump_reliable(Clock::time_point now) {
+        channel_.queued_packets = static_cast<std::int32_t>(pending_.size());
+        reliable_give_time(channel_, clock_ms(now), hooks_);
         channel_.queued_packets = static_cast<std::int32_t>(pending_.size());
     }
 
-    void release_acked() {
-        for (std::size_t i = 0; i < slot_data_.size(); ++i)
-            if (!channel_.slots[i].used && !slot_data_[i].empty()) slot_data_[i].clear();
+    // Frees the packets of the slots acknowledged among sequences [from, to]: an ack frees only slots in that range
+    // (AckAll from the oldest unacknowledged to the ack, AckOne its own), so the rest of the ring is not walked.
+    void release_acked(std::int64_t from, std::int64_t to) {
+        from = std::max<std::int64_t>(from, 0); // an ack widened to before the first sequence
+        to = std::min(to, channel_.next_seq - 1);
+        for (std::int64_t sequence = from; sequence <= to; ++sequence) {
+            const auto index = static_cast<std::size_t>(sequence % static_cast<std::int64_t>(channel_.slots.size()));
+            if (!channel_.slots[index].used && !slot_data_[index].empty()) slot_data_[index].clear();
+        }
     }
 
     void on_ack(std::uint16_t seq) {
+        const std::int64_t from = channel_.oldest_unacked_seq;
+        const std::int64_t to = reliable_widen(channel_, seq);
         reliable_ack_all(channel_, seq, clock_ms(now_()));
-        release_acked();
+        release_acked(from, to);
     }
 
     void on_out_of_order_ack(std::uint16_t seq) {
-        reliable_ack_one(channel_, reliable_widen(channel_, seq), clock_ms(now_()));
-        release_acked();
+        const std::int64_t sequence = reliable_widen(channel_, seq);
+        reliable_ack_one(channel_, sequence, clock_ms(now_()));
+        release_acked(sequence, sequence);
     }
 
     void receive_all() {
@@ -782,6 +804,7 @@ private:
     };
     std::deque<Pending> pending_;    // queued reliable packets, not yet in a slot
     ReliableChannel channel_;        // the original's reliable channel 0
+    ReliableChannelHooks hooks_;     // its callbacks (init_hooks)
     std::vector<Bytes> slot_data_;   // each slot's packet
     Bytes multi_;                     // the multi-buffer: 00 03 and the held packets, or empty
     Clock::time_point multi_started_; // when its first packet was added
@@ -802,6 +825,7 @@ private:
     std::int64_t ping_total_ = 0;
     std::array<std::uint64_t, 4> sync_{}; // our sent, our received, their sent, their received
     std::uint64_t keepalives_sent_ = 0;
+    std::uint64_t failed_sends_ = 0; // datagrams the socket refused since the last that went (send_now)
 };
 
 } // namespace

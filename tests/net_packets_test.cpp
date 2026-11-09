@@ -99,6 +99,17 @@ TEST_CASE("OP_SendLoginInfo is 464 bytes with account\\0key and the zoning flag 
     CHECK(decode_login_info(p)->custom_files_key == "key1");
 }
 
+TEST_CASE("OP_SendLoginInfo: a key that does not fit keeps the field's last NUL") {
+    LoginInfo li{"12345", std::string(57, 'K'), false, ""}; // 5 + 1 + 57 + 1 = 64: fits
+    CHECK(login_info_fits(li));
+    CHECK(decode_login_info(encode(li))->session_key == li.session_key);
+    li.session_key.push_back('K');
+    CHECK_FALSE(login_info_fits(li));
+    AppPacket p = encode(li);
+    CHECK(byte_at(p, 63) == 0);
+    CHECK(decode_login_info(p)->session_key == std::string(57, 'K'));
+}
+
 TEST_CASE("OP_EnterWorld client record is 72 bytes") {
     AppPacket p = encode(EnterWorld{"Gennro", 0, 1});
     CHECK(p.opcode == to_wire(Op::EnterWorld));

@@ -297,6 +297,8 @@ struct ConnectionOptions {
     // The saved server's folder (servers/<id>/): at the first zone-in the zone-in waits while the server's client
     // files are brought into its assets/ (net/server_files.h). Empty: no download (a test login, tests).
     std::filesystem::path server_files_dir;
+    // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
+    ServerFileSync::Limits server_files_limits;
 };
 
 // The modifier keys of a click on an item slot (CXWndManager::GetKeyboardFlags: Shift, Ctrl, Alt).

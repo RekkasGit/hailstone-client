@@ -116,7 +116,7 @@ ask for `files_chunks_per_second` pieces a second (768, 24 MB/s; one download wa
 this leaves it room), and all of a zone's players together for `files_chunks_per_second_zone` (1024, 32 MB/s: two
 first downloads at once each get about the measured rate, three or more share it and are slower). A client asking
 faster than that has its requests wait, up to 64 of them, and while any wait, every player's are served a player at a
-time in turn, so no one is left with nothing; they are served as requests come and on a 100 ms timer (`eq.set_timer`
+time in turn, so no one is left with nothing; they are served as requests come (while the zone's limit has room that second) and on a 100 ms timer (`eq.set_timer`
 on the script's encounter) as the limits allow, and what waits for a player who leaves the zone is dropped. The
 client asks again for a piece that does not come. EQEmu keeps every piece it sent until the client acknowledges it,
 for up to 30 seconds, and a quest script cannot see those acknowledgements: a modified client that asks and never
@@ -125,7 +125,7 @@ however many characters it uses (about 0.7 GB for one). This is bounded, not gon
 `files_chunks_per_second_zone` to hold less, at the cost of slower first downloads.
 
 Every Hailstone request is limited per character before the zone does any work for it: eight whole file lists a
-minute, ten guild packets and five settings requests in 10 seconds, five group declines in 10 seconds. An honest
+minute, ten guild packets and five settings requests in 10 seconds (a malformed one counts too, so a flood of them is not logged line by line), five group declines in 10 seconds, and file piece requests up to twice what the two limits above let a player be sent in a second plus the 64 that may wait (at least 2112 a second; an honest client asks once a piece, and again for a lost one). An honest
 client asks for each once a zone-in; what is over the limit is dropped, with one line in the zone's log. A first download of a
 gigabyte took about 70 seconds on one machine; a player who has the files only gets the list. Compressing the
 files would not help: EQEmu already compresses the zone stream (`Network:CompressZoneStream`), and zone and model

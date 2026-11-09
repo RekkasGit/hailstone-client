@@ -187,9 +187,16 @@ void GameConnection::update() {
             info.account_id = std::to_string(ticket_.account_id);
             info.session_key = ticket_.session_key;
             info.zoning = zoning_;
-            send_world(encode(info));
-            if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
-            status_ = "Logging in to " + ticket_.server_name;
+            if (!login_info_fits(info)) {
+                // EQEmu's login server sends a 10-character key; a longer one cannot be sent whole.
+                const std::size_t room = info.account_id.size() < 62 ? 62 - info.account_id.size() : 0;
+                fail(std::format("the login server's session key is too long for the world login ({} bytes, at most {})",
+                                 info.session_key.size(), room));
+            } else {
+                send_world(encode(info));
+                if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
+                status_ = "Logging in to " + ticket_.server_name;
+            }
             // Zoning keeps state_ == Zoning; the world's OP_EnterWorld reply moves it on.
         }
         while (auto p = world_session_ ? world_session_->receive() : std::nullopt)
@@ -235,8 +242,9 @@ void GameConnection::update() {
             // The first zone-in of the login brings the server's client files first (net/server_files.h): the zone
             // knows the client once it has OP_ZoneEntry, and keeps it connecting while the files come.
             if (!options_.server_files_dir.empty() && !server_files_) {
-                server_files_ = std::make_unique<ServerFileSync>(options_.server_files_dir,
-                                                                 [this](AppPacket p) { send_zone(std::move(p)); });
+                server_files_ = std::make_unique<ServerFileSync>(
+                    options_.server_files_dir, [this](AppPacket p) { send_zone(std::move(p)); },
+                    options_.server_files_limits);
                 zone_session_->set_no_hold(true); // the pieces asked and acknowledged without the 150 ms hold
                 server_files_->start(ServerFileSync::Clock::now());
             }

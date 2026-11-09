@@ -71,6 +71,15 @@ plugin::Rules cached_server_rules(const std::filesystem::path& profile_dir);
 // .tga, .png, .jpg), which changes no play.
 bool asset_counts(const std::set<std::string>& only, std::string_view normalized);
 
+// What a server may make this write (Hailstone's bounds; hailstone.ini's assets.server_files_max_file_mb and
+// assets.server_files_max_total_mb, docs/layout.md "Server files"). A file larger than max_file is refused (not
+// downloaded, like an unsafe name); when what is to come adds up to more than max_total the sync fails before
+// anything is written. The defaults are far above the largest server measured (1.1 GB in all).
+struct ServerFileLimits {
+    std::uint64_t max_file = std::uint64_t{2} << 30;   // 2 GiB
+    std::uint64_t max_total = std::uint64_t{16} << 30; // 16 GiB
+};
+
 class ServerFileSync {
 public:
     using Clock = std::chrono::steady_clock;
@@ -95,8 +104,10 @@ public:
     // order (a few tens of ms); handle() hashes only plan()'s first share, once a list.
     static constexpr std::uint64_t kHashBytesPerUpdate = std::uint64_t{16} << 20;
 
+    using Limits = ServerFileLimits;
+
     // profile_dir: servers/<id>/.
-    ServerFileSync(std::filesystem::path profile_dir, Send send);
+    ServerFileSync(std::filesystem::path profile_dir, Send send, Limits limits = {});
     ~ServerFileSync();
 
     void start(Clock::time_point now);
@@ -163,6 +174,7 @@ private:
 
     std::filesystem::path dir_;
     Send send_;
+    Limits limits_;
     State state_ = State::Idle;
     bool changed_ = false;
     std::string error_;

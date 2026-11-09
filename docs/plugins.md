@@ -548,8 +548,8 @@ own and works the same on every platform. Nothing waits on the network:
 
 | Function | What |
 |---|---|
-| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `HAILSTONE_TCP_MAX` = 8 open). A name is looked up in the background, the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why |
-| `tcp_state(handle)` | 1 connected, 0 still connecting, -1 closed (refused, dropped, closed by the other side) |
+| `tcp_open(address, port)` | starts connecting without waiting: a handle above 0, or 0 (no `net`, already `HAILSTONE_TCP_MAX` = 8 open). A name is looked up in the background (at most four lookups at once, the rest queued), the handle connecting meanwhile; one that does not resolve shows as `tcp_state` -1, `tcp_error` saying why. Each of a name's addresses is tried in turn (IPv4 first): one refused, or with no answer in 10 s, hands over to the next, and the last one's failure closes the handle |
+| `tcp_state(handle)` | 1 connected, 0 still connecting (at most 10 s an address), -1 closed (refused, no answer, dropped, closed by the other side) |
 | `tcp_send(handle, data, size)` | takes every byte (what the system cannot take yet waits in the client and goes out at the next `tcp_*` call) and returns the count, or -1 once closed |
 | `tcp_recv(handle, out, size)` | what has arrived: the count, 0 for nothing yet, -1 once closed with nothing left |
 | `tcp_error(handle, out, size)` | why it closed, as text |
