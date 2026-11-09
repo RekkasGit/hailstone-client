@@ -53,6 +53,7 @@ dependencies was run); the deterministic tests are the verified part.
 | `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite object position (corrupt record) reached float-to-unsigned casts | treat non-finite coordinates as 0 |
 | `src/net/movement_packets.cpp` `decode_find_person_reply`, `src/game/player_path.cpp` `handle_reply` | a reply whose points were all NaN left the path empty, then read its last point (UB) | non-finite points are dropped in the decoder; a reply that leaves no point is a failed find |
 | `src/game/player_path.cpp` `load_path_settings`, `trim`, `walk` | a `SegmentLength` or `ControlSegmentLength` of 0 or less, a negative or tiny `LODFactor`, or a NaN `MergeDistance` in Path.ini looped forever (or added points every frame without end) | such values take the defaults; trim adds at most the reply's 10000 points, and a drawn segment at most 256 |
+| `src/game/collision.cpp` `CollisionMesh::build`, `object_collision.cpp` `ObjectShape::from_mesh`, `zone_ladders.cpp` | a mesh part whose first index and count reach past the index list read out of bounds | the part ends at the list's end |
 
 Behaviour for valid input is unchanged. The typed packet decoders, the session layer, the login parsers and the WLD, ZON,
 model, DDS, TGA, XMI and table parsers produced no findings.
