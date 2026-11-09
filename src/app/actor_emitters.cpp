@@ -71,7 +71,8 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         if (!a.mesh || a.mesh->emitters.empty()) continue;
         Live& live = live_[a.id];
         live.seen = true;
-        if (live.mesh != a.mesh) {
+        live.mesh = a.mesh; // (the same mesh, or one at the same address: the attachments below read this one)
+        if (live.mesh_serial != a.mesh->serial.value()) {
             // A new mesh (dressed again, another weapon): its emitters replace the old ones.
             for (std::uint32_t key : live.keys) particles_.stop(key);
             for (std::uint32_t key : live.standing_keys) particles_.stop(key);
@@ -80,7 +81,7 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
             live.keys.clear();
             live.standing_keys.clear();
             live.triggered.clear();
-            live.mesh = a.mesh;
+            live.mesh_serial = a.mesh->serial.value();
             for (std::size_t i = 0; i < a.mesh->emitters.size(); ++i) {
                 const auto& e = a.mesh->emitters[i].emitter;
                 if (e.trigger != 0 || e.variant >= 1) continue;

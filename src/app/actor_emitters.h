@@ -70,7 +70,10 @@ public:
 
 private:
     struct Live {
+        // The mesh drawn last frame, and which one it is: a mesh freed and another dressed at its address (the
+        // spawn dressed again) has another serial (assets::MeshSerial), so its emitters start afresh.
         const assets::CharacterMesh* mesh = nullptr;
+        std::uint64_t mesh_serial = 0;
         std::vector<std::uint32_t> keys;
         std::vector<std::uint32_t> standing_keys; // the STND / IDLE entries', while it stands
         // The other animation-started entries, by entry: the time into their animation last frame (negative: not

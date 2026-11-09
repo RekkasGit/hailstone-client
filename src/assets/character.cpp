@@ -11,6 +11,7 @@
 #include "assets/character.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cctype>
 #include <cmath>
@@ -28,6 +29,11 @@
 #include "game/race_models.h"
 
 namespace hailstone::assets {
+
+std::uint64_t MeshSerial::next() noexcept {
+    static std::atomic<std::uint64_t> counter{0};
+    return counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
 namespace {
 
