@@ -751,6 +751,23 @@ TEST_CASE("EQG character meshes: with bones v runs up from the texture's bottom 
     CHECK(v[2].uv == glm::vec2(0.5f, 0.0f));
 }
 
+TEST_CASE("EQG string tables: a name is cut at 256 bytes, however many references share a long run") {
+    ByteWriter w;
+    const std::string run(100000, 'm');
+    w.le(eqg::kZonMagic);
+    w.le<std::uint32_t>(1);
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(run.size() + 1));
+    w.le<std::uint32_t>(10000); // models
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.fixed_string(run, run.size() + 1);
+    for (std::int32_t i = 0; i < 10000; ++i) w.le(i);
+    auto z = eqg::parse_zon(w.data());
+    REQUIRE(z.models.size() == 10000);
+    for (const auto& m : z.models) CHECK(m == std::string(256, 'm'));
+}
+
 TEST_CASE("unpainted heightmap tiles take the nearest painted tile") {
     std::map<std::pair<std::int32_t, std::int32_t>, std::size_t> painted{{{0, 0}, 0}, {{3, 0}, 1}, {{2, 2}, 2}};
     CHECK(eqg::nearest_painted_tile(1, 0, painted) == 0u);
@@ -758,6 +775,11 @@ TEST_CASE("unpainted heightmap tiles take the nearest painted tile") {
     CHECK(eqg::nearest_painted_tile(3, 2, painted) == 2u);  // ring 1: (2, 2) straight beside it
     CHECK(eqg::nearest_painted_tile(1, 1, painted) == 0u);  // ring 1 holds (0, 0) and (2, 2), diagonal both: the first
     CHECK_FALSE(eqg::nearest_painted_tile(40, 40, painted).has_value());
+    // A corrupt tile's index at the edge of int32: its neighbours past the edge are none, without overflowing.
+    const std::int32_t lo = std::numeric_limits<std::int32_t>::min(), hi = std::numeric_limits<std::int32_t>::max();
+    std::map<std::pair<std::int32_t, std::int32_t>, std::size_t> edge{{{lo + 1, hi}, 7}};
+    CHECK(eqg::nearest_painted_tile(lo, hi, edge) == 7u);
+    CHECK_FALSE(eqg::nearest_painted_tile(hi, lo, edge).has_value());
 }
 
 TEST_CASE("animated texture sidecars list their frames") {

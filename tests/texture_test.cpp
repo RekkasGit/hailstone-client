@@ -385,6 +385,31 @@ TEST_CASE("RLE8 BMP") {
     CHECK(pixel(img, 0, 3, 0) == Px{0, 0, 0, 255});
 }
 
+TEST_CASE("RLE8 BMP: a size far past what its runs could fill is refused before it allocates") {
+    std::vector<std::uint32_t> pal = {0x000000, 0xff0000};
+    // 8192 x 256 from two bytes: an end of bitmap at once leaves every pixel unwritten (index 0). (Its rows pass
+    // the older check: one delta could skip 255 of them.)
+    std::vector<std::uint8_t> px = {0, 1};
+    std::string error;
+    CHECK_FALSE(decode_texture(bmp(8192, 256, 8, pal, px, 1), {}, &error));
+    CHECK(error.find("too short") != std::string::npos);
+    // A small one ended early is still a picture of index 0 where nothing was written.
+    auto img = decode_ok(bmp(64, 64, 8, pal, {2, 1, 0, 1}, 1));
+    CHECK(pixel(img, 0, 0, 63) == Px{255, 0, 0, 255});
+    CHECK(pixel(img, 0, 2, 63) == Px{0, 0, 0, 255});
+    CHECK(pixel(img, 0, 5, 0) == Px{0, 0, 0, 255});
+    // Runs that do fill a large image: 1024 x 256, each row four runs of 255 and one of 4.
+    std::vector<std::uint8_t> rows;
+    for (int y = 0; y < 256; ++y) {
+        for (int k = 0; k < 4; ++k) rows.insert(rows.end(), {255, 1});
+        rows.insert(rows.end(), {4, 1, 0, 0});
+    }
+    rows.insert(rows.end(), {0, 1});
+    auto full = decode_ok(bmp(1024, 256, 8, pal, rows, 1));
+    CHECK(pixel(full, 0, 1023, 0) == Px{255, 0, 0, 255});
+    CHECK(pixel(full, 0, 0, 255) == Px{255, 0, 0, 255});
+}
+
 TEST_CASE("Truncated and corrupt textures are rejected") {
     std::string error;
     auto w = dds_header({.width = 8, .height = 8, .fourcc = "DXT5"});

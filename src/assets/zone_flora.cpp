@@ -65,6 +65,15 @@ float unit(MsvcRand& rand) { return static_cast<float>(rand()) / 32767.0f; }
 // invisible cloud layers) or that only glow (Additive).
 bool casts_cover(const Material& m) { return m.blend != BlendMode::Invisible && m.blend != BlendMode::Additive; }
 
+// A vertex past this many units from the origin is a damaged mesh's, not ground: the classic and EQG zones lie
+// within some +-20,000 units. Such a triangle (or a non-finite one) neither grows plants nor covers any; it would
+// otherwise reach the float-to-int casts below as NaN or split into a million pieces.
+constexpr float kMaxFloraCoord = 100000.0f;
+
+bool sane_position(const glm::vec3& p) {
+    return std::abs(p.x) <= kMaxFloraCoord && std::abs(p.y) <= kMaxFloraCoord && std::abs(p.z) <= kMaxFloraCoord;
+}
+
 class CoverGrid {
 public:
     explicit CoverGrid(const Zone& zone) {
@@ -79,7 +88,7 @@ public:
                     bool ok = true;
                     for (int k = 0; k < 3; ++k) {
                         const std::uint32_t v = mesh.indices[i + static_cast<std::size_t>(k)];
-                        if (v >= mesh.vertices.size()) {
+                        if (v >= mesh.vertices.size() || !sane_position(mesh.vertices[v].position)) { // NaN too
                             ok = false;
                             break;
                         }
@@ -100,55 +109,101 @@ public:
         origin_ = lo;
         nx_ = std::min<std::int32_t>(static_cast<std::int32_t>((hi.x - lo.x) / kCell) + 1, 4096);
         ny_ = std::min<std::int32_t>(static_cast<std::int32_t>((hi.y - lo.y) / kCell) + 1, 4096);
-        std::vector<std::uint32_t> counts(static_cast<std::size_t>(nx_) * static_cast<std::size_t>(ny_) + 1, 0);
-        auto each_cell = [&](const Tri& t, auto&& fn) {
+        struct Span {
+            std::int32_t x0, x1, y0, y1;
+        };
+        auto span_of = [&](const Tri& t) {
             glm::vec2 a = glm::min(glm::min(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
             glm::vec2 b = glm::max(glm::max(glm::vec2(t.p[0]), glm::vec2(t.p[1])), glm::vec2(t.p[2]));
-            const std::int32_t x0 = cell(a.x - origin_.x, nx_), x1 = cell(b.x - origin_.x, nx_);
-            const std::int32_t y0 = cell(a.y - origin_.y, ny_), y1 = cell(b.y - origin_.y, ny_);
-            for (std::int32_t y = y0; y <= y1; ++y)
-                for (std::int32_t x = x0; x <= x1; ++x)
-                    fn(static_cast<std::size_t>(y) * static_cast<std::size_t>(nx_) + static_cast<std::size_t>(x));
+            return Span{cell(a.x - origin_.x, nx_), cell(b.x - origin_.x, nx_), cell(a.y - origin_.y, ny_),
+                        cell(b.y - origin_.y, ny_)};
         };
-        for (const auto& t : tris_) each_cell(t, [&](std::size_t c) { ++counts[c + 1]; });
-        for (std::size_t c = 1; c < counts.size(); ++c) counts[c] += counts[c - 1];
+        // A triangle over more than kBigCells cells (a sea floor across the zone) is kept apart and tested at every
+        // point, as collision.cpp's big_; the cells hold at most kMaxRefs references in all. A triangle past either
+        // bound (only a damaged mesh has so many) is no cover: plants may grow under it, nothing worse.
+        std::vector<std::uint32_t> counts(static_cast<std::size_t>(nx_) * static_cast<std::size_t>(ny_) + 1, 0);
+        std::vector<std::uint8_t> where(tris_.size(), 0); // 0 the grid, 1 big_, 2 dropped
+        std::uint64_t total = 0;
+        std::size_t dropped = 0;
+        for (std::size_t i = 0; i < tris_.size(); ++i) {
+            const Span s = span_of(tris_[i]);
+            const std::uint64_t cells = std::uint64_t(s.x1 - s.x0 + 1) * std::uint64_t(s.y1 - s.y0 + 1);
+            if (cells > kBigCells) {
+                if (big_.size() < kMaxBig) {
+                    big_.push_back(static_cast<std::uint32_t>(i));
+                    where[i] = 1;
+                } else {
+                    where[i] = 2;
+                    ++dropped;
+                }
+                continue;
+            }
+            if (total + cells > kMaxRefs) {
+                where[i] = 2;
+                ++dropped;
+                continue;
+            }
+            total += cells;
+            for (std::int32_t y = s.y0; y <= s.y1; ++y)
+                for (std::int32_t x = s.x0; x <= s.x1; ++x) ++counts[index_of(x, y) + 1];
+        }
+        if (dropped > 0) log::debug("{}: zone flora: {} triangles too large to tell cover by", zone.name, dropped);
+        for (std::size_t c = 1; c < counts.size(); ++c) counts[c] += counts[c - 1]; // at most kMaxRefs: no wrap
         start_ = counts;
         index_.resize(counts.back());
-        for (std::uint32_t i = 0; i < tris_.size(); ++i) each_cell(tris_[i], [&](std::size_t c) { index_[counts[c]++] = i; });
+        for (std::uint32_t i = 0; i < tris_.size(); ++i) {
+            if (where[i] != 0) continue;
+            const Span s = span_of(tris_[i]);
+            for (std::int32_t y = s.y0; y <= s.y1; ++y)
+                for (std::int32_t x = s.x0; x <= s.x1; ++x) index_[counts[index_of(x, y)]++] = i;
+        }
     }
 
     // Whether a triangle lies more than kClearance over `p` (straight up).
     bool covered(const glm::vec3& p) const {
         if (tris_.empty()) return false;
-        const std::int32_t x = cell(p.x - origin_.x, nx_), y = cell(p.y - origin_.y, ny_);
-        const std::size_t c = static_cast<std::size_t>(y) * static_cast<std::size_t>(nx_) + static_cast<std::size_t>(x);
-        for (std::uint32_t k = start_[c]; k < start_[c + 1]; ++k) {
-            const Tri& t = tris_[index_[k]];
-            // Barycentric in the plane; the height there.
-            const glm::vec2 a(t.p[0]), b(t.p[1]), q(t.p[2]), pt(p);
-            const float d = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y);
-            const float u = ((pt.x - a.x) * (q.y - a.y) - (q.x - a.x) * (pt.y - a.y)) / d;
-            const float v = ((b.x - a.x) * (pt.y - a.y) - (pt.x - a.x) * (b.y - a.y)) / d;
-            if (u < 0.0f || v < 0.0f || u + v > 1.0f) continue;
-            const float z = t.p[0].z + (t.p[1].z - t.p[0].z) * u + (t.p[2].z - t.p[0].z) * v;
-            if (z > p.z + kClearance) return true;
-        }
+        const std::size_t c = index_of(cell(p.x - origin_.x, nx_), cell(p.y - origin_.y, ny_));
+        for (std::uint32_t k = start_[c]; k < start_[c + 1]; ++k)
+            if (over(tris_[index_[k]], p)) return true;
+        for (std::uint32_t t : big_)
+            if (over(tris_[t], p)) return true;
         return false;
     }
 
 private:
     static constexpr float kCell = 64.0f;
     static constexpr float kClearance = 1.0f; // the ground's own triangle, and a decal over it, are not cover
+    static constexpr std::uint64_t kBigCells = 1024;      // 2,048 units a side
+    static constexpr std::size_t kMaxBig = 256;
+    static constexpr std::uint64_t kMaxRefs = 1u << 24;  // 64 MB of references
     struct Tri {
         glm::vec3 p[3];
     };
-    std::int32_t cell(float d, std::int32_t n) const {
-        return std::clamp(static_cast<std::int32_t>(std::floor(d / kCell)), 0, n - 1);
+    static bool over(const Tri& t, const glm::vec3& p) {
+        // Barycentric in the plane; the height there.
+        const glm::vec2 a(t.p[0]), b(t.p[1]), q(t.p[2]), pt(p);
+        const float d = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y);
+        const float u = ((pt.x - a.x) * (q.y - a.y) - (q.x - a.x) * (pt.y - a.y)) / d;
+        const float v = ((b.x - a.x) * (pt.y - a.y) - (pt.x - a.x) * (b.y - a.y)) / d;
+        if (u < 0.0f || v < 0.0f || u + v > 1.0f) return false;
+        const float z = t.p[0].z + (t.p[1].z - t.p[0].z) * u + (t.p[2].z - t.p[0].z) * v;
+        return z > p.z + kClearance;
+    }
+    // The cell of offset `d` along an axis of `n` cells, clamped; a NaN is cell 0. Clamped as a float first: a float
+    // out of int32's range cast to it is undefined.
+    static std::int32_t cell(float d, std::int32_t n) {
+        const float c = std::floor(d / kCell);
+        if (!(c > 0.0f)) return 0;
+        if (c >= static_cast<float>(n - 1)) return n - 1;
+        return static_cast<std::int32_t>(c);
+    }
+    std::size_t index_of(std::int32_t x, std::int32_t y) const {
+        return static_cast<std::size_t>(y) * static_cast<std::size_t>(nx_) + static_cast<std::size_t>(x);
     }
     std::vector<Tri> tris_;
     glm::vec2 origin_{0.0f};
     std::int32_t nx_ = 0, ny_ = 0;
-    std::vector<std::uint32_t> start_, index_;
+    std::vector<std::uint32_t> start_, index_, big_;
 };
 
 // A triangle's own sequence (Hailstone's own seed, so it grows the same plants at every load).
@@ -286,8 +341,13 @@ namespace {
 // then walks only the plants of the ground near it, not every plant of a sea floor's one triangle across the zone.
 constexpr float kMaxGrowArea = kZoneFloraTile * kZoneFloraTile / 4.0f;
 constexpr int kMaxSplits = 10; // 4^10 pieces at most, for a damaged mesh's triangle across the world
+// The most pieces a zone's ground is cut into. A split piece is over a quarter of kMaxGrowArea, so ground of 20,000
+// units a side makes some 400,000 (plus the triangles too small to split, a few hundred thousand in the densest
+// zone); only a damaged mesh asks for more, and its ground past this grows nothing.
+constexpr std::size_t kMaxPieces = std::size_t{1} << 21;
 
 void add_split(std::vector<ZoneFloraGrower::Piece>& out, const ZoneFloraGrower::Piece& t, int depth) {
+    if (out.size() >= kMaxPieces) return;
     if (t.area <= kMaxGrowArea || depth >= kMaxSplits) {
         out.push_back(t);
         return;
@@ -403,6 +463,7 @@ ZoneFloraGrower::ZoneFloraGrower(const Zone& zone, const ZoneFloraRules& rules,
                 const std::uint32_t ia = mesh.indices[i], ib = mesh.indices[i + 1], ic = mesh.indices[i + 2];
                 if (ia >= mesh.vertices.size() || ib >= mesh.vertices.size() || ic >= mesh.vertices.size()) continue;
                 const Vertex &a = mesh.vertices[ia], &b = mesh.vertices[ib], &c = mesh.vertices[ic];
+                if (!sane_position(a.position) || !sane_position(b.position) || !sane_position(c.position)) continue;
                 glm::vec3 n = glm::cross(b.position - a.position, c.position - a.position);
                 const float len = glm::length(n);
                 if (!(len > 1e-6f)) continue;
@@ -427,7 +488,8 @@ ZoneFloraGrower::ZoneFloraGrower(const Zone& zone, const ZoneFloraRules& rules,
     }
     if (d.tris.empty()) return;
 
-    // Binned by the tiles their bounds touch (a plant belongs to the tile its foot is in).
+    // Binned by the tiles their bounds touch (a plant belongs to the tile its foot is in). The pieces' corners are
+    // within kMaxFloraCoord, so the tile numbers fit an int32.
     auto tile_of = [](float v) { return static_cast<std::int32_t>(std::floor(v / kZoneFloraTile)); };
     std::map<std::pair<std::int32_t, std::int32_t>, std::vector<std::uint32_t>> bins;
     for (std::uint32_t i = 0; i < d.tris.size(); ++i) {

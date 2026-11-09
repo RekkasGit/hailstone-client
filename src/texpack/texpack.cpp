@@ -240,8 +240,14 @@ ScanResult scan(const std::vector<fs::path>& archives, const ScanOptions& option
             try {
                 auto archive = assets::PfsArchive::open(path);
                 for (const auto& name : archive.names()) {
+                    // A member without a texture's extension is sniffed by its first bytes before it is inflated
+                    // whole: most are meshes, WLDs and sounds.
+                    if (!has_texture_extension(name)) {
+                        auto head = archive.read_prefix(name, 4);
+                        if (!head || !has_texture_magic(*head)) continue;
+                    }
                     auto data = archive.read(name);
-                    if (!data || (!has_texture_extension(name) && !has_texture_magic(*data))) continue;
+                    if (!data) continue;
                     const std::uint64_t hash = assets::texture_content_hash(*data);
                     {
                         std::lock_guard lock(mutex);

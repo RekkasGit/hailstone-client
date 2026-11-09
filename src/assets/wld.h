@@ -318,8 +318,9 @@ public:
     // The first fragment with this name. Names can repeat (Plane of Knowledge's
     // object WLD has later duplicates); the first definition is used, as in OpenEQ.
     const Fragment* find(std::string_view name) const;
-    // String at a negative reference; empty when invalid.
+    // String at a negative reference; empty when invalid, cut at kMaxStringLength.
     std::string string_at(Ref ref) const;
+    static constexpr std::size_t kMaxStringLength = 256;
 
     template <typename T> const T* get(Ref ref) const {
         const Fragment* f = resolve(ref);

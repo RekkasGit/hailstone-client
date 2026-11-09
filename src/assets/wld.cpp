@@ -1,5 +1,6 @@
 #include "assets/wld.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "core/byte_io.h"
@@ -503,9 +504,12 @@ std::string WldFile::string_at(Ref ref) const {
     // Negate in 64 bits so INT32_MIN cannot overflow.
     auto offset = static_cast<std::uint64_t>(-static_cast<std::int64_t>(ref));
     if (offset >= strings_.size()) return {};
+    // A name ends at its NUL or after kMaxStringLength bytes: the longest in the RoF2 files is 40 (59 in an EQG), and
+    // without a bound every reference into one long run without a NUL would copy all of it.
     std::size_t start = static_cast<std::size_t>(offset);
     std::size_t end = start;
-    while (end < strings_.size() && strings_[end] != 0) ++end;
+    const std::size_t limit = start + std::min(strings_.size() - start, kMaxStringLength);
+    while (end < limit && strings_[end] != 0) ++end;
     return std::string(reinterpret_cast<const char*>(strings_.data() + start), end - start);
 }
 

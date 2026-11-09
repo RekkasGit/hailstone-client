@@ -409,7 +409,6 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
     log::debug("{}: {} of {} placements have vertex lighting", zone.name, lit, zone.placements.size());
 
     for (const auto& l : zon.lights) {
-        if (!finite(l.position)) continue;
         PointLight light;
         // Stored as (y, -x, z) relative to the geometry: OpenEQ zone.rs reads
         // them so, and 380 of Anguish's 452 lights then lie within 20 units of
@@ -417,7 +416,7 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
         light.position = {l.position.y, -l.position.x, l.position.z};
         light.color = l.color;
         light.radius = l.radius;
-        zone.lights.push_back(light);
+        if (finite_light(light)) zone.lights.push_back(light);
     }
 
     std::vector<RegionBox> boxes;
@@ -1025,7 +1024,7 @@ void load_heightmap(Zone& zone, const Source& src, std::span<const std::byte> zo
             if (auto c = eqg::light_definition_color(
                     std::string_view(reinterpret_cast<const char*>(def->data()), def->size())))
                 light.color = *c;
-        zone.lights.push_back(light);
+        if (finite_light(light)) zone.lights.push_back(light);
     }
 }
 
