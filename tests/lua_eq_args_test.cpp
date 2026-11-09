@@ -242,3 +242,18 @@ TEST_CASE("plugin values: a table inside itself or past the size budget is refus
     CHECK(lua_istable(L, -1));
     lua_close(L);
 }
+
+TEST_CASE("plugin values: number keys get Lua's own text without a Lua string made for them") {
+    lua_State* L = luaL_newstate();
+    REQUIRE(luaL_dostring(L, "return {[1.5] = 'a', [2.0] = 'b', [-3] = 'c', [1e100] = 'd', x = 'e'}") == LUA_OK);
+    const plugin::UiValue v = plugin::to_value(L, -1);
+    REQUIRE(v.kind == plugin::UiValue::Kind::Table);
+    // Each key as tostring(key) gives it in Lua.
+    for (const char* k : {"1.5", "-3", "1e+100", "x"}) {
+        INFO(k);
+        CHECK(v.field(k));
+    }
+    // 2.0 is the integer key 2 in a Lua table.
+    CHECK(v.field("2"));
+    lua_close(L);
+}

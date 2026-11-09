@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <vector>
@@ -23,6 +24,21 @@ std::optional<lua_Integer> integer_key(const std::string& k) {
     auto [end, ec] = std::from_chars(k.data(), k.data() + k.size(), v);
     if (ec != std::errc() || end != k.data() + k.size()) return std::nullopt;
     return v;
+}
+
+// A number key's text as Lua's tostring gives it ("12", "1.5", "2.0"), made here rather than with lua_tolstring on
+// a copy: that makes a Lua string, and an allocation that fails raises (Lua is built as C) past this file's
+// vectors and strings. LUA_INTEGER_FMT and LUA_NUMBER_FMT, with lobject.c's ".0" for a float that looks whole.
+std::string number_key(lua_State* L, int idx) {
+    char buf[64];
+    if (lua_isinteger(L, idx)) {
+        std::snprintf(buf, sizeof buf, LUA_INTEGER_FMT, static_cast<LUAI_UACINT>(lua_tointeger(L, idx)));
+        return buf;
+    }
+    std::string out(buf, static_cast<std::size_t>(std::max(0, std::snprintf(buf, sizeof buf, LUA_NUMBER_FMT,
+                                                                            static_cast<LUAI_UACNUMBER>(lua_tonumber(L, idx))))));
+    if (out.find_first_not_of("-0123456789") == std::string::npos) out += std::string(1, lua_getlocaledecpoint()) + "0";
+    return out;
 }
 
 } // namespace
@@ -98,11 +114,17 @@ UiValue convert(lua_State* L, int idx, int depth, Budget& b) {
         lua_pushnil(L);
         while (lua_next(L, idx)) {
             if (b.why.empty() && (lua_type(L, -2) == LUA_TSTRING || lua_type(L, -2) == LUA_TNUMBER)) {
-                lua_pushvalue(L, -2); // tostring on a copy: lua_next needs the key as it was
-                std::size_t kn = 0;
-                const char* kt = lua_tolstring(L, -1, &kn);
-                std::string key(kt, kn);
-                lua_pop(L, 1);
+                // A number key's text made here: lua_next needs the key as it was, and a string made from a copy
+                // could raise. Nothing here raises (Lua is built as C: this frame's objects would leak).
+                std::string key;
+                if (lua_type(L, -2) == LUA_TSTRING) {
+                    std::size_t len = 0;
+                    const char* kt = lua_tolstring(L, -2, &len);
+                    key.assign(kt, len);
+                } else {
+                    key = number_key(L, -2);
+                }
+                const std::size_t kn = key.size();
                 if (kn <= b.bytes) {
                     b.bytes -= kn;
                     v.fields.emplace_back(std::move(key), convert(L, -1, depth + 1, b));
@@ -204,13 +226,16 @@ void push(lua_State* L, const UiValue& v, int depth) {
 } // namespace
 
 void push_value(lua_State* L, const UiValue& v, int depth) {
-    Budget b;
-    if (!fits(v, depth, b)) {
-        log::warn("a value passed to Lua was left out: {}", b.why);
-        lua_pushnil(L);
-        return;
+    bool ok = true;
+    { // the budget is gone before anything is pushed: a push that fails raises past this frame
+        Budget b;
+        if (!fits(v, depth, b)) {
+            log::warn("a value passed to Lua was left out: {}", b.why);
+            ok = false;
+        }
     }
-    push(L, v, depth);
+    if (ok) push(L, v, depth);
+    else lua_pushnil(L);
 }
 
 } // namespace hailstone::plugin

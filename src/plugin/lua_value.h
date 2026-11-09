@@ -26,6 +26,8 @@ inline constexpr std::size_t kMaxValueBytes = 16u << 20;
 std::optional<UiValue> to_value_checked(lua_State* L, int idx, std::string* why = nullptr);
 // to_value_checked, with nil for a value it refuses (and a line in the log). `depth`: where idx's table sits already.
 UiValue to_value(lua_State* L, int idx, int depth = 0);
+// (Neither conversion to a UiValue calls Lua that could raise: Lua is built as C, and a raise would skip their
+// vectors' and strings' destructors.)
 // Pushes the value (arrays 1..n; a table's whole-number keys, "12", as Lua integers, so to_value's round trip
 // keeps them). Tables deeper than kMaxValueDepth are nil, and so is the whole value when it is past kMaxValueNodes /
 // kMaxValueBytes. Never raises a Lua error for the stack (lua_checkstack).

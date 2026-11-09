@@ -592,36 +592,32 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, s
     --s.busy;
 }
 
-// mq.bind's work once its arguments are checked; false with the error's text on the stack. Its strings are gone
-// before l_bind raises the error (Lua is built as C: an error longjmps past C++ objects).
-bool bind_command(lua_State* L, Script& s, const char* given) {
+// mq.bind's work once its arguments are checked and the function is referenced (`ref`); false with the error's
+// text in s.scratch. Nothing here calls Lua that could raise: Lua is built as C, and an error longjmps past this
+// frame's strings (luaL_unref sets keys the registry has already, which allocates nothing).
+bool bind_command(Script& s, const char* given, int ref) {
     std::string cmd = given;
     if (cmd.empty() || cmd.front() != '/') cmd.insert(cmd.begin(), '/');
     cmd = lower(cmd);
-    if (s.host->env.hooks->reserved_command(cmd)) {
-        luaL_where(L, 1);
-        lua_pushfstring(L, "mq.bind: %s is the client's own command", cmd.c_str());
-        lua_concat(L, 2);
+    plugin::Hooks& hooks = *s.host->env.hooks;
+    if (hooks.reserved_command(cmd)) {
+        s.scratch = "mq.bind: " + cmd + " is the client's own command";
         return false;
     }
     // Another script's or plugin's: taking it over would hand this script what the player types for the other (and
     // run it with this one's capabilities).
-    if (auto o = s.host->env.hooks->command_owner(cmd); o && *o != s.owner && s.host->env.hooks->is_guest(*o)) {
-        luaL_where(L, 1);
-        lua_pushfstring(L, "mq.bind: %s is %s's command", cmd.c_str(), s.host->env.hooks->owner_name(*o).c_str());
-        lua_concat(L, 2);
+    if (auto o = hooks.command_owner(cmd); o && *o != s.owner && hooks.is_guest(*o)) {
+        s.scratch = "mq.bind: " + cmd + " is " + hooks.owner_name(*o) + "'s command";
         return false;
     }
     if (auto it = s.binds.find(cmd); it != s.binds.end()) {
-        luaL_unref(L, LUA_REGISTRYINDEX, it->second);
+        luaL_unref(s.L, LUA_REGISTRYINDEX, it->second);
         s.binds.erase(it);
-        s.host->env.hooks->remove_command(s.owner, cmd);
+        hooks.remove_command(s.owner, cmd);
     }
-    lua_pushvalue(L, 2);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     s.binds[cmd] = ref;
     Script* sp = &s;
-    s.host->env.hooks->add_command(s.owner, cmd, [sp, ref](std::string_view args) {
+    hooks.add_command(s.owner, cmd, [sp, ref](std::string_view args) {
         std::vector<std::string> words;
         std::string_view rest = args;
         while (!rest.empty()) {
@@ -642,8 +638,14 @@ int l_bind(lua_State* L) {
     Script& s = Script::of(L);
     const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
-    if (!bind_command(L, s, given)) return lua_error(L);
-    return 0;
+    lua_pushvalue(L, 2);
+    const int ref = luaL_ref(L, LUA_REGISTRYINDEX); // (may raise: before any C++ object)
+    if (bind_command(s, given, ref)) return 0;
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    luaL_where(L, 1);
+    lua_pushlstring(L, s.scratch.data(), s.scratch.size());
+    lua_concat(L, 2);
+    return lua_error(L);
 }
 
 int l_unbind(lua_State* L) {
