@@ -99,7 +99,11 @@ breaks its signature, so a bundle keeps its data in `~/Library/Application Suppo
 `HAILSTONE_DATA_DIR` to keep them elsewhere.
 
 `hailstone.ini`, `server.ini` and the characters' files are written through a temporary file renamed over the old
-one, so a crash never leaves half a file. Names that reach these files from a server (a world's or a character's
+one, so a crash never leaves half a file. The temporary file is synced to the disk before the rename, and the rename
+after it (`core/atomic_file.h`, `platform/durable_file.h`: fsync of the file and its folder; on Windows
+FlushFileBuffers and MOVEFILE_WRITE_THROUGH), so a power cut leaves the old file or the new one, not an empty one.
+Each save waits for the disk that way (a few milliseconds on an SSD, more on a hard disk), so nothing saves every
+frame: the UI's and the hot buttons' settings are saved on a change or at most every few seconds. Names that reach these files from a server (a world's or a character's
 name, kept as a `char:<name>@<world>` key in `server.ini`) cannot add lines of their own: in a key a line break or
 `=` becomes `_` (also a leading `;`, `#` or `[`), and in a section name a line break or `]` (`core/ini_file.h`). A
 world or character name is compared with the saved list in that form, so such a world keeps one set of characters.
