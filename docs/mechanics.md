@@ -572,6 +572,11 @@ music load 128, music active-entry selection 2500, spell effect 3000):
   emitters and the app's selections (start-up, character select, combat, bank, merchant, trainer, death).
 - `game/sound_rules.*` `spell_effect_stage`: the spell effect's stage sound and particle decisions.
 - `game/spell_gem.*`: the gem window's tints, the tint stages and the cool-down rectangle (a unit test, no vectors).
+- `app/sound_events.cpp`, a deliberate difference: another spawn's walking is turned into its steps and loop only
+  within the reach of its sounds plus 50 units (`audio::spawn_out_of_hearing`: 12 x its height for a step,
+  24 x max(height / 2, 2) for the loop; both are muted past that, here as in the original). The original plays the
+  muted steps of a far spawn too, each holding one of pool 0's 16 voices while it lasts; a spawn coming into reach
+  picks up its loop on its first frame there. OP_Animation's sounds play wherever the spawn is.
 
 ## Guild ranks, the AA filter, skill limits and task text
 

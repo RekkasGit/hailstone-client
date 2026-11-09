@@ -5,6 +5,7 @@
 
 #include "audio/audio_system.h"
 #include "audio/listener.h"
+#include "audio/sound_control.h"
 #include "core/game_dir.h"
 #include "core/log.h"
 #include "game/mechanics/anim_select.h"
@@ -23,6 +24,10 @@ constexpr std::int32_t kAnimWalk = 0x11, kAnimRun = 0x12, kAnimJump = 0x13, kAni
 constexpr float kIdleBelow = 1.5f, kRunAbove = 26.0f;
 
 float height_of(const game::Spawn& s) { return s.heights.height; } // Height (+0x13c)
+
+// How far past the reach of its sounds a walking spawn is still turned into them (audio::spawn_out_of_hearing): it
+// moves between frames, and a step at the edge is quiet anyway.
+constexpr float kHearingMargin = 50.0f;
 
 } // namespace
 
@@ -171,8 +176,8 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
     }
 
     // Animations.
-    std::vector<std::uint32_t> alive;
-    alive.reserve(world.spawns.size());
+    alive_.clear();
+    const glm::vec3 listener = audio_.listener();
     for (const auto& [id, s] : world.spawns) {
         SpawnState& st = spawns_[id];
         bool local = id == my_id;
@@ -196,7 +201,13 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
         }
         if (s.is_corpse) {
             st.loop = 0;
-        } else {
+        } else if (!audio::spawn_out_of_hearing(listener, s.display_valid ? s.display_position : s.position,
+                                                height_of(s), kHearingMargin)) {
+            // Hailstone, a deliberate difference: a spawn walking beyond the reach of its sounds (muted there, as
+            // the original's are) is not turned into them each frame; its loop and steps pick up when it comes
+            // in reach (the animation it walks then differs from the one kept, so the loop is set again). The
+            // original plays the muted steps, each holding one of pool 0's voices while it lasts (docs/mechanics.md
+            // "Listener, music, spell sounds and spell gems"). OP_Animation's sounds above are played wherever the spawn is.
             float speed = std::sqrt(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y) * 20.0f; // per second
             float scale = height_of(s) / 6.0f;
             std::int32_t a = speed < kIdleBelow ? kAnimStand : speed < kRunAbove * scale / 1.2f ? kAnimWalk : kAnimRun;
@@ -204,11 +215,13 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
         }
         if (st.loop != 0) {
             audio_.set_spawn_loop(id, st.loop, s.display_valid ? s.display_position : s.position, height_of(s));
-            alive.push_back(id);
+            alive_.push_back(id);
         }
     }
-    audio_.drop_spawn_loops_except(alive);
-    std::erase_if(spawns_, [&](const auto& kv) { return !world.spawns.contains(kv.first); });
+    audio_.drop_spawn_loops_except(alive_);
+    // Every spawn has its state (made above), so the two differ in size exactly when some have gone.
+    if (spawns_.size() != world.spawns.size())
+        std::erase_if(spawns_, [&](const auto& kv) { return !world.spawns.contains(kv.first); });
 }
 
 } // namespace hailstone::app
