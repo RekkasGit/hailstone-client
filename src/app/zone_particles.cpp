@@ -12,20 +12,22 @@
 
 namespace hailstone::app {
 
-namespace {
-
-// A flame cloud's flame: its particles over a second of steady burning, from a fresh emitter of the same
-// definition and node rotation (the origin aside, all a fixture's look depends on). The sprites are teardrops
-// filling about the middle of their quads.
-assets::ZoneFire measure_flame(game::ParticleSystem& sim, std::uint32_t definition, const glm::mat4& node) {
+assets::ZoneFire measure_flame_cloud(game::ParticleSystem& sim, std::uint32_t definition, const glm::mat4& node) {
+    assets::ZoneFire f;
     glm::mat4 at = node;
     at[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
     sim.clear();
-    sim.add_fixture(definition, at);
+    if (!sim.add_fixture(definition, at)) return f;
+    // Burn for one particle lifetime first, so the oldest particles have risen as far as they ever will (potranquility's
+    // arc_brazier pillars live 5 s; a fixed second measured only their lower third). Capped to keep a zone's load short.
+    const auto& d = sim.definitions()[definition];
+    const float life = d.lifetime > 0.0f ? d.lifetime : sim.emitters().front().duration;
+    constexpr float kStep = 0.05f;
+    const int warm = static_cast<int>(std::ceil(std::clamp(life, 1.0f, kMaxFlameWarmup) / kStep));
     glm::vec3 lo(1e30f), hi(-1e30f);
-    for (int step = 0; step < 40; ++step) {
-        sim.update(0.05f, {});
-        if (step < 20) continue;
+    for (int step = 0; step < warm + 20; ++step) {
+        sim.update(kStep, {});
+        if (step < warm) continue;
         for (const auto& p : sim.emitters().front().particles) {
             if (p.color.a < 0.15f) continue;
             glm::vec3 r(glm::vec2(p.width * 0.3f * p.size_factor), p.height * 0.35f * p.size_factor);
@@ -33,7 +35,6 @@ assets::ZoneFire measure_flame(game::ParticleSystem& sim, std::uint32_t definiti
             hi = glm::max(hi, p.position + r);
         }
     }
-    assets::ZoneFire f;
     if (!(hi.x >= lo.x)) return f;
     f.base = glm::vec3((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, lo.z);
     // The cloud's reach is wider and taller than the flame it shows, its edges thin.
@@ -41,8 +42,6 @@ assets::ZoneFire measure_flame(game::ParticleSystem& sim, std::uint32_t definiti
     f.height = (hi.z - lo.z) * 0.85f;
     return f;
 }
-
-} // namespace
 
 ZoneParticles::ZoneParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir,
                              const assets::Zone& zone)
@@ -65,7 +64,7 @@ ZoneParticles::ZoneParticles(render::VkContext& vk, const GameDir& game, const s
             for (int r = 0; r < 3; ++r) rot[c * 3 + r] = static_cast<int>(std::lround(f.transform[c][r] * 20.0f));
         auto key = std::make_tuple(f.definition, rot);
         auto it = measured.find(key);
-        if (it == measured.end()) it = measured.emplace(key, measure_flame(sim, f.definition, f.transform)).first;
+        if (it == measured.end()) it = measured.emplace(key, measure_flame_cloud(sim, f.definition, f.transform)).first;
         assets::ZoneFire fire = it->second;
         if (!(fire.height > 0.05f)) continue;
         fire.base += glm::vec3(f.transform[3]);

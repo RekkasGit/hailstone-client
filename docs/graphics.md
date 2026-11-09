@@ -119,8 +119,11 @@ The flames are found in the zone's data (`assets/zone_fires.h`), in three forms 
   1.1 of its height. `ZoneRenderer::set_hide_flames` and `ObjectRenderer::set_hide_flames` leave the meshes out, and
   `ObjectRenderer::prepared_fires` gives the doors' and ground objects' flames each frame (a campfire door).
 - Particle clouds on placed objects (Luclin onwards): definitions whose sprite is `GENG*.DDS` or `GENPOP*.DDS`.
-  `ZoneParticles` measures each kind of cloud (definition and node rotation) by running a fresh emitter of it for
-  two seconds; the flame takes the bright particles' reach, 0.75 of its width and 0.85 of its height. The flame
+  `ZoneParticles` measures each kind of cloud (definition and node rotation, `app::measure_flame_cloud`) by burning a
+  fresh emitter of it for one particle lifetime (at least 1 s, at most 8 s), so its oldest particles have risen as
+  far as they go, then watching it for a second; the flame takes the bright particles' reach, 0.75 of its width and
+  0.85 of its height. (potranquility's pillars are ten 5-second clouds stacked 10 units apart: measured after a
+  fixed second each was under 10 units, and the column burnt as separate flames.) The flame
   clouds are drawn only in the classic lighting; the smoke stays.
 - An EQG zone's environment emitters, `<zone>_EnvironmentEmitters.txt` (`Name^EmitterDefIdx^X^Y^Z^[AlwaysVisible^]
   Lifespan`, positions in the zone's own frame) over `environmentemittersnew.edd`. `assets::load_zone` adds them to

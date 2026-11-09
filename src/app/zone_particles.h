@@ -12,7 +12,7 @@
 //
 // The flame clouds (assets::flame_emitter_hue) are kept apart from the rest, so
 // the modern lighting can leave them out for its own flames (fires(): each one's
-// size, measured by running its cloud for a while).
+// size, measured by running its cloud for one particle lifetime: measure_flame_cloud).
 
 #include <filesystem>
 #include <memory>
@@ -28,6 +28,15 @@ namespace hailstone { class GameDir; }
 namespace hailstone::assets { struct Zone; }
 
 namespace hailstone::app {
+
+// The longest a flame cloud is burnt before it is measured, s.
+inline constexpr float kMaxFlameWarmup = 8.0f;
+
+// A flame cloud's flame (base relative to the node's origin): a fresh emitter of `definition` at the node's rotation
+// in `sim` (cleared first), burnt for one particle lifetime (at least 1 s, at most kMaxFlameWarmup) and then measured
+// over a second of its bright particles. The sprites are teardrops filling about the middle of their quads. A default
+// ZoneFire when the definition is out of range or shows nothing bright.
+assets::ZoneFire measure_flame_cloud(game::ParticleSystem& sim, std::uint32_t definition, const glm::mat4& node);
 
 class ZoneParticles {
 public:
