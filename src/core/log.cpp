@@ -119,8 +119,34 @@ std::size_t copy_recent_lines(char* out, std::size_t size) {
     return at;
 }
 
+std::string_view escape_controls(std::string_view message, std::string& scratch) {
+    auto control = [](char c) {
+        const auto b = static_cast<unsigned char>(c);
+        return (b < 0x20 && b != '\t') || b == 0x7f;
+    };
+    auto first = std::find_if(message.begin(), message.end(), control);
+    if (first == message.end()) return message;
+    scratch.assign(message.begin(), first);
+    static constexpr char kHex[] = "0123456789abcdef";
+    for (auto it = first; it != message.end(); ++it) {
+        const char c = *it;
+        if (!control(c)) scratch.push_back(c);
+        else if (c == '\n') scratch += "\\n";
+        else if (c == '\r') scratch += "\\r";
+        else {
+            const auto b = static_cast<unsigned char>(c);
+            scratch += "\\x";
+            scratch.push_back(kHex[b >> 4]);
+            scratch.push_back(kHex[b & 0xf]);
+        }
+    }
+    return scratch;
+}
+
 void write(Level level, std::string_view message) {
     if (level < g_level.load()) return;
+    std::string escaped; // empty, so no allocation, unless the message has a control character
+    message = escape_controls(message, escaped);
     std::lock_guard lock(g_mutex);
     remember_line(tag(level), message);
     std::fprintf(level >= Level::Warn ? stderr : stdout, "[%s] %.*s\n", tag(level),
