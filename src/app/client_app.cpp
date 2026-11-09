@@ -1,6 +1,7 @@
 // ClientApp: the main loop, and run_client.
 
 #include "app/client_app_internal.h"
+#include "app/frame_pace.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
 #include "core/wipe.h"
@@ -16,6 +17,7 @@ int ClientApp::run() {
     start_addons();
     auto last = Clock::now();
     auto start = last;
+    auto last_drawn = last;
     float fps = 0.0f;
     // The game clock (core/step_clock.h): the rules run at 60 steps a second; game.fixed_step false steps once a
     // drawn frame instead, as the original's code is written (docs/mechanics.md "Frame rate").
@@ -24,10 +26,11 @@ int ClientApp::run() {
         if (opts_.frames && frame >= opts_.frames) break;
         retired_ui_textures_.reset(); // the last frame, which may have drawn it, is submitted (waits for the GPU)
         perf_ui_.begin_frame();
-        // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus.
-        int cap = opts_.max_fps;
-        if (background_fps_ > 0 && !window_.focused()) cap = cap > 0 ? std::min(cap, background_fps_) : background_fps_;
-        if (cap > 0) std::this_thread::sleep_until(last + std::chrono::microseconds(1000000 / cap));
+        // The frame cap (display.max_fps, --max-fps), and display.background_fps while another window has the focus:
+        // below 10 there, the loop runs on at 10 a second and draws only some frames, or none (app/frame_pace.h).
+        const FramePace pace = frame_pace(opts_.max_fps, background_fps_, window_.focused(),
+            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - last_drawn));
+        if (pace.cap > 0) std::this_thread::sleep_until(last + std::chrono::microseconds(1000000 / pace.cap));
         perf_ui_.mark(FramePhase::Sleep);
         if (!opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1) vk_.request_screenshot(opts_.screenshot);
         screenshot_this_frame_ = false;
@@ -301,8 +304,11 @@ int ClientApp::run() {
         glm::vec4 horizon_haze(0.0f); // the sky's blend into the haze (render::SkyFrame)
         perf_ui_.mark(FramePhase::Prepare);
         update_view_area();
-        auto f = vk_.begin_frame_commands();
+        // A frame not drawn (the background frame rate, or a minimised window) runs as one the GPU had no image for.
+        const bool screenshot_frame = !opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1;
+        auto f = pace.draw || screenshot_frame ? vk_.begin_frame_commands() : std::nullopt;
         perf_ui_.mark(FramePhase::Wait);
+        if (f) last_drawn = now;
         if (!f) {
             ui_.end_frame_without_render();
             continue;

@@ -1005,6 +1005,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_slot_info_test.cpp
     tests/social_editor_test.cpp
     tests/app_frame_work_test.cpp
+    tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp

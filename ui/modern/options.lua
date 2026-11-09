@@ -234,8 +234,8 @@ end
 -- ---------------------------------------------------------------- Display
 local FPS = { 0, 30, 60, 75, 90, 120, 144, 165, 240 }
 local FPS_NAMES = { "Unlimited", "30", "60", "75", "90", "120", "144", "165", "240" }
-local BG_FPS = { 0, 10, 15, 30, 60 }
-local BG_FPS_NAMES = { "Same as above", "10", "15", "30", "60" }
+local BG_FPS = { 0, -1, 1, 5, 10, 15, 30, 60 }
+local BG_FPS_NAMES = { "Same as above", "0 (draw nothing)", "1", "5", "10", "15", "30", "60" }
 local SCALES = { 0, 75, 100, 125, 150, 175, 200, 250 }
 local SCALE_NAMES = { "Automatic (display)", "75 %", "100 %", "125 %", "150 %", "175 %", "200 %", "250 %" }
 
@@ -271,7 +271,8 @@ local function displayTab()
       .. "Adaptive: syncs, but tears instead of stuttering when a frame is late (where the driver supports it).")
     combo("max_fps", "Frame Rate Limit", FPS_NAMES, "The most frames a second the client draws.", FPS)
     combo("background_fps", "Background Frame Rate", BG_FPS_NAMES,
-      "The frame limit while another window has the focus: saves power and heat with the game in the background.",
+      "The frame limit while another window has the focus: saves power and heat with the game in the background. "
+      .. "At 0 nothing is drawn; the game, chat and scripts keep running.",
       BG_FPS)
   end)
   section("View", function()
