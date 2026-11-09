@@ -659,3 +659,30 @@ TEST_CASE("Mixer: finished voices are reaped in one pass, the live ones kept in 
     for (std::size_t i = 1; i < ids.size(); i += 2) CHECK(m.alive(ids[i]));
     for (std::size_t i = 0; i < ids.size(); i += 2) CHECK_FALSE(m.alive(ids[i]));
 }
+
+TEST_CASE("Audio system: the global music is set once the sound archives are indexed; a selection made before stays") {
+    test::ScratchDir dir("audio_global_music");
+    std::filesystem::create_directories(dir.path() / "sounds");
+    std::ofstream(dir.path() / "eqtheme.mp3", std::ios::binary) << "not an mp3";
+    auto pfs = test::pfs_fixtures::make_pfs({{"gl.xmi", std::vector<std::byte>(16, std::byte{0})}});
+    std::ofstream(dir.path() / "snd2.pfs", std::ios::binary)
+        .write(reinterpret_cast<const char*>(pfs.data()), static_cast<std::streamsize>(pfs.size()));
+    GameDir game(dir.path());
+    AudioSystem audio(game, AudioSettings{}, false);
+    // The login screen's theme, asked for at once: kept until the entries are set if the index is still being built.
+    audio.music_selection(kMusicLogin, true);
+    audio.library().wait_idle(); // the index is built
+    audio.update(20);
+    CHECK(audio.global_music_ready());
+    const MusicEntry* playing = audio.music().playing();
+    REQUIRE(playing);
+    CHECK(playing->id == kMusicLogin);
+    CHECK(playing->file == "eqtheme.mp3");
+    // gl.xmi, found only in the archive, gives the other entries theirs.
+    audio.music_selection(kMusicBank, true);
+    audio.music_selection(kMusicLogin, false);
+    playing = audio.music().playing();
+    REQUIRE(playing);
+    CHECK(playing->id == kMusicBank);
+    CHECK(playing->file == "gl.xmi");
+}

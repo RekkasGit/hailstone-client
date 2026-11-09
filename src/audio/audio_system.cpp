@@ -4,6 +4,7 @@
 #include <cmath>
 #include <ctime>
 #include <iterator>
+#include <utility>
 
 #include "assets/xmi.h"
 #include "audio/sound_library.h"
@@ -105,23 +106,11 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     library_->preload(global);
     global_wave_files_ = std::move(global);
     // LoadGlobalMusic @0x4aa860: entries 1..15, the combat theme picked by rand() after srand(Util::FastTime()).
+    // The entries are set once the sound archives are indexed (set_up_global_music: its file checks would wait
+    // here for the worker to open every snd*.pfs); the rand() is drawn now.
     CrtRand rand(static_cast<std::uint32_t>(std::time(nullptr)));
-    for (const MusicSetCall& c : load_global_music([this](const std::string& f) { return library_->exists(f); }, rand())) {
-        MusicEntry e;
-        e.id = c.entry;
-        e.file = c.asset;
-        e.track = c.track;
-        e.volume = c.volume;
-        e.priority = c.priority;
-        e.fade_in_ms = c.fade_in_ms;
-        e.crossfade_ms = c.fade_out_replaced_ms;
-        e.fade_out_ms = c.fade_out_stopped_ms;
-        if (!e.file.empty() && std::find(global_music_files_.begin(), global_music_files_.end(), e.file) ==
-                                   global_music_files_.end())
-            global_music_files_.push_back(e.file);
-        music_.set(std::move(e));
-    }
-    library_->set_resident_files(global_music_files_);
+    global_music_rand_ = rand();
+    if (library_->index_ready()) set_up_global_music();
     // LoadGlobalEmitters @0x4a9df0: the rain (+0xfd8, wave 159) and wind (+0xfdc, wave 158) emitters, created
     // disabled: SoundEmitter::Init's defaults (gain 1, echo 1, any environment and time, not user-disableable) with
     // delays, loop count, range and distances 0 (always in range, looping, 2D), fades 2000 / 3000 and gain 0.5.
@@ -144,6 +133,30 @@ AudioSystem::AudioSystem(const GameDir& game, AudioSettings settings, bool open_
     }
     log::info("audio: {} sound names, {} music selections, {} races", global_waves_.size(), mp3index_.size(),
               race_ids_.size());
+}
+
+void AudioSystem::set_up_global_music() {
+    if (global_music_set_) return;
+    global_music_set_ = true;
+    for (const MusicSetCall& c : load_global_music([this](const std::string& f) { return library_->exists(f); },
+                                                   global_music_rand_)) {
+        MusicEntry e;
+        e.id = c.entry;
+        e.file = c.asset;
+        e.track = c.track;
+        e.volume = c.volume;
+        e.priority = c.priority;
+        e.fade_in_ms = c.fade_in_ms;
+        e.crossfade_ms = c.fade_out_replaced_ms;
+        e.fade_out_ms = c.fade_out_stopped_ms;
+        if (!e.file.empty() && std::find(global_music_files_.begin(), global_music_files_.end(), e.file) ==
+                                   global_music_files_.end())
+            global_music_files_.push_back(e.file);
+        music_.set(std::move(e));
+    }
+    library_->set_resident_files(global_music_files_);
+    // The selections asked for meanwhile (the login screen's theme), in order.
+    for (const auto& [id, on] : std::exchange(pending_selections_, {})) music_selection(id, on);
 }
 
 AudioSystem::~AudioSystem() {
@@ -220,6 +233,13 @@ void AudioSystem::set_special_room(std::optional<std::int32_t> room) {
 }
 
 void AudioSystem::music_selection(std::int32_t id, bool on) {
+    if (!global_music_set_) {
+        if (!library_->index_ready()) {
+            pending_selections_.emplace_back(id, on); // applied by set_up_global_music
+            return;
+        }
+        set_up_global_music();
+    }
     if (on) music_.play(id, *this);
     else music_.stop(id, *this);
     const MusicEntry* p = music_.playing();
@@ -257,6 +277,9 @@ void AudioSystem::set_zone(const std::string& short_name) {
     // The waves of the zones before the last go, the global ones stay (LoadGlobalWaves keeps those for the session).
     library_->drop_idle_waves(global_wave_files_);
     if (short_name.empty()) return;
+    // The global entries before the zone's (as LoadGlobalMusic ran at start): this waits for the archives' index,
+    // long built by the time a zone is entered.
+    set_up_global_music();
 
     auto exists = [this](const std::string& f) { return library_->exists(f); };
     // SetCurrentZone: "<zone>.emt" when it opens, else the old files.
@@ -386,6 +409,7 @@ std::uint32_t AudioSystem::play_music(const MusicEntry& entry, float volume) {
 }
 
 void AudioSystem::update(std::uint32_t now_ms) {
+    if (!global_music_set_ && library_->index_ready()) set_up_global_music();
     // The music level gates FadeIn (MusicManager +0x08 > 0); the mixer's buses do the rest.
     float music = settings_.mute ? 0.0f : level(settings_.music);
     music_.set_volume(music);

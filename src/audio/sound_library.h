@@ -44,6 +44,8 @@ public:
 
     // Whether the name can be loaded (waits for the archive index on first use).
     bool exists(const std::string& name);
+    // The archive index is built (on the worker, first): exists() and read() no longer wait for it.
+    bool index_ready() const;
     // The file's bytes (synchronous).
     std::optional<std::vector<std::byte>> read(const std::string& name);
     // The decoded sound if it is ready; otherwise queues the decode and returns nullptr.
