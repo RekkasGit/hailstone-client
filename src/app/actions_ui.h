@@ -95,8 +95,7 @@ public:
     int hot_bar_page(int bar) const { return bar >= 0 && bar < game::kHotBars ? store_.page(bar) : -1; }
     void set_hot_bar_page(int bar, int page) {
         if (bar < 0 || bar >= game::kHotBars) return;
-        store_.set_page(bar, page);
-        changed();
+        store_.set_page(bar, page); // (not saved: the character file keeps the buttons, no bar's page)
     }
     // The Actions window's ability buttons (Abilities 0..5, Combat 0..3): the skill on one (-1 clears it), saved with
     // the character's hot buttons; and a skill's name as the buttons show it.
@@ -212,8 +211,14 @@ public:
     std::vector<std::pair<std::string, std::uint32_t>> take_messages();
     // The melee attack button asks the client to toggle attack (and face the target).
     bool take_attack_toggle();
-    // Saves the character file now (it is also saved on changes).
+    // Saves the character file now, when anything changed. Changes are also saved by update(), at most every
+    // kSaveDelayMs (save_if_due): a drag, the social editor or a plugin's edits do not rewrite the file (and the Lua
+    // socials folder) each frame. Zoning (enter_zone), leaving the character and the end save at once.
     void save_character();
+    static constexpr std::int64_t kSaveDelayMs = 3000;
+    // Saves when a change has waited kSaveDelayMs (on GameConnection::now_ms()'s clock); whether it saved.
+    bool save_if_due(std::int64_t now_ms);
+    bool unsaved() const { return dirty_; }
     // Hotbutton sets (game/hot_button_sets.h, CHotButtonWnd's menu; app/actions_ui_sets.cpp): the sets, and the
     // menu's Save (the text entry's OK), Load and Delete (their confirmations' Yes) and Clear current hotbuttons
     // for bar 0..9, each with the original's chat line; the character file is written at once.
@@ -260,6 +265,7 @@ private:
     std::filesystem::path char_ini_path_;
     std::string loaded_for_;
     bool dirty_ = false;
+    std::optional<std::int64_t> dirty_seen_ms_; // when save_if_due first saw the change waiting
     bool loadouts_fresh_ = false; // the spell sets are read into the connection on the next update
     game::mechanics::SkillState state_;
     game::CompassError compass_;

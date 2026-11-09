@@ -2,10 +2,16 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 
+#include "app/actions_ui.h"
 #include "app/group_ui.h"
+#include "core/config.h"
 #include "game/world_state.h"
+#include "scratch_dir.h"
 
 using namespace hailstone;
 
@@ -68,4 +74,55 @@ TEST_CASE("Group window: each member's spawn is kept between frames and looked f
     CHECK(frame("Farfaraway") == 0);
     now += 1000;
     CHECK(frame("Farfaraway") == 11);
+}
+
+namespace {
+std::string read_text(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
+} // namespace
+
+TEST_CASE("Hot buttons: changes are saved once they have waited, at once on zoning and at the end; a page flip is not") {
+    test::ScratchDir scratch("actions_save_delay");
+    const std::filesystem::path file = scratch.path() / "hotbuttons.ini";
+    Config config;
+    {
+        app::ActionsUi actions(config, scratch.path() / "hailstone.ini");
+        actions.enter_zone(file);
+        CHECK_FALSE(actions.unsaved());
+        // A page flip changes nothing that is saved.
+        actions.set_hot_bar_page(0, 3);
+        CHECK_FALSE(actions.unsaved());
+        // A button: kept unsaved for kSaveDelayMs from when it is first seen, however often it is asked.
+        game::HotButton b;
+        b.type = game::HotButtonType::Social;
+        b.slot = 2;
+        actions.set_hot_button(0, 1, b);
+        CHECK(actions.unsaved());
+        CHECK_FALSE(actions.save_if_due(10'000));
+        CHECK_FALSE(actions.save_if_due(10'000 + app::ActionsUi::kSaveDelayMs - 1));
+        CHECK_FALSE(std::filesystem::exists(file));
+        CHECK(actions.save_if_due(10'000 + app::ActionsUi::kSaveDelayMs));
+        CHECK_FALSE(actions.unsaved());
+        CHECK(std::filesystem::exists(file));
+        const std::string first = read_text(file);
+        CHECK_FALSE(first.empty());
+        // Nothing waiting: nothing written.
+        CHECK_FALSE(actions.save_if_due(50'000));
+        // Zoning (the same character) saves what waits at once.
+        actions.set_hot_button(0, 2, b);
+        CHECK_FALSE(actions.save_if_due(60'000));
+        actions.enter_zone(file);
+        CHECK_FALSE(actions.unsaved());
+        CHECK(read_text(file) != first);
+        // The end (camp, exit: the destructor and ClientApp::leave_character) saves too.
+        actions.set_hot_button(0, 3, b);
+        CHECK(actions.unsaved());
+    }
+    app::ActionsUi again(config, scratch.path() / "hailstone.ini");
+    again.enter_zone(file);
+    CHECK(again.hot_button_spec(0, 3, 3).value_or("") != "");
 }
