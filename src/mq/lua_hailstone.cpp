@@ -895,6 +895,31 @@ int l_spell(lua_State* L) {
     set_int(L, "skill", s->skill);
     set_bool(L, "is_skill", s->is_skill);
     set_int(L, "gem_icon", s->gem_icon);
+    set_num(L, "range", s->range);
+    set_num(L, "ae_range", s->ae_range);
+    set_num(L, "push_back", s->push_back);
+    set_int(L, "duration_formula", s->duration_formula);
+    set_int(L, "duration_cap", s->duration_cap);
+    set_int(L, "spell_type", s->spell_type);
+    set_int(L, "resist", s->resist);
+    set_int(L, "resist_adj", s->resist_adj);
+    set_int(L, "spell_icon", s->spell_icon);
+    set_int(L, "category", s->category);
+    set_int(L, "subcategory", s->subcategory);
+    set_str(L, "cast_on_you", s->cast_on_you);
+    set_str(L, "cast_on_other", s->cast_on_other);
+    set_str(L, "wear_off", s->wear_off);
+    lua_createtable(L, 12, 0);
+    for (std::size_t i = 0; i < s->effect.size(); ++i) {
+        lua_createtable(L, 0, 5);
+        set_int(L, "effect", s->effect[i]);
+        set_int(L, "base", s->base[i]);
+        set_int(L, "base2", s->base2[i]);
+        set_int(L, "max", s->max[i]);
+        set_int(L, "formula", s->formula[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "effects");
     return 1;
 }
 

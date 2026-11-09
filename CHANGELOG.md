@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lua add-ons can read more of a spell's own data (range, duration, resist, icon, messages and the twelve effect slots), and Lua windows can read which spell or item each information window shows
 - Add-ons: when `addons/installed.txt` is lost or damaged, the add-ons it listed no longer run with every permission as though you had put them in by hand. It now has a copy, `installed.bak.txt`, that it is put back from at the next start; an add-on that neither file has whole gets no permissions, and nothing is installed, updated or removed until the file is put right (the log says so)
 - Add-ons: a link to an older version than the one installed now says so on its card, and installs only with **Install the older version**
 - Options' Texture Studio... starts the studio only when it is the real one (from projecthailstone/hailstone-texstudio, signed with its key); another add-on named `texstudio` can still be started from its row in Add-ons
