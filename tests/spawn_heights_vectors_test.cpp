@@ -428,6 +428,30 @@ TEST_CASE("spawn heights: ground_npcs measures a still NPC again once the zone's
     CHECK(w.spawns[59].display_position.z == doctest::Approx(-54.93f));
 }
 
+TEST_CASE("spawn heights: ground_npcs stands an NPC on a door's floor, not on the ground under it") {
+    // Plane of Knowledge's portal stones are doors: an NPC the server puts on one's base is drawn there, not sunk
+    // into it down to the zone's floor.
+    g::WorldState w;
+    w.ground_npcs = true;
+    g::Spawn npc;
+    npc.is_npc = true;
+    npc.heights.avatar_height = 3.0f;
+    npc.update_time = -20.0; // standing still
+    npc.position = glm::vec3(5.0f, 5.0f, 23.5f); // 0.5 over the base's top (20) + 3
+    w.spawns[1] = npc;
+    const auto zone_floor = [](const glm::vec3&) { return std::optional<float>(10.0f); };
+    const auto with_doors = [](const glm::vec3&) { return std::optional<float>(20.0f); };
+    w.smooth(10.0f, 2.0, zone_floor, {}, {}, with_doors);
+    w.smooth(10.0f, 2.0, zone_floor, {}, {}, with_doors);
+    CHECK(w.spawns[1].ground_drop == doctest::Approx(0.5f));
+    CHECK(w.spawns[1].display_position.z == doctest::Approx(23.0f));
+    // The door is gone (or not loaded yet): the zone's floor again, once reground says so.
+    w.reground();
+    w.smooth(10.0f, 2.0, zone_floor, {}, {}, zone_floor);
+    w.smooth(10.0f, 2.0, zone_floor, {}, {}, zone_floor);
+    CHECK(w.spawns[1].display_position.z == doctest::Approx(13.0f));
+}
+
 TEST_CASE("spawn heights: a race whose model is not loaded becomes a Human, except a mount race") {
     g::WorldState w;
     g::Spawn a;
