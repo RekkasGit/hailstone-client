@@ -10,6 +10,7 @@
 #include "game/coords.h"
 #include "game/eq_names.h"
 #include "game/group.h"
+#include "game/targeting.h"
 #include "game/world_state.h"
 #include "mq/tlo.h"
 
@@ -164,7 +165,9 @@ std::vector<const game::Spawn*> search_spawns(const SpawnSearch& q, const game::
         if (s.level < q.min_level || s.level > q.max_level) continue;
         if (q.nopet && is_pet(s)) continue;
         if (q.named && !is_named(s)) continue;
-        if (q.targetable && !s.targetable) continue;
+        // MQ's "targetable" asks the game's PlayerBase::IsTargetable, not the spawn's flag alone (Spawn.Targetable
+        // is that flag): body type 11 (EQEmu's NoTarget, a server's portal and trigger NPCs) is left out too.
+        if (q.targetable && !game::is_targetable(s)) continue;
         if (q.gm && !s.gm) continue;
         if (q.trader && !s.trader) continue;
         if (q.buyer && !s.buyer) continue;

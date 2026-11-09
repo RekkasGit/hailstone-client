@@ -138,6 +138,20 @@ TEST_CASE("TLO: Target, Spawn, SpawnCount, NearestSpawn and the search words") {
     CHECK(f.p("${Target.HeadingTo.Degrees}").substr(0, 3) != "NUL");
 }
 
+TEST_CASE("spawn search: targetable is the game's IsTargetable, body type 11 left out") {
+    Fixture f;
+    auto& w = net::GameConnectionTestAccess::world(*f.world.conn);
+    CHECK(f.p("${SpawnCount[npc targetable]}") == "2");
+    // A server's portal trigger: the Targetable flag on, body type 11 (EQEmu's NoTarget).
+    w.spawns[11].body_type = 11;
+    CHECK(f.p("${Spawn[11].Targetable}") == "TRUE"); // the flag alone, as MQ's Spawn.Targetable
+    CHECK(f.p("${SpawnCount[npc targetable]}") == "1");
+    CHECK(f.p("${SpawnCount[npc]}") == "2");
+    w.spawns[11].body_type = 1;
+    w.spawns[11].targetable = false;
+    CHECK(f.p("${SpawnCount[npc targetable]}") == "1");
+}
+
 TEST_CASE("spawn search: parsed words") {
     auto s = mq::parse_spawn_search("npc radius 50 zradius 10 range 5 9 named \"a rat\" notid 3 id 7");
     CHECK(s.kind == mq::SpawnSearch::Kind::Npc);

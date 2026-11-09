@@ -240,6 +240,10 @@ Spawn searches use MQ's words:
   `targetable`, `group`, `nopet`, `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead`, `loc X Y [Z]`
 - names: a partial name, `=Exact` or `exact`
 
+`targetable` is the game's own test, as in MQ: the spawn's Targetable flag on and its body type not 11 (EQEmu's
+NoTarget, which servers give portal and trigger NPCs). `Spawn.Targetable` is the flag alone, as in MQ, so a script
+that filters spawns itself checks `BodyType` too.
+
 Not yet:
 - TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is
   built in: `docs/navigation.md`)
