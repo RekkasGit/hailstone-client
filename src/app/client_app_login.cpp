@@ -420,6 +420,7 @@ void ClientApp::back_to_login(std::string message, bool is_error) {
 
 void ClientApp::leave_character() {
     // The character's UI settings are saved and let go: the next login's character writes its own, never these.
+    if (actions_ui_) actions_ui_->save_character(); // its hot buttons' last changes (ActionsUi::save_if_due)
     ui_character_dir_.clear();
     if (lua_ui_) lua_ui_->set_character_settings({});
     use_character_settings({}); // hailstone.ini's settings again
@@ -437,31 +438,16 @@ void ClientApp::update_login() {
         login_view_.status = {"Getting the server list...", false};
         login_->request_server_list();
         break;
-    case net::LoginState::ServerList:
-        // The login client asks for the list again every 60 s while it is shown (eqmain's MainLoop).
-        servers_ = login_->servers();
-        if (!server_profile_.id.empty() && opts_.auto_user.empty() && opts_.account.empty()) {
-            // The worlds for the login screen's account World lists (written only when they changed).
-            std::vector<std::string> names;
-            for (const auto& s : servers_) names.push_back(s.name);
-            if (names != worlds_noted_) {
-                worlds_noted_ = names;
-                set_listed_worlds(server_profile_.id, names, login_view_.servers_dir);
-                if (ui::selected_profile_id(login_view_) == server_profile_.id) {
-                    login_view_.worlds = names;
-                    for (const auto& a : login_view_.accounts)
-                        for (const auto& c : a.characters)
-                            if (std::none_of(names.begin(), names.end(), [&](const std::string& n) {
-                                    return n == c.world || saved_character_key_part(n) == c.world;
-                                })) {
-                                login_view_.worlds.push_back(c.world);
-                                names.push_back(c.world);
-                            }
-                }
-            }
+    case net::LoginState::ServerList: {
+        // The login client asks for the list again every 60 s while it is shown (eqmain's MainLoop). The screen is
+        // built again when a list arrives, not each frame; the add-on hint also every few seconds (it reads the
+        // server's folder).
+        const bool fresh = login_->servers_serial() != servers_listed_serial_;
+        if (fresh) take_server_list();
+        if (fresh || Clock::now() - server_hint_at_ > std::chrono::seconds(3)) {
+            update_server_select_hint();
+            server_hint_at_ = Clock::now();
         }
-        list_worlds();
-        update_server_select_hint();
         server_view_.busy = false;
         // 6018 (failed attempts) after the login, or 6028 when Play picked a server for another locale.
         if (!login_->notice().empty()) server_view_.status = {login_->notice(), login_->error_id() != 0};
@@ -483,6 +469,7 @@ void ClientApp::update_login() {
             login_->request_play(world->id);
         }
         break;
+    }
     case net::LoginState::KickOffered:
         // ServerSelectWnd::OnJoinServer: 302 / 114, a character of this account is still in the world. The question
         // is drawn over the server select (ClientApp::draw_kick_question) until it is answered.
@@ -511,6 +498,33 @@ void ClientApp::update_login() {
     default:
         break;
     }
+}
+
+// The login server's list, as it arrived: the worlds noted for the login screen and the server select's rows.
+void ClientApp::take_server_list() {
+    servers_listed_serial_ = login_->servers_serial();
+    servers_ = login_->servers();
+    if (!server_profile_.id.empty() && opts_.auto_user.empty() && opts_.account.empty()) {
+        // The worlds for the login screen's account World lists (written only when they changed).
+        std::vector<std::string> names;
+        for (const auto& s : servers_) names.push_back(s.name);
+        if (names != worlds_noted_) {
+            worlds_noted_ = names;
+            set_listed_worlds(server_profile_.id, names, login_view_.servers_dir);
+            if (ui::selected_profile_id(login_view_) == server_profile_.id) {
+                login_view_.worlds = names;
+                for (const auto& a : login_view_.accounts)
+                    for (const auto& c : a.characters)
+                        if (std::none_of(names.begin(), names.end(), [&](const std::string& n) {
+                                return n == c.world || saved_character_key_part(n) == c.world;
+                            })) {
+                            login_view_.worlds.push_back(c.world);
+                            names.push_back(c.world);
+                        }
+            }
+        }
+    }
+    list_worlds();
 }
 
 std::string ClientApp::world_key(std::string_view what) const {
@@ -786,26 +800,30 @@ void ClientApp::update_connection() {
     using S = net::ConnectionState;
     switch (conn_->state()) {
     case S::CharacterSelect: {
-        char_view_.characters.clear();
-        for (const auto& c : conn_->characters()) {
-            ui::CharacterEntry e;
-            e.name = c.name;
-            e.level = c.level;
-            e.race = c.race;
-            std::uint32_t mask = conn_->classes_mask(c.name);
-            for (std::uint32_t bit = 0; bit < 16; ++bit)
-                if (mask & (1u << bit)) e.classes.push_back(bit + 1);
-            if (e.classes.empty()) e.classes.push_back(c.class_);
-            e.zone = game::zone_long_name(c.zone);
-            if (e.zone.empty()) e.zone = "Zone " + std::to_string(c.zone);
-            // CCharacterListWnd::EnableButtons @0x42f4b0: bCanGoHome and bUseable (taken here as the list's enabled
-            // byte; docs/unknowns.md). Stock EQEmu sets go_home from World:EnableReturnHomeButton and the time since
-            // the last login, and enabled always.
-            e.can_go_home = c.go_home != 0 && c.enabled != 0;
-            e.home_question = conn_->strings().format(6137, std::vector<std::string>{c.name});
-            char_view_.characters.push_back(std::move(e));
+        // The rows are built again when the list or a character's classes change, not each frame.
+        if (conn_->characters_serial() != characters_listed_serial_) {
+            characters_listed_serial_ = conn_->characters_serial();
+            char_view_.characters.clear();
+            for (const auto& c : conn_->characters()) {
+                ui::CharacterEntry e;
+                e.name = c.name;
+                e.level = c.level;
+                e.race = c.race;
+                std::uint32_t mask = conn_->classes_mask(c.name);
+                for (std::uint32_t bit = 0; bit < 16; ++bit)
+                    if (mask & (1u << bit)) e.classes.push_back(bit + 1);
+                if (e.classes.empty()) e.classes.push_back(c.class_);
+                e.zone = game::zone_long_name(c.zone);
+                if (e.zone.empty()) e.zone = "Zone " + std::to_string(c.zone);
+                // CCharacterListWnd::EnableButtons @0x42f4b0: bCanGoHome and bUseable (taken here as the list's
+                // enabled byte; docs/unknowns.md). Stock EQEmu sets go_home from World:EnableReturnHomeButton and the
+                // time since the last login, and enabled always.
+                e.can_go_home = c.go_home != 0 && c.enabled != 0;
+                e.home_question = conn_->strings().format(6137, std::vector<std::string>{c.name});
+                char_view_.characters.push_back(std::move(e));
+            }
+            note_listed_characters();
         }
-        note_listed_characters();
         if (char_view_.selected >= static_cast<int>(char_view_.characters.size())) char_view_.selected = -1;
         if (char_view_.selected < 0 && !char_view_.characters.empty()) char_view_.selected = 0;
         char_view_.busy = false;

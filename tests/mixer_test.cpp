@@ -602,3 +602,13 @@ TEST_CASE("SoundLibrary: decoded waves not asked for over two zone changes are d
     library.wait_idle();
     CHECK(library.wave("old.wav"));
 }
+
+TEST_CASE("Spawn sounds: a spawn beyond the reach of its steps and loop is out of hearing") {
+    // Height 6: steps to 72, the loop to 72; height 2: steps to 24, the loop to 48 (its minimum 2 x 24).
+    CHECK_FALSE(spawn_out_of_hearing({0, 0, 0}, {72, 0, 0}, 6.0f, 0.0f));
+    CHECK(spawn_out_of_hearing({0, 0, 0}, {72.5f, 0, 0}, 6.0f, 0.0f));
+    CHECK_FALSE(spawn_out_of_hearing({0, 0, 0}, {0, 48, 0}, 2.0f, 0.0f));
+    CHECK(spawn_out_of_hearing({0, 0, 0}, {0, 49, 0}, 2.0f, 0.0f));
+    CHECK_FALSE(spawn_out_of_hearing({10, 10, 10}, {10, 10, 130}, 6.0f, 50.0f));
+    CHECK(spawn_out_of_hearing({0, 0, 0}, {std::nanf(""), 0, 0}, 6.0f, 50.0f));
+}

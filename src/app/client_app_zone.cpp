@@ -213,6 +213,7 @@ void ClientApp::unload_zone() {
     zone_fires_.clear();
     zone_mesh_fires_.clear();
     frame_fires_.clear();
+    frame_fire_list_ = {};
     sky_renderer_.reset();
     if (actor_renderer_) actor_kept_ = actor_renderer_->release_kept();
     actor_renderer_.reset();
@@ -881,15 +882,11 @@ void ClientApp::update_missiles() {
         }
     }
     if (world_objects_) {
-        if (spell_bolts_) {
-            // The missiles a spell bolt follows are not drawn as their models.
-            std::vector<game::Missile> shown;
-            for (const auto& m : missiles_.missiles())
-                if (!spell_bolts_->follows(m.serial)) shown.push_back(m);
-            world_objects_->set_missiles(shown);
-        } else {
-            world_objects_->set_missiles(missiles_.missiles());
-        }
+        // The missiles a spell bolt follows are not drawn as their models.
+        const SpellBolts* bolts = spell_bolts_.get();
+        world_objects_->set_missiles(missiles_.missiles(), [bolts](std::uint32_t serial) {
+            return bolts && bolts->follows(serial);
+        });
     }
 }
 

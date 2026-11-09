@@ -534,6 +534,8 @@ bool GameConnection::market_hidden(const game::Spawn& s) const {
     return false;
 }
 
+bool GameConnection::market_hides_any() const { return bazaar_.hide_traders || barter_search_.hide_buyers; }
+
 bool GameConnection::feature_refused(std::int32_t feature) {
     if (game_feature(feature) != 0) return false;
     chat(ChatEvent::Kind::System, game::feature_refused_message(feature, membership_details_), 0,

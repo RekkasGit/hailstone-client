@@ -163,6 +163,13 @@ void ClientApp::show_select_model() {
         pre_game_shown_.clear();
         return;
     }
+    // The same row of the same list: nothing to look at again (the key below is built only when either changed).
+    const std::pair<std::uint32_t, int> source{conn_->characters_serial(), i};
+    if (!pre_game_shown_.empty() && pre_game_shown_ != "create" && source == pre_game_shown_for_) {
+        pre_game_hidden_ = false;
+        return;
+    }
+    pre_game_shown_for_ = source;
     const net::CharacterSelectEntry& e = list[static_cast<std::size_t>(i)];
     // What the model shows changes with the row and with what the list says of it (a new list after a creation).
     std::string key = e.name + "/" + std::to_string(e.race) + "/" + std::to_string(e.gender) + "/" +

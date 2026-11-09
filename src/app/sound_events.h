@@ -62,6 +62,7 @@ private:
     std::vector<assets::SpellEffectSounds> spell_effects_;           // SpellsNew.eff
     std::vector<std::array<std::int32_t, 3>> old_effects_;           // spells.eff's stage sounds
     std::unordered_map<std::uint32_t, SpawnState> spawns_;
+    std::vector<std::uint32_t> alive_; // the spawns with a loop this frame (kept for its capacity)
     audio::CrtRand rand_{static_cast<std::uint32_t>(0x5eed)};
 };
 

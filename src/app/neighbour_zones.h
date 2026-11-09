@@ -56,8 +56,8 @@ public:
               const game::ViewDistance& view, double time_seconds, render::ZonePhase phase);
 
     bool entered() const { return entered_; }
-    // A load is under way (update starts and finishes them).
-    bool busy() const { return job_ != nullptr; }
+    // A load is under way (update starts and finishes them), its ground being sampled included.
+    bool busy() const { return job_ != nullptr || pending_.has_value(); }
     std::size_t loaded() const;
     // The CPU time the last draw calls took, in ms (Opaque plus Translucent).
     double draw_ms() const { return draw_ms_; }
@@ -78,7 +78,22 @@ private:
         bool failed = false;
         std::unique_ptr<render::ZoneRenderer> renderer;
         std::size_t bytes = 0;
+        // Loaded, but the camera is past its free reach: not drawn, and freed only when another needs its room, on
+        // zoning or with the setting off (freeing waits for the GPU: render::ZoneRenderer's destructor).
+        bool idle = false;
     };
+    // A load about to start: the current zone's ground past the seam is sampled first, on this thread (the loader
+    // must not touch this zone) a few rows a frame, then the loader starts.
+    struct Pending {
+        std::size_t line = 0;
+        std::shared_ptr<Job> job;
+        game::GroundSampler ground;
+        float top = 0.0f;
+        float distance = 0.0f;
+        double ms = 0.0;    // the frames' time on it so far
+        int frames = 0;
+    };
+    void start(Pending& p);
     void finish(Job& job);
     static void run(std::shared_ptr<Job> job, const GameDir* game);
 
@@ -91,6 +106,7 @@ private:
     glm::vec3 zone_lo_{0.0f}, zone_hi_{0.0f};
     std::shared_ptr<Job> job_;
     std::thread thread_;
+    std::optional<Pending> pending_;
     struct Abandoned {
         std::shared_ptr<Job> job;
         std::thread thread;

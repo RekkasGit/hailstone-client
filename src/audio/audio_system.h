@@ -78,6 +78,7 @@ public:
     // The listener: the local player's position and the camera's angle in radians (audio/listener.h's
     // eq_listener_location); and the time of day: stored hour 1..24 (night outside 5..18).
     void set_listener(const glm::vec3& position, float angle);
+    const glm::vec3& listener() const { return listener_; }
     void set_hour(int stored_hour);
 
     // The listener environment (CDisplay_UpdateListenerEnvironment: 1 outside, 2 high, 3 low): the emitters of

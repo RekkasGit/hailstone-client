@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <numbers>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -538,4 +539,25 @@ TEST_CASE("GlobalLoad.txt: a phase past int32 wraps as the original's atoi, the 
     REQUIRE(out.size() >= 2);
     CHECK(out[0] == "second_chr.s3d");
     CHECK(out[1] == "first_chr.s3d");
+}
+
+TEST_CASE("CharacterMesh serial: every mesh has its own, a copy a new one, a move keeps it") {
+    CharacterMesh a, b;
+    CHECK(a.serial.value() != 0);
+    CHECK(a.serial.value() != b.serial.value());
+    const std::uint64_t was = a.serial.value();
+    CharacterMesh copy = a;
+    CHECK(copy.serial.value() != was);
+    CHECK(a.serial.value() == was);
+    CharacterMesh moved = std::move(a);
+    CHECK(moved.serial.value() == was);
+    CHECK(a.serial.value() != was); // the source, reused, is another mesh
+    b = moved;
+    CHECK(b.serial.value() != was);
+    // A mesh freed and another made in its place (the same address, as a re-dressed spawn's can be) differ.
+    auto first = std::make_unique<CharacterMesh>();
+    const std::uint64_t first_serial = first->serial.value();
+    first.reset();
+    auto second = std::make_unique<CharacterMesh>();
+    CHECK(second->serial.value() != first_serial);
 }

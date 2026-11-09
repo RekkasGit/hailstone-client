@@ -21,14 +21,25 @@ float overlap_area(const PlateBox& a, const PlateBox& b) {
 } // namespace
 
 std::vector<std::size_t> plate_draw_order(const std::vector<PlateBox>& boxes) {
-    std::vector<std::size_t> order(boxes.size());
-    std::iota(order.begin(), order.end(), std::size_t{0});
-    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return nearer(boxes[b], boxes[a]); });
+    std::vector<std::size_t> order;
+    plate_draw_order(boxes, order);
     return order;
 }
 
+void plate_draw_order(const std::vector<PlateBox>& boxes, std::vector<std::size_t>& order) {
+    order.resize(boxes.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
+    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return nearer(boxes[b], boxes[a]); });
+}
+
 std::vector<float> plate_target_alpha(const std::vector<PlateBox>& boxes) {
-    std::vector<float> alpha(boxes.size(), 1.0f);
+    std::vector<float> alpha;
+    plate_target_alpha(boxes, alpha);
+    return alpha;
+}
+
+void plate_target_alpha(const std::vector<PlateBox>& boxes, std::vector<float>& alpha) {
+    alpha.assign(boxes.size(), 1.0f);
     for (std::size_t i = 0; i < boxes.size(); ++i) {
         const PlateBox& b = boxes[i];
         if (b.front) continue;
@@ -44,7 +55,6 @@ std::vector<float> plate_target_alpha(const std::vector<PlateBox>& boxes) {
         const float t = std::clamp((covered - kPlateFadeFrom) / (kPlateFadeTo - kPlateFadeFrom), 0.0f, 1.0f);
         alpha[i] = 1.0f - (1.0f - kPlateCoveredAlpha) * t * t * (3.0f - 2.0f * t);
     }
-    return alpha;
 }
 
 float PlateFade::step(std::uint32_t id, float alpha_target, float dt, bool front) {

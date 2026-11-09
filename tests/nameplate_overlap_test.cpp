@@ -135,3 +135,17 @@ TEST_CASE("plate occlusion: the scene hides every name, the target's too unless 
     CHECK(plate_hidden_by_scene(true, false)); // the default: as the original, no sight of a target behind a wall
     CHECK_FALSE(plate_hidden_by_scene(true, true));
 }
+
+TEST_CASE("plate overlap: the lists filled in place match the returned ones, whatever the list held before") {
+    const std::vector<PlateBox> b = {box(0, 0, 100), box(85, 0, 20), box(0, 0, 300, true)};
+    std::vector<std::size_t> order{7, 7, 7, 7, 7};
+    std::vector<float> alpha{0.5f};
+    plate_draw_order(b, order);
+    plate_target_alpha(b, alpha);
+    CHECK(order == plate_draw_order(b));
+    CHECK(alpha == plate_target_alpha(b));
+    plate_draw_order({}, order);
+    plate_target_alpha({}, alpha);
+    CHECK(order.empty());
+    CHECK(alpha.empty());
+}

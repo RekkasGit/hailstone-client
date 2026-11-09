@@ -14,6 +14,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -210,6 +211,19 @@ void seam_band(const Seam& seam, const glm::vec3& zone_lo, const glm::vec3& zone
                glm::vec2& hi);
 GroundGrid sample_ground(const glm::vec2& lo, const glm::vec2& hi, float cell,
                          const std::function<std::optional<float>(float x, float y)>& floor);
+// sample_ground a row at a time, so the frame can spread it over several (app/neighbour_zones.cpp): the same grid.
+class GroundSampler {
+public:
+    GroundSampler(const glm::vec2& lo, const glm::vec2& hi, float cell);
+    // Samples rows, the first always, the next while `more()` says so; true once every row is done.
+    bool step(const std::function<std::optional<float>(float x, float y)>& floor, const std::function<bool()>& more);
+    bool done() const { return row_ >= grid_.height; }
+    GroundGrid take() { return std::move(grid_); }
+
+private:
+    GroundGrid grid_;
+    int row_ = 0;
+};
 
 // A convex polygon as barycentric weights over a triangle's corners (a, b, c).
 using BaryPolygon = std::vector<glm::vec3>;

@@ -88,7 +88,34 @@ struct MeshEmitter {
     ModelEmitter emitter;
 };
 
+// A number no other mesh made in this run has, so a mesh freed and another made at its address are told apart
+// (app/actor_emitters.h keys an actor's emitters by it). A copy is another mesh and gets a new one; a move keeps it
+// and leaves the source a new one.
+class MeshSerial {
+public:
+    MeshSerial() : value_(next()) {}
+    MeshSerial(const MeshSerial&) : value_(next()) {}
+    MeshSerial& operator=(const MeshSerial& o) {
+        if (this != &o) value_ = next();
+        return *this;
+    }
+    MeshSerial(MeshSerial&& o) noexcept : value_(o.value_) { o.value_ = next(); }
+    MeshSerial& operator=(MeshSerial&& o) noexcept {
+        if (this != &o) {
+            value_ = o.value_;
+            o.value_ = next();
+        }
+        return *this;
+    }
+    std::uint64_t value() const { return value_; }
+
+private:
+    static std::uint64_t next() noexcept;
+    std::uint64_t value_;
+};
+
 struct CharacterMesh {
+    MeshSerial serial;
     std::vector<MeshEmitter> emitters;
     std::vector<SkinnedVertex> vertices;
     std::vector<std::uint32_t> indices; // triangle list

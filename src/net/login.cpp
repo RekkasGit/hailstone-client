@@ -11,6 +11,7 @@
 
 #include "core/byte_io.h"
 #include "core/log.h"
+#include "core/process_serial.h"
 #include "net/des.h"
 
 // Login protocol as the original's eqmain.dll speaks it: LoginServerAPI's request
@@ -486,6 +487,7 @@ void LoginClient::handle(const AppPacket& packet) {
         case login_op::ServerListResponse:
             // OnGetServerList replaces the list, a refresh included.
             servers_ = login_codec::parse_server_list(packet.data);
+            servers_serial_ = core::next_process_serial();
             if (state_ == LoginState::RequestingList) state_ = LoginState::ServerList;
             break;
         case login_op::PlayEverquestResponse:
