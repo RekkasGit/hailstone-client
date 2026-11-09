@@ -87,6 +87,30 @@ TEST_CASE("addon_index: what is refused") {
     CHECK_FALSE(parse_addon_index(std::string(70 * 1024, '#'), kRelease.pub));
 }
 
+// The serial lets the client refuse an older signed index served again (one that still lists an add-on taken out, or
+// a key replaced since).
+TEST_CASE("addon_index: the serial, and an older index refused") {
+    auto with_serial = [](const std::string& line) {
+        std::string body = index_body();
+        return body.insert(body.find('\n') + 1, line);
+    };
+    auto index = parse_addon_index(signed_index(with_serial("serial 1762700000\n")), kRelease.pub);
+    REQUIRE(index);
+    CHECK(index->serial == 1762700000u);
+    CHECK_FALSE(parse_addon_index(signed_index(index_body()), kRelease.pub)->serial);
+    for (const char* bad : {"serial 0\n", "serial x\n", "serial\n", "serial 1 2\n", "serial -3\n",
+                            "serial 5\nserial 6\n"})
+        CHECK_MESSAGE(!parse_addon_index(signed_index(with_serial(bad)), kRelease.pub), bad);
+
+    using S = std::optional<std::uint64_t>;
+    CHECK(addon_index_older(S{}, S{}).empty());        // neither has one: as before the serial
+    CHECK(addon_index_older(S{}, S{5}).empty());
+    CHECK(addon_index_older(S{5}, S{5}).empty());      // the same index again
+    CHECK(addon_index_older(S{5}, S{6}).empty());
+    CHECK_FALSE(addon_index_older(S{6}, S{5}).empty());
+    CHECK_FALSE(addon_index_older(S{6}, S{}).empty()); // once a serial was seen, one without is older
+}
+
 TEST_CASE("addon_index: random and cut-off input is refused without a crash") {
     std::mt19937 rng(4321);
     const std::string good = signed_index(index_body());
@@ -224,6 +248,41 @@ TEST_CASE("addon_manager: the add-on index is fetched, cached and checked") {
         auto m = start();
         CHECK_FALSE(m->status().index);
         CHECK_FALSE(fs::exists(addons_dir(dir.path()) / "index.txt"));
+    }
+    SUBCASE("an older index than the one kept is not taken") {
+        auto body = [](const std::string& serial, const std::string& name) {
+            return "hailstone-addon-index 1\n" + serial + "addon " + name + " owner/" + name + " " +
+                   hex_encode(kAddonKey.pub) + "\n";
+        };
+        github.files[kIndexUrl] = signed_index(body("serial 200\n", "newer"));
+        auto m = start();
+        REQUIRE(m->status().index);
+        CHECK(m->status().index->serial == 200u);
+        for (const std::string& stale : {body("serial 100\n", "older"), body("", "unnumbered")}) {
+            github.files[kIndexUrl] = signed_index(stale);
+            m->refresh_index(true);
+            m->wait_idle();
+            REQUIRE(m->status().index);
+            CHECK(m->status().index->addons[0].name == "newer");
+            m = start();
+            REQUIRE(m->status().index);
+            CHECK(m->status().index->addons[0].name == "newer"); // the cache kept the newer one
+        }
+        github.files[kIndexUrl] = signed_index(body("serial 300\n", "newest"));
+        m->refresh_index(true);
+        m->wait_idle();
+        CHECK(m->status().index->addons[0].name == "newest");
+    }
+    SUBCASE("an index without a serial still replaces one without") {
+        github.files[kIndexUrl] = signed_index(index_body());
+        auto m = start();
+        REQUIRE(m->status().index);
+        std::string body = index_body();
+        body += "addon second owner/second " + hex_encode(kAddonKey.pub) + "\n";
+        github.files[kIndexUrl] = signed_index(body);
+        m->refresh_index(true);
+        m->wait_idle();
+        CHECK(m->status().index->addons.size() == 2);
     }
     SUBCASE("without a key nothing is fetched") {
         github.files[kIndexUrl] = signed_index(index_body());

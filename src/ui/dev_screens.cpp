@@ -17,6 +17,7 @@
 
 #include "core/ascii_case.h"
 #include "core/config.h"
+#include "core/wipe.h"
 #include "game/eq_names.h"
 #include "game/zone_names.h"
 #include "game/gamepad_bindings.h"
@@ -462,9 +463,16 @@ LoginAction addons_window(AddonsView& a, bool busy, bool* open) {
             ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s",
                                "A tool is a program of its own: it runs on your computer with your rights, outside "
                                "Hailstone, which starts it when you ask. Install only tools you trust.");
+        if (o.older)
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "This is an older version than the one installed (%s): "
+                               "installing it goes back to %s.", o.installed_version.c_str(), o.version.c_str());
         if (!o.blocked.empty()) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", o.blocked.c_str());
         ImGui::BeginDisabled(!o.blocked.empty());
-        if (ImGui::Button(o.installed_version.empty() ? "Install" : "Install this version")) action = LoginAction::AddonInstall;
+        if (ImGui::Button(o.older ? "Install the older version" : o.installed_version.empty() ? "Install"
+                                                                                               : "Install this version")) {
+            action = LoginAction::AddonInstall;
+            a.choice_on = o.older;
+        }
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) action = LoginAction::AddonCancel;
@@ -1158,7 +1166,7 @@ std::string credential_server(const LoginView& view) { return platform::credenti
 
 void pick_account(LoginView& view, std::string_view username) {
     view.username = std::string(username);
-    view.password.clear();
+    core::wipe(view.password);
     view.save_password = false;
     const SavedAccount* a = nullptr;
     for (const auto& acc : view.accounts)
@@ -1319,6 +1327,7 @@ std::optional<ServerProfile> store_login_settings(LoginView& view, Config& confi
     // What was typed stays, even when the username is not remembered.
     view.username = std::move(username);
     view.password = std::move(password);
+    core::wipe(password);
     return p;
 }
 

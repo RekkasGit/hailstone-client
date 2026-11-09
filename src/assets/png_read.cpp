@@ -1,5 +1,6 @@
 #include "assets/png_read.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -44,31 +45,26 @@ int paeth(int a, int b, int c) {
     return pb <= pc ? b : c;
 }
 
-// Undoes the filters of a w x h sub-image whose filtered rows start at `in`; false on a bad filter type.
-bool unfilter(const Header& h, std::uint32_t w, std::uint32_t rows, const unsigned char* in,
-              std::vector<unsigned char>& out) {
-    std::size_t stride = h.row_bytes(w), bpp = h.filter_bytes();
-    out.assign(stride * rows, 0);
-    for (std::uint32_t y = 0; y < rows; ++y) {
-        unsigned char type = in[y * (stride + 1)];
-        const unsigned char* src = in + y * (stride + 1) + 1;
-        unsigned char* cur = out.data() + y * stride;
-        const unsigned char* prev = y > 0 ? cur - stride : nullptr;
-        for (std::size_t x = 0; x < stride; ++x) {
-            int a = x >= bpp ? cur[x - bpp] : 0;
-            int b = prev ? prev[x] : 0;
-            int c = prev && x >= bpp ? prev[x - bpp] : 0;
-            int v = src[x];
-            switch (type) {
-            case 0: break;
-            case 1: v += a; break;
-            case 2: v += b; break;
-            case 3: v += (a + b) / 2; break;
-            case 4: v += paeth(a, b, c); break;
-            default: return false;
-            }
-            cur[x] = static_cast<unsigned char>(v);
+// Undoes the filter of one row in place: `row` holds its filter type then `stride` bytes, `prev` the row above
+// unfiltered (nullptr for a pass's first). False on a bad filter type.
+bool unfilter_row(const Header& h, std::size_t stride, unsigned char* row, const unsigned char* prev) {
+    const std::size_t bpp = h.filter_bytes();
+    const unsigned char type = row[0];
+    if (type > 4) return false;
+    unsigned char* cur = row + 1;
+    for (std::size_t x = 0; x < stride; ++x) {
+        int a = x >= bpp ? cur[x - bpp] : 0;
+        int b = prev ? prev[x] : 0;
+        int c = prev && x >= bpp ? prev[x - bpp] : 0;
+        int v = cur[x];
+        switch (type) {
+        case 1: v += a; break;
+        case 2: v += b; break;
+        case 3: v += (a + b) / 2; break;
+        case 4: v += paeth(a, b, c); break;
+        default: break;
         }
+        cur[x] = static_cast<unsigned char>(v);
     }
     return true;
 }
@@ -170,28 +166,56 @@ std::optional<Image> decode_png(std::span<const std::byte> data, std::string* er
         if (w && rows) expected += (h.row_bytes(w) + 1) * rows;
     }
     if (expected / kMaxDeflateRatio > idat.size()) return fail("image data too short for its size");
-    std::vector<unsigned char> raw(expected);
-    uLongf raw_size = static_cast<uLongf>(expected);
-    int z = uncompress(raw.data(), &raw_size, idat.data(), static_cast<uLong>(idat.size()));
-    if (z != Z_OK || raw_size != expected) return fail("bad image data");
+
+    // Inflated a row at a time into two row buffers and written straight into the pixels: the whole filtered
+    // stream is never held (it is larger than the image itself), so the peak is the image and the IDAT.
+    z_stream zs{};
+    if (inflateInit(&zs) != Z_OK) return fail("bad image data");
+    struct End {
+        z_stream* zs;
+        ~End() { inflateEnd(zs); }
+    } end{&zs};
+    zs.next_in = idat.data();
+    zs.avail_in = static_cast<uInt>(std::min<std::size_t>(idat.size(), std::numeric_limits<uInt>::max()));
+    std::size_t in_left = idat.size() - zs.avail_in;
+    bool stream_end = false;
+    // Inflates exactly `n` bytes into `out`; false when the stream is bad or ends first.
+    auto inflate_exactly = [&](unsigned char* out, std::size_t n) {
+        zs.next_out = out;
+        zs.avail_out = static_cast<uInt>(n);
+        while (zs.avail_out > 0) {
+            if (stream_end) return false;
+            if (zs.avail_in == 0 && in_left > 0) {
+                const std::size_t more = std::min<std::size_t>(in_left, std::numeric_limits<uInt>::max());
+                zs.avail_in = static_cast<uInt>(more);
+                in_left -= more;
+            }
+            const int z = inflate(&zs, Z_NO_FLUSH);
+            if (z == Z_STREAM_END) stream_end = true;
+            else if (z != Z_OK) return false;
+        }
+        return true;
+    };
 
     Image img;
     img.width = h.width;
     img.height = h.height;
     img.format = PixelFormat::RGBA8;
     std::vector<std::byte> px(std::size_t(h.width) * h.height * 4);
-    std::size_t offset = 0;
-    std::vector<unsigned char> rows_out;
+    std::vector<unsigned char> cur_row, prev_row;
     for (const Pass& p : passes) {
         std::uint32_t w = h.width > p.x0 ? (h.width - p.x0 + p.dx - 1) / p.dx : 0;
         std::uint32_t rows = h.height > p.y0 ? (h.height - p.y0 + p.dy - 1) / p.dy : 0;
         if (!w || !rows) continue;
-        if (!unfilter(h, w, rows, raw.data() + offset, rows_out)) return fail("bad filter type");
-        offset += (h.row_bytes(w) + 1) * rows;
         std::size_t stride = h.row_bytes(w);
+        cur_row.assign(stride + 1, 0);
+        prev_row.assign(stride + 1, 0);
         int ch = h.channels();
         for (std::uint32_t y = 0; y < rows; ++y) {
-            const unsigned char* row = rows_out.data() + y * stride;
+            if (!inflate_exactly(cur_row.data(), stride + 1)) return fail("bad image data");
+            if (!unfilter_row(h, stride, cur_row.data(), y > 0 ? prev_row.data() + 1 : nullptr))
+                return fail("bad filter type");
+            const unsigned char* row = cur_row.data() + 1;
             for (std::uint32_t x = 0; x < w; ++x) {
                 std::array<int, 4> c{};
                 std::size_t s = std::size_t(x) * static_cast<std::size_t>(ch);
@@ -223,7 +247,20 @@ std::optional<Image> decode_png(std::span<const std::byte> data, std::string* er
                 std::size_t at = (std::size_t(p.y0 + y * p.dy) * h.width + p.x0 + x * p.dx) * 4;
                 for (int k = 0; k < 4; ++k) px[at + static_cast<std::size_t>(k)] = static_cast<std::byte>(c[k]);
             }
+            std::swap(cur_row, prev_row);
         }
+    }
+    // The stream must end where the image does, as uncompress() into a buffer of exactly that size checked.
+    if (!stream_end) {
+        unsigned char extra = 0;
+        zs.next_out = &extra;
+        zs.avail_out = 1;
+        if (zs.avail_in == 0 && in_left > 0) {
+            const std::size_t more = std::min<std::size_t>(in_left, std::numeric_limits<uInt>::max());
+            zs.avail_in = static_cast<uInt>(more);
+            in_left -= more;
+        }
+        if (inflate(&zs, Z_FINISH) != Z_STREAM_END || zs.avail_out != 1) return fail("bad image data");
     }
     img.mips.push_back(std::move(px));
     return img;

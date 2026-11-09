@@ -248,6 +248,20 @@ bool Hooks::has_command(std::string_view name) const {
     return false;
 }
 
+std::optional<Hooks::Owner> Hooks::command_owner(std::string_view name) const {
+    std::string n = lower(name);
+    if (!n.empty() && n.front() != '/') n.insert(n.begin(), '/');
+    std::optional<Owner> owner;
+    for (const auto& e : impl_->lists[kCommand])
+        if (e->alive && e->name == n) owner = e->owner;
+    return owner;
+}
+
+bool Hooks::is_guest(Owner owner) const {
+    const auto& g = impl_->guests;
+    return std::find(g.begin(), g.end(), owner) != g.end();
+}
+
 std::uint32_t Hooks::command_required(std::string_view name) const {
     std::string n = lower(name);
     if (!n.empty() && n.front() != '/') n.insert(n.begin(), '/');

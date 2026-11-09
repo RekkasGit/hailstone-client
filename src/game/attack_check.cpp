@@ -5,6 +5,7 @@
 #include "game/race_models.h"
 #include "game/spells.h"
 #include "game/world_state.h"
+#include "game/zone_names.h"
 
 namespace hailstone::game {
 
@@ -30,6 +31,7 @@ public:
         a.pvp = sp.pvp != 0;
         a.guild_id = static_cast<std::int32_t>(sp.guild_id);
         a.deity = sp.deity;
+        a.zone = in_.zone; // the client knows only the spawns of its own zone
         levels_[id] = id == in_.world->player_id && in_.my_level ? in_.my_level : sp.level;
         races_[id] = {sp.race, sp.gender};
         gms_[id] = sp.gm;
@@ -77,7 +79,7 @@ public:
         if (s.id == in_.world->player_id) return true;
         return in_.self_or_group_member && in_.self_or_group_member(it->second.name);
     }
-    bool is_newbie_zone(std::uint32_t) override { return false; }
+    bool is_newbie_zone(std::uint32_t zone) override { return game::is_newbie_zone(zone); }
 
 private:
     const AttackCheckInput& in_;

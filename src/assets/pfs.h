@@ -35,6 +35,9 @@ public:
 
     // Inflated contents of a file (name matched case-insensitively).
     std::optional<std::vector<std::byte>> read(std::string_view name) const;
+    // The first min(max, size) bytes of a file, inflating no more of it than that (a magic test before reading a
+    // whole member). Throws on a malformed file as read() does, over what it inflates.
+    std::optional<std::vector<std::byte>> read_prefix(std::string_view name, std::size_t max) const;
 
     const std::string& label() const { return label_; }
 

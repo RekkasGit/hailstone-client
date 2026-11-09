@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -57,7 +58,9 @@ public:
     // The missiles in flight (game/missiles.h), after update: their actors this frame. CDisplay::CreateActor's
     // model, or IT63, or RED_BLOB when it has none; at the actor's position, turned (heading, tilt, 0) as
     // CActorData::SetEulerRotation512 does, at CreateActor's scale.
-    void set_missiles(const std::vector<game::Missile>& missiles);
+    // `hidden(serial)`: a missile not drawn as its model (one a spell bolt follows).
+    void set_missiles(const std::vector<game::Missile>& missiles,
+                      const std::function<bool(std::uint32_t serial)>& hidden = {});
     // The drawn missiles whose models have actor emitters (an EQG model's `<model>.prt` on its `.pts` points, e.g.
     // a spell bolt's flames): an id (kMissileActorBit | the missile's serial) and the emitters, each on bone 0,
     // whose world matrix missile_transform gives (app/actor_emitters.h).

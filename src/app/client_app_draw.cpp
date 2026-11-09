@@ -50,7 +50,7 @@ void ClientApp::draw_text_overlay() {
 
 void ClientApp::update_market_hidden(bool in_game) {
     market_hidden_.clear();
-    if (!in_game || !conn_) return;
+    if (!in_game || !conn_ || !conn_->market_hides_any()) return;
     for (const auto& [id, s] : conn_->world().spawns)
         if (conn_->market_hidden(s)) market_hidden_.insert(id);
 }
@@ -81,11 +81,7 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
     if (!plate_layer_) plate_layer_ = std::make_unique<NameplateLayer>(vk_, shader_dir_);
     plate_layer_->begin(frame, dl, glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h), camera_.near_plane,
                         far_plane);
-    struct Entry {
-        std::uint32_t id;
-        NameplateText plate;
-    };
-    std::vector<Entry> plates;
+    plate_count_ = 0;
     for (const auto& [id, s] : world.spawns) {
         if (market_hidden_.contains(id)) continue; // IsInvisible: Hide Traders / Hide Buyers
         // ToggleNpcNameSprites / ToggleCharacterNameSprites; the player's own name too, as the original draws it (not
@@ -116,7 +112,11 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (std::abs(ndc.x) > 1.0f || std::abs(ndc.y) > 1.0f) continue;
         float px = view_area_.x + (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width) * sx;
         float py = view_area_.y + (0.5f - ndc.y * 0.5f) * static_cast<float>(extent.height) * sy;
-        std::string label = game::display_name(s.name);
+        if (plate_count_ == plates_.size()) plates_.emplace_back();
+        PlateEntry& entry = plates_[plate_count_];
+        NameplateText& plate = entry.plate;
+        std::string& label = plate.name; // (built in place: the string keeps its capacity from frame to frame)
+        label = game::display_name(s.name);
         // An NPC's last name is its owner line under the name (below); a player's follows the name.
         const bool npc = s.is_npc && !s.is_corpse;
         // PlayerClient::SetNameSpriteState @0x58e2d0 by __ShowNames (/shownames): a player's title and suffix above
@@ -128,10 +128,10 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (!s.title.empty() && (!player || level > 3)) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
-        NameplateText plate;
         plate.pos = glm::vec2(px, py);
         plate.depth = clip.w;
-        plate.name = label;
+        plate.lines.clear();
+        plate.alpha = 1.0f;
         plate.target = id == world.target_id;
         plate.highlight = plate.target && target_plate_highlight_;
         plate.through_walls = !game::plate_hidden_by_scene(plate.target, target_plate_through_walls_);
@@ -156,25 +156,26 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
             const std::uint32_t rgb = game::con_rgb(game::con_level(s, conn_->player_status().level, conn_->pvp_rules()));
             plate.color = IM_COL32((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 255);
         }
-        plates.push_back({id, std::move(plate)});
+        entry.id = id;
+        ++plate_count_;
     }
     // Hailstone (game/nameplate_overlap.h): the nearer name is drawn over the farther, and a name a nearer one covers
     // fades toward a tenth of its alpha, smoothly (tau 0.3 s). The target stays at full alpha at its projected head.
-    std::vector<game::PlateBox> boxes;
-    boxes.reserve(plates.size());
-    for (const auto& e : plates) {
-        const glm::vec2 size = NameplateLayer::size_of(e.plate);
-        boxes.push_back({e.plate.pos.x - size.x * 0.5f, e.plate.pos.y, e.plate.pos.x + size.x * 0.5f,
-                         e.plate.pos.y + size.y, e.plate.depth, e.plate.target});
+    plate_boxes_.clear();
+    for (std::size_t i = 0; i < plate_count_; ++i) {
+        const NameplateText& p = plates_[i].plate;
+        const glm::vec2 size = NameplateLayer::size_of(p);
+        plate_boxes_.push_back({p.pos.x - size.x * 0.5f, p.pos.y, p.pos.x + size.x * 0.5f, p.pos.y + size.y, p.depth,
+                                p.target});
     }
-    const std::vector<float> targets =
-        plate_overlap_fade_ ? game::plate_target_alpha(boxes) : std::vector<float>(boxes.size(), 1.0f);
-    const std::vector<std::size_t> order = game::plate_draw_order(boxes);
+    if (plate_overlap_fade_) game::plate_target_alpha(plate_boxes_, plate_alpha_);
+    else plate_alpha_.assign(plate_boxes_.size(), 1.0f);
+    game::plate_draw_order(plate_boxes_, plate_order_);
     const float dt = ImGui::GetIO().DeltaTime;
-    for (std::size_t i = 0; i < plates.size(); ++i)
-        plates[i].plate.alpha = plate_fade_.step(plates[i].id, targets[i], dt, plates[i].plate.target);
+    for (std::size_t i = 0; i < plate_count_; ++i)
+        plates_[i].plate.alpha = plate_fade_.step(plates_[i].id, plate_alpha_[i], dt, plates_[i].plate.target);
     plate_fade_.end_frame();
-    for (std::size_t i : order) plate_layer_->draw(plates[i].plate);
+    for (std::size_t i : plate_order_) plate_layer_->draw(plates_[i].plate);
     dl->PopClipRect();
 }
 

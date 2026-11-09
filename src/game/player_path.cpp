@@ -14,6 +14,7 @@ namespace {
 
 constexpr std::size_t kMaxPoints = 10000; // HandleFindPersonReply's limit on the points it adds
 constexpr int kMaxMovers = 20;            // +0x38c is capped at 0x14
+constexpr float kMaxSegmentPoints = 256;  // ours: the drawn points a segment gets at most (walk)
 
 float dist2(const glm::vec3& a, const glm::vec3& b) {
     glm::vec3 d = a - b;
@@ -44,10 +45,14 @@ PathSettings load_path_settings(const IniFile* ini) {
         auto v = ini->get(sec, key);
         return v && !v->empty() ? core::msvc_atoi(*v) : fallback;
     };
-    s.segment_length = num("SegmentLength", 5.0f);
-    s.lod_factor = num("LODFactor", 0.0f);
-    s.control_segment_length = num("ControlSegmentLength", 5.0f);
-    s.merge_distance = num("MergeDistance", 5.0f);
+    // The original takes these as written. A step of zero or less (or not a number) would never end the loops that
+    // fill and draw the path (handle_reply, trim, walk), so such a value is ours to replace with the default; every
+    // value the original could use is kept.
+    auto positive = [](float v, float fallback) { return std::isfinite(v) && v > 0.0f ? v : fallback; };
+    s.segment_length = positive(num("SegmentLength", 5.0f), 5.0f);
+    if (float v = num("LODFactor", 0.0f); std::isfinite(v) && v >= 0.0f) s.lod_factor = v; // a negative step never ends
+    s.control_segment_length = positive(num("ControlSegmentLength", 5.0f), 5.0f);
+    if (float v = num("MergeDistance", 5.0f); std::isfinite(v)) s.merge_distance = v;
     s.finish_range = num("FinishRange", 10.0f);
     s.texture = ini->get_string(sec, "Texture");
     s.frame_count = integer("FrameCount", 0);
@@ -238,6 +243,13 @@ PlayerPath::Reply PlayerPath::handle_reply(std::span<const glm::vec3> points, st
         points_.push_back(p);
         prev = p;
     }
+    if (points_.empty()) {
+        // Every point was dropped (not a number, or the merge test failed for all): no path. The original would read
+        // past its empty list here; ours is a failed find without a point.
+        out.failed = true;
+        stop();
+        return out;
+    }
     tail_ = points_.back();
     current_ = static_cast<int>(points_.size()) - 1;
     active_ = true;
@@ -286,7 +298,9 @@ void PlayerPath::trim(const glm::vec3& player) {
     float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
     if (settings_.control_segment_length < len) {
         float step = settings_.control_segment_length / len;
-        for (float t = step; t < 1.0f - step; t += step) points_.push_back(tail_ + d * t);
+        // kMaxPoints is ours here (HandleFindPersonReply's limit): a jump far away, or a step too small for t to grow,
+        // would otherwise add points without end.
+        for (float t = step; t < 1.0f - step && points_.size() <= kMaxPoints; t += step) points_.push_back(tail_ + d * t);
         points_.push_back(player);
         tail_ = player;
         return;
@@ -429,7 +443,10 @@ void PlayerPath::walk(const glm::vec3& eye, std::uint32_t now_ms) {
         float step = s.segment_length;
         if (s.lod_factor <= -1.1920929e-07f || 1.1920929e-07f <= s.lod_factor)
             step = std::sqrt(dist2(eye, p1)) * s.lod_factor * step;
-        if (step <= len) {
+        // Ours: a step that is not above zero (the distance or LODFactor) draws the segment straight, and a segment
+        // gets at most kMaxSegmentPoints points, so a tiny LODFactor cannot add points without end.
+        if (std::isfinite(step) && step > 0.0f && step <= len) {
+            step = std::max(step, len / kMaxSegmentPoints);
             // The tangent handles: toward the neighbours, CurveScale long, when they are a step or more away.
             const glm::vec3& p0 = at(k - 2);
             const glm::vec3& p3 = at(std::min(k + 1, last));

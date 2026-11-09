@@ -314,23 +314,40 @@ ZoneRenderer::ZoneRenderer(VkContext& vk, PreparedPtr prepared, const std::files
 }
 
 ZoneRenderer::~ZoneRenderer() {
-    VkDevice d = vk_.device();
-    vk_.wait_idle();
-    for (VkPipeline p : pipelines_)
-        if (p) vkDestroyPipeline(d, p, nullptr);
-    if (shadow_pipeline_) vkDestroyPipeline(d, shadow_pipeline_, nullptr);
-    if (point_shadow_pipeline_) vkDestroyPipeline(d, point_shadow_pipeline_, nullptr);
-    if (underwater_pipeline_) vkDestroyPipeline(d, underwater_pipeline_, nullptr);
-    if (layout_) vkDestroyPipelineLayout(d, layout_, nullptr);
-    if (pool_) vkDestroyDescriptorPool(d, pool_, nullptr);
-    if (set_layout_) vkDestroyDescriptorSetLayout(d, set_layout_, nullptr);
-    if (scene_layout_) vkDestroyDescriptorSetLayout(d, scene_layout_, nullptr);
-    for (auto& b : scene_buffers_) b.destroy(vk_.allocator());
-    for (auto& b : light_grid_buffers_) b.destroy(vk_.allocator());
-    if (sampler_) vkDestroySampler(d, sampler_, nullptr);
-    for (auto& t : textures_) t.destroy(d, vk_.allocator());
-    vertex_buffer_.destroy(vk_.allocator());
-    index_buffer_.destroy(vk_.allocator());
+    // Retired rather than destroyed after a wait for the device: a neighbour zone is let go in the middle of a frame
+    // (app/neighbour_zones.h), and vkDeviceWaitIdle there was a hitch. Its objects go once the frames that may still
+    // draw it, and its uploads, are done (VkContext::retire).
+    struct Objects {
+        std::vector<VkPipeline> pipelines;
+        VkPipelineLayout layout;
+        VkDescriptorPool pool;
+        std::vector<VkDescriptorSetLayout> set_layouts;
+        std::vector<Buffer> buffers;
+        VkSampler sampler;
+        std::vector<Texture> textures;
+    } o{{shadow_pipeline_, point_shadow_pipeline_, underwater_pipeline_},
+        layout_,
+        pool_,
+        {set_layout_, scene_layout_},
+        {},
+        sampler_,
+        std::move(textures_)};
+    for (VkPipeline p : pipelines_) o.pipelines.push_back(p);
+    for (const auto& b : scene_buffers_) o.buffers.push_back(b);
+    for (const auto& b : light_grid_buffers_) o.buffers.push_back(b);
+    o.buffers.push_back(vertex_buffer_);
+    o.buffers.push_back(index_buffer_);
+    vk_.retire([d = vk_.device(), allocator = vk_.allocator(), o]() mutable {
+        for (VkPipeline p : o.pipelines)
+            if (p) vkDestroyPipeline(d, p, nullptr);
+        if (o.layout) vkDestroyPipelineLayout(d, o.layout, nullptr);
+        if (o.pool) vkDestroyDescriptorPool(d, o.pool, nullptr);
+        for (VkDescriptorSetLayout l : o.set_layouts)
+            if (l) vkDestroyDescriptorSetLayout(d, l, nullptr);
+        for (Buffer& b : o.buffers) b.destroy(allocator);
+        if (o.sampler) vkDestroySampler(d, o.sampler, nullptr);
+        for (Texture& t : o.textures) t.destroy(d, allocator);
+    });
 }
 
 std::vector<std::vector<std::uint8_t>> classic_liquid_triangles(const assets::Zone& zone) {

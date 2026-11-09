@@ -46,9 +46,8 @@ void PluginTcp::progress() {
             error_ = std::move(lookup_->error);
         }
         lookup_.reset();
-        bool started = false;
-        for (const auto& ep : endpoints)
-            if ((started = socket_.connect(ep, error_))) break;
+        // Each address in turn, also when one fails after starting (refused, or no answer in the timeout).
+        const bool started = !endpoints.empty() && socket_.connect(std::move(endpoints), error_);
         if (started) {
             error_.clear();
         } else {

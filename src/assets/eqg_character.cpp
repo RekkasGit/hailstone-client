@@ -40,11 +40,18 @@ std::uint32_t count(ByteReader& r, std::size_t limit) {
     return v;
 }
 
+// The longest name a string table gives. The RoF2 files' longest is 59 bytes; without a bound every reference into
+// one long run without a NUL would copy all of it.
+constexpr std::size_t kMaxNameLength = 256;
+
 std::string name_at(std::span<const std::byte> strings, std::uint32_t offset) {
     if (offset >= strings.size()) throw std::runtime_error("string offset out of range");
     const char* p = reinterpret_cast<const char*>(strings.data()) + offset;
     std::size_t n = 0;
-    while (offset + n < strings.size() && p[n] != '\0') ++n;
+    while (offset + n < strings.size() && p[n] != '\0') {
+        if (n == kMaxNameLength) throw std::runtime_error("string too long");
+        ++n;
+    }
     if (offset + n == strings.size()) throw std::runtime_error("unterminated string");
     return std::string(p, n);
 }

@@ -11,6 +11,8 @@
 
 #include "core/byte_io.h"
 #include "core/log.h"
+#include "core/process_serial.h"
+#include "core/wipe.h"
 #include "net/des.h"
 
 // Login protocol as the original's eqmain.dll speaks it: LoginServerAPI's request
@@ -56,8 +58,13 @@ AppPacket player_login(std::uint32_t sequence, const std::string& user, const st
     return {login_op::Login, w.take()};
 }
 
+// A login reply inflates to at most this (the largest, a server list, is a few KB); larger is refused.
+constexpr std::size_t kMaxInflated = std::size_t{1} << 20;
+
 std::vector<std::byte> inflate_all(std::span<const std::byte> in) {
-    std::vector<std::byte> out(std::max<std::size_t>(in.size() * 4, 256));
+    // Capped from the start: a body over 256 KB would otherwise start past the cap, which is checked only when the
+    // buffer fills.
+    std::vector<std::byte> out(std::min(std::max<std::size_t>(in.size() * 4, 256), kMaxInflated));
     z_stream z{};
     need(inflateInit(&z) == Z_OK, "zlib init");
     z.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(in.data()));
@@ -65,8 +72,8 @@ std::vector<std::byte> inflate_all(std::span<const std::byte> in) {
     int rc = Z_OK;
     while (rc == Z_OK) {
         if (z.total_out == out.size()) {
-            if (out.size() >= (1u << 20)) break;
-            out.resize(out.size() * 2);
+            if (out.size() >= kMaxInflated) break;
+            out.resize(std::min(out.size() * 2, kMaxInflated));
         }
         z.next_out = reinterpret_cast<Bytef*>(out.data() + z.total_out);
         z.avail_out = static_cast<uInt>(out.size() - z.total_out);
@@ -334,6 +341,7 @@ LoginClient::~LoginClient() = default;
 
 void LoginClient::start(const std::string& host, std::uint16_t port, std::string user, std::string password) {
     start(std::vector<Host>{{host, port}}, std::move(user), std::move(password));
+    core::wipe(password); // a short one's bytes stay in the moved-from string's own storage, on the stack
 }
 
 void LoginClient::start(std::vector<Host> hosts, std::string user, std::string password) {
@@ -341,6 +349,7 @@ void LoginClient::start(std::vector<Host> hosts, std::string user, std::string p
     host_index_ = 0;
     user_ = std::move(user);
     password_ = std::move(password);
+    core::wipe(password);
     error_.clear();
     error_id_ = 0;
     notice_.clear();
@@ -467,9 +476,8 @@ void LoginClient::handle(const AppPacket& packet) {
             send_request(login_op::Login, options_.login_timeout, [&](std::uint32_t s) {
                 return login_codec::login_request(s, user, password);
             });
-            std::fill(password.begin(), password.end(), '\0');
-            std::fill(password_.begin(), password_.end(), '\0');
-            password_.clear();
+            core::wipe(password);
+            core::wipe(password_);
             state_ = LoginState::Authenticating;
             break;
         }
@@ -486,6 +494,7 @@ void LoginClient::handle(const AppPacket& packet) {
         case login_op::ServerListResponse:
             // OnGetServerList replaces the list, a refresh included.
             servers_ = login_codec::parse_server_list(packet.data);
+            servers_serial_ = core::next_process_serial();
             if (state_ == LoginState::RequestingList) state_ = LoginState::ServerList;
             break;
         case login_op::PlayEverquestResponse:

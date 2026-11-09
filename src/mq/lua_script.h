@@ -3,6 +3,7 @@
 // The script host's insides (mq/lua_mq.h), shared by its files: lua_mq.cpp (the mq module, running scripts) and
 // lua_hailstone.cpp (the hailstone module: scripts as plugins). Not for use elsewhere.
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -12,6 +13,7 @@
 #include <optional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -35,6 +37,12 @@ inline constexpr std::size_t kMemoryLimit = 256u << 20; // a script's Lua heap
 inline constexpr std::int64_t kSliceMs = 3;             // run this long, then wait for the next frame
 inline constexpr std::int64_t kRunawayMs = 5000;        // this long without a chance to yield: the script is stopped
 inline constexpr std::size_t kMaxQueuedEvents = 1000;
+// mq.event's limits (docs/plugins.md): every pattern is matched against every chat line, outside the script's time
+// slice and memory limit, so a script's events are held well above what MQ macros use.
+inline constexpr std::size_t kMaxEvents = 256;                      // events of one script
+inline constexpr std::size_t kMaxEventPattern = 1024;               // bytes of one pattern
+inline constexpr std::size_t kMaxEventPatterns = std::size_t{32} << 10; // bytes of all of one script's patterns
+inline constexpr std::size_t kMaxEventName = 256;                   // bytes of an event's name
 inline constexpr std::int64_t kPressMs = 50;            // a Lua social in press mode runs to its end within this
 inline constexpr std::int64_t kFaceMs = 5;              // a social's face
 inline constexpr std::int64_t kFaceEveryMs = 200;       // how often a face runs
@@ -75,6 +83,11 @@ struct ScriptHost::Impl {
     }
     // One of the server's own scripts under its hailstone.cfg: the player cannot stop or pause it.
     bool kept(const Script& s) const;
+    // Whether the code running now may stop or pause the script (/lua stop, /lua pause, the Scripts window): the
+    // player, or code that may do all the script may (plugin::caller_caps). A script or plugin with less cannot end
+    // the player's own. refuse_control says so in the chat window when it may not.
+    bool may_control(const Script& s) const;
+    bool refuse_control(const Script& s) const;
     void end(Script& s, const std::string& why);
     std::optional<fs::path> resolve(const std::string& name) const;
     void lua_command(std::string_view args);
@@ -95,6 +108,8 @@ struct ScriptHost::Impl {
     };
     // A new script's Lua state with the libraries, the mq module and ImGui; false with the reason.
     bool open_state(Script& sc, std::string& why);
+    // Moves a script's config/ folder from the name it had before script_folder_name, when that is unambiguous.
+    void migrate_config_dir(const Script& s) const;
     // The character's autorun list (set_autorun_file): the file and its names, lower case, in file order.
     fs::path autorun_file;
     std::vector<std::string> autorun;
@@ -137,9 +152,15 @@ struct Script {
     bool closing = false; // close() runs: the state's last code may give the client nothing more
     std::size_t memory = 0;
     int limited = 0;              // >0: the script's own code runs (ScriptRun), so kMemoryLimit holds
+    int runs = 0;                 // the ScriptRuns alive now (each in a host frame, so each ends)
     lua_State* resumed = nullptr; // the host's thread it resumes now: the only one preempt_hook yields
     plugin::Hooks::Owner owner = 0;
     Clock::time_point slice_start{};
+    // Text the host pushes for the script's code (hailstone.server_dir ...), kept here rather than in the C function's
+    // frame: a push that fails longjmps (Lua is built as C), and the frame's objects would not be destroyed.
+    std::string scratch;
+    // Whether a compiled plugin has the script's name (ScriptEnv::plugin_named), asked at its first folder.
+    std::optional<bool> plugin_named;
 
     struct Event {
         std::string name;
@@ -148,10 +169,27 @@ struct Script {
     };
     std::vector<Event> events;
     bool chat_hooked = false;
-    std::deque<std::pair<std::string, std::vector<std::string>>> queued; // event name, {line, args...}
+    struct Queued {
+        std::string name;
+        std::vector<std::string> args; // {line, args...}
+        // What the code whose line it was may do (plugin::ChatLine::origin_caps): a line a script or plugin wrote
+        // runs another script's handler with no more than that (l_next_event).
+        std::uint32_t origin = plugin::kCapAll;
+    };
+    std::deque<Queued> queued;
     std::vector<std::pair<std::string, int>> windows;                    // mq.imgui: name, draw function
     std::vector<std::pair<std::string, int>> drawing;                    // the windows draw_windows draws now
-    std::vector<std::pair<lua_State*, int>> threads;                     // binds still running: thread, its ref
+    // Binds (and a full Lua social's press, and handlers of events another's line raised) still running: each with
+    // the capabilities it was started with, the script's own and its starter's together, for every resume.
+    struct Thread {
+        lua_State* t = nullptr;
+        int ref = LUA_NOREF;
+        std::uint32_t caps = 0;
+    };
+    std::vector<Thread> threads;
+    // The capabilities of the thread resumed now (Thread::caps), which need_caps holds the script's functions to as
+    // well; kCapAll for the script's own run.
+    std::uint32_t narrowed = plugin::kCapAll;
     std::map<std::string, int> binds;                                    // command, function ref
 
     // A Lua social's state (ScriptHost::press_button).
@@ -201,16 +239,22 @@ struct Script {
 // While it lives, the script's own code runs (a lua_resume or lua_pcall of the host's): an allocation past
 // kMemoryLimit fails, and the error it raises is caught there. Outside it the host's own pushes and reads, which
 // nothing would catch (a script state has no panic handler that could carry on), are never refused.
+// It lives in the host's frame around the lua_resume or lua_pcall, which catches the script's errors, so it always
+// ends, and it puts back the values it found: what a HostWork further in left behind when an error longjmped past
+// its destructor (Lua is built as C) is undone here at the latest (and sooner by repair_limit).
 struct ScriptRun {
     Script& s;
     lua_State* before;
+    int before_limited;
     // `thread`: the host's coroutine resumed (preempt_hook may yield it); null for a pcall on the main state.
-    explicit ScriptRun(Script& sc, lua_State* thread = nullptr) : s(sc), before(sc.resumed) {
-        ++s.limited;
+    explicit ScriptRun(Script& sc, lua_State* thread = nullptr) : s(sc), before(sc.resumed), before_limited(sc.limited) {
+        s.limited = std::max(before_limited, 0) + 1;
+        ++s.runs;
         if (thread) s.resumed = thread;
     }
     ~ScriptRun() {
-        --s.limited;
+        s.limited = before_limited;
+        --s.runs;
         s.resumed = before;
     }
     ScriptRun(const ScriptRun&) = delete;
@@ -218,7 +262,9 @@ struct ScriptRun {
 };
 
 // The host's own work on a script's state while its code runs further up the stack (a bind its mq.cmd started):
-// unprotected, so no allocation is refused until it ends.
+// unprotected, so no allocation is refused until it ends. Its destructor is skipped if an error longjmps past it (a
+// system out of memory, the only error its work can raise): the limit then comes back at the next instruction hook
+// (repair_limit) or when the ScriptRun around it ends, not never.
 struct HostWork {
     Script& s;
     int before;
@@ -228,12 +274,19 @@ struct HostWork {
     HostWork& operator=(const HostWork&) = delete;
 };
 
+// While Lua code of the script runs (a hook fires only then), a ScriptRun is around it and no HostWork is (a
+// HostWork's work runs no Lua instructions but under a ScriptRun of its own): an unlimited state then is one a
+// skipped HostWork destructor left, and the limit comes back. Called by the instruction hooks; cheap.
+inline void repair_limit(Script& s) {
+    if (s.runs > 0 && s.limited <= 0) s.limited = 1;
+}
+
 // The capability check of the script's functions (mq.*, hailstone.*): a Lua error when the script may not do `cap`.
 // Nothing but reading works in a closing state or in a Lua social's dry run (which notes its commands and waits, and
 // does nothing else).
 inline void need_caps(lua_State* L, std::uint32_t cap, const char* what) {
     const Script& s = Script::of(L);
-    if ((s.caps & cap) != cap) {
+    if ((s.caps & s.narrowed & cap) != cap) {
         luaL_where(L, 1);
         lua_pushfstring(L, "%s needs the server's '%s' permission", what, plugin::caps_text(cap).c_str());
         lua_concat(L, 2);

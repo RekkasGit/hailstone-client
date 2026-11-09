@@ -96,6 +96,9 @@ public:
     bool unload(std::string_view name);
     void unload_all();
     bool loaded(std::string_view name) const;
+    // Whether a compiled plugin has this name (any case): loaded, or a file in the folders (the server's too). Scans
+    // the folders without hashing anything.
+    bool has_plugin(std::string_view name) const;
     // A loaded plugin's capabilities, by its exact name; 0 when none of that name is loaded. Cheap (no folder scan or
     // hashing, unlike list()): the Lua UI asks it at every switch to a plugin's code, many times a frame.
     std::uint32_t loaded_caps(std::string_view name) const;

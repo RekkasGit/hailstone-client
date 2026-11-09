@@ -127,7 +127,12 @@ io.popen = function(cmd)
   elseif cmd:match("sha256sum") then
     local names = {}
     for rel in (T.files["client_files/" .. cmd:match("%-a (%S+)")] or ""):gmatch("[^\n]+") do
-      names[#names + 1] = string.rep("ab", 32) .. "  " .. rel
+      -- As GNU's: a name with a backslash is escaped, and its line starts with one.
+      if rel:find("\\", 1, true) then
+        names[#names + 1] = "\\" .. string.rep("ab", 32) .. "  " .. rel:gsub("\\", "\\\\")
+      else
+        names[#names + 1] = string.rep("ab", 32) .. "  " .. rel
+      end
     end
     out = table.concat(names, "\n") .. "\n"
   end
@@ -623,6 +628,63 @@ for _, l in ipairs(T.logs) do if l:find("asks for the settings too fast", 1, tru
 assert(dropped == 1, "the first dropped settings request is logged once: " .. dropped)
 T.now = T.now + 10
 assert(guild_hello(a) and settings_request(a), "the next 10 s")
+)lua");
+}
+
+TEST_CASE("Server script: a flood of piece requests is dropped before any work, and none rescans the held ones") {
+    check_run(R"lua(
+add_files(1, 40000)
+load_script()
+local a, b = client(1, "Alpha"), client(2, "Beta")
+local id = list_request(a, 0):ReadInt32(8)
+for _ = 1, 768 do chunk_request(a, id, 0, 0) end
+for _ = 1, 256 do chunk_request(b, id, 0, 0) end -- the zone's 1024 spent this second
+local lookups = 0
+local real_list = eq.get_entity_list
+eq.get_entity_list = function()
+  local l = real_list()
+  local get = l.GetClientByCharID
+  l.GetClientByCharID = function(self, cid) lookups = lookups + 1; return get(self, cid) end
+  return l
+end
+chunk_request(b, id, 0, 1) -- held
+for k = 1, 5000 do chunk_request(b, id, 0, k) end
+assert(lookups == 0, "the zone's limit is spent: the held ones are not looked at per packet: " .. lookups)
+local over = 0
+for _, l in ipairs(T.logs) do if l:find("asks for file pieces too often", 1, true) then over = over + 1 end end
+assert(over == 1, "the flood is logged once: " .. over)
+-- The next second the timer serves what is held, and requests count from 0 again.
+T.now = T.now + 1
+fire_timer("hailstone:files")
+assert(lookups > 0, "the timer looks at them")
+local before = #a.sent
+chunk_request(a, id, 0, 0)
+assert(#a.sent == before + 1 or T.timers["hailstone:files"] ~= nil, "a new second's request is taken")
+)lua");
+}
+
+TEST_CASE("Server script: settings requests without the magic are counted before they are logged") {
+    check_run(R"lua(
+add_files(1, 100)
+load_script()
+local a = client(1, "Alpha")
+local p = Packet(0x1424, 6)
+p:WriteInt32(0, 0x12345678)
+for _ = 1, 50 do T.handlers[Event.unhandled_opcode]({ self = a, packet = p }) end
+local bad = 0
+for _, l in ipairs(T.logs) do if l:find("without the NMSP magic", 1, true) then bad = bad + 1 end end
+assert(bad == 5, "5 a character in 10 s are looked at: " .. bad)
+)lua");
+}
+
+TEST_CASE("Server script: a file whose name has a backslash is hashed from sha256sum's escaped line") {
+    check_run(R"lua(
+T.files["client_files/back\\slash.txt"] = "x"
+T.files["client_files/plain.txt"] = "y"
+load_script()
+for _, l in ipairs(T.logs) do assert(not l:find("could not hash", 1, true), l) end
+local a = client(1, "Alpha")
+assert(list_request(a, 0):ReadInt32(12) == 2, "both listed")
 )lua");
 }
 

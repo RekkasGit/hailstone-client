@@ -197,6 +197,8 @@ public:
     const std::string& notice() const { return notice_; }
     const LoginResult& login_result() const { return login_; }
     const std::vector<ServerInfo>& servers() const { return servers_; }
+    // Changes with each server list that arrives (unique in the process, so two logins' lists differ too); 0 none.
+    std::uint32_t servers_serial() const { return servers_serial_; }
     const PlayResult& play_result() const { return play_; }
     // Valid in PlayAccepted.
     std::optional<WorldTicket> ticket() const;
@@ -236,6 +238,7 @@ private:
     Clock::time_point last_list_request_{};
     LoginResult login_;
     std::vector<ServerInfo> servers_;
+    std::uint32_t servers_serial_ = 0;
     PlayResult play_;
     std::uint32_t play_server_ = 0;
 };

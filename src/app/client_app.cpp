@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 #include "core/build_info.h"
 #include "core/frame_sections.h"
+#include "core/wipe.h"
 
 namespace hailstone::app {
 
@@ -410,12 +411,18 @@ int ClientApp::run() {
                 // The flames: the zone's, then the doors' and objects' as they stand (the modern lighting's own).
                 if (zone_renderer_) zone_renderer_->set_hide_flames(modern);
                 if (objects) objects->set_hide_flames(modern);
-                frame_fires_.clear();
+                frame_fire_list_ = {};
                 if (modern) {
-                    frame_fires_ = environment_particle_density_ > 0.0f ? zone_fires_ : zone_mesh_fires_;
-                    std::vector<assets::ZoneFire> moving;
-                    if (objects) objects->prepared_fires(moving);
-                    for (const auto& fire : moving) render::add_fire_sources(fire, frame_fires_);
+                    // The zone's list as it is, copied only when the doors and objects add theirs.
+                    const auto& zone_list = environment_particle_density_ > 0.0f ? zone_fires_ : zone_mesh_fires_;
+                    frame_fire_list_ = zone_list;
+                    moving_fires_.clear();
+                    if (objects) objects->prepared_fires(moving_fires_);
+                    if (!moving_fires_.empty()) {
+                        frame_fires_.assign(zone_list.begin(), zone_list.end());
+                        for (const auto& fire : moving_fires_) render::add_fire_sources(fire, frame_fires_);
+                        frame_fire_list_ = frame_fires_;
+                    }
                 }
                 if (light_shadows) {
                     render::sync_point_shadows(point_shadows_, vk_);
@@ -565,22 +572,23 @@ int ClientApp::run() {
                 flora_renderer_->set_reach(flora_reach_);
                 // The grass bends away from the spawns standing in it (Hailstone's own): the nearest to the camera
                 // within 150 units, by their feet, round them by their size.
-                std::vector<std::pair<float, glm::vec4>> near;
+                auto& near = flora_near_;
+                near.clear();
                 if (in_game)
                     for (const auto& [id, s] : conn_->world().spawns) {
                         const glm::vec3 at = s.display_valid ? s.display_position : s.position;
-                        const float d = glm::distance(glm::vec2(at), glm::vec2(camera_.position));
-                        if (d > 150.0f) continue;
+                        const glm::vec2 off = glm::vec2(at) - glm::vec2(camera_.position);
+                        if (!(glm::dot(off, off) <= 150.0f * 150.0f)) continue;
                         const glm::vec3 feet = at - glm::vec3(0.0f, 0.0f, s.heights.avatar_height);
-                        near.emplace_back(d, glm::vec4(feet, std::clamp(s.size * 0.7f, 3.0f, 12.0f)));
+                        near.emplace_back(glm::length(off), glm::vec4(feet, std::clamp(s.size * 0.7f, 3.0f, 12.0f)));
                     }
-                std::sort(near.begin(), near.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-                std::vector<glm::vec4> pushers;
-                for (const auto& [d, p] : near) {
-                    if (pushers.size() >= render::FloraRenderer::kMaxPushers) break;
-                    pushers.push_back(p);
-                }
-                flora_renderer_->set_pushers(pushers);
+                // The nearest kMaxPushers, nearest first.
+                const auto take = std::min(near.size(), render::FloraRenderer::kMaxPushers);
+                const auto nearer = [](const auto& a, const auto& b) { return a.first < b.first; };
+                std::partial_sort(near.begin(), near.begin() + static_cast<std::ptrdiff_t>(take), near.end(), nearer);
+                flora_pushers_.clear();
+                for (std::size_t i = 0; i < take; ++i) flora_pushers_.push_back(near[i].second);
+                flora_renderer_->set_pushers(flora_pushers_);
             }
             const std::unordered_set<std::uint32_t>* modelled = nullptr;
             if (actor_renderer_) modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit);
@@ -615,7 +623,7 @@ int ClientApp::run() {
                 zone_particles_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, !modern,
                                       particle_lighting);
             if (modern && fire_renderer_)
-                fire_renderer_->draw(*f, vp, camera_.position, t, frame_fires_, frame_lighting_,
+                fire_renderer_->draw(*f, vp, camera_.position, t, frame_fire_list_, frame_lighting_,
                                      std::min(lit.far_plane, 1500.0f), render::kParticleGlow);
             if (modern && spell_bolts_ && in_game)
                 spell_bolts_->draw(*f, vp, camera_.position, t, frame_lighting_, render::kParticleGlow);
@@ -679,15 +687,17 @@ int ClientApp::run() {
 
 } // namespace client_internal
 
-int run_client(const ClientOptions& options) {
+int run_client(ClientOptions& options) {
     int code = 0;
     client_internal::ClientApp::UpdateExit update;
     {
         // Without --game-dir or EQ_GAME_DIR the asset folder comes from hailstone.ini or the picker
-        // (choose_asset_folder).
-        client_internal::ClientApp app(options);
-        code = app.run();
-        update = app.update_exit();
+        // (choose_asset_folder). On the heap: a Windows crash dump holds the threads' stacks, and the client's
+        // members (the login fields, the session key) must not be in it.
+        auto app = std::make_unique<client_internal::ClientApp>(options);
+        core::wipe(options.auto_password);
+        code = app->run();
+        update = app->update_exit();
     }
     // The client is gone (its window, the browser helper, the plugins): a downloaded update goes in now.
     if (update.install) finish_update_at_exit(update.restart);

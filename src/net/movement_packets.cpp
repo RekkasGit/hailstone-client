@@ -1,6 +1,7 @@
 #include "net/movement_packets.h"
 
 #include <bit>
+#include <cmath>
 
 #include "core/byte_io.h"
 #include "net/packet_io.h"
@@ -68,7 +69,9 @@ std::optional<std::vector<glm::vec3>> decode_find_person_reply(const AppPacket& 
             v.x = std::bit_cast<float>(r.le<std::uint32_t>());
             v.y = std::bit_cast<float>(r.le<std::uint32_t>());
             v.z = std::bit_cast<float>(r.le<std::uint32_t>());
-            points.push_back(v);
+            // Not the original's: a point that is not a number (or infinite) is dropped, as the missile decoder drops
+            // such packets, so the path, the navigator and the face never take it.
+            if (std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z)) points.push_back(v);
         }
         return points;
     });

@@ -1,5 +1,6 @@
 #include "platform/tcp_socket.h"
 
+#include <algorithm>
 #include <cstring>
 #include <format>
 
@@ -100,6 +101,7 @@ SockLen to_sockaddr(const Endpoint& ep, sockaddr_storage& ss) {
     sin6.sin6_family = AF_INET6;
     sin6.sin6_port = htons(ep.port);
     std::memcpy(&sin6.sin6_addr, ep.address.data(), 16);
+    sin6.sin6_scope_id = ep.scope_id; // a link-local address names its interface
     std::memcpy(&ss, &sin6, sizeof sin6);
     return static_cast<SockLen>(sizeof sin6);
 }
@@ -120,6 +122,7 @@ std::optional<Endpoint> from_sockaddr(const sockaddr* sa) {
         ep.family = Endpoint::Family::V6;
         std::memcpy(ep.address.data(), &sin6.sin6_addr, 16);
         ep.port = ntohs(sin6.sin6_port);
+        ep.scope_id = sin6.sin6_scope_id;
         return ep;
     }
     return std::nullopt;
@@ -160,7 +163,8 @@ bool writable_now(NativeSocket s) {
 TcpSocket::~TcpSocket() { close(); }
 
 TcpSocket::TcpSocket(TcpSocket&& other) noexcept
-    : handle_(other.handle_), state_(other.state_), error_(std::move(other.error_)) {
+    : handle_(other.handle_), state_(other.state_), error_(std::move(other.error_)), to_(std::move(other.to_)),
+      connect_timeout_(other.connect_timeout_), connect_started_(other.connect_started_) {
     other.handle_ = widen(kInvalid);
     other.state_ = State::Closed;
 }
@@ -171,6 +175,9 @@ TcpSocket& TcpSocket::operator=(TcpSocket&& other) noexcept {
         handle_ = other.handle_;
         state_ = other.state_;
         error_ = std::move(other.error_);
+        to_ = std::move(other.to_);
+        connect_timeout_ = other.connect_timeout_;
+        connect_started_ = other.connect_started_;
         other.handle_ = widen(kInvalid);
         other.state_ = State::Closed;
     }
@@ -181,6 +188,7 @@ void TcpSocket::close() {
     if (valid(handle_)) close_native(native(handle_));
     handle_ = widen(kInvalid);
     state_ = State::Closed;
+    to_.clear();
 }
 
 void TcpSocket::fail(const std::string& what) {
@@ -188,9 +196,26 @@ void TcpSocket::fail(const std::string& what) {
     close();
 }
 
-bool TcpSocket::connect(const Endpoint& to, std::string& error) {
+bool TcpSocket::connect(const Endpoint& to, std::string& error) { return connect(std::vector<Endpoint>{to}, error); }
+
+bool TcpSocket::connect(std::vector<Endpoint> to, std::string& error) {
     close();
     error_.clear();
+    to_ = std::move(to);
+    std::reverse(to_.begin(), to_.end()); // taken from the back
+    error = "no address to connect to";
+    while (!to_.empty()) {
+        Endpoint ep = to_.back();
+        to_.pop_back();
+        if (start(ep, error)) {
+            error.clear();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TcpSocket::start(const Endpoint& to, std::string& error) {
     if (!ensure_init()) {
         error = "socket library initialisation failed";
         return false;
@@ -214,11 +239,25 @@ bool TcpSocket::connect(const Endpoint& to, std::string& error) {
             return false;
         }
         state_ = State::Connecting;
+        connect_started_ = std::chrono::steady_clock::now();
     } else {
         state_ = State::Connected;
     }
     handle_ = widen(s);
     return true;
+}
+
+void TcpSocket::next_address(const std::string& why) {
+    if (valid(handle_)) close_native(native(handle_));
+    handle_ = widen(kInvalid);
+    state_ = State::Closed;
+    std::string error = why;
+    while (!to_.empty()) {
+        Endpoint ep = to_.back();
+        to_.pop_back();
+        if (start(ep, error)) return;
+    }
+    fail(error);
 }
 
 TcpSocket::State TcpSocket::state() {
@@ -227,9 +266,12 @@ TcpSocket::State TcpSocket::state() {
         SockLen len = static_cast<SockLen>(sizeof err);
         if (getsockopt(native(handle_), SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&err), &len) != 0)
             err = last_socket_error();
-        if (err != 0) fail("connect: " + error_text(err));
+        if (err != 0) next_address("connect: " + error_text(err));
         else state_ = State::Connected;
     }
+    // Also what reports a refused connect where WSAPoll does not (Windows 10 before 2004): it times out instead.
+    if (state_ == State::Connecting && std::chrono::steady_clock::now() - connect_started_ >= connect_timeout_)
+        next_address(std::format("connect: no answer in {} ms", connect_timeout_.count()));
     return state_;
 }
 

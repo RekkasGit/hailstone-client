@@ -158,7 +158,8 @@ bool asset_counts(const std::set<std::string>& only, std::string_view normalized
     return only.contains(std::string(normalized)) || !ext_in(normalized, kTextures).empty();
 }
 
-ServerFileSync::ServerFileSync(fs::path profile_dir, Send send) : dir_(std::move(profile_dir)), send_(std::move(send)) {}
+ServerFileSync::ServerFileSync(fs::path profile_dir, Send send, Limits limits)
+    : dir_(std::move(profile_dir)), send_(std::move(send)), limits_(limits) {}
 
 ServerFileSync::~ServerFileSync() = default;
 
@@ -397,6 +398,13 @@ void ServerFileSync::plan(Clock::time_point now) {
             }
             continue;
         }
+        if (e.size > limits_.max_file) {
+            // A size in the list is the server's word alone (up to 4 GB a file, 65536 files): the bound is Hailstone's.
+            log::warn("server files: refused {}: {} MB, more than the limit of {} MB a file", e.path, megabytes(e.size),
+                      megabytes(limits_.max_file));
+            ++refused;
+            continue;
+        }
         dest_[i] = *dest;
         std::string key = lower(*dest);
         if (listed.contains(key)) continue; // the same place twice (another case, or assets/x and x): the first
@@ -491,6 +499,9 @@ void ServerFileSync::finish_plan(Clock::time_point now) {
     for (const auto& [key, r] : record_)
         if (!listed.contains(key)) remove_.push_back(key);
     for (std::uint32_t i : ready_) bytes_done_ += list_[i].size;
+    if (bytes_total_ > limits_.max_total)
+        return fail(std::format("the server's files to download come to {} MB, more than the limit of {} MB",
+                                megabytes(bytes_total_), megabytes(limits_.max_total)));
     log::info("server files: {} listed, {} to download ({} MB), {} already downloaded, {} to delete{}{}", list_.size(),
               needed_.size() - ready_.size(), megabytes(bytes_total_ - bytes_done_), ready_.size(), remove_.size(),
               refused ? std::format(", {} refused", refused) : std::string(),

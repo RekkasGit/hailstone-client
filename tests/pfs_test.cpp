@@ -182,3 +182,34 @@ TEST_CASE("PfsArchive refuses a member or name table larger than any game file")
     put_u32(table, first_entry_at(table) + 12 + 8, 0x02000000u);
     CHECK_THROWS_WITH(PfsArchive::from_memory(table), doctest::Contains("name table is too large"));
 }
+
+TEST_CASE("PfsArchive::read_prefix inflates a member's first bytes only, across its blocks") {
+    using namespace hailstone::test::pfs_fixtures;
+    std::vector<std::byte> data(10000);
+    for (std::size_t i = 0; i < data.size(); ++i) data[i] = static_cast<std::byte>(i * 7 % 251);
+    auto a = PfsArchive::from_memory(make_pfs({{"thing.mod", data}, {"tiny.txt", {std::byte{'A'}}}}, 3000));
+    auto head = a.read_prefix("THING.MOD", 4);
+    REQUIRE(head);
+    CHECK(*head == std::vector<std::byte>(data.begin(), data.begin() + 4));
+    // Across the first block's end (3000 bytes).
+    auto more = a.read_prefix("thing.mod", 4500);
+    REQUIRE(more);
+    CHECK(*more == std::vector<std::byte>(data.begin(), data.begin() + 4500));
+    // Past the member's end: the member, not `max` bytes.
+    CHECK(a.read_prefix("tiny.txt", 1u << 30).value() == std::vector<std::byte>{std::byte{'A'}});
+    CHECK(a.read_prefix("thing.mod", 0).value().empty());
+    CHECK_FALSE(a.read_prefix("missing.bmp", 4));
+}
+
+TEST_CASE("PfsArchive::read_prefix refuses a block that inflates to less than it declares") {
+    using namespace hailstone::test::pfs_fixtures;
+    std::vector<std::byte> data(100, std::byte{'x'});
+    auto archive = make_pfs({{"a.bin", data}});
+    // The first block's header: {deflated, inflated} at offset 12; declare the member and its block bigger.
+    put_u32(archive, 16, 200);
+    const std::size_t dir = first_entry_at(archive);
+    put_u32(archive, dir + 8, 200);
+    auto a = PfsArchive::from_memory(archive);
+    CHECK(a.read_prefix("a.bin", 50).value().size() == 50);
+    CHECK_THROWS(a.read_prefix("a.bin", 150));
+}

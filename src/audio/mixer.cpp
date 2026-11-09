@@ -48,13 +48,19 @@ void Mixer::ramp(Voice& v, float volume, std::int32_t fade_ms) const {
 }
 
 void Mixer::reap(std::vector<Voice>& out) {
-    for (auto it = voices_.begin(); it != voices_.end();)
-        if (it->done && !it->rendering) {
-            out.push_back(std::move(*it));
-            it = voices_.erase(it);
+    // One pass, the voices kept in their order (an erase per finished voice moved the rest each time, under the
+    // lock the audio thread waits for).
+    std::size_t kept = 0;
+    for (std::size_t i = 0; i < voices_.size(); ++i) {
+        Voice& v = voices_[i];
+        if (v.done && !v.rendering) {
+            out.push_back(std::move(v));
         } else {
-            ++it;
+            if (kept != i) voices_[kept] = std::move(v);
+            ++kept;
         }
+    }
+    voices_.erase(voices_.begin() + static_cast<std::ptrdiff_t>(kept), voices_.end());
 }
 
 std::uint32_t Mixer::add(Voice v, float volume, std::int32_t fade_ms) {
@@ -119,38 +125,108 @@ void Mixer::set_send(std::uint32_t voice, float send) {
 }
 
 void Mixer::set_reverb(float level, float decay_s, float damping, float predelay_s) {
+    level = sane_level(level);
+    // The delay lines are made here, outside the lock (the first room, or a new pre-delay), and swapped in under it:
+    // the audio thread does not wait on their allocation. The old ones are freed after the lock is released.
+    Reverb::Lines lines; // declared first: destroyed after the lock
+    bool sized = true;
+    if (level > 0.0f) {
+        std::lock_guard lock(mutex_);
+        sized = reverb_.sized_for(rate_, predelay_s);
+    }
+    if (!sized) lines = Reverb::make_lines(rate_, predelay_s);
     std::lock_guard lock(mutex_);
-    reverb_.level = sane_level(level);
-    if (reverb_.level > 0.0f) reverb_.configure(rate_, decay_s, damping, predelay_s);
+    reverb_.level = level;
+    if (reverb_.level <= 0.0f) return;
+    if (!sized && !reverb_.sized_for(rate_, predelay_s)) reverb_.adopt(lines);
+    reverb_.configure(rate_, decay_s, damping, predelay_s);
+}
+
+namespace {
+// Freeverb's comb and all-pass lengths (at 44.1 kHz; the right side 23 samples longer).
+constexpr int kCombs[4] = {1116, 1188, 1277, 1356};
+constexpr int kAllPasses[2] = {556, 441};
+std::size_t comb_length(std::uint32_t rate, int c, int k) {
+    return static_cast<std::size_t>((kCombs[k] + c * 23) * (static_cast<double>(rate) / 44100.0));
+}
+std::size_t allpass_length(std::uint32_t rate, int c, int k) {
+    return static_cast<std::size_t>((kAllPasses[k] + c * 23) * (static_cast<double>(rate) / 44100.0));
+}
+// A NaN or infinity would make the pre-delay's length undefined.
+float clean_predelay(float predelay_s) { return std::isfinite(predelay_s) ? std::clamp(predelay_s, 0.0f, 1.0f) : 0.0f; }
+std::size_t predelay_length(std::uint32_t rate, float predelay_s) {
+    return static_cast<std::size_t>(clean_predelay(predelay_s) * static_cast<float>(rate)) + 1;
+}
+} // namespace
+
+bool Mixer::Reverb::sized_for(std::uint32_t rate, float predelay_s) const {
+    if (predelay.size() != predelay_length(rate, predelay_s)) return false;
+    for (int c = 0; c < 2; ++c) {
+        for (int k = 0; k < 4; ++k)
+            if (combs[c][k].line.size() != comb_length(rate, c, k)) return false;
+        for (int k = 0; k < 2; ++k)
+            if (allpasses[c][k].line.size() != allpass_length(rate, c, k)) return false;
+    }
+    return true;
+}
+
+Mixer::Reverb::Lines Mixer::Reverb::make_lines(std::uint32_t rate, float predelay_s) {
+    Lines l;
+    l.predelay.assign(predelay_length(rate, predelay_s), 0.0f);
+    for (int c = 0; c < 2; ++c) {
+        for (int k = 0; k < 4; ++k) l.combs[c][k].assign(comb_length(rate, c, k), 0.0f);
+        for (int k = 0; k < 2; ++k) l.allpasses[c][k].assign(allpass_length(rate, c, k), 0.0f);
+    }
+    return l;
+}
+
+void Mixer::Reverb::adopt(Lines& l) {
+    // A line of its length already keeps what it holds (the room changed, not the rate); another is swapped in,
+    // empty, and its read position starts over. `l` is left with the old lines, to be freed by the caller.
+    auto take = [](std::vector<float>& mine, std::vector<float>& fresh, std::size_t& at) {
+        if (mine.size() == fresh.size()) return;
+        mine.swap(fresh);
+        at = 0;
+    };
+    take(predelay, l.predelay, predelay_at);
+    for (int c = 0; c < 2; ++c) {
+        for (int k = 0; k < 4; ++k) {
+            const bool fresh = combs[c][k].line.size() != l.combs[c][k].size();
+            take(combs[c][k].line, l.combs[c][k], combs[c][k].at);
+            if (fresh) combs[c][k].store = 0.0f;
+        }
+        for (int k = 0; k < 2; ++k) take(allpasses[c][k].line, l.allpasses[c][k], allpasses[c][k].at);
+    }
 }
 
 void Mixer::Reverb::configure(std::uint32_t rate, float decay_s, float damping, float predelay_s) {
-    // Freeverb's comb and all-pass lengths (at 44.1 kHz; the right side 23 samples longer).
-    static constexpr int kCombs[4] = {1116, 1188, 1277, 1356};
-    static constexpr int kAllPasses[2] = {556, 441};
-    double scale = static_cast<double>(rate) / 44100.0;
-    // A NaN or infinity would make the feedback (or the pre-delay's length) undefined.
+    // A NaN or infinity would make the feedback undefined.
     decay_s = std::isfinite(decay_s) ? std::clamp(decay_s, 0.05f, 60.0f) : 0.05f;
     damping = std::isfinite(damping) ? std::max(damping, 0.0f) : 0.0f;
-    predelay_s = std::isfinite(predelay_s) ? std::clamp(predelay_s, 0.0f, 1.0f) : 0.0f;
     // A one-pole low-pass in each comb's loop: more damping, faster high-frequency decay.
     float damp = std::clamp(damping / (1.0f + damping), 0.0f, 0.95f);
+    // The lines are sized (adopt) before this is called; one that is not (a caller that skipped it) is made here.
     for (int c = 0; c < 2; ++c) {
         for (int k = 0; k < 4; ++k) {
-            auto len = static_cast<std::size_t>((kCombs[k] + c * 23) * scale);
+            const std::size_t len = comb_length(rate, c, k);
             Comb& comb = combs[c][k];
-            if (comb.line.size() != len) comb.line.assign(len, 0.0f);
+            if (comb.line.size() != len) {
+                comb.line.assign(len, 0.0f);
+                comb.at = 0;
+            }
             // -60 dB after decay_s: g^(decay_s * rate / len) = 0.001.
             comb.feedback = static_cast<float>(std::pow(10.0, -3.0 * static_cast<double>(len) / (static_cast<double>(decay_s) * static_cast<double>(rate))));
             comb.damp = damp;
         }
         for (int k = 0; k < 2; ++k) {
-            auto len = static_cast<std::size_t>((kAllPasses[k] + c * 23) * scale);
-            if (allpasses[c][k].line.size() != len) allpasses[c][k].line.assign(len, 0.0f);
+            const std::size_t len = allpass_length(rate, c, k);
+            if (allpasses[c][k].line.size() != len) {
+                allpasses[c][k].line.assign(len, 0.0f);
+                allpasses[c][k].at = 0;
+            }
         }
     }
-    auto pre = static_cast<std::size_t>(predelay_s * static_cast<float>(rate)) + 1;
-    if (predelay.size() != pre) {
+    if (const std::size_t pre = predelay_length(rate, predelay_s); predelay.size() != pre) {
         predelay.assign(pre, 0.0f);
         predelay_at = 0;
     }

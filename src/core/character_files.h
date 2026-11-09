@@ -73,6 +73,11 @@ private:
 
 // The files of `character` on the world `world` of the server `profile` (an empty profile, world or character gives
 // empty paths).
+// Whether `name`, a file name in a character's folder, is one of the files Hailstone keeps there (the list above, the
+// GuildNotes.txt, IgnoreList.txt and ui-<pack>.txt files, the plugin-config folder), ignoring case as Windows does.
+// /outputfile refuses those names: its output must not replace the character's settings.
+bool is_kept_character_file(std::string_view name);
+
 CharacterFiles character_files(std::string_view profile, std::string_view world, std::string_view character,
                                const std::filesystem::path& servers = platform::servers_dir());
 

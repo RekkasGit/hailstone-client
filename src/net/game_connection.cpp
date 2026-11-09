@@ -17,6 +17,7 @@
 #include "core/server_profile.h"
 #include "core/zone_name.h"
 #include "core/log.h"
+#include "core/process_serial.h"
 #include "game/appearance.h"
 #include "game/boats.h"
 #include "game/race_models.h"
@@ -147,6 +148,8 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
                           std::string peer) {
     if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
         plugin::ChatLine line{std::move(text), rgb, static_cast<int>(kind)};
+        line.from_code = !plugin::caller_name().empty();
+        line.origin_caps = plugin::caller_caps();
         if (options_.hooks->chat(line) == plugin::Flow::Drop) return;
         text = std::move(line.text);
         rgb = line.color;
@@ -184,9 +187,16 @@ void GameConnection::update() {
             info.account_id = std::to_string(ticket_.account_id);
             info.session_key = ticket_.session_key;
             info.zoning = zoning_;
-            send_world(encode(info));
-            if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
-            status_ = "Logging in to " + ticket_.server_name;
+            if (!login_info_fits(info)) {
+                // EQEmu's login server sends a 10-character key; a longer one cannot be sent whole.
+                const std::size_t room = info.account_id.size() < 62 ? 62 - info.account_id.size() : 0;
+                fail(std::format("the login server's session key is too long for the world login ({} bytes, at most {})",
+                                 info.session_key.size(), room));
+            } else {
+                send_world(encode(info));
+                if (state_ == ConnectionState::WorldConnecting) state_ = ConnectionState::WorldAuth;
+                status_ = "Logging in to " + ticket_.server_name;
+            }
             // Zoning keeps state_ == Zoning; the world's OP_EnterWorld reply moves it on.
         }
         while (auto p = world_session_ ? world_session_->receive() : std::nullopt)
@@ -232,8 +242,9 @@ void GameConnection::update() {
             // The first zone-in of the login brings the server's client files first (net/server_files.h): the zone
             // knows the client once it has OP_ZoneEntry, and keeps it connecting while the files come.
             if (!options_.server_files_dir.empty() && !server_files_) {
-                server_files_ = std::make_unique<ServerFileSync>(options_.server_files_dir,
-                                                                 [this](AppPacket p) { send_zone(std::move(p)); });
+                server_files_ = std::make_unique<ServerFileSync>(
+                    options_.server_files_dir, [this](AppPacket p) { send_zone(std::move(p)); },
+                    options_.server_files_limits);
                 zone_session_->set_no_hold(true); // the pieces asked and acknowledged without the 150 ms hold
                 server_files_->start(ServerFileSync::Clock::now());
             }
@@ -481,6 +492,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         auto list = decode_character_select(p);
         if (!list) { fail("could not read the character list"); return; }
         characters_ = std::move(*list);
+        characters_serial_ = core::next_process_serial();
         bool first = state_ == ConnectionState::WorldAuth;
         state_ = ConnectionState::CharacterSelect;
         status_.clear();
@@ -655,8 +667,10 @@ std::uint32_t GameConnection::classes_mask(const std::string& name) const {
 }
 
 void GameConnection::set_character_classes(const std::string& name, std::uint32_t mask) {
+    if (classes_mask(name) == mask) return;
     if (mask) character_classes_[name] = mask;
     else character_classes_.erase(name);
+    characters_serial_ = core::next_process_serial();
 }
 
 std::string GameConnection::guild_member_class(std::uint32_t class_value) const {
@@ -2171,6 +2185,7 @@ bool GameConnection::allowed_to_attack(std::uint32_t target, std::int32_t spell)
     in.target_id = target;
     in.spell = spell;
     in.my_level = static_cast<std::uint8_t>(pstatus_.level);
+    in.zone = static_cast<std::uint32_t>(zone_id()) | (static_cast<std::uint32_t>(zone_instance()) << 16);
     in.rules.pvp_rules = pvp_rules_;
     in.self_or_group_member = [this](const std::string& name) { return group_.has_member(name); };
     return game::allowed_to_attack(in);

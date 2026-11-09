@@ -82,10 +82,16 @@ bool GroupState::add(const std::string& name, std::uint32_t level, bool merc, co
     return false;
 }
 
-bool GroupState::remove(const std::string& name) {
+bool GroupState::remove(const std::string& name, std::uint32_t spawn_id) {
     int i = slot_of(name);
     if (i < 0) return false;
     slots[static_cast<std::size_t>(i)] = {};
+    if (is_leader(name)) leader.clear();
+    if (spawn_id != 0) {
+        mana_percent.erase(spawn_id);
+        endurance_percent.erase(spawn_id);
+    }
+    if (count() == 0) clear();
     return true;
 }
 

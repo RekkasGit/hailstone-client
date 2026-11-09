@@ -564,7 +564,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "texture_studio") {
         if (v == 0) return;
         std::string error;
-        if (!start_addon_tool(kTextureStudio, &error)) log::warn("{}", error);
+        if (!start_texture_studio(&error)) log::warn("{}", error);
         return;
     }
     if (o == "clip_plane") {

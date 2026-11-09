@@ -82,3 +82,71 @@ TEST_CASE("tcp socket: a connect nobody listens for ends closed") {
     CHECK(s.state() == TcpSocket::State::Closed);
     CHECK_FALSE(s.last_error().empty());
 }
+
+TEST_CASE("tcp socket: an address that fails hands over to the next one") {
+    std::uint16_t closed = 0;
+    {
+        TcpListener l;
+        std::string error;
+        REQUIRE(l.listen(Endpoint::v4(127, 0, 0, 1, 0), error));
+        closed = l.local_endpoint()->port;
+    }
+    TcpListener listener;
+    std::string error;
+    REQUIRE(listener.listen(Endpoint::v4(127, 0, 0, 1, 0), error));
+    // The first refuses (at once, or later: Windows retries a refused loopback connect for about two seconds), the
+    // second listens: as a name's IPv4 address that fails before its IPv6 one does.
+    TcpSocket s;
+    REQUIRE(s.connect(std::vector<Endpoint>{Endpoint::v4(127, 0, 0, 1, closed), *listener.local_endpoint()}, error));
+    std::optional<TcpSocket> server;
+    REQUIRE(eventually([&] {
+        if (!server) server = listener.accept();
+        return s.state() != TcpSocket::State::Connecting;
+    }));
+    CHECK(s.state() == TcpSocket::State::Connected);
+
+    // None left: closed (at once or later), with the last one's reason.
+    TcpSocket none;
+    if (none.connect(std::vector<Endpoint>{Endpoint::v4(127, 0, 0, 1, closed)}, error)) {
+        REQUIRE(eventually([&] { return none.state() != TcpSocket::State::Connecting; }));
+        CHECK(none.state() == TcpSocket::State::Closed);
+        CHECK_FALSE(none.last_error().empty());
+    } else {
+        CHECK_FALSE(error.empty());
+    }
+}
+
+TEST_CASE("tcp socket: a connect with no answer times out and tries the next address") {
+    // A listener whose queue is full and never accepted: Linux and macOS drop further connects' SYNs, so those
+    // connects get no answer at all (Windows refuses them, which hands over the same way).
+    TcpListener full;
+    std::string error;
+    REQUIRE(full.listen(Endpoint::v4(127, 0, 0, 1, 0), error));
+    std::vector<TcpSocket> filler(24);
+    for (auto& f : filler) f.connect(*full.local_endpoint(), error);
+    for (int i = 0; i < 20; ++i)
+        for (auto& f : filler) f.state();
+
+    TcpListener good;
+    REQUIRE(good.listen(Endpoint::v4(127, 0, 0, 1, 0), error));
+    TcpSocket s;
+    s.set_connect_timeout(std::chrono::milliseconds(200));
+    REQUIRE(s.connect(std::vector<Endpoint>{*full.local_endpoint(), *good.local_endpoint()}, error));
+    std::optional<TcpSocket> server;
+    REQUIRE(eventually([&] {
+        if (!server) server = good.accept();
+        return s.state() != TcpSocket::State::Connecting;
+    }));
+    CHECK(s.state() == TcpSocket::State::Connected);
+
+    // Alone, the silent one ends closed once the timeout passes.
+    TcpSocket alone;
+    alone.set_connect_timeout(std::chrono::milliseconds(200));
+    REQUIRE(alone.connect(*full.local_endpoint(), error));
+    REQUIRE(eventually([&] { return alone.state() != TcpSocket::State::Connecting; }));
+    if (alone.state() == TcpSocket::State::Connected) {
+        MESSAGE("this system answered a connect to a full listen queue; the timeout itself was not exercised");
+        return;
+    }
+    CHECK_FALSE(alone.last_error().empty());
+}

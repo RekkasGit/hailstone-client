@@ -105,3 +105,59 @@ TEST_CASE("http_get: cancelled ends a transfer stalled waiting for the answer") 
     if (under_wine()) WARN(took < std::chrono::seconds(10));
     else CHECK(took < std::chrono::seconds(10));
 }
+
+// allow_url holds for an answer with no body too: libcurl's write callback, where the address is checked as the body
+// starts, never runs for one, so an empty 2xx from an address it refuses must still fail (as WinHTTP's check, made
+// before any body, always did).
+TEST_CASE("http_get: allow_url refuses an empty answer from an address it does not allow") {
+    if (!http_available()) return; // no libcurl here: nothing to fetch with
+    TcpListener listener;
+    std::string error;
+    REQUIRE(listener.listen(Endpoint::v4(127, 0, 0, 1, 0), error));
+    const auto at = listener.local_endpoint();
+    REQUIRE(at);
+    std::atomic<bool> finished{false};
+    std::atomic<int> answered{0};
+    std::thread server([&] {
+        std::optional<TcpSocket> peer;
+        std::string request;
+        std::vector<std::byte> buf(1024);
+        const std::string answer = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        while (!finished) {
+            if (!peer) {
+                peer = listener.accept();
+                request.clear();
+            }
+            if (peer)
+                if (auto n = peer->recv(buf); n && *n) {
+                    request.append(reinterpret_cast<const char*>(buf.data()), *n);
+                    if (request.find("\r\n\r\n") != std::string::npos) {
+                        peer->send(std::as_bytes(std::span(answer.data(), answer.size())));
+                        ++answered;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                        peer.reset();
+                    }
+                }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    const std::string url = "http://127.0.0.1:" + std::to_string(at->port) + "/empty";
+    HttpGetOptions options;
+    options.user_agent = "hailstone-test";
+    options.stall_timeout_s = 10;
+    std::string seen;
+    options.allow_url = [&](std::string_view u) {
+        seen = std::string(u);
+        return false;
+    };
+    HttpGetResult refused = http_get(url, options, [](std::span<const std::byte>) { return true; }, {});
+    options.allow_url = [](std::string_view) { return true; };
+    HttpGetResult allowed = http_get(url, options, [](std::span<const std::byte>) { return true; }, {});
+    finished = true;
+    server.join();
+    CHECK(answered == 2);
+    CHECK_FALSE(refused.ok);
+    CHECK(refused.error == "the download was sent to an address it may not come from");
+    CHECK(seen == url);
+    CHECK(allowed.ok);
+}

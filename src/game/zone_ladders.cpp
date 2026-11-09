@@ -36,6 +36,8 @@ bool ladder_shape(const assets::Mesh& mesh, ObjectShape& s) {
         if (part.solid) continue;
         const bool clear = see_through(mesh, part);
         for (std::uint32_t i = 0; i + 2 < part.index_count; i += 3) {
+            // A part reaching past the index list (a damaged file) ends there.
+            if (std::size_t{part.first_index} + i + 2 >= mesh.indices.size()) break;
             std::uint32_t idx[3] = {mesh.indices[part.first_index + i], mesh.indices[part.first_index + i + 1],
                                     mesh.indices[part.first_index + i + 2]};
             if (idx[0] >= mesh.vertices.size() || idx[1] >= mesh.vertices.size() || idx[2] >= mesh.vertices.size())

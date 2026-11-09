@@ -235,6 +235,33 @@ TEST_CASE("server list and play reply, plain and compressed") {
     CHECK(login_error_text(999999).find("999999") != std::string::npos);
 }
 
+TEST_CASE("login reply: a compressed body inflates to at most 1 MB, however large it is") {
+    // 300 KB that does not compress, then 800 KB of zeros: 1.1 MB from about 300 KB of zlib data. The buffer used to
+    // start at four times the input (1.2 MB here) and was checked against the cap only once full.
+    std::vector<std::byte> body(1100 * 1024, std::byte{0});
+    std::uint32_t x = 12345;
+    for (std::size_t i = 0; i < 300 * 1024; ++i) {
+        x = x * 1664525u + 1013904223u;
+        body[i] = static_cast<std::byte>(x >> 24);
+    }
+    auto pack = [](const std::vector<std::byte>& plain) {
+        uLongf zsize = compressBound(static_cast<uLong>(plain.size()));
+        std::vector<std::byte> z(zsize);
+        REQUIRE(compress2(reinterpret_cast<Bytef*>(z.data()), &zsize, reinterpret_cast<const Bytef*>(plain.data()),
+                          static_cast<uLong>(plain.size()), 6) == Z_OK);
+        z.resize(zsize);
+        std::vector<std::byte> packet(10, std::byte{0});
+        packet[4] = std::byte{1};
+        packet.insert(packet.end(), z.begin(), z.end());
+        return packet;
+    };
+    auto big = pack(body);
+    REQUIRE(big.size() > 256 * 1024);
+    CHECK_THROWS(login_codec::reply_body(0, big));
+    body.resize(1000 * 1024);
+    CHECK(login_codec::reply_body(0, pack(body)).size() == body.size());
+}
+
 namespace {
 
 // A login server on loopback that speaks just enough SOE session for LoginClient.

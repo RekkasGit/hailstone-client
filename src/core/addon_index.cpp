@@ -1,5 +1,8 @@
 #include "core/addon_index.h"
 
+#include <charconv>
+#include <system_error>
+
 #include "core/addon_manifest.h"
 #include "core/addon_source.h"
 #include "core/update_manifest.h"
@@ -107,6 +110,14 @@ std::optional<AddonIndex> parse_addon_index(std::string_view text, const Ed25519
             for (const auto& a : index.addons)
                 if (lower(a.name) == lower(name)) return fail(error, where + " repeats an add-on");
             index.addons.push_back({std::string(name), addon_source_text(*src), *k});
+        } else if (record == "serial") {
+            const std::string_view n = next_field(line, pos);
+            std::uint64_t v = 0;
+            auto [end, ec] = std::from_chars(n.data(), n.data() + n.size(), v);
+            if (index.serial || n.empty() || ec != std::errc{} || end != n.data() + n.size() || v == 0 ||
+                !trim(line.substr(pos)).empty())
+                return fail(error, where + " is not a serial");
+            index.serial = v;
         } else if (record == "world") {
             const std::string_view name = next_field(line, pos), login = next_field(line, pos);
             const std::string_view world = trim(line.substr(pos));
@@ -139,6 +150,14 @@ std::vector<AddonIndexMatch> addon_index_matches(const AddonIndex& index, std::s
         if (match) out.push_back({a, *match});
     }
     return out;
+}
+
+std::string addon_index_older(const std::optional<std::uint64_t>& kept, const std::optional<std::uint64_t>& fetched) {
+    if (!kept) return {};
+    if (!fetched) return "it has no serial, and the one kept has " + std::to_string(*kept);
+    if (*fetched < *kept)
+        return "its serial " + std::to_string(*fetched) + " is older than the one kept (" + std::to_string(*kept) + ")";
+    return {};
 }
 
 } // namespace hailstone

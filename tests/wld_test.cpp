@@ -51,6 +51,19 @@ TEST_CASE("WldFile decodes the string table and resolves signed references") {
     CHECK(w.unknown_types().at(0x99) == 1);
 }
 
+TEST_CASE("WldFile cuts a name at kMaxStringLength: references into one long run copy a bounded name each") {
+    WldBuilder b;
+    auto run = b.str(std::string(200000, 'A'));
+    ByteWriter body;
+    body.le(std::uint32_t{0});
+    // 20,000 fragments naming the run (and points inside it): once each copied the rest of the run, 4 GB in all.
+    for (int i = 0; i < 20000; ++i) b.add(0x99, run - i, body);
+    auto w = wld::WldFile::parse(b.build());
+    REQUIRE(w.fragments().size() == 20000);
+    for (const auto& f : w.fragments()) CHECK(f.name == std::string(wld::WldFile::kMaxStringLength, 'A'));
+    CHECK(w.string_at(run - 199990) == std::string(10, 'A')); // a short tail is all there is
+}
+
 TEST_CASE("WldFile bounds each fragment to its declared size") {
     WldBuilder b;
     ByteWriter only_name;

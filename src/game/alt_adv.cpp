@@ -102,9 +102,10 @@ AAReadiness AltAdvState::readiness(const AltAbility& a, std::int32_t reduction, 
 
 void AltAdvState::set_timer(std::uint32_t index, std::uint32_t begin, std::uint32_t server_now, std::int64_t now) {
     if (index >= kAATimers) return; // the original also skips negative indices (signed compare)
-    // The server's clock is translated to ours: begin + (our time - its time), in 32 bits.
-    auto offset = static_cast<std::uint32_t>(now) - server_now;
-    timers[index] = static_cast<std::int32_t>(begin + offset);
+    // The server's clock is translated to ours: begin + (our time - its time). The original adds in 32 bits; both
+    // wire times are unsigned 32-bit seconds (EQEmu's uint32 time()), so the sum is taken in 64 bits: the same until
+    // 2038, and past it a start time is not read as negative (which made every timer ready at once).
+    timers[index] = static_cast<std::int64_t>(begin) + (now - static_cast<std::int64_t>(server_now));
     timers_seen = true;
 }
 

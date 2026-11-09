@@ -466,6 +466,32 @@ TEST_CASE("update install: a cut-off install and a version that does not start a
         CHECK(get(inst / "hailstone") == "old");
         CHECK(get(inst / "shaders/a.spv") == "old a");
     }
+    SUBCASE("a torn or damaged journal moves no folder and nothing of the player's") {
+        // The last line was cut off mid-name ("added ui" of "added ui/x.lua"): it names a move that never began.
+        // The lines before it name a folder, the player's settings and a path outside the folder: none is acted on.
+        put(inst / "ui/settings/modern.txt", "the player's");
+        put(inst / "ui/modern/login.lua", "shipped");
+        put(inst / "hailstone.ini", "mine");
+        put(inst / "update/journal.txt",
+            "added shaders\nadded ui/settings/modern.txt\nadded hailstone.ini\nadded ../outside\nadded ui");
+        REQUIRE(write_file_atomic(inst / "update/state.txt", "installing 0.2.0 0.1.0\n"));
+        update_at_start(inst, "0.1.0");
+        update_at_start(inst, "0.1.0");
+        CHECK(get(inst / "ui/settings/modern.txt") == "the player's");
+        CHECK(get(inst / "ui/modern/login.lua") == "shipped");
+        CHECK(get(inst / "shaders/a.spv") == "old a");
+        CHECK(get(inst / "hailstone.ini") == "mine");
+        CHECK(get(inst / "hailstone") == "old");
+    }
+    SUBCASE("a whole journal line is still undone") {
+        put(inst / "icons/n.png", "added by the cut-off install");
+        put(inst / "update/journal.txt", "added icons/n.png\nadded ico");
+        REQUIRE(write_file_atomic(inst / "update/state.txt", "installing 0.2.0 0.1.0\n"));
+        update_at_start(inst, "0.1.0");
+        update_at_start(inst, "0.1.0");
+        CHECK_FALSE(fs::exists(inst / "icons/n.png"));
+        CHECK(fs::is_directory(inst / "icons"));
+    }
     SUBCASE("does not start") {
         stage();
         REQUIRE(install_staged_update(inst, "0.1.0").ok);

@@ -460,3 +460,19 @@ TEST_CASE("an environment emitter's fixture holds a lifetime of particles") {
     for (int i = 0; i < 100; ++i) ps.update(0.05f, {});
     CHECK(ps.emitters()[0].particles.size() > 250u);
 }
+
+TEST_CASE("a long frame fills an emitter to its capacity at once, its leftover ticks skipped") {
+    using namespace hailstone;
+    game::ParticleSystem ps({assets::EmitterDefinition{}, rising_flame(5.0f, 2.0f)});
+    REQUIRE(ps.add_fixture(1, glm::mat4(1.0f)));
+    const auto cap = ps.emitters()[0].capacity;
+    ps.update(0.05f, {}); // the initial count
+    ps.update(1.0e6f, {}); // ten million ticks: the full emitter stops asking for more
+    CHECK(ps.emitters()[0].particles.size() <= cap);
+    CHECK(ps.emitters()[0].tick_accumulator < 1.0f);
+    CHECK(ps.emitters()[0].tick_accumulator >= 0.0f);
+    // The glow test is worked out per definition.
+    CHECK(ps.glows(1));
+    CHECK_FALSE(ps.glows(0));
+    CHECK_FALSE(ps.glows(7));
+}

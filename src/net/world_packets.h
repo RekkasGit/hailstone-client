@@ -34,6 +34,9 @@ struct LoginInfo {
     std::string custom_files_key; // NUL-terminated at +64; world checks it when the
                                   // World:CustomFilesKey rule is set (empty otherwise)
 };
+// Whether "<account>\0<key>\0" fits login_info[64]. encode() of one that does not keeps the field's last NUL and
+// cuts the key short, which world refuses: GameConnection checks this first and fails the login with a reason.
+bool login_info_fits(const LoginInfo& v);
 AppPacket encode(const LoginInfo& v);
 std::optional<LoginInfo> decode_login_info(const AppPacket& p);
 
