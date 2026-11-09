@@ -400,6 +400,17 @@ local function displayTab()
       "Hailstone: the part of the ring hidden behind characters and walls shows faintly through them.")
     slider("target_ring_opacity", "Opacity", 25, 200, pct, "How solid the ring is, against the con colour's own.")
     slider("target_ring_glow", "Glow", 0, 100, pct, "How brightly the ring's core shines (with the bloom).")
+    -- Max Size (game::cap_ring_radius): 4 .. 40 units, and the slider's top end (41) is Off, the original's size.
+    local maxSize = eq.Option("target_ring_max_size")
+    if maxSize ~= nil then
+      row("Max Size", "Hailstone: the largest the ring gets, so a giant's or a dragon's does not fill the screen; "
+          .. "a smaller ring is left as it is. About 6 is a human's. All the way right is Off: every ring at its "
+          .. "own size, as on the original client.", function()
+        local v = maxSize == 0 and 41 or maxSize
+        local nv, changed = ui.SliderInt("##target_ring_max_size", v, 4, 41, v > 40 and "Off" or tostring(v))
+        if changed and nv ~= v then eq.SetOption("target_ring_max_size", nv > 40 and 0 or nv) end
+      end)
+    end
     for i, con in ipairs(RING_CONS) do
       local rgb = eq.Option("target_ring_color_" .. (i - 1))
       if rgb then

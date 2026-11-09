@@ -802,6 +802,7 @@ private:
     bool ring_cues_ = true;  // display.target_ring_cues: the sweep on a new target, the pulse while attacking
     bool ring_xray_ = false; // display.target_ring_xray: the hidden part shows faintly through
     game::TargetRingColors ring_colors_; // display.target_ring_color.*, _opacity, _glow (Options > Display "Target Ring")
+    int ring_max_size_ = game::kTargetRingMaxSizeOff; // display.target_ring_max_size, 0 off (Hailstone's cap)
     void load_ring_colors();
     const game::TargetIndicatorSettings& target_indicator() const; // read on first use
     std::optional<int> ring_option(std::string_view name) const;
