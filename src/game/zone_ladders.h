@@ -16,6 +16,14 @@
 // Cabilis's LADDERCB101 has every polygon passable: it never stops the sweep and
 // in the original is only mounted by a click (Hailstone's [movement]
 // passable_ladders also climbs it, CollisionMesh::touches_passable_ladder).
+//
+// Hailstone's solid ladders ([movement] solid_ladders, on by default): the
+// player's movement meets a ladder as one solid slab, the box of its solid
+// polygons, instead of its rails and rungs. With the stand-in sweep radius
+// (docs/unknowns.md) a small race's sphere passes between the rungs and drops
+// off the ladder, and CanIFitHere's floor and ceiling probes find the rungs
+// below and above (3.7 apart), refuse the move and leave every race stuck
+// partway up. Sight, picking and the navigation mesh see the rungs as before.
 
 #include <string_view>
 #include <vector>
@@ -46,5 +54,10 @@ struct ZoneLadder {
 // (the actor's vtable +0x60) is not traced: the top of the solid bounds at the
 // placement's scale is used, as for a ground object (app/world_objects_ladder.cpp).
 std::vector<ZoneLadder> zone_ladders(const assets::Zone& zone);
+
+// The solid slab of a ladder placement: the 12 triangles of the box around the mesh's polygons that are not passable,
+// in the placement's frame (so it leans as the ladder does), each facing out of the box, flagged kTriangleObject |
+// kTriangleLadder | kTriangleLadderSlab. Empty when the ladder has no such polygon (Cabilis's LADDERCB101).
+std::vector<CollisionTriangle> ladder_slab(const assets::Mesh& mesh, const glm::mat4& transform);
 
 } // namespace hailstone::game

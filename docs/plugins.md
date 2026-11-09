@@ -240,6 +240,10 @@ Spawn searches use MQ's words:
   `targetable`, `group`, `nopet`, `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead`, `loc X Y [Z]`
 - names: a partial name, `=Exact` or `exact`
 
+`targetable` is the game's own test, as in MQ: the spawn's Targetable flag on and its body type not 11 (EQEmu's
+NoTarget, which servers give portal and trigger NPCs). `Spawn.Targetable` is the flag alone, as in MQ, so a script
+that filters spawns itself checks `BodyType` too.
+
 Not yet:
 - TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is
   built in: `docs/navigation.md`)
@@ -684,9 +688,9 @@ a line in the log once.
 
 | Needs | `eq` functions |
 |---|---|
-| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
+| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
 | `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
-| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.ItemJob`, `eq.SetItemKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
+| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute or destroy chosen items), `eq.ItemJob`, `eq.SetItemKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 
 What stays shared: a plugin can still write into the tables the pack keeps in its globals (that is how its windows
@@ -797,6 +801,9 @@ npc_collision = on        ; live NPCs stop the player, who slides along them (de
 passable_ladders = on     ; walking or swimming into a ladder whose polygons are all passable (the Cabilis canal
                           ; ladders) climbs it (default on). Off: only a click from the top mounts one, as in
                           ; the original client
+solid_ladders = on        ; the player's movement meets a ladder as one solid slab, not its rails and rungs, so
+                          ; every race climbs it (default on). Off: the rungs, as in the original client, where a
+                          ; small race slips between them and any race can stick partway up
 
 [web]
 allow = example.org       ; the hosts scripts and plugins may open, and those below them (default: any;
@@ -824,7 +831,9 @@ client's: a live NPC is a wall the player cannot walk through, while players, pe
 passable. It is on unless the server's file says `[movement] npc_collision = off`; the player has no switch for it.
 Climbing passable ladders (docs/mechanics.md "Ladders") is Hailstone's own rule too: in the original the sphere goes
 through a ladder whose polygons are all passable, such as the Cabilis canal ladders, and never climbs it. It is on
-unless the server's file says `[movement] passable_ladders = off`.
+unless the server's file says `[movement] passable_ladders = off`. Solid ladders are the same: the player's movement
+meets a ladder as one slab instead of its rungs (docs/mechanics.md "Ladders") unless the file says
+`[movement] solid_ladders = off`.
 Players get a change at their next login, with the rest of the file.
 
 A server folder for every platform its players use:

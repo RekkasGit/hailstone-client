@@ -2,9 +2,11 @@
 -- and the open tradeskill object in the zone (WorldContainer: a forge, an oven) when it has its own window (opened
 -- that way, or by the tradeskill window's Experiment).
 -- The slots are the bag window's own (eq.BagSlotItem / eq.BagSlotClick: pick up, drop, swap, split, sell, inspect),
--- in rows of up to five. A tradeskill container has its Combine button over the slots. Over them (Hailstone): the
--- bag's filter, Stack and Sort for this bag (lib/itemtools.lua); slots the inventory's or bank's search does not match
--- are dimmed, locked slots and junk marked, and while a marking mode is on a click marks instead.
+-- in rows of up to five until the window is resized (Hailstone): then as many to a row as its width holds, and its
+-- height grows to fit the rows (Reset size goes back to rows of five). A tradeskill container has its Combine button
+-- over the slots. Over them (Hailstone): the bag's filter, Stack and Sort for this bag (lib/itemtools.lua); slots the
+-- inventory's or bank's search does not match are dimmed, locked slots and junk marked, and while a marking mode is
+-- on a click marks instead.
 local hud = dofile("lib/hud.lua")
 local items = dofile("lib/items.lua")
 local tools = dofile("lib/itemtools.lua")
@@ -17,18 +19,27 @@ local function perRow(count)
   return math.min(5, math.ceil(count / 2))
 end
 
+-- the slots to a row that a contents width (design pixels) holds, one at least
+local function fitRow(count, width)
+  return math.max(1, math.min(count, math.floor((width + GAP) / (SLOT + GAP))))
+end
+
 -- One record per bag window, made once: its dialog's opts and body read what bag() last read this frame.
 local bags = {}
 local PRIMARY = { primary = true }
 local HELD = { held = true }
 
 local function record(window, n)
-  local b = { window = window }
+  -- chromeW, chromeH: the window's padding and title bar around the contents (design pixels), measured each frame;
+  -- a resizable dialog's size is the window's, the contents' less these
+  local b = { window = window, chromeW = 20, chromeH = 40, minSize = { 150, 80 } }
   local function slotName(i) return b.name .. ", slot " .. (i + 1) end
   b.opts = {
     size = function()
-      return math.max(b.cols * (SLOT + GAP) - GAP, b.sortable and 200 or 150), b.top + b.rows * (SLOT + GAP) - GAP
+      return math.max(b.defaultCols * (SLOT + GAP) - GAP, b.minW) + b.chromeW,
+        b.top + math.ceil(b.count / b.defaultCols) * (SLOT + GAP) - GAP + b.chromeH
     end,
+    resizable = b.minSize, -- refilled each frame: the height the rows need at the window's width
     -- the first bags open in a column at the right, above the menu button
     place = function(sw, sh, w, h, s)
       if not n then return (sw - w) / 2, (sh - h) / 2 end
@@ -37,8 +48,13 @@ local function record(window, n)
     end,
     onClose = function() eq.ClickChild(window, "StandardDoneButton", "left") end, -- closes the bag in game
   }
-  b.body = function(x, y, w, h, s)
-    local combine, sortable, where, bagSlot, cols = b.combine, b.sortable, b.where, b.bagSlot, b.cols
+  b.body = function(x, y, _, _, s)
+    -- the room the window has (the w, h given are held to its minimum, which counts the title bar and padding)
+    local w, h = ui.GetContentRegionAvail()
+    local ww, wh = ui.GetWindowSize()
+    b.chromeW, b.chromeH = math.max(0, (ww - w) / s), math.max(0, (wh - h) / s)
+    local combine, sortable, where, bagSlot = b.combine, b.sortable, b.where, b.bagSlot
+    local cols = fitRow(b.count, w / s)
     if combine then
       local bw = (w - 6 * s) / 2
       if T.Button("##combine", x, y, x + bw, y + 26 * s, s, "Combine", PRIMARY) then
@@ -82,11 +98,17 @@ local function bag(window, n)
     b = record(window, n)
     bags[window] = b
   end
-  local cols = perRow(count)
   b.name, b.count, b.combine, b.where, b.bagSlot = name, count, combine, where, bagSlot
-  b.cols, b.rows = cols, math.ceil(count / cols)
+  b.defaultCols = perRow(count)
   b.sortable = where == "inventory" or where == "bank"
   b.top = (combine and 34 or 0) + (b.sortable and 30 or 0)
+  b.minW = b.sortable and 200 or 150
+  -- the slots to a row at the width the player gave it (hud.size.<window>), else the default rows
+  local savedW = tonumber(((ui.GetSetting("hud.size." .. window) or ""):match("^([%d.]+),")))
+  local cols = b.defaultCols
+  if savedW then cols = fitRow(count, math.max(savedW, b.minW + b.chromeW) - b.chromeW) end
+  b.minSize[1] = math.max(b.minW, SLOT) + b.chromeW
+  b.minSize[2] = b.top + math.ceil(count / cols) * (SLOT + GAP) - GAP + b.chromeH
   hud.Dialog(window, name, b.opts, b.body)
 end
 

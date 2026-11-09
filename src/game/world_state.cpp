@@ -16,7 +16,8 @@
 namespace hailstone::game {
 
 std::string display_name(const std::string& name) {
-    std::string out = name;
+    // CEverQuest::trimName (game/social.h trim_name) drops '#' too: the server's "#Name" spawns show as "Name".
+    std::string out = name.substr(std::min(name.find_first_not_of('#'), name.size()));
     while (!out.empty() && std::isdigit(static_cast<unsigned char>(out.back()))) out.pop_back();
     for (char& c : out)
         if (c == '_') c = ' ';
@@ -88,7 +89,8 @@ void WorldState::smooth_vehicles(float dt, double now) {
 }
 
 void WorldState::smooth(float dt, double now, const FloorFn& floor, const RegionFn& region,
-                        const VehicleFn& vehicle_under) {
+                        const VehicleFn& vehicle_under, const FloorFn& ground_floor) {
+    const FloorFn& grounding = ground_floor ? ground_floor : floor;
     if (!vehicles_smoothed) smooth_vehicles(dt, now);
     vehicles_smoothed = false;
     float k = 1.0f - std::exp(-dt * 12.0f);
@@ -153,9 +155,9 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
         glm::vec3 target = s.position;
         // Hailstone (ground_npcs): measured again when the position changes, after the option is turned on and after
         // a zone's floor is loaded (reground). With no floor under it yet, it is measured again next frame.
-        if (id != player_id && id != controlled_id && ground_npcs && floor) {
+        if (id != player_id && id != controlled_id && ground_npcs && grounding) {
             if (s.ground_probe_at != s.position) {
-                const auto drop = ground_drop(s, floor, region);
+                const auto drop = ground_drop(s, grounding, region);
                 s.ground_drop = drop.value_or(0.0f);
                 s.ground_probe_at = drop ? s.position : glm::vec3(std::numeric_limits<float>::quiet_NaN());
             }

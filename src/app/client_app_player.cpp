@@ -684,6 +684,7 @@ void ClientApp::update_player(float dt) {
         {
             const auto& rules = conn_->server_rules();
             world.set_passable_ladders(!(rules && rules->configured && !rules->passable_ladders));
+            if (collision_) collision_->set_solid_ladders(!(rules && rules->configured && !rules->solid_ladders));
         }
         // /nav or /stick moving the player: the doors not shut do not block it (Navigator::passes_open_doors).
         if (nav_ && nav_->passes_open_doors()) {

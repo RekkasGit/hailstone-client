@@ -58,6 +58,41 @@ bool ladder_shape(const assets::Mesh& mesh, ObjectShape& s) {
 
 } // namespace
 
+std::vector<CollisionTriangle> ladder_slab(const assets::Mesh& mesh, const glm::mat4& transform) {
+    std::vector<CollisionTriangle> out;
+    glm::vec3 lo(0.0f), hi(0.0f);
+    bool any = false;
+    for (const auto& part : mesh.parts) {
+        if (!part.solid) continue;
+        for (std::uint32_t i = 0; i < part.index_count; ++i) {
+            if (std::size_t{part.first_index} + i >= mesh.indices.size()) break;
+            const std::uint32_t k = mesh.indices[part.first_index + i];
+            if (k >= mesh.vertices.size()) continue;
+            const glm::vec3 p = mesh.vertices[k].position;
+            lo = any ? glm::min(lo, p) : p;
+            hi = any ? glm::max(hi, p) : p;
+            any = true;
+        }
+    }
+    if (!any) return out;
+    glm::vec3 corner[8];
+    for (int i = 0; i < 8; ++i)
+        corner[i] = glm::vec3(transform * glm::vec4(i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z, 1.0f));
+    const glm::vec3 middle = glm::vec3(transform * glm::vec4((lo + hi) * 0.5f, 1.0f));
+    static constexpr int kFaces[6][4] = {{0, 1, 3, 2}, {4, 5, 7, 6}, {0, 1, 5, 4}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 3, 7, 5}};
+    constexpr std::uint8_t kFlags = kTriangleObject | kTriangleLadder | kTriangleLadderSlab;
+    auto add = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+        // CollisionTriangle::make's normal is (a - b) x (c - b): turned to face away from the box's middle.
+        if (glm::dot(glm::cross(a - b, c - b), (a + b + c) / 3.0f - middle) < 0.0f) std::swap(b, c);
+        out.push_back(CollisionTriangle::make(a, b, c, kFlags));
+    };
+    for (const auto& f : kFaces) {
+        add(corner[f[0]], corner[f[1]], corner[f[2]]);
+        add(corner[f[0]], corner[f[2]], corner[f[3]]);
+    }
+    return out;
+}
+
 std::vector<ZoneLadder> zone_ladders(const assets::Zone& zone) {
     std::vector<ZoneLadder> out;
     for (const auto& p : zone.placements) {

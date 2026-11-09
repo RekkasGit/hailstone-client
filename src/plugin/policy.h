@@ -121,6 +121,9 @@ struct Rules {
     // [movement] passable_ladders: walking into a ladder whose polygons are all passable climbs it
     // (CollisionMesh::touches_passable_ladder).
     bool passable_ladders = true;
+    // [movement] solid_ladders: the player's movement meets a ladder as one solid slab, not its rails and rungs
+    // (game/zone_ladders.h, CollisionMesh::set_solid_ladders).
+    bool solid_ladders = true;
     // [web] allow: the hosts scripts and plugins may open (and those below them); empty: any (core/web_url.h).
     std::vector<std::string> web_allow;
     // [addons] suggest: add-ons the server suggests to its players (docs/addons.md "Suggested add-ons"), as

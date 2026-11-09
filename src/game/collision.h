@@ -12,6 +12,12 @@
 // (the original's GetFloorHeight and CollideLineSegment are not ported):
 // they use the triangles that are neither passable nor transparent
 // (translucent and additive surfaces: water, glass, effects), as before.
+//
+// Each solid ladder also has a slab (game/zone_ladders.h ladder_slab, flagged
+// kTriangleLadderSlab). Only the sweeps, floor_below and ceiling_above (the
+// player's movement and its floor and ceiling tests) use it, and only with
+// set_solid_ladders(true); they then leave out the ladder's own polygons.
+// Everything else, and triangles(), keeps the ladder's polygons.
 
 #include <cmath>
 #include <cstdint>
@@ -84,6 +90,11 @@ public:
     // all passable, as Cabilis's LADDERCB101) short of where it stopped. Such a triangle never stops the sphere.
     bool touches_passable_ladder(const SphereSweep& sweep) const;
 
+    // Hailstone ([movement] solid_ladders): the sweeps, floor_below and ceiling_above meet each solid ladder as its
+    // slab instead of its rails and rungs (game/zone_ladders.h). Off (the default), as the original: the rungs.
+    void set_solid_ladders(bool on) { solid_ladders_ = on; }
+    bool solid_ladders() const { return solid_ladders_; }
+
     // The light level of a zone triangle, as CActor::GetScaledAmbient reads
     // it (0x1001fa60): (t[a] + t[b] + t[c]) x 0.33333299 of its vertex alpha
     // bytes, t = byte / 256 (CRender +0x85a0), on the FPU at 24 bits. NaN for
@@ -98,7 +109,8 @@ public:
     const std::optional<std::pair<glm::vec3, glm::vec3>>& bounds() const { return bounds_; }
 
     std::size_t triangle_count() const { return triangles_.size(); }
-    // Every triangle, terrain then placed objects (the navigation mesh's input, nav/nav_mesh.h).
+    // Every triangle, terrain then placed objects (the navigation mesh's input, nav/nav_mesh.h), ladder slabs among
+    // them (kTriangleLadderSlab: leave them out for anything but the movement).
     std::span<const CollisionTriangle> triangles() const { return triangles_; }
 
 private:
@@ -118,14 +130,27 @@ private:
     // fn(index) for every triangle the swept sphere's box touches, once each, then the huge ones.
     template <class Fn>
     void for_each_near_sweep(const SphereSweep& s, Fn&& fn) const;
-    // Triangles for the floor and sight probes.
-    static bool probe_solid(const CollisionTriangle& t) { return !(t.flags & (kTrianglePassable | kTriangleTransparent | 0x10)); }
+    // Triangles for the floor and sight probes (never a ladder's slab).
+    static bool probe_solid(const CollisionTriangle& t) {
+        return !(t.flags & (kTrianglePassable | kTriangleTransparent | 0x10 | kTriangleLadderSlab));
+    }
+    // Whether the movement's queries take the triangle: the slab with solid_ladders_, else the ladder's own polygons
+    // (a polygon of a ladder that is not passable means the ladder has a slab).
+    bool movement_kept(const CollisionTriangle& t) const {
+        if (t.flags & kTriangleLadderSlab) return solid_ladders_;
+        return !(solid_ladders_ && (t.flags & kTriangleLadder) && !(t.flags & kTrianglePassable));
+    }
+    // probe_solid for the movement's floor and ceiling tests.
+    bool movement_solid(const CollisionTriangle& t) const {
+        return movement_kept(t) && !(t.flags & (kTrianglePassable | kTriangleTransparent | 0x10));
+    }
 
     std::vector<CollisionTriangle> triangles_;
     std::vector<float> light_; // per triangle (triangle_light); empty from from_triangles
     std::unordered_map<std::int64_t, std::vector<std::uint32_t>> cells_;
     std::vector<std::uint32_t> big_; // triangles too large for the grid
     std::optional<std::pair<glm::vec3, glm::vec3>> bounds_;
+    bool solid_ladders_ = false;
 };
 
 } // namespace hailstone::game

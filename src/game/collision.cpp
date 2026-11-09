@@ -84,7 +84,14 @@ CollisionMesh CollisionMesh::build(const assets::Zone& zone) {
     for (const auto& mesh : zone.terrain) add_mesh(mesh, glm::mat4(1.0f), true, false);
     for (const auto& p : zone.placements) {
         auto it = zone.objects.find(p.actor);
-        if (it != zone.objects.end()) add_mesh(it->second, p.transform, false, is_ladder_actor(p.actor));
+        if (it == zone.objects.end()) continue;
+        const bool ladder = is_ladder_actor(p.actor);
+        add_mesh(it->second, p.transform, false, ladder);
+        if (!ladder) continue;
+        for (const CollisionTriangle& t : ladder_slab(it->second, p.transform)) {
+            m.triangles_.push_back(t);
+            m.light_.push_back(std::numeric_limits<float>::quiet_NaN());
+        }
     }
     m.index();
     return m;
@@ -126,7 +133,7 @@ std::optional<float> CollisionMesh::floor_below(const glm::vec3& p, float step_u
     const float limit = p.z + step_up;
     for (std::uint32_t t : it->second) {
         const auto& tri = triangles_[t];
-        if (!probe_solid(tri)) continue;
+        if (!movement_solid(tri)) continue;
         // Barycentric test in XY, then the plane height at (x, y).
         glm::vec2 a(tri.v0), b(tri.v1), c(tri.v2), q(p);
         float d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
@@ -147,7 +154,7 @@ std::optional<float> CollisionMesh::ceiling_above(const glm::vec3& p) const {
     std::optional<float> best;
     for (std::uint32_t t : it->second) {
         const auto& tri = triangles_[t];
-        if (!probe_solid(tri)) continue;
+        if (!movement_solid(tri)) continue;
         glm::vec2 a(tri.v0), b(tri.v1), c(tri.v2), q(p);
         float d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
         if (std::abs(d) < 1e-6f) continue;
@@ -296,6 +303,7 @@ void CollisionMesh::for_each_on_segment(const glm::vec3& a, const glm::vec3& b,
         for (std::uint32_t t : it->second) {
             if (seen[t]) continue;
             seen[t] = true;
+            if (triangles_[t].flags & kTriangleLadderSlab) continue; // the movement's alone
             fn(triangles_[t]);
         }
     };
@@ -360,6 +368,7 @@ void CollisionMesh::for_each_near_sweep(const SphereSweep& s, Fn&& fn) const {
 std::int32_t CollisionMesh::sweep_sphere_hit(SphereSweep& s) const {
     std::int32_t hit = -1;
     for_each_near_sweep(s, [&](std::uint32_t t) {
+        if (!movement_kept(triangles_[t])) return;
         if (collide_triangle(s, triangles_[t])) hit = static_cast<std::int32_t>(t);
     });
     return hit;

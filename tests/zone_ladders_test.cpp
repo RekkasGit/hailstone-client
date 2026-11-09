@@ -137,6 +137,87 @@ Walk walk_at_wall(Wall wall, bool passable_ladders = false) {
     return w;
 }
 
+// Adds an axis-aligned box (12 triangles) to a mesh's one part.
+void add_box(assets::Mesh& m, glm::vec3 lo, glm::vec3 hi) {
+    const auto base = static_cast<std::uint32_t>(m.vertices.size());
+    for (int i = 0; i < 8; ++i) {
+        assets::Vertex v;
+        v.position = {i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z};
+        m.vertices.push_back(v);
+    }
+    const std::uint32_t faces[6][4] = {{0, 1, 3, 2}, {4, 5, 7, 6}, {0, 1, 5, 4}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 3, 7, 5}};
+    // Each triangle facing out of the box (CollisionTriangle::make's normal, (a - b) x (c - b)), front_ccw clear.
+    const glm::vec3 middle = (lo + hi) * 0.5f;
+    auto tri = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
+        const glm::vec3 pa = m.vertices[base + a].position, pb = m.vertices[base + b].position,
+                        pc = m.vertices[base + c].position;
+        if (glm::dot(glm::cross(pa - pb, pc - pb), (pa + pb + pc) / 3.0f - middle) < 0.0f) std::swap(b, c);
+        m.indices.insert(m.indices.end(), {base + a, base + b, base + c});
+    };
+    for (const auto& f : faces) {
+        tri(f[0], f[1], f[2]);
+        tri(f[0], f[2], f[3]);
+    }
+    if (m.materials.empty()) m.materials.push_back(assets::Material{});
+    if (m.parts.empty()) m.parts.push_back({0, 0, 0, true});
+    m.parts[0].index_count = static_cast<std::uint32_t>(m.indices.size());
+}
+
+constexpr float kRungLadderHeight = 42.0f;
+
+// A ladder of rails and rungs as LADDER14 .. LADDER60 are built (0.72 deep, 3.5 wide, a rung every 3.5), 42 high, at
+// x 10 facing -x, on ground at z 0 with a wall 2.3 behind it: room for a small sphere that goes between the rungs.
+assets::Zone rung_ladder_zone() {
+    assets::Zone zone;
+    assets::Mesh ground;
+    add_box(ground, {-60.0f, -60.0f, -2.0f}, {60.0f, 60.0f, 0.0f});
+    add_box(ground, {13.0f, -60.0f, 0.0f}, {15.0f, 60.0f, 80.0f});
+    zone.terrain.push_back(std::move(ground));
+    assets::Mesh ladder;
+    add_box(ladder, {0.02f, -1.75f, -1.0f}, {0.74f, -1.45f, kRungLadderHeight});
+    add_box(ladder, {0.02f, 1.45f, -1.0f}, {0.74f, 1.75f, kRungLadderHeight});
+    for (float z = 1.75f; z < kRungLadderHeight; z += 3.5f) add_box(ladder, {0.02f, -1.45f, z}, {0.74f, 1.45f, z + 0.3f});
+    zone.objects["LADDER42_ACTORDEF"] = std::move(ladder);
+    assets::Placement p;
+    p.actor = "LADDER42_ACTORDEF";
+    p.transform = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+    zone.placements.push_back(p);
+    return zone;
+}
+
+// AvatarHeight as SetHeights gives it from racedata.txt's default heights (Height x 0.625): gnome 3, halfling 3.5,
+// dwarf 4, human 6, ogre 9.
+struct Race {
+    const char* name;
+    std::uint32_t race;
+    float avatar_height;
+};
+constexpr Race kRaces[] = {{"gnome", 12, 1.875f}, {"halfling", 11, 2.1875f}, {"dwarf", 8, 2.5f},
+                           {"human", 1, 3.75f},   {"ogre", 10, 5.625f}};
+
+// How far above `from` the feet get walking along `yaw` for 8 s, looking up 45 degrees.
+float climb(const app::MoveWorld& world, const Race& r, glm::vec3 from = {0.0f, 0.0f, 0.0f}, float yaw = 0.0f,
+            const assets::ZoneRegions* regions = nullptr) {
+    test::ScratchDir scratch("zone_ladders_climb");
+    GameDir game(scratch.path());
+    net::GameConnection conn(game, {});
+    app::PlayerMovement m;
+    m.set_collision_radius(game::mechanics::sweep_radius(game::mechanics::SweepRadiusSpawn{r.avatar_height, r.race}));
+    m.set_race(r.race);
+    m.reset(from, yaw);
+    app::MovementKeys keys;
+    std::uint32_t now = 10000;
+    float top = from.z;
+    for (int i = 0; i < 500; ++i) {
+        keys.forward = i >= 3;
+        now += 16;
+        app::PlayerMovement::Frame f =
+            m.update(keys, yaw, glm::radians(45.0f), 16.0f, now, conn, regions, r.avatar_height, &world);
+        top = std::max(top, f.feet.z);
+    }
+    return top - from.z;
+}
+
 } // namespace
 
 TEST_CASE("zone ladders: the actor tag starts with LADDER, in any case") {
@@ -183,8 +264,8 @@ TEST_CASE("zone ladders: a LADDER placement is a ladder actor and its triangles 
         if (t.flags & game::kTriangleObject) ++objects;
         if (t.flags & game::kTriangleLadder) ++marked;
     }
-    CHECK(objects == 24);
-    CHECK(marked == 12); // the ladder's, not the barrel's
+    CHECK(objects == 36);
+    CHECK(marked == 24); // the ladder's and its slab's, not the barrel's
 }
 
 TEST_CASE("zone ladders: walking into a ladder climbs it; into a wall does not") {
@@ -305,4 +386,128 @@ TEST_CASE("zone ladders: Cabilis East's canal ladders" * doctest::skip(!hailston
     };
     CHECK(swim(false) < -9.0f); // the original: no way out of the canal here
     CHECK(swim(true) > -1.0f);  // up to the street (z 0)
+}
+
+TEST_CASE("zone ladders: a solid ladder's slab is the box of its solid polygons, placed as the ladder") {
+    assets::Mesh mesh;
+    add_box(mesh, {0.0f, -1.7f, -1.0f}, {0.7f, 1.7f, 14.6f});
+    constexpr float kUnit = 2.0f * glm::pi<float>() / 512.0f;
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 200.0f, 5.0f));
+    transform = glm::rotate(transform, 128.0f * kUnit, glm::vec3(0, 0, 1));
+    transform = glm::rotate(transform, -8.0f * kUnit, glm::vec3(0, 1, 0)); // leaning, as Upper Guk's
+    const auto slab = game::ladder_slab(mesh, transform);
+    REQUIRE(slab.size() == 12);
+    const glm::vec3 middle(transform * glm::vec4(0.35f, 0.0f, 6.8f, 1.0f));
+    for (const auto& t : slab) {
+        CHECK(t.flags == (game::kTriangleObject | game::kTriangleLadder | game::kTriangleLadderSlab));
+        CHECK(glm::dot(t.normal, (t.v0 + t.v1 + t.v2) / 3.0f - middle) > 0.0f); // facing out
+    }
+    // Every corner is a corner of the placed box.
+    const glm::vec3 top(transform * glm::vec4(0.7f, 1.7f, 14.6f, 1.0f));
+    bool found = false;
+    for (const auto& t : slab)
+        for (const glm::vec3& v : {t.v0, t.v1, t.v2}) found = found || glm::distance(v, top) < 1e-3f;
+    CHECK(found);
+
+    // A ladder whose polygons are all passable (LADDERCB101) has none.
+    mesh.parts[0].solid = false;
+    CHECK(game::ladder_slab(mesh, transform).empty());
+}
+
+TEST_CASE("zone ladders: the slab is the movement's alone, and only with solid ladders") {
+    const assets::Zone zone = rung_ladder_zone();
+    game::CollisionMesh mesh = game::CollisionMesh::build(zone);
+    CHECK_FALSE(mesh.solid_ladders()); // off unless asked: the meshes of the neighbour zones, weather and plates
+    // Between two rungs (z 5.25 .. 8.75), in front of the ladder and behind it.
+    const glm::vec3 front(9.0f, 0.0f, 7.0f), back(12.0f, 0.0f, 7.0f);
+    for (bool solid : {false, true}) {
+        CAPTURE(solid);
+        mesh.set_solid_ladders(solid);
+        CHECK(mesh.line_of_sight(front, back)); // seen through the rungs either way
+        CHECK(mesh.surfaces_above({10.4f, 0.0f, 7.0f}).front().z == doctest::Approx(8.75f));
+        // A sphere moved through the gap: stopped by the slab only.
+        game::SphereSweep s = game::SphereSweep::make(front, back, 0.5f);
+        mesh.sweep_sphere(s);
+        CHECK(s.collided == solid);
+        // The movement's floor and ceiling inside the ladder: the rungs, or the slab's top and nothing above it.
+        const glm::vec3 inside(10.4f, 0.0f, 7.0f);
+        if (solid) {
+            CHECK(mesh.floor_below(inside, 0.0f) == doctest::Approx(0.0f)); // the ground: the slab is not below
+            CHECK(mesh.floor_below({10.4f, 0.0f, 50.0f}, 0.0f) == doctest::Approx(kRungLadderHeight));
+            CHECK(mesh.ceiling_above(inside) == doctest::Approx(kRungLadderHeight));
+        } else {
+            CHECK(mesh.floor_below(inside, 0.0f) == doctest::Approx(5.55f));
+            CHECK(mesh.ceiling_above(inside) == doctest::Approx(8.75f));
+        }
+    }
+    std::size_t slab = 0;
+    for (const auto& t : mesh.triangles())
+        if (t.flags & game::kTriangleLadderSlab) ++slab;
+    CHECK(slab == 12);
+}
+
+TEST_CASE("zone ladders: with solid ladders every race climbs a ladder of rungs") {
+    const assets::Zone zone = rung_ladder_zone();
+    game::CollisionMesh mesh = game::CollisionMesh::build(zone);
+    const MeshWorld world(mesh);
+    for (const Race& r : kRaces) {
+        CAPTURE(std::string(r.name));
+        mesh.set_solid_ladders(false);
+        const float rungs = climb(world, r);
+        mesh.set_solid_ladders(true);
+        const float slab = climb(world, r);
+        MESSAGE(std::string(r.name), ": rungs ", rungs, ", slab ", slab);
+        CHECK(slab > kRungLadderHeight - 6.0f);
+        // The rungs alone (the original's collision with the stand-in radius): a gnome's sphere goes between them.
+        if (r.race == 12) CHECK(rungs < 10.0f);
+    }
+}
+
+TEST_CASE("zone ladders: every race climbs Upper and Lower Guk's tall ladders" * doctest::skip(!hailstone::test::game_dir())) {
+    // Upper Guk's LADDER28 at (747, 258), 56 high, leaning back; Lower Guk's LADDER42 at (1128, -833), 84 high, in a
+    // shaft. Without solid ladders a gnome, halfling or dwarf got about a tenth of the way up either.
+    struct Tall {
+        const char* zone;
+        glm::vec2 at;
+    };
+    for (const Tall& t : {Tall{"guktop", {746.8f, 258.0f}}, Tall{"gukbottom", {1128.3f, -833.4f}}}) {
+        CAPTURE(std::string(t.zone));
+        const assets::Zone zone = assets::load_zone(*hailstone::test::game_dir(), t.zone);
+        const auto ladders = game::zone_ladders(zone);
+        const game::ZoneLadder* ladder = nullptr;
+        for (const auto& l : ladders)
+            if (glm::distance(glm::vec2(l.center), t.at) < 1.0f) ladder = &l;
+        REQUIRE(ladder != nullptr);
+        game::CollisionMesh mesh = game::CollisionMesh::build(zone);
+        mesh.set_solid_ladders(true);
+        const MeshWorld world(mesh);
+        // Straight at its face (the model's +x is into the ladder), from the nearest floor in front at its foot.
+        glm::vec3 into(ladder->transform[0]);
+        into.z = 0.0f;
+        into = glm::normalize(into);
+        std::optional<glm::vec3> start;
+        for (float back : {3.0f, 5.0f, 8.0f}) {
+            const glm::vec3 p = glm::vec3(ladder->center.x, ladder->center.y, 0.0f) - into * back;
+            const auto floor = mesh.floor_below({p.x, p.y, ladder->center.z + 3.0f}, 0.0f);
+            if (floor && *floor > ladder->center.z - 3.0f) {
+                start = glm::vec3(p.x, p.y, *floor);
+                break;
+            }
+        }
+        REQUIRE(start);
+        const glm::vec3 from = *start;
+        for (const Race& r : kRaces) {
+            CAPTURE(std::string(r.name));
+            CHECK(climb(world, r, from, std::atan2(into.y, into.x), &zone.regions) > 0.9f * ladder->ladder.height);
+        }
+    }
+}
+
+TEST_CASE("zone ladders: hailstone.cfg [movement] solid_ladders") {
+    CHECK(plugin::Rules{}.solid_ladders);
+    CHECK(plugin::parse_server_cfg("").solid_ladders);
+    std::vector<std::string> warnings;
+    CHECK_FALSE(plugin::parse_server_cfg("[movement]\nsolid_ladders = off\n", &warnings).solid_ladders);
+    CHECK(warnings.empty());
+    CHECK(plugin::parse_server_cfg("[movement]\nsolid_ladders = on\n").solid_ladders);
 }

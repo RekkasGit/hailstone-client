@@ -421,6 +421,16 @@ Ladders (`game/zone_ladders.*`, `ladder.*`):
   overlaps where the move starts, counts as the ladder's hit (`CollisionMesh::touches_passable_ladder`). The
   sphere still goes through it, and the climb then runs as for a solid ladder; swimming at a canal ladder from the
   canal, looking up, reaches the street.
+- Solid ladders (Hailstone's own rule, on by default and switched by `hailstone.cfg` `[movement] solid_ladders`): the
+  player's movement meets a solid ladder as one slab, the box of its solid polygons placed as the ladder is (so it
+  leans with it), instead of its rails and rungs (`game::ladder_slab`, `CollisionMesh::set_solid_ladders`). The
+  movement sweep, the floor test and CanIFitHere's ceiling all see the slab; sight, picking, rain and the navigation
+  mesh still see the rungs. Without it, with the stand-in sweep radius (0.475 x AvatarHeight, "Movement collision"),
+  the rung ladders could not be climbed reliably by any race. A small race's sphere (a gnome's 0.89) goes between
+  the rungs (3.2 apart) or off the ladder's edge, stops meeting the ladder and falls. And CanIFitHere takes the rung
+  below as the floor and the rung above as the ceiling, 3.7 apart. That is less than the 2 x AvatarHeight it needs
+  for every race (3.75 for a gnome), so it refuses the move and the climber sticks partway up. Upper and Lower Guk,
+  Unrest and Ak'Anon each had ladders that some races (and in Ak'Anon every race) could not climb.
 
 ## NPC collision
 
@@ -680,6 +690,10 @@ find affect slot 1600). Each record is replayed call for call against the record
   `can_use_memorized_spell_slot`: gems < 8, then g - 8 < the SPA 326 total (AA + buff + item); no profile or
   profile +0x340c: all. Readiness: the click needs now > gem timer and now > recovery; the tint not casting, a valid
   spell, now >= both and the linked timer ready. The focus reuse mod only shortens the overlay's total (taken as 0).
+- A gem click that cannot cast (gem or recovery not ready, or a cast running) while a bard song plays stops the song
+  (ClearBardTwist, StopCurrentSpellCast(0): "Your song ends.") instead of "You haven't recovered yet..."; the next
+  click casts. A song stays cast after it lands (EQEmu's OP_ManaChange during it has keepcasting set), so this is
+  how a bard changes songs (`GameConnection::cast_gem`).
 - `find_affect_slot`, in order: a player caster's stack-blocked check (an existing SPA 148 blocks the SPA its base
   names in the slot its calc names, up to |max|); a copy of the same spell is refreshed in place (a lower level
   refused unless SPA 444; SPA 67 / 101 / 113 refuse), except a stackable DoT from another caster, which takes a slot
@@ -736,6 +750,26 @@ left where it is:
 Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing. Not
 covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
 not both: marking one clears the other.
+
+## The Advanced Inventory's bulk actions
+
+Also Hailstone's own: rows selected in the Advanced Inventory's list (a click, Ctrl, Shift, Ctrl+A) can be sold,
+donated as tribute or destroyed together (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
+item at a time, through the same packets a player's clicks would send, and takes only what is carried (the general
+slots and their bags; nothing worn or banked) and never a kept item:
+
+- Sell, at an open merchant: each sale is OP_ShopPlayerSell for the whole stack, the next after the merchant's answer,
+  as Sell marked does. Not a bag, nor what the merchant refuses (`game::sell_refusal`).
+- Tribute, at an open (personal) tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
+  as the window's Donate), the next after the server's answer; one it refuses (0 favour) goes back to its slot. An item
+  worth no favour (Favor 0, which EQEmu refuses) or a bag is left out. No answer in 5 seconds stops the job.
+- Destroy: each item is picked up and destroyed from the cursor (OP_MoveItem to nowhere, as DestroyHeldItemOrMoney),
+  with no confirmation per item: the window asks once, naming what goes. A bag that holds anything is left out (it
+  would take its contents), and so is an item with the No Destroy flag.
+
+The window says beforehand how many of the selection each action takes. A job stops, with a line in the chat and
+what the cursor holds put away, if the items change under it (the cursor, a trade, a merchant or the quantity
+window), as Sort does.
 
 ## Using items
 
@@ -938,14 +972,15 @@ map leaves standing higher stays in the air.
 
 Grounding NPCs (a deliberate difference, Hailstone's option `ground_npcs`: hailstone.ini `display.ground_npcs`,
 Options > Graphics "Ground Floating NPCs", on by default): an NPC or corpse on the ground that stands more than 0.25
-and at most 50 over the zone's floor there (its terrain and placed objects; not doors) is drawn at floor +
-AvatarHeight. That covers both gaps the landing check leaves: more than 5, and any gap of a spawn whose last update is
+and at most 50 over the floor there (the zone's terrain and placed objects, and the doors, as the player's own floor
+test has them: Plane of Knowledge's portal stones are doors, and an NPC on one's base stands on it) is drawn at floor +
+AvatarHeight. The landing check above keeps the zone's floor alone. That covers both gaps the landing check leaves: more than 5, and any gap of a spawn whose last update is
 more than 12 s old (it is no longer stepped, so it never settles). Flymode 3 counts as on the ground: EQEmu sends it
 (GravityBehavior::Water) for NPCs that may swim, such as East Commonlands' spiderlings (race 440, seen live 0.93 over
 the floor). Left alone: flying and levitating spawns (flymode 1 and 2, SpawnAppearance 19; EQEmu's 4 and 5 too),
 riders, spawns on a boat, players, and spawns in or over water, slime or lava regions (fish, a dock the zone files
-lack). Higher than 50 the server more likely means it. A spawn is measured again when it moves and when a zone's
-collision loads (spawns come before it, while character select's scene is still loaded); with no floor under it, every
+lack). Higher than 50 the server more likely means it. A spawn is measured again when it moves, when a zone's
+collision loads and when a door comes, goes or moves (spawns come before it, while character select's scene is still loaded); with no floor under it, every
 frame until there is one. Only `display_position` is lowered, so the model, name, target ring, picking and the NPC
 walls follow the drawn body; `position`, which range, melee and the other rules use, keeps the server's z.
 

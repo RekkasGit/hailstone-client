@@ -746,7 +746,7 @@ void ClientApp::trace_spawn(float dt) {
                   glm::length(s.velocity), s.snap_error, s.on_vehicle, feet_.x, feet_.y, feet_.z,
                   conn_->standing_on());
         // Grounding (game::WorldState::ground_npcs): the floor the spawn is measured against and what was made of it.
-        auto floor = collision_ ? collision_->floor_below(s.position, 4.0f) : std::nullopt;
+        auto floor = collision_ ? grounding_floor(s.position) : std::nullopt;
         log::info("trace {} floor {} avatar height {:.2f} height {:.2f} size {:.2f} model scale {:.2f} fly mode {} "
                   "body wet {} drawn {:.2f} lower, last update {:.1f} s ago",
                   id, floor ? std::format("{:.2f}", *floor) : std::string("none"), s.heights.avatar_height,
@@ -760,6 +760,13 @@ void ClientApp::trace_spawn(float dt) {
         }
         break;
     }
+}
+
+std::optional<float> ClientApp::grounding_floor(const glm::vec3& p) const {
+    std::optional<float> floor = collision_ ? collision_->floor_below(p, 4.0f) : std::nullopt;
+    if (world_objects_)
+        if (auto door = world_objects_->floor_below(p, 4.0f); door && (!floor || *door > *floor)) floor = door;
+    return floor;
 }
 
 } // namespace hailstone::app::client_internal

@@ -1579,7 +1579,12 @@ std::optional<net::ItemSlot> parse_place(std::string_view text) {
 
 const char* mode_name(net::GameConnection::ItemJobMode m) {
     using M = net::GameConnection::ItemJobMode;
-    return m == M::Stack ? "stack" : m == M::Tidy ? "tidy" : m == M::Sell ? "sell" : "sort";
+    return m == M::Stack     ? "stack"
+           : m == M::Tidy    ? "tidy"
+           : m == M::Sell    ? "sell"
+           : m == M::Destroy ? "destroy"
+           : m == M::Tribute ? "tribute"
+                             : "sort";
 }
 
 // err = eq.SortItems(where, mode [, options])   -- where: "inventory", "bank" or a bag window ("Bag3"); mode: "sort",
@@ -1664,7 +1669,8 @@ int SellJunk(lua_State* L) {
     return 1;
 }
 
-// done, total, mode, where = eq.ItemJob()   -- the job running (mode: "sort", "stack", "tidy", "sell"; where:
+// done, total, mode, where = eq.ItemJob()   -- the job running (mode: "sort", "stack", "tidy", "sell", "destroy",
+// "tribute"; where:
 // "inventory", "bank" or "bag"); nil when none is
 int ItemJob(lua_State* L) {
     auto& h = Impl::of(L).host;
