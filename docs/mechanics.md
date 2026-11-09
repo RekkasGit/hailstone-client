@@ -737,6 +737,26 @@ Nothing goes to the server: the refusals are the client not sending the move, so
 covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
 not both: marking one clears the other.
 
+## The Advanced Inventory's bulk actions
+
+Also Hailstone's own: rows selected in the Advanced Inventory's list (a click, Ctrl, Shift, Ctrl+A) can be sold,
+donated as tribute or destroyed together (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
+item at a time, through the same packets a player's clicks would send, and takes only what is carried (the general
+slots and their bags; nothing worn or banked) and never a kept item:
+
+- Sell, at an open merchant: each sale is OP_ShopPlayerSell for the whole stack, the next after the merchant's answer,
+  as Sell marked does. Not a bag, nor what the merchant refuses (`game::sell_refusal`).
+- Tribute, at an open (personal) tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
+  as the window's Donate), the next after the server's answer; one it refuses (0 favour) goes back to its slot. An item
+  worth no favour (Favor 0, which EQEmu refuses) or a bag is left out. No answer in 5 seconds stops the job.
+- Destroy: each item is picked up and destroyed from the cursor (OP_MoveItem to nowhere, as DestroyHeldItemOrMoney),
+  with no confirmation per item: the window asks once, naming what goes. A bag that holds anything is left out (it
+  would take its contents), and so is an item with the No Destroy flag.
+
+The window says beforehand how many of the selection each action takes. A job stops, with a line in the chat and
+what the cursor holds put away, if the items change under it (the cursor, a trade, a merchant or the quantity
+window), as Sort does.
+
 ## Using items
 
 `net/game_connection_item_use.cpp` (no vectors; `tests/item_use_test.cpp` runs it against the mock server):

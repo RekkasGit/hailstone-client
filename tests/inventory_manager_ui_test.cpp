@@ -1,6 +1,7 @@
 // The Advanced Inventory (ui/modern/inventorymanager.lua over app/lua_eq_inventory_manager.cpp) and the Keep marks
 // (game/kept_items.h), against the mock server: the window draws in both views without script errors and lists what
-// the character wears and carries; a kept item is not destroyed or dropped; the marks are kept per character.
+// the character wears and carries; a kept item is not destroyed or dropped; the marks are kept per character; the
+// bulk sell, destroy and tribute of chosen slots (GameConnection::start_bulk_job); /finditem and /advi.
 #include <doctest/doctest.h>
 
 #include <filesystem>
@@ -15,6 +16,8 @@
 #include "app/lua_eq.h"
 #include "app/lua_eq_menu.h"
 #include "mock_server/harness.h"
+#include "net/merchant_packets.h"
+#include "net/tribute_packets.h"
 #include "ui/lua/lua_host.h"
 #include "scratch_dir.h"
 
@@ -33,6 +36,29 @@ void frame(ui::lua::LuaUi& lua) {
     ImGui::NewFrame();
     lua.frame();
     ImGui::Render();
+}
+
+std::uint32_t id_at(const net::GameConnection& c, int slot, int sub = -1) {
+    const net::Item* it =
+        c.inventory().at(net::ItemSlot::possessions(static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub)));
+    return it ? it->id : 0u;
+}
+
+net::ItemSlot at(int slot, int sub = -1) {
+    return net::ItemSlot::possessions(static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub));
+}
+
+net::Item bag_item(std::uint32_t id, const std::string& name, std::int16_t slot) {
+    net::Item b = make_item(id, name, slot);
+    b.item_class = 1;
+    b.bag_slots = 4;
+    return b;
+}
+
+// The mock's character zones in holding coin (profile_builder.cpp); the bulk jobs, as Sort, want an empty cursor.
+void put_coin_away(net::GameConnection& c) {
+    for (int i = 0; i < 4; ++i) c.drop_on_doll(); // one coin a click, platinum first
+    for (std::uint32_t n : c.cursor_coins()) REQUIRE(n == 0u);
 }
 
 std::string file_text(const fs::path& p) {
@@ -62,6 +88,7 @@ TEST_CASE("Advanced Inventory: lists what is worn and carried, draws in both vie
         Rig rig(MockConfig::standard(), options);
         REQUIRE(rig.to_zone());
         auto& conn = rig.conn;
+        put_coin_away(conn);
 
         app::EqHost host;
         host.in_game = host.ui_ready = true;
@@ -123,11 +150,57 @@ return kept, eq.ItemKept(rations.id), tools.Junk(rations)
         frames();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
 
-        // the grid, a filter and a sort
+        // the grid, a filter and a sort (Kind, no longer a sort, falls back to Place)
         REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.view', 'grid') ui.SetSetting('advinv.sort', 'Kind') "
                                  "ui.SetSetting('advinv.mark', 'keep')") == LUA_OK);
         frames();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+
+        // the stats, and the bulk actions' counts (the Rations are kept, the Short Sword worn: neither is taken)
+        REQUIRE(luaL_dostring(L, R"lua(
+local st = eq.ItemStats()
+local l = eq.AllItems()
+local nd, ed = eq.BulkItems("destroy", { "i:23", "i:13", "b:0", "nonsense" }, true)
+local ns, es = eq.BulkItems("sell", { "i:23" }, true)
+local bad = pcall(eq.BulkItems, "juggle", {})
+return st[1][1], st[1][2], #st, type(l[1].item.stats), l[2].item.tribute, nd, ed, ns, es, bad
+)lua") == LUA_OK);
+        CHECK(std::string(lua_tostring(L, 1)) == "ac");
+        CHECK(std::string(lua_tostring(L, 2)) == "AC");
+        CHECK(lua_tointeger(L, 3) > 40);
+        CHECK(std::string(lua_tostring(L, 4)) == "table");
+        CHECK(lua_tointeger(L, 5) == 0);
+        CHECK(lua_tointeger(L, 6) == 0);
+        CHECK(lua_isnil(L, 7)); // nothing stops a destroy, there is just nothing to take
+        CHECK(lua_tointeger(L, 8) == 0);
+        CHECK(std::string(lua_tostring(L, 9)) == "Open a merchant first.");
+        CHECK_FALSE(lua_toboolean(L, 10));
+        lua_settop(L, 0);
+        REQUIRE(luaL_dostring(L, "local t = dofile('lib/itemtools.lua') t.SetKeep(eq.Item(23), false) "
+                                 "return eq.BulkItems('destroy', { 'i:23', 'i:23' }, true)") == LUA_OK);
+        CHECK(lua_tointeger(L, 1) == 1); // once, chosen twice
+        lua_settop(L, 0);
+
+        // the list with a stat's column and sort, and a selection: the selection's bar draws; a search from
+        // /finditem clears the filters and the selection
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.view', 'list') ui.SetSetting('advinv.mark', 'any') "
+                                 "ui.SetSetting('advinv.stat', 'ac') ui.SetSetting('advinv.sort', 'Stat')") == LUA_OK);
+        frames();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.stat', '') ui.SetSetting('advinv.sort', 'Value') "
+                                 "local s = ADVANCED_INVENTORY.sel s.places['i:23'] = 1002 s.n = 1") == LUA_OK);
+        frames();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(luaL_dostring(L, "return ADVANCED_INVENTORY.sel.n") == LUA_OK);
+        CHECK(lua_tointeger(L, 1) == 1); // still shown, still selected
+        lua_settop(L, 0);
+        host.item_search = "Short";
+        frames();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        CHECK_FALSE(host.item_search.has_value());
+        REQUIRE(luaL_dostring(L, "return ADVANCED_INVENTORY.sel.n, ui.GetSetting('advinv.mark')") == LUA_OK);
+        CHECK(lua_tointeger(L, 1) == 0);
+        lua_settop(L, 0);
 
         // the inventory window, with its Advanced Inventory button, draws too
         api.show("InventoryWindow", true);
@@ -146,6 +219,7 @@ TEST_CASE("Kept items: not destroyed or dropped, and kept per character in kept_
         Rig rig(MockConfig::standard(), options);
         REQUIRE(rig.to_zone());
         auto& conn = rig.conn;
+        put_coin_away(conn);
         conn.set_item_kept(1002, "Rations", true);
         fs::path file = conn.own_files().kept_items();
         REQUIRE(fs::exists(file));
@@ -173,4 +247,179 @@ TEST_CASE("Kept items: not destroyed or dropped, and kept per character in kept_
     REQUIRE(again.to_zone());
     CHECK(again.conn.kept_items().kept(1001));
     CHECK_FALSE(again.conn.kept_items().kept(1002));
+}
+
+TEST_CASE("Advanced Inventory bulk destroy: what is chosen and carried, one item at a time") {
+    ScratchDir scratch("inventory_bulk_destroy_test");
+    MockConfig config = MockConfig::standard();
+    auto& inv = config.characters[0].inventory;
+    inv.push_back(make_item(2001, "Rusty Dagger", 24));
+    net::Item sack = bag_item(2002, "Sack", 25);
+    sack.contents.push_back({0, make_item(2003, "Pebble", 25)});
+    inv.push_back(sack);
+    net::Item heirloom = make_item(2004, "Heirloom", 26);
+    heirloom.unknown34_37[3] = 1u << 16; // No Destroy
+    inv.push_back(heirloom);
+    inv.push_back(bag_item(2005, "Empty Sack", 27));
+    net::ConnectionOptions options = quick_options();
+    options.servers_dir = scratch.path();
+    Rig rig(std::move(config), options);
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    put_coin_away(conn);
+    REQUIRE(id_at(conn, 25, 0) == 2003u);
+    conn.set_item_kept(1002, "Rations", true);
+    using M = net::GameConnection::ItemJobMode;
+    // worn, kept, a bag that holds something and a No Destroy item stay; a bag's content and an empty bag go
+    const std::vector<net::ItemSlot> chosen{at(13), at(23), at(24), at(25), at(25, 0), at(26), at(27)};
+    auto plan = conn.bulk_items_plan(M::Destroy, chosen);
+    REQUIRE(plan.size() == 3);
+    CHECK(plan[0].same(at(24)));
+    CHECK(plan[1].same(at(25, 0)));
+    CHECK(plan[2].same(at(27)));
+    CHECK(conn.start_bulk_job(M::Destroy, {at(13), at(23)}) == "Nothing chosen is something you carry that can be destroyed.");
+
+    const int moves = MockEqServer::count(rig.server.zone_log, net::Op::MoveItem);
+    CHECK(conn.start_bulk_job(M::Destroy, chosen).empty());
+    CHECK(conn.start_bulk_job(M::Destroy, chosen) == "Already busy with your items.");
+    REQUIRE(conn.item_job());
+    CHECK(conn.item_job()->mode == M::Destroy);
+    REQUIRE(rig.until([&] { return !conn.item_job(); }));
+    CHECK(id_at(conn, 24) == 0u);
+    CHECK(id_at(conn, 25, 0) == 0u);
+    CHECK(id_at(conn, 27) == 0u);
+    CHECK(id_at(conn, 25) == 2002u);
+    CHECK(id_at(conn, 26) == 2004u);
+    CHECK(id_at(conn, 23) == 1002u);
+    CHECK(id_at(conn, 13) == 1001u);
+    CHECK_FALSE(conn.inventory().cursor());
+    // each one picked up, then destroyed from the cursor
+    REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, net::Op::MoveItem) >= moves + 6; }));
+    CHECK(MockEqServer::count(rig.server.zone_log, net::Op::MoveItem) == moves + 6);
+
+    // not while something is held
+    conn.click_slot(at(25), true, false);
+    REQUIRE(conn.inventory().cursor());
+    CHECK(conn.start_bulk_job(M::Destroy, {at(26)}) == "Put down what you are holding first.");
+}
+
+TEST_CASE("Advanced Inventory bulk sell: the chosen carried items the open merchant buys, one sale at a time") {
+    MockConfig config = MockConfig::standard();
+    auto& inv = config.characters[0].inventory;
+    inv.push_back(make_item(2010, "Bone Chips", 24, 3));
+    inv.push_back(bag_item(2011, "Sack", 25));
+    inv.push_back(make_item(2012, "Spider Silk", 26));
+    Rig rig(std::move(config));
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    put_coin_away(conn);
+    using M = net::GameConnection::ItemJobMode;
+    const std::vector<net::ItemSlot> chosen{at(13), at(24), at(25), at(26)};
+    CHECK(conn.start_bulk_job(M::Sell, chosen) == "Open a merchant first.");
+    CHECK(conn.bulk_items_plan(M::Sell, chosen).size() == 2); // not worn, not a bag
+
+    auto& world = conn.world_for_test();
+    game::Spawn m = *world.player();
+    m.id = 5001;
+    m.name = "Merchant00";
+    m.class_id = 41;
+    m.is_npc = true;
+    world.spawns[m.id] = m;
+    conn.open_merchant(m.id);
+    net::MerchantClick open;
+    open.npc_id = m.id;
+    open.player_id = world.player_id;
+    open.rate = 1.0f;
+    rig.server.zone.send_reliable(net::encode(open));
+    REQUIRE(rig.until([&] { return conn.merchant() && conn.merchant()->open; }));
+
+    REQUIRE(conn.start_bulk_job(M::Sell, chosen).empty());
+    // each sale waits for the merchant's answer
+    for (int k = 1; k <= 2; ++k) {
+        REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, net::Op::ShopPlayerSell) == k; }));
+        rig.run_for(std::chrono::milliseconds(200));
+        CHECK(MockEqServer::count(rig.server.zone_log, net::Op::ShopPlayerSell) == k);
+        std::optional<net::MerchantSell> sold;
+        for (auto it = rig.server.zone_log.rbegin(); it != rig.server.zone_log.rend(); ++it)
+            if (net::from_wire(it->opcode) == net::Op::ShopPlayerSell) {
+                sold = net::decode_merchant_sell(*it);
+                break;
+            }
+        REQUIRE(sold);
+        CHECK(sold->slot == (k == 1 ? 24 : 26));
+        CHECK(sold->quantity == (k == 1 ? 3u : 1u)); // the whole stack
+        sold->price = 10;
+        rig.server.zone.send_reliable(net::encode(*sold));
+    }
+    REQUIRE(rig.until([&] { return !conn.item_job(); }));
+    CHECK(id_at(conn, 24) == 0u);
+    CHECK(id_at(conn, 26) == 0u);
+    CHECK(id_at(conn, 25) == 2011u);
+    CHECK(id_at(conn, 13) == 1001u);
+}
+
+TEST_CASE("Advanced Inventory bulk tribute: donated one at a time to the open tribute master; a refused one goes back") {
+    MockConfig config = MockConfig::standard();
+    auto& inv = config.characters[0].inventory;
+    net::Item gem = make_item(2020, "Gem", 24);
+    gem.favor = 50;
+    inv.push_back(gem);
+    inv.push_back(make_item(2021, "Lint", 25)); // worth no favour
+    net::Item ruby = make_item(2022, "Ruby", 26);
+    ruby.favor = 10;
+    inv.push_back(ruby);
+    Rig rig(std::move(config));
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    put_coin_away(conn);
+    using M = net::GameConnection::ItemJobMode;
+    const std::vector<net::ItemSlot> chosen{at(13), at(24), at(25), at(26)};
+    CHECK(conn.start_bulk_job(M::Tribute, chosen) == "Open a tribute master first.");
+    rig.server.zone.send_reliable(net::encode(net::StartTribute{conn.world().player_id, 77, 1}));
+    REQUIRE(rig.until([&] { return conn.tribute().master_id == 77u; }));
+    CHECK(conn.bulk_items_plan(M::Tribute, chosen).size() == 2);
+
+    REQUIRE(conn.start_bulk_job(M::Tribute, chosen).empty());
+    auto donation = [&](int k) {
+        REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, net::Op::TributeItem) == k; }));
+        std::optional<net::TributeItem> t;
+        for (auto it = rig.server.zone_log.rbegin(); it != rig.server.zone_log.rend() && !t; ++it)
+            if (net::from_wire(it->opcode) == net::Op::TributeItem) t = net::decode_tribute_item(*it);
+        REQUIRE(t);
+        CHECK(t->slot.same(net::ItemSlot::possessions(net::kSlotCursor))); // from the cursor, as the window's Donate
+        CHECK(t->master_id == 77u);
+        REQUIRE(conn.inventory().cursor());
+        return *t;
+    };
+    net::TributeItem first = donation(1);
+    CHECK(conn.inventory().cursor()->id == 2020u);
+    rig.run_for(std::chrono::milliseconds(200)); // the next waits for the answer
+    CHECK(MockEqServer::count(rig.server.zone_log, net::Op::TributeItem) == 1);
+    first.points = 50;
+    rig.server.zone.send_reliable(net::encode(first));
+    net::TributeItem second = donation(2);
+    CHECK(conn.inventory().cursor()->id == 2022u);
+    second.points = 0; // refused
+    rig.server.zone.send_reliable(net::encode(second));
+    REQUIRE(rig.until([&] { return !conn.item_job(); }));
+    CHECK_FALSE(conn.inventory().cursor());
+    CHECK(id_at(conn, 24) == 0u);
+    CHECK(id_at(conn, 25) == 2021u);
+    CHECK(id_at(conn, 26) == 2022u); // back in its slot
+    CHECK(conn.tribute().last_donation == 0);
+}
+
+TEST_CASE("/finditem and /advi go to the Advanced Inventory's handler") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    std::vector<std::pair<std::string, std::string>> calls;
+    rig.conn.set_client_commands([&](std::string_view h, const std::string& args) {
+        calls.emplace_back(std::string(h), args);
+        return true;
+    });
+    rig.conn.send_command("/finditem rusty dagger");
+    rig.conn.send_command("/ADVI");
+    REQUIRE(calls.size() == 2);
+    CHECK(calls[0] == std::pair<std::string, std::string>{"Hailstone_finditem", "rusty dagger"});
+    CHECK(calls[1] == std::pair<std::string, std::string>{"Hailstone_finditem", ""});
 }

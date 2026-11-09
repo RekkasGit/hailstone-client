@@ -669,6 +669,7 @@ public:
         std::uint32_t master_id = 0;     // the tribute master whose window is open
         bool benefit_open = false;       // TributeBenefitWnd
         std::int32_t last_donation = 0;  // the favour the last donation gave
+        std::uint32_t donation_answers = 0; // OP_TributeItem answers so far (the Advanced Inventory's job waits on them)
         // The active cost: the chosen tiers' costs.
         std::uint32_t active_cost() const;
         // The active time left in ms (counting down while active).
@@ -1554,7 +1555,7 @@ public:
     // bags or the open bank's (what is loose in a general or bank slot stays). `locked` slots are left as they are;
     // `filters` give bags (by top-level slot) a kind of item. Empty when it started, else why not.
     enum class ItemJobScope : std::uint8_t { Bag, Inventory, Bank };
-    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell };
+    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell, Destroy, Tribute };
     struct ItemJobOptions {
         std::vector<ItemSlot> locked;
         std::vector<std::pair<ItemSlot, game::ItemCategory>> filters;
@@ -1563,6 +1564,18 @@ public:
     // Sells every item with one of `ids` the player carries (the general slots and their bags) to the open merchant,
     // one at a time as the merchant answers. Empty when it started, else why not.
     std::string start_sell_job(const std::vector<std::uint32_t>& ids);
+    // Hailstone: the Advanced Inventory's bulk actions on chosen slots (a deliberate difference, with no counterpart in
+    // the original). Only what is carried (the general slots and their bags) is taken, never a kept item:
+    //   Sell     to the open merchant, one sale at a time as it answers (not a bag; what the merchant buys);
+    //   Destroy  each picked up and destroyed, with no confirmation each (the window asks once). Not a bag that holds
+    //            anything, nor a No Destroy item;
+    //   Tribute  each picked up and donated to the open tribute master, the next after its answer (an item worth no
+    //            favour, or a bag, is left out; one the server refuses goes back to its slot).
+    // bulk_items_plan is what a job would take now (the slots, in order); start_bulk_job is empty when it started, else
+    // why not (bulk_items_blocked: the situation alone).
+    std::vector<ItemSlot> bulk_items_plan(ItemJobMode mode, const std::vector<ItemSlot>& slots) const;
+    std::string bulk_items_blocked(ItemJobMode mode) const;
+    std::string start_bulk_job(ItemJobMode mode, const std::vector<ItemSlot>& slots);
     struct ItemJobStatus {
         std::size_t done = 0, total = 0;
         ItemJobMode mode = ItemJobMode::Sort;
@@ -3021,10 +3034,16 @@ private:
         std::size_t next = 0;
         std::int64_t next_ms = 0;
         ItemJobStatus status;
+        // Destroy and Tribute: the current item's step (0 pick up, 1 destroy or donate, 2 wait for the tribute
+        // master's answer, 3 put a refused donation back), the answer count before the donation and when to give up.
+        int phase = 0;
+        std::uint32_t answers = 0;
+        std::int64_t deadline_ms = 0;
     };
     std::optional<ItemJob> item_job_;
     std::string item_job_blocked(ItemJobScope scope) const; // why a job cannot run now (empty: it can)
     void update_item_job();
+    void update_bulk_job(std::int64_t now); // Destroy and Tribute's steps
     void next_parcel_claim(); // Claim all: the next parcel, when none is being taken
     std::string parcel_send_blocked(const std::string& to) const;
     std::uint32_t parcel_money_picks_ = 0; // MerchantSession::ParcelMoneyPick::serial

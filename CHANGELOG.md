@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Advanced Inventory: click a column's heading to sort by it, and again to reverse it (the Sort menu is now only in the grid view, which has no headings). The Kind sort is gone; the Kind filter remains
+- Advanced Inventory: a Stat menu at the bottom of the left pane (with its own filter) shows only the items with that stat (AC, HP, the attributes and heroics, the resists, haste, regen, damage, ratio, tribute value and more), adds its column and sorts by it. Clear filters beside the search turns every filter off at once
+- Advanced Inventory: select rows with a click, Ctrl+click, Shift+click or Ctrl+A, then Sell (at a merchant), Tribute (at a tribute master) or Destroy them together, after one confirmation. Only what you carry is taken, never an item marked Keep
+- `/finditem` (or `/advi`) opens or closes the Advanced Inventory; `/finditem <text>` opens it searching for that
 - A face seen up close no longer shows dark lines across it with the modern lighting: an erudite's forehead had a sharp V-shaped crease, and faces had dark lines over the cheeks and under the eyes. The ambient occlusion picked out the folds of the low-poly head that its smooth shading hides; it now fades out on anything closer than about twice a character's height to the camera
 - Collision with walls is now computed by Hailstone's own code for the sphere sweep. It agrees with the original client within a tiny margin; in rare cases where the player only just grazes an edge or a corner, a step may now stop or pass where it did not before
 - Characters with the Luclin models now stand, walk and fight with their arms ready when they hold a weapon or a shield, as on the original client: a shield used to hang low at the hip in the empty-handed pose

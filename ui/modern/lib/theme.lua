@@ -316,15 +316,16 @@ function T.HoverFx(x0, y0, x1, y1, s, radius)
   end
 end
 
--- A small rounded button with a label; returns clicked. opts: enabled (default true), primary, width.
+-- A small rounded button with a label; returns clicked. opts: enabled (default true), primary, danger (the danger
+-- colour, for what cannot be undone), width.
 function T.Button(id, x0, y0, x1, y1, s, label, opts)
   opts = opts or NO_OPTS
   local enabled = opts.enabled ~= false
   local clicked = T.Hit(id, x0, y0, x1, y1)
   local hovered, active = ui.IsItemHovered(), ui.IsItemActive()
   local rad = 5 * s
-  local base = opts.primary and C.accent or C.ink
-  local fill = opts.primary and 0.22 or 0.06
+  local base = (opts.danger and C.danger) or (opts.primary and C.accent) or C.ink
+  local fill = (opts.primary or opts.danger) and 0.22 or 0.06
   if enabled and active then fill = fill + 0.10 elseif enabled and hovered then fill = fill + 0.06 end
   if not enabled then fill = 0.03 end
   ui.DrawRectFilled(x0, y0, x1, y1, base[1], base[2], base[3], fill, rad)

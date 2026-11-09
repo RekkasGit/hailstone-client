@@ -250,6 +250,7 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
     case Op::TributeItem:
         if (auto t = decode_tribute_item(p)) {
             tribute_.last_donation = t->points;
+            ++tribute_.donation_answers;
             // EQEmu's TributeItem deletes the donated item (DeleteItemInInventory, no client update) and echoes this;
             // a refusal (an augmented or worthless item, too few charges) echoes 0 points and keeps it.
             if (Item* item = t->points > 0 ? inventory_.at(t->slot) : nullptr) {
