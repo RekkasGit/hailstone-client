@@ -421,6 +421,16 @@ Ladders (`game/zone_ladders.*`, `ladder.*`):
   overlaps where the move starts, counts as the ladder's hit (`CollisionMesh::touches_passable_ladder`). The
   sphere still goes through it, and the climb then runs as for a solid ladder; swimming at a canal ladder from the
   canal, looking up, reaches the street.
+- Solid ladders (Hailstone's own rule, on by default and switched by `hailstone.cfg` `[movement] solid_ladders`): the
+  player's movement meets a solid ladder as one slab, the box of its solid polygons placed as the ladder is (so it
+  leans with it), instead of its rails and rungs (`game::ladder_slab`, `CollisionMesh::set_solid_ladders`). The
+  movement sweep, the floor test and CanIFitHere's ceiling all see the slab; sight, picking, rain and the navigation
+  mesh still see the rungs. Without it, with the stand-in sweep radius (0.475 x AvatarHeight, "Movement collision"),
+  the rung ladders could not be climbed reliably by any race. A small race's sphere (a gnome's 0.89) goes between
+  the rungs (3.2 apart) or off the ladder's edge, stops meeting the ladder and falls. And CanIFitHere takes the rung
+  below as the floor and the rung above as the ceiling, 3.7 apart. That is less than the 2 x AvatarHeight it needs
+  for every race (3.75 for a gnome), so it refuses the move and the climber sticks partway up. Upper and Lower Guk,
+  Unrest and Ak'Anon each had ladders that some races (and in Ak'Anon every race) could not climb.
 
 ## NPC collision
 

@@ -214,6 +214,7 @@ std::shared_ptr<const InputGeometry> InputGeometry::from_collision(const game::C
     };
     for (const game::CollisionTriangle& t : mesh.triangles()) {
         if (outside(t)) continue;
+        if (t.flags & game::kTriangleLadderSlab) continue; // the movement's stand-in; the mesh keeps the rungs
         // Passable triangles never stop the sweep and are not walked on, but a water surface is swum on: it is
         // ground for the mesh (Water once the areas are marked), so a path can cross water whose bottom is too
         // deep or too steep to walk.
