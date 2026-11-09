@@ -195,6 +195,12 @@ lands the spell, on players and NPCs alike. Stock EQEmu sends the landing only t
 the caster's cast stage and no impact; the original client gets no more from the server. A server owner who wants
 the impact seen from further raises that rule.
 
+The server can also play an effect by its spellsnew.eff number on a spawn (OP_SpellEffect, OP_AddNimbusEffect;
+`game/spell_effect_timers.h`): a nimbus, such as an item's or a buff's aura of orbs or flames, is one. Its emitters ask
+for a forced 5,000 s, so it stays on the spawn until OP_RemoveNimbusEffect stops it (EQEmu sends that when the buff
+fades) or the zone changes. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
+does not see it, on the original client either.
+
 Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
 first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
 a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the

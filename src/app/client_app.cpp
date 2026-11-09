@@ -239,11 +239,17 @@ int ClientApp::run() {
         if (zone_particles_ && (in_world || pre_game)) zone_particles_->update(dt, camera_.position);
         if (spell_particles_ && in_world && conn_) {
             auto cues = conn_->take_spell_effect_cues();
-            if (!spell_effects_) cues.clear(); // /showspelleffects off: none start
+            auto effect_packets = conn_->take_effect_packets();
+            if (!spell_effects_) { // /showspelleffects off: none start (the removals still stop what is shown)
+                cues.clear();
+                std::erase_if(effect_packets, [](const net::EffectPacketCue& e) {
+                    return e.kind == net::EffectPacketCue::Kind::Add || e.kind == net::EffectPacketCue::Kind::AddNimbus;
+                });
+            }
             const double bolt_now = bolt_clock();
             if (spell_bolts_ && lighting_mode_ == render::LightingMode::Modern)
                 spell_bolts_->take_cues(*conn_, cues, bolt_now);
-            spell_particles_->update(*conn_, cues, actor_renderer_.get(), dt);
+            spell_particles_->update(*conn_, cues, effect_packets, actor_renderer_.get(), dt);
             spell_particles_->prepare();
             if (spell_bolts_)
                 spell_bolts_->update(*conn_, bolt_now, [this](std::uint32_t serial) -> std::optional<glm::vec3> {

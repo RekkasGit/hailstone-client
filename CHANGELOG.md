@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Nimbus effects show: a spell or item with a nimbus (the orbs, flames or petals that surround the caster while its buff lasts, such as Nimbus of Discordant Souls) now draws it on the caster until the buff fades. Other effects the server plays on a spawn by number show as well
 - Bazaar trader: a ware's price can now go up to 4,294,967 platinum (4,294,967p 2g 9s 5c, the most the server can store), instead of the original client's 1,000,000 platinum
 - Options > Audio has an **NPC Hit Sounds** slider: the sounds of NPCs being hit, blocking and dodging can be turned down (or off) without lowering the other sound effects. The default leaves them as before
 - `/camp` can be stopped again by standing with the sit/stand key or by moving forward, as on the original client. Before, only the Stand button or a second `/camp` stopped it

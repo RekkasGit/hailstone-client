@@ -262,6 +262,17 @@ struct SpellEffectCue {
     bool proc = false;
 };
 
+// An effect the server plays by number (a spellsnew.eff index, not a spell): OP_SpellEffect's add and remove
+// (game::SpellEffectTimers), OP_AddNimbusEffect and OP_RemoveNimbusEffect. For the nimbus kinds caster = target =
+// the spawn and the timings are 0.
+struct EffectPacketCue {
+    enum class Kind : std::uint8_t { Add, Remove, AddNimbus, RemoveNimbus };
+    Kind kind = Kind::Add;
+    std::uint32_t effect = 0, caster = 0, target = 0;
+    std::uint32_t stage1_ms = 0, stage1_length_ms = 0, stage2_length_ms = 0;
+    bool full = false;
+};
+
 // The local player's points and progress, from OP_PlayerProfile and the
 // update packets (OP_HPUpdate, OP_ManaChange/OP_ManaUpdate,
 // OP_EnduranceUpdate, OP_ExpUpdate, OP_LevelUpdate). Maxima are 0 until the
@@ -441,6 +452,8 @@ public:
     }
     // The sound events since the last call (doors included).
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
+    // The effect packets since the last call, in order (app/spell_particles.h plays them).
+    std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
     // The missiles the server launched since the last call (OP_SomeItemPacketMaybe, game/missiles.h), in order.
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
     std::vector<SoundCue> take_sound_cues();
@@ -3029,6 +3042,7 @@ private:
     std::uint32_t door_moves_seen_ = 0;
     std::vector<SoundCue> sound_cues_;
     std::vector<SpellEffectCue> effect_cues_;
+    std::vector<EffectPacketCue> effect_packets_;
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;

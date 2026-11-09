@@ -374,6 +374,7 @@ add_library(hailstone_engine STATIC
   src/game/scene_light.cpp
   src/game/cloud_patches.cpp
   src/game/particles.cpp
+  src/game/spell_effect_timers.cpp
   src/game/sine_table.cpp
   src/game/collision.cpp
   src/nav/nav_mesh.cpp
@@ -1078,6 +1079,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mock_placement_test.cpp
     tests/sky_test.cpp
     tests/particles_test.cpp
+    tests/spell_effect_timers_test.cpp
     tests/wld_particles_test.cpp
     tests/wld_detail_test.cpp
     tests/movement_test.cpp

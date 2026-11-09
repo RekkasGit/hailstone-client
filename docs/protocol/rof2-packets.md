@@ -259,6 +259,9 @@ The online client never finishes a cast itself. It gates the cast, starts its ow
 | ColoredText | Z→C | 0x43af | u32 chat colour, text (EQEmu copies strlen bytes without a terminator; the struct padding usually supplies one). Buff fade texts |
 | LinkedReuse | Z→C | 0x1619 | 12 B: u32 timer 1..19, u32 end, u32 start (seconds): a shared spell timer; tints the gems only |
 | Stamina | Z→C | 0x2a79 | 8 B: u32 food, u32 water |
+| SpellEffect | Z→C | 0x5936 | 28 B: u32 effect (a spellsnew.eff index, not a spell), u32 caster, u32 target, u32 stage 1 start ms, u32 stage 2 after it ms, u32 stage 2 length ms, u8 full (emitters at density and opacity 1), u8 add (0 removes), u16 unread. Add: the effect's cast stage at once, stage 1 and stage 2 as their starts pass (`SpellEffectTimers`); remove: the timers dropped and the emitters stopped. EQEmu sends a spell's nimbus (spells_new column 193) as {500, 0, 3000, 1, 1} when it is cast |
+| AddNimbusEffect | Z→C | 0xc693 | 8 B: u32 spawn, i32 effect: the effect's impact stage on the spawn (`Mob::AddNimbusEffect`, quests only) |
+| RemoveNimbusEffect | Z→C | 0x7b1e | 8 B: u32 spawn, i32 effect: stops the effect's emitters on the spawn. EQEmu sends it when a buff with a nimbus fades |
 
 Observed sequences (EQEmu server, `playprobe --spells 1` with a level 1 human cleric):
 - Scribing: the scroll goes onto the cursor (C→Z `OP_MoveItem` general slot → cursor), "Beginning to scribe %1..." (12049); after the client's countdown (92 ticks, 3 per frame at most every 2 ms of the display clock) C→Z `OP_MemorizeSpell` {book slot, spell, 0}. The server deletes the scroll and echoes `OP_MemorizeSpell` {slot, spell, 0}; the client writes the book and prints 12006. The book only works sitting (the click handler checks StandState 110 or a mount).
