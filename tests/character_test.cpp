@@ -234,6 +234,35 @@ TEST_CASE("a borrowed clip keeps the bones a Luclin model hides at rest hidden" 
     CHECK(reach < 6.0f);
 }
 
+TEST_CASE("a borrowed clip leaves a Luclin model's face bones in their own place" * doctest::skip(!hailstone::test::game_dir())) {
+    // The Wood Elf's clips key the face bones at the elf's rest places: the Erudite's lips parted over its teeth and
+    // its brows dropped into a frown. Face bones keep their own translation; the body still takes the donor's.
+    auto lib = CharacterLibrary::load(*hailstone::test::game_dir(), "", true);
+    auto m = lib.model("ERM");
+    REQUIRE(m);
+    const auto& rest = m->clips.at("");
+    auto clip = m->clips.find("P01");
+    REQUIRE(clip != m->clips.end());
+    REQUIRE(clip->second.borrowed);
+    int faces = 0;
+    for (std::size_t i = 0; i < m->bone_names.size(); ++i) {
+        if (m->bone_names[i].rfind("ERMFA", 0) != 0) continue;
+        ++faces;
+        CAPTURE(m->bone_names[i]);
+        for (const auto& p : clip->second.tracks[i]) {
+            CHECK(p.translation.x == doctest::Approx(rest.tracks[i].front().translation.x));
+            CHECK(p.translation.y == doctest::Approx(rest.tracks[i].front().translation.y));
+            CHECK(p.translation.z == doctest::Approx(rest.tracks[i].front().translation.z));
+        }
+    }
+    CHECK(faces >= 10);
+    // The neck is no face bone: the elf's (0.996 long, the erudite's own is 0.867).
+    int neck = m->find_bone("NENECK_TRACK");
+    REQUIRE(neck >= 0);
+    CHECK(clip->second.tracks[static_cast<std::size_t>(neck)].front().translation.x ==
+          doctest::Approx(0.996f).epsilon(0.01));
+}
+
 TEST_CASE("a Luclin model borrows nothing from the classic donor's skeleton" * doctest::skip(!hailstone::test::game_dir())) {
     // global_chr's classic ELF has C10, C11 and T07..T09, the Luclin ELF has not; the few bone names the two share
     // lent a Luclin human those clips with every other bone in the rest pose: a T-pose.
