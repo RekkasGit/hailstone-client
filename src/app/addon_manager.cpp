@@ -333,9 +333,11 @@ void AddonManager::refresh_index(bool now) {
         const fs::path cache = addons_dir(env_.data_dir) / "index.txt";
         const fs::path stamp = addons_dir(env_.data_dir) / "index-checked.txt";
         std::string why;
+        std::optional<std::uint64_t> kept_serial;
         if (auto text = read_text_file(cache)) {
             // Checked again: the file is the player's to change.
             if (auto index = parse_addon_index(*text, *env_.index_key, &why)) {
+                kept_serial = index->serial;
                 std::lock_guard lock(mutex_);
                 status_.index = std::move(*index);
             } else {
@@ -358,6 +360,11 @@ void AddonManager::refresh_index(bool now) {
         auto index = parse_addon_index(*text, *env_.index_key, &why);
         if (!index) {
             log::warn("Add-ons: the add-on index is refused: {}", why);
+            return;
+        }
+        // Signed is not enough: an older signed index, served again, would bring back what a later one took out.
+        if (std::string older = addon_index_older(kept_serial, index->serial); !older.empty()) {
+            log::warn("Add-ons: the fetched add-on index is refused, the one kept stays: {}", older);
             return;
         }
         std::error_code ec;

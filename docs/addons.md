@@ -139,7 +139,11 @@ player who logs in to such a server for the first time does not know it exists, 
   with) and the worlds it is for (the login server's host, `*` for any, and the world's name as the login server
   lists it). It is signed with the release key, the same as the update manifest, and an index that does not check
   is not used. The client fetches it at start, at most every `addons.check_hours`, and keeps it in
-  `addons/index.txt` (checked again when it is read). The store lists the same index. Since it is known before any login, it reaches a player on
+  `addons/index.txt` (checked again when it is read). The store lists the same index. Its `serial <n>` record (once,
+  after the first line; `hailstone_sign sign` writes the time it signs, in seconds since 1970, and always more than
+  the serial it had) keeps an older signed index from being served again: a fetched index with a lower serial than
+  the kept one, or with none once the kept one has one, is refused and the kept one stays (`addon_index_older`). An
+  index without a serial is still taken while the kept one has none, so the indexes signed before the serial work. Since it is known before any login, it reaches a player on
   their first visit.
 - **The server's own `hailstone.cfg`**: `[addons] suggest = owner/repo, ...` (docs/plugins.md). It comes only with
   the server's files at the first zone-in, so it is suggested from the next login screen on.
@@ -167,7 +171,8 @@ real add-on. A server's suggestion of an add-on the index does not list is a pla
 link gives, signed or not.
 
 **Adding a server** is a pull request to the index's repository. A maintainer signs it with the release key
-(`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it).
+(`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
+serial first). Sign it with a `hailstone_sign` that writes the serial (this client's), so that each publish raises it.
 
 ## The manifest
 

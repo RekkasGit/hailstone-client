@@ -14,6 +14,10 @@
 // The secret key file is 128 hex digits (Monocypher's 64-byte Ed25519 secret key). Keep it out of the repository
 // and every build machine but the one that signs; whoever has it can make every Hailstone install run their code.
 
+#include <algorithm>
+#include <charconv>
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -117,6 +121,28 @@ int sign(const fs::path& key_path, const fs::path& manifest) {
             if (!line.starts_with("key ")) kept += line + "\n";
         body = kept + "key " + hex_encode(public_of(*secret)) + "\n";
     }
+    if (index) {
+        // The serial the client holds a fetched index to (core/addon_index.h addon_index_older): the time it is
+        // signed, and always past the one it had, so a clock set back never makes a newer index look older.
+        std::uint64_t serial = 0, old = 0;
+        std::istringstream in(body);
+        std::string kept, header;
+        for (std::string line; std::getline(in, line);) {
+            if (header.empty()) {
+                header = line + "\n";
+                continue;
+            }
+            if (line.starts_with("serial ")) {
+                std::from_chars(line.data() + 7, line.data() + line.size(), old);
+                continue;
+            }
+            kept += line + "\n";
+        }
+        const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+                             std::chrono::system_clock::now().time_since_epoch()).count();
+        serial = std::max<std::uint64_t>(old + 1, now > 0 ? static_cast<std::uint64_t>(now) : 0);
+        body = header + "serial " + std::to_string(serial) + "\n" + kept;
+    }
     const std::string out = body + "signature " + hex_encode(ed25519_sign(*secret, body)) + "\n";
     std::string error;
     if (addon   ? !parse_addon_manifest(out, &error)
@@ -169,6 +195,8 @@ int verify(const std::string& key_arg, const fs::path& manifest) {
             std::fprintf(stderr, "%s: %s\n", manifest.string().c_str(), error.c_str());
             return 1;
         }
+        if (index->serial) std::printf("serial %llu\n", static_cast<unsigned long long>(*index->serial));
+        else std::printf("no serial (signed by an older hailstone_sign)\n");
         for (const auto& a : index->addons) {
             std::printf("add-on %s from %s, key %s\n", a.name.c_str(), a.source.c_str(), hex_encode(a.key).c_str());
             for (const auto& w : index->worlds)

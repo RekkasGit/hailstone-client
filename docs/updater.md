@@ -105,6 +105,8 @@ against the manifest's size and SHA-256 twice, once after the download and again
 - **TLS and GitHub's own asset digests** prove only that a file came from GitHub. The signature proves it came from
   whoever holds the release key. Someone with write access to the releases, but without the key, cannot make the
   clients run their code.
+- **The same key signs the add-on index** (docs/addons.md "Suggested add-ons"); `hailstone_sign sign` gives an
+  index its serial.
 - **Keep the secret key off GitHub,** including Actions secrets, unless releases are signed in CI on purpose. Whoever
   has it can run code on every Hailstone install.
 - **Changing the key** needs a release signed with the old key that carries the new public key. After that, only
