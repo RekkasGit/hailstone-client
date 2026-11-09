@@ -918,8 +918,11 @@ in filler: the ground, hills and walls their builders put past each line, often 
 - **Loading**: once the zone is entered and the zone points are in, the nearest qualifying neighbour whose line is
   within the view distance plus 1500 units loads on a background thread at a lower priority (`ZoneRenderer::prepare`:
   the geometry, chunks and decoded textures with their mip chains, capped at 128 texels across; no detail passes,
-  material maps or multi-pass lights); the frame uploads it when ready. At most two are loaded; one goes when the
-  camera is 3500 units past the view distance from its line, all of them on zoning or with the setting off. A load
+  material maps or multi-pass lights); the frame uploads it when ready. Before the load starts, this zone's ground
+  past the seam (the grid of `game::split_off_ground`) is sampled on the frame's thread, about 1 ms of rows a frame
+  (`game::GroundSampler`), since the loader must not touch this zone. At most two are loaded; one is no longer drawn
+  when the camera is 3500 units past the view distance from its line, and is freed when another needs its room, on
+  zoning or with the setting off (freeing one waits for the GPU, which would hitch a frame of play). A load
   cut off by zoning or quitting stops at its next step (after reading the zone, after its collision mesh, and
   between `prepare`'s meshes and materials, `ZoneRenderOptions::cancelled`), so the wait for its thread is short;
   reading the zone's files is not broken off. It is fogged by this zone's haze, as it is drawn with this zone's

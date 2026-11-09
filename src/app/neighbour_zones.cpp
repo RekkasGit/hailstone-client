@@ -7,6 +7,7 @@
 
 #include "assets/zone.h"
 #include "core/game_dir.h"
+#include "core/work_budget.h"
 #include "core/log.h"
 #include "game/collision.h"
 #include "game/zone_names.h"
@@ -37,6 +38,8 @@ constexpr float kGroundProbe = 100.0f;
 constexpr float kGroundTolerance = 24.0f;
 // How far into the neighbour its open sky is tested, past the seam.
 constexpr float kArrivalProbe = 40.0f;
+// The frame's time for sampling a load's ground past the seam (NeighbourZones::Pending); at least a row a frame.
+constexpr double kGroundBudgetMs = 1.0;
 
 // The ground under (p.x, p.y), from `top` down: the line's own height range, not the zone's highest surface. The
 // ground as seen (CollisionMesh::ground_below): a tunnel roof's underside is not ground, nor an invisible plane (some
@@ -103,6 +106,7 @@ NeighbourZones::~NeighbourZones() {
 }
 
 void NeighbourZones::clear() {
+    pending_.reset();
     if (job_) {
         job_->cancelled = true;
         abandoned_.push_back({std::move(job_), std::move(thread_)});
@@ -320,12 +324,43 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
         job_.reset();
     }
     if (!entered_) return;
-    // Free the far ones (or all, switched off).
-    for (auto& l : lines_)
-        if (l.renderer && (!enabled || game::distance_xy(camera, l.seam.lo, l.seam.hi) > far_plane + kFreeReach)) {
+    // Switched off: all of them go. Past the free reach: no longer drawn, and freed when another needs the room
+    // (below) or on zoning, as freeing one waits for the GPU (~ZoneRenderer) and would hitch the frame.
+    for (auto& l : lines_) {
+        if (!l.renderer) continue;
+        if (!enabled) {
             log::info("neighbour zone {}: freed ({:.1f} MB)", l.name, static_cast<double>(l.bytes) / (1024.0 * 1024.0));
             l.renderer.reset();
+            continue;
         }
+        const bool idle = game::distance_xy(camera, l.seam.lo, l.seam.hi) > far_plane + kFreeReach;
+        if (idle != l.idle) log::info("neighbour zone {}: {}", l.name, idle ? "out of reach, not drawn" : "in reach again");
+        l.idle = idle;
+    }
+    if (!enabled) pending_.reset();
+    // The ground of a load about to start, a few rows a frame.
+    if (pending_) {
+        core::WorkBudget budget(kGroundBudgetMs);
+        auto t = Clock::now();
+        const auto& collision = *collision_;
+        const float top = pending_->top;
+        const bool done = pending_->ground.step(
+            [&](float x, float y) { return floor_at(collision, glm::vec3(x, y, 0.0f), top); },
+            [&] {
+                const auto now = Clock::now();
+                budget.done(std::chrono::duration<double, std::milli>(now - t).count());
+                t = now;
+                return budget.may_start();
+            });
+        budget.done(ms_since(t));
+        pending_->ms += budget.spent_ms();
+        ++pending_->frames;
+        if (done) {
+            start(*pending_);
+            pending_.reset();
+        }
+        return;
+    }
     // At most kMaxAbandoned loads cut off by zoning may still be running: past that the next load waits for them, so
     // rapid zoning does not pile up loader threads.
     if (!enabled || job_ || abandoned_.size() >= kMaxAbandoned) return;
@@ -355,6 +390,7 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
         if (!far) return;
         log::info("neighbour zone {}: freed for {}", far->name, next->name);
         far->renderer.reset();
+        far->idle = false;
     }
     auto job = std::make_shared<Job>();
     job->name = next->name;
@@ -364,21 +400,28 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
     job->points = next->points;
     job->floors_here = next->floors_here;
     job->max_images = vk_.caps().max_sampled_images;
-    if (collision_) {
-        // The current zone's ground past the seam (its filler), sampled here: the loader must not touch this zone.
-        const auto t0 = Clock::now();
-        glm::vec2 lo, hi;
-        game::seam_band(next->seam, zone_lo_, zone_hi_, 50.0f, lo, hi);
-        const float top = next->seam.hi.z + kGroundProbe;
-        job->ground = game::sample_ground(lo, hi, kGroundCell, [&](float x, float y) {
-            return floor_at(*collision_, glm::vec3(x, y, 0.0f), top);
-        });
-        log::info("neighbour zone {}: ground past the seam sampled on a {}x{} grid in {:.1f} ms", next->name,
-                  job->ground.width, job->ground.height, ms_since(t0));
+    if (!collision_) {
+        log::info("neighbour zone {}: loading ({:.0f} units from its line)", next->name, best);
+        job_ = job;
+        thread_ = std::thread(&NeighbourZones::run, std::move(job), &game_);
+        return;
     }
-    log::info("neighbour zone {}: loading ({:.0f} units from its line)", next->name, best);
-    job_ = job;
-    thread_ = std::thread(&NeighbourZones::run, std::move(job), &game_);
+    // The current zone's ground past the seam (its filler), sampled here over the next frames: the loader must not
+    // touch this zone.
+    glm::vec2 lo, hi;
+    game::seam_band(next->seam, zone_lo_, zone_hi_, 50.0f, lo, hi);
+    pending_.emplace(Pending{static_cast<std::size_t>(next - lines_.data()), std::move(job),
+                             game::GroundSampler(lo, hi, kGroundCell), next->seam.hi.z + kGroundProbe, best});
+}
+
+void NeighbourZones::start(Pending& p) {
+    const Line& l = lines_[p.line];
+    p.job->ground = p.ground.take();
+    log::info("neighbour zone {}: ground past the seam sampled on a {}x{} grid in {:.1f} ms over {} frames", l.name,
+              p.job->ground.width, p.job->ground.height, p.ms, p.frames);
+    log::info("neighbour zone {}: loading ({:.0f} units from its line)", l.name, p.distance);
+    job_ = p.job;
+    thread_ = std::thread(&NeighbourZones::run, std::move(p.job), &game_);
 }
 
 void NeighbourZones::set_scene_light(const game::SceneLight& light) {
@@ -395,7 +438,7 @@ void NeighbourZones::draw(const render::FrameInfo& frame, const glm::mat4& view_
                           const game::ViewDistance& view, double time_seconds, render::ZonePhase phase) {
     const auto t0 = Clock::now();
     for (auto& l : lines_)
-        if (l.renderer) {
+        if (l.renderer && !l.idle) {
             l.renderer->draw(frame, view_proj, camera_pos, view, time_seconds, phase);
             const auto d = l.renderer->take_drawn();
             triangles_acc_ += d.triangles;
