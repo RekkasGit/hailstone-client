@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `/outputfile` refuses a file name that is one of the character's own settings files (`hailstone.ini`, `scripts.ini`, `hotbuttons.ini`, `UI.ini` and the others, in any case): `/outputfile inventory scripts.ini` used to overwrite the character's autorun list
 - Text from the server with line breaks or other control characters in it (a refused web link, for one) is written into `hailstone.log` and crash reports as `\n`, `\r` or `\xHH`, so it cannot pass itself off as lines of the log
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following

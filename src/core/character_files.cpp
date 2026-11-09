@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
+#include "core/ascii_case.h"
 #include "core/game_dir.h"
 #include "core/log.h"
 #include "core/server_profile.h"
@@ -31,6 +32,17 @@ std::string transient_profile_id(std::string_view server_name, std::string_view 
                    })))
         return id;
     return "_transient-" + id;
+}
+
+bool is_kept_character_file(std::string_view name) {
+    static constexpr std::string_view kKept[] = {
+        "UI.ini", "hotbuttons.ini", "BZR.ini", "BART.ini", "btrlog.txt", "AddressBook.txt", "IgnoreList.txt",
+        "GuildNotes.txt", "chat.ini", "options.ini", "chat_history.txt", "scripts.ini", "kept_items.txt",
+        "hailstone.ini", "plugin-config",
+    };
+    for (std::string_view kept : kKept)
+        if (iequals(name, kept)) return true;
+    return istarts_with(name, "ui-") && iends_with(name, ".txt");
 }
 
 CharacterFiles character_files(std::string_view profile, std::string_view world, std::string_view character,

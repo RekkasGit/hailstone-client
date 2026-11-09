@@ -56,7 +56,10 @@ hailstone/
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
                              opacity, locks: the `hud.*` settings);
                              eqlog.txt (or /log on <name>: <name>.txt), the chat log; plugin-config/<plugin>/ a
-                             plugin's files for the character (character_config_dir; the NMS plugin's itemrules.ini)
+                             plugin's files for the character (character_config_dir; the NMS plugin's itemrules.ini);
+                             /outputfile's dumps (the original writes them in the game folder), under any name
+                             but those of the settings files above (any case; a chat log's name is allowed, as in
+                             the original; is_kept_character_file)
   notes.txt                  the notes window's text (/note)
   web/                       the in-game browser's data: web/<profile>/ one server's cookies and cache, cef.log
                              CEF's log (docs/browser.md)
