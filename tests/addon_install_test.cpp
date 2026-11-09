@@ -439,7 +439,7 @@ TEST_CASE("addon_install: the ceilings are the add-on's Lua files and its librar
     p.files = {{"MQ2Hud.so", 1, sha256(std::string_view("l"))},
                {"MQ2Hud.ini", 1, sha256(std::string_view("n"))},
                {"ui/modern/hud.lua", 1, sha256(std::string_view("u"))}};
-    const auto c = addon_ceilings({s, p});
+    const auto c = addon_ceilings(std::vector<InstalledAddon>{s, p});
     REQUIRE(c.size() == 2);
     CHECK(c[0].kind == plugin::FileKind::Script);
     CHECK(c[0].sha256 == sha256(std::string_view("i")));
