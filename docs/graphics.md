@@ -974,7 +974,9 @@ window, on any GPU through ncnn's Vulkan compute, with no Python to install; the
 three-stage build and the pack's files).
 
 1. `texpack export ASSETDIR WORK` writes each distinct texture once, keyed by `texture_content_hash` of its file:
-   61,474 in the RoF2 install (from 2,709 archives, in about a minute). It writes `WORK/src/<hash>.png` upright, with
+   61,474 in the RoF2 install (from 2,709 archives, in about a minute). A member named `.bmp`, `.dds` or `.tga` is
+   read whole; any other is taken only when its first four bytes (`PfsArchive::read_prefix`, which inflates no more)
+   are a DDS or BMP magic, so the scan no longer inflates every mesh, WLD and sound. It writes `WORK/src/<hash>.png` upright, with
    `<hash>.m.png`, the masked variant of an 8-bit BMP whose palette index 0 is used, `<hash>.k.png`, the variant
    without its colour key of a texture painted on one (`remove_color_key`), and `WORK/manifest.jsonl`,
    holding the names, archives, size, stored format and alpha kind.
