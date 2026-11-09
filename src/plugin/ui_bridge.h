@@ -14,6 +14,7 @@
 // case. A lookup by a bare name ("nms", what the packs' eq.Plugin passes) finds a compiled plugin's before a
 // script's; a lookup by tag finds that owner alone.
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -64,6 +65,9 @@ public:
     static std::optional<std::pair<Kind, std::string>> parse_tag(std::string_view tag);
 
     using Fn = std::function<UiValue(const std::vector<UiValue>& args)>;
+    // The most arguments one call passes (eq.Plugin(...).fn(table.unpack(t)) could pass a million): past it the call
+    // is refused (nullopt). Each one is a slot on the callee's Lua stack.
+    static constexpr std::size_t kMaxCallArgs = 64;
     struct Option {
         std::string plugin, name, label;
         int min = 0, max = 1; // max 1: a switch; else a slider
@@ -81,7 +85,7 @@ public:
     // `plugin` names the owner (with `kind`); in the lookups below it is a bare name or a tag (owner_tag).
     void add_function(const std::string& plugin, const std::string& name, Fn fn, Kind kind = Kind::Plugin);
     void remove_function(std::string_view plugin, std::string_view name, Kind kind = Kind::Plugin);
-    // nullopt: no such plugin or function.
+    // nullopt: no such plugin or function, or more than kMaxCallArgs arguments.
     std::optional<UiValue> call(std::string_view plugin, std::string_view name, const std::vector<UiValue>& args) const;
     bool has_plugin(std::string_view plugin) const;
     // The tag of the owner a bare name or tag finds (a compiled plugin's before a script's); "" none.

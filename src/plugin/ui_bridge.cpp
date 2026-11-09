@@ -92,6 +92,7 @@ void UiBridge::remove_function(std::string_view plugin, std::string_view name, K
 
 std::optional<UiValue> UiBridge::call(std::string_view plugin, std::string_view name,
                                       const std::vector<UiValue>& args) const {
+    if (args.size() > kMaxCallArgs) return std::nullopt;
     const std::string owner = resolve(plugin);
     if (owner.empty()) return std::nullopt;
     for (const Function& f : functions_)

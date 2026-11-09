@@ -48,6 +48,7 @@ constexpr std::int64_t kHookMs = 50; // a hook, packet or UI function call runs 
 
 void runaway_hook(lua_State* L, lua_Debug*) {
     Script& s = Script::of(L);
+    repair_limit(s);
     auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
     if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
 }
@@ -725,6 +726,10 @@ int l_ui_function(lua_State* L) {
     s.host->env.ui->add_function(s.name, name, [sp, ref](const std::vector<plugin::UiValue>& args) {
         if (!usable(*sp) || !(sp->caps & plugin::kCapUi)) return plugin::UiValue{};
         lua_State* l = sp->L;
+        // Room for the function and every argument: Lua is built without LUA_USE_APICHECK, so a push past the
+        // stack's room writes past its end (push_value checks only for a table's own slots).
+        if (args.size() > plugin::UiBridge::kMaxCallArgs || !lua_checkstack(l, static_cast<int>(args.size()) + 1))
+            return plugin::UiValue{};
         lua_rawgeti(l, LUA_REGISTRYINDEX, ref);
         for (const auto& a : args) plugin::push_value(l, a);
         if (!call_script(*sp, static_cast<int>(args.size()), 1)) return plugin::UiValue{};
@@ -1007,16 +1012,29 @@ int l_chat(lua_State* L) {
     return 0;
 }
 
-// A folder of the script's own, created now, as a string; nil when `dir` is empty.
-int push_dir(lua_State* L, const fs::path& dir) {
-    if (dir.empty()) {
-        lua_pushnil(L);
-        return 1;
+// The script's folder under `parent` (the script's name as script_folder_name gives it), made now, into s.scratch;
+// false when `parent` is empty. A Lua social's dry run and its face make nothing on disk: they get the name only.
+// A script with a compiled plugin's name (an add-on "nms" beside the NMS server's plugin) gets
+// plugin-config/script%3A<name>/ (its owner tag, UiBridge::owner_tag, as a folder name) instead: the plugin's
+// folder may hold what the plugin keeps from scripts (its server's key). Any other keeps plugin-config/<name>/.
+bool make_dir(Script& s, const fs::path& parent) {
+    if (parent.empty()) return false;
+    if (!s.plugin_named) s.plugin_named = s.host->env.plugin_named && s.host->env.plugin_named(s.name);
+    const fs::path folder = parent / script_folder_name(*s.plugin_named ? "script:" + s.name : s.name);
+    if (!s.dry && !s.face_eval) {
+        std::error_code ec;
+        fs::create_directories(folder, ec);
     }
-    std::error_code ec;
-    fs::create_directories(dir, ec);
-    std::string d = dir.string();
-    lua_pushlstring(L, d.data(), d.size());
+    s.scratch = folder.string();
+    return true;
+}
+
+// s.scratch as a string, or nil. Pushed from the Script's own string once the caller's paths are gone: a push that
+// fails longjmps (Lua is built as C) past the objects of the frames it leaves.
+int push_scratch(lua_State* L, bool ok) {
+    const Script& s = Script::of(L);
+    if (ok) lua_pushlstring(L, s.scratch.data(), s.scratch.size());
+    else lua_pushnil(L);
     return 1;
 }
 
@@ -1024,8 +1042,9 @@ int push_dir(lua_State* L, const fs::path& dir) {
 int l_server_dir(lua_State* L) {
     Script& s = Script::of(L);
     const plugin::Policy* policy = s.host->env.policy;
-    if (!policy || !policy->current() || policy->current()->dir.empty()) return push_dir(L, {});
-    return push_dir(L, policy->current()->dir / "plugin-config" / s.name);
+    const bool ok = policy && policy->current() && !policy->current()->dir.empty() &&
+                    make_dir(s, policy->current()->dir / "plugin-config");
+    return push_scratch(L, ok);
 }
 
 // hailstone.hold_autoskill(on): the Ability Book's autoskill uses nothing while this script holds it (the player's
@@ -1181,8 +1200,8 @@ int l_server_rule(lua_State* L) {
 int l_character_dir(lua_State* L) {
     Script& s = Script::of(L);
     const net::GameConnection* c = writable(s);
-    const CharacterFiles files = c ? c->own_files() : CharacterFiles{};
-    return push_dir(L, files.empty() ? fs::path() : files.dir / "plugin-config" / s.name);
+    const bool ok = c && !c->own_files().empty() && make_dir(s, c->own_files().dir / "plugin-config");
+    return push_scratch(L, ok);
 }
 
 net::GameConnection* acting(lua_State* L, const char* what) {

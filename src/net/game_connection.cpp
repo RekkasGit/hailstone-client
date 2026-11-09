@@ -148,6 +148,8 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
                           std::string peer) {
     if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
         plugin::ChatLine line{std::move(text), rgb, static_cast<int>(kind)};
+        line.from_code = !plugin::caller_name().empty();
+        line.origin_caps = plugin::caller_caps();
         if (options_.hooks->chat(line) == plugin::Flow::Drop) return;
         text = std::move(line.text);
         rgb = line.color;

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -39,6 +40,12 @@ struct ChatLine {
     std::string text;
     std::uint32_t color = 0; // 0xRRGGBB, 0 the system colour
     int kind = 0;            // net::ChatEvent::Kind
+    // Whose line it is: a script's or plugin's (written while its code ran: mq.print, /echo, WriteChatf, a command's
+    // own reply) or not (the server's, the client's, the player's). Such a line runs another script's mq.event
+    // handler with no more than `origin_caps` (plugin::caller_caps() when it was written), and compiled plugins'
+    // OnIncomingChat and OnFilterChat do not get it: it is not incoming chat, and its text could be anything.
+    bool from_code = false;
+    std::uint32_t origin_caps = ~0u;
 };
 
 class Hooks {
@@ -92,6 +99,9 @@ public:
     // by a command). `line` holds the rewritten text when it was not.
     bool command(std::string& line);
     bool has_command(std::string_view name) const;
+    // The owner of the latest live registration of `name`, and whether it is a guest (a plugin's or script's).
+    std::optional<Owner> command_owner(std::string_view name) const;
+    bool is_guest(Owner owner) const;
     // The latest registration's `required` (0 when there is none).
     std::uint32_t command_required(std::string_view name) const;
     std::vector<std::string> commands() const;

@@ -12,6 +12,7 @@
 #include "core/sha256.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
+#include "mq/lua_script.h" // ScriptRun, HostWork (the host's insides)
 #include "mq_test_world.h"
 #include "scratch_dir.h"
 #include "app/web_service.h"
@@ -1307,4 +1308,261 @@ error('bye')
     for (int i = 0; i < 20000 && h.scripts->running("full"); ++i) h.pulses(1);
     CHECK_FALSE(h.scripts->running("full"));
     CHECK(printed_part(h, "[Lua] full ended with an error"));
+}
+
+namespace {
+bool printed_with(const Host& h, const std::string& start, const std::string& part) {
+    return std::any_of(h.printed.begin(), h.printed.end(), [&](const std::string& l) {
+        return l.rfind(start, 0) == 0 && l.find(part) != std::string::npos;
+    });
+}
+std::size_t count_part(const std::vector<std::string>& lines, const std::string& part) {
+    return static_cast<std::size_t>(
+        std::count_if(lines.begin(), lines.end(), [&](const std::string& l) { return l.find(part) != std::string::npos; }));
+}
+} // namespace
+
+TEST_CASE("MQ Lua: mq.event holds a script's events, patterns and names to their limits") {
+    Host h;
+    h.write("ev.lua", R"(
+local mq = require('mq')
+local fn = function() end
+print('long', pcall(mq.event, 'x', string.rep('a', 1025), fn))
+print('name', pcall(mq.event, string.rep('n', 257), 'a', fn))
+print('max', pcall(mq.event, 'y', string.rep('a', 1024), fn))
+for i = 1, 255 do mq.event('e' .. i, 'p' .. i, fn) end
+print('more', pcall(mq.event, 'z', 'q', fn))
+print('again', pcall(mq.event, 'e1', 'the same name', fn))
+)");
+    REQUIRE(h.scripts->run("ev", {}));
+    h.pulses(1);
+    CHECK(printed_with(h, "long false", "a pattern is at most 1024 bytes"));
+    CHECK(printed_with(h, "name false", "a name is at most 256 bytes"));
+    CHECK(h.printed_line("max true"));
+    CHECK(printed_with(h, "more false", "a script has at most 256 events"));
+    CHECK(h.printed_line("again true")); // replacing one is no new event
+
+    Host t;
+    t.write("ev.lua", R"(
+local mq = require('mq')
+for i = 1, 32 do mq.event('b' .. i, string.rep('b', 1024), function() end) end
+print('total', pcall(mq.event, 'b33', 'x', function() end))
+print('smaller', pcall(mq.event, 'b1', 'x', function() end))
+)");
+    REQUIRE(t.scripts->run("ev", {}));
+    t.pulses(1);
+    CHECK(printed_with(t, "total false", "a script's patterns hold at most 32768 bytes"));
+    CHECK(t.printed_line("smaller true"));
+}
+
+TEST_CASE("MQ Lua: another's line runs an event's handler with no more than that code may do") {
+    Host h;
+    h.write("watch.lua", R"(
+local mq = require('mq')
+mq.event('inv', "#1# tells you, 'invite'", function(line, who)
+    mq.cmd('/sit')
+    mq.delay(10)
+    mq.cmd('/sit')
+    print('handled', who, pcall(mq.bind, '/w2', function() end))
+end)
+while true do mq.doevents() mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("watch", {}));
+    h.pulses(1);
+    // A read-only add-on's print: the handler runs, but neither /sit is sent, nor before nor after its wait.
+    plugin::ChatLine fake{"Bob tells you, 'invite'", 0, 0};
+    fake.from_code = true;
+    fake.origin_caps = plugin::kCapRead | plugin::kCapEvents;
+    h.hooks.chat(fake);
+    h.pulses(4, 10);
+    CHECK(h.sent.empty());
+    CHECK(count_part(h.printed, "/sit needs the server's 'move' permission") == 2);
+    CHECK(printed_with(h, "handled Bob false", "'commands' permission"));
+    // The server's line: the handler has the script's own.
+    plugin::ChatLine real{"Ann tells you, 'invite'", 0, 0};
+    h.hooks.chat(real);
+    h.pulses(4, 10);
+    CHECK(h.sent == std::vector<std::string>{"/sit", "/sit"});
+    CHECK(h.printed_line("handled Ann true"));
+    // A script with every capability writing it is no narrower than the handler: as the server's.
+    plugin::ChatLine full{"Cid tells you, 'invite'", 0, 0};
+    full.from_code = true;
+    full.origin_caps = plugin::kCapAll;
+    h.hooks.chat(full);
+    h.pulses(4, 10);
+    CHECK(h.sent.size() == 4u);
+}
+
+TEST_CASE("MQ Lua: a line written while a script's or plugin's code runs is marked as its") {
+    plugin::Hooks hooks;
+    net::ConnectionOptions opts;
+    opts.hooks = &hooks;
+    mq_test::World w("hailstone_mq_lua_origin", opts);
+    std::vector<plugin::ChatLine> seen;
+    hooks.on_chat(hooks.new_owner("watch"), [&](plugin::ChatLine& l) {
+        seen.push_back(l);
+        return plugin::Flow::Continue;
+    });
+    net::GameConnectionTestAccess::chat(*w.conn, "the server's");
+    {
+        plugin::CallerScope scope(plugin::kCapRead, "addon");
+        w.conn->ui_message("the add-on's");
+    }
+    REQUIRE(seen.size() == 2u);
+    CHECK_FALSE(seen[0].from_code);
+    CHECK(seen[0].origin_caps == plugin::kCapAll);
+    CHECK(seen[1].from_code);
+    CHECK(seen[1].origin_caps == plugin::kCapRead);
+}
+
+TEST_CASE("MQ Lua: a bind another ran keeps its starter's capabilities after it waits") {
+    Host h;
+    h.write("a.lua", R"(
+local mq = require('mq')
+mq.bind('/dosit', function()
+    mq.cmd('/sit')
+    mq.delay(10)
+    mq.cmd('/sit')
+    print('after', pcall(mq.event, 'q', 'x', function() end))
+end)
+while true do mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("a", {}));
+    h.pulses(1);
+    {
+        plugin::CallerScope scope(plugin::kCapCommands, "lesser");
+        h.run("/dosit");
+    }
+    h.pulses(3, 10);
+    CHECK(h.sent.empty());
+    CHECK(count_part(h.printed, "/sit needs the server's 'move' permission") == 2);
+    CHECK(printed_with(h, "after false", "'events' permission"));
+    h.run("/dosit"); // the player's: the script's own
+    h.pulses(3, 10);
+    CHECK(h.sent == std::vector<std::string>{"/sit", "/sit"});
+    CHECK(h.printed_line("after true"));
+}
+
+TEST_CASE("MQ Lua: /lua stop and pause reach only a script that may do no more than the caller") {
+    Host h;
+    h.write("big.lua", "local mq = require('mq') while true do mq.delay(10) end\n");
+    REQUIRE(h.scripts->run("big", {}));
+    h.pulses(1);
+    {
+        plugin::CallerScope scope(plugin::kCapRead | plugin::kCapCommands, "addon");
+        h.run("/lua stop big");
+        h.run("/lua pause big");
+        h.run("/lua stop");
+        h.run("/lua pause");
+    }
+    CHECK(h.scripts->running("big"));
+    for (const auto& s : h.scripts->list())
+        if (s.name == "big") CHECK(s.status == "RUNNING");
+    CHECK(count_part(h.printed, "addon may not stop or pause big") == 2u);
+    {
+        plugin::CallerScope scope(plugin::kCapAll, "equal");
+        h.run("/lua pause big");
+    }
+    for (const auto& s : h.scripts->list())
+        if (s.name == "big") CHECK(s.status == "PAUSED");
+    h.run("/lua stop big");
+    CHECK_FALSE(h.scripts->running("big"));
+}
+
+TEST_CASE("MQ Lua: mq.bind does not take another script's command") {
+    Host h;
+    h.write("a.lua", "local mq = require('mq') mq.bind('/mine', function() print('a ran') end) while true do mq.delay(10) end\n");
+    h.write("b.lua", R"(
+local mq = require('mq')
+print('b', pcall(mq.bind, '/mine', function() print('b ran') end))
+while true do mq.delay(10) end
+)");
+    REQUIRE(h.scripts->run("a", {}));
+    h.pulses(1);
+    REQUIRE(h.scripts->run("b", {}));
+    h.pulses(1);
+    CHECK(printed_with(h, "b false", "/mine is lua:a's command"));
+    h.run("/mine");
+    h.pulses(1);
+    CHECK(h.printed_line("a ran"));
+    CHECK_FALSE(h.printed_line("b ran"));
+}
+
+TEST_CASE("MQ Lua: no two scripts share a config folder; an old shared name moves when it is only theirs") {
+    CHECK(mq::script_folder_name("capped") == "capped");
+    CHECK(mq::script_folder_name("a b") == "a b");
+    CHECK(mq::script_folder_name("a_b") == "a_b");
+    CHECK(mq::script_folder_name("a/b") == "a%2Fb");
+    CHECK(mq::script_folder_name("50%") == "50%25");
+    CHECK(mq::script_folder_name("x.") == "x%2E");
+    CHECK(mq::script_folder_name("..") == ".%2E");
+    CHECK(mq::script_folder_name("con") == "%63on");
+    CHECK(mq::script_folder_name("caf\xc3\xa9") == "caf%C3%A9");
+    CHECK(mq::script_folder_name("") == "%");
+
+    Host h(plugin::kCapRead);
+    // "my script"'s settings from before, in config/my_script/: no other script had that name, so they move.
+    fs::create_directories(h.config_dir / "my_script");
+    std::ofstream(h.config_dir / "my_script" / "Old.lua", std::ios::binary) << "return {v = 7}\n";
+    h.write("my script.lua", "local mq = require('mq') print('old', dofile(mq.configDir .. '/Old.lua').v)\n");
+    REQUIRE(h.scripts->run("my script", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("old 7"));
+    CHECK(fs::exists(h.config_dir / "my script" / "Old.lua"));
+    CHECK_FALSE(fs::exists(h.config_dir / "a_b"));
+    // "a b" and "a_b" both there: config/a_b is a_b's, and "a b" starts with a folder of its own.
+    fs::create_directories(h.config_dir / "a_b");
+    std::ofstream(h.config_dir / "a_b" / "Theirs.lua", std::ios::binary) << "return {v = 1}\n";
+    h.write("a_b.lua", "print('a_b')\n");
+    h.write("a b.lua", "local mq = require('mq') print('dir', mq.configDir) print('theirs', pcall(dofile, mq.configDir .. '/Theirs.lua'))\n");
+    REQUIRE(h.scripts->run("a b", {}));
+    h.pulses(1);
+    CHECK(h.printed_line("dir " + (h.config_dir / "a b").string()));
+    CHECK(printed_with(h, "theirs false", ""));
+    CHECK(fs::exists(h.config_dir / "a_b" / "Theirs.lua"));
+}
+
+TEST_CASE("Lua socials: hailstone.server_dir in a dry run gives the folder and makes none") {
+    Host h(0);
+    plugin::Rules r;
+    r.configured = true;
+    r.social_mode = plugin::ButtonMode::Full;
+    r.social_caps = plugin::kCapAll;
+    r.social_faces = true;
+    r.dir = h.world.dir / "servers" / "test";
+    h.policy.set(r);
+    h.scripts->policy_changed();
+    auto d = h.scripts->dry_run_button(press("print('dir', hailstone.server_dir())"));
+    CHECK(d.ok);
+    // The social's name, "social 'Test'", written as a folder name: the quotes are kept, nothing is made.
+    const fs::path dir = r.dir / "plugin-config" / "social 'Test'";
+    CHECK(h.printed_line("dir " + dir.string()));
+    CHECK_FALSE(fs::exists(r.dir / "plugin-config"));
+    CHECK(h.scripts->press_button(press("hailstone.server_dir()")));
+    CHECK(fs::is_directory(dir));
+}
+
+TEST_CASE("MQ Lua: the memory limit comes back after an error skipped a HostWork's end") {
+    mq::Script s;
+    alignas(mq::HostWork) unsigned char buf[sizeof(mq::HostWork)];
+    {
+        mq::ScriptRun run(s);
+        CHECK(s.limited == 1);
+        new (buf) mq::HostWork(s); // its destructor never runs, as when an error longjmps past it
+        CHECK(s.limited == 0);
+        mq::repair_limit(s); // the next instruction hook
+        CHECK(s.limited == 1);
+        new (buf) mq::HostWork(s);
+    }
+    CHECK(s.limited == 0); // the ScriptRun put back what it found
+    mq::repair_limit(s);   // outside any run: nothing to repair
+    CHECK(s.limited == 0);
+    {
+        mq::ScriptRun run(s);
+        CHECK(s.limited == 1);
+        mq::ScriptRun inner(s);
+        CHECK(s.limited == 2);
+    }
+    CHECK(s.limited == 0);
+    CHECK(s.runs == 0);
 }

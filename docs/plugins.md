@@ -19,7 +19,13 @@ The folders are in the Hailstone folder (`docs/layout.md`). A compiled plugin's 
 `scripts/config/` (`mq.configDir`) when the script may do everything, and to a folder of its own,
 `scripts/config/<script>/`, when it may not (an add-on with a ceiling, the player's scripts under a server's
 `player_caps`). Such a script reads and writes only there, so it cannot change or read the settings of a script
-that may do more. `mq.configDir .. '/MyScript.lua'`, the usual MQ path, works either way.
+that may do more. `mq.configDir .. '/MyScript.lua'`, the usual MQ path, works either way. The folder is the script's
+name as it is, but for what would not stay written so on every system, which is `%XX` (two hex digits): `%`, control
+characters and bytes past ASCII, `/ \ : * ? " < > |`, a last `.` or space and the first letter of a device name
+(`con`, `nul`, ...). So no two scripts share one (`mq/lua_mq.cpp` `script_folder_name`). Up to 0.6 every byte but
+letters, digits, `-`, `_` and `.` was `_`, so `a b` and `a_b` shared `config/a_b/`: a script whose old folder is
+there, with none of its new name yet, has it moved to its new name at its start, unless another script in the script
+folders had the same old folder (then the old folder stays, and the script starts with an empty one).
 
 **The server decides, through a file.** A server with Hailstone's script (`server/`) sends its `client_files/` folder
 at the first zone-in of a login (docs/layout.md "Server files"). Three things in it concern this page:
@@ -102,7 +108,9 @@ pack window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its ow
 
 ## For players
 
-- `/lua run <script> [args...]`, `/lua stop [script]`, `/lua pause [script]`, `/lua list`
+- `/lua run <script> [args...]`, `/lua stop [script]`, `/lua pause [script]`, `/lua list`. From a script or plugin
+  (`mq.cmd`, `DoCommand`, `eq.ChatSubmit`) `/lua stop` and `/lua pause` reach only a script that may do no more than
+  it ("may not stop or pause" otherwise; with no name, the others are left alone): an add-on cannot end yours
 - `/plugin list`, `/plugin <name> [load|unload]`
 - A server's compiled plugins load only once you allow them: see "The server's compiled plugins ask first" above.
 - **Add-ons** on the login screen installs a script or plugin from its store or a GitHub link, keeps it up to date and removes it
@@ -182,8 +190,8 @@ end, after what it registered is taken back. For the same reason an `mq.TLO` val
 | `mq.TLO.<Name>...` | MQ's TLOs (below). Call with no arguments for the plain value (`mq.TLO.Me.PctHPs()`, `nil` for NULL). Call with arguments for an indexed member (`mq.TLO.Me.Buff(1).Duration.TotalSeconds()`, `mq.TLO.Spawn('npc radius 50').ID()`). Values also work with `tostring`, `..`, `==`, `<` and `<=`. |
 | `mq.cmd(line)`, `mq.cmd.<name>(args...)`, `mq.cmdf(fmt, ...)` | a command line, with `${...}` parsed |
 | `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true. A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
-| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: the whole line must match; `#*#` matches any text (as much as it can); `#1#`, `#2#`, ... (as little as they can) are passed to `fn(line, arg1, ...)` in their number's order; neither takes a line break; any other `#` is literal (`mq/event_pattern.h`) |
-| `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`. The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either), `/lua`, `/plugin` and MQ's (`/echo`, ...). A name another script or plugin bound is taken over until this one unbinds, as in MQ |
+| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: the whole line must match; `#*#` matches any text (as much as it can); `#1#`, `#2#`, ... (as little as they can) are passed to `fn(line, arg1, ...)` in their number's order; neither takes a line break; any other `#` is literal (`mq/event_pattern.h`). A script has at most 256 events, a pattern is at most 1024 bytes and a name 256, and a script's patterns together at most 32 KB (an error past them): every pattern is matched against every chat line, outside the script's time slice. A line another script or a plugin wrote (`print`, `/echo`, `WriteChatf`) raises events too, as `/echo` does in MQ, but a handler then gets no more than that code may do: one that would get more runs as a thread of its own (as a bind), held to both scripts' capabilities for each of its resumes, and `doevents` goes on without waiting for it |
+| `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`. The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either), `/lua`, `/plugin` and MQ's (`/echo`, ...), nor a name another script or plugin has now (an error naming it): what the player types for one is never handed to another. A bind runs with the script's capabilities and those of whoever ran the command (another script, a plugin, the player all) together, at its start and again after each `mq.delay` |
 | `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui` |
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
 | `mq.parse(text)`, `mq.gettime()`, `mq.exit()` | |
@@ -284,7 +292,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `eq.Plugin("<script name>")` |
 | `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
-| `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (below) |
+| `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (below: `plugin-config/<name>/`, the name written as for `mq.configDir`; a Lua social's dry run and face get the path and make no folder). A script with the name of a compiled plugin (installed, loaded or the add-on manager's, in any case) gets `plugin-config/script%3A<name>/` instead, so it cannot read or change what the plugin keeps there (a server's key); the add-on manager installs no script and plugin of one name either (docs/addons.md) |
 | `server_rule(section, key)` | a setting from a section of the server's `hailstone.cfg` that is not the client's own (`[autocombat] hunter = off`), as written; nil when the server has no `hailstone.cfg` or does not set it |
 | `item(slot [, sub])`'s fields | `id`, `name`, `type`, `item_class`, `classes`, `races`, `icon`, `stack`, `charges`, `req_level`, `bag_slots` (0 for an item that is not a bag), `click_spell` and `scroll_spell` (0: none); with a click effect also `click_type`, `click_level`, `click_cast_time` (ms), `click_recast` (s), `click_recast_type` (the timer group), `click_max_charges` (-1: unlimited) and `click_ready_in` (seconds until the recast is over, 0: ready). Slots are `/useitem`'s: 0..22 worn, 23..32 the general slots, `sub` the place in a bag from 0 |
 | `autoskill_list()` | the player's autoskill list in order: `{key, name, endurance, mana, target_hp_below, target_hp_above, self_hp_below, when, keep_buff}` (`read`) |
@@ -410,7 +418,10 @@ HAILSTONE_EXPORT void OnPulse(void) { /* every frame */ }
 Callbacks:
 - `InitializePlugin`, `ShutdownPlugin`, `OnPulse`, `SetGameState(state)`
 - `OnBeginZone`, `OnEndZone`, `OnZoned`, `OnAddSpawn(id)`, `OnRemoveSpawn(id)`
-- `OnIncomingChat(line, color)`, `OnFilterChat(line, color)` (nonzero hides the line)
+- `OnIncomingChat(line, color)`, `OnFilterChat(line, color)` (nonzero hides the line): the server's lines and the
+  client's own, not those a script or plugin writes (`print`, `/echo`, `WriteChatf`, a reply to its command), as MQ
+  hands its own lines to `OnWriteChatColor` and not here: a plugin that answers "Bob tells you, ..." would otherwise
+  answer whatever another add-on printed
 - `OnUpdateImGui`, `OnPacket(stream, direction, packet)` (nonzero drops it)
 
 Host functions: `WriteChatf`, `DoCommand(f)`, `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`, `ParseMacroData` (`${...}`, so the
@@ -544,8 +555,11 @@ own and works the same on every platform. Nothing waits on the network:
 | `tcp_error(handle, out, size)` | why it closed, as text |
 | `tcp_close(handle)` | ends it; unloading a plugin closes its others |
 
-Call `tcp_recv` each pulse; that also sends what was waiting. A plugin that grants `net` can reach any address, so
-a server's `hailstone.cfg` grants it to the player's plugins only when it says so.
+Call `tcp_recv` each pulse; that also sends what was waiting. A plugin that grants `net` can reach any address, this
+computer and the player's network too (a server run at home is often there): unlike a web page, a compiled plugin is
+native code and could open such a connection without the client, so a refusal would hold nothing. A server's
+`hailstone.cfg` grants it to the player's plugins only when it says so. When the plugin loses `net` (a narrower
+policy, a lowered ceiling) its connections close, and each later `tcp_*` call on them sees one closed (-1).
 
 ### Plugin windows (ABI 2)
 
@@ -627,7 +641,8 @@ whole number (`"12"`) is the Lua integer 12, so a table can be keyed by slot or 
 
 Values cross both ways as plain data: tables nested deeper than 16 levels are cut there (nil), and a value with a
 table inside itself, more than 100 000 values or more than 16 MiB of text is nil as a whole, with a line in the log
-(`plugin/lua_value.h`).
+(`plugin/lua_value.h`). A call passes at most 64 arguments (`UiBridge::kMaxCallArgs`): one with more gives nil and
+does not reach the plugin.
 
 It can also add:
 - **options**: `add_option(name, label, min, max, get, set, user)`. A switch when max is 1, else a slider. The

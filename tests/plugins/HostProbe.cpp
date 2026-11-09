@@ -4,6 +4,7 @@
 //   /probethrow    lets an exception out (not a std::exception); so do ${Probe.Throw} and OnUpdateImGui
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
+//   /probetcp port    tcp_open("127.0.0.1", port); /probetcpsend h  tcp_send(h, "hello") and tcp_state(h)
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -56,6 +57,17 @@ void probe_message(void*, const char* args) {
     WriteChatf("[Probe] message %d, %s", r, n && r >= 0 ? buf : "-");
 }
 
+void probe_tcp(void*, const char* args) {
+    const auto port = static_cast<std::uint16_t>(std::strtoul(args, nullptr, 10));
+    WriteChatf("[Probe] tcp open %d", static_cast<int>(host->tcp_open(host->host, "127.0.0.1", port)));
+}
+
+void probe_tcp_send(void*, const char* args) {
+    const auto handle = static_cast<std::int32_t>(std::strtol(args, nullptr, 10));
+    const long long sent = host->tcp_send(host->host, handle, "hello", 5);
+    WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -70,6 +82,8 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probethrow", probe_throw, nullptr);
     AddCommand("/probestate", probe_state, nullptr);
     AddCommand("/probemessage", probe_message, nullptr);
+    AddCommand("/probetcp", probe_tcp, nullptr);
+    AddCommand("/probetcpsend", probe_tcp_send, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -80,6 +94,8 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probethrow");
     RemoveCommand("/probestate");
     RemoveCommand("/probemessage");
+    RemoveCommand("/probetcp");
+    RemoveCommand("/probetcpsend");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }
