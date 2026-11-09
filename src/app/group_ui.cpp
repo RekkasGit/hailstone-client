@@ -2,34 +2,17 @@
 #include "ui/lua/lua_host.h"
 
 #include <algorithm>
-#include <cctype>
 #include <format>
 
+#include "core/ascii_case.h"
 #include "game/eq_names.h"
+#include "game/world_state.h"
 #include "net/game_connection.h"
 #include "net/pet_packets.h"
 
 namespace hailstone::app {
 
 namespace {
-
-bool same_name(const std::string& member, const std::string& spawn) {
-    // Group lists carry clean names; spawn names may carry EQEmu's trailing digits.
-    std::string s = spawn;
-    while (!s.empty() && std::isdigit(static_cast<unsigned char>(s.back()))) s.pop_back();
-    auto eq = [](const std::string& a, const std::string& b) {
-        return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-                   return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
-               });
-    };
-    return eq(member, spawn) || eq(member, s);
-}
-
-const game::Spawn* find_spawn(const game::WorldState& world, const std::string& name) {
-    for (const auto& [id, s] : world.spawns)
-        if (!s.is_corpse && same_name(name, s.name)) return &s;
-    return nullptr;
-}
 
 std::string time_left(const game::BuffSlot& b) {
     // Tics are 6 s; count down from when the packet arrived.
@@ -40,6 +23,42 @@ std::string time_left(const game::BuffSlot& b) {
 }
 
 } // namespace
+
+bool group_member_is(std::string_view member, std::string_view spawn) {
+    // Group lists carry clean names; spawn names may carry EQEmu's trailing digits.
+    std::string_view s = spawn;
+    while (!s.empty() && s.back() >= '0' && s.back() <= '9') s.remove_suffix(1);
+    return iequals(member, spawn) || iequals(member, s);
+}
+
+const game::Spawn* GroupMemberSpawns::find(const game::WorldState& world, const std::string& name, std::int64_t now_ms) {
+    auto it = members_.find(name);
+    if (it == members_.end()) it = members_.emplace(name, Entry{}).first;
+    Entry& e = it->second;
+    e.frame = frame_;
+    if (e.id) {
+        if (auto s = world.spawns.find(e.id);
+            s != world.spawns.end() && !s->second.is_corpse && group_member_is(name, s->second.name))
+            return &s->second;
+        e.id = 0;
+        e.looked = false; // gone (or died, or another spawn took the id): searched for again now
+    }
+    if (e.looked && e.spawns == world.spawns.size() && now_ms - e.looked_ms < 1000) return nullptr;
+    ++scans_;
+    e.looked = true;
+    e.spawns = world.spawns.size();
+    e.looked_ms = now_ms;
+    for (const auto& [id, s] : world.spawns)
+        if (!s.is_corpse && group_member_is(name, s.name)) {
+            e.id = id;
+            return &s;
+        }
+    return nullptr;
+}
+
+void GroupMemberSpawns::end() {
+    std::erase_if(members_, [&](const auto& kv) { return kv.second.frame != frame_; });
+}
 
 void GroupUi::set_testing(const std::string& commands, bool accept_invites) {
     auto_commands_.clear();
@@ -79,18 +98,21 @@ void GroupUi::draw(net::GameConnection& conn) {
         }
     }
 
-    // ---- group window
+    // ---- group window (its members only while this window shows: the Lua GroupWindow reads the connection itself)
     group_.in_group = g.active;
     group_.inviter = g.inviter;
     group_.members.clear();
-    if (g.active) {
+    const bool group_shown = group_.open && g.active && !ui::lua::replaces("GroupWindow");
+    if (group_shown) {
+        member_spawns_.begin();
+        const std::int64_t now_ms = net::GameConnection::now_ms();
         for (const auto& m : g.slots) {
             if (m.name.empty()) continue;
             ui::GroupMemberView v;
             v.name = m.name;
             v.leader = g.is_leader(m.name);
             v.offline = m.offline;
-            const game::Spawn* s = find_spawn(world, m.name);
+            const game::Spawn* s = member_spawns_.find(world, m.name, now_ms);
             if (s) {
                 v.spawn_id = s->id;
                 v.level = s->level;
@@ -112,15 +134,19 @@ void GroupUi::draw(net::GameConnection& conn) {
             }
             group_.members.push_back(std::move(v));
         }
+        member_spawns_.end();
+    } else {
+        member_spawns_.clear();
     }
 
-    // ---- pet window
+    // ---- pet window (built only while it shows, as the group's)
     const auto& pets = conn.pets();
+    const bool pet_shown = pet_.open && !ui::lua::replaces("PetInfoWindow");
     pet_.has_pet = false;
     pet_.pets.clear();
     pet_.buttons.clear();
     pet_.buffs.clear();
-    if (auto it = world.spawns.find(pets.focused); pets.focused && it != world.spawns.end()) {
+    if (auto it = world.spawns.find(pets.focused); pet_shown && pets.focused && it != world.spawns.end()) {
         const auto& p = it->second;
         pet_.has_pet = true;
         pet_.pet_id = p.id;
@@ -148,6 +174,7 @@ void GroupUi::draw(net::GameConnection& conn) {
         }
     }
     for (const auto& e : pets.list) {
+        if (!pet_shown) break;
         ui::PetListRowView row;
         row.spawn_id = e.spawn_id;
         if (auto it = world.spawns.find(e.spawn_id); it != world.spawns.end()) {
@@ -160,11 +187,11 @@ void GroupUi::draw(net::GameConnection& conn) {
     }
 
     ui::GroupActions actions;
-    if (!ui::lua::replaces("GroupWindow")) ui::group_window(group_, actions); // off while the Lua window runs
+    if (group_shown) ui::group_window(group_, actions); // off while the Lua window runs
     // The modern pack's Group Invite popup (ui/modern/groupinvite.lua) claims "GroupInvite"; a pack without one
     // (gamepad) keeps this prompt, which its group window gives the pad's focus.
     if (!ui::lua::replaces("GroupInvite")) ui::invite_prompt(group_, actions);
-    if (!ui::lua::replaces("PetInfoWindow")) ui::pet_window(pet_, actions); // off while the Lua window runs
+    if (pet_shown) ui::pet_window(pet_, actions); // off while the Lua window runs
 
     if (actions.target_spawn) conn.set_target(*actions.target_spawn);
     if (actions.accept) conn.accept_group_invite();
