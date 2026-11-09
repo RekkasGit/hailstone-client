@@ -55,7 +55,7 @@ public:
     // set_all_art says; null when it is missing or cannot be decoded.
     const Texture* game_file(std::string_view relative);
     // A picture file of the disk (PNG, JPEG, BMP, TGA, DDS: the pre-game screens' pictures, app/screen_pictures.h);
-    // null when it cannot be read or decoded. A few stay loaded; older ones are let go (after the GPU is done).
+    // null when it cannot be read or decoded. A few stay loaded; older ones are let go (VkContext::retire).
     const Texture* picture(const std::filesystem::path& file);
     std::optional<Cell> item_icon(std::uint32_t icon);
     std::optional<Cell> spell_icon(std::int32_t icon);

@@ -297,22 +297,15 @@ std::unique_ptr<UiTextures::Entry> UiTextures::make(std::span<const std::byte> d
 const UiTextures::Texture* UiTextures::picture(const std::filesystem::path& file) {
     const std::string key = file.string();
     if (auto it = pictures_.find(key); it != pictures_.end()) return it->second ? &it->second->info : nullptr;
-    // Big pictures: only the last few are kept. Called between frames' draws (the screens pick before they draw), so
-    // after the GPU is idle no draw list holds the old ones.
+    // Big pictures: only the last few are kept. An old one goes once the frames that may draw it are done (retire:
+    // the one being built included), without waiting for the GPU.
     constexpr std::size_t kKept = 3;
-    if (picture_order_.size() >= kKept) {
-        vk_.wait_idle();
-        while (picture_order_.size() >= kKept) {
-            auto it = pictures_.find(picture_order_.front());
-            if (it != pictures_.end()) {
-                if (it->second) {
-                    if (it->second->set) ui::remove_imgui_texture(it->second->set);
-                    it->second->texture.destroy(vk_.device(), vk_.allocator());
-                }
-                pictures_.erase(it);
-            }
-            picture_order_.erase(picture_order_.begin());
+    while (picture_order_.size() >= kKept) {
+        if (auto it = pictures_.find(picture_order_.front()); it != pictures_.end()) {
+            retire(std::move(it->second));
+            pictures_.erase(it);
         }
+        picture_order_.erase(picture_order_.begin());
     }
     std::unique_ptr<Entry> e;
     std::ifstream in(file, std::ios::binary);
