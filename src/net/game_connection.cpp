@@ -2303,7 +2303,9 @@ bool GameConnection::set_stand_state(std::uint32_t state, bool room_to_stand) {
 }
 
 void GameConnection::sit_toggle() {
-    if (state_ != ConnectionState::InZone) return;
+    // Also while camping: CEverQuest::Sit stands a camping player up through ChangePosition, which abandons the
+    // camp (set_stand_state: 12290). This is the sit key and moving forward with AllowAutoStand.
+    if (state_ != ConnectionState::InZone && state_ != ConnectionState::Camping) return;
     // TotalEffect(31) (mesmerized): "You do not have control of yourself right now."
     for (const auto& b : spells_.buffs) {
         if (b.empty()) continue;
