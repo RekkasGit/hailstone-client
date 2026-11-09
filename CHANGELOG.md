@@ -4,6 +4,8 @@
 
 - A server's files are now bounded on your disk: one file over 2 GB is not downloaded, and a server whose files to download add up to more than 16 GB is refused before anything is written, keeping the files you have. `assets.server_files_max_file_mb` and `assets.server_files_max_total_mb` in `hailstone.ini` change the limits
 - A world login whose session key is too long to send whole now fails with a message saying so, instead of being sent cut short and refused by the world
+- Servers on an IPv6 link-local address (such as `fe80::1%eth0`) can be reached
+- Plugin connections to a name with several addresses try the next one when the first is refused or does not answer, and give up on an address after 10 s instead of waiting up to two minutes
 - When the network drops, the log gets one line about failed sends and one when sending works again, instead of a warning for every packet
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following

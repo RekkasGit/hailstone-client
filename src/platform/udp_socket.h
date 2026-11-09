@@ -22,12 +22,14 @@ struct Endpoint {
     Family family = Family::V4;
     std::array<std::uint8_t, 16> address{}; // V4 uses the first 4 bytes
     std::uint16_t port = 0;
+    // V6: the interface a link-local (fe80::/10) address is on (sin6_scope_id); 0 for any other address.
+    std::uint32_t scope_id = 0;
 
     static Endpoint v4(std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d, std::uint16_t port);
 
-    // "1.2.3.4:5" or "[::1]:5".
+    // "1.2.3.4:5", "[::1]:5" or "[fe80::1%3]:5".
     std::string to_string() const;
-    // The address alone, without the port.
+    // The address alone, without the port (with "%scope" when it has one).
     std::string address_string() const;
 
     bool operator==(const Endpoint&) const = default;
@@ -40,7 +42,8 @@ std::vector<Endpoint> resolve(const std::string& host, std::uint16_t port, std::
 // `host` as a numeric IPv4 or IPv6 address, without asking a name server (so it never waits); nullopt for a name.
 std::optional<Endpoint> numeric_endpoint(const std::string& host, std::uint16_t port);
 
-// resolve() on a thread of its own; `done` is called on that thread with its result. A lookup still running when
+// resolve() on a thread of its own (at most four at once; more wait their turn); `done` is called on that thread
+// with its result, and holds up the lookups waiting behind it while it runs. A lookup still running when
 // the program exits is not waited for (getaddrinfo cannot be cut off, and an unreachable name server holds it for
 // tens of seconds): it is left to the process's end, so `done` must own what it uses, and may never be called.
 void resolve_async(std::string host, std::uint16_t port,
@@ -75,6 +78,7 @@ public:
     // Waits until a datagram is readable or the timeout passes.
     bool wait_readable(std::chrono::milliseconds timeout) const;
 
+    // Why the last send_to or recv_from failed; empty when it did not (each call clears it, as open() does).
     const std::string& last_error() const { return error_; }
 
 private:
