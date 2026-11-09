@@ -51,6 +51,10 @@ int plugin_fn(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
+    if (static_cast<std::size_t>(lua_gettop(L)) > plugin::UiBridge::kMaxCallArgs) { // (the bridge refuses them too)
+        lua_pushnil(L);
+        return 1;
+    }
     for (int i = 1; i <= lua_gettop(L); ++i) ui::lua::unview(L, i); // (to_value reads tables raw)
     std::vector<UiValue> args;
     for (int i = 1; i <= lua_gettop(L); ++i) args.push_back(to_value(L, i));
@@ -69,6 +73,10 @@ int plugin_call(lua_State* L) {
     const char* owner = lua_tostring(L, lua_upvalueindex(2));
     const char* name = luaL_checkstring(L, 1);
     if (!owner || !may_reach(owner)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    if (static_cast<std::size_t>(lua_gettop(L) - 1) > plugin::UiBridge::kMaxCallArgs) {
         lua_pushnil(L);
         return 1;
     }

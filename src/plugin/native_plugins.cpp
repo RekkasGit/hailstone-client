@@ -1262,7 +1262,13 @@ void h_set_hot_bar_page(void* h, std::int32_t bar, std::int32_t page) {
 
 // ---- the plugin's TCP connections (HAILSTONE_CAP_NET)
 
+// The connection, while the plugin still has 'net': one opened before a narrower policy took it away is closed at
+// its next use (policy_changed closes them too), so it shows as gone (-1).
 Loaded::Tcp* find_tcp(Loaded& l, std::int32_t handle) {
+    if (!l.can(kCapNet)) {
+        l.tcp.clear();
+        return nullptr;
+    }
     for (auto& t : l.tcp)
         if (t->id == handle) return t.get();
     return nullptr;
@@ -1743,7 +1749,9 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     if (p.incoming_chat || p.filter_chat) {
         if (p.can(kCapEvents)) {
             hooks.on_chat(p.owner, scoped([lp](ChatLine& line) {
-                if (!lp->can(kCapEvents)) return Flow::Continue;
+                // A line a script or plugin wrote is not incoming chat (MQ's own lines go to OnWriteChatColor, not
+                // here): a plugin that acts on "Bob tells you, ..." would act on whatever another add-on printed.
+                if (!lp->can(kCapEvents) || line.from_code) return Flow::Continue;
                 if (lp->incoming_chat) lp->incoming_chat(line.text.c_str(), line.color);
                 if (lp->filter_chat && lp->filter_chat(line.text.c_str(), line.color)) return Flow::Drop;
                 return Flow::Continue;
@@ -1872,6 +1880,8 @@ void NativePlugins::policy_changed(const std::vector<std::string>& autoload) {
         }
         // No longer allowed windows: its Lua windows, functions, options and menu entries go.
         if (!l->can(kCapUi) && m.env.ui) m.env.ui->remove(l->name);
+        // No longer allowed its own connections: they close (tcp_state -1 from now on).
+        if (!l->can(kCapNet)) l->tcp.clear();
     }
     for (const auto& n : drop) {
         m.say("[Plugin] " + n + ": it may not run here");

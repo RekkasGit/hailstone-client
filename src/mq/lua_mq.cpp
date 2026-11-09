@@ -130,10 +130,23 @@ struct TloRef {
 
 constexpr const char* kTloMeta = "hailstone.mq.tlo";
 
-void push_ref(lua_State* L, TloRef ref) {
-    void* mem = lua_newuserdatauv(L, sizeof(TloRef), 0);
+// A TLO value is pushed in two steps, as Lua is built as C and an error (a failed allocation too) longjmps past the
+// C++ objects of the frames it leaves: ref_slot pushes the metatable and the value's memory, which may raise while no
+// TloRef or Value exists yet; ref_fill builds the TloRef there and sets the metatable, which cannot raise.
+void* ref_slot(lua_State* L) {
+    luaL_getmetatable(L, kTloMeta);
+    return lua_newuserdatauv(L, sizeof(TloRef), 0);
+}
+
+void ref_fill(lua_State* L, void* mem, TloRef&& ref) {
     new (mem) TloRef(std::move(ref));
-    luaL_setmetatable(L, kTloMeta);
+    lua_rotate(L, -2, 1); // the value, then its metatable
+    lua_setmetatable(L, -2);
+}
+
+void push_ref(lua_State* L, TloRef::Kind kind, const char* name) {
+    void* mem = ref_slot(L);
+    ref_fill(L, mem, TloRef{kind, name ? name : "", {}});
 }
 
 TloRef& check_ref(lua_State* L, int i) { return *static_cast<TloRef*>(luaL_checkudata(L, i, kTloMeta)); }
@@ -149,15 +162,32 @@ Value resolve(lua_State* L, const TloRef& r, std::string_view index) {
     return Value::nil();
 }
 
-void push_plain(lua_State* L, const Value& v) {
+// A value's plain form (Registry::plain) for push_plain, its text in the Script's scratch string: made before
+// anything is pushed, and gone (but for the scratch) when push_plain may raise.
+struct Plain {
+    Value::Kind kind = Value::Kind::Nil;
+    bool b = false;
+    std::int64_t i = 0;
+    double f = 0;
+};
+
+Plain plain_of(lua_State* L, const Value& v) {
     Value p = reg_of(L).plain(ctx_of(L), v);
+    Script& s = Script::of(L);
+    if (p.kind == Value::Kind::String) s.scratch = std::move(p.s);
+    else if (p.kind == Value::Kind::Object) s.scratch = p.type ? p.type->name : std::string();
+    return {p.kind, p.b, p.i, p.f};
+}
+
+void push_plain(lua_State* L, const Plain& p) {
+    const std::string& text = Script::of(L).scratch;
     switch (p.kind) {
     case Value::Kind::Nil: lua_pushnil(L); return;
     case Value::Kind::Bool: lua_pushboolean(L, p.b); return;
     case Value::Kind::Int: lua_pushinteger(L, p.i); return;
     case Value::Kind::Float: lua_pushnumber(L, p.f); return;
-    case Value::Kind::String: lua_pushlstring(L, p.s.data(), p.s.size()); return;
-    case Value::Kind::Object: lua_pushstring(L, p.type ? p.type->name.c_str() : ""); return;
+    case Value::Kind::String:
+    case Value::Kind::Object: lua_pushlstring(L, text.data(), text.size()); return;
     }
 }
 
@@ -179,14 +209,17 @@ int tlo_gc(lua_State* L) {
     return 0;
 }
 
+// (Each pushes once its C++ objects are gone or moved into what was pushed: ref_slot, plain_of, the scratch string.
+// resolve raises only before it makes a Value.)
 int tlo_index(lua_State* L) {
     TloRef& r = check_ref(L, 1);
     if (lua_type(L, 2) != LUA_TSTRING) {
         lua_pushnil(L);
         return 1;
     }
+    void* mem = ref_slot(L);
     Value base = resolve(L, r, {});
-    push_ref(L, TloRef{TloRef::Kind::Member, lua_tostring(L, 2), std::move(base)});
+    ref_fill(L, mem, TloRef{TloRef::Kind::Member, lua_tostring(L, 2), std::move(base)});
     return 1;
 }
 
@@ -195,38 +228,43 @@ int tlo_call(lua_State* L) {
     need(L, plugin::kCapRead, "mq.TLO");
     int top = lua_gettop(L);
     if (top < 2) {
-        push_plain(L, resolve(L, *static_cast<TloRef*>(lua_touserdata(L, 1)), {}));
+        const Plain p = plain_of(L, resolve(L, *static_cast<TloRef*>(lua_touserdata(L, 1)), {}));
+        push_plain(L, p);
         return 1;
     }
     push_index_text(L, 2, top);
     std::size_t n = 0;
     const char* index = lua_tolstring(L, -1, &n);
+    void* mem = ref_slot(L);
     Value v = resolve(L, *static_cast<TloRef*>(lua_touserdata(L, 1)), std::string_view(index, n));
-    push_ref(L, TloRef{TloRef::Kind::Value, {}, std::move(v)});
+    ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, std::move(v)});
     return 1;
 }
 
 int tlo_tostring(lua_State* L) {
     TloRef& r = check_ref(L, 1);
-    std::string text = reg_of(L).text(ctx_of(L), resolve(L, r, {}));
-    lua_pushlstring(L, text.data(), text.size());
+    Script& s = Script::of(L);
+    s.scratch = reg_of(L).text(ctx_of(L), resolve(L, r, {}));
+    lua_pushlstring(L, s.scratch.data(), s.scratch.size());
     return 1;
 }
 
 // An operand's plain value: a TLO value's, or the Lua value itself.
 void push_operand(lua_State* L, int i) {
     if (luaL_testudata(L, i, kTloMeta)) {
-        push_plain(L, resolve(L, *static_cast<TloRef*>(lua_touserdata(L, i)), {}));
+        const Plain p = plain_of(L, resolve(L, *static_cast<TloRef*>(lua_touserdata(L, i)), {}));
+        push_plain(L, p);
     } else {
         lua_pushvalue(L, i);
     }
 }
 
 int tlo_concat(lua_State* L) {
+    Script& s = Script::of(L);
     for (int i = 1; i <= 2; ++i) {
         if (luaL_testudata(L, i, kTloMeta)) {
-            std::string t = reg_of(L).text(ctx_of(L), resolve(L, *static_cast<TloRef*>(lua_touserdata(L, i)), {}));
-            lua_pushlstring(L, t.data(), t.size());
+            s.scratch = reg_of(L).text(ctx_of(L), resolve(L, *static_cast<TloRef*>(lua_touserdata(L, i)), {}));
+            lua_pushlstring(L, s.scratch.data(), s.scratch.size());
         } else {
             luaL_tolstring(L, i, nullptr);
         }
@@ -254,7 +292,7 @@ int tlo_root_index(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    push_ref(L, TloRef{TloRef::Kind::Tlo, lua_tostring(L, 2), {}});
+    push_ref(L, TloRef::Kind::Tlo, lua_tostring(L, 2));
     return 1;
 }
 
@@ -382,9 +420,24 @@ void add_event(lua_State* L, Script& s, const char* name, const char* pattern);
 int l_event(lua_State* L) {
     need(L, plugin::kCapEvents, "mq.event");
     Script& s = Script::of(L);
-    const char* name_text = luaL_checkstring(L, 1);
-    const char* pattern = luaL_checkstring(L, 2);
+    std::size_t name_n = 0, pattern_n = 0;
+    const char* name_text = luaL_checklstring(L, 1, &name_n);
+    const char* pattern = luaL_checklstring(L, 2, &pattern_n);
     luaL_checktype(L, 3, LUA_TFUNCTION);
+    // The limits (kMaxEvents ...), counted without the event this one replaces. Checked before add_event makes any
+    // C++ object: the errors longjmp.
+    std::size_t count = 0, bytes = 0;
+    for (const auto& e : s.events)
+        if (e.name.size() != name_n || e.name.compare(0, name_n, name_text, name_n) != 0) {
+            ++count;
+            bytes += e.pattern.size();
+        }
+    if (name_n > kMaxEventName) return luaL_error(L, "mq.event: a name is at most %d bytes", static_cast<int>(kMaxEventName));
+    if (pattern_n > kMaxEventPattern)
+        return luaL_error(L, "mq.event: a pattern is at most %d bytes", static_cast<int>(kMaxEventPattern));
+    if (count >= kMaxEvents) return luaL_error(L, "mq.event: a script has at most %d events", static_cast<int>(kMaxEvents));
+    if (bytes + pattern_n > kMaxEventPatterns)
+        return luaL_error(L, "mq.event: a script's patterns hold at most %d bytes", static_cast<int>(kMaxEventPatterns));
     add_event(L, s, name_text, pattern); // every pattern is one (a '#' that starts no #*# or #n# is itself)
     return 0;
 }
@@ -392,7 +445,7 @@ int l_event(lua_State* L) {
 // The callback is argument 3 on L, the calling thread's stack.
 void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
     lua_pushvalue(L, 3);
-    const int fn = luaL_ref(L, LUA_REGISTRYINDEX);
+    const int fn = luaL_ref(L, LUA_REGISTRYINDEX); // (before the Event: it may raise)
     Script::Event e{name, EventPattern(pattern), fn};
     for (auto& old : s.events)
         if (old.name == name) {
@@ -415,7 +468,8 @@ void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
                     numbered.emplace_back(ev.pattern.order()[g], std::move((*m)[g]));
                 std::sort(numbered.begin(), numbered.end());
                 for (auto& [n, text] : numbered) args.push_back(std::move(text));
-                if (sp->queued.size() < kMaxQueuedEvents) sp->queued.emplace_back(ev.name, std::move(args));
+                if (sp->queued.size() < kMaxQueuedEvents)
+                    sp->queued.push_back({ev.name, std::move(args), line.from_code ? line.origin_caps : plugin::kCapAll});
             }
             return plugin::Flow::Continue;
         });
@@ -432,7 +486,7 @@ int l_unevent(lua_State* L) {
         } else {
             ++it;
         }
-    std::erase_if(s.queued, [&](const auto& q) { return q.first == name; });
+    std::erase_if(s.queued, [&](const auto& q) { return q.name == name; });
     return 0;
 }
 
@@ -442,30 +496,47 @@ int l_flushevents(lua_State* L) {
         s.queued.clear();
     } else {
         std::string name = luaL_checkstring(L, 1);
-        std::erase_if(s.queued, [&](const auto& q) { return q.first == name; });
+        std::erase_if(s.queued, [&](const auto& q) { return q.name == name; });
     }
     return 0;
 }
 
+void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, std::uint32_t limit = plugin::kCapAll);
+
 // fn, {args} = mq._next_event([name]): the oldest queued event (of that name).
+// The event's text stays in the queue (the Script's) until it is on the stack: a push that fails longjmps (Lua is
+// built as C), and no C++ object of this frame may be alive then.
+// An event raised by another's line (a script's or plugin's print, Queued::origin) whose handler would get more than
+// that code may do runs as a thread of its own with no more (start_thread's limit), as a bind it ran would; doevents
+// goes on with the next. A thread so that the limit holds for each resume, if the handler waits.
 int l_next_event(lua_State* L) {
     Script& s = Script::of(L);
-    std::optional<std::string> name;
-    if (!lua_isnoneornil(L, 1)) name = luaL_checkstring(L, 1);
-    for (auto it = s.queued.begin(); it != s.queued.end(); ++it) {
-        if (name && it->first != *name) continue;
+    const char* name = lua_isnoneornil(L, 1) ? nullptr : luaL_checkstring(L, 1);
+    while (true) {
+        auto it = s.queued.begin();
+        while (it != s.queued.end() && name && it->name != name) ++it;
+        if (it == s.queued.end()) break;
         int fn = LUA_NOREF;
         for (const auto& e : s.events)
-            if (e.name == it->first) fn = e.fn;
-        auto args = std::move(it->second);
-        s.queued.erase(it);
-        if (fn == LUA_NOREF) return l_next_event(L); // unevented meanwhile
+            if (e.name == it->name) fn = e.fn;
+        if (fn == LUA_NOREF) { // unevented meanwhile
+            s.queued.erase(it);
+            continue;
+        }
+        if ((s.caps & s.narrowed & ~it->origin) != 0) {
+            const std::uint32_t origin = it->origin;
+            std::vector<std::string> args = std::move(it->args);
+            s.queued.erase(it);
+            start_thread(s, fn, args, origin);
+            continue;
+        }
         lua_rawgeti(L, LUA_REGISTRYINDEX, fn);
-        lua_createtable(L, static_cast<int>(args.size()), 0);
-        for (std::size_t i = 0; i < args.size(); ++i) {
-            lua_pushlstring(L, args[i].data(), args[i].size());
+        lua_createtable(L, static_cast<int>(it->args.size()), 0);
+        for (std::size_t i = 0; i < it->args.size(); ++i) {
+            lua_pushlstring(L, it->args[i].data(), it->args[i].size());
             lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
         }
+        s.queued.erase(it);
         return 2;
     }
     lua_pushnil(L);
@@ -475,7 +546,10 @@ int l_next_event(lua_State* L) {
 // Runs fn(args...) as a new coroutine of the script (binds): it may mq.delay; pulse() resumes it.
 // A bind that runs itself (mq.bind('/x', function() mq.cmd('/x') end)) nests here on the native stack: each resume
 // starts Lua's own C-stack count again (no `from`), so past kMaxNesting the script is stopped instead.
-void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
+// It runs with the script's capabilities, its starter's (the code that ran the command: another script's, a plugin's,
+// the player's all) and `limit` together, at its first resume and every later one (Script::Thread::caps): a bind a
+// lesser script ran does not get the script's own once it waited.
+void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args, std::uint32_t limit) {
     if (!s.L || s.stop_requested) return;
     if (s.busy >= kMaxNesting) {
         s.fail(std::format("its commands ran each other more than {} deep", kMaxNesting));
@@ -496,7 +570,9 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
     watch(t);
     lua_rawgeti(t, LUA_REGISTRYINDEX, fn_ref);
     for (const auto& a : args) lua_pushlstring(t, a.data(), a.size());
-    plugin::CallerScope scope(s.caps, s.name);
+    const std::uint32_t caps = s.caps & s.narrowed & plugin::caller_caps() & limit;
+    plugin::CallerScope scope(caps, s.name);
+    const std::uint32_t narrowed = std::exchange(s.narrowed, caps);
     s.slice_start = Clock::now();
     int nres = 0;
     int st = 0;
@@ -504,9 +580,10 @@ void start_thread(Script& s, int fn_ref, const std::vector<std::string>& args) {
         ScriptRun run(s, t);
         st = lua_resume(t, nullptr, static_cast<int>(args.size()), &nres);
     }
+    s.narrowed = narrowed;
     if (st == LUA_YIELD) {
         lua_pop(t, nres);
-        s.threads.emplace_back(t, ref);
+        s.threads.push_back({t, ref, caps});
     } else {
         if (st != LUA_OK && !(lua_touserdata(t, -1) == &kExitKey)) s.fail(lua_tostring(t, -1) ? lua_tostring(t, -1) : "error");
         else if (st != LUA_OK) s.stop_requested = true; // mq.exit
@@ -524,6 +601,14 @@ bool bind_command(lua_State* L, Script& s, const char* given) {
     if (s.host->env.hooks->reserved_command(cmd)) {
         luaL_where(L, 1);
         lua_pushfstring(L, "mq.bind: %s is the client's own command", cmd.c_str());
+        lua_concat(L, 2);
+        return false;
+    }
+    // Another script's or plugin's: taking it over would hand this script what the player types for the other (and
+    // run it with this one's capabilities).
+    if (auto o = s.host->env.hooks->command_owner(cmd); o && *o != s.owner && s.host->env.hooks->is_guest(*o)) {
+        luaL_where(L, 1);
+        lua_pushfstring(L, "mq.bind: %s is %s's command", cmd.c_str(), s.host->env.hooks->owner_name(*o).c_str());
         lua_concat(L, 2);
         return false;
     }
@@ -550,8 +635,8 @@ bool bind_command(lua_State* L, Script& s, const char* given) {
 }
 
 // mq.bind(cmd, fn): a command of the script's own (the 'commands' capability). The client's own commands (the game's,
-// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command); a name another
-// script or plugin bound is taken over, as in MQ, until this one unbinds.
+// abbreviations included, and /lua, /plugin, MQ's) cannot be taken (plugin::Hooks::reserved_command), nor a name
+// another script or plugin has now.
 int l_bind(lua_State* L) {
     need(L, plugin::kCapCommands, "mq.bind");
     Script& s = Script::of(L);
@@ -578,9 +663,9 @@ int l_imgui_init(lua_State* L) {
     Script& s = Script::of(L);
     const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
-    std::string name = given;
     lua_pushvalue(L, 2);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX); // before the name's string: it may raise (Lua is built as C)
+    std::string name = given;
     for (auto& w : s.windows)
         if (w.first == name) {
             luaL_unref(L, LUA_REGISTRYINDEX, w.second);
@@ -617,12 +702,16 @@ int l_get_all_spawns(lua_State* L) {
     const Type* spawn = reg_of(L).find_type("spawn");
     lua_newtable(L);
     if (!ctx.conn || !spawn) return 1;
+    // The ids' vector lives across the pushes: they are not refused at the script's memory limit (HostWork), so
+    // none raises past it (Lua is built as C) but for a system out of memory.
+    HostWork unlimited(Script::of(L));
     std::vector<std::uint32_t> ids;
     for (const auto& [id, s] : ctx.conn->world().spawns) ids.push_back(id);
     std::sort(ids.begin(), ids.end());
     lua_Integer n = 0;
     for (auto id : ids) {
-        push_ref(L, TloRef{TloRef::Kind::Value, {}, Value::object(spawn, id)});
+        void* mem = ref_slot(L);
+        ref_fill(L, mem, TloRef{TloRef::Kind::Value, {}, Value::object(spawn, id)});
         lua_rawseti(L, -2, ++n);
     }
     return 1;
@@ -648,17 +737,86 @@ bool in_config_dir(const fs::path& dir, const fs::path& file) {
 
 } // namespace
 
-// The script's config directory (mq.configDir): the shared one for a script that may do everything; a folder of its
-// own under it (config/<name>/) for any other, so an add-on cannot rewrite or read the settings another script (a
-// server's, the player's) keeps there. mq.configDir .. '/MyScript.lua', MQ's usual path, works either way.
-fs::path script_config_dir(const Script& s) {
-    const fs::path& base = s.host->env.config_dir;
-    if (base.empty() || s.caps == plugin::kCapAll) return base;
-    std::string folder = s.name;
+// A script's name as one folder name (its mq.configDir under config/, its hailstone.server_dir and character_dir
+// under plugin-config/): the name itself where every system keeps it as written, else with the bytes that would not
+// stay written as %XX (two upper-case hex digits): '%', control characters and bytes past ASCII, the characters
+// Windows refuses or reads as a path (/ \ : * ? " < > |), a last '.' or ' ' (Windows drops them) and the first of a
+// device name (CON, NUL, COM1 ...). Two names never share a folder ("a b" and "a_b", which config/ once shared as
+// a_b); scripts' names are lower case, so a case-insensitive volume does not join two either.
+std::string script_folder_name(std::string_view name) {
+    if (name.empty()) return "%";
+    static constexpr char kHex[] = "0123456789ABCDEF";
+    const bool device = is_windows_device_name(name);
+    std::string out;
+    out.reserve(name.size());
+    for (std::size_t i = 0; i < name.size(); ++i) {
+        const auto c = static_cast<unsigned char>(name[i]);
+        const bool last = i + 1 == name.size();
+        if (c < 0x20 || c >= 0x7f || std::string_view("%/\\:*?\"<>|").find(static_cast<char>(c)) != std::string_view::npos ||
+            (last && (c == '.' || c == ' ')) || (i == 0 && device)) {
+            out += '%';
+            out += kHex[c >> 4];
+            out += kHex[c & 0xf];
+        } else {
+            out += static_cast<char>(c);
+        }
+    }
+    return out;
+}
+
+namespace {
+
+// config/'s folder for a script before script_folder_name: every byte but letters, digits, '-', '_' and '.' as '_'
+// (so "a b" and "a_b" shared one). What open_state moves to the new name (migrate_config_dir).
+std::string old_config_folder(std::string_view name) {
+    std::string folder(name);
     for (char& c : folder)
         if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_' && c != '.') c = '_';
     if (folder.empty() || folder.find_first_not_of('.') == std::string::npos) folder = "_";
-    return base / folder;
+    return folder;
+}
+
+} // namespace
+
+// The script's config directory (mq.configDir): the shared one for a script that may do everything; a folder of its
+// own under it (config/<name>/, script_folder_name) for any other, so an add-on cannot rewrite or read the settings
+// another script (a server's, the player's) keeps there. mq.configDir .. '/MyScript.lua', MQ's usual path, works
+// either way.
+fs::path script_config_dir(const Script& s) {
+    const fs::path& base = s.host->env.config_dir;
+    if (base.empty() || s.caps == plugin::kCapAll) return base;
+    return base / script_folder_name(s.name);
+}
+
+// A script whose folder in config/ was another name before script_folder_name (old_config_folder: a name with a
+// space or another such byte) gets that folder moved to its own name, once, when nothing else could have used it: its
+// own folder is not there yet, and no other script in the script folders had the old name. Otherwise it starts with
+// an empty folder, and the old one stays where it was.
+void ScriptHost::Impl::migrate_config_dir(const Script& s) const {
+    const fs::path to = script_config_dir(s);
+    const fs::path& base = env.config_dir;
+    if (to == base || to.empty()) return;
+    const std::string old_name = old_config_folder(s.name);
+    if (old_name == script_folder_name(s.name)) return;
+    std::error_code ec;
+    const fs::path from = base / old_name;
+    if (fs::exists(to, ec) || !fs::is_directory(from, ec)) return;
+    for (const auto& d : dirs())
+        for (fs::directory_iterator it(d, ec), end; !ec && it != end; it.increment(ec)) {
+            const fs::path& p = it->path();
+            std::error_code fec;
+            std::string other;
+            if (it->is_directory(fec) && fs::is_regular_file(p / "init.lua", fec)) other = lower(p.filename().string());
+            else if (it->is_regular_file(fec) && lower(p.extension().string()) == ".lua") other = lower(p.stem().string());
+            else continue;
+            if (other != s.name && (old_config_folder(other) == old_name || script_folder_name(other) == old_name)) {
+                log::info("lua: {}: {} may be {}'s too: left where it is", s.name, from.string(), other);
+                return;
+            }
+        }
+    fs::rename(from, to, ec);
+    if (ec) log::warn("lua: {}: cannot move {} to {}: {}", s.name, from.string(), to.string(), ec.message());
+    else log::info("lua: {}: its settings moved from {} to {}", s.name, from.string(), to.string());
 }
 
 namespace {
@@ -1118,6 +1276,7 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     }
     lua_pushstring(L, lua_dir.c_str());
     lua_setfield(L, -2, "luaDir");
+    migrate_config_dir(sc);
     lua_pushstring(L, script_config_dir(sc).string().c_str());
     lua_setfield(L, -2, "configDir");
     lua_pushvalue(L, -1);
@@ -1211,6 +1370,15 @@ void ScriptHost::Impl::end(Script& s, const std::string& why) {
     say("[Lua] " + s.name + " " + why);
 }
 
+bool ScriptHost::Impl::may_control(const Script& s) const { return (s.caps & ~plugin::caller_caps()) == 0; }
+
+bool ScriptHost::Impl::refuse_control(const Script& s) const {
+    if (may_control(s)) return false;
+    say(std::format("[Lua] {} may not stop or pause {}: it may do more than {}", plugin::caller_name(), s.name,
+                    plugin::caller_name()));
+    return true;
+}
+
 bool ScriptHost::stop(std::string_view name) {
     Script* s = impl_->find(lower(name));
     if (!s || s->stop_requested) return false;
@@ -1218,6 +1386,7 @@ bool ScriptHost::stop(std::string_view name) {
         impl_->say("[Lua] " + s->name + " is this server's own script: it keeps running");
         return true;
     }
+    if (impl_->refuse_control(*s)) return true;
     impl_->end(*s, "stopped");
     impl_->reap();
     return true;
@@ -1238,6 +1407,7 @@ bool ScriptHost::pause(std::string_view name, std::optional<bool> paused) {
         impl_->say("[Lua] " + s->name + " is this server's own script: it keeps running");
         return true;
     }
+    if (impl_->refuse_control(*s)) return true;
     bool now_paused = paused ? *paused : s->status != Script::Status::Paused;
     s->status = now_paused ? Script::Status::Paused : Script::Status::Running;
     impl_->say(std::format("[Lua] {} {}", s->name, now_paused ? "paused" : "resumed"));
@@ -1385,13 +1555,16 @@ void ScriptHost::pulse() {
 // The binds (and a Lua social's presses) still running.
 void ScriptHost::Impl::resume_threads(Script& s) {
     for (std::size_t t = 0; t < s.threads.size() && !s.stop_requested;) {
-        auto [thread, ref] = s.threads[t];
+        const auto [thread, ref, caps] = s.threads[t];
         s.slice_start = Clock::now();
         int tn = 0;
         int ts = 0;
         {
+            plugin::CallerScope scope(caps, s.name); // the capabilities it started with, not the script's own
+            const std::uint32_t narrowed = std::exchange(s.narrowed, caps);
             ScriptRun run(s, thread);
             ts = lua_resume(thread, nullptr, 0, &tn);
+            s.narrowed = narrowed;
         }
         if (ts == LUA_YIELD) {
             lua_pop(thread, tn);
@@ -1615,7 +1788,7 @@ void ScriptHost::Impl::lua_command(std::string_view args) {
     if (verb == "stop") {
         if (words.empty()) {
             for (auto& s : scripts)
-                if (!s->stop_requested && !kept(*s)) end(*s, "stopped");
+                if (!s->stop_requested && !kept(*s) && may_control(*s)) end(*s, "stopped");
             reap();
         } else if (!self->stop(words.front())) say("[Lua] no running script named " + words.front());
         return;
@@ -1624,7 +1797,7 @@ void ScriptHost::Impl::lua_command(std::string_view args) {
         if (words.empty()) {
             std::vector<std::string> names;
             for (auto& s : scripts)
-                if (!s->stop_requested && !kept(*s)) names.push_back(s->name);
+                if (!s->stop_requested && !kept(*s) && may_control(*s)) names.push_back(s->name);
             for (const auto& n : names) self->pause(n);
         } else if (!self->pause(words.front())) {
             say("[Lua] no running script named " + words.front());
@@ -1815,7 +1988,7 @@ Script* ScriptHost::Impl::button(const ButtonPress& p, std::string& why) {
 
 void ScriptHost::Impl::stop_threads(Script& s) {
     if (!s.L) return;
-    for (auto& [thread, ref] : s.threads) luaL_unref(s.L, LUA_REGISTRYINDEX, ref);
+    for (const auto& th : s.threads) luaL_unref(s.L, LUA_REGISTRYINDEX, th.ref);
     s.threads.clear();
     for (auto& e : s.events) luaL_unref(s.L, LUA_REGISTRYINDEX, e.fn);
     s.events.clear();

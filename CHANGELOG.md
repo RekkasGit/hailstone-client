@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Scripts and plugins: a line another add-on prints (`print`, `/echo`, `WriteChatf`) can no longer make a script with more permissions act for it. It still raises the script's `mq.event`, but the handler gets no more than the add-on that printed it may do, and compiled plugins' `OnIncomingChat` and `OnFilterChat` no longer get such lines at all. A bind another script ran keeps that script's limits after an `mq.delay` too
+- Scripts: `/lua stop` and `/lua pause` from a script or plugin reach only scripts that may do no more than it, so an add-on cannot stop yours, and `mq.bind` no longer takes over a command another script or plugin has
+- Scripts: `mq.event` takes at most 256 events a script, patterns of up to 1024 bytes (32 KB in all) and names of up to 256 bytes; past that it is an error
+- Scripts: a script with a space or another unusual character in its name no longer shares its settings folder (`mq.configDir`) with another script ("a b" and "a_b" both used `config/a_b/`). Its old folder is moved to the new name when no other script used it
+- Plugins: a plugin's own TCP connections close when it loses the 'net' permission
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following
 - Erudites and other characters whose Luclin model borrows another race's animations keep their own face: an erudite no longer bares its teeth with parted lips, frowns or wears its beard in front of its mouth. The lips, jaw and brows took the wood elf's places from the borrowed animations

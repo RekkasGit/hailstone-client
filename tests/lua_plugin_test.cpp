@@ -433,6 +433,28 @@ print('[more] camera ' .. math.floor(hs.max_camera_distance()))
     CHECK(n.printed_part("needs the server's 'actions' permission"));
 }
 
+TEST_CASE("Lua plugin: a UI function takes at most kMaxCallArgs arguments; its folders are its name as one folder") {
+    Host h;
+    h.write("odd%name.lua", R"lua(
+local hs = require('hailstone')
+hs.ui_function('count', function(...) return select('#', ...) end)
+print('[odd] ' .. hs.server_dir())
+)lua");
+    REQUIRE(h.scripts->run("odd%name", {}));
+    h.scripts->pulse();
+    const std::vector<plugin::UiValue> most(plugin::UiBridge::kMaxCallArgs, plugin::UiValue::integer(1));
+    auto r = h.bridge.call("odd%name", "count", most);
+    REQUIRE(r);
+    CHECK(r->i == static_cast<std::int64_t>(plugin::UiBridge::kMaxCallArgs));
+    std::vector<plugin::UiValue> more = most;
+    more.push_back(plugin::UiValue::integer(1));
+    CHECK_FALSE(h.bridge.call("odd%name", "count", more));
+    // '%' itself is written %25: no other name gives that folder.
+    const fs::path dir = h.world.dir / "servers" / "test" / "plugin-config" / "odd%25name";
+    CHECK(h.printed_part("[odd] " + dir.string()));
+    CHECK(fs::is_directory(dir));
+}
+
 TEST_CASE("Lua plugin: after_combat_ability gets the spell id and whether it was used") {
     Host h;
     h.write("aca.lua", "hailstone.hooks{ after_combat_ability = function(id, used) print('aca', id, used) end }\n");

@@ -192,5 +192,8 @@ private:
 
 // The hex SHA-256 of a script file (for the developer window).
 std::optional<std::string> script_file_hash(const std::filesystem::path& file);
+// A script's name as one folder name (its mq.configDir under config/, its hailstone.server_dir and character_dir under
+// plugin-config/), the same for no two names: bytes no system keeps as written are %XX (lua_mq.cpp).
+std::string script_folder_name(std::string_view name);
 
 } // namespace hailstone::mq
