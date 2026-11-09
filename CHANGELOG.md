@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A face seen up close no longer shows dark lines across it with the modern lighting: an erudite's forehead had a sharp V-shaped crease, and faces had dark lines over the cheeks and under the eyes. The ambient occlusion picked out the folds of the low-poly head that its smooth shading hides; it now fades out on anything closer than about twice a character's height to the camera
+- NPC names that start with "#" on the server (named NPCs such as "#Lord Bob") now show without the "#", in their name above the head, the target window, chat and elsewhere, as on the original client
 - Collision with walls is now computed by Hailstone's own code for the sphere sweep. It agrees with the original client within a tiny margin; in rare cases where the player only just grazes an edge or a corner, a step may now stop or pass where it did not before
 - Characters with the Luclin models now stand, walk and fight with their arms ready when they hold a weapon or a shield, as on the original client: a shield used to hang low at the hip in the empty-handed pose
 - Add-ons can now be tools, programs of their own that work beside Hailstone: install one from Add-ons on the login screen like a script or plugin, and press Start on its row. The first is Hailstone Texture Studio, which builds HD textures from your own game files on your graphics card (twice or four times the size, with normal and roughness maps for the modern lighting, using the PBRify upscaler)

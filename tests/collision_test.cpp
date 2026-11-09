@@ -50,6 +50,8 @@ TEST_CASE("floor_below picks the highest floor within the step height") {
 TEST_CASE("display_name strips digits and underscores") {
     CHECK(hailstone::game::display_name("a_rat01") == "a rat");
     CHECK(hailstone::game::display_name("Guard_Ahrens000") == "Guard Ahrens");
+    CHECK(hailstone::game::display_name("#Lord_Bob00") == "Lord Bob");
+    CHECK(hailstone::game::display_name("#") == "");
 }
 
 TEST_CASE("qeynos2 has floors under its streets" * doctest::skip(!hailstone::test::game_dir())) {
