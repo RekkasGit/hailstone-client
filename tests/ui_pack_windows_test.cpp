@@ -2303,3 +2303,90 @@ TEST_CASE("UI packs (modern): the Options window's Textures section picks the te
     }
     ImGui::DestroyContext(ctx);
 }
+
+// A bag window resized: as many slots to a row as its width holds, its height grown to fit the rows; unsized, rows
+// of five. A click lands on the slot drawn under the mouse (eq.BagSlotClick's index).
+TEST_CASE("UI packs (modern): a resized bag window lays its slots out to its width") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir dir_scratch("ui_pack_bag_reflow_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, R"(
+            bagClicked = nil
+            eq.BagInfo = function(win) if win == 'Bag1' then return 'Test Bag', 10, false, 'inventory', 23 end end
+            eq.BagSlotItem = function() return nil end
+            local WindowShown = eq.WindowShown -- (the game opens a bag window only on a bag it has)
+            eq.WindowShown = function(win) if win == 'Bag1' then return true end return WindowShown(win) end
+            eq.BagSlotClick = function(win, i, button) if button == 'left' then bagClicked = i end end
+            ui.SetSetting('test.pos.Bag1', '100,100')
+        )") == LUA_OK);
+        s.frames(3);
+        REQUIRE(luaL_dostring(L, "return ui.GetIO().uiScale or 1") == LUA_OK);
+        const float scale = static_cast<float>(lua_tonumber(L, -1));
+        lua_settop(L, 0);
+        auto window = [] {
+            for (ImGuiWindow* win : ImGui::GetCurrentContext()->Windows) {
+                if (std::string_view(win->Name).ends_with("###modern.Bag1") && win->WasActive) return win;
+            }
+            return static_cast<ImGuiWindow*>(nullptr);
+        };
+        ImGuiIO& io = ImGui::GetIO();
+        // the slot clicked at (col, row) of the grid: 44 design pixels and a gap of 5, below the 30 of the toolbar
+        auto click = [&](int col, int row) {
+            ImGuiWindow* win = window();
+            REQUIRE(win);
+            const ImVec2 o = win->DC.CursorStartPos;
+            const float x = o.x + (static_cast<float>(col) * 49 + 22) * scale;
+            const float y = o.y + (30 + static_cast<float>(row) * 49 + 22) * scale;
+            REQUIRE(luaL_dostring(L, "bagClicked = nil") == LUA_OK);
+            io.AddMousePosEvent(x, y);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, true);
+            s.frames(1);
+            io.AddMouseButtonEvent(0, false);
+            s.frames(2);
+            io.AddMousePosEvent(-1000, -1000);
+            s.frames(1);
+            REQUIRE(luaL_dostring(L, "return bagClicked or -1") == LUA_OK);
+            const int i = static_cast<int>(lua_tointeger(L, -1));
+            lua_settop(L, 0);
+            return i;
+        };
+        auto bottomOfRows = [&](int rows) {
+            ImGuiWindow* win = window();
+            REQUIRE(win);
+            return win->DC.CursorStartPos.y + (30 + static_cast<float>(rows) * 49 - 5) * scale;
+        };
+        // unsized: two rows of five
+        CHECK(click(4, 0) == 4);
+        CHECK(click(0, 1) == 5);
+        // wide: one row of ten, the window no taller than that needs and still all of it
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.Bag1', '560,60')") == LUA_OK);
+        s.frames(3);
+        CHECK(click(7, 0) == 7);
+        CHECK(click(0, 1) == -1);
+        ImGuiWindow* win = window();
+        REQUIRE(win);
+        CHECK(win->Pos.y + win->Size.y >= bottomOfRows(1));
+        CHECK(win->Pos.y + win->Size.y < bottomOfRows(2));
+        // narrow (below its least width): four to a row, three rows, the window grown to hold them
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.Bag1', '100,60')") == LUA_OK);
+        s.frames(3);
+        CHECK(click(3, 0) == 3);
+        CHECK(click(1, 2) == 9);
+        win = window();
+        REQUIRE(win);
+        CHECK(win->Pos.y + win->Size.y >= bottomOfRows(3));
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
