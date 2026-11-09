@@ -1013,9 +1013,13 @@ int l_chat(lua_State* L) {
 
 // The script's folder under `parent` (the script's name as script_folder_name gives it), made now, into s.scratch;
 // false when `parent` is empty. A Lua social's dry run and its face make nothing on disk: they get the name only.
+// A script with a compiled plugin's name (an add-on "nms" beside the NMS server's plugin) gets
+// plugin-config/script%3A<name>/ (its owner tag, UiBridge::owner_tag, as a folder name) instead: the plugin's
+// folder may hold what the plugin keeps from scripts (its server's key). Any other keeps plugin-config/<name>/.
 bool make_dir(Script& s, const fs::path& parent) {
     if (parent.empty()) return false;
-    const fs::path folder = parent / script_folder_name(s.name);
+    if (!s.plugin_named) s.plugin_named = s.host->env.plugin_named && s.host->env.plugin_named(s.name);
+    const fs::path folder = parent / script_folder_name(*s.plugin_named ? "script:" + s.name : s.name);
     if (!s.dry && !s.face_eval) {
         std::error_code ec;
         fs::create_directories(folder, ec);

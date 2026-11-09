@@ -1521,6 +1521,12 @@ std::vector<NativePlugins::Info> NativePlugins::list() const {
 
 bool NativePlugins::loaded(std::string_view name) const { return impl_->find(name) != nullptr; }
 
+bool NativePlugins::has_plugin(std::string_view name) const {
+    if (impl_->find(name)) return true;
+    const auto files = plugin_files(impl_->dirs());
+    return std::any_of(files.begin(), files.end(), [&](const fs::path& f) { return iequal(plugin_name(f), name); });
+}
+
 std::uint32_t NativePlugins::loaded_caps(std::string_view name) const {
     const Loaded* l = impl_->find(name);
     return l && l->name == name ? l->caps : 0;

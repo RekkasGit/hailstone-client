@@ -61,6 +61,10 @@ struct ScriptEnv {
     std::function<void(float)> set_max_camera_distance;
     // The in-game browser (mq.web; plugin/web_access.h): the script's own tabs, as "script:<name>". Null: none.
     plugin::WebAccess* web = nullptr;
+    // Whether a compiled plugin (installed, loaded or the add-on manager's) has this name, any case: such a script's
+    // hailstone.server_dir and character_dir are not the plugin's plugin-config/<name>/ (lua_hailstone.cpp). Asked
+    // once a script; null: none has.
+    std::function<bool(std::string_view name)> plugin_named;
     // The Ability Book's autoskill (game/ability_book.h): a script holds it off while it runs
     // (hailstone.hold_autoskill; a stopped script's hold goes), and reads the player's list with each ability's
     // name (hailstone.autoskill_list). Either may be empty.

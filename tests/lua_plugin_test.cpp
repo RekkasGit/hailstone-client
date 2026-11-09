@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 
+#include "core/ascii_case.h"
 #include "game/server_ext_chain.h"
 #include "game/spells.h"
 #include "mq/commands.h"
@@ -31,6 +32,7 @@ struct Host {
     std::vector<std::pair<plugin::Stream, net::AppPacket>> packets;
     std::int64_t clock = 0;
     float max_zoom = 50.0f;
+    std::vector<std::string> plugin_names; // the compiled plugins ScriptEnv::plugin_named knows
     std::unique_ptr<mq::Commands> commands;
     std::unique_ptr<mq::ScriptHost> scripts;
 
@@ -63,6 +65,9 @@ struct Host {
         se.send = [this](plugin::Stream s, const net::AppPacket& p) { packets.emplace_back(s, p); };
         se.max_camera_distance = [this] { return max_zoom; };
         se.set_max_camera_distance = [this](float d) { max_zoom = d; };
+        se.plugin_named = [this](std::string_view n) {
+            return std::any_of(plugin_names.begin(), plugin_names.end(), [&](const std::string& p) { return iequals(p, n); });
+        };
         scripts = std::make_unique<mq::ScriptHost>(se);
     }
     ~Host() {
@@ -453,6 +458,19 @@ print('[odd] ' .. hs.server_dir())
     const fs::path dir = h.world.dir / "servers" / "test" / "plugin-config" / "odd%25name";
     CHECK(h.printed_part("[odd] " + dir.string()));
     CHECK(fs::is_directory(dir));
+}
+
+TEST_CASE("Lua plugin: a script with a compiled plugin's name does not get the plugin's plugin-config folder") {
+    Host h;
+    h.plugin_names = {"NMS"};
+    h.write("nms.lua", "print('[nms] ' .. require('hailstone').server_dir())\n");
+    REQUIRE(h.scripts->run("nms", {}));
+    h.scripts->pulse();
+    const fs::path base = h.world.dir / "servers" / "test" / "plugin-config";
+    CHECK(h.printed_part("[nms] " + (base / "script%3Anms").string()));
+    CHECK(fs::is_directory(base / "script%3Anms"));
+    CHECK_FALSE(fs::exists(base / "nms"));
+    CHECK_FALSE(fs::exists(base / "NMS"));
 }
 
 TEST_CASE("Lua plugin: after_combat_ability gets the spell id and whether it was used") {

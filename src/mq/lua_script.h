@@ -157,6 +157,8 @@ struct Script {
     // Text the host pushes for the script's code (hailstone.server_dir ...), kept here rather than in the C function's
     // frame: a push that fails longjmps (Lua is built as C), and the frame's objects would not be destroyed.
     std::string scratch;
+    // Whether a compiled plugin has the script's name (ScriptEnv::plugin_named), asked at its first folder.
+    std::optional<bool> plugin_named;
 
     struct Event {
         std::string name;

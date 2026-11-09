@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Scripts: a Lua script with the same name as a compiled plugin (an add-on called `nms` beside the NMS plugin, say) no longer shares the plugin's server and character settings folders, where a plugin may keep its server's key. Its `hailstone.server_dir` and `character_dir` are `plugin-config/script%3A<name>/` instead; other scripts keep theirs
 - Scripts and plugins: a line another add-on prints (`print`, `/echo`, `WriteChatf`) can no longer make a script with more permissions act for it. It still raises the script's `mq.event`, but the handler gets no more than the add-on that printed it may do, and compiled plugins' `OnIncomingChat` and `OnFilterChat` no longer get such lines at all. A bind another script ran keeps that script's limits after an `mq.delay` too
 - Scripts: `/lua stop` and `/lua pause` from a script or plugin reach only scripts that may do no more than it, so an add-on cannot stop yours, and `mq.bind` no longer takes over a command another script or plugin has
 - Scripts: `mq.event` takes at most 256 events a script, patterns of up to 1024 bytes (32 KB in all) and names of up to 256 bytes; past that it is an error

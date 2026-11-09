@@ -10,6 +10,7 @@
 
 #include <imgui.h>
 
+#include "app/addon_install.h"
 #include "core/log.h"
 #include "mq/commands.h"
 #include "mq/lua_mq.h"
@@ -179,6 +180,13 @@ Automation::Automation(AutomationEnv env) : impl_(std::make_unique<Impl>()) {
             if (s == plugin::Stream::World) c->send_world_packet(p);
             else c->send_zone_packet(p);
         }
+    };
+    // A compiled plugin's name, also one the add-on manager installed (built later than this env: asked at call time).
+    se.plugin_named = [&m](std::string_view name) {
+        if (m.plugins && m.plugins->has_plugin(name)) return true;
+        const auto addons = read_installed_addons(m.env.data_dir);
+        const InstalledAddon* a = find_addon(addons, name);
+        return a && a->kind == AddonKind::Plugin;
     };
     fs::create_directories(se.dirs.front(), ec);
     m.scripts = std::make_unique<mq::ScriptHost>(se);

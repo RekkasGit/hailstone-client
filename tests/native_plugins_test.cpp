@@ -570,6 +570,15 @@ TEST_CASE("native plugins: a connection opened with 'net' closes when the policy
     CHECK(h.printed_line("[Probe] tcp open 0"));
 }
 
+TEST_CASE("native plugins: has_plugin knows a plugin on disk or loaded, in any case") {
+    Host h;
+    h.approve(plugin::kCapAll);
+    CHECK(h.plugins->has_plugin("mq2example"));
+    CHECK_FALSE(h.plugins->has_plugin("nosuch"));
+    REQUIRE(h.plugins->load("MQ2Example"));
+    CHECK(h.plugins->has_plugin("MQ2EXAMPLE"));
+}
+
 TEST_CASE("native plugins: a line a script or plugin wrote is not incoming chat") {
     Host h;
     h.approve(plugin::kCapAll);
