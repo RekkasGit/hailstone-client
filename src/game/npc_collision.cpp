@@ -1,6 +1,7 @@
 #include "game/npc_collision.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <string_view>
@@ -41,10 +42,13 @@ NpcBody npc_body(const Spawn& s, const glm::vec3& position) {
     return b;
 }
 
-std::vector<CollisionTriangle> npc_walls(const NpcBody& b) {
-    std::vector<CollisionTriangle> out;
-    if (!(b.radius > 0.0f)) return out;
-    out.reserve(2 * kNpcWallSides);
+namespace {
+
+using Walls = std::array<CollisionTriangle, 2 * kNpcWallSides>;
+
+// The walls into `out`; how many (none without a radius).
+std::size_t fill_walls(const NpcBody& b, Walls& out) {
+    if (!(b.radius > 0.0f)) return 0;
     const float bottom = b.feet.z - kNpcWallBelowFeet;
     const float top = b.feet.z + b.height;
     auto at = [&](int i, float z) {
@@ -54,12 +58,21 @@ std::vector<CollisionTriangle> npc_walls(const NpcBody& b) {
     };
     // The corners go round counter-clockwise seen from above; CollisionTriangle's normal,
     // (v0 - v1) x (v2 - v1), then points away from the axis.
+    std::size_t n = 0;
     for (int i = 0; i < kNpcWallSides; ++i) {
         const glm::vec3 b0 = at(i, bottom), b1 = at(i + 1, bottom), t0 = at(i, top), t1 = at(i + 1, top);
-        out.push_back(CollisionTriangle::make(b1, b0, t0, 0));
-        out.push_back(CollisionTriangle::make(b1, t0, t1, 0));
+        out[n++] = CollisionTriangle::make(b1, b0, t0, 0);
+        out[n++] = CollisionTriangle::make(b1, t0, t1, 0);
     }
-    return out;
+    return n;
+}
+
+} // namespace
+
+std::vector<CollisionTriangle> npc_walls(const NpcBody& b) {
+    Walls walls;
+    const std::size_t n = fill_walls(b, walls);
+    return {walls.begin(), walls.begin() + static_cast<std::ptrdiff_t>(n)};
 }
 
 namespace {
@@ -83,7 +96,10 @@ std::uint32_t sweep_npcs(SphereSweep& s, std::span<const NpcBody> bodies) {
         if (point_segment_distance_squared(PickSegment{s.start, s.delta}, centre) > reach * reach) continue;
         if (starts_inside(s, b)) continue;
         bool hit = false;
-        for (const auto& t : npc_walls(b)) hit = collide_triangle(s, t) || hit;
+        // On the stack: the sweep asks this of every NPC near the mover, every frame.
+        Walls walls;
+        const std::size_t n = fill_walls(b, walls);
+        for (std::size_t i = 0; i < n; ++i) hit = collide_triangle(s, walls[i]) || hit;
         if (hit) stopped = b.id;
     }
     return stopped;
