@@ -158,6 +158,9 @@ void GameConnection::send_command(const std::string& typed) {
         // Hailstone's own windows (the client's handlers, by a name not in the original's table).
         if (word == "/abilitybook" && client_commands_ && client_commands_("Hailstone_abilitybook", std::string(rest)))
             return;
+        if ((word == "/finditem" || word == "/advi") && client_commands_ &&
+            client_commands_("Hailstone_finditem", std::string(rest)))
+            return;
         system(12380); // That is not a valid command.  Please use /help.
         return;
     }

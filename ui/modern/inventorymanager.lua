@@ -1,12 +1,19 @@
 -- Advanced Inventory (Hailstone's own window, InventoryManagerWnd: the EQ menu's "Advanced Inventory" and the
 -- inventory window's button): everything the character has, worn, carried, banked and in the shared bank, in one
 -- list or grid (eq.AllItems).
---   * search by name; filter by place, kind, mark and flags (usable by you, magic, lore, no trade, temporary,
---     stackable, sellable), each choice with how many items it would show; sort by place (grouped by bag), name,
---     kind (grouped), value, weight, quantity or level;
+--   * search by name; filter by place, kind, mark, flags (usable by you, magic, lore, no trade, temporary,
+--     stackable, sellable) and a stat (eq.ItemStats: the items that have it, with its column), each choice with how
+--     many items it would show; Clear filters beside the search. A click on a column's heading sorts by it (place
+--     grouped by bag, name, level, the stat, quantity, value, weight), a second click the other way; the grid has
+--     no headings, so it has a Sort menu instead;
+--   * a click on a row (not its icon or marks) selects it, Ctrl adds or takes one away, Shift selects from the
+--     last one clicked, Ctrl+A everything shown. The selection's bar along the bottom sells (at an open merchant),
+--     tributes (at an open tribute master) or destroys what is selected and carried, after one confirmation
+--     (eq.BulkItems: one item at a time, never a kept one);
 --   * Keep and Sell marks per item (every copy of it): a kept item is not destroyed, dropped, traded, given, sold or
 --     sent by parcel (the client refuses: game/kept_items.h); Sell marked sells the carried ones to the open merchant
 --     (eq.SellJunk). An item has one mark or the other. Marks for every item shown at once are in the ... menu;
+--   * /finditem (or /advi) shows or hides the window; /finditem <text> opens it searching for that, filters cleared;
 --   * each item's icon is its slot: a click picks it up, drops or swaps (Shift: the stack, Ctrl: one), a right click
 --     uses it, holding the right button shows its details, holding the left button (or dragging) puts a hot button
 --     for it on the cursor, as in a bag. A banked item moves only while the bank is open. A right click on the row
@@ -34,12 +41,24 @@ local KINDS = { { "all", "All kinds" }, { "weapons", "Weapons" }, { "armor", "Ar
   { "containers", "Containers" }, { "tradeskill", "Tradeskill" }, { "food", "Food and drink" },
   { "potions", "Potions and poisons" }, { "spells", "Spells and tomes" }, { "augments", "Augments" },
   { "other", "Other" } }
-local KIND_NAME, KIND_RANK = {}, {}
-for i, k in ipairs(KINDS) do KIND_NAME[k[1]], KIND_RANK[k[1]] = k[2], i end
+local KIND_NAME = {}
+for _, k in ipairs(KINDS) do KIND_NAME[k[1]] = k[2] end
 local MARKS = { { "any", "Any" }, { "keep", "Keep" }, { "sell", "Sell" }, { "none", "Unmarked" } }
 local FLAGS = { { "usable", "Usable by me" }, { "magic", "Magic" }, { "lore", "Lore" }, { "notrade", "No Trade" },
   { "temporary", "Temporary" }, { "stackable", "Stackable" }, { "sellable", "Sellable" } }
-local SORTS = { "Place", "Name", "Kind", "Value", "Weight", "Quantity", "Level" }
+-- The sorts, each a column's: the first click on a column sorts its text A to Z, its numbers largest first.
+local SORTS = { "Place", "Name", "Level", "Stat", "Quantity", "Value", "Weight" }
+local SORT_OK, SORT_DESC_FIRST = {}, { Level = true, Stat = true, Quantity = true, Value = true, Weight = true }
+for _, m in ipairs(SORTS) do SORT_OK[m] = true end
+
+local STATS, STAT_LABEL = nil, {}
+local function stats()
+  if not STATS then
+    STATS = eq.ItemStats and eq.ItemStats() or {}
+    for _, st in ipairs(STATS) do STAT_LABEL[st[1]] = st[2] end
+  end
+  return STATS
+end
 
 -- ---------------------------------------------------------------- settings
 local function setting(key, default)
@@ -58,11 +77,17 @@ local function readSettings()
   cfg.kind = setting("kind", "all")
   cfg.mark = setting("mark", "any")
   cfg.sort = setting("sort", "Place")
+  if not SORT_OK[cfg.sort] then cfg.sort = "Place" end -- (an older sort, Kind)
   cfg.desc = setting("desc", false)
   cfg.view = setting("view", "list")
+  stats()
+  cfg.stat = setting("stat", "")
+  if cfg.stat ~= "" and not STAT_LABEL[cfg.stat] then cfg.stat = "" end
+  if cfg.sort == "Stat" and cfg.stat == "" then cfg.sort = "Place" end
   for _, f in ipairs(FLAGS) do cfg.flags[f[1]] = setting("flag." .. f[1], false) end
 end
 local search = ""
+local statFilter = "" -- the stat menu's own filter
 
 -- ---------------------------------------------------------------- the items
 local data = { rows = {}, inv = -1, keep = -1, at = -100, stamp = 0 }
@@ -120,6 +145,8 @@ local function refresh()
     r._value = (it.value or 0) * r._count
     r._weight = (it.weight or 0) * r._count
     r._id = "##row" .. r.place
+    r._stats = it.stats or {}
+    r._level = math.max(it.reqLevel or 0, it.recLevel or 0)
   end
   data.stamp = data.stamp + 1
 end
@@ -142,12 +169,42 @@ local FLAG_TEST = {
 
 -- The rows shown, sorted, with each one's group header ("" none), and how many each choice of the sidebar would show
 -- with the other choices as they are: kept until the items, the marks, the search or a choice change.
-local view = { rows = {}, groups = {}, counts = { place = {}, kind = {}, mark = {}, flag = {} } }
+local view = { rows = {}, groups = {}, counts = { place = {}, kind = {}, mark = {}, flag = {}, stat = {} } }
 local function cacheKey()
   local parts = { data.stamp, tools.MarksStamp(), data.keep, search, cfg.place, cfg.kind, cfg.mark, cfg.sort,
-    tostring(cfg.desc) }
+    tostring(cfg.desc), cfg.stat }
   for _, f in ipairs(FLAGS) do parts[#parts + 1] = cfg.flags[f[1]] and "1" or "0" end
   return table.concat(parts, "|")
+end
+
+-- The rows selected (a click on a row; Shift, Ctrl), by place, each with the item it held then: the bulk actions'
+-- items. Only rows shown stay selected. (Kept across a reload of the script, as lib/itemtools.lua's ITEM_TOOLS; the
+-- tests read it.)
+ADVANCED_INVENTORY = ADVANCED_INVENTORY or { sel = { places = {}, n = 0, anchor = nil } }
+local sel = ADVANCED_INVENTORY.sel
+local function selected(r) return sel.places[r.place] == r.item.id end
+local function selClear()
+  sel.places, sel.n, sel.anchor = {}, 0, nil
+end
+local function selSet(r, on)
+  if on == selected(r) then return end
+  if on then
+    if sel.places[r.place] == nil then sel.n = sel.n + 1 end
+    sel.places[r.place] = r.item.id
+  else
+    if sel.places[r.place] ~= nil then sel.n = sel.n - 1 end
+    sel.places[r.place] = nil
+  end
+end
+-- what is selected and still shown, the rest dropped
+local function selPrune(rows)
+  if sel.n == 0 then return end
+  local keep, n = {}, 0
+  for _, r in ipairs(rows) do
+    if selected(r) then keep[r.place], n = r.item.id, n + 1 end
+  end
+  sel.places, sel.n = keep, n
+  if sel.anchor and not keep[sel.anchor] then sel.anchor = nil end
 end
 
 local sortKeys, sortDesc = {}, false
@@ -166,7 +223,7 @@ local function shownRows()
   if view.key == key then return view end
   view.key = key
   local q = search:lower()
-  local counts = { place = { all = 0 }, kind = { all = 0 }, mark = { any = 0 }, flag = {} }
+  local counts = { place = { all = 0 }, kind = { all = 0 }, mark = { any = 0 }, flag = {}, stat = { [""] = 0 } }
   local rows = {}
   for _, r in ipairs(data.rows) do
     local it = r.item
@@ -175,24 +232,29 @@ local function shownRows()
     local okPlace = cfg.place == "all" or r.where == cfg.place
     local okKind = cfg.kind == "all" or r._kind == cfg.kind
     local okMark = cfg.mark == "any" or m == cfg.mark
+    local okStat = cfg.stat == "" or r._stats[cfg.stat] ~= nil
     local okFlags = true
     for _, f in ipairs(FLAGS) do
       if cfg.flags[f[1]] and not FLAG_TEST[f[1]](it) then okFlags = false end
     end
     if okSearch then
-      if okKind and okMark and okFlags then
+      if okKind and okMark and okFlags and okStat then
         counts.place[r.where] = (counts.place[r.where] or 0) + 1
         counts.place.all = counts.place.all + 1
       end
-      if okPlace and okMark and okFlags then
+      if okPlace and okMark and okFlags and okStat then
         counts.kind[r._kind] = (counts.kind[r._kind] or 0) + 1
         counts.kind.all = counts.kind.all + 1
       end
-      if okPlace and okKind and okFlags then
+      if okPlace and okKind and okFlags and okStat then
         counts.mark[m] = (counts.mark[m] or 0) + 1
         counts.mark.any = counts.mark.any + 1
       end
-      if okPlace and okKind and okMark then
+      if okPlace and okKind and okMark and okFlags then -- a stat's count: the items that have it
+        counts.stat[""] = counts.stat[""] + 1
+        for k in pairs(r._stats) do counts.stat[k] = (counts.stat[k] or 0) + 1 end
+      end
+      if okPlace and okKind and okMark and okStat then
         -- a flag's count: what would show with it on, the other flags as they are
         for _, f in ipairs(FLAGS) do
           if FLAG_TEST[f[1]](it) then
@@ -205,29 +267,28 @@ local function shownRows()
         end
       end
     end
-    if okSearch and okPlace and okKind and okMark and okFlags then rows[#rows + 1] = r end
+    if okSearch and okPlace and okKind and okMark and okFlags and okStat then rows[#rows + 1] = r end
   end
   local mode = cfg.sort
   sortKeys, sortDesc = {}, cfg.desc
   for _, r in ipairs(rows) do
     local k
     if mode == "Name" then k = r._lname
-    elseif mode == "Kind" then k = KIND_RANK[r._kind] or 99
     elseif mode == "Value" then k = r._value
     elseif mode == "Weight" then k = r._weight
     elseif mode == "Quantity" then k = r._count
-    elseif mode == "Level" then k = math.max(r.item.reqLevel or 0, r.item.recLevel or 0)
+    elseif mode == "Level" then k = r._level
+    elseif mode == "Stat" then k = r._stats[cfg.stat] or 0
     else k = r._placeKey end
     sortKeys[r] = k
   end
   table.sort(rows, bySort)
   local groups = {}
   for i, r in ipairs(rows) do
-    if mode == "Place" then groups[i] = r._groupText
-    elseif mode == "Kind" then groups[i] = KIND_NAME[r._kind] or "Other"
-    else groups[i] = "" end
+    groups[i] = mode == "Place" and r._groupText or ""
   end
   view.rows, view.groups, view.counts = rows, groups, counts
+  selPrune(rows)
   return view
 end
 
@@ -379,8 +440,48 @@ local function itemMenu(r)
   if not reach then ui.TextDisabled("Open the bank to move or use it") end
 end
 
+local function filtersOn()
+  if cfg.place ~= "all" or cfg.kind ~= "all" or cfg.mark ~= "any" or cfg.stat ~= "" then return true end
+  for _, f in ipairs(FLAGS) do if cfg.flags[f[1]] then return true end end
+  return false
+end
+-- Every filter off and the search empty (the sort stays; a stat's sort goes with the stat).
+local function resetFilters()
+  setSetting("place", "all")
+  setSetting("kind", "all")
+  setSetting("mark", "any")
+  setSetting("stat", "")
+  if cfg.sort == "Stat" then setSetting("sort", "Place") setSetting("desc", false) end
+  for _, f in ipairs(FLAGS) do setSetting("flag." .. f[1], false) end
+  search = ""
+end
+
+-- A column's heading clicked: its sort, or the other way when it is the sort already.
+local function sortBy(mode)
+  if cfg.sort == mode then setSetting("desc", not cfg.desc)
+  else
+    setSetting("sort", mode)
+    setSetting("desc", SORT_DESC_FIRST[mode] == true)
+  end
+end
+
+local function setStat(key)
+  setSetting("stat", key)
+  if key ~= "" then -- its column sorts, largest first
+    setSetting("sort", "Stat")
+    setSetting("desc", true)
+  elseif cfg.sort == "Stat" then
+    setSetting("sort", "Place")
+    setSetting("desc", false)
+  end
+end
+
 -- ---------------------------------------------------------------- toolbar
 local SORT_DESC, SORT_ASC = { tooltip = "Descending" }, { tooltip = "Ascending" }
+local function sortLabel(m)
+  if m == "Stat" then return STAT_LABEL[cfg.stat] or "Stat" end
+  return m
+end
 local function toolbar(x, y, w, s, v)
   local wx, wy = ui.GetWindowPos()
   ui.SetCursorPos(x - wx, y - wy + 3 * s)
@@ -394,26 +495,38 @@ local function toolbar(x, y, w, s, v)
       search = ""
     end
   end
-  -- sort
-  local cx = x + 274 * s
   local _, th = T.TextSize("Ag", T.font.small)
-  T.Text(cx, y + 3 * s + (28 * s - th) / 2, "Sort", C.muted, T.font.small)
-  ui.SetCursorPos(cx + 36 * s - wx, y - wy + 3 * s)
-  ui.SetNextItemWidth(112 * s)
-  ui.PushStyleVar(ui.StyleVar.FramePadding, 8 * s, 6 * s)
-  if ui.BeginCombo("##advsort", cfg.sort) then
-    for _, m in ipairs(SORTS) do
-      if ui.Selectable(m, m == cfg.sort) then setSetting("sort", m) end
-    end
-    ui.EndCombo()
+  local cx = x + 270 * s
+  local any = filtersOn() or search ~= ""
+  if T.Button("##advreset", cx, y + 3 * s, cx + 104 * s, y + 31 * s, s, "Clear filters",
+      { enabled = any, tooltip = any and "Show everything: the search, the filters and the stat cleared" or "No filters are on" }) then
+    resetFilters()
   end
-  ui.PopStyleVar()
-  if T.Button("##advdesc", cx + 154 * s, y + 3 * s, cx + 182 * s, y + 31 * s, s, cfg.desc and "v" or "^",
-      cfg.desc and SORT_DESC or SORT_ASC) then
-    setSetting("desc", not cfg.desc)
+  cx = cx + 116 * s
+  -- the grid's sort (the list's is its column headings)
+  if cfg.view == "grid" then
+    T.Text(cx, y + 3 * s + (28 * s - th) / 2, "Sort", C.muted, T.font.small)
+    ui.SetCursorPos(cx + 36 * s - wx, y - wy + 3 * s)
+    ui.SetNextItemWidth(112 * s)
+    ui.PushStyleVar(ui.StyleVar.FramePadding, 8 * s, 6 * s)
+    if ui.BeginCombo("##advsort", sortLabel(cfg.sort)) then
+      for _, m in ipairs(SORTS) do
+        if (m ~= "Stat" or cfg.stat ~= "") and ui.Selectable(sortLabel(m), m == cfg.sort) then
+          setSetting("sort", m)
+          setSetting("desc", SORT_DESC_FIRST[m] == true)
+        end
+      end
+      ui.EndCombo()
+    end
+    ui.PopStyleVar()
+    if T.Button("##advdesc", cx + 154 * s, y + 3 * s, cx + 182 * s, y + 31 * s, s, cfg.desc and "v" or "^",
+        cfg.desc and SORT_DESC or SORT_ASC) then
+      setSetting("desc", not cfg.desc)
+    end
+    cx = cx + 196 * s
   end
   -- the view: list or grid
-  local vx = cx + 196 * s
+  local vx = cx
   local c1, w1 = chip("##advlist", vx, y + 4 * s, "List", cfg.view == "list", s, "Rows with each item's details")
   if c1 then setSetting("view", "list") end
   local c2 = chip("##advgrid", vx + w1 + 4 * s, y + 4 * s, "Grid", cfg.view == "grid", s, "Icons only, as in a bag")
@@ -450,6 +563,11 @@ local function toolbar(x, y, w, s, v)
     end
     ui.Separator()
     if ui.MenuItem("Clear every sell mark") then tools.ClearSell() end
+    ui.Separator()
+    if ui.MenuItem("Select everything shown", false, cfg.view == "list" and #v.rows > 0, "Ctrl+A") then
+      for _, r in ipairs(v.rows) do selSet(r, true) end
+    end
+    if ui.MenuItem("Clear the selection", false, sel.n > 0) then selClear() end
     ui.EndPopup()
   end
   -- what the bags hold, right of the view
@@ -501,18 +619,6 @@ local function sideRow(id, x, y, w, s, label, count, on, check)
   return clicked, y + h + 1 * s
 end
 
-local function filtersOn()
-  if cfg.place ~= "all" or cfg.kind ~= "all" or cfg.mark ~= "any" then return true end
-  for _, f in ipairs(FLAGS) do if cfg.flags[f[1]] then return true end end
-  return false
-end
-local function resetFilters()
-  setSetting("place", "all")
-  setSetting("kind", "all")
-  setSetting("mark", "any")
-  for _, f in ipairs(FLAGS) do setSetting("flag." .. f[1], false) end
-end
-
 local function sidebar(x, y, w, h, s, v)
   local wx, wy = ui.GetWindowPos()
   ui.DrawRectFilled(x, y, x + w, y + h, C.ink[1], C.ink[2], C.ink[3], 0.03, 8 * s)
@@ -556,19 +662,64 @@ local function sidebar(x, y, w, h, s, v)
     clicked, yy = sideRow("##f" .. f[1], cx, yy, cw, s, f[2], counts.flag[f[1]] or 0, on, true)
     if clicked then setSetting("flag." .. f[1], not on) end
   end
-  if filtersOn() then
-    yy = yy + 8 * s
-    if T.Button("##advreset", cx + 4 * s, yy, cx + cw - 4 * s, yy + 26 * s, s, "Reset filters") then resetFilters() end
-    yy = yy + 30 * s
+  -- a stat: the items that have it, and its column (a menu, as there are many, with a filter of its own)
+  yy = sideHeading(cx, yy + 4 * s, cw, "STAT", s)
+  local wx2, wy2 = ui.GetWindowPos()
+  ui.SetCursorPos(cx + 4 * s - wx2, yy - wy2 + ui.GetScrollY())
+  ui.SetNextItemWidth(cw - 8 * s)
+  ui.PushStyleVar(ui.StyleVar.FramePadding, 8 * s, 5 * s)
+  local label = cfg.stat ~= "" and (STAT_LABEL[cfg.stat] .. "  (" .. T.Thousands(counts.stat[cfg.stat] or 0) .. ")") or "Any stat"
+  if ui.BeginCombo("##advstat", label, ui.ComboFlags.HeightLarge) then
+    if ui.IsWindowAppearing() then
+      statFilter = ""
+      ui.SetKeyboardFocusHere()
+    end
+    ui.SetNextItemWidth(-1)
+    statFilter = ui.InputTextWithHint("##advstatq", "Filter stats", statFilter, 32)
+    local q = statFilter:lower()
+    if q == "" and ui.Selectable("Any stat", cfg.stat == "") then setStat("") end
+    for _, st in ipairs(stats()) do
+      local n = counts.stat[st[1]] or 0
+      -- what nothing has is left out, as the kinds are, unless it is the one chosen or searched for
+      if (n > 0 or cfg.stat == st[1] or q ~= "") and (q == "" or st[2]:lower():find(q, 1, true)) then
+        if ui.Selectable(st[2] .. "##st" .. st[1], cfg.stat == st[1]) then setStat(st[1]) end
+        local _, y0, x1, y1 = ui.GetItemRect()
+        local _, th = T.TextSize("Ag", T.font.small)
+        T.Text(x1 - 4 * s, y0 + (y1 - y0 - th) / 2, T.Thousands(n), C.faint, T.font.small, "right")
+      end
+    end
+    ui.EndCombo()
   end
+  ui.PopStyleVar()
+  yy = yy + 30 * s
   ui.SetCursorScreenPos(cx, yy)
   ui.Dummy(cw, 6 * s)
   ui.EndChild()
 end
 
 -- ---------------------------------------------------------------- the list and the grid
-local COLS = { place = 0.40, qty = 0.665, value = 0.775, weight = 0.845 }
 local MARK_W = 44
+-- The list's columns across a row from px, cw wide: the marks at the right, the numbers left of them (each x its
+-- right edge), the name and the place sharing what is left. The stat's column is there while a stat is chosen.
+local function columns(px, cw, s)
+  local c = {}
+  c.marks = px + cw - 2 * MARK_W * s - 12 * s
+  c.weight = c.marks - 12 * s
+  c.value = c.weight - 54 * s
+  c.qty = c.value - 84 * s
+  c.stat = c.qty - 48 * s
+  c.level = cfg.stat ~= "" and c.stat - 62 * s or c.qty - 48 * s
+  local nameX = px + 8 * s + (ROW_H - 8) * s + 10 * s
+  local rest = c.level - 36 * s - nameX
+  c.place = nameX + rest * 0.58
+  c.placeW = c.level - 36 * s - c.place - 8 * s
+  return c
+end
+local function statText(v)
+  if v == nil then return "" end
+  if math.type(v) == "float" then return string.format("%.2f", v) end
+  return T.Thousands(v)
+end
 local KEEP_TIP = "Keep: never destroy, drop, trade, give, sell or send it (every copy of it)"
 local SELL_TIP = "Sell: Sell marked sells it at a merchant (every copy you carry)"
 local NO_SELL_TIP = "Merchants will not buy it"
@@ -593,7 +744,36 @@ end
 
 local menuRow = nil
 
-local function listRow(r, px, py, cw, s, th)
+-- A click on a row: it alone; Ctrl adds or takes it away; Shift selects from the last one clicked to it.
+local function rowClicked(v, r)
+  local io = ui.GetIO()
+  if io.shift and sel.anchor then
+    local a, b
+    for i, o in ipairs(v.rows) do
+      if o.place == sel.anchor then a = i end
+      if o == r then b = i end
+    end
+    if a and b then
+      if not io.ctrl then
+        local anchor = sel.anchor
+        selClear()
+        sel.anchor = anchor
+      end
+      for i = math.min(a, b), math.max(a, b) do selSet(v.rows[i], true) end
+      return
+    end
+  end
+  if io.ctrl then
+    selSet(r, not selected(r))
+  else
+    local only = selected(r) and sel.n == 1
+    selClear()
+    if not only then selSet(r, true) end -- (a click on the one selected row takes it away)
+  end
+  sel.anchor = r.place
+end
+
+local function listRow(v, r, px, py, cw, s, th, col)
   local rh = ROW_H * s
   local it = r.item
   local kept, sell = tools.Kept(it), tools.Junk(it)
@@ -602,22 +782,29 @@ local function listRow(r, px, py, cw, s, th)
   local mw, mh = MARK_W * s, 20 * s
   local sx = px + cw - mw - 6 * s
   local kx = sx - mw - 6 * s
-  T.Hit(r._id, px, py, px + cw, py + rh - 2 * s) -- (the row: its menu; the icon and the marks act on their own)
+  -- (the row: selecting it, and its menu; the icon and the marks act on their own)
+  local clicked = T.Hit(r._id, px, py, px + cw, py + rh - 2 * s)
   local hov = ui.IsItemHovered()
-  if hov and ui.IsMouseClicked(ui.Mouse.Right) then
-    local mx = ui.GetMousePos()
-    if mx > ix + isz and mx < kx then -- not on the icon (a right click there uses the item) nor the marks
-      menuRow = r
-      T.TakeRightClick()
-    end
+  local mx = ui.GetMousePos()
+  local between = mx > ix + isz and mx < kx -- not on the icon (a right click there uses the item) nor the marks
+  if clicked and between then rowClicked(v, r) end
+  if hov and ui.IsMouseClicked(ui.Mouse.Right) and between then
+    menuRow = r
+    T.TakeRightClick()
   end
-  if hov then ui.DrawRectFilled(px, py, px + cw, py + rh - 2 * s, C.ink[1], C.ink[2], C.ink[3], 0.05, 6 * s) end
+  local on = selected(r)
+  if on then
+    local a = C.accent
+    ui.DrawRectFilled(px, py, px + cw, py + rh - 2 * s, a[1], a[2], a[3], hov and 0.20 or 0.15, 6 * s)
+  elseif hov then
+    ui.DrawRectFilled(px, py, px + cw, py + rh - 2 * s, C.ink[1], C.ink[2], C.ink[3], 0.05, 6 * s)
+  end
   -- the mark's bar at the left edge
   local bar = kept and C.good or (sell and C.danger or nil)
   if bar then ui.DrawRectFilled(px, py + 6 * s, px + 3 * s, py + rh - 8 * s, bar[1], bar[2], bar[3], 0.9, 1.5 * s) end
   slotFor(r, ix, iy, isz, s)
   local nx = ix + isz + 10 * s
-  local colPlace = px + cw * COLS.place
+  local colPlace = col.place
   local nameW = colPlace - nx - 10 * s
   local name = it.name or ""
   local twoLine = py + 4 * s
@@ -626,12 +813,17 @@ local function listRow(r, px, py, cw, s, th)
   if tg ~= "" then T.Text(nx, twoLine + th + 1 * s, T.Fit(tg, nameW, T.font.tiny), C.faint, T.font.tiny) end
   local cy = py + (rh - 2 * s - th) / 2
   local banked = r.where == "bank" or r.where == "shared"
-  T.Text(colPlace, cy, T.Fit(r._place, px + cw * COLS.qty - colPlace - 40 * s, T.font.small),
+  T.Text(colPlace, cy, T.Fit(r._place, col.placeW, T.font.small),
     banked and C.gold or (r.where == "worn" and C.accent or C.muted), T.font.small)
-  if it.stackable then T.Text(px + cw * COLS.qty, cy, T.Thousands(it.count), C.text, T.font.small, "right") end
+  if r._level > 0 then T.Text(col.level, cy, tostring(r._level), C.muted, T.font.small, "right") end
+  if cfg.stat ~= "" then
+    local sv = r._stats[cfg.stat]
+    T.Text(col.stat, cy, statText(sv), sv and sv < 0 and C.danger or C.text, T.font.small, "right")
+  end
+  if it.stackable then T.Text(col.qty, cy, T.Thousands(it.count), C.text, T.font.small, "right") end
   local mv, coin = money(r._value)
-  if mv ~= "" then T.Text(px + cw * COLS.value, cy, mv, C[coin] or C.gold, T.font.small, "right") end
-  T.Text(px + cw * COLS.weight, cy, weightText(r._weight), C.faint, T.font.small, "right")
+  if mv ~= "" then T.Text(col.value, cy, mv, C[coin] or C.gold, T.font.small, "right") end
+  T.Text(col.weight, cy, weightText(r._weight), C.faint, T.font.small, "right")
   -- the marks
   local my = py + (rh - 2 * s - mh) / 2
   local held = r.kept and not kept -- a bag holding a kept item
@@ -658,6 +850,7 @@ local function listView(v, x, y, w, h, s)
   local yy = py0
   local header = nil
   local rh, hh = ROW_H * s, HEAD_H * s
+  local col = columns(px0, cw, s)
   for i, r in ipairs(v.rows) do
     local g = v.groups[i]
     if g ~= "" and g ~= header then
@@ -665,7 +858,7 @@ local function listView(v, x, y, w, h, s)
       if yy + hh >= top and yy <= bottom then groupHeader(px0, yy, cw, s, g) end
       yy = yy + hh
     end
-    if yy + rh >= top and yy <= bottom then listRow(r, px0, yy, cw, s, th) end
+    if yy + rh >= top and yy <= bottom then listRow(v, r, px0, yy, cw, s, th, col) end
     yy = yy + rh
   end
   ui.SetCursorScreenPos(px0, yy)
@@ -697,6 +890,10 @@ local function gridView(v, x, y, w, h, s)
     local tx = px0 + col * (t + g)
     if yy + t >= top and yy <= bottom then
       slotFor(r, tx, yy, t, s)
+      if selected(r) then
+        local a = C.accent
+        ui.DrawRect(tx - 2 * s, yy - 2 * s, tx + t + 2 * s, yy + t + 2 * s, a[1], a[2], a[3], 0.9, 7 * s, 2 * s)
+      end
     end
     col = col + 1
     if col >= cols then yy, col = yy + t + g, 0 end
@@ -707,23 +904,147 @@ local function gridView(v, x, y, w, h, s)
   ui.EndChild()
 end
 
+-- The list's headings, each sorting by its column (a second click the other way), with the sort's arrow.
+local HEAD_TIP = {
+  Value = "The item's base value, for the whole stack; a merchant pays less",
+  Level = "The level it needs, or is meant for",
+}
 local function columnHeader(x, y, w, s)
   local _, tth = T.TextSize("Ag", T.font.tiny)
-  local function head(cx, text, align, tip)
-    T.Text(cx, y, text, C.faint, T.font.tiny, align)
-    if tip then
-      local tw = T.TextSize(text, T.font.tiny)
-      local x0 = align == "right" and cx - tw or cx
-      T.Hit("##h" .. text, x0, y, x0 + tw, y + tth)
-      if ui.IsItemHovered() then ui.SetTooltip(tip) end
+  -- (the list's child starts below; its rows are as wide as the child less its scroll bar, so are the headings)
+  local col = columns(x, w, s)
+  local function head(cx, text, align, mode)
+    local tw = T.TextSize(text, T.font.tiny)
+    local x0 = align == "right" and cx - tw or cx
+    local on = cfg.sort == mode
+    local clicked = T.Hit("##h" .. mode, x0 - 4 * s, y - 3 * s, x0 + tw + 12 * s, y + tth + 3 * s)
+    local hov = ui.IsItemHovered()
+    T.Text(cx, y, text, (on or hov) and C.text or C.faint, T.font.tiny, align)
+    if on then -- the arrow: up for A to Z or smallest first
+      local a, ax, my = C.accent, x0 + tw + 3 * s, y + tth / 2
+      if cfg.desc then
+        ui.DrawTriangleFilled(ax, my - 2 * s, ax + 6 * s, my - 2 * s, ax + 3 * s, my + 2.5 * s, a[1], a[2], a[3], 1)
+      else
+        ui.DrawTriangleFilled(ax, my + 2 * s, ax + 6 * s, my + 2 * s, ax + 3 * s, my - 2.5 * s, a[1], a[2], a[3], 1)
+      end
+    end
+    if hov then
+      local why = HEAD_TIP[mode]
+      local how = on and "Click to sort the other way" or ("Click to sort by " .. text:lower())
+      ui.SetTooltip(why and (why .. "\n" .. how) or how)
+    end
+    if clicked then sortBy(mode) end
+  end
+  head(x + 8 * s, "ITEM", nil, "Name")
+  head(col.place, "WHERE", nil, "Place")
+  head(col.level, "LVL", "right", "Level")
+  if cfg.stat ~= "" then head(col.stat, T.Fit((STAT_LABEL[cfg.stat] or "Stat"):upper(), 58 * s, T.font.tiny), "right", "Stat") end
+  head(col.qty, "QTY", "right", "Quantity")
+  head(col.value, "VALUE", "right", "Value")
+  head(col.weight, "WEIGHT", "right", "Weight")
+  T.Text(x + w - (MARK_W + 9) * s, y, "MARKS", C.faint, T.font.tiny, "center")
+end
+
+-- ---------------------------------------------------------------- the selection's actions
+local BULK = {
+  sell = { word = "Sell", verb = "Sell", where = "Open a merchant to sell what you selected",
+    what = "what you carry that the merchant buys" },
+  tribute = { word = "Tribute", verb = "Donate", where = "Open a tribute master to donate what you selected",
+    what = "what you carry that is worth tribute" },
+  destroy = { word = "Destroy", verb = "Destroy", what = "what you carry, but a bag that holds anything or a No Destroy item" },
+}
+local bulk = { mode = nil, places = nil } -- the action waiting for its confirmation
+
+-- The selected places, in the order shown.
+local function selPlaces(v)
+  local out = {}
+  for _, r in ipairs(v.rows) do
+    if selected(r) then out[#out + 1] = r.place end
+  end
+  return out
+end
+
+local function bulkConfirm(s)
+  ui.PushStyleVar(ui.StyleVar.WindowPadding, 14 * s, 12 * s)
+  local open = ui.BeginPopup("##advbulkask")
+  ui.PopStyleVar()
+  if not open then
+    bulk.mode, bulk.places = nil, nil
+    return
+  end
+  local b = BULK[bulk.mode]
+  local n, err = eq.BulkItems(bulk.mode, bulk.places, true)
+  local names, seen = {}, {}
+  for _, r in ipairs(data.rows) do
+    for _, p in ipairs(bulk.places) do
+      if r.place == p and not seen[p] then
+        seen[p] = true
+        names[#names + 1] = r.item.stackable and (r.item.count .. " x " .. r.item.name) or r.item.name
+      end
     end
   end
-  head(x + 8 * s, "ITEM")
-  head(x + w * COLS.place, "WHERE")
-  head(x + w * COLS.qty, "QTY", "right")
-  head(x + w * COLS.value, "VALUE", "right", "The item's base value, for the whole stack; a merchant pays less")
-  head(x + w * COLS.weight, "WEIGHT", "right")
-  head(x + w - (MARK_W + 9) * s, "MARKS", "center")
+  ui.Text(string.format("%s %d item%s?", b.verb, n, n == 1 and "" or "s"))
+  ui.PushTextWrapPos(ui.GetCursorPos() + 340 * s)
+  for i = 1, math.min(#names, 8) do ui.TextDisabled("  " .. names[i]) end
+  if #names > 8 then ui.TextDisabled(string.format("  and %d more", #names - 8)) end
+  if n < #bulk.places then
+    ui.TextDisabled(string.format("Only %s: %d of the %d selected; kept items stay.", b.what, n, #bulk.places))
+  end
+  if bulk.mode ~= "sell" then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, "This cannot be undone.") end
+  if err then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, err) end
+  ui.PopTextWrapPos()
+  ui.Dummy(0, 4 * s)
+  local d = C.danger
+  ui.PushStyleColor(ui.Col.Button, d[1], d[2], d[3], 0.55)
+  ui.PushStyleColor(ui.Col.ButtonHovered, d[1], d[2], d[3], 0.75)
+  ui.PushStyleColor(ui.Col.ButtonActive, d[1], d[2], d[3], 0.9)
+  local go = ui.Button(b.verb .. (n > 0 and (" " .. n) or "")) and n > 0 and not err
+  ui.PopStyleColor(3)
+  if go then
+    local _, why = eq.BulkItems(bulk.mode, bulk.places)
+    note(why)
+    if not why then selClear() end
+    ui.CloseCurrentPopup()
+  end
+  ui.SameLine()
+  if ui.Button("Cancel") or ui.IsKeyPressed(ui.Key.Escape) then ui.CloseCurrentPopup() end
+  ui.EndPopup()
+end
+
+-- The selection's bar, from x (where the summary is otherwise): how many, their worth, and the actions.
+local function selectionBar(x, y, s, v)
+  local places = selPlaces(v)
+  local worth = 0
+  for _, r in ipairs(v.rows) do
+    if selected(r) then worth = worth + r._value end
+  end
+  local mv = money(worth)
+  local tx = x + T.Text(x, y + 15 * s, string.format("%d selected%s", #places, mv ~= "" and (" (" .. mv .. ")") or ""),
+    C.text, T.font.small) + 14 * s
+  local busy = eq.ItemJob()
+  local bw = 96 * s
+  for _, mode in ipairs({ "sell", "tribute", "destroy" }) do
+    local b = BULK[mode]
+    local n, err = eq.BulkItems(mode, places, true)
+    local ok = not busy and not err and n > 0
+    local tip
+    if busy then tip = "Wait for the items being moved"
+    elseif err and b.where and err:find("^Open") then tip = b.where
+    elseif err then tip = err
+    elseif n == 0 then tip = "None of them: only " .. b.what .. ", never what is marked Keep"
+    else tip = string.format("%s %d of the %d selected (%s; never what is marked Keep)", b.verb, n, #places, b.what) end
+    if T.Button("##advbulk" .. mode, tx, y + 10 * s, tx + bw, y + 36 * s, s, n > 0 and (b.word .. " (" .. n .. ")") or b.word,
+        { enabled = ok, primary = ok and mode ~= "destroy", danger = mode == "destroy", tooltip = tip }) then
+      bulk.mode, bulk.places = mode, places
+      ui.OpenPopup("##advbulkask")
+    end
+    tx = tx + bw + 6 * s
+  end
+  if T.Button("##advselclear", tx + 4 * s, y + 10 * s, tx + 4 * s + 64 * s, y + 36 * s, s, "Clear",
+      { tooltip = "Clear the selection" }) then
+    selClear()
+  end
+  bulkConfirm(s)
 end
 
 -- ---------------------------------------------------------------- footer
@@ -731,7 +1052,10 @@ local function footer(x, y, w, s, v)
   local _, th = T.TextSize("Ag", T.font.small)
   local banner = tools.ModeBanner("##advmode", x, x + 440 * s, y + 13 * s, s)
   local note = tools.Note()
-  if banner == 0 and note then -- why the last Sort, Stack or sale did not start, for a few seconds
+  local selecting = sel.n > 0 and cfg.view == "list" or bulk.mode ~= nil
+  if banner == 0 and selecting then
+    selectionBar(x, y, s, v)
+  elseif banner == 0 and note then -- why the last Sort, Stack or sale did not start, for a few seconds
     T.Text(x, y + 15 * s, T.Fit(note, w * 0.5, T.font.small), C.danger, T.font.small)
   elseif banner == 0 then
     local keep, sell, sellCp = 0, 0, 0
@@ -760,7 +1084,7 @@ local function footer(x, y, w, s, v)
   local merchant = eq.WindowShown("MerchantWnd") == true
   local n = tools.JunkCarried()
   local busy = eq.ItemJob()
-  if not busy then
+  if not busy and not (banner == 0 and selecting) then -- (the selection's bar has its own Sell)
     local tip = tools.Note() or (not merchant and "Open a merchant to sell what you marked"
       or (n > 0 and "Sell every item you carry that is marked to sell" or "Mark items to sell first"))
     if T.Button("##advsell", sx1 - sellW, y + 10 * s, sx1, y + 36 * s, s,
@@ -783,8 +1107,20 @@ local DIALOG = {
 local function body(x, y, w, h, s)
   refresh()
   readSettings()
+  local q = eq.TakeItemSearch and eq.TakeItemSearch()
+  if q then -- /finditem <text>: everything, searched
+    resetFilters()
+    readSettings()
+    search = q
+    selClear()
+  end
   menuRow = nil
   local v = shownRows()
+  -- Ctrl+A: everything shown, unless a text field has the keys
+  local io = ui.GetIO()
+  if cfg.view == "list" and io.ctrl and not io.typing and ui.IsKeyPressed(ui.Key.A) and ui.IsWindowFocused(3) then
+    for _, r in ipairs(v.rows) do selSet(r, true) end
+  end
   toolbar(x, y, w, s, v)
   local by = y + TOOL_H * s
   local bodyH = h - TOOL_H * s - FOOT_H * s

@@ -205,6 +205,20 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
         }
         return true;
     }
+    if (h == "Hailstone_finditem") {
+        // The Advanced Inventory (/finditem, /advi): no argument shows or hides it; text opens it searching for that
+        // (its filters cleared, so the search covers everything the character has).
+        if (!eq_api_) return true;
+        std::string text = args;
+        while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) text.pop_back();
+        if (text.empty()) {
+            eq_api_->toggle("InventoryManagerWnd");
+        } else {
+            eq_host_.item_search = text;
+            eq_api_->show("InventoryManagerWnd", true);
+        }
+        return true;
+    }
     if (h == "Cmd_xtarget") {
         xtarget_command(args);
         return true;

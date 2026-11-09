@@ -181,7 +181,9 @@ struct EqHost {
     };
     std::optional<UiQuantity> quantity;
     std::int32_t air = -1, max_air = 0; // the air supply (PlayerMovement; -1 not yet counted) and its maximum
-    bool body_tint_open = false; // BodyTintWnd (the inventory's Tint button opens it; app/lua_eq_tint.cpp)
+    // A search for the Advanced Inventory (/finditem <text>), until its window takes it (eq.TakeItemSearch).
+    std::optional<std::string> item_search;
+        bool body_tint_open = false; // BodyTintWnd (the inventory's Tint button opens it; app/lua_eq_tint.cpp)
     // The player customization window (PlayerCustomizationWnd, app/lua_eq_customization.cpp): the character library
     // and the model the player is drawn with (the window tries features on it), and the window's camera: -1 while
     // it is closed, else CharSelect_PositionCameraForModel's zoom (100 the face, 0 the whole body).
