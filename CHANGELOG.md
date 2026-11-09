@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Busy zones and the pre-game screens cost less each frame: the group and pet windows, the name plates, the grass, the flames, the far spawns' footsteps and the server and character selects no longer rebuild their lists every frame, and starting to draw a neighbour zone no longer stalls a frame sampling the ground by its zone line
+- Hot button, social and loadout changes are saved to the character's file a few seconds after they are made, and at once on zoning, camping and quitting, instead of in every frame something changes (a plugin setting buttons rewrote the file each frame)
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting
 - Modern UI: the map's Follow button stays on when you zoom with the mouse wheel; the map zooms around you instead of the cursor while following. Only dragging the map or a double click stops following
 - Erudites and other characters whose Luclin model borrows another race's animations keep their own face: an erudite no longer bares its teeth with parted lips, frowns or wears its beard in front of its mouth. The lips, jaw and brows took the wood elf's places from the borrowed animations

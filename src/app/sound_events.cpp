@@ -204,10 +204,10 @@ void SoundEvents::update(net::GameConnection& conn, const LocalMotion& me, std::
         } else if (!audio::spawn_out_of_hearing(listener, s.display_valid ? s.display_position : s.position,
                                                 height_of(s), kHearingMargin)) {
             // Hailstone, a deliberate difference: a spawn walking beyond the reach of its sounds (muted there, as
-            // the original's are) is not turned into them each frame; its loop and steps pick up when it comes
-            // in reach (the animation it walks then differs from the one kept, so the loop is set again). The
-            // original plays the muted steps, each holding one of pool 0's voices while it lasts (docs/mechanics.md
-            // "Listener, music, spell sounds and spell gems"). OP_Animation's sounds above are played wherever the spawn is.
+            // the original's are) is not turned into them each frame; its steps and loop pick up on its first frame
+            // in reach. The original plays the muted steps, each holding one of pool 0's voices while it lasts
+            // (docs/mechanics.md "Listener, music, spell sounds and spell gems"). OP_Animation's sounds above play
+            // wherever the spawn is.
             float speed = std::sqrt(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y) * 20.0f; // per second
             float scale = height_of(s) / 6.0f;
             std::int32_t a = speed < kIdleBelow ? kAnimStand : speed < kRunAbove * scale / 1.2f ? kAnimWalk : kAnimRun;

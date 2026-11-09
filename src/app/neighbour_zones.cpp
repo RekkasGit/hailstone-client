@@ -7,8 +7,8 @@
 
 #include "assets/zone.h"
 #include "core/game_dir.h"
-#include "core/work_budget.h"
 #include "core/log.h"
+#include "core/work_budget.h"
 #include "game/collision.h"
 #include "game/zone_names.h"
 #include "platform/process.h"
@@ -334,7 +334,8 @@ void NeighbourZones::update(const glm::vec3& camera, float far_plane, bool enabl
             continue;
         }
         const bool idle = game::distance_xy(camera, l.seam.lo, l.seam.hi) > far_plane + kFreeReach;
-        if (idle != l.idle) log::info("neighbour zone {}: {}", l.name, idle ? "out of reach, not drawn" : "in reach again");
+        if (idle != l.idle)
+            log::info("neighbour zone {}: {}", l.name, idle ? "out of reach, not drawn" : "in reach again");
         l.idle = idle;
     }
     if (!enabled) pending_.reset();

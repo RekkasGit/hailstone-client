@@ -31,7 +31,8 @@ bool group_member_is(std::string_view member, std::string_view spawn) {
     return iequals(member, spawn) || iequals(member, s);
 }
 
-const game::Spawn* GroupMemberSpawns::find(const game::WorldState& world, const std::string& name, std::int64_t now_ms) {
+const game::Spawn* GroupMemberSpawns::find(const game::WorldState& world, const std::string& name,
+                                           std::int64_t now_ms) {
     auto it = members_.find(name);
     if (it == members_.end()) it = members_.emplace(name, Entry{}).first;
     Entry& e = it->second;

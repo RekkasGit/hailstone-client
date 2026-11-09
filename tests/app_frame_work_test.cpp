@@ -85,7 +85,7 @@ std::string read_text(const std::filesystem::path& p) {
 }
 } // namespace
 
-TEST_CASE("Hot buttons: changes are saved once they have waited, at once on zoning and at the end; a page flip is not") {
+TEST_CASE("Hot buttons: changes are saved once they have waited, at once on zoning and at the end; not a page flip") {
     test::ScratchDir scratch("actions_save_delay");
     const std::filesystem::path file = scratch.path() / "hotbuttons.ini";
     Config config;
