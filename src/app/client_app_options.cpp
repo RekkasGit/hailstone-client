@@ -421,6 +421,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "master") return s.master;
     if (o == "music") return s.music;
     if (o == "effects") return s.effects;
+    if (o == "npc_hits") return s.npc_hits;
     if (o == "realism") return s.realism;
     if (o == "environment") return s.environment ? 1 : 0;
     if (o == "combat_music") return s.combat_music ? 1 : 0;
@@ -625,6 +626,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "master") s.master = percent;
     else if (o == "music") s.music = percent;
     else if (o == "effects") s.effects = percent;
+    else if (o == "npc_hits") s.npc_hits = percent;
     else if (o == "realism") s.realism = percent;
     else if (o == "environment") s.environment = v != 0;
     else if (o == "combat_music") s.combat_music = v != 0;
