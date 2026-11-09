@@ -388,6 +388,17 @@ TEST_CASE("fuzz: PFS archives") {
     });
 }
 
+namespace {
+// Every part of a built mesh lies within its indices and every index within its vertices: the consumers
+// (game/object_collision.cpp, zone_fires, wld_detail) read parts without checking them again.
+void check_parts(const Mesh& m) {
+    bool ok = true;
+    for (const auto& p : m.parts) ok = ok && std::uint64_t{p.first_index} + p.index_count <= m.indices.size();
+    for (auto i : m.indices) ok = ok && i < m.vertices.size();
+    if (!ok) FAIL_CHECK("a mesh part or index out of range: " << m.name);
+}
+} // namespace
+
 TEST_CASE("fuzz: WLD files and the meshes built from them") {
     fuzz::QuietLog quiet;
     std::vector<Bytes> seeds = {test::wld_fixtures::mesh_wld(false), test::wld_fixtures::mesh_wld(true), wld_all_types(1), wld_all_types(2)};
@@ -395,7 +406,7 @@ TEST_CASE("fuzz: WLD files and the meshes built from them") {
         auto w = wld::WldFile::parse(d);
         for (const auto& f : w.fragments()) {
             (void)w.resolve(static_cast<wld::Ref>(f.offset));
-            if (const auto* m = std::get_if<wld::MeshDef>(&f.data)) (void)wld::build_mesh(w, *m, f.name);
+            if (const auto* m = std::get_if<wld::MeshDef>(&f.data)) check_parts(wld::build_mesh(w, *m, f.name));
             if (const auto* sk = std::get_if<wld::Skeleton>(&f.data)) (void)wld::build_skeleton_pose(w, *sk, f.name);
             if (const auto* inst = std::get_if<wld::ActorInstance>(&f.data)) (void)wld::placement_transform(*inst);
         }
@@ -411,7 +422,7 @@ TEST_CASE("fuzz: EQG models, ZON, heightmap, ECO, TOG, water and character files
               for (bool terrain : {false, true}) {
                   auto m = eqg::parse_model(d, terrain);
                   eqg::MeshStats stats;
-                  (void)eqg::build_mesh(m, "OBJ", stats);
+                  check_parts(eqg::build_mesh(m, "OBJ", stats));
               }
           });
     sweep("parse_zon", {eqg_zon()}, 8, 800, [](std::span<const std::byte> d) { (void)eqg::parse_zon(d); });

@@ -18,6 +18,7 @@
 #include "game/race_models.h"
 #include "game_files.h"
 #include "scratch_dir.h"
+#include "pfs_fixtures.h"
 #include "wld_fixtures.h"
 
 using namespace hailstone;
@@ -538,4 +539,67 @@ TEST_CASE("GlobalLoad.txt: a phase past int32 wraps as the original's atoi, the 
     REQUIRE(out.size() >= 2);
     CHECK(out[0] == "second_chr.s3d");
     CHECK(out[1] == "first_chr.s3d");
+}
+
+namespace {
+// An uncompressed 32-bit TGA of one colour.
+std::vector<std::byte> solid_tga(std::uint16_t w, std::uint16_t h, std::uint8_t r, std::uint8_t g, std::uint8_t b,
+                                 std::uint8_t a) {
+    ByteWriter out;
+    out.le<std::uint8_t>(0);
+    out.le<std::uint8_t>(0);
+    out.le<std::uint8_t>(2);
+    for (int i = 0; i < 9; ++i) out.le<std::uint8_t>(0); // colour map, origin
+    out.le(w);
+    out.le(h);
+    out.le<std::uint8_t>(32);
+    out.le<std::uint8_t>(8);
+    for (std::size_t i = 0; i < std::size_t{w} * h; ++i) {
+        out.le(b);
+        out.le(g);
+        out.le(r);
+        out.le(a);
+    }
+    return out.take();
+}
+} // namespace
+
+TEST_CASE("Luclin layers: composited at the size of the layer with the most texels") {
+    using namespace hailstone::test::pfs_fixtures;
+    // A wide skin and a tall armour layer: once composited at the widest by the tallest (a forged pair of 16384 x 1
+    // and 1 x 16384 layers made a 1 GiB image).
+    auto archive = std::make_shared<CharacterArchive>();
+    archive->archive = std::make_shared<const PfsArchive>(PfsArchive::from_memory(
+        make_pfs({{"skin.tga", solid_tga(64, 2, 200, 0, 0, 255)}, {"armour.tga", solid_tga(2, 16, 0, 0, 200, 255)},
+                  {"big.tga", solid_tga(32, 32, 0, 200, 0, 255)}})));
+    CharacterLibrary lib({archive});
+    std::string why;
+    auto two = lib.texture("layers:skin.tga+armour.tga", false, &why);
+    REQUIRE_MESSAGE(two, why);
+    CHECK(two->width == 64); // 128 texels against 32
+    CHECK(two->height == 2);
+    REQUIRE(two->mips.size() == 1);
+    REQUIRE(two->mips[0].size() == 64u * 2 * 4);
+    CHECK(std::to_integer<int>(two->mips[0][2]) == 200); // the opaque armour layer over the skin
+    auto three = lib.texture("layers:skin.tga+big.tga", false, &why);
+    REQUIRE(three);
+    CHECK(three->width == 32); // the base layer is resampled up to the larger one
+    CHECK(three->height == 32);
+    CHECK(std::to_integer<int>(three->mips[0][1]) == 200);
+}
+
+TEST_CASE("EQGA: a bone name past 256 bytes is refused, not copied for every track") {
+    auto clip = [](std::size_t name_length) {
+        ByteWriter w;
+        w.fixed_string("EQGA", 4);
+        w.le<std::uint32_t>(1);
+        w.le<std::uint32_t>(static_cast<std::uint32_t>(name_length + 1));
+        w.le<std::uint32_t>(1); // tracks
+        w.fixed_string(std::string(name_length, 'b'), name_length + 1);
+        w.le<std::uint32_t>(0); // frames
+        w.le<std::uint32_t>(0); // the name at offset 0
+        return w.take();
+    };
+    CHECK(eqg_character::parse_animation(clip(256)).tracks.at(0).bone.size() == 256);
+    CHECK_THROWS_WITH(eqg_character::parse_animation(clip(257)), doctest::Contains("too long"));
 }

@@ -5,6 +5,7 @@
 #include "assets/eqg.h"
 
 #include <algorithm>
+#include <limits>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -34,11 +35,15 @@ std::string lower(std::string s) {
     return s;
 }
 
-// The NUL-terminated string at `offset` of a string table ("" when out of range).
+// The longest name a string table gives. The RoF2 files' longest is 59 bytes; without a bound every reference into
+// one long run without a NUL would copy all of it.
+constexpr std::size_t kMaxStringLength = 256;
+
+// The NUL-terminated string at `offset` of a string table ("" when out of range), cut at kMaxStringLength.
 std::string string_at(std::span<const std::byte> table, std::int64_t offset) {
     if (offset < 0 || static_cast<std::size_t>(offset) >= table.size()) return {};
     const char* p = reinterpret_cast<const char*>(table.data()) + offset;
-    std::size_t max = table.size() - static_cast<std::size_t>(offset);
+    std::size_t max = std::min(table.size() - static_cast<std::size_t>(offset), kMaxStringLength);
     std::size_t len = 0;
     while (len < max && p[len] != '\0') ++len;
     return std::string(p, len);
@@ -349,7 +354,10 @@ Heightmap parse_heightmap(const HeightmapOptions& options, std::span<const std::
     const std::uint32_t q = options.quads_per_tile;
     const std::size_t verts = static_cast<std::size_t>(q + 1) * (q + 1);
     const float tile_size = options.tile_size();
-    map.tiles.reserve(tile_count);
+    // A tile's record holds at least its vertices (12 bytes each), quad flags and seven words (index, id, water,
+    // counts): `count` checked only 12 bytes a tile, against a HeightmapTile of some 160 before its vectors.
+    const std::size_t min_record = verts * 12 + std::size_t{q} * q + 28;
+    map.tiles.reserve(std::min<std::size_t>(tile_count, r.remaining() / min_record));
     for (std::uint32_t t = 0; t < tile_count; ++t) {
         HeightmapTile tile;
         // Unsigned subtraction: a bogus tile index wraps instead of overflowing a signed int.
@@ -650,7 +658,12 @@ std::optional<std::size_t> nearest_painted_tile(std::int32_t lng, std::int32_t l
         for (std::int32_t dy = -ring; dy <= ring; ++dy)
             for (std::int32_t dx = -ring; dx <= ring; ++dx) {
                 if (std::max(std::abs(dx), std::abs(dy)) != ring) continue;
-                auto it = painted.find({lng + dx, lat + dy});
+                // In 64 bits: a corrupt tile's index lies near INT32_MIN or INT32_MAX, and a neighbour past it is none.
+                const std::int64_t x = std::int64_t{lng} + dx, y = std::int64_t{lat} + dy;
+                if (x < std::numeric_limits<std::int32_t>::min() || x > std::numeric_limits<std::int32_t>::max() ||
+                    y < std::numeric_limits<std::int32_t>::min() || y > std::numeric_limits<std::int32_t>::max())
+                    continue;
+                auto it = painted.find({static_cast<std::int32_t>(x), static_cast<std::int32_t>(y)});
                 if (it == painted.end()) continue;
                 const std::int64_t d2 = std::int64_t{dx} * dx + std::int64_t{dy} * dy;
                 if (!best || d2 < best_d2) {

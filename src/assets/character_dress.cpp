@@ -492,8 +492,12 @@ std::optional<Image> CharacterLibrary::layered_texture(std::string_view key, std
         }
         Image rgba = to_rgba8(*img);
         rgba.mips.resize(1);
-        w = std::max(w, rgba.width);
-        h = std::max(h, rgba.height);
+        // Composited at the size of the layer with the most texels (a texture pack may upscale one layer): not the
+        // widest by the tallest, which a wide and a tall layer would make 16384 x 16384.
+        if (std::uint64_t{rgba.width} * rgba.height > std::uint64_t{w} * h) {
+            w = rgba.width;
+            h = rgba.height;
+        }
         layers.push_back(std::move(rgba));
     }
     if (layers.empty() || w == 0 || h == 0) {
@@ -512,7 +516,7 @@ std::optional<Image> CharacterLibrary::layered_texture(std::string_view key, std
         const auto& s = src.mips.front();
         for (std::uint32_t y = 0; y < h; ++y)
             for (std::uint32_t x = 0; x < w; ++x) {
-                // Nearest sample when a layer is smaller than the largest.
+                // Nearest sample when a layer's size differs from the composite's.
                 std::size_t sx = static_cast<std::size_t>(x) * src.width / w;
                 std::size_t sy = static_cast<std::size_t>(y) * src.height / h;
                 const std::byte* sp = &s[(sy * src.width + sx) * 4];

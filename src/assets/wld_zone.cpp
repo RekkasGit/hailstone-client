@@ -566,7 +566,7 @@ Zone load_classic_zone(const GameDir& game, std::string_view name_view, const Zo
                 if (!def->colors.empty()) light.color = def->colors.front();
                 else if (!def->levels.empty()) light.color = glm::vec3(def->levels.front());
             }
-            zone.lights.push_back(light);
+            if (finite_light(light)) zone.lights.push_back(light);
         }
     }
 

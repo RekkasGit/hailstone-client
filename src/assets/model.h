@@ -4,6 +4,7 @@
 // later). Coordinates are EQ world units in the files' own Z-up frame; the
 // renderer converts to its own frame.
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -161,5 +162,12 @@ struct PointLight {
     glm::vec3 color{1.0f};
     float radius = 0.0f;
 };
+
+// Whether a light read from a zone file is all finite numbers. A damaged file's NaN or infinity is left out at load,
+// so the light grid never bins it (the original's files hold none).
+inline bool finite_light(const PointLight& l) {
+    return std::isfinite(l.position.x) && std::isfinite(l.position.y) && std::isfinite(l.position.z) &&
+           std::isfinite(l.color.r) && std::isfinite(l.color.g) && std::isfinite(l.color.b) && std::isfinite(l.radius);
+}
 
 } // namespace hailstone::assets
