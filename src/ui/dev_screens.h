@@ -78,6 +78,7 @@ struct AddonOfferView {
     std::string source, page, notes;                      // owner/repo, its page, its release notes
     std::string key;               // the signing key's first 16 hex digits ("" not signed)
     std::string installed_version; // "" a new add-on; else this replaces that version
+    bool older = false;            // older than installed_version: AddonInstall needs choice_on (the player's yes)
     std::string blocked;           // why it cannot be installed ("" it can)
     std::vector<std::string> caps; // what it asks to do, in plain words
 };
@@ -137,7 +138,8 @@ struct AddonsView {
     std::string server;             // the picked server's name ("" none picked)
     std::vector<AddonSuggestionView> suggestions; // the picked server's suggested add-ons the player does not have
     std::string choice;             // the row an action is for (its name); a suggestion's or store item's source
-    bool choice_on = false;         // AddonAuto: on or off; AddonBrowse: fetch the list again
+    bool choice_on = false;         // AddonAuto: on or off; AddonBrowse: fetch the list again; AddonInstall: an
+                                    // older version than the installed one is meant
     // The store: every add-on the add-on index lists (AddonBrowse fetches their manifests).
     bool browsing = false;          // being fetched
     bool browsed = false;           // fetched this run (store_error: why it is empty)

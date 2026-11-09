@@ -225,6 +225,7 @@ void emit_addons(Out& o, const ui::AddonsView& a) {
         o.str("notes", of.notes);
         o.str("key", of.key);
         o.str("installedVersion", of.installed_version);
+        o.boolean("older", of.older);
         o.str("blocked", of.blocked);
         emit_strings(o, "caps", of.caps);
         o.close("offer");
@@ -528,7 +529,9 @@ SavedAccount* account_named(ui::LoginView& v, std::string_view username) {
 //   "world", name, w   the world the account's box login plays ("" the last played)
 //   "character", name, c  the character it enters, on its world ("" choose at character select)
 //   "addonInspect"     fetch the add-on link's manifest (addons.offer, the install card)
-//   "addonInstall"     install the offer (the player said yes to what it asks); "addonCancel" drops it
+//   "addonInstall" [, "older"]  install the offer (the player said yes to what it asks); an offer older than the
+//                      installed version (addons.offer.older) needs "older", the player's yes to going back;
+//                      "addonCancel" drops it
 //   "addonUpdate", n   update add-on n now (approves what it asks for more; overwrites the player's changes)
 //   "addonRemove", n   remove add-on n (ask first; only the installed ones: never the server's)
 //   "addonAuto", n, on  auto-update for add-on n
@@ -594,8 +597,13 @@ int LoginDo(lua_State* L) {
             ok = a.available && !a.inspecting && !a.link.empty();
             if (ok) action = A::AddonInspect;
         } else if (what == "addonInstall") {
-            ok = a.offer.has_value() && a.offer->blocked.empty();
-            if (ok) action = A::AddonInstall;
+            // An older version than the installed one goes in only when the call says that is meant ("older").
+            const bool older = std::string_view(luaL_optstring(L, 2, "")) == "older";
+            ok = a.offer.has_value() && a.offer->blocked.empty() && (!a.offer->older || older);
+            if (ok) {
+                a.choice_on = older;
+                action = A::AddonInstall;
+            }
         } else if (what == "addonCancel") {
             ok = a.offer.has_value();
             if (ok) action = A::AddonCancel;

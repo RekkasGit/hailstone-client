@@ -32,6 +32,10 @@ The client fetches the add-on's manifest and shows a card before it writes anyth
   do on the computer;
 - why it cannot be installed, when it cannot: it needs a newer Hailstone, it has no build for this system, it asks for
   a permission this Hailstone does not know, or its name is taken;
+- when it is an older version than the one installed (a link to an older release's tag, or a release taken back),
+  a warning that installing it goes back to that version, and **Install the older version** in place of Install:
+  `eq.LoginDo("addonInstall")` alone does not take it, `eq.LoginDo("addonInstall", "older")` does
+  (`AddonOffer::older`, `AddonManager::install_offer(true)`);
 - **Install**, **Cancel** and **Repository**.
 
 **The list.** Three groups:

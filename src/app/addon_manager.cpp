@@ -318,6 +318,9 @@ void AddonManager::inspect(std::string link, std::optional<AddonExpect> expect) 
                 offer.blocked = a->name + " is signed with another key than the one installed: remove it first to "
                                           "trust the new key";
             offer.installed_version = a->version;
+            // A link may name an older release (a tag) than the one installed: the card says so, and only a second,
+            // explicit yes installs it (install_offer(true)).
+            if (auto v = parse_version(a->version)) offer.older = compare_versions(m.version, *v) < 0;
         } else if (offer.blocked.empty()) {
             offer.blocked = addon_name_taken(env_.data_dir, installed, m.kind, m.name);
         }
@@ -494,10 +497,21 @@ std::optional<AddonManager::Staged> AddonManager::download(const AddonManifest& 
     return Staged{std::move(a), file};
 }
 
-void AddonManager::install_offer() {
+void AddonManager::install_offer(bool older_ok) {
     std::optional<AddonOffer> offer;
     {
         std::lock_guard lock(mutex_);
+        // An older version than the one installed only on the player's word that it is the older one they want: the
+        // card stays up until they give it or cancel.
+        if (status_.offer && status_.offer->older && !older_ok) {
+            const std::string why = status_.offer->manifest.name + " " + status_.offer->manifest.version_text +
+                                    " is older than the one installed (" + status_.offer->installed_version +
+                                    "): confirm that you want to go back to it";
+            status_.message = why;
+            status_.message_error = true;
+            ++status_.message_serial;
+            return;
+        }
         offer = std::move(status_.offer);
         status_.offer.reset();
     }

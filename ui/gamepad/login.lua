@@ -758,12 +758,18 @@ local function addonsPage(v, x0, y, x1, w)
       y = lines("A tool is a program of its own: it runs on your computer with your rights, outside Hailstone, which "
         .. "starts it when you ask. Install only tools you trust.", x0, y, x1, true)
     end
+    if o.older then
+      y = lines("This is an older version than the one installed (" .. o.installedVersion .. "): installing it goes "
+        .. "back to " .. o.version .. ".", x0, y, x1, true)
+    end
     y = lines(o.blocked, x0, y, x1, true)
     P.at(x0, y)
     local bw = (w - 2 * gap) / 3
-    if P.button(F, "##addoninstall", o.installedVersion == "" and "Install" or "Install this version", bw, px(64),
+    local label = o.older and "Install the older version"
+      or (o.installedVersion == "" and "Install" or "Install this version")
+    if P.button(F, "##addoninstall", label, bw, px(64),
           { primary = o.blocked == "", disabled = o.blocked ~= "" }) then
-      eq.LoginDo("addonInstall")
+      eq.LoginDo("addonInstall", o.older and "older" or nil)
       F:want("##addonlink")
     end
     ui.SameLine(0, gap)

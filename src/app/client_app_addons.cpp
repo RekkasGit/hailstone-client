@@ -212,6 +212,7 @@ void ClientApp::update_addons() {
         ov.notes = o.manifest.notes;
         if (o.manifest.key) ov.key = hex_encode(*o.manifest.key).substr(0, 16);
         ov.installed_version = o.installed_version;
+        ov.older = o.older;
         ov.blocked = o.blocked;
         ov.caps = plugin::caps_described(o.caps);
         v.offer = std::move(ov);
@@ -397,7 +398,7 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
         break;
     case A::AddonInstall:
         if (addons_) {
-            addons_->install_offer();
+            addons_->install_offer(v.choice_on);
             v.link.clear();
         }
         break;
