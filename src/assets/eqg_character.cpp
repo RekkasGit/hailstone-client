@@ -171,9 +171,13 @@ MeshFile parse_mesh(std::span<const std::byte> data, std::string_view label) {
             if (f.version >= 3) r.skip(4); // colour
             float u = r.f32();
             float w = r.f32();
-            // EQG UVs run up from the bottom of the texture: a DDS's top row is the stored v = 1. Read as they
-            // are, the textures land upside down (the puma's teeth on its back, the worg's mouth on its spine).
-            v.uv = {u, 1.0f - w};
+            // A mesh with bones has its UVs run up from the bottom of the texture: a DDS's top row is the stored
+            // v = 1. Read as they are, the textures land upside down (the puma's teeth on its back, the worg's
+            // mouth on its spine, a hero's forge breastplate's chainmail across it). A mesh without bones (a held
+            // item, a hero's forge helm or bracer) stores v from the top, as the zones' .mod objects do: turned,
+            // the 10th anniversary shield's lettering reads upside down and the Haunting Nightmares ornament shows
+            // the inside of its pumpkin.
+            v.uv = {u, nb > 0 ? 1.0f - w : w};
             if (f.version >= 3) r.skip(8); // second uv
         }
     };

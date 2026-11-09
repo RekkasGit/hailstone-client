@@ -713,13 +713,38 @@ TEST_CASE("Zones the live client revamped under the RoF2 name load as S3D, or no
     fs::remove_all(dir, ec);
 }
 
-TEST_CASE("EQG character meshes: v runs up from the texture's bottom, so it is read as 1 - v") {
+TEST_CASE("EQG character meshes: with bones v runs up from the texture's bottom (1 - v), without it is as stored") {
     std::vector<glm::vec3> pos{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
     std::vector<glm::vec2> uv{{0.25f, 0.1f}, {1.0f, 0.0f}, {0.5f, 1.0f}};
     auto data = make_model(false, 1, {{"body", "Opaque_MaxCBS1.fx", "c_pma_bd_s00_c.dds"}}, pos, uv, {{0, 1, 2, 0, 0}});
-    auto mesh = eqg_character::parse_mesh(data, "IT1");
-    REQUIRE(mesh.pieces.size() == 1);
-    const auto& v = mesh.pieces[0].vertices;
+    // A static piece (a held item, a hero's forge helm): v as stored, as the zones' objects read it.
+    auto still = eqg_character::parse_mesh(data, "IT1");
+    REQUIRE(still.pieces.size() == 1);
+    REQUIRE(still.pieces[0].vertices.size() == 3);
+    CHECK(still.pieces[0].vertices[0].uv == glm::vec2(0.25f, 0.1f));
+    CHECK(still.pieces[0].vertices[2].uv == glm::vec2(0.5f, 1.0f));
+    // The same mesh with one bone (the count after magic, version, string, material, vertex and triangle counts), the
+    // bone's record and each vertex's weights: a skinned piece, v turned.
+    ByteWriter n;
+    n.le<std::uint32_t>(1);
+    std::copy(n.data().begin(), n.data().end(), data.begin() + 24);
+    ByteWriter extra;
+    extra.le<std::int32_t>(0);  // name
+    extra.le<std::int32_t>(-1); // next sibling
+    extra.le<std::uint32_t>(0); // children
+    extra.le<std::int32_t>(-1); // first child
+    for (float f : {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f}) extra.f32(f);
+    for (int i = 0; i < 3; ++i) {
+        extra.le<std::uint32_t>(1);
+        for (int k = 0; k < 4; ++k) {
+            extra.le<std::int32_t>(0);
+            extra.f32(k == 0 ? 1.0f : 0.0f);
+        }
+    }
+    data.insert(data.end(), extra.data().begin(), extra.data().end());
+    auto skinned = eqg_character::parse_mesh(data, "IT1");
+    REQUIRE(skinned.bones.size() == 1);
+    const auto& v = skinned.pieces.at(0).vertices;
     REQUIRE(v.size() == 3);
     CHECK(v[0].uv == glm::vec2(0.25f, 0.9f));
     CHECK(v[1].uv == glm::vec2(1.0f, 1.0f));
