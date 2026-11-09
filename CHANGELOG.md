@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bazaar trader: a ware's price can now go up to 4,294,967 platinum (4,294,967p 2g 9s 5c, the most the server can store), instead of the original client's 1,000,000 platinum
 - `/camp` can be stopped again by standing with the sit/stand key or by moving forward, as on the original client. Before, only the Stand button or a second `/camp` stopped it
 - Name plates sit above the head instead of over it: a name's bottom edge is at the head, so larger names and the guild line under it grow upward
 - A player riding a mount has their name above their head, not down where they sit

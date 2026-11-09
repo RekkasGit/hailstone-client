@@ -130,6 +130,15 @@ TraderSelection select_trader_slot(const std::vector<TraderSlot>& slots, const I
 std::array<std::uint32_t, 4> split_price(std::uint32_t copper);
 std::uint32_t join_price(std::uint32_t platinum, std::uint32_t gold, std::uint32_t silver, std::uint32_t copper);
 
+// The most each price button's amount dialog takes. The original's platinum
+// button (sub_006386a0) stops at 1,000,000; Hailstone's goes up to the largest
+// price the 32-bit copper fields of OP_Trader carry (4,294,967,295 copper), a
+// deliberate difference so that the whole range the server stores can be used.
+// Gold, silver and copper keep the original's 100.
+inline constexpr std::int32_t kTraderMaxPlatinum = 4294967;
+inline constexpr std::int32_t kTraderMaxSmallCoin = 100;
+inline constexpr std::int32_t trader_coin_max(int coin) { return coin == 0 ? kTraderMaxPlatinum : kTraderMaxSmallCoin; }
+
 // FormatCoinStringCompact @0x4ee020: "12p 3g 4s 5c" (zero parts left out, "0c" for nothing).
 std::string coin_compact(std::int64_t copper);
 

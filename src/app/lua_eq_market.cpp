@@ -140,7 +140,7 @@ public:
             if (t.selected < 0) return true;
             auto parts = game::split_price(t.entered_price);
             game::QuantityOpen q;
-            q.max = m == 0 ? 1000000 : 100;
+            q.max = game::trader_coin_max(m);
             q.start = static_cast<std::int32_t>(parts[static_cast<std::size_t>(m)]);
             at_click_centre(host, q);
             open_quantity(host, q, [&host, m](std::int32_t v) {

@@ -585,6 +585,13 @@ TEST_CASE("bazaar rules: prices, the INI key and the compact coin text") {
     CHECK(game::split_price(12345) == std::array<std::uint32_t, 4>{12, 3, 4, 5});
     CHECK(game::join_price(12, 3, 4, 5) == 12345);
     CHECK(game::join_price(4294968u, 0, 0, 0) == 0xffffffffu); // held, not wrapped to 704
+    // The price buttons reach the largest 32-bit price (a deliberate difference: the original stops at 1,000,000 pp).
+    CHECK(game::trader_coin_max(0) == 4294967);
+    CHECK(game::trader_coin_max(1) == 100);
+    CHECK(game::trader_coin_max(3) == 100);
+    CHECK(game::join_price(static_cast<std::uint32_t>(game::trader_coin_max(0)), 0, 0, 0) == 4294967000u);
+    CHECK(game::join_price(static_cast<std::uint32_t>(game::trader_coin_max(0)), 9, 9, 9) == 4294967295u);
+    CHECK(game::join_price(static_cast<std::uint32_t>(game::trader_coin_max(0)), 100, 100, 100) == 0xffffffffu);
     CHECK(game::coin_compact(12345) == "12p 3g 4s 5c");
     CHECK(game::coin_compact(1000) == "1p");
     CHECK(game::coin_compact(105) == "1g 5c");
