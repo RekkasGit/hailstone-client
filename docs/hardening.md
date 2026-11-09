@@ -51,6 +51,8 @@ dependencies was run); the deterministic tests are the verified part.
 | `src/assets/texture.cpp` `decode_bmp` | `biClrUsed` larger than the bit depth can index (e.g. 256 colours at 1 bit) wrote past the palette array: heap-buffer-overflow | clamp the entry count to `1 << bits` |
 | `src/assets/eqg.cpp` `parse_heightmap` | tile longitude/latitude `i32 - 100000` overflowed a signed int for values near `INT_MIN` | subtract as `uint32_t` and wrap |
 | `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite object position (corrupt record) reached float-to-unsigned casts | treat non-finite coordinates as 0 |
+| `src/net/movement_packets.cpp` `decode_find_person_reply`, `src/game/player_path.cpp` `handle_reply` | a reply whose points were all NaN left the path empty, then read its last point (UB) | non-finite points are dropped in the decoder; a reply that leaves no point is a failed find |
+| `src/game/player_path.cpp` `load_path_settings`, `trim`, `walk` | a `SegmentLength` or `ControlSegmentLength` of 0 or less, a negative or tiny `LODFactor`, or a NaN `MergeDistance` in Path.ini looped forever (or added points every frame without end) | such values take the defaults; trim adds at most the reply's 10000 points, and a drawn segment at most 256 |
 
 Behaviour for valid input is unchanged. The typed packet decoders, the session layer, the login parsers and the WLD, ZON,
 model, DDS, TGA, XMI and table parsers produced no findings.

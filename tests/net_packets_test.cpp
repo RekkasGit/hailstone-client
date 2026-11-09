@@ -2,6 +2,7 @@
 
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -1190,6 +1191,14 @@ TEST_CASE("find: the request is 40 bytes; the reply's points come in order") {
     auto none = hailstone::net::decode_find_person_reply(hailstone::net::AppPacket(hailstone::net::to_wire(hailstone::net::Op::FindPersonReply)));
     REQUIRE(none);
     CHECK(none->empty());
+    // A point that is not a number or is infinite is dropped; the others stay in order.
+    std::vector<glm::vec3> bad{{1, 2, 3}, {std::nanf(""), 0, 0}, {0, INFINITY, 0}, {4, 5, 6}};
+    auto kept = hailstone::net::decode_find_person_reply(hailstone::net::encode_find_person_reply(bad));
+    REQUIRE(kept);
+    REQUIRE(kept->size() == 3); // the destination (4, 5, 6) first, then (1, 2, 3) and (4, 5, 6)
+    CHECK((*kept)[0] == glm::vec3(4, 5, 6));
+    CHECK((*kept)[1] == glm::vec3(1, 2, 3));
+    CHECK((*kept)[2] == glm::vec3(4, 5, 6));
 }
 
 TEST_CASE("pvp: stats (4612 bytes), the leaderboard (8024) and the crystal counts") {
