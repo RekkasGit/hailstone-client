@@ -335,7 +335,7 @@ across the view every 2.5 s (`--lighting modern`).
 
 The ring at the current target's feet (`render/target_ring_renderer.h`, `shaders/target_ring.frag`; its rules in
 `game/target_indicator.h`). Which ring shows, its colour and alpha (the default UI's TargetIndicator.ini section for
-the target's con) and its radius follow the original; how it is drawn and how it moves are Hailstone's own (the
+the target's con) and its radius (unless Max Size caps it, below) follow the original; how it is drawn and how it moves are Hailstone's own (the
 original turns four UV-animated circles).
 
 It is a decal on the scene's depth, drawn after `VkContext::begin_translucent` (the classic lighting, which has no
@@ -359,6 +359,11 @@ Options > Display "Target Ring" also sets the colour for each con, Gray to Red, 
 (`display.target_ring_color.<Section>`, RRGGBB, the ini's section names; Default Colors erases them and the ini's
 colours come back), and the **Opacity**, 25 .. 200 % of the section's alpha (`display.target_ring_opacity`, at most
 opaque). The free-target sections are not the player's to colour (`game::apply_ring_colors`).
+
+**Max Size** (`display.target_ring_max_size`, 4 .. 40 units, 0 off, the default) is a deliberate difference: it caps
+the radius, so a giant's or a dragon's ring (AvatarHeight times the model's scale, tens of units across) does not fill
+the screen. A ring smaller than the cap keeps its size; the band, dashes and chevron follow the capped radius
+(`game::cap_ring_radius`). Off, every ring is the original's size.
 
 ## Loading screen
 
@@ -1110,6 +1115,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.target_ring_color.<Section>` | RRGGBB | (TargetIndicator.ini's) | the target ring's colour for a con, Trivial .. Deadly (Target Ring) |
 | `display.target_ring_opacity` | 25 .. 200 | 100 | the target ring's alpha, in % of its con's |
 | `display.target_ring_glow` | 0 .. 100 | 50 | how bright the target ring's core shines |
+| `display.target_ring_max_size` | 0, 4 .. 40 | 0 | the target ring's largest radius in world units, 0 off (Max Size; a deliberate difference) |
 | `display.bloom` | 0 .. 1 | 0.5 | bright light spreading into its surroundings; modern only; viewer `--bloom N` |
 | `display.brightness` | -0.2 .. 0.2 | 0 | added after the tonemap, in display values (the UI is not graded) |
 | `display.contrast` | 0.5 .. 1.5 | 1 | around mid grey, after the tonemap |

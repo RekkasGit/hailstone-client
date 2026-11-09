@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Options > Display "Target Ring" has a **Max Size** slider: it limits how big the ring gets, so a giant's or a dragon's no longer fills the screen. Smaller rings keep their size. All the way right is Off, the default, which leaves every ring as before
 - Options > Display: **Background Frame Rate** can now be 0, 1 or 5 as well. At 0 nothing is drawn while another window has the focus; the game, chat and scripts keep running, and the window is drawn again as soon as it has the focus
 - Bazaar trader: a ware's price can now go up to 4,294,967 platinum (4,294,967p 2g 9s 5c, the most the server can store), instead of the original client's 1,000,000 platinum
 - Options > Audio has an **NPC Hit Sounds** slider: the sounds of NPCs being hit, blocking and dodging can be turned down (or off) without lowering the other sound effects. The default leaves them as before
