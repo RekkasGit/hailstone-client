@@ -327,6 +327,10 @@ TEST_CASE("aa: reuse timers translate the server's clock; readiness subtracts SP
     CHECK(s.timers[7] == 6000);
     CHECK(s.readiness(*s.get(500), 600, 6000).ready); // no reuse time left after the reduction
     s.set_timer(100, 0, 0, 1);                         // out of range: ignored
+    // Past 2038 the 32-bit times are unsigned: a start a minute ago is not ready for its 600 s.
+    s.set_timer(7, 0x90000000u - 60u, 0x90000000u, std::int64_t{0x90000000});
+    CHECK(s.timers[7] == std::int64_t{0x90000000} - 60);
+    CHECK_FALSE(s.readiness(*s.get(500), 0, std::int64_t{0x90000000}).ready);
     // The owned ranks' effects for the character sheet.
     s.owned = {{500, 2, 0}, {999, 1, 0}};
     s.get(500);
