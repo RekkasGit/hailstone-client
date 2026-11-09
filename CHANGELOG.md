@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Name plates sit above the head instead of over it: a name's bottom edge is at the head, so larger names and the guild line under it grow upward
+- A player riding a mount has their name above their head, not down where they sit
 - Options > Display has a **Name Plates** section for the names over players and NPCs: their font, size, bold, a shadow, outline or no edge, smaller names farther away, and the size of the guild and owner lines under them. The defaults look as before
 - Add-ons: when `addons/installed.txt` is lost or damaged, the add-ons it listed no longer run with every permission as though you had put them in by hand. It now has a copy, `installed.bak.txt`, that it is put back from at the next start; an add-on that neither file has whole gets no permissions, and nothing is installed, updated or removed until the file is put right (the log says so)
 - Add-ons: a link to an older version than the one installed now says so on its card, and installs only with **Install the older version**

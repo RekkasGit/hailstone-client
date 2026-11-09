@@ -115,6 +115,9 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
                       render::ActorRenderer::model_z_offset(*model, s.heights.model_scale, world.height_tables.get());
         }
         glm::vec3 head = base + glm::vec3(0, 0, top + 1.5f);
+        // A rider sits on its mount's seat bone, well above its spawn's place: its head from there.
+        if (glm::vec3 seated; actor_renderer_ && actor_renderer_->drawn_rider_top(id, seated))
+            head = seated + glm::vec3(0, 0, 1.5f);
         const float head_distance = glm::distance(head, camera_.position);
         if (head_distance > kNameplateRange) continue;
         glm::vec4 clip = view_proj * glm::vec4(head, 1.0f);
@@ -176,8 +179,10 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
     // fades toward a tenth of its alpha, smoothly (tau 0.3 s). The target stays at full alpha at its projected head.
     plate_boxes_.clear();
     for (std::size_t i = 0; i < plate_count_; ++i) {
-        const NameplateText& p = plates_[i].plate;
+        NameplateText& p = plates_[i].plate;
         const glm::vec2 size = plate_layer_->size_of(p);
+        // Hailstone: the plate's bottom edge at the head, so a larger name (or more lines) grows upward, off the head.
+        p.pos.y -= size.y;
         plate_boxes_.push_back({p.pos.x - size.x * 0.5f, p.pos.y, p.pos.x + size.x * 0.5f, p.pos.y + size.y, p.depth,
                                 p.target});
     }
