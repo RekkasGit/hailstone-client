@@ -1470,6 +1470,8 @@ void VkContext::end_frame(const FrameInfo& frame) {
         screenshot_path_.clear();
     }
     if (!screenshot_path_.empty()) {
+        // The command buffer is open: a failure here is logged and the frame goes on without the copy (a throw
+        // would leave it half recorded).
         VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         bi.size = VkDeviceSize{extent_.width} * extent_.height * 4;
         bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -1477,8 +1479,17 @@ void VkContext::end_frame(const FrameInfo& frame) {
         ai.usage = VMA_MEMORY_USAGE_AUTO;
         ai.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
         VmaAllocationInfo out{};
-        vk_check(vmaCreateBuffer(allocator_, &bi, &ai, &readback, &readback_alloc, &out), "create readback buffer");
-        readback_data = out.pMappedData;
+        if (VkResult made = vmaCreateBuffer(allocator_, &bi, &ai, &readback, &readback_alloc, &out); made != VK_SUCCESS) {
+            log::error("screenshot {} not taken: no readback buffer (VkResult {})", screenshot_path_.string(),
+                       static_cast<int>(made));
+            screenshot_path_.clear();
+            readback = VK_NULL_HANDLE;
+            readback_alloc = VK_NULL_HANDLE;
+        } else {
+            readback_data = out.pMappedData;
+        }
+    }
+    if (readback) {
         image_barrier(frame.cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -1487,6 +1498,21 @@ void VkContext::end_frame(const FrameInfo& frame) {
         region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         region.imageExtent = {extent_.width, extent_.height, 1};
         vkCmdCopyImageToBuffer(frame.cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1, &region);
+        // The copy's writes made available to the host, which reads the buffer after the fence.
+        VkBufferMemoryBarrier2 host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2};
+        host.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        host.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        host.dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+        host.dstAccessMask = VK_ACCESS_2_HOST_READ_BIT;
+        host.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        host.buffer = readback;
+        host.offset = 0;
+        host.size = VK_WHOLE_SIZE;
+        VkDependencyInfo host_dep{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+        host_dep.bufferMemoryBarrierCount = 1;
+        host_dep.pBufferMemoryBarriers = &host;
+        vkCmdPipelineBarrier2(frame.cmd, &host_dep);
         image_barrier(frame.cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
                       VK_PIPELINE_STAGE_2_NONE, 0);
