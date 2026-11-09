@@ -801,6 +801,9 @@ npc_collision = on        ; live NPCs stop the player, who slides along them (de
 passable_ladders = on     ; walking or swimming into a ladder whose polygons are all passable (the Cabilis canal
                           ; ladders) climbs it (default on). Off: only a click from the top mounts one, as in
                           ; the original client
+solid_ladders = on        ; the player's movement meets a ladder as one solid slab, not its rails and rungs, so
+                          ; every race climbs it (default on). Off: the rungs, as in the original client, where a
+                          ; small race slips between them and any race can stick partway up
 
 [web]
 allow = example.org       ; the hosts scripts and plugins may open, and those below them (default: any;
@@ -828,7 +831,9 @@ client's: a live NPC is a wall the player cannot walk through, while players, pe
 passable. It is on unless the server's file says `[movement] npc_collision = off`; the player has no switch for it.
 Climbing passable ladders (docs/mechanics.md "Ladders") is Hailstone's own rule too: in the original the sphere goes
 through a ladder whose polygons are all passable, such as the Cabilis canal ladders, and never climbs it. It is on
-unless the server's file says `[movement] passable_ladders = off`.
+unless the server's file says `[movement] passable_ladders = off`. Solid ladders are the same: the player's movement
+meets a ladder as one slab instead of its rungs (docs/mechanics.md "Ladders") unless the file says
+`[movement] solid_ladders = off`.
 Players get a change at their next login, with the rest of the file.
 
 A server folder for every platform its players use:

@@ -42,6 +42,9 @@ inline constexpr std::uint8_t kTriangleInvisible = 0x40;
 // Not a record flag: the triangle belongs to a ladder placement (game/zone_ladders.h, an actor of type 6), whose kept
 // hit makes the player climb (CollisionHit_SetCollidingType).
 inline constexpr std::uint8_t kTriangleLadder = 0x80;
+// Not a record flag: Hailstone's solid stand-in for a ladder's rungs (game/zone_ladders.h ladder_slab), which only the
+// player's movement collides with, and only with CollisionMesh::set_solid_ladders. Always with kTriangleLadder.
+inline constexpr std::uint8_t kTriangleLadderSlab = 0x4;
 
 // The collision info of one sweep (CCollisionInfoBase + CCollisionInfoSphere).
 struct SphereSweep {

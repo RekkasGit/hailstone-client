@@ -312,6 +312,10 @@ Rules parse_server_cfg(std::string_view text, std::vector<std::string>* warnings
                     flag(r.passable_ladders);
                     continue;
                 }
+                if (key == "solid_ladders") {
+                    flag(r.solid_ladders);
+                    continue;
+                }
             } else if (section == "web") {
                 if (key == "allow") {
                     std::string_view rest = v;
