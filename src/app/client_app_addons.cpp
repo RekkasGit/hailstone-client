@@ -75,7 +75,7 @@ bool tool_program_there(const std::filesystem::path& data, const InstalledAddon&
 void ClientApp::start_addons() {
     const std::filesystem::path data = platform::data_dir();
     addons_at_start(data);
-    if (automation_) automation_->set_addon_ceilings(addon_ceilings(read_installed_addons(data)));
+    if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
     ui::AddonsView& v = login_view_.addons;
     if (!opts_.updates) {
         v.why_off = "Add-ons are not fetched on a test run.";
@@ -162,7 +162,7 @@ void ClientApp::update_addons() {
     if (serial != addons_serial_ || addons_dirty_) {
         addons_serial_ = serial;
         addons_dirty_ = false;
-        if (automation_) automation_->set_addon_ceilings(addon_ceilings(read_installed_addons(data)));
+        if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
         addons_listed_ = {};
     }
     if (!at_login) return;

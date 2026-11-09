@@ -276,6 +276,16 @@ without `login` does not run before the zone-in, whatever the server allows.
 - **The ceiling is on the files' hashes** (`plugin::Policy::set_ceilings`, from `addons/installed.txt` at start and
   after each change). It covers a script's Lua files and a plugin's library. A file the player changes has another
   hash and gets the rules of a file put in by hand: the player's own edit is theirs.
+- **A record that cannot be read fails closed.** `installed.txt` is written with a copy, `installed.bak.txt`, and a
+  record of it that is lost or does not read is taken from that copy (`read_addon_registry`); at the next start a
+  lost or damaged `installed.txt` is written again from it. An add-on `installed.txt` (or its copy) still names whose
+  record neither has whole gets no capabilities: each Lua file of its folder and each library at its top, by its
+  bytes then, gets a ceiling of nothing, and the log says so. A newer Hailstone's `installed.txt` (another
+  `hailstone-addons <n>` header, after an update was rolled back) is read the same way, from its `addon <name> <kind>`
+  lines, and never written over. While any add-on does not read, nothing is installed, updated or removed (the
+  message says why), so that its record is not lost: the player puts the file right, or takes it out with those
+  add-ons' folders. A registry lost with its copy cannot be told from none, and its add-ons' files are then the
+  player's own.
 - **The server's own** keep every capability, also when an add-on ships the same bytes.
 
 ## What is checked
@@ -312,6 +322,7 @@ whoever holds the key, not merely from whoever can push to the repository.
 addons/
   installed.txt   each add-on: name, kind, source, version, the caps accepted, its key, auto-update, author,
                   description, notes, and every file it put in with its size and SHA-256
+  installed.bak.txt installed.txt's copy, written with it (a lost or damaged record is read from it)
   checked.txt     when the last check at start ran (addons.check_hours)
   index.txt       the add-on index as last fetched (Suggested add-ons); index-checked.txt, when
   download/       packages, by their SHA-256; each goes once it is installed

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add-ons: when `addons/installed.txt` is lost or damaged, the add-ons it listed no longer run with every permission as though you had put them in by hand. It now has a copy, `installed.bak.txt`, that it is put back from at the next start; an add-on that neither file has whole gets no permissions, and nothing is installed, updated or removed until the file is put right (the log says so)
 - Settings, saved lists and the add-ons' and updater's own files are now written to the disk before they replace the old ones, so a power cut right after a save leaves the old file or the new one, never an empty one
 - An update cut off by a crash is undone more carefully: a damaged or half-written line of its journal no longer moves a whole folder (such as `ui/`, with your UI settings in `ui/settings/`) or any of your own files out of the way
 - The pillars of fire in the Plane of Tranquility now burn as four solid columns. With the modern lighting each was a stack of small separate flames; with the classic lighting each emitter only puffed a few particles every few seconds. Many newer zones' torches, braziers, smoke and mist (an EQG zone's environment emitters) were held to a few particles the same way and now burn fully, and slowly rising fires may burn taller with the modern lighting

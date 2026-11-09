@@ -69,7 +69,8 @@ hailstone/
                              the newest 30 kept)
   screenshots/               the screenshot key's pictures, and where a relative --screenshot FILE goes
   addons/                    the add-on manager's (docs/addons.md): installed.txt (each add-on installed from GitHub,
-                             its source, version, accepted capabilities, key and files), its downloads, an
+                             its source, version, accepted capabilities, key and files) and its copy
+                             installed.bak.txt, its downloads, an
                              install's journal and the add-on index (index.txt); the add-ons themselves go in
                              scripts/<name>/ and plugins/<name>/
   update/                    the updater's downloads, the installed components' file lists, the files the last
