@@ -1,5 +1,5 @@
 -- Spell displays: replace the game's SpellDisplayWindow. The game shows one for a spell gem held with the right
--- button (gone again when it comes up), the book's "Spell window", a link, ...; several can be open at once, as
+-- button (the Modern bar keeps it if released over it), the book's "Spell window", a link, ...; several can be open at once, as
 -- SpellDisplayWindow, SpellDisplayWindow#2, ... (eq.ReplaceWindow numbers windows that share a screen name). Each is
 -- a small resizable dialog: the spell's icon and name over the game's own description (SDW_SpellDescription: level,
 -- mana, cast and recast times, duration, the effects), which scrolls when the window is short. Opening and closing
