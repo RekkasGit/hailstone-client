@@ -111,18 +111,18 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
         if (i < def.uvs.size()) v.uv = def.uvs[i];
         if (i < def.colors.size()) v.color = bgra_to_rgba(def.colors[i]);
     }
-    if (const auto* list = wld.get<MaterialList>(def.material_list))
-        for (Ref r : list->materials) out.materials.push_back(build_material(wld, r));
+    const auto* list = wld.get<MaterialList>(def.material_list);
+    const std::size_t slots = list ? list->materials.size() : 0;
 
     // Polygons are stored in runs of {count, material slot}; gather them per
     // slot so each material is one draw.
     // Passable polygons (flag 0x10: no collision) go in their own parts.
-    std::vector<std::vector<std::uint32_t>> buckets(out.materials.size() * 2);
+    std::vector<std::vector<std::uint32_t>> buckets(slots * 2);
     std::size_t cursor = 0, bad_slot = 0, bad_index = 0;
     auto add_run = [&](std::size_t count, std::size_t slot) {
         std::size_t end = std::min(cursor + count, def.polygons.size());
         for (; cursor < end; ++cursor) {
-            if (slot >= out.materials.size()) { ++bad_slot; continue; }
+            if (slot >= slots) { ++bad_slot; continue; }
             const auto& p = def.polygons[cursor];
             if (p.v[0] >= out.vertices.size() || p.v[1] >= out.vertices.size() || p.v[2] >= out.vertices.size()) {
                 ++bad_index;
@@ -139,13 +139,12 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
         log::warn("{}: mesh {}: dropped {} polygons with a bad material slot, {} with bad indices, {} outside any run",
                   wld.label(), out.name, bad_slot, bad_index, leftover);
 
-    // Zone meshes share one palette of every zone material; keep only the
-    // slots this mesh draws, in slot order.
-    std::vector<Material> used;
-    for (std::size_t slot = 0; slot < out.materials.size(); ++slot) {
+    // Zone meshes share one palette of every zone material; build only the
+    // slots this mesh draws, in slot order (not the whole palette per mesh).
+    for (std::size_t slot = 0; slot < slots; ++slot) {
         if (buckets[slot * 2].empty() && buckets[slot * 2 + 1].empty()) continue;
-        auto material = static_cast<std::uint32_t>(used.size());
-        used.push_back(std::move(out.materials[slot]));
+        auto material = static_cast<std::uint32_t>(out.materials.size());
+        out.materials.push_back(build_material(wld, list->materials[slot]));
         for (std::size_t passable = 0; passable < 2; ++passable) {
             const auto& b = buckets[slot * 2 + passable];
             if (b.empty()) continue;
@@ -158,7 +157,6 @@ Mesh build_mesh(const WldFile& wld, const MeshDef& def, std::string name) {
             out.parts.push_back(part);
         }
     }
-    out.materials = std::move(used);
     return out;
 }
 
