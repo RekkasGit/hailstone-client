@@ -772,6 +772,8 @@ private:
     // The `eq` table of the Lua UI over this client's state.
     void register_eq_api(lua_State* L);
     void trace_spawn(float dt);
+    // The floor game::WorldState::ground_npcs measures a spawn against: the zone's and the doors', the higher.
+    std::optional<float> grounding_floor(const glm::vec3& p) const;
     void draw_nameplates(const render::FrameInfo& frame, const glm::mat4& view_proj, VkExtent2D extent, float far_plane);
     // The 3D target indicator (app/target_ring.cpp, game/target_indicator.h): the ring at the target's feet, drawn
     // over the scene's depth (render/target_ring_renderer.h), so in the scene after begin_translucent (the classic
@@ -1217,6 +1219,7 @@ private:
     bool browser_tried_ = false;
     bool web_text_input_ = false;                    // a page has the keyboard this frame
     std::unique_ptr<WorldObjects> world_objects_;           // doors and ground objects (app/world_objects.h)
+    std::uint32_t grounded_doors_ = 0;                      // world_objects_' floor_generation the spawns were grounded on
     // The zones past the outdoor zone lines, drawn in the distance in the modern lighting (app/neighbour_zones.h);
     // display.neighbour_zones.
     std::unique_ptr<NeighbourZones> neighbours_;

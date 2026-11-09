@@ -317,6 +317,7 @@ std::shared_ptr<const assets::PfsArchive> WorldObjects::archive(const std::strin
 void WorldObjects::place(Placed& p, const glm::mat4& transform, float scale) {
     // Doors and placed items are placed again each update; most have not moved.
     if (!p.inverted || p.transform != transform) {
+        if (p.solid && p.model) floor_changed_ = true;
         p.transform = transform;
         p.inverse = glm::inverse(transform);
         p.inverted = true;
@@ -341,6 +342,7 @@ void WorldObjects::update(const net::GameConnection& conn) {
             // Invisible switches block too: only the sweep's filter's types 0x32 and 0x33 do not
             // (game::door_blocks_movement).
             p.solid = game::door_blocks_movement(d);
+            if (p.model && p.solid) floor_changed_ = true;
         }
         p.floor_switch = game::is_floor_switch(d, conn.zone_id());
         p.type = d.type;
@@ -349,7 +351,11 @@ void WorldObjects::update(const net::GameConnection& conn) {
         glm::mat4 t = game::door_transform(d);
         place(p, t, d.scale());
     }
-    std::erase_if(doors_, [&](const auto& kv) { return kv.second.seen != serial; });
+    std::erase_if(doors_, [&](const auto& kv) {
+        const bool gone = kv.second.seen != serial;
+        if (gone && kv.second.model && kv.second.solid) floor_changed_ = true;
+        return gone;
+    });
 
     // Ground objects.
     for (const auto& o : conn.ground_objects()) {
@@ -382,14 +388,20 @@ void WorldObjects::update(const net::GameConnection& conn) {
         if (fresh || placed_tags_[key] != o.tag) {
             placed_tags_[key] = o.tag;
             p.model = o.npc_item ? nullptr : placed_model(o.tag);
+            floor_changed_ = true;
         }
+        if (p.solid != game::placed_solid(o)) floor_changed_ = true;
         p.solid = game::placed_solid(o);
         p.pick_mask = 2;
         // EQPlacedItem_CopyFrom takes a known key's new data without rebuilding the actor; the transform here
         // follows the data (whether the original's actor moves is not traced: docs/unknowns.md).
         place(p, game::placed_transform(o), std::isfinite(o.scale) && o.scale > 0.0f ? o.scale : 1.0f);
     }
-    std::erase_if(placed_, [&](const auto& kv) { return kv.second.seen != serial; });
+    std::erase_if(placed_, [&](const auto& kv) {
+        const bool gone = kv.second.seen != serial;
+        if (gone && kv.second.model && kv.second.solid) floor_changed_ = true;
+        return gone;
+    });
     if (placed_tags_.size() != placed_.size())
         std::erase_if(placed_tags_, [&](const auto& kv) { return !placed_.contains(kv.first); });
     // The placement ghost (BeginPlacement's copy of the object, actor type 5).
@@ -405,6 +417,9 @@ void WorldObjects::update(const net::GameConnection& conn) {
     } else {
         ghost_.reset();
     }
+
+    if (floor_changed_) ++floor_generation_;
+    floor_changed_ = false;
 
     instances_.clear();
     for (const auto& [id, p] : doors_)

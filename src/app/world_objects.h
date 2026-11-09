@@ -87,6 +87,9 @@ public:
     // where they swung to); the same queries as game::CollisionMesh.
     bool line_of_sight(const glm::vec3& a, const glm::vec3& b) const;
     std::optional<float> floor_below(const glm::vec3& p, float step_up) const;
+    // Counts the updates that changed what floor_below finds: a solid door or placed object came, went, got its model
+    // or moved. Spawns measured against the floor (game::WorldState::reground) are measured again when it changes.
+    std::uint32_t floor_generation() const { return floor_generation_; }
     // The movement sweep against the solid doors (CCollision::CollideActor's
     // actor pass, after the zone's mesh): true when a door hit was kept, as
     // the hit callback then sets CollidingType to the switch type (3).
@@ -199,6 +202,8 @@ private:
     std::optional<Placed> ghost_;
     std::string ghost_tag_;
     std::uint32_t update_serial_ = 0; // update()'s count, for Placed::seen
+    std::uint32_t floor_generation_ = 0;
+    bool floor_changed_ = false; // within update(): floor_generation_ moves at its end
     const Model* placed_model(const std::string& tag);
     std::vector<render::ObjectRenderer::Instance> instances_;
     std::vector<MissileActor> missile_actors_;

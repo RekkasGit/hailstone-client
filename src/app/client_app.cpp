@@ -82,6 +82,11 @@ int ClientApp::run() {
         update_lap.mark("automation");
         if (conn_ && world_objects_ && screen_ == Screen::InGame && player_ready_) {
             world_objects_->update(*conn_);
+            // A door that came or moved (a portal stone's base is one) is floor for ground_npcs.
+            if (world_objects_->floor_generation() != grounded_doors_) {
+                grounded_doors_ = world_objects_->floor_generation();
+                conn_->reground();
+            }
             update_missiles();
         }
         update_lap.mark("world objects update");
@@ -132,7 +137,11 @@ int ClientApp::run() {
                     decks.set_vehicles(&vehicles_);
                     return decks.vehicle_under(p);
                 };
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under);
+            // ground_npcs measures against the doors too (Plane of Knowledge's portal stones stand on a door's base),
+            // as the player's floor test does; the landing check above keeps the zone's floor alone.
+            game::WorldState::FloorFn ground_floor;
+            if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");

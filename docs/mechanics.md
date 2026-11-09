@@ -938,14 +938,15 @@ map leaves standing higher stays in the air.
 
 Grounding NPCs (a deliberate difference, Hailstone's option `ground_npcs`: hailstone.ini `display.ground_npcs`,
 Options > Graphics "Ground Floating NPCs", on by default): an NPC or corpse on the ground that stands more than 0.25
-and at most 50 over the zone's floor there (its terrain and placed objects; not doors) is drawn at floor +
-AvatarHeight. That covers both gaps the landing check leaves: more than 5, and any gap of a spawn whose last update is
+and at most 50 over the floor there (the zone's terrain and placed objects, and the doors, as the player's own floor
+test has them: Plane of Knowledge's portal stones are doors, and an NPC on one's base stands on it) is drawn at floor +
+AvatarHeight. The landing check above keeps the zone's floor alone. That covers both gaps the landing check leaves: more than 5, and any gap of a spawn whose last update is
 more than 12 s old (it is no longer stepped, so it never settles). Flymode 3 counts as on the ground: EQEmu sends it
 (GravityBehavior::Water) for NPCs that may swim, such as East Commonlands' spiderlings (race 440, seen live 0.93 over
 the floor). Left alone: flying and levitating spawns (flymode 1 and 2, SpawnAppearance 19; EQEmu's 4 and 5 too),
 riders, spawns on a boat, players, and spawns in or over water, slime or lava regions (fish, a dock the zone files
-lack). Higher than 50 the server more likely means it. A spawn is measured again when it moves and when a zone's
-collision loads (spawns come before it, while character select's scene is still loaded); with no floor under it, every
+lack). Higher than 50 the server more likely means it. A spawn is measured again when it moves, when a zone's
+collision loads and when a door comes, goes or moves (spawns come before it, while character select's scene is still loaded); with no floor under it, every
 frame until there is one. Only `display_position` is lowered, so the model, name, target ring, picking and the NPC
 walls follow the drawn body; `position`, which range, melee and the other rules use, keeps the server's z.
 

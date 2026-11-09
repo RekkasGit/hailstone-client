@@ -381,7 +381,8 @@ public:
     void smooth(float dt, const game::WorldState::FloorFn& floor = {},
                 const game::WorldState::ActorModelFn& actor_model = {},
                 const game::WorldState::RegionFn& region = {},
-                const game::WorldState::VehicleFn& vehicle_under = {});
+                const game::WorldState::VehicleFn& vehicle_under = {},
+                const game::WorldState::FloorFn& ground_floor = {});
     // The vehicles' part of smooth, before the local player moves (WorldState::smooth_vehicles).
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).

@@ -225,8 +225,10 @@ struct WorldState {
     using VehicleFn = std::function<std::uint32_t(const glm::vec3&)>;
     // The local player and the mount it rides (controlled_id) are not eased: they are drawn where set_local_drawn put
     // them this frame, else at their position.
+    // `ground_floor` (optional): the floor ground_npcs measures against, which has the doors too (a portal stone's
+    // base, a platform); unset, `floor`.
     void smooth(float dt, double now, const FloorFn& floor = {}, const RegionFn& region = {},
-                const VehicleFn& vehicle_under = {});
+                const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {});
     // Where the local player is drawn this frame: where the camera is, between the game clock's last two steps
     // (app/client_app_player.cpp). Sets the drawn place and heading (0..512) of the player and of the mount it rides at
     // once, so the eye on a mount follows it in the same frame; the next smooth keeps them and forgets the call.
@@ -251,7 +253,8 @@ struct WorldState {
     // whose model has no tunic point (0x58dde0) or is a mount race drawn as the human fallback, which in practice
     // means one under an illusion: the summon then fails with 5524. The mount's own dag is still needed to seat it.
     bool illusion_mounts = false;
-    // The floor smooth is given changed (a zone's collision loaded): every spawn is measured for ground_npcs again.
+    // The floor smooth is given changed (a zone's collision loaded, a door came or moved): every spawn is measured for
+    // ground_npcs again.
     // Spawns can come before the zone's floor (character select's scene is still loaded), and one that stands
     // still would keep what it was measured against then.
     void reground();
