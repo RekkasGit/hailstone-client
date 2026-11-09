@@ -51,6 +51,8 @@ dependencies was run); the deterministic tests are the verified part.
 | `src/assets/texture.cpp` `decode_bmp` | `biClrUsed` larger than the bit depth can index (e.g. 256 colours at 1 bit) wrote past the palette array: heap-buffer-overflow | clamp the entry count to `1 << bits` |
 | `src/assets/eqg.cpp` `parse_heightmap` | tile longitude/latitude `i32 - 100000` overflowed a signed int for values near `INT_MIN` | subtract as `uint32_t` and wrap |
 | `src/assets/eqg.cpp` `HeightmapTile::height_at` | a non-finite object position (corrupt record) reached float-to-unsigned casts | treat non-finite coordinates as 0 |
+| `src/assets/zone_flora.cpp` `CoverGrid` | ~256 zone-sized roof triangles wrapped the 32-bit cell totals, so the cell index was allocated too small and written past its end | a triangle over 1,024 cells goes to a list tested at every point (at most 256); the cells hold at most 2^24 references; the rest are no cover |
+| `src/assets/zone_flora.cpp` `ZoneFloraGrower`, `CoverGrid` | a NaN or infinite vertex reached float-to-int casts; a finite 1e9-unit triangle split into 4^10 pieces, each binned over millions of tiles | triangles with a non-finite vertex or one past 100,000 units are left out; at most 2^21 pieces; the cell lookup clamps as a float |
 
 Behaviour for valid input is unchanged. The typed packet decoders, the session layer, the login parsers and the WLD, ZON,
 model, DDS, TGA, XMI and table parsers produced no findings.

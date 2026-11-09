@@ -269,7 +269,11 @@ outdoor vertices carry none).
 by 128-unit tile (`assets::ZoneFloraGrower`); the renderer grows the tiles within reach as they come into it, nearest
 first and for at most 3 ms a frame, and lets go of those well past it. Each piece's plants come from its own seeded
 sequence, so a tile grows the same plants every time and a zone costs memory by the reach, not by its size (South
-Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load.
+Karana would hold some 6.5 million plants at once). Setting a zone up takes some 10 to 30 ms at load. A damaged
+mesh is bounded: a triangle with a non-finite vertex or one over 100,000 units out (the zones lie within some 20,000)
+neither grows plants nor covers any, the ground is cut into at most 2 million pieces, and the cover test holds at most
+16 million cell references, a triangle over more than 1,024 of its 64-unit cells (at most 256 such) being tested at
+every point instead. A triangle past those bounds is no cover.
 
 They are looks only: collision, line of sight, the navigation mesh and picking do not see them.
 `tools/florascan GAME_DIR flora ZONE...` lists, per zone, the rules it takes and the plants on each ground texture
