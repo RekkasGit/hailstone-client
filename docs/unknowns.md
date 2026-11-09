@@ -75,6 +75,7 @@ What the client does not implement yet, or implements with an approximation it c
 - `/spellscribe` sends opcode 0x51e5 only when the world's OP_LogServer +0x18 is non-zero; EQEmu sends 0 (and has no handler), so it does nothing there. The two numbers it reads are unused in the original too.
 - `/offlinemode` sends opcode 0x53d3, which EQEmu drops; the position history the original sends first (Send_OP_FloatListThing) is not kept. A link death within 15 s of it exits the client after 3 s, but the screen shown is the disconnect one, not OfflineMode.bmp's. The server's 0x5369 that cancels it is not in EQEmu's table.
 - `/targetgroupbuff` keeps TargetGroupBuff in the character's options.ini (the original: eqclient.ini [Defaults]) and sends it at each zone-in.
+- AllowedToAttack's newbie-zone rule reads the target's Zone (+0x210); the client fills it for every spawn with the current zone's id and instance (`AttackCheckInput::zone`), as a spawn is only known in the player's own zone. Where the original writes a spawn's +0x210 (the spawn packet or the zone-in) was not traced; tracing those writes would settle it.
 
 ## Items, inventory and commerce
 

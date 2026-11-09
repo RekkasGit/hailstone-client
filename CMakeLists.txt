@@ -961,6 +961,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/npc_collision_test.cpp
     tests/mounts_test.cpp
     tests/world_state_smooth_test.cpp
+    tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
     tests/ui_rules_vectors_test.cpp
     tests/net_login_test.cpp

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- PvP servers (rule set 6, and rule set 4 between deity teams): characters below level 6 can no longer cast detrimental spells on each other in a newbie zone, as on the original client. The client used to allow it everywhere and leave the refusal to the server
 - A zone floor or ceiling made of one very large triangle (thousands of units across) is now found by the floor and ceiling tests and by line of sight, not only by the movement sweep
 - `/find`: a damaged Path.ini (a step length of zero or less, or a value that is not a number) or a path reply from the server with broken points no longer freezes or crashes the client; such a setting takes its default
 - Rain, snow and mouse picks cost less: their collision tests no longer allocate and clear memory the size of the whole zone for each raindrop and each pick
