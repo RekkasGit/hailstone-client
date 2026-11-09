@@ -306,6 +306,39 @@ TEST_CASE("a first fragment too short for its total length breaks the stream: no
     CHECK(in.broken());
 }
 
+TEST_CASE("a fragment that runs past its payload's total breaks the stream instead of being cut short") {
+    auto frag = [](std::uint16_t seq, const Bytes& body) {
+        return cat(b({0, soe::op::Fragment, seq >> 8, seq & 0xff}), body);
+    };
+    SUBCASE("a first fragment longer than its own total") {
+        soe::InboundStream in(0);
+        std::vector<Bytes> out;
+        CHECK(in.push(frag(0, b({0, 0, 0, 3, 0x41, 0x42, 0x43, 0x44, 0x45})), out) == soe::SeqOrder::Current);
+        CHECK(in.broken());
+        // The two extra bytes are not read as the start of a new payload, nor anything after.
+        CHECK(in.push(frag(1, b({0, 0, 0, 2, 0x46, 0x47})), out) == soe::SeqOrder::Current);
+        CHECK(out.empty());
+    }
+    SUBCASE("a later piece past the total") {
+        soe::InboundStream in(0);
+        std::vector<Bytes> out;
+        CHECK(in.push(frag(0, b({0, 0, 0, 4, 0x41, 0x42})), out) == soe::SeqOrder::Current);
+        CHECK_FALSE(in.broken());
+        CHECK(in.push(frag(1, b({0x43, 0x44, 0x45})), out) == soe::SeqOrder::Current);
+        CHECK(in.broken());
+        CHECK(out.empty());
+    }
+    SUBCASE("pieces that add up to the total exactly are delivered") {
+        soe::InboundStream in(0);
+        std::vector<Bytes> out;
+        CHECK(in.push(frag(0, b({0, 0, 0, 4, 0x41, 0x42})), out) == soe::SeqOrder::Current);
+        CHECK(in.push(frag(1, b({0x43, 0x44})), out) == soe::SeqOrder::Current);
+        CHECK_FALSE(in.broken());
+        REQUIRE(out.size() == 1);
+        CHECK(out[0] == b({0x41, 0x42, 0x43, 0x44}));
+    }
+}
+
 TEST_CASE("decompress_body reuses its inflater: results stay right after a failure and between sizes") {
     Bytes big = noise(4000, 5);
     for (auto& x : big) x = std::byte{static_cast<std::uint8_t>(std::to_integer<int>(x) & 0x0f)}; // compressible
@@ -627,4 +660,35 @@ TEST_CASE("platform::resolve_async: a numeric address on the lookup thread, seve
         REQUIRE(endpoints.size() == 1);
         CHECK(endpoints[0] == platform::Endpoint::v4(127, 0, 0, 1, static_cast<std::uint16_t>(9000 + i)));
     }
+}
+
+TEST_CASE("session: a send the network refuses is logged once an outage, not once a datagram") {
+    // A link-local address on an interface that does not exist: every SessionRequest the session sends fails.
+    test::ManualClock clock;
+    SessionOptions o;
+    o.clock = clock.source();
+    auto session = Session::create(o);
+    clock.hold();
+    session->connect("fe80::1%4000000", 9);
+    session->update();
+    if (session->state() == SessionState::Disconnected) {
+        MESSAGE("no IPv6 here: " << session->error());
+        return;
+    }
+    for (int i = 0; i < 4; ++i) {
+        clock.advance(std::chrono::milliseconds(1100)); // the SessionRequest is sent again each second
+        session->update();
+    }
+    char recent[4096];
+    log::copy_recent_lines(recent, sizeof recent);
+    std::string_view lines(recent);
+    std::size_t count = 0;
+    for (auto at = lines.find("further send errors are counted"); at != std::string_view::npos;
+         at = lines.find("further send errors are counted", at + 1))
+        ++count;
+    if (count == 0) {
+        MESSAGE("this system took the datagrams: the outage was not exercised");
+        return;
+    }
+    CHECK(count == 1);
 }
