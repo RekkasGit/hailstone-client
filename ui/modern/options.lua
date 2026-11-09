@@ -663,6 +663,8 @@ local function audioTab()
     slider("master", "Master Volume", 0, 100, pct)
     slider("music", "Music", 0, 100, pct)
     slider("effects", "Sound Effects", 0, 100, pct, "Spells, combat and the world's sounds.")
+    slider("npc_hits", "NPC Hit Sounds", 0, 100, pct,
+      "NPCs being hit, blocking and dodging, on top of Sound Effects (a Hailstone option).")
   end)
   section("Sound", function()
     check("environment", "Environment Sounds", "The zone's ambient sounds: wind, water, birds and the like.")

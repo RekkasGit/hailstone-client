@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Options > Audio has an **NPC Hit Sounds** slider: the sounds of NPCs being hit, blocking and dodging can be turned down (or off) without lowering the other sound effects. The default leaves them as before
 - `/camp` can be stopped again by standing with the sit/stand key or by moving forward, as on the original client. Before, only the Stand button or a second `/camp` stopped it
 - Name plates sit above the head instead of over it: a name's bottom edge is at the head, so larger names and the guild line under it grow upward
 - A player riding a mount has their name above their head, not down where they sit

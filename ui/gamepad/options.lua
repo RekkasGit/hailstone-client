@@ -246,10 +246,11 @@ local PAGES = {
       optionRow("Master volume", "master", { 0, 100, 5, " %" }),
       optionRow("Music", "music", { 0, 100, 5, " %" }),
       optionRow("Sound effects", "effects", { 0, 100, 5, " %" }),
+      optionRow("NPC hit sounds", "npc_hits", { 0, 100, 5, " %" }),
       optionRow("Environment sounds", "environment", "bool"),
       optionRow("Combat music", "combat_music", "bool"),
     }
-    for i = 1, 6 do if list[i] then rows[#rows + 1] = list[i] end end
+    for i = 1, 7 do if list[i] then rows[#rows + 1] = list[i] end end
     return rows
   end },
   -- The plugins' options (eq.PluginOptions; docs/plugins.md "Plugin windows"): a switch, or left / right over its range.
