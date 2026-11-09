@@ -156,8 +156,9 @@ void push_item(lua_State* L, const net::Item& it, const net::GameConnection* c =
     }
 }
 
-void push_spawn(lua_State* L, const game::Spawn& s) {
-    lua_createtable(L, 0, 18);
+// Writes a spawn's fields into the table on top of the stack, every one of them, so a reused table keeps nothing of
+// the spawn it held before.
+void fill_spawn(lua_State* L, const game::Spawn& s) {
     set_int(L, "id", s.id);
     set_str(L, "name", s.name);
     set_int(L, "level", s.level);
@@ -176,6 +177,25 @@ void push_spawn(lua_State* L, const game::Spawn& s) {
     set_bool(L, "mercenary", s.mercenary);
     set_bool(L, "gm", s.gm);
     set_int(L, "body_type", s.properties.empty() ? 0 : s.properties[0]);
+}
+
+void push_spawn(lua_State* L, const game::Spawn& s) {
+    lua_createtable(L, 0, 18);
+    fill_spawn(L, s);
+}
+
+// The spawn as one table the state keeps and refills (the registry holds it), for a hook that runs for every name
+// plate every frame: no table made and collected per plate. It is valid during the call only; a script that keeps
+// it sees it change.
+char g_spawn_scratch_key;
+void push_spawn_scratch(lua_State* L, const game::Spawn& s) {
+    if (lua_rawgetp(L, LUA_REGISTRYINDEX, &g_spawn_scratch_key) != LUA_TTABLE) {
+        lua_pop(L, 1);
+        lua_createtable(L, 0, 18);
+        lua_pushvalue(L, -1);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, &g_spawn_scratch_key);
+    }
+    fill_spawn(L, s);
 }
 
 void push_slot(lua_State* L, const net::ItemSlot& slot) {
@@ -433,6 +453,13 @@ public:
     void label_text(const net::GameConnection&, int id, std::string& text) const override {
         if (!hook("label")) return;
         lua_pushinteger(L(), id);
+        lua_pushlstring(L(), text.data(), text.size());
+        if (!run(2)) return;
+        if (auto t = string_result()) text = *t;
+    }
+    void nameplate_text(const net::GameConnection&, const game::Spawn& spawn, std::string& text) const override {
+        if (!hook("nameplate")) return;
+        push_spawn_scratch(L(), spawn);
         lua_pushlstring(L(), text.data(), text.size());
         if (!run(2)) return;
         if (auto t = string_result()) text = *t;
