@@ -557,6 +557,16 @@ HttpGetResult http_get(const std::string& url, const HttpGetOptions& options,
         if (code == kWriteError || code == kAbortedByCallback) r.error = "cancelled";
     } else {
         r.ok = true;
+        // An answer with no body never reached on_write, so its address is checked here (as WinHTTP's always is):
+        // an empty 2xx at the end of a redirect off the allowed hosts is not a success.
+        if (options.allow_url && !t.url_checked) {
+            char* end_url = nullptr;
+            c.easy_getinfo(h, kInfoEffectiveUrl, &end_url);
+            if (!end_url || !options.allow_url(std::string_view(end_url))) {
+                r.ok = false;
+                r.error = "the download was sent to an address it may not come from";
+            }
+        }
     }
     c.easy_cleanup(h);
     return r;

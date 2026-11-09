@@ -281,6 +281,7 @@ add_library(hailstone_engine STATIC
   src/platform/crash_log.cpp
   src/platform/local_time.cpp
   src/platform/private_file.cpp
+  src/platform/durable_file.cpp
   src/platform/process.cpp
   src/game/eq_names.cpp
   src/ui/font_faces.cpp
@@ -872,6 +873,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/env_test.cpp
     tests/sdk_old_names_test.cpp
     tests/private_file_test.cpp
+    tests/durable_file_test.cpp
     tests/server_script_test.cpp
     tests/server_tools_test.cpp
     tests/float_chars_test.cpp

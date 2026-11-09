@@ -7,6 +7,9 @@
 // line, like the update manifest (core/update_manifest.h):
 //
 //   hailstone-addon-index 1
+//   serial <n>                                 optional, once: a number each publish raises (hailstone_sign sign
+//                                              writes the time it signs, in seconds since 1970); the client refuses
+//                                              an index older than the one it keeps (addon_index_older)
 //   addon <name> <owner/repo> <key>            the add-on: its manifest's name, its GitHub source, the Ed25519 key
 //                                              (64 hex digits) its manifest must be signed with
 //   world <name> <login server> <world name>   a world it is for: the login server's host ("*" any), and the world's
@@ -15,6 +18,7 @@
 //
 // Unknown records are skipped, for later versions; a record this knows that does not parse refuses the whole index.
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,6 +41,7 @@ struct AddonIndexWorld {
 };
 
 struct AddonIndex {
+    std::optional<std::uint64_t> serial; // nullopt: an index from before the serial
     std::vector<AddonIndexAddon> addons;
     std::vector<AddonIndexWorld> worlds;
 };
@@ -44,6 +49,11 @@ struct AddonIndex {
 // The index in `text` when its signature is `key`'s and it parses; nullopt with *error why not.
 std::optional<AddonIndex> parse_addon_index(std::string_view text, const Ed25519PublicKey& key,
                                             std::string* error = nullptr);
+
+// Why a fetched index with serial `fetched` may not replace the kept one with serial `kept` ("" it may): it is
+// older, or it has no serial while the kept one has. An older signed index would list again an add-on the index took
+// out, or a key it replaced. Without a kept serial (no index kept, or one from before the serial) any index is taken.
+std::string addon_index_older(const std::optional<std::uint64_t>& kept, const std::optional<std::uint64_t>& fetched);
 
 // The index's add-ons for a login to `login_host` whose login server lists `worlds` (each once, in the index's
 // order), each with the first of `worlds` it is for. Hosts and world names compare in any case; a world name's outer

@@ -299,7 +299,7 @@ TEST_CASE("addon_install: an install cut off is undone at the next start") {
     CHECK_FALSE(fs::exists(dir.path().parent_path() / "outside"));
 }
 
-TEST_CASE("addon_install: installed.txt reads back, and a damaged record is dropped") {
+TEST_CASE("addon_install: installed.txt reads back, a damaged record is taken from its backup or refused") {
     test::ScratchDir dir("addon_registry");
     InstalledAddon a;
     a.name = "MQ2Hud";
@@ -337,13 +337,41 @@ TEST_CASE("addon_install: installed.txt reads back, and a damaged record is drop
     CHECK(back[1].auto_update);
     CHECK(find_addon(back, "mq2hud") == &back[0]);
 
-    std::string text = read_file(addons_dir(dir.path()) / "installed.txt");
+    // Written with its backup, which stands in for a damaged record.
+    const fs::path reg = addons_dir(dir.path()) / "installed.txt", bak = addons_dir(dir.path()) / "installed.bak.txt";
+    CHECK(read_file(bak) == read_file(reg));
+    std::string text = read_file(reg);
     text.replace(text.find("ui/modern/my hud.lua"), 20, "../../escape.lua");
-    put_file(addons_dir(dir.path()) / "installed.txt", text);
-    back = read_installed_addons(dir.path());
-    REQUIRE(back.size() == 1);
-    CHECK(back[0].name == "autoloot");
-    put_file(addons_dir(dir.path()) / "installed.txt", "hailstone-addons 99\naddon x script\n");
+    put_file(reg, text);
+    AddonRegistry r = read_addon_registry(dir.path());
+    REQUIRE(r.addons.size() == 2);
+    const InstalledAddon* hud = find_addon(r.addons, "MQ2Hud");
+    REQUIRE(hud);
+    CHECK(hud->files.size() == 2);
+    CHECK(r.from_backup);
+    CHECK(r.unreadable.empty());
+    CHECK(r.writable());
+    // Without the backup the damaged record is not read, and is named as unreadable (its files get nothing).
+    fs::remove(bak);
+    r = read_addon_registry(dir.path());
+    REQUIRE(r.addons.size() == 1);
+    CHECK(r.addons[0].name == "autoloot");
+    REQUIRE(r.unreadable.size() == 1);
+    CHECK(r.unreadable[0].name == "MQ2Hud");
+    CHECK(r.unreadable[0].kind == AddonKind::Plugin);
+    CHECK_FALSE(r.writable());
+    CHECK_FALSE(write_installed_addons(dir.path(), {b})); // it would drop MQ2Hud's record
+    CHECK(read_file(reg) == text);
+    // A newer Hailstone's registry (an update rolled back): nothing reads, each add-on it names is unreadable, and
+    // it is never written over.
+    put_file(reg, "hailstone-addons 99\naddon x script\naddon y something\n");
+    r = read_addon_registry(dir.path());
+    CHECK(r.addons.empty());
+    CHECK(r.newer);
+    REQUIRE(r.unreadable.size() == 2);
+    CHECK(r.unreadable[0].kind == AddonKind::Script);
+    CHECK_FALSE(r.unreadable[1].kind);
+    CHECK_FALSE(write_installed_addons(dir.path(), {}));
     CHECK(read_installed_addons(dir.path()).empty());
 }
 
@@ -419,6 +447,81 @@ TEST_CASE("addon_install: the ceilings are the add-on's Lua files and its librar
     CHECK(c[1].kind == plugin::FileKind::Plugin);
     CHECK(c[1].sha256 == sha256(std::string_view("l")));
     CHECK(c[1].caps == plugin::kCapUi);
+}
+
+// A lost or damaged installed.txt fails closed: an add-on's files never become hand-installed ones (every
+// capability on a server without hailstone.cfg). The backup brings it back when it can.
+TEST_CASE("addon_install: an add-on whose record cannot be read gets no capabilities") {
+    test::ScratchDir dir("addon_fail_closed");
+    install_script(dir.path(), "autoloot", "1.0.0", {{"init.lua", "print(1)\n"}, {"lib/rules.lua", "return {}\n"}});
+    const Sha256Digest init = sha256(std::string_view("print(1)\n")), rules = sha256(std::string_view("return {}\n"));
+    const fs::path reg = addons_dir(dir.path()) / "installed.txt", bak = addons_dir(dir.path()) / "installed.bak.txt";
+    REQUIRE(fs::exists(bak));
+    plugin::Rules open; // a server without hailstone.cfg
+    auto caps_of = [&](const Sha256Digest& h) {
+        plugin::Policy p;
+        p.set_ceilings(addon_ceilings(dir.path()));
+        p.set(open);
+        return p.caps(plugin::FileKind::Script, h);
+    };
+    CHECK(caps_of(init) == (plugin::kCapRead | plugin::kCapUi));
+
+    SUBCASE("installed.txt lost: read from the backup, and written again at start") {
+        fs::remove(reg);
+        CHECK(read_addon_registry(dir.path()).from_backup);
+        CHECK(caps_of(init) == (plugin::kCapRead | plugin::kCapUi));
+        addons_at_start(dir.path());
+        REQUIRE(fs::exists(reg));
+        const AddonRegistry r = read_addon_registry(dir.path());
+        CHECK(r.problem.empty());
+        CHECK(r.addons.size() == 1);
+    }
+    SUBCASE("both a newer Hailstone's: the files it names may do nothing, and nothing installs") {
+        const std::string newer = "hailstone-addons 2\naddon autoloot script\nsomething new\n";
+        put_file(reg, newer);
+        put_file(bak, newer);
+        CHECK(caps_of(init) == 0u);
+        CHECK(caps_of(rules) == 0u);
+        CHECK(caps_of(sha256(std::string_view("a script of the player's"))) == plugin::kCapAll);
+        addons_at_start(dir.path());
+        CHECK(read_file(reg) == newer); // not written over
+        std::string why;
+        CHECK_FALSE(remove_addon(dir.path(), "autoloot", &why));
+        CHECK(why.find("newer") != std::string::npos);
+        CHECK(fs::exists(dir.path() / "scripts" / "autoloot" / "init.lua"));
+        CHECK(addon_owns_folder(dir.path(), "scripts/autoloot"));
+    }
+    SUBCASE("garbage and no backup: the add-on it still names is refused") {
+        put_file(reg, "\x01\x02garbage\naddon autoloot script\nfile zz\n");
+        fs::remove(bak);
+        CHECK(caps_of(init) == 0u);
+        CHECK(caps_of(rules) == 0u);
+        CHECK_FALSE(read_addon_registry(dir.path()).writable());
+    }
+    SUBCASE("an empty installed.txt with a good backup: the backup's") {
+        put_file(reg, "");
+        CHECK(caps_of(init) == (plugin::kCapRead | plugin::kCapUi));
+        addons_at_start(dir.path());
+        CHECK(read_addon_registry(dir.path()).problem.empty());
+    }
+}
+
+TEST_CASE("addon_install: a pinned add-on is the one from its repository with its key") {
+    Keys keys, other(9);
+    InstalledAddon a;
+    a.name = "texstudio";
+    a.kind = AddonKind::Tool;
+    a.source = "ProjectHailstone/hailstone-texstudio@v1.0.0";
+    a.key = keys.pub;
+    const std::vector<InstalledAddon> all = {a};
+    CHECK(find_pinned_addon(all, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio", keys.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio", other.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Tool, "someone/hailstone-texstudio", keys.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Script, "projecthailstone/hailstone-texstudio", keys.pub));
+    auto unsigned_one = all;
+    unsigned_one[0].key.reset();
+    CHECK_FALSE(find_pinned_addon(unsigned_one, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio",
+                                  keys.pub));
 }
 
 TEST_CASE("addon_install: lua_compiles takes text only") {

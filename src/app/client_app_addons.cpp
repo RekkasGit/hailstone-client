@@ -75,7 +75,7 @@ bool tool_program_there(const std::filesystem::path& data, const InstalledAddon&
 void ClientApp::start_addons() {
     const std::filesystem::path data = platform::data_dir();
     addons_at_start(data);
-    if (automation_) automation_->set_addon_ceilings(addon_ceilings(read_installed_addons(data)));
+    if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
     ui::AddonsView& v = login_view_.addons;
     if (!opts_.updates) {
         v.why_off = "Add-ons are not fetched on a test run.";
@@ -162,7 +162,7 @@ void ClientApp::update_addons() {
     if (serial != addons_serial_ || addons_dirty_) {
         addons_serial_ = serial;
         addons_dirty_ = false;
-        if (automation_) automation_->set_addon_ceilings(addon_ceilings(read_installed_addons(data)));
+        if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
         addons_listed_ = {};
     }
     if (!at_login) return;
@@ -212,6 +212,7 @@ void ClientApp::update_addons() {
         ov.notes = o.manifest.notes;
         if (o.manifest.key) ov.key = hex_encode(*o.manifest.key).substr(0, 16);
         ov.installed_version = o.installed_version;
+        ov.older = o.older;
         ov.blocked = o.blocked;
         ov.caps = plugin::caps_described(o.caps);
         v.offer = std::move(ov);
@@ -362,6 +363,20 @@ bool ClientApp::texture_studio_installed() const {
     return tool_program_there(platform::data_dir(), a);
 }
 
+bool ClientApp::start_texture_studio(std::string* error) {
+    const auto all = read_installed_addons(platform::data_dir());
+    const auto key = hex_decode<32>(kTextureStudioKey);
+    if (find_addon(all, kTextureStudio) && (!key || !find_pinned_addon(all, kTextureStudio, AddonKind::Tool,
+                                                                       kTextureStudioRepo, *key))) {
+        if (error)
+            *error = "The add-on named " + std::string(kTextureStudio) + " is not Hailstone Texture Studio (" +
+                     std::string(kTextureStudioRepo) + ", signed with its key): Options does not start it. Start "
+                     "it from its row in Add-ons if you trust it.";
+        return false;
+    }
+    return start_addon_tool(kTextureStudio, error);
+}
+
 bool ClientApp::start_addon_tool(std::string_view name, std::string* error) {
     const std::filesystem::path data = platform::data_dir();
     const auto all = read_installed_addons(data);
@@ -397,7 +412,7 @@ void ClientApp::addons_login_action(ui::LoginAction action) {
         break;
     case A::AddonInstall:
         if (addons_) {
-            addons_->install_offer();
+            addons_->install_offer(v.choice_on);
             v.link.clear();
         }
         break;

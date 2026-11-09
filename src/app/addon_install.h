@@ -55,10 +55,41 @@ std::string_view addon_kind_word(AddonKind kind); // "script", "plugin", "tool"
 // A tool's program in its package and its folder for `platform`: <name>.exe on Windows, <name> elsewhere.
 std::string addon_tool_program(std::string_view name, std::string_view platform);
 
+// An add-on installed.txt names whose record does not read: its files get no capabilities (addon_ceilings), since
+// what it was allowed is not known. Fails closed: a lost or damaged registry must not turn an add-on's files into
+// hand-installed ones, which get every capability on a server without hailstone.cfg.
+struct UnreadableAddon {
+    std::string name;
+    std::optional<AddonKind> kind; // nullopt: its kind did not read either (every kind's folder of the name)
+};
+
+// installed.txt as read, with installed.bak.txt (the copy written beside it each time) standing in for a record of
+// it that is lost or does not read.
+struct AddonRegistry {
+    std::vector<InstalledAddon> addons;     // the records that read
+    std::vector<UnreadableAddon> unreadable; // named, but neither installed.txt nor the backup has it whole
+    bool from_backup = false;                // some or all of `addons` are the backup's
+    bool newer = false;                      // installed.txt is a newer Hailstone's format: never written over
+    std::string problem;                     // what is wrong with installed.txt ("" nothing)
+    // Whether installed.txt may be written (an install, an update, a removal, a switch): not over a newer
+    // Hailstone's, and not while that would drop an add-on that does not read.
+    bool writable() const { return !newer && unreadable.empty(); }
+};
+AddonRegistry read_addon_registry(const std::filesystem::path& data_dir);
+
+// read_addon_registry's records that read.
 std::vector<InstalledAddon> read_installed_addons(const std::filesystem::path& data_dir);
+// Writes installed.txt and its backup, installed.bak.txt; false (written nowhere) when it cannot, or may not be
+// written now (AddonRegistry::writable).
 bool write_installed_addons(const std::filesystem::path& data_dir, const std::vector<InstalledAddon>& addons);
 // The add-on named `name` (any case), or null.
 const InstalledAddon* find_addon(const std::vector<InstalledAddon>& addons, std::string_view name);
+// The add-on named `name` of `kind` when it comes from the repository `repo` (owner/repo, whatever tag or branch)
+// and is signed with `key`, else null. For the client's own buttons that start one add-on they know by name
+// (Options' Texture Studio...): another add-on that took the name, or one not signed by its author, is not taken for
+// it.
+const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addons, std::string_view name,
+                                        AddonKind kind, std::string_view repo, const Ed25519PublicKey& key);
 
 // The files of an installed add-on that are gone or no longer what it shipped (the player changed them).
 std::vector<std::string> modified_addon_files(const std::filesystem::path& data_dir, const InstalledAddon& addon);
@@ -92,9 +123,14 @@ bool remove_addon(const std::filesystem::path& data_dir, std::string_view name, 
 // The capability ceilings of the installed add-ons' files (plugin::Policy::set_ceilings): a script's Lua files and a
 // plugin's library, each with the capabilities the player accepted for its add-on.
 std::vector<plugin::Ceiling> addon_ceilings(const std::vector<InstalledAddon>& addons);
+// The ceilings of the data folder's add-ons: addon_ceilings of the records that read, and a ceiling of no
+// capabilities on each Lua file and library now in the folder of an add-on whose record does not
+// (AddonRegistry::unreadable), each logged.
+std::vector<plugin::Ceiling> addon_ceilings(const std::filesystem::path& data_dir);
 
 // First thing at start: an install or a removal that was cut off is undone, and what it left in new/ and previous/
-// goes.
+// goes. A lost or damaged installed.txt is written again from its backup when that has every add-on it names; else
+// the log says what is wrong.
 void addons_at_start(const std::filesystem::path& data_dir);
 
 } // namespace hailstone::app

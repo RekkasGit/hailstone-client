@@ -32,6 +32,10 @@ The client fetches the add-on's manifest and shows a card before it writes anyth
   do on the computer;
 - why it cannot be installed, when it cannot: it needs a newer Hailstone, it has no build for this system, it asks for
   a permission this Hailstone does not know, or its name is taken;
+- when it is an older version than the one installed (a link to an older release's tag, or a release taken back),
+  a warning that installing it goes back to that version, and **Install the older version** in place of Install:
+  `eq.LoginDo("addonInstall")` alone does not take it, `eq.LoginDo("addonInstall", "older")` does
+  (`AddonOffer::older`, `AddonManager::install_offer(true)`);
 - **Install**, **Cancel** and **Repository**.
 
 **The list.** Three groups:
@@ -94,7 +98,12 @@ loads or runs anything of it itself:
   player's Hailstone folder (`hailstone.ini`, `textures/`, its own settings) wherever it was started from. It runs as a
   program of its own and is left running when Hailstone quits (`ClientApp::start_addon_tool`).
 - **Options** start the one tool it knows of: Graphics, Textures, **Texture Studio...** once the add-on `texstudio`
-  is installed; until then that row says to install it from Add-ons.
+  is installed; until then that row says to install it from Add-ons. The button starts it only when it is the real
+  one: installed from projecthailstone/hailstone-texstudio and signed with the project's add-on key (the key the
+  add-on index lists for the project's add-ons; `ClientApp::kTextureStudioRepo`, `kTextureStudioKey`,
+  `find_pinned_addon`). Another add-on that took the name, or an unsigned one, is not started from Options (the log
+  says why); its row's **Start** still starts it, where the player sees what it is. A new key for the studio needs a
+  client release.
 - **Its card** asks for no permissions, and says instead that a tool runs on the computer with the player's rights,
   outside Hailstone: the capability ceiling means nothing to a program of its own, so a tool's manifest says
   `caps none` and one that asks for any is refused.
@@ -139,7 +148,11 @@ player who logs in to such a server for the first time does not know it exists, 
   with) and the worlds it is for (the login server's host, `*` for any, and the world's name as the login server
   lists it). It is signed with the release key, the same as the update manifest, and an index that does not check
   is not used. The client fetches it at start, at most every `addons.check_hours`, and keeps it in
-  `addons/index.txt` (checked again when it is read). The store lists the same index. Since it is known before any login, it reaches a player on
+  `addons/index.txt` (checked again when it is read). The store lists the same index. Its `serial <n>` record (once,
+  after the first line; `hailstone_sign sign` writes the time it signs, in seconds since 1970, and always more than
+  the serial it had) keeps an older signed index from being served again: a fetched index with a lower serial than
+  the kept one, or with none once the kept one has one, is refused and the kept one stays (`addon_index_older`). An
+  index without a serial is still taken while the kept one has none, so the indexes signed before the serial work. Since it is known before any login, it reaches a player on
   their first visit.
 - **The server's own `hailstone.cfg`**: `[addons] suggest = owner/repo, ...` (docs/plugins.md). It comes only with
   the server's files at the first zone-in, so it is suggested from the next login screen on.
@@ -167,7 +180,8 @@ real add-on. A server's suggestion of an add-on the index does not list is a pla
 link gives, signed or not.
 
 **Adding a server** is a pull request to the index's repository. A maintainer signs it with the release key
-(`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it).
+(`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
+serial first). Sign it with a `hailstone_sign` that writes the serial (this client's), so that each publish raises it.
 
 ## The manifest
 
@@ -240,7 +254,8 @@ packs, signs and uploads.
 Only `github.com` links are taken. A download may end only on GitHub's own hosts, whatever redirects it took:
 `github.com`, `raw.githubusercontent.com`, `codeload.github.com`, `objects.githubusercontent.com` and
 `release-assets.githubusercontent.com` (`addon_download_allowed`). The address a transfer ends on is checked before
-any of its body is used (`HttpGetOptions::allow_url`: libcurl's effective URL, WinHTTP's `WINHTTP_OPTION_URL`). The
+any of its body is used (`HttpGetOptions::allow_url`: libcurl's effective URL, WinHTTP's `WINHTTP_OPTION_URL`), and
+also when it has no body: an empty answer from an address off those hosts is a failure, not an empty file. The
 link parser (`core/addon_source.h`) keeps the hosts in one place, so others can be added later.
 
 ## Capabilities: the manifest's `caps` are a ceiling
@@ -275,6 +290,16 @@ without `login` does not run before the zone-in, whatever the server allows.
 - **The ceiling is on the files' hashes** (`plugin::Policy::set_ceilings`, from `addons/installed.txt` at start and
   after each change). It covers a script's Lua files and a plugin's library. A file the player changes has another
   hash and gets the rules of a file put in by hand: the player's own edit is theirs.
+- **A record that cannot be read fails closed.** `installed.txt` is written with a copy, `installed.bak.txt`, and a
+  record of it that is lost or does not read is taken from that copy (`read_addon_registry`); at the next start a
+  lost or damaged `installed.txt` is written again from it. An add-on `installed.txt` (or its copy) still names whose
+  record neither has whole gets no capabilities: each Lua file of its folder and each library at its top, by its
+  bytes then, gets a ceiling of nothing, and the log says so. A newer Hailstone's `installed.txt` (another
+  `hailstone-addons <n>` header, after an update was rolled back) is read the same way, from its `addon <name> <kind>`
+  lines, and never written over. While any add-on does not read, nothing is installed, updated or removed (the
+  message says why), so that its record is not lost: the player puts the file right, or takes it out with those
+  add-ons' folders. A registry lost with its copy cannot be told from none, and its add-ons' files are then the
+  player's own.
 - **The server's own** keep every capability, also when an add-on ships the same bytes.
 
 ## What is checked
@@ -311,6 +336,7 @@ whoever holds the key, not merely from whoever can push to the repository.
 addons/
   installed.txt   each add-on: name, kind, source, version, the caps accepted, its key, auto-update, author,
                   description, notes, and every file it put in with its size and SHA-256
+  installed.bak.txt installed.txt's copy, written with it (a lost or damaged record is read from it)
   checked.txt     when the last check at start ran (addons.check_hours)
   index.txt       the add-on index as last fetched (Suggested add-ons); index-checked.txt, when
   download/       packages, by their SHA-256; each goes once it is installed
@@ -379,12 +405,13 @@ cannot install another.
 - `tests/addon_manifest_test.cpp`: the links, the manifest's checks and signature, random and cut-off input, the
   headers of each platform.
 - `tests/addon_install_test.cpp`: what a package may hold, an install and an update keeping the player's files, a
-  removal, a cut-off install undone, `installed.txt`, the names taken, the ceilings, the server's and hand-installed
-  lists.
-- `tests/addon_manager_test.cpp`: the manager against GitHub in memory: the install card, a package changed or
-  redirected off GitHub, updates that ask for more, that would overwrite the player's changes or that carry another
-  key, auto-update off, the check interval.
-- `tests/addon_index_test.cpp`: the index's checks and signature, random and cut-off input, which worlds match, which
+  removal, a cut-off install undone, `installed.txt` and its backup, a damaged, lost or newer one failing closed, the
+  names taken, the ceilings, the pinned add-on, the server's and hand-installed lists.
+- `tests/addon_manager_test.cpp`: the manager against GitHub in memory: the install card, an older version from a
+  link, a package changed or redirected off GitHub, updates that ask for more, that would overwrite the player's
+  changes or that carry another key, auto-update off, the check interval.
+- `tests/addon_index_test.cpp`: the index's checks and signature, its serial and an older index refused, random and
+  cut-off input, which worlds match, which
   suggestions the player sees, `[addons] suggest`, the manager fetching and caching the index, a suggestion's card
   held to the index's name and key, and the store's list (each add-on's manifest held to the index's name and key,
   what keeps one from being installed, once a run unless refreshed, no index).

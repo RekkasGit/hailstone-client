@@ -10,6 +10,7 @@
 #include <lua.hpp>
 
 #include "app/update_install.h"
+#include "core/addon_source.h"
 #include "core/atomic_file.h"
 #include "core/binary_header.h"
 #include "core/log.h"
@@ -31,6 +32,7 @@ constexpr std::uint64_t kMaxPluginBytes = 512ull * 1024 * 1024;  // all of a plu
 constexpr std::uint64_t kMaxLuaFile = 4ull * 1024 * 1024;        // one Lua file, read whole to compile it
 constexpr std::uint64_t kMaxLibrary = 256ull * 1024 * 1024;      // the plugin's library, read whole for its header
 constexpr std::string_view kRegistryHeader = "hailstone-addons 1";
+constexpr std::string_view kRegistryBackup = "installed.bak.txt"; // installed.txt as last written
 
 fs::path rel(std::string_view name) {
     return fs::path(std::u8string(reinterpret_cast<const char8_t*>(name.data()), name.size()));
@@ -163,6 +165,15 @@ void undo_journal(const fs::path& data_dir) {
         fs::remove(dir / "installed.txt", ec);
     }
     fs::remove(dir / "installed.prev.txt", ec);
+    if (!registry.empty()) {
+        // The backup follows installed.txt back (it was written with the installed.txt the undo takes out).
+        if (auto back = read_text_file(dir / "installed.txt")) {
+            if (!write_file_atomic(dir / kRegistryBackup, *back))
+                log::warn("Add-ons: undoing a cut-off install: cannot write addons/{}", kRegistryBackup);
+        } else {
+            fs::remove(dir / kRegistryBackup, ec);
+        }
+    }
 }
 
 bool journal_done(const fs::path& data_dir) {
@@ -231,41 +242,85 @@ std::string addon_tool_program(std::string_view name, std::string_view platform)
     return std::string(name) + (platform.starts_with("windows-") ? ".exe" : "");
 }
 
-std::vector<InstalledAddon> read_installed_addons(const fs::path& data_dir) {
-    std::vector<InstalledAddon> out;
-    auto text = read_text_file(addons_dir(data_dir) / "installed.txt");
-    if (!text) return out;
+namespace {
+
+constexpr std::string_view kRegistryFamily = "hailstone-addons ";
+
+// One registry file as read: its records that read whole, and the add-ons it names whose record does not.
+struct ParsedRegistry {
+    bool exists = false;
+    bool header = false; // this version's header: the records below were read
+    bool newer = false;  // another version's header ("hailstone-addons 2"): a newer Hailstone's, not read
+    std::vector<InstalledAddon> good;
+    std::vector<UnreadableAddon> bad;
+};
+
+void add_unreadable(std::vector<UnreadableAddon>& list, std::string_view name, std::optional<AddonKind> kind) {
+    for (const auto& u : list)
+        if (iequal(u.name, name) && u.kind == kind) return;
+    list.push_back({std::string(name), kind});
+}
+
+std::optional<AddonKind> kind_of_word(std::string_view w) {
+    if (w == "script") return AddonKind::Script;
+    if (w == "plugin") return AddonKind::Plugin;
+    if (w == "tool") return AddonKind::Tool;
+    return std::nullopt;
+}
+
+ParsedRegistry parse_registry(const fs::path& file) {
+    ParsedRegistry r;
+    auto text = read_text_file(file);
+    if (!text) return r;
+    r.exists = true;
     std::istringstream in(*text);
-    bool header = false;
-    bool bad = false; // the current record has a line that does not read: it is dropped
+    bool first = true, bad = false; // bad: the current record has a line that does not read
+    bool skipping = false;          // the current record is not kept (its lines are another add-on's)
     auto close = [&] {
-        if (!out.empty() && bad) out.pop_back();
+        if (bad && !r.good.empty()) {
+            add_unreadable(r.bad, r.good.back().name, r.good.back().kind);
+            r.good.pop_back();
+        }
         bad = false;
     };
     for (std::string line; std::getline(in, line);) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#') continue;
-        if (!header) {
-            if (line != kRegistryHeader) {
-                log::warn("Add-ons: addons/installed.txt is not one this version reads");
-                return out;
-            }
-            header = true;
+        if (first) {
+            first = false;
+            r.header = line == kRegistryHeader;
+            r.newer = !r.header && line.starts_with(kRegistryFamily);
+            if (r.header) continue;
+        }
+        if (!r.header) {
+            // Not a registry this reads (damaged, or a newer Hailstone's after an update was rolled back): its
+            // "addon <name> <kind>" lines are still looked for, so that those add-ons' files get no capabilities
+            // rather than a hand-installed file's (every one, on a server without hailstone.cfg).
+            auto [what, rest] = split(line);
+            if (what != "addon") continue;
+            auto [name, kind] = split(rest);
+            auto [kind_word, more] = split(kind);
+            if (addon_name_ok(name)) add_unreadable(r.bad, name, kind_of_word(kind_word));
             continue;
         }
         auto [what, rest] = split(line);
         if (what == "addon") {
             close();
             auto [name, kind] = split(rest);
+            const auto k = kind_of_word(kind);
+            skipping = !addon_name_ok(name) || !k;
+            // A name no folder can have names nothing to refuse; a known name of an unknown kind is refused in
+            // every kind's folder.
+            if (addon_name_ok(name) && !k) add_unreadable(r.bad, name, std::nullopt);
+            if (skipping) continue;
             InstalledAddon a;
             a.name = std::string(name);
-            a.kind = kind == "plugin" ? AddonKind::Plugin : kind == "tool" ? AddonKind::Tool : AddonKind::Script;
-            bad = !addon_name_ok(name) || (kind != "plugin" && kind != "script" && kind != "tool");
-            out.push_back(std::move(a));
+            a.kind = *k;
+            r.good.push_back(std::move(a));
             continue;
         }
-        if (out.empty()) continue;
-        InstalledAddon& a = out.back();
+        if (skipping || r.good.empty()) continue;
+        InstalledAddon& a = r.good.back();
         if (what == "source") a.source = std::string(rest);
         else if (what == "version") a.version = std::string(rest);
         else if (what == "caps") a.caps = plugin::parse_caps(rest);
@@ -292,10 +347,64 @@ std::vector<InstalledAddon> read_installed_addons(const fs::path& data_dir) {
         }
     }
     close();
-    return out;
+    return r;
 }
 
-bool write_installed_addons(const fs::path& data_dir, const std::vector<InstalledAddon>& addons) {
+bool named(const std::vector<InstalledAddon>& list, std::string_view name) { return find_addon(list, name) != nullptr; }
+
+} // namespace
+
+AddonRegistry read_addon_registry(const fs::path& data_dir) {
+    const fs::path dir = addons_dir(data_dir);
+    AddonRegistry reg;
+    ParsedRegistry p = parse_registry(dir / "installed.txt");
+    if (p.exists && p.header && p.bad.empty()) {
+        reg.addons = std::move(p.good);
+        return reg;
+    }
+    ParsedRegistry b = parse_registry(dir / kRegistryBackup);
+    if (!p.exists && !b.exists) return reg; // no add-on was ever installed
+    reg.newer = p.newer || (!p.exists && b.newer);
+    if (!p.exists) reg.problem = "addons/installed.txt is gone";
+    else if (p.newer) reg.problem = "addons/installed.txt is a newer Hailstone's";
+    else if (!p.header) reg.problem = "addons/installed.txt is damaged";
+    else reg.problem = "addons/installed.txt has records that do not read";
+    if (!p.header) {
+        // Nothing of installed.txt reads: the backup's records stand in, and what installed.txt names beyond them
+        // gets nothing.
+        if (b.header) {
+            reg.addons = std::move(b.good);
+            reg.from_backup = true;
+            for (const auto& u : b.bad) add_unreadable(reg.unreadable, u.name, u.kind);
+        } else {
+            for (const auto& u : b.bad) add_unreadable(reg.unreadable, u.name, u.kind);
+        }
+        for (const auto& u : p.bad)
+            if (!named(reg.addons, u.name)) add_unreadable(reg.unreadable, u.name, u.kind);
+    } else {
+        // Only some records of installed.txt are damaged: each is taken from the backup when it reads there.
+        reg.addons = std::move(p.good);
+        for (const auto& u : p.bad) {
+            const InstalledAddon* saved = b.header ? find_addon(b.good, u.name) : nullptr;
+            if (saved && !named(reg.addons, u.name) && (!u.kind || saved->kind == *u.kind)) {
+                reg.addons.push_back(*saved);
+                reg.from_backup = true;
+            } else {
+                add_unreadable(reg.unreadable, u.name, u.kind);
+            }
+        }
+        std::sort(reg.addons.begin(), reg.addons.end(),
+                  [](const auto& x, const auto& y) { return lower(x.name) < lower(y.name); });
+    }
+    return reg;
+}
+
+std::vector<InstalledAddon> read_installed_addons(const fs::path& data_dir) {
+    return read_addon_registry(data_dir).addons;
+}
+
+namespace {
+std::string registry_text(const std::vector<InstalledAddon>& addons) {
     std::string text = "# The add-ons Hailstone installed (docs/addons.md). Written by the client.\n";
     text += kRegistryHeader;
     text += "\n";
@@ -311,13 +420,43 @@ bool write_installed_addons(const fs::path& data_dir, const std::vector<Installe
         if (!a.notes.empty()) text += "notes " + a.notes + "\n";
         for (const auto& f : a.files) text += "file " + to_hex(f.sha256) + " " + std::to_string(f.size) + " " + f.path + "\n";
     }
-    return write_file_atomic(addons_dir(data_dir) / "installed.txt", text);
+    return text;
+}
+
+// Why installed.txt may not be written now ("" it may): a newer Hailstone's registry is never written over, and one
+// whose records do not all read would lose those (their files would then get a hand-installed file's capabilities).
+std::string registry_locked(const AddonRegistry& reg) {
+    if (reg.writable()) return {};
+    return reg.problem + ": add-ons cannot be installed, updated or removed until it is put right (docs/addons.md)";
+}
+} // namespace
+
+bool write_installed_addons(const fs::path& data_dir, const std::vector<InstalledAddon>& addons) {
+    if (std::string why = registry_locked(read_addon_registry(data_dir)); !why.empty()) {
+        log::warn("Add-ons: {}", why);
+        return false;
+    }
+    const std::string text = registry_text(addons);
+    if (!write_file_atomic(addons_dir(data_dir) / "installed.txt", text)) return false;
+    // The copy a lost or damaged installed.txt is read from (read_addon_registry).
+    if (!write_file_atomic(addons_dir(data_dir) / kRegistryBackup, text))
+        log::warn("Add-ons: cannot write addons/{}", kRegistryBackup);
+    return true;
 }
 
 const InstalledAddon* find_addon(const std::vector<InstalledAddon>& addons, std::string_view name) {
     for (const auto& a : addons)
         if (iequal(a.name, name)) return &a;
     return nullptr;
+}
+
+const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addons, std::string_view name,
+                                        AddonKind kind, std::string_view repo, const Ed25519PublicKey& key) {
+    const InstalledAddon* a = find_addon(addons, name);
+    if (!a || a->kind != kind || !a->key || *a->key != key) return nullptr;
+    auto have = parse_addon_link(a->source), want = parse_addon_link(repo);
+    if (!have || !want || !iequal(have->owner, want->owner) || !iequal(have->repo, want->repo)) return nullptr;
+    return a;
 }
 
 std::vector<std::string> modified_addon_files(const fs::path& data_dir, const InstalledAddon& addon) {
@@ -382,10 +521,15 @@ std::string addon_name_taken(const fs::path& data_dir, const std::vector<Install
 }
 
 bool addon_owns_folder(const fs::path& data_dir, std::string_view folder) {
-    for (const auto& a : read_installed_addons(data_dir)) {
+    const AddonRegistry reg = read_addon_registry(data_dir);
+    for (const auto& a : reg.addons) {
         const std::string mine = std::string(kind_folder(a.kind)) + "/" + a.name;
         if (iequal(mine, folder)) return true;
     }
+    // One whose record does not read is still taken for an add-on's: the updater leaves it alone.
+    for (const auto& u : reg.unreadable)
+        for (AddonKind k : {AddonKind::Script, AddonKind::Plugin, AddonKind::Tool})
+            if ((!u.kind || *u.kind == k) && iequal(std::string(kind_folder(k)) + "/" + u.name, folder)) return true;
     return false;
 }
 
@@ -631,7 +775,12 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
     const fs::path src = dir / "new" / rel(addon.name);
     const fs::path prev = dir / "previous" / rel(addon.name);
     const fs::path target = addon_folder(data_dir, addon.kind, addon.name);
-    std::vector<InstalledAddon> all = read_installed_addons(data_dir);
+    const AddonRegistry reg = read_addon_registry(data_dir);
+    if (std::string why = registry_locked(reg); !why.empty()) {
+        if (error) *error = why;
+        return false;
+    }
+    std::vector<InstalledAddon> all = reg.addons;
     const InstalledAddon* old = find_addon(all, addon.name);
     if (old && old->kind != addon.kind) {
         if (error) *error = "an add-on cannot change its kind (" + std::string(addon_kind_word(old->kind)) + " to " +
@@ -704,7 +853,12 @@ bool apply_addon(const fs::path& data_dir, const InstalledAddon& addon, std::str
 
 bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* error) {
     const fs::path dir = addons_dir(data_dir);
-    std::vector<InstalledAddon> all = read_installed_addons(data_dir);
+    const AddonRegistry reg = read_addon_registry(data_dir);
+    if (std::string why = registry_locked(reg); !why.empty()) {
+        if (error) *error = why;
+        return false;
+    }
+    std::vector<InstalledAddon> all = reg.addons;
     const InstalledAddon* found = find_addon(all, name);
     if (!found) {
         if (error) *error = "no add-on is named " + std::string(name);
@@ -753,6 +907,51 @@ bool remove_addon(const fs::path& data_dir, std::string_view name, std::string* 
     return true;
 }
 
+namespace {
+bool library_file(std::string_view path) {
+    const std::string ext = extension_of(path);
+    return ext == ".so" || ext == ".dll" || ext == ".dylib";
+}
+} // namespace
+
+std::vector<plugin::Ceiling> addon_ceilings(const fs::path& data_dir) {
+    const AddonRegistry reg = read_addon_registry(data_dir);
+    std::vector<plugin::Ceiling> out = addon_ceilings(reg.addons);
+    // An add-on whose record does not read: what it was allowed is not known, so its files may do nothing (not what
+    // a file put in by hand may). Every Lua file of its folder, and every library at its top, by their bytes now.
+    for (const auto& u : reg.unreadable) {
+        std::size_t refused = 0;
+        for (AddonKind k : {AddonKind::Script, AddonKind::Plugin}) {
+            if (u.kind && *u.kind != k) continue;
+            const fs::path folder = addon_folder(data_dir, k, u.name);
+            std::error_code ec;
+            if (!fs::is_directory(folder, ec)) continue;
+            auto take = [&](const fs::path& file, plugin::FileKind fk) {
+                if (auto bytes = read_text_file(file)) {
+                    out.push_back({fk, sha256(*bytes), 0});
+                    ++refused;
+                }
+            };
+            if (k == AddonKind::Script) {
+                for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
+                     it.increment(ec))
+                    if (it->is_regular_file(ec) && extension_of(it->path().filename().string()) == ".lua")
+                        take(it->path(), plugin::FileKind::Script);
+            } else {
+                for (const auto& e : fs::directory_iterator(folder, ec))
+                    if (e.is_regular_file(ec) && library_file(e.path().filename().string()))
+                        take(e.path(), plugin::FileKind::Plugin);
+            }
+        }
+        log::warn("Add-ons: {} is named in addons/installed.txt, but its record cannot be read ({}): its {} file(s) "
+                  "get no permissions until it is put right",
+                  u.name, reg.problem, refused);
+    }
+    if (reg.from_backup && reg.unreadable.empty())
+        log::warn("Add-ons: {}: its add-ons are read from addons/{}", reg.problem, kRegistryBackup);
+    return out;
+}
+
 std::vector<plugin::Ceiling> addon_ceilings(const std::vector<InstalledAddon>& addons) {
     std::vector<plugin::Ceiling> out;
     for (const auto& a : addons)
@@ -781,6 +980,22 @@ void addons_at_start(const fs::path& data_dir) {
     remove_quietly(dir / "installed.prev.txt");
     remove_quietly(dir / "previous");
     remove_quietly(dir / "new");
+    const AddonRegistry reg = read_addon_registry(data_dir);
+    if (reg.problem.empty()) {
+        // An installed.txt from before the backup: it gets its copy now.
+        if (fs::exists(dir / "installed.txt", ec) && !fs::exists(dir / kRegistryBackup, ec))
+            if (auto text = read_text_file(dir / "installed.txt")) write_file_atomic(dir / kRegistryBackup, *text);
+        return;
+    }
+    if (reg.from_backup && reg.writable()) {
+        // The backup has every add-on installed.txt names (or installed.txt is gone): it is written again from it.
+        if (write_installed_addons(data_dir, reg.addons))
+            log::warn("Add-ons: {}; it was written again from addons/{}", reg.problem, kRegistryBackup);
+        return;
+    }
+    log::error("Add-ons: {}: the add-ons it names that cannot be read get no permissions, and no add-on can be "
+               "installed, updated or removed until it is put right (or taken out, with those add-ons' folders)",
+               reg.problem);
 }
 
 } // namespace hailstone::app
