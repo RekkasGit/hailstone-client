@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Erudites and other characters whose Luclin model borrows another race's animations keep their own face: an erudite no longer bares its teeth with parted lips, frowns or wears its beard in front of its mouth. The lips, jaw and brows took the wood elf's places from the borrowed animations
 - A face seen up close no longer shows dark lines across it with the modern lighting: an erudite's forehead had a sharp V-shaped crease, and faces had dark lines over the cheeks and under the eyes. The ambient occlusion picked out the folds of the low-poly head that its smooth shading hides; it now fades out on anything closer than about twice a character's height to the camera
 - NPC names that start with "#" on the server (named NPCs such as "#Lord Bob") now show without the "#", in their name above the head, the target window, chat and elsewhere, as on the original client
 - Scripts: the `targetable` spawn search word now leaves out spawns the game will not target (body type 11, which servers give portal and trigger NPCs), as in MacroQuest. It used to look only at the spawn's Targetable flag
