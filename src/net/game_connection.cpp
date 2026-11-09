@@ -609,6 +609,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.memorizing.reset();
         spells_.others.clear();
         cast_stage_shown_.clear();
+        effect_packets_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
         loot_.reset();
@@ -1372,6 +1373,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::BlockedBuffs:
     case Op::RemoveBlockedBuffs:
     case Op::ClearBlockedBuffs:
+    case Op::SpellEffect:
+    case Op::AddNimbusEffect:
+    case Op::RemoveNimbusEffect:
         handle_spell(op, p);
         break;
     case Op::CharInventory:
