@@ -363,6 +363,20 @@ bool ClientApp::texture_studio_installed() const {
     return tool_program_there(platform::data_dir(), a);
 }
 
+bool ClientApp::start_texture_studio(std::string* error) {
+    const auto all = read_installed_addons(platform::data_dir());
+    const auto key = hex_decode<32>(kTextureStudioKey);
+    if (find_addon(all, kTextureStudio) && (!key || !find_pinned_addon(all, kTextureStudio, AddonKind::Tool,
+                                                                       kTextureStudioRepo, *key))) {
+        if (error)
+            *error = "The add-on named " + std::string(kTextureStudio) + " is not Hailstone Texture Studio (" +
+                     std::string(kTextureStudioRepo) + ", signed with its key): Options does not start it. Start "
+                     "it from its row in Add-ons if you trust it.";
+        return false;
+    }
+    return start_addon_tool(kTextureStudio, error);
+}
+
 bool ClientApp::start_addon_tool(std::string_view name, std::string* error) {
     const std::filesystem::path data = platform::data_dir();
     const auto all = read_installed_addons(data);

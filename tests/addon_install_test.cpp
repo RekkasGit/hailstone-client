@@ -506,6 +506,24 @@ TEST_CASE("addon_install: an add-on whose record cannot be read gets no capabili
     }
 }
 
+TEST_CASE("addon_install: a pinned add-on is the one from its repository with its key") {
+    Keys keys, other(9);
+    InstalledAddon a;
+    a.name = "texstudio";
+    a.kind = AddonKind::Tool;
+    a.source = "ProjectHailstone/hailstone-texstudio@v1.0.0";
+    a.key = keys.pub;
+    const std::vector<InstalledAddon> all = {a};
+    CHECK(find_pinned_addon(all, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio", keys.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio", other.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Tool, "someone/hailstone-texstudio", keys.pub));
+    CHECK_FALSE(find_pinned_addon(all, "texstudio", AddonKind::Script, "projecthailstone/hailstone-texstudio", keys.pub));
+    auto unsigned_one = all;
+    unsigned_one[0].key.reset();
+    CHECK_FALSE(find_pinned_addon(unsigned_one, "texstudio", AddonKind::Tool, "projecthailstone/hailstone-texstudio",
+                                  keys.pub));
+}
+
 TEST_CASE("addon_install: lua_compiles takes text only") {
     std::string why;
     CHECK(lua_compiles("return 1", "x", &why));

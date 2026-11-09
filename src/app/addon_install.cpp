@@ -10,6 +10,7 @@
 #include <lua.hpp>
 
 #include "app/update_install.h"
+#include "core/addon_source.h"
 #include "core/atomic_file.h"
 #include "core/binary_header.h"
 #include "core/log.h"
@@ -447,6 +448,15 @@ const InstalledAddon* find_addon(const std::vector<InstalledAddon>& addons, std:
     for (const auto& a : addons)
         if (iequal(a.name, name)) return &a;
     return nullptr;
+}
+
+const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addons, std::string_view name,
+                                        AddonKind kind, std::string_view repo, const Ed25519PublicKey& key) {
+    const InstalledAddon* a = find_addon(addons, name);
+    if (!a || a->kind != kind || !a->key || *a->key != key) return nullptr;
+    auto have = parse_addon_link(a->source), want = parse_addon_link(repo);
+    if (!have || !want || !iequal(have->owner, want->owner) || !iequal(have->repo, want->repo)) return nullptr;
+    return a;
 }
 
 std::vector<std::string> modified_addon_files(const fs::path& data_dir, const InstalledAddon& addon) {

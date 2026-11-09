@@ -98,7 +98,12 @@ loads or runs anything of it itself:
   player's Hailstone folder (`hailstone.ini`, `textures/`, its own settings) wherever it was started from. It runs as a
   program of its own and is left running when Hailstone quits (`ClientApp::start_addon_tool`).
 - **Options** start the one tool it knows of: Graphics, Textures, **Texture Studio...** once the add-on `texstudio`
-  is installed; until then that row says to install it from Add-ons.
+  is installed; until then that row says to install it from Add-ons. The button starts it only when it is the real
+  one: installed from projecthailstone/hailstone-texstudio and signed with the project's add-on key (the key the
+  add-on index lists for the project's add-ons; `ClientApp::kTextureStudioRepo`, `kTextureStudioKey`,
+  `find_pinned_addon`). Another add-on that took the name, or an unsigned one, is not started from Options (the log
+  says why); its row's **Start** still starts it, where the player sees what it is. A new key for the studio needs a
+  client release.
 - **Its card** asks for no permissions, and says instead that a tool runs on the computer with the player's rights,
   outside Hailstone: the capability ceiling means nothing to a program of its own, so a tool's manifest says
   `caps none` and one that asks for any is refused.
@@ -400,12 +405,13 @@ cannot install another.
 - `tests/addon_manifest_test.cpp`: the links, the manifest's checks and signature, random and cut-off input, the
   headers of each platform.
 - `tests/addon_install_test.cpp`: what a package may hold, an install and an update keeping the player's files, a
-  removal, a cut-off install undone, `installed.txt`, the names taken, the ceilings, the server's and hand-installed
-  lists.
-- `tests/addon_manager_test.cpp`: the manager against GitHub in memory: the install card, a package changed or
-  redirected off GitHub, updates that ask for more, that would overwrite the player's changes or that carry another
-  key, auto-update off, the check interval.
-- `tests/addon_index_test.cpp`: the index's checks and signature, random and cut-off input, which worlds match, which
+  removal, a cut-off install undone, `installed.txt` and its backup, a damaged, lost or newer one failing closed, the
+  names taken, the ceilings, the pinned add-on, the server's and hand-installed lists.
+- `tests/addon_manager_test.cpp`: the manager against GitHub in memory: the install card, an older version from a
+  link, a package changed or redirected off GitHub, updates that ask for more, that would overwrite the player's
+  changes or that carry another key, auto-update off, the check interval.
+- `tests/addon_index_test.cpp`: the index's checks and signature, its serial and an older index refused, random and
+  cut-off input, which worlds match, which
   suggestions the player sees, `[addons] suggest`, the manager fetching and caching the index, a suggestion's card
   held to the index's name and key, and the store's list (each add-on's manifest held to the index's name and key,
   what keeps one from being installed, once a run unless refreshed, no index).

@@ -659,9 +659,16 @@ private:
     // *error why not (not installed, its program gone, or the system would not start it).
     bool start_addon_tool(std::string_view name, std::string* error);
     // Hailstone Texture Studio's add-on name (projecthailstone/hailstone-texstudio): Options' "Texture Studio..."
-    // starts it once it is installed.
+    // starts it once it is installed, from that repository and signed with the project's add-on key
+    // (kTextureStudioKey, the key the add-on index lists for the project's add-ons): the button starts a program by
+    // name, so another add-on that took the name, or an unsigned one, is not started from it (its row's Start still
+    // works, where the player sees what it is).
     static constexpr std::string_view kTextureStudio = "texstudio";
+    static constexpr std::string_view kTextureStudioRepo = "projecthailstone/hailstone-texstudio";
+    static constexpr std::string_view kTextureStudioKey =
+        "1cec1c02c81c578912f0b8dcae84277c60ddb80271cfa28793cc06bc7ae51608";
     bool texture_studio_installed() const;
+    bool start_texture_studio(std::string* error);
 public:
     struct UpdateExit {
         bool install = false; // a downloaded update is installed now

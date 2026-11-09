@@ -84,6 +84,13 @@ std::vector<InstalledAddon> read_installed_addons(const std::filesystem::path& d
 bool write_installed_addons(const std::filesystem::path& data_dir, const std::vector<InstalledAddon>& addons);
 // The add-on named `name` (any case), or null.
 const InstalledAddon* find_addon(const std::vector<InstalledAddon>& addons, std::string_view name);
+// The add-on named `name` of `kind` when it comes from the repository `repo` (owner/repo, whatever tag or branch)
+// and is signed with `key`, else null. For the client's own buttons that start one add-on they know by name
+// (Options' Texture Studio...): another add-on that took the name, or one not signed by its author, is not taken for
+// it.
+const InstalledAddon* find_pinned_addon(const std::vector<InstalledAddon>& addons, std::string_view name,
+                                        AddonKind kind, std::string_view repo, const Ed25519PublicKey& key);
+
 // The files of an installed add-on that are gone or no longer what it shipped (the player changed them).
 std::vector<std::string> modified_addon_files(const std::filesystem::path& data_dir, const InstalledAddon& addon);
 
