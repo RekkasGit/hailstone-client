@@ -240,7 +240,8 @@ packs, signs and uploads.
 Only `github.com` links are taken. A download may end only on GitHub's own hosts, whatever redirects it took:
 `github.com`, `raw.githubusercontent.com`, `codeload.github.com`, `objects.githubusercontent.com` and
 `release-assets.githubusercontent.com` (`addon_download_allowed`). The address a transfer ends on is checked before
-any of its body is used (`HttpGetOptions::allow_url`: libcurl's effective URL, WinHTTP's `WINHTTP_OPTION_URL`). The
+any of its body is used (`HttpGetOptions::allow_url`: libcurl's effective URL, WinHTTP's `WINHTTP_OPTION_URL`), and
+also when it has no body: an empty answer from an address off those hosts is a failure, not an empty file. The
 link parser (`core/addon_source.h`) keeps the hosts in one place, so others can be added later.
 
 ## Capabilities: the manifest's `caps` are a ceiling
