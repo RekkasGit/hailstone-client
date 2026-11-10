@@ -91,7 +91,13 @@ struct StageActor {
     std::optional<float> floor;
     // GetParticleScaleFactor (actor vtable +0x218): its model's moddat.ini PESFactor, 1 without one. Attach 12's scale.
     float particle_scale = 1.0f;
+    // Whether its model is known. Hailstone: a spawn whose model has not loaded yet (an effect sent as it zones in)
+    // has no points to read; the original's actor always has them. Its slots keep the point they ask for, and the
+    // attachment finds it once the model is drawn (or keeps to the spawn's place).
+    bool model_known = true;
     bool has_point(int n) const { return n >= 0 && n < 16 && (points >> n) & 1u; }
+    // has_point, or for a model not known yet any of the ten.
+    bool may_have_point(int n) const { return model_known ? has_point(n) : n >= 0 && n < 10; }
 };
 
 // SpellEffect_SpawnStageEmitters' slot loop for stage 0 (cast), 1

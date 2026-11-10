@@ -668,3 +668,23 @@ TEST_CASE("an actor's own emitter is made for 5,000 s, not its entry's 5 s") {
     CHECK(hailstone::game::emitter_counts(d, 1.0f, duration).capacity == (80 + 1) * 4);
     CHECK(hailstone::game::emitter_counts(d, 1.0f, 5.0f).capacity == 1 + 50 * 4);
 }
+
+TEST_CASE("SpellEffect_SpawnStageEmitters: an actor whose model is not known yet keeps the point a slot asks for") {
+    // A nimbus sent as the spawn zones in, before its model has loaded (Hailstone; the original's actor has its
+    // points from the start).
+    auto run = [](std::int32_t attach) {
+        assets::SpellEffect fx;
+        fx.stages[2].slots[0] = {10, 0, 1, attach};
+        game::StageActor caster{7, {1, 2, 3}, 10, 6.0f};
+        caster.model_known = false;
+        return game::spawn_stage_emitters(fx, 2, 468, &caster, &caster, {1, 2, 3}, 0, {});
+    };
+    auto chest = run(2);
+    REQUIRE(chest.size() == 1);
+    CHECK(chest[0].bone_point == 1);
+    CHECK(chest[0].actor == 7u);
+    CHECK(run(10)[0].bone_point == 8); // an eye: kept too, found or not once the model is drawn
+    auto at12 = run(12);
+    REQUIRE(at12.size() == 1);
+    CHECK(at12[0].position == glm::vec3(1, 2, 3)); // no chest known: the spawn's place
+}

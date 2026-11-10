@@ -58,13 +58,13 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
             // 1 -> point 0; 2..7 -> points 1..6, else point 0; 8 -> no point; 9 / 10 -> points 7 / 8 or the slot
             // is skipped; 11 -> point 9; 12 -> no point, at the chest's x and y (z: GetPlayerFloorHeight 0.1 above
             // the actor, see below), scaled by the actor's particle scale. A missing point leaves the actor without one.
-            auto existing = [&](int n) { return at->has_point(n) ? n : -1; };
+            auto existing = [&](int n) { return at->may_have_point(n) ? n : -1; };
             if (slot.attach == 1) r.bone_point = existing(0);
             else if (slot.attach >= 2 && slot.attach <= 7) {
                 r.bone_point = existing(slot.attach - 1);
                 if (r.bone_point < 0) r.bone_point = existing(0);
             } else if (slot.attach == 9 || slot.attach == 10) {
-                if (!at->has_point(slot.attach - 2)) continue;
+                if (!at->may_have_point(slot.attach - 2)) continue;
                 r.bone_point = slot.attach - 2;
             } else if (slot.attach == 11) r.bone_point = existing(9);
             else if (slot.attach == 12) {
