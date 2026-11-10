@@ -4,6 +4,8 @@
 
 - Nothing updates unless you ask. A new Hailstone release is shown on the login screen but downloads only when you press **Download** (set `update.download=1` in hailstone.ini to have it download by itself, as before). An update an older version downloaded on its own is no longer installed when you quit; **Restart now** installs it
 - Add-ons: auto-update is off unless you switch it on in an add-on's row. Add-ons installed before this version had it switched on without asking, so it now starts off for them too; **Check for updates** still shows newer versions, and **Update** takes them
+- A player who feigns death, sits or is stunned while running stops where they are, as on the original client. Other players kept running for a few seconds in the direction they were going, and your own character slid on while stunned
+- Stuns follow the original client: a stun that lands while you are already stunned no longer restarts it, a stun under 1 second lasts 1 second, stun immunity is respected, a stun that ends while you are mesmerized lasts until the mez ends, "You are stunned!" and "You are unstunned." are printed, and sounds take on the dazed echo while you are stunned
 - Chat: a message with line breaks in it (such as a server's message of the day) is shown on separate lines, instead of its words being thrown across the window
 
 ## 0.7.0-beta (2026-11-09)

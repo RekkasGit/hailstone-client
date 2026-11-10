@@ -889,7 +889,17 @@ public:
     std::vector<JournalLine> take_journal_lines() { return std::exchange(journal_lines_, {}); }
 
     // ---- stuns (OP_Stun: u32 duration ms first): while stunned the character neither moves, casts nor uses skills.
-    bool stunned() const { return now_ms() < stun_until_ms_; }
+    // The character's stun state (CharacterZoneClient +0x100 = 1). StunMe sets it with the timer (the spawn's +0x43c);
+    // DoPassageOfTime ends it once the timer passes, unless the player is mesmerized (EndStun then waits for the mez).
+    bool stunned() const { return stun_state_; }
+    // How many times the local player was made to stop. SpeedRun (+0x7c): a stun starting (CharacterZoneClient::StunMe
+    // @0x4432c0, which stops the mount too) or sitting, looting or lying down (PlayerZoneClient::ChangePosition
+    // @0x5a0bc0's StopMoving); the turn rate (+0x8c): ChangePosition's alone. Movement clears its body's speeds when
+    // these change; it stops asking for speed while it cannot move, so the speed it had would carry it on.
+    std::uint32_t speed_stops() const { return speed_stops_; }
+    std::uint32_t turn_stops() const { return turn_stops_; }
+    // How many stuns leaned the player: StunMe's last argument sets the turn rate (+0x8c) to 32.
+    std::uint32_t stun_leans() const { return stun_leans_; }
 
     // ---- food and drink (OP_Consume): a right click eats through OP_ItemVerifyReply (handle_item_verify_reply);
     // below kAutoEatLevel (of EQEmu's 6000) the first food or drink in the general slots and their bags is eaten
@@ -3236,7 +3246,12 @@ private:
     std::function<void(std::string_view, std::string_view, const std::string&)> ui_ini_put_;
     std::function<std::string()> visible_chat_text_;
     Claims claims_;
-    std::int64_t stun_until_ms_ = 0;
+    std::int64_t stun_timer_ms_ = 0; // the spawn's +0x43c: when the stun ends (0: none running)
+    bool stun_state_ = false;        // CharacterZoneClient +0x100 = 1
+    std::uint32_t speed_stops_ = 0, turn_stops_ = 0, stun_leans_ = 0;
+    // CharacterZoneClient::StunMe @0x4432c0 and CharacterZoneClient_EndStun @0x4433d0 (game_connection_ticks.cpp).
+    void stun_me(std::uint32_t duration_ms, bool lean);
+    void end_stun();
     bool alarm_open_ = false;
     std::int64_t alarm_due_ms_ = 0;
     std::array<NameChangeWindow, kNameKinds> name_change_{};
