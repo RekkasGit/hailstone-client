@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- For server admins: Hailstone's own packets moved to opcodes 0x1430-0x1435 (guild invitation 0x1430/0x1431, settings 0x1432/0x1433, server files 0x1434/0x1435), because Project Triune's server uses 0x1422. Update `server/quests/global/encounters/hailstone.lua` on the server: the new script still answers Hailstone 0.7.0 and older on their old opcodes (0x1422-0x1427), but this version gets no server files, settings or cross-zone guild invitations from a server with the old script
 - Nothing updates unless you ask. A new Hailstone release is shown on the login screen but downloads only when you press **Download** (set `update.download=1` in hailstone.ini to have it download by itself, as before). An update an older version downloaded on its own is no longer installed when you quit; **Restart now** installs it
 - Add-ons: auto-update is off unless you switch it on in an add-on's row. Add-ons installed before this version had it switched on without asking, so it now starts off for them too; **Check for updates** still shows newer versions, and **Update** takes them
 - A player who feigns death, sits or is stunned while running stops where they are, as on the original client. Other players kept running for a few seconds in the direction they were going, and your own character slid on while stunned
