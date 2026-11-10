@@ -1120,6 +1120,143 @@ int ConColor(int cLevel,int targetlevel)
 
 }
 
+int h_get_pet_buff_data_bulk(void* h, unsigned char* data, int datamax)
+{
+    const net::GameConnection* c = connection_of(Loaded::of(h));
+    if (!c) return 0;
+
+    c->pet_buffs();
+    return 0;
+}
+int h_get_buff_data_bulk(void* h, unsigned char* data, int datamax)
+{
+
+    //don't allow a deny just grab the raw connection.
+    const net::GameConnection* c = connection_of(Loaded::of(h));
+    if (!c) return 0;
+
+    c->spell_state().buffs;
+    return 0;
+  //  const auto& buffs = c->spell_state().buffs;
+  //  
+  //  int bufferSize = 0;
+  //  unsigned char* pBuffer = data;
+
+  //  for (const auto& buff : buffs) {
+
+  //      int ID = buff.spell;
+  //      //get said spell for some data we need
+  //      const auto* spell = c->spell_table().get(ID);
+  //      //blast the id into the buffer and move pointer forward
+  //      memcpy(pBuffer, &ID, sizeof(ID));
+  //      pBuffer += sizeof(ID);
+  //      bufferSize += sizeof(ID);
+
+  //      int casterID = buff.caster_id;
+  //      memcpy(pBuffer, &casterID, sizeof(casterID));
+  //      pBuffer += sizeof(casterID);
+  //      bufferSize += sizeof(casterID);
+
+  //      int duration = buff.tics;
+  //      memcpy(pBuffer, &duration, sizeof(duration));
+  //      pBuffer += sizeof(duration);
+  //      bufferSize += sizeof(duration);
+
+  //      int hitcount = buff.num_hits;
+  //      memcpy(pBuffer, &hitcount, sizeof(hitcount));
+  //      pBuffer += sizeof(hitcount);
+  //      bufferSize += sizeof(hitcount);
+
+  //      int spelltype = 0;
+
+  //      if (spell)
+  //      {
+  //          spelltype = spell->spell_type;;
+
+  //      }
+  //      memcpy(pBuffer, &spelltype, sizeof(spelltype));
+  //      pBuffer += sizeof(spelltype);
+  //      bufferSize += sizeof(spelltype);
+
+  //      int counterTotal = 0;
+  //      int counterType = -1;
+  //      //get the number of effects on the spell object
+  //      int effectCount = spell->effect.size();
+  //      
+  //      for (int i = 0; i < effectCount; i++)
+  //      {
+  //          //looking through each effect of the spell, we pull the attributes
+  //          //if its one of the attributes we care for we do work.
+  //          switch (spell->effect[i])
+  //          {
+  //          case game::eEQSPA::SPA_DISEASE:
+  //              counterType = 0; //disease id
+  //              //loop through the buffs slot data to see if its slot id=our effect index. 
+  //              //if so the slot matches our effect of DISEASE, so pull out the value and add it to the counter
+  //              //should only be one of each type so exit it we match on one.
+  //              for (auto& slotData : effect.SlotData)
+  //              {
+  //                  if (slotData.Slot == i)
+  //                  {
+  //                      counterTotal += slotData.Value;
+  //                  }
+  //              }
+  //              goto exit_loop;
+  //              break;
+  //          case game::eEQSPA::SPA_POISON:
+  //              counterType = 1;
+  //              for (auto& slotData : effect.SlotData)
+  //              {
+  //                  if (slotData.Slot == i)
+  //                  {
+  //                      counterTotal += slotData.Value;
+  //                  }
+  //              }
+  //              goto exit_loop;
+  //              //counterTotal = GetSpellCounters(SPA_POISON, effect);
+  //              break;
+  //          case game::eEQSPA::SPA_CURSE:
+  //              counterType = 2;
+  //              for (auto& slotData : effect.SlotData)
+  //              {
+  //                  if (slotData.Slot == i)
+  //                  {
+  //                      counterTotal += slotData.Value;
+  //                  }
+  //              }
+  //              goto exit_loop;
+  //              //counterTotal = GetSpellCounters(SPA_CURSE, effect);
+  //              break;
+  //          case game::eEQSPA::SPA_CORRUPTION:
+  //              counterType = 3;
+  //              for (auto& slotData : effect.SlotData)
+  //              {
+  //                  if (slotData.Slot == i)
+  //                  {
+  //                      counterTotal += slotData.Value;
+  //                  }
+  //              }
+  //              goto exit_loop;
+  //              //counterTotal = GetSpellCounters(SPA_CORRUPTION, effect);
+  //              break;
+  //          }
+  //      }
+  //  exit_loop:
+
+
+  //  }
+
+  ///*  const game::BuffSlot& b = buffs[index];
+  //  HailstoneBuff v{};
+  //  v.size = sizeof v;
+  //  v.spell_id = b.empty() ? 0 : b.spell;
+  //  v.tics = b.tics;
+  //  v.level = b.level;
+  //  v.caster_id = b.caster_id;
+  //  return give(out, v);*/
+
+}
+
 //may need to break this up, but you need a sizable buffer for this or boom.
 //for 5,000 spawns, assume 10 megs. now 5k is wayyy higher than it should ever be
 //so can get away with less, but you never know. 
