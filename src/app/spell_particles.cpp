@@ -67,6 +67,8 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
     const auto now_ms = static_cast<std::uint64_t>(clock_ * 1000.0);
     using Kind = net::EffectPacketCue::Kind;
     for (const auto& e : effect_packets) {
+        log::info("effect packet {}: effect {} caster {} target {} ({} / {} / {} ms, full {})", static_cast<int>(e.kind),
+                  e.effect, e.caster, e.target, e.stage1_ms, e.stage1_length_ms, e.stage2_length_ms, e.full);
         switch (e.kind) {
         case Kind::Add:
             timers_.add(e.caster, e.target, e.effect, e.stage1_ms, e.stage1_length_ms, e.stage2_length_ms, e.full,
@@ -116,7 +118,7 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
         // The actor's root GetScaleFactor (its model scale) and GetParticleScaleFactor (moddat.ini PESFactor).
         if (it->second.heights.model_scale > 0.0f) a.actor_scale = it->second.heights.model_scale;
         if (actors) {
-            if (const assets::CharacterModel* model = actors->drawn_model(id)) a.particle_scale = particle_scale(*model);
+            if (const assets::CharacterModel* model = actors->spawn_model(id)) a.particle_scale = particle_scale(*model);
             if (pt >= 0)
                 if (auto m = point_world(*actors, id, pt)) {
                     a.position = glm::vec3((*m)[3]);
@@ -239,8 +241,10 @@ std::optional<game::StageActor> SpellParticles::stage_actor(const net::GameConne
     a.position = s.display_valid ? s.display_position : s.position;
     a.level = s.level > 0 ? s.level : 1;
     a.height = s.heights.height; // Height (+0x13c): the size, or racedata's default
+    // The points are the model's, drawn or not: a spawn not drawn this frame (the player in first person, one out of
+    // view) still has them in the original, and an emitter made without a point would stay where it was made.
     if (actors)
-        if (const assets::CharacterModel* model = actors->drawn_model(id)) {
+        if (const assets::CharacterModel* model = actors->spawn_model(id)) {
             a.points = spell_points_.of(*model).mask;
             if (auto chest = point_world(*actors, id, 1)) a.chest = glm::vec3((*chest)[3]);
             a.particle_scale = particle_scale(*model);
