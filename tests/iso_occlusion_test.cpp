@@ -137,3 +137,17 @@ TEST_CASE("iso reveal: a click goes through a triangle where it is cut") {
     // With the cut off, nothing is skipped.
     CHECK_FALSE(iso_pick_skips(IsoReveal{}, s, wall));
 }
+
+TEST_CASE("iso reveal: a wide roof softens over a quarter of its radius") {
+    IsoRevealInput in;
+    in.camera = {0.0f, -100.0f, 104.0f};
+    in.focus = {0.0f, 0.0f, 4.0f};
+    in.strength = 0.0f;
+    in.roof_height = 9.0f;
+    in.roof_radius = 200.0f;
+    in.roof_strength = 1.0f;
+    IsoReveal r = iso_reveal(in);
+    CHECK(r.roof.z == doctest::Approx(50.0f));
+    CHECK(iso_reveal_cut(r, {140.0f, 0.0f, 30.0f}) == doctest::Approx(1.0f)); // a hill well round the player
+    CHECK(iso_reveal_cut(r, {260.0f, 0.0f, 30.0f}) == 0.0f);
+}

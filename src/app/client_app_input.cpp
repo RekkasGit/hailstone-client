@@ -344,6 +344,14 @@ void ClientApp::camera_command(const std::string& args) {
     auto say = [this](const std::string& text) { conn_->show_chat(text, 15); };
     auto save = [this] { save_iso_settings(); };
     if (word.empty()) {
+        if (iso()) {
+            // What the cut is doing now (for tuning it against a place).
+            const game::IsoReveal r = iso_reveal();
+            say(std::format("Cut now: circle {:.0f}% (radius {:.0f} at you), roof {:.0f}% (above {:.0f}, {:.0f} round you; "
+                            "your eyes at {:.0f}).",
+                            iso_cone_strength_ * 100.0f, r.shape.x, iso_roof_strength_ * 100.0f, iso_roof_height_,
+                            r.roof.y, eye_position().z));
+        }
         say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}, reveal {:.0f}. "
                         "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
                         "/camera wasd camera|classic",

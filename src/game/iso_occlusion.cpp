@@ -28,7 +28,7 @@ IsoReveal iso_reveal(const IsoRevealInput& in) {
     r.origin = glm::vec4(in.camera, cone);
     r.axis = glm::vec4(to / distance, distance);
     r.shape = glm::vec4(std::max(in.radius, 0.0f), in.feet_z + kIsoRevealFloor, kIsoRevealMargin, kIsoRevealSoft);
-    r.roof = glm::vec4(in.roof_height, in.roof_radius, kIsoRoofSoft, roof);
+    r.roof = glm::vec4(in.roof_height, in.roof_radius, std::max(kIsoRoofSoft, in.roof_radius * kIsoRoofSoftShare), roof);
     return r;
 }
 

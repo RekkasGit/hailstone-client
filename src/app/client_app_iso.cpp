@@ -36,7 +36,7 @@ game::IsoReveal ClientApp::iso_reveal() const {
     in.radius = iso_reveal_radius_ * iso_camera_.distance / game::kIsoRevealAtDistance;
     in.strength = iso_cone_strength_;
     in.roof_height = iso_roof_height_;
-    in.roof_radius = iso_roof_radius_;
+    in.roof_radius = std::max(iso_roof_radius_, game::kIsoRoofViewShare * iso_camera_.distance);
     in.roof_strength = iso_roof_strength_;
     return game::iso_reveal(in);
 }

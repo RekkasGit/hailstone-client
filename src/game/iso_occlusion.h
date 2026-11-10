@@ -45,8 +45,13 @@ struct IsoRevealInput {
     float roof_strength = 0.0f;
 };
 
-// The roof's soft edge (flat units), and how far over its height it rises to a full cut.
+// The roof's soft edge (flat units, at least, and at least kIsoRoofSoftShare of its radius), and how far over its
+// height it rises to a full cut.
 inline constexpr float kIsoRoofSoft = 15.0f;
+inline constexpr float kIsoRoofSoftShare = 0.25f;
+// The roof reaches at least this share of the camera's distance from the player, so it clears what the view shows
+// round them (a tunnel under a hill: the whole hill over it, not a disc as small as the circle).
+inline constexpr float kIsoRoofViewShare = 1.25f;
 inline constexpr float kIsoRoofRise = 1.5f;
 // The roof cuts above the player's eyes by this much.
 inline constexpr float kIsoRoofAboveEyes = 1.5f;

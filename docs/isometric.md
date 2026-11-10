@@ -100,8 +100,9 @@ So the floor the player stands on and the ground falling away in front stay, and
 a roof or an upper floor goes.
 
 **The roof** comes while something solid is within 60 units over the player's eyes (a ceiling, a roof, a bridge,
-an overhang; `camera.iso_roof`). Then everything more than 1.5 units over the eyes within 60 units of the player
-(flat; the outer 15 thinning out) goes, in front or behind: a room, a corridor or a cave shows from above as a
+an overhang; `camera.iso_roof`). Then everything more than 1.5 units over the eyes round the player goes, in front
+or behind, out to 60 units or 1.25 times the camera's distance, the larger (flat; the outer quarter, at least 15,
+thinning out), so it clears what the view shows (in a tunnel, the whole hill over it): a room, a corridor or a cave shows from above as a
 cut-away, its walls trimmed at head height and the floors above taken away. The height follows the eyes, so a
 staircase walked up takes the cut with it.
 
@@ -131,7 +132,7 @@ ring lies on the floor under it.
 
 | Command | Effect |
 |---|---|
-| `/camera` | which camera, and the isometric camera's settings |
+| `/camera` | which camera, and the isometric camera's settings; in it, what the cut is doing now (the circle's and the roof's strength, the roof's height and reach) |
 | `/camera iso` | the isometric camera |
 | `/camera first`, `/camera behind`, `/camera toggle` | first person, the camera behind the player, or between those and the isometric camera |
 | `/camera pitch <degrees>` | the look down, 20..89 |
