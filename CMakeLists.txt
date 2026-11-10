@@ -968,6 +968,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/boats_test.cpp
     tests/npc_collision_test.cpp
     tests/mounts_test.cpp
+    tests/spawn_is_named_test.cpp
     tests/world_state_smooth_test.cpp
     tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp

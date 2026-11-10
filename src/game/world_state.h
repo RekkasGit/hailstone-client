@@ -5,17 +5,20 @@
 // read by the renderer and UI.
 
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
 
+#include "core/ascii_case.h"
 #include "game/spawn_heights.h"
 
 
@@ -1202,8 +1205,6 @@ namespace hailstone::game {
 		{
 			if (pSpawn)
 			{
-				char szTemp[2048] = { 0 };
-
 				if (game::Spawn::GetSpawnType(pSpawn) != hailstone::game::eSpawnType::NPC)
 					return false;
 				if (!pSpawn->targetable)
@@ -1234,41 +1235,41 @@ namespace hailstone::game {
 					return false;
 				}
 
-				strcpy_s(szTemp, pSpawn->name.c_str());
-				char* Next_Token1 = nullptr;
-
-				if (char* Cmd = strtok_s(szTemp, " ", &Next_Token1))
+				// The name's first space-separated word (spawn names use '_' for spaces, so usually all of it).
+				const std::string_view name = pSpawn->name;
+				const std::size_t first = name.find_first_not_of(' ');
+				if (first != std::string_view::npos)
 				{
+					const std::string_view Cmd = name.substr(first, name.find(' ', first) - first);
 					// Checking for mobs that have 'A' or 'An' as their first name
 					if (Cmd[0] == 'A')
 					{
-						if (Cmd[1] == '_')
+						if (Cmd.size() > 1 && Cmd[1] == '_')
 							return false;
-						else if (Cmd[1] == 'n')
-							if (Cmd[2] == '_')
-								return false;
+						else if (Cmd.size() > 2 && Cmd[1] == 'n' && Cmd[2] == '_')
+							return false;
 					}
 
-					if (!_strnicmp(Cmd, "Guard", 5)
-						|| !_strnicmp(Cmd, "Defender", 8)
-						|| !_strnicmp(Cmd, "Soulbinder", 10)
-						|| !_strnicmp(Cmd, "Aura", 4)
-						|| !_strnicmp(Cmd, "Sage", 4)
-						//|| !_strnicmp(szTemp,"High_Priest", 11)
-						|| !_strnicmp(Cmd, "Ward", 4)
-						//|| !_strnicmp(szTemp,"Shroudkeeper", 12)
-						|| !_strnicmp(Cmd, "Eye of", 6)
-						|| !_strnicmp(Cmd, "Imperial_Crypt", 14)
-						|| !_strnicmp(Cmd, "Diaku", 5))
+					if (hailstone::istarts_with(Cmd, "Guard")
+						|| hailstone::istarts_with(Cmd, "Defender")
+						|| hailstone::istarts_with(Cmd, "Soulbinder")
+						|| hailstone::istarts_with(Cmd, "Aura")
+						|| hailstone::istarts_with(Cmd, "Sage")
+						//|| hailstone::istarts_with(Cmd, "High_Priest")
+						|| hailstone::istarts_with(Cmd, "Ward")
+						//|| hailstone::istarts_with(Cmd, "Shroudkeeper")
+						|| hailstone::istarts_with(Cmd, "Eye of")
+						|| hailstone::istarts_with(Cmd, "Imperial_Crypt")
+						|| hailstone::istarts_with(Cmd, "Diaku"))
 					{
 						return false;
 					}
 
 
-					if (Cmd[0] == '#' && !pSpawn->last_name.c_str()[0])
+					if (Cmd[0] == '#' && pSpawn->last_name.empty())
 						return true;
 
-					if (isupper(Cmd[0]) && !pSpawn->last_name.c_str()[0])
+					if (std::isupper(static_cast<unsigned char>(Cmd[0])) && pSpawn->last_name.empty())
 						return true;
 				}
 			}
