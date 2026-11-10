@@ -959,6 +959,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/tcp_socket_test.cpp
     tests/plugin_tcp_test.cpp
     tests/merchant_buy_test.cpp
+    tests/merchant_usable_test.cpp
     tests/ascii_case_test.cpp
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
@@ -968,6 +969,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/boats_test.cpp
     tests/npc_collision_test.cpp
     tests/mounts_test.cpp
+    tests/spawn_is_named_test.cpp
     tests/world_state_smooth_test.cpp
     tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
@@ -1145,6 +1147,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/player_placement_test.cpp
     tests/step_landing_test.cpp
     tests/jump_hang_test.cpp
+    tests/stop_moving_test.cpp
     tests/zone_ladders_test.cpp
     tests/chat_trade_vectors_test.cpp
     tests/hotbutton_tracking_vectors_test.cpp
