@@ -33,7 +33,7 @@ game::IsoReveal ClientApp::iso_reveal() const {
     in.camera = camera_.position;
     in.focus = iso_camera_.focus;
     in.feet_z = iso_camera_.focus.z - iso_focus_height();
-    in.radius = iso_reveal_radius_;
+    in.radius = iso_reveal_radius_ * iso_camera_.distance / game::kIsoRevealAtDistance;
     return game::iso_reveal(in);
 }
 

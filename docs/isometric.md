@@ -86,10 +86,11 @@ What stands between the camera and the player is cut away round them, so they st
 hills, roofs and the floors above (`game::iso_reveal`, `shaders/lighting.glsl` `reveal_discard`). A surface is cut
 where it is
 
-- nearer the camera than the player's middle by at least 3 units,
-- inside a cone round the line from the camera to the player, 12 units across at the player (`camera.iso_reveal`),
-  which shows as a circle on the screen, its outer third thinning out, and
-- higher than 1 unit above the player's feet, fully from 2.
+- nearer the camera than the player's middle by at least 3 units, fully from 9,
+- inside a cone round the line from the camera to the player, which shows as a circle on the screen: 20 units in
+  radius at the player at the camera's starting distance (`camera.iso_reveal`), scaled with the zoom so it keeps its
+  size on the screen, its outer 60 % thinning out, and
+- higher than 1 unit above the player's feet, fully from 4.
 
 So the floor the player stands on and the ground falling away in front stay, and a wall, a slope rising in front,
 a roof or an upper floor goes. The zone, its objects (doors, placed objects, ground items) and the grass are cut; the
@@ -110,7 +111,7 @@ that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, t
 | `/camera fov <degrees>` | the field of view across, 10..90 |
 | `/camera distance <units>` | the distance, 60..320 |
 | `/camera wasd camera` or `classic` | the movement keys relative to the camera, or as in the other cameras |
-| `/camera reveal <units>` | the cut round the player: its radius, 0..60 (0 off) |
+| `/camera reveal <units>` | the cut round the player: its radius at the starting distance, 0..60 (0 off) |
 
 ## Settings
 
@@ -123,7 +124,7 @@ that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, t
 | `camera.iso_fov` | 63 | degrees across |
 | `camera.iso_distance` | 160 | units from the player |
 | `camera.iso_wasd` | camera | `camera`: the movement keys relative to the camera; `classic`: as in the other cameras |
-| `camera.iso_reveal` | 12 | the cut round the player: its radius at the player, 0 off |
+| `camera.iso_reveal` | 20 | the cut round the player: its radius at the player at the starting distance (160), 0 off |
 
 ## Still to do
 

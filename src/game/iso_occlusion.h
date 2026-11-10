@@ -31,17 +31,24 @@ struct IsoRevealInput {
     float strength = 1.0f;
 };
 
-// Above the feet by this much before anything is cut (a step or a kerb at the player's feet stays).
+// Above the feet by this much before anything is cut (a step or a kerb at the player's feet stays), and fully only
+// kIsoRevealRise higher.
 inline constexpr float kIsoRevealFloor = 1.0f;
-// Only what is at least this much nearer the camera than the player's middle (the body's own depth).
+inline constexpr float kIsoRevealRise = 3.0f;
+// Only what is at least this much nearer the camera than the player's middle (the body's own depth), and fully only
+// kIsoRevealDepthFade nearer still.
 inline constexpr float kIsoRevealMargin = 3.0f;
+inline constexpr float kIsoRevealDepthFade = 6.0f;
 // The outer share of the radius the cut fades over.
-inline constexpr float kIsoRevealSoft = 0.35f;
+inline constexpr float kIsoRevealSoft = 0.6f;
+// The radius setting is at the isometric camera's starting distance (game::IsoCameraSettings::distance); zoomed in or
+// out it scales with the distance, so the circle keeps its size on the screen.
+inline constexpr float kIsoRevealAtDistance = 160.0f;
 
 IsoReveal iso_reveal(const IsoRevealInput& in);
 
 // How much of world point `p` the cut takes, 0 none .. 1 all (the shader drops a pixel when this is above its dither
-// threshold). The shader's reveal_cut, line for line.
+// threshold). The shader's reveal_cut, line for line (its constants are these).
 float iso_reveal_cut(const IsoReveal& r, const glm::vec3& p);
 
 } // namespace hailstone::game

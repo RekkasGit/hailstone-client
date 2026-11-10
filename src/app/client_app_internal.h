@@ -1515,7 +1515,7 @@ private:
     void iso_turn_keys(float dt);
     // The cut through what stands in front of the player this frame (game/iso_occlusion.h): off outside the isometric
     // camera or with camera.iso_reveal 0 (its radius at the player).
-    float iso_reveal_radius_ = 12.0f;
+    float iso_reveal_radius_ = 20.0f;
     game::IsoReveal iso_reveal() const;
     // How far above the feet the isometric camera looks: the middle of the body.
     float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }

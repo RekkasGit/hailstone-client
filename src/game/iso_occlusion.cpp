@@ -32,8 +32,9 @@ float iso_reveal_cut(const IsoReveal& r, const glm::vec3& p) {
     // The distance from the line, as it shows at the player's depth: a cone, so a circle on the screen.
     const float lateral = glm::length(v - t * axis) * r.axis.w / t;
     const float edge = 1.0f - smoothstep(r.shape.x * (1.0f - r.shape.w), r.shape.x, lateral);
-    const float height = smoothstep(r.shape.y, r.shape.y + 1.0f, p.z);
-    return r.origin.w * edge * height;
+    const float height = smoothstep(r.shape.y, r.shape.y + kIsoRevealRise, p.z);
+    const float depth = 1.0f - smoothstep(r.axis.w - r.shape.z - kIsoRevealDepthFade, r.axis.w - r.shape.z, t);
+    return r.origin.w * edge * height * depth;
 }
 
 } // namespace hailstone::game

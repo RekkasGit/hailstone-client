@@ -52,8 +52,9 @@ float reveal_cut(vec3 p, vec4 origin, vec4 axis, vec4 shape) {
     if (t <= 0.0 || t >= axis.w - shape.z) return 0.0;
     float lateral = length(v - t * axis.xyz) * axis.w / t;
     float edge = 1.0 - smoothstep(shape.x * (1.0 - shape.w), shape.x, lateral);
-    float height = smoothstep(shape.y, shape.y + 1.0, p.z);
-    return origin.w * edge * height;
+    float height = smoothstep(shape.y, shape.y + 3.0, p.z);                       // kIsoRevealRise
+    float depth = 1.0 - smoothstep(axis.w - shape.z - 6.0, axis.w - shape.z, t);  // kIsoRevealDepthFade
+    return origin.w * edge * height * depth;
 }
 
 // Whether the pixel at `frag` (gl_FragCoord.xy) of world point `p` is dropped: the cut against a 4x4 ordered dither,

@@ -39,10 +39,24 @@ TEST_CASE("iso reveal: only inside the circle round the player, softly at its ed
     IsoReveal r = reveal();
     // Halfway to the player the cone is half as wide.
     CHECK(iso_reveal_cut(r, {30.0f, -50.0f, 54.0f}) == 0.0f);
-    CHECK(iso_reveal_cut(r, {3.0f, -50.0f, 54.0f}) == doctest::Approx(1.0f));
+    CHECK(iso_reveal_cut(r, {1.5f, -50.0f, 54.0f}) == doctest::Approx(1.0f)); // 3 at the player: inside the full cut
     const float edge = iso_reveal_cut(r, {5.5f, -50.0f, 54.0f}); // 11 at the player's depth: in the soft band
     CHECK(edge > 0.0f);
     CHECK(edge < 1.0f);
+}
+
+TEST_CASE("iso reveal: it fades in above the feet and short of the player") {
+    IsoReveal r = reveal();
+    // Halfway up the rise above the floor margin (feet 0, floor 1, rise 3): partly cut.
+    const float rising = iso_reveal_cut(r, {0.0f, -10.0f, 2.5f});
+    CHECK(rising > 0.0f);
+    CHECK(rising < 1.0f);
+    // Just inside the depth margin's fade, on the line: partly cut.
+    const float d = r.axis.w - r.shape.z - kIsoRevealDepthFade * 0.5f;
+    const glm::vec3 near_player = glm::vec3(r.origin) + glm::vec3(r.axis) * d;
+    const float fading = iso_reveal_cut(r, near_player);
+    CHECK(fading > 0.0f);
+    CHECK(fading < 1.0f);
 }
 
 TEST_CASE("iso reveal: off and partial strength") {
