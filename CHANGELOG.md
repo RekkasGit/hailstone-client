@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Nothing updates unless you ask. A new Hailstone release is shown on the login screen but downloads only when you press **Download** (set `update.download=1` in hailstone.ini to have it download by itself, as before). An update an older version downloaded on its own is no longer installed when you quit; **Restart now** installs it
+- Add-ons: auto-update is off unless you switch it on in an add-on's row. Add-ons installed before this version had it switched on without asking, so it now starts off for them too; **Check for updates** still shows newer versions, and **Update** takes them
+
 ## 0.7.0-beta (2026-11-09)
 
 - Spell effects move and look as on the original client: flames pulled in to a spell's centre now vanish there instead of piling into a bright column (Burst of Flame), offsets put each effect where it belongs, effects turn with the spawn they are on, the wind drifts smoke steadily, rays are drawn as streaks along their direction and rune circles lie flat on the ground. At a lower Spell Particle Density effects keep at least 16 particles a burst, as on the original, rather than thinning out. In the classic lighting, particles more than 500 units away are no longer drawn, as on the original

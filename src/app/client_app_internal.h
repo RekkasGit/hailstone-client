@@ -1091,6 +1091,8 @@ private:
     std::unique_ptr<Updater> updater_;
     UpdateSettings update_settings_;
     bool update_restart_ = false;   // Restart now: install at the end of the run, then start the new version
+    bool update_asked_ = false;     // the player pressed Download this run (a quit may then install it)
+    bool update_installs_at_quit() const;
     bool update_confirmed_ = false; // the login screen was shown: a pending update started fine
     // The add-on manager (app/client_app_addons.cpp): null when nothing can be fetched this run. The lists beside the
     // add-ons (the picked server's own, the ones put in by hand, that server's rules) are read every few seconds.
