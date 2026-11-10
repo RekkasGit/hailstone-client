@@ -1263,6 +1263,7 @@ private:
     bool listener_indoors_ = false;
     std::uint8_t head_wet_ = 0;
     bool special_room_ = false;
+    bool stun_room_ = false; // the stun's room 0x17 is set (StunMe), until the stun ends
     // The global music selections made (EqSoundManager::SetMusicSelection's callers).
     bool music_attack_ = false, music_bank_ = false, music_merchant_ = false, music_trainer_ = false, music_loot_ = false;
     bool music_dead_ = false, music_select_ = false;

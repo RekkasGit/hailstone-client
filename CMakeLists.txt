@@ -1145,6 +1145,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/player_placement_test.cpp
     tests/step_landing_test.cpp
     tests/jump_hang_test.cpp
+    tests/stop_moving_test.cpp
     tests/zone_ladders_test.cpp
     tests/chat_trade_vectors_test.cpp
     tests/hotbutton_tracking_vectors_test.cpp

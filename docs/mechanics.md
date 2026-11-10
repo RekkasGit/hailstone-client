@@ -976,6 +976,22 @@ Remote spawns and the floor: a moving spawn on the ground (flymode 0) is kept at
 settles onto a floor at most 5 below or above it (`WorldState::smooth`), so an NPC that an EQEmu server with a poor
 map leaves standing higher stays in the air.
 
+Stopping: another spawn is stepped on with its last update's SpeedRun and turn rate while that update is at most 12 s
+old (AdvanceSpawn). A SpawnAppearance stand state of sitting (110), looting (105) or lying down (115, feign death)
+clears both (PlayerZoneClient::ChangePosition @0x5a0bc0's StopMoving), so the spawn slides to a stop on the velocity
+it had instead of running on. The local player's body loses them the same way, and its SpeedRun when a stun starts
+(CharacterZoneClient::StunMe @0x4432c0, the mount's too; `GameConnection::speed_stops`): ProcessControls only stops
+asking for speed while the player cannot move.
+
+Stuns (OP_Stun, the case @0x4c7093: StunMe(duration, 0, 0, the byte at +4)). StunMe does nothing under stun immunity
+(TotalEffect(40) > 0) or while a stun's timer runs; a duration below 1000 ms is 1000 ms for a player, so EQEmu's
+UnStun, an OP_Stun of 0 (a fear fading with Combat:EnableFearPathing off, a quest's UnStun), stuns for a second when
+none runs and changes nothing when one does. A stun sets the timer and the stunned state, prints "You are stunned!"
+(chat filter 0x1a hides it), stops the player and its mount, sets the listener's room 0x17, and with the byte at +4
+sets the turn rate to 32, which turns the player until it can move again (EQEmu sends 0). DoPassageOfTime clears the
+timer once it passes and ends the stun (EndStun: "You are unstunned.") unless the player is mesmerized; then the mez's
+removal ends it.
+
 Grounding NPCs (a deliberate difference, Hailstone's option `ground_npcs`: hailstone.ini `display.ground_npcs`,
 Options > Graphics "Ground Floating NPCs", on by default): an NPC or corpse on the ground that stands more than 0.25
 and at most 50 over the floor there (the zone's terrain and placed objects, and the doors, as the player's own floor
