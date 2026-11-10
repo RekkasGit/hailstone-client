@@ -4,6 +4,7 @@
 
 - Nothing updates unless you ask. A new Hailstone release is shown on the login screen but downloads only when you press **Download** (set `update.download=1` in hailstone.ini to have it download by itself, as before). An update an older version downloaded on its own is no longer installed when you quit; **Restart now** installs it
 - Add-ons: auto-update is off unless you switch it on in an add-on's row. Add-ons installed before this version had it switched on without asking, so it now starts off for them too; **Check for updates** still shows newer versions, and **Update** takes them
+- Merchants: the merchant window can show only the goods you can use, as on the original client. Items your class or race cannot use, and spell scrolls you already have (or have a higher rank of), are hidden. It is on when you start. Untick **Usable only** beside the search box to see everything; in the gamepad UI, press X on the Buy page
 - Chat: a message with line breaks in it (such as a server's message of the day) is shown on separate lines, instead of its words being thrown across the window
 
 ## 0.7.0-beta (2026-11-09)
