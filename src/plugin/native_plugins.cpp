@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <format>
 #include <fstream>
@@ -13,6 +14,7 @@
 
 #include <SDL3/SDL_loadso.h>
 
+#include "core/ascii_case.h"
 #include "core/atomic_file.h"
 #include "core/log.h"
 #include "core/sha256.h"
@@ -1034,6 +1036,15 @@ int h_server_info(void* h, HailstoneServer* out) {
     return give(out, v);
 }
 
+// strcpy_s without MSVC's CRT: copies at most size - 1 bytes and always ends the copy with a 0.
+static void copy_cstr(char* dst, size_t size, const char* src)
+{
+    if (size == 0) return;
+    const size_t n = std::min(std::strlen(src), size - 1);
+    std::memcpy(dst, src, n);
+    dst[n] = 0;
+}
+
 // ***************************************************************************
 // Function:    CleanupName
 // Description: Cleans up NPC names
@@ -1070,24 +1081,24 @@ char* CleanupName(char* szName, size_t BufferSize, bool Article, bool ForWhoList
         }
     }
 
-    strcpy_s(szName, BufferSize, szTemp);
+    copy_cstr(szName, BufferSize, szTemp);
 
     if (!Article) return szName;
 
-    if (!_strnicmp(szName, "a ", 2))
+    if (hailstone::istarts_with(szName, "a "))
     {
-        sprintf_s(szTemp, "%s, a", szName + 2);
-        strcpy_s(szName, BufferSize, szTemp);
+        std::snprintf(szTemp, sizeof(szTemp), "%s, a", szName + 2);
+        copy_cstr(szName, BufferSize, szTemp);
     }
-    else if (!_strnicmp(szName, "an ", 3))
+    else if (hailstone::istarts_with(szName, "an "))
     {
-        sprintf_s(szTemp, "%s, an", szName + 3);
-        strcpy_s(szName, BufferSize, szTemp);
+        std::snprintf(szTemp, sizeof(szTemp), "%s, an", szName + 3);
+        copy_cstr(szName, BufferSize, szTemp);
     }
-    else if (!_strnicmp(szName, "the ", 4))
+    else if (hailstone::istarts_with(szName, "the "))
     {
-        sprintf_s(szTemp, "%s, the", szName + 4);
-        strcpy_s(szName, BufferSize, szTemp);
+        std::snprintf(szTemp, sizeof(szTemp), "%s, the", szName + 4);
+        copy_cstr(szName, BufferSize, szTemp);
     }
 
     return szName;
@@ -1261,7 +1272,8 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int datamax)
 //for 5,000 spawns, assume 10 megs. now 5k is wayyy higher than it should ever be
 //so can get away with less, but you never know. 
 //there is a safety check that if we get down to our last 4,096 bytes, kick out and just return with what we have.
-int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
+// Not registered as a host function yet (e3n will call it), hence [[maybe_unused]].
+[[maybe_unused]] int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
 {
     //don't allow a deny just grab the raw connection.
     const net::GameConnection* c = connection_of(Loaded::of(h));
@@ -1306,7 +1318,7 @@ int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
         
         const char* BodyDesc;
 
-        if (BodyTypeID < std::size(game::szBodyType))
+        if (BodyTypeID >= 0 && static_cast<std::size_t>(BodyTypeID) < std::size(game::szBodyType))
         {
             BodyDesc = game::szBodyType[BodyTypeID].data();
 
@@ -1336,7 +1348,7 @@ int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
         bufferSize += sizeof(ClassID);
 
         char tempBuffer[2048];
-        strcpy_s(tempBuffer, spawn.name.c_str());
+        copy_cstr(tempBuffer, sizeof(tempBuffer), spawn.name.c_str());
         CleanupName(tempBuffer, sizeof(tempBuffer), false, false);
         std::string tCleanName(tempBuffer);
         int tCleanNameLength = static_cast<int>(tCleanName.size());
