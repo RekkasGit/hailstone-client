@@ -52,6 +52,21 @@ local OP_SETTINGS_REQUEST = 0x1432
 local OP_SETTINGS         = 0x1433
 local MAGIC      = 0x50534d4e
 
+-- Hailstone 0.7.0 and older send the same packets 0x0e lower (0x1422-0x1427). They are still answered, on the
+-- opcodes the client asked on, so a server that updates this script keeps serving clients that have not updated.
+-- (On Project Triune's servers the old 0x1422 is its own opcode and never comes here: those old clients get no
+-- cross-zone guild invitations, as before.) Kept per client entity, which a zone-in makes anew.
+local OLD_OPCODES_VAR   = "hailstone_old_opcodes"
+local OLD_OPCODES_SHIFT = 0x0e
+
+-- The opcode to answer `client` on: `op`, or its old number for a client that asked on the old ones.
+local function reply_op(client, op)
+	if client:GetEntityVariable(OLD_OPCODES_VAR) == "1" then
+		return op - OLD_OPCODES_SHIFT
+	end
+	return op
+end
+
 local function log(msg)
 	eq.debug("[hailstone] " .. msg)
 end
@@ -139,8 +154,8 @@ local HAILSTONE_VAR  = "hailstone_client"
 
 local encounter -- for the delivery timers
 
-local function guild_packet(action, name, guild_id, value)
-	local p = Packet(OP_GUILD_REPLY, GUILD_SIZE, true)
+local function guild_packet(client, action, name, guild_id, value)
+	local p = Packet(reply_op(client, OP_GUILD_REPLY), GUILD_SIZE, true)
 	p:WriteInt32(0, GUILD_MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt16(6, action)
@@ -246,7 +261,7 @@ local function guild_deliver(client)
 	end
 	i.state = "d"
 	write_invite(id, i)
-	client:QueuePacket(guild_packet(GUILD_INVITE, i.inviter, i.guild_id, i.rank))
+	client:QueuePacket(guild_packet(client, GUILD_INVITE, i.inviter, i.guild_id, i.rank))
 end
 
 -- What EQEmu sends a new member (EntityList::SendGuildMemberAdd: Client::SendGuildRanks, SendGuildRankNames,
@@ -405,7 +420,7 @@ local function on_guild_packet(client, packet)
 	if action == GUILD_HELLO then
 		client:SetEntityVariable(HAILSTONE_VAR, "1")
 		local on = setting("enabled") ~= 0 and setting("guild_invites_world") ~= 0 and Database ~= nil
-		client:QueuePacket(guild_packet(GUILD_HELLO, "", 0, on and 1 or 0))
+		client:QueuePacket(guild_packet(client, GUILD_HELLO, "", 0, on and 1 or 0))
 		return
 	end
 	if setting("enabled") == 0 or setting("guild_invites_world") == 0 or Database == nil then
@@ -796,7 +811,7 @@ local function send_files_page(client, first)
 	for i = first + 1, first + count do
 		size = size + 38 + #list[i].path
 	end
-	local p = Packet(OP_FILES, size, true)
+	local p = Packet(reply_op(client, OP_FILES), size, true)
 	files_header(p, 1)
 	p:WriteInt32(8, files.id)
 	p:WriteInt32(12, #list)
@@ -817,7 +832,7 @@ local function send_files_page(client, first)
 end
 
 local function send_files_error(client, id, index, code)
-	local p = Packet(OP_FILES, 20, true)
+	local p = Packet(reply_op(client, OP_FILES), 20, true)
 	files_header(p, 3)
 	p:WriteInt32(8, id)
 	p:WriteInt32(12, index)
@@ -874,7 +889,7 @@ local function send_files_chunk(client, id, index, offset, length)
 		send_files_error(client, id, index, 2)
 		return
 	end
-	local p = Packet(OP_FILES, 24 + length, true)
+	local p = Packet(reply_op(client, OP_FILES), 24 + length, true)
 	files_header(p, 2)
 	p:WriteInt32(8, id)
 	p:WriteInt32(12, index)
@@ -1090,7 +1105,7 @@ local function send_settings(client)
 		return
 	end
 	local flags = 0
-	local p = Packet(OP_SETTINGS, 10, true)
+	local p = Packet(reply_op(client, OP_SETTINGS), 10, true)
 	p:WriteInt32(0, MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt32(6, flags)
@@ -1105,6 +1120,13 @@ local settings_limit = limiter(SETTINGS_SECONDS)
 local function on_unhandled_opcode(e)
 	local packet = e.packet
 	local op     = packet:GetProtocolOpcode()
+	if op == OP_GUILD - OLD_OPCODES_SHIFT or op == OP_FILES_REQUEST - OLD_OPCODES_SHIFT
+		or op == OP_SETTINGS_REQUEST - OLD_OPCODES_SHIFT then
+		e.self:SetEntityVariable(OLD_OPCODES_VAR, "1")
+		op = op + OLD_OPCODES_SHIFT
+	elseif op == OP_GUILD or op == OP_FILES_REQUEST or op == OP_SETTINGS_REQUEST then
+		e.self:SetEntityVariable(OLD_OPCODES_VAR, "0")
+	end
 	if op == OP_GUILD then
 		on_guild_packet(e.self, packet)
 		return

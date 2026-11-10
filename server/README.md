@@ -135,7 +135,10 @@ archives are compressed inside.
 
 The client sends its requests on custom opcodes no server's opcode table lists (the settings request
 0x1432, the files' `OP_HsFilesRequest` 0x1434, the guild invitation 0x1430), so the zone passes them to the
-`event_unhandled_opcode` quest event, and the script replies with raw packets. The script registers that event
+`event_unhandled_opcode` quest event, and the script replies with raw packets. Hailstone 0.7.0 and older send the
+same requests 0x0e lower (0x1422, 0x1424, 0x1426); the script answers those on the old numbers too, so updating the
+script first leaves older clients working. (On Project Triune's server 0x1422 is its own opcode and never reaches
+the script, so those older clients get no cross-zone guild invitations there.) The script registers that event
 through an encounter loaded from `global/script_init.lua`, which EQEmu runs from every quest folder, so the server's
 own `global_player` scripts keep running.
 
