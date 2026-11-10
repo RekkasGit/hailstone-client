@@ -537,7 +537,9 @@ vec3 surface_shine(vec3 n, uint flags) {
 
 void main() {
     // The isometric camera's cut (game/iso_occlusion.h).
-    if (reveal_discard(v_world, gl_FragCoord.xy, scene.reveal_origin, scene.reveal_axis, scene.reveal_shape)) discard;
+    if (reveal_discard(v_world, gl_FragCoord.xy, scene.reveal_origin, scene.reveal_axis, scene.reveal_shape,
+                       scene.reveal_roof))
+        discard;
     uint mode = pc.tex2.y;
     uint flags = pc.tex2.z;
     bool unlit = (flags & kUnlit) != 0u;

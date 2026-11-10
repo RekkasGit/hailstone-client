@@ -39,29 +39,43 @@ struct PointLightGpu {
     vec4 reveal_origin; /* game/iso_occlusion.h IsoReveal: xyz the camera, w strength (0 off) */                      \
     vec4 reveal_axis;   /* xyz the way to the player, w their distance */                                             \
     vec4 reveal_shape;  /* x radius at the player, y the height it starts at, z depth margin, w soft share */        \
+    vec4 reveal_roof;   /* x the height it cuts above, y its flat radius, z its soft edge, w strength (0 off) */      \
     vec4 point_shadow_light[8]; /* render/point_shadows.h: xyz the light, w its radius */                              \
     vec4 point_shadow_slot[8];  /* x: its cube's first layer, y: strength */                                           \
     vec4 point_shadow_params;   /* x: count, y: 1 / face size, z: the face scale, w: the near distance */              \
     PointLightGpu lights[32];
 
 // The isometric camera's cut through what stands between it and the player (game/iso_occlusion.h, Hailstone's own):
-// how much of world point `p` is cut away, 0..1. game::iso_reveal_cut, line for line.
-float reveal_cut(vec3 p, vec4 origin, vec4 axis, vec4 shape) {
-    vec3 v = p - origin.xyz;
-    float t = dot(v, axis.xyz);
-    if (t <= 0.0 || t >= axis.w - shape.z) return 0.0;
-    float lateral = length(v - t * axis.xyz) * axis.w / t;
-    float edge = 1.0 - smoothstep(shape.x * (1.0 - shape.w), shape.x, lateral);
-    float height = smoothstep(shape.y, shape.y + 3.0, p.z);                       // kIsoRevealRise
-    float depth = 1.0 - smoothstep(axis.w - shape.z - 6.0, axis.w - shape.z, t);  // kIsoRevealDepthFade
-    return origin.w * edge * height * depth;
+// how much of world point `p` is cut away, 0..1: the cone round the line to the player, or the roof over them.
+// game::iso_reveal_cut, line for line.
+float reveal_cut(vec3 p, vec4 origin, vec4 axis, vec4 shape, vec4 roof) {
+    float cone = 0.0;
+    if (origin.w > 0.0) {
+        vec3 v = p - origin.xyz;
+        float t = dot(v, axis.xyz);
+        if (t > 0.0 && t < axis.w - shape.z) {
+            float lateral = length(v - t * axis.xyz) * axis.w / t;
+            float edge = 1.0 - smoothstep(shape.x * (1.0 - shape.w), shape.x, lateral);
+            float height = smoothstep(shape.y, shape.y + 3.0, p.z);                       // kIsoRevealRise
+            float depth = 1.0 - smoothstep(axis.w - shape.z - 6.0, axis.w - shape.z, t);  // kIsoRevealDepthFade
+            cone = origin.w * edge * height * depth;
+        }
+    }
+    float over = 0.0;
+    if (roof.w > 0.0) {
+        vec3 player = origin.xyz + axis.xyz * axis.w;
+        float flat_d = length(p.xy - player.xy);
+        float edge = 1.0 - smoothstep(roof.y - roof.z, roof.y, flat_d);
+        over = roof.w * edge * smoothstep(roof.x, roof.x + 1.5, p.z);                      // kIsoRoofRise
+    }
+    return max(cone, over);
 }
 
 // Whether the pixel at `frag` (gl_FragCoord.xy) of world point `p` is dropped: the cut against a 4x4 ordered dither,
 // so its edge thins out without blending (and the pass stays opaque).
-bool reveal_discard(vec3 p, vec2 frag, vec4 origin, vec4 axis, vec4 shape) {
-    if (origin.w <= 0.0) return false;
-    float cut = reveal_cut(p, origin, axis, shape);
+bool reveal_discard(vec3 p, vec2 frag, vec4 origin, vec4 axis, vec4 shape, vec4 roof) {
+    if (origin.w <= 0.0 && roof.w <= 0.0) return false;
+    float cut = reveal_cut(p, origin, axis, shape, roof);
     if (cut <= 0.0) return false;
     const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
     ivec2 i = ivec2(frag) & 3;

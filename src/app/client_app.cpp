@@ -378,6 +378,7 @@ int ClientApp::run() {
                     lighting.reveal_origin = r.origin;
                     lighting.reveal_axis = r.axis;
                     lighting.reveal_shape = r.shape;
+                    lighting.reveal_roof = r.roof;
                 }
                 bool shadows = lighting_mode_ == render::LightingMode::Modern && vk_.shadows_enabled() &&
                                zone_renderer_ && glm::vec3(lighting.light) != glm::vec3(0.0f);
@@ -600,13 +601,15 @@ int ClientApp::run() {
             if (flora_renderer_ && grass_) {
                 flora_renderer_->set_reach(flora_reach_);
                 // The grass bends away from the spawns standing in it (Hailstone's own): the nearest to the camera
-                // within 150 units, by their feet, round them by their size.
+                // (in the isometric camera, which stands far off, to the player) within 150 units, by their feet,
+                // round them by their size.
                 auto& near = flora_near_;
                 near.clear();
+                const glm::vec3 near_to = iso() ? feet_ : camera_.position;
                 if (in_game)
                     for (const auto& [id, s] : conn_->world().spawns) {
                         const glm::vec3 at = s.display_valid ? s.display_position : s.position;
-                        const glm::vec2 off = glm::vec2(at) - glm::vec2(camera_.position);
+                        const glm::vec2 off = glm::vec2(at) - glm::vec2(near_to);
                         if (!(glm::dot(off, off) <= 150.0f * 150.0f)) continue;
                         const glm::vec3 feet = at - glm::vec3(0.0f, 0.0f, s.heights.avatar_height);
                         near.emplace_back(glm::length(off), glm::vec4(feet, std::clamp(s.size * 0.7f, 3.0f, 12.0f)));
@@ -620,6 +623,15 @@ int ClientApp::run() {
                 flora_renderer_->set_pushers(flora_pushers_);
             }
             const std::unordered_set<std::uint32_t>* modelled = nullptr;
+            // The isometric camera's silhouette of the player (and its mount), where the zone or an object still
+            // hides them: before the characters, which cover it where the player is in sight.
+            if (actor_renderer_ && in_game && iso() && iso_silhouette_)
+                if (const game::Spawn* me = conn_->world().player()) {
+                    const std::uint32_t ids[2] = {me->id, me->mount_id};
+                    actor_renderer_->draw_silhouette(*f, vp, camera_.position,
+                                                     std::span<const std::uint32_t>(ids, me->mount_id ? 2u : 1u),
+                                                     glm::vec4(0.55f, 0.75f, 1.0f, 0.55f));
+                }
             if (actor_renderer_) modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit);
             lap.mark("actors draw");
             if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
@@ -627,7 +639,8 @@ int ClientApp::run() {
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
-            if (modern || (in_game && (target_ring_shown() || iso_marker_shown()))) vk_.begin_translucent(*f);
+            if (modern || (in_game && (target_ring_shown() || iso_marker_shown() || (iso() && iso_hover_.shown))))
+                vk_.begin_translucent(*f);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
             if (modern) {
@@ -639,6 +652,7 @@ int ClientApp::run() {
             // weather and particles. Character select draws no target.
             if (in_game) draw_target_ring(*f, vp, lit.far_plane, modern, t);
             if (in_game) draw_iso_marker(*f, vp, lit.far_plane, modern, t);
+            if (in_game) draw_iso_hover(*f, vp, lit.far_plane, modern, t);
             // Rain or snow: the precipitation manager's particles. The original draws them in every zone type,
             // with or without a sky (CRender's scene, 0x10097420).
             if (weather_renderer_ && in_game) {

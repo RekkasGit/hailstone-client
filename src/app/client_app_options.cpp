@@ -341,6 +341,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
         return conn_ && eq_api_ ? eq_api_->window_setting("PetInfoWindow", "popup") : std::nullopt;
     if (auto d = display_option(o)) return d;
     if (auto v = video_option(o)) return v;
+    if (auto i = iso_option(o)) return i;
     if (o == "pc_names") return pc_names_ ? 1 : 0;
     // Hailstone: the player's own name over its head (game::NameSpriteSwitches), on by default.
     if (o == "own_name") return own_name_ ? 1 : 0;
@@ -445,7 +446,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         if (eq_api_) eq_api_->set_window_setting("PetInfoWindow", "popup", v);
         return;
     }
-    if (set_display_option(o, v) || set_video_option(o, v)) return;
+    if (set_display_option(o, v) || set_video_option(o, v) || set_iso_option(o, v)) return;
     if (o == "font_face") {
         // GeneralPageWndNotification's font button: the face set and saved (Fonts / Font.<set>.0).
         auto choices = option_choices("font_face");
@@ -689,13 +690,7 @@ void ClientApp::apply_settings() {
         std::clamp(config_.get_int("display.max_camera_distance", static_cast<int>(kMaxCameraDistance)),
                    kMinCameraZoomSetting, kMaxCameraZoomSetting));
     camera_distance_ = std::min(camera_distance_, max_camera_distance_);
-    // The isometric camera's settings (game/iso_camera.h; /camera).
-    iso_settings_.pitch = glm::radians(std::clamp(config_float("camera.iso_pitch", 45.0f), 20.0f, 89.0f));
-    iso_settings_.fov_degrees = std::clamp(config_float("camera.iso_fov", 63.0f), 10.0f, 90.0f);
-    iso_camera_.distance = std::clamp(config_float("camera.iso_distance", iso_settings_.distance),
-                                      iso_settings_.min_distance, iso_settings_.max_distance);
-    iso_wasd_camera_ = config_.get_string("camera.iso_wasd", "camera") != "classic";
-    iso_reveal_radius_ = std::clamp(config_float("camera.iso_reveal", 20.0f), 0.0f, 60.0f);
+    load_iso_settings(); // the isometric camera's (game/iso_camera.h; /camera, Options)
     mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
     {
         // loadOptions: MousePointerSpeedMod 0..10, anything else 0.

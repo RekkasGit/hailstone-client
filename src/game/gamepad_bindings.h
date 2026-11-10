@@ -44,6 +44,7 @@ struct PadAction {
         HotPagePrev, // "hotpage_prev" / "hotpage_next": hot bar 1's page before / after (HOTPAGE1_*)
         HotPageNext,
         Chat,        // "chat": the chat input (the chat key 488, game/chat_input.h)
+        CameraIso,   // "camera_iso": the isometric camera on / off (docs/isometric.md)
     };
     Kind kind = Kind::None;
     int command = 0;          // Command: the key map slot

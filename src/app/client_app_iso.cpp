@@ -28,16 +28,193 @@ float ClientApp::iso_spawn_arrive(std::uint32_t id) const {
 }
 
 game::IsoReveal ClientApp::iso_reveal() const {
-    if (!iso() || iso_reveal_radius_ <= 0.0f || !iso_camera_.placed) return {};
+    if (!iso() || !iso_camera_.placed) return {};
     game::IsoRevealInput in;
     in.camera = camera_.position;
     in.focus = iso_camera_.focus;
     in.feet_z = iso_camera_.focus.z - iso_focus_height();
     in.radius = iso_reveal_radius_ * iso_camera_.distance / game::kIsoRevealAtDistance;
+    in.strength = iso_cone_strength_;
+    in.roof_height = iso_roof_height_;
+    in.roof_radius = iso_roof_radius_;
+    in.roof_strength = iso_roof_strength_;
     return game::iso_reveal(in);
 }
 
+void ClientApp::update_iso_reveal(float dt) {
+    if (!iso()) {
+        iso_cone_strength_ = iso_roof_strength_ = 0.0f;
+        return;
+    }
+    const game::CameraSweep sweep = camera_sweep();
+    // Whether the zone or its objects stand in the way of a straight line: the camera's own sweep (radius 0.25),
+    // stopped short of its end.
+    auto blocked = [&](const glm::vec3& from, const glm::vec3& to) {
+        std::optional<glm::vec3> stop = sweep(from, to, 0.25f);
+        return stop && glm::distance(*stop, to) > 0.5f;
+    };
+    // The cone: while the line from the player's feet, middle or eyes to the camera is blocked (or always, with
+    // camera.iso_reveal_always).
+    const glm::vec3 feet = iso_camera_.focus - glm::vec3(0.0f, 0.0f, iso_focus_height());
+    const glm::vec3 eye = eye_position();
+    bool in_way = iso_reveal_always_;
+    if (!in_way && iso_reveal_radius_ > 0.0f)
+        for (const glm::vec3& p : {feet + glm::vec3(0.0f, 0.0f, 1.5f), iso_camera_.focus, eye})
+            if (blocked(p, camera_.position)) {
+                in_way = true;
+                break;
+            }
+    iso_cone_strength_ = game::iso_ease(iso_cone_strength_, in_way && iso_reveal_radius_ > 0.0f ? 1.0f : 0.0f, dt);
+    // The roof: while something solid is over the player's head.
+    const bool covered = iso_roof_ && blocked(eye, eye + glm::vec3(0.0f, 0.0f, game::kIsoCoverReach));
+    iso_roof_strength_ = game::iso_ease(iso_roof_strength_, covered ? 1.0f : 0.0f, dt);
+    // Its height follows the eyes (a staircase walked up takes the cut with it).
+    iso_roof_height_ = eye.z + game::kIsoRoofAboveEyes;
+}
+
+std::optional<int> ClientApp::iso_option(std::string_view o) const {
+    if (o == "iso_camera") return iso() ? 1 : 0;
+    if (o == "iso_pitch") return static_cast<int>(std::lround(glm::degrees(iso_settings_.pitch)));
+    if (o == "iso_fov") return static_cast<int>(std::lround(iso_settings_.fov_degrees));
+    if (o == "iso_reveal") return static_cast<int>(std::lround(iso_reveal_radius_));
+    if (o == "iso_reveal_always") return iso_reveal_always_ ? 1 : 0;
+    if (o == "iso_roof") return iso_roof_ ? 1 : 0;
+    if (o == "iso_silhouette") return iso_silhouette_ ? 1 : 0;
+    if (o == "iso_wasd") return iso_wasd_camera_ ? 0 : 1;
+    if (o == "iso_marker") return iso_marker_on_ ? 1 : 0;
+    if (o == "iso_hover") return iso_hover_on_ ? 1 : 0;
+    return std::nullopt;
+}
+
+bool ClientApp::set_iso_option(std::string_view o, int v) {
+    if (o == "iso_camera") {
+        if (v != 0 && !iso()) set_camera_type(game::kCameraIsometric);
+        else if (v == 0 && iso()) set_view(true);
+    } else if (o == "iso_pitch") {
+        iso_settings_.pitch = glm::radians(static_cast<float>(std::clamp(v, 20, 89)));
+    } else if (o == "iso_fov") {
+        iso_settings_.fov_degrees = static_cast<float>(std::clamp(v, 10, 90));
+    } else if (o == "iso_reveal") {
+        iso_reveal_radius_ = static_cast<float>(std::clamp(v, 0, 60));
+    } else if (o == "iso_reveal_always") {
+        iso_reveal_always_ = v != 0;
+    } else if (o == "iso_roof") {
+        iso_roof_ = v != 0;
+    } else if (o == "iso_silhouette") {
+        iso_silhouette_ = v != 0;
+    } else if (o == "iso_wasd") {
+        iso_wasd_camera_ = v == 0;
+    } else if (o == "iso_marker") {
+        iso_marker_on_ = v != 0;
+        if (!iso_marker_on_) iso_marker_.active = false;
+    } else if (o == "iso_hover") {
+        iso_hover_on_ = v != 0;
+        if (!iso_hover_on_) iso_hover_ = {};
+    } else {
+        return false;
+    }
+    save_iso_settings();
+    return true;
+}
+
+void ClientApp::load_iso_settings() {
+    iso_settings_.pitch = glm::radians(std::clamp(config_float("camera.iso_pitch", 45.0f), 20.0f, 89.0f));
+    iso_settings_.fov_degrees = std::clamp(config_float("camera.iso_fov", 63.0f), 10.0f, 90.0f);
+    iso_camera_.distance = std::clamp(config_float("camera.iso_distance", iso_settings_.distance),
+                                      iso_settings_.min_distance, iso_settings_.max_distance);
+    iso_wasd_camera_ = config_.get_string("camera.iso_wasd", "camera") != "classic";
+    iso_reveal_radius_ = std::clamp(config_float("camera.iso_reveal", 20.0f), 0.0f, 60.0f);
+    iso_reveal_always_ = config_.get_bool("camera.iso_reveal_always", false);
+    iso_roof_ = config_.get_bool("camera.iso_roof", true);
+    iso_silhouette_ = config_.get_bool("camera.iso_silhouette", true);
+    iso_marker_on_ = config_.get_bool("camera.iso_marker", true);
+    iso_hover_on_ = config_.get_bool("camera.iso_hover", true);
+}
+
+void ClientApp::save_iso_settings() {
+    config_.set("camera.iso_pitch", std::format("{:.1f}", glm::degrees(iso_settings_.pitch)));
+    config_.set("camera.iso_fov", std::format("{:.1f}", iso_settings_.fov_degrees));
+    config_.set("camera.iso_distance", std::format("{:.0f}", iso_camera_.distance));
+    config_.set_bool("camera.iso", iso());
+    config_.set("camera.iso_wasd", iso_wasd_camera_ ? "camera" : "classic");
+    config_.set("camera.iso_reveal", std::format("{:.0f}", iso_reveal_radius_));
+    config_.set_bool("camera.iso_reveal_always", iso_reveal_always_);
+    config_.set_bool("camera.iso_roof", iso_roof_);
+    config_.set_bool("camera.iso_silhouette", iso_silhouette_);
+    config_.set_bool("camera.iso_marker", iso_marker_on_);
+    config_.set_bool("camera.iso_hover", iso_hover_on_);
+    config_.save(config_path_);
+}
+
+void ClientApp::update_iso_hover() {
+    if (!iso() || !iso_hover_on_ || !conn_ || ui_.wants_mouse() || mouse_look_.active || conn_->placement().active()) {
+        iso_hover_ = {};
+        return;
+    }
+    // Ten times a second, or at once when the mouse moved: a pick is too dear for every frame.
+    const auto& in = window_.input();
+    const glm::vec2 at(in.mouse_x, in.mouse_y);
+    const auto now = Clock::now();
+    if (at == iso_hover_at_ && now - iso_hover_time_ < std::chrono::milliseconds(100)) return;
+    iso_hover_at_ = at;
+    iso_hover_time_ = now;
+    const PickTarget hit = pick_at(at.x, at.y, game::kHoverRequired, game::kHoverSkip, nullptr);
+    IsoHover h;
+    const auto& world = conn_->world();
+    if (hit.kind == PickTarget::Kind::Spawn) {
+        // Not the player, and not the target (its ring is there already).
+        if (hit.id == world.player_id || hit.id == world.target_id) return void(iso_hover_ = {});
+        auto it = world.spawns.find(hit.id);
+        if (it == world.spawns.end()) return void(iso_hover_ = {});
+        const game::Spawn& s = it->second;
+        const glm::vec3 base = s.display_valid ? s.display_position : s.position;
+        h.shown = true;
+        h.spawn = hit.id;
+        h.feet = base - glm::vec3(0.0f, 0.0f, s.heights.avatar_height);
+        const bool has_actor = actor_renderer_ && actor_renderer_->model_for(s);
+        h.radius = game::cap_ring_radius(
+            game::target_ring_radius(s.heights.avatar_height, s.heights.model_scale, has_actor), ring_max_size_);
+    } else if (hit.kind == PickTarget::Kind::Door || hit.kind == PickTarget::Kind::Object) {
+        glm::vec3 p = hit.point;
+        if (hit.kind == PickTarget::Kind::Door)
+            if (const game::Door* d = conn_->door(static_cast<std::uint8_t>(hit.id))) p = d->world_position();
+        // On the floor under it.
+        if (collision_)
+            if (auto floor = collision_->floor_below(p + glm::vec3(0.0f, 0.0f, 1.0f), 12.0f)) p.z = *floor;
+        h.shown = true;
+        h.feet = p;
+        h.radius = 2.0f;
+    }
+    iso_hover_ = h;
+}
+
+void ClientApp::draw_iso_hover(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane,
+                               bool modern, double seconds) {
+    if (!iso() || !iso_hover_.shown) return;
+    // A spawn that went or became the target since the pick: nothing.
+    if (iso_hover_.spawn && (iso_hover_.spawn == conn_->world().target_id || !conn_->world().spawns.contains(iso_hover_.spawn)))
+        return;
+    if (!iso_hover_renderer_) iso_hover_renderer_ = std::make_unique<render::TargetRingRenderer>(vk_, shader_dir_);
+    render::TargetRing ring;
+    ring.feet = iso_hover_.feet;
+    ring.radius = iso_hover_.radius;
+    ring.color = glm::vec4(0.92f, 0.96f, 1.0f, 0.5f); // a pale white, quieter than the target's
+    ring.width = 0.1f;
+    ring.spin = static_cast<float>(std::fmod(seconds * 0.6, static_cast<double>(glm::two_pi<float>())));
+    ring.glow = 0.3f;
+    render::TargetRingView view;
+    view.view_proj = view_proj;
+    view.camera = camera_.position;
+    view.forward = camera_.forward();
+    view.near_plane = camera_.near_plane;
+    view.far_plane = far_plane;
+    view.haze = modern ? frame_lighting_.haze : glm::vec4(0.0f);
+    view.seconds = seconds;
+    iso_hover_renderer_->draw(frame, view, ring);
+}
+
 void ClientApp::set_iso_marker(const glm::vec3& point, bool click) {
+    if (!iso_marker_on_) return;
     iso_marker_.point = point;
     if (click || !iso_marker_.active) iso_marker_.click = true;
     iso_marker_.active = true;

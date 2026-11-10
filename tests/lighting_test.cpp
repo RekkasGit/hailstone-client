@@ -149,7 +149,7 @@ TEST_CASE("particle lights: the glowing emitters, merged when close, by their ti
 TEST_CASE("make_scene_lighting: the shader block; classic carries no lights") {
     static_assert(sizeof(render::GpuPointLight) == 32);
     static_assert(sizeof(render::SceneLighting) ==
-                  29 * 16 + 4 * 64 + (2 * render::kMaxPointShadows + 1) * 16 + render::kMaxSceneLights * 32);
+                  30 * 16 + 4 * 64 + (2 * render::kMaxPointShadows + 1) * 16 + render::kMaxSceneLights * 32);
     game::SceneLight scene;
     scene.ambient = {0.1f, 0.2f, 0.3f};
     scene.directional = {0.5f, 0.5f, 0.5f};

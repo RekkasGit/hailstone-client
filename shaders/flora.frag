@@ -48,7 +48,8 @@ float blade_shadow(vec3 p) {
 
 void main() {
     // The isometric camera's cut (game/iso_occlusion.h).
-    if (reveal_discard(v_world, gl_FragCoord.xy, lighting.reveal_origin, lighting.reveal_axis, lighting.reveal_shape))
+    if (reveal_discard(v_world, gl_FragCoord.xy, lighting.reveal_origin, lighting.reveal_axis, lighting.reveal_shape,
+                       lighting.reveal_roof))
         discard;
     vec4 c = texture(textures[nonuniformEXT(v_texture)], v_uv);
     if (c.a < 0.5) discard;

@@ -998,6 +998,7 @@ private:
     std::optional<glm::vec3> world_point_at(float x, float y);
     // Item placement mode (game/placement.h) each frame: the ghost under the mouse, re-validated.
     void update_placement();
+    // `why` names the pick in the log; null picks quietly.
     PickTarget pick_at(float x, float y, std::uint32_t required, std::uint32_t skip, const char* why);
     // CEverQuest::LeftClickedOnPlayer.
     void left_click_spawn(std::uint32_t id);
@@ -1517,6 +1518,39 @@ private:
     // camera or with camera.iso_reveal 0 (its radius at the player).
     float iso_reveal_radius_ = 20.0f;
     game::IsoReveal iso_reveal() const;
+    // The cut's parts (game/iso_occlusion.h): the cone only while something is in the way (or always), the roof while
+    // something is over the player (camera.iso_roof); their strengths eased each frame, and the roof's height.
+    bool iso_reveal_always_ = false;
+    bool iso_roof_ = true;
+    float iso_roof_radius_ = 60.0f;
+    float iso_cone_strength_ = 0.0f, iso_roof_strength_ = 0.0f, iso_roof_height_ = 0.0f;
+    void update_iso_reveal(float dt);
+    // The player's silhouette where something the cut leaves still hides them (camera.iso_silhouette).
+    bool iso_silhouette_ = true;
+    // The click marker and the hover ring, each switchable (camera.iso_marker, camera.iso_hover).
+    bool iso_marker_on_ = true, iso_hover_on_ = true;
+    // What is under the cursor (a spawn, a door, a ground object) and its ring on the floor; picked ten times a
+    // second or when the mouse moves.
+    struct IsoHover {
+        bool shown = false;
+        std::uint32_t spawn = 0;
+        glm::vec3 feet{0.0f};
+        float radius = 2.0f;
+    };
+    IsoHover iso_hover_;
+    glm::vec2 iso_hover_at_{-1.0f};
+    Clock::time_point iso_hover_time_{};
+    std::unique_ptr<render::TargetRingRenderer> iso_hover_renderer_;
+    void update_iso_hover();
+    void draw_iso_hover(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
+                        double seconds);
+    // The isometric camera's options (eq.Option / eq.SetOption "iso_*") and settings (hailstone.ini camera.iso_*).
+    std::optional<int> iso_option(std::string_view o) const;
+    bool set_iso_option(std::string_view o, int v);
+    void load_iso_settings();
+    void save_iso_settings();
+    // The zone's triangles for a pick, less what the isometric camera's cut takes away there.
+    std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> pick_world() const;
     // How far above the feet the isometric camera looks: the middle of the body.
     float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }
     // The mark where a click's walk ends (a ring on the ground, drawn as the target ring is): where, since when (the

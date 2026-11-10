@@ -36,7 +36,8 @@ layout(location = 0) out vec4 o_color;
 
 void main() {
     // The isometric camera's cut (game/iso_occlusion.h).
-    if (reveal_discard(v_world, gl_FragCoord.xy, lighting.reveal_origin, lighting.reveal_axis, lighting.reveal_shape))
+    if (reveal_discard(v_world, gl_FragCoord.xy, lighting.reveal_origin, lighting.reveal_axis, lighting.reveal_shape,
+                       lighting.reveal_roof))
         discard;
     vec4 tex = texture(textures[pc.texture_index], v_uv);
     float out_alpha;

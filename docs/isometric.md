@@ -83,8 +83,12 @@ itself, is there).
 ## Seeing the player
 
 What stands between the camera and the player is cut away round them, so they stay in sight behind walls, trees,
-hills, roofs and the floors above (`game::iso_reveal`, `shaders/lighting.glsl` `reveal_discard`). A surface is cut
-where it is
+hills, roofs and the floors above (`game::iso_reveal`, `shaders/lighting.glsl` `reveal_discard`). The cut has two
+shapes, each eased in over 0.2 s and out over 0.5 s (`game::iso_ease`, `ClientApp::update_iso_reveal`).
+
+**The circle** comes while the line from the camera to the player's feet, middle or eyes is blocked by the zone or
+its objects (the camera's own sweep, radius 0.25), so a tree beside the player that hides nothing is left whole
+(`camera.iso_reveal_always` cuts all the time). A surface is cut where it is
 
 - nearer the camera than the player's middle by at least 3 units, fully from 9,
 - inside a cone round the line from the camera to the player, which shows as a circle on the screen: 20 units in
@@ -93,12 +97,35 @@ where it is
 - higher than 1 unit above the player's feet, fully from 4.
 
 So the floor the player stands on and the ground falling away in front stay, and a wall, a slope rising in front,
-a roof or an upper floor goes. The zone, its objects (doors, placed objects, ground items) and the grass are cut; the
-characters are not. The cut drops pixels against a 4x4 ordered dither rather than blending, so the passes stay opaque
-and nothing has to be sorted. The shadow passes do not cut: what is cut still casts its shadow.
+a roof or an upper floor goes.
 
-A click goes through the cut as well: the ground point a click walks to is the first surface along the cursor's ray
-that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, the shader's test on the CPU).
+**The roof** comes while something solid is within 60 units over the player's eyes (a ceiling, a roof, a bridge,
+an overhang; `camera.iso_roof`). Then everything more than 1.5 units over the eyes within 60 units of the player
+(flat; the outer 15 thinning out) goes, in front or behind: a room, a corridor or a cave shows from above as a
+cut-away, its walls trimmed at head height and the floors above taken away. The height follows the eyes, so a
+staircase walked up takes the cut with it.
+
+The zone, its objects (doors, placed objects, ground items) and the grass are cut; the characters are not. The cut
+drops pixels against a 4x4 ordered dither rather than blending, so the passes stay opaque and nothing has to be
+sorted. The shadow passes do not cut: what is cut still casts its shadow.
+
+A click goes through the cut as well: a world triangle the pick's ray meets where the cut takes at least half is
+skipped (`ClientApp::pick_world`, `game::iso_pick_skips`, the shader's test on the CPU), so a click on a spawn, a door
+or the ground behind a cut wall reaches it.
+
+**The silhouette.** Where the player is still hidden (by the edge of the cut, a character, an object the cut leaves) a
+pale blue outline of them, stronger toward their edge, shows through (`camera.iso_silhouette`;
+`ActorRenderer::draw_silhouette`, `shaders/actor_silhouette.frag`). It is drawn after the zone and its objects and
+before the characters, where the player's body lies behind what is drawn (a depth test, no depth write); the player
+drawn after covers it wherever they are in sight, so their own arms and legs never outline themselves. Their mount's
+outline shows with theirs.
+
+## Under the cursor
+
+A pale ring lies under the spawn, door or ground item the mouse is over (`camera.iso_hover`; not the target, which
+has its own ring, nor the player), so it is clear what a click will do. The pick is made ten times a second, or when
+the mouse moves, without logging (`ClientApp::update_iso_hover`); it goes through the cut as the clicks do. A door's
+ring lies on the floor under it.
 
 ## /camera
 
@@ -112,10 +139,29 @@ that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, t
 | `/camera distance <units>` | the distance, 60..320 |
 | `/camera wasd camera` or `classic` | the movement keys relative to the camera, or as in the other cameras |
 | `/camera reveal <units>` | the cut round the player: its radius at the starting distance, 0..60 (0 off) |
+| `/camera roof`, `silhouette`, `marker`, `hover`, `always` + `on` or `off` | the roof cut, the silhouette, the click marker, the hover ring, the circle even when nothing is in the way |
+
+There is no key command of its own: the key table is the original's (`game/keymap_tables.inc`). A hot button or a
+social with `/camera toggle` gives the camera a key. The gamepad has a pad action of its own, `camera_iso`
+(`docs/gamepad.md`).
+
+## Options
+
+Options > Display > **Isometric Camera** (the modern pack) and the gamepad pack's **Camera** page set the same things,
+through `eq.Option` / `eq.SetOption`:
+
+| Option | Values |
+|---|---|
+| `iso_camera` | 0, 1: the isometric camera off (the camera behind the player) or on |
+| `iso_pitch` | 20..89 degrees |
+| `iso_fov` | 10..90 degrees |
+| `iso_wasd` | 0 relative to the camera, 1 classic |
+| `iso_reveal` | 0..60: the circle's radius (0 off) |
+| `iso_reveal_always`, `iso_roof`, `iso_silhouette`, `iso_marker`, `iso_hover` | 0, 1 |
 
 ## Settings
 
-`hailstone.ini`, written by `/camera`:
+`hailstone.ini` (the character's), written by `/camera` and the options:
 
 | Key | Default | |
 |---|---|---|
@@ -125,11 +171,13 @@ that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, t
 | `camera.iso_distance` | 160 | units from the player |
 | `camera.iso_wasd` | camera | `camera`: the movement keys relative to the camera; `classic`: as in the other cameras |
 | `camera.iso_reveal` | 20 | the cut round the player: its radius at the player at the starting distance (160), 0 off |
+| `camera.iso_reveal_always` | 0 | the circle even when nothing is in the way |
+| `camera.iso_roof` | 1 | the roof cut under cover |
+| `camera.iso_silhouette` | 1 | the player's silhouette where they are hidden |
+| `camera.iso_marker` | 1 | the click marker |
+| `camera.iso_hover` | 1 | the ring under the cursor |
 
 ## Still to do
 
-- A silhouette of the player where something not cut (a character, the edge of the cut) still hides them.
-- Whole objects fading, and a roof or ceiling over the player taken away beyond the circle.
-- The cut only while something is in the way, and the spawn pick through it (a click on a spawn behind a cut wall).
-- A highlight on what is under the cursor.
-- An Options page, the camera key, and `eq.*` for the UI packs.
+- Whole objects (a tree, a pillar) fading as one where they hide the player, rather than cut in the circle.
+- Tuning against real zones: the roof's reach, radius and height, the circle's size, the silhouette's colour.

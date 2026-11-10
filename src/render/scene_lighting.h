@@ -133,6 +133,7 @@ struct SceneLighting {
     glm::vec4 reveal_origin{0.0f};
     glm::vec4 reveal_axis{0.0f};
     glm::vec4 reveal_shape{0.0f};
+    glm::vec4 reveal_roof{0.0f};
     // The zone lights' shadows (render/point_shadows.h PointShadows::apply), modern only.
     std::array<glm::vec4, kMaxPointShadows> point_shadow_light{}; // xyz the light, w its radius
     std::array<glm::vec4, kMaxPointShadows> point_shadow_slot{};  // x: its cube's first layer, y: its strength

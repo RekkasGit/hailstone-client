@@ -327,6 +327,7 @@ void ClientApp::update_iso_camera(const glm::vec3& feet, float dt) {
     camera_.yaw = pose.yaw;
     camera_.pitch = pose.pitch;
     iso_focus_distance_ = pose.focus_distance;
+    update_iso_reveal(dt);
 }
 
 void ClientApp::camera_command(const std::string& args) {
@@ -335,19 +336,13 @@ void ClientApp::camera_command(const std::string& args) {
     // /camera pitch <deg> | fov <deg> | distance <units>   (the isometric camera; saved)
     // /camera wasd camera|classic   (its movement keys: relative to the camera, or as in the other cameras)
     // /camera reveal <units>        (the cut through what stands in front of the player: its radius; 0 off)
+    // /camera roof|silhouette|marker|hover|always on|off   (the cut's roof, the silhouette, the click marker, the
+    //                                hover ring, the cut even when nothing is in the way)
     std::string_view rest = args;
     std::string word = game::next_cmd_arg(rest);
     for (char& ch : word) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     auto say = [this](const std::string& text) { conn_->show_chat(text, 15); };
-    auto save = [this] {
-        config_.set("camera.iso_pitch", std::format("{:.1f}", glm::degrees(iso_settings_.pitch)));
-        config_.set("camera.iso_fov", std::format("{:.1f}", iso_settings_.fov_degrees));
-        config_.set("camera.iso_distance", std::format("{:.0f}", iso_camera_.distance));
-        config_.set_bool("camera.iso", iso());
-        config_.set("camera.iso_wasd", iso_wasd_camera_ ? "camera" : "classic");
-        config_.set("camera.iso_reveal", std::format("{:.0f}", iso_reveal_radius_));
-        config_.save(config_path_);
-    };
+    auto save = [this] { save_iso_settings(); };
     if (word.empty()) {
         say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}, reveal {:.0f}. "
                         "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
@@ -367,6 +362,15 @@ void ClientApp::camera_command(const std::string& args) {
     } else if (word == "toggle") {
         set_camera_type(iso() ? game::kCameraFirstPerson : game::kCameraIsometric);
         if (!iso()) set_view(true);
+    } else if (word == "roof" || word == "silhouette" || word == "marker" || word == "hover" || word == "always") {
+        std::string how = game::next_cmd_arg(rest);
+        for (char& ch : how) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (how != "on" && how != "off") {
+            say(std::format("Usage: /camera {} on|off", word));
+            return;
+        }
+        set_iso_option(word == "always" ? "iso_reveal_always" : "iso_" + word, how == "on" ? 1 : 0);
+        return; // set_iso_option saves
     } else if (word == "wasd") {
         std::string how = game::next_cmd_arg(rest);
         for (char& ch : how) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -389,7 +393,7 @@ void ClientApp::camera_command(const std::string& args) {
         else iso_camera_.distance = std::clamp(v, iso_settings_.min_distance, iso_settings_.max_distance);
     } else {
         say("Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
-            "/camera wasd camera|classic");
+            "/camera wasd camera|classic, /camera roof|silhouette|marker|hover|always on|off");
         return;
     }
     save();
@@ -402,7 +406,7 @@ void ClientApp::set_view(bool behind) {
         set_camera_type(game::kCameraFirstPerson);
     } else if (camera_type_ != game::kCameraWheelFollow) {
         camera_distance_ = std::clamp(pad_camera_distance_, 1.0f, max_camera_distance_);
-        camera_type_ = game::kCameraWheelFollow;
+        set_camera_type(game::kCameraWheelFollow); // (out of the isometric camera: its own field of view goes)
     }
 }
 

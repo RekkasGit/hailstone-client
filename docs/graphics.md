@@ -1075,9 +1075,12 @@ At run time:
 In the isometric camera (`docs/isometric.md`) `zone.frag`, `object.frag` and `flora.frag` drop the pixels of what
 stands between the camera and the player: `reveal_discard` in `shaders/lighting.glsl`, from `SceneLighting`'s
 `reveal_origin`, `reveal_axis` and `reveal_shape` (`game/iso_occlusion.h`; off, as in every other camera, when
-`reveal_origin.w` is 0). The test is a cone round the camera-to-player line, above the player's feet and nearer than
-them, against a 4x4 ordered dither; the shadow passes' own shaders do not have it. The click marker of that camera is
-a second `TargetRingRenderer`.
+`reveal_origin.w` and `reveal_roof.w` are 0). The test is a cone round the camera-to-player line, above the player's
+feet and nearer than them, or (`reveal_roof`) everything over a height within a flat radius of the player, against a
+4x4 ordered dither; the shadow passes' own shaders do not have it. The click marker and the hover ring of that camera
+are a second and a third `TargetRingRenderer`. The player's silhouette is a fourth actor pipeline
+(`shaders/actor_silhouette.frag`: depth test LESS, no depth write, premultiplied blend, the opaque parts only), drawn
+before the actors.
 
 ## Name plates
 

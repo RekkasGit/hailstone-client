@@ -173,14 +173,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
         refs.push_back({PickTarget::Kind::Ladder, static_cast<std::uint32_t>(i), {}});
     }
     game::PickScene scene;
-    if (collision_) {
-        const game::CollisionMesh* mesh = &*collision_;
-        scene.world = [mesh](const game::PickSegment& sg, const game::PickTriangleSink& sink) {
-            mesh->for_each_on_segment(sg.start, sg.start + sg.dir, [&](const game::CollisionTriangle& c) {
-                sink(game::PickTriangle{c.v0, c.v1, c.v2, c.normal, c.flags});
-            });
-        };
-    }
+    scene.world = pick_world();
     scene.actors = actors;
     scene.exclude_a = exclude;
     game::PickHit hit = game::pick_actor(seg, scene, required, skip);
@@ -188,6 +181,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
         out = refs[static_cast<std::size_t>(hit.actor)];
         out.point = hit.point;
     }
+    if (!why) return out; // quiet (the isometric camera's hover, each frame)
     static constexpr const char* kKinds[] = {"nothing", "spawn", "door", "object", "placed object", "ladder"};
     std::string name;
     if (out.kind == PickTarget::Kind::Spawn)
@@ -200,28 +194,27 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
 std::optional<glm::vec3> ClientApp::world_point_at(float x, float y) {
     if (!conn_ || !pick_camera_valid_ || !collision_ || !view_area_.contains(x, y)) return std::nullopt;
     game::PickSegment seg = game::screen_ray(pick_camera_, x - view_area_.x, y - view_area_.y);
-    const game::CollisionMesh* mesh = &*collision_;
     game::PickScene scene;
-    scene.world = [mesh](const game::PickSegment& sg, const game::PickTriangleSink& sink) {
+    scene.world = pick_world();
+    game::PickHit hit = game::pick_actor(seg, scene, 0, 0);
+    if (hit.world_t >= 1.0f) return std::nullopt;
+    return seg.start + seg.dir * hit.world_t;
+}
+
+std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> ClientApp::pick_world() const {
+    if (!collision_) return {};
+    const game::CollisionMesh* mesh = &*collision_;
+    // The isometric camera: a surface the cut takes away (game/iso_occlusion.h) is not there for a click, which goes
+    // on through it to what shows behind (a spawn, a door, the ground).
+    const game::IsoReveal reveal = iso_reveal();
+    const bool cut = reveal.origin.w > 0.0f || reveal.roof.w > 0.0f;
+    return [mesh, reveal, cut](const game::PickSegment& sg, const game::PickTriangleSink& sink) {
         mesh->for_each_on_segment(sg.start, sg.start + sg.dir, [&](const game::CollisionTriangle& c) {
-            sink(game::PickTriangle{c.v0, c.v1, c.v2, c.normal, c.flags});
+            const game::PickTriangle t{c.v0, c.v1, c.v2, c.normal, c.flags};
+            if (cut && game::iso_pick_skips(reveal, sg, t)) return;
+            sink(t);
         });
     };
-    // The isometric camera: a surface the cut takes away (game/iso_occlusion.h) is not there for the click, which goes
-    // on through it to what shows behind.
-    const game::IsoReveal reveal = iso_reveal();
-    for (int pass = 0; pass < 8; ++pass) {
-        game::PickHit hit = game::pick_actor(seg, scene, 0, 0);
-        if (hit.world_t >= 1.0f) return std::nullopt;
-        const glm::vec3 at = seg.start + seg.dir * hit.world_t;
-        if (game::iso_reveal_cut(reveal, at) < 0.5f) return at;
-        // On from just past it.
-        const float step = hit.world_t + 0.05f / std::max(glm::length(seg.dir), 1e-3f);
-        if (step >= 1.0f) return std::nullopt;
-        seg.start += seg.dir * step;
-        seg.dir *= 1.0f - step;
-    }
-    return std::nullopt;
 }
 
 void ClientApp::update_placement() {

@@ -690,6 +690,7 @@ hailstone_add_shaders(hailstone_shaders
   shaders/spawn.frag
   shaders/actor.vert
   shaders/actor.frag
+  shaders/actor_silhouette.frag
   shaders/object.vert
   shaders/object.frag
   shaders/sky.vert

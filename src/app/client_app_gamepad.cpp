@@ -142,6 +142,11 @@ void ClientApp::pad_action(const game::PadEvent& e) {
         // First person, or the camera behind the player at its last distance (the mouse wheel's camera_distance_).
         set_view(camera_type_ != game::kCameraWheelFollow);
         break;
+    case K::CameraIso:
+        // The isometric camera, or back to the camera behind the player.
+        if (iso()) set_view(true);
+        else set_camera_type(game::kCameraIsometric);
+        break;
     case K::Interact: pad_interact(); break;
     case K::Cancel: pad_cancel(); break;
     case K::TargetPrev:

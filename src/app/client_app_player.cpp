@@ -403,6 +403,7 @@ void ClientApp::update_player(float dt) {
     update_placement();
     update_item_input();
     update_iso_clicks(player_moved);
+    update_iso_hover();
     // --auto-keys: one key command pressed and released every 2 s, 6 s after zoning in.
     if (!opts_.auto_keys.empty() && std::chrono::duration<float>(Clock::now() - zone_entered_).count() > 6.0f &&
         Clock::now() - auto_key_time_ > std::chrono::seconds(2)) {
