@@ -1,9 +1,10 @@
 # Isometric camera
 
 Code: `src/game/iso_camera.{h,cpp}` (the camera and movement relative to it), `src/game/click_intent.{h,cpp}` (what a
-click does), `src/app/client_app_iso.cpp` (the clicks' walks and the keys), `ClientApp::update_iso_camera` and
+click does), `src/game/iso_occlusion.{h,cpp}` and `reveal_cut` in `shaders/lighting.glsl` (seeing the player through
+what is in front), `src/app/client_app_iso.cpp` (the clicks' walks and the keys), `ClientApp::update_iso_camera` and
 `ClientApp::camera_command` (`src/app/client_app_input.cpp`), `Navigator::walk_to_click` (`src/app/navigator.cpp`).
-Tests: `tests/iso_camera_test.cpp`, `tests/click_intent_test.cpp`.
+Tests: `tests/iso_camera_test.cpp`, `tests/click_intent_test.cpp`, `tests/iso_occlusion_test.cpp`.
 
 The original client has no such camera. This is a Hailstone addition, off unless the player chooses it: a view from
 above and to one side, in the manner of isometric RPGs. It changes only where the scene is seen from. Movement,
@@ -14,8 +15,8 @@ facing, speed, collision and every game rule stay the original's, and the server
 Camera type 7 (`game::kCameraIsometric`), Hailstone's own beside the camera behind the player (6). It looks down at a
 fixed pitch (45 degrees by default) from a distance (160 units at the start), through a perspective lens (63 degrees
 across by default, about the stock cameras' 63.3). It follows the player's body with a little easing (0.08 s) and
-jumps with a teleport or a zone-in. It does not stop at scenery: what stands between it and the player is left to
-the occlusion (not done yet, see "Still to do").
+jumps with a teleport or a zone-in. It does not stop at scenery: what stands between it and the player is cut away
+instead ("Seeing the player" below).
 
 - The right button held turns the camera freely about the player, never the player. A short right click still
   clicks.
@@ -74,6 +75,30 @@ player here:
   that much further, so the sharpest cascade covers the player.
 - **The sound listener** is the player's in every camera already.
 
+A click that walks to a spot or an item puts a gold ring on the ground there (drawn as the target ring is, a decal on
+the scene's depth): it lands wide and closes in with a flash, spins slowly while the walk goes on, follows the held
+button's aim, and fades when the walk ends. A walk to a spawn or a door shows none (the target ring, or the door
+itself, is there).
+
+## Seeing the player
+
+What stands between the camera and the player is cut away round them, so they stay in sight behind walls, trees,
+hills, roofs and the floors above (`game::iso_reveal`, `shaders/lighting.glsl` `reveal_discard`). A surface is cut
+where it is
+
+- nearer the camera than the player's middle by at least 3 units,
+- inside a cone round the line from the camera to the player, 12 units across at the player (`camera.iso_reveal`),
+  which shows as a circle on the screen, its outer third thinning out, and
+- higher than 1 unit above the player's feet, fully from 2.
+
+So the floor the player stands on and the ground falling away in front stay, and a wall, a slope rising in front,
+a roof or an upper floor goes. The zone, its objects (doors, placed objects, ground items) and the grass are cut; the
+characters are not. The cut drops pixels against a 4x4 ordered dither rather than blending, so the passes stay opaque
+and nothing has to be sorted. The shadow passes do not cut: what is cut still casts its shadow.
+
+A click goes through the cut as well: the ground point a click walks to is the first surface along the cursor's ray
+that the cut leaves (`ClientApp::world_point_at`, with `game::iso_reveal_cut`, the shader's test on the CPU).
+
 ## /camera
 
 | Command | Effect |
@@ -85,6 +110,7 @@ player here:
 | `/camera fov <degrees>` | the field of view across, 10..90 |
 | `/camera distance <units>` | the distance, 60..320 |
 | `/camera wasd camera` or `classic` | the movement keys relative to the camera, or as in the other cameras |
+| `/camera reveal <units>` | the cut round the player: its radius, 0..60 (0 off) |
 
 ## Settings
 
@@ -97,10 +123,12 @@ player here:
 | `camera.iso_fov` | 63 | degrees across |
 | `camera.iso_distance` | 160 | units from the player |
 | `camera.iso_wasd` | camera | `camera`: the movement keys relative to the camera; `classic`: as in the other cameras |
+| `camera.iso_reveal` | 12 | the cut round the player: its radius at the player, 0 off |
 
 ## Still to do
 
-- A mark where a click's walk ends, and a highlight on what is under the cursor.
-- Seeing the player through what stands in front: a silhouette, a see-through circle, fading objects, roofs and
-  ceilings.
+- A silhouette of the player where something not cut (a character, the edge of the cut) still hides them.
+- Whole objects fading, and a roof or ceiling over the player taken away beyond the circle.
+- The cut only while something is in the way, and the spawn pick through it (a click on a spawn behind a cut wall).
+- A highlight on what is under the cursor.
 - An Options page, the camera key, and `eq.*` for the UI packs.

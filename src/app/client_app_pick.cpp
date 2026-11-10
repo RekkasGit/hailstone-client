@@ -207,9 +207,21 @@ std::optional<glm::vec3> ClientApp::world_point_at(float x, float y) {
             sink(game::PickTriangle{c.v0, c.v1, c.v2, c.normal, c.flags});
         });
     };
-    game::PickHit hit = game::pick_actor(seg, scene, 0, 0);
-    if (hit.world_t >= 1.0f) return std::nullopt;
-    return seg.start + seg.dir * hit.world_t;
+    // The isometric camera: a surface the cut takes away (game/iso_occlusion.h) is not there for the click, which goes
+    // on through it to what shows behind.
+    const game::IsoReveal reveal = iso_reveal();
+    for (int pass = 0; pass < 8; ++pass) {
+        game::PickHit hit = game::pick_actor(seg, scene, 0, 0);
+        if (hit.world_t >= 1.0f) return std::nullopt;
+        const glm::vec3 at = seg.start + seg.dir * hit.world_t;
+        if (game::iso_reveal_cut(reveal, at) < 0.5f) return at;
+        // On from just past it.
+        const float step = hit.world_t + 0.05f / std::max(glm::length(seg.dir), 1e-3f);
+        if (step >= 1.0f) return std::nullopt;
+        seg.start += seg.dir * step;
+        seg.dir *= 1.0f - step;
+    }
+    return std::nullopt;
 }
 
 void ClientApp::update_placement() {

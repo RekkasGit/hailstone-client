@@ -240,8 +240,10 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] WASD relative to the camera (or classic: `camera.iso_wasd`), the turn keys turning the camera, the gamepad's sticks.
 - [x] Click to move and to interact, on the navigator: the ground (held, following the cursor), doors, ground items, ladders; a right click walking to an NPC or a corpse. Never an attack.
 - [ ] Live: clicks across a zone, a merchant and a corpse walked to, a door on the way, the held button; the gamepad.
-- [ ] A mark where a click's walk ends, and a highlight on what is under the cursor.
-- [ ] Seeing the player through what is in front: a silhouette, a see-through circle, fading objects, roofs and ceilings.
+- [x] A mark where a click's walk ends.
+- [x] Seeing the player through what is in front: a dithered cut round the player of what is nearer and above their feet (zone, objects, grass), clicks through it.
+- [ ] A silhouette where the player is still hidden; whole objects fading; roofs and ceilings beyond the circle; the cut only while something is in the way; spawn picks through it.
+- [ ] A highlight on what is under the cursor.
 - [ ] An Options page, the camera key, `eq.*` for the UI packs.
 
 ## 4. Check live (implemented, not confirmed)

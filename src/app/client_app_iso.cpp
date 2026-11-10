@@ -27,6 +27,70 @@ float ClientApp::iso_spawn_arrive(std::uint32_t id) const {
     return std::max(4.0f, melee ? *melee * Navigator::kStickMeleeShare : 5.0f);
 }
 
+game::IsoReveal ClientApp::iso_reveal() const {
+    if (!iso() || iso_reveal_radius_ <= 0.0f || !iso_camera_.placed) return {};
+    game::IsoRevealInput in;
+    in.camera = camera_.position;
+    in.focus = iso_camera_.focus;
+    in.feet_z = iso_camera_.focus.z - iso_focus_height();
+    in.radius = iso_reveal_radius_;
+    return game::iso_reveal(in);
+}
+
+void ClientApp::set_iso_marker(const glm::vec3& point, bool click) {
+    iso_marker_.point = point;
+    if (click || !iso_marker_.active) iso_marker_.click = true;
+    iso_marker_.active = true;
+    iso_marker_.ending = false;
+    iso_marker_.ended = -1.0;
+}
+
+void ClientApp::draw_iso_marker(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane,
+                                bool modern, double seconds) {
+    if (!iso_marker_shown()) return;
+    IsoMarker& m = iso_marker_;
+    if (m.click) {
+        m.click = false;
+        m.since = seconds;
+    }
+    if (m.ending) {
+        m.ending = false;
+        m.ended = seconds;
+    }
+    // A click lands as a wider ring that closes in over a quarter second with a flash; it then spins slowly while
+    // the walk goes on, and fades over a third of a second once it ends.
+    constexpr double kLand = 0.25, kFade = 0.33;
+    const double age = seconds - m.since;
+    float fade = 1.0f;
+    if (m.ended >= 0.0) {
+        fade = 1.0f - static_cast<float>(std::clamp((seconds - m.ended) / kFade, 0.0, 1.0));
+        if (fade <= 0.0f) {
+            m.active = false;
+            return;
+        }
+    }
+    const float land = static_cast<float>(std::clamp(age / kLand, 0.0, 1.0));
+    if (!iso_marker_renderer_) iso_marker_renderer_ = std::make_unique<render::TargetRingRenderer>(vk_, shader_dir_);
+    render::TargetRing ring;
+    ring.feet = m.point;
+    ring.radius = 1.4f + 1.4f * (1.0f - land) * (1.0f - land);
+    ring.color = glm::vec4(1.0f, 0.86f, 0.45f, 0.9f * fade); // a warm gold, apart from the con colours
+    ring.width = 0.12f;
+    ring.spin = static_cast<float>(std::fmod(age * 1.5, static_cast<double>(glm::two_pi<float>())));
+    ring.pulse = 0.5f + 0.5f * static_cast<float>(std::sin(age * 6.0));
+    ring.flash = 1.0f - land;
+    ring.glow = 0.7f;
+    render::TargetRingView view;
+    view.view_proj = view_proj;
+    view.camera = camera_.position;
+    view.forward = camera_.forward();
+    view.near_plane = camera_.near_plane;
+    view.far_plane = far_plane;
+    view.haze = modern ? frame_lighting_.haze : glm::vec4(0.0f);
+    view.seconds = seconds;
+    iso_marker_renderer_->draw(frame, view, ring);
+}
+
 bool ClientApp::iso_click(const glm::vec2& at, const PickTarget& hit, bool right) {
     if (!nav_ || !conn_) return false;
     const auto& world = conn_->world();
@@ -70,9 +134,11 @@ bool ClientApp::iso_click(const glm::vec2& at, const PickTarget& hit, bool right
     const game::IsoClickAction action = game::iso_click_action(in);
     if (action == game::IsoClickAction::Original) return false;
     iso_pending_.reset();
+    iso_marker_.active = false; // a walk to a spawn or a door has the target ring or the door itself to show
     std::string why;
     if (action == game::IsoClickAction::WalkTo) {
         why = nav_->walk_to_click(*ground, 2.0f);
+        if (why.empty()) set_iso_marker(*ground, true);
         iso_hold_ = !right;
         iso_hold_point_ = *ground;
         iso_hold_at_ = Clock::now();
@@ -84,7 +150,10 @@ bool ClientApp::iso_click(const glm::vec2& at, const PickTarget& hit, bool right
         if (why.empty()) iso_pending_ = IsoPending{hit, right};
     } else {
         why = nav_->walk_to_click(hit.point, kIsoObjectArrive);
-        if (why.empty()) iso_pending_ = IsoPending{hit, right};
+        if (why.empty()) {
+            iso_pending_ = IsoPending{hit, right};
+            set_iso_marker(hit.point, true);
+        }
     }
     if (!why.empty()) {
         conn_->show_chat("Cannot walk there: " + why + ".", 15);
@@ -113,11 +182,12 @@ void ClientApp::update_iso_clicks(bool player_moved) {
         if (auto p = world_point_at(in.mouse_x, in.mouse_y); p && glm::distance(*p, iso_hold_point_) >= kIsoHoldMove) {
             iso_hold_at_ = Clock::now();
             iso_hold_point_ = *p;
-            nav_->walk_to_click(*p, 2.0f);
+            if (nav_->walk_to_click(*p, 2.0f).empty()) set_iso_marker(*p, false);
         }
     }
     if (nav_->status().active) return;
     iso_walking_ = false;
+    if (iso_marker_.active && iso_marker_.ended < 0.0) iso_marker_.ending = true;
     // The walk is over: arrived, its click; stopped short (keys, no path, stuck), nothing.
     if (!iso_pending_) return;
     const IsoPending pending = *std::exchange(iso_pending_, std::nullopt);

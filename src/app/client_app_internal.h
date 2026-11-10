@@ -73,6 +73,7 @@
 #include "game/char_create_look.h"
 #include "game/cameras.h"
 #include "game/iso_camera.h"
+#include "game/iso_occlusion.h"
 #include "game/char_select_camera.h"
 #include "game/eq_names.h"
 #include "game/mechanics/character.h"
@@ -1512,6 +1513,28 @@ private:
     std::optional<bool> iso_key_override();
     // Each frame: the turn keys turn the isometric camera.
     void iso_turn_keys(float dt);
+    // The cut through what stands in front of the player this frame (game/iso_occlusion.h): off outside the isometric
+    // camera or with camera.iso_reveal 0 (its radius at the player).
+    float iso_reveal_radius_ = 12.0f;
+    game::IsoReveal iso_reveal() const;
+    // How far above the feet the isometric camera looks: the middle of the body.
+    float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }
+    // The mark where a click's walk ends (a ring on the ground, drawn as the target ring is): where, since when (the
+    // click's flash), and when the walk ended (it fades); its own ring renderer, made on first use.
+    struct IsoMarker {
+        glm::vec3 point{0.0f};
+        bool active = false;
+        bool click = false;      // a new click, its flash timed from the next draw (not the held button's aim)
+        bool ending = false;     // the walk ended, its fade timed from the next draw
+        double since = 0.0;      // the click (the draw's clock)
+        double ended = -1.0;     // < 0: the walk goes on
+    };
+    IsoMarker iso_marker_;
+    std::unique_ptr<render::TargetRingRenderer> iso_marker_renderer_;
+    void set_iso_marker(const glm::vec3& point, bool click);
+    bool iso_marker_shown() const { return iso() && iso_marker_.active; }
+    void draw_iso_marker(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
+                         double seconds);
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)
     // The Options window's Max Camera Zoom sets it (10..150, saved); the NMS patch's /fov too (not saved).
     float max_camera_distance_ = kMaxCameraDistance;

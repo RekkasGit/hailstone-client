@@ -321,8 +321,7 @@ void ClientApp::set_camera_type(int type) {
 
 void ClientApp::update_iso_camera(const glm::vec3& feet, float dt) {
     camera_.fov_units = game::iso_fov_units(iso_settings_.fov_degrees);
-    // The middle of the body: the feet plus half the AvatarHeight-based eye.
-    const glm::vec3 target = feet + glm::vec3(0.0f, 0.0f, floor_offset_ * 0.5f + 2.0f);
+    const glm::vec3 target = feet + glm::vec3(0.0f, 0.0f, iso_focus_height());
     const game::IsoPose pose = game::update_iso_camera(iso_camera_, target, dt, iso_settings_);
     camera_.position = pose.position;
     camera_.yaw = pose.yaw;
@@ -335,6 +334,7 @@ void ClientApp::camera_command(const std::string& args) {
     // /camera iso|first|behind|toggle
     // /camera pitch <deg> | fov <deg> | distance <units>   (the isometric camera; saved)
     // /camera wasd camera|classic   (its movement keys: relative to the camera, or as in the other cameras)
+    // /camera reveal <units>        (the cut through what stands in front of the player: its radius; 0 off)
     std::string_view rest = args;
     std::string word = game::next_cmd_arg(rest);
     for (char& ch : word) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -345,14 +345,16 @@ void ClientApp::camera_command(const std::string& args) {
         config_.set("camera.iso_distance", std::format("{:.0f}", iso_camera_.distance));
         config_.set_bool("camera.iso", iso());
         config_.set("camera.iso_wasd", iso_wasd_camera_ ? "camera" : "classic");
+        config_.set("camera.iso_reveal", std::format("{:.0f}", iso_reveal_radius_));
         config_.save(config_path_);
     };
     if (word.empty()) {
-        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}. "
-                        "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance <value>, "
+        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}, reveal {:.0f}. "
+                        "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
                         "/camera wasd camera|classic",
                         camera_type_, iso() ? " (isometric)" : "", glm::degrees(iso_settings_.pitch),
-                        iso_settings_.fov_degrees, iso_camera_.distance, iso_wasd_camera_ ? "camera" : "classic"));
+                        iso_settings_.fov_degrees, iso_camera_.distance, iso_wasd_camera_ ? "camera" : "classic",
+                        iso_reveal_radius_));
         return;
     }
     if (word == "iso" || word == "isometric") {
@@ -374,7 +376,7 @@ void ClientApp::camera_command(const std::string& args) {
             say("Usage: /camera wasd camera|classic");
             return;
         }
-    } else if (word == "pitch" || word == "fov" || word == "distance") {
+    } else if (word == "pitch" || word == "fov" || word == "distance" || word == "reveal") {
         std::string value = game::next_cmd_arg(rest);
         float v = 0.0f;
         if (value.empty() || float_from_chars(value.data(), value.data() + value.size(), v).ec != std::errc{}) {
@@ -383,9 +385,11 @@ void ClientApp::camera_command(const std::string& args) {
         }
         if (word == "pitch") iso_settings_.pitch = glm::radians(std::clamp(v, 20.0f, 89.0f));
         else if (word == "fov") iso_settings_.fov_degrees = std::clamp(v, 10.0f, 90.0f);
+        else if (word == "reveal") iso_reveal_radius_ = std::clamp(v, 0.0f, 60.0f);
         else iso_camera_.distance = std::clamp(v, iso_settings_.min_distance, iso_settings_.max_distance);
     } else {
-        say("Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance <value>, /camera wasd camera|classic");
+        say("Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
+            "/camera wasd camera|classic");
         return;
     }
     save();

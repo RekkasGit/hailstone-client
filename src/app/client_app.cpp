@@ -372,6 +372,13 @@ int ClientApp::run() {
                 // modern or classic (/lighting, display.lighting): the same scene light for every renderer.
                 render::DynamicShadowLights moving_lights;
                 render::SceneLighting lighting = scene_lighting(scene_light, sky_hour, &moving_lights);
+                // The isometric camera's cut through what stands in front of the player (game/iso_occlusion.h).
+                {
+                    const game::IsoReveal r = iso_reveal();
+                    lighting.reveal_origin = r.origin;
+                    lighting.reveal_axis = r.axis;
+                    lighting.reveal_shape = r.shape;
+                }
                 bool shadows = lighting_mode_ == render::LightingMode::Modern && vk_.shadows_enabled() &&
                                zone_renderer_ && glm::vec3(lighting.light) != glm::vec3(0.0f);
                 if (shadows) {
@@ -620,7 +627,7 @@ int ClientApp::run() {
             // The depth copy is taken before the grass: the target ring lies on the ground under it, not on the
             // blades (a ring traced over them twists into a coil). The water, drawn after the grass, still meets it
             // in the depth buffer.
-            if (modern || (in_game && target_ring_shown())) vk_.begin_translucent(*f);
+            if (modern || (in_game && (target_ring_shown() || iso_marker_shown()))) vk_.begin_translucent(*f);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
             if (modern) {
@@ -631,6 +638,7 @@ int ClientApp::run() {
             // The target ring lies on the depth copy (taken above, or by it in the classic lighting), under the
             // weather and particles. Character select draws no target.
             if (in_game) draw_target_ring(*f, vp, lit.far_plane, modern, t);
+            if (in_game) draw_iso_marker(*f, vp, lit.far_plane, modern, t);
             // Rain or snow: the precipitation manager's particles. The original draws them in every zone type,
             // with or without a sky (CRender's scene, 0x10097420).
             if (weather_renderer_ && in_game) {

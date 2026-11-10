@@ -128,6 +128,11 @@ struct SceneLighting {
     // The zone's baked light where the player stands (render/ambient_probe.h ProbeBlend), for the characters and the
     // doors in the modern lighting: rgb the vertex colour (display values), w 1 + the sky's share; w 0 none.
     glm::vec4 probe{0.0f};
+    // The isometric camera's cut through what stands in front of the player (game/iso_occlusion.h IsoReveal;
+    // shaders/lighting.glsl reveal_discard): origin w 0 is off, as in every other camera.
+    glm::vec4 reveal_origin{0.0f};
+    glm::vec4 reveal_axis{0.0f};
+    glm::vec4 reveal_shape{0.0f};
     // The zone lights' shadows (render/point_shadows.h PointShadows::apply), modern only.
     std::array<glm::vec4, kMaxPointShadows> point_shadow_light{}; // xyz the light, w its radius
     std::array<glm::vec4, kMaxPointShadows> point_shadow_slot{};  // x: its cube's first layer, y: its strength
