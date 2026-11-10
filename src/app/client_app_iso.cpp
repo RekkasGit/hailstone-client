@@ -65,11 +65,21 @@ void ClientApp::update_iso_reveal(float dt) {
                 break;
             }
     iso_cone_strength_ = game::iso_ease(iso_cone_strength_, in_way && iso_reveal_radius_ > 0.0f ? 1.0f : 0.0f, dt);
-    // The roof: while something solid is over the player's head.
-    const bool covered = iso_roof_ && blocked(eye, eye + glm::vec3(0.0f, 0.0f, game::kIsoCoverReach));
-    iso_roof_strength_ = game::iso_ease(iso_roof_strength_, covered ? 1.0f : 0.0f, dt);
-    // Its height follows the eyes (a staircase walked up takes the cut with it).
-    iso_roof_height_ = eye.z + game::kIsoRoofAboveEyes;
+    // The roof: while something solid is over the player's head, cut a little under it (game::iso_roof_height), so a
+    // room keeps its walls up to its ceiling and only the ceiling and what is over it goes.
+    std::optional<float> cover;
+    if (iso_roof_) {
+        const glm::vec3 up = eye + glm::vec3(0.0f, 0.0f, game::kIsoCoverReach);
+        if (std::optional<glm::vec3> stop = sweep(eye, up, 0.25f); stop && glm::distance(*stop, up) > 0.5f)
+            cover = stop->z;
+    }
+    if (cover) {
+        const float target = game::iso_roof_height(*cover, eye.z);
+        // A new cover takes its height at once; under it the height follows an arch or a sloping roof smoothly.
+        if (iso_roof_strength_ <= 0.0f) iso_roof_height_ = target;
+        else iso_roof_height_ += (target - iso_roof_height_) * (1.0f - std::exp(-dt / game::kIsoRoofHeightTau));
+    }
+    iso_roof_strength_ = game::iso_ease(iso_roof_strength_, cover ? 1.0f : 0.0f, dt);
 }
 
 std::optional<int> ClientApp::iso_option(std::string_view o) const {

@@ -151,3 +151,10 @@ TEST_CASE("iso reveal: a wide roof softens over a quarter of its radius") {
     CHECK(iso_reveal_cut(r, {140.0f, 0.0f, 30.0f}) == doctest::Approx(1.0f)); // a hill well round the player
     CHECK(iso_reveal_cut(r, {260.0f, 0.0f, 30.0f}) == 0.0f);
 }
+
+TEST_CASE("iso reveal: the roof cuts just under the cover, never below the eyes") {
+    // A high hall's ceiling 40 over the eyes: the walls stay up to just under it.
+    CHECK(iso_roof_height(50.0f, 10.0f) == doctest::Approx(50.0f - kIsoRoofUnderCover));
+    // A low tunnel's roof just over the head: the cut stays over the eyes.
+    CHECK(iso_roof_height(11.0f, 10.0f) == doctest::Approx(10.0f + kIsoRoofAboveEyes));
+}

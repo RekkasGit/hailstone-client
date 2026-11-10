@@ -12,6 +12,10 @@ float smoothstep(float e0, float e1, float x) {
 }
 } // namespace
 
+float iso_roof_height(float cover_z, float eye_z) {
+    return std::max(cover_z - kIsoRoofUnderCover, eye_z + kIsoRoofAboveEyes);
+}
+
 float iso_ease(float current, float target, float dt) {
     if (dt <= 0.0f) return current;
     if (target > current) return std::min(target, current + dt / kIsoEaseIn);

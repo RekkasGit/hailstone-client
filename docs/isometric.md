@@ -100,11 +100,12 @@ So the floor the player stands on and the ground falling away in front stay, and
 a roof or an upper floor goes.
 
 **The roof** comes while something solid is within 60 units over the player's eyes (a ceiling, a roof, a bridge,
-an overhang; `camera.iso_roof`). Then everything more than 1.5 units over the eyes round the player goes, in front
-or behind, out to 60 units or 1.25 times the camera's distance, the larger (flat; the outer quarter, at least 15,
-thinning out), so it clears what the view shows (in a tunnel, the whole hill over it): a room, a corridor or a cave shows from above as a
-cut-away, its walls trimmed at head height and the floors above taken away. The height follows the eyes, so a
-staircase walked up takes the cut with it.
+an overhang; `camera.iso_roof`). Then everything above a height just under that cover (2 units under where the cover
+test hit, never lower than 1.5 over the eyes; `game::iso_roof_height`) goes round the player, in front or behind,
+out to 60 units or 1.25 times the camera's distance, the larger (flat; the outer quarter, at least 15, thinning out),
+so it clears what the view shows. A hall keeps its walls up to its ceiling and loses the ceiling; a low tunnel loses
+the whole hill over it; a house loses its roof. The height follows a changing cover (an arch, a sloping roof, a
+staircase) over a quarter second.
 
 The zone, its objects (doors, placed objects, ground items) and the grass are cut; the characters are not. The cut
 drops pixels against a 4x4 ordered dither rather than blending, so the passes stay opaque and nothing has to be

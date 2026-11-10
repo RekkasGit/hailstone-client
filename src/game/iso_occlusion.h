@@ -53,8 +53,15 @@ inline constexpr float kIsoRoofSoftShare = 0.25f;
 // round them (a tunnel under a hill: the whole hill over it, not a disc as small as the circle).
 inline constexpr float kIsoRoofViewShare = 1.25f;
 inline constexpr float kIsoRoofRise = 1.5f;
-// The roof cuts above the player's eyes by this much.
+// The roof cuts a little under what is over the player (the ceiling or roof the cover test found), so the walls
+// stay up to it and only it and what is above goes; never lower than this much over the player's eyes.
+inline constexpr float kIsoRoofUnderCover = 2.0f;
 inline constexpr float kIsoRoofAboveEyes = 1.5f;
+// Its height follows a changing cover (an arch, a sloping roof) with this time constant (seconds).
+inline constexpr float kIsoRoofHeightTau = 0.25f;
+
+// The roof's cut height under cover found at `cover_z`, the player's eyes at `eye_z`.
+float iso_roof_height(float cover_z, float eye_z);
 // Cover: something solid within this height over the player's head.
 inline constexpr float kIsoCoverReach = 60.0f;
 // The strengths ease in over this long (seconds) and out over kIsoEaseOut.
