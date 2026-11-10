@@ -73,3 +73,23 @@ TEST_CASE("iso camera: the view is measured from the player") {
     CHECK(iso_shadow_near(10.0f, 1.0f) == doctest::Approx(1.0f));
     CHECK(iso_fov_units(90.0f) == doctest::Approx(128.0f));
 }
+
+TEST_CASE("iso camera: movement relative to the camera") {
+    const float y = 0.3f;
+    auto near = [](float a, float b) { return std::abs(std::remainder(a - b, glm::two_pi<float>())) < 1e-5f; };
+    CHECK_FALSE(iso_move(0.0f, 0.0f, y).move);
+    CHECK_FALSE(iso_move(1.0f - 1.0f, 0.05f, y).move); // opposite keys cancel; a stick inside the dead zone
+    IsoMove up = iso_move(1.0f, 0.0f, y);
+    CHECK(up.move);
+    CHECK(near(up.yaw, y)); // up the screen: the way the camera looks
+    CHECK(near(iso_move(-1.0f, 0.0f, y).yaw, y + glm::pi<float>()));      // down: toward the camera
+    CHECK(near(iso_move(0.0f, 1.0f, y).yaw, y - glm::half_pi<float>()));  // right: clockwise from above
+    CHECK(near(iso_move(0.0f, -1.0f, y).yaw, y + glm::half_pi<float>())); // left
+    CHECK(near(iso_move(1.0f, 1.0f, y).yaw, y - glm::quarter_pi<float>())); // up and right together
+    // The direction it gives lies along the camera's forward and right in the world.
+    IsoMove r = iso_move(0.0f, 1.0f, y);
+    glm::vec3 f = iso_forward(y, 0.0f);
+    glm::vec3 right = glm::normalize(glm::cross(f, glm::vec3(0.0f, 0.0f, 1.0f)));
+    CHECK(std::cos(r.yaw) == doctest::Approx(right.x).epsilon(1e-4));
+    CHECK(std::sin(r.yaw) == doctest::Approx(right.y).epsilon(1e-4));
+}

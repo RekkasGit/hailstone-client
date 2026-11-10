@@ -402,6 +402,7 @@ void ClientApp::update_player(float dt) {
     }
     update_placement();
     update_item_input();
+    update_iso_clicks(player_moved);
     // --auto-keys: one key command pressed and released every 2 s, 6 s after zoning in.
     if (!opts_.auto_keys.empty() && std::chrono::duration<float>(Clock::now() - zone_entered_).count() > 6.0f &&
         Clock::now() - auto_key_time_ > std::chrono::seconds(2)) {
@@ -819,6 +820,8 @@ void ClientApp::update_player(float dt) {
                                                           });
                               });
         }
+        // The isometric camera: the movement keys point relative to the camera (game::iso_move).
+        movement_.set_key_override(at_helm ? std::nullopt : iso_key_override());
         PlayerMovement::Frame frame = movement_.update(mk, yaw_, pitch_, dt_step * 1000.0f, now_ms, *conn_,
                                                        zone_ ? &zone_->regions : nullptr, floor_offset_, &world, melee_ch,
                                                        st.elapsed_ms);
@@ -935,6 +938,7 @@ void ClientApp::update_player(float dt) {
     for (const auto& st : frame_steps_) run_step(st);
     // The wheel (CEverQuest::MouseWheelHandler) is __ProcessMouseEvents', which stops at a locked interface. It
     // zooms between first person and the camera behind the player; in the cameras 1..5 it does nothing.
+    iso_turn_keys(dt);
     if (!ui_.wants_mouse() && mouse_wheel_zoom_ && !conn_->interface_locked() && iso()) {
         game::iso_zoom(iso_camera_, in.wheel, iso_settings_);
     } else if (!ui_.wants_mouse() && mouse_wheel_zoom_ && !conn_->interface_locked() &&

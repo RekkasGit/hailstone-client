@@ -334,6 +334,7 @@ void ClientApp::camera_command(const std::string& args) {
     // /camera                 which camera, and the isometric camera's settings
     // /camera iso|first|behind|toggle
     // /camera pitch <deg> | fov <deg> | distance <units>   (the isometric camera; saved)
+    // /camera wasd camera|classic   (its movement keys: relative to the camera, or as in the other cameras)
     std::string_view rest = args;
     std::string word = game::next_cmd_arg(rest);
     for (char& ch : word) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -343,13 +344,15 @@ void ClientApp::camera_command(const std::string& args) {
         config_.set("camera.iso_fov", std::format("{:.1f}", iso_settings_.fov_degrees));
         config_.set("camera.iso_distance", std::format("{:.0f}", iso_camera_.distance));
         config_.set_bool("camera.iso", iso());
+        config_.set("camera.iso_wasd", iso_wasd_camera_ ? "camera" : "classic");
         config_.save(config_path_);
     };
     if (word.empty()) {
-        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}. "
-                        "Usage: /camera [iso|first|behind|toggle] or /camera pitch|fov|distance <value>",
+        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}. "
+                        "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance <value>, "
+                        "/camera wasd camera|classic",
                         camera_type_, iso() ? " (isometric)" : "", glm::degrees(iso_settings_.pitch),
-                        iso_settings_.fov_degrees, iso_camera_.distance));
+                        iso_settings_.fov_degrees, iso_camera_.distance, iso_wasd_camera_ ? "camera" : "classic"));
         return;
     }
     if (word == "iso" || word == "isometric") {
@@ -362,6 +365,15 @@ void ClientApp::camera_command(const std::string& args) {
     } else if (word == "toggle") {
         set_camera_type(iso() ? game::kCameraFirstPerson : game::kCameraIsometric);
         if (!iso()) set_view(true);
+    } else if (word == "wasd") {
+        std::string how = game::next_cmd_arg(rest);
+        for (char& ch : how) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (how == "camera") iso_wasd_camera_ = true;
+        else if (how == "classic") iso_wasd_camera_ = false;
+        else {
+            say("Usage: /camera wasd camera|classic");
+            return;
+        }
     } else if (word == "pitch" || word == "fov" || word == "distance") {
         std::string value = game::next_cmd_arg(rest);
         float v = 0.0f;
@@ -373,7 +385,7 @@ void ClientApp::camera_command(const std::string& args) {
         else if (word == "fov") iso_settings_.fov_degrees = std::clamp(v, 10.0f, 90.0f);
         else iso_camera_.distance = std::clamp(v, iso_settings_.min_distance, iso_settings_.max_distance);
     } else {
-        say("Usage: /camera [iso|first|behind|toggle] or /camera pitch|fov|distance <value>");
+        say("Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance <value>, /camera wasd camera|classic");
         return;
     }
     save();
@@ -769,6 +781,8 @@ void ClientApp::update_combat_input() {
             return;
         }
         PickTarget hit = pick_at(at->x, at->y, game::kClickRequired, game::kClickSkip, "left click");
+        // The isometric camera's click to move (game/click_intent.h): the ground, or a thing out of reach, is walked to.
+        if (iso() && iso_click(*at, hit, false)) return;
         // A mount race with a rider (PlayerBase_IsMountRace, 0x58cfb0) gives the rider (LMouseUp @0x53875b).
         if (hit.kind == PickTarget::Kind::Spawn) {
             const auto& spawns = conn_->world().spawns;

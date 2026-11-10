@@ -50,4 +50,13 @@ float iso_shadow_near(float focus_distance, float near_plane) {
     return std::max(near_plane, focus_distance - kIsoShadowLead);
 }
 
+IsoMove iso_move(float forward, float right, float camera_yaw, float dead) {
+    IsoMove m;
+    if (forward * forward + right * right <= dead * dead) return m;
+    // The camera's right is its yaw less a quarter turn: forward (cos y, sin y), right (sin y, -cos y).
+    m.move = true;
+    m.yaw = std::remainder(camera_yaw + std::atan2(-right, forward), glm::two_pi<float>());
+    return m;
+}
+
 } // namespace hailstone::game

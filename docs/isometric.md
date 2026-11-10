@@ -1,7 +1,9 @@
 # Isometric camera
 
-Code: `src/game/iso_camera.{h,cpp}` (the camera), `ClientApp::update_iso_camera` and `ClientApp::camera_command`
-(`src/app/client_app_input.cpp`). Tests: `tests/iso_camera_test.cpp`.
+Code: `src/game/iso_camera.{h,cpp}` (the camera and movement relative to it), `src/game/click_intent.{h,cpp}` (what a
+click does), `src/app/client_app_iso.cpp` (the clicks' walks and the keys), `ClientApp::update_iso_camera` and
+`ClientApp::camera_command` (`src/app/client_app_input.cpp`), `Navigator::walk_to_click` (`src/app/navigator.cpp`).
+Tests: `tests/iso_camera_test.cpp`, `tests/click_intent_test.cpp`.
 
 The original client has no such camera. This is a Hailstone addition, off unless the player chooses it: a view from
 above and to one side, in the manner of isometric RPGs. It changes only where the scene is seen from. Movement,
@@ -22,8 +24,42 @@ the occlusion (not done yet, see "Still to do").
 - TOGGLECAM's cycle counts it as first person (0 -> 1), as it counts camera 6; the first person camera's key leaves
   it.
 
-To the movement controls it is the camera behind the player (6) with no mouse look, so the turn keys turn and
-neither button runs.
+To the movement controls it is the camera behind the player (6) with no mouse look, so neither button runs.
+
+## Movement keys
+
+With `camera.iso_wasd = camera` (the default) the movement keys point relative to the camera, as in isometric RPGs:
+forward runs up the screen, back down it toward the camera, the strafe keys left and right across it, and two
+together the diagonal between. The player turns at once to that way (as /follow and /nav set the heading) and the
+controls see only the forward key held, so the speed, the run and walk, collision and the position updates are the
+original's. The turn keys turn the camera (2 radians a second), not the player. Autorun runs the way the player
+faces. At a boat's helm the keys sail the boat as in the other cameras.
+
+The gamepad's left stick moves along its own angle, not eight ways; the right stick turns the camera (sideways) and
+zooms (up and down).
+
+With `camera.iso_wasd = classic` (`/camera wasd classic`) the keys move, turn and strafe as in the other cameras.
+
+## Clicks
+
+A click either does what it does in the other cameras or walks first, over the navigation mesh
+(`docs/navigation.md`), and then does that. It never targets, attacks or casts on its own: auto attack is turned on
+with its key or `/attack`, as everywhere (`game::iso_click_action`).
+
+| Click on | Does |
+|---|---|
+| the ground, left | walks there; held, the walk follows the cursor |
+| a door, a ground item or a ladder out of reach, left | walks to it, then clicks it |
+| an NPC or a corpse out of reach, right | walks to it (inside the melee range), turns to it, then right clicks it: a merchant's or banker's window, a corpse's loot; a hostile NPC is only walked to |
+| any spawn, left | targets it, near or far, as in the other cameras |
+| a player, right | their menu, where they stand |
+| anything, with an item on the cursor or while placing one | the other cameras' click (drop, place, a key on a door) |
+
+The walk is the navigator's, so it goes round walls, opens doors on the way and gets itself unstuck. Any movement key
+ends it, without a word in the chat (each click would say so). A walk that cannot be started says why ("Cannot walk
+there: ..."). A click that walks to the spot says nothing when the mesh goes only part of the way, and goes straight
+at the spot in a zone without a mesh. The click at the end is made only when the walk ended near enough; a walk
+stopped short (a key, no path, stuck) clicks nothing.
 
 ## Measured from the player
 
@@ -48,6 +84,7 @@ player here:
 | `/camera pitch <degrees>` | the look down, 20..89 |
 | `/camera fov <degrees>` | the field of view across, 10..90 |
 | `/camera distance <units>` | the distance, 60..320 |
+| `/camera wasd camera` or `classic` | the movement keys relative to the camera, or as in the other cameras |
 
 ## Settings
 
@@ -59,11 +96,11 @@ player here:
 | `camera.iso_pitch` | 45 | degrees below the horizon |
 | `camera.iso_fov` | 63 | degrees across |
 | `camera.iso_distance` | 160 | units from the player |
+| `camera.iso_wasd` | camera | `camera`: the movement keys relative to the camera; `classic`: as in the other cameras |
 
 ## Still to do
 
-- WASD relative to the camera, and the gamepad's stick.
-- Click to move and to interact, on the navigator (`docs/navigation.md`).
+- A mark where a click's walk ends, and a highlight on what is under the cursor.
 - Seeing the player through what stands in front: a silhouette, a see-through circle, fading objects, roofs and
   ceilings.
 - An Options page, the camera key, and `eq.*` for the UI packs.

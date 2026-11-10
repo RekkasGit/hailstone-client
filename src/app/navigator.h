@@ -134,6 +134,10 @@ public:
     std::string go_to_point(const glm::vec3& world, float distance, std::string label, bool straight) override;
     std::string go_to_spawn(std::uint32_t id, float distance) override;
     std::string go_to_door(std::uint8_t id, bool click) override;
+    // The isometric camera's click to move (game/click_intent.h, docs/isometric.md): a walk to a point that says
+    // nothing when the mesh goes only part of the way (each click or held button would say it again), and goes
+    // straight at the point in a zone without a mesh. "" when it started, else why not.
+    std::string walk_to_click(const glm::vec3& world, float distance);
     std::string stick(std::uint32_t id, const nav::StickOptions& options) override;
     void unstick(std::string_view why) override;
     void stop(std::string_view why) override;
@@ -165,6 +169,7 @@ private:
         std::uint8_t door = 0;
         bool click = false;
         bool straight = false;
+        bool quiet = false; // a click to move: no word in the chat when the mesh only goes part of the way
         float distance = 2.0f;
         std::string label;
     };

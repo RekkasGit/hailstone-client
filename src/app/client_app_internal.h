@@ -1486,6 +1486,32 @@ private:
     bool iso() const { return camera_type_ == game::kCameraIsometric; }
     // Places camera_ for the isometric camera this frame, looking at the player drawn at `feet`.
     void update_iso_camera(const glm::vec3& feet, float dt);
+    // The isometric camera's click to move and movement relative to the camera (app/client_app_iso.cpp): WASD
+    // relative to the camera or classic (hailstone.ini camera.iso_wasd); the gamepad's stick as last read in game mode
+    // (x right, y up; zero when it moves nothing); a click's walk under way, and what to click when it arrives; the
+    // left button held on the ground (the walk follows the cursor).
+    bool iso_wasd_camera_ = true;
+    glm::vec2 pad_iso_stick_{0.0f};
+    bool iso_walking_ = false;
+    struct IsoPending {
+        PickTarget hit;
+        bool right = false;
+    };
+    std::optional<IsoPending> iso_pending_;
+    bool iso_hold_ = false;
+    glm::vec3 iso_hold_point_{0.0f};
+    Clock::time_point iso_hold_at_{};
+    // A click in the isometric camera (game/click_intent.h): true when it walks instead of the original's click.
+    bool iso_click(const glm::vec2& at, const PickTarget& hit, bool right);
+    // Each frame: a key ends a click's walk, the held button aims it, an arrival makes its click.
+    void update_iso_clicks(bool player_moved);
+    // How near a walk to spawn `id` goes before its click.
+    float iso_spawn_arrive(std::uint32_t id) const;
+    // Each step: the movement keys as a heading relative to the camera (turns the player) and the forward key the
+    // controls see (PlayerMovement::set_key_override); nullopt outside the isometric camera or with no key held.
+    std::optional<bool> iso_key_override();
+    // Each frame: the turn keys turn the isometric camera.
+    void iso_turn_keys(float dt);
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)
     // The Options window's Max Camera Zoom sets it (10..150, saved); the NMS patch's /fov too (not saved).
     float max_camera_distance_ = kMaxCameraDistance;

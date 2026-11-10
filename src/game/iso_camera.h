@@ -71,4 +71,17 @@ ViewDistance iso_view(const ViewDistance& v, float focus_distance);
 inline constexpr float kIsoShadowLead = 40.0f;
 float iso_shadow_near(float focus_distance, float near_plane);
 
+// Movement relative to the camera (hailstone.ini camera.iso_wasd = camera, the default): `forward` up the screen and
+// `right` across it (-1..1 each: the movement keys, or the gamepad's stick) as the world heading the player turns to
+// and runs along. Nothing to move when they cancel out (or are within `dead` of the middle).
+struct IsoMove {
+    bool move = false;
+    float yaw = 0.0f; // world yaw (radians, game/coords.h)
+};
+IsoMove iso_move(float forward, float right, float camera_yaw, float dead = 0.1f);
+
+// With movement relative to the camera, the turn keys turn the camera at this rate (radians a second) instead of
+// the player.
+inline constexpr float kIsoTurnRate = 2.0f;
+
 } // namespace hailstone::game

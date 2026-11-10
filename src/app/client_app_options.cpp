@@ -694,6 +694,7 @@ void ClientApp::apply_settings() {
     iso_settings_.fov_degrees = std::clamp(config_float("camera.iso_fov", 63.0f), 10.0f, 90.0f);
     iso_camera_.distance = std::clamp(config_float("camera.iso_distance", iso_settings_.distance),
                                       iso_settings_.min_distance, iso_settings_.max_distance);
+    iso_wasd_camera_ = config_.get_string("camera.iso_wasd", "camera") != "classic";
     mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
     {
         // loadOptions: MousePointerSpeedMod 0..10, anything else 0.
