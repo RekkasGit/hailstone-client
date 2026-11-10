@@ -235,6 +235,13 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Zone lines marked exactly into the mesh; a walk stops before stepping into one (seen live at Oasis / North Ro).
 - [ ] Swimming live end to end (a long swim, diving, climbing out); levitation paths.
 
+## Isometric camera (docs/isometric.md)
+- [x] The camera (type 7): pitch, field of view, free turn, zoom, easing; fog, far plane, region and shadow cascades measured from the player; `/camera`.
+- [ ] WASD relative to the camera, and the gamepad's stick.
+- [ ] Click to move and to interact, on the navigator.
+- [ ] Seeing the player through what is in front: a silhouette, a see-through circle, fading objects, roofs and ceilings.
+- [ ] An Options page, the camera key, `eq.*` for the UI packs.
+
 ## 4. Check live (implemented, not confirmed)
 
 - [x] Shift-click / Ctrl-click quantity flags (checked live).

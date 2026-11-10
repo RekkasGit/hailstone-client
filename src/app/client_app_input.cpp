@@ -4,7 +4,9 @@
 #include "app/lua_eq_menu.h"
 #include "game/mechanics/abilities.h"
 #include "game/boats.h"
+#include "game/slash_commands.h"
 #include "core/env.h"
+#include "core/float_chars.h"
 
 namespace hailstone::app::client_internal {
 
@@ -305,7 +307,76 @@ void ClientApp::set_camera_type(int type) {
         if (camera_distance_ > 0.0f) pad_camera_distance_ = camera_distance_;
         camera_distance_ = 0.0f;
     }
+    if (type == game::kCameraIsometric && !iso()) {
+        iso_saved_fov_ = camera_.fov_units;
+        iso_camera_.placed = false;
+        // It starts looking the way the player faces.
+        iso_camera_.yaw = yaw_;
+    } else if (type != game::kCameraIsometric && iso()) {
+        camera_.fov_units = iso_saved_fov_;
+        iso_focus_distance_ = 0.0f;
+    }
     camera_type_ = type;
+}
+
+void ClientApp::update_iso_camera(const glm::vec3& feet, float dt) {
+    camera_.fov_units = game::iso_fov_units(iso_settings_.fov_degrees);
+    // The middle of the body: the feet plus half the AvatarHeight-based eye.
+    const glm::vec3 target = feet + glm::vec3(0.0f, 0.0f, floor_offset_ * 0.5f + 2.0f);
+    const game::IsoPose pose = game::update_iso_camera(iso_camera_, target, dt, iso_settings_);
+    camera_.position = pose.position;
+    camera_.yaw = pose.yaw;
+    camera_.pitch = pose.pitch;
+    iso_focus_distance_ = pose.focus_distance;
+}
+
+void ClientApp::camera_command(const std::string& args) {
+    // /camera                 which camera, and the isometric camera's settings
+    // /camera iso|first|behind|toggle
+    // /camera pitch <deg> | fov <deg> | distance <units>   (the isometric camera; saved)
+    std::string_view rest = args;
+    std::string word = game::next_cmd_arg(rest);
+    for (char& ch : word) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    auto say = [this](const std::string& text) { conn_->show_chat(text, 15); };
+    auto save = [this] {
+        config_.set("camera.iso_pitch", std::format("{:.1f}", glm::degrees(iso_settings_.pitch)));
+        config_.set("camera.iso_fov", std::format("{:.1f}", iso_settings_.fov_degrees));
+        config_.set("camera.iso_distance", std::format("{:.0f}", iso_camera_.distance));
+        config_.set_bool("camera.iso", iso());
+        config_.save(config_path_);
+    };
+    if (word.empty()) {
+        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}. "
+                        "Usage: /camera [iso|first|behind|toggle] or /camera pitch|fov|distance <value>",
+                        camera_type_, iso() ? " (isometric)" : "", glm::degrees(iso_settings_.pitch),
+                        iso_settings_.fov_degrees, iso_camera_.distance));
+        return;
+    }
+    if (word == "iso" || word == "isometric") {
+        set_camera_type(game::kCameraIsometric);
+    } else if (word == "first") {
+        set_camera_type(game::kCameraFirstPerson);
+    } else if (word == "behind") {
+        set_camera_type(game::kCameraFirstPerson);
+        set_view(true);
+    } else if (word == "toggle") {
+        set_camera_type(iso() ? game::kCameraFirstPerson : game::kCameraIsometric);
+        if (!iso()) set_view(true);
+    } else if (word == "pitch" || word == "fov" || word == "distance") {
+        std::string value = game::next_cmd_arg(rest);
+        float v = 0.0f;
+        if (value.empty() || float_from_chars(value.data(), value.data() + value.size(), v).ec != std::errc{}) {
+            say(std::format("Usage: /camera {} <value>", word));
+            return;
+        }
+        if (word == "pitch") iso_settings_.pitch = glm::radians(std::clamp(v, 20.0f, 89.0f));
+        else if (word == "fov") iso_settings_.fov_degrees = std::clamp(v, 10.0f, 90.0f);
+        else iso_camera_.distance = std::clamp(v, iso_settings_.min_distance, iso_settings_.max_distance);
+    } else {
+        say("Usage: /camera [iso|first|behind|toggle] or /camera pitch|fov|distance <value>");
+        return;
+    }
+    save();
 }
 
 void ClientApp::toggle_view() { set_camera_type(game::toggle_view_next(camera_type_)); }

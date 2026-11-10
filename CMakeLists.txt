@@ -400,6 +400,7 @@ add_library(hailstone_engine STATIC
   src/game/char_create_look.cpp
   src/game/char_select_camera.cpp
   src/game/cameras.cpp
+  src/game/iso_camera.cpp
   src/game/spawn_animation.cpp
   src/game/anim_layers.cpp
   src/game/hit_landing.cpp
@@ -1111,6 +1112,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/key_commands_test.cpp
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
+    tests/iso_camera_test.cpp
     tests/gamepad_bindings_test.cpp
     tests/anim_vectors_test.cpp
     tests/anim_layers_test.cpp

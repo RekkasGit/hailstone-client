@@ -72,6 +72,7 @@
 #include "game/race_models.h"
 #include "game/char_create_look.h"
 #include "game/cameras.h"
+#include "game/iso_camera.h"
 #include "game/char_select_camera.h"
 #include "game/eq_names.h"
 #include "game/mechanics/character.h"
@@ -595,6 +596,8 @@ public:
         view_ = game::compute_view_distance({}, opts_.clip_plane);
         camera_distance_ = opts_.camera_distance;
         camera_type_ = camera_distance_ > 0.0f ? game::kCameraWheelFollow : game::kCameraFirstPerson;
+        // The isometric camera when it was the one in use (hailstone.ini camera.iso, /camera).
+        if (config_.get_bool("camera.iso", false)) set_camera_type(game::kCameraIsometric);
         game::reset_camera_defaults(cameras_);
         if (!opts_.auto_user.empty()) {
             // Test logins never use the player's remembered server: a test account's password must not reach a
@@ -761,8 +764,11 @@ private:
     // CameraAngle = 0 in the first person camera is here, as the pitch is pitch_.
     void movement_command(int command, bool down, bool accept);
     // SetCameraType @0x48adf0 (game/cameras.h): another type than 6 puts the camera behind the player's distance
-    // to 0. TOGGLECAM's cycle (CDisplay::ToggleView) is game::toggle_view_next.
+    // to 0. TOGGLECAM's cycle (CDisplay::ToggleView) is game::toggle_view_next. Into or out of the isometric camera
+    // (7) the field of view changes to its own and back.
     void set_camera_type(int type);
+    // /camera (Hailstone's own): which camera, and the isometric camera's settings.
+    void camera_command(const std::string& args);
     // CDisplay::ToggleView @0x494160 (TOGGLECAM, the hot button's): the next camera of game::toggle_view_next.
     void toggle_view();
     // The gamepad's camera button (Hailstone's own): first person, or the camera behind the player at its last
@@ -1467,9 +1473,19 @@ private:
     float floor_offset_ = 0.0f;
     float camera_distance_ = 0.0f; // the camera behind the player's (6) distance; 0 outside it (the mouse wheel's)
     // CDisplay::cameraType (game/cameras.h): 0 first person, 1..5 the original's other cameras (cameras_), 6 the
-    // camera behind the player (camera_distance_ > 0).
+    // camera behind the player (camera_distance_ > 0), 7 the isometric camera (iso_camera_).
     int camera_type_ = game::kCameraFirstPerson;
     std::array<game::GameCamera, 6> cameras_;
+    // The isometric camera (game/iso_camera.h): its state, its settings (hailstone.ini camera.iso_*), the field of
+    // view the other cameras use while it has its own, and this frame's distance from the player (the view and the
+    // shadow cascades are measured from the player with it).
+    game::IsoCamera iso_camera_;
+    game::IsoCameraSettings iso_settings_;
+    float iso_saved_fov_ = game::kStockFovUnits;
+    float iso_focus_distance_ = 0.0f;
+    bool iso() const { return camera_type_ == game::kCameraIsometric; }
+    // Places camera_ for the isometric camera this frame, looking at the player drawn at `feet`.
+    void update_iso_camera(const glm::vec3& feet, float dt);
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)
     // The Options window's Max Camera Zoom sets it (10..150, saved); the NMS patch's /fov too (not saved).
     float max_camera_distance_ = kMaxCameraDistance;

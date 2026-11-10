@@ -65,7 +65,10 @@ void ClientApp::update_mouse_look() {
             // frame: the cursor itself comes back where the look took it, platform/mouse_capture.h.)
             right_click_ = up.click;
         }
-        if (left_pressed && (mouse_look_.active || !ui_.wants_mouse())) {
+        if (left_pressed && iso() && !ui_.wants_mouse()) {
+            // The isometric camera (Hailstone's own): the left button only clicks; it never starts a mouse look.
+            if (!mouse_look_.active) left_click_ = glm::vec2(in.mouse_x, in.mouse_y);
+        } else if (left_pressed && (mouse_look_.active || !ui_.wants_mouse())) {
             mouse_look_.left_down(options, camera6, now);
             // This client clicks at the press; during MouseTurnZoom's look the click waits for the release, as
             // CEverQuest::LMouseUp makes every click (held under 0x2ef ms, mouse look off by then).
@@ -85,6 +88,12 @@ void ClientApp::update_mouse_look() {
     // first person. The mouse's sideways motion turns the player only when it can move (the move flag), or the
     // camera alone in the camera 6 during a left-button look; its up and down motion tilts the view.
     if (!mouse_look_.active) return;
+    if (iso()) {
+        // The isometric camera: the right button's look turns the camera about the player, never the player.
+        game::iso_turn(iso_camera_, -in.mouse_dx * mouse_look_scale());
+        last_mouse_look_ = Clock::now();
+        return;
+    }
     const std::uint32_t stand = conn_->player_status().stand_state;
     const bool can_move = (stand == net::kStandStanding || stand == net::kStandCrouching) && !conn_->stunned();
     if (camera_type_ == game::kCameraFirstPerson && !can_move) return;
@@ -664,9 +673,11 @@ void ClientApp::update_player(float dt) {
         }
         abilities_test(mk);
         melee_test(mk);
-        mk.mouse_look = mouse_look_.active;
-        mk.both_buttons = mouse_look_.both_buttons;
-        mk.camera_index = camera_type_;
+        // The isometric camera's mouse look turns the camera alone: to the controls it is the camera behind the
+        // player (6) with no look, so the turn keys turn and the buttons do not run.
+        mk.mouse_look = mouse_look_.active && !iso();
+        mk.both_buttons = mouse_look_.both_buttons && !iso();
+        mk.camera_index = iso() ? game::kCameraWheelFollow : camera_type_;
         if (camera_type_ > game::kCameraFirstPerson && camera_type_ < game::kCameraWheelFollow) {
             const game::UserCamera& f = cameras_[camera_type_].f;
             mk.camera = {f.height, f.pitch, f.distance, f.heading};
@@ -924,7 +935,9 @@ void ClientApp::update_player(float dt) {
     for (const auto& st : frame_steps_) run_step(st);
     // The wheel (CEverQuest::MouseWheelHandler) is __ProcessMouseEvents', which stops at a locked interface. It
     // zooms between first person and the camera behind the player; in the cameras 1..5 it does nothing.
-    if (!ui_.wants_mouse() && mouse_wheel_zoom_ && !conn_->interface_locked() &&
+    if (!ui_.wants_mouse() && mouse_wheel_zoom_ && !conn_->interface_locked() && iso()) {
+        game::iso_zoom(iso_camera_, in.wheel, iso_settings_);
+    } else if (!ui_.wants_mouse() && mouse_wheel_zoom_ && !conn_->interface_locked() &&
         (camera_type_ == game::kCameraFirstPerson || camera_type_ == game::kCameraWheelFollow)) {
         camera_distance_ = std::clamp(camera_distance_ - in.wheel * 4.0f, 0.0f, max_camera_distance_);
         camera_type_ = camera_distance_ > 0.0f ? game::kCameraWheelFollow : game::kCameraFirstPerson;
@@ -942,7 +955,9 @@ void ClientApp::update_player(float dt) {
     camera_.pitch = std::clamp(pitch_ - behind * step_pitch_, -1.5f, 1.5f);
     glm::vec3 eye = eye_position() - (seated ? glm::vec3(0.0f) : behind * step_move_);
     camera_.position = eye;
-    if (camera_type_ > game::kCameraFirstPerson && camera_type_ < game::kCameraWheelFollow) {
+    if (iso()) {
+        update_iso_camera(feet_ - behind * step_move_, dt);
+    } else if (camera_type_ > game::kCameraFirstPerson && camera_type_ < game::kCameraWheelFollow) {
         update_game_camera(feet_ - behind * step_move_);
     } else if (camera_distance_ > 0.0f) {
         // Behind and above the player; stopped where scenery is in the way, as the cameras 1..5 are.

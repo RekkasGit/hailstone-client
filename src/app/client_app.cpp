@@ -288,6 +288,9 @@ int ClientApp::run() {
         if (in_world || pre_game) {
             fog_frame = scene_fog_frame(sky_hour, t);
             view_ = fog_frame->view;
+            // The isometric camera stands back from the player: the fog and the far plane are measured from the
+            // player (game::iso_view), so as much of the zone shows round them as in the other cameras.
+            if (iso()) view_ = game::iso_view(view_, iso_focus_distance_);
         }
         // What the renderers draw with: the original's view, or in the modern mode the longer one with its haze
         // (mouse picking keeps the original's yon).
@@ -372,9 +375,16 @@ int ClientApp::run() {
                 bool shadows = lighting_mode_ == render::LightingMode::Modern && vk_.shadows_enabled() &&
                                zone_renderer_ && glm::vec3(lighting.light) != glm::vec3(0.0f);
                 if (shadows) {
+                    // The isometric camera's cascades start a little short of the player, not at the lens.
+                    render::ShadowCamera shadow_view = camera_.shadow_camera(width, height);
+                    float shadow_distance = render::kShadowDistance;
+                    if (iso()) {
+                        shadow_view.near_plane = game::iso_shadow_near(iso_focus_distance_, shadow_view.near_plane);
+                        shadow_distance += iso_focus_distance_;
+                    }
                     auto cascades = render::fit_shadow_cascades(
-                        camera_.shadow_camera(width, height), glm::vec3(lighting.to_light),
-                        std::min(render::kShadowDistance, lit.far_plane), render::kShadowCasterReach, vk_.shadow_size());
+                        shadow_view, glm::vec3(lighting.to_light), std::min(shadow_distance, lit.far_plane),
+                        render::kShadowCasterReach, vk_.shadow_size());
                     render::set_shadows(lighting, cascades, vk_.shadow_size(), camera_.position, camera_.forward());
                 }
                 // Under the rain or snow, the zone seen from above: what is covered stays dry (render/cover_map.h).

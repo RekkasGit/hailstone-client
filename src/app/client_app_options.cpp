@@ -104,7 +104,7 @@ bool ClientApp::set_video_option(std::string_view name, int value) {
     } else if (name == "fov") {
         // Degrees across (below an aspect of 2); below 0 the original's 90 units (63.3 degrees).
         float units = value < 0 ? game::kStockFovUnits : std::clamp(static_cast<float>(value), 45.0f, 120.0f) / kDegreesPerFovUnit;
-        camera_.fov_units = units;
+        (iso() ? iso_saved_fov_ : camera_.fov_units) = units; // the isometric camera keeps its own until it is left
         config_.set("display.fov", value < 0 ? std::string() : std::format("{:.2f}", units));
     } else if (name == "ui_name") {
         if (value < 0 || value >= static_cast<int>(ui_packs_.size())) return true;
@@ -137,7 +137,7 @@ void ClientApp::apply_frame_options() {
     opts_.max_fps = max_fps_arg_ ? *max_fps_arg_ : std::max(0, config_.get_int("display.max_fps", 0)); // --max-fps first
     background_fps_ = background_fps_setting(config_.get_int("display.background_fps", 0));
     float fov = config_float("display.fov", 0.0f);
-    camera_.fov_units = fov > 0.0f ? fov : game::kStockFovUnits;
+    (iso() ? iso_saved_fov_ : camera_.fov_units) = fov > 0.0f ? fov : game::kStockFovUnits;
 }
 
 void ClientApp::apply_video_options() {
@@ -689,6 +689,11 @@ void ClientApp::apply_settings() {
         std::clamp(config_.get_int("display.max_camera_distance", static_cast<int>(kMaxCameraDistance)),
                    kMinCameraZoomSetting, kMaxCameraZoomSetting));
     camera_distance_ = std::min(camera_distance_, max_camera_distance_);
+    // The isometric camera's settings (game/iso_camera.h; /camera).
+    iso_settings_.pitch = glm::radians(std::clamp(config_float("camera.iso_pitch", 45.0f), 20.0f, 89.0f));
+    iso_settings_.fov_degrees = std::clamp(config_float("camera.iso_fov", 63.0f), 10.0f, 90.0f);
+    iso_camera_.distance = std::clamp(config_float("camera.iso_distance", iso_settings_.distance),
+                                      iso_settings_.min_distance, iso_settings_.max_distance);
     mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
     {
         // loadOptions: MousePointerSpeedMod 0..10, anything else 0.
