@@ -166,9 +166,10 @@ server doors (never spawned) still show no flame.
 ## Particles
 
 `render::ParticleRenderer` draws the particles of the spells, the actors' emitters and the zone's clouds as
-camera-facing quads built on the CPU from `game::ParticleSystem`; the emitters behave the same in both lightings. The
-classic lighting draws them as the EDD flags say: emitter by emitter, additive or alpha-blended, writing
-depth unless the definition turns that off. The modern lighting draws every particle of a renderer in one stream,
+quads built on the CPU from `game::ParticleSystem`; the emitters behave the same in both lightings, as the graphics
+DLL's update does (docs/formats/particles.md). The classic lighting draws them as the DLL does: emitter by emitter,
+additive or alpha-blended, none writing depth, nothing nearer than 2 units or beyond 500 along the view. The modern
+lighting draws them past 500 units (Hailstone's: its view reaches further). The modern lighting draws every particle of a renderer in one stream,
 sorted back to front by distance from the camera (the nearest kept when there are too many), with premultiplied
 blending so the additive ones (alpha 0) and the blended ones mix in that order, and without depth writes. It draws
 after `VkContext::begin_translucent`: a particle fades where it meets the scene (the depth copy) over a quarter of its
@@ -180,10 +181,12 @@ smoke (a texture with "smoke" in its name, the Luclin chimneys' `CSMOKE.DDS`) is
 night. Each renderer sorts only its own particles: the zone's clouds, the actors' and the spells' are still drawn one
 renderer after the other.
 
-The EDD's billboard mode (+0x70; `render::particle_basis`, this client's reading of the records' names) turns the
-quad: 0 faces the camera; 1 stands along the emitter's axis and turns about it towards the eye (rays, teleport
-columns, lopingplains' fire pits); 2 lies flat in the emitter's transverse plane (the gate spells' rune circles, the
-ice and crocus paths, gears, water rings), fading into what it lies on over a quarter unit instead of its size.
+The EDD's billboard mode (+0x70; `render::particle_corners`, as the DLL's quad builder places the corners) turns the
+quad: 0 faces the camera, turned clockwise on the screen by a spinning particle's rotation; 1 is a streak along the
+particle's axis, its length the particle's height, widened on the screen's x only (rays, teleport columns,
+lopingplains' fire pits); 2 lies flat on the world's horizontal plane, turned by the rotation (the gate spells' rune
+circles, the ice and crocus paths, gears, water rings), fading into what it lies on over a quarter unit instead of its
+size in the modern lighting. The depth offset (+0xd0) brings a quad that much nearer along the view.
 
 An EQG model's emitters started by an animation (`.prt` trigger 1; docs/formats/particles.md) start each time it
 starts or loops round on the actor (`ActorRenderer::drawn_playing`), after the entry's delay, and emit for about one
@@ -194,6 +197,14 @@ lands the spell, on players and NPCs alike. Stock EQEmu sends the landing only t
 (75 units) of the struck spawn, but the begin cast within `Range:BeginCast` (200), so between the two a bystander sees
 the caster's cast stage and no impact; the original client gets no more from the server. A server owner who wants
 the impact seen from further raises that rule.
+
+The server can also play an effect by its spellsnew.eff number on a spawn (OP_SpellEffect, OP_AddNimbusEffect;
+`game/spell_effect_timers.h`): a nimbus, such as an item's or a buff's aura of orbs or flames, is one. Its emitters ask
+for a forced 5,000 s, so it stays on the spawn until OP_RemoveNimbusEffect stops it (EQEmu sends that when the buff
+fades) or the zone changes. An effect that arrives before its spawn's model has loaded (a server resending the nimbuses
+as you zone in) keeps the point each emitter asks for and takes it once the model is drawn, at the spawn's place
+until then; the original's spawn always has its points. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
+does not see it, on the original client either.
 
 Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
 first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
@@ -335,7 +346,7 @@ across the view every 2.5 s (`--lighting modern`).
 
 The ring at the current target's feet (`render/target_ring_renderer.h`, `shaders/target_ring.frag`; its rules in
 `game/target_indicator.h`). Which ring shows, its colour and alpha (the default UI's TargetIndicator.ini section for
-the target's con) and its radius follow the original; how it is drawn and how it moves are Hailstone's own (the
+the target's con) and its radius (unless Max Size caps it, below) follow the original; how it is drawn and how it moves are Hailstone's own (the
 original turns four UV-animated circles).
 
 It is a decal on the scene's depth, drawn after `VkContext::begin_translucent` (the classic lighting, which has no
@@ -359,6 +370,11 @@ Options > Display "Target Ring" also sets the colour for each con, Gray to Red, 
 (`display.target_ring_color.<Section>`, RRGGBB, the ini's section names; Default Colors erases them and the ini's
 colours come back), and the **Opacity**, 25 .. 200 % of the section's alpha (`display.target_ring_opacity`, at most
 opaque). The free-target sections are not the player's to colour (`game::apply_ring_colors`).
+
+**Max Size** (`display.target_ring_max_size`, 4 .. 40 units, 0 off, the default) is a deliberate difference: it caps
+the radius, so a giant's or a dragon's ring (AvatarHeight times the model's scale, tens of units across) does not fill
+the screen. A ring smaller than the cap keeps its size; the band, dashes and chevron follow the capped radius
+(`game::cap_ring_radius`). Off, every ring is the original's size.
 
 ## Loading screen
 
@@ -1066,7 +1082,20 @@ The plates are a 2D overlay. Each name is drawn through a pipeline of ours (`app
 
 Where geometry hides a name its pixels are dropped; there is no ghost in the client. The viewer's `--plate-test-ghost A` can still draw the test names behind the scene with an alpha A (the shader's `extra.x`). The overlap fade is the option `plate_overlap_fade` (Options > Display "Fade Overlapping Names", `display.plate_overlap_fade`, default on); off, every name is drawn at full alpha, still nearer over farther.
 
-Every name stays at its natural projected head position. There is no stacking, distance fade, height timer or runtime tuning command in this version.
+Every name stays at its natural projected head position: 1.5 units above the top of its model, the plate's bottom edge there, so a larger name or more lines under it grow upward, off the head. A rider's head is measured from where it is drawn, its model's top in its mount's seat bone frame (`ActorRenderer::rider_top`), not from its spawn's place on the ground. There is no stacking, distance fade, height timer or runtime tuning command in this version.
+
+How the names' text looks is Hailstone's to choose (the original's name sprites have one fixed font), set in Options > Display "Name Plates" (`game/nameplate_style.h`, hailstone.ini keys `display.plate_*`, kept per character like the other display options). The defaults draw the names as before these options:
+
+| Option | Key | Default | What it does |
+|---|---|---|---|
+| `plate_font_face` | `display.plate_font_face` | empty | A font family from the system's (as /fontface lists them); empty, or a face not found, is the UI's font. |
+| `plate_font_size` | `display.plate_font_size` | 15 | Points at 100 % UI scale, 8 to 48. The names get a font of their own in the atlas at this size, so a large name is not an enlarged small one. |
+| `plate_font_bold` | `display.plate_font_bold` | 0 | The face's bold file; a face with none is struck twice, a pixel apart. |
+| `plate_edge` | `display.plate_edge` | 0 | 0 a drop shadow one pixel down and right, 1 a dark outline all round (thicker for larger names), 2 none. |
+| `plate_far_scale` | `display.plate_far_scale` | 100 | The size of a name at the plates' range (250 units), in % of its size; it falls evenly with the head's distance from the camera (`game::plate_distance_factor`), 25 to 100. 100 keeps every name one size. |
+| `plate_tag_scale` | `display.plate_tag_scale` | 100 | The lines under the name (a guild, an NPC's owner line) in % of the name's size, 50 to 100. |
+
+The overlap fade measures each name's box at the size it is drawn. A change rebuilds the font atlas at the next frame, as /fontface does.
 
 Names that overlap each other are drawn from the farthest to the nearest, so the nearer lies over the farther (a deliberate difference; the original's name sprites sort by depth and nothing more). What a nearer box covers fades to `game::kPlateCoveredAlpha` (0.1), by the largest share of its box that one nearer box covers: nothing under `game::kPlateFadeFrom` (10 %), all of it from `game::kPlateFadeTo` (20 %), smoothstep between (`game/nameplate_overlap.h`). The alpha follows its goal smoothly (tau 0.3 s). The target is never faded and stays at its projected head at full alpha.
 
@@ -1097,6 +1126,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.target_ring_color.<Section>` | RRGGBB | (TargetIndicator.ini's) | the target ring's colour for a con, Trivial .. Deadly (Target Ring) |
 | `display.target_ring_opacity` | 25 .. 200 | 100 | the target ring's alpha, in % of its con's |
 | `display.target_ring_glow` | 0 .. 100 | 50 | how bright the target ring's core shines |
+| `display.target_ring_max_size` | 0, 4 .. 40 | 0 | the target ring's largest radius in world units, 0 off (Max Size; a deliberate difference) |
 | `display.bloom` | 0 .. 1 | 0.5 | bright light spreading into its surroundings; modern only; viewer `--bloom N` |
 | `display.brightness` | -0.2 .. 0.2 | 0 | added after the tonemap, in display values (the UI is not graded) |
 | `display.contrast` | 0.5 .. 1.5 | 1 | around mid grey, after the tonemap |
@@ -1107,7 +1137,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.resolution` | WxH | the desktop's | the fullscreen mode (the closest the display has); in a window, the Options window's Resolution sets the window's size |
 | `display.vsync` | off, on, adaptive | on | the present mode: immediate (else mailbox), FIFO, FIFO relaxed; FIFO when the surface lacks one |
 | `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence |
-| `display.background_fps` | 0, 10 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`) |
+| `display.background_fps` | -1, 0, 1 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`; -1: nothing drawn, the Options window's "0"). Below 10 the loop runs on at 10 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is |
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |

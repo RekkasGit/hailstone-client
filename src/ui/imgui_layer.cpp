@@ -40,6 +40,10 @@ constexpr std::array<float, kChatFonts> kChatFontSizes = {10, 12, 14, 15, 16, 20
 constexpr std::array<bool, kChatFonts> kChatFontBold = {false, false, false, false, false, true, true, false, false, false, true};
 std::array<ImFont*, kChatFonts> g_chat_fonts{};
 float g_ui_scale = 1.0f; // the display scale the fonts were built for
+// The name plates' (ImGuiLayer::set_plate_font).
+ImFont* g_plate_font = nullptr;
+float g_plate_font_size = 15.0f;
+bool g_plate_faux_bold = false;
 
 // Metric-compatible Arial-class fonts first (plan section 2), then common sans fonts.
 // These are plain file paths; a missing file is simply skipped.
@@ -189,6 +193,9 @@ void ImGuiLayer::build_fonts() {
     io.Fonts->Clear();
     g_eq_fonts.fill(nullptr);
     g_chat_fonts.fill(nullptr);
+    g_plate_font = nullptr;
+    g_plate_font_size = std::round(plate_size_ * scale_);
+    g_plate_faux_bold = false;
     // Rasterise at the framebuffer density so text stays sharp on HiDPI screens.
     ImFontConfig cfg;
     cfg.RasterizerDensity = window_.pixel_density();
@@ -210,6 +217,8 @@ void ImGuiLayer::build_fonts() {
         io.Fonts->Clear();
         g_eq_fonts.fill(nullptr);
         g_chat_fonts.fill(nullptr);
+        g_plate_font = nullptr;
+        g_plate_faux_bold = plate_bold_;
         ImFontConfig def = cfg;
         def.SizePixels = std::round(13.0f * scale_);
         io.Fonts->AddFontDefault(&def);
@@ -237,6 +246,18 @@ void ImGuiLayer::build_fonts() {
             g_chat_fonts[i] = io.Fonts->AddFontFromFileTTF(utf8(file).c_str(),
                                                            std::round(kChatFontSizes[i] * scale_), &chat_cfg);
         }
+        // The name plates': their own face when its file is there, else the UI's; its bold file when bold is asked
+        // for, else the regular one struck twice (plate_font_faux_bold).
+        std::error_code ec;
+        const bool own = !plate_face_.empty() && std::filesystem::is_regular_file(plate_face_, ec);
+        const std::filesystem::path& regular = own ? plate_face_ : font;
+        std::filesystem::path plate_bold = own ? plate_face_bold_ : (bold == font ? std::filesystem::path() : bold);
+        if (!plate_bold.empty() && !std::filesystem::is_regular_file(plate_bold, ec)) plate_bold.clear();
+        const std::filesystem::path& file = plate_bold_ && !plate_bold.empty() ? plate_bold : regular;
+        g_plate_faux_bold = plate_bold_ && plate_bold.empty();
+        ImFontConfig plate_cfg;
+        plate_cfg.RasterizerDensity = window_.pixel_density();
+        g_plate_font = io.Fonts->AddFontFromFileTTF(utf8(file).c_str(), g_plate_font_size, &plate_cfg);
     }
     // A file that reads but is not a font the rasteriser can parse fails here, not when the texture is made.
     if (!io.Fonts->Build()) {
@@ -249,6 +270,16 @@ void ImGuiLayer::set_font_face(const std::filesystem::path& regular, const std::
     if (regular == face_ && bold == face_bold_) return;
     face_ = regular;
     face_bold_ = bold;
+    fonts_dirty_ = true;
+}
+
+void ImGuiLayer::set_plate_font(const std::filesystem::path& regular, const std::filesystem::path& bold, float size,
+                                bool bold_face) {
+    if (regular == plate_face_ && bold == plate_face_bold_ && size == plate_size_ && bold_face == plate_bold_) return;
+    plate_face_ = regular;
+    plate_face_bold_ = bold;
+    plate_size_ = size;
+    plate_bold_ = bold_face;
     fonts_dirty_ = true;
 }
 
@@ -454,6 +485,10 @@ ImFont* chat_font(int index) {
 float chat_font_size(int index) {
     return index >= 0 && index < static_cast<int>(kChatFonts) ? kChatFontSizes[static_cast<std::size_t>(index)] : 0.0f;
 }
+
+ImFont* plate_font() { return g_plate_font; }
+float plate_font_size() { return g_plate_font_size; }
+bool plate_font_faux_bold() { return g_plate_faux_bold; }
 
 ImFont* eq_font(int index) {
     return index >= 1 && index < static_cast<int>(kEqFontSizes.size()) ? g_eq_fonts[static_cast<std::size_t>(index)]

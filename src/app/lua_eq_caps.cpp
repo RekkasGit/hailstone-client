@@ -57,6 +57,7 @@ constexpr Entry kCalls[] = {
     {"HotBarMenu", 0}, {"ChatWindows", 0}, {"ChatText", 0}, {"ChatHistory", 0}, {"ChatInfo", 0}, {"ChatFilters", 0},
     {"ChatDefaultChannels", 0}, {"ChatTellWindows", 0}, {"ChatHitModes", 0}, {"ChatMenu", 0}, {"CharacterStats", 0},
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
+    {"DisplaySpellId", 0}, {"DisplayItemData", 0},
     {"SpellSets", 0}, {"DrawMap", 0}, {"MapZoom", 0}, {"MapMouseDown", 0}, {"MapMouseUp", 0}, {"MapPanReset", 0},
     {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
     {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},

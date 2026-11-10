@@ -920,7 +920,8 @@ teleport index request and wait 300, do-teleport-B 2000, zone player to bind 120
   same zone (the whole dword with the instance): death music off, rewind reset, the position list sent, no move;
   another zone: MoveToZone(zone, save 1, reason 10, x, y, z, (int)heading, -1, -1, 0).
 - The respawn window's Select waits for the packet's +8 delay and is disabled once chosen; it sends {u32 option}.
-- Camp: sits, OP_Camp, 12293; 12684 every 5 s; a second /camp or a position change cancels it (12290), any other
+- Camp: sits, OP_Camp, 12293; 12684 every 5 s; a second /camp or a position change (the Stand button, the sit key,
+  moving forward while sitting) cancels it (12290), any other
   stand 12683; it never looks at an open trade. At the end the position history goes (when not riding), then
   OP_Logout.
   Enhancement (option `fast_camp`, hailstone.ini `game.fast_camp`, Options > General "Fast Camp", off by default):

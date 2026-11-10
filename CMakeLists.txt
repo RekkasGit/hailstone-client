@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 # The oldest macOS a build runs on (set before project()). 13.3 is the first whose libc++ formats floating-point
 # numbers (std::format of a float, std::to_chars), which the client uses; the bundled MoltenVK needs 12.0.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the build runs on")
-project(hailstone VERSION 0.6.0 LANGUAGES C CXX)
+project(hailstone VERSION 0.7.0 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
 set(HAILSTONE_VERSION_LABEL "beta")
@@ -374,6 +374,7 @@ add_library(hailstone_engine STATIC
   src/game/scene_light.cpp
   src/game/cloud_patches.cpp
   src/game/particles.cpp
+  src/game/spell_effect_timers.cpp
   src/game/sine_table.cpp
   src/game/collision.cpp
   src/nav/nav_mesh.cpp
@@ -472,6 +473,7 @@ add_library(hailstone_engine STATIC
   src/game/cursor_drop.cpp
   src/game/item_options.cpp
   src/game/nameplate_overlap.cpp
+  src/game/nameplate_style.cpp
   src/game/option_commands.cpp
   src/game/output_file.cpp
   src/ui/lua/lua_host.cpp
@@ -1004,6 +1006,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_slot_info_test.cpp
     tests/social_editor_test.cpp
     tests/app_frame_work_test.cpp
+    tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp
@@ -1043,6 +1046,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/combat_test.cpp
     tests/plate_test_test.cpp
     tests/nameplate_overlap_test.cpp
+    tests/nameplate_style_test.cpp
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
@@ -1076,6 +1080,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mock_placement_test.cpp
     tests/sky_test.cpp
     tests/particles_test.cpp
+    tests/spell_effect_timers_test.cpp
     tests/wld_particles_test.cpp
     tests/wld_detail_test.cpp
     tests/movement_test.cpp

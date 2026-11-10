@@ -220,6 +220,40 @@ int SpellDetails(lua_State* L) {
     return 2;
 }
 
+// The actual display instance, not a lookup by its (possibly non-unique) title.
+int DisplaySpellId(lua_State* L) {
+    lua_Integer n = luaL_checkinteger(L, 1);
+    const auto& displays = host(L).spell_displays;
+    if (n < 1 || static_cast<lua_Unsigned>(n) > displays.size()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, displays[static_cast<std::size_t>(n - 1)].first);
+    return 1;
+}
+
+int DisplayItemData(lua_State* L) {
+    lua_Integer n = luaL_checkinteger(L, 1);
+    const auto* displays = host(L).item_displays;
+    if (!displays || n < 1 || static_cast<lua_Unsigned>(n) > displays->size()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const auto& item = (*displays)[static_cast<std::size_t>(n - 1)];
+    lua_createtable(L, 0, 10);
+    set_int(L, "id", item.id);
+    set_int(L, "icon", item.icon);
+    set_str(L, "name", item.name);
+    set_str(L, "lore", item.lore);
+    set_int(L, "value", item.value);
+    set_int(L, "stack_count", item.stack_count);
+    set_int(L, "damage", item.damage);
+    set_int(L, "delay", item.delay);
+    set_int(L, "item_type", item.item_type);
+    set_int(L, "favor", item.favor);
+    return 1;
+}
+
 int SpellSets(lua_State* L) {
     auto& h = host(L);
     lua_createtable(L, game::kSpellLoadouts, 0);
@@ -314,7 +348,8 @@ void register_spellbook_api(lua_State* L, EqHost& h) {
                                    {"SpellIcon", SpellIcon},       {"SpellBookClick", SpellBookClick},
                                    {"SpellBookMemorize", SpellBookMemorize}, {"ShowSpell", ShowSpell},
                                    {"SpellBookSwap", SpellBookSwap},
-                                   {"SpellDetails", SpellDetails},
+                                   {"SpellDetails", SpellDetails}, {"DisplaySpellId", DisplaySpellId},
+                                   {"DisplayItemData", DisplayItemData},
                                    {"SpellSets", SpellSets},       {"SaveSpellSet", SaveSpellSet},
                                    {"MemorizeSpellSet", MemorizeSpellSet}, {"DeleteSpellSet", DeleteSpellSet},
                                    {"EditSpellSet", EditSpellSet},

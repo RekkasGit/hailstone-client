@@ -709,6 +709,12 @@ const assets::CharacterModel* ActorRenderer::drawn_model(std::uint32_t id) const
     return it == last_draws_.end() ? nullptr : it->second.model;
 }
 
+const assets::CharacterModel* ActorRenderer::spawn_model(std::uint32_t id) const {
+    if (const assets::CharacterModel* m = drawn_model(id)) return m;
+    auto it = spawns_.find(id);
+    return it == spawns_.end() ? nullptr : it->second.model.get();
+}
+
 const assets::CharacterMesh* ActorRenderer::drawn_mesh(std::uint32_t id) const {
     auto it = last_draws_.find(id);
     return it == last_draws_.end() ? nullptr : it->second.mesh;
@@ -755,6 +761,13 @@ bool ActorRenderer::drawn_bone(std::uint32_t id, int bone, glm::mat4& world) con
     return it != last_draws_.end() && bone_world(it->second, bone, world);
 }
 
+bool ActorRenderer::drawn_transform(std::uint32_t id, glm::mat4& world) const {
+    auto it = last_draws_.find(id);
+    if (it == last_draws_.end() || !it->second.model) return false;
+    world = instance_matrix(it->second);
+    return true;
+}
+
 bool ActorRenderer::bone_world(const ActorDraw& a, int bone, glm::mat4& world) {
     if (!a.model || !a.clip || bone < 0) return false;
     std::vector<assets::BonePose> local, previous;
@@ -783,6 +796,17 @@ bool ActorRenderer::seat_rider(const ActorDraw& mount, ActorDraw& rider, const g
     rider.attached = true;
     rider.position = glm::vec3(rider.parent[3]); // bounds and culling
     return true;
+}
+
+bool ActorRenderer::rider_top(const ActorDraw& a, glm::vec3& top) {
+    if (!a.attached || !a.model) return false;
+    top = glm::vec3(a.parent * glm::vec4(0.0f, 0.0f, a.model->bounds_max.z, 1.0f));
+    return true;
+}
+
+bool ActorRenderer::drawn_rider_top(std::uint32_t id, glm::vec3& top) const {
+    auto it = last_draws_.find(id);
+    return it != last_draws_.end() && rider_top(it->second, top);
 }
 
 bool ActorRenderer::spawn_pose(std::uint32_t id, SpawnPose& out) const {

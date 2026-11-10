@@ -2,6 +2,7 @@
 // frame settings (window mode, resolution, vertical sync, frame caps, field of view, UI scale).
 
 #include "app/client_app_internal.h"
+#include "app/frame_pace.h"
 #include "game/appearance.h"
 
 namespace hailstone::app {
@@ -94,10 +95,12 @@ bool ClientApp::set_video_option(std::string_view name, int value) {
         int v = std::clamp(value, 0, 2);
         config_.set("display.vsync", kVsyncModes[v]);
         vk_.set_vsync(static_cast<render::VkContext::Vsync>(v));
-    } else if (name == "max_fps" || name == "background_fps") {
-        int fps = value <= 0 ? 0 : std::clamp(value, 10, 1000);
-        (name == "max_fps" ? opts_.max_fps : background_fps_) = fps;
-        config_.set_int(name == "max_fps" ? "display.max_fps" : "display.background_fps", fps);
+    } else if (name == "max_fps") {
+        opts_.max_fps = value <= 0 ? 0 : std::clamp(value, 10, 1000);
+        config_.set_int("display.max_fps", opts_.max_fps);
+    } else if (name == "background_fps") {
+        background_fps_ = background_fps_setting(value);
+        config_.set_int("display.background_fps", background_fps_);
     } else if (name == "fov") {
         // Degrees across (below an aspect of 2); below 0 the original's 90 units (63.3 degrees).
         float units = value < 0 ? game::kStockFovUnits : std::clamp(static_cast<float>(value), 45.0f, 120.0f) / kDegreesPerFovUnit;
@@ -132,7 +135,7 @@ void ClientApp::apply_frame_options() {
     vk_.set_vsync(static_cast<render::VkContext::Vsync>(
         index_of(kVsyncModes, 3, config_.get_string("display.vsync", "on"), 1)));
     opts_.max_fps = max_fps_arg_ ? *max_fps_arg_ : std::max(0, config_.get_int("display.max_fps", 0)); // --max-fps first
-    background_fps_ = std::max(0, config_.get_int("display.background_fps", 0));
+    background_fps_ = background_fps_setting(config_.get_int("display.background_fps", 0));
     float fov = config_float("display.fov", 0.0f);
     camera_.fov_units = fov > 0.0f ? fov : game::kStockFovUnits;
 }
@@ -287,6 +290,16 @@ void ClientApp::apply_font_face() {
     ui_.set_font_face(files.regular, files.bold);
 }
 
+void ClientApp::apply_plate_font() {
+    ui::FontFiles files;
+    if (!plate_style_.face.empty()) {
+        files = ui::find_font_family(font_faces(), plate_style_.face);
+        if (files.regular.empty()) files.regular = files.bold; // a face with only a bold file
+        if (files.regular.empty()) log::warn("fonts: no face \"{}\" for the name plates; the UI's font stays", plate_style_.face);
+    }
+    ui_.set_plate_font(files.regular, files.bold, static_cast<float>(plate_style_.size), plate_style_.bold);
+}
+
 std::vector<std::string> ClientApp::option_choices(std::string_view name) const {
     std::vector<std::string> out;
     // The texture packs (display.texture_folder): "Off", then each folder of textures/.
@@ -297,6 +310,11 @@ std::vector<std::string> ClientApp::option_choices(std::string_view name) const 
     // The Options window's font list (EnumerateSystemFonts): "Default" (the Arial-class font), then every family.
     if (name == "font_face") {
         out.push_back("Default");
+        for (auto& f : ui::font_families(font_faces())) out.push_back(f);
+    }
+    // The name plates' font list: "Same as UI", then every family.
+    if (name == "plate_font_face") {
+        out.push_back("Same as UI");
         for (auto& f : ui::font_families(font_faces())) out.push_back(f);
     }
     // The asset folder the game runs with (one entry; "asset_folder_pick" changes it on the login screen).
@@ -351,6 +369,16 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "plate_overlap_fade") return plate_overlap_fade_ ? 1 : 0;
     // Hailstone: the target's name is not hidden by walls (draw_nameplates), off by default.
     if (o == "target_plate_through_walls") return target_plate_through_walls_ ? 1 : 0;
+    // Hailstone: the name plates' text (game/nameplate_style.h); the face is its place in
+    // option_choices("plate_font_face"), 0 the UI's, -1 one not in the list.
+    if (auto v = game::plate_style_option(plate_style_, o)) return v;
+    if (o == "plate_font_face") {
+        if (plate_style_.face.empty()) return 0;
+        auto choices = option_choices("plate_font_face");
+        for (std::size_t i = 1; i < choices.size(); ++i)
+            if (game::same_no_case(choices[i], plate_style_.face)) return static_cast<int>(i);
+        return -1;
+    }
     // Hailstone: the hot button states the original leaves out (game/hot_button_state.h), on by default.
     if (o == "hotbutton_extras") return config_.get_bool("ui.hotbutton_extras", true) ? 1 : 0;
     // Hailstone: the layout copy window offered at a character's first entry (app/lua_eq_layout.cpp), on by default.
@@ -396,6 +424,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "master") return s.master;
     if (o == "music") return s.music;
     if (o == "effects") return s.effects;
+    if (o == "npc_hits") return s.npc_hits;
     if (o == "realism") return s.realism;
     if (o == "environment") return s.environment ? 1 : 0;
     if (o == "combat_music") return s.combat_music ? 1 : 0;
@@ -499,6 +528,17 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         config_.save(config_path_);
         return;
     }
+    if (o == "plate_font_face") {
+        auto choices = option_choices("plate_font_face");
+        if (v < 0 || v >= static_cast<int>(choices.size())) return;
+        plate_style_.face = v == 0 ? std::string() : choices[static_cast<std::size_t>(v)];
+    }
+    if (o == "plate_font_face" || game::set_plate_style_option(plate_style_, o, v)) {
+        game::store_plate_style(plate_style_, config_);
+        config_.save(config_path_);
+        apply_plate_font();
+        return;
+    }
     if (o == "target_plate_highlight") {
         target_plate_highlight_ = v != 0;
         config_.set_bool("display.target_plate_highlight", v != 0);
@@ -589,6 +629,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     if (o == "master") s.master = percent;
     else if (o == "music") s.music = percent;
     else if (o == "effects") s.effects = percent;
+    else if (o == "npc_hits") s.npc_hits = percent;
     else if (o == "realism") s.realism = percent;
     else if (o == "environment") s.environment = v != 0;
     else if (o == "combat_music") s.combat_music = v != 0;
@@ -639,6 +680,8 @@ void ClientApp::apply_settings() {
     viewport_.reset();
     if (auto text = config_.get("display.viewport")) viewport_ = game::parse_viewport(*text);
     apply_font_face();
+    plate_style_ = game::load_plate_style(config_);
+    apply_plate_font();
     actor_clip_plane_ = std::max(config_.get_int("display.actor_clip_plane", game::kDefaultActorClipPlane), 0);
     mouse_invert_y_ = config_.get_bool("mouse.invert_y", false);
     mouse_wheel_zoom_ = config_.get_bool("mouse.wheel_zoom", true);

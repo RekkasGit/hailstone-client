@@ -187,6 +187,9 @@ public:
     // __GetLabelFromEQ(type): may replace the stock text (in game only).
     virtual void label_text(const net::GameConnection&, int, std::string&) const {}
 
+    // The text of a world nameplate, after its stock name and marks have been assembled.
+    virtual void nameplate_text(const net::GameConnection&, const Spawn&, std::string&) const {}
+
     // ---- the extended target list (net/game_connection_group.cpp, app/lua_eq_player.cpp) ----
     // True = the slot is left out on this side: no row in the window, not targeted by a click, the slot keys or
     // the cycle key, not taken by /xtarget add (GameConnection::xtarget_slot_hidden). The slot keeps its number.

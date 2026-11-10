@@ -81,6 +81,16 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
     if (!plate_layer_) plate_layer_ = std::make_unique<NameplateLayer>(vk_, shader_dir_);
     plate_layer_->begin(frame, dl, glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h), camera_.near_plane,
                         far_plane);
+    // Hailstone (game/nameplate_style.h): the name plates' own font, size, edge and tag size.
+    {
+        NameplateDrawStyle style;
+        style.font = ui::plate_font();
+        style.size = ui::plate_font_size();
+        style.faux_bold = ui::plate_font_faux_bold();
+        style.edge = plate_style_.edge;
+        style.tag_scale = static_cast<float>(plate_style_.tag_scale) / 100.0f;
+        plate_layer_->set_style(style);
+    }
     plate_count_ = 0;
     for (const auto& [id, s] : world.spawns) {
         if (market_hidden_.contains(id)) continue; // IsInvisible: Hide Traders / Hide Buyers
@@ -105,7 +115,11 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
                       render::ActorRenderer::model_z_offset(*model, s.heights.model_scale, world.height_tables.get());
         }
         glm::vec3 head = base + glm::vec3(0, 0, top + 1.5f);
-        if (glm::distance(head, camera_.position) > kNameplateRange) continue;
+        // A rider sits on its mount's seat bone, well above its spawn's place: its head from there.
+        if (glm::vec3 seated; actor_renderer_ && actor_renderer_->drawn_rider_top(id, seated))
+            head = seated + glm::vec3(0, 0, 1.5f);
+        const float head_distance = glm::distance(head, camera_.position);
+        if (head_distance > kNameplateRange) continue;
         glm::vec4 clip = view_proj * glm::vec4(head, 1.0f);
         if (clip.w <= 0.1f) continue;
         glm::vec2 ndc(clip.x / clip.w, clip.y / clip.w);
@@ -128,10 +142,13 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         if (!s.title.empty() && (!player || level > 3)) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
+        conn_->server_ext().nameplate_text(*conn_, s, label);
         plate.pos = glm::vec2(px, py);
         plate.depth = clip.w;
         plate.lines.clear();
         plate.alpha = 1.0f;
+        // Hailstone (option plate_far_scale): a farther name drawn smaller.
+        plate.scale = game::plate_distance_factor(head_distance, kNameplateRange, plate_style_.far_scale);
         plate.target = id == world.target_id;
         plate.highlight = plate.target && target_plate_highlight_;
         plate.through_walls = !game::plate_hidden_by_scene(plate.target, target_plate_through_walls_);
@@ -163,8 +180,10 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
     // fades toward a tenth of its alpha, smoothly (tau 0.3 s). The target stays at full alpha at its projected head.
     plate_boxes_.clear();
     for (std::size_t i = 0; i < plate_count_; ++i) {
-        const NameplateText& p = plates_[i].plate;
-        const glm::vec2 size = NameplateLayer::size_of(p);
+        NameplateText& p = plates_[i].plate;
+        const glm::vec2 size = plate_layer_->size_of(p);
+        // Hailstone: the plate's bottom edge at the head, so a larger name (or more lines) grows upward, off the head.
+        p.pos.y -= size.y;
         plate_boxes_.push_back({p.pos.x - size.x * 0.5f, p.pos.y, p.pos.x + size.x * 0.5f, p.pos.y + size.y, p.depth,
                                 p.target});
     }

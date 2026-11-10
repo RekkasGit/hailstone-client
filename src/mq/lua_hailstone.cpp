@@ -156,8 +156,9 @@ void push_item(lua_State* L, const net::Item& it, const net::GameConnection* c =
     }
 }
 
-void push_spawn(lua_State* L, const game::Spawn& s) {
-    lua_createtable(L, 0, 18);
+// Writes a spawn's fields into the table on top of the stack, every one of them, so a reused table keeps nothing of
+// the spawn it held before.
+void fill_spawn(lua_State* L, const game::Spawn& s) {
     set_int(L, "id", s.id);
     set_str(L, "name", s.name);
     set_int(L, "level", s.level);
@@ -176,6 +177,25 @@ void push_spawn(lua_State* L, const game::Spawn& s) {
     set_bool(L, "mercenary", s.mercenary);
     set_bool(L, "gm", s.gm);
     set_int(L, "body_type", s.properties.empty() ? 0 : s.properties[0]);
+}
+
+void push_spawn(lua_State* L, const game::Spawn& s) {
+    lua_createtable(L, 0, 18);
+    fill_spawn(L, s);
+}
+
+// The spawn as one table the state keeps and refills (the registry holds it), for a hook that runs for every name
+// plate every frame: no table made and collected per plate. It is valid during the call only; a script that keeps
+// it sees it change.
+char g_spawn_scratch_key;
+void push_spawn_scratch(lua_State* L, const game::Spawn& s) {
+    if (lua_rawgetp(L, LUA_REGISTRYINDEX, &g_spawn_scratch_key) != LUA_TTABLE) {
+        lua_pop(L, 1);
+        lua_createtable(L, 0, 18);
+        lua_pushvalue(L, -1);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, &g_spawn_scratch_key);
+    }
+    fill_spawn(L, s);
 }
 
 void push_slot(lua_State* L, const net::ItemSlot& slot) {
@@ -433,6 +453,13 @@ public:
     void label_text(const net::GameConnection&, int id, std::string& text) const override {
         if (!hook("label")) return;
         lua_pushinteger(L(), id);
+        lua_pushlstring(L(), text.data(), text.size());
+        if (!run(2)) return;
+        if (auto t = string_result()) text = *t;
+    }
+    void nameplate_text(const net::GameConnection&, const game::Spawn& spawn, std::string& text) const override {
+        if (!hook("nameplate")) return;
+        push_spawn_scratch(L(), spawn);
         lua_pushlstring(L(), text.data(), text.size());
         if (!run(2)) return;
         if (auto t = string_result()) text = *t;
@@ -895,6 +922,31 @@ int l_spell(lua_State* L) {
     set_int(L, "skill", s->skill);
     set_bool(L, "is_skill", s->is_skill);
     set_int(L, "gem_icon", s->gem_icon);
+    set_num(L, "range", s->range);
+    set_num(L, "ae_range", s->ae_range);
+    set_num(L, "push_back", s->push_back);
+    set_int(L, "duration_formula", s->duration_formula);
+    set_int(L, "duration_cap", s->duration_cap);
+    set_int(L, "spell_type", s->spell_type);
+    set_int(L, "resist", s->resist);
+    set_int(L, "resist_adj", s->resist_adj);
+    set_int(L, "spell_icon", s->spell_icon);
+    set_int(L, "category", s->category);
+    set_int(L, "subcategory", s->subcategory);
+    set_str(L, "cast_on_you", s->cast_on_you);
+    set_str(L, "cast_on_other", s->cast_on_other);
+    set_str(L, "wear_off", s->wear_off);
+    lua_createtable(L, 12, 0);
+    for (std::size_t i = 0; i < s->effect.size(); ++i) {
+        lua_createtable(L, 0, 5);
+        set_int(L, "effect", s->effect[i]);
+        set_int(L, "base", s->base[i]);
+        set_int(L, "base2", s->base2[i]);
+        set_int(L, "max", s->max[i]);
+        set_int(L, "formula", s->formula[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "effects");
     return 1;
 }
 

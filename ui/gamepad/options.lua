@@ -182,11 +182,30 @@ local PAGES = {
       local x = optionRow(o[1], o[2], "bool")
       if x then rows[#rows + 1] = x end
     end
+    -- The name plates' text (game/nameplate_style.h).
+    local faces = eq.OptionChoices("plate_font_face")
+    if faces and #faces > 0 then
+      local x = optionRow("Name font", "plate_font_face", faces)
+      if x then rows[#rows + 1] = x end
+    end
+    for _, o in ipairs({ { "Name size", "plate_font_size", { 8, 48, 1, " pt" } }, { "Bold names", "plate_font_bold", "bool" },
+        { "Name edge", "plate_edge", { "Shadow", "Outline", "None" } },
+        { "Name size at distance", "plate_far_scale", { 25, 100, 5, " %" } },
+        { "Guild and owner lines", "plate_tag_scale", { 50, 100, 5, " %" } } }) do
+      local x = optionRow(o[1], o[2], o[3])
+      if x then rows[#rows + 1] = x end
+    end
     for _, o in ipairs({ { "Target ring opacity", "target_ring_opacity", { 25, 200, 25, " %" } },
         { "Target ring glow", "target_ring_glow", { 0, 100, 10, " %" } } }) do
       local x = optionRow(o[1], o[2], o[3])
       if x then rows[#rows + 1] = x end
     end
+    -- The ring's Max Size (game::cap_ring_radius): 4 .. 40 units, or Off (0), the original's size.
+    local sizeNames, sizeValues = {}, {}
+    for v = 4, 40 do sizeNames[#sizeNames + 1] = tostring(v); sizeValues[#sizeValues + 1] = v end
+    sizeNames[#sizeNames + 1] = "Off"; sizeValues[#sizeValues + 1] = 0
+    local x = optionRow("Target ring max size", "target_ring_max_size", sizeNames, sizeValues)
+    if x then rows[#rows + 1] = x end
     return rows
   end },
   { "Game", function()
@@ -233,10 +252,11 @@ local PAGES = {
       optionRow("Master volume", "master", { 0, 100, 5, " %" }),
       optionRow("Music", "music", { 0, 100, 5, " %" }),
       optionRow("Sound effects", "effects", { 0, 100, 5, " %" }),
+      optionRow("NPC hit sounds", "npc_hits", { 0, 100, 5, " %" }),
       optionRow("Environment sounds", "environment", "bool"),
       optionRow("Combat music", "combat_music", "bool"),
     }
-    for i = 1, 6 do if list[i] then rows[#rows + 1] = list[i] end end
+    for i = 1, 7 do if list[i] then rows[#rows + 1] = list[i] end end
     return rows
   end },
   -- The plugins' options (eq.PluginOptions; docs/plugins.md "Plugin windows"): a switch, or left / right over its range.
