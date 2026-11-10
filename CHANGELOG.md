@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0-beta (2026-11-09)
+
 - Spell effects move and look as on the original client: flames pulled in to a spell's centre now vanish there instead of piling into a bright column (Burst of Flame), offsets put each effect where it belongs, effects turn with the spawn they are on, the wind drifts smoke steadily, rays are drawn as streaks along their direction and rune circles lie flat on the ground. At a lower Spell Particle Density effects keep at least 16 particles a burst, as on the original, rather than thinning out. In the classic lighting, particles more than 500 units away are no longer drawn, as on the original
 - Nimbus effects show: a spell or item with a nimbus (the orbs, flames or petals that surround the caster while its buff lasts, such as Nimbus of Discordant Souls) now draws it on the caster until the buff fades. Other effects the server plays on a spawn by number show as well
 - Options > Display "Target Ring" has a **Max Size** slider: it limits how big the ring gets, so a giant's or a dragon's no longer fills the screen. Smaller rings keep their size. All the way right is Off, the default, which leaves every ring as before
