@@ -709,6 +709,12 @@ const assets::CharacterModel* ActorRenderer::drawn_model(std::uint32_t id) const
     return it == last_draws_.end() ? nullptr : it->second.model;
 }
 
+const assets::CharacterModel* ActorRenderer::spawn_model(std::uint32_t id) const {
+    if (const assets::CharacterModel* m = drawn_model(id)) return m;
+    auto it = spawns_.find(id);
+    return it == spawns_.end() ? nullptr : it->second.model.get();
+}
+
 const assets::CharacterMesh* ActorRenderer::drawn_mesh(std::uint32_t id) const {
     auto it = last_draws_.find(id);
     return it == last_draws_.end() ? nullptr : it->second.mesh;

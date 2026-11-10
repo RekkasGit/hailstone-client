@@ -218,6 +218,9 @@ public:
     // (the bone's frame: the matrix a held item or a model point hangs from); false when the spawn was not
     // drawn with a model or the bone is out of range.
     const assets::CharacterModel* drawn_model(std::uint32_t id) const;
+    // The model a spawn wears whether or not it was drawn (drawn_model's, else the one kept for a spawn hidden on
+    // purpose, such as the player in first person); nullptr when it has none yet.
+    const assets::CharacterModel* spawn_model(std::uint32_t id) const;
     // The dressed mesh it was drawn with (nullptr: none, or the model's default geometry).
     const assets::CharacterMesh* drawn_mesh(std::uint32_t id) const;
     bool drawn_bone(std::uint32_t id, int bone, glm::mat4& world) const;
