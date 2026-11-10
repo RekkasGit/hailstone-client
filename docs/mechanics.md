@@ -735,6 +735,18 @@ find affect slot 1600). Each record is replayed call for call against the record
   sitting player (110), so a feigned one stays down until /sit or /stand (CEverQuest::Sit: anything but standing or
   ducking stands up). The client hands ProcessControls the feigned state as 115 (`CharacterInput::lying`).
 
+## The merchant's "Show only items I can use"
+
+The merchant window's purchase page has a check box, MW_UsableButton, ticked when the window is made (CMerchantWnd's
+constructor: SetCheck(1), and PurchasePageHandler +0x60 cleared). While it is ticked, the list
+(PurchasePageHandler::UpdateList @0x6f0bb0, `game::merchant_usable_hides`) leaves out a common item (item class 0)
+whose class mask lacks the character's class or whose race mask lacks the race's bit (0x6f7160: races below 13 as they
+are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll whose spell is in the book, or
+whose group has a higher rank in the book (from the top rank down while above the scroll's). Bags and books always
+show. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the list; the state lasts
+for the session. The modern pack's box is "Usable only" beside "Affordable only"; the gamepad pack's Buy page switches
+it with X.
+
 ## Kept items: Hailstone's Keep mark
 
 A deliberate difference, with no counterpart in the original: the Advanced Inventory window (Hailstone's own,
