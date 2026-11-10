@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- For server admins: Hailstone's own packets moved to opcodes 0x1430-0x1435 (guild invitation 0x1430/0x1431, settings 0x1432/0x1433, server files 0x1434/0x1435), away from Project Triune's custom opcodes, which now use 0x1422. Update `server/quests/global/encounters/hailstone.lua` on the server together with the client
+
 - Nothing updates unless you ask. A new Hailstone release is shown on the login screen but downloads only when you press **Download** (set `update.download=1` in hailstone.ini to have it download by itself, as before). An update an older version downloaded on its own is no longer installed when you quit; **Restart now** installs it
 - Add-ons: auto-update is off unless you switch it on in an add-on's row. Add-ons installed before this version had it switched on without asking, so it now starts off for them too; **Check for updates** still shows newer versions, and **Update** takes them
 
