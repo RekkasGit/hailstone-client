@@ -127,7 +127,13 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
             glm::mat4 t;
             if (actors->drawn_transform(id, t)) a.actor_axes = glm::mat3(t);
         }
-        // Without its model drawn, a pointed emitter keeps to the spawn's place.
+        // A point the model turned out not to have (asked for before it loaded): point 0, as the slot's own fallback
+        // would have chosen. Without its model drawn, a pointed emitter keeps to the spawn's place.
+        if (pt > 0 && !a.position && actors)
+            if (auto m = point_world(*actors, id, 0)) {
+                a.position = glm::vec3((*m)[3]);
+                a.axes = glm::mat3(*m);
+            }
         if (pt >= 0 && !a.position) a.position = position(id);
         return a;
     });
@@ -243,8 +249,10 @@ std::optional<game::StageActor> SpellParticles::stage_actor(const net::GameConne
     a.height = s.heights.height; // Height (+0x13c): the size, or racedata's default
     // The points are the model's, drawn or not: a spawn not drawn this frame (the player in first person, one out of
     // view) still has them in the original, and an emitter made without a point would stay where it was made.
+    a.model_known = false;
     if (actors)
         if (const assets::CharacterModel* model = actors->spawn_model(id)) {
+            a.model_known = true;
             a.points = spell_points_.of(*model).mask;
             if (auto chest = point_world(*actors, id, 1)) a.chest = glm::vec3((*chest)[3]);
             a.particle_scale = particle_scale(*model);

@@ -201,7 +201,9 @@ the impact seen from further raises that rule.
 The server can also play an effect by its spellsnew.eff number on a spawn (OP_SpellEffect, OP_AddNimbusEffect;
 `game/spell_effect_timers.h`): a nimbus, such as an item's or a buff's aura of orbs or flames, is one. Its emitters ask
 for a forced 5,000 s, so it stays on the spawn until OP_RemoveNimbusEffect stops it (EQEmu sends that when the buff
-fades) or the zone changes. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
+fades) or the zone changes. An effect that arrives before its spawn's model has loaded (a server resending the nimbuses
+as you zone in) keeps the point each emitter asks for and takes it once the model is drawn, at the spawn's place
+until then; the original's spawn always has its points. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
 does not see it, on the original client either.
 
 Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
