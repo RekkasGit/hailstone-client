@@ -1120,6 +1120,10 @@ int ConColor(int cLevel,int targetlevel)
 
 }
 
+//may need to break this up, but you need a sizable buffer for this or boom.
+//for 5,000 spawns, assume 10 megs. now 5k is wayyy higher than it should ever be
+//so can get away with less, but you never know. 
+//there is a safety check that if we get down to our last 4,096 bytes, kick out and just return with what we have.
 int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
 {
     //don't allow a deny just grab the raw connection.
@@ -1127,11 +1131,13 @@ int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
     if (!c) return 0;
     auto spawns = c->world().spawns;
     int bufferSize = 0;
+    unsigned char* pBuffer = data;
     for (const auto& [id, spawn] : spawns) {
        
+        //if we are down to our last 4k of room
+        //kick out, as we may explode
+        if ((bufferSize + 4096) > datamax) break;
 
-
-        unsigned char* pBuffer = data;
         int ID = spawn.id;
         memcpy(pBuffer, &ID, sizeof(ID));
         pBuffer += sizeof(ID);
@@ -1529,6 +1535,8 @@ int h_get_spawns_bulk(void* h, unsigned char* data, int datamax)
 
 
     }
+
+    return bufferSize;
 }
 int h_get_spawn(void* h, std::uint32_t id, HailstoneSpawn* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_spawn");
