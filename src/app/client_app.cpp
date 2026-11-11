@@ -145,7 +145,13 @@ int ClientApp::run() {
             // as the player's floor test does; the landing check above keeps the zone's floor alone.
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor);
+            game::WorldState::RemoteCollisionFn remote_collision;
+            if (collision_ && screen_ == Screen::InGame)
+                remote_collision = [this](const game::Spawn& spawn, const glm::vec3& from, const glm::vec3& to) {
+                    const ZoneMoveWorld world(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
+                    return remote_collision_type(spawn, from, to, world);
+                };
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");

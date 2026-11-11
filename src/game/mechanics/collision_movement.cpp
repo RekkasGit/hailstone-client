@@ -1,5 +1,6 @@
 #include "game/mechanics/collision_movement.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -10,6 +11,14 @@
 // which NaN's payload survives.
 
 namespace hailstone::game::mechanics {
+
+float collision_height_offset(std::uint8_t stand_state, std::uint8_t body_wet, std::uint32_t race,
+                               float avatar_height, float radius) {
+    if (stand_state == 0x6f || stand_state == 0x78 || body_wet >= 5) return 0.0f;
+    float height = 1.9f;
+    if (race == 2 || race == 9 || race == 10) height = std::max(avatar_height * 0.5f, height);
+    return std::max(height, radius);
+}
 
 namespace {
 

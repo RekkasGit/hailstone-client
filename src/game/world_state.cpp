@@ -89,7 +89,7 @@ void WorldState::smooth_vehicles(float dt, double now) {
 }
 
 void WorldState::smooth(float dt, double now, const FloorFn& floor, const RegionFn& region,
-                        const VehicleFn& vehicle_under, const FloorFn& ground_floor) {
+                        const VehicleFn& vehicle_under, const FloorFn& ground_floor, const RemoteCollisionFn& collision) {
     const FloorFn& grounding = ground_floor ? ground_floor : floor;
     if (!vehicles_smoothed) smooth_vehicles(dt, now);
     vehicles_smoothed = false;
@@ -124,6 +124,14 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             for (float ms : steps) {
                 const glm::vec3 before = b.position;
                 mechanics::step_remote_spawn(b, ms, s.is_npc);
+                // DoCollisionMovement resets +0x24 when moving, and actor hits set it again. A still spawn keeps
+                // its last contact. Riders and NoCollide bodies do not run this sweep. The current remote
+                // predictor leaves vertical integration to server updates, but a vertical move still probes.
+                if (collision && !s.mount_id && !s.is_corpse &&
+                    (b.position != before || b.velocity.z != 0.0f)) {
+                    const bool no_collide = std::find(s.properties.begin(), s.properties.end(), 0x64u) != s.properties.end();
+                    s.colliding_type = no_collide ? 0 : collision(s, before, b.position);
+                }
                 // CollisionPass's landing check (LandingAndFallCheck) runs with every step, so a spawn stands at
                 // floor + AvatarHeight (feet = z - AvatarHeight) at rest too: the server places NPCs with its own
                 // per-race offsets (EQEmu's GetZOffset: 0.7 x 0.2 x size for a dwarf), not the client's AvatarHeight.

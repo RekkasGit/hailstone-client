@@ -54,6 +54,7 @@ struct SpawnAnimInput {
     // Classic models only.
     std::uint8_t follow_up = 0x20;  // +0x10c4: the follow-up the stand request plays (0x20 none; 0x47 P08, or an
                                     // action the layers keep, render/actor_layers.h)
+    bool mounted = false;
 };
 
 struct SpawnAnimState {
@@ -69,6 +70,7 @@ struct SpawnAnimState {
     bool reverse = false;
     float rate = 1.0f;
     bool loop = true;
+    std::int32_t column = 0;
 };
 
 struct SpawnAnimChoice {
@@ -82,6 +84,7 @@ struct SpawnAnimChoice {
     // Classic models: what +0x10c4 becomes once a stand request plays the follow-up (in.follow_up when it plays
     // none): 0x20, or 0x47 after an animation game::classic_plain_stand_after does not name.
     std::uint8_t follow_up = 0x20;
+    std::int32_t column = 0; // new-style track's resolved style, after fallbacks
 };
 
 // `has_clip(code)`: the model has that clip. `clip_done`: the playing clip
@@ -96,11 +99,13 @@ struct NewStyleTrackInput {
     std::uint32_t player_state = 0; // +0x14c
     std::uint8_t current = 0;       // the animation playing (+0x10c0)
     std::int32_t forced_column = -1; // +0x324 (-1: none)
+    bool mounted = false;
 };
 struct NewStyleTrack {
     std::string track; // "<tag>_<style>" ("SLPR_1H"), empty for none
     std::string clip;  // track + "_<variant>" ("SLPR_1H_2")
     std::uint8_t code = 0; // the sequence found (after fallbacks)
+    std::int32_t column = 0;
 };
 // The clip a new-style code plays on an EQG model whose tracks are named
 // "<tag>_<style>_<n>" (assets/eqg_character.h is_track_name), as
@@ -111,10 +116,13 @@ struct NewStyleTrack {
 // ST2H, 1 (1H) for the rest; 0x5885e0 plays STDA / IDLA for STND / IDLE
 // while aggressive (0x4 / 0x8) or after an attack (+0x19 of the playing
 // sequence); 0x588470 picks the variant at random among those the
-// column has (rand() % count). Mounts (column 5) are not modelled.
+// column has (rand() % count). A rider uses column 5 (MT), with the
+// sequence's mount-fallback flag controlling whether BA is allowed.
 NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
                               const std::function<bool(std::string_view)>& has_clip,
                               const std::function<int()>& rand);
+// A resolved EQG track or clip's style column; 0 for a classic/unknown name.
+std::int32_t new_style_clip_column(std::string_view clip);
 
 // The clip an OP_Animation action (or any animation the client starts: an
 // old-style number below 0x4f, else a new-style code) plays, or empty for

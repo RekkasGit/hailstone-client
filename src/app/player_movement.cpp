@@ -28,6 +28,34 @@ namespace hailstone::app {
 
 namespace mech = game::mechanics;
 
+std::int32_t remote_collision_type(const game::Spawn& spawn, const glm::vec3& from, const glm::vec3& to,
+                                    const MoveWorld& world) {
+    if (!world.collision_loaded()) return 0;
+    const float radius = mech::sweep_radius({spawn.heights.avatar_height, spawn.race});
+    const float lift = mech::collision_height_offset(spawn.stand_state, spawn.body_wet, spawn.race,
+                                                     spawn.heights.avatar_height, radius);
+    const glm::vec3 offset(0.0f, 0.0f, lift);
+    const MoveWorld::Sweep hit = world.sweep(from + offset, to + offset, radius);
+    std::int32_t type = 0;
+    auto contact = [&](std::int32_t actor_type) {
+        game::HitActor actor;
+        actor.type = actor_type;
+        actor.has_owner = true;
+        actor.collisions_enabled = true;
+        actor.kind = 1;
+        actor.player_found = true;
+        if (auto result = game::collision_hit_set_colliding_type(actor, false); result.colliding_type)
+            type = *result.colliding_type;
+    };
+    if (hit.ladder_hit) contact(game::kActorLadder);
+    // ZoneMoveWorld visits doors after the zone's placed ladder geometry, just as the local adapter does.
+    for (const auto& door : hit.door_hits) {
+        (void)door;
+        contact(game::kActorSwitch);
+    }
+    return type;
+}
+
 namespace {
 
 // Zone flags from the original's zone table (ZoneManager::ZoneManager
@@ -138,21 +166,6 @@ mech::MovementFacts fallback_facts(const net::GameConnection& conn, const net::P
 std::uint8_t region_type(const assets::ZoneRegions* regions, const glm::vec3& p) {
     if (!regions || regions->empty()) return 0;
     return static_cast<std::uint8_t>(regions->lookup(p).flags & 0xff);
-}
-
-// PlayerClient vf94 @0x5063d0, the height the collision sphere's centre sits
-// above the spawn's z: 0 ducking (StandState 0x6f), dead (0x78) or in a
-// liquid; else 1.9, or for barbarians, trolls and ogres (races 2, 9, 10)
-// AvatarHeight x 0.5 when that is more; then at least the actor's bounding
-// radius (not for a vehicle race). The original's AvatarHeight x 0.75 branch
-// is only reached with a negative AvatarHeight and then gives 1.9 too.
-float height_offset(std::uint8_t stand_state, std::uint8_t body_wet, std::uint32_t race, float avatar_height,
-                    float radius) {
-    if (stand_state == 0x6f || stand_state == 0x78 || body_wet >= 5) return 0.0f;
-    float h = 1.9f;
-    if (race == 2 || race == 9 || race == 10) h = std::max(avatar_height * 0.5f, 1.9f);
-    if (0.0f < h) h = std::max(h, radius);
-    return h;
 }
 
 using mech::Vec3f;
@@ -425,7 +438,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
     RoomCheck out;
     if (!world) return out;
     const mech::PhysicsBody& body = ctl_.body;
-    float height = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    float height = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     PlayerCollision pc(collision_, world, actor_, radius_, height, now, false);
     pc.avatar_height = floor_offset;
     pc.special_height = special_height;
@@ -459,7 +472,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
 // starting below the top finds nothing, and the player hangs there with its feet inside the step, unable to move.
 float PlayerMovement::floor_probe_lift(float floor_offset) const {
     const mech::PhysicsBody& body = ctl_.body;
-    const float h = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    const float h = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     return std::max(0.0f, h - radius_);
 }
 
@@ -799,7 +812,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     cs.floor_height = body.floor_height;
     cs.body_wet = body.body_wet;
     cs.colliding_type = body.colliding_type;
-    float height = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    float height = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     lift_ = floor_offset + height;
     PlayerCollision pc(cs, world, actor_, radius_, height, now,
                        mech::can_swim_jump_now(ctl_.next_swim(), now));

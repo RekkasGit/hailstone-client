@@ -1274,6 +1274,11 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         game::SpawnAnimInput in;
         in.velocity = is_player && player_motion_.valid ? player_motion_.velocity : s.velocity;
         in.speed_run = speed_run;
+        in.mounted = mount != nullptr;
+        if (mount && new_style) {
+            in.velocity = mount->velocity;
+            in.speed_run = mount->speed_run;
+        }
         in.feet_wet = is_player && player_motion_.valid ? player_motion_.feet_wet : s.feet_wet;
         in.body_wet = is_player && player_motion_.valid ? player_motion_.body_wet : s.body_wet;
         in.walk_speed = s.walk_speed;
@@ -1295,8 +1300,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         in.owner_id = s.pet_owner_id;
         in.first_person = is_player && player_motion_.first_person;
         if (!new_style) in.follow_up = layers.follow_up;
-        // +0x24 is the local player's own; other spawns' is not probed (docs/unknowns.md).
-        in.colliding_type = is_player && player_motion_.valid ? player_motion_.colliding_type : 0;
+        in.colliding_type = is_player && player_motion_.valid ? player_motion_.colliding_type : s.colliding_type;
         const bool done = st.motion_clip && lower.clip == st.motion_clip && !lower.loop &&
                           lower.time >= st.motion_clip->duration_seconds();
         game::SpawnAnimChoice choice = game::choose_spawn_animation(
@@ -1317,12 +1321,13 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         req.humanoid = humanoid;
         req.speed_run = speed_run;
         req.follow_up_after = choice.follow_up;
+        req.base_column = choice.column;
         if (s.is_corpse || s.stand_state == 115) {
             req.base = &model->first_clip({"D05", "D04", "P01"}, holding);
             req.base_anim = 0x10; // D05
             req.loop = false;
             req.corpse = true;
-        } else if (mount) {
+        } else if (mount && !new_style) {
             // 0x4b15b0 on a rider: its movement and idle animations become the mount race's rider animation
             // (racedata.txt's last field, empty in the shipped file: 0x4a, P09), or 0x4e (L10) while the mount runs
             // at its run speed or faster; a model without the clip falls back as 0x4b1210 does (0x4e to 0x4a,
@@ -1350,9 +1355,10 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             st.action_seq_known = true;
         } else if (s.action_seq != st.action_seq) {
             st.action_seq = s.action_seq;
-            game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1};
+            game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1, mount != nullptr};
             std::uint8_t playing = s.action;
             std::string code = game::action_clip(s.action, has_clip, new_style, track_in, rand_int, &playing);
+            req.action_column = game::new_style_clip_column(code);
             const assets::AnimationClip* c = code.empty() ? nullptr : model->clip(code, holding);
             const bool started = c && layers.start_action(c, playing, s.action_speed / 10.0f, req);
             log::debug("animation: {} ({}) action {} speed {} -> {}{}", s.name, id, s.action, s.action_speed,

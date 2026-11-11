@@ -18,6 +18,53 @@
 using namespace hailstone::game;
 namespace mech = hailstone::game::mechanics;
 
+TEST_CASE("A sphere parallel to a triangle's plane has no vertex edge-region crossing") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        const V a(0, 0, 0), b(10, 0, 0), c(0, 10, 0), n(0, 0, -1);
+        const V delta(4, 4, 0);
+        const F inverse = F(1) / std::sqrt(F(32));
+        // The sphere crosses the triangle plane but starts outside both edges meeting at A. Its centre path
+        // never crosses that plane, so the edge-region selector refuses it before choosing a capsule.
+        const auto outside = sweep::sphere_triangle<F>(V(-2, -2, 0), delta, inverse, F(1), F(1), n, a, b, c);
+        CHECK_FALSE(outside.hit);
+        // A sphere already inside the triangle still overlaps immediately; the parallel rejection is local to
+        // the vertex's edge-region case.
+        const auto inside = sweep::sphere_triangle<F>(V(1, 1, 0), delta, inverse, F(1), F(1), n, a, b, c);
+        CHECK(inside.hit);
+        CHECK(inside.t == F(0));
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
+TEST_CASE("A capsule keeps native candidate order for a centre already inside its side") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        const V a(0, 0, 0), b(10, 0, 0), c(0, 10, 0), n(0, 0, -1);
+        auto hit = [&](V delta) {
+            return sweep::sphere_triangle<F>(V(2, F(-0.5), 0), delta, F(1) / glm::length(delta),
+                                              F(1), F(1), n, a, b, c);
+        };
+        // The cylinder exit is generated before a start-cap root behind the move. Only one root is within the
+        // move, so the selector retains that first cylinder candidate instead of sorting the negative cap first.
+        const auto side = hit(V(4, -1, 0));
+        REQUIRE(side.hit);
+        CHECK(side.t == doctest::Approx(0.5));
+        // Along the edge toward its start, the initial start-sphere crossing is inside the cylinder. The capsule
+        // boundary is the far side of that sphere, at x=-sqrt(1-0.5^2), rather than its near side at +sqrt(...).
+        const auto start = hit(V(-12, 0, 0));
+        REQUIRE(start.hit);
+        CHECK(start.t == doctest::Approx((F(2) + std::sqrt(F(0.75))) / F(12)));
+        // The reverse direction retains the original's asymmetric first-candidate selection, clamped to zero.
+        const auto far = hit(V(12, 0, 0));
+        REQUIRE(far.hit);
+        CHECK(far.t == F(0));
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
 namespace {
 
 // A wall in the plane x = 10 from y -100..100, z -50..50, wound so that its

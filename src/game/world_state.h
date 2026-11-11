@@ -1131,6 +1131,7 @@ namespace hailstone::game {
 		// The region types under it (+0xa1 FeetWet, +0xa2 BodyWet: 0 dry, 5 water, ...), probed with each step
 		// (WorldState::smooth's `region`); the local player's come from its own controller.
 		std::uint8_t feet_wet = 0, body_wet = 0;
+		std::int32_t colliding_type = 0; // movement sweep's actor type (+0x24); 6 enables climbing animation
 		// EQPlayer::SetHeights' results (game/spawn_heights.h): heights.avatar_height is the spawn's z above its
 		// feet, heights.model_scale its actor's scale. WorldState::set_heights keeps them.
 		SpawnHeights heights;
@@ -2776,12 +2777,15 @@ namespace hailstone::game {
 		// `vehicle_under` (optional) gives the vehicle whose deck is under a point (0: none): a spawn an update puts
 		// there rides it (game/boats.h).
 		using VehicleFn = std::function<std::uint32_t(const glm::vec3&)>;
+		// The moving remote spawn's sweep, for CollisionHit_SetCollidingType (+0x24). This observes actor hits;
+		// complete remote CollisionPass positioning remains separate from the interpolation below.
+		using RemoteCollisionFn = std::function<std::int32_t(const Spawn&, const glm::vec3&, const glm::vec3&)>;
 		// The local player and the mount it rides (controlled_id) are not eased: they are drawn where set_local_drawn put
 		// them this frame, else at their position.
 		// `ground_floor` (optional): the floor ground_npcs measures against, which has the doors too (a portal stone's
 		// base, a platform); unset, `floor`.
 		void smooth(float dt, double now, const FloorFn& floor = {}, const RegionFn& region = {},
-			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {});
+			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {}, const RemoteCollisionFn& collision = {});
 		// Where the local player is drawn this frame: where the camera is, between the game clock's last two steps
 		// (app/client_app_player.cpp). Sets the drawn place and heading (0..512) of the player and of the mount it rides at
 		// once, so the eye on a mount follows it in the same frame; the next smooth keeps them and forgets the call.

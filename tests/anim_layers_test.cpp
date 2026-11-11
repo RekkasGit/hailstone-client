@@ -229,6 +229,31 @@ TEST_CASE("new-style: an attack over a walk; a stand cuts it") {
     CHECK(l.group[kUpperBones].time == doctest::Approx(t));
 }
 
+TEST_CASE("New-style layers distinguish the same sequence in another style column") {
+    auto stand = clip(10), one_hand = clip(2), mounted = clip(2);
+    ActorLayers l;
+    LayerRequest req;
+    req.new_style = true;
+    req.base = &stand;
+    req.base_anim = 0x6e;
+    req.base_column = 5;
+    req.mounted = true;
+    l.step(req, 0.1f);
+    CHECK(l.group[kLowerBones].column == 5);
+    req.action_column = 1;
+    REQUIRE(l.start_action(&one_hand, 0x50, 1.0f, req));
+    CHECK(l.group[kUpperBones].column == 1);
+    CHECK(l.group[kLowerBones].clip == &stand);
+    l.step(req, 0.2f);
+    CHECK_FALSE(l.start_action(&one_hand, 0x50, 1.0f, req)); // same sequence/style keeps its phase
+    req.action_column = 5;
+    CHECK(l.start_action(&mounted, 0x50, 1.0f, req)); // finished sequence, new style can start
+    CHECK(l.group[kUpperBones].clip == &mounted);
+    CHECK(l.group[kUpperBones].column == 5);
+    CHECK(l.group[kLowerBones].clip == &stand);
+    CHECK(l.group[kLowerBones].column == 5);
+}
+
 TEST_CASE("classic: an action asked during an unfinished one follows it (+0x10c4)") {
     using hailstone::game::classic_may_interrupt;
     CHECK_FALSE(classic_may_interrupt(5, 5));   // never over itself

@@ -162,6 +162,11 @@ struct SweepRadiusSpawn {
 };
 float sweep_radius(const SweepRadiusSpawn& spawn);
 
+// PlayerClient vf94 @0x5063d0: the collision sphere's centre above the spawn's z. The local and remote probes
+// use the same posture, environment and large-race rules; the caller supplies its currently qualified radius.
+float collision_height_offset(std::uint8_t stand_state, std::uint8_t body_wet, std::uint32_t race,
+                               float avatar_height, float radius);
+
 // 0x509130: a vector scaled to length 1, or zero when its length is
 // within 2^-23 of 0 (the length unrounded, compared with the constants).
 void normalize_vector(float v[3], const Fpu& fpu = Fpu{});
