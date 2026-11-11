@@ -5,6 +5,7 @@
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
 //   /probetcp port    tcp_open("127.0.0.1", port); /probetcpsend h  tcp_send(h, "hello") and tcp_state(h)
+//   /probebuffs n, /probepetbuffs n  get_buff_data_bulk / get_pet_buff_data_bulk into n bytes, read with ByteReader
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -14,6 +15,7 @@
 #include <stdexcept>
 #include <thread>
 
+#include "hailstone_byte_io.h"
 #include "hailstone_plugin.h"
 
 HAILSTONE_PLUGIN
@@ -68,6 +70,45 @@ void probe_tcp_send(void*, const char* args) {
     WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
 }
 
+// The occupied slots one line each; the empty ones only counted, and only when laid out as empty.
+void probe_buffs(void*, const char* args) {
+    unsigned char buf[4096];
+    const std::size_t n = std::strtoul(args, nullptr, 10);
+    const std::int32_t r = host->get_buff_data_bulk(host->host, buf, n < sizeof buf ? n : sizeof buf);
+    hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
+    int empty = 0;
+    for (int slot = 0; rd.remaining() >= HAILSTONE_BUFF_RECORD_SIZE; ++slot) {
+        const auto spell = rd.le<std::uint32_t>(), caster = rd.le<std::uint32_t>(), tics = rd.le<std::uint32_t>(),
+                   hits = rd.le<std::uint32_t>(), type = rd.le<std::uint32_t>();
+        const auto counter = rd.le<std::int32_t>(), base = rd.le<std::int32_t>(), left = rd.le<std::int32_t>();
+        const auto song = rd.le<std::uint8_t>();
+        if (spell == 0 && caster == 0 && tics == 0 && hits == 0 && type == 0 && counter == -1 && base == 0 &&
+            left == 0 && song == 0) {
+            ++empty;
+            continue;
+        }
+        WriteChatf("[Probe] buff %d: %u %u %u %u %u %d %d %d %u", slot, static_cast<unsigned>(spell),
+                   static_cast<unsigned>(caster), static_cast<unsigned>(tics), static_cast<unsigned>(hits),
+                   static_cast<unsigned>(type), static_cast<int>(counter), static_cast<int>(base),
+                   static_cast<int>(left), static_cast<unsigned>(song));
+    }
+    WriteChatf("[Probe] buffs %d bytes, %d empty", static_cast<int>(r), empty);
+}
+
+void probe_pet_buffs(void*, const char* args) {
+    unsigned char buf[1024];
+    const std::size_t n = std::strtoul(args, nullptr, 10);
+    const std::int32_t r = host->get_pet_buff_data_bulk(host->host, buf, n < sizeof buf ? n : sizeof buf);
+    hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
+    while (rd.remaining() >= HAILSTONE_PET_BUFF_RECORD_SIZE) {
+        const auto slot = rd.le<std::uint32_t>(), spell = rd.le<std::uint32_t>(), tics = rd.le<std::uint32_t>(),
+                   type = rd.le<std::uint32_t>();
+        WriteChatf("[Probe] pet buff %u: %u %u %u", static_cast<unsigned>(slot), static_cast<unsigned>(spell),
+                   static_cast<unsigned>(tics), static_cast<unsigned>(type));
+    }
+    WriteChatf("[Probe] pet buffs %d bytes", static_cast<int>(r));
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -84,6 +125,8 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probemessage", probe_message, nullptr);
     AddCommand("/probetcp", probe_tcp, nullptr);
     AddCommand("/probetcpsend", probe_tcp_send, nullptr);
+    AddCommand("/probebuffs", probe_buffs, nullptr);
+    AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -96,6 +139,8 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probemessage");
     RemoveCommand("/probetcp");
     RemoveCommand("/probetcpsend");
+    RemoveCommand("/probebuffs");
+    RemoveCommand("/probepetbuffs");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }

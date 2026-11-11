@@ -22,6 +22,7 @@
 #include "game/combat.h"
 #include "game/item_links.h"
 #include "game/server_ext_chain.h"
+#include "game/spa_ids.h"
 #include "game/spells.h"
 #include "game/zone_names.h"
 #include "mq/parse.h"
@@ -1629,6 +1630,75 @@ int h_get_buff(void* h, std::uint32_t index, HailstoneBuff* out) {
     return give(out, v);
 }
 
+// The whole records of `w` (`record` bytes each) that fit in out_size go to `out`; returns the bytes given.
+std::int32_t give_records(const ByteWriter& w, std::size_t record, void* out, std::size_t out_size) {
+    const std::size_t n = std::min(w.size(), out_size / record * record);
+    if (n) std::memcpy(out, w.data().data(), n);
+    return static_cast<std::int32_t>(n);
+}
+
+// get_buff_data_bulk, laid out as hailstone_plugin.h says. The counters are those of the spell's first counter
+// effect, as MacroQuest's Spell.CounterType and CounterNumber read them: its base is the counters the buff starts
+// with; the counters left are the slot's data, which stock EQEmu sends as zeros (BuffSlot::slot_data).
+std::int32_t h_get_buff_data_bulk(void* h, void* out, std::size_t out_size) {
+    const net::GameConnection* c = readable(Loaded::of(h), "get_buff_data_bulk");
+    if (!c || !out) return 0;
+    const auto& buffs = c->spell_state().buffs;
+    ByteWriter w;
+    for (std::size_t slot = 0; slot < buffs.size(); ++slot) {
+        const game::BuffSlot& b = buffs[slot];
+        if (b.empty()) {
+            w.zeros(20);
+            w.le<std::int32_t>(-1); // no counters
+            w.zeros(HAILSTONE_BUFF_RECORD_SIZE - 24);
+            continue;
+        }
+        std::int32_t counter_type = -1, counter_base = 0, counter_left = 0;
+        std::uint32_t spell_type = 0;
+        if (const game::SpellData* s = c->spell_table().get(b.spell)) {
+            spell_type = s->spell_type;
+            for (std::size_t i = 0; i < s->effect.size() && counter_type < 0; ++i) {
+                switch (s->effect[i]) {
+                case game::SPA_DISEASE: counter_type = 0; break;
+                case game::SPA_POISON: counter_type = 1; break;
+                case game::SPA_CURSE: counter_type = 2; break;
+                case game::SPA_CORRUPTION: counter_type = 3; break;
+                default: continue;
+                }
+                counter_base = s->base[i];
+                counter_left = b.slot_data[i];
+            }
+        }
+        const bool song = slot >= static_cast<std::size_t>(game::kLongBuffSlots) &&
+                          slot < static_cast<std::size_t>(game::kLongBuffSlots + game::kShortBuffSlots);
+        w.le<std::uint32_t>(b.spell);
+        w.le<std::uint32_t>(b.caster_id);
+        w.le<std::uint32_t>(b.tics);
+        w.le<std::uint32_t>(b.num_hits);
+        w.le<std::uint32_t>(spell_type);
+        w.le<std::int32_t>(counter_type);
+        w.le<std::int32_t>(counter_base);
+        w.le<std::int32_t>(counter_left);
+        w.le<std::uint8_t>(song ? 1 : 0);
+    }
+    return give_records(w, HAILSTONE_BUFF_RECORD_SIZE, out, out_size);
+}
+
+// get_pet_buff_data_bulk: the pet window's buffs (OP_PetBuffWindow), laid out as hailstone_plugin.h says.
+std::int32_t h_get_pet_buff_data_bulk(void* h, void* out, std::size_t out_size) {
+    const net::GameConnection* c = readable(Loaded::of(h), "get_pet_buff_data_bulk");
+    if (!c || !out) return 0;
+    ByteWriter w;
+    for (const auto& [slot, b] : c->pet_buffs()) {
+        const game::SpellData* s = c->spell_table().get(b.spell);
+        w.le<std::uint32_t>(slot);
+        w.le<std::uint32_t>(b.spell);
+        w.le<std::uint32_t>(b.tics);
+        w.le<std::uint32_t>(s ? s->spell_type : 0u);
+    }
+    return give_records(w, HAILSTONE_PET_BUFF_RECORD_SIZE, out, out_size);
+}
+
 int h_get_xtarget(void* h, std::uint32_t index, HailstoneXTarget* out) {
     const net::GameConnection* c = readable(Loaded::of(h), "get_xtarget");
     if (!c) return 0;
@@ -2241,6 +2311,8 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.web_state = main_only<h_web_state>;
     p.table.web_view = main_only<h_web_view>;
     p.table.open_bank = main_only<h_open_bank>;
+    p.table.get_buff_data_bulk = main_only<h_get_buff_data_bulk>;
+    p.table.get_pet_buff_data_bulk = main_only<h_get_pet_buff_data_bulk>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
     Hooks& hooks = *m.env.hooks;

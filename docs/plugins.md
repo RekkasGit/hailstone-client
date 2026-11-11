@@ -506,7 +506,8 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   the profile holds it), `aa_value` (an owned alternate ability's slot value, by its ability id), and `eqstr` for a
   game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
-  for an older client keeps working. `server_info` gives the
+  for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call and
+  `get_pet_buff_data_bulk` the pet window's buffs, as fixed little-endian records (Buff records below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
   one server can tell it from another that sends the same packets.
 - **take item clicks** (`item_right_click`, then the client's own with `right_click_item`, which needs `actions`)
@@ -547,6 +548,30 @@ load it. Calls added to the host table since then keep ABI 3: test `HAILSTONE_HO
 call, since a client older than the call has a shorter table. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
+
+Buff records: `get_buff_data_bulk(host, out, out_size)` and `get_pet_buff_data_bulk(host, out, out_size)` (with
+`read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, get_buff_data_bulk)` first) write the whole records
+that fit in `out_size` and return the bytes written. The fields are little-endian and unaligned: read them with
+`ByteReader`, never by casting a struct onto the buffer.
+
+- `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (33) bytes per buff slot, slot 0 first, for all
+  `HailstonePlayer.buff_slots` slots (the songs from slot 42, the discipline slot last), so 2079 bytes for RoF2's 63.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | u32 | spell id; 0 an empty slot, whose other fields are 0 but the counter type, -1 |
+  | 4 | u32 | the caster's spawn id |
+  | 8 | u32 | tics left, as the server sent them |
+  | 12 | u32 | hits left |
+  | 16 | u32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
+  | 20 | i32 | counter type of the spell's first counter effect: -1 none, 0 disease, 1 poison, 2 curse, 3 corruption |
+  | 24 | i32 | that effect's base: the counters the buff starts with (MacroQuest's `Spell.CounterNumber`) |
+  | 28 | i32 | the counters left, as the server sent them; stock EQEmu always sends 0 |
+  | 32 | u8 | 1 for a song slot |
+
+- `get_pet_buff_data_bulk`: one record of `HAILSTONE_PET_BUFF_RECORD_SIZE` (16) bytes per buff in the pet window,
+  in the order the server sent them (0 bytes with no pet): u32 the pet window's slot, u32 spell id, u32 tics, u32 the
+  spell's type (as above).
 
 ### Connections (ABI 2)
 
