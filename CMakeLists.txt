@@ -971,6 +971,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
     tests/net_session_test.cpp
+    tests/ucs_session_test.cpp
     tests/reliable_channel_vectors_test.cpp
     tests/vehicle_ladder_vectors_test.cpp
     tests/boats_test.cpp

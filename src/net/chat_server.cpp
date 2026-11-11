@@ -1,6 +1,7 @@
 #include "net/chat_server.h"
 
 #include <mutex>
+#include <algorithm>
 
 #include "core/byte_io.h"
 #include "core/log.h"
@@ -11,6 +12,12 @@
 namespace hailstone::net {
 
 namespace {
+
+std::size_t event_bytes(const ChatServerEvent& e) {
+    std::size_t bytes = sizeof(e) + e.channel.size() + e.sender.size() + e.text.size();
+    for (const auto& f : e.fields) bytes += sizeof(f) + f.size();
+    return bytes;
+}
 
 std::vector<std::string> split(std::string_view s, char sep) {
     std::vector<std::string> out;
@@ -38,6 +45,21 @@ AppPacket text_packet(std::uint16_t op, std::initializer_list<std::string_view> 
 }
 
 } // namespace
+
+SessionOptions ucs_session_options(bool short_keepalive) {
+    SessionOptions opt;
+    opt.connect_timeout = std::chrono::milliseconds(30000);
+    opt.request_interval = std::chrono::milliseconds(5000);
+    opt.idle_timeout = std::chrono::milliseconds(0);
+    opt.keepalive_interval = std::chrono::milliseconds(short_keepalive ? 14800 : 44000);
+    opt.opcode_bytes = 1;
+    opt.hold_time = std::chrono::milliseconds(0);
+    opt.stat_interval = std::chrono::milliseconds(0);
+    opt.window_slots = 24;
+    opt.window_bytes = 10000;
+    opt.reliable_timeout_ms = 120000;
+    return opt;
+}
 
 AppPacket encode_mail_login(const ChatServerInfo& info) {
     std::string key = std::string(1, info.connection_type) + info.mail_key;
@@ -93,11 +115,20 @@ std::optional<ChatServerEvent> decode_chat_server_packet(const AppPacket& p) {
         case ucs::kMailLogin: {
             // Client::SendMailBoxes: u8 1, u32 count, u32 0, the comma list, a NUL.
             e.kind = ChatServerEvent::Kind::MailboxList;
-            r.le<std::uint8_t>();
+            e.accepted = r.le<std::uint8_t>() != 0;
+            if (!e.accepted) return e;
+            auto count = r.le<std::uint32_t>();
             r.le<std::uint32_t>();
-            r.le<std::uint32_t>();
-            std::string list = r.remaining() ? r.cstring() : std::string();
-            for (auto& m : split(list, ',')) e.fields.push_back(trim(m));
+            std::string list = r.cstring();
+            if (count > 128) throw std::out_of_range("too many UCS mailboxes");
+            if (!list.empty()) {
+                for (auto& m : split(list, ',')) {
+                    auto name = trim(m);
+                    if (name.empty()) throw std::out_of_range("empty UCS mailbox");
+                    e.fields.push_back(std::move(name));
+                }
+            }
+            if (e.fields.size() != count) throw std::out_of_range("UCS mailbox count does not match the list");
             return e;
         }
         case ucs::kMailHeaderCount:
@@ -144,12 +175,36 @@ struct ChatServer::Resolve {
     std::string error;
 };
 
-ChatServer::ChatServer() = default;
+ChatServer::ChatServer() : ChatServer(Options{}) {}
+ChatServer::ChatServer(Options options) : options_(std::move(options)) {}
 ChatServer::~ChatServer() { disconnect(); }
+
+ChatServer::Clock::time_point ChatServer::now() const {
+    return options_.session.clock ? options_.session.clock() : Clock::now();
+}
 
 void ChatServer::connect(const ChatServerInfo& info) {
     disconnect();
     info_ = info;
+    error_.clear();
+    const auto mailbox = "SOE.EQ." + info.server_short_name + "." + info.character;
+    // The stock UCS copies the mailbox and key into char[64]. Refuse an identity it cannot safely read rather
+    // than truncating a character's name into another identity. Embedded NULs would change the fields on wire.
+    if (info.host.empty() || info.port == 0 || info.character.empty() || mailbox.size() > 63 ||
+        info.mail_key.size() > 62 || info.host.find('\0') != std::string::npos ||
+        mailbox.find('\0') != std::string::npos || info.mail_key.find('\0') != std::string::npos) {
+        error_ = "invalid chat server endpoint or identity";
+        return;
+    }
+    active_ = true;
+    begin_attempt();
+}
+
+void ChatServer::begin_attempt() {
+    retry_pending_ = false;
+    attempt_started_ = now();
+    last_probe_ = attempt_started_;
+    login_sent_ = false;
     logged_in_ = false;
     // CEverQuest::ChatServerConnect runs while the player is in the zone: the name (from OP_SetChatServer2) is looked
     // up on a thread, and update() opens the session on its address. A lookup given up on (disconnect, another
@@ -157,26 +212,17 @@ void ChatServer::connect(const ChatServerInfo& info) {
     // (resolve_async).
     auto r = std::make_shared<Resolve>();
     resolving_ = r;
-    platform::resolve_async(info.host, info.port, [r](std::vector<platform::Endpoint> endpoints, std::string error) {
+    platform::resolve_async(info_.host, info_.port, [r](std::vector<platform::Endpoint> endpoints, std::string error) {
         std::lock_guard lock(r->mutex);
         r->endpoints = std::move(endpoints);
         r->error = std::move(error);
         r->done = true;
     });
-    log::info("chat server: connecting to {}:{} as {}.{}", info.host, info.port, info.server_short_name, info.character);
+    log::info("chat server: connecting to {}:{} as {}.{}", info_.host, info_.port, info_.server_short_name, info_.character);
 }
 
 void ChatServer::start_session(const std::string& address, std::uint16_t port) {
-    SessionOptions opt;
-    opt.opcode_bytes = 1;
-    // UniversalChatProxy_Connect @0x7f0040 builds its own UdpManager Params: the keepalive delay (+0x38, the
-    // UdpManager's 0xe) is 44 s, or 14.8 s with [Defaults] ChatKeepAlive set; the multi-buffer hold (+0x54) keeps
-    // UdpLibrary's default, 50 ms. It sets no no-data timeout (0x12); the client counts 44 s of silence as a lost
-    // link, which EQEmu's 9 s keepalive meets.
-    opt.idle_timeout = std::chrono::milliseconds(44000);
-    opt.keepalive_interval = std::chrono::milliseconds(44000);
-    opt.hold_time = std::chrono::milliseconds(50);
-    session_ = Session::create(opt);
+    session_ = Session::create(options_.session);
     session_->connect(address, port); // a numeric address: no lookup on this thread
 }
 
@@ -187,8 +233,43 @@ bool ChatServer::failed() const {
     return !session_ || session_->state() == SessionState::Disconnected;
 }
 
+void ChatServer::fail(std::string error, bool retry) {
+    error_ = std::move(error);
+    log::warn("chat server: {}", error_);
+    resolving_.reset();
+    session_.reset();
+    login_sent_ = logged_in_ = false;
+    channels_.clear();
+    pending_.clear();
+    pending_bytes_ = 0;
+    before_login_.clear();
+    before_login_bytes_ = 0;
+    events_.clear();
+    ChatServerEvent event;
+    event.kind = ChatServerEvent::Kind::Disconnected;
+    events_.push_back(std::move(event));
+    retry_pending_ = active_ && retry && options_.reconnect_delay.count() > 0;
+    if (retry_pending_) retry_at_ = now() + options_.reconnect_delay;
+    else active_ = false;
+}
+
+void ChatServer::accept_event(ChatServerEvent event) {
+    if (event.kind == ChatServerEvent::Kind::Channels) {
+        channels_.clear();
+        if (!event.text.empty())
+            for (auto& c : split(event.text, ',')) channels_.push_back(trim(c));
+    }
+    events_.push_back(std::move(event));
+}
+
 void ChatServer::update() {
+    if (retry_pending_) {
+        if (now() < retry_at_) return;
+        begin_attempt();
+    }
     if (resolving_) {
+        if (now() - attempt_started_ >= options_.session.connect_timeout)
+            return fail("chat server lookup timed out", true);
         std::vector<platform::Endpoint> endpoints;
         std::string error;
         {
@@ -199,20 +280,21 @@ void ChatServer::update() {
         }
         resolving_.reset();
         if (endpoints.empty()) {
-            log::warn("chat server: {}", error);
-            return; // failed(): no session
+            return fail(error.empty() ? "could not resolve the chat server" : error, true);
         }
         start_session(endpoints.front().address_string(), endpoints.front().port);
     }
     if (!session_) return;
     session_->update();
-    if (!logged_in_ && session_->state() == SessionState::Connected) {
+    if (session_->state() == SessionState::Disconnected)
+        return fail(session_->error().empty() ? "the chat server disconnected" : session_->error(), true);
+    if (!login_sent_ && session_->state() == SessionState::Connecting &&
+        now() - attempt_started_ >= options_.session.connect_timeout)
+        return fail("chat server connection timed out", true);
+    if (!login_sent_ && session_->state() == SessionState::Connected) {
         session_->send(encode_mail_login(info_));
-        logged_in_ = true;
-        while (!pending_.empty()) {
-            session_->send(pending_.front());
-            pending_.pop_front();
-        }
+        login_sent_ = true;
+        login_started_ = now();
     }
     while (auto p = session_->receive()) {
         auto e = decode_chat_server_packet(*p);
@@ -220,31 +302,67 @@ void ChatServer::update() {
             log::debug("chat server: opcode 0x{:02x} ({} bytes)", p->opcode, p->data.size());
             continue;
         }
-        if (e->kind == ChatServerEvent::Kind::Channels) {
-            channels_.clear();
-            if (!e->text.empty())
-                for (auto& c : split(e->text, ',')) channels_.push_back(trim(c));
+        if (e->kind == ChatServerEvent::Kind::MailboxList) {
+            if (!login_sent_) continue;
+            if (!e->accepted) return fail("the chat server refused the login", false);
+            if (logged_in_) continue; // a repeated application reply does not replay commands or reset mail
+            logged_in_ = true;
+            error_.clear();
+            accept_event(std::move(*e));
+            while (!before_login_.empty()) {
+                accept_event(std::move(before_login_.front()));
+                before_login_.pop_front();
+            }
+            before_login_bytes_ = 0;
+            while (!pending_.empty()) {
+                session_->send(pending_.front());
+                pending_.pop_front();
+            }
+            pending_bytes_ = 0;
+        } else if (!logged_in_) {
+            const auto bytes = event_bytes(*e);
+            if (before_login_.size() >= options_.max_before_login_events ||
+                bytes > options_.max_before_login_bytes - before_login_bytes_)
+                return fail("too many chat events before the login reply", true);
+            before_login_bytes_ += bytes;
+            before_login_.push_back(std::move(*e));
+        } else {
+            accept_event(std::move(*e));
         }
-        events_.push_back(std::move(*e));
+    }
+    if (login_sent_ && !logged_in_ && now() - login_started_ >= options_.login_timeout)
+        return fail("the chat server did not answer the login", true);
+    // UniversalChatProxy checks the age of the oldest sent, unacknowledged packet, not time since any traffic.
+    // Keepalives and unrelated inbound messages therefore cannot hide a stuck command.
+    if (login_sent_ && now() - last_probe_ > std::chrono::milliseconds(5000)) {
+        last_probe_ = now();
+        if (session_->stats().oldest_unacked_ms > 30000)
+            return fail("the chat server did not acknowledge reliable data", true);
     }
 }
 
-void ChatServer::send_command(const std::string& text) {
-    if (!session_ && !resolving_) return;
+bool ChatServer::send_command_packet(AppPacket packet) {
+    if (!active_ || retry_pending_ || (!session_ && !resolving_)) return false;
     if (!logged_in_) {
-        pending_.push_back(encode_mail_command(text));
-        return;
+        const auto bytes = packet.data.size() + sizeof(packet);
+        if (pending_.size() >= options_.max_pending_packets || bytes > options_.max_pending_bytes - pending_bytes_) return false;
+        pending_bytes_ += bytes;
+        pending_.push_back(std::move(packet));
+        return true;
     }
-    session_->send(encode_mail_command(text));
+    if (session_->state() != SessionState::Connected) return false;
+    session_->send(packet);
+    return true;
 }
 
-void ChatServer::send_mail_command(const std::string& text) {
-    if (!session_ && !resolving_) return;
-    if (!logged_in_) {
-        pending_.push_back(encode_mail_bracket_command(text));
-        return;
-    }
-    session_->send(encode_mail_bracket_command(text));
+bool ChatServer::send_command(const std::string& text) {
+    if (text.size() > options_.max_pending_bytes || text.find('\0') != std::string::npos) return false;
+    return send_command_packet(encode_mail_command(text));
+}
+
+bool ChatServer::send_mail_command(const std::string& text) {
+    if (text.size() > options_.max_pending_bytes || text.find('\0') != std::string::npos) return false;
+    return send_command_packet(encode_mail_bracket_command(text));
 }
 
 std::optional<ChatServerEvent> ChatServer::poll() {
@@ -255,12 +373,17 @@ std::optional<ChatServerEvent> ChatServer::poll() {
 }
 
 void ChatServer::disconnect() {
+    active_ = retry_pending_ = false;
     resolving_.reset();
-    if (!session_) return;
-    session_->disconnect();
-    for (int i = 0; i < 3; ++i) session_->update();
+    // Destroy the old socket and its reliable queue before accepting another endpoint or identity.
     session_.reset();
-    logged_in_ = false;
+    login_sent_ = logged_in_ = false;
+    pending_.clear();
+    pending_bytes_ = 0;
+    before_login_.clear();
+    before_login_bytes_ = 0;
+    events_.clear();
+    channels_.clear();
 }
 
 } // namespace hailstone::net

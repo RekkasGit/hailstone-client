@@ -42,9 +42,6 @@ using soe::ByteSpan;
 // 0x15 (150 ms) is the multi-buffer hold time (SessionOptions::hold_time,
 // UdpConnection_BufferedSend @0x8c49b0 / FlushMultiBuffer @0x8c4850); the
 // service thread is the UdpManagerThread (run loop @0x8cbfb0).
-constexpr milliseconds kSessionRequestInterval{1000};
-constexpr std::int32_t kReliableTimeoutMs = 180000;
-constexpr std::int32_t kWindowBytes = 100000;
 constexpr milliseconds kDrainTimeout{10000};
 constexpr int kMaxNesting = 4;
 // An owner update() later than this after the previous one is logged as a stall.
@@ -249,12 +246,12 @@ private:
             if (now - started_ > opt_.connect_timeout)
                 return fail(std::format("no session response from {} after {:.1f} s", peer_.to_string(),
                                         static_cast<double>(opt_.connect_timeout.count()) / 1000.0));
-            if (now - last_request_ >= kSessionRequestInterval) send_session_request(now);
+            if (now - last_request_ >= opt_.request_interval) send_session_request(now);
             return;
         }
 
         // InternalGiveTime @0x8c638e: the link times out once the silence reaches the limit (not only past it).
-        if (now - last_recv_ >= opt_.idle_timeout)
+        if (opt_.idle_timeout.count() > 0 && now - last_recv_ >= opt_.idle_timeout)
             return fail(std::format("connection to {} timed out (nothing received for {} s)", peer_.to_string(),
                                     std::chrono::duration_cast<milliseconds>(now - last_recv_).count() / 1000));
 
@@ -324,6 +321,7 @@ private:
         channel_.slots.resize(static_cast<std::size_t>(opt_.window_slots));
         slot_data_.assign(static_cast<std::size_t>(opt_.window_slots), Bytes{});
         channel_.resend_delay_adjust = opt_.resend_delay_adjust;
+        channel_.max_outstanding_bytes = opt_.window_bytes;
         multi_.clear();
         ack_at_ = kNoAck;
         received_.clear();
@@ -357,6 +355,12 @@ private:
         s.fast_resends = channel_.connection_fast_resends;
         s.rtt_ms = channel_.rtt;
         s.queued_packets = static_cast<std::int32_t>(pending_.size());
+        if (channel_.oldest_unacked_seq < channel_.next_seq) {
+            const auto& slot = channel_.slots[static_cast<std::size_t>(channel_.oldest_unacked_seq %
+                                                                     static_cast<std::int64_t>(channel_.slots.size()))];
+            if (slot.used && slot.first_send != 0)
+                s.oldest_unacked_ms = reliable_elapsed(clock_ms(now_()), slot.first_send);
+        }
         s.longest_stall_ms = longest_stall_ms_;
         s.ping_last = ping_last_;
         s.ping_average = ping_count_ ? static_cast<std::int32_t>(ping_total_ / ping_count_) : 0;
@@ -471,7 +475,7 @@ private:
         channel_.start_window = std::max(std::min(std::max(fragment * 2, 0x111c), fragment * 4), 0);
         channel_.start_window = std::max(channel_.start_window, channel_.min_window);
         channel_.congestion_window = channel_.start_window;
-        channel_.threshold = std::min(kWindowBytes, opt_.window_slots * fragment);
+        channel_.threshold = std::min(opt_.window_bytes, opt_.window_slots * fragment);
     }
 
     // Data bytes of a prebuilt reliable packet (the slot length the original counts: no header, no total length).
@@ -503,7 +507,7 @@ private:
     // The channel's callbacks, made once: they only call back into this session, and the service thread runs
     // pump_reliable every pass.
     void init_hooks() {
-        hooks_.max_unacked_age = kReliableTimeoutMs;
+        hooks_.max_unacked_age = opt_.reliable_timeout_ms;
         hooks_.fill = [this](ReliableChannel& ch, std::int32_t bytes) { return fill_slots(ch, bytes); };
         hooks_.packet_length = [this](std::int32_t index) { return channel_.slots[static_cast<std::size_t>(index)].length; };
         hooks_.send = [this](std::span<const std::uint8_t>, const ReliableSlot& slot) {
@@ -515,7 +519,9 @@ private:
                            slot.send_count, channel_.rtt);
             buffered_send(slot_data_[static_cast<std::size_t>(slot.packet)]);
         };
-        hooks_.disconnect = [this](std::uint32_t) { fail("reliable data was not acknowledged for 180 s"); };
+        hooks_.disconnect = [this](std::uint32_t) {
+            fail(std::format("reliable data was not acknowledged for {} ms", opt_.reliable_timeout_ms));
+        };
     }
 
     // UdpReliableChannel_GiveTime: sends new reliable packets within the window and resends overdue ones.

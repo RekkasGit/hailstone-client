@@ -33,12 +33,12 @@ enum class SessionState : std::uint8_t {
 
 struct SessionOptions {
     std::chrono::milliseconds connect_timeout{10000};
+    std::chrono::milliseconds request_interval{1000}; // Params 0x21; UCS uses 5000 ms
     // No packet from the server for this long counts as link death. The original's no-data timeout is UdpManager
     // Params 0x12 (manager +0x58 → UdpConnection +0x15c @0x8c4197, checked in UdpConnection_InternalGiveTime
     // @0x8c633c..0x8c6398 against the time since the last receive, +0x1d0: that long or longer ends the link with
     // reason 2, Timeout): NetMgr +0x50 = 180 s for world and zone (NetMgr_Ctor @0x462a8f, NetMgr_CreateUdpManager
-    // @0x4620f1), the default here. Login and chat set none; the client keeps a limit there (login.h,
-    // chat_server.cpp; docs/unknowns.md).
+    // @0x4620f1), the default here. Zero disables this timer, as in the UCS profile; login keeps its safety limit.
     std::chrono::milliseconds idle_timeout{180000};
     // A KeepAlive (00 06) goes out once nothing has been sent for this long (0: never). The original's is Params 0xe
     // (manager +0x48 → UdpConnection +0x230; InternalGiveTime @0x8c61c4 sends the 2 bytes encoded, at once, when the
@@ -64,6 +64,8 @@ struct SessionOptions {
     std::int32_t resend_delay_adjust = 300;
     // Reliable packets in flight (Params 0x2c): 400, or 100 for the login server.
     std::int32_t window_slots = 400;
+    std::int32_t window_bytes = 100000; // Params 0x2b; UCS uses 10000
+    std::int32_t reliable_timeout_ms = 180000; // Params 0x13; UCS uses 120000
     // The most the received application packets waiting for receive() may hold (their data plus a packet's own
     // size each). The service thread goes on receiving while the owner is busy, so a stalled owner or a server that
     // floods would otherwise grow the queue without bound. Dropping a reliable packet would leave the game state out
@@ -89,6 +91,7 @@ struct SessionStats {
     std::int64_t timeout_resends = 0, fast_resends = 0;
     std::int32_t rtt_ms = 0;
     std::int32_t queued_packets = 0;  // reliable packets waiting for a slot
+    std::int32_t oldest_unacked_ms = 0; // age since its first send; zero when no sent packet remains
     std::int64_t longest_stall_ms = 0; // the longest gap between the owner's update() calls
     // The SessionStatRequest round trips (the server's SessionStatResponse echoes the request's 16-bit time): the
     // last, the average, the lowest and the highest; 0 before the first reply. /netstats (Cmd_netstats) shows them

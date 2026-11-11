@@ -65,16 +65,30 @@ Servicing the session only from the owner's `update()`, once a frame, is not eno
 
 ## Timings
 
+UCS has a separate profile (`ucs_session_options`), rather than inheriting the world/zone timings below:
+24 reliable slots, 10,000 bytes, no multi-buffer hold, no statistics requests, a 5 s SessionRequest retry and a 30 s
+connection deadline. Keepalive is 44 s, or 14.8 s with ChatKeepAlive; there is no receive-idle timeout. Reliable data
+has a 120 s transport limit. The chat owner also checks the oldest unacknowledged data every more than 5 s and
+fails the link once that data is over 30 s old. These ages are independent of incoming keepalives.
+
+Transport connection does not authenticate UCS. Commands wait for a complete successful MailLogin reply;
+friend/ignore events sent by stock EQEmu before that reply are held until it arrives. Pending commands and events
+are bounded (128 commands / 256 KiB, 256 events / 1 MiB). DNS and the transport handshake share a 30 s connection
+deadline; once MailLogin is sent, its reply has a separate 30 s deadline. Hailstone deliberately retries transient failures after 5 s, discarding pending work rather
+than replaying a mail or channel command into a new session. An explicit refusal requires fresh connection
+credentials. Late replies cannot authenticate a replacement attempt. Mailbox and transient mail state are cleared
+when the authenticated session is lost (`tests/ucs_session_test.cpp`).
+
 | What | Value | Note |
 |---|---|---|
-| SessionRequest resend | 1000 ms | param 0x21 |
-| Connect timeout | 10 s (`SessionOptions::connect_timeout`) | client choice |
-| Link dead: nothing received for | 180 s world and zone (`SessionOptions::idle_timeout`); 14.8 s login, 44 s chat | param 0x12 (NetMgr +0x50 → UdpConnection +0x15c, checked in `UdpConnection_InternalGiveTime` @0x8c638e: the silence reaching it ends the link, reason 2). Login and chat set none; there the limits are the client's (docs/unknowns.md) |
+| SessionRequest resend | 1000 ms default; 5000 ms UCS | param 0x21 |
+| Connect timeout | 10 s default; 30 s UCS (`SessionOptions::connect_timeout`) | client choice; includes DNS |
+| Link dead: nothing received for | 180 s world and zone (`SessionOptions::idle_timeout`); 14.8 s login; disabled UCS | param 0x12 (NetMgr +0x50 → UdpConnection +0x15c, checked in `UdpConnection_InternalGiveTime` @0x8c638e: the silence reaching it ends the link, reason 2). Login and chat set none; there the limits are the client's (docs/unknowns.md) |
 | SessionStatRequest interval | 30 s | param 0x1a |
 | Client keepalive (00 06) | after 15 s without sending (`SessionOptions::keepalive_interval`) | param 0xe; 14.8 s login, 44 s chat (14.8 s with `[Defaults] ChatKeepAlive`). EQEmu drops a client it has not heard from for 60 s (`stale_connection_ms`) |
 | Server keepalive | every 9 s of server silence | EQEmu `keepalive_delay_ms` |
-| Unacked reliable limit | 180 s | params 0x12/0x13 |
-| Multi-buffer hold | 150 ms world and zone, 0 login (`SessionOptions::hold_time`) | param 0x15 |
+| Unacked reliable limit | 180 s default; 120 s UCS | params 0x12/0x13; UCS also checks oldest unacked >30 s at the application layer |
+| Multi-buffer hold | 150 ms world and zone, 0 login and UCS (`SessionOptions::hold_time`) | param 0x15 |
 | Service thread pass | every 20 ms (`SessionOptions::service_interval`) | |
 | Server drops a client whose oldest unacked packet is | 30 s | EQEmu `resend_timeout` |
 | Drain before disconnect | until all reliable data is acked, at most 10 s | |
