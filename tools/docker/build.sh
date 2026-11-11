@@ -14,7 +14,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 what=${1:?usage: tools/docker/build.sh linux-x64|linux-arm64|windows-x64|macos-arm64|all [--no-test]}
 test=1; [ "${2:-}" = --no-test ] && test=0
-export HOST_UID=$(id -u) HOST_GID=$(id -g)
+# The containers run as the checkout's owner, also when root starts this: Chromium (the browser tests) refuses to run as
+# root, and nothing in the checkout should end up owned by root.
+export HOST_UID=${HOST_UID:-$(stat -c %u .)} HOST_GID=${HOST_GID:-$(stat -c %g .)}
+if [ "$HOST_UID" = 0 ]; then echo "warning: the checkout belongs to root, so the browser tests will fail (Chromium refuses root)"; fi
 mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/msvc .docker/msvc-home .docker/no-plugin dist
 tag=${BUILD_TAG:+-$BUILD_TAG}
 out=dist${BUILD_TAG:+/$BUILD_TAG}
