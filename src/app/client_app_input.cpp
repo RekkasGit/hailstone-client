@@ -346,9 +346,11 @@ game::CameraTarget ClientApp::camera_target(const glm::vec3& feet) const {
     t.position = feet + glm::vec3(0, 0, floor_offset_); // the spawn's z: the feet plus AvatarHeight
     t.heading = game::yaw_to_heading(yaw_);
     const game::Spawn* me = conn_ ? conn_->world().player() : nullptr;
+    if (conn_ && conn_->world().view_id)
+        if (auto it = conn_->world().spawns.find(conn_->world().view_id); it != conn_->world().spawns.end()) me = &it->second;
     if (!me) return t;
     t.eye_height = game::eye_height(me->heights, me->race, me->mount_id != 0);
-    const std::uint32_t stand = conn_->player_status().stand_state;
+    const std::uint32_t stand = me->id == conn_->world().player_id ? conn_->player_status().stand_state : me->stand_state;
     t.ducking = stand == net::kStandCrouching;
     t.sitting = stand == net::kStandSitting;
     if (me->mount_id) {
@@ -393,6 +395,8 @@ void ClientApp::update_game_camera(const glm::vec3& feet) {
 
 glm::vec3 ClientApp::eye_position() const {
     const game::Spawn* me = conn_ ? conn_->world().player() : nullptr;
+    if (conn_ && conn_->world().view_id)
+        if (auto it = conn_->world().spawns.find(conn_->world().view_id); it != conn_->world().spawns.end()) me = &it->second;
     // PlayerClient vfd0 for a classic model on foot: ViewHeight - AvatarHeight above z (7.44 above the feet for a
     // human). New-style models use the actor definition's +0x48, whose writer is not traced (docs/unknowns.md).
     float eye = me ? game::eye_height(me->heights, me->race, me->mount_id != 0) : 0.0f;
@@ -428,9 +432,11 @@ glm::vec3 ClientApp::eye_position() const {
 // What the abilities code needs from the client this frame (app/actions_ui.h).
 AbilityView ClientApp::ability_view() const {
     AbilityView v;
-    v.position = feet_ + glm::vec3(0, 0, floor_offset_);
-    v.heading = game::yaw_to_heading(yaw_);
-    v.velocity = last_velocity_;
+    v.position = local_body_movement_
+        ? local_body_movement_->controller().body.feet + glm::vec3(0, 0, local_body_height_)
+        : feet_ + glm::vec3(0, 0, floor_offset_);
+    v.heading = game::yaw_to_heading(local_body_movement_ ? local_body_yaw_ : yaw_);
+    v.velocity = local_body_movement_ ? local_body_movement_->controller().body.velocity : last_velocity_;
     if (auto seen = can_see_spawn(conn_->world().target_id)) v.can_see_target = *seen;
     return v;
 }

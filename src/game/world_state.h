@@ -1131,6 +1131,7 @@ namespace hailstone::game {
 		// The region types under it (+0xa1 FeetWet, +0xa2 BodyWet: 0 dry, 5 water, ...), probed with each step
 		// (WorldState::smooth's `region`); the local player's come from its own controller.
 		std::uint8_t feet_wet = 0, body_wet = 0;
+		std::int32_t colliding_type = 0; // movement sweep's actor type (+0x24); 6 enables climbing animation
 		// EQPlayer::SetHeights' results (game/spawn_heights.h): heights.avatar_height is the spawn's z above its
 		// feet, heights.model_scale its actor's scale. WorldState::set_heights keeps them.
 		SpawnHeights heights;
@@ -2728,6 +2729,8 @@ namespace hailstone::game {
 		std::uint32_t target_id = 0; // the player's current target, 0 = none
 		// pinstControlledPlayer: the spawn the local player moves when it is not itself (its mount; game/mounts.h).
 		std::uint32_t controlled_id = 0;
+		std::uint32_t eye_id = 0; // SPA67 remote control, distinct from a rider's mount
+		std::uint32_t view_id = 0; // SetViewActor's spawn, 0: the local player
 		// The small boat the local player has the helm of (OP_ControlBoat, game/boats.h steer_boat): the player moves it,
 		// so it is not stepped.
 		std::uint32_t driven_id = 0;

@@ -262,6 +262,7 @@ add_library(hailstone_engine STATIC
   src/game/spell_record.cpp
   src/game/spells.cpp
   src/game/passage_of_time.cpp
+  src/game/eye_control.cpp
   src/game/spell_sets.cpp
   src/game/group_role_sets.cpp
   src/game/group_search.cpp
@@ -1063,6 +1064,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
+    tests/eye_control_test.cpp
     tests/item_packets_test.cpp
     tests/augments_test.cpp
     tests/item_preview_test.cpp

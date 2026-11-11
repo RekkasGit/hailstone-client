@@ -101,6 +101,19 @@ struct PhysicsBody {
                                      // that is not still; a door hit sets 3 (the switch's actor type)
 };
 
+struct DrunkenMotion {
+    std::int32_t phase = -1;
+    std::int32_t stride = 1;
+    float amplitude = 0.35f;
+};
+// UpdateDrunkenness' physics parameters, called only when a positive value was decremented. A mount has its own
+// physics object: update the player's parameters without seeding the mount's velocity.
+void update_drunken_motion(PhysicsBody& body, DrunkenMotion& motion, std::int32_t value, bool seed_velocity = true,
+                           const Fpu& fpu = Fpu{});
+// PlayerPhysics vf44 @0x59de70 after integration, before landing/collision: a moving player's lateral sway is per
+// step (not multiplied by dt); its phase advances only while either horizontal velocity is nonzero.
+void apply_drunken_motion(PhysicsBody& body, DrunkenMotion& motion, const Fpu& fpu = Fpu{});
+
 // PlayerBase::MyFeetAreOnGround @0x8cfca0: (Z - AvatarHeight) + SpeedZ is not
 // above FloorHeight + 0.5 + 0.001; Z - AvatarHeight is body.feet.z here.
 bool feet_on_ground(const PhysicsBody& body);

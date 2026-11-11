@@ -114,8 +114,10 @@ void GameConnection::handle_death(const Death& d) {
             report_hit(*line, d.killer_id, r.hit_report);
     if (d.damage > 0 && d.attack_skill < 231) melee_sound(d.spawn_id, d.killer_id, static_cast<std::int32_t>(d.damage));
     if (r.local_died) {
+        release_eye_control(true);
         death_tip_pending_ = true; // 0x531730: CEverQuest +0x39580 = 1 (the death tip at the next zone-in)
         pstatus_.dead = true;
+        pstatus_.owner_status = 4;
         pstatus_.hp = 0;
         set_auto_attack(false);
     }
@@ -134,6 +136,7 @@ void GameConnection::handle_death(const Death& d) {
     dead->speed_run = 0.0f;
     dead->speed_heading = 0.0f;
     dead->fly_mode = 0;
+    if (dead->id == world_.eye_id) release_eye_control(true);
     // The death text: ours in colour 0x115 and on the screen, others' in 0x116 when reported.
     while (chat_at < r.chat.size()) {
         std::uint32_t color = r.chat[chat_at].color;
@@ -165,6 +168,7 @@ void GameConnection::handle_zone_to_bind(const AppPacket& p) {
         pstatus_.endurance = pstatus_.max_endurance;
         drunkenness_ = 0;
         pstatus_.dead = false;
+        pstatus_.owner_status = 0;
         // In a raid: CRaid::SetTargetRaidPlayer(0) and ClearInvitedState (a pending invitation is dropped).
         if (raid_.active) {
             raid_.target.clear();

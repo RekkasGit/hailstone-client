@@ -18,6 +18,47 @@
 using namespace hailstone;
 using namespace hailstone::game::mechanics;
 
+TEST_CASE("Drunken motion sways sideways per moving step and sobering resets its parameters") {
+    PhysicsBody body;
+    DrunkenMotion motion;
+    body.velocity.x = 1;
+    update_drunken_motion(body, motion, 40);
+    CHECK(motion.phase == 0);
+    CHECK(motion.stride == 6);
+    CHECK(motion.amplitude == doctest::Approx(0.45f));
+    motion.phase = 128; // The sine peak; heading zero's sideways direction is +Y.
+    apply_drunken_motion(body, motion);
+    CHECK(body.feet.x == 0);
+    CHECK(body.feet.y == doctest::Approx(0.45f));
+    CHECK(motion.phase == 134);
+    CHECK(body.velocity.x == 1); // Sway changes the proposed position, before its collision sweep.
+    body.velocity = glm::vec3(0);
+    const auto still = body.feet;
+    apply_drunken_motion(body, motion);
+    CHECK(body.feet == still);
+    CHECK(motion.phase == 134);
+    body.velocity.y = 1;
+    motion.phase = 512;
+    apply_drunken_motion(body, motion);
+    CHECK(motion.phase == 518); // 512 itself is retained for one step, then values above it reset to zero.
+    apply_drunken_motion(body, motion);
+    CHECK(motion.phase == 6);
+    update_drunken_motion(body, motion, 39);
+    CHECK(motion.phase == -1);
+    CHECK(motion.stride == 1);
+    CHECK(motion.amplitude == 0.35f);
+
+    body.velocity = {0, -2, 0};
+    update_drunken_motion(body, motion, 100);
+    CHECK(body.velocity.x == 0.001f);
+    CHECK(body.velocity.y == -2);
+    CHECK(motion.stride == 13);
+    CHECK(motion.amplitude == doctest::Approx(0.60f));
+    body.velocity = glm::vec3(0);
+    update_drunken_motion(body, motion, 100, false); // A rider's update does not seed its mount's velocity.
+    CHECK(body.velocity == glm::vec3(0));
+}
+
 namespace {
 
 // n * 0.01f: the percent the original multiplies by.

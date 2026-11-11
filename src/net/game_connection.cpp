@@ -3,6 +3,7 @@
 #include "net/notice_packets.h"
 #include "net/player_packets.h"
 #include "net/settings_packets.h"
+#include "net/spell_packets.h"
 
 #include <algorithm>
 #include <fstream>
@@ -14,12 +15,14 @@
 
 #include "core/ascii_case.h"
 #include "core/game_dir.h"
+#include "core/byte_io.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "core/zone_name.h"
 #include "core/log.h"
 #include "core/process_serial.h"
 #include "game/appearance.h"
+#include "game/eye_control.h"
 #include "game/boats.h"
 #include "game/race_models.h"
 #include "game/combat.h"
@@ -581,6 +584,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         quest_npcs_asked_ = false;
         world_.player_id = 0;
         world_.controlled_id = 0;
+        world_.eye_id = world_.view_id = 0;
+        eye_motion_dirty_ = false;
+        last_eye_position_send_ = {};
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
         world_.target_id = 0;
         target_of_target_ = 0;
@@ -592,6 +598,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         motion_known_ = false;
         new_zone_.reset();
         profile_.reset();
+        drunkenness_ = 0;
         zone_points_.clear();
         zone_change_pending_ = false;
         auto_attack_ = sent_auto_attack_ = false;
@@ -610,6 +617,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         spell_book_open_ = false; // MoveToZone closes the book
         respawn_.reset();
         pstatus_.dead = false;
+        pstatus_.owner_status = 0;
         pstatus_.stand_state = 100;
         spells_.casting = {};
         spells_.pending = 0;
@@ -875,6 +883,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     }
     game::normalize_appearance(a, s.race);
     note_pet_spawn(out);
+    reconcile_eye_control();
 }
 
 void GameConnection::finish_server_files() {
@@ -1171,6 +1180,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     switch (op) {
     case Op::PlayerProfile:
         profile_ = decode_player_profile(p);
+        if (profile_) drunkenness_ = static_cast<std::int32_t>(std::min(profile_->intoxication, 200u));
         if (profile_) {
             pstatus_.hp = profile_->cur_hp;
             pstatus_.mana = profile_->mana;
@@ -2020,6 +2030,8 @@ void GameConnection::set_player_motion(const glm::vec3& position, float heading,
 void GameConnection::send_position(bool force) {
     // A dead player's spawn is a corpse now; nothing to report until the re-zone.
     if (!zone_session_ || world_.player_id == 0 || pstatus_.dead) return;
+    reconcile_eye_control();
+    send_eye_position(force);
     auto now = Clock::now();
     if (!force && (!motion_dirty_ || now - last_position_send_ < kPositionInterval)) return;
     // DoMainLoop: the sequence is the position tracker's sample count, then sample 2 is recorded.
@@ -2061,6 +2073,66 @@ void GameConnection::send_position(bool force) {
     last_sent_position_ = position_;
     last_sent_heading_ = heading_;
     motion_dirty_ = false;
+}
+
+void GameConnection::acquire_eye_control() {
+    if (state_ != ConnectionState::InZone || pstatus_.dead || own_effect_with(67) < 0) return;
+    if (!game::take_eye_control(world_, game::find_eye_summon(world_))) return;
+    // SetViewActor @0x48f030 acknowledges the remote view with its ID (0 restores the local view). Stock EQEmu
+    // ignores this message, but it is still part of the original client's view transition.
+    ByteWriter ack;
+    ack.le(world_.view_id);
+    send_zone(AppPacket(to_wire(Op::AckPacket), ack.take()));
+    eye_motion_dirty_ = true;
+    moving_ = false;
+    motion_dirty_ = true;
+}
+
+void GameConnection::release_eye_control(bool remove_effect) {
+    if (!world_.eye_id) return;
+    if (remove_effect)
+        if (int slot = own_effect_with(67); slot >= 0) {
+            send_zone(encode_buff_remove_request(static_cast<std::uint32_t>(slot), world_.player_id));
+            spells_.buffs[static_cast<std::size_t>(slot)] = {};
+        }
+    if (!game::release_eye_control(world_)) return;
+    eye_motion_dirty_ = false;
+    last_eye_position_send_ = {};
+    ByteWriter ack;
+    ack.le<std::uint32_t>(0);
+    send_zone(AppPacket(to_wire(Op::AckPacket), ack.take()));
+}
+
+void GameConnection::reconcile_eye_control() {
+    if (!world_.eye_id) return;
+    const auto eye = world_.spawns.find(world_.eye_id);
+    const bool retired = eye == world_.spawns.end() || eye->second.is_corpse ||
+                         game::find_eye_summon(world_) != world_.eye_id;
+    if (pstatus_.dead || retired || own_effect_with(67) < 0) release_eye_control(retired || pstatus_.dead);
+}
+
+void GameConnection::send_eye_position(bool force) {
+    const auto eye = world_.spawns.find(world_.eye_id);
+    if (eye == world_.spawns.end() || !zone_session_) return;
+    const auto now = Clock::now();
+    if (!force && (!eye_motion_dirty_ || now - last_eye_position_send_ < kPositionInterval)) return;
+    const game::Spawn& spawn = eye->second;
+    ClientPositionUpdate u;
+    u.sequence = position_tracker_.sequence();
+    u.spawn_id = static_cast<std::uint16_t>(spawn.id);
+    const auto p = game::world_to_server(spawn.position);
+    const auto v = game::world_to_server(spawn.velocity);
+    u.motion.x = p.x;
+    u.motion.y = p.y;
+    u.motion.z = p.z;
+    u.motion.heading = spawn.heading;
+    u.motion.delta_x = v.x;
+    u.motion.delta_y = v.y;
+    u.motion.delta_z = v.z;
+    u.motion.animation = static_cast<std::int32_t>(std::clamp(spawn.speed_run, -12.8f, 12.7f) * 40.0f);
+    send_zone(encode(u), false);
+    last_eye_position_send_ = now;
+    eye_motion_dirty_ = false;
 }
 
 void GameConnection::leave_zone_dropped() {
@@ -2117,6 +2189,7 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    release_eye_control();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (chat_server_) chat_server_->disconnect();
@@ -2480,6 +2553,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                     pstatus_.hp -= d->damage;
                     if (pstatus_.max_hp > 0 && pstatus_.hp > pstatus_.max_hp) pstatus_.hp = pstatus_.max_hp;
                 }
+                update_player_consciousness(true);
             }
             report_successful_hit(*d, hit_reported(d->target, d->source));
             // Hailstone (auto_target_xtarget): an NPC attacking the player, a pick due when there is no target.

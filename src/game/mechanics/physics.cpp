@@ -37,6 +37,31 @@ float vf0(const PhysicsBody& body, float value) {
 float heading_sin(float heading) { return table_sin(heading); }
 float heading_cos(float heading) { return table_cos(heading); }
 
+void update_drunken_motion(PhysicsBody& body, DrunkenMotion& motion, std::int32_t value, bool seed_velocity,
+                           const Fpu& fpu) {
+    if (value >= 40) {
+        if (motion.phase == -1) motion.phase = 0;
+        motion.amplitude = static_cast<float>(fpu.add(fpu.mul(static_cast<double>(value >> 2), 0.01f), 0.35f));
+        motion.stride = (value >> 3) + 1;
+    } else {
+        motion = {};
+    }
+    if (seed_velocity && value >= 100) {
+        if (body.velocity.x == 0.0f) body.velocity.x = 0.001f;
+        if (body.velocity.y == 0.0f) body.velocity.y = 0.001f;
+    }
+}
+
+void apply_drunken_motion(PhysicsBody& body, DrunkenMotion& motion, const Fpu& fpu) {
+    if (motion.phase < 0 || (body.velocity.x == 0.0f && body.velocity.y == 0.0f)) return;
+    if (motion.phase > 512) motion.phase = 0;
+    const float sway = static_cast<float>(fpu.mul(table_sin(static_cast<float>(motion.phase)), motion.amplitude));
+    const float sideways = static_cast<float>(fpu.add(body.heading, 128.0f));
+    body.feet.x = static_cast<float>(fpu.add(body.feet.x, fpu.mul(table_cos(sideways), sway)));
+    body.feet.y = static_cast<float>(fpu.add(body.feet.y, fpu.mul(table_sin(sideways), sway)));
+    motion.phase += motion.stride;
+}
+
 bool feet_on_ground(const PhysicsBody& body) {
     float feet = body.feet.z + body.velocity.z;
     float bound = body.floor_height + 0.5f + 0.001f;
