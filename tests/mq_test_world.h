@@ -49,6 +49,7 @@ struct GameConnectionTestAccess {
         ++c.server_rules_serial_;
     }
     static void update_server_rules(GameConnection& c) { c.update_server_rules(); }
+    static void update_bulk_job(GameConnection& c, std::int64_t now) { c.update_bulk_job(now); }
     static void with_character(const GameConnection& c, const std::function<void(game::mechanics::Character&)>& fn) {
         c.with_character(fn);
     }

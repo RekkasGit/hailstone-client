@@ -1584,6 +1584,7 @@ const char* mode_name(net::GameConnection::ItemJobMode m) {
            : m == M::Sell    ? "sell"
            : m == M::Destroy ? "destroy"
            : m == M::Tribute ? "tribute"
+           : m == M::Withdraw ? "withdraw"
                              : "sort";
 }
 
@@ -1670,7 +1671,7 @@ int SellJunk(lua_State* L) {
 }
 
 // done, total, mode, where = eq.ItemJob()   -- the job running (mode: "sort", "stack", "tidy", "sell", "destroy",
-// "tribute"; where:
+// "tribute", "withdraw"; where:
 // "inventory", "bank" or "bag"); nil when none is
 int ItemJob(lua_State* L) {
     auto& h = Impl::of(L).host;

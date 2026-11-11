@@ -109,7 +109,7 @@ constexpr Entry kCalls[] = {
     {"GameMenuClick", kCapActions}, {"ClickHotButton", kCapActions}, {"PickUp", kCapActions},
     {"PressButtonFrom", kCapActions}, {"ClearCursorButton", kCapActions}, {"SpellGemClick", kCapActions},
     {"BagSlotClick", kCapActions}, {"BankSlotClick", kCapActions}, {"PlaceClick", kCapActions},
-    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"ItemJob", kCapActions}, {"StopItemJob", kCapActions},
+    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SetItemsKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"ItemJob", kCapActions}, {"StopItemJob", kCapActions},
     {"SendParcel", kCapActions}, {"SendParcelMoney", kCapActions}, {"RetrieveParcel", kCapActions},
     {"ClaimAllParcels", kCapActions}, {"AbilityBookUse", kCapActions}, {"AbilityBookAutoskillEnable", kCapActions},
     {"UseSkill", kCapActions}, {"SpellBookClick", kCapActions}, {"SpellBookMemorize", kCapActions},

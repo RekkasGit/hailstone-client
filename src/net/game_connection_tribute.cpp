@@ -21,7 +21,82 @@ bool iequals(std::string_view a, std::string_view b) {
            });
 }
 
+std::uint32_t donation_count(const Item& item) { return item.stackable() ? item.stack_count : 1u; }
+
+// A bag must not take newly added contents with it when its delayed donation reply arrives.
+bool same_donated_item(const Item& a, const Item& b) {
+    if (a.id != b.id || a.serial != b.serial || a.instance_id != b.instance_id || a.stackable() != b.stackable() ||
+        donation_count(a) != donation_count(b) || a.charges != b.charges || a.contents.size() != b.contents.size())
+        return false;
+    for (const auto& child : a.contents) {
+        const auto other =
+            std::find_if(b.contents.begin(), b.contents.end(), [&](const auto& c) { return c.index == child.index; });
+        if (other == b.contents.end() || !same_donated_item(child.item, other->item))
+            return false;
+    }
+    return true;
+}
+
 } // namespace
+
+bool GameConnection::begin_tribute_donation(bool guild, const Item& item, std::uint32_t master_id) {
+    if (pending_tribute_donation_) {
+        chat(ChatEvent::Kind::System, "Wait for the tribute master to answer your previous item donation.");
+        return false;
+    }
+    if (item.serial.empty() || item.serial.find_first_not_of('0') == std::string::npos) {
+        chat(ChatEvent::Kind::System, "This item cannot be identified safely for a tribute donation.");
+        return false;
+    }
+    pending_tribute_donation_ = PendingTributeDonation{guild, item.slot, donation_count(item), master_id, item};
+    return true;
+}
+
+bool GameConnection::finish_tribute_donation(bool guild, const ItemSlot& slot, std::uint32_t quantity,
+                                            std::uint32_t master_id, bool consumed) {
+    if (!pending_tribute_donation_ || pending_tribute_donation_->guild != guild ||
+        !pending_tribute_donation_->slot.same(slot) || pending_tribute_donation_->quantity != quantity ||
+        (!guild && pending_tribute_donation_->master_id != master_id)) {
+        log::warn("ignoring an unmatched {} tribute item reply", guild ? "guild" : "personal");
+        return false;
+    }
+    PendingTributeDonation pending = std::move(*pending_tribute_donation_);
+    pending_tribute_donation_.reset();
+    if (!consumed)
+        return true;
+
+    // A player may have moved the donated instance while waiting. Remove that unique, unchanged instance wherever
+    // it now lives, never an item that has since taken its request slot. A split/merge or duplicate serial is
+    // ambiguous, so leave the inventory intact for the server's next authoritative refresh.
+    std::size_t instances = 0;
+    std::optional<ItemSlot> found;
+    auto visit = [&](auto&& self, const Item& item, const ItemSlot& at) -> void {
+        if (item.id == pending.item.id && item.serial == pending.item.serial) {
+            ++instances;
+            if (same_donated_item(item, pending.item))
+                found = at;
+        }
+        if (item.is_bag() && at.sub < 0)
+            for (const auto& child : item.contents) {
+                ItemSlot inside = at;
+                inside.sub = static_cast<std::int16_t>(child.index);
+                self(self, child.item, inside);
+            }
+    };
+    for (const auto& [key, item] : inventory_.items())
+        visit(visit, item, ItemSlot{key.first, key.second, -1, -1});
+    if (instances == 1 && found) {
+        inventory_.take(*found);
+        if (found->type == kInvPossessions && found->sub < 0 && found->slot < kEquipmentSlots)
+            refresh_worn_slot(found->slot);
+    } else {
+        log::warn("cannot reconcile {} tribute donation of item {} serial {}", guild ? "guild" : "personal",
+                  pending.item.id, pending.item.serial);
+        chat(ChatEvent::Kind::System,
+             "Your donated item changed before the tribute reply. Other items were left alone; zone to refresh your inventory.");
+    }
+    return true;
+}
 
 std::uint32_t GameConnection::Tribute::active_cost() const {
     std::uint32_t cost = 0;
@@ -78,6 +153,8 @@ void GameConnection::tribute_toggle(bool on) {
 bool GameConnection::tribute_donate_cursor() {
     const Item* held = inventory_.cursor();
     if (state_ != ConnectionState::InZone || !tribute_.master_id || !held) return false;
+    if (refuse_kept(held, "donate")) return false;
+    if (!begin_tribute_donation(false, *held, tribute_.master_id)) return false;
     TributeItem t;
     t.slot = ItemSlot::possessions(kSlotCursor);
     t.quantity = held->stackable() ? held->stack_count : 1;
@@ -146,6 +223,8 @@ void GameConnection::guild_trophy_opt_out(const std::string& member) {
 bool GameConnection::guild_tribute_donate_cursor() {
     const Item* held = inventory_.cursor();
     if (state_ != ConnectionState::InZone || !guild_tribute_.master_id || !held) return false;
+    if (refuse_kept(held, "donate")) return false;
+    if (!begin_tribute_donation(true, *held, guild_tribute_.master_id)) return false;
     send_zone(encode_guild_donate_item(ItemSlot::possessions(kSlotCursor), held->stackable() ? held->stack_count : 1,
                                        guild_tribute_.master_id, guild_.guild_id));
     return true;
@@ -200,13 +279,10 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
         break;
     case Op::GuildTributeDonateItem:
         if (auto v = decode_guild_donate_item(p)) {
+            // EQEmu consumes guild offerings even when their favour is zero.
+            if (!finish_tribute_donation(true, v->slot, v->quantity, 0, true)) break;
             g.last_donation = static_cast<std::int32_t>(v->favor);
-            // EQEmu deleted the donated item without telling the client, whatever favour it gave (unlike the personal
-            // tribute, Handle_OP_GuildTributeDonateItem never refuses: a worthless item gives 0 and still goes).
-            if (Item* item = inventory_.at(v->slot)) {
-                if (item->stackable() && v->quantity > 0 && v->quantity < item->stack_count) item->stack_count -= v->quantity;
-                else inventory_.take(v->slot);
-            }
+            ++g.donation_answers;
         }
         break;
     case Op::GuildTributeDonatePlat:
@@ -249,14 +325,10 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
         break;
     case Op::TributeItem:
         if (auto t = decode_tribute_item(p)) {
+            // A personal refusal (zero favour) keeps the item.
+            if (!finish_tribute_donation(false, t->slot, t->quantity, t->master_id, t->points > 0)) break;
             tribute_.last_donation = t->points;
             ++tribute_.donation_answers;
-            // EQEmu's TributeItem deletes the donated item (DeleteItemInInventory, no client update) and echoes this;
-            // a refusal (an augmented or worthless item, too few charges) echoes 0 points and keeps it.
-            if (Item* item = t->points > 0 ? inventory_.at(t->slot) : nullptr) {
-                if (item->stackable() && t->quantity > 0 && t->quantity < item->stack_count) item->stack_count -= t->quantity;
-                else inventory_.take(t->slot);
-            }
         }
         break;
     case Op::TributeMoney:

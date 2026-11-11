@@ -1081,13 +1081,48 @@ void GameConnection::load_kept_items() {
 }
 
 void GameConnection::set_item_kept(std::uint32_t id, std::string_view name, bool on) {
-    if (!kept_items_.set(id, name, on)) return;
+    set_items_kept({{id, std::string(name)}}, on);
+}
+
+void GameConnection::set_items_kept(const std::vector<std::pair<std::uint32_t, std::string>>& items, bool on) {
+    bool changed = false;
+    for (const auto& [id, name] : items) changed = kept_items_.set(id, name, on) || changed;
+    if (!changed) return;
     ++kept_revision_;
+    if (on) {
+        // An existing server-side offer must stop too: guarding only the next button press leaves it for sale.
+        if ((trader_.trader || trader_.start_pending) &&
+            std::any_of(trader_.slots.begin(), trader_.slots.end(), [&](const auto& slot) {
+                const Item* item = inventory_.at(slot.where);
+                return kept_items_.kept(slot.item_id) || (item && kept_items_.holds_kept(*item));
+            })) {
+            trader_end();
+            chat(ChatEvent::Kind::System, "Trader mode stopped because an offered item is now marked Keep.");
+        }
+        if (barter_window_.buyer_mode &&
+            std::any_of(barter_window_.lines.begin(), barter_window_.lines.end(), [&](const auto& line) {
+                return line.enabled && line.toggle &&
+                    std::any_of(line.trade_items.begin(), line.trade_items.end(), [&](const auto& item) {
+                        return kept_items_.kept(item.item_id);
+                    });
+            })) {
+            barter_start_stop();
+            chat(ChatEvent::Kind::System, "Buyer mode stopped because a compensation item is now marked Keep.");
+        }
+    }
     std::filesystem::path path = own_files().kept_items();
     if (path.empty()) return; // no character yet: kept for this session only
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     if (!write_file_atomic(path, kept_items_.format())) log::warn("cannot write {}", path.string());
+}
+
+bool GameConnection::refuse_kept_id(std::uint32_t id, std::string_view verb) {
+    if (!kept_items_.kept(id)) return false;
+    Item item;
+    item.id = id;
+    item.name = kept_items_.items().at(id);
+    return refuse_kept(&item, verb);
 }
 
 bool GameConnection::refuse_kept(const Item* item, std::string_view verb) {

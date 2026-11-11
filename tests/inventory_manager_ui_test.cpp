@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -120,7 +121,7 @@ TEST_CASE("Advanced Inventory: lists what is worn and carried, draws in both vie
         // the mock's character: a Short Sword in Primary, five Rations in the first general slot
         REQUIRE(luaL_dostring(L, R"lua(
 local l = eq.AllItems()
-return #l, l[1].where, l[1].item.name, l[1].place, l[2].where, l[2].item.count, l[2].place, l[2].kept
+return #l, l[1].where, l[1].item.name, l[1].place, l[2].where, l[2].item.count, l[2].place, l[2].kept, l[2].item.serial
 )lua") == LUA_OK);
         CHECK(lua_tointeger(L, 1) == 2);
         CHECK(std::string(lua_tostring(L, 2)) == "worn");
@@ -130,6 +131,8 @@ return #l, l[1].where, l[1].item.name, l[1].place, l[2].where, l[2].item.count, 
         CHECK(lua_tointeger(L, 6) == 5);
         CHECK(std::string(lua_tostring(L, 7)) == "i:23");
         CHECK_FALSE(lua_toboolean(L, 8));
+        REQUIRE(lua_isstring(L, 9));
+        CHECK(std::string(lua_tostring(L, 9)) == conn.inventory().at(at(23))->serial);
         lua_settop(L, 0);
 
         // Keep through the shared tools: the client has it, and a Sell mark on the same item clears it
@@ -147,6 +150,26 @@ return kept, eq.ItemKept(rations.id), tools.Junk(rations)
         lua_settop(L, 0);
         REQUIRE(luaL_dostring(L, "local t = dofile('lib/itemtools.lua') t.SetKeep(eq.Item(23), true)") == LUA_OK);
         CHECK(conn.kept_items().kept(1002));
+        const auto before_batch = conn.kept_items_revision();
+        REQUIRE(luaL_dostring(L, R"lua(
+local invalid = pcall(eq.SetItemsKept, {{id=1001, name="Sword"}, {id=0}}, true)
+return invalid, eq.ItemKept(1001)
+)lua") == LUA_OK);
+        CHECK_FALSE(lua_toboolean(L, 1));
+        CHECK_FALSE(lua_toboolean(L, 2));
+        CHECK(conn.kept_items_revision() == before_batch);
+        lua_settop(L, 0);
+        REQUIRE(luaL_dostring(L, R"lua(
+local tools = dofile("lib/itemtools.lua")
+tools.SetKeepMany({eq.Item(13), eq.Item(23), eq.Item(13)}, true)
+return eq.ItemKept(1001), eq.ItemKept(1002), tools.Junk(eq.Item(23))
+)lua") == LUA_OK);
+        CHECK(lua_toboolean(L, 1));
+        CHECK(lua_toboolean(L, 2));
+        CHECK_FALSE(lua_toboolean(L, 3));
+        CHECK(conn.kept_items_revision() == before_batch + 1);
+        lua_settop(L, 0);
+        conn.set_item_kept(1001, "Sword", false);
         frames();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
 
@@ -188,7 +211,8 @@ return st[1][1], st[1][2], #st, type(l[1].item.stats), l[2].item.tribute, nd, ed
         frames();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
         REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.stat', '') ui.SetSetting('advinv.sort', 'Value') "
-                                 "local s = ADVANCED_INVENTORY.sel s.places['i:23'] = 1002 s.n = 1") == LUA_OK);
+                                 "local s = ADVANCED_INVENTORY.sel local it = eq.AllItems()[2].item "
+                                 "s.places['i:23'] = {id=it.id, serial=it.serial, quantity=it.count} s.n = 1") == LUA_OK);
         frames();
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
         REQUIRE(luaL_dostring(L, "return ADVANCED_INVENTORY.sel.n") == LUA_OK);
@@ -209,6 +233,158 @@ return st[1][1], st[1][2], #st, type(l[1].item.stats), l[2].item.tribute, nd, ed
         CHECK(ImGui::FindWindowByName("###modern.InventoryWindow") != nullptr);
     }
     ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Advanced Inventory selection and confirmation retain item instance and stack identities") {
+    ScratchDir scratch("inventory_manager_identity_test");
+    const fs::path dir = scratch.path();
+    fs::copy(ui_dir() / "modern", dir / "modern", fs::copy_options::recursive);
+    std::unique_ptr<ImGuiContext, void (*)(ImGuiContext*)> context(ImGui::CreateContext(), ImGui::DestroyContext);
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* pixels = nullptr;
+    int width = 0, height = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    auto config = MockConfig::standard();
+    for (auto& item : config.characters[0].inventory)
+        if (item.slot.same(net::ItemSlot::possessions(23))) item.serial = "0000000000001002";
+    auto options = quick_options();
+    options.servers_dir = dir / "servers";
+    Rig rig(std::move(config), options);
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    put_coin_away(conn);
+    REQUIRE(conn.inventory().at(at(23)));
+    struct Mutation {
+        net::GameConnection* conn;
+        net::Item replacement;
+    } mutation{&conn, *conn.inventory().at(at(23))};
+    app::EqHost host;
+    host.in_game = host.ui_ready = true;
+    host.game = &rig.game;
+    host.conn = &conn;
+    app::EqApi api(host);
+    api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+    ui::lua::LuaUi lua(dir / "modern", dir / "modern.txt");
+    lua.add_eq_api([&](lua_State* state) {
+        api.register_functions(state);
+        lua_pushcfunction(state, [](lua_State* s) { lua_pushboolean(s, 1); return 1; });
+        lua_setfield(state, -2, "InGame");
+    });
+    lua_State* state = lua.state();
+    lua_pushlightuserdata(state, &mutation);
+    lua_pushcclosure(state, [](lua_State* s) {
+        const auto* change = static_cast<Mutation*>(lua_touserdata(s, lua_upvalueindex(1)));
+        change->conn->receive_zone_packet_for_test(net::encode_item_packet(false, {net::kItemPacketCharInventory, change->replacement}));
+        return 0;
+    }, 1);
+    lua_setglobal(state, "test_replace");
+    REQUIRE(luaL_dostring(state, R"lua(
+ui.SetSetting("advinv.view", "grid")
+test_started, test_confirm_drawn = 0, 0
+local invisible, button, bulk = ui.InvisibleButton, ui.Button, eq.BulkItems
+ui.InvisibleButton = function(id, ...)
+  local clicked = invisible(id, ...)
+  if test_hit == id then test_hit = nil return true end
+  return clicked
+end
+ui.Button = function(label, ...)
+  local clicked = button(label, ...)
+  if label == "Destroy 1" then test_confirm_drawn = test_confirm_drawn + 1 end
+  if test_confirm == label then
+    test_confirm = nil
+    if test_mutate_on_confirm then test_mutate_on_confirm = nil test_replace() end
+    return true
+  end
+  return clicked
+end
+eq.BulkItems = function(mode, places, dry)
+  if not dry then test_started = test_started + 1 end
+  return bulk(mode, places, dry)
+end
+)lua") == LUA_OK);
+    auto one_frame = [&] {
+        api.begin_frame();
+        frame(lua);
+        REQUIRE(ImGui::FindWindowByName("UI errors") == nullptr);
+    };
+    auto value = [&](const char* code) {
+        REQUIRE(luaL_dostring(state, code) == LUA_OK);
+        const auto result = lua_tointeger(state, -1);
+        lua_settop(state, 0);
+        return result;
+    };
+    api.show("InventoryManagerWnd", true);
+    for (int i = 0; i < 3; ++i) one_frame();
+    REQUIRE(luaL_dostring(state, "test_hit = '##gridselecti:23'") == LUA_OK);
+    one_frame();
+    REQUIRE(value("return ADVANCED_INVENTORY.sel.n") == 1);
+    REQUIRE(luaL_dostring(state, R"lua(
+local selected = ADVANCED_INVENTORY.sel.places["i:23"]
+return selected.id, selected.serial, selected.quantity
+)lua") == LUA_OK);
+    CHECK(lua_tointeger(state, 1) == 1002);
+    REQUIRE(lua_type(state, 2) == LUA_TSTRING);
+    CHECK(std::string(lua_tostring(state, 2)) == "0000000000001002");
+    CHECK(lua_tointeger(state, 3) == 5);
+    lua_settop(state, 0);
+
+    enum class ChangeAt { Selection, Modal, Confirm, Unchanged };
+    ChangeAt when = ChangeAt::Modal;
+    bool rewrite_selection = false;
+    SUBCASE("replacement serial before opening confirmation") {
+        when = ChangeAt::Selection;
+        mutation.replacement.serial = "0000000000002002";
+    }
+    SUBCASE("stack count before opening confirmation") {
+        when = ChangeAt::Selection;
+        mutation.replacement.stack_count = 6;
+    }
+    SUBCASE("replacement definition before opening confirmation") {
+        when = ChangeAt::Selection;
+        mutation.replacement.id = 2002;
+    }
+    SUBCASE("replacement serial while confirmation is open") { mutation.replacement.serial = "0000000000002002"; }
+    SUBCASE("stack count while confirmation is open") { mutation.replacement.stack_count = 6; }
+    SUBCASE("the modal cannot adopt a rebased selection table") {
+        mutation.replacement.serial = "0000000000002002";
+        rewrite_selection = true;
+    }
+    SUBCASE("identity is checked again immediately before starting the job") {
+        when = ChangeAt::Confirm;
+        mutation.replacement.serial = "0000000000002002";
+    }
+    SUBCASE("an unchanged selection starts the existing bulk job") { when = ChangeAt::Unchanged; }
+    auto replace = [&] {
+        conn.receive_zone_packet_for_test(net::encode_item_packet(false, {net::kItemPacketCharInventory, mutation.replacement}));
+    };
+    if (when == ChangeAt::Selection) {
+        replace();
+        one_frame();
+        CHECK(value("return ADVANCED_INVENTORY.sel.n") == 0);
+        REQUIRE(luaL_dostring(state, "test_hit = '##advbulkdestroy'") == LUA_OK);
+        one_frame();
+    } else {
+        REQUIRE(luaL_dostring(state, "test_hit = '##advbulkdestroy'") == LUA_OK);
+        one_frame();
+        REQUIRE(value("return test_confirm_drawn") > 0);
+        if (when == ChangeAt::Modal) {
+            replace();
+            if (rewrite_selection)
+                REQUIRE(luaL_dostring(state, "ADVANCED_INVENTORY.sel.places['i:23'].serial = '0000000000002002'") == LUA_OK);
+        }
+        REQUIRE(luaL_dostring(state, when == ChangeAt::Confirm ?
+            "test_confirm = 'Destroy 1' test_mutate_on_confirm = true" : "test_confirm = 'Destroy 1'") == LUA_OK);
+        one_frame();
+    }
+    const bool unchanged = when == ChangeAt::Unchanged;
+    CHECK(value("return test_started") == (unchanged ? 1 : 0));
+    CHECK(conn.item_job().has_value() == unchanged);
+    CHECK(value("return ADVANCED_INVENTORY.sel.n") == 0);
+    REQUIRE(conn.inventory().at(at(23)));
+    CHECK(conn.inventory().at(at(23))->id == mutation.replacement.id);
+    CHECK(conn.inventory().at(at(23))->serial == mutation.replacement.serial);
+    CHECK(conn.inventory().at(at(23))->stack_count == mutation.replacement.stack_count);
+    CHECK_FALSE(conn.inventory().cursor());
 }
 
 TEST_CASE("Kept items: not destroyed or dropped, and kept per character in kept_items.txt") {

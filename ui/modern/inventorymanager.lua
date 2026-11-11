@@ -177,12 +177,22 @@ local function cacheKey()
   return table.concat(parts, "|")
 end
 
--- The rows selected (a click on a row; Shift, Ctrl), by place, each with the item it held then: the bulk actions'
--- items. Only rows shown stay selected. (Kept across a reload of the script, as lib/itemtools.lua's ITEM_TOOLS; the
+-- The rows selected (a click on a row; Shift, Ctrl), by place, with their item id, serial and quantity at selection:
+-- the bulk actions' items. A changed instance or stack loses its selection rather than inheriting permission.
+-- Only rows shown stay selected. (Kept across a reload of the script, as lib/itemtools.lua's ITEM_TOOLS; the
 -- tests read it.)
 ADVANCED_INVENTORY = ADVANCED_INVENTORY or { sel = { places = {}, n = 0, anchor = nil } }
 local sel = ADVANCED_INVENTORY.sel
-local function selected(r) return sel.places[r.place] == r.item.id end
+local function quantity(it) return it.stackable and (it.count or 1) or 1 end
+local function identity(it)
+  return { id = it.id, serial = it.serial, quantity = quantity(it) }
+end
+local function matches(snapshot, it)
+  -- An older hot-reloaded selection held only an item id. It cannot safely identify an instance now.
+  return type(snapshot) == "table" and it ~= nil and snapshot.id == it.id
+    and snapshot.serial == it.serial and snapshot.quantity == quantity(it)
+end
+local function selected(r) return matches(sel.places[r.place], r.item) end
 local function selClear()
   sel.places, sel.n, sel.anchor = {}, 0, nil
 end
@@ -190,7 +200,7 @@ local function selSet(r, on)
   if on == selected(r) then return end
   if on then
     if sel.places[r.place] == nil then sel.n = sel.n + 1 end
-    sel.places[r.place] = r.item.id
+    sel.places[r.place] = identity(r.item)
   else
     if sel.places[r.place] ~= nil then sel.n = sel.n - 1 end
     sel.places[r.place] = nil
@@ -198,10 +208,9 @@ local function selSet(r, on)
 end
 -- what is selected and still shown, the rest dropped
 local function selPrune(rows)
-  if sel.n == 0 then return end
   local keep, n = {}, 0
   for _, r in ipairs(rows) do
-    if selected(r) then keep[r.place], n = r.item.id, n + 1 end
+    if selected(r) then keep[r.place], n = sel.places[r.place], n + 1 end
   end
   sel.places, sel.n = keep, n
   if sel.anchor and not keep[sel.anchor] then sel.anchor = nil end
@@ -539,11 +548,12 @@ local function toolbar(x, y, w, s, v)
     ui.TextDisabled(#v.rows == 1 and "The item shown" or ("The " .. #v.rows .. " items shown"))
     ui.Separator()
     if ui.MenuItem("Keep them all") then
-      local seen = {}
+      local seen, batch = {}, {}
       for _, r in ipairs(v.rows) do
-        if not seen[r.item.id] and not tools.Kept(r.item) then tools.SetKeep(r.item, true) end
+        if not seen[r.item.id] and not tools.Kept(r.item) then batch[#batch + 1] = r.item end
         seen[r.item.id] = true
       end
+      tools.SetKeepMany(batch, true)
     end
     if ui.MenuItem("Mark them to sell") then
       local seen = {}
@@ -556,15 +566,17 @@ local function toolbar(x, y, w, s, v)
     end
     if ui.IsItemHovered() then ui.SetTooltip("Leaves out what you wear, what is marked Keep and what merchants will not buy") end
     if ui.MenuItem("Clear their marks") then
+      local batch = {}
       for _, r in ipairs(v.rows) do
-        if tools.Kept(r.item) then tools.SetKeep(r.item, false) end
+        if tools.Kept(r.item) then batch[#batch + 1] = r.item end
         if tools.Junk(r.item) then tools.SetSell(r.item, false) end
       end
+      tools.SetKeepMany(batch, false)
     end
     ui.Separator()
     if ui.MenuItem("Clear every sell mark") then tools.ClearSell() end
     ui.Separator()
-    if ui.MenuItem("Select everything shown", false, cfg.view == "list" and #v.rows > 0, "Ctrl+A") then
+    if ui.MenuItem("Select everything shown", false, #v.rows > 0, "Ctrl+A") then
       for _, r in ipairs(v.rows) do selSet(r, true) end
     end
     if ui.MenuItem("Clear the selection", false, sel.n > 0) then selClear() end
@@ -889,7 +901,13 @@ local function gridView(v, x, y, w, h, s)
     end
     local tx = px0 + col * (t + g)
     if yy + t >= top and yy <= bottom then
-      slotFor(r, tx, yy, t, s)
+      -- A selection strip leaves the icon's pick/use/drag behavior intact.
+      local selectH = 12 * s
+      slotFor(r, tx, yy, t - selectH, s)
+      if T.Hit("##gridselect" .. r.place, tx, yy + t - selectH, tx + t, yy + t) then
+        rowClicked(v, r)
+      end
+      if ui.IsItemHovered() then ui.SetTooltip("Select (Ctrl adds; Shift selects a range)") end
       if selected(r) then
         local a = C.accent
         ui.DrawRect(tx - 2 * s, yy - 2 * s, tx + t + 2 * s, yy + t + 2 * s, a[1], a[2], a[3], 0.9, 7 * s, 2 * s)
@@ -947,13 +965,15 @@ end
 
 -- ---------------------------------------------------------------- the selection's actions
 local BULK = {
+  withdraw = { word = "Withdraw", verb = "Withdraw", where = "Open the bank to withdraw what you selected",
+    what = "what is in the open bank (Keep marks stay)" },
   sell = { word = "Sell", verb = "Sell", where = "Open a merchant to sell what you selected",
     what = "what you carry that the merchant buys" },
   tribute = { word = "Tribute", verb = "Donate", where = "Open a tribute master to donate what you selected",
     what = "what you carry that is worth tribute" },
-  destroy = { word = "Destroy", verb = "Destroy", what = "what you carry, but a bag that holds anything or a No Destroy item" },
+  destroy = { word = "Destroy", verb = "Destroy", what = "carried or open-bank items, except full bags and No Destroy items" },
 }
-local bulk = { mode = nil, places = nil } -- the action waiting for its confirmation
+local bulk = { mode = nil, places = nil, identities = nil, names = nil } -- an immutable confirmation snapshot
 
 -- The selected places, in the order shown.
 local function selPlaces(v)
@@ -964,33 +984,55 @@ local function selPlaces(v)
   return out
 end
 
+local function bulkCurrent()
+  local live = {}
+  for _, r in ipairs(eq.AllItems() or {}) do live[r.place] = r.item end
+  for _, p in ipairs(bulk.places) do
+    if not matches(bulk.identities[p], live[p]) then return false end
+  end
+  return true
+end
+
+local function bulkChanged()
+  selClear()
+  note("The selected items changed. Select them again.")
+  ui.CloseCurrentPopup()
+  bulk.mode, bulk.places, bulk.identities, bulk.names = nil, nil, nil, nil
+end
+
 local function bulkConfirm(s)
   ui.PushStyleVar(ui.StyleVar.WindowPadding, 14 * s, 12 * s)
   local open = ui.BeginPopup("##advbulkask")
   ui.PopStyleVar()
   if not open then
-    bulk.mode, bulk.places = nil, nil
+    bulk.mode, bulk.places, bulk.identities, bulk.names = nil, nil, nil, nil
+    return
+  end
+  if not bulk.mode or not bulk.places or not bulk.identities or not bulk.names then
+    -- An open popup can outlive a hot reload of this script; its old identity snapshot cannot be reconstructed.
+    bulkChanged()
+    ui.EndPopup()
+    return
+  end
+  if not bulkCurrent() then
+    bulkChanged()
+    ui.EndPopup()
     return
   end
   local b = BULK[bulk.mode]
   local n, err = eq.BulkItems(bulk.mode, bulk.places, true)
-  local names, seen = {}, {}
-  for _, r in ipairs(data.rows) do
-    for _, p in ipairs(bulk.places) do
-      if r.place == p and not seen[p] then
-        seen[p] = true
-        names[#names + 1] = r.item.stackable and (r.item.count .. " x " .. r.item.name) or r.item.name
-      end
-    end
-  end
+  local names = bulk.names
   ui.Text(string.format("%s %d item%s?", b.verb, n, n == 1 and "" or "s"))
   ui.PushTextWrapPos(ui.GetCursorPos() + 340 * s)
   for i = 1, math.min(#names, 8) do ui.TextDisabled("  " .. names[i]) end
   if #names > 8 then ui.TextDisabled(string.format("  and %d more", #names - 8)) end
   if n < #bulk.places then
-    ui.TextDisabled(string.format("Only %s: %d of the %d selected; kept items stay.", b.what, n, #bulk.places))
+    ui.TextDisabled(string.format("Only %s: %d of the %d selected; %s.", b.what, n, #bulk.places,
+      bulk.mode == "withdraw" and "Keep marks stay" or "kept items stay"))
   end
-  if bulk.mode ~= "sell" then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, "This cannot be undone.") end
+  if bulk.mode == "destroy" or bulk.mode == "tribute" then
+    ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, "This cannot be undone.")
+  end
   if err then ui.TextColored(C.danger[1], C.danger[2], C.danger[3], 1, err) end
   ui.PopTextWrapPos()
   ui.Dummy(0, 4 * s)
@@ -1001,10 +1043,16 @@ local function bulkConfirm(s)
   local go = ui.Button(b.verb .. (n > 0 and (" " .. n) or "")) and n > 0 and not err
   ui.PopStyleColor(3)
   if go then
-    local _, why = eq.BulkItems(bulk.mode, bulk.places)
-    note(why)
-    if not why then selClear() end
-    ui.CloseCurrentPopup()
+    -- Read live identities immediately before handing the places to the job. The modal must not adopt a
+    -- replacement or a changed stack, even when the displayed rows or the selection have refreshed meanwhile.
+    if bulkCurrent() then
+      local _, why = eq.BulkItems(bulk.mode, bulk.places)
+      note(why)
+      if not why then selClear() end
+      ui.CloseCurrentPopup()
+    else
+      bulkChanged()
+    end
   end
   ui.SameLine()
   if ui.Button("Cancel") or ui.IsKeyPressed(ui.Key.Escape) then ui.CloseCurrentPopup() end
@@ -1023,7 +1071,7 @@ local function selectionBar(x, y, s, v)
     C.text, T.font.small) + 14 * s
   local busy = eq.ItemJob()
   local bw = 96 * s
-  for _, mode in ipairs({ "sell", "tribute", "destroy" }) do
+  for _, mode in ipairs({ "withdraw", "sell", "tribute", "destroy" }) do
     local b = BULK[mode]
     local n, err = eq.BulkItems(mode, places, true)
     local ok = not busy and not err and n > 0
@@ -1031,11 +1079,19 @@ local function selectionBar(x, y, s, v)
     if busy then tip = "Wait for the items being moved"
     elseif err and b.where and err:find("^Open") then tip = b.where
     elseif err then tip = err
-    elseif n == 0 then tip = "None of them: only " .. b.what .. ", never what is marked Keep"
-    else tip = string.format("%s %d of the %d selected (%s; never what is marked Keep)", b.verb, n, #places, b.what) end
+    elseif n == 0 then tip = "None of them: only " .. b.what
+    else tip = string.format("%s %d of the %d selected (%s)", b.verb, n, #places, b.what) end
     if T.Button("##advbulk" .. mode, tx, y + 10 * s, tx + bw, y + 36 * s, s, n > 0 and (b.word .. " (" .. n .. ")") or b.word,
         { enabled = ok, primary = ok and mode ~= "destroy", danger = mode == "destroy", tooltip = tip }) then
-      bulk.mode, bulk.places = mode, places
+      local snapshots, names = {}, {}
+      for _, r in ipairs(v.rows) do
+        if selected(r) then
+          local chosen = sel.places[r.place]
+          snapshots[r.place] = { id = chosen.id, serial = chosen.serial, quantity = chosen.quantity }
+          names[#names + 1] = r.item.stackable and (chosen.quantity .. " x " .. r.item.name) or r.item.name
+        end
+      end
+      bulk.mode, bulk.places, bulk.identities, bulk.names = mode, places, snapshots, names
       ui.OpenPopup("##advbulkask")
     end
     tx = tx + bw + 6 * s
@@ -1052,7 +1108,7 @@ local function footer(x, y, w, s, v)
   local _, th = T.TextSize("Ag", T.font.small)
   local banner = tools.ModeBanner("##advmode", x, x + 440 * s, y + 13 * s, s)
   local note = tools.Note()
-  local selecting = sel.n > 0 and cfg.view == "list" or bulk.mode ~= nil
+  local selecting = sel.n > 0 or bulk.mode ~= nil
   if banner == 0 and selecting then
     selectionBar(x, y, s, v)
   elseif banner == 0 and note then -- why the last Sort, Stack or sale did not start, for a few seconds
@@ -1118,7 +1174,7 @@ local function body(x, y, w, h, s)
   local v = shownRows()
   -- Ctrl+A: everything shown, unless a text field has the keys
   local io = ui.GetIO()
-  if cfg.view == "list" and io.ctrl and not io.typing and ui.IsKeyPressed(ui.Key.A) and ui.IsWindowFocused(3) then
+  if io.ctrl and not io.typing and ui.IsKeyPressed(ui.Key.A) and ui.IsWindowFocused(3) then
     for _, r in ipairs(v.rows) do selSet(r, true) end
   end
   toolbar(x, y, w, s, v)
