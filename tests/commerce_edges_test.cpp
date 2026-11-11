@@ -276,3 +276,25 @@ TEST_CASE("commerce: bulk guild tribute waits for the guild answer and uses guil
     CHECK_FALSE(c.inventory().at(net::ItemSlot::possessions(24)));
     CHECK(c.guild_tribute().last_donation == 10);
 }
+
+TEST_CASE("commerce: a bank withdrawal goes into the packs and never equips") {
+    auto config = MockConfig::standard();
+    auto arrows = make_item(3003, "Stored arrows", 0);
+    arrows.slot = bank_at(0);
+    arrows.equip_slots = 1u << net::kSlotAmmo; // the ammo slot is empty: auto-inventory would equip them there
+    config.characters.front().inventory.push_back(arrows);
+    ScratchDir files("commerce_edges");
+    Rig rig(std::move(config), commerce_options(files));
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    empty_coin_cursor(c);
+    show_bank(rig);
+    REQUIRE_FALSE(c.inventory().at(net::ItemSlot::possessions(net::kSlotAmmo)));
+    using M = net::GameConnection::ItemJobMode;
+    REQUIRE(c.start_bulk_job(M::Withdraw, {bank_at(0)}).empty());
+    REQUIRE(rig.until([&] { return !c.item_job(); }));
+    CHECK_FALSE(c.inventory().at(bank_at(0)));
+    CHECK_FALSE(c.inventory().at(net::ItemSlot::possessions(net::kSlotAmmo)));
+    REQUIRE(c.inventory().at(net::ItemSlot::possessions(24)));
+    CHECK(c.inventory().at(net::ItemSlot::possessions(24))->id == 3003);
+}

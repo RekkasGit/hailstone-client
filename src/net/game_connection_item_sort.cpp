@@ -248,7 +248,7 @@ void GameConnection::update_bulk_job(std::int64_t now) {
     case 1: // destroy it, or donate it
         if (!held || !matches(*held)) return stop();
         if (withdraw) {
-            if (auto_inventory()) return next_item();
+            if (stow_cursor_in_packs()) return next_item(); // into the packs only: a withdrawal equips nothing
             // A full inventory leaves it on the cursor; put it back rather than continuing the selection.
             if (!inventory_.at(c.slot) && bank_) click_slot(c.slot, true, false);
             return stop();

@@ -588,6 +588,14 @@ bool GameConnection::auto_inventory() {
             return true;
         }
     }
+    return stow_cursor_in_packs();
+}
+
+bool GameConnection::stow_cursor_in_packs() {
+    if (state_ != ConnectionState::InZone) return false;
+    const Item* held = inventory_.cursor();
+    if (!held) return false;
+    const ItemSlot cursor = cursor_slot();
     for (std::int16_t s = kSlotGeneral1; s <= kSlotGeneral10; ++s) {
         if (!inventory_.at(ItemSlot::possessions(s))) {
             move_item(cursor, ItemSlot::possessions(s), 0);

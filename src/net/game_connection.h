@@ -1590,6 +1590,9 @@ public:
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
     bool auto_inventory();
+    // auto_inventory's last steps only: the first free general slot, else the first bag with room; never a worn slot
+    // (Hailstone's bulk withdraw, which is not the original's and must not equip what it takes from the bank).
+    bool stow_cursor_in_packs();
     // Hailstone: the items marked Keep (game/kept_items.h; the Advanced Inventory window), kept per character in
     // kept_items.txt (read at enter_world, written at each change). A kept item, or a bag holding one, is not
     // destroyed, dropped on the ground, put in a trade or a give, sold to a merchant or sent by parcel: each of those
