@@ -4,11 +4,13 @@ Survey of public projects, specs and data sources that can help build Hailstone.
 
 ## How to read the licence column
 
+Hailstone is GPL-2.0-or-later (NOTICE.md), its plugin SDK (`sdk/`) MIT.
+
 | Licence class | What we may do |
 |---|---|
-| **MIT / BSD / ISC / zlib / Apache-2.0 / CC0 / Unlicense** | We may port or vendor the code with credit in `THIRD_PARTY.md` (Apache-2.0 also needs its NOTICE carried along). |
-| **LGPL** | We may link to it as a separate shared library. Don't paste its code into our sources. |
-| **GPL-2.0 / GPL-3.0 / AGPL / MPL file-level** | **Reference only.** Read it to learn the format or behaviour, then write our own code from the facts. Don't copy code unless the project decides to become GPL. File formats and protocol facts can't be copyrighted, so learning them this way is fine. |
+| **MIT / BSD / ISC / zlib / CC0 / Unlicense** | We may port or vendor the code with credit in `THIRD_PARTY.md`. |
+| **GPL-2.0 / GPL-2.0-or-later / LGPL-2.1** | We may port the code with credit in `THIRD_PARTY.md`, keeping its notice; a file with GPL-2.0-only code (MacroQuest) says so in its SPDX line. Never into `sdk/`. |
+| **Apache-2.0 (only) / GPL-3.0 / AGPL / MPL file-level** | **Reference only.** Their terms are not compatible with GPL version 2, so copying them would bind the client to version 3. Read them to learn the format or behaviour, then write our own code from the facts (a separate Apache-2.0 library beside the binary, such as MoltenVK, is not copied code). File formats and protocol facts can't be copyrighted, so learning them this way is fine. |
 | **No licence (none on GitHub)** | All rights reserved by default. We may **read** it, including its docs, for facts. Don't copy code or text. |
 | **Restricted custom licence** | Same as no licence, or stricter (see EQ: Requiem). |
 

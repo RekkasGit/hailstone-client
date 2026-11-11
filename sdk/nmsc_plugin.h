@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 /* The plugin SDK's names up to 0.6 (deprecated): nmsc_plugin.h, NmscHost and the other Nmsc* types, the NMSC_*
  * macros and the plugin's `nmsc` global. A new plugin includes hailstone_plugin.h; this header includes it and adds
  * the old names back, so a plugin written against them builds unchanged. Nothing changes for a built plugin: the

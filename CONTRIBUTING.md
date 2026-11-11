@@ -84,4 +84,4 @@ AI-assisted changes are welcome under the same rules as any other change, and th
 - Keep pull requests focused. Describe what changed and why, and note how you tested.
 - Do not commit build output, logs, captures containing account data, passwords, auth keys or anything from your game folder.
 
-By contributing you agree that your work is released under the [MIT license](LICENSE).
+By contributing you agree that your work is released under the GNU General Public License, version 2 or (at your option) any later version ([LICENSE](LICENSE)), with the plugin and add-on exception in [NOTICE.md](NOTICE.md); changes to [sdk/](sdk/) are released under its MIT licence ([sdk/LICENSE](sdk/LICENSE)).
