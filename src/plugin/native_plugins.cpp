@@ -1152,7 +1152,7 @@ namespace hailstone::plugin {
 				int spellType;
 			};
 			const size_t bytesPerBuff = sizeof(BuffDataPacket);
-
+			const game::SpellTable& st = c->spell_table();
 			for (const auto& [slot, b] : c->pet_buffs()) {
 
 				if (bufferSize + bytesPerBuff > static_cast<size_t>(datamax)) {
@@ -1164,7 +1164,7 @@ namespace hailstone::plugin {
 				{
 					packet.id = b.spell;
 					packet.duration = b.tics;
-					const auto* sp = c->spell_table().get(b.spell);
+					const auto* sp = st.get(b.spell);
 					if (sp)
 					{
 						packet.spellType = sp->spell_type;
@@ -1191,8 +1191,6 @@ namespace hailstone::plugin {
 			if (!c || !data || datamax <= 0) return 0;
 
 			c->spell_state().buffs;
-			//  c->spell_table()
-			return 0;
 			const auto& buffs = c->spell_state().buffs;
 
 			int bufferSize = 0;
@@ -1200,134 +1198,67 @@ namespace hailstone::plugin {
 			//buffs are stored in buff slots
 			//0-41 = normal buffs, 42-61 = songs, 62 = hidden disc buff
 			//don't send out the last buff slot so -1
+			//precent C++ from padding the struct as we are blasting this into the array.
+#pragma pack(push, 1)
+			struct BuffBulkData {
+				int ID;
+				int casterID;
+				int duration;
+				int hitcount;
+				int spelltype;
+				int counterType;
+				int counterTotal;
+				unsigned char isSong;
+			};
+#pragma pack(pop)
+
 			for (int slot = 0; slot < game::kBuffSlots-1; ++slot) {
+				
+				// SAFETY CHECK: Ensure writing this next packet won't exceed datamax
+				if (bufferSize + sizeof(BuffBulkData) > static_cast<std::size_t>(datamax)) {
+					// Buffer is full! Break out early to prevent an overflow crash.
+					break;
+				}
 				const auto& buff = buffs[static_cast<std::size_t>(slot)];
 			
-				int ID = buff.spell;
+
+				BuffBulkData pkt{};
+				pkt.ID = buff.spell;
+				pkt.counterType = 0; // 0 for empty slots
 				if (!buff.empty())
 				{
 					//get said spell for some data we need
-					const auto* spell = c->spell_table().get(ID);
 					//blast the id into the buffer and move pointer forward
-					memcpy(pBuffer, &ID, sizeof(ID));
-					pBuffer += sizeof(ID);
-					bufferSize += sizeof(ID);
+					pkt.casterID = buff.caster_id;
+					pkt.duration = buff.tics;
+					pkt.hitcount = buff.num_hits;
+					pkt.counterType = -1; // -1 for active slots with no matching effect
+					pkt.isSong = (slot >= game::kLongBuffSlots && slot < game::kLongBuffSlots + game::kShortBuffSlots);
 
-					int casterID = buff.caster_id;
-					memcpy(pBuffer, &casterID, sizeof(casterID));
-					pBuffer += sizeof(casterID);
-					bufferSize += sizeof(casterID);
 
-					int duration = buff.tics;
-					memcpy(pBuffer, &duration, sizeof(duration));
-					pBuffer += sizeof(duration);
-					bufferSize += sizeof(duration);
+					if (const auto* spell = c->spell_table().get(pkt.ID)) {
+						pkt.spelltype = spell->spell_type;
 
-					int hitcount = buff.num_hits;
-					memcpy(pBuffer, &hitcount, sizeof(hitcount));
-					pBuffer += sizeof(hitcount);
-					bufferSize += sizeof(hitcount);
-
-					int spelltype = 0;
-
-					if (spell)
-					{
-						spelltype = spell->spell_type;;
-
-					}
-					memcpy(pBuffer, &spelltype, sizeof(spelltype));
-					pBuffer += sizeof(spelltype);
-					bufferSize += sizeof(spelltype);
-
-					int counterTotal = 0;
-					int counterType = -1;
-					//get the number of effects on the spell object
-					int effectCount = spell->effect.size();
-
-					for (int i = 0; i < effectCount; i++)
-					{	
-						switch (spell->effect[i])
-						{
-							case game::eEQSPA::SPA_DISEASE:
-								counterType = 0; //disease id
-								counterTotal += spell->base[i];
-								goto exit_loop;
+						// Evaluate spell effects for counters
+						for (std::size_t i = 0; i < spell->effect.size(); ++i) {
+							bool match = true;
+							switch (spell->effect[i]) {
+							case game::eEQSPA::SPA_DISEASE:    pkt.counterType = 0; break;
+							case game::eEQSPA::SPA_POISON:     pkt.counterType = 1; break;
+							case game::eEQSPA::SPA_CURSE:      pkt.counterType = 2; break;
+							case game::eEQSPA::SPA_CORRUPTION: pkt.counterType = 3; break;
+							default:                           match = false;       break;
+							}
+							if (match) {
+								pkt.counterTotal += spell->base[i];
 								break;
-							case game::eEQSPA::SPA_POISON:
-								counterType = 1;
-								counterTotal += spell->base[i];
-								goto exit_loop;
-								break;
-							case game::eEQSPA::SPA_CURSE:
-								counterType = 2;
-								counterTotal += spell->base[i];
-								goto exit_loop;
-								//counterTotal = GetSpellCounters(SPA_CURSE, effect);
-								break;
-							case game::eEQSPA::SPA_CORRUPTION:
-								counterType = 3;
-								counterTotal += spell->base[i];
-								goto exit_loop;
-								//counterTotal = GetSpellCounters(SPA_CORRUPTION, effect);
-								break;
+							}
 						}
 					}
-				exit_loop://used for the effect switch/for loop to break out since break is a keyword in the switch.
-
-					memcpy(pBuffer, &counterType, sizeof(counterType));
-					pBuffer += sizeof(counterType);
-					bufferSize += sizeof(counterType);
-
-					memcpy(pBuffer, &counterTotal, sizeof(counterTotal));
-					pBuffer += sizeof(counterTotal);
-					bufferSize += sizeof(counterTotal);
-
-					unsigned char isSong = (slot>= game::kLongBuffSlots && slot <game::kLongBuffSlots + game::kShortBuffSlots);
-					memcpy(pBuffer, &isSong, sizeof(isSong));
-					pBuffer += sizeof(isSong);
-					bufferSize += sizeof(isSong);
 				}
-				else
-				{
-					
-					memcpy(pBuffer, &ID, sizeof(ID));
-					pBuffer += sizeof(ID);
-					bufferSize += sizeof(ID);
-					//repat for each type
-					int casterID = 0;
-					memcpy(pBuffer, &casterID, sizeof(casterID));
-					pBuffer += sizeof(casterID);
-					bufferSize += sizeof(casterID);
-
-					int duration = 0;
-					memcpy(pBuffer, &duration, sizeof(duration));
-					pBuffer += sizeof(duration);
-					bufferSize += sizeof(duration);
-
-					int hitcount = 0;
-					memcpy(pBuffer, &hitcount, sizeof(hitcount));
-					pBuffer += sizeof(hitcount);
-					bufferSize += sizeof(hitcount);
-					int spelltype = 0;
-
-					memcpy(pBuffer, &spelltype, sizeof(spelltype));
-					pBuffer += sizeof(spelltype);
-					bufferSize += sizeof(spelltype);
-
-					int counterTotal = 0;
-					int counterType = 0;
-					memcpy(pBuffer, &counterType, sizeof(counterType));
-					pBuffer += sizeof(counterType);
-					bufferSize += sizeof(counterType);
-
-					memcpy(pBuffer, &counterTotal, sizeof(counterTotal));
-					pBuffer += sizeof(counterTotal);
-					bufferSize += sizeof(counterTotal);
-					unsigned char isSong = 0;
-					memcpy(pBuffer, &isSong, sizeof(isSong));
-					pBuffer += sizeof(isSong);
-					bufferSize += sizeof(isSong);
-				}
+				std::memcpy(pBuffer, &pkt, sizeof(pkt));
+				pBuffer += sizeof(pkt);
+				bufferSize += sizeof(pkt); // Success! Tracks total bytes perfectly
 				
 			}
 			return bufferSize;
