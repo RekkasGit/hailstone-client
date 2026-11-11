@@ -483,7 +483,7 @@ bool add_resource(Map& map, std::unordered_map<std::string, std::uint64_t>& leve
 
 } // namespace
 
-thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
+constinit thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
 
 CharacterLookups::~CharacterLookups() {
     current_ = parent_;

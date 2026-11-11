@@ -265,7 +265,8 @@ public:
 
 private:
     void note_one(char table, const std::string& name);
-    static thread_local CharacterLookups* current_;
+    // Visible here so other translation units need no dynamic TLS initialization wrapper.
+    static constinit thread_local CharacterLookups* current_;
     CharacterLookups* parent_;
     std::unordered_set<std::string> names_;
 };
