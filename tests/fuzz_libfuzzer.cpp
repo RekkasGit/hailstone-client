@@ -40,6 +40,7 @@
 #include "net/movement_packets.h"
 #include "net/notice_packets.h"
 #include "net/settings_packets.h"
+#include "net/zone_link_packets.h"
 #include "net/pet_packets.h"
 #include "net/real_estate_packets.h"
 #include "net/player_packets.h"

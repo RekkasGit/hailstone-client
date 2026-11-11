@@ -42,12 +42,14 @@
 
 #include "app/lua_eq_windows.h"
 #include "core/ascii_case.h"
+#include "core/atomic_file.h"
 #include "core/frame_sections.h"
 #include "core/game_dir.h"
 #include "core/log.h"
 #include "game/eq_names.h"
 #include "game/atlas.h"
 #include "game/combat.h"
+#include "game/coords.h"
 #include "game/map_data.h"
 #include "game/map_files.h"
 #include "game/mechanics/character.h"
@@ -55,6 +57,7 @@
 #include "game/slash_commands.h"
 #include "game/world_state.h"
 #include "game/zone_names.h"
+#include "game/zone_routes.h"
 #include "net/game_connection.h"
 #include "ui/dev_screens.h"
 #include "ui/lua/lua_host.h"
@@ -218,8 +221,8 @@ struct MapState {
     std::string atlas_file;               // the page shown
     game::AtlasPage atlas;
     bool atlas_loaded = false;
-    std::map<std::string, std::string> atlas_zones; // zone short name (lower case) -> the page that links it
-    bool atlas_indexed = false;
+    std::optional<game::AtlasIndex> atlas_index; // every page and zone link (built when first wanted)
+    std::map<std::string, game::AtlasPage> atlas_pages; // the modern map's pages (eq.AtlasPageData), by lower-case file
     std::string atlas_pending;            // AtlasWnd +0x220: a page link clicked, opened on the next frame
 
     // CMapViewWnd's constructor: the zone box +-1000 at zoom 0 (range 200), then SetZoom(2) (range 1000), which
@@ -382,20 +385,66 @@ struct MapState {
         }
     }
     // AtlasWnd_LoadDefaultPage @0x620760: the pages reachable from Default.xml through their page links, read for
-    // their zone links (ClickAction 2), the first page linking a zone kept for it.
-    void index_atlas(const EqHost& h) {
-        if (atlas_indexed) return;
-        atlas_indexed = true;
-        atlas_zones.clear();
-        std::vector<std::string> queue = {"Default.xml"};
-        std::set<std::string> seen = {lower("Default.xml")};
-        for (std::size_t i = 0; i < queue.size() && i < 256; ++i) {
-            auto text = read_atlas(h, queue[i]);
-            if (!text) continue;
-            game::AtlasPage p = game::parse_atlas_page(*text);
-            for (const auto& l : p.links) {
-                if (l.action == 1 && seen.insert(lower(l.target)).second) queue.push_back(l.target);
-                if (l.action == 2) atlas_zones.emplace(lower(l.target), queue[i]);
+    // their zone links (ClickAction 2), the first page linking a zone kept for it (game::index_atlas).
+    const game::AtlasIndex& index_atlas(const EqHost& h) {
+        if (!atlas_index) atlas_index = game::index_atlas([&](const std::string& f) { return read_atlas(h, f); });
+        return *atlas_index;
+    }
+    // The atlas directory changed: everything read from the old one goes.
+    void forget_atlas() {
+        atlas_index.reset();
+        atlas_pages.clear();
+    }
+
+    // ---- the zone links (game/zone_routes.h), kept in servers/<profile>/zone_links.txt
+    game::ZoneRoutes routes;
+    fs::path routes_dir;                 // the server folder they were read from
+    bool routes_read = false;
+    std::uint32_t routes_learned_zone = 0; // the zone whose zone points were last learned
+    std::uint32_t routes_serial = 0;       // the connection's zone_links_serial() taken
+    std::size_t routes_zones = 0;          // routes.zones().size(), kept as the links change
+    void save_routes() {
+        routes_zones = routes.zones().size();
+        if (routes_dir.empty()) return;
+        std::error_code ec;
+        fs::create_directories(routes_dir, ec);
+        if (!write_file_atomic(routes_dir / "zone_links.txt", routes.serialize()))
+            log::warn("map: could not write {}", (routes_dir / "zone_links.txt").string());
+    }
+    // Each frame: the server's folder read once, the zone points of each zone entered learned, the server's list
+    // taken when it comes.
+    void update_routes(const EqHost& h) {
+        if (!routes_read || h.server_dir != routes_dir) {
+            routes_read = true;
+            routes_dir = h.server_dir;
+            routes = {};
+            routes_learned_zone = 0;
+            routes_serial = 0;
+            if (!routes_dir.empty()) {
+                std::ifstream in(routes_dir / "zone_links.txt", std::ios::binary);
+                if (in) {
+                    std::stringstream ss;
+                    ss << in.rdbuf();
+                    routes = game::ZoneRoutes::parse(ss.str());
+                }
+            }
+            routes_zones = routes.zones().size();
+        }
+        if (!h.conn) return;
+        const std::uint32_t zid = h.conn->zone_id();
+        if (zid != 0 && zid != routes_learned_zone && !h.conn->zone_points().empty()) {
+            routes_learned_zone = zid;
+            std::vector<std::uint32_t> to;
+            for (const auto& p : h.conn->zone_points()) to.push_back(p.zone_id);
+            if (routes.learn(zid, to)) save_routes();
+        }
+        if (h.conn->zone_links_serial() != routes_serial) {
+            routes_serial = h.conn->zone_links_serial();
+            if (const auto& z = h.conn->zone_links()) {
+                std::vector<game::ZoneRoutes::Link> links;
+                links.reserve(z->links.size());
+                for (const auto& [from, to] : z->links) links.emplace_back(from, to);
+                if (routes.set_server(std::move(links))) save_routes();
             }
         }
     }
@@ -403,9 +452,8 @@ struct MapState {
     // atlas page shown; else Default.xml (the tab stays). The original also tries the zones of the same zone guide
     // continent, which EQEmu does not send.
     void atlas_for_zone(EqHost& h, const std::string& short_name) {
-        index_atlas(h);
-        if (auto it = atlas_zones.find(lower(short_name)); it != atlas_zones.end()) {
-            load_atlas(h, it->second);
+        if (const auto* z = index_atlas(h).find_zone(short_name)) {
+            load_atlas(h, z->page);
             tab = 1;
             return;
         }
@@ -608,6 +656,7 @@ public:
         if (!h.in_game) return;
         const std::string& zone = h.zone_short_name;
         if (zone.empty()) return;
+        s.update_routes(h);
         // The player's zone on zone-in (and when the box comes); an emptied map (Current Zone, the maps directory)
         // loads the player's zone again. Another zone's map, chosen in the atlas, stays until then.
         if (zone != s.player_zone || s.zone.empty() || (zone == s.zone && h.zone_box_valid && !s.box_valid)) {
@@ -815,7 +864,7 @@ public:
             s.atlas_skins.selected = index;
             s.atlas_skin = s.atlas_skins.choices[static_cast<std::size_t>(index)];
             if (s.ini) s.ini->put("Main", "AtlasSkin", s.atlas_skin);
-            s.atlas_indexed = false;
+            s.forget_atlas();
             s.load_atlas(h, "Default.xml");
             return true;
         }
@@ -1403,8 +1452,10 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
     };
     // Its parts' time in the frame's sections (the hitch log), inside the window's own.
     core::frame_sections::Lap lap;
-    auto feet = s.feet_z(h);
     const auto& v = s.view;
+    // Another zone's map (an atlas zone link, eq.ShowZoneMap) is drawn without the player, the find path and the
+    // height fade, which belong to the player's zone.
+    auto feet = v.current_zone ? s.feet_z(h) : std::nullopt;
     const glm::vec2 here = zv.P(me->x, me->y);
     // The minimap's square: in a busy zone's thousands of lines, most are outside it.
     const float reach = zv.reach > 0.0f ? zv.reach + 1.0f : 0.0f;
@@ -1435,7 +1486,7 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
             dl->AddText(f, fs, tp, faded(ink(l.color, 255), fade), text.c_str());
         }
     }
-    if (h.conn && !h.conn->find_path().empty()) {
+    if (v.current_zone && h.conn && !h.conn->find_path().empty()) {
         // The find path from the player to the destination (its points run the other way).
         const auto& pts = h.conn->find_path();
         glm::vec2 prev = here;
@@ -1446,7 +1497,7 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
             prev = p;
         }
     }
-    if (h.conn)
+    if (v.current_zone && h.conn)
         for (const auto& pt : h.conn->compass_points()) {
             glm::vec3 m = game::world_to_map(pt);
             glm::vec2 p = zv.P(m.x, m.y);
@@ -1487,6 +1538,7 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
             dl->AddCircle(at(p), 4.0f * w, IM_COL32(0, 0, 0, 200), 0, w);
         }
     // The player: an arrow along the heading, as the map window's with Sense Heading above 190, else a dot.
+    if (!v.current_zone) return;
     const ImVec2 pc = at(here);
     const float ph = h.heading - zv.turn;
     auto dir = [&](float u, float len) {
@@ -1572,7 +1624,7 @@ int DrawZoneMap(lua_State* L) {
     lua_pushnumber(L, mid.x);
     lua_pushnumber(L, mid.y);
     int out = 3;
-    if (me) {
+    if (me && s.view.current_zone) { // (another zone's map: no player)
         lua_pushnumber(L, me->x);
         lua_pushnumber(L, me->y);
         out = 5;
@@ -1900,6 +1952,300 @@ void add_map_windows(std::vector<std::unique_ptr<StockWindow>>& out) {
     out.push_back(std::make_unique<EditLabelWindow>(s));
 }
 
+// ---------------------------------------------------------------- the modern map's atlas and zone finder
+// Hailstone's, not the original's (docs/navigation.md "Zone atlas"): the atlas pages as data for the pack to draw,
+// the zone links (game/zone_routes.h) and routes over them, and the current zone's exits.
+
+void set_field(lua_State* L, const char* key, lua_Number v) {
+    lua_pushnumber(L, v);
+    lua_setfield(L, -2, key);
+}
+void set_field(lua_State* L, const char* key, int v) {
+    lua_pushinteger(L, v);
+    lua_setfield(L, -2, key);
+}
+void set_field(lua_State* L, const char* key, std::uint32_t v) {
+    lua_pushinteger(L, static_cast<lua_Integer>(v));
+    lua_setfield(L, -2, key);
+}
+void set_field(lua_State* L, const char* key, std::string_view v) {
+    lua_pushlstring(L, v.data(), v.size());
+    lua_setfield(L, -2, key);
+}
+void set_rect(lua_State* L, const game::AtlasRect& r) {
+    set_field(L, "x0", r.left);
+    set_field(L, "y0", r.top);
+    set_field(L, "x1", r.right);
+    set_field(L, "y1", r.bottom);
+}
+// A zone's name for the finder: the zone table's long name, else the short name.
+std::string zone_title(std::uint32_t id) {
+    std::string n = game::zone_long_name(id);
+    return n.empty() ? game::zone_short_name(id) : n;
+}
+void push_zone(lua_State* L, std::uint32_t id) {
+    lua_createtable(L, 0, 4);
+    set_field(L, "id", id);
+    set_field(L, "zone", game::zone_short_name(id));
+    set_field(L, "name", zone_title(id));
+    set_field(L, "expansion", game::zone_expansion(id));
+}
+
+// index = eq.AtlasIndex()   -- the atlas (Atlas\<skin>\, read once): index.pages = {{file, title, parent}, ...} in
+// the order found from Default.xml (parent "" for it), index.zones = {{zone, name, page, x0, y0, x1, y1, id,
+// expansion}, ...}: every zone link, page by page (a zone may be on several pages; id 0 for a zone the zone table
+// does not know).
+int AtlasIndex(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    const game::AtlasIndex& index = s.index_atlas(h);
+    lua_createtable(L, 0, 2);
+    lua_createtable(L, static_cast<int>(index.pages.size()), 0);
+    for (std::size_t i = 0; i < index.pages.size(); ++i) {
+        const auto& p = index.pages[i];
+        lua_createtable(L, 0, 3);
+        set_field(L, "file", p.file);
+        set_field(L, "title", p.title);
+        set_field(L, "parent", p.parent);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "pages");
+    lua_createtable(L, static_cast<int>(index.zones.size()), 0);
+    for (std::size_t i = 0; i < index.zones.size(); ++i) {
+        const auto& z = index.zones[i];
+        const std::uint32_t id = game::zone_id_by_short_name(z.zone);
+        lua_createtable(L, 0, 9);
+        set_field(L, "zone", id ? game::zone_short_name(id) : z.zone);
+        set_field(L, "name", z.name);
+        set_field(L, "page", z.page);
+        set_rect(L, z.rect);
+        set_field(L, "id", id);
+        set_field(L, "expansion", game::zone_expansion(id));
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "zones");
+    return 1;
+}
+
+// page = eq.AtlasPageData(file)   -- an atlas page (game::parse_atlas_page, read once): {width, height, background,
+// bgw, bgh, images = {{file, x0, y0, x1, y1}, ...}, labels = {{text, x, y}, ...}, links = {{action, target,
+// tip, x0, y0, x1, y1}, ...}, errors}; a link's own picture is among the images. nil when it cannot be read.
+int AtlasPageData(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    const std::string file = luaL_checkstring(L, 1);
+    auto it = s.atlas_pages.find(lower(file));
+    if (it == s.atlas_pages.end()) {
+        auto text = s.read_atlas(h, file);
+        if (!text) {
+            lua_pushnil(L);
+            return 1;
+        }
+        it = s.atlas_pages.emplace(lower(file), game::parse_atlas_page(*text)).first;
+    }
+    const game::AtlasPage& page = it->second;
+    lua_createtable(L, 0, 9);
+    set_field(L, "width", page.width());
+    set_field(L, "height", page.height());
+    if (page.background) {
+        set_field(L, "background", *page.background);
+        set_field(L, "bgw", page.background_cx);
+        set_field(L, "bgh", page.background_cy);
+    }
+    lua_createtable(L, static_cast<int>(page.images.size()), 0);
+    int n = 0;
+    auto image = [&](const game::AtlasImage& im) {
+        lua_createtable(L, 0, 5);
+        set_field(L, "file", im.file);
+        set_rect(L, im.rect);
+        lua_rawseti(L, -2, ++n);
+    };
+    for (const auto& im : page.images) image(im);
+    for (const auto& l : page.links)
+        if (l.image) image(*l.image);
+    lua_setfield(L, -2, "images");
+    lua_createtable(L, static_cast<int>(page.labels.size()), 0);
+    for (std::size_t i = 0; i < page.labels.size(); ++i) {
+        lua_createtable(L, 0, 3);
+        set_field(L, "text", page.labels[i].text);
+        set_field(L, "x", page.labels[i].x);
+        set_field(L, "y", page.labels[i].y);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "labels");
+    lua_createtable(L, static_cast<int>(page.links.size()), 0);
+    for (std::size_t i = 0; i < page.links.size(); ++i) {
+        const auto& l = page.links[i];
+        lua_createtable(L, 0, 7);
+        set_field(L, "action", l.action);
+        const std::uint32_t id = l.action == 2 ? game::zone_id_by_short_name(l.target) : 0;
+        set_field(L, "target", id ? game::zone_short_name(id) : l.target);
+        set_field(L, "tip", l.tooltip);
+        set_rect(L, l.rect);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "links");
+    set_field(L, "errors", page.errors);
+    return 1;
+}
+
+// tex, w, h = eq.AtlasTexture(file)   -- a picture of the atlas directory (nil when it cannot be read)
+int AtlasTexture(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    const auto* t = h.textures ? h.textures->game_file("Atlas/" + s.atlas_skin + "/" + luaL_checkstring(L, 1)) : nullptr;
+    if (!t) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushlightuserdata(L, t->id);
+    lua_pushinteger(L, t->width);
+    lua_pushinteger(L, t->height);
+    return 3;
+}
+
+// server, zones = eq.ZoneLinks()   -- what is known of how the zones connect on this server: server is true when
+// its list came (Hailstone's server script), zones how many zones a link starts or ends at. Asks the server for
+// its list the first time it can in a session (GameConnection::request_zone_links), so call it while the zone
+// finder is shown.
+int ZoneLinks(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    if (h.in_game && h.conn) h.conn->request_zone_links();
+    lua_pushboolean(L, s.routes.has_server());
+    lua_pushinteger(L, static_cast<lua_Integer>(s.routes_zones));
+    return 2;
+}
+
+// route = eq.ZoneRoute(to [, from])   -- the fewest zone changes from `from` (the player's zone) to `to` (short
+// names): {zone, ...} from the start to the destination, each {id, zone, name, expansion}, with route.assumed
+// when it uses a zone line seen only from the far side. nil when no way is known or a name is unknown.
+int ZoneRoute(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    const std::uint32_t to = game::zone_id_by_short_name(luaL_checkstring(L, 1));
+    const std::uint32_t from = lua_isstring(L, 2) ? game::zone_id_by_short_name(lua_tostring(L, 2))
+                               : h.conn                ? h.conn->zone_id()
+                                                       : 0u;
+    game::ZoneRoute r = s.routes.route(from, to);
+    if (r.zones.empty()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, static_cast<int>(r.zones.size()), 1);
+    for (std::size_t i = 0; i < r.zones.size(); ++i) {
+        push_zone(L, r.zones[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_pushboolean(L, r.assumed);
+    lua_setfield(L, -2, "assumed");
+    return 1;
+}
+
+// The current zone's exits, once the app has worked them out for this zone (EqHost::zone_exits).
+const std::vector<EqHost::ZoneExit>* current_exits(const EqHost& h) {
+    if (!h.in_game || !h.conn || h.zone_exits_zone == 0 || h.zone_exits_zone != h.conn->zone_id()) return nullptr;
+    return &h.zone_exits;
+}
+
+// exits = eq.ZoneExits()   -- where the current zone's zone lines lead: {{id, zone, name, expansion, x, y, x0, y0,
+// x1, y1}, ...} in map units (the middle and the box round the lines to that zone); empty before the zone points
+// come and in a zone without lines.
+int ZoneExits(lua_State* L) {
+    EqHost& h = *host_of(L);
+    const auto* exits = current_exits(h);
+    lua_createtable(L, exits ? static_cast<int>(exits->size()) : 0, 0);
+    if (!exits) return 1;
+    int n = 0;
+    for (const auto& e : *exits) {
+        push_zone(L, e.zone_id);
+        glm::vec3 a = game::world_to_map(glm::vec3(e.lo[0], e.lo[1], e.lo[2]));
+        glm::vec3 b = game::world_to_map(glm::vec3(e.hi[0], e.hi[1], e.hi[2]));
+        set_field(L, "x0", std::min(a.x, b.x));
+        set_field(L, "y0", std::min(a.y, b.y));
+        set_field(L, "x1", std::max(a.x, b.x));
+        set_field(L, "y1", std::max(a.y, b.y));
+        set_field(L, "x", (a.x + b.x) / 2.0f);
+        set_field(L, "y", (a.y + b.y) / 2.0f);
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+
+// x, y = eq.ZoneExitWalk(zone)   -- walks to the current zone's nearest zone line to `zone` (short name) and
+// through it: a /nav walk (docs/navigation.md; its goal inside the line, so the walk does not stop at it) to the
+// point of the nearest line piece closest to the player, kept 2 units inside it. Returns where it goes in map
+// units, or nil when no line leads there (or the player's place is not known yet).
+int ZoneExitWalk(lua_State* L) {
+    EqHost& h = *host_of(L);
+    const std::uint32_t to = game::zone_id_by_short_name(luaL_checkstring(L, 1));
+    const auto* exits = current_exits(h);
+    if (!exits || to == 0 || !h.feet_valid || !h.submit_chat) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const glm::vec3 me(h.feet[0], h.feet[1], h.feet[2]);
+    std::optional<glm::vec3> best;
+    float best_d = FLT_MAX;
+    for (const auto& e : *exits) {
+        if (e.zone_id != to) continue;
+        for (const auto& c : e.cells) {
+            glm::vec3 lo(c[0], c[1], c[2]), hi(c[3], c[4], c[5]);
+            glm::vec3 p;
+            for (int i = 0; i < 3; ++i) {
+                // Inside by 2 where the piece is wide enough, else its middle.
+                float a = lo[i] + 2.0f, b = hi[i] - 2.0f;
+                p[i] = a <= b ? std::clamp(me[i], a, b) : (lo[i] + hi[i]) / 2.0f;
+            }
+            float d = glm::length(p - me);
+            if (d < best_d) {
+                best_d = d;
+                best = p;
+            }
+        }
+    }
+    if (!best) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const glm::vec3 server = game::world_to_server(*best); // /nav locxyz takes the server's x, y, z
+    char line[128];
+    std::snprintf(line, sizeof line, "/nav locxyz %.1f %.1f %.1f", static_cast<double>(server.x),
+                  static_cast<double>(server.y), static_cast<double>(server.z));
+    h.submit_chat(line);
+    glm::vec3 m = game::world_to_map(*best);
+    lua_pushnumber(L, m.x);
+    lua_pushnumber(L, m.y);
+    return 2;
+}
+
+// eq.ShowZoneMap([zone])   -- the map window shows another zone's map (short name), as an atlas zone link does;
+// without one (or the player's own zone), the player's zone again.
+// long, short, own = eq.MapZoneShown()   -- the zone whose map the map window shows; own: it is the player's.
+int ShowZoneMap(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    if (!h.in_game) return 0;
+    const std::uint32_t id = lua_isstring(L, 1) ? game::zone_id_by_short_name(lua_tostring(L, 1)) : 0;
+    if (id == 0 || lower(game::zone_short_name(id)) == lower(h.zone_short_name)) s.zone.clear(); // reloaded next frame
+    else s.load_other_zone(h, game::zone_short_name(id));
+    return 0;
+}
+int MapZoneShown(lua_State* L) {
+    MapState& s = *state_of(L);
+    EqHost& h = *host_of(L);
+    const bool own = s.zone.empty() || lower(s.zone) == lower(h.zone_short_name);
+    if (own) {
+        lua_pushstring(L, h.zone_long_name.c_str());
+        lua_pushstring(L, h.zone_short_name.c_str());
+    } else {
+        lua_pushstring(L, zone_title(game::zone_id_by_short_name(s.zone)).c_str());
+        lua_pushstring(L, s.zone.c_str());
+    }
+    lua_pushboolean(L, own);
+    return 3;
+}
+
 void register_map_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<StockWindow>>& windows) {
     MapState* state = nullptr;
     for (auto& w : windows)
@@ -1909,6 +2255,9 @@ void register_map_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<St
                                    {"MapMouseUp", MapMouseUp},   {"MapPanReset", MapPanReset}, {"MapRightClick", MapRightClick},
                                    {"DrawMinimap", DrawMinimap}, {"DrawZoneMap", DrawZoneMap},
                                    {"FindMapLocation", FindMapLocation}, {"DrawAtlas", DrawAtlas}, {"FindPathShown", FindPathShown}, {"EndFind", EndFind}, {"ZoneName", ZoneName}, {"MapAutoZ", MapAutoZ},       {"GameTime", GameTime},
+                                   {"AtlasIndex", AtlasIndex}, {"AtlasPageData", AtlasPageData}, {"AtlasTexture", AtlasTexture},
+                                   {"ZoneLinks", ZoneLinks}, {"ZoneRoute", ZoneRoute}, {"ZoneExits", ZoneExits},
+                                   {"ZoneExitWalk", ZoneExitWalk}, {"ShowZoneMap", ShowZoneMap}, {"MapZoneShown", MapZoneShown},
                                    {nullptr, nullptr}};
     lua_pushlightuserdata(L, state);
     lua_pushlightuserdata(L, &host);

@@ -207,6 +207,8 @@ void ClientApp::unload_zone() {
     if (audio_) audio_->set_zone("");
     if (zone_renderer_) vk_.wait_idle();
     if (neighbours_) neighbours_->clear();
+    eq_host_.zone_exits.clear();
+    eq_host_.zone_exits_zone = 0;
     zone_renderer_.reset();
     flora_renderer_.reset(); // holds the zone's plants
     zone_particles_.reset(); // reads the zone's archives
@@ -465,6 +467,7 @@ void ClientApp::enter_zone() {
         if (file != layout_for_) {
             layout_for_ = file;
             eq_host_.maps_dir = profile_maps_dir(profile);
+            eq_host_.server_dir = profile_dir(profile);
             // Made empty, so the player sees where maps for every server go.
             eq_host_.global_maps_dir = platform::maps_dir();
             std::error_code maps_ec;

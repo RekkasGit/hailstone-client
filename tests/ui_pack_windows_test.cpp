@@ -2076,6 +2076,12 @@ TEST_CASE("UI packs (modern): the inventory, loot, trade, raid, guild, merchant,
     fs::path dir = dir_scratch.path();
     fs::create_directories(dir / "game");
     fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    // a small atlas for the map's World view
+    fs::create_directories(dir / "game" / "Atlas" / "Default");
+    std::ofstream(dir / "game" / "Atlas" / "Default" / "Default.xml")
+        << "<Label Text = \"Antonica\" X = 5 Y = 6/><Link ClickAction = 1 FileToOpen = \"Q.xml\" ToolTip = \"Q\">"
+           "<Rect X = 0 Y = 0 CX = 50 CY = 50/></Link><Link ClickAction = 2 FileToOpen = \"qeynos2\" ToolTip = \"North Qeynos\">"
+           "<Rect X = 60 Y = 0 CX = 50 CY = 50/></Link>";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
     unsigned char* px = nullptr;
@@ -2095,6 +2101,27 @@ TEST_CASE("UI packs (modern): the inventory, loot, trade, raid, guild, merchant,
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             REQUIRE(luaL_dostring(L, (std::string("eq.ShowWindow('") + screen + "', false)").c_str()) == LUA_OK);
         }
+        // the map's World view (the atlas and the zone finder, lib/atlas.lua) over the small atlas above, then a search
+        // and a route followed (the banner over the Zone view)
+        // (a window's stored title changes only in some cases, so the World view is told by the zone finder's list)
+        auto finder_drawn = [] {
+            for (ImGuiWindow* win : GImGui->Windows)
+                if (std::string_view(win->Name).find("##zonelist") != std::string_view::npos && win->Active) return true;
+            return false;
+        };
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('map.view', 'world') eq.ShowWindow('MapViewWnd', true)") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        CHECK(finder_drawn());
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('MapViewWnd', false)") == LUA_OK);
+        s.frames(1);
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('atlas.route', 'qeytoqrg') ui.SetSetting('map.view', 'zone')"
+                                 " eq.ShowWindow('MapViewWnd', true)") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        CHECK_FALSE(finder_drawn()); // the Zone view
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('MapViewWnd', false) ui.SetSetting('atlas.route', '') ui.SetSetting('map.view', '')") == LUA_OK);
+        s.frames(1);
         // the dialogs a test setting draws though the game has not opened them (their opts.shown, set each frame)
         REQUIRE(luaL_dostring(L, "ui.SetSetting('test.draw.MarketplaceWnd', '1') ui.SetSetting('test.draw.ZonePathWnd', '1')"
                                  " ui.SetSetting('test.draw.PointMerchantWnd', '1')") == LUA_OK);
