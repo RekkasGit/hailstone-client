@@ -1298,12 +1298,16 @@ otherwise 30 s for travel type 3 or 50 ms. Area target types 8, 21, 22, 23, 28 a
 destination and play stage 2; other spell missiles launch stage 1. SPA 76 area contact checks moving targets every
 2 s inside 2.5 times AE range with sight; other local contact attempts use a 3 s gate and source sight, respecting
 NPCNoLoS. Contact emits presentation messages, never authoritative damage. Spell 54 plays its destruction impact
-one velocity step behind. Spell 859 can run a local hit presentation inside a strict 40-unit horizontal radius;
-it sends no packet, applies no successful-landing flag and grants no buff.
+one velocity step behind, at that point in the world with the source as caster and no target (EQMissile_UpdateAll
+@0x501415), so it outlives the missile. Spell 859 can run a local hit presentation inside a strict 40-unit
+horizontal radius, at the local player's level (@0x501342); it sends no packet, applies no successful-landing flag,
+grants no buff and does not end the source's cast.
 
 Large-source launch placement uses the renderer's actual posed role-0/name anchor. Missing authored or posed data
 keeps the packet origin rather than inventing an attachment. Missile pulse timing uses a source's completed
-physics step, not its last packet arrival. Spawns start with an absent clock; local movement, fresh remote and
+physics step, not its last packet arrival: a non-area launch moves (now - that step) x 0.02 velocity steps further.
+Hailstone: a step time not before now counts as none, and the age stops at 12 s (when a remote spawn stops
+stepping), so a stale or wrapped time cannot throw the missile across the zone. Spawns start with an absent clock; local movement, fresh remote and
 boat/rider steps publish StepClock time + 1. The app explicitly bridges that relative time to the missile's
 32-bit steady clock. Empty step batches and stale spawns do not advance it. Fixtures cover the clock and actual
 packet-to-emitter flow; recorded native vectors and live acceptance remain pending.

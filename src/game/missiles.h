@@ -195,6 +195,9 @@ float missile_actor_scale(const std::string& model, std::int32_t zone_id);
 
 // EQMissile::ProcessMissile: the launch; invalid/absent spells and missing sources end before making an actor.
 void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world);
+// The extra velocity steps a spell missile's launch takes for its source's time since its last physics step
+// (ProcessMissile: (now - stepped_at) x 0.02), none for a time not before now, the age capped at 12 s.
+float spell_launch_steps(std::optional<std::uint32_t> stepped_at, std::uint32_t now);
 // EQMissile::MissileAI.
 void missile_ai(Missile& m, std::uint32_t now, const MissileWorld& world);
 // 0x8d2790: the physics step.

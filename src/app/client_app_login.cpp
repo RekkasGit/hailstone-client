@@ -385,9 +385,6 @@ void ClientApp::reload_server_files(bool at_login) {
     });
     spell_bolts_ = std::make_unique<SpellBolts>(vk_, shader_dir_);
     actor_emitters_ = std::make_unique<ActorEmitters>(vk_, game_, shader_dir_);
-    actor_emitters_->set_floor([this](const glm::vec3& p) -> std::optional<float> {
-        return collision_ ? collision_->floor_below(p, 0.0f) : std::nullopt;
-    });
 }
 
 void ClientApp::back_to_login(std::string message, bool is_error) {

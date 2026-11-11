@@ -9,6 +9,7 @@
 #include "game/doors.h"
 #include "game/follow.h"
 #include "game/mechanics/anim_select.h"
+#include "game/mechanics/remote_spawns.h"
 #include "game/sine_table.h"
 #include "game/spells.h"
 
@@ -51,6 +52,21 @@ float segment_distance_squared(const glm::vec3& p, const glm::vec3& from, const 
     }
     return static_cast<float>(dz * dz + dy * dy + dx * dx);
 }
+
+} // namespace
+
+float spell_launch_steps(std::optional<std::uint32_t> stepped_at, std::uint32_t now) {
+    // Hailstone: the original reads (now - the source's +0x30) x 0.02 unchecked, its spawns stepping every frame.
+    // Here a time past now counts as none, and the age stops at 12 s, where a remote spawn stops stepping
+    // (AdvanceSpawn): a stale or wrapped timestamp cannot throw the missile across the zone.
+    // The age as a signed difference, so the 32-bit clock's wrap still reads as a short age.
+    if (!stepped_at) return 0.0f;
+    const std::uint32_t age = now - *stepped_at;
+    if (age == 0 || age > 0x7fffffffu) return 0.0f;
+    return static_cast<float>(std::min(age, mechanics::kSpawnStaleMs)) * 0.02f;
+}
+
+namespace {
 
 void missile_contacts(Missile& m, std::uint32_t now, const MissileWorld& world) {
     if (m.packet.item_type != kMissileItemSpell || !world.spell || m.done) return;
@@ -232,8 +248,7 @@ void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
             }
             if (spell->travel_type == 3) m.velocity.z = 0.0f;
             else {
-                const float elapsed = source->stepped_at ? static_cast<float>(now - *source->stepped_at) * 0.02f : 0.0f;
-                m.position += m.velocity * (5.5f + elapsed);
+                m.position += m.velocity * (5.5f + spell_launch_steps(source->stepped_at, now));
             }
         }
     } else {
@@ -439,9 +454,12 @@ bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
 void MissileList::update(std::uint32_t now, const MissileWorld& world) {
     auto retire = [&](const Missile& m) {
         if (m.has_actor && m.packet.item_type == kMissileItemSpell && m.packet.spell == 54 && world.effect) {
+            // Placed in the world where the missile was, not on its actor: the actor goes with the missile
+            // (ended below), and the impact must outlive it.
             Missile impact = m;
             impact.position -= impact.velocity;
             impact.actor_position = impact.position;
+            impact.has_actor = false;
             world.effect(impact, 2);
         }
         if (m.has_actor && m.packet.item_type == kMissileItemSpell && m.packet.spell == 859 && world.spell_hit)

@@ -342,6 +342,40 @@ TEST_CASE("spell projectile flight uses its duration and only spell54 emits a de
     CHECK(sweeps == 1);
 }
 
+TEST_CASE("a spell missile's launch extrapolation ignores a future source step and caps a stale one") {
+    CHECK(spell_launch_steps(std::nullopt, 5000) == 0.0f);
+    CHECK(spell_launch_steps(4900u, 5000) == doctest::Approx(2.0f));
+    CHECK(spell_launch_steps(5000u, 5000) == 0.0f);
+    CHECK(spell_launch_steps(5001u, 5000) == 0.0f);      // not 2^32 - 1 ms of steps
+    CHECK(spell_launch_steps(1000u, 100000) == doctest::Approx(240.0f)); // 12 s at most
+    CHECK(spell_launch_steps(0xfffff000u, 0x1000u) == doctest::Approx(163.84f)); // across the clock's wrap
+
+    TestWorld tw;
+    tw.spawns.push_back({7, {1, 2, 3}, 3.75f, 6.0f, 1, false, 6000u}); // stepped after the missile's now
+    SpellData spell;
+    spell.id = 600;
+    spell.target_type = 5;
+    auto world = tw.world();
+    world.spell = [&](std::uint32_t id) { return id == spell.id ? &spell : nullptr; };
+    MissilePacket packet;
+    packet.source_id = 7;
+    packet.position = {10, 20, 30};
+    packet.velocity = {1, 2, 0};
+    packet.item_type = 9;
+    packet.spell = 600;
+    MissileList missiles;
+    missiles.add(make_missile(packet, 5000, 0));
+    missiles.update(5000, world);
+    REQUIRE(missiles.missiles().size() == 1);
+    CHECK(missiles.missiles().front().position == glm::vec3(15.5f, 31.0f, 30.0f)); // 5.5 steps, none extra
+    tw.spawns[0].stepped_at = 1000u; // a minute stale
+    missiles.clear();
+    missiles.add(make_missile(packet, 61000, 0));
+    missiles.update(61000, world);
+    REQUIRE(missiles.missiles().size() == 1);
+    CHECK(missiles.missiles().front().position == glm::vec3(255.5f, 511.0f, 30.0f)); // 5.5 + 240 steps
+}
+
 TEST_CASE("stationary spell contacts use moving-area and local line-of-sight gates at their native cadence") {
     TestWorld tw;
     tw.spawns.push_back({7, {0, 0, 0}, 4, 6, 1, false});

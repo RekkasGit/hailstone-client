@@ -33,7 +33,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
-                                                   bool full, const StageActor* missile) {
+                                                      bool full, const StageActor* missile) {
     std::vector<SpellEmitterRequest> out;
     if (stage < 0 || stage > 2) return out;
     const std::int32_t level = caster ? caster->level : 1;
@@ -162,18 +162,13 @@ glm::mat3 turn_axes(const glm::mat3& axes, float angle1, float angle2) {
     return glm::mat3(t1, t2, ax);
 }
 
-glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2, bool normalize_basis) {
+glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2) {
     auto unit = [](glm::vec3 v, glm::vec3 fallback) {
         float len = glm::length(v);
         return std::isfinite(len) && len > 1e-6f ? v / len : fallback;
     };
     // The constructor with a matrix (0x1006c5b5): axial = row 2, transverse 1 = row 0, transverse 2 = -row 1.
-    glm::vec3 r0 = owner[0], r1 = owner[1], r2 = owner[2];
-    if (normalize_basis) {
-        r0 = unit(r0, {1, 0, 0});
-        r1 = unit(r1, {0, 1, 0});
-        r2 = unit(r2, {0, 0, 1});
-    }
+    glm::vec3 r0 = unit(owner[0], {1, 0, 0}), r1 = unit(owner[1], {0, 1, 0}), r2 = unit(owner[2], {0, 0, 1});
     return turn_axes(glm::mat3(r0, -r1, r2), angle1, angle2);
 }
 
@@ -230,7 +225,6 @@ std::int32_t ParticleSystem::create(const SpellEmitterRequest& r) {
     e.actor = r.actor;
     e.point = r.actor != 0 ? r.bone_point : -1;
     e.point_only = r.point_only;
-    if (r.axes) e.axes = *r.axes;
     e.origin = r.position;
     e.scale = r.scale;
     e.density = r.density;
@@ -497,14 +491,8 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
                 }
                 // The basis: a spell emitter's from its actor every frame, whatever +0x60 says (axial = row 2,
                 // transverse 1 = row 0, transverse 2 = -row 1); an actor's own emitter's from its point with +0x60.
-                if (!e.point_only && at->actor_axes) e.axes = emitter_axes(*at->actor_axes, 0.0f, 0.0f, false);
-                else if (e.point_only && d.bone_orientation == 1 && at->axes) {
-                    // The point path divides the complete basis by its first row's length only when offsets do
-                    // not inherit scale. Spell actors above copy their world matrix without that division.
-                    e.axes = emitter_axes(*at->axes, 0.0f, 0.0f, false);
-                    const float scale = glm::length((*at->axes)[0]);
-                    if (d.actor_scales_offsets == 0 && std::isfinite(scale) && scale > 1e-6f) e.axes /= scale;
-                }
+                if (!e.point_only && at->actor_axes) e.axes = emitter_axes(*at->actor_axes, 0.0f, 0.0f);
+                else if (e.point_only && d.bone_orientation == 1 && at->axes) e.axes = emitter_axes(*at->axes, 0.0f, 0.0f);
             }
         // Particles whose time is up leave the ring's head first (0x10072a71): one drawn last frame at its end.
         std::erase_if(e.particles, [](const Particle& p) { return p.lifetime - p.age <= 0.0f; });

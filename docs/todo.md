@@ -12,7 +12,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Environmental hits 0xf3 to 0xfd: animations, chat lines, sounds, and our own fall, drowning and lava damage reported like ApplyDamage (eb42f20; falls tested live).
 - [x] ReportSuccessfulHit's shared tail: the spell book closes and a sitting or mounted player stands when damage lands; a spell heal from OP_Damage (ff39361; the stand checked live).
 - [x] Blood spurts on supported WLD actors: landed local sharp-weapon hits, exact authored blood attachment and the player's single-frame blood sprite. Synthetic asset and packet-to-emitter coverage; missing attachments or unsupported sprite data safely omit the effect.
-- [x] Spell impact source, raw actor axes, owner opacity and point-model PESFactor; fixed floor emitters. Actor animation-trigger timing and native random-table parity remain open.
+- [x] Spell particles: the impact stage's caster is the packet's source (EQPlayer::TriggerSpellEffect @0x593eb0; the struck spawn when the source is unknown, a Hailstone difference); the actor's opacity and the point model's PESFactor on actor emitters.
+- [ ] Spell particles: whether an actor's world matrix rows carry its scale (normalised here), and what makes a floor-flag actor emitter again as the actor moves (kept on the actor here). unknowns.md.
 - [x] Linked spell timers and discipline timers from the player profile.
 - [x] Item recast on cast items (already in 789134d).
 - [x] The distance modifier of effect values, and the extra long-buff slots from level 72 and 75.

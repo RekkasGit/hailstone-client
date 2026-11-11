@@ -727,21 +727,28 @@ std::vector<int> GameConnection::buff_slots_with_spa(std::int32_t spa) const {
     return out;
 }
 
-void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool proc_stage) {
+void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool from_server) {
     if (a.type != 231) return;
     log::debug("action: spell {} {} -> {} flag {}", a.spell_id, a.source, a.target, a.effect_flag);
-    spells_.others.erase(a.source);
+    // The caster's animation (PlayerZoneClient::IWasHit -> TriggerSpellEffect); visuals later. Only a landing the
+    // server sent ends the source's cast: spell 859's local presentation says nothing about it.
+    if (from_server) spells_.others.erase(a.source);
     SoundCue c;
     c.kind = SoundCue::Kind::SpellLanded;
     c.source = a.source;
     c.target = a.target;
     c.spell = a.spell_id;
     sound_cues_.push_back(c);
-    // Hailstone's added proc cast stage is for received server landings. A native synthetic missile landing
-    // plays only the impact, and must never broadcast a new animation packet.
+    // Hailstone: a spell landing with no OP_BeginCast before it (EQEmu sends one for a buff's proc but not for an
+    // item, weapon or augment proc, Mob::TryWeaponProc) gets the cast stage at its source as a cast would. The
+    // original plays only the impact here (EQPlayer::TriggerSpellEffect @0x593d10). Only the first of a landing's
+    // two OP_Actions (flag 4 marks the second), not a bard song's pulse, and only for one the server sent: spell
+    // 859's local landing plays only the impact, and never sends an animation.
     if (const game::SpellData* sp = spell_table_->get(a.spell_id);
-        proc_stage && sp && a.source != 0 && (a.effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
+        from_server && sp && a.source != 0 && (a.effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
         play_animation(a.source, sp->casting_anim);
+        // Our own: the zone is told of the animation too, as the server does not pass it on to players with
+        // some chat filters on; a second one does not interrupt a playing animation and is range limited.
         if (a.source == world_.player_id) {
             Animation animation;
             animation.spawn_id = static_cast<std::uint16_t>(world_.player_id);
@@ -754,10 +761,14 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
             SpellEffectCue cue{0, a.source, 0, a.spell_id, 0};
             cue.proc = true;
             effect_cues_.push_back(cue);
+            // An area proc's other targets, landing with it, share this one.
             cast_stage_shown_[a.source] = {a.spell_id, now + kProcLandingMs};
         }
     }
+    // The impact stage: the source as its caster, the struck spawn as its target (app/spell_particles.h).
     effect_cues_.push_back({2, a.target, a.target, a.spell_id, 0, a.source});
+    // PlayerZoneClient::IWasHit @0x5a07b0: a spell on us with packet flag 4 goes through EQ_Character::HitBySpell
+    // (game/hit_landing.h).
     if (a.target == world_.player_id && (a.effect_flag & 4) != 0 && profile_ && spell_table_)
         land_spell_on_me(a, now);
 }
@@ -781,7 +792,7 @@ void GameConnection::spell_missile_hit(const game::Missile& missile) {
     action.hit_pitch = missile.tilt;
     action.type = 231;
     action.spell_id = 859;
-    action.spell_level = pstatus_.level;
+    action.spell_level = pstatus_.level; // the local player's GetLevel, as the original's (@0x501342) is
     handle_spell_action(action, now_ms(), false);
 }
 

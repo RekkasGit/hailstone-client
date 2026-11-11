@@ -269,20 +269,13 @@ int ClientApp::run() {
             // The drawn spawns' own emitters, on the pose drawn last frame.
             actor_emitter_list_.clear();
             for (const auto& [id, spawn] : conn_->world().spawns)
-                if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty()) {
-                    glm::mat4 transform;
-                    if (!actor_renderer_->drawn_transform(id, transform)) continue;
+                if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty())
                     actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id),
-                                                   actor_renderer_->drawn_alpha(id), glm::mat3(transform)});
-                }
+                                                   actor_renderer_->drawn_alpha(id)});
             // The missiles' (a spell bolt's flames: its model's own emitters, app/world_objects.h).
             const WorldObjects* objects = world_objects_.get();
             if (objects)
-                for (const auto& m : objects->missile_actors()) {
-                    glm::mat4 transform;
-                    if (objects->missile_transform(m.id, transform))
-                        actor_emitter_list_.push_back({m.id, m.emitters, false, 1.0f, glm::mat3(transform)});
-                }
+                for (const auto& m : objects->missile_actors()) actor_emitter_list_.push_back({m.id, m.emitters});
             const render::ActorRenderer* actors = actor_renderer_.get();
             actor_emitters_->update(dt, actor_emitter_list_,
                                     [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {

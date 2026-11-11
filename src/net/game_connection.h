@@ -2599,7 +2599,8 @@ private:
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
     void handle_spell(Op op, const AppPacket& p);
-    void handle_spell_action(const Action& action, std::int64_t now, bool proc_stage);
+    // An OP_Action of type 231; from_server false: a local presentation (spell 859's missile, spell_missile_hit).
+    void handle_spell_action(const Action& action, std::int64_t now, bool from_server);
     // Handle_OP_MemorizeSpell @0x4be150 (game/mechanics/spell_gems.h) on the connection's state.
     void handle_memorize_spell(const MemorizeSpell& m);
     void land_spell_on_me(const Action& a, std::int64_t now);

@@ -80,8 +80,6 @@ struct SpellEmitterRequest {
     // The DLL's actor-emitter creator (CParticleSystem vtable +0x20, 0x10070640) gives the emitter only the point,
     // not the actor (emitter +0x68 stays 0): its axes then follow the point (EDD +0x60), not the actor's turn.
     bool point_only = false;
-    // An explicitly placed emitter (e.g. an actor's floor entry) may retain its creator's basis without following it.
-    std::optional<glm::mat3> axes;
 };
 
 // An actor a stage can place emitters on.
@@ -142,7 +140,7 @@ std::uint32_t emitter_capacity(const assets::EmitterDefinition& def, float durat
 // matrix's rows 2, 0 and -1; each particle's spawn (0x10072fe0, 0x100730ea) turns its copy by +0xc4 about transverse
 // 2 (axial' = axial cos + t1 sin, t1' = t1 cos - axial sin), then by +0xc8 about transverse 1 (axial'' = axial'
 // cos + t2 sin, t2' = t2 cos - axial' sin).
-glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2, bool normalize_basis = true);
+glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2);
 // Those two turns of a basis already taken (columns transverse 1, transverse 2, axial).
 glm::mat3 turn_axes(const glm::mat3& axes, float angle1, float angle2);
 

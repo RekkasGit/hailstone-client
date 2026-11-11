@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <cmath>
 #include <optional>
 
 #include "assets/character.h"
@@ -72,20 +71,8 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         r.bone_point = static_cast<std::int32_t>(i);
         r.point_only = true;
         r.persistent = duration_ms < 0;
-        if (me.emitter.floor != 0) {
-            // The floor flag creates a world placement, with no point or actor left to follow. A missing floor
-            // postpones creation instead of putting an effect into the air while the zone is still loading.
-            if (!floor_ || !a.world_axes) return std::nullopt;
-            auto floor = floor_(r.position);
-            if (!floor || !std::isfinite(*floor)) return std::nullopt;
-            r.position.z = *floor + 0.05f;
-            r.axes = game::emitter_axes(*a.world_axes, 0.0f, 0.0f, false);
-            r.actor = 0;
-            r.bone_point = -1;
-            r.point_only = false;
-        }
         particles_.create(r);
-        return particles_.has(r.key) ? std::optional<std::uint32_t>(r.key) : std::nullopt;
+        return r.key;
     };
     for (const Actor& a : actors) {
         if (!a.mesh || a.mesh->emitters.empty()) continue;
@@ -100,17 +87,15 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
             for (auto& [i, t] : live.triggered)
                 if (t.key) particles_.stop(t.key);
             live.keys.clear();
-            live.started_entries.assign(a.mesh->emitters.size(), false);
             live.standing_keys.clear();
             live.triggered.clear();
             live.mesh_serial = a.mesh->serial.value();
-        }
-        for (std::size_t i = 0; i < a.mesh->emitters.size(); ++i) {
-            const auto& e = a.mesh->emitters[i].emitter;
-            if (live.started_entries[i] || e.trigger != 0 || e.variant >= 1) continue;
-            if (auto key = start(a, i)) {
-                live.keys.push_back(*key);
-                live.started_entries[i] = true;
+            // Tried once per mesh: an entry that makes nothing (an index past the file's end, density 0) is not
+            // tried again each frame; a new mesh (another look or weapon) tries its entries afresh.
+            for (std::size_t i = 0; i < a.mesh->emitters.size(); ++i) {
+                const auto& e = a.mesh->emitters[i].emitter;
+                if (e.trigger != 0 || e.variant >= 1) continue;
+                if (auto key = start(a, i)) live.keys.push_back(*key);
             }
         }
         // The standing entries start when it stands and stop when it moves, casts or acts.

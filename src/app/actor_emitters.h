@@ -44,8 +44,6 @@ public:
     ActorEmitters(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
     explicit ActorEmitters(std::vector<assets::EmitterDefinition> definitions, game::HeightTables heights = {});
     const game::ParticleSystem& simulation() const { return particles_; }
-    using FloorFn = std::function<std::optional<float>(const glm::vec3&)>;
-    void set_floor(FloorFn floor) { floor_ = std::move(floor); }
 
     // An actor drawn this frame and the mesh it was drawn with.
     struct Actor {
@@ -53,7 +51,6 @@ public:
         const assets::CharacterMesh* mesh = nullptr;
         bool standing = false; // in its stand or idle animation (render::ActorRenderer::standing)
         float alpha = 1.0f;
-        std::optional<glm::mat3> world_axes; // root actor's basis for a floor-placed entry
     };
     // A bone's world matrix on an actor as drawn (false: not drawn).
     using BoneWorld = std::function<bool(std::uint32_t id, int bone, glm::mat4& world)>;
@@ -82,7 +79,6 @@ private:
         const assets::CharacterMesh* mesh = nullptr;
         std::uint64_t mesh_serial = 0;
         std::vector<std::uint32_t> keys;
-        std::vector<bool> started_entries;
         float alpha = 1.0f;
         std::vector<std::uint32_t> standing_keys; // the STND / IDLE entries', while it stands
         // The other animation-started entries, by entry: the time into their animation last frame (negative: not
@@ -96,7 +92,6 @@ private:
     };
     game::ParticleSystem particles_;
     game::HeightTables heights_;
-    FloorFn floor_;
     game::SpellParticleSettings settings_;
     float eqclient_density_ = 1.0f;
     std::unique_ptr<render::ParticleRenderer> renderer_;

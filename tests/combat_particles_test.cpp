@@ -109,9 +109,44 @@ TEST_CASE("Spell landing packets use the source actor and its level for impact-s
     CHECK(particles.simulation().emitters().empty());
 }
 
-TEST_CASE("Attached spell particles preserve raw actor axes and update their owner opacity") {
+TEST_CASE("A spell landing without a known source plays its impact stage with the struck spawn as caster") {
+    using namespace net;
+    using namespace test;
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    auto struck = make_spawn("FixtureTarget", 334, 1, 1, 80, 90, 8);
+    struck.level = 50;
+    rig.server.add_spawn(struck);
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(334); }));
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(600)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    assets::SpellEffect effect;
+    effect.stages[2].slots[0] = {1, 20, 1, 8}; // caster-level gate and caster attachment
+    effect.stages[2].slots[1] = {1, 0, 3, 8};
+    for (std::uint16_t source : {std::uint16_t{0}, std::uint16_t{999}}) {
+        CAPTURE(source);
+        rig.conn.take_spell_effect_cues();
+        Action hit;
+        hit.source = source;
+        hit.target = 334;
+        hit.type = 231;
+        hit.spell_id = 600;
+        hit.effect_flag = 4;
+        rig.conn.receive_zone_packet_for_test(encode(hit));
+        app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {assets::SpellEffect{}, effect});
+        particles.update(rig.conn, rig.conn.take_spell_effect_cues(), {}, nullptr, 0.01f);
+        const auto& emitters = particles.simulation().emitters();
+        REQUIRE(emitters.size() == 2); // the location 1 slot, past its level 20 gate, on the struck spawn
+        CHECK(emitters[0].actor == 334);
+        CHECK(emitters[1].actor == 334);
+    }
+}
+
+TEST_CASE("Attached spell particles take the actor's scale once and update their owner opacity") {
     auto d = dot();
     d.follow_attachment = 1;
+    d.actor_scales_offsets = 1;
     d.offset = {0, 1, 0}; // transverse 1
     game::ParticleSystem particles({assets::EmitterDefinition{}, d});
     game::SpellEmitterRequest request;
@@ -121,22 +156,25 @@ TEST_CASE("Attached spell particles preserve raw actor axes and update their own
     request.opacity = 0.5f;
     REQUIRE(particles.create(request) > 0);
     game::EmitterAttachment attachment;
-    attachment.actor_axes = glm::mat3(glm::vec3(2, 0, 0), glm::vec3(0, 3, 0), glm::vec3(0, 0, 4));
+    // A large race: its scale is in its world matrix's rows and in its GetScaleFactor. The offset scales by the
+    // latter alone; the basis is only the direction (the rows' scale is not known to reach it, docs/unknowns.md).
+    attachment.actor_axes = glm::mat3(glm::vec3(2, 0, 0), glm::vec3(0, 2, 0), glm::vec3(0, 0, 2));
+    attachment.actor_scale = 2.0f;
     attachment.alpha = 0.25f;
     auto resolve = [&](std::uint32_t, std::int32_t) { return std::optional(attachment); };
     particles.update(0.01f, resolve);
     const auto& first = particles.emitters().front().particles.front();
-    CHECK(near(first.position, {12, 20, 30}));
+    CHECK(near(first.position, {12, 20, 30})); // not 14: the scale once
     CHECK(first.color.a == doctest::Approx(0.125f));
     (*attachment.actor_axes)[0] = {5, 0, 0};
     attachment.alpha = 0.75f;
     particles.update(0.01f, resolve);
     const auto& second = particles.emitters().front().particles.front();
-    CHECK(near(second.position, {15, 20, 30}));
+    CHECK(near(second.position, {12, 20, 30}));
     CHECK(second.color.a == doctest::Approx(0.375f));
 }
 
-TEST_CASE("Actor emitters use point-owner PESFactor and freeze floor placements as the actor moves") {
+TEST_CASE("Actor emitters use point-owner PESFactor, keep floor entries on the actor and try an entry once a mesh") {
     auto d = dot();
     d.duration = 0;
     d.follow_attachment = 1;
@@ -153,37 +191,42 @@ TEST_CASE("Actor emitters use point-owner PESFactor and freeze floor placements 
     floor.emitter.floor = 1;
     floor.local = glm::translate(glm::mat4(1.0f), glm::vec3(2, 0, 0));
     mesh.emitters.push_back(floor);
+    auto missing = attached; // an index past the file's end makes nothing
+    missing.bone = 1;
+    missing.emitter.emitter = 5;
+    mesh.emitters.push_back(missing);
     auto heights = game::parse_height_tables({}, "[IT42]\nPESFactor=3\n");
     app::ActorEmitters particles({assets::EmitterDefinition{}, d}, heights);
-    bool floor_available = false;
-    particles.set_floor([&](const glm::vec3&) -> std::optional<float> {
-        return floor_available ? std::optional(10.0f) : std::nullopt;
-    });
     glm::mat4 world = glm::translate(glm::mat4(1), glm::vec3(100, 20, 30));
     world = glm::scale(world, glm::vec3(2, 4, 6));
-    app::ActorEmitters::Actor actor{7, &mesh, false, 0.25f, glm::mat3(world)};
+    app::ActorEmitters::Actor actor{7, &mesh, false, 0.25f};
+    int missing_tries = 0;
     auto pose = [&](std::uint32_t id, int bone, glm::mat4& out) {
-        if (id != 7 || bone != 0) return false;
+        if (id != 7) return false;
+        if (bone == 1) ++missing_tries;
         out = world;
-        return true;
+        return bone == 0 || bone == 1;
     };
     particles.update(0.01f, std::span(&actor, 1), pose, {});
-    REQUIRE(particles.simulation().emitters().size() == 1); // no guessed floor while collision is unavailable
+    REQUIRE(particles.simulation().emitters().size() == 2);
     const auto& attached_particle = particles.simulation().emitters()[0].particles.front();
     CHECK(attached_particle.size_factor == doctest::Approx(6.0f)); // first row length 2 x item PESFactor 3
     CHECK(attached_particle.color.a == doctest::Approx(0.25f));
-    CHECK(near(particles.simulation().emitters()[0].axes[2], {0, 0, 3})); // one common divisor, not three unit axes
-    floor_available = true;
-    particles.update(0.01f, std::span(&actor, 1), pose, {});
-    REQUIRE(particles.simulation().emitters().size() == 2);
-    CHECK(near(particles.simulation().emitters()[1].origin, {104, 20, 10.05f}));
-    CHECK(particles.simulation().emitters()[1].actor == 0);
+    CHECK(near(particles.simulation().emitters()[0].axes[2], {0, 0, 1}));
+    // The floor entry: what makes the original's again as the actor moves was not traced, so it stays on the actor.
+    CHECK(particles.simulation().emitters()[1].actor == 7);
+    CHECK(near(particles.simulation().emitters()[1].origin, {104, 20, 30}));
     world[3].x += 20;
     actor.alpha = 0.5f;
     particles.update(0.01f, std::span(&actor, 1), pose, {});
+    particles.update(0.01f, std::span(&actor, 1), pose, {});
     CHECK(near(particles.simulation().emitters()[0].origin, {120, 20, 30}));
-    CHECK(near(particles.simulation().emitters()[1].origin, {104, 20, 10.05f}));
+    CHECK(near(particles.simulation().emitters()[1].origin, {124, 20, 30}));
     CHECK(particles.simulation().emitters()[0].particles.front().color.a == doctest::Approx(0.5f));
+    CHECK(missing_tries == 1); // not tried again each frame
+    mesh.serial = {};           // another look: its entries are tried afresh
+    particles.update(0.01f, std::span(&actor, 1), pose, {});
+    CHECK(missing_tries == 2);
     particles.update(0.01f, {}, pose, {});
     CHECK(particles.simulation().emitters().empty());
 }
@@ -346,6 +389,60 @@ TEST_CASE("A valid spell missile packet creates its stage at the missile and rel
     CHECK(particles.simulation().emitters().empty());
 }
 
+TEST_CASE("Spell 54's destruction impact outlives the missile it is played for") {
+    using namespace net;
+    using namespace test;
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    rig.server.add_spawn(make_spawn("FixtureCaster", 333, 1, 1, 50, 60, 7));
+    REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(333); }));
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(54, 5)) == 1);
+    rig.conn.set_spell_table_for_test(table);
+    assets::SpellEffect effect;
+    effect.stages[1].slots[0] = {1, 0, 2, 8}; // the flight: on the missile
+    effect.stages[2].slots[0] = {1, 0, 2, 8}; // the impact: where the missile was
+    app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {assets::SpellEffect{}, effect});
+    game::MissilePacket packet;
+    packet.source_id = 333;
+    packet.position = {10, 20, 30};
+    packet.velocity = {1, 2, 0};
+    packet.item_type = 9;
+    packet.spell = 54;
+    game::MissileList missiles;
+    missiles.add(game::make_missile(packet, 1000, 0));
+    game::MissileWorld world;
+    world.spawn = [&](std::uint32_t id) -> std::optional<game::MissileSpawn> {
+        auto it = rig.conn.world().spawns.find(id);
+        if (it == rig.conn.world().spawns.end()) return std::nullopt;
+        return game::MissileSpawn{id, it->second.position, 4, 6, it->second.race, false};
+    };
+    world.spell = [&](std::uint32_t id) { return table->get(id); };
+    world.effect = [&](const game::Missile& m, int stage) { particles.missile_effect(rig.conn, m, stage, nullptr); };
+    glm::vec3 impact_at{};
+    world.ended = [&](const game::Missile& m) {
+        impact_at = m.position - m.velocity;
+        particles.end_missile(m.serial);
+    };
+    particles.set_missile_pose([&](std::uint32_t serial) -> std::optional<glm::mat4> {
+        for (const auto& m : missiles.missiles())
+            if (m.serial == serial) return glm::translate(glm::mat4(1), m.actor_position);
+        return std::nullopt;
+    });
+    missiles.update(1000, world);
+    REQUIRE(missiles.missiles().size() == 1);
+    REQUIRE(particles.simulation().emitters().size() == 1);
+    CHECK(particles.simulation().emitters()[0].actor == (0x80000000u | missiles.missiles().front().serial));
+    missiles.update(1066, world); // past its 50 ms
+    REQUIRE(missiles.missiles().empty());
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    const auto& emitters = particles.simulation().emitters();
+    REQUIRE(emitters.size() == 1); // the flight's went with the missile, the impact stays
+    CHECK(emitters[0].actor == 0);
+    CHECK(near(emitters[0].origin, impact_at));
+    CHECK(emitters[0].particles.size() == 1);
+}
+
 TEST_CASE("Spell missile duration reads the native AE clamp and its first-slot cloud exception") {
     game::SpellTable table;
     REQUIRE(table.parse(spell_line(600, 8, 20000) + "\n" + spell_line(601, 8, 20000, false, 76)) == 2);
@@ -368,6 +465,12 @@ TEST_CASE("Spell859 missile destruction invokes the local Action presentation wi
     const auto position = rig.conn.world().player()->position;
     rig.server.add_spawn(make_spawn("FixtureCaster", 333, 1, 1, 50, 60, 7));
     REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(333); }));
+    BeginCast casting; // the source is casting something else, which the local presentation must not end
+    casting.spell_id = 859;
+    casting.caster_id = 333;
+    casting.cast_time = 10000;
+    rig.conn.receive_zone_packet_for_test(encode(casting));
+    REQUIRE(rig.conn.spell_state().others.contains(333));
     rig.conn.take_spell_effect_cues();
     rig.conn.take_sound_cues();
     const auto hp = rig.conn.player_status().hp;
@@ -401,6 +504,7 @@ TEST_CASE("Spell859 missile destruction invokes the local Action presentation wi
     CHECK(cues.front().source == 333);
     CHECK(cues.front().target == me);
     CHECK_FALSE(cues.front().proc); // no invented proc cast stage or animation broadcast
+    CHECK(rig.conn.spell_state().others.contains(333));
     auto sounds = rig.conn.take_sound_cues();
     REQUIRE(sounds.size() == 1);
     CHECK(sounds.front().kind == SoundCue::Kind::SpellLanded);

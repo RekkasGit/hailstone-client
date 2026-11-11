@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
+#include <memory>
+#include <system_error>
 
 #include "assets/character.h"
 #include "assets/pfs.h"
@@ -21,7 +24,66 @@ namespace {
 // This is a separate named actor role, not one of the ten spell points.
 constexpr int kBloodPoint = 10;
 constexpr std::uint32_t kMissileActorBit = 0x80000000u; // app/world_objects.h's actor namespace
+
+// The blood cloud's definition and its texture's bytes, the archive itself not kept.
+struct BloodSprite {
+    assets::EmitterDefinition definition;
+    std::string texture; // GameDir::normalize'd
+    std::shared_ptr<const std::vector<std::byte>> bytes;
+};
+
+std::optional<BloodSprite> read_blood_sprite(const std::filesystem::path& path) {
+    auto data = read_file(path);
+    if (!data) return std::nullopt;
+    auto archive = assets::PfsArchive::from_memory(std::move(*data), "gequip.s3d");
+    auto wld_bytes = archive.read("gequip.wld");
+    if (!wld_bytes) return std::nullopt;
+    auto wld = assets::wld::WldFile::parse(*wld_bytes, "gequip.s3d:gequip.wld");
+    const auto* sprite = wld.find("I_BLOODSPRITE");
+    if (!sprite) return std::nullopt;
+    const auto ref = static_cast<assets::wld::Ref>(sprite - wld.fragments().data() + 1);
+    auto tex = assets::particle_texture(wld, ref);
+    if (!tex || tex->frames != 1) return std::nullopt;
+    auto material = tex->material & 0x80000000u ? assets::particle_material_alias(tex->material)
+                                               : std::optional(tex->material);
+    if (!material || !(*material & 0x1000000u)) return std::nullopt;
+    auto bytes = archive.read(tex->file);
+    if (!bytes) return std::nullopt;
+    BloodSprite out;
+    out.definition = game::blood_spurt_definition(tex->file);
+    out.definition.additive = (*material >> 20) & 1u;
+    out.texture = GameDir::normalize(tex->file);
+    out.bytes = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+    return out;
 }
+
+// gequip.s3d's sprite, read again only when the file found is another or has changed: reload_server_files makes
+// SpellParticles again for every change of the server's files, and this parses the whole of gequip.wld.
+std::optional<BloodSprite> load_blood_sprite(const GameDir& game) {
+    struct Cached {
+        std::filesystem::path path;
+        std::uintmax_t size = 0;
+        std::filesystem::file_time_type time{};
+        std::optional<BloodSprite> sprite;
+    };
+    static std::optional<Cached> cache;
+    auto path = game.find("gequip.s3d");
+    if (!path) return std::nullopt;
+    std::error_code size_error, time_error;
+    const auto size = std::filesystem::file_size(*path, size_error);
+    const auto time = std::filesystem::last_write_time(*path, time_error);
+    if (cache && !size_error && !time_error && cache->path == *path && cache->size == size && cache->time == time)
+        return cache->sprite;
+    std::optional<BloodSprite> sprite;
+    try {
+        sprite = read_blood_sprite(*path);
+    } catch (const std::exception& e) {
+        log::warn("blood particles: {}", e.what());
+    }
+    if (!size_error && !time_error) cache = Cached{*path, size, time, sprite};
+    return sprite;
+}
+} // namespace
 
 SpellParticles::SpellParticles(std::vector<assets::EmitterDefinition> definitions,
                                std::vector<assets::SpellEffect> effects)
@@ -52,39 +114,15 @@ SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const
         if (auto text = sp_offsets_.get(section, key)) v = std::strtof(text->c_str(), nullptr);
         return v;
     });
-    // The original resolves I_BLOODSPRITE from the global equipment resources. Retain the player's archive for
-    // the texture reader, and skip the feature if its sprite chain is absent or unsupported.
-    std::shared_ptr<const assets::PfsArchive> blood_archive;
-    std::string blood_texture;
-    try {
-        if (auto data = game.read("gequip.s3d")) {
-            auto archive = std::make_shared<assets::PfsArchive>(assets::PfsArchive::from_memory(std::move(*data), "gequip.s3d"));
-            if (auto bytes = archive->read("gequip.wld")) {
-                auto wld = assets::wld::WldFile::parse(*bytes, "gequip.s3d:gequip.wld");
-                if (const auto* sprite = wld.find("I_BLOODSPRITE")) {
-                    const auto ref = static_cast<assets::wld::Ref>(sprite - wld.fragments().data() + 1);
-                    if (auto tex = assets::particle_texture(wld, ref); tex && tex->frames == 1 && archive->contains(tex->file)) {
-                        auto material = tex->material & 0x80000000u ? assets::particle_material_alias(tex->material)
-                                                                   : std::optional(tex->material);
-                        if (material && (*material & 0x1000000u)) {
-                            auto definition = game::blood_spurt_definition(tex->file);
-                            definition.additive = (*material >> 20) & 1u;
-                            set_blood_sprite(std::move(definition));
-                            blood_texture = GameDir::normalize(tex->file);
-                            blood_archive = std::move(archive);
-                        }
-                    }
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        log::warn("blood particles: {}", e.what());
-    }
+    // The original resolves I_BLOODSPRITE from the global equipment resources; without a supported sprite chain
+    // there is no blood.
+    std::optional<BloodSprite> blood = load_blood_sprite(game);
+    if (blood) set_blood_sprite(blood->definition);
     if (!particles_.empty()) {
         renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir);
-        if (blood_archive)
-            renderer_->set_texture_reader([archive = std::move(blood_archive), name = std::move(blood_texture)](const std::string& wanted) {
-                return GameDir::normalize(wanted) == name ? archive->read(wanted) : std::nullopt;
+        if (blood)
+            renderer_->set_texture_reader([name = blood->texture, bytes = blood->bytes](const std::string& wanted) {
+                return GameDir::normalize(wanted) == name ? std::optional(*bytes) : std::nullopt;
             });
         log::info("spell particles: {} emitter definitions, {} effects, density {:.2f}, opacity {:.2f}",
                   particles_.definitions().size(), effects_.size(), settings_.density, settings_.opacity);
@@ -133,7 +171,9 @@ void SpellParticles::missile_effect(const net::GameConnection& conn, const game:
     if (!spell || spell->spell_anim < 1 || static_cast<std::size_t>(spell->spell_anim) >= effects_.size()) return;
     auto caster = stage_actor(conn, missile.packet.source_id, actors);
     game::StageActor at;
-    at.id = kMissileActorBit | missile.serial;
+    // Without its actor (spell 54's destruction impact, played as the missile goes) the location 2 slots stay at
+    // the missile's last place rather than on an actor end_missile removes.
+    at.id = missile.has_actor ? kMissileActorBit | missile.serial : 0u;
     at.position = missile.actor_position;
     at.points = 0; // no fabricated eyes, mouth or spell bones on a missile actor
     game::SpellParticleSettings settings = settings_;
@@ -413,7 +453,12 @@ void SpellParticles::play(net::GameConnection& conn, const Held& cue, const rend
     game::SpellParticleSettings settings = settings_;
     settings.density *= source_density_for(conn, cast_by, cue.target != 0 ? cue.target : cue.caster);
     if (settings.density <= 0.0f) return;
+    // The impact stage's caster is the packet's source: EQPlayer::TriggerSpellEffect (@0x593eb0) passes it to
+    // DoSpellEffect as the caster, the struck spawn as the target. Hailstone: with a source of 0 or one not in the
+    // zone the struck spawn stands in as the caster (its location 1 slots and level), as before; the original's
+    // DoSpellEffect plays nothing without a caster.
     auto caster = stage_actor(conn, cast_by, actors);
+    if (!caster && cue.stage == 2) caster = stage_actor(conn, cue.caster, actors);
     auto target = stage_actor(conn, cue.target, actors);
     glm::vec3 point = caster ? caster->position : target ? target->position : glm::vec3(0.0f);
     std::int32_t longest = 0;
