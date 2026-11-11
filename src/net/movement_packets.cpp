@@ -110,7 +110,7 @@ AppPacket encode_findable_npc(const FindableNpc& n) {
     w.fixed_string(std::string_view(n.last_name).substr(0, 31), 32);
     w.le<std::uint32_t>(n.race);
     w.le<std::uint8_t>(n.class_id);
-    for (std::uint8_t b : {0x16, 0x06, 0x24}) w.le<std::uint8_t>(b);
+    for (std::uint8_t b : {std::uint8_t{0x16}, std::uint8_t{0x06}, std::uint8_t{0x24}}) w.le<std::uint8_t>(b);
     return make_packet(Op::SendFindableNPCs, std::move(w));
 }
 
