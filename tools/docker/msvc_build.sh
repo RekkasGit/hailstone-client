@@ -9,10 +9,6 @@ export PATH="${MSVC_DIR:?set MSVC_DIR to the msvc-wine install}/bin/x64:$PATH" W
 # One wine server for the whole build, rather than one started and stopped per compile.
 wineserver -p 2>/dev/null || true
 wine wineboot >/dev/null 2>&1 || true
-# wineboot can stop before it makes the profile's Temp folder (seen when its 32-bit rundll32 is missing), and cl then
-# fails with D8037 "cannot create temporary il file": make the folder Wine's TEMP names.
-temp=$(wine cmd /c 'echo %TEMP%' 2>/dev/null | tr -d '\r')
-if [ -n "$temp" ]; then mkdir -p "$(winepath -u "$temp" 2>/dev/null)" || true; fi
 if [ ! -f "$build/CMakeCache.txt" ]; then
     CC=cl CXX=cl cmake -S "$src" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows "$@"
 fi

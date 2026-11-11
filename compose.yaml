@@ -8,6 +8,11 @@
 
 x-build: &build
   user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  # The browser tests start Chromium, whose sandbox makes user namespaces; Docker's default seccomp and AppArmor
+  # profiles refuse that ("No usable sandbox!").
+  security_opt:
+    - seccomp=unconfined
+    - apparmor=unconfined
   working_dir: /src
   volumes:
     - .:/src
