@@ -541,13 +541,21 @@ void LoginClient::request_server_list() {
 void LoginClient::request_play(std::uint32_t server_id) {
     if (state_ != LoginState::ServerList) return;
     // ServerSelectWnd::WndNotification: a server for another locale is refused here (unless show-player-count).
-    for (const auto& s : servers_)
-        if (s.id == server_id && !login_.show_player_count && !locale_matches(s.country, options_.locale)) {
+    for (const auto& s : servers_) {
+        if (s.id != server_id) continue;
+        if (!s.can_join()) {
+            error_id_ = 326;
+            error_ = login_error_text(error_id_);
+            notice_ = error_;
+            return;
+        }
+        if (!login_.show_player_count && !locale_matches(s.country, options_.locale)) {
             error_id_ = login_error::WrongLocale;
             error_ = login_error_text(login_error::WrongLocale);
             notice_ = error_;
             return;
         }
+    }
     send_play_request(server_id);
 }
 

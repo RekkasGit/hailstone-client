@@ -45,6 +45,11 @@ Every message is one application packet, little-endian: **opcode u16 | sequence 
 
 ## Sequence numbers and pending requests
 
+World status is a bit field: the down bit (1) blocks a Play attempt; the locked bit (4) displays **Locked** and does
+not by itself block Play. The world server decides whether the account may enter a locked world, including GM
+bypass. This applies to buttons, double-click, keyboard and gamepad entry points through the same `can_join` row
+state; the client has no local account-status check that could replace the server's decision.
+
 One counter per login connection (a new one for each connect attempt) starts at 1 and is incremented **before** each request is built, wrapping to 1 at 0xffffff: handshake 2, login 3, list 4, play 5; each list refresh takes the next number, so a play request after one refresh carries 6. Every request is pending with a timeout: handshake 10 s (nothing happens when it runs out), login 20 s and list 120 s (**103** "A timeout occurred"), play 10 s (**324**). A reply whose sequence is below 0xffffff must match a pending request, which it then removes, or it is dropped, unless its opcode is a push (0x25–0x2d, 0x30, 0x31); the reply's opcode is not compared with the request's. EQEmu echoes the request's sequence (and hard-codes 2 in the handshake reply, which a fresh connection always uses). A connection the server drops after the login: **112**.
 
 Error texts come from eqlsstr_us.txt (`load_login_strings`, loaded by the client at start-up), with Hailstone's own English wording (not the stock file's text) for the ids the client uses when the file is missing; an id with no text reads "Login message <id> (no text for it).".

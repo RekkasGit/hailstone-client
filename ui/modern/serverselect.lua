@@ -73,7 +73,8 @@ local function card(view, s, bh)
     ui.PopFont()
     pw, ph = pw + 12 * s, ph + 4 * s
     local px = x1 - 10 * s - pw
-    P.Pill(px, y0 + (y1 - y0 - ph) / 2, sv.status, sv.canJoin and C.pet or C.danger, s)
+    P.Pill(px, y0 + (y1 - y0 - ph) / 2, sv.status,
+      sv.status == "Locked" and C.gold or (sv.canJoin and C.pet or C.danger), s)
     ui.PopID()
   end
   ui.EndChild()

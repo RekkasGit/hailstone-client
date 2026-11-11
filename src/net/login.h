@@ -90,6 +90,9 @@ struct ServerInfo {
     std::int32_t players = 0;
     std::string country;
     std::string language;
+    // A lock restricts admission on the world server (GMs may enter); only the down bit blocks a play attempt.
+    bool can_join() const { return (status & 1) == 0; }
+    const char* status_text() const { return (status & 4) ? "Locked" : (status & 1) ? "Down" : "Up"; }
 };
 
 struct PlayResult {
