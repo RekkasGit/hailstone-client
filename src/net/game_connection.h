@@ -3246,10 +3246,21 @@ private:
         ItemSlot slot;
         std::uint32_t quantity = 0, master_id = 0;
         Item item;
+        std::int64_t expires_ms = 0; // session_now_ms() after which no answer is expected any more
     };
     // Neither reply carries an instance or transaction ID. Keep this single request even after a batch timeout,
     // so a late reply cannot be mistaken for another donation. Other inventory actions remain available.
+    // EQEmu answers in the handler or not at all (a master out of range or gone, no guild), so the request is
+    // also dropped when that channel's master window is answered again (the answer to an open sent after the
+    // donation comes after the donation's own) and after kTributeReplyLimitMs.
     std::optional<PendingTributeDonation> pending_tribute_donation_;
+    static constexpr std::int64_t kTributeReplyLimitMs = 30000;
+    // The session's clock (ConnectionOptions::session.clock when a test sets one) in ms, on now_ms()'s scale.
+    std::int64_t session_now_ms() const;
+    bool tribute_donation_waiting() const {
+        return pending_tribute_donation_ && session_now_ms() < pending_tribute_donation_->expires_ms;
+    }
+    void expire_tribute_donation();
     bool begin_tribute_donation(bool guild, const Item& item, std::uint32_t master_id);
     bool finish_tribute_donation(bool guild, const ItemSlot& slot, std::uint32_t quantity,
                                 std::uint32_t master_id, bool consumed);

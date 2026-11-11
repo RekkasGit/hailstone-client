@@ -124,7 +124,7 @@ std::string GameConnection::bulk_items_blocked(ItemJobMode mode) const {
         return "That is not a bulk action.";
     if (mode == ItemJobMode::Tribute && !tribute_.master_id && !guild_tribute_.master_id)
         return "Open a tribute master first.";
-    if (mode == ItemJobMode::Tribute && pending_tribute_donation_)
+    if (mode == ItemJobMode::Tribute && tribute_donation_waiting())
         return "Wait for the previous tribute donation's answer.";
     return item_job_blocked(ItemJobScope::Inventory); // each item goes through the cursor
 }

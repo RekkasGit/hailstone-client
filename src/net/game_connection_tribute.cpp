@@ -39,7 +39,20 @@ bool same_donated_item(const Item& a, const Item& b) {
 
 } // namespace
 
+std::int64_t GameConnection::session_now_ms() const {
+    if (!options_.session.clock) return now_ms();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(options_.session.clock().time_since_epoch()).count();
+}
+
+void GameConnection::expire_tribute_donation() {
+    if (!pending_tribute_donation_ || tribute_donation_waiting()) return;
+    log::warn("no answer to the {} tribute item donation; no longer waiting for it",
+              pending_tribute_donation_->guild ? "guild" : "personal");
+    pending_tribute_donation_.reset();
+}
+
 bool GameConnection::begin_tribute_donation(bool guild, const Item& item, std::uint32_t master_id) {
+    expire_tribute_donation();
     if (pending_tribute_donation_) {
         chat(ChatEvent::Kind::System, "Wait for the tribute master to answer your previous item donation.");
         return false;
@@ -48,12 +61,14 @@ bool GameConnection::begin_tribute_donation(bool guild, const Item& item, std::u
         chat(ChatEvent::Kind::System, "This item cannot be identified safely for a tribute donation.");
         return false;
     }
-    pending_tribute_donation_ = PendingTributeDonation{guild, item.slot, donation_count(item), master_id, item};
+    pending_tribute_donation_ = PendingTributeDonation{guild, item.slot, donation_count(item), master_id, item,
+                                                       session_now_ms() + kTributeReplyLimitMs};
     return true;
 }
 
 bool GameConnection::finish_tribute_donation(bool guild, const ItemSlot& slot, std::uint32_t quantity,
                                             std::uint32_t master_id, bool consumed) {
+    expire_tribute_donation();
     if (!pending_tribute_donation_ || pending_tribute_donation_->guild != guild ||
         !pending_tribute_donation_->slot.same(slot) || pending_tribute_donation_->quantity != quantity ||
         (!guild && pending_tribute_donation_->master_id != master_id)) {
@@ -295,7 +310,12 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
         }
         break;
     case Op::OpenGuildTributeMaster:
-        if (auto st = decode_start_tribute(p)) g.master_id = st->response ? st->master_id : 0;
+        if (auto st = decode_start_tribute(p)) {
+            g.master_id = st->response ? st->master_id : 0;
+            // EQEmu answered any guild donation sent before this open (Handle_OP_GuildTributeDonateItem replies in
+            // the handler or never, as without a guild), so no answer to it is still coming.
+            if (pending_tribute_donation_ && pending_tribute_donation_->guild) pending_tribute_donation_.reset();
+        }
         break;
     case Op::GuildModifyBenefits:
         break; // the echo of the save; the benefits come with OP_GuildSendActiveTributes
@@ -321,7 +341,12 @@ void GameConnection::handle_tribute(Op op, const AppPacket& p) {
         if (auto d = decode_tribute_description(p)) tribute_.descriptions[d->tribute_id] = std::move(d->text);
         break;
     case Op::OpenTributeMaster:
-        if (auto st = decode_start_tribute(p)) tribute_.master_id = st->response ? st->master_id : 0;
+        if (auto st = decode_start_tribute(p)) {
+            tribute_.master_id = st->response ? st->master_id : 0;
+            // Handle_OP_TributeItem replies in the handler or returns silently (a master out of range or gone), so
+            // an answer to the earlier donation came before this one or never comes.
+            if (pending_tribute_donation_ && !pending_tribute_donation_->guild) pending_tribute_donation_.reset();
+        }
         break;
     case Op::TributeItem:
         if (auto t = decode_tribute_item(p)) {

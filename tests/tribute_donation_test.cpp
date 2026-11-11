@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "manual_clock.h"
 #include "mock_server/harness.h"
 #include "mq_test_world.h"
 #include "net/tribute_packets.h"
@@ -223,7 +224,7 @@ TEST_CASE("an item without a usable serial cannot start an uncorrelatable donati
     open_master(rig, true);
     take_rations(c);
     auto item = *c.inventory().cursor();
-    for (const std::string serial : {std::string{}, std::string{"0000000000000000"}}) {
+    for (const auto& serial : {std::string{}, std::string{"0000000000000000"}}) {
         item.serial = serial;
         deliver_item(c, item);
         CHECK_FALSE(donate(c, false));
@@ -306,4 +307,66 @@ TEST_CASE("zone and disconnect discard old tribute reply identities") {
             CHECK(donate(c, guild));
         }
     }
+}
+
+TEST_CASE("an unanswered tribute donation stops blocking when the master is opened again or after a long wait") {
+    // Stock EQEmu sends no reply when the personal master is gone or out of range (Handle_OP_TributeItem returns),
+    // nor for a guild donation without a guild. The mock never answers on its own, as that server.
+    using namespace std::chrono_literals;
+    for (bool guild : {false, true}) {
+        for (bool reopen : {false, true}) {
+            CAPTURE(guild);
+            CAPTURE(reopen);
+            ScratchDir files("tribute_reply_missing");
+            auto options = tribute_options(files);
+            options.session.idle_timeout = 10min; // only the donation's wait is under test
+            ManualClock clock;
+            options.session.clock = clock.source();
+            Rig rig(tribute_config(), options);
+            REQUIRE(rig.to_zone());
+            clock.hold();
+            auto& c = rig.conn;
+            put_coin_away(c);
+            open_master(rig, guild);
+            take_rations(c);
+            REQUIRE(donate(c, guild));
+            REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, item_opcode(guild)) == 1; }));
+            REQUIRE(c.inventory().cursor()); // no answer: nothing was taken
+            CHECK_FALSE(donate(c, guild));
+            if (reopen) {
+                open_master(rig, guild);
+            } else {
+                clock.advance(29s);
+                CHECK_FALSE(donate(c, guild));
+                clock.advance(2s);
+            }
+            REQUIRE(c.inventory().cursor());
+            CHECK(donate(c, guild));
+            REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, item_opcode(guild)) == 2; }));
+        }
+    }
+}
+
+TEST_CASE("a tribute batch that timed out without an answer frees donations after the long wait") {
+    using namespace std::chrono_literals;
+    ScratchDir files("tribute_batch_missing");
+    auto options = tribute_options(files);
+    options.session.idle_timeout = 10min;
+    ManualClock clock;
+    options.session.clock = clock.source();
+    Rig rig(tribute_config(), options);
+    REQUIRE(rig.to_zone());
+    clock.hold();
+    auto& c = rig.conn;
+    put_coin_away(c);
+    open_master(rig, false);
+    using M = net::GameConnection::ItemJobMode;
+    REQUIRE(c.start_bulk_job(M::Tribute, {net::ItemSlot::possessions(23)}).empty());
+    REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, net::Op::TributeItem) == 1; }));
+    net::GameConnectionTestAccess::update_bulk_job(c, net::GameConnection::now_ms() + 6000);
+    REQUIRE_FALSE(c.item_job());
+    CHECK(c.start_bulk_job(M::Tribute, {net::ItemSlot::possessions(23)}) ==
+          "Wait for the previous tribute donation's answer.");
+    clock.advance(31s);
+    CHECK(c.start_bulk_job(M::Tribute, {net::ItemSlot::possessions(23)}).empty());
 }
