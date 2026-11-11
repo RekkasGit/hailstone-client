@@ -89,4 +89,29 @@ AppPacket encode_find_person_reply(const std::vector<glm::vec3>& path) {
     return make_packet(Op::FindPersonReply, std::move(w));
 }
 
+std::optional<FindableNpc> decode_findable_npc(const AppPacket& p) {
+    return detail::decode_with(p, [](ByteReader& r) {
+        FindableNpc n;
+        n.remove = r.le<std::uint32_t>() != 0;
+        n.spawn_id = r.le<std::uint32_t>();
+        n.name = r.fixed_string(64);
+        n.last_name = r.fixed_string(32);
+        n.race = r.le<std::uint32_t>();
+        n.class_id = r.le<std::uint8_t>();
+        return n;
+    });
+}
+
+AppPacket encode_findable_npc(const FindableNpc& n) {
+    ByteWriter w;
+    w.le<std::uint32_t>(n.remove ? 1 : 0);
+    w.le<std::uint32_t>(n.spawn_id);
+    w.fixed_string(std::string_view(n.name).substr(0, 63), 64);
+    w.fixed_string(std::string_view(n.last_name).substr(0, 31), 32);
+    w.le<std::uint32_t>(n.race);
+    w.le<std::uint8_t>(n.class_id);
+    for (std::uint8_t b : {0x16, 0x06, 0x24}) w.le<std::uint8_t>(b);
+    return make_packet(Op::SendFindableNPCs, std::move(w));
+}
+
 } // namespace hailstone::net

@@ -141,6 +141,7 @@
 #include "ui/web_textures.h"
 #include "web/browser_host.h"
 #include "app/web_service.h"
+#include "app/guide_path.h"
 #include "app/navigator.h"
 #include "ui/asset_picker.h"
 #include "core/asset_folder_choice.h"
@@ -1384,6 +1385,10 @@ private:
     std::vector<game::ZoneLadder> zone_ladders_; // the zone's own ladders (game/zone_ladders.h), clickable
     // Navigation (app/navigator.h): /nav, /moveto and the Navigation TLO; after collision_, which it reads.
     std::unique_ptr<Navigator> nav_;
+    // The Find window's guide path (app/guide_path.h) over nav_'s mesh, drawn by spell_particles_ and the maps.
+    GuidePath guide_;
+    std::string guide_zone_; // the zone it was started in: zoning ends it (spawn ids are the zone's)
+    void update_guide();
     game::ZoneLineTrigger zone_line_;
     game::ViewDistance view_;
     // The per-frame fog and scene light (CDisplay_UpdateSkyWeatherAndFog and SetFog), the player's light level

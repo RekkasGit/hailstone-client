@@ -33,6 +33,16 @@
 -- size, or its time where find can tell) makes the zone hash again and the client list again, instead of sending
 -- bytes that do not match the list.
 --
+-- And it tells the client's Find window which of the zone's NPCs have quests: Hailstone asks once a zone, when the
+-- window first lists the zone's NPCs (OP_HsQuestNpcsRequest raw 0x1436: {u32 magic 'HSQN'; u16 version 1}), and this
+-- answers OP_HsQuestNpcs 0x1437: {u32 magic; u16 version 1; u16 count; count x {u8 flags (1 takes hand-ins, 2
+-- talks); u8 length; the npc_types name}}. An NPC has quests when its own quest file (found as EQEmu finds it:
+-- quests/<zone>/v<version>/, quests/<zone>/, quests/global/; by id, name or name_id; .lua or .pl; the first in each
+-- of quest_paths' folders) handles EVENT_ITEM / event_trade (hand-ins) or EVENT_SAY / event_say (talks). The default
+-- scripts and global_npc are left out: they run for every NPC. The NPCs are the zone's spawn tables' (one query)
+-- and the ones alive now (spawned by scripts). The list is made once per zone process, at the first request, and
+-- kept (#reloadquest makes it again).
+--
 -- And it sends how the zones connect, for the map's zone finder: when its World view first opens in a session,
 -- Hailstone asks (OP_HsZoneLinksRequest raw 0x1438: {u32 magic 'HSZL'; u16 version 1}) and this answers
 -- OP_HsZoneLinks (0x1439: {u32 magic; u16 version 1; u16 flags 0; u32 count; count x {u16 from zone id; u16 to zone
@@ -54,6 +64,7 @@ local settings = {
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
 	files_chunks_per_second = 768, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
 	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
+	quest_npcs             = 1,  -- tell Hailstone's Find window which of the zone's NPCs have quests (0: say nothing)
 	zone_links             = 1,  -- send the zone connections for the map's zone finder (0: never answered)
 }
 
@@ -1105,6 +1116,154 @@ local function on_files_request(client, packet)
 	end
 end
 
+-- ---------------------------------------------------------------- the Find window's quest NPCs
+
+local OP_QUEST_REQUEST = 0x1436
+local OP_QUEST_NPCS    = 0x1437
+local QUEST_MAGIC      = 0x4e515348 -- "HSQN"
+local QUEST_FLAG_ITEMS, QUEST_FLAG_TALKS = 1, 2
+local QUEST_MAX        = 4000 -- names in a reply (the count is a u16; a zone has a few hundred)
+local QUEST_FILE_MAX   = 1048576 -- bytes of a quest file read for its handlers
+
+local quest_list = nil -- { { name, flags }, ... } once made: kept for the zone process
+
+-- quest_paths from eqemu_config.json (beside which the zone runs), else its "quests" folder, else "quests".
+local function quest_dirs()
+	local dirs = {}
+	local f = io.open("eqemu_config.json", "rb")
+	local text = f and f:read(262144) or ""
+	if f then f:close() end
+	local list = text:match('"quest_paths"%s*:%s*(%b[])')
+	if list then
+		for d in list:gmatch('"([^"]*)"') do dirs[#dirs + 1] = d end
+	end
+	if #dirs == 0 then dirs[1] = text:match('"quests"%s*:%s*"([^"]*)"') or "quests" end
+	for i, d in ipairs(dirs) do dirs[i] = d:gsub("[/\\]+$", "") end
+	return dirs
+end
+
+-- `flags` with `bit` set (EQEmu's Lua is 5.1: no bit operators).
+local function with_flag(flags, bit)
+	if math.floor(flags / bit) % 2 == 1 then return flags end
+	return flags + bit
+end
+
+-- The handlers a quest file has (QUEST_FLAG_*), each file read once.
+local quest_file_flags = {}
+local function file_flags(path)
+	local known = quest_file_flags[path]
+	if known ~= nil then return known end
+	local flags = 0
+	local f = io.open(path, "rb")
+	if f then
+		local text = f:read(QUEST_FILE_MAX) or ""
+		f:close()
+		if text:find("sub%s+EVENT_ITEM") or text:find("function%s+event_trade") or text:find("event_trade%s*=%s*function") then
+			flags = with_flag(flags, QUEST_FLAG_ITEMS)
+		end
+		if text:find("sub%s+EVENT_SAY") or text:find("function%s+event_say") or text:find("event_say%s*=%s*function") then
+			flags = with_flag(flags, QUEST_FLAG_TALKS)
+		end
+	else
+		flags = false -- no such file
+	end
+	quest_file_flags[path] = flags
+	return flags
+end
+
+-- The NPC's quest file as EQEmu looks for it (QuestParserCollection::GetQIByNPCQuest, without the default scripts),
+-- and its handlers; 0 without one.
+local function npc_flags(dirs, zone, version, id, name)
+	name = name:gsub("`", "-")
+	local bases = { tostring(id), name, name .. "_" .. id }
+	for _, dir in ipairs(dirs) do
+		for _, folder in ipairs({ dir .. "/" .. zone .. "/v" .. version, dir .. "/" .. zone, dir .. "/global" }) do
+			for _, base in ipairs(bases) do
+				for _, ext in ipairs({ ".lua", ".pl" }) do
+					local flags = file_flags(folder .. "/" .. base .. ext)
+					if flags then return flags end
+				end
+			end
+		end
+	end
+	return 0
+end
+
+local function build_quest_list()
+	local started = os.clock()
+	local zone    = (eq.get_zone_short_name() or ""):gsub("[^%w_]", "")
+	local version = tonumber(eq.get_zone_instance_version()) or 0
+	-- the NPCs: the spawn tables' for this zone and version, and those alive now
+	local npcs, seen = {}, {}
+	local function add(id, name)
+		id = tonumber(id)
+		if id and name and name ~= "" and not seen[id] then
+			seen[id] = true
+			npcs[#npcs + 1] = { id = id, name = name }
+		end
+	end
+	if Database then
+		for _, r in ipairs(rows(string.format(
+			"SELECT DISTINCT nt.`id`, nt.`name` FROM `spawn2` s JOIN `spawnentry` se ON se.`spawngroupID` = s.`spawngroupID` " ..
+			"JOIN `npc_types` nt ON nt.`id` = se.`npcID` WHERE s.`zone` = '%s' AND (s.`version` = %d OR s.`version` = -1)",
+			zone, version))) do
+			add(r.id, r.name)
+		end
+	end
+	local list = eq.get_entity_list():GetNPCList()
+	for npc in (list and list.entries or function() end) do
+		local name = (npc:GetName() or ""):gsub("%d+$", "") -- the spawn's name with its number
+		add(npc:GetNPCTypeID(), name)
+	end
+	local dirs, out, names = quest_dirs(), {}, {}
+	for _, n in ipairs(npcs) do
+		local flags = npc_flags(dirs, zone, version, n.id, n.name)
+		if flags ~= 0 and #out < QUEST_MAX then
+			local key = n.name:sub(1, 64)
+			if names[key] then
+				if math.floor(flags / QUEST_FLAG_ITEMS) % 2 == 1 then names[key].flags = with_flag(names[key].flags, QUEST_FLAG_ITEMS) end
+				if math.floor(flags / QUEST_FLAG_TALKS) % 2 == 1 then names[key].flags = with_flag(names[key].flags, QUEST_FLAG_TALKS) end
+			else
+				names[key] = { name = key, flags = flags }
+				out[#out + 1] = names[key]
+			end
+		end
+	end
+	log(string.format("quest NPCs of %s: %d of %d NPCs, %.0f ms", zone, #out, #npcs, (os.clock() - started) * 1000))
+	return out
+end
+
+-- A client asks once a zone (and again after it zones back): QUEST_REQUESTS a character in QUEST_SECONDS.
+local QUEST_REQUESTS, QUEST_SECONDS = 3, 10
+local quest_limit = limiter(QUEST_SECONDS)
+
+local function on_quest_request(client, packet)
+	if setting("enabled") == 0 or setting("quest_npcs") == 0 then
+		return
+	end
+	if not allow(quest_limit, client:CharacterID(), QUEST_REQUESTS) then
+		return
+	end
+	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= QUEST_MAGIC then
+		return
+	end
+	quest_list = quest_list or build_quest_list()
+	local size = 8
+	for _, q in ipairs(quest_list) do size = size + 2 + #q.name end
+	local p = Packet(OP_QUEST_NPCS, size, true)
+	p:WriteInt32(0, QUEST_MAGIC)
+	p:WriteInt16(4, 1)
+	p:WriteInt16(6, #quest_list)
+	local pos = 8
+	for _, q in ipairs(quest_list) do
+		p:WriteInt8(pos, q.flags)
+		p:WriteInt8(pos + 1, #q.name)
+		p:WriteFixedLengthString(pos + 2, q.name, #q.name)
+		pos = pos + 2 + #q.name
+	end
+	client:QueuePacket(p)
+end
+
 -- ---------------------------------------------------------------- the zone links (the map's zone finder)
 
 local OP_ZONE_LINKS_REQUEST = 0x1438
@@ -1269,6 +1428,10 @@ local function on_unhandled_opcode(e)
 		on_cancel_invite(e.self, packet)
 		return
 	end
+	if op == OP_QUEST_REQUEST then
+		on_quest_request(e.self, packet)
+		return
+	end
 	if op == OP_ZONE_LINKS_REQUEST then
 		on_zone_links_request(e.self, packet)
 		return
@@ -1294,6 +1457,7 @@ end
 function event_encounter_load(e)
 	encounter = e.encounter
 	setting_cache = {} -- #reloadquest: the buckets as they are now
+	quest_list, quest_file_flags = nil, {} -- and the quest files as they are now
 	zone_links = nil   -- and the zone links built again when next asked
 	if setting("client_files") ~= 0 then
 		build_client_files(true) -- the hashing is done before the first client asks

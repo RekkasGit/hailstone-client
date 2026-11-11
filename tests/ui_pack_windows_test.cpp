@@ -82,7 +82,7 @@ struct Session {
 constexpr const char* kScreens[] = {
     "GroupSearchWnd", "GroupSearchFiltersWnd", "GroupMentorWindow", "FellowshipWnd", "SocialEditWnd",
     "IconSelectionWnd", "CombatAbilityWnd", "JournalNPCWnd", "JournalCatWnd", "HelpWindow", "StoryWnd",
-    "AlertHistoryWnd", "FindLocationWnd", "ZonePathWnd", "TributeTrophyWnd",
+    "AlertHistoryWnd", "ZonePathWnd", "TributeTrophyWnd",
     "LoadskinWnd", "LayoutCopyWindow", "VideoModesWindow", "NameChangeWnd", "NameChangePetWnd", "NameChangeMercWnd",
     "OptionsWindow", "AlarmWnd", "TipWindow", "NoteWindow", "EditLabelWnd", "BugReportWindow", "FeedbackWindow",
     "ClaimWnd", "ColorPickerWnd", "BodyTintWnd", "PlayerCustomizationWnd", "TitleWnd", "BreathWindow",
@@ -859,6 +859,63 @@ TEST_CASE("UI packs: the inventory's alternate currencies draw, and a row select
             CHECK(lua_toboolean(L, -1)); // 31, held: Claim is on
             lua_settop(L, 0);
             s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
+// Hailstone's Find window (app/lua_eq_find.cpp): the find key's state opens it (modern: the map on its Find page;
+// gamepad: a window of its own), it draws the zone's NPCs, and the map closing closes it.
+TEST_CASE("UI packs: the Find window draws the zone's NPCs and follows eq.FindOpen") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        INFO(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch("ui_pack_find_test");
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            auto& world = s.conn.world_for_test();
+            auto add = [&](std::uint32_t id, const char* name, std::uint8_t cls, float x) {
+                game::Spawn sp;
+                sp.id = id;
+                sp.name = name;
+                sp.class_id = cls;
+                sp.is_npc = true;
+                sp.position = {x, 0, 0};
+                world.spawns[id] = sp;
+            };
+            add(2, "Arms_Dealer01", 41, 10);
+            add(3, "Banker_Bob00", 40, 20);
+            add(4, "Wilt00", 20, 30);
+            ++world.spawn_set_serial;
+            lua_State* L = s.lua.state();
+            REQUIRE(luaL_dostring(L, "ui.SetSetting('map.npcMarks', '1') eq.FindOpen(true)") == LUA_OK);
+            s.frames(3);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            if (std::string(pack) == "modern") {
+                CHECK(s.api.shown("MapViewWnd")); // the map opened on its Find page
+                REQUIRE(luaL_dostring(L, "eq.ShowWindow('MapViewWnd', false)") == LUA_OK);
+                s.frames(2);
+                CHECK_FALSE(s.host.find_open); // the map closing closed Find
+                REQUIRE(luaL_dostring(L, "eq.FindOpen(true)") == LUA_OK);
+                s.frames(2);
+                CHECK(s.api.shown("MapViewWnd"));
+                s.host.find_open = false; // the find key again: the map goes
+                s.frames(2);
+                CHECK_FALSE(s.api.shown("MapViewWnd"));
+            } else {
+                REQUIRE(luaL_dostring(L, "eq.FindOpen(false)") == LUA_OK);
+                s.frames(2);
+            }
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
         }
         ImGui::DestroyContext(ctx);

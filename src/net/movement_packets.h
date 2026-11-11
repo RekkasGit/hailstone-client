@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -53,5 +54,20 @@ AppPacket encode(const FindPersonRequest& r);
 // Every point of the reply in order (count = size / 12), as PlayerPath_HandleFindPersonReply takes them.
 std::optional<std::vector<glm::vec3>> decode_find_person_reply(const AppPacket& p);
 AppPacket encode_find_person_reply(const std::vector<glm::vec3>& path);             // server direction, for tests
+
+// OP_SendFindableNPCs (Z→C, 0x4613, 112 bytes; EQEmu FindableNPC_Struct, sent for each findable NPC at the zone-in by
+// EntityList::SendFindableNPCList and again as one spawns or goes, UpdateFindableNPCState). Handle_OP_SendFindableNPCs
+// @0x4b8b50 reads: u32 +0 a removal when not 0, u32 +4 the spawn, the name at +8 (64) and the surname at +0x48 (32),
+// u32 +0x68 the race and the byte +0x6c the class (the find window's FindPlayerData). The three bytes after it are
+// unread (EQEmu writes 0x16 0x06 0x24).
+struct FindableNpc {
+    bool remove = false;
+    std::uint32_t spawn_id = 0;
+    std::string name, last_name;
+    std::uint32_t race = 0;
+    std::uint8_t class_id = 0;
+};
+std::optional<FindableNpc> decode_findable_npc(const AppPacket& p);
+AppPacket encode_findable_npc(const FindableNpc& n); // server direction, for tests
 
 } // namespace hailstone::net

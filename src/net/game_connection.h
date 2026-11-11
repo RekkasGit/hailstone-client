@@ -91,6 +91,7 @@
 #include "net/server_files.h"
 #include "net/merchant_packets.h"
 #include "net/movement_packets.h"
+#include "net/quest_npc_packets.h"
 #include "net/player_packets.h"
 #include "net/tribute_packets.h"
 #include "net/marketplace_packets.h"
@@ -757,6 +758,9 @@ public:
     // (PlayerManagerClient::GetSpawnByName, then PlayerPath_FindSpawn, as 0x59da00), or to the target; nothing
     // to find ends the path.
     void find_target(const std::string& name = {});
+    // The path to a spawn by id, the player facing it when it comes (PlayerPath_FindSpawnByID(id, 1)); for the Find
+    // window (app/lua_eq_find.cpp). False when there is no such spawn.
+    bool find_spawn(std::uint32_t spawn_id);
     // PlayerPath_FindMapLocation (MapViewMap::HandleRButtonDown): the path to a point of the map, world coordinates
     // at the player's height.
     void find_map_location(const glm::vec3& at);
@@ -778,8 +782,18 @@ public:
         game::FindKind kind = game::FindKind::Spawn;
     };
     std::optional<FailedFind> take_failed_find() { return std::exchange(failed_find_, std::nullopt); }
-    // Counts the find replies (each closes FindLocationWnd: Show(false) before HandleFindPersonReply).
+    // Counts the shown find replies (the original's FindLocationWnd closed on each: Show(false) before
+    // HandleFindPersonReply).
     std::uint32_t find_replies() const { return find_replies_; }
+    // The zone's findable NPCs (OP_SendFindableNPCs: the server's `findable` flag), by spawn id; cleared on zoning.
+    // The original's find window listed them (Handle_OP_SendFindableNPCs); the Find window here does too
+    // (game/useful_npcs.h).
+    const std::unordered_map<std::uint32_t, FindableNpc>& findable_npcs() const { return findable_npcs_; }
+    // The zone's quest NPCs from Hailstone's server script (net/quest_npc_packets.h), by their names as shown
+    // (game::display_name, ASCII lower case): kQuestNpcItems / kQuestNpcTalks. Asked once a zone, the first time the
+    // Find window wants them (request_quest_npcs); empty without the script. Cleared on zoning.
+    void request_quest_npcs();
+    const std::unordered_map<std::string, std::uint8_t>& quest_npcs() const { return quest_npcs_; }
     // The path's finish emitters, taken by the world's effects (PlayerPath_OnDestinationReached).
     std::optional<glm::vec3> take_path_finish() { return std::exchange(path_finish_, std::nullopt); }
 
@@ -3229,6 +3243,9 @@ private:
     game::PlayerPath::FloorFn path_floor_;
     std::optional<FailedFind> failed_find_;
     std::uint32_t find_replies_ = 0;
+    std::unordered_map<std::uint32_t, FindableNpc> findable_npcs_;
+    std::unordered_map<std::string, std::uint8_t> quest_npcs_;
+    bool quest_npcs_asked_ = false;
     bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
     bool zone_links_asked_ = false;
     std::optional<ZoneLinks> zone_links_;

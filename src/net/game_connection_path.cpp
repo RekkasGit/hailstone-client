@@ -86,6 +86,13 @@ void GameConnection::find_target(const std::string& name) {
     send_find(path_.find_spawn(static_cast<std::uint16_t>(id), true, eq_time()));
 }
 
+bool GameConnection::find_spawn(std::uint32_t spawn_id) {
+    auto it = world_.spawns.find(spawn_id);
+    if (it == world_.spawns.end()) return false;
+    send_find_path(it->second, true);
+    return true;
+}
+
 void GameConnection::send_find_path(const game::Spawn& to, bool face) {
     // PlayerPath_FindGroupMember / FindRaidMember (after their checks; they leave +0x15 at 0) and
     // PlayerPath_FindSpawnByID(id, face): the server's path to a spawn.

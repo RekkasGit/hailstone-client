@@ -36,7 +36,7 @@ local MAIN_TILES = {
   mainTile("AMP_InviteButton", "Invite", "Invite your target to your group"),
   mainTile("AMP_FollowButton", "Follow", "Accept the group invitation"),
   mainTile("AMP_DisbandButton", "Disband", "Leave your group (or remove your target from it)"),
-  mainTile("AMP_FindButton", "Find", "Find a path to someone or something"),
+  mainTile("AMP_FindButton", "Find", "Find merchants, bankers, trainers and more in this zone"),
   mainTile("AMP_EndFindButton", "End Find", "Stop showing the path"),
   mainTile("AMP_CampButton", "Camp", "Sit down and log out"),
 }
