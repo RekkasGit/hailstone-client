@@ -93,7 +93,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
     for (const auto& [id, s] : world.spawns) ids.push_back(id);
     std::sort(ids.begin(), ids.end());
     const std::uint8_t option = conn_->click_through_mask();
-    const auto see_invisible = conn_->see_invisible_rank();
+    const auto see_invisible = viewer_see_invisible_rank();
     for (std::uint32_t id : ids) {
         const game::Spawn& s = world.spawns.at(id);
         game::MaskSpawn ms;

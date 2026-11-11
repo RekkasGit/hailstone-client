@@ -916,6 +916,10 @@ private:
     // The spawns PlayerZoneClient::IsInvisible hides for Hide Traders and Hide Buyers (GameConnection::market_hidden),
     // gathered each frame: not drawn, named or clicked.
     void update_market_hidden(bool in_game);
+    // The viewer's see-invisible rank for a batch of spawn_invisible tests: GameConnection::see_invisible_rank
+    // builds the character sheet, so it is asked only when some spawn is hidden at a rank (0 otherwise, which no
+    // test then reads). Drawing asks once a frame; lighting reads market_hidden_.
+    std::int32_t viewer_see_invisible_rank() const;
     std::unordered_set<std::uint32_t> market_hidden_;
     game::PlateFade plate_fade_; // each overlapped name's fade toward its target alpha (game/nameplate_overlap.h)
     // The spawn not to draw: the player's own in first person (camera 0's activate hides it; no other camera does).

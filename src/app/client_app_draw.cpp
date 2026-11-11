@@ -48,10 +48,17 @@ void ClientApp::draw_text_overlay() {
     }
 }
 
+std::int32_t ClientApp::viewer_see_invisible_rank() const {
+    if (!conn_) return 0;
+    for (const auto& kv : conn_->world().spawns)
+        if (kv.second.invis_rank > 0) return conn_->see_invisible_rank();
+    return 0;
+}
+
 void ClientApp::update_market_hidden(bool in_game) {
     market_hidden_.clear();
     if (!in_game || !conn_) return;
-    const auto see_invisible = conn_->see_invisible_rank();
+    const auto see_invisible = viewer_see_invisible_rank();
     for (const auto& [id, s] : conn_->world().spawns)
         if (conn_->spawn_invisible(s, see_invisible)) market_hidden_.insert(id);
 }

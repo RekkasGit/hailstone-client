@@ -6,6 +6,9 @@
 #include <unordered_set>
 
 namespace hailstone::game {
+    // PlayerZoneClient::IsInvisible @0x5a1850 (rof2decomp spawn_visibility.cpp). The spawn itself is invisible only
+    // to a GM (virtual +0xdc, PlayerClient_IsGM @0x597f40) whose hide mode (+0x338) is 3001; corpses (type >= 2) and
+    // spawns at 0 HP never are; PlayerBase::HasProperty(0x64) (body type 100, or 100 in the property list) always is.
     bool spawn_invisible(const Spawn& viewer, const Spawn& target, std::int32_t see_invisible_rank, bool group_member) {
         if (viewer.id == target.id) return viewer.gm && target.invis_rank == 3001;
         if (target.is_corpse || target.hp_percent == 0) return false;
