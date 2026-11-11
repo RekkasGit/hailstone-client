@@ -221,7 +221,7 @@ AppPacket encode(const BuffIcons& v, bool target_window) {
     w.le<std::uint8_t>(v.type);
     return make_packet(target_window ? Op::TargetBuffs : Op::BuffCreate, std::move(w));
 }
-
+//TODO: This is being used for Target window and Pet window... hrm...not sure what to name it.
 std::optional<BuffIcons> decode_buff_icons(const AppPacket& p) {
     return detail::decode_with(p, [](ByteReader& r) {
         BuffIcons v;

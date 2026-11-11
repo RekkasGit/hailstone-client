@@ -37,7 +37,7 @@ const char* target_type_name(std::uint8_t t) {
 std::string seconds(std::uint32_t ms) {
     return ms % 1000 == 0 ? std::format("{} s", ms / 1000) : std::format("{:.1f} s", static_cast<double>(ms) / 1000.0);
 }
-
+//TODO: DEV function to show buff line information?
 ui::BuffView buff_view(const game::SpellTable& table, const game::EqStrings& strings, const DescriptionPlayer& player,
                        int slot, const game::BuffSlot& b,
                        std::int64_t now) {
