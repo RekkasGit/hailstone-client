@@ -1446,6 +1446,17 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
             prev = p;
         }
     }
+    if (h.guide_line && h.guide_line->size() >= 2) {
+        // The Find window's guide path (app/guide_path.h), the player first, gold.
+        const auto& pts = *h.guide_line;
+        glm::vec2 prev = here;
+        for (std::size_t i = 1; i < pts.size(); ++i) {
+            glm::vec3 m = game::world_to_map(pts[i]);
+            glm::vec2 p = zv.P(m.x, m.y);
+            seg(prev, p, IM_COL32(255, 204, 90, 255), w * 2.0f);
+            prev = p;
+        }
+    }
     if (h.conn)
         for (const auto& pt : h.conn->compass_points()) {
             glm::vec3 m = game::world_to_map(pt);
@@ -1508,7 +1519,9 @@ void draw_zone_view(MapState& s, EqHost& h, const ZoneView& zv) {
 
 // eq.DrawMinimap(cx, cy, radius, range [, rotate])   -- the map in a circle centred on the player, `range` world
 // units from the centre to the edge, north up or, with rotate, the player's heading up; without the labels.
-// Returns the screen direction of north (dx, dy) for the ring's N.
+// Returns the screen direction of north (dx, dy) for the ring's N and, in the world, the player's map position and the
+// screen pixels per map unit (for a pack's own marks: a point's offset from the player times that, turned so north is
+// (dx, dy)).
 int DrawMinimap(lua_State* L) {
     MapState& s = *state_of(L);
     EqHost& h = *host_of(L);
@@ -1537,7 +1550,10 @@ int DrawMinimap(lua_State* L) {
     zv.reach = range; // the circle's radius r is `range` map units, however the map turns
     zv.reach_from = glm::vec2(me->x, me->y);
     draw_zone_view(s, h, zv);
-    return 2;
+    lua_pushnumber(L, me->x);
+    lua_pushnumber(L, me->y);
+    lua_pushnumber(L, k);
+    return 5;
 }
 
 // scale, cx, cy = eq.DrawZoneMap(x0, y0, x1, y1, zoom [, cx, cy [, labels]])   -- the map in that rectangle, north
@@ -1687,14 +1703,16 @@ int FindMapLocation(lua_State* L) {
 }
 
 // active = eq.FindPathShown()   -- a find path is shown;  eq.EndFind()   -- it ends (PlayerPath_Stop)
+// (and the Find window's guide path, app/guide_path.h, likewise)
 int FindPathShown(lua_State* L) {
     EqHost& h = *host_of(L);
-    lua_pushboolean(L, h.conn && h.conn->player_path().active());
+    lua_pushboolean(L, (h.conn && h.conn->player_path().active()) || h.guide_line);
     return 1;
 }
 int EndFind(lua_State* L) {
     EqHost& h = *host_of(L);
     if (h.conn && h.conn->player_path().active()) h.conn->stop_find_path();
+    if (h.guide_line && h.end_guide) h.end_guide();
     return 0;
 }
 

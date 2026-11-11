@@ -127,6 +127,7 @@ add_library(hailstone_engine STATIC
   src/plugin/consent.cpp
   src/plugin/policy.cpp
   src/net/settings_packets.cpp
+  src/net/quest_npc_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
   src/mq/tlo.cpp
@@ -383,6 +384,8 @@ add_library(hailstone_engine STATIC
   src/game/zone_lines.cpp
   src/game/neighbour_zones.cpp
   src/game/world_state.cpp
+  src/game/useful_npcs.cpp
+  src/game/path_trail.cpp
   src/game/boats.cpp
   src/game/npc_collision.cpp
   src/game/mounts.cpp
@@ -487,6 +490,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq.cpp
   src/app/automation.cpp
   src/app/navigator.cpp
+  src/app/guide_path.cpp
   src/app/lua_eq_values.cpp
   src/app/lua_eq_hud.cpp
   src/app/lua_eq_hotbar.cpp
@@ -523,6 +527,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq_layout.cpp
   src/app/lua_eq_video.cpp
   src/app/lua_eq_zoneguide.cpp
+  src/app/lua_eq_find.cpp
   src/app/lua_eq_fellowship.cpp
   src/app/lua_eq_story.cpp
   src/app/lua_eq_journal.cpp
@@ -1010,6 +1015,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/app_frame_work_test.cpp
     tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
+    tests/useful_npcs_test.cpp
+    tests/guide_path_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp
     tests/auto_inventory_ui_test.cpp

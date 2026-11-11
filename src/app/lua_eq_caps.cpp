@@ -6,6 +6,8 @@
 //   kCapActions   acts in the game: a stock window's buttons and lists (which run its handler, whatever it does:
 //                 buy, trade, destroy, accept), items, the cursor, spells, abilities, hot buttons, parcels, the menus'
 //                 commands
+//   kCapTarget    changes the target (the Find window's row: eq.FindNpcTarget)
+//   kCapMove      moves the player (the Find window's Walk there: eq.FindNpcWalk, a /nav walk)
 // eq.ChatSubmit's line goes through the command filter (mq/commands.h), which holds it to the caller's capabilities
 // as any command a plugin sends: it needs nothing here. The pre-game screens, the scripts' and the
 // plugins' functions and the web's check plugin code themselves (app/lua_eq_pregame.cpp, lua_eq_scripts.cpp,
@@ -30,6 +32,8 @@ namespace {
 
 using plugin::kCapActions;
 using plugin::kCapCommands;
+using plugin::kCapMove;
+using plugin::kCapTarget;
 
 struct Entry {
     std::string_view name;
@@ -60,6 +64,7 @@ constexpr Entry kCalls[] = {
     {"DisplaySpellId", 0}, {"DisplayItemData", 0},
     {"SpellSets", 0}, {"DrawMap", 0}, {"MapZoom", 0}, {"MapMouseDown", 0}, {"MapMouseUp", 0}, {"MapPanReset", 0},
     {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
+    {"FindNpcs", 0}, {"FindCategories", 0},
     {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},
     {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"LuaSocialEditRequest", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
     {"SocialEditorSocial", 0}, {"SocialLine", 0}, {"SlashCommands", 0}, {"CurrentSocial", 0},
@@ -90,7 +95,8 @@ constexpr Entry kCalls[] = {
     {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands},
     {"HotBarSetting", kCapCommands}, {"ShowSpell", kCapCommands}, {"SaveSpellSet", kCapCommands},
     {"DeleteSpellSet", kCapCommands}, {"EditSpellSet", kCapCommands}, {"EndFind", kCapCommands},
-    {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands},
+    {"FindMapLocation", kCapCommands}, {"FindNpcTarget", kCapTarget}, {"FindNpcPath", kCapCommands}, {"FindOpen", kCapCommands},
+    {"FindNpcWalk", kCapMove}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands},
     {"StopLuaSocial", kCapCommands}, {"OpenLuaSocialEditor", kCapCommands}, {"OpenSocialEditor", kCapCommands},
     {"gamepad.set_mode", kCapCommands}, {"gamepad.set_binding", kCapCommands},
     {"gamepad.set_cross_slot", kCapCommands}, {"gamepad.set_setting", kCapCommands},

@@ -12,6 +12,7 @@
 #include <iterator>
 #include <random>
 
+#include "core/ascii_case.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
@@ -575,6 +576,9 @@ void GameConnection::handle_world(const AppPacket& p) {
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
         world_.spawns.clear();
         ++world_.spawn_set_serial;
+        findable_npcs_.clear(); // the old zone's ids
+        quest_npcs_.clear();    // and quest NPCs: the next zone's are asked for when wanted
+        quest_npcs_asked_ = false;
         world_.player_id = 0;
         world_.controlled_id = 0;
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
@@ -1042,6 +1046,12 @@ void GameConnection::finish_zone_in() {
     task_compass_dirty_ = true;
 }
 
+void GameConnection::request_quest_npcs() {
+    if (quest_npcs_asked_ || !zone_ready_) return;
+    quest_npcs_asked_ = true;
+    send_zone(encode_quest_npcs_request());
+}
+
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
     if (p.opcode == kOpHsFiles) {
@@ -1061,6 +1071,21 @@ void GameConnection::handle_zone(const AppPacket& p) {
     if (p.opcode == kOpHailstoneGuildReply) {
         if (auto g = decode_hailstone_guild(p)) handle_hailstone_guild(*g);
         else log::warn("a bad OP_HailstoneGuildReply ({} bytes) ignored", p.data.size());
+        return;
+    }
+    if (p.opcode == kOpHsQuestNpcs) {
+        if (auto list = decode_quest_npcs(p)) {
+            quest_npcs_.clear();
+            for (const auto& n : *list) {
+                std::string key = game::display_name(n.name);
+                for (char& ch : key) ch = ascii_lower(ch);
+                auto& f = quest_npcs_[key];
+                f = static_cast<std::uint8_t>(f | n.flags);
+            }
+            log::info("find: {} quest NPCs from the server", quest_npcs_.size());
+        } else {
+            log::warn("find: a bad OP_HsQuestNpcs ({} bytes) ignored", p.data.size());
+        }
         return;
     }
     if (p.opcode == kOpHailstoneSettings) {
@@ -1653,6 +1678,13 @@ void GameConnection::handle_zone(const AppPacket& p) {
     }
     case Op::FindPersonReply:
         path_reply(p);
+        break;
+    case Op::SendFindableNPCs:
+        // Handle_OP_SendFindableNPCs: an addition (or a change) of the spawn, or its removal.
+        if (auto n = decode_findable_npc(p)) {
+            if (n->remove) findable_npcs_.erase(n->spawn_id);
+            else findable_npcs_[n->spawn_id] = std::move(*n);
+        }
         break;
     case Op::LFGuild:
         if (auto v = decode_lfguild(p)) {

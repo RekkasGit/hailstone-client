@@ -320,6 +320,24 @@ void ClientApp::update_eq_host() {
     h.zone_long_name = conn_ ? conn_->world().zone_long_name : std::string();
     h.game_hour = sky_hour_;
     h.feet_valid = h.in_game;
+    h.guide_line = guide_.active() && h.in_game ? &guide_.line() : nullptr;
+    if (!h.guide_to) {
+        h.guide_to = [this](std::uint32_t id) {
+            if (!conn_) return false;
+            const auto& spawns = conn_->world().spawns;
+            auto it = spawns.find(id);
+            if (it == spawns.end()) return false;
+            guide_.start(id, game::display_name(it->second.name));
+            guide_zone_ = conn_->world().zone_short_name;
+            return true;
+        };
+        h.end_guide = [this] { guide_.stop(); };
+        h.walk_to = [this](std::uint32_t id) -> std::string {
+            if (!nav_ || !eq_host_.guide_to || !eq_host_.guide_to(id)) return "no such NPC";
+            // Close enough to talk to (within the guide path's arrival, so it says "You have reached").
+            return nav_->go_to_spawn(id, 10.0f);
+        };
+    }
     for (int i = 0; i < 3; ++i) h.feet[i] = feet_[i];
     h.zone_box_valid = collision_ && collision_->bounds();
     if (h.zone_box_valid)

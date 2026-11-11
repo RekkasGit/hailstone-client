@@ -252,6 +252,8 @@ int ClientApp::run() {
             const double bolt_now = bolt_clock();
             if (spell_bolts_ && lighting_mode_ == render::LightingMode::Modern)
                 spell_bolts_->take_cues(*conn_, cues, bolt_now);
+            update_guide();
+            spell_particles_->set_guide_line(guide_.line());
             spell_particles_->update(*conn_, cues, effect_packets, actor_renderer_.get(), dt);
             spell_particles_->prepare();
             if (spell_bolts_)
@@ -696,6 +698,30 @@ int ClientApp::run() {
     audio_.reset();
     return 0;
 }
+
+void ClientApp::update_guide() {
+    // The Find window's guide path (app/guide_path.h): the NPC's place, found again over the mesh as the player goes.
+    if (!guide_.active() || !conn_) return;
+    if (conn_->world().zone_short_name != guide_zone_) {
+        guide_.stop();
+        return;
+    }
+    std::optional<glm::vec3> goal;
+    const auto& spawns = conn_->world().spawns;
+    if (auto it = spawns.find(guide_.spawn()); it != spawns.end() && !it->second.is_corpse)
+        goal = it->second.display_valid ? it->second.display_position : it->second.position;
+    const double now = std::chrono::duration<double>(Clock::now() - start_time_).count();
+    const std::string name = guide_.name();
+    auto u = guide_.update(feet_, goal, now, [this](const glm::vec3& from, const glm::vec3& to) {
+        return nav_ ? nav_->plan_between(from, to) : std::nullopt;
+    });
+    // Hailstone's own lines (the original has no guide path).
+    if (u.arrived) conn_->ui_message("You have reached " + name + ".");
+    else if (u.gone) conn_->ui_message(name + " is no longer here.");
+    else if (u.no_way) conn_->ui_message("There is no way to " + name + " from here.");
+    else if (u.waiting_mesh) conn_->ui_message("The path to " + name + " will show once this zone's map is ready.");
+}
+
 
 } // namespace client_internal
 

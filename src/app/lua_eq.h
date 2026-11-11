@@ -169,6 +169,18 @@ struct EqHost {
     // The Actions window's open state and page (ActionsUi keeps them for the keys).
     // The keep-C++-windows switch (config ui.cpp_windows): with it on, the C++ windows stay on next to the Lua ones.
     bool keep_cpp_windows = false;
+    // The Find window (app/lua_eq_find.cpp, a Hailstone addition that replaces the original's FindLocationWnd): open
+    // or not. The find key (CMD_TOGGLE_FIND_WINDOW) and the Actions window's Find toggle it; each pack draws it (the
+    // modern pack as a page of the map, the gamepad pack as a window of its own).
+    bool find_open = false;
+    // The Find window's guide path (app/guide_path.h): starts it to an NPC (false: no such NPC), ends it, and while
+    // it is shown its line (the player first) for the maps. Unset (tests): eq.FindNpcPath asks the server's find path.
+    std::function<bool(std::uint32_t spawn)> guide_to;
+    std::function<void()> end_guide;
+    // The Find window's Walk there: the navigator walks the player to the NPC (/nav id), the guide path showing;
+    // "" when the walk started, else why not.
+    std::function<std::string(std::uint32_t spawn)> walk_to;
+    const std::vector<glm::vec3>* guide_line = nullptr;
 
     // A quantity dialog a window opened (CQuantityWnd::Open with that window as the owner; the stack split's
     // dialog is the connection's quantity_request()): the slider's range and start, where it shows (none:

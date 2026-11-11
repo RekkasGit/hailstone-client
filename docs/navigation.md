@@ -310,6 +310,56 @@ Not yet: MQ2MoveUtils' `pin`, `!front`, `moveback`, `uw` and percent distances.
 search. Lua reads it as `mq.TLO.Navigation.Active()`; plugins with the SDK's `parse` and run `/nav` with
 `do_command`.
 
+## Find
+
+A Hailstone addition, in place of the original's Find window (FindLocationWnd, whose code is gone): a list of the
+NPCs a new player looks for in the zone, from what every stock EQEmu server sends (`game/useful_npcs.h`,
+`app/lua_eq_find.cpp`). The find key (`CMD_TOGGLE_FIND_WINDOW`), the EQ menu's Find and the Actions window's Find
+open and close it as the original's key did its window: open, it closes; closed with a find path shown, the path ends;
+else it opens. The modern pack draws it as the map's Find page (the map opens on it; closing the map closes it), the
+gamepad pack as a window of its own (More > Find).
+
+- By the spawn's class: merchants (41), bankers (40, 66), guildmasters (20..35), special merchants for points and
+  other currencies (58, 59, 61, 67, 68, 70, 73) and other services (tribute 63, 64, 74; adventure 60; fellowship 69;
+  mercenaries 71; real estate 72). Never players, corpses, pets or the LDoN objects of class 62.
+- Quest givers: with Hailstone's server script (server/README.md "Quest givers in the Find window"), the NPCs whose
+  quest file takes hand-ins or talks, asked once a zone when the list is first wanted (`net/quest_npc_packets.h`)
+  and matched to spawns by the name as shown. An NPC listed for its trade keeps its kind and gets a "!" beside it.
+  Without the script there are none: the client does not guess at them.
+- Points of interest: the other NPCs on the server's findable list (OP_SendFindableNPCs, the npc_types `findable`
+  flag; docs/protocol/rof2-packets.md), which the original's window listed. Zoning clears the list.
+- Each row: the name, the surname (else the class's name) and the distance; nearest first, a search on the name and
+  surname, and a filter per kind (`find.hidden` in the pack's settings). A click targets the NPC and centres the map
+  on it; Show path (or a double click) starts the guide path to it (below); Walk there (the gamepad's X) walks the
+  player there as `/nav id` does, to within 10, with the guide path showing (the player's movement keys stop the walk,
+  the guide path stays). The map's NPCs button (`map.npcMarks`, off
+  at first) marks the listed NPCs on it and on the minimap, by the same kinds and search (`ui/modern/lib/find.lua`);
+  the selected and hovered ones are marked always.
+- Positions are where the client has the spawn: EQEmu sends far spawns' moves less often, so a walking NPC far off
+  may be shown a little behind.
+
+### The guide path
+
+`app/guide_path.h`: a gold trail from the player to the NPC over the client's own mesh (`Navigator::plan_between`, the
+walk's options), so it goes round walls on every zone; the server's find path is a straight line where the server
+has no mesh of its own. It is found again when the player is more than 8 (flat) off it or the NPC has moved 6 since,
+at most every half second, and trimmed behind the player. It ends within 12 of the NPC (and 10 in height) with "You
+have reached ...", when the NPC dies or goes, when there is no way there, on zoning, with End path / End Find, or the
+find key with the Find window closed. While the mesh is not ready it says once that the path will show when it is.
+A partial path (the NPC off the mesh) is drawn as far as it goes. The maps draw it in gold beside the find path.
+
+### The trail
+
+`game/path_trail.h`: both the guide path and the find path (PlayerPath, in its pale blue) are drawn as soft glowing
+sprites (spellsnew's `blobb.dds`, additive) sampled every 1.4 along the line and each put on the floor (one more than
+6 off the line keeps the line's height), so the trail neither clumps at corners nor gaps on straights nor cuts
+through a hill. Bright bands run along it towards the destination at 9 a second, it fades in over the first 5 and out
+at its far end (the guide path's 120..170; the find path's at Path.ini's FadeEnd), and a breathing glow with rings of
+light rising from it marks the end. The original draws the find path as a textured tube; this look is Hailstone's.
+The find path's travelling Path.ini emitters and its finish emitters are as before.
+
+Not yet: the gamepad pack's minimap marks, and a key of the client's own for a walk to the target (`/nav target` on a hot button does it) (docs/todo.md).
+
 ## Not done
 
 - Swimming is not yet seen live end to end (unit tests only; the live try was cut short by an attack). Levitation
