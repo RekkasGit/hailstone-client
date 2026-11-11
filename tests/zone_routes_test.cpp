@@ -1,6 +1,7 @@
 // game/zone_routes.h (the map's zone links and routes) and net/zone_link_packets.h (the server's list).
 #include <doctest/doctest.h>
 
+#include <set>
 #include <vector>
 
 #include "game/zone_routes.h"
@@ -85,4 +86,42 @@ TEST_CASE("Zone link packets: request, reply, bad replies") {
     big.data[9] = std::byte{0xff};
     big.data[10] = std::byte{0xff};
     CHECK_FALSE(net::decode_zone_links(big));
+}
+
+TEST_CASE("Zone routes: only through the zones the server allows") {
+    ZoneRoutes r;
+    r.set_server({{1, 2}, {2, 4}, {1, 3}, {3, 4}});
+    auto no2 = [](std::uint32_t z) { return z != 2; };
+    CHECK(r.route(1, 4, no2).zones == std::vector<std::uint32_t>{1, 3, 4});
+    CHECK(r.route(1, 2, no2).zones.empty()); // the destination itself
+    CHECK(r.route(2, 4, no2).zones == std::vector<std::uint32_t>{2, 4}); // the start may be any
+    CHECK(r.set_server_zones({1, 3, 4, 0}, 2));
+    CHECK_FALSE(r.set_server_zones({1, 3, 4}, 2));
+    CHECK(r.server_zones() == std::set<std::uint32_t>{1, 3, 4});
+    ZoneRoutes back = ZoneRoutes::parse(r.serialize());
+    CHECK(back.server_zones() == r.server_zones());
+    CHECK(back.server_expansion() == 2);
+    CHECK(back.serialize() == r.serialize());
+}
+
+TEST_CASE("Zone link packets: the allowed zones after the links, and a reply without them") {
+    net::ZoneLinks v;
+    v.links = {{1, 2}};
+    v.has_zones = true;
+    v.expansion = -1;
+    v.zones = {1, 2, 54};
+    auto p = net::encode(v);
+    CHECK(p.data.size() == 12 + 4 + 6 + 6);
+    auto d = net::decode_zone_links(p);
+    REQUIRE(d);
+    CHECK(d->has_zones);
+    CHECK(d->expansion == -1);
+    CHECK(d->zones == v.zones);
+    auto cut = p;
+    cut.data.resize(cut.data.size() - 1);
+    CHECK_FALSE(net::decode_zone_links(cut)); // fewer zones than the count says
+    v.has_zones = false;
+    auto old = net::decode_zone_links(net::encode(v)); // an older script
+    REQUIRE(old);
+    CHECK_FALSE(old->has_zones);
 }

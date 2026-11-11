@@ -171,9 +171,11 @@ script, the client asks once a session, the first time a player opens the map's 
 0x1438), and gets every pair of zones a zone point joins (`OP_HsZoneLinks` 0x1439; the layout is in the client's
 `src/net/zone_link_packets.h`). The list is the `zone_points` rows of version 0 or -1 whose own row, source zone and
 target zone the server's expansion (`Expansion:CurrentExpansion`) and content flags allow, as EQEmu's
-`ContentFilterCriteria` filters them when a zone loads its zone points. It is built at the first request in each zone
+`ContentFilterCriteria` filters them when a zone loads its zone points, followed by the current expansion and the
+zones (version 0) the expansion and content flags allow: the finder lists and routes through only those, so players
+see only the zones of the server's expansion. It is built at the first request in each zone
 process with one query of the content database and one of `content_flags`, then kept in memory; `#reloadquest`
-builds it again. A character is answered at most twice a minute. A stock database gives a reply of about 6 KB.
+builds it again. A character is answered at most twice a minute. A stock database gives a reply of about 7 KB.
 
 ## Guild invitations across zones
 

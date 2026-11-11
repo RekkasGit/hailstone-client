@@ -46,8 +46,9 @@
 -- And it sends how the zones connect, for the map's zone finder: when its World view first opens in a session,
 -- Hailstone asks (OP_HsZoneLinksRequest raw 0x1438: {u32 magic 'HSZL'; u16 version 1}) and this answers
 -- OP_HsZoneLinks (0x1439: {u32 magic; u16 version 1; u16 flags 0; u32 count; count x {u16 from zone id; u16 to zone
--- id}}; the client's net/zone_link_packets.h): the zone_points rows of version 0 or -1 that the server's expansion
--- and content flags allow, each pair of zones once. Built at the first request in a zone process with one query of
+-- id}; i16 current expansion (-1 all); u32 zone count; count x u16 zone id}; the client's net/zone_link_packets.h):
+-- the zone_points rows of version 0 or -1 that the server's expansion and content flags allow, each pair of zones
+-- once, then the zones they allow (the client lists and routes through only those). Built at the first request in a zone process with one query of
 -- the content database (and one of content_flags), then kept in memory (#reloadquest builds it again); a
 -- character is answered at most twice a minute. Without it, the client learns the zone lines of the zones it visits.
 --
@@ -1272,6 +1273,8 @@ local ZONE_LINKS_MAGIC      = 0x4c5a5348
 local ZONE_LINKS_MAX, ZONE_LINKS_SECONDS = 2, 60
 local zone_links_limit = limiter(ZONE_LINKS_SECONDS)
 local zone_links       = nil -- { from1, to1, from2, to2, ... } once built
+local zone_list        = nil -- { zone id, ... } the zones allowed; nil for a schema without the content columns
+local zone_expansion   = -1  -- Expansion:CurrentExpansion as the rule says it (-1 all)
 
 -- A comma-separated flag list that names one of `set`'s flags.
 local function names_flag(list, set)
@@ -1297,6 +1300,7 @@ end
 
 local function build_zone_links()
 	local expansion = tonumber(eq.get_rule("Expansion:CurrentExpansion")) or -1
+	zone_expansion = expansion
 	if expansion == -1 then
 		expansion = 99
 	end
@@ -1351,7 +1355,25 @@ local function build_zone_links()
 			row = stmt:fetch_hash()
 		end
 	end
-	log(string.format("zone links: %d for the map's zone finder", math.floor(#list / 2)))
+	-- The zones themselves (version 0), as allowed.
+	zone_list = nil
+	local zstmt = filtered and query(db, "SELECT z.`zoneidnumber` AS id, " .. cols("z") ..
+		" FROM `zone` z WHERE z.`version` = 0 AND z.`zoneidnumber` > 0 AND z.`zoneidnumber` < 65536")
+	if zstmt then
+		zone_list = {}
+		local zseen = {}
+		local row = zstmt:fetch_hash()
+		while row do
+			local id = tonumber(row.id)
+			if id and not zseen[id] and content_allows(row, expansion, enabled, disabled) then
+				zseen[id] = true
+				zone_list[#zone_list + 1] = id
+			end
+			row = zstmt:fetch_hash()
+		end
+	end
+	log(string.format("zone links: %d, %s zones, for the map's zone finder", math.floor(#list / 2),
+		zone_list and tostring(#zone_list) or "all"))
 	return list
 end
 
@@ -1373,7 +1395,8 @@ local function on_zone_links_request(client, packet)
 		zone_links = build_zone_links()
 	end
 	local count = math.floor(#zone_links / 2)
-	local p = Packet(OP_ZONE_LINKS, 12 + 4 * count, true)
+	local zones = zone_list and #zone_list or 0
+	local p = Packet(OP_ZONE_LINKS, 12 + 4 * count + (zone_list and 6 + 2 * zones or 0), true)
 	p:WriteInt32(0, ZONE_LINKS_MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt16(6, 0)
@@ -1381,6 +1404,14 @@ local function on_zone_links_request(client, packet)
 	for i = 1, count do
 		p:WriteInt16(12 + (i - 1) * 4, zone_links[2 * i - 1])
 		p:WriteInt16(14 + (i - 1) * 4, zone_links[2 * i])
+	end
+	if zone_list then
+		local at = 12 + 4 * count
+		p:WriteInt16(at, zone_expansion)
+		p:WriteInt32(at + 2, zones)
+		for i = 1, zones do
+			p:WriteInt16(at + 6 + (i - 1) * 2, zone_list[i])
+		end
 	end
 	client:QueuePacket(p)
 end

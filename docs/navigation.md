@@ -376,7 +376,7 @@ server, which EQEmu does not send (`docs/unknowns.md`). The World view draws the
   its map in the Zone view, with a bar back to your own (the player, the find path and the height fade are not drawn
   on another zone's map, and closing the window goes back to your zone). Your zone pulses, the selected zone is
   outlined, and the zones of the route followed are numbered and joined.
-- **The zone finder.** Every zone the atlas links, by the zone table's long name or the atlas' tooltip and its short
+- **The zone finder.** Every zone the atlas links that the server has (below), by the zone table's long name or the atlas' tooltip and its short
   name (prefix and word matches first), or the zones of the page shown when nothing is typed; each with its region
   and expansion. The selected zone's card shows how many zones away it is and the way there, with **On atlas**,
   **Its map** and **Go here**.
@@ -394,6 +394,13 @@ server, which EQEmu does not send (`docs/unknowns.md`). The World view draws the
   first time the World view is open after a zone has answered the settings request, so a server without the script
   is never asked;
 - learned: the targets of each zone's OP_SendZonepoints, as the player enters it.
+
+**Only the server's zones.** The finder lists, and a route passes through, only the zones the server has; the
+atlas dims the others ("Not on this server"). With the script's list, those are the zones its current expansion
+(`Expansion:CurrentExpansion`) and content flags allow, sent with the links. Without it, the account's expansions
+are used (the profile's or OP_ExpansionInfo's bits, expansion n at bit n − 1, Classic always): EQEmu fills those
+from `World:ExpansionSettings` or the client version rather than `Expansion:CurrentExpansion`, so a server that
+limits only its content shows every zone until it runs the script. The finder's footer says which applies.
 
 A route has the fewest zone changes (the lowest zone ids first among equals). When the links in their own direction
 give none, a learned link may be used backwards (a zone line seen only from its far side); most zone lines go both

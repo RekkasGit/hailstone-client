@@ -149,6 +149,34 @@ TEST_CASE("Zone atlas: the atlas, routes, exits and another zone's map through e
             CHECK(links_file_text(host.server_dir / "zone_links.txt").find("s " + std::to_string(surefall)) != std::string::npos);
         }
 
+        SUBCASE("only the zones the server has: its list, else the account's expansions") {
+            frame();
+            // No list, every expansion bit: nothing left out.
+            CHECK(run(L, "local s, n, limit = eq.ZoneLinks() return tostring(limit)") == "nil");
+            // The account's bits: Kunark only (bit 0). Classic zones stay; a Velious one (expansion 2) goes.
+            auto& prof = *A::profile(*world.conn);
+            prof.expansions = 0x1;
+            const std::uint32_t velious = game::zone_id_by_short_name("thurgadina");
+            REQUIRE(game::zone_expansion(velious) == 2);
+            CHECK(run(L, "local s, n, limit = eq.ZoneLinks() return tostring(limit)") == "account");
+            CHECK(run(L, "return tostring(eq.ZoneRoute('thurgadina'))") == "nil");
+            CHECK(run(L, "return tostring(eq.AtlasIndex().zones[1].allowed)") == "true"); // qeynos2, Classic
+            // The server's list of zones wins: North Qeynos and the hills, not Surefall Glade.
+            net::HailstoneSettings hs;
+            A::handle_zone(*world.conn, net::encode(hs));
+            net::ZoneLinks links;
+            links.links = {{static_cast<std::uint16_t>(qeynos2), static_cast<std::uint16_t>(hills)}};
+            links.has_zones = true;
+            links.expansion = 1;
+            links.zones = {static_cast<std::uint16_t>(qeynos2), static_cast<std::uint16_t>(hills)};
+            A::handle_zone(*world.conn, net::encode(links));
+            frame();
+            CHECK(run(L, "local s, n, limit, e = eq.ZoneLinks() return limit .. ' ' .. e") == "server 1");
+            CHECK(run(L, "return #eq.ZoneRoute('qeytoqrg')") == "2");
+            CHECK(run(L, "return tostring(eq.ZoneRoute('qrg'))") == "nil"); // the server lacks it
+            CHECK(links_file_text(host.server_dir / "zone_links.txt").find("e 1\n") != std::string::npos);
+        }
+
         SUBCASE("the exits, and the walk through one") {
             frame();
             CHECK(run(L, "return #eq.ZoneExits()") == "0"); // not worked out for this zone yet

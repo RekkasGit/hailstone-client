@@ -396,6 +396,23 @@ struct MapState {
         atlas_pages.clear();
     }
 
+    // Whether the server has the zone (docs/navigation.md "Zone atlas"): in the zones its list allows (its current
+    // expansion and content flags), else, without that list, in the account's expansions (the profile's, else
+    // world's OP_ExpansionInfo bits: expansion n is bit n - 1, Classic always). EQEmu fills those bits from
+    // World:ExpansionSettings or the client version, not Expansion:CurrentExpansion, so without the script a server
+    // that limits only its content shows every zone.
+    bool zone_allowed(const EqHost& h, std::uint32_t id) const {
+        if (!routes.server_zones().empty()) return routes.server_zones().contains(id);
+        std::uint32_t mask = 0;
+        if (h.conn) {
+            const auto& p = h.conn->profile();
+            mask = p && p->expansions ? p->expansions : h.conn->world_expansions();
+        }
+        const std::uint32_t e = game::zone_expansion(id);
+        if (mask == 0 || e == 0 || e > 32) return true;
+        return (mask & (1u << (e - 1))) != 0;
+    }
+
     // ---- the zone links (game/zone_routes.h), kept in servers/<profile>/zone_links.txt
     game::ZoneRoutes routes;
     fs::path routes_dir;                 // the server folder they were read from
@@ -444,7 +461,10 @@ struct MapState {
                 std::vector<game::ZoneRoutes::Link> links;
                 links.reserve(z->links.size());
                 for (const auto& [from, to] : z->links) links.emplace_back(from, to);
-                if (routes.set_server(std::move(links))) save_routes();
+                bool changed = routes.set_server(std::move(links));
+                if (z->has_zones)
+                    changed = routes.set_server_zones(std::vector<std::uint32_t>(z->zones.begin(), z->zones.end()), z->expansion) || changed;
+                if (changed) save_routes();
             }
         }
     }
@@ -2011,8 +2031,9 @@ void push_zone(lua_State* L, std::uint32_t id) {
 
 // index = eq.AtlasIndex()   -- the atlas (Atlas\<skin>\, read once): index.pages = {{file, title, parent}, ...} in
 // the order found from Default.xml (parent "" for it), index.zones = {{zone, name, page, x0, y0, x1, y1, id,
-// expansion}, ...}: every zone link, page by page (a zone may be on several pages; id 0 for a zone the zone table
-// does not know).
+// expansion, allowed}, ...}: every zone link, page by page (a zone may be on several pages; id 0 for a zone the zone
+// table does not know); allowed: the server has it (MapState::zone_allowed; true for an unknown zone). Call it again
+// when eq.ZoneLinks() changes.
 int AtlasIndex(lua_State* L) {
     MapState& s = *state_of(L);
     EqHost& h = *host_of(L);
@@ -2039,6 +2060,8 @@ int AtlasIndex(lua_State* L) {
         set_rect(L, z.rect);
         set_field(L, "id", id);
         set_field(L, "expansion", game::zone_expansion(id));
+        lua_pushboolean(L, id == 0 || s.zone_allowed(h, id));
+        lua_setfield(L, -2, "allowed");
         lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
     }
     lua_setfield(L, -2, "zones");
@@ -2122,8 +2145,10 @@ int AtlasTexture(lua_State* L) {
     return 3;
 }
 
-// server, zones = eq.ZoneLinks()   -- what is known of how the zones connect on this server: server is true when
-// its list came (Hailstone's server script), zones how many zones a link starts or ends at. Asks the server for
+// server, zones, limit, expansion = eq.ZoneLinks()   -- what is known of how the zones connect on this server: server
+// is true when its list came (Hailstone's server script), zones how many zones a link starts or ends at; limit what
+// decides which zones it has: "server" (its list of zones, with expansion its current one, -1 all), "account" (the
+// account's expansion bits leave some out) or nil (every zone). Asks the server for
 // its list the first time it can in a session (GameConnection::request_zone_links), so call it while the zone
 // finder is shown.
 int ZoneLinks(lua_State* L) {
@@ -2132,12 +2157,26 @@ int ZoneLinks(lua_State* L) {
     if (h.in_game && h.conn) h.conn->request_zone_links();
     lua_pushboolean(L, s.routes.has_server());
     lua_pushinteger(L, static_cast<lua_Integer>(s.routes_zones));
-    return 2;
+    if (!s.routes.server_zones().empty()) {
+        lua_pushstring(L, "server");
+        lua_pushinteger(L, s.routes.server_expansion());
+        return 4;
+    }
+    std::uint32_t mask = 0;
+    if (h.conn) {
+        const auto& p = h.conn->profile();
+        mask = p && p->expansions ? p->expansions : h.conn->world_expansions();
+    }
+    // Bits for every expansion RoF2 knows (Kunark .. Rain of Fear, 19): nothing is left out.
+    if (mask != 0 && (mask & 0x7ffffu) != 0x7ffffu) lua_pushstring(L, "account");
+    else lua_pushnil(L);
+    return 3;
 }
 
 // route = eq.ZoneRoute(to [, from])   -- the fewest zone changes from `from` (the player's zone) to `to` (short
 // names): {zone, ...} from the start to the destination, each {id, zone, name, expansion}, with route.assumed
-// when it uses a zone line seen only from the far side. nil when no way is known or a name is unknown.
+// when it uses a zone line seen only from the far side. It passes only through zones the server has
+// (MapState::zone_allowed). nil when no way is known, the server lacks the destination or a name is unknown.
 int ZoneRoute(lua_State* L) {
     MapState& s = *state_of(L);
     EqHost& h = *host_of(L);
@@ -2145,7 +2184,7 @@ int ZoneRoute(lua_State* L) {
     const std::uint32_t from = lua_isstring(L, 2) ? game::zone_id_by_short_name(lua_tostring(L, 2))
                                : h.conn                ? h.conn->zone_id()
                                                        : 0u;
-    game::ZoneRoute r = s.routes.route(from, to);
+    game::ZoneRoute r = s.routes.route(from, to, [&](std::uint32_t z) { return s.zone_allowed(h, z); });
     if (r.zones.empty()) {
         lua_pushnil(L);
         return 1;
