@@ -243,3 +243,40 @@ TEST_CASE("A passive local body retains its own physics while an Eye receives mo
     CHECK(viewed.feet.x > 100);
     CHECK_FALSE(eye.controls_state().controlled_is_local);
 }
+
+TEST_CASE("Another player's Eye whose name extends the player's name is not this player's Eye") {
+    game::WorldState world;
+    world.player_id = 1;
+    world.spawns[1].id = 1;
+    world.spawns[1].name = "Bob";
+    world.spawns[2].id = 2;
+    world.spawns[2].name = "Eye_of_Bobby000";
+    CHECK(game::find_eye_summon(world) == 0);
+    CHECK_FALSE(game::is_own_eye(world, 2));
+    CHECK_FALSE(game::take_eye_control(world, 2));
+    world.spawns[3].id = 3;
+    world.spawns[3].name = "Eye_of_Bob000";
+    CHECK(game::find_eye_summon(world) == 3);
+    CHECK(game::is_own_eye(world, 3));
+    world.spawns[1].name = "Bobby";
+    CHECK(game::find_eye_summon(world) == 2);
+}
+
+TEST_CASE("A held Eye stays held when a same-named Eye appears after control is taken") {
+    EyeRig rig;
+    rig.enter();
+    auto& c = rig.conn;
+    const auto name = c.world().player()->name;
+    rig.spawn(eye_packet(name));
+    rig.buff();
+    rig.tick();
+    REQUIRE(c.eye_id() == 987);
+    auto other = eye_packet(name, 988);
+    other.name = game::eye_name_for(name) + "001";
+    rig.spawn(other); // find_eye_summon is ambiguous now, but the held Eye still exists.
+    CHECK(game::find_eye_summon(c.world()) == 0);
+    rig.tick();
+    CHECK(c.eye_id() == 987);
+    CHECK_FALSE(c.spell_state().buffs[2].empty());
+    CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::BuffRemoveRequest) == 0);
+}

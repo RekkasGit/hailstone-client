@@ -1268,9 +1268,12 @@ path. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` an
 
 SPA 67 acquires an Eye summon named from the first 24 bytes of the player's name. View and control are distinct
 from the player's body and mount: the Eye sends its own spawn ID's movement while the body retains gravity, air
-and environment damage. Fade, despawn, death and zoning restore control and retire the remote view. Deliberate
-safety difference: ambiguous matching Eye names refuse acquisition rather than using unordered-map iteration to
-choose one. The packet and movement lifecycle is covered by `tests/eye_control_test.cpp`.
+and environment damage. Fade, despawn, death and zoning restore control and retire the remote view. Once held,
+control stays while that spawn lives under the Eye's name; another matching Eye appearing later does not retire it.
+Deliberate safety differences: ambiguous matching Eye names refuse acquisition rather than using unordered-map
+iteration to choose one, and the name must not go on with a letter after the player's name (EQEmu names the Eye
+`Eye_of_<name>` plus MakeNameUnique's three digits, so `Eye_of_Bobby000` is not Bob's; the original takes any
+partial match). The packet and movement lifecycle is covered by `tests/eye_control_test.cpp`.
 
 The swing timers (melee.h; `ActionsUi::melee_timers` each frame before the movement update): at its start, while
 auto attack is on and the primary flag is still set, both flags clear and the primary, secondary and ranged timers

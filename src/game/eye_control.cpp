@@ -6,12 +6,22 @@
 
 namespace hailstone::game {
 namespace {
-bool matches(std::string_view name, std::string_view prefix) {
+bool matches(std::string_view name, std::string_view prefix, bool whole_name) {
     if (name.size() < prefix.size()) return false;
     for (std::size_t i = 0; i < prefix.size(); ++i)
         if (std::tolower(static_cast<unsigned char>(name[i])) !=
             std::tolower(static_cast<unsigned char>(prefix[i]))) return false;
-    return true;
+    // EQEmu names the Eye "Eye_of_<name>" and NPC::NPC's MakeNameUnique appends a three-digit number. Player names
+    // are letters only, so a letter right after the full name is someone else's Eye ("Eye_of_Bobby000" is not
+    // Bob's). The original takes any partial match; this deliberately stricter test keeps another player's Eye
+    // from being taken or retired. A name cut at 24 bytes cannot be checked this way.
+    return !whole_name || name.size() == prefix.size() ||
+           !std::isalpha(static_cast<unsigned char>(name[prefix.size()]));
+}
+
+bool owned_eye(const WorldState& world, const Spawn& player, std::uint32_t id, const Spawn& spawn) {
+    return id != world.player_id && !spawn.is_corpse &&
+           matches(spawn.name, eye_name_for(player.name), player.name.size() <= 24);
 }
 }
 
@@ -20,16 +30,21 @@ std::string eye_name_for(std::string_view player) { return "Eye_of_" + std::stri
 std::uint32_t find_eye_summon(const WorldState& world) {
     const Spawn* player = world.player();
     if (!player) return 0;
-    const std::string prefix = eye_name_for(player->name);
     std::uint32_t found = 0;
     for (const auto& [id, spawn] : world.spawns) {
-        if (id == world.player_id || spawn.is_corpse || !matches(spawn.name, prefix)) continue;
+        if (!owned_eye(world, *player, id, spawn)) continue;
         // The original takes the first partial-name match in its actor list. This world's hash map has no actor
         // order: refuse an ambiguous summon rather than take control of a different player's same-prefix Eye.
         if (found) return 0;
         found = id;
     }
     return found;
+}
+
+bool is_own_eye(const WorldState& world, std::uint32_t eye) {
+    const Spawn* player = world.player();
+    const auto it = world.spawns.find(eye);
+    return player && eye != 0 && it != world.spawns.end() && owned_eye(world, *player, eye, it->second);
 }
 
 bool take_eye_control(WorldState& world, std::uint32_t eye) {

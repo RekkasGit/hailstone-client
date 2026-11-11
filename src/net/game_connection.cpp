@@ -2105,9 +2105,9 @@ void GameConnection::release_eye_control(bool remove_effect) {
 
 void GameConnection::reconcile_eye_control() {
     if (!world_.eye_id) return;
-    const auto eye = world_.spawns.find(world_.eye_id);
-    const bool retired = eye == world_.spawns.end() || eye->second.is_corpse ||
-                         game::find_eye_summon(world_) != world_.eye_id;
+    // The held Eye stays held while its spawn lives under the Eye's name; the ambiguity search is only for taking
+    // control. Re-running it here let another player's same-prefix Eye retire ours (and remove our buff).
+    const bool retired = !game::is_own_eye(world_, world_.eye_id);
     if (pstatus_.dead || retired || own_effect_with(67) < 0) release_eye_control(retired || pstatus_.dead);
 }
 
