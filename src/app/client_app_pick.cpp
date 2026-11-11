@@ -93,6 +93,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
     for (const auto& [id, s] : world.spawns) ids.push_back(id);
     std::sort(ids.begin(), ids.end());
     const std::uint8_t option = conn_->click_through_mask();
+    const auto see_invisible = conn_->see_invisible_rank();
     for (std::uint32_t id : ids) {
         const game::Spawn& s = world.spawns.at(id);
         game::MaskSpawn ms;
@@ -104,7 +105,7 @@ ClientApp::PickTarget ClientApp::pick_at(float x, float y, std::uint32_t require
                 ms.owner_is_player = !o->second.is_npc && !o->second.is_corpse;
         game::PickActor a;
         a.mask = game::spawn_pick_mask(ms, option);
-        a.invisible = conn_->market_hidden(s); // IsInvisible (slot 2 skips it): Hide Traders / Hide Buyers
+        a.invisible = conn_->spawn_invisible(s, see_invisible); // IsInvisible (slot 2 skips it)
         glm::vec3 origin;
         float radius = 0.0f;
         if (actor_renderer_ && actor_renderer_->spawn_bounds(id, origin, radius)) {

@@ -115,7 +115,15 @@ private:
 };
 
 struct CharacterMesh {
+    struct SkinBinding {
+        std::uint16_t host_bone = 0;
+        glm::mat4 local{1.0f};
+    };
     MeshSerial serial;
+    // Attachment palette entries after the model's own bones. A WLD host's
+    // raw bone matrix needs a separate inverse bind for each EQG influence.
+    std::vector<SkinBinding> skin_bindings;
+    bool append_skin_bones(std::vector<glm::mat4>& bones) const;
     std::vector<MeshEmitter> emitters;
     std::vector<SkinnedVertex> vertices;
     std::vector<std::uint32_t> indices; // triangle list

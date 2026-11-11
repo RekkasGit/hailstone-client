@@ -1512,6 +1512,10 @@ public:
     // SpawnAppearance {me, 15, 0}).
     void make_me_visible(bool appearance);
     bool invisible() const;
+    // Viewer awareness, shared by drawing, name plates, picking and target
+    // cycling. Compute the effect rank once for a batch of spawns.
+    std::int32_t see_invisible_rank() const;
+    bool spawn_invisible(const game::Spawn& spawn, std::int32_t see_invisible_rank) const;
     // /stopcast: asks the server to interrupt (empty OP_ManaChange).
     void stop_cast();
     // CSpellBookWnd::StartSpellMemorization: memorize the book slot's spell into a gem.

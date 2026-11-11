@@ -28,6 +28,8 @@ inline constexpr std::uint8_t kNoTexture = 0xff; // Appearance::texture: per-slo
 // PlayerZoneClient::LegalPlayerRace @0049deb0: races that wear armour per
 // slot (< 13, 128, 130, 330, 522).
 bool is_pc_model_race(std::uint32_t race);
+// Remote signed HP is unavailable; the server percentage gates living targets.
+bool spawn_invisible(const Spawn& viewer, const Spawn& target, std::int32_t see_invisible_rank, bool group_member);
 
 // The unserializer's fold (@00591acb): for a PC-model race a TextureType
 // >= 0 becomes the material of slots 1-6 and TextureType becomes -1.

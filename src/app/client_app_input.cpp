@@ -468,7 +468,8 @@ std::optional<bool> ClientApp::can_see_spawn(std::uint32_t id) const {
 // the spawn) unless tab_line_of_sight is off; without the zone's collision every NPC counts as in sight.
 void ClientApp::prepare_target_cycle() {
     target_manager_.skip_pets = option_value("tab_skip_pets").value_or(1) != 0;
-    target_manager_.invisible = [this](const game::Spawn& s) { return conn_->market_hidden(s); };
+    const auto see_invisible = conn_->see_invisible_rank();
+    target_manager_.invisible = [this, see_invisible](const game::Spawn& s) { return conn_->spawn_invisible(s, see_invisible); };
     if (option_value("tab_line_of_sight").value_or(1) != 0)
         target_manager_.in_sight = [this](const game::Spawn& s) { return can_see_spawn(s.id).value_or(true); };
     else

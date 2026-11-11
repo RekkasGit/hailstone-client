@@ -395,6 +395,64 @@ std::optional<std::vector<std::int32_t>> part_bone_parents(const MeshFile& mesh)
     return parent;
 }
 
+bool bind_part_to_wld(const MeshFile& file, std::string_view body_code,
+                      std::span<const std::string> body_bones, int anchor,
+                      const glm::mat4& adjustment, CharacterMesh& mesh) {
+    if (anchor < 0 || static_cast<std::size_t>(anchor) >= body_bones.size()) return false;
+    auto parents = part_bone_parents(file);
+    if (!parents) return false;
+    const auto count = file.bones.size();
+    std::vector<glm::mat4> bind(count, glm::mat4(1.0f));
+    std::vector<bool> done(count, false);
+    for (std::size_t pass = 0; pass < count; ++pass)
+        for (std::size_t b = 0; b < count; ++b) {
+            if (done[b]) continue;
+            const auto parent = (*parents)[b];
+            if (parent >= 0 && !done[static_cast<std::size_t>(parent)]) continue;
+            const auto& pose = file.bones[b].bind;
+            const auto local = glm::translate(glm::mat4(1.0f), pose.translation) * glm::mat4_cast(pose.rotation) *
+                               glm::scale(glm::mat4(1.0f), pose.scale);
+            bind[b] = parent < 0 ? local : bind[static_cast<std::size_t>(parent)] * local;
+            done[b] = true;
+        }
+    std::vector<int> host(count, -1);
+    for (std::size_t b = 0; b < count; ++b) {
+        const auto name = upper(body_code) + upper(file.bones[b].name) + "_TRACK";
+        for (std::size_t h = 0; h < body_bones.size(); ++h)
+            if (upper(body_bones[h]) == name) { host[b] = static_cast<int>(h); break; }
+    }
+    std::vector<SkinnedVertex> vertices = mesh.vertices;
+    std::vector<CharacterMesh::SkinBinding> bindings;
+    std::map<std::int32_t, std::uint16_t> palette;
+    for (auto& vertex : vertices)
+        for (std::size_t k = 0; k < 4; ++k) {
+            if (!(vertex.weights[static_cast<glm::length_t>(k)] > 0.0f)) { vertex.bones[k] = 0; continue; }
+            std::int32_t b = vertex.bones[k] < count ? static_cast<std::int32_t>(vertex.bones[k]) : -1;
+            while (b >= 0 && host[static_cast<std::size_t>(b)] < 0) b = (*parents)[static_cast<std::size_t>(b)];
+            auto entry = palette.find(b);
+            if (entry == palette.end()) {
+                const auto index = body_bones.size() + mesh.skin_bindings.size() + bindings.size();
+                if (index > std::numeric_limits<std::uint16_t>::max()) return false;
+                CharacterMesh::SkinBinding binding;
+                binding.host_bone = static_cast<std::uint16_t>(b < 0 ? anchor : host[static_cast<std::size_t>(b)]);
+                binding.local = adjustment;
+                if (b >= 0) {
+                    if (std::abs(glm::determinant(bind[static_cast<std::size_t>(b)])) < 1e-12f) return false;
+                    binding.local *= glm::inverse(bind[static_cast<std::size_t>(b)]);
+                }
+                for (int c = 0; c < 4; ++c)
+                    for (int r = 0; r < 4; ++r)
+                        if (!std::isfinite(binding.local[c][r])) return false;
+                bindings.push_back(binding);
+                entry = palette.emplace(b, static_cast<std::uint16_t>(index)).first;
+            }
+            vertex.bones[k] = entry->second;
+        }
+    mesh.vertices = std::move(vertices);
+    mesh.skin_bindings.insert(mesh.skin_bindings.end(), bindings.begin(), bindings.end());
+    return true;
+}
+
 void append_pieces(const MeshFile& mesh, const std::vector<std::size_t>& pieces, CharacterMesh& out) {
     for (std::size_t pi : pieces) {
         const Piece& piece = mesh.pieces[pi];

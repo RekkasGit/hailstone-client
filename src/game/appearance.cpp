@@ -6,6 +6,17 @@
 #include <unordered_set>
 
 namespace hailstone::game {
+    bool spawn_invisible(const Spawn& viewer, const Spawn& target, std::int32_t see_invisible_rank, bool group_member) {
+        if (viewer.id == target.id) return viewer.gm && target.invis_rank == 3001;
+        if (target.is_corpse || target.hp_percent == 0) return false;
+        if (target.body_type == 100 || std::find(target.properties.begin(), target.properties.end(), 100u) != target.properties.end())
+            return true;
+        if (target.invis_rank <= 0) return false;
+        if (see_invisible_rank >= target.invis_rank) return target.gm && !viewer.gm;
+        // PcClient's awareness override (0x5801d0 / 0x4493c0) checks the
+        // player's group, with no equivalent raid exemption.
+        return !group_member;
+    }
 
 	bool is_pc_model_race(std::uint32_t race) {
 		return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;

@@ -12,6 +12,7 @@
 #include "assets/spell_effects.h"
 #include "game/inventory.h"
 #include "game/particles.h"
+#include "game/world_state.h"
 #include "net/item_packets.h"
 
 namespace hailstone::game {
@@ -77,6 +78,11 @@ std::optional<LightSource> carried_light(std::uint8_t light_value, const glm::ve
     };
     if (light_value == 0 || light_value >= std::size(kLooks)) return std::nullopt;
     return LightSource{position, kLooks[light_value].color, kLooks[light_value].radius};
+}
+
+std::optional<LightSource> spawn_carried_light(const Spawn& spawn) {
+    const auto position = spawn.display_valid ? spawn.display_position : spawn.position;
+    return carried_light(spawn.light_type, position + glm::vec3(0.0f, 0.0f, 4.0f));
 }
 
 LightSource char_select_key_light(const glm::vec3& feet, float height, const glm::vec3& camera) {

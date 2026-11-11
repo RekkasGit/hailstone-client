@@ -592,6 +592,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         motion_known_ = false;
         new_zone_.reset();
         profile_.reset();
+        invis_state_ = 0;
         zone_points_.clear();
         zone_change_pending_ = false;
         auto_attack_ = sent_auto_attack_ = false;
@@ -846,6 +847,9 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.lfg = s.lfg;
     out.linkdead = s.linkdead;
     out.gm = s.gm;
+    out.invis_rank = s.invis;
+    out.light_type = s.light;
+    if (out.id == world_.player_id) invis_state_ = out.invis_rank;
     out.pvp = s.pvp;
     out.deity = s.deity;
     out.trader = s.trader;
@@ -1212,6 +1216,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         apply_spawn(*s);
         if (!own_spawn_seen_ && s->name == character_) {
             world_.player_id = s->spawn_id;
+            invis_state_ = s->invis;
             own_spawn_seen_ = true;
             // The character's anonymity is the server's (the spawn record's anon bits, EQEmu's m_pp.anon): the
             // Options window's boxes (Options/Anonymous) take it as Handle_OP_SpawnAppearance 0x15 does for us.
@@ -2548,6 +2553,8 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
             // Social appearance types (EQEmu AppearanceType; Handle_OP_SpawnAppearance).
             if (auto* s = spawn(id)) {
                 switch (a->type) {
+                case 3: s->invis_rank = static_cast<std::int32_t>(a->parameter); break;
+                case 5: s->light_type = static_cast<std::uint8_t>(a->parameter); break;
                 case 18: s->linkdead = a->parameter != 0; break;
                 case 19: s->fly_mode = static_cast<std::uint8_t>(a->parameter); break; // PlayerPhysics_SetFlyMode
                 case 20: s->gm = a->parameter != 0; break;

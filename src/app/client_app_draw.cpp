@@ -50,9 +50,10 @@ void ClientApp::draw_text_overlay() {
 
 void ClientApp::update_market_hidden(bool in_game) {
     market_hidden_.clear();
-    if (!in_game || !conn_ || !conn_->market_hides_any()) return;
+    if (!in_game || !conn_) return;
+    const auto see_invisible = conn_->see_invisible_rank();
     for (const auto& [id, s] : conn_->world().spawns)
-        if (conn_->market_hidden(s)) market_hidden_.insert(id);
+        if (conn_->spawn_invisible(s, see_invisible)) market_hidden_.insert(id);
 }
 
 void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4& view_proj, VkExtent2D extent, float far_plane) {
@@ -93,7 +94,7 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
     }
     plate_count_ = 0;
     for (const auto& [id, s] : world.spawns) {
-        if (market_hidden_.contains(id)) continue; // IsInvisible: Hide Traders / Hide Buyers
+        if (market_hidden_.contains(id)) continue; // the same viewer awareness as actors and picking
         // ToggleNpcNameSprites / ToggleCharacterNameSprites; the player's own name too, as the original draws it (not
         // in first person, where its model is hidden).
         const bool me = id == world.player_id;

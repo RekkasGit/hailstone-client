@@ -21,6 +21,7 @@ struct PointLight;
 namespace hailstone::game {
 class Inventory;
 class ParticleSystem;
+struct Spawn;
 } // namespace hailstone::game
 
 namespace hailstone::game {
@@ -44,6 +45,9 @@ std::uint8_t carried_light_value(const Inventory& inventory);
 // The light a carried light source gives off at `position` (a torch's warm orange, a lightstone's white ...); nullopt
 // for 0 or an unknown value. The colours and radii are this client's choice for the modern mode.
 std::optional<LightSource> carried_light(std::uint8_t light_value, const glm::vec3& position);
+// Server-selected active light at the carrier's displayed position, using
+// the same modern palette and chest offset as the local player's light.
+std::optional<LightSource> spawn_carried_light(const Spawn& spawn);
 
 // Character select and creation (modern lighting): a soft key light on the model from the camera's side, above and to
 // its left, so the character reads in clz's tree shade. `feet` is the model's position, `height` its height and

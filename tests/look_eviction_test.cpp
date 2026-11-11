@@ -4,12 +4,75 @@
 
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "render/look_eviction.h"
+#include "render/texture_claims.h"
 
 using hailstone::render::kLookIdleMs;
 using hailstone::render::kLookSweepMs;
 using hailstone::render::look_idle;
+
+TEST_CASE("Appearance texture lifetime: shared layers survive until the last model releases them") {
+    struct Part {
+        std::uint32_t texture = 0, texture2 = 0xffffffffu, normal_map = 0, rough_map = 0;
+    };
+    struct Model { std::vector<Part> parts; };
+    std::map<int, Model> models;
+    models[1].parts = {{1, 2, 3, 4}, {1, 0xffffffffu, 0, 0}};
+    models[2].parts = {{1, 5, 3, 0}};
+    auto used = hailstone::render::model_texture_slots(models);
+    CHECK(used == std::unordered_set<std::uint32_t>{0, 1, 2, 3, 4, 5});
+    models.erase(1); // one look leaves; its shared base and normal map stay
+    used = hailstone::render::model_texture_slots(models);
+    CHECK(used == std::unordered_set<std::uint32_t>{0, 1, 3, 5});
+    models.clear();
+    CHECK(hailstone::render::model_texture_slots(models) == std::unordered_set<std::uint32_t>{0});
+}
+
+TEST_CASE("Appearance texture lifetime: exhausted uploads retry once capacity returns; absent images stay cached") {
+    using namespace hailstone::render;
+    struct Part {
+        std::uint32_t texture = 0, texture2 = 0xffffffffu, normal_map = 0, rough_map = 0;
+    };
+    struct Model {
+        std::vector<Part> parts;
+        bool capacity_blocked = false;
+    };
+    struct Slot {
+        std::uint32_t slot = 0;
+        bool capacity_blocked = false;
+    };
+    std::map<int, Model> models{{1, {{{1, 0, 2, 0}}, true}}, {2, {{{1, 0xffffffffu, 2, 0}}, false}}};
+    std::map<std::string, Slot> slots{{"base", {1}}, {"normal", {2}}, {"tint", {0, true}},
+                                       {"rough", {0, true}}, {"missing", {0}}};
+    auto claims = std::make_shared<TextureClaims>();
+    for (const auto& [key, slot] : slots) {
+        (void)slot;
+        claims->installed(key);
+    }
+    std::size_t retired = 0;
+    const auto retire = [&](Model&) { ++retired; };
+    const auto release = [&](const std::string& key) { claims->evicted(key); };
+    CHECK_FALSE(retry_capacity_blocked_textures(models, slots, false, retire, release));
+    CHECK(models.size() == 2);
+    CHECK(slots.size() == 5);
+    CHECK(retired == 0);
+    CHECK_FALSE(claims->claim("tint"));
+
+    REQUIRE(retry_capacity_blocked_textures(models, slots, true, retire, release));
+    CHECK(retired == 1);
+    CHECK_FALSE(models.contains(1)); // its baked slot 0 must be rebuilt too
+    CHECK(models.contains(2));
+    CHECK(slots.size() == 3);
+    CHECK(slots.at("missing").slot == 0); // no image: do not repeatedly decode it
+    CHECK_FALSE(claims->claim("missing"));
+    CHECK(claims->claim("tint"));
+    CHECK(claims->claim("rough")); // material maps retry as well as colour layers
+    CHECK(model_texture_slots(models) == std::unordered_set<std::uint32_t>{0, 1, 2});
+    CHECK_FALSE(retry_capacity_blocked_textures(models, slots, true, retire, release));
+    CHECK(retired == 1);
+}
 
 TEST_CASE("look_idle: idle long enough and past the frames in flight") {
     CHECK_FALSE(look_idle(100, 1000, 100, 1000, 2));               // drawn this frame

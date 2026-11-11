@@ -516,17 +516,22 @@ render::SceneLighting ClientApp::scene_lighting(const game::SceneLight& scene, f
         // The weather: the storm's grey light, the lightning lighting everything from the sky.
         render::apply_storm(sky, weather_look_.storm);
         sky.sky += glm::vec3(weather_look_.flash * 1.5f);
-        // The player's carried light, at about chest height. Without dynamic lights (/dynamiclights off at the zone-in)
-        // none of these lights is made.
-        if (dynamic_lights_ && conn_ && screen_ == Screen::InGame && player_ready_)
-            if (auto l = game::carried_light(game::carried_light_value(conn_->inventory()),
-                                             feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 4.0f))) {
-                dynamic.push_back(*l);
-                if (moving) {
-                    moving->carried = *l;
-                    moving->carrier = conn_->world().player_id;
+        // The server selects the active light (equipment, innate or spell).
+        // Its type and updates apply to every carrier, with the existing modern
+        // palette. Dynamic lights remain the same switchable presentation.
+        if (dynamic_lights_ && conn_ && screen_ == Screen::InGame && player_ready_) {
+            const auto see_invisible = conn_->see_invisible_rank();
+            for (const auto& [id, spawn] : conn_->world().spawns) {
+                if (conn_->spawn_invisible(spawn, see_invisible)) continue;
+                if (auto l = game::spawn_carried_light(spawn)) {
+                    dynamic.push_back(*l);
+                    if (moving && id == conn_->world().player_id) {
+                        moving->carried = *l;
+                        moving->carrier = id;
+                    }
                 }
             }
+        }
         // Character select and creation: a key light on the model (game::char_select_key_light; not the original's).
         if (!pre_game_hidden_ && pre_game_scene())
             if (auto it = pre_game_world_->spawns.find(kModelPlayerId); it != pre_game_world_->spawns.end()) {

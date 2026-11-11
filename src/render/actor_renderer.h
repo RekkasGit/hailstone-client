@@ -282,12 +282,14 @@ private:
         bool used = false; // drawn since the renderer was made (release_kept keeps only these)
         std::uint64_t last_frame = 0; // VkContext::frames_begun() when last drawn or put up
         std::uint32_t last_ms = 0;    // now_ms_ then
+        bool capacity_blocked = false; // a texture exists but the descriptor array was full
     };
     // A texture's slot (0: none, drawn white), with the names reading it looked up in the library
     // (assets::CharacterLookups): a zone archive defining one of them may give another image.
     struct TextureSlot {
         std::uint32_t slot = 0;
         assets::CharacterLookups::Names lookups;
+        bool capacity_blocked = false;
     };
     struct SpawnState {
         std::shared_ptr<const assets::CharacterModel> model;
@@ -379,8 +381,10 @@ private:
     };
     std::unordered_map<const assets::CharacterModel*, Looks> looks_;
     // Frees the looks no spawn wears that have not been drawn for kLookIdleMs (render/look_eviction.h): their meshes
-    // and buffers, not the textures (shared slots). Swept every kLookSweepMs, from prepare_spawns.
+    // and buffers. Shared textures go only when no remaining model reads their slot.
+    // Swept every kLookSweepMs, from prepare_spawns.
     void evict_idle_looks();
+    void evict_unused_textures();
     std::uint32_t last_look_sweep_ms_ = 0;
     const std::shared_ptr<const assets::CharacterMesh>* applied_look(const assets::CharacterModel& model,
                                                                      const game::Appearance& a) const;
@@ -451,6 +455,7 @@ private:
     // Takes `kept` over, then frees what this renderer's library would not hand out the same.
     void adopt(Kept& kept);
     void free_model(GpuModel& g);
+    void retire_model(GpuModel& g);
     std::uint32_t max_textures_ = 0;
     std::array<std::uint32_t, VkContext::kFramesInFlight> descriptor_textures_{}; // textures written into each set
 
