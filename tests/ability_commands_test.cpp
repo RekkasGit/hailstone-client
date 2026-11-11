@@ -11,6 +11,7 @@
 #include "game/combat_ability_menu.h"
 #include "game/hotbuttons.h"
 #include "game/mechanics/sheet_builder.h"
+#include "mock_server/harness.h"
 #include "mq_test_world.h"
 
 using namespace hailstone;
@@ -207,6 +208,59 @@ TEST_CASE("A periodic interrupt clears a normal cast and ends a bard song abrupt
     sp.casting.item_location = {0, 23, 0};
     c.stop_current_spell_cast(1);
     CHECK_FALSE(sp.casting.casting());
+}
+
+TEST_CASE("StopSpellCast: a bard's non-song never interrupts or restarts the twist; others interrupt for reason 0") {
+    // stop_spell_cast.cpp:84-101: a bard's non-song returns at the launch data reset (kept outright when its
+    // recovery is at most 100 ms and it is not an item cast). A non-bard's non-song sends the empty OP_ManaChange
+    // for reason 0 only (feign death's StopCastAndFeignDeath is such a caller).
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    auto spells = std::make_shared<game::SpellTable>();
+    REQUIRE(spells->parse(mq_test::spell_line({{0, "6800"}, {1, "Slow Recovery"}, {13, "1000"}, {14, "2000"},
+                                               {83, "1"}}) + "\n" +
+                          mq_test::spell_line({{0, "6801"}, {1, "Quick Recovery"}, {13, "1000"}, {83, "1"}})) == 2);
+    c.set_spell_table_for_test(spells);
+    auto profile = *c.profile();
+    profile.class_ = 8;
+    profile.level = 60;
+    c.set_profile_for_test(profile);
+    auto& sp = A::spells(c);
+    sp.gems[0].spell = 6801; // the twist's gem 1: a restart would cast it
+    sp.gems[0].ready = 0;
+    sp.recovery_ready = 0;
+    c.melody_command("1");
+    REQUIRE(c.next_bard_twist_gem() == 1);
+    const auto mana_changes = [&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::ManaChange); };
+    const auto casts = [&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::CastSpell); };
+    for (std::uint8_t reason : {std::uint8_t{0}, std::uint8_t{1}}) {
+        sp.casting = {};
+        sp.casting.spell = 6800;
+        c.stop_current_spell_cast(reason);
+        CHECK_FALSE(sp.casting.casting());
+    }
+    sp.casting = {};
+    sp.casting.spell = 6801;
+    c.stop_current_spell_cast(0);
+    CHECK(sp.casting.spell == 6801); // short recovery, not an item cast: kept
+    sp.casting.item_location = {0, 23, 0};
+    c.stop_current_spell_cast(0);
+    CHECK_FALSE(sp.casting.casting());
+
+    profile.class_ = 2;
+    c.set_profile_for_test(profile);
+    sp.casting = {};
+    sp.casting.spell = 6800;
+    c.stop_current_spell_cast(1);
+    CHECK_FALSE(sp.casting.casting());
+    sp.casting.spell = 6801;
+    c.stop_current_spell_cast(0);
+    CHECK_FALSE(sp.casting.casting());
+    REQUIRE(rig.until([&] { return mana_changes() >= 1; }));
+    rig.run_for(std::chrono::milliseconds(30));
+    CHECK(mana_changes() == 1); // only the non-bard's reason 0
+    CHECK(casts() == 0);        // no twist restart
 }
 
 TEST_CASE("Unconscious status follows local damage and conscious recovery without overriding death") {

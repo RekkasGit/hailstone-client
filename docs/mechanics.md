@@ -1264,7 +1264,10 @@ does not apply to a mounted rider. Damage below 1 HP can set the owner status to
 lie down and select the overhead camera; its six-second HP tick bleeds and prints the bleeding message. Positive
 HP recovers consciousness on the tick, stands and restores the camera. Server death remains authoritative.
 SPA 343's flag-1 interruption stops any local cast without an extra interrupt packet, including the bard restart
-path. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` and `tests/movement_test.cpp`.
+path. StopSpellCast (stop_spell_cast.cpp:84-101): a bard's non-song only resets the cast (kept outright with
+recovery at most 100 ms when it is not an item cast), with no interrupt packet and no twist restart for any reason;
+anything else sends the empty OP_ManaChange for reason 0 only (feign death's StopCastAndFeignDeath, /stopsong) and
+resets the cast; a bard song then also restarts the twist for a reason other than 0. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` and `tests/movement_test.cpp`.
 
 SPA 67 acquires an Eye summon named from the first 24 bytes of the player's name. View and control are distinct
 from the player's body and mount: the Eye sends its own spawn ID's movement while the body retains gravity, air

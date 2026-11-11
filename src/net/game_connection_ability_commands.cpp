@@ -77,14 +77,17 @@ void GameConnection::stop_current_spell_cast(std::uint8_t reason) {
     const game::SpellData* s = spell_table_->get(spells_.casting.spell);
     const bool song = s && bard_song(*s);
     if (!song) spells_.pending = std::max(0, spells_.pending - 1);
+    // A bard's non-song (stop_spell_cast.cpp:84-101) ends at the launch data reset: no interrupt packet and no
+    // twist restart, whatever the reason. A spell with recovery at most 100 ms that is not an item cast (the
+    // +0x450/+0x454 test) is kept without the reset.
+    if (profile_ && profile_->class_ == kBard && !song) {
+        if (!(s && !spells_.casting.is_item_cast() && s->recovery_time <= 100)) spells_.casting = {};
+        return;
+    }
     if (!s) return;
-    // A bard's non-song gem with recovery at most 100 ms is left alone. Item casts take the normal reset path.
-    if (profile_ && profile_->class_ == kBard && !song && !spells_.casting.is_item_cast() &&
-        s->recovery_time <= 100) return;
     if (reason == 0) send_zone(encode_stop_cast_request());
     spells_.casting = {};
     if (song) bard_song_stopped(reason);
-    else restart_bard_twist(reason);
 }
 
 void GameConnection::bard_song_stopped(std::uint32_t reason) {
