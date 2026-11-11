@@ -67,3 +67,12 @@ original game.
 - `src/assets/character_dress.cpp`, `src/assets/eqg_character.cpp`: character appearance and EQG character models were written after studying `crates/openeq-assets/src/character/{appearance.rs,luclin.rs,modern.rs,equipment.rs}` and `docs/CHARACTER_RENDERING.md`: the classic texture naming (variant digits, the face as the head piece's tens digit, robes 10–16 → `<code>01` body mesh and CLK04–CLK10, helm meshes `<code>HE<nn>`), item models on R_POINT/L_POINT/SHIELD_POINT (shield chosen by texture name), the Luclin layered materials (`<code><part><selector><piece>_MDF`, layer compositing with clothing-only tint) and modular parts (part numbers, anchors and bone remapping), the EQGS/EQGM/EQGA layouts (conjugated quaternions, four bone weights, inverse bind matrices) and the EQG body/head piece choice.).
 - `src/game/combat.cpp` `animation_code()`: the OP_Animation action → clip code table is ported from `crates/openeq-render/src/actors.rs` (`animation_code`). The respawn-window layout in `src/net/zone_packets.cpp` (including EQEmu's zero padding) follows `docs/DEATH_RECOVERY_PLAN.md`, checked against the server's `SendRespawnBinds`; held-P02 sitting in `src/render/actor_renderer.cpp` follows `docs/CHARACTER_RENDERING.md`.
 - `src/net/game_connection_commerce.cpp`, `src/net/merchant_packets.cpp`, `src/net/trade_packets.cpp`: written from EQEmu's `rof2_structs.h`/`client_packet.cpp`; OpenEQ `docs/COMMERCE_PROTOCOL.md`, `docs/TRADE_PROTOCOL.md` and `docs/QUEST_HANDIN_PLAN.md` were read to cross-check the packet sizes, the buy flow without OP_MoneyUpdate, the trade-view slot numbering and the cursor queue. No OpenEQ code was studied or ported.
+
+### Code copied from MacroQuest
+
+MacroQuest (github.com/macroquest/macroquest), Copyright (C) 2002-present MacroQuest Authors, GNU General Public
+License version 2.
+
+- `src/game/spa_ids.h`: the `eEQSPA` spell effect ids (0..526) and the `eEQSPELLCAT` spell categories (1..176) are
+  copied from `src/eqlib/include/eqlib/game/Spells.h` (without its deprecated and alias names), and `SPA_NAMES` 0..520
+  from `src/eqlib/include/eqdata/spelleffects.h`. The ids 527 and 528 and the names 521..528 were added in Hailstone.
