@@ -142,3 +142,37 @@ TEST_CASE("Carried light integration: active spawn light and updates survive equ
     rig.conn.receive_zone_packet_for_test(net::encode(s));
     CHECK_FALSE(game::spawn_carried_light(rig.conn.world().spawns.at(301)));
 }
+
+TEST_CASE("Carried light: the player's follows its own equipment, not the spawn record") {
+    // EQEmu sets a client's spawn light only when it builds the spawn packet and sends no SpawnAppearance 5 for a
+    // client, so the player's light comes from its inventory (game::carrier_light_value).
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    const std::uint32_t me = rig.conn.world().player_id;
+    REQUIRE(rig.conn.world().spawns.contains(me));
+    const game::Spawn& self = rig.conn.world().spawns.at(me);
+    CHECK(self.light_type == 0);
+    CHECK(game::carrier_light_value(self, me, rig.conn.inventory()) == 0);
+
+    net::Item torch = make_item(5001, "Torch", net::kSlotSecondary);
+    torch.light = 2;
+    rig.server.item_packet(net::kItemPacketCharInventory, torch);
+    REQUIRE(rig.until([&] { return rig.conn.inventory().at(net::ItemSlot::possessions(net::kSlotSecondary)) != nullptr; }));
+    CHECK(self.light_type == 0); // the server sends nothing for it
+    CHECK(game::carrier_light_value(self, me, rig.conn.inventory()) == 2);
+
+    net::MoveItem gone;
+    gone.from = net::ItemSlot::possessions(net::kSlotSecondary);
+    gone.count = 0xffffffffu; // -1: the whole stack of one
+    rig.conn.receive_zone_packet_for_test(net::encode_delete_item(gone));
+    REQUIRE(rig.conn.inventory().at(net::ItemSlot::possessions(net::kSlotSecondary)) == nullptr);
+    CHECK(game::carrier_light_value(self, me, rig.conn.inventory()) == 0);
+
+    // Another spawn's light is its record's, whatever the player carries.
+    rig.server.item_packet(net::kItemPacketCharInventory, torch);
+    REQUIRE(rig.until([&] { return rig.conn.inventory().at(net::ItemSlot::possessions(net::kSlotSecondary)) != nullptr; }));
+    auto other = make_spawn("Lantern_Carrier", 302, 1, 1, 10, 20, 3);
+    other.light = 6;
+    rig.conn.receive_zone_packet_for_test(net::encode(other));
+    CHECK(game::carrier_light_value(rig.conn.world().spawns.at(302), me, rig.conn.inventory()) == 6);
+}

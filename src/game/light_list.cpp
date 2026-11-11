@@ -80,6 +80,10 @@ std::optional<LightSource> carried_light(std::uint8_t light_value, const glm::ve
     return LightSource{position, kLooks[light_value].color, kLooks[light_value].radius};
 }
 
+std::uint8_t carrier_light_value(const Spawn& spawn, std::uint32_t player_id, const Inventory& inventory) {
+    return spawn.id == player_id ? carried_light_value(inventory) : spawn.light_type;
+}
+
 std::optional<LightSource> spawn_carried_light(const Spawn& spawn) {
     const auto position = spawn.display_valid ? spawn.display_position : spawn.position;
     return carried_light(spawn.light_type, position + glm::vec3(0.0f, 0.0f, 4.0f));

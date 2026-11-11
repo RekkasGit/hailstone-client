@@ -638,7 +638,7 @@ light list as before.
 
 ## Light shadows
 
-Modern scene lighting uses each visible carrier's server-selected active light type, initialized by its spawn and changed by SpawnAppearance type 5. The existing carried-light palette sets its color and radius; dynamic lights remain switchable. Lights follow the carrier's displayed body position rather than camera control. The local player's carried light retains its dedicated shadow slot; other carriers join the nearby point-light list.
+Modern scene lighting gives every visible carrier its light (`game::carrier_light_value`). The player's comes from its own inventory (the brightest worn or general-slot item), as before: stock EQEmu sets a client's spawn light only when it builds the spawn packet, ignores the client's own SpawnAppearance type 5 and sends type 5 only for NPCs, corpses, bots and mercenaries. Every other carrier uses its spawn record's light, changed by SpawnAppearance type 5. The existing carried-light palette sets its color and radius; dynamic lights remain switchable. Other carriers' lights follow their displayed body position. The local player's carried light retains its dedicated shadow slot; other carriers join the nearby point-light list.
 
 The zone's lights, the light the player carries and the spells' cast shadows in the modern lighting
 (`render/point_shadows.h`), so a torch no longer lights the far side of a wall. The classic renderer has no shadows at all.

@@ -516,19 +516,25 @@ render::SceneLighting ClientApp::scene_lighting(const game::SceneLight& scene, f
         // The weather: the storm's grey light, the lightning lighting everything from the sky.
         render::apply_storm(sky, weather_look_.storm);
         sky.sky += glm::vec3(weather_look_.flash * 1.5f);
-        // The server selects the active light (equipment, innate or spell).
-        // Its type and updates apply to every carrier, with the existing modern
-        // palette. Dynamic lights remain the same switchable presentation.
+        // The carried lights, the player's at about chest height. The player's light comes from its own inventory,
+        // every other carrier's from its spawn record and SpawnAppearance 5 (game::carrier_light_value says why).
+        // A spawn the viewer cannot see (market_hidden_, last frame's IsInvisible set) carries none. Without dynamic
+        // lights (/dynamiclights off at the zone-in) none of these lights is made.
         if (dynamic_lights_ && conn_ && screen_ == Screen::InGame && player_ready_) {
-            const auto see_invisible = conn_->see_invisible_rank();
+            const std::uint32_t player_id = conn_->world().player_id;
             for (const auto& [id, spawn] : conn_->world().spawns) {
-                if (conn_->spawn_invisible(spawn, see_invisible)) continue;
-                if (auto l = game::spawn_carried_light(spawn)) {
-                    dynamic.push_back(*l);
-                    if (moving && id == conn_->world().player_id) {
-                        moving->carried = *l;
-                        moving->carrier = id;
-                    }
+                if (market_hidden_.contains(id)) continue;
+                std::optional<game::LightSource> l;
+                if (id == player_id)
+                    l = game::carried_light(game::carrier_light_value(spawn, player_id, conn_->inventory()),
+                                            feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 4.0f));
+                else
+                    l = game::spawn_carried_light(spawn);
+                if (!l) continue;
+                dynamic.push_back(*l);
+                if (moving && id == player_id) {
+                    moving->carried = *l;
+                    moving->carrier = id;
                 }
             }
         }
