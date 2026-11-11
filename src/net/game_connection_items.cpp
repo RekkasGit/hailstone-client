@@ -1093,16 +1093,22 @@ void GameConnection::set_item_kept(std::uint32_t id, std::string_view name, bool
 }
 
 void GameConnection::set_items_kept(const std::vector<std::pair<std::uint32_t, std::string>>& items, bool on) {
-    bool changed = false;
-    for (const auto& [id, name] : items) changed = kept_items_.set(id, name, on) || changed;
-    if (!changed) return;
+    std::vector<std::uint32_t> marked; // the items this call marks
+    for (const auto& [id, name] : items)
+        if (kept_items_.set(id, name, on)) marked.push_back(id);
+    if (marked.empty()) return;
     ++kept_revision_;
     if (on) {
-        // An existing server-side offer must stop too: guarding only the next button press leaves it for sale.
+        const auto newly = [&](std::uint32_t id) { return std::find(marked.begin(), marked.end(), id) != marked.end(); };
+        // An existing server-side offer must stop too: guarding only the next button press leaves it for sale. Only
+        // an offered item (listed with the server) ends it: a newly kept satchel item without a price is not for sale.
         if ((trader_.trader || trader_.start_pending) &&
             std::any_of(trader_.slots.begin(), trader_.slots.end(), [&](const auto& slot) {
+                if (!slot.active) return false;
+                if (newly(slot.item_id)) return true;
                 const Item* item = inventory_.at(slot.where);
-                return kept_items_.kept(slot.item_id) || (item && kept_items_.holds_kept(*item));
+                return item && std::any_of(item->contents.begin(), item->contents.end(),
+                                           [&](const auto& c) { return newly(c.item.id); });
             })) {
             trader_end();
             chat(ChatEvent::Kind::System, "Trader mode stopped because an offered item is now marked Keep.");

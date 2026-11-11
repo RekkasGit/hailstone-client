@@ -298,3 +298,29 @@ TEST_CASE("commerce: a bank withdrawal goes into the packs and never equips") {
     REQUIRE(c.inventory().at(net::ItemSlot::possessions(24)));
     CHECK(c.inventory().at(net::ItemSlot::possessions(24))->id == 3003);
 }
+
+TEST_CASE("commerce: marking an unoffered satchel item Keep leaves the trader session running") {
+    ScratchDir files("commerce_edges");
+    Rig rig(MockConfig::standard(), commerce_options(files));
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    auto& trader = const_cast<game::TraderState&>(c.trader_state());
+    game::TraderSlot offered;
+    offered.where = net::ItemSlot::possessions(23);
+    offered.serial = c.inventory().at(offered.where)->serial;
+    offered.item_id = 1002;
+    offered.price = 100;
+    offered.active = true;
+    game::TraderSlot unpriced;
+    unpriced.where = net::ItemSlot::possessions(13);
+    unpriced.serial = c.inventory().at(unpriced.where)->serial;
+    unpriced.item_id = 1001;
+    trader.slots = {offered, unpriced};
+    trader.trader = trader.start_pending = true;
+    c.set_item_kept(1001, "Short Sword", true);
+    CHECK(trader.start_pending);
+    CHECK(trader.slots[0].active);
+    c.set_item_kept(1002, "Rations", true);
+    CHECK_FALSE(trader.start_pending);
+    CHECK_FALSE(trader.slots[0].active);
+}
