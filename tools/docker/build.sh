@@ -6,23 +6,30 @@
 # JOBS sets the parallel jobs. windows-x64 downloads MSVC on its first run and needs MSVC_ACCEPT_LICENSE=1.
 # macos-arm64 starts the macOS workflow on GitHub for HEAD (pushed) and unpacks its artifact; it needs gh.
 # A server plugin built in (docs/plugins.md): PLUGIN_DIR=<its clone> PLUGIN_NAME=<folder under plugins/>.
+# A server's own build: BUILD_TAG=<name> keeps its build folders (build-<platform>-<name>) and installs
+# (dist/<name>/<platform>) apart, and CMAKE_ARGS holds its settings, for example
+#   CMAKE_ARGS="-DHAILSTONE_UPDATE_FEED=https://example.org/hailstone/hailstone-update.txt -DHAILSTONE_UPDATE_KEY=<hex>"
+# The ccache is shared, so a second server's build compiles little.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 what=${1:?usage: tools/docker/build.sh linux-x64|linux-arm64|windows-x64|macos-arm64|all [--no-test]}
 test=1; [ "${2:-}" = --no-test ] && test=0
 export HOST_UID=$(id -u) HOST_GID=$(id -g)
 mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/msvc .docker/msvc-home .docker/no-plugin dist
+tag=${BUILD_TAG:+-$BUILD_TAG}
+out=dist${BUILD_TAG:+/$BUILD_TAG}
+read -ra cmake_args <<< "${CMAKE_ARGS:-}"
 
 # Compose v2 (docker compose) or v1 (docker-compose); BuildKit so linux-arm64's image can be built for its platform.
 if docker compose version >/dev/null 2>&1; then dc() { docker compose "$@"; }; else dc() { docker-compose "$@"; }; fi
 export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1
 
 install_tree() { # <platform> <build dir> <service>
-    rm -rf "dist/$1"
-    dc run --rm --no-deps "$3" cmake --install "$2" --prefix "dist/$1/hailstone"
+    rm -rf "$out/$1"
+    dc run --rm --no-deps "$3" cmake --install "$2" --prefix "$out/$1/hailstone"
     # The default Windows install also writes zlib's bin/, include/ and lib/ (docs/updater.md step 2).
-    rm -rf "dist/$1/hailstone/bin" "dist/$1/hailstone/include" "dist/$1/hailstone/lib"
-    echo "installed dist/$1/hailstone"
+    rm -rf "$out/$1/hailstone/bin" "$out/$1/hailstone/include" "$out/$1/hailstone/lib"
+    echo "installed $out/$1/hailstone"
 }
 
 linux() { # <platform>
@@ -31,9 +38,9 @@ linux() { # <platform>
         docker run --privileged --rm tonistiigi/binfmt --install arm64
     fi
     dc build "$1"
-    dc run --rm "$1"
-    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= "$1" "build-$1/hailstone_tests"; fi
-    install_tree "$1" "build-$1" "$1"
+    dc run --rm "$1" tools/docker/linux_build.sh "build-$1$tag" "${cmake_args[@]}"
+    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= "$1" "build-$1$tag/hailstone_tests"; fi
+    install_tree "$1" "build-$1$tag" "$1"
 }
 
 windows() {
@@ -45,9 +52,9 @@ windows() {
         fi
         dc --profile setup run --rm msvc-setup
     fi
-    dc run --rm windows-x64
-    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= windows-x64 wine build-windows-x64/hailstone_tests.exe; fi
-    install_tree windows-x64 build-windows-x64 windows-x64
+    dc run --rm windows-x64 tools/docker/msvc_build.sh . "build-windows-x64$tag" "${cmake_args[@]}"
+    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= windows-x64 wine "build-windows-x64$tag/hailstone_tests.exe"; fi
+    install_tree windows-x64 "build-windows-x64$tag" windows-x64
 }
 
 macos() {
@@ -58,11 +65,11 @@ macos() {
     sleep 10
     run=$(gh run list --workflow macos.yml --limit 1 --json databaseId -q '.[0].databaseId')
     gh run watch "$run" --exit-status
-    rm -rf dist/macos-arm64 && mkdir -p dist/macos-arm64
-    gh run download "$run" -n hailstone-macos-arm64 -D dist/macos-arm64
-    tar -C dist/macos-arm64 -xf dist/macos-arm64/hailstone-macos-arm64.tar
-    rm dist/macos-arm64/hailstone-macos-arm64.tar
-    echo "installed dist/macos-arm64/hailstone"
+    rm -rf "$out/macos-arm64" && mkdir -p "$out/macos-arm64"
+    gh run download "$run" -n hailstone-macos-arm64 -D "$out/macos-arm64"
+    tar -C "$out/macos-arm64" -xf "$out/macos-arm64/hailstone-macos-arm64.tar"
+    rm "$out/macos-arm64/hailstone-macos-arm64.tar"
+    echo "installed $out/macos-arm64/hailstone"
 }
 
 case $what in
