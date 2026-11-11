@@ -99,7 +99,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), and [AGENTS.md](AGENTS.md) for AI coding
 
 ## License
 
-[MIT](LICENSE). Bundled and fetched third-party code keeps its own licenses, listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+[GPL-2.0-or-later](LICENSE), with the plugin SDK ([sdk/](sdk/)) under MIT and an exception that lets plugins, scripts and add-ons use any licence: see [NOTICE.md](NOTICE.md). Releases up to 0.7.0-beta were MIT. Bundled and fetched third-party code keeps its own licenses, listed in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Credits
 

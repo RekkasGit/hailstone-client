@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 /* Hailstone compiled plugins: the C interface a plugin (a .dll / .so / .dylib) is built against.
  *
  * The names follow MacroQuest's plugin callbacks, so an MQ plugin's structure carries over: export the callbacks

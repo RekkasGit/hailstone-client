@@ -407,6 +407,10 @@ with any compiler. On macOS the client loads only `.dylib`: CMake names a `MODUL
 plugin's own build sets `CMAKE_SHARED_MODULE_SUFFIX` to `.dylib` (or the target's `SUFFIX`); the client's build does
 this for the plugins built in its tree. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
 
+**Licence.** The client is GPL-2.0-or-later, but `sdk/` is MIT (`sdk/LICENSE`), and NOTICE.md's plugin and add-on
+exception lets a plugin built against it, or a script using the `mq` module and `eq.*`, use any licence, closed ones
+included. A plugin that copies the client's own code (anything outside `sdk/`) is covered by the GPL instead.
+
 ```c
 #include "hailstone_plugin.h"
 HAILSTONE_PLUGIN   /* the two required exports and the `host` global (the host table) */

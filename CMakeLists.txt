@@ -828,6 +828,9 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
+# The licence (GPL-2.0-or-later, NOTICE.md) and the third-party notices travel with the binary.
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE DESTINATION . RENAME LICENSE.txt)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE.md ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY.md DESTINATION .)
 if(HAILSTONE_MOLTENVK_DYLIB)
   # macOS: Vulkan itself, beside the binary (platform/paths.h bundled_vulkan_library), with its licence.
   install(FILES ${HAILSTONE_MOLTENVK_DYLIB} DESTINATION .)

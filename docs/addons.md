@@ -187,6 +187,12 @@ link gives, signed or not.
 (`tools/sign.sh` there, `hailstone_sign sign`; `hailstone_sign verify <key> hailstone-addon-index.txt` lists it, its
 serial first). Sign it with a `hailstone_sign` that writes the serial (this client's), so that each publish raises it.
 
+## Licence
+
+An add-on may use any licence, closed ones included: the client is GPL-2.0-or-later, but its plugin SDK (`sdk/`) is
+MIT and NOTICE.md's plugin and add-on exception covers plugins built against it and scripts and UI packs that use the
+documented Lua interfaces. An add-on that copies the client's own code (outside `sdk/`) is covered by the GPL.
+
 ## The manifest
 
 An add-on is a GitHub repository with `hailstone-addon.txt`. **A repository without one is refused** ("it is not a
