@@ -409,7 +409,14 @@ public:
     // The vehicles' part of smooth, before the local player moves (WorldState::smooth_vehicles).
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).
-    void set_physics_steps(std::optional<std::vector<float>> steps_ms) { world_.physics_steps = std::move(steps_ms); }
+    void set_physics_steps(std::optional<std::vector<float>> steps_ms,
+                           std::optional<std::uint32_t> completed_time_ms = {}) {
+        world_.physics_steps = std::move(steps_ms);
+        world_.physics_step_time_ms = completed_time_ms;
+    }
+    void note_physics_step(std::uint32_t id, std::uint32_t ms) {
+        if (auto it = world_.spawns.find(id); it != world_.spawns.end()) it->second.physics_step_ms = ms;
+    }
     // The game clock's steps this frame on now_ms()'s clock (core/step_clock.h, docs/mechanics.md "Frame rate"): the
     // rules that run once a frame and wait for a frame past their interval (memorizing, scribing, the 1 s and 6 s
     // ticks, the socials' lines) run once per step at its time. nullopt: once a frame, now.
@@ -456,8 +463,11 @@ public:
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
     // The effect packets since the last call, in order (app/spell_particles.h plays them).
     std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
+    std::vector<std::uint32_t> take_blood_spurts() { return std::exchange(blood_spurts_, {}); }
     // The missiles the server launched since the last call (OP_SomeItemPacketMaybe, game/missiles.h), in order.
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
+    // Spell 859 local presentation; no packet is encoded or sent.
+    void spell_missile_hit(const game::Missile& missile);
     std::vector<SoundCue> take_sound_cues();
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
@@ -2589,6 +2599,7 @@ private:
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
     void handle_spell(Op op, const AppPacket& p);
+    void handle_spell_action(const Action& action, std::int64_t now, bool proc_stage);
     // Handle_OP_MemorizeSpell @0x4be150 (game/mechanics/spell_gems.h) on the connection's state.
     void handle_memorize_spell(const MemorizeSpell& m);
     void land_spell_on_me(const Action& a, std::int64_t now);
@@ -3074,6 +3085,7 @@ private:
     std::vector<SoundCue> sound_cues_;
     std::vector<SpellEffectCue> effect_cues_;
     std::vector<EffectPacketCue> effect_packets_;
+    std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;

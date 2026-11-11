@@ -296,9 +296,6 @@ int run_model_viewer(const ModelViewerOptions& opts) {
     // The models' and held items' own emitters (app/actor_emitters.h).
     ActorEmitters actor_emitters(vk, game, shader_dir);
     std::vector<ActorEmitters::Actor> emitter_actors;
-    for (std::size_t i = 0; i < draws.size(); ++i)
-        if (draws[i].mesh && !draws[i].mesh->emitters.empty())
-            emitter_actors.push_back({static_cast<std::uint32_t>(i + 1), draws[i].mesh, render::ActorRenderer::standing(draws[i])});
 
     auto start = std::chrono::steady_clock::now();
     auto last = start;
@@ -336,6 +333,12 @@ int run_model_viewer(const ModelViewerOptions& opts) {
                               draws[i].position.z, draws[i - 1].position.z);
                 }
             }
+        emitter_actors.clear();
+        for (std::size_t i = 0; i < draws.size(); ++i)
+            if (draws[i].mesh && !draws[i].mesh->emitters.empty())
+                emitter_actors.push_back({static_cast<std::uint32_t>(i + 1), draws[i].mesh,
+                                          render::ActorRenderer::standing(draws[i]), draws[i].alpha,
+                                          glm::mat3(render::ActorRenderer::draw_matrix(draws[i]))});
         actor_emitters.update(dt, emitter_actors, [&](std::uint32_t id, int bone, glm::mat4& w) {
             return id >= 1 && id <= draws.size() && render::ActorRenderer::bone_world(draws[id - 1], bone, w);
         }, camera.position, [&](std::uint32_t id, std::string_view code, float& time) {

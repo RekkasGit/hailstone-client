@@ -829,6 +829,18 @@ TEST_CASE("EQG part bones: parents from the child lists; a cyclic hierarchy is r
     CHECK(*p == std::vector<std::int32_t>{-1, 0, 0});
 }
 
+TEST_CASE("EQG role zero resolves only an authored HEAD_NAME bone") {
+    const std::vector<glm::vec3> positions{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    const std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {0, 1}};
+    auto data = make_model(false, 1, {{"body", "Opaque.fx", "fixture.dds"}}, positions, uv, {{0, 1, 2, 0, 0}});
+    auto file = eqg_character::parse_mesh(data, "TST");
+    file.bones.resize(1);
+    file.bones[0].name = "HEAD_NAME";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == 0);
+    file.bones[0].name = "SPELLPOINT_HEAD";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == -1);
+}
+
 TEST_CASE("EQG character meshes: a vertex count the file cannot hold is refused before it is allocated") {
     std::vector<glm::vec3> pos{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
     std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {0, 1}};

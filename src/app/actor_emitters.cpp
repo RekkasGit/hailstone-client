@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <optional>
 
 #include "assets/character.h"
@@ -24,6 +25,9 @@ std::string_view triggered_clip(std::int32_t animation) {
 }
 } // namespace
 
+ActorEmitters::ActorEmitters(std::vector<assets::EmitterDefinition> definitions, game::HeightTables heights)
+    : particles_(std::move(definitions)), heights_(std::move(heights)) {}
+
 ActorEmitters::ActorEmitters(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir) {
     try {
         if (auto data = game.read("actoremittersnew.edd")) particles_ = game::ParticleSystem(assets::parse_edd(*data));
@@ -39,6 +43,8 @@ ActorEmitters::ActorEmitters(render::VkContext& vk, const GameDir& game, const s
     };
     settings_ = game::spell_particle_settings(value("ActorParticleDensity"), value("ActorParticleOpacity"));
     eqclient_density_ = settings_.density;
+    if (auto moddat = game.read("Resources/moddat.ini"))
+        heights_ = game::parse_height_tables({}, std::string_view(reinterpret_cast<const char*>(moddat->data()), moddat->size()));
     if (!particles_.empty()) renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir);
 }
 
@@ -66,13 +72,26 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         r.bone_point = static_cast<std::int32_t>(i);
         r.point_only = true;
         r.persistent = duration_ms < 0;
+        if (me.emitter.floor != 0) {
+            // The floor flag creates a world placement, with no point or actor left to follow. A missing floor
+            // postpones creation instead of putting an effect into the air while the zone is still loading.
+            if (!floor_ || !a.world_axes) return std::nullopt;
+            auto floor = floor_(r.position);
+            if (!floor || !std::isfinite(*floor)) return std::nullopt;
+            r.position.z = *floor + 0.05f;
+            r.axes = game::emitter_axes(*a.world_axes, 0.0f, 0.0f, false);
+            r.actor = 0;
+            r.bone_point = -1;
+            r.point_only = false;
+        }
         particles_.create(r);
-        return r.key;
+        return particles_.has(r.key) ? std::optional<std::uint32_t>(r.key) : std::nullopt;
     };
     for (const Actor& a : actors) {
         if (!a.mesh || a.mesh->emitters.empty()) continue;
         Live& live = live_[a.id];
         live.seen = true;
+        live.alpha = a.alpha;
         live.mesh = a.mesh; // (the same mesh, or one at the same address: the attachments below read this one)
         if (live.mesh_serial != a.mesh->serial.value()) {
             // A new mesh (dressed again, another weapon): its emitters replace the old ones.
@@ -81,13 +100,17 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
             for (auto& [i, t] : live.triggered)
                 if (t.key) particles_.stop(t.key);
             live.keys.clear();
+            live.started_entries.assign(a.mesh->emitters.size(), false);
             live.standing_keys.clear();
             live.triggered.clear();
             live.mesh_serial = a.mesh->serial.value();
-            for (std::size_t i = 0; i < a.mesh->emitters.size(); ++i) {
-                const auto& e = a.mesh->emitters[i].emitter;
-                if (e.trigger != 0 || e.variant >= 1) continue;
-                if (auto key = start(a, i)) live.keys.push_back(*key);
+        }
+        for (std::size_t i = 0; i < a.mesh->emitters.size(); ++i) {
+            const auto& e = a.mesh->emitters[i].emitter;
+            if (live.started_entries[i] || e.trigger != 0 || e.variant >= 1) continue;
+            if (auto key = start(a, i)) {
+                live.keys.push_back(*key);
+                live.started_entries[i] = true;
             }
         }
         // The standing entries start when it stands and stop when it moves, casts or acts.
@@ -154,6 +177,8 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
         game::EmitterAttachment at;
         at.position = glm::vec3(m[3]);
         at.axes = glm::mat3(m);
+        at.alpha = it->second.alpha;
+        at.particle_scale = heights_.pes_factor(me.model_code);
         return at;
     });
     if (renderer_) renderer_->prepare(particles_);

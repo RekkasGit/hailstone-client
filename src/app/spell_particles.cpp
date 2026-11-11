@@ -4,15 +4,28 @@
 #include <cstdlib>
 
 #include "assets/character.h"
+#include "assets/pfs.h"
+#include "assets/wld_particles.h"
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "game/path_trail.h"
 #include "game/spells.h"
+#include "game/missiles.h"
 #include "net/game_connection.h"
 #include "render/actor_renderer.h"
 
 namespace hailstone::app {
+
+namespace {
+// This is a separate named actor role, not one of the ten spell points.
+constexpr int kBloodPoint = 10;
+constexpr std::uint32_t kMissileActorBit = 0x80000000u; // app/world_objects.h's actor namespace
+}
+
+SpellParticles::SpellParticles(std::vector<assets::EmitterDefinition> definitions,
+                               std::vector<assets::SpellEffect> effects)
+    : effects_(std::move(effects)), particles_(std::move(definitions)) {}
 
 SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir) {
     try {
@@ -39,12 +52,99 @@ SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const
         if (auto text = sp_offsets_.get(section, key)) v = std::strtof(text->c_str(), nullptr);
         return v;
     });
+    // The original resolves I_BLOODSPRITE from the global equipment resources. Retain the player's archive for
+    // the texture reader, and skip the feature if its sprite chain is absent or unsupported.
+    std::shared_ptr<const assets::PfsArchive> blood_archive;
+    std::string blood_texture;
+    try {
+        if (auto data = game.read("gequip.s3d")) {
+            auto archive = std::make_shared<assets::PfsArchive>(assets::PfsArchive::from_memory(std::move(*data), "gequip.s3d"));
+            if (auto bytes = archive->read("gequip.wld")) {
+                auto wld = assets::wld::WldFile::parse(*bytes, "gequip.s3d:gequip.wld");
+                if (const auto* sprite = wld.find("I_BLOODSPRITE")) {
+                    const auto ref = static_cast<assets::wld::Ref>(sprite - wld.fragments().data() + 1);
+                    if (auto tex = assets::particle_texture(wld, ref); tex && tex->frames == 1 && archive->contains(tex->file)) {
+                        auto material = tex->material & 0x80000000u ? assets::particle_material_alias(tex->material)
+                                                                   : std::optional(tex->material);
+                        if (material && (*material & 0x1000000u)) {
+                            auto definition = game::blood_spurt_definition(tex->file);
+                            definition.additive = (*material >> 20) & 1u;
+                            set_blood_sprite(std::move(definition));
+                            blood_texture = GameDir::normalize(tex->file);
+                            blood_archive = std::move(archive);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        log::warn("blood particles: {}", e.what());
+    }
     if (!particles_.empty()) {
         renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir);
+        if (blood_archive)
+            renderer_->set_texture_reader([archive = std::move(blood_archive), name = std::move(blood_texture)](const std::string& wanted) {
+                return GameDir::normalize(wanted) == name ? archive->read(wanted) : std::nullopt;
+            });
         log::info("spell particles: {} emitter definitions, {} effects, density {:.2f}, opacity {:.2f}",
                   particles_.definitions().size(), effects_.size(), settings_.density, settings_.opacity);
     }
 }
+
+void SpellParticles::set_blood_sprite(assets::EmitterDefinition definition) {
+    if (definition.texture.empty() || blood_definition_) return;
+    if (particles_.empty()) particles_.add_definition({}); // definition zero is the sentinel
+    blood_definition_ = particles_.add_definition(std::move(definition));
+}
+
+std::optional<glm::mat4> SpellParticles::blood_point_world(const render::ActorRenderer* actors,
+                                                         std::uint32_t id) const {
+    if (blood_point_) return blood_point_(id);
+    if (!actors) return std::nullopt;
+    const auto* model = actors->drawn_model(id);
+    if (!model || model->blood_bone < 0) return std::nullopt;
+    glm::mat4 point;
+    return actors->drawn_bone(id, model->blood_bone, point) ? std::optional(point) : std::nullopt;
+}
+
+void SpellParticles::update_blood(net::GameConnection& conn, const render::ActorRenderer* actors) {
+    const auto& spawns = conn.world().spawns;
+    for (auto id : conn.take_blood_spurts()) {
+        if (!blood_definition_ || !spawns.contains(id)) continue;
+        auto point = blood_point_world(actors, id);
+        if (!point) continue;
+        game::SpellEmitterRequest r;
+        r.emitter = static_cast<std::int32_t>(*blood_definition_);
+        r.actor = id;
+        r.bone_point = kBloodPoint;
+        r.point_only = true;
+        r.position = glm::vec3((*point)[3]);
+        particles_.create(r);
+    }
+    std::vector<std::uint32_t> gone;
+    for (const auto& e : particles_.emitters())
+        if (e.point == kBloodPoint && !spawns.contains(e.actor)) gone.push_back(e.actor);
+    for (auto id : gone) particles_.stop_attachment(id, kBloodPoint);
+}
+
+void SpellParticles::missile_effect(const net::GameConnection& conn, const game::Missile& missile, int stage,
+                                     const render::ActorRenderer* actors) {
+    const auto* spell = conn.spell_table().get(missile.packet.spell);
+    if (!spell || spell->spell_anim < 1 || static_cast<std::size_t>(spell->spell_anim) >= effects_.size()) return;
+    auto caster = stage_actor(conn, missile.packet.source_id, actors);
+    game::StageActor at;
+    at.id = kMissileActorBit | missile.serial;
+    at.position = missile.actor_position;
+    at.points = 0; // no fabricated eyes, mouth or spell bones on a missile actor
+    game::SpellParticleSettings settings = settings_;
+    settings.density *= source_density_for(conn, missile.packet.source_id, 0);
+    for (const auto& r : game::spawn_stage_emitters(effects_[static_cast<std::size_t>(spell->spell_anim)], stage,
+                                                   spell->id, caster ? &*caster : nullptr, nullptr, at.position,
+                                                   0, settings, false, &at))
+        particles_.create(r);
+}
+
+void SpellParticles::end_missile(std::uint32_t serial) { particles_.stop_actor(kMissileActorBit | serial); }
 
 std::optional<glm::mat4> SpellParticles::point_world(const render::ActorRenderer& actors, std::uint32_t id, int point) {
     const assets::CharacterModel* model = actors.drawn_model(id);
@@ -60,6 +160,7 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
                             std::span<const net::EffectPacketCue> effect_packets, const render::ActorRenderer* actors,
                             float dt) {
     clock_ += dt;
+    update_blood(conn, actors);
     for (const auto& cue : cues) {
         Held h{clock_ + cue.delay, cue.stage, cue.caster, cue.target, cue.spell, cue.source, cue.duration_ms};
         if (cue.delay > 0.0) held_.push_back(h);
@@ -113,6 +214,15 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
         return s.display_valid ? s.display_position : s.position;
     };
     particles_.update(dt, [&](std::uint32_t id, std::int32_t pt) -> std::optional<game::EmitterAttachment> {
+        if ((id & kMissileActorBit) != 0) {
+            auto pose = missile_pose_ ? missile_pose_(id & ~kMissileActorBit) : std::nullopt;
+            if (!pose) return std::nullopt;
+            game::EmitterAttachment a;
+            a.position = glm::vec3((*pose)[3]);
+            a.actor_axes = glm::mat3(*pose);
+            a.actor_scale = glm::length((*pose)[0]);
+            return a;
+        }
         auto it = world.spawns.find(id);
         if (it == world.spawns.end()) return std::nullopt;
         game::EmitterAttachment a;
@@ -120,22 +230,30 @@ void SpellParticles::update(net::GameConnection& conn, std::span<const net::Spel
         if (it->second.heights.model_scale > 0.0f) a.actor_scale = it->second.heights.model_scale;
         if (actors) {
             if (const assets::CharacterModel* model = actors->spawn_model(id)) a.particle_scale = particle_scale(*model);
-            if (pt >= 0)
+            if (pt >= 0 && pt < kBloodPoint)
                 if (auto m = point_world(*actors, id, pt)) {
                     a.position = glm::vec3((*m)[3]);
                     a.axes = glm::mat3(*m);
                 }
             glm::mat4 t;
-            if (actors->drawn_transform(id, t)) a.actor_axes = glm::mat3(t);
+            if (actors->drawn_transform(id, t)) {
+                a.actor_axes = glm::mat3(t);
+                a.alpha = actors->drawn_alpha(id);
+            }
         }
+        if (pt == kBloodPoint)
+            if (auto m = blood_point_world(actors, id)) {
+                a.position = glm::vec3((*m)[3]);
+                a.axes = glm::mat3(*m);
+            }
         // A point the model turned out not to have (asked for before it loaded): point 0, as the slot's own fallback
         // would have chosen. Without its model drawn, a pointed emitter keeps to the spawn's place.
-        if (pt > 0 && !a.position && actors)
+        if (pt > 0 && pt < kBloodPoint && !a.position && actors)
             if (auto m = point_world(*actors, id, 0)) {
                 a.position = glm::vec3((*m)[3]);
                 a.axes = glm::mat3(*m);
             }
-        if (pt >= 0 && !a.position) a.position = position(id);
+        if (pt >= 0 && pt < kBloodPoint && !a.position) a.position = position(id);
         return a;
     });
 }
@@ -295,7 +413,7 @@ void SpellParticles::play(net::GameConnection& conn, const Held& cue, const rend
     game::SpellParticleSettings settings = settings_;
     settings.density *= source_density_for(conn, cast_by, cue.target != 0 ? cue.target : cue.caster);
     if (settings.density <= 0.0f) return;
-    auto caster = stage_actor(conn, cue.caster, actors);
+    auto caster = stage_actor(conn, cast_by, actors);
     auto target = stage_actor(conn, cue.target, actors);
     glm::vec3 point = caster ? caster->position : target ? target->position : glm::vec3(0.0f);
     std::int32_t longest = 0;

@@ -465,6 +465,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
     rest.tracks.resize(n);
     for (std::size_t i = 0; i < n; ++i) {
         m.bone_names.push_back(mesh.bones[i].name);
+        if (m.name_bone < 0 && mesh.bones[i].name == "HEAD_NAME") m.name_bone = static_cast<int>(i);
         rest.tracks[i].push_back(mesh.bones[i].bind);
     }
     std::vector<glm::mat4> bind;

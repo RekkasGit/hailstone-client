@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "game/missiles.h"
+#include "game/spells.h"
 
 using namespace hailstone;
 using namespace hailstone::game;
@@ -217,4 +218,232 @@ TEST_CASE("a missile with a target flies through walls until the target goes; it
     tw.spawns.erase(tw.spawns.begin());
     list.update(90, w);
     CHECK(list.missiles().empty());
+}
+
+TEST_CASE("valid spell missiles launch the actual area actor and retire without a generic impact") {
+    TestWorld tw;
+    tw.spawns.push_back({7, {1, 2, 3}, 3.75f, 6.0f, 1, false});
+    tw.spawns.push_back({9, {100, 200, 30}, 3.75f, 6.0f, 1, false});
+    SpellData spell;
+    spell.id = 600;
+    spell.target_type = 8;
+    spell.ae_duration = 500;
+    auto world = tw.world();
+    world.spell = [&](std::uint32_t id) { return id == spell.id ? &spell : nullptr; };
+    std::vector<int> stages;
+    glm::vec3 effect_at{};
+    int ended = 0;
+    world.effect = [&](const Missile& m, int stage) { stages.push_back(stage); effect_at = m.actor_position; };
+    world.ended = [&](const Missile&) { ++ended; };
+    MissilePacket packet;
+    packet.source_id = 7;
+    packet.target_id = 9;
+    packet.position = {10, 20, 30};
+    packet.velocity = {1, 2, 3};
+    packet.speed = 4;
+    packet.item_type = 9;
+    packet.spell = 600;
+    MissileList missiles;
+    missiles.add(make_missile(packet, 1000, 1500));
+    missiles.update(1000, world); // spell missiles do not wait for a physical ranged animation
+    REQUIRE(missiles.missiles().size() == 1);
+    const auto& m = missiles.missiles().front();
+    CHECK(m.has_actor);
+    CHECK(m.position == glm::vec3(100, 200, 30));
+    CHECK(effect_at == m.position);
+    CHECK(m.velocity == glm::vec3(0));
+    CHECK(m.speed == 0);
+    CHECK(m.ends_at == 1500);
+    CHECK(stages == std::vector<int>{2});
+    missiles.update(1500, world);
+    CHECK(missiles.missiles().size() == 1); // the original compares time strictly past the expiry
+    missiles.update(1533, world);
+    CHECK(missiles.missiles().empty());
+    CHECK(ended == 1);
+    CHECK(stages == std::vector<int>{2}); // no invented second impact at expiration
+
+    spell.target_type = 45;
+    packet.location = {300, 400, 50};
+    missiles.add(make_missile(packet, 2000, 0));
+    missiles.update(2000, world);
+    CHECK(missiles.missiles().front().position == packet.location);
+    missiles.clear();
+    for (auto id : {0u, 601u, 45001u}) {
+        packet.spell = id;
+        missiles.add(make_missile(packet, 3000, 0));
+        missiles.update(3000, world);
+        CHECK(missiles.missiles().empty());
+    }
+}
+
+TEST_CASE("spell projectile flight uses its duration and only spell54 emits a destruction impact") {
+    TestWorld tw;
+    tw.spawns.push_back({7, {1, 2, 3}, 3.75f, 6.0f, 1, false, 900u});
+    tw.spawns.push_back({9, {1000, 2000, 30}, 3.75f, 6.0f, 1, false});
+    SpellData spell;
+    spell.id = 54;
+    spell.target_type = 5;
+    auto world = tw.world();
+    world.spell = [&](std::uint32_t id) { return id == spell.id ? &spell : nullptr; };
+    std::vector<std::pair<int, glm::vec3>> stages;
+    world.effect = [&](const Missile& m, int stage) { stages.emplace_back(stage, m.actor_position); };
+    MissilePacket packet;
+    packet.source_id = 7;
+    packet.position = {10, 20, 30};
+    packet.velocity = {1, 2, 0};
+    packet.item_type = 9;
+    packet.spell = 54;
+    MissileList missiles;
+    missiles.add(make_missile(packet, 1000, 0));
+    missiles.update(1000, world);
+    REQUIRE(missiles.missiles().size() == 1);
+    CHECK(missiles.missiles().front().position == glm::vec3(17.5f, 35.0f, 30.0f));
+    CHECK(missiles.missiles().front().ends_at == 1050);
+    REQUIRE(stages.size() == 1);
+    CHECK(stages[0].first == 1);
+    missiles.update(1066, world);
+    CHECK(missiles.missiles().empty());
+    REQUIRE(stages.size() == 2);
+    CHECK(stages[1].first == 2);
+    // The native destruction stage is one current-velocity step behind the final simulated position.
+    CHECK(stages[1].second.x == doctest::Approx(17.772f));
+    CHECK(stages[1].second.y == doctest::Approx(35.544f));
+
+    spell.id = packet.spell = 600;
+    spell.travel_type = 3;
+    packet.velocity.z = 5;
+    missiles.add(make_missile(packet, 2000, 0));
+    missiles.update(2000, world);
+    REQUIRE(missiles.missiles().size() == 1);
+    CHECK(missiles.missiles().front().position == packet.position);
+    CHECK(missiles.missiles().front().velocity.z == 0);
+    CHECK(missiles.missiles().front().ends_at == 32000);
+    tw.solid = true;
+    packet.target_id = 9;
+    missiles.clear();
+    missiles.add(make_missile(packet, 3000, 0));
+    missiles.update(3000, world);
+    missiles.update(3033, world);
+    CHECK(missiles.missiles().empty()); // a spell projectile sweeps even when it has a target
+
+    tw.solid = false;
+    tw.spawns[1].position = {10, 0, 0};
+    Missile crossing = make_missile(packet, 4000, 0);
+    crossing.has_actor = true;
+    crossing.actor_position = {0, 0, 0};
+    crossing.position = {20, 0, 0};
+    crossing.velocity = {1, 0, 0};
+    crossing.target_id = 9;
+    crossing.ends_at = 10000;
+    int sweeps = 0;
+    world.sweep = [&](const glm::vec3&, const glm::vec3&, float) { ++sweeps; return false; };
+    CHECK_FALSE(move_missile(crossing, 4000, world));
+    CHECK(crossing.done); // a spell with a target checks that target after its clear terrain sweep
+    CHECK(sweeps == 1);
+}
+
+TEST_CASE("stationary spell contacts use moving-area and local line-of-sight gates at their native cadence") {
+    TestWorld tw;
+    tw.spawns.push_back({7, {0, 0, 0}, 4, 6, 1, false});
+    tw.spawns.push_back({9, {5, 0, 0}, 4, 6, 8, false});
+    tw.spawns.push_back({10, {6, 0, 0}, 4, 6, 1, false}); // stationary: excluded by SpeedRun, not life state
+    tw.spawns.push_back({11, {20, 0, 0}, 4, 6, 1, false}); // blocked
+    tw.spawns.push_back({12, {0, 0, 25.1f}, 4, 6, 1, false}); // outside the 3D sphere
+    tw.spawns.push_back({15, {5, 0, 0}, 4, 6, 1, false}); // rider gets its mount's notification
+    for (auto i : {1u, 3u, 4u}) tw.spawns[i].speed_run = 1.0f;
+    tw.spawns[1].rider_id = 15;
+    SpellData spell;
+    spell.id = 600;
+    spell.ae_range = 10;
+    spell.ae_duration = 10000;
+    spell.target_type = 45;
+    spell.effect.fill(254);
+    spell.effect[0] = 76;
+    auto world = tw.world();
+    world.spell = [&](std::uint32_t id) { return id == spell.id ? &spell : nullptr; };
+    world.spawns = [&] { return tw.spawns; };
+    world.local_id = 9;
+    bool line_clear = true;
+    bool checked_small_race_height = false;
+    world.visible = [&](const glm::vec3& from, const glm::vec3&) {
+        if (from.x == 5) checked_small_race_height = from.z == 1.0f;
+        return line_clear && from.x != 20;
+    };
+    std::vector<std::uint32_t> contacts;
+    world.contact = [&](const Missile&, const MissileSpawn& target) { contacts.push_back(target.id); };
+    MissilePacket packet;
+    packet.source_id = 7;
+    packet.item_type = 9;
+    packet.spell = 600;
+    MissileList missiles;
+    missiles.add(make_missile(packet, 1000, 0));
+    missiles.update(1000, world);
+    CHECK(contacts.empty());
+    missiles.update(1033, world);
+    CHECK(contacts == std::vector<std::uint32_t>{15});
+    CHECK(checked_small_race_height);
+    missiles.update(3033, world);
+    CHECK(contacts.size() == 1); // strict: next_contact < now, not <=
+    missiles.update(3066, world);
+    CHECK(contacts == std::vector<std::uint32_t>{15, 15});
+    REQUIRE(missiles.missiles().size() == 1);
+    CHECK(missiles.missiles().front().area_contact);
+
+    missiles.clear();
+    contacts.clear();
+    spell.effect.fill(254);
+    tw.spawns[1].rider_id = 0;
+    line_clear = false;
+    missiles.add(make_missile(packet, 4000, 0));
+    missiles.update(4000, world);
+    missiles.update(4033, world);
+    CHECK(contacts.empty());
+    spell.npc_no_los = true;
+    missiles.update(4066, world);
+    CHECK(contacts.empty()); // the bypass is restricted to an NPC source
+    tw.spawns[0].is_npc = true;
+    missiles.update(4099, world);
+    CHECK(contacts == std::vector<std::uint32_t>{9});
+    missiles.update(7099, world);
+    CHECK(contacts.size() == 1);
+    missiles.update(7132, world);
+    CHECK(contacts == std::vector<std::uint32_t>{9, 9});
+    CHECK_FALSE(missiles.missiles().front().area_contact); // these attempts never become SPA76 contact text
+}
+
+TEST_CASE("large-race spell missiles use the authored role-zero origin without inventing a missing point") {
+    TestWorld tw;
+    tw.spawns.push_back({7, {1, 2, 3}, 4, 6, 49, false, 1000u});
+    SpellData spell;
+    spell.id = 600;
+    spell.target_type = 5;
+    spell.travel_type = 3;
+    auto world = tw.world();
+    world.spell = [&](std::uint32_t id) { return id == 600 ? &spell : nullptr; };
+    int queries = 0;
+    world.launch_point = [&](std::uint32_t id) -> std::optional<glm::vec3> {
+        ++queries;
+        CHECK(id == 7);
+        return glm::vec3(100, 200, 300);
+    };
+    MissilePacket packet;
+    packet.source_id = 7;
+    packet.item_type = 9;
+    packet.spell = 600;
+    packet.position = {10, 20, 30};
+    packet.velocity = {1, 2, 3};
+    packet.speed = 4;
+    packet.range = 1;
+    Missile m = make_missile(packet, 1000, 0);
+    process_missile(m, 1000, world);
+    REQUIRE(m.has_actor);
+    CHECK(queries == 1);
+    CHECK(m.actor_position == glm::vec3(132.5f, 265.0f, 288.0f));
+    CHECK(m.pitch == -72.0f);
+    CHECK(m.velocity.z == 0.0f);
+    CHECK(m.radius == 1.0f);
+    world.launch_point = [](std::uint32_t) { return std::optional<glm::vec3>{}; };
+    m = make_missile(packet, 1000, 0);
+    process_missile(m, 1000, world);
+    CHECK(m.actor_position == packet.position); // safest fallback for unavailable authored/posed role data
 }

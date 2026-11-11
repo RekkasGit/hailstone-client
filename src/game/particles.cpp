@@ -33,7 +33,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
-                                                      bool full) {
+                                                   bool full, const StageActor* missile) {
     std::vector<SpellEmitterRequest> out;
     if (stage < 0 || stage > 2) return out;
     const std::int32_t level = caster ? caster->level : 1;
@@ -48,7 +48,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
         r.opacity = full ? 1.0f : settings.opacity;
         switch (slot.location) {
         case 1: at = caster; break;
-        case 2: at = nullptr; break; // the missile: not modelled
+        case 2: at = missile; break;
         case 3: at = target; break;
         default: break;
         }
@@ -162,13 +162,18 @@ glm::mat3 turn_axes(const glm::mat3& axes, float angle1, float angle2) {
     return glm::mat3(t1, t2, ax);
 }
 
-glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2) {
+glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2, bool normalize_basis) {
     auto unit = [](glm::vec3 v, glm::vec3 fallback) {
         float len = glm::length(v);
         return std::isfinite(len) && len > 1e-6f ? v / len : fallback;
     };
     // The constructor with a matrix (0x1006c5b5): axial = row 2, transverse 1 = row 0, transverse 2 = -row 1.
-    glm::vec3 r0 = unit(owner[0], {1, 0, 0}), r1 = unit(owner[1], {0, 1, 0}), r2 = unit(owner[2], {0, 0, 1});
+    glm::vec3 r0 = owner[0], r1 = owner[1], r2 = owner[2];
+    if (normalize_basis) {
+        r0 = unit(r0, {1, 0, 0});
+        r1 = unit(r1, {0, 1, 0});
+        r2 = unit(r2, {0, 0, 1});
+    }
     return turn_axes(glm::mat3(r0, -r1, r2), angle1, angle2);
 }
 
@@ -190,6 +195,27 @@ ParticleSystem::ParticleSystem(std::vector<assets::EmitterDefinition> definition
     for (const auto& d : definitions_) glows_.push_back(particle_glows(d));
 }
 
+assets::EmitterDefinition blood_spurt_definition(std::string texture) {
+    assets::EmitterDefinition d;
+    d.name = "BloodSpurt";
+    d.texture = std::move(texture);
+    d.bone_orientation = 1;
+    d.no_zwrite = 1;
+    d.duration = -0.5f;
+    d.lifetime = 0.5f;
+    d.per_tick = 1;
+    d.ticks_per_second = 200.0f;
+    d.capacity = 100;
+    d.shape = 5;
+    d.motion[3] = {1.25f, 5.0f, 0.0f};
+    d.gravity = 1.0f;
+    d.scale1 = 0.375f;
+    d.scale2 = d.max_opacity = 0.5f;
+    d.frames = 1;
+    d.frames_per_second = 10.0f;
+    return d;
+}
+
 float ParticleSystem::random(float a, float b) {
     return a + (b - a) * std::uniform_real_distribution<float>(0.0f, 1.0f)(rng_);
 }
@@ -204,6 +230,7 @@ std::int32_t ParticleSystem::create(const SpellEmitterRequest& r) {
     e.actor = r.actor;
     e.point = r.actor != 0 ? r.bone_point : -1;
     e.point_only = r.point_only;
+    if (r.axes) e.axes = *r.axes;
     e.origin = r.position;
     e.scale = r.scale;
     e.density = r.density;
@@ -247,6 +274,14 @@ void ParticleSystem::set_persistent_density(float density) {
 
 void ParticleSystem::stop(std::uint32_t key) {
     std::erase_if(emitters_, [&](const Emitter& e) { return e.key == key; });
+}
+
+void ParticleSystem::stop_attachment(std::uint32_t actor, std::int32_t point) {
+    std::erase_if(emitters_, [&](const Emitter& e) { return e.actor == actor && e.point == point; });
+}
+
+void ParticleSystem::stop_actor(std::uint32_t actor) {
+    std::erase_if(emitters_, [&](const Emitter& e) { return e.actor == actor; });
 }
 
 void ParticleSystem::move(std::uint32_t key, const glm::vec3& origin) {
@@ -443,8 +478,10 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
         // or with a point the point matrix's row length x the point's actor's GetParticleScaleFactor.
         float size_scale = d.actor_scales_size == 1 && e.actor == 0 ? e.scale : 1.0f;
         float offset_scale = d.actor_scales_offsets == 1 ? e.scale : 1.0f;
+        float actor_alpha = 1.0f;
         if (e.actor != 0 && attachment)
             if (auto at = attachment(e.actor, e.point)) {
+                actor_alpha = std::isfinite(at->alpha) ? std::clamp(at->alpha, 0.0f, 1.0f) : 0.0f;
                 if (!e.point_only) {
                     const float actor = at->actor_scale * at->particle_scale;
                     if (d.actor_scales_size == 1) size_scale = actor;
@@ -460,8 +497,14 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
                 }
                 // The basis: a spell emitter's from its actor every frame, whatever +0x60 says (axial = row 2,
                 // transverse 1 = row 0, transverse 2 = -row 1); an actor's own emitter's from its point with +0x60.
-                if (!e.point_only && at->actor_axes) e.axes = emitter_axes(*at->actor_axes, 0.0f, 0.0f);
-                else if (e.point_only && d.bone_orientation == 1 && at->axes) e.axes = emitter_axes(*at->axes, 0.0f, 0.0f);
+                if (!e.point_only && at->actor_axes) e.axes = emitter_axes(*at->actor_axes, 0.0f, 0.0f, false);
+                else if (e.point_only && d.bone_orientation == 1 && at->axes) {
+                    // The point path divides the complete basis by its first row's length only when offsets do
+                    // not inherit scale. Spell actors above copy their world matrix without that division.
+                    e.axes = emitter_axes(*at->axes, 0.0f, 0.0f, false);
+                    const float scale = glm::length((*at->axes)[0]);
+                    if (d.actor_scales_offsets == 0 && std::isfinite(scale) && scale > 1e-6f) e.axes /= scale;
+                }
             }
         // Particles whose time is up leave the ring's head first (0x10072a71): one drawn last frame at its end.
         std::erase_if(e.particles, [](const Particle& p) { return p.lifetime - p.age <= 0.0f; });
@@ -526,7 +569,7 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
             const float rem = p.lifetime - p.age;
             auto ramp_in = [&](float t) { return t > 0.0f && p.age < t ? p.age / t : 1.0f; };
             auto ramp_out = [&](float t) { return t > 0.0f && rem < t ? std::max(rem, 0.0f) / t : 1.0f; };
-            const float alpha = std::min(ramp_in(d.fade_in) * ramp_out(d.fade_out), d.max_opacity) * e.opacity;
+            const float alpha = std::min(ramp_in(d.fade_in) * ramp_out(d.fade_out), d.max_opacity) * e.opacity * actor_alpha;
             p.size_factor = d.scale1 * size_scale * ramp_in(d.grow) * ramp_out(d.shrink);
             p.ramp_height = ramp_out(d.shrink_x);
             p.ramp_width = ramp_out(d.shrink_y);

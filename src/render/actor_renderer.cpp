@@ -709,6 +709,12 @@ const assets::CharacterModel* ActorRenderer::drawn_model(std::uint32_t id) const
     return it == last_draws_.end() ? nullptr : it->second.model;
 }
 
+float ActorRenderer::drawn_alpha(std::uint32_t id) const {
+    auto it = last_draws_.find(id);
+    if (it == last_draws_.end() || !it->second.model || !std::isfinite(it->second.alpha)) return 0.0f;
+    return std::clamp(it->second.alpha, 0.0f, 1.0f);
+}
+
 const assets::CharacterModel* ActorRenderer::spawn_model(std::uint32_t id) const {
     if (const assets::CharacterModel* m = drawn_model(id)) return m;
     auto it = spawns_.find(id);
@@ -776,6 +782,18 @@ bool ActorRenderer::bone_world(const ActorDraw& a, int bone, glm::mat4& world) {
     if (static_cast<std::size_t>(bone) >= bones.size()) return false;
     world = instance_matrix(a) * bones[static_cast<std::size_t>(bone)];
     return true;
+}
+
+bool ActorRenderer::name_position(const ActorDraw& actor, glm::vec3& position) {
+    glm::mat4 world;
+    if (!actor.model || !bone_world(actor, actor.model->name_bone, world)) return false;
+    position = glm::vec3(world[3]);
+    return true;
+}
+
+bool ActorRenderer::drawn_name_position(std::uint32_t id, glm::vec3& position) const {
+    const auto it = last_draws_.find(id);
+    return it != last_draws_.end() && name_position(it->second, position);
 }
 
 bool ActorRenderer::seat_rider(const ActorDraw& mount, ActorDraw& rider, const game::HeightTables* tables) {
@@ -904,7 +922,8 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
     // Upload new models first: that may add textures, and the descriptor
     // sets must be complete before they are bound.
     for (std::size_t i = 0; i < actors.size(); ++i)
-        if (actors[i].model && actors[i].clip) {
+        if (actors[i].model && actors[i].clip && std::isfinite(actors[i].alpha) && actors[i].alpha > 0.0f) {
+            prepared_[i].alpha = std::min(1.0f, actors[i].alpha);
             prepared_[i].gpu = gpu_model(actors[i].mesh ? *actors[i].mesh : default_mesh(*actors[i].model), upload);
             prepared_[i].eqg = actors[i].model->eqg;
         }
@@ -1056,7 +1075,8 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
             const Prepared& p = prepared_[i];
             bool any = false;
             for (const auto& part : p.gpu->parts) {
-                if (static_cast<int>(part.pass) != pass) continue;
+                const Pass draw_pass = p.alpha < 1.0f && part.pass == Pass::Opaque ? Pass::Blended : part.pass;
+                if (static_cast<int>(draw_pass) != pass) continue;
                 if (!bound_set) {
                     VkDescriptorSet sets[2] = {frame_set(frame), vk_.shadow_set()};
                     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
@@ -1086,8 +1106,8 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
                 pc.tint = part.tint;
                 pc.texture2 = (part.texture2 == 0xffffffffu ? 0xffffu : part.texture2) | part.normal_map << 16;
                 pc.bone_offset = p.bone_offset;
-                pc.fog = part.fog ? glm::vec4(view.fog_start, view.fog_end, part.alpha_ref, part.opacity)
-                                  : glm::vec4(kNoFogStart, kNoFogEnd, part.alpha_ref, part.opacity);
+                pc.fog = part.fog ? glm::vec4(view.fog_start, view.fog_end, part.alpha_ref, part.opacity * p.alpha)
+                                  : glm::vec4(kNoFogStart, kNoFogEnd, part.alpha_ref, part.opacity * p.alpha);
                 vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                    sizeof(pc), &pc);
                 vkCmdDrawIndexed(cmd, part.index_count, 1, part.first_index, 0, 0);

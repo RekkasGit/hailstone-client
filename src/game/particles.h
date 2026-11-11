@@ -30,6 +30,7 @@
 #include <functional>
 #include <optional>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -45,6 +46,10 @@ struct SpellParticleSettings {
 };
 // From the ini values (missing -> 1.0), clamped to [0, 1].
 SpellParticleSettings spell_particle_settings(std::optional<float> density, std::optional<float> opacity);
+
+// SpawnBloodSpurt's short-lived cloud, with the player's own I_BLOODSPRITE texture. The resource-manager
+// converter gives this cloud a sphere emission, fixed lifetime and a non-additive material (0x58f1c0/0x10071640).
+assets::EmitterDefinition blood_spurt_definition(std::string texture);
 
 // Hailstone (not in the original): whose a spell effect stage is, for the Options window's per-source spell
 // particle densities, which scale SpellParticleDensity. The original has one density and an "On For" filter
@@ -75,6 +80,8 @@ struct SpellEmitterRequest {
     // The DLL's actor-emitter creator (CParticleSystem vtable +0x20, 0x10070640) gives the emitter only the point,
     // not the actor (emitter +0x68 stays 0): its axes then follow the point (EDD +0x60), not the actor's turn.
     bool point_only = false;
+    // An explicitly placed emitter (e.g. an actor's floor entry) may retain its creator's basis without following it.
+    std::optional<glm::mat3> axes;
 };
 
 // An actor a stage can place emitters on.
@@ -106,7 +113,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
-                                                      bool full = false);
+                                                      bool full = false, const StageActor* missile = nullptr);
 
 // The duration a zone fixture's emitter is created with (add_fixture), ms.
 inline constexpr std::int32_t kFixtureDurationMs = 9999000;
@@ -135,7 +142,7 @@ std::uint32_t emitter_capacity(const assets::EmitterDefinition& def, float durat
 // matrix's rows 2, 0 and -1; each particle's spawn (0x10072fe0, 0x100730ea) turns its copy by +0xc4 about transverse
 // 2 (axial' = axial cos + t1 sin, t1' = t1 cos - axial sin), then by +0xc8 about transverse 1 (axial'' = axial'
 // cos + t2 sin, t2' = t2 cos - axial' sin).
-glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2);
+glm::mat3 emitter_axes(const glm::mat3& owner, float angle1, float angle2, bool normalize_basis = true);
 // Those two turns of a basis already taken (columns transverse 1, transverse 2, axial).
 glm::mat3 turn_axes(const glm::mat3& axes, float angle1, float angle2);
 
@@ -208,6 +215,7 @@ struct EmitterAttachment {
     // GetParticleScaleFactor (+0x218, moddat.ini PESFactor) and the actor's root GetScaleFactor (+0xa0).
     float particle_scale = 1.0f;
     float actor_scale = 1.0f;
+    float alpha = 1.0f; // GetAlpha of the actor or the point's owning actor, sampled every frame
 };
 using AttachmentFn = std::function<std::optional<EmitterAttachment>(std::uint32_t actor, std::int32_t point)>;
 
@@ -240,6 +248,9 @@ public:
     void set_viewer(std::optional<glm::vec3> viewer) { viewer_ = viewer; }
     // Stops every emitter with this key (effect manager vtable +0x38).
     void stop(std::uint32_t key);
+    // Remove a particular owner's attachment without affecting its other spells (e.g. a despawned blood point).
+    void stop_attachment(std::uint32_t actor, std::int32_t point);
+    void stop_actor(std::uint32_t actor);
     // The density of the persistent emitters (zone fixtures, actors' own): what they emit from now on scales with
     // it (the effect manager's density setters, +0xa4 environment / +0xac actor).
     void set_persistent_density(float density);

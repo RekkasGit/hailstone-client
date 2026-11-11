@@ -1,7 +1,7 @@
 #pragma once
 
 // Missiles: arrows, thrown weapons and spell bolts in flight (EQMissile,
-// eqgame 0x4ff7d0..0x5022e1).
+// constructor 0x5005b0, ProcessMissile 0x4fff70 and MoveMissile 0x5019c0).
 //
 // The server sends each one as OP_SomeItemPacketMaybe (0x747c, 116 bytes;
 // EQEmu's Mob::ProjectileAnimation / SendItemAnimation). The client never makes
@@ -31,8 +31,8 @@
 //    (PhysicsObject at +4, vtable 0x9cef90) and CDisplay::MoveMissile
 //    @0x5019c0 (the actor's motion, the hit and the end).
 //
-// Only a missile without a target (+0x6c null) sweeps the zone (MoveMissile's
-// s3dCollideActorSweep, also for item type 9); one with a target tests only
+// A physical missile without a target (+0x6c null), and every spell missile, sweeps the zone (MoveMissile's
+// s3dCollideActorSweep); a physical one with a target tests only
 // its step against the target's Height, so it flies through walls and floors,
 // as the original's does. The source and target are spawn pointers there:
 // when a spawn goes, PlayerZoneClient::DeleteMyMissiles @0x5a0b60 (from
@@ -47,12 +47,12 @@
 // Spell missiles (the client's item type 9): EQEmu never writes the spell
 // (+0x40 stays 0), and ProcessMissile ends an item type 9 missile whose spell
 // fails IsValidSpellID @0x4ad150 (1..45000) before it makes the actor, so the
-// original shows nothing for them; here every item type 9 missile is dropped
-// likewise. What the original does with a valid spell is not modelled (no
-// server sends one): its lifetime from the spell's duration, the start on the
-// target for the area target types, the projectile stage (DoSpellEffect stage
-// 1), MoveMissile's area pulses (HitActor on the spawns in range every 2 s,
-// or on the local player every 3 s) and the impact stage when it ends. The
+// original shows nothing for them. Valid spell ids use their AE duration (or
+// 30 s for travel type 3, 50 ms otherwise), start stationary on the target for
+// area target types and play the projectile/area stage. Stationary SPA 76 clouds contact moving spawns in range
+// every 2 s, and other stationary spells attempt contact on the local player every 3 s with the source's LOS
+// (or its NPCNoLoS bypass). The contact itself is presentation only. Spell 859 calls the local IWasHit presentation
+// within 40 horizontal units when destroyed. Only spell 54 plays an impact at the missile on destruction. The
 // NMS server sends its bolts as item type 20 with the spell's player_1 model:
 // an ordinary missile.
 //
@@ -70,6 +70,8 @@
 #include <glm/glm.hpp>
 
 namespace hailstone::game {
+
+struct SpellData;
 
 // OP_SomeItemPacketMaybe as the client reads it (offsets above).
 struct MissilePacket {
@@ -127,6 +129,13 @@ struct MissileSpawn {
     float height = 0.0f;        // +0x13c
     std::uint16_t race = 0;     // vf88
     bool dead = false;          // +0x35c == 0x78
+    // The source's physics timestamp (+0x30), on the same clock as update. Absent: no extra extrapolation;
+    // an offline world or a presentation layer without that timestamp must not invent its age.
+    std::optional<std::uint32_t> stepped_at;
+    float speed_run = 0.0f;     // +0x7c: SPA 76's area contact checks moving spawns only
+    bool is_npc = false;
+    std::uint32_t rider_id = 0;
+    bool has_actor = true;
 };
 
 struct Missile {
@@ -150,6 +159,8 @@ struct Missile {
     glm::vec3 actor_position{0.0f};
     float actor_scale = 1.0f;
     float radius = 0.0f;
+    std::uint32_t next_contact = 0;
+    bool area_contact = false; // MoveMissile sets this only for a stationary SPA 76 cloud
 };
 
 // The constructor's packet path; `now` is __EQGetTime, `launch_delay` missile_launch_delay's answer (0 without
@@ -165,13 +176,24 @@ struct MissileWorld {
     // pinstSceneGraph vtable +0x4c: the point is inside the zone.
     std::function<bool(const glm::vec3& p)> inside;
     std::int32_t zone_id = 0;
+    std::function<const SpellData*(std::uint32_t id)> spell;
+    std::function<std::optional<glm::vec3>(std::uint32_t id)> launch_point;
+    // A visual stage with the missile's actual actor/position, and retirement of that actor's attachments.
+    std::function<void(const Missile&, int stage)> effect;
+    std::function<void(const Missile&)> ended;
+    std::function<std::vector<MissileSpawn>()> spawns;
+    std::uint32_t local_id = 0;
+    std::function<bool(const glm::vec3& from, const glm::vec3& to)> visible;
+    // HitActor's contact attempt, not damage or an impact stage. SPA 76's moving-area contacts print text only.
+    std::function<void(const Missile&, const MissileSpawn& target)> contact;
+    std::function<void(const Missile&)> spell_hit; // spell 859's nearby local IWasHit, no network request
 };
 
 // CDisplay::CreateActor's scale for an IT model (1.5 for IT66 / IT69 / IT73 and BBBOARD, 1.3 for IT74; in
 // zones 0x13, 0x37, 0x3c and 0x43 0.8 for IT70 / IT74 instead).
 float missile_actor_scale(const std::string& model, std::int32_t zone_id);
 
-// EQMissile::ProcessMissile: the launch; sets done when the missile ends (no source spawn, a spell missile).
+// EQMissile::ProcessMissile: the launch; invalid/absent spells and missing sources end before making an actor.
 void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world);
 // EQMissile::MissileAI.
 void missile_ai(Missile& m, std::uint32_t now, const MissileWorld& world);

@@ -362,6 +362,33 @@ TEST_CASE("an upper-body clip poses only the upper group's bones") {
     CHECK(local[2].translation.x == doctest::Approx(10.0f));
 }
 
+TEST_CASE("Actor role zero position uses the posed name bone before inverse bind") {
+    assets::CharacterModel model;
+    model.name_bone = 1;
+    model.parents = {-1, 0};
+    model.order = {0, 1};
+    model.inverse_bind.assign(2, glm::mat4(1.0f));
+    model.inverse_bind[1][3] = {0, 0, -5, 1};
+    assets::AnimationClip clip;
+    clip.tracks.resize(2);
+    clip.tracks[0].push_back(assets::BonePose{});
+    assets::BonePose head;
+    head.translation = {0, 0, 5};
+    clip.tracks[1].push_back(head);
+    render::ActorDraw actor;
+    actor.model = &model;
+    actor.clip = &clip;
+    actor.position = {10, 20, 30};
+    actor.scale = 2;
+    glm::vec3 position(0.0f);
+    REQUIRE(render::ActorRenderer::name_position(actor, position));
+    CHECK(position.z == doctest::Approx(40.0f));
+    model.name_bone = -1;
+    position = {7, 8, 9};
+    CHECK_FALSE(render::ActorRenderer::name_position(actor, position));
+    CHECK(position == glm::vec3(7, 8, 9));
+}
+
 TEST_CASE("other spawns' water: the body and feet regions are probed with each step") {
     WorldState w;
     w.player_id = 9;

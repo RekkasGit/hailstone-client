@@ -1291,10 +1291,22 @@ spawn. The client chooses only a missile source's launch animation (the attack a
 BATK for arrows) and the target's hit animation (`game::hit_animation`: D02 on a hit for damage, a spell's
 TargetAnim, D01 / D03 / D04 for the environmental types).
 
-Missiles (`game/missiles.h`): only a missile without a target sweeps the zone, so one with a target flies through
-walls, as in the original. When a spawn goes (DeleteMyMissiles), the missiles it shot end and those aimed at it lose
-their target: they stop homing and sweep from then on. Item type 9 (spell) missiles need a valid spell id, which
-EQEmu never sends, so they end before they are drawn, in the original too.
+Missiles (`game/missiles.h`): an item missile with a target does not sweep the zone; spell missiles sweep and
+also check the target segment. Source despawn ends its missiles; target despawn removes homing. Item type 9 needs
+a loaded spell id in 1..45000. Duration uses normalized AE duration (capped at 14 s except first-slot SPA 76),
+otherwise 30 s for travel type 3 or 50 ms. Area target types 8, 21, 22, 23, 28 and 45 stay at the target or
+destination and play stage 2; other spell missiles launch stage 1. SPA 76 area contact checks moving targets every
+2 s inside 2.5 times AE range with sight; other local contact attempts use a 3 s gate and source sight, respecting
+NPCNoLoS. Contact emits presentation messages, never authoritative damage. Spell 54 plays its destruction impact
+one velocity step behind. Spell 859 can run a local hit presentation inside a strict 40-unit horizontal radius;
+it sends no packet, applies no successful-landing flag and grants no buff.
+
+Large-source launch placement uses the renderer's actual posed role-0/name anchor. Missing authored or posed data
+keeps the packet origin rather than inventing an attachment. Missile pulse timing uses a source's completed
+physics step, not its last packet arrival. Spawns start with an absent clock; local movement, fresh remote and
+boat/rider steps publish StepClock time + 1. The app explicitly bridges that relative time to the missile's
+32-bit steady clock. Empty step batches and stale spawns do not advance it. Fixtures cover the clock and actual
+packet-to-emitter flow; recorded native vectors and live acceptance remain pending.
 
 Environmental hits (types 0xf3..0xfd: mind burns, rotting, chilled, freezing, tormented, burned, thorns, burning,
 drowning, falling, a trap; `game::environment_hit`): the player's own fall, drowning or lava damage goes through
@@ -1312,8 +1324,8 @@ sitting player and, while mounted, sets standing too; then the target's Hit1..4 
 here; the melee branch adds FlshHit 0x93 / 0x94 before it). Handle_OP_Damage itself, for a hit on the player by
 another, closes the book for any damage above 0 (a beneficial spell's too), takes melee and environmental damage
 off the HP, and heals a spell's negative damage. The tail's blood spurt (`PlayerClient_SpawnBloodSpurt` @0x58f1c0)
-goes with the player's own landed hit of skill 0..3, 8, 10, 36 or 77 when the target's actor has point 6; it is not
-drawn (docs/unknowns.md).
+goes with the player's own landed hit of skill 0..3, 8, 10, 36 or 77 when the target has its exact authored blood
+attachment and the player's sprite can be loaded (docs/formats/particles.md).
 
 ## Animations
 

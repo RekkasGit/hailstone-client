@@ -1122,6 +1122,8 @@ namespace hailstone::game {
 		// (mechanics::step_remote_spawn) for 12 s after the update.
 		glm::vec3 velocity{ 0.0f };    // world units per physics tick (50 ms), from the update's deltas
 		float speed_run = 0.0f;      // the update's animation field x 0.025
+		// Last completed StepClock time since app start + 1; absent until this spawn incarnation steps.
+		std::optional<std::uint32_t> physics_step_ms;
 		float speed_heading = 0.0f;  // heading units per tick
 		double update_time = 0.0;    // when position was last set (seconds, steady clock)
 		float snap_error = 0.0f;     // how far the last update moved the stepped position (diagnostics)
@@ -2796,6 +2798,7 @@ namespace hailstone::game {
 		// and the vehicles' physics (AdvanceSpawn's per-step friction) runs once for each. Unset: one step of the frame's
 		// dt (the original's code as written). The drawn place eases over the frame's dt either way.
 		std::optional<std::vector<float>> physics_steps;
+		std::optional<std::uint32_t> physics_step_time_ms; // current frame last completed StepClock time + 1
 		// Hailstone (option ground_npcs, a deliberate difference; docs/mechanics.md "Grounding NPCs"): an NPC on the
 		// ground (flymode 0, or EQEmu's 3 out of water) that stands over the floor (by more than 0.25, at most 50), as EQEmu servers with a poor map
 		// leave some, is drawn on the floor. Only where it is drawn changes (display_position, so picking and the NPC

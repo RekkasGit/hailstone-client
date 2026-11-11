@@ -83,7 +83,9 @@ void WorldState::smooth_vehicles(float dt, double now) {
     const std::span<const float> steps = physics_steps ? std::span<const float>(*physics_steps) : std::span<const float>(&one, 1);
     for (auto& [id, s] : spawns) {
         if (id == player_id || id == controlled_id || id == driven_id || !is_vehicle_race(s.race, s.gender)) continue;
-        step_vehicle(s, dt, now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0, steps);
+        const bool fresh = now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0;
+        step_vehicle(s, dt, fresh, steps);
+        if (fresh && !steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
     }
     vehicles_smoothed = true;
 }
@@ -110,7 +112,9 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             if (s.on_vehicle) {
                 auto vit = spawns.find(s.on_vehicle);
                 if (vit != spawns.end()) {
-                    step_rider(s, vit->second, dt, now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0, steps);
+                    const bool fresh = now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0;
+                    step_rider(s, vit->second, dt, fresh, steps);
+                    if (fresh && !steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
                     continue;
                 }
                 s.on_vehicle = 0;
@@ -143,6 +147,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             s.velocity = b.velocity;
             s.heading = b.heading;
             s.position = b.position;
+            if (!steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
             // CollisionPass after the step: PlayerClient::sub_00506d20 @0x506d20 takes the region at the spawn's z
             // as its body environment (+0xa2, BodyEnvironmentChange) and CheckRegionChange @0x508e10 the region at
             // the feet + 0.25 (z + 0.25 - (the collision height - AvatarHeight)) as its feet environment (+0xa1,
