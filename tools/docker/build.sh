@@ -13,7 +13,9 @@ test=1; [ "${2:-}" = --no-test ] && test=0
 export HOST_UID=$(id -u) HOST_GID=$(id -g)
 mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/msvc .docker/msvc-home .docker/no-plugin dist
 
-dc() { docker compose "$@"; }
+# Compose v2 (docker compose) or v1 (docker-compose); BuildKit so linux-arm64's image can be built for its platform.
+if docker compose version >/dev/null 2>&1; then dc() { docker compose "$@"; }; else dc() { docker-compose "$@"; }; fi
+export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1
 
 install_tree() { # <platform> <build dir> <service>
     rm -rf "dist/$1"
@@ -35,7 +37,8 @@ linux() { # <platform>
 }
 
 windows() {
-    dc --profile setup build linux-x64 msvc-setup
+    dc build linux-x64
+    dc --profile setup build msvc-setup
     if [ ! -x .docker/msvc/bin/x64/cl ]; then
         if [ "${MSVC_ACCEPT_LICENSE:-}" != 1 ]; then
             echo "MSVC is downloaded once: set MSVC_ACCEPT_LICENSE=1 to accept Microsoft's license"; exit 1

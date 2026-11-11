@@ -22,7 +22,6 @@ services:
     build:
       context: tools/docker
       dockerfile: linux.Dockerfile
-      platforms: [linux/amd64]
     environment:
       HOME: /tmp
       CCACHE_DIR: /src/.docker/ccache/linux-x64
@@ -36,7 +35,6 @@ services:
     build:
       context: tools/docker
       dockerfile: linux.Dockerfile
-      platforms: [linux/arm64]
     environment:
       HOME: /tmp
       CCACHE_DIR: /src/.docker/ccache/linux-arm64
@@ -51,11 +49,7 @@ services:
     build:
       context: tools/docker
       dockerfile: msvc.Dockerfile
-      platforms: [linux/amd64]
-      additional_contexts:
-        base: service:linux-x64
-      args:
-        BASE: base
+      # FROM hailstone-linux-build:24.04: build.sh builds linux-x64 first.
     environment:
       HOME: /src/.docker/msvc-home
     profiles: [setup]
