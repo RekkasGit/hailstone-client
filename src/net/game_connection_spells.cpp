@@ -24,6 +24,7 @@
 #include "net/spell_packets.h"
 #include "net/ability_packets.h"
 #include "game/race_models.h"
+#include "core/animation_types.h"
 
 namespace hailstone::net {
 
@@ -916,7 +917,21 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                     sp && a->source != 0 && (a->effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
                    
                     //Play the animation for the spell that was specified
-                    play_animation(source, sp->casting_anim);
+                    if (sp->casting_anim > 0)
+                    {
+                        play_animation(source, sp->casting_anim);
+                    }
+                    else
+                    {
+                        if (sp->spell_type > 0)
+                        {
+                            play_animation(source, AnimationType::CastHeals);
+                        }
+                        else
+                        {
+                            play_animation(source, AnimationType::CastNuke);
+                        }
+                    }
                     //if this is us doing a local play, broadcast the animation out to the rest of the zone
                     //as the server won't send it out by default, if they have 'chat filters' on for whatever reason.
                     //doing this twice won't hurt anything as it won't interrupt a playing animation and is still limited in range.

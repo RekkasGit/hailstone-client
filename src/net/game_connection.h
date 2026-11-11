@@ -100,6 +100,7 @@
 #include "net/spell_packets.h"
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
+#include "core/animation_types.h"
 
 namespace hailstone { class GameDir; }
 namespace hailstone::game::mechanics { struct GameTables; }
@@ -611,6 +612,7 @@ public:
     // A one-shot animation on a spawn, as an OP_Animation for it would play it at speed 10 (a missile's
     // launch: Send_OP_Animation_0058f540 -> PlayAttackAnimation on its source).
     void play_animation(std::uint32_t spawn_id, std::uint8_t action);
+    void play_animation(std::uint32_t spawn_id, AnimationType action);
     // OP_ControlBoat {spawn id, take_control}: take_control 1
     // makes that spawn pinstControlledPlayer ("You have the helm, captain.", 1407); release_boat() lets go
     // ({id, 0}). 0: the player itself is controlled.
