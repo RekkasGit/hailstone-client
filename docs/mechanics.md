@@ -768,7 +768,8 @@ left where it is:
 
 Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing.
 Checks run again at confirmation, not only when a quantity dialog opens. Marking an offered item Keep ends the
-active trader or buyer session; it cannot remain available for a later remote sale. An item is marked Keep or Sell,
+active trader or buyer session; it cannot remain available for a later remote sale. A satchel item that is not listed
+(no price) does not end it. An item is marked Keep or Sell,
 not both: marking one clears the other. `eq.SetItemsKept` validates a batch before applying it, then persists it and
 changes the Keep revision once.
 
@@ -787,7 +788,9 @@ taken. The selection records each item's serial and quantity: a replacement in t
   as the window's Donate), the next after the server's answer; one it refuses (0 favour) goes back to its slot. An item
   worth no favour or a bag is left out. Guild donations use GuildFavor and wait for the guild reply counter;
   personal donations use Favor. Changing or closing the master stops the job. No answer in 5 seconds stops it.
-- Withdraw, at an open bank: each chosen bank or shared-bank item goes through the cursor into inventory. Selecting
+- Withdraw, at an open bank: each chosen bank or shared-bank item goes through the cursor into the first free general
+  slot, else the first bag with room (`stow_cursor_in_packs`: auto-inventory's last steps, without its worn-slot merge
+  and equip, so nothing withdrawn is equipped). Selecting
   a bag and its children moves the bag once. Closing the bank stops the job; if inventory fills, the held item is
   put back when its original slot is still free.
 - Destroy: each item is picked up and destroyed from the cursor (OP_MoveItem to nowhere, as DestroyHeldItemOrMoney),
@@ -805,7 +808,10 @@ recheck Keep; a late start reply cannot publish newly protected compensation.
 
 Item donations allow one unresolved request across personal and guild tribute. Neither reply has an instance or
 transaction ID, so a batch's five-second timeout retains its pending identity and another item donation waits for
-the answer or a new zone/session. A reply reconciles only one unchanged original instance, even if it moved;
+the answer, a new zone/session, the same kind of master's window being answered again, or 30 seconds. Stock EQEmu
+answers in the handler or not at all (Handle_OP_TributeItem returns without a reply when the master is gone or out
+of range, the guild handler when the character has no guild), so the answer to a master opened after the donation
+comes after any answer to it; closing the window alone keeps waiting, so a reply still in flight is reconciled. A reply reconciles only one unchanged original instance, even if it moved;
 replacement cursor items and ambiguous or changed stacks are preserved, with a message to refresh by zoning.
 
 ## Using items
