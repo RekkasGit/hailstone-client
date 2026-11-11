@@ -4,6 +4,8 @@
 
 #include <map>
 #include <memory>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "render/look_eviction.h"
@@ -54,13 +56,14 @@ TEST_CASE("Appearance texture lifetime: exhausted uploads retry once capacity re
     std::size_t retired = 0;
     const auto retire = [&](Model&) { ++retired; };
     const auto release = [&](const std::string& key) { claims->evicted(key); };
-    CHECK_FALSE(retry_capacity_blocked_textures(models, slots, false, retire, release));
+    const std::unordered_set<int> none;
+    CHECK_FALSE(retry_capacity_blocked_textures(models, none, 1, slots, false, retire, release));
     CHECK(models.size() == 2);
     CHECK(slots.size() == 5);
     CHECK(retired == 0);
     CHECK_FALSE(claims->claim("tint"));
 
-    REQUIRE(retry_capacity_blocked_textures(models, slots, true, retire, release));
+    REQUIRE(retry_capacity_blocked_textures(models, none, 1, slots, true, retire, release));
     CHECK(retired == 1);
     CHECK_FALSE(models.contains(1)); // its baked slot 0 must be rebuilt too
     CHECK(models.contains(2));
@@ -70,8 +73,44 @@ TEST_CASE("Appearance texture lifetime: exhausted uploads retry once capacity re
     CHECK(claims->claim("tint"));
     CHECK(claims->claim("rough")); // material maps retry as well as colour layers
     CHECK(model_texture_slots(models) == std::unordered_set<std::uint32_t>{0, 1, 2});
-    CHECK_FALSE(retry_capacity_blocked_textures(models, slots, true, retire, release));
+    CHECK_FALSE(retry_capacity_blocked_textures(models, none, 1, slots, true, retire, release));
     CHECK(retired == 1);
+}
+
+TEST_CASE("Appearance texture lifetime: worn blocked models retry a few per sweep, unworn ones at once") {
+    using namespace hailstone::render;
+    struct Model {
+        bool capacity_blocked = false;
+    };
+    struct Slot {
+        std::uint32_t slot = 0;
+        bool capacity_blocked = false;
+    };
+    // 1..3 blocked and worn (rebuilt on the main thread at their next draw), 4 blocked and unworn, 5 fine and worn.
+    std::map<int, Model> models{{1, {true}}, {2, {true}}, {3, {true}}, {4, {true}}, {5, {false}}};
+    const std::unordered_set<int> worn{1, 2, 3, 5};
+    std::map<std::string, Slot> slots{{"tint", {0, true}}};
+    std::vector<int> retired;
+    const auto retire = [](Model&) {};
+    const auto release = [](const std::string&) {};
+    auto sweep = [&] {
+        const auto before = models;
+        const bool r = retry_capacity_blocked_textures(models, worn, 1, slots, true, retire, release);
+        retired.clear();
+        for (const auto& kv : before)
+            if (!models.contains(kv.first)) retired.push_back(kv.first);
+        return r;
+    };
+    REQUIRE(sweep());
+    CHECK(retired == std::vector<int>{1, 4}); // one worn model, and every unworn one
+    CHECK(slots.empty());
+    REQUIRE(sweep());
+    CHECK(retired == std::vector<int>{2});
+    REQUIRE(sweep());
+    CHECK(retired == std::vector<int>{3});
+    CHECK_FALSE(sweep());
+    CHECK(models.size() == 1);
+    CHECK(models.contains(5)); // a model that was never blocked is never discarded
 }
 
 TEST_CASE("look_idle: idle long enough and past the frames in flight") {

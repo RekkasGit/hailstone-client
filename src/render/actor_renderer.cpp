@@ -623,14 +623,15 @@ void ActorRenderer::evict_idle_looks() {
         });
         it = it->second.looks.empty() ? looks_.erase(it) : std::next(it);
     }
+    // Texture slots are reclaimed after an eviction; a capacity retry is tried every sweep while slots are free.
+    if (evicted || !free_textures_.empty()) evict_unused_textures(evicted != 0);
     if (evicted) {
-        evict_unused_textures();
         stats_.models = models_.size();
         log::debug("freed {} idle appearances ({} meshes on the GPU)", evicted, models_.size());
     }
 }
 
-void ActorRenderer::evict_unused_textures() {
+void ActorRenderer::evict_unused_textures(bool reclaim_first) {
     auto reclaim = [&] {
         const auto used = model_texture_slots(models_);
         for (auto it = texture_slots_.begin(); it != texture_slots_.end();) {
@@ -654,8 +655,21 @@ void ActorRenderer::evict_unused_textures() {
             for (auto& written : descriptor_textures_) written = std::min(written, slot);
         }
     };
-    reclaim();
-    if (retry_capacity_blocked_textures(models_, texture_slots_, !free_textures_.empty(),
+    if (reclaim_first) reclaim();
+    if (std::none_of(models_.begin(), models_.end(), [](const auto& kv) { return kv.second.capacity_blocked; })) {
+        stats_.textures = textures_.size() - free_textures_.size();
+        return;
+    }
+    // The GPU models spawns wear (a default mesh included): rebuilt at once when discarded, so retried a few a sweep.
+    std::unordered_set<const assets::CharacterMesh*> worn;
+    for (const auto& kv : spawns_) {
+        const SpawnState& st = kv.second;
+        if (st.mesh) worn.insert(st.mesh.get());
+        else if (st.model)
+            if (auto d = default_meshes_.find(st.model.get()); d != default_meshes_.end() && d->second)
+                worn.insert(d->second.get());
+    }
+    if (retry_capacity_blocked_textures(models_, worn, kMaxWornRetries, texture_slots_, !free_textures_.empty(),
             [this](GpuModel& model) { retire_model(model); },
             [this](const std::string& key) { if (claims_) claims_->evicted(key); })) {
         // The invalidated models may have owned successful uploads too. They

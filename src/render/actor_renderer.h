@@ -384,7 +384,10 @@ private:
     // and buffers. Shared textures go only when no remaining model reads their slot.
     // Swept every kLookSweepMs, from prepare_spawns.
     void evict_idle_looks();
-    void evict_unused_textures();
+    // Frees the texture slots no model reads (when `reclaim_first`), then retries capacity-blocked models
+    // (render/look_eviction.h), at most kMaxWornRetries worn ones a sweep.
+    void evict_unused_textures(bool reclaim_first);
+    static constexpr std::size_t kMaxWornRetries = 1;
     std::uint32_t last_look_sweep_ms_ = 0;
     const std::shared_ptr<const assets::CharacterMesh>* applied_look(const assets::CharacterModel& model,
                                                                      const game::Appearance& a) const;
