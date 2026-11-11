@@ -20,6 +20,7 @@ local forgetName = nil  -- the account the Forget question is about
 local more = false      -- More options unfolded
 local boxOpen = false   -- the box set card open
 local removeName = nil   -- the add-on the Remove question is about
+local removeAsk = false  -- a row's Remove was pressed: the question opens at the window's level
 local addonTab = nil    -- the add-ons card's tab to select next frame ("store" or "mine"), nil: as it is
 local testedTab = nil   -- test.addontab as last applied
 local notesTested = false -- test.whatsnew applied
@@ -498,7 +499,7 @@ local function addonRow(a, r, s)
       ui.BeginDisabled(not r.canRemove)
       if ui.Button("Remove") then
         removeName = r.name
-        ui.OpenPopup("##removeaddon")
+        removeAsk = true -- (opened beside its BeginPopup: this row's ID scope would give the popup another ID)
       end
       ui.EndDisabled()
     end
@@ -677,6 +678,10 @@ local function addonsCard(view, s, bh)
   P.AlignRight(P.ButtonsWidth(CLOSE, s))
   if ui.Button("Close") then eq.LoginSet("addonsOpen", false) end
 
+  if removeAsk then
+    removeAsk = false
+    ui.OpenPopup("##removeaddon")
+  end
   if P.Confirm("##removeaddon", string.format("Remove %s?", removeName or ""),
       "Its own files go; files of yours in its folder (its settings) stay.", "Remove", s) and removeName then
     eq.LoginDo("addonRemove", removeName)

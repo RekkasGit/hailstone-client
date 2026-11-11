@@ -599,6 +599,90 @@ TEST_CASE("UI packs: the spell book's sets and set editor draw; eq.SaveSpellSet 
 // Two widgets of one window with the same ID make ImGui's "conflicting ID" popup show when either is hovered: the
 // Memorized filter and the details pane's Memorize button were both "##mem". The mouse crosses the whole book (in
 // the details view, a spell selected) and no hovered item may share its ID.
+// A row's Remove in the add-ons card asks first, then removes: the question must open (it was opened from inside the
+// row's ID scope while drawn at the window's, so it never showed and nothing was removed), for a script and a plugin.
+TEST_CASE("UI packs (modern): an add-on's Remove asks, and its answer removes that add-on") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir dir_scratch("ui_pack_addon_remove_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        s.host.in_game = s.host.ui_ready = false;
+        lua_State* L = s.lua.state();
+        // Every row unfolded; a button labelled `press` reports a click at its `press_at`th drawing in a frame; the
+        // texts drawn are kept.
+        REQUIRE(luaL_dostring(L, R"(
+            eq.InGame = function() return false end
+            press, press_at, seen, texts = nil, 0, 0, {}
+            local tn, b, t = ui.TreeNode, ui.Button, ui.Text
+            ui.TreeNode = function(l) tn(l) return true end
+            ui.Button = function(l, ...)
+              local r = b(l, ...)
+              if l == press then
+                seen = seen + 1
+                if seen == press_at then return true end
+              end
+              return r
+            end
+            ui.Text = function(x, ...) texts[#texts + 1] = tostring(x) return t(x, ...) end
+            ui.SetSetting('test.addontab', 'mine')
+        )") == LUA_OK);
+        ui::LoginView login;
+        login.servers_dir = dir / "servers";
+        login.ui = login.default_ui = "modern";
+        login.addons.open = true;
+        for (const char* kind : {"script", "plugin"}) {
+            ui::AddonRowView r;
+            r.name = std::string("my") + kind;
+            r.kind = kind;
+            r.group = "installed";
+            r.version = "1.0.0";
+            r.can_remove = true;
+            login.addons.rows.push_back(r);
+        }
+        s.host.login = &login;
+        s.frames(3);
+        REQUIRE(ImGui::FindWindowByName("UI errors") == nullptr);
+        auto asked = [&](const std::string& q) {
+            REQUIRE(luaL_dostring(L, "return table.concat(texts, '|')") == LUA_OK);
+            const std::string all = lua_tostring(L, -1);
+            lua_settop(L, 0);
+            return all.find(q) != std::string::npos;
+        };
+        int row = 0;
+        for (const char* name : {"myscript", "myplugin"}) {
+            INFO(name);
+            ++row;
+            s.host.login_action.reset();
+            // The row's own Remove (the rows' buttons come in list order).
+            REQUIRE(luaL_dostring(L, ("press, press_at, seen, texts = 'Remove', " + std::to_string(row) + ", 0, {}").c_str())
+                    == LUA_OK);
+            s.frames(1);
+            REQUIRE(luaL_dostring(L, "press, seen, texts = nil, 0, {}") == LUA_OK);
+            s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            CHECK(asked(std::string("Remove ") + name + "?"));
+            CHECK_FALSE(s.host.login_action);
+            // The question's Remove: drawn after both rows' buttons.
+            REQUIRE(luaL_dostring(L, "press, press_at, seen, texts = 'Remove', 3, 0, {}") == LUA_OK);
+            s.frames(1);
+            REQUIRE(luaL_dostring(L, "press, seen = nil, 0") == LUA_OK);
+            CHECK(s.host.login_action == static_cast<int>(ui::LoginAction::AddonRemove));
+            CHECK(login.addons.choice == name);
+            s.frames(2);
+        }
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("UI packs (modern): no two of the spell book's widgets share an ID") {
     fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
     hailstone::test::ScratchDir dir_scratch("ui_pack_spellbook_ids_test");
