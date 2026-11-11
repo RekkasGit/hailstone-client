@@ -303,11 +303,11 @@ void ClientApp::movement_command(int command, bool down, bool accept) {
 }
 
 void ClientApp::set_camera_type(int type) {
-    if (type != game::kCameraWheelFollow) {
-        if (camera_distance_ > 0.0f) pad_camera_distance_ = camera_distance_;
-        camera_distance_ = 0.0f;
-    }
-    camera_type_ = type;
+    game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+    game::select_camera(s, type);
+    camera_type_ = s.type;
+    camera_distance_ = s.distance;
+    pad_camera_distance_ = s.pad_distance;
 }
 
 void ClientApp::toggle_view() { set_camera_type(game::toggle_view_next(camera_type_)); }
@@ -315,10 +315,12 @@ void ClientApp::toggle_view() { set_camera_type(game::toggle_view_next(camera_ty
 void ClientApp::set_view(bool behind) {
     if (!behind) {
         set_camera_type(game::kCameraFirstPerson);
-    } else if (camera_type_ != game::kCameraWheelFollow) {
-        camera_distance_ = std::clamp(pad_camera_distance_, 1.0f, max_camera_distance_);
-        camera_type_ = game::kCameraWheelFollow;
+        return;
     }
+    game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+    game::select_behind(s, max_camera_distance_);
+    camera_type_ = s.type;
+    camera_distance_ = s.distance;
 }
 
 void ClientApp::take_screenshot() {

@@ -345,11 +345,15 @@ void ClientApp::update_player(float dt) {
         consciousness_changes_ = conn_->consciousness_changes();
         if (conn_->player_status().owner_status == 3) {
             if (!unconscious_camera_) unconscious_camera_ = camera_type_;
-            camera_type_ = game::kCameraOverhead;
+            set_camera_type(game::kCameraOverhead);
         }
     }
     if (conn_ && conn_->player_status().owner_status == 0 && unconscious_camera_) {
-        camera_type_ = *unconscious_camera_;
+        game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+        game::restore_camera(s, *unconscious_camera_, max_camera_distance_);
+        camera_type_ = s.type;
+        camera_distance_ = s.distance;
+        pad_camera_distance_ = s.pad_distance;
         unconscious_camera_.reset();
     }
     if (conn_ && conn_->drunkenness_updates() != drunkenness_updates_) {
