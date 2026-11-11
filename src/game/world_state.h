@@ -50,8 +50,15 @@ namespace hailstone::game {
 		// Per slot: armour material (slots 0-6) or item model number IT<n>
 		// (slots 7, 8), and the tint 0xAARRGGBB (a zero high byte = untinted).
 		std::array<std::uint32_t, 9> material{};
+		// Keep every word of the RoF2 armor record, including fields whose meaning
+		// varies by model. Dressing and saves must not reconstruct them from two ids.
+		std::array<std::uint32_t, 9> material_variation{};
+		std::array<std::uint32_t, 9> elite_material{};
 		std::array<std::uint32_t, 9> tint{};
 		std::array<std::uint32_t, 9> hero_forge{};
+		std::array<std::uint32_t, 9> material2{};
+		bool npc = false; // ActorNewArmorFilter selects players and NPCs independently
+		bool new_armor_filter_exempt = false; // local player and group/raid members
 		// NpcTintIndex (spawn +0x51c; OP_SpawnAppearance 39): npct.ini Value<n>
 		// tints new-style models (ActorClient_ApplyNpcTint); 0 none.
 		std::uint32_t npc_tint = 0;
@@ -1142,6 +1149,7 @@ namespace hailstone::game {
 		// Riding (game/mounts.h): EQPlayer::GetMount (+0x154) and PlayerBase_GetRider (+0x158) as spawn ids, 0 none.
 		std::uint32_t mount_id = 0;
 		std::uint32_t rider_id = 0;
+		std::uint32_t form_mount_id = 0; // re-seat after a form change rebuilds this actor
 		float walk_speed = 0.0f, run_speed = 0.0f; // the spawn record's walkspeed / runspeed (+0x330 / +0x350)
 		std::uint8_t hp_percent = 100;
 		std::uint8_t stand_state = 100; // SpawnAppearance animation: 100 stand, 110 sit, 111 crouch, 115 lying

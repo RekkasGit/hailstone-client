@@ -1385,6 +1385,8 @@ it does nothing). Which group plays what:
 
 ## Character appearance
 
+An illusion received while mounted runs the form-change unseat before rebuilding the actor. The saved mount identity is used to re-seat only after the new actor is made; a departed mount clears that pending identity so a reused spawn id cannot attach another mount. This retains the existing `illusion_mounts` option. Disabling `UseLuclinElementals` also excludes the three associated global NPC archives, including explicit GlobalLoad entries. Mock packet tests cover the material records, Drakkin features and mount lifecycle; archive-option tests use synthetic files.
+
 `game/actor_look.*` follows the ActorClient appearance functions (the recorded vectors in
 `tests/appearance_vectors_test.cpp`); `assets/character_parts.cpp` (Luclin and new models) and
 `assets/character_dress.cpp` (classic models) run them on the model.

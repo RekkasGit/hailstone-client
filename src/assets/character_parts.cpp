@@ -513,15 +513,16 @@ game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, 
     for (std::size_t i = 0; i < 9; ++i) {
         look.tint[i] = a.tint[i];
         look.armor[i].material = static_cast<std::int32_t>(a.material[i]);
+        look.armor[i].variation = static_cast<std::int32_t>(a.material_variation[i]);
+        look.armor[i].material2 = static_cast<std::int32_t>(a.elite_material[i]);
         look.armor[i].new_armor_id = a.hero_forge[i];
+        look.armor[i].new_armor_type = a.material2[i];
     }
     look.show_helm = a.show_helm;
     look.heritage = static_cast<std::int32_t>(a.drakkin_heritage);
     look.tattoo = static_cast<std::int32_t>(a.drakkin_tattoo);
     look.details = static_cast<std::int32_t>(a.drakkin_details);
-    // ActorNewArmorFilter: players (8) and NPCs (0x10); the spawn's kind is
-    // not known here, so hero's forge shows when either bit is set (24 by default).
-    look.new_armor_filtered = data ? (data->new_armor_filter & 0x18u) == 0 : true;
+    look.new_armor_filtered = game::appearance_new_armor_filtered(a, data ? data->new_armor_filter : 0u);
     return look;
 }
 

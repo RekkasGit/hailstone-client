@@ -1,4 +1,5 @@
 #include "game/appearance.h"
+#include "game/appearance_data.h"
 
 #include <algorithm>
 #include <atomic>
@@ -6,6 +7,9 @@
 #include <unordered_set>
 
 namespace hailstone::game {
+    bool appearance_new_armor_filtered(const Appearance& a, std::uint32_t filter) {
+        return !a.new_armor_filter_exempt && new_armor_filtered(filter, a.npc);
+    }
 
 	bool is_pc_model_race(std::uint32_t race) {
 		return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;
@@ -26,13 +30,16 @@ namespace hailstone::game {
 	}
 
 	bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
-		std::uint32_t tint) {
+		std::uint32_t tint, std::uint32_t variation, std::uint32_t elite_material, std::uint32_t material2) {
 		if (slot >= 9) return false;
 		if (slot < kSlotPrimary && a.texture != kNoTexture) return false; // fixed body texture
 		// material -1 resets the slot (the actor part goes back to its default).
 		a.material[slot] = material == 0xffffffffu ? 0 : material;
+		a.material_variation[slot] = variation;
+		a.elite_material[slot] = elite_material;
 		a.tint[slot] = tint;
 		a.hero_forge[slot] = hero_forge;
+		a.material2[slot] = material2;
 		return true;
 	}
 

@@ -1055,6 +1055,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/character_test.cpp
     tests/rider_seat_test.cpp
     tests/appearance_test.cpp
+    tests/equipment_illusions_test.cpp
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
     tests/plate_test_test.cpp

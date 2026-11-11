@@ -23,6 +23,7 @@
 
 #include "assets/eqg_character.h"
 #include "core/game_dir.h"
+#include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 #include "core/log.h"
 #include "game/appearance_data.h"
@@ -367,6 +368,12 @@ bool chr_txt_entry_is_s3d(const GameDir& game, std::string_view code, std::strin
 }
 
 std::vector<std::string> global_character_archives(const GameDir& game, bool luclin) {
+    IniFile ini;
+    if (auto bytes = game.read("eqclient.ini"))
+        ini.parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
+    const auto elemental_option = ini.get("Defaults", "UseLuclinElementals");
+    const bool elementals = !elemental_option || (!elemental_option->empty() &&
+        (elemental_option->front() == 'T' || elemental_option->front() == 't' || elemental_option->front() == '1'));
     std::vector<std::string> out;
     auto add = [&](std::string name) {
         name = lower(name);
@@ -423,7 +430,12 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
             add(f[1]);
         }
     }
-    std::erase_if(out, [&](const std::string& n) { return !game.exists(n); });
+    // The global NPC load obeys the same option as CreatePlayerActor's race swap.
+    // Filter explicit GlobalLoad entries too, not just the implicit global5 load.
+    std::erase_if(out, [&](const std::string& n) {
+        return !game.exists(n) || (!elementals &&
+            (n == "global5_chr.s3d" || n == "global5_chr2.s3d" || n == "frog_mount_chr.s3d"));
+    });
     return out;
 }
 

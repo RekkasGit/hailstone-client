@@ -378,6 +378,11 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
+    // ApplyNewArmorFilter exempts our own actor and current group/raid members.
+    // Refresh after the packet batch so joins and leaves also invalidate dressed looks.
+    for (auto& [id, spawn] : world_.spawns)
+        spawn.appearance.new_armor_filter_exempt = id == world_.player_id ||
+            group_.has_member(spawn.name) || raid_.is_member(spawn.name);
     raise_hook_events();
     marketplace_frame(now_ms());
 }
@@ -821,6 +826,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.heights = {};
     out.heights.height = s.size;
     out.actor_made = false;
+    out.form_mount_id = 0;
     world_.set_heights(out);
     out.melee_radius = s.melee_radius;
     out.walk_speed = s.walk_speed;
@@ -868,9 +874,13 @@ void GameConnection::apply_spawn(const Spawn& s) {
     a.drakkin_details = s.drakkin_details;
     a.npc_tint = s.npc_tint_id;
     a.class_id = s.class_;
+    a.npc = s.npc == 1 || s.npc == 2; // NPCs and NPC corpses retain their category
     for (std::size_t i = 0; i < 9; ++i) {
         a.material[i] = s.equipment[i].material;
+        a.material_variation[i] = s.equipment[i].unknown1;
+        a.elite_material[i] = s.equipment[i].elite_material;
         a.hero_forge[i] = s.equipment[i].hero_forge_model;
+        a.material2[i] = s.equipment[i].material2;
         a.tint[i] = s.long_equipment ? s.equipment_tint[i] : 0;
     }
     game::normalize_appearance(a, s.race);
@@ -1337,7 +1347,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             auto it = world_.spawns.find(w->spawn_id);
             if (it != world_.spawns.end())
                 game::apply_wear_change(it->second.appearance, w->slot, w->armor.material, w->armor.hero_forge_model,
-                                        w->tint);
+                                        w->tint, w->armor.unknown1, w->armor.elite_material, w->armor.material2);
         }
         break;
     case Op::Illusion:
@@ -1347,6 +1357,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // do_change_form: 0xff / -1 keep a field.
                 game::Spawn& sp = it->second;
                 game::Appearance& a = sp.appearance;
+                game::MountEvents unseat;
+                if (const auto mount = game::change_form_unseat(world_, sp, unseat)) sp.form_mount_id = mount;
+                mount_events(unseat);
                 if (ill->race != 0xffff && ill->race != 0) sp.race = ill->race;
                 if (ill->gender != 0xff) sp.gender = ill->gender;
                 if (ill->size > 0.0f) sp.size = ill->size;
@@ -1366,6 +1379,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 if (ill->hair_color != 0xff) a.hair_color = ill->hair_color;
                 if (ill->beard != 0xff) a.beard = ill->beard;
                 if (ill->beard_color != 0xff) a.beard_color = ill->beard_color;
+                if (ill->drakkin_heritage != 0xffffffffu) a.drakkin_heritage = ill->drakkin_heritage;
+                if (ill->drakkin_tattoo != 0xffffffffu) a.drakkin_tattoo = ill->drakkin_tattoo;
+                if (ill->drakkin_details != 0xffffffffu) a.drakkin_details = ill->drakkin_details;
             }
         }
         break;

@@ -28,6 +28,8 @@ inline constexpr std::uint8_t kNoTexture = 0xff; // Appearance::texture: per-slo
 // PlayerZoneClient::LegalPlayerRace @0049deb0: races that wear armour per
 // slot (< 13, 128, 130, 330, 522).
 bool is_pc_model_race(std::uint32_t race);
+// ApplyNewArmorFilter: local/group/raid actors bypass the category bits.
+bool appearance_new_armor_filtered(const Appearance& a, std::uint32_t filter);
 
 // The unserializer's fold (@00591acb): for a PC-model race a TextureType
 // >= 0 becomes the material of slots 1-6 and TextureType becomes -1.
@@ -44,7 +46,8 @@ Appearance drawn_appearance(const Appearance& a, std::uint32_t race);
 // OP_WearChange. Returns false when the client ignores it: a body
 // slot of a spawn with a fixed body texture, or a slot >= 9.
 bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
-                       std::uint32_t tint);
+                       std::uint32_t tint, std::uint32_t variation = 0, std::uint32_t elite_material = 0,
+                       std::uint32_t material2 = 0);
 
 // Material numbers. 10..16 on the chest are robes (the arms and wrists then
 // show the chest's texture); robe textures are CLK04..CLK10.

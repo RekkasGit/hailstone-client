@@ -79,7 +79,9 @@ An EQG model has body pieces `<code><nn>` and head pieces `<code>HE<nn>` (HNM: H
 
 ## Appearance
 
-`game::Appearance` (on `game::Spawn`) holds TextureType, HeadType, face, hair/beard style and colour, eyes, Drakkin features, show_helm, and per slot (0 head, 1 chest, 2 arms, 3 wrists, 4 hands, 5 legs, 6 feet, 7 primary, 8 secondary) the material, tint (`0xAARRGGBB`, Tint_Struct) and Hero's Forge id. It comes from the spawn packet (`GameConnection::apply_spawn`), `OP_WearChange` and `OP_Illusion`; `ActorRenderer` rebuilds a spawn's mesh when it changes, dressing `game::drawn_appearance`: a race outside the per-slot armour races (1-12, 128, 130, 330, 522) shows no armour colours (slots 0-6), as the RoF2 client draws a player under a skeleton illusion (docs/unknowns.md).
+Armor records retain all five words from RoF2: material, variation, elite material, Hero's Forge id and the final material word. Spawns, wear changes, character selection, item previews, appearance cache keys and saves carry the complete record. The player/NPC category reaches the Hero's Forge filter; the local player and current group/raid members are exempt. `OP_Illusion` applies decoded Drakkin heritage, tattoo and detail changes; zero resets a feature and the omitted-value sentinel keeps it.
+
+`game::Appearance` (on `game::Spawn`) holds TextureType, HeadType, face, hair/beard style and colour, eyes, Drakkin features, show_helm, and per slot (0 head, 1 chest, 2 arms, 3 wrists, 4 hands, 5 legs, 6 feet, 7 primary, 8 secondary) the complete five-word armor record and tint (`0xAARRGGBB`, Tint_Struct). It comes from the spawn packet (`GameConnection::apply_spawn`), `OP_WearChange` and `OP_Illusion`; `ActorRenderer` rebuilds a spawn's mesh when it changes, dressing `game::drawn_appearance`: a race outside the per-slot armour races (1-12, 128, 130, 330, 522) shows no armour colours (slots 0-6), as the RoF2 client draws a player under a skeleton illusion (docs/unknowns.md).
 
 Which value drives what:
 
