@@ -28,6 +28,14 @@ std::optional<ZoneLinks> decode_zone_links(const AppPacket& p) {
             const auto to = r.le<std::uint16_t>();
             v.links.emplace_back(from, to);
         }
+        if (r.remaining() >= 6) {
+            v.has_zones = true;
+            v.expansion = r.le<std::int16_t>();
+            const auto zones = r.le<std::uint32_t>();
+            if (zones > kZoneLinksMax || r.remaining() / 2 < zones) return std::nullopt;
+            v.zones.reserve(zones);
+            for (std::uint32_t i = 0; i < zones; ++i) v.zones.push_back(r.le<std::uint16_t>());
+        }
         return v;
     });
     return got ? *got : std::nullopt;
@@ -42,6 +50,11 @@ AppPacket encode(const ZoneLinks& v) {
     for (const auto& [from, to] : v.links) {
         w.le(from);
         w.le(to);
+    }
+    if (v.has_zones) {
+        w.le(v.expansion);
+        w.le(static_cast<std::uint32_t>(v.zones.size()));
+        for (std::uint16_t z : v.zones) w.le(z);
     }
     return AppPacket(kOpHsZoneLinks, w.take());
 }

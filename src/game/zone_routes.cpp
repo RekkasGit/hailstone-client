@@ -71,16 +71,29 @@ void ZoneRoutes::rebuild() {
     }
 }
 
-ZoneRoute ZoneRoutes::route(std::uint32_t from, std::uint32_t to) const {
+bool ZoneRoutes::set_server_zones(std::vector<std::uint32_t> zones, int expansion) {
+    std::set<std::uint32_t> next;
+    for (std::uint32_t z : zones)
+        if (z != 0) next.insert(z);
+    if (next == server_zones_ && expansion == server_expansion_) return false;
+    server_zones_ = std::move(next);
+    server_expansion_ = expansion;
+    return true;
+}
+
+ZoneRoute ZoneRoutes::route(std::uint32_t from, std::uint32_t to, const std::function<bool(std::uint32_t)>& allowed) const {
     ZoneRoute r;
     if (from == 0 || to == 0) return r;
+    if (from != to && allowed && !allowed(to)) return r;
+    auto ok = [&](std::uint32_t z) { return !allowed || allowed(z); };
     if (from == to) {
         r.zones = {from};
         return r;
     }
     auto forward = [&](std::uint32_t z, auto&& visit) {
         if (auto it = forward_.find(z); it != forward_.end())
-            for (std::uint32_t n : it->second) visit(n);
+            for (std::uint32_t n : it->second)
+                if (ok(n)) visit(n);
     };
     r.zones = search(from, to, forward);
     if (!r.zones.empty()) return r;
@@ -89,7 +102,8 @@ ZoneRoute ZoneRoutes::route(std::uint32_t from, std::uint32_t to) const {
         std::set<std::uint32_t> all;
         if (auto it = forward_.find(z); it != forward_.end()) all.insert(it->second.begin(), it->second.end());
         if (auto it = backward_.find(z); it != backward_.end()) all.insert(it->second.begin(), it->second.end());
-        for (std::uint32_t n : all) visit(n);
+        for (std::uint32_t n : all)
+            if (ok(n)) visit(n);
     };
     r.zones = search(from, to, both);
     r.assumed = !r.zones.empty();
@@ -116,6 +130,10 @@ std::string ZoneRoutes::serialize() const {
     std::string out = "# Hailstone zone links: s = the server's list, l = learned from zone points\n";
     for (const auto& l : server_) out += "s " + std::to_string(l.first) + " " + std::to_string(l.second) + "\n";
     for (const auto& l : learned_) out += "l " + std::to_string(l.first) + " " + std::to_string(l.second) + "\n";
+    if (!server_zones_.empty()) {
+        out += "e " + std::to_string(server_expansion_) + "\n";
+        for (std::uint32_t z : server_zones_) out += "z " + std::to_string(z) + "\n";
+    }
     return out;
 }
 
@@ -125,9 +143,22 @@ ZoneRoutes ZoneRoutes::parse(std::string_view text) {
         std::size_t nl = text.find('\n');
         std::string_view line = text.substr(0, nl);
         text.remove_prefix(nl == std::string_view::npos ? text.size() : nl + 1);
-        if (line.empty() || (line.front() != 's' && line.front() != 'l')) continue;
+        if (line.empty()) continue;
         const char kind = line.front();
         line.remove_prefix(1);
+        if (kind == 'z') {
+            std::uint32_t z = 0;
+            if (read_u32(line, z) && z != 0) r.server_zones_.insert(z);
+            continue;
+        }
+        if (kind == 'e') {
+            while (!line.empty() && line.front() == ' ') line.remove_prefix(1);
+            int e = 0;
+            auto [end, ec] = std::from_chars(line.data(), line.data() + line.size(), e);
+            if (ec == std::errc{} && end != line.data()) r.server_expansion_ = e;
+            continue;
+        }
+        if (kind != 's' && kind != 'l') continue;
         std::uint32_t from = 0, to = 0;
         if (!read_u32(line, from) || !read_u32(line, to) || from == 0 || to == 0 || from == to) continue;
         (kind == 's' ? r.server_ : r.learned_).emplace(from, to);

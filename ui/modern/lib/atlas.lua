@@ -9,7 +9,8 @@
 --   * a route followed (ui/settings/modern.txt, atlas.route): a banner over your zone's map with the next zone and
 --     "Walk there" (eq.ZoneExitWalk: a /nav walk through that zone line), and the exits marked on the map.
 -- Routes come from the server's zone list (Hailstone's server script) or, without it, from the zone lines of the
--- zones you have been to on this server (eq.ZoneLinks).
+-- zones you have been to on this server (eq.ZoneLinks). Only the zones the server has are listed and routed through
+-- (its current expansion and content flags, from the script; else the account's expansions); the atlas dims the rest.
 local hud = dofile("lib/hud.lua")
 local T = hud.T
 local C = T.color
@@ -28,10 +29,21 @@ function A.ExpansionName(n) return EXPANSIONS[n or -1] end
 
 -- ---------------------------------------------------------------- data
 local index, byZone, byPage, pageTitles, pageParents = nil, nil, nil, nil, nil
+local indexKey = nil
+local allowedCount = 0
+
+-- What decides which zones the server has; the index is read again when it changes.
+local function limitKey()
+  local server, _, limit, expansion = eq.ZoneLinks()
+  return tostring(server) .. ":" .. tostring(limit) .. ":" .. tostring(expansion)
+end
 
 -- The atlas' zones, one entry per zone (its first page), with what the finder searches.
 local function loadIndex()
-  if index then return end
+  local key = limitKey()
+  if index and key == indexKey then return end
+  indexKey = key
+  allowedCount = 0
   local raw = eq.AtlasIndex and eq.AtlasIndex() or { pages = {}, zones = {} }
   index, byZone, byPage, pageTitles, pageParents = {}, {}, {}, {}, {}
   for _, p in ipairs(raw.pages) do
@@ -45,8 +57,9 @@ local function loadIndex()
     if not byZone[key] then
       local e = {
         zone = z.zone, id = z.id, page = z.page, region = pageTitles[z.page:lower()] or z.page,
-        name = z.name, expansion = z.id ~= 0 and z.expansion or nil,
+        name = z.name, expansion = z.id ~= 0 and z.expansion or nil, allowed = z.allowed ~= false,
       }
+      if e.allowed then allowedCount = allowedCount + 1 end
       e.find = (e.name .. " " .. e.zone):lower()
       byZone[key] = e
       index[#index + 1] = e
@@ -68,8 +81,8 @@ local routeCache = { key = nil, routes = {} }
 local function routeTo(short)
   if not short then return nil end
   local _, here = eq.ZoneName()
-  local server, known = eq.ZoneLinks()
-  local key = (here or "") .. ":" .. tostring(server) .. ":" .. known
+  local server, known, limit, expansion = eq.ZoneLinks()
+  local key = (here or "") .. ":" .. tostring(server) .. ":" .. known .. ":" .. tostring(limit) .. ":" .. tostring(expansion)
   if routeCache.key ~= key then routeCache.key, routeCache.routes = key, {} end
   local k = short:lower()
   local r = routeCache.routes[k]
@@ -239,7 +252,11 @@ function A.DrawView(x0, y0, x1, y1, s, onView)
     local bx, by = P(l.x1, l.y1)
     local key = l.target:lower()
     local r = 6 * s
-    if l.action == 2 then
+    local e = l.action == 2 and byZone[key] or nil
+    if e and not e.allowed then
+      -- not on this server: dimmed
+      ui.DrawRectFilled(ax, ay, bx, by, 0, 0, 0, l == hover and 0.45 or 0.55, r)
+    elseif l.action == 2 then
       local sel = A.sel and key == A.sel:lower()
       if l == hover then
         ui.DrawRectFilled(ax, ay, bx, by, C.accent[1], C.accent[2], C.accent[3], 0.16, r)
@@ -275,6 +292,15 @@ function A.DrawView(x0, y0, x1, y1, s, onView)
   ui.DrawRect(x0, y0, x1, y1, C.ink[1], C.ink[2], C.ink[3], 0.08, 8 * s, 1)
 
   -- the hovered link's tip, and its clicks
+  local hoverZone = hover and hover.action == 2 and byZone[hover.target:lower()] or nil
+  if hoverZone and not hoverZone.allowed then
+    ui.BeginTooltip()
+    ui.Text(hoverZone.name)
+    local exp = A.ExpansionName(hoverZone.expansion)
+    ui.TextDisabled("Not on this server" .. (exp and (" (" .. exp .. ")") or ""))
+    ui.EndTooltip()
+    hover = nil
+  end
   if hover then
     if hover.action == 2 then
       local e = byZone[hover.target:lower()]
@@ -367,7 +393,7 @@ local function matches(q)
   if q == "" then
     for _, z in ipairs(byPage[A.page:lower()] or {}) do
       local e = byZone[z.zone:lower()]
-      if e and not out[e] then
+      if e and e.allowed and not out[e] then
         out[e] = true
         out[#out + 1] = e
       end
@@ -377,8 +403,8 @@ local function matches(q)
   end
   local first, rest = {}, {}
   for _, e in ipairs(index) do
-    local at = e.find:find(q, 1, true)
-    if at == 1 or (e.name:lower():find("%f[%w]" .. q:gsub("%p", "%%%0"))) then
+    local at = e.allowed and e.find:find(q, 1, true)
+    if at == 1 or (at and e.name:lower():find("%f[%w]" .. q:gsub("%p", "%%%0"))) then
       first[#first + 1] = e
     elseif at then
       rest[#rest + 1] = e
@@ -415,25 +441,26 @@ end
 function A.DrawFinder(x, y, w, h, s, onView)
   loadIndex()
   local wx, wy = ui.GetWindowPos()
-  local server, known = eq.ZoneLinks()
+  local server, known, limit, expansion = eq.ZoneLinks()
   T.Text(x, y, "Zones", C.text, T.font.normal)
-  T.Text(x + w, y + 3 * s, #index > 0 and string.format("%d on the atlas", #index) or "", C.faint, T.font.tiny, "right")
+  T.Text(x + w, y + 3 * s, allowedCount > 0 and string.format("%d on this server", allowedCount) or "", C.faint, T.font.tiny, "right")
   ui.SetCursorPos(x - wx, y + 24 * s - wy)
   ui.SetNextItemWidth(w)
   A.search = ui.InputTextWithHint("##zonesearch", "Find a zone", A.search, 64)
   local q = A.search:lower():gsub("^%s+", ""):gsub("%s+$", "")
-  local key = q .. "|" .. A.page
+  local key = q .. "|" .. A.page .. "|" .. tostring(indexKey)
   if key ~= resultsKey then resultsKey, results = key, matches(q) end
 
   -- the selected zone's card at the bottom
   local sel = A.sel and byZone[A.sel:lower()]
+  if sel and not sel.allowed then sel, A.sel = nil, nil end
   local route = sel and routeTo(sel.zone)
   local cardH = 0
   if sel then
     cardH = 112 * s
     if route and #route > 1 then cardH = cardH + math.min(#route, 8) * 18 * s + 6 * s end
   end
-  local footer = 20 * s
+  local footer = (limit and 34 or 20) * s
   local ly = y + 56 * s
   T.Text(x, ly, q == "" and ("In " .. (pageTitles[A.page:lower()] or "this region")) or
     string.format("%d found", #results), C.faint, T.font.tiny)
@@ -528,9 +555,17 @@ function A.DrawFinder(x, y, w, h, s, onView)
     end
   end
 
-  -- where the routes come from
+  -- which zones are listed, and where the routes come from
+  local lim
+  if limit == "server" then
+    local exp = expansion ~= nil and expansion >= 0 and A.ExpansionName(expansion)
+    lim = exp and ("Zones up to " .. exp .. ", the server's expansion") or "Zones the server has"
+  elseif limit == "account" then
+    lim = "Zones of your account's expansions"
+  end
   local src = server and "Routes from the server's zone list" or
     (known > 0 and string.format("Routes from zone lines seen in %d zones", known) or "Routes: none known yet")
+  if lim then T.Text(x, y + h - 28 * s, T.Fit(lim, w, T.font.tiny), C.faint, T.font.tiny) end
   T.Text(x, y + h - 14 * s, T.Fit(src, w, T.font.tiny), C.faint, T.font.tiny)
 end
 

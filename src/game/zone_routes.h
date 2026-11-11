@@ -11,8 +11,13 @@
 // A route follows links in their own direction. When there is none that way, a route may also use a learned link
 // backwards (a zone line seen from the far side only). Most zone lines go both ways, but not all, so such a route
 // is marked `assumed`.
+//
+// The zones the server allows (its current expansion and content flags) come with its list; a route passes only
+// through allowed zones (game::ZoneRoutes::route's `allowed`, app/lua_eq_map.cpp: the server's zones, else the
+// account's expansions).
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -36,23 +41,32 @@ public:
     // The server's list, replacing an earlier one. True when it changed.
     bool set_server(std::vector<Link> links);
     bool has_server() const { return !server_.empty(); }
+    // The zones the server allows, with its current expansion (-1 all), replacing earlier ones. True when changed.
+    bool set_server_zones(std::vector<std::uint32_t> zones, int expansion);
+    const std::set<std::uint32_t>& server_zones() const { return server_zones_; } // empty: not known
+    int server_expansion() const { return server_expansion_; }
     bool empty() const { return server_.empty() && learned_.empty(); }
 
     // The fewest zone changes from `from` to `to` (links in their direction first, then with learned ones
-    // backwards); the lowest zone ids first among equals. `from == to` gives that zone alone.
-    ZoneRoute route(std::uint32_t from, std::uint32_t to) const;
+    // backwards); the lowest zone ids first among equals. `from == to` gives that zone alone. With `allowed`, a route
+    // never enters a zone it refuses (the start may be any).
+    ZoneRoute route(std::uint32_t from, std::uint32_t to,
+                    const std::function<bool(std::uint32_t)>& allowed = nullptr) const;
     // Where a zone's links lead (both sources), ascending.
     std::vector<std::uint32_t> neighbours(std::uint32_t zone) const;
     // Every zone a link starts or ends at, ascending.
     std::vector<std::uint32_t> zones() const;
 
     // The file kept per server (servers/<profile>/zone_links.txt): a line per link, "s <from> <to>" from the
-    // server's list or "l <from> <to>" learned; '#' lines and anything unreadable are skipped.
+    // server's list or "l <from> <to>" learned, "z <zone>" a zone the server allows, "e <expansion>" its current
+    // expansion; '#' lines and anything unreadable are skipped.
     std::string serialize() const;
     static ZoneRoutes parse(std::string_view text);
 
 private:
     std::set<Link> server_, learned_;
+    std::set<std::uint32_t> server_zones_;
+    int server_expansion_ = -1;
     std::map<std::uint32_t, std::set<std::uint32_t>> forward_, backward_; // forward: both sources; backward: learned
     void rebuild();
 };
