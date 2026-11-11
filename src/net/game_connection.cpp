@@ -1053,6 +1053,25 @@ void GameConnection::request_quest_npcs() {
     send_zone(encode_quest_npcs_request());
 }
 
+std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
+    if (!time_) return std::nullopt;
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - time_received_).count();
+    TimeOfDay current = *time_;
+    // EQEmu common/eqtime.cpp, GetCurrentEQTimeOfDay: three real seconds per minute,
+    // hours 1..24, days 1..28 and months 1..12. The packet's time already includes the zone's offset.
+    std::int64_t carry = std::max<std::int64_t>(0, seconds) / 3 + current.minute;
+    current.minute = static_cast<std::uint8_t>(carry % 60);
+    carry = carry / 60 + (current.hour == 0 ? 23 : current.hour - 1);
+    current.hour = static_cast<std::uint8_t>(carry % 24 + 1);
+    carry = carry / 24 + std::max(1, static_cast<int>(current.day)) - 1;
+    current.day = static_cast<std::uint8_t>(carry % 28 + 1);
+    carry = carry / 28 + std::max(1, static_cast<int>(current.month)) - 1;
+    current.month = static_cast<std::uint8_t>(carry % 12 + 1);
+    current.year += static_cast<std::uint32_t>(carry / 12);
+    return current;
+}
+
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
     if (p.opcode == kOpHsFiles) {
@@ -1232,6 +1251,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     case Op::TimeOfDay:
         time_ = decode_time_of_day(p);
+        time_received_ = options_.session.clock ? options_.session.clock() : Clock::now();
         break;
     case Op::Weather:
         if (auto w = decode_weather(p)) {

@@ -1,6 +1,7 @@
 // mq/tlo.h, mq/spawn_search.h and mq/parse.h: MacroQuest's TLOs over a small world (tests/mq_test_world.h).
 #include <doctest/doctest.h>
 
+#include "manual_clock.h"
 #include "mq/parse.h"
 #include "mq/spawn_search.h"
 #include "mq/tlo.h"
@@ -288,4 +289,34 @@ TEST_CASE("TLO: numbers from text out of range, NaN or infinite are no id, loc o
     const double huge = std::stod("1e300");
     CHECK(mq::in_range<float>(huge) == std::nullopt);
     CHECK(mq::in_range<float>(std::numeric_limits<double>::quiet_NaN()) == std::nullopt);
+}
+
+TEST_CASE("TLO: GameTime advances between packets and carries the game calendar") {
+    test::ManualClock clock;
+    clock.hold();
+    net::ConnectionOptions options;
+    options.session.clock = clock.source();
+    mq_test::World world("hailstone_mq_game_time_test", options);
+    mq::Registry reg;
+    mq::register_game_tlos(reg);
+    mq::Context ctx;
+    ctx.registry = &reg;
+    ctx.conn = world.conn.get();
+    auto parse = [&](std::string_view text) { return mq::parse_macro_data(ctx, text); };
+    CHECK(parse("${GameTime}") == "NULL");
+    world.conn->receive_zone_packet_for_test(net::encode(net::TimeOfDay{18, 59, 28, 12, 3200}));
+    CHECK(parse("${GameTime}") == "18:59");
+    CHECK(parse("${GameTime.Night}") == "FALSE");
+    clock.advance(std::chrono::milliseconds{2999});
+    CHECK(parse("${GameTime.Time24}") == "18:59");
+    clock.advance(std::chrono::milliseconds{1});
+    CHECK(parse("${GameTime}") == "19:00");
+    CHECK(parse("${GameTime.Time24}") == "19:00");
+    CHECK(parse("${GameTime.Hour}:${GameTime.Minute}") == "19:0");
+    CHECK(parse("${GameTime.Day}/${GameTime.Month}/${GameTime.Year}") == "28/12/3200");
+    CHECK(parse("${GameTime.Night}") == "TRUE");
+    clock.advance(std::chrono::milliseconds{6 * 60 * 3000});
+    CHECK(parse("${GameTime}") == "01:00");
+    CHECK(parse("${GameTime.Day}/${GameTime.Month}/${GameTime.Year}") == "1/1/3201");
+    CHECK(parse("${GameTime.Night}") == "TRUE");
 }

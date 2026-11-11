@@ -1060,3 +1060,115 @@ TEST_CASE("mock server: the Options' chat filters go to the zone (OP_SetServerFi
     std::ifstream in(rig.dir.path() / "eqclient.ini", std::ios::binary);
     CHECK(std::string(std::istreambuf_iterator<char>(in), {}) == eqclient);
 }
+
+TEST_CASE("game clock: elapsed minutes carry through the EQ calendar") {
+    ManualClock clock;
+    clock.hold();
+    ConnectionOptions options;
+    options.session.clock = clock.source();
+    EmptyGameDir dir;
+    GameDir game(dir.path());
+    GameConnection conn(game, options);
+    CHECK_FALSE(conn.time_of_day());
+    CHECK_FALSE(conn.current_time_of_day());
+    auto check_time = [&](int hour, int minute, int day, int month, std::uint32_t year) {
+        const auto time = conn.current_time_of_day();
+        REQUIRE(time);
+        CHECK(time->hour == hour);
+        CHECK(time->minute == minute);
+        CHECK(time->day == day);
+        CHECK(time->month == month);
+        CHECK(time->year == year);
+    };
+    conn.receive_zone_packet_for_test(encode(TimeOfDay{14, 58, 27, 12, 3200}));
+    check_time(14, 58, 27, 12, 3200);
+    clock.advance(2999ms);
+    check_time(14, 58, 27, 12, 3200);
+    clock.advance(1ms);
+    check_time(14, 59, 27, 12, 3200);
+    clock.advance(3000ms);
+    check_time(15, 0, 27, 12, 3200);
+    REQUIRE(conn.time_of_day());
+    CHECK(conn.time_of_day()->hour == 14); // the sky's packet snapshot stays unchanged
+    CHECK(conn.time_of_day()->minute == 58);
+
+    conn.receive_zone_packet_for_test(encode(TimeOfDay{24, 59, 28, 12, 3200}));
+    clock.advance(2999ms);
+    check_time(24, 59, 28, 12, 3200);
+    clock.advance(1ms);
+    check_time(1, 0, 1, 1, 3201);
+    // A long gap carries whole years too: a year and one day, hour and minute.
+    clock.advance(std::chrono::milliseconds{(12LL * 28 * 24 * 60 + 24 * 60 + 61) * 3000});
+    check_time(2, 1, 2, 1, 3202);
+}
+
+TEST_CASE("game clock: every server time packet replaces the elapsed-time reference") {
+    ManualClock clock;
+    clock.hold();
+    ConnectionOptions options;
+    options.session.clock = clock.source();
+    EmptyGameDir dir;
+    GameDir game(dir.path());
+    GameConnection conn(game, options);
+    const auto packet = encode(TimeOfDay{8, 59, 5, 6, 3200});
+    conn.receive_zone_packet_for_test(packet);
+    clock.advance(2999ms);
+    conn.receive_zone_packet_for_test(packet); // even an identical packet starts a new reference
+    clock.advance(1ms);
+    auto time = conn.current_time_of_day();
+    REQUIRE(time);
+    CHECK(time->hour == 8);
+    CHECK(time->minute == 59);
+    clock.advance(2999ms);
+    time = conn.current_time_of_day();
+    REQUIRE(time);
+    CHECK(time->hour == 9);
+    CHECK(time->minute == 0);
+
+    conn.receive_zone_packet_for_test(encode(TimeOfDay{4, 10, 2, 3, 3199}));
+    time = conn.current_time_of_day();
+    REQUIRE(time);
+    CHECK(time->hour == 4);
+    CHECK(time->minute == 10);
+    CHECK(time->day == 2);
+    CHECK(time->month == 3);
+    CHECK(time->year == 3199);
+    clock.advance(3000ms);
+    time = conn.current_time_of_day();
+    REQUIRE(time);
+    CHECK(time->hour == 4);
+    CHECK(time->minute == 11);
+}
+
+TEST_CASE("mock server: /time reports the advancing game hour and the local time") {
+    ManualClock clock;
+    ConnectionOptions options = quick_options();
+    options.session.clock = clock.source();
+    Rig rig(MockConfig::standard(), options);
+    {
+        std::ofstream strings(rig.dir.path() / "eqstr_us.txt", std::ios::app);
+        strings << "6706 GAME %1\n12389 LOCAL %1\n";
+    }
+    rig.conn.reload_game_files();
+    REQUIRE(rig.to_zone());
+    clock.hold();
+    rig.chat();
+    rig.conn.receive_zone_packet_for_test(encode(TimeOfDay{13, 59, 28, 12, 3200}));
+    rig.conn.send_command("/time");
+    auto lines = rig.chat();
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0].kind == ChatEvent::Kind::System);
+    CHECK(lines[0].text.starts_with("GAME "));
+    CHECK(lines[0].text.ends_with("December 28, 3200 - 12 PM"));
+    CHECK(lines[1].text.starts_with("LOCAL "));
+    CHECK(lines[1].text.size() > std::strlen("LOCAL "));
+
+    clock.advance(3000ms);
+    rig.conn.send_command("/time");
+    lines = rig.chat();
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0].text.starts_with("GAME "));
+    CHECK(lines[0].text.ends_with("December 28, 3200 - 1 PM"));
+    CHECK(lines[1].text.starts_with("LOCAL "));
+    CHECK(lines[1].text.size() > std::strlen("LOCAL "));
+}
