@@ -19,6 +19,9 @@ test=1; [ "${2:-}" = --no-test ] && test=0
 export HOST_UID=${HOST_UID:-$(stat -c %u . 2>/dev/null || stat -f %u .)} HOST_GID=${HOST_GID:-$(stat -c %g . 2>/dev/null || stat -f %g .)}
 if [ "$HOST_UID" = 0 ]; then echo "warning: the checkout belongs to root, so the browser tests will fail (Chromium refuses root)"; fi
 mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/msvc .docker/msvc-home .docker/no-plugin dist
+# Started by root, the folders it just made are still root's: hand them to the containers' user (Wine refuses a home
+# folder it does not own).
+if [ "$(id -u)" = 0 ]; then chown "$HOST_UID:$HOST_GID" .docker .docker/ccache .docker/ccache/* .docker/msvc .docker/msvc-home .docker/no-plugin dist; fi
 tag=${BUILD_TAG:+-$BUILD_TAG}
 out=dist${BUILD_TAG:+/$BUILD_TAG}
 read -ra cmake_args <<< "${CMAKE_ARGS:-}"
