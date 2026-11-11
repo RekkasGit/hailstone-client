@@ -226,9 +226,11 @@ int ItemStats(lua_State* L) {
 // The AllItems place keys, including banked selections while the bank is open.
 std::optional<net::ItemSlot> carried_place(std::string_view text) {
     if (text.size() < 3 || text[1] != ':') return std::nullopt;
-    const std::int16_t type = text[0] == 'i' ? net::kInvPossessions :
-        text[0] == 'b' ? net::kInvBank : text[0] == 's' ? net::kInvSharedBank : -1;
-    if (type < 0) return std::nullopt;
+    std::int16_t type = 0;
+    if (text[0] == 'i') type = net::kInvPossessions;
+    else if (text[0] == 'b') type = net::kInvBank;
+    else if (text[0] == 's') type = net::kInvSharedBank;
+    else return std::nullopt;
     text.remove_prefix(2);
     int slot = 0, sub = -1;
     auto r = std::from_chars(text.data(), text.data() + text.size(), slot);
