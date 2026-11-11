@@ -21,6 +21,9 @@ struct FlyCamera {
     // The original's camera FOV in 512ths of a circle (90 for every stock
     // camera) and near plane (game/view_distance.h, camera_fov).
     float fov_units = game::kStockFovUnits;
+    // Added to fov_units for the view only (drunkenness's widening), so the chosen FOV is never overwritten.
+    float fov_offset_units = 0.0f;
+    float view_fov_units() const { return fov_units + fov_offset_units; }
     float near_plane = game::kCameraNear;
 
     glm::vec3 forward() const {
@@ -41,7 +44,7 @@ struct FlyCamera {
     // from D3D's; the image does not.
     // The view as the shadow cascades take it (render/shadows.h).
     ShadowCamera shadow_camera(int width, int height) const {
-        auto fov = game::camera_fov(fov_units, width, height);
+        auto fov = game::camera_fov(view_fov_units(), width, height);
         ShadowCamera c;
         c.position = position;
         c.forward = forward();
@@ -55,7 +58,7 @@ struct FlyCamera {
 
     // The projection terms the screen-space AO rebuilds positions with (render/vk_context.h AoView).
     AoView ao_view(int width, int height, float far_plane) const {
-        auto fov = game::camera_fov(fov_units, width, height);
+        auto fov = game::camera_fov(view_fov_units(), width, height);
         AoView v;
         v.tan_half_x = fov.tan_half_x;
         v.tan_half_y = fov.tan_half_y;
@@ -65,7 +68,7 @@ struct FlyCamera {
     }
 
     glm::mat4 projection(int width, int height, float far_plane) const {
-        auto fov = game::camera_fov(fov_units, width, height);
+        auto fov = game::camera_fov(view_fov_units(), width, height);
         float n = near_plane;
         glm::mat4 p(0.0f);
         p[0][0] = 1.0f / fov.tan_half_x;

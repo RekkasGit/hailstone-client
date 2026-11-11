@@ -258,7 +258,9 @@ Deliberate differences: the cameras keep the client's own field of view (ToggleV
 default); the user cameras are not saved (the original's loadOptions reads Camera2-* into camera 1's globals, so its
 zoom check always fails and both are reset to their defaults each session: the same here); zoning does not restore
 the saved camera. Knockout selects overhead until consciousness returns; a drunkenness tick at 70 or above selects
-first person and widens the FOV by the value above 70. The missile camera
+first person and widens the FOV by the value above 70. The widening is added on top of the player's own FOV
+(Options, /fov) instead of replacing it with camera 0's base FOV, and drops at once when drunkenness falls below 70
+(a reset at death or bind too), so the chosen FOV comes back exactly. The missile camera
 (8, following the player's own arrow) is not used.
 
 ## Movement collision

@@ -242,10 +242,7 @@ DrunkennessTick drunkenness_tick(std::int32_t value, std::int32_t alcohol_tolera
     return out;
 }
 
-std::optional<float> drunkenness_fov(std::int32_t value, float first_person_fov) {
-    if (value < 70) return std::nullopt;
-    return static_cast<float>(mechanics::Fpu::ftol(first_person_fov) + value - 70);
-}
+float drunkenness_fov_offset(std::int32_t value) { return value < 70 ? 0.0f : static_cast<float>(value - 70); }
 
 bool six_second_tick_due(const SpellState& spells, std::int64_t now_ms) {
     return elapsed_over(now_ms, spells.last_buff_tick_ms, kSixSeconds);

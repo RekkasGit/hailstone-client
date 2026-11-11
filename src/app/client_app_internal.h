@@ -1482,6 +1482,7 @@ private:
     int camera_type_ = game::kCameraFirstPerson;
     std::uint32_t consciousness_changes_ = 0;
     std::uint32_t drunkenness_updates_ = 0;
+    float drunk_fov_offset_ = 0.0f; // on top of camera_.fov_units (game::drunkenness_fov_offset)
     std::optional<int> unconscious_camera_;
     std::array<game::GameCamera, 6> cameras_;
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)

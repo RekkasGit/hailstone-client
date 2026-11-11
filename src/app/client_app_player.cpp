@@ -354,11 +354,12 @@ void ClientApp::update_player(float dt) {
     }
     if (conn_ && conn_->drunkenness_updates() != drunkenness_updates_) {
         drunkenness_updates_ = conn_->drunkenness_updates();
-        if (auto fov = game::drunkenness_fov(conn_->drunkenness(), cameras_[0].f.fov)) {
-            set_camera_type(game::kCameraFirstPerson);
-            camera_.fov_units = *fov;
-        }
+        drunk_fov_offset_ = game::drunkenness_fov_offset(conn_->drunkenness());
+        if (conn_->drunkenness() >= 70) set_camera_type(game::kCameraFirstPerson);
     }
+    // The widening follows the ticks, but a value below 70 (a sudden reset too) drops it at once.
+    if (!conn_ || game::drunkenness_fov_offset(conn_->drunkenness()) == 0.0f) drunk_fov_offset_ = 0.0f;
+    camera_.fov_offset_units = drunk_fov_offset_;
     // Behind the loading screen (zone_settle_) the keys and the pad do not reach the world.
     bool keys = !ui_.wants_keyboard() && !zone_settling();
     const auto& in = window_.input();

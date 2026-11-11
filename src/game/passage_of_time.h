@@ -23,7 +23,6 @@
 // movement rate, visibility and air supply (other modules or not needed).
 
 #include <cstdint>
-#include <optional>
 
 #include "game/mechanics/character_sheet.h"
 
@@ -52,9 +51,11 @@ struct DrunkennessTick {
 // UpdateDrunkenness @0x44af40: one point per buff tick. The mount threshold reads the raw Alcohol Tolerance
 // skill, before any skill modifiers, and compares the value after the decrement.
 DrunkennessTick drunkenness_tick(std::int32_t value, std::int32_t alcohol_tolerance, bool mounted);
-// UpdateDrunkenness chooses first person at 70, then sets the projection to that camera's base FOV + value-70.
-// The base field is truncated before addition (the original's integer SetFOV argument).
-std::optional<float> drunkenness_fov(std::int32_t value, float first_person_fov);
+// UpdateDrunkenness chooses first person at 70, then sets the projection to that camera's base FOV + value-70
+// (the base truncated, the original's integer SetFOV argument). Deliberate difference: the widening, value-70 (0
+// below 70), is added on top of the player's chosen FOV each frame instead of replacing it, so the Options or /fov
+// setting comes back exactly, also when drunkenness is reset at once (death, bind) above 70.
+float drunkenness_fov_offset(std::int32_t value);
 
 // What the ticks ask of the connection.
 class PassageHost {

@@ -432,10 +432,11 @@ TEST_CASE("Drunkenness decays once per buff tick and compares the new value with
     CHECK_FALSE(drunkenness_tick(51, 0, false).remove_mount);
     CHECK_FALSE(drunkenness_tick(101, 102, true).remove_mount); // threshold101, value100.
     CHECK(drunkenness_tick(151, 250, true).remove_mount); // threshold caps at150.
-    CHECK_FALSE(drunkenness_fov(69, 90));
-    REQUIRE(drunkenness_fov(70, 90));
-    CHECK(*drunkenness_fov(70, 90) == 90);
-    CHECK(*drunkenness_fov(120, 90.75f) == 140); // Integer base-FOV conversion precedes addition.
+    // The widening is an offset on the player's own FOV, 0 below 70 (a reset to 0 restores the chosen FOV).
+    CHECK(drunkenness_fov_offset(0) == 0);
+    CHECK(drunkenness_fov_offset(69) == 0);
+    CHECK(drunkenness_fov_offset(70) == 0);
+    CHECK(drunkenness_fov_offset(120) == 50);
 
     // The timed update runs even when BaseData is missing; a skipped regen must not accelerate sobering.
     mq_test::World w("hailstone_drunkenness_tick_test");
