@@ -7,6 +7,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "game/path_trail.h"
 #include "game/spells.h"
 #include "net/game_connection.h"
 #include "render/actor_renderer.h"
@@ -147,18 +148,13 @@ namespace {
 // The keys of the path's emitters (above any spawn id << 16 | spell id a spell's emitters use).
 constexpr std::uint32_t kPathLineKey = 0xfff00000u;
 constexpr std::uint32_t kPathFinishKey = 0xfff00001u;
+constexpr std::uint32_t kGuideLineKey = 0xfff00002u;
 std::uint32_t mover_key(std::uint32_t serial, int i) { return 0xfff10000u + ((serial & 0x3fffu) << 2) + static_cast<std::uint32_t>(i); }
 } // namespace
 
-void SpellParticles::update_path(net::GameConnection& conn) {
-    if (particles_.empty()) return;
-    const game::PlayerPath& path = conn.player_path();
-    const game::PathSettings& ps = path.settings();
-    // The line: soft glowing quads along PlayerPath's spline points (and half way between them), their alpha as
-    // PlayerPath fades the line near and far from the player. This client's look: the original draws a textured tube
-    // (ThickLineSystem with Path.ini's Texture and ShapeSet); a soft blob (spellsnew's blobb.dds, a finish emitter's
-    // texture) reads better as camera-facing quads than the tube's stripe texture.
+void SpellParticles::draw_trail(std::uint32_t key, std::span<const glm::vec3> line, const glm::vec3& color, float far) {
     if (!path_definition_) {
+        // A soft blob (spellsnew's blobb.dds, a finish emitter's texture), additive, not writing depth.
         assets::EmitterDefinition d;
         d.name = "PlayerPath";
         d.texture = "blobb.dds";
@@ -167,29 +163,42 @@ void SpellParticles::update_path(net::GameConnection& conn) {
         d.frames = 1;
         path_definition_ = particles_.add_definition(std::move(d));
     }
+    game::TrailStyle st;
+    st.color = color;
+    st.far_end = far;
+    st.far_start = far * 0.7f;
+    game::TrailFloorFn floor;
+    if (floor_) floor = [this](const glm::vec3& p) { return floor_(p); };
     std::vector<game::Particle> quads;
-    if (path.active()) {
-        const auto& line = path.line();
-        auto quad = [&](const glm::vec3& at, float scale, float alpha) {
-            if (alpha <= 0.0f) return;
-            game::Particle q;
-            q.position = at;
-            q.width = q.height = 2.5f * scale;
-            q.color = glm::vec4(0.75f, 0.9f, 1.0f, alpha);
-            q.lifetime = 1.0f;
-            quads.push_back(q);
-        };
-        for (std::size_t i = 0; i < line.size(); ++i) {
-            quad(line[i].position, line[i].scale, line[i].alpha);
-            if (i + 1 < line.size())
-                quad((line[i].position + line[i + 1].position) * 0.5f, (line[i].scale + line[i + 1].scale) * 0.5f,
-                     std::min(line[i].alpha, line[i + 1].alpha));
+    for (const auto& t : game::build_trail(line, st, clock_, floor)) {
+        game::Particle q;
+        q.position = t.position;
+        q.width = q.height = t.size;
+        q.color = glm::vec4(color, t.alpha);
+        q.lifetime = 1.0f;
+        quads.push_back(q);
+    }
+    if (quads.empty()) particles_.stop(key);
+    else particles_.set_still(key, *path_definition_, std::move(quads));
+}
+
+void SpellParticles::update_path(net::GameConnection& conn) {
+    if (particles_.empty()) return;
+    const game::PlayerPath& path = conn.player_path();
+    const game::PathSettings& ps = path.settings();
+    // The line: a trail of soft glowing sprites (game/path_trail.h) from the player along PlayerPath's points. This
+    // client's look: the original draws a textured tube (ThickLineSystem with Path.ini's Texture and ShapeSet). It
+    // fades out where Path.ini's FadeStart / FadeEnd fade the original's.
+    {
+        std::vector<glm::vec3> line;
+        if (path.active()) {
+            const auto& pts = path.points(); // the destination first: the trail runs from the player
+            line.assign(pts.rbegin(), pts.rend());
         }
+        draw_trail(kPathLineKey, line, glm::vec3(0.6f, 0.85f, 1.0f), std::max(ps.fade_end, 40.0f));
     }
-    if (path_definition_) {
-        if (quads.empty()) particles_.stop(kPathLineKey);
-        else particles_.set_still(kPathLineKey, *path_definition_, std::move(quads));
-    }
+    // The Find window's guide path (app/guide_path.h): the same trail, gold.
+    draw_trail(kGuideLineKey, guide_line_, glm::vec3(1.0f, 0.8f, 0.35f), 170.0f);
     // The movers: their four EmitterN emitters made where a mover is first placed, moved along with it, and taken away
     // when it is off the path or gone (a reused mover has a new serial).
     std::vector<std::uint32_t> live;

@@ -407,6 +407,10 @@ with any compiler. On macOS the client loads only `.dylib`: CMake names a `MODUL
 plugin's own build sets `CMAKE_SHARED_MODULE_SUFFIX` to `.dylib` (or the target's `SUFFIX`); the client's build does
 this for the plugins built in its tree. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
 
+**Licence.** The client is GPL-2.0-or-later, but `sdk/` is MIT (`sdk/LICENSE`), and NOTICE.md's plugin and add-on
+exception lets a plugin built against it, or a script using the `mq` module and `eq.*`, use any licence, closed ones
+included. A plugin that copies the client's own code (anything outside `sdk/`) is covered by the GPL instead.
+
 ```c
 #include "hailstone_plugin.h"
 HAILSTONE_PLUGIN   /* the two required exports and the `host` global (the host table) */
@@ -707,7 +711,9 @@ a line in the log once.
 | Needs | `eq` functions |
 |---|---|
 | nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
-| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
+| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the Find window (`eq.FindOpen`) and its guide path (`eq.FindNpcPath`), the social editors, `eq.gamepad.set_*` |
+| `target` | `eq.FindNpcTarget` (the Find window's row) |
+| `move` | `eq.FindNpcWalk` (the Find window's Walk there, a `/nav` walk) |
 | `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute or destroy chosen items), `eq.ItemJob`, `eq.SetItemKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 

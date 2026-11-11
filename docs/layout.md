@@ -45,6 +45,8 @@ hailstone/
     server_files.txt         the files downloaded from the server: SHA-256, size, path (net/server_files.h)
     .download/               a download that has not finished; moved into place when every file has come
     maps/                    map edits made on this server, for all its worlds; maps added by hand for it
+    zone_links.txt           how the zones connect, for the map's zone finder: "s <from> <to>" from the server's
+                             list, "l <from> <to>" learned from zone points (game/zone_routes.h)
     worlds.ini               [<world>] name, listed: the worlds the login server listed last
     characters/<world>/<character>/
                              UI.ini, hotbuttons.ini, BZR.ini, BART.ini (buy lines), btrlog.txt (barter

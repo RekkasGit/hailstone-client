@@ -1,5 +1,9 @@
 # Third-party code and references
 
+Hailstone itself is GPL-2.0-or-later, its plugin SDK (`sdk/`) MIT (NOTICE.md). Everything listed here keeps its own
+licence; all of it is compatible with GPL version 2 except MoltenVK (Apache-2.0), which is not compiled in: it is a
+separate library shipped beside the macOS binary, with its licence.
+
 ## Libraries
 
 | Library | Licence | Use |

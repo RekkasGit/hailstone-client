@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT (sdk/LICENSE) */
 #pragma once
 
 // Endian-explicit readers and writers for game files and packets. All EQ

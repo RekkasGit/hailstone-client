@@ -5,6 +5,7 @@
 -- and its ranges above and below you, hud.AutoZControls).
 -- Shown or hidden from any frame's menu (All frames > Minimap: hud.minimap).
 local hud = dofile("lib/hud.lua")
+local FL = dofile("lib/find.lua")
 local T = hud.T
 local C = T.color
 
@@ -66,7 +67,22 @@ local function drawWindow(x, y, w, h, s)
   local dragged = hud.DragItem() -- a drag moves the frame
   local mx, my = ui.GetMousePos()
   local hovered = ui.IsItemHovered() and (mx - cx) ^ 2 + (my - cy) ^ 2 <= r * r
-  local nx, ny = eq.DrawMinimap(cx, cy, r, RANGES[zoom()], rotating())
+  local nx, ny, pmx, pmy, k = eq.DrawMinimap(cx, cy, r, RANGES[zoom()], rotating())
+  -- the Find window's NPCs (lib/find.lua): as the map marks them, inside the ring
+  if pmx and k then
+    local F, all = FL.state, FL.marks()
+    if all or F.sel then
+      local sn, cs = nx, -ny -- north's screen direction is (sin, -cos) of the turn
+      for _, row in ipairs(FL.rows()) do
+        local lit = row.id == F.sel or row.id == F.hover
+        if all or lit then
+          local dx, dy = (row.x - pmx) * k, (row.y - pmy) * k
+          local sx, sy = dx * cs - dy * sn, dx * sn + dy * cs
+          if sx * sx + sy * sy <= (r - 4 * s) ^ 2 then FL.drawMark(cx + sx, cy + sy, row, s * 0.85, lit, false) end
+        end
+      end
+    end
+  end
   ui.DrawCircle(cx, cy, r, C.accent[1], C.accent[2], C.accent[3], 0.35, 1.5 * s)
   -- north on the ring
   if nx then

@@ -15,7 +15,7 @@ Security problems go through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Before you start
 
-- Read [docs/plan.md](docs/plan.md) (goals and architecture), [docs/todo.md](docs/todo.md) (what is open) and [docs/unknowns.md](docs/unknowns.md) (what is guessed). Pick work from the to-do list, or open an issue first for anything large, so effort is not duplicated.
+- Read [docs/plan.md](docs/plan.md) (goals and architecture), [docs/code-overview.md](docs/code-overview.md) (where everything is), [docs/todo.md](docs/todo.md) (what is open) and [docs/unknowns.md](docs/unknowns.md) (what is guessed). Pick work from the to-do list, or open an issue first for anything large, so effort is not duplicated.
 - The rules that shape every change:
   - **Faithful mechanics, modern graphics.** Game rules follow the original RoF2 client; rendering does not have to look like it.
   - **No guessing.** Behaviour you cannot confirm is recorded in `docs/unknowns.md` rather than invented.
@@ -84,4 +84,4 @@ AI-assisted changes are welcome under the same rules as any other change, and th
 - Keep pull requests focused. Describe what changed and why, and note how you tested.
 - Do not commit build output, logs, captures containing account data, passwords, auth keys or anything from your game folder.
 
-By contributing you agree that your work is released under the [MIT license](LICENSE).
+By contributing you agree that your work is released under the GNU General Public License, version 2 or (at your option) any later version ([LICENSE](LICENSE)), with the plugin and add-on exception in [NOTICE.md](NOTICE.md); changes to [sdk/](sdk/) are released under its MIT licence ([sdk/LICENSE](sdk/LICENSE)).
