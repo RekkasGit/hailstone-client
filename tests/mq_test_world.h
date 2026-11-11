@@ -30,6 +30,9 @@ struct GameConnectionTestAccess {
     static std::string& character(GameConnection& c) { return c.character_; }
     static bool& auto_attack(GameConnection& c) { return c.auto_attack_; }
     static ConnectionState& state(GameConnection& c) { return c.state_; }
+    static std::optional<NewZone>& new_zone(GameConnection& c) { return c.new_zone_; }
+    static std::vector<ZonePoint>& zone_points(GameConnection& c) { return c.zone_points_; }
+    static void handle_zone(GameConnection& c, const AppPacket& p) { c.handle_zone(p); }
     static game::AltAdvState& alt_adv(GameConnection& c) { return c.alt_adv_; }
     static void update_usable_gems(GameConnection& c) { c.update_usable_gems(); }
     static void memorize_tick(GameConnection& c, std::int64_t now) { c.memorize_tick(now); }

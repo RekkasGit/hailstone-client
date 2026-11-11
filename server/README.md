@@ -1,6 +1,6 @@
 # Hailstone server support
 
-Hailstone works on any EQEmu server as is. A server can add four things:
+Hailstone works on any EQEmu server as is. A server can add five things:
 
 - **sending the server's client files**: what the owner puts in `client_files/` (spells, strings, zones, models, and
   the server's own plugins and Lua scripts with the `hailstone.cfg` that sets the rules for plugins, scripts and
@@ -13,9 +13,11 @@ Hailstone works on any EQEmu server as is. A server can add four things:
   other refusals), else the same line as text. It works for any RoF2 client, Hailstone or not. EQEmu's Lua cannot
   tell whether the named player really invited the sender, so at most 5 declines a sender in 10 s are passed on;
 - **quest givers in the Find window**: Hailstone's Find window lists the zone's merchants, bankers and trainers on
-  any server; with the script it also lists the NPCs that have quests (below).
+  any server; with the script it also lists the NPCs that have quests (below);
+- **zone connections for the map's zone finder**: every zone point the server's expansion and content flags allow,
+  so the World view can route between zones the player has not visited (below).
 
-This folder does all four with a Lua quest script. It needs no C++ changes, no rebuild and no opcode
+This folder does all five with a Lua quest script. It needs no C++ changes, no rebuild and no opcode
 edits, and it runs next to the server's own quests (Perl or Lua) without replacing any of them. Tested on
 EQEmu 23.10.3 with the PEQ quests.
 
@@ -76,6 +78,7 @@ so each read is a database query), and at once after `#reloadquest`.
 | `files_chunks_per_second` | 768 | file pieces (32 KB each) one player is sent in a second; more wait their turn (0: no limit) |
 | `files_chunks_per_second_zone` | 1024 | file pieces all of the zone's players together are sent in a second; more wait their turn (0: no limit) |
 | `quest_npcs` | 1 | tell Hailstone's Find window which of the zone's NPCs have quests (0: say nothing) |
+| `zone_links` | 1 | send how the zones connect, for the map's zone finder (0: never answered; players' clients then learn the zone lines of the zones they visit) |
 
 ## Client files
 
@@ -153,13 +156,24 @@ dropped. Set `quest_npcs` to 0 to keep which NPCs are scripted to yourself.
 ## How it works
 
 The client sends its requests on custom opcodes no server's opcode table lists (the settings request
-0x1432, the files' `OP_HsFilesRequest` 0x1434, the guild invitation 0x1430, the quest NPCs 0x1436), so the zone passes them to the
+0x1432, the files' `OP_HsFilesRequest` 0x1434, the guild invitation 0x1430, the quest NPCs 0x1436, the zone links 0x1438), so the zone passes them to the
 `event_unhandled_opcode` quest event, and the script replies with raw packets. Hailstone 0.7.0 and older send the
 same requests 0x0e lower (0x1422, 0x1424, 0x1426); the script answers those on the old numbers too, so updating the
 script first leaves older clients working. (On Project Triune's server 0x1422 is its own opcode and never reaches
 the script, so those older clients get no cross-zone guild invitations there.) The script registers that event
 through an encounter loaded from `global/script_init.lua`, which EQEmu runs from every quest folder, so the server's
 own `global_player` scripts keep running.
+
+## Zone links
+
+The map window's zone finder shows the way from one zone to another (docs/navigation.md "Zone atlas"). With the
+script, the client asks once a session, the first time a player opens the map's World view (`OP_HsZoneLinksRequest`
+0x1438), and gets every pair of zones a zone point joins (`OP_HsZoneLinks` 0x1439; the layout is in the client's
+`src/net/zone_link_packets.h`). The list is the `zone_points` rows of version 0 or -1 whose own row, source zone and
+target zone the server's expansion (`Expansion:CurrentExpansion`) and content flags allow, as EQEmu's
+`ContentFilterCriteria` filters them when a zone loads its zone points. It is built at the first request in each zone
+process with one query of the content database and one of `content_flags`, then kept in memory; `#reloadquest`
+builds it again. A character is answered at most twice a minute. A stock database gives a reply of about 6 KB.
 
 ## Guild invitations across zones
 

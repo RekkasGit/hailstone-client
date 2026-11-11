@@ -86,6 +86,7 @@
 #include "net/commerce.h"
 #include "net/market_packets.h"
 #include "net/settings_packets.h"
+#include "net/zone_link_packets.h"
 #include "plugin/policy.h"
 #include "net/server_files.h"
 #include "net/merchant_packets.h"
@@ -477,6 +478,12 @@ public:
     float player_heading() const { return heading_; }
     // Zone points of the current zone (OP_SendZonepoints): targets by zone_points.number.
     const std::vector<ZonePoint>& zone_points() const { return zone_points_; }
+    // The server's zone connections for the map's zone finder (net/zone_link_packets.h): asked at most once a session,
+    // and only once a zone has answered OP_HailstoneSettingsRequest (Hailstone's server script is there; a stock
+    // server never answers). Cheap to call every frame.
+    void request_zone_links();
+    const std::optional<ZoneLinks>& zone_links() const { return zone_links_; }
+    std::uint32_t zone_links_serial() const { return zone_links_serial_; }
     // The current zone's id and instance (from OP_NewZone; 0 before it arrives).
     std::uint16_t zone_id() const { return new_zone_ ? new_zone_->zone_id : 0; }
     // The spawns ProcessSwitches checks for a moving floor switch's riders (the app's player); null: none.
@@ -3239,6 +3246,10 @@ private:
     std::unordered_map<std::uint32_t, FindableNpc> findable_npcs_;
     std::unordered_map<std::string, std::uint8_t> quest_npcs_;
     bool quest_npcs_asked_ = false;
+    bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
+    bool zone_links_asked_ = false;
+    std::optional<ZoneLinks> zone_links_;
+    std::uint32_t zone_links_serial_ = 0;
     std::optional<glm::vec3> path_finish_;
     bool path_settings_loaded_ = false;
     game::PathSettings path_settings_;

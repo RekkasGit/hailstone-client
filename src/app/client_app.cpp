@@ -448,6 +448,26 @@ int ClientApp::run() {
                 lap.mark("plan point shadows");
                 settle_frame_.shadow_builds = point_builds.size();
                 if (zone_renderer_) zone_renderer_->set_lighting(lighting);
+                // The zone's exits for the map and its zone finder (EqHost::zone_exits), once its zone points are in.
+                if (in_game && zone_ && conn_ && eq_host_.zone_exits_zone == 0 && conn_->zone_id() != 0 &&
+                    !conn_->zone_points().empty()) {
+                    std::vector<game::ZonePointTarget> points;
+                    for (const auto& p : conn_->zone_points()) points.push_back({p.number, p.zone_id, p.x, p.y, p.z});
+                    const auto zid = static_cast<std::uint32_t>(conn_->zone_id());
+                    eq_host_.zone_exits.clear();
+                    for (const auto& g : game::collect_neighbour_lines(zone_->regions, zone_->bounds_min, zone_->bounds_max,
+                                                                       points, zid)) {
+                        EqHost::ZoneExit e;
+                        e.zone_id = g.zone_id;
+                        for (int i = 0; i < 3; ++i) {
+                            e.lo[i] = g.lo[i];
+                            e.hi[i] = g.hi[i];
+                        }
+                        for (const auto& c : g.cells) e.cells.push_back({c.lo.x, c.lo.y, c.lo.z, c.hi.x, c.hi.y, c.hi.z});
+                        eq_host_.zone_exits.push_back(std::move(e));
+                    }
+                    eq_host_.zone_exits_zone = zid;
+                }
                 if (neighbours_) {
                     // The zone past each outdoor zone line, once the zone points are in (app/neighbour_zones.h).
                     if (in_game && zone_ && conn_ && !neighbours_->entered()) {

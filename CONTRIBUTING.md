@@ -15,7 +15,7 @@ Security problems go through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Before you start
 
-- Read [docs/plan.md](docs/plan.md) (goals and architecture), [docs/todo.md](docs/todo.md) (what is open) and [docs/unknowns.md](docs/unknowns.md) (what is guessed). Pick work from the to-do list, or open an issue first for anything large, so effort is not duplicated.
+- Read [docs/plan.md](docs/plan.md) (goals and architecture), [docs/code-overview.md](docs/code-overview.md) (where everything is), [docs/todo.md](docs/todo.md) (what is open) and [docs/unknowns.md](docs/unknowns.md) (what is guessed). Pick work from the to-do list, or open an issue first for anything large, so effort is not duplicated.
 - The rules that shape every change:
   - **Faithful mechanics, modern graphics.** Game rules follow the original RoF2 client; rendering does not have to look like it.
   - **No guessing.** Behaviour you cannot confirm is recorded in `docs/unknowns.md` rather than invented.
