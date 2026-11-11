@@ -145,6 +145,7 @@ void GameConnection::fail(std::string message) {
     log::warn("connection: {}", message);
     error_ = std::move(message);
     state_ = ConnectionState::Disconnected;
+    reset_tribute_donations();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (zone_session_) zone_session_->disconnect();
@@ -168,6 +169,7 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
 }
 
 void GameConnection::start(const WorldTicket& ticket) {
+    reset_tribute_donations();
     ticket_ = ticket;
     camped_out_.reset();
     link_death_.reset();
@@ -633,6 +635,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_group_for_zone();
         reset_social_for_zone();
         reset_commerce_for_zone();
+        reset_tribute_donations();
         reset_progress_for_zone();
         reset_player_for_zone();
         reset_market_for_zone();
@@ -2137,6 +2140,7 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    reset_tribute_donations();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (chat_server_) chat_server_->disconnect();

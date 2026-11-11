@@ -18,6 +18,12 @@ constexpr std::int64_t kTributeWaitMs = 5000; // a donation the tribute master h
 bool carried_slot(const ItemSlot& at) {
     return at.type == kInvPossessions && at.slot >= kSlotGeneral1 && at.slot <= kSlotGeneral10 && at.aug < 0;
 }
+
+bool bank_slot(const ItemSlot& at, int slots) {
+    return at.aug < 0 && at.slot >= 0 &&
+        ((at.type == kInvBank && at.slot < slots) ||
+         (at.type == kInvSharedBank && at.slot < game::kSharedBankSlots));
+}
 }
 
 std::string GameConnection::item_job_blocked(ItemJobScope scope) const {
@@ -113,21 +119,28 @@ std::string GameConnection::bulk_items_blocked(ItemJobMode mode) const {
         if (!merchant_ || !merchant_->open || merchant_->trader) return "Open a merchant first.";
         return {};
     }
-    if (mode != ItemJobMode::Destroy && mode != ItemJobMode::Tribute) return "That is not a bulk action.";
-    if (mode == ItemJobMode::Tribute && !tribute_.master_id) return "Open a tribute master first.";
+    if (mode == ItemJobMode::Withdraw && !bank_) return "The bank is not open.";
+    if (mode != ItemJobMode::Destroy && mode != ItemJobMode::Tribute && mode != ItemJobMode::Withdraw)
+        return "That is not a bulk action.";
+    if (mode == ItemJobMode::Tribute && !tribute_.master_id && !guild_tribute_.master_id)
+        return "Open a tribute master first.";
+    if (mode == ItemJobMode::Tribute && tribute_donation_waiting())
+        return "Wait for the previous tribute donation's answer.";
     return item_job_blocked(ItemJobScope::Inventory); // each item goes through the cursor
 }
 
 std::vector<ItemSlot> GameConnection::bulk_items_plan(ItemJobMode mode, const std::vector<ItemSlot>& slots) const {
     std::vector<ItemSlot> out;
     for (const ItemSlot& at : slots) {
-        if (!carried_slot(at)) continue;
+        const bool banked = bank_ && bank_slot(at, bank_->slots);
+        if (mode == ItemJobMode::Withdraw ? !banked :
+            !carried_slot(at) && !(banked && mode == ItemJobMode::Destroy)) continue;
         if (at.sub >= 0) { // a bag's slot: the bag must be in that general slot
-            const Item* bag = inventory_.at(ItemSlot::possessions(at.slot));
+            const Item* bag = inventory_.at(at.parent());
             if (!bag || !bag->is_bag() || at.sub >= bag->bag_slots) continue;
         }
         const Item* it = inventory_.at(at);
-        if (!it || kept_items_.kept(it->id)) continue;
+        if (!it || (mode != ItemJobMode::Withdraw && kept_items_.holds_kept(*it))) continue;
         if (std::any_of(out.begin(), out.end(), [&](const ItemSlot& o) { return o.same(at); })) continue;
         bool ok = false;
         switch (mode) {
@@ -139,18 +152,29 @@ std::vector<ItemSlot> GameConnection::bulk_items_plan(ItemJobMode mode, const st
             bool full = false;
             if (it->is_bag() && at.sub < 0)
                 for (int i = 0; i < it->bag_slots && !full; ++i)
-                    full = inventory_.at(ItemSlot::possessions(at.slot, static_cast<std::int16_t>(i))) != nullptr;
+                    full = inventory_.at(ItemSlot{at.type, at.slot, static_cast<std::int16_t>(i), -1}) != nullptr;
             ok = !full && !it->no_destroy();
             break;
         }
         case ItemJobMode::Tribute:
             // EQEmu's Handle_OP_TributeItem gives an item's Favor and refuses one worth none
-            ok = !it->is_bag() && it->favor > 0;
+            ok = !it->is_bag() && (guild_tribute_.master_id ? it->guild_favor > 0 : it->favor > 0);
+            break;
+        case ItemJobMode::Withdraw:
+            ok = true;
             break;
         default:
             break;
         }
         if (ok) out.push_back(at);
+    }
+    if (mode == ItemJobMode::Withdraw) {
+        const auto chosen = out;
+        std::erase_if(out, [&](const ItemSlot& at) {
+            return at.sub >= 0 && std::any_of(chosen.begin(), chosen.end(), [&](const ItemSlot& parent) {
+                return parent.sub < 0 && parent.same(at.parent());
+            });
+        });
     }
     return out;
 }
@@ -159,13 +183,21 @@ std::string GameConnection::start_bulk_job(ItemJobMode mode, const std::vector<I
     if (auto why = bulk_items_blocked(mode); !why.empty()) return why;
     std::vector<ItemSlot> plan = bulk_items_plan(mode, slots);
     if (plan.empty()) {
-        return mode == ItemJobMode::Sell      ? "Nothing chosen is something you carry that this merchant buys."
+        return mode == ItemJobMode::Withdraw  ? "Nothing chosen is in the open bank."
+               : mode == ItemJobMode::Sell   ? "Nothing chosen is something you carry that this merchant buys."
                : mode == ItemJobMode::Tribute ? "Nothing chosen is something you carry that is worth tribute."
                                               : "Nothing chosen is something you carry that can be destroyed.";
     }
     ItemJob job;
-    for (const ItemSlot& at : plan) job.clicks.push_back({at, inventory_.at(at)->id});
-    job.status = {0, job.clicks.size(), mode, ItemJobScope::Inventory};
+    for (const ItemSlot& at : plan) {
+        const Item& item = *inventory_.at(at);
+        job.clicks.push_back({at, item.id});
+        job.expected.emplace_back(item.serial, item.stackable() ? item.stack_count : 1u);
+    }
+    const bool banked = std::any_of(plan.begin(), plan.end(), [](const ItemSlot& at) { return at.type != kInvPossessions; });
+    job.status = {0, job.clicks.size(), mode, banked ? ItemJobScope::Bank : ItemJobScope::Inventory};
+    job.guild_tribute = mode == ItemJobMode::Tribute && guild_tribute_.master_id != 0;
+    job.tribute_master = job.guild_tribute ? guild_tribute_.master_id : tribute_.master_id;
     log::info("bulk item job (mode {}): {} items", static_cast<int>(mode), job.clicks.size());
     item_job_ = std::move(job);
     return {};
@@ -175,6 +207,14 @@ void GameConnection::update_bulk_job(std::int64_t now) {
     ItemJob& job = *item_job_;
     const game::SortClick& c = job.clicks[job.next];
     const bool tribute = job.status.mode == ItemJobMode::Tribute;
+    const bool withdraw = job.status.mode == ItemJobMode::Withdraw;
+    const auto master = [&] { return job.guild_tribute ? guild_tribute_.master_id : tribute_.master_id; };
+    const auto answers = [&] { return job.guild_tribute ? guild_tribute_.donation_answers : tribute_.donation_answers; };
+    const auto matches = [&](const Item& item) {
+        const auto& expected = job.expected[job.next];
+        return item.id == c.cursor_id && item.serial == expected.first &&
+            (item.stackable() ? item.stack_count : 1u) == expected.second;
+    };
     auto next_item = [&] {
         job.phase = 0;
         ++job.next;
@@ -185,10 +225,12 @@ void GameConnection::update_bulk_job(std::int64_t now) {
         item_job_.reset();
         if (inventory_.cursor()) auto_inventory();
         chat(ChatEvent::Kind::System, tribute ? "Tribute stopped: your items changed while it ran."
-                                              : "Destroying stopped: your items changed while it ran.");
+                                      : withdraw ? "Withdrawing stopped: your items changed or your inventory is full."
+                                                 : "Destroying stopped: your items changed while it ran.");
     };
     if (state_ != ConnectionState::InZone || pstatus_.dead || quantity_ || trade_ || (merchant_ && merchant_->open) ||
-        (tribute && !tribute_.master_id))
+        (job.status.scope == ItemJobScope::Bank && !bank_) ||
+        (tribute && (master() == 0 || master() != job.tribute_master)))
         return stop();
     job.next_ms = now + kItemJobStepMs;
     const Item* held = inventory_.cursor();
@@ -196,30 +238,39 @@ void GameConnection::update_bulk_job(std::int64_t now) {
     case 0: { // pick it up (the whole stack)
         if (held) return stop();
         const Item* it = inventory_.at(c.slot);
-        if (!it || it->id != c.cursor_id || kept_items_.kept(it->id)) return next_item(); // gone or moved: skipped
+        if (!it || !matches(*it) || (!withdraw && kept_items_.holds_kept(*it))) return next_item();
+        if (job.status.mode == ItemJobMode::Destroy &&
+            (it->no_destroy() || (it->is_bag() && !it->contents.empty()))) return next_item();
         click_slot(c.slot, true, false);
         job.phase = 1;
         return;
     }
     case 1: // destroy it, or donate it
-        if (!held || held->id != c.cursor_id) return stop();
+        if (!held || !matches(*held)) return stop();
+        if (withdraw) {
+            if (stow_cursor_in_packs()) return next_item(); // into the packs only: a withdrawal equips nothing
+            // A full inventory leaves it on the cursor; put it back rather than continuing the selection.
+            if (!inventory_.at(c.slot) && bank_) click_slot(c.slot, true, false);
+            return stop();
+        }
         if (!tribute) {
+            if (held->no_destroy() || (held->is_bag() && !held->contents.empty())) return stop();
             destroy_cursor();
             if (inventory_.cursor()) return stop(); // refused (kept since)
             return next_item();
         }
-        job.answers = tribute_.donation_answers;
-        if (!tribute_donate_cursor()) return stop();
+        job.answers = answers();
+        if (!(job.guild_tribute ? guild_tribute_donate_cursor() : tribute_donate_cursor())) return stop();
         job.deadline_ms = now + kTributeWaitMs;
         job.phase = 2;
         return;
     case 2: // the tribute master's answer
-        if (tribute_.donation_answers == job.answers) {
+        if (answers() == job.answers) {
             if (now >= job.deadline_ms) return stop();
             return;
         }
         if (!held) return next_item(); // donated
-        if (held->id != c.cursor_id) return stop();
+        if (!matches(*held)) return stop();
         // refused (0 favour): back where it was
         if (inventory_.at(c.slot)) return stop();
         click_slot(c.slot, true, false);
@@ -245,7 +296,8 @@ void GameConnection::update_item_job() {
         if (job.status.mode != ItemJobMode::Sell || !merchant_ || merchant_->pending == 0) item_job_.reset();
         return;
     }
-    if (job.status.mode == ItemJobMode::Destroy || job.status.mode == ItemJobMode::Tribute) return update_bulk_job(now);
+    if (job.status.mode == ItemJobMode::Destroy || job.status.mode == ItemJobMode::Tribute ||
+        job.status.mode == ItemJobMode::Withdraw) return update_bulk_job(now);
     const game::SortClick& c = job.clicks[job.next];
     if (job.status.mode == ItemJobMode::Sell) {
         // one sale at a time: the merchant's answer clears pending (CMerchantWnd's "one thing at a time")
@@ -255,10 +307,15 @@ void GameConnection::update_item_job() {
         }
         if (merchant_->pending > 0) return;
         job.next_ms = now + kSellStepMs;
+        const std::size_t selected = job.next;
         ++job.next;
         job.status.done = job.next;
         const Item* it = inventory_.at(c.slot);
         if (!it || it->id != c.cursor_id) return; // gone or moved since: skipped
+        if (!job.expected.empty()) {
+            const auto& expected = job.expected[selected];
+            if (it->serial != expected.first || (it->stackable() ? it->stack_count : 1u) != expected.second) return;
+        }
         merchant_sell(c.slot, it->stackable() ? it->stack_count : 1);
         return;
     }

@@ -1150,6 +1150,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/item_sort_test.cpp
     tests/kept_items_test.cpp
     tests/inventory_manager_ui_test.cpp
+    tests/commerce_edges_test.cpp
+    tests/tribute_donation_test.cpp
     tests/audio_vectors_test.cpp
     tests/melee_vectors_test.cpp
     tests/spawn_heights_vectors_test.cpp

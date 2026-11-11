@@ -112,6 +112,15 @@ function M.SetKeep(item, on)
   eq.SetItemKept(item.id, item.name or "", on)
   kept.frame = -1
 end
+function M.SetKeepMany(items, on)
+  local changedSell = false
+  for _, item in ipairs(items) do
+    if on and M.Junk(item) then prefs().junk[item.id], changedSell = nil, true end
+  end
+  if changedSell then save("junk") end
+  eq.SetItemsKept(items, on)
+  kept.frame = -1
+end
 function M.SetSell(item, on)
   if not item then return end
   if on and M.Kept(item) then M.SetKeep(item, false) end

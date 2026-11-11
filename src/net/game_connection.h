@@ -1104,6 +1104,7 @@ public:
         std::optional<bool> opted_in;
         std::uint32_t master_id = 0;
         std::int32_t last_donation = 0;
+        std::uint32_t donation_answers = 0;
         std::uint32_t active_cost() const;
         std::int64_t time_left(std::int64_t now) const;
     };
@@ -1592,6 +1593,9 @@ public:
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
     bool auto_inventory();
+    // auto_inventory's last steps only: the first free general slot, else the first bag with room; never a worn slot
+    // (Hailstone's bulk withdraw, which is not the original's and must not equip what it takes from the bank).
+    bool stow_cursor_in_packs();
     // Hailstone: the items marked Keep (game/kept_items.h; the Advanced Inventory window), kept per character in
     // kept_items.txt (read at enter_world, written at each change). A kept item, or a bag holding one, is not
     // destroyed, dropped on the ground, put in a trade or a give, sold to a merchant or sent by parcel: each of those
@@ -1599,6 +1603,8 @@ public:
     const game::KeptItems& kept_items() const { return kept_items_; }
     bool item_kept(const Item& item) const { return kept_items_.holds_kept(item); }
     void set_item_kept(std::uint32_t id, std::string_view name, bool on);
+    // One persistence update for a set of marks (the Advanced Inventory's bulk mark actions).
+    void set_items_kept(const std::vector<std::pair<std::uint32_t, std::string>>& items, bool on);
     // Counts the changes to the marks (a window's cache of them).
     std::uint64_t kept_items_revision() const { return kept_revision_; }
     // CharacterZoneClient::CanUseItem(item, 1, 0) for our character, quietly (the Advanced Inventory's "usable").
@@ -1613,7 +1619,7 @@ public:
     // bags or the open bank's (what is loose in a general or bank slot stays). `locked` slots are left as they are;
     // `filters` give bags (by top-level slot) a kind of item. Empty when it started, else why not.
     enum class ItemJobScope : std::uint8_t { Bag, Inventory, Bank };
-    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell, Destroy, Tribute };
+    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell, Destroy, Tribute, Withdraw };
     struct ItemJobOptions {
         std::vector<ItemSlot> locked;
         std::vector<std::pair<ItemSlot, game::ItemCategory>> filters;
@@ -3043,6 +3049,7 @@ private:
     void load_kept_items();
     // A kept item (or a bag holding one) about to be `verb`ed ("destroy", "drop", ...): says so, and true.
     bool refuse_kept(const Item* item, std::string_view verb);
+    bool refuse_kept_id(std::uint32_t id, std::string_view verb);
     net::Coins coins_;
     net::Coins pending_split_; // opcode 0x3ed4's coin (0xddfcd4..0xddfce0), credited by process_cursor_queue
     std::optional<LootSession> loot_;
@@ -3102,6 +3109,10 @@ private:
         int phase = 0;
         std::uint32_t answers = 0;
         std::int64_t deadline_ms = 0;
+        bool guild_tribute = false;
+        std::uint32_t tribute_master = 0;
+        // A replacement stack of the same item must not inherit a destructive action.
+        std::vector<std::pair<std::string, std::uint32_t>> expected;
     };
     std::optional<ItemJob> item_job_;
     std::string item_job_blocked(ItemJobScope scope) const; // why a job cannot run now (empty: it can)
@@ -3237,6 +3248,30 @@ private:
     void resend_blocked_buffs();
     Tribute tribute_;
     GuildTribute guild_tribute_;
+    struct PendingTributeDonation {
+        bool guild = false;
+        ItemSlot slot;
+        std::uint32_t quantity = 0, master_id = 0;
+        Item item;
+        std::int64_t expires_ms = 0; // session_now_ms() after which no answer is expected any more
+    };
+    // Neither reply carries an instance or transaction ID. Keep this single request even after a batch timeout,
+    // so a late reply cannot be mistaken for another donation. Other inventory actions remain available.
+    // EQEmu answers in the handler or not at all (a master out of range or gone, no guild), so the request is
+    // also dropped when that channel's master window is answered again (the answer to an open sent after the
+    // donation comes after the donation's own) and after kTributeReplyLimitMs.
+    std::optional<PendingTributeDonation> pending_tribute_donation_;
+    static constexpr std::int64_t kTributeReplyLimitMs = 30000;
+    // The session's clock (ConnectionOptions::session.clock when a test sets one) in ms, on now_ms()'s scale.
+    std::int64_t session_now_ms() const;
+    bool tribute_donation_waiting() const {
+        return pending_tribute_donation_ && session_now_ms() < pending_tribute_donation_->expires_ms;
+    }
+    void expire_tribute_donation();
+    bool begin_tribute_donation(bool guild, const Item& item, std::uint32_t master_id);
+    bool finish_tribute_donation(bool guild, const ItemSlot& slot, std::uint32_t quantity,
+                                std::uint32_t master_id, bool consumed);
+    void reset_tribute_donations() { pending_tribute_donation_.reset(); }
     std::uint32_t guild_platinum_pending_ = 0; // a guild platinum donation awaiting its answer
     void handle_tribute(Op op, const AppPacket& p);
     Expedition expedition_;

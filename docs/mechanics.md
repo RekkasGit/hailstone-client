@@ -762,24 +762,37 @@ left where it is:
 - putting it in a trade, with a player or an NPC (`trade_drop_cursor`, which a give to an NPC goes through);
 - selling it to a merchant, a point merchant or an adventure merchant (`merchant_sell`, `point_merchant_sell`,
   `adventure_merchant_sell`); Sell marked leaves kept items out;
-- sending it by parcel (`send_parcel`).
+- sending it by parcel (`send_parcel`);
+- selling to a barter buyer, posting a bazaar offer or offering it as buyer compensation;
+- donating it to a personal or guild tribute master.
 
-Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing. Not
-covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
-not both: marking one clears the other.
+Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing.
+Checks run again at confirmation, not only when a quantity dialog opens. Marking an offered item Keep ends the
+active trader or buyer session; it cannot remain available for a later remote sale. A satchel item that is not listed
+(no price) does not end it. An item is marked Keep or Sell,
+not both: marking one clears the other. `eq.SetItemsKept` validates a batch before applying it, then persists it and
+changes the Keep revision once.
 
 ## The Advanced Inventory's bulk actions
 
-Also Hailstone's own: rows selected in the Advanced Inventory's list (a click, Ctrl, Shift, Ctrl+A) can be sold,
-donated as tribute or destroyed together (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
-item at a time, through the same packets a player's clicks would send, and takes only what is carried (the general
-slots and their bags; nothing worn or banked) and never a kept item:
+Also Hailstone's own: selected rows in either the Advanced Inventory list or grid can be sold, donated as tribute,
+destroyed or withdrawn from the bank (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
+item at a time, through the same packets a player's clicks would send. Sell and tribute take only carried items
+(the general slots and their bags); destroy can also take banked items while the bank is open. These three actions
+exclude kept items. Withdraw only moves banked items into inventory, so Keep does not block it. Nothing worn is
+taken. The selection records each item's serial and quantity: a replacement in the same slot is not acted on.
 
 - Sell, at an open merchant: each sale is OP_ShopPlayerSell for the whole stack, the next after the merchant's answer,
   as Sell marked does. Not a bag, nor what the merchant refuses (`game::sell_refusal`).
-- Tribute, at an open (personal) tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
+- Tribute, at an open personal or guild tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
   as the window's Donate), the next after the server's answer; one it refuses (0 favour) goes back to its slot. An item
-  worth no favour (Favor 0, which EQEmu refuses) or a bag is left out. No answer in 5 seconds stops the job.
+  worth no favour or a bag is left out. Guild donations use GuildFavor and wait for the guild reply counter;
+  personal donations use Favor. Changing or closing the master stops the job. No answer in 5 seconds stops it.
+- Withdraw, at an open bank: each chosen bank or shared-bank item goes through the cursor into the first free general
+  slot, else the first bag with room (`stow_cursor_in_packs`: auto-inventory's last steps, without its worn-slot merge
+  and equip, so nothing withdrawn is equipped). Selecting
+  a bag and its children moves the bag once. Closing the bank stops the job; if inventory fills, the held item is
+  put back when its original slot is still free.
 - Destroy: each item is picked up and destroyed from the cursor (OP_MoveItem to nowhere, as DestroyHeldItemOrMoney),
   with no confirmation per item: the window asks once, naming what goes. A bag that holds anything is left out (it
   would take its contents), and so is an item with the No Destroy flag.
@@ -787,6 +800,19 @@ slots and their bags; nothing worn or banked) and never a kept item:
 The window says beforehand how many of the selection each action takes. A job stops, with a line in the chat and
 what the cursor holds put away, if the items change under it (the cursor, a trade, a merchant or the quantity
 window), as Sort does.
+
+Selection identity is checked before confirmation as well as while the job runs: the item ID, serial and quantity
+must still match, and a destroy rechecks No Destroy and bag contents immediately before pickup and destruction.
+An empty selected bag that acquired contents is left intact. Trader Add and the buyer-start acknowledgment also
+recheck Keep; a late start reply cannot publish newly protected compensation.
+
+Item donations allow one unresolved request across personal and guild tribute. Neither reply has an instance or
+transaction ID, so a batch's five-second timeout retains its pending identity and another item donation waits for
+the answer, a new zone/session, the same kind of master's window being answered again, or 30 seconds. Stock EQEmu
+answers in the handler or not at all (Handle_OP_TributeItem returns without a reply when the master is gone or out
+of range, the guild handler when the character has no guild), so the answer to a master opened after the donation
+comes after any answer to it; closing the window alone keeps waiting, so a reply still in flight is reconciled. A reply reconciles only one unchanged original instance, even if it moved;
+replacement cursor items and ambiguous or changed stacks are preserved, with a message to refresh by zoning.
 
 ## Using items
 
