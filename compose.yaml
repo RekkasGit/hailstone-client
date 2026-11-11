@@ -1,0 +1,73 @@
+# Containers that build the client (docs/ci.md "Builds in containers"). Use tools/docker/build.sh, which makes the
+# .docker/ folders first so they belong to you, not to root:
+#   tools/docker/build.sh linux-x64 | linux-arm64 | windows-x64 | macos-arm64 | all
+# Each platform keeps its own build folder (build-<platform>/) and ccache (.docker/ccache/<platform>), so a rebuild
+# only compiles what changed. linux-arm64 runs natively on an ARM host and under QEMU elsewhere (much slower; build.sh
+# registers QEMU once). macOS is not built here: Apple's compiler and SDK run only on a Mac, so build.sh macos-arm64
+# starts the macOS workflow instead.
+
+x-build: &build
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  working_dir: /src
+  volumes:
+    - .:/src
+    # Server plugins cloned outside the checkout (PLUGIN_DIR) appear at plugins/<PLUGIN_NAME> in the container.
+    - ${PLUGIN_DIR:-./.docker/no-plugin}:/src/plugins/${PLUGIN_NAME:-none}
+
+services:
+  linux-x64:
+    <<: *build
+    image: hailstone-linux-build:24.04
+    platform: linux/amd64
+    build:
+      context: tools/docker
+      dockerfile: linux.Dockerfile
+      platforms: [linux/amd64]
+    environment:
+      HOME: /tmp
+      CCACHE_DIR: /src/.docker/ccache/linux-x64
+      JOBS: "${JOBS:-}"
+    command: tools/docker/linux_build.sh build-linux-x64
+
+  linux-arm64:
+    <<: *build
+    image: hailstone-linux-build:24.04-arm64
+    platform: linux/arm64
+    build:
+      context: tools/docker
+      dockerfile: linux.Dockerfile
+      platforms: [linux/arm64]
+    environment:
+      HOME: /tmp
+      CCACHE_DIR: /src/.docker/ccache/linux-arm64
+      JOBS: "${JOBS:-}"
+    command: tools/docker/linux_build.sh build-linux-arm64
+
+  # Once, about 3.3 GB: MSVC 2022 and the Windows SDK into .docker/msvc, then msvc-wine's wrappers.
+  msvc-setup:
+    <<: *build
+    image: hailstone-msvc-build:24.04
+    platform: linux/amd64
+    build:
+      context: tools/docker
+      dockerfile: msvc.Dockerfile
+      platforms: [linux/amd64]
+      additional_contexts:
+        base: service:linux-x64
+      args:
+        BASE: base
+    environment:
+      HOME: /src/.docker/msvc-home
+    profiles: [setup]
+    command: tools/docker/msvc_setup.sh
+
+  windows-x64:
+    <<: *build
+    image: hailstone-msvc-build:24.04
+    platform: linux/amd64
+    environment:
+      HOME: /src/.docker/msvc-home
+      MSVC_DIR: /src/.docker/msvc
+      WINEDEBUG: -all
+      JOBS: "${JOBS:-}"
+    command: tools/docker/msvc_build.sh . build-windows-x64

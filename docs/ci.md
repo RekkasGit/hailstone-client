@@ -117,6 +117,24 @@ dependency sources through `FETCHCONTENT_SOURCE_DIR_*`, a symlinked plugin clone
 Under Wine a fast fail shows as doctest's "test case CRASHED: SIGSEGV", with the case named. This is the build the
 Windows release is made from (docs/updater.md "Making a release").
 
+### Builds in containers
+
+`compose.yaml` and `tools/docker/build.sh` wrap the images above, so one command builds, tests and installs a platform:
+
+```sh
+tools/docker/build.sh linux-x64                          # build-linux-x64/, dist/linux-x64/hailstone
+MSVC_ACCEPT_LICENSE=1 tools/docker/build.sh windows-x64  # downloads MSVC into .docker/msvc the first time
+tools/docker/build.sh linux-arm64                        # native on an ARM host, under QEMU elsewhere (slow)
+tools/docker/build.sh macos-arm64                        # starts the macOS workflow for HEAD and unpacks its artifact (gh)
+tools/docker/build.sh all
+```
+
+- Each platform keeps its build folder and its ccache (`.docker/ccache/<platform>`), so a rebuild compiles only what changed.
+- The containers run as you (`HOST_UID`/`HOST_GID`), so nothing in the checkout ends up owned by root.
+- `dist/<platform>/hailstone` is what `tools/make_update.py --dist` takes.
+- A server plugin cloned elsewhere is built in with `PLUGIN_DIR=<its clone> PLUGIN_NAME=<folder under plugins/>`.
+- macOS cannot be built in a container: Apple's compiler and SDK run only on a Mac.
+
 ## clang-tidy
 
 Not in CI at present (see above). By hand: configure the tree with Clang (no build needed) and run `run-clang-tidy -p build -quiet -header-filter='.*/src/.*' '.*/src/.*\.cpp$'` with the root `.clang-tidy`; the CI job that did this is in the workflow's history.
