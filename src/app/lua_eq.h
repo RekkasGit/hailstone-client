@@ -134,6 +134,19 @@ struct EqHost {
     std::filesystem::path maps_dir;
     // The player's maps for every server (platform::maps_dir()), after the server's assets (game/map_files.h).
     std::filesystem::path global_maps_dir;
+    // The server's own folder (servers/<profile>, core/server_profile.h): the map's zone links are kept there
+    // (game/zone_routes.h).
+    std::filesystem::path server_dir;
+    // The current zone's exits, from its zone-line regions and zone points (game::collect_neighbour_lines), worked
+    // out by the app once the zone points are in: each zone a line leads to, and where (world coordinates). For the
+    // map's exits and the zone finder's "lead me there" (docs/navigation.md "Zone atlas").
+    struct ZoneExit {
+        std::uint32_t zone_id = 0;
+        float lo[3] = {0, 0, 0}, hi[3] = {0, 0, 0}; // round the lines to that zone
+        std::vector<std::array<float, 6>> cells;     // each line piece: lo xyz, hi xyz
+    };
+    std::vector<ZoneExit> zone_exits;
+    std::uint32_t zone_exits_zone = 0; // the zone they were worked out for; 0 not yet
     bool feet_valid = false;
     float feet[3] = {0, 0, 0};
     bool zone_box_valid = false;
@@ -169,6 +182,18 @@ struct EqHost {
     // The Actions window's open state and page (ActionsUi keeps them for the keys).
     // The keep-C++-windows switch (config ui.cpp_windows): with it on, the C++ windows stay on next to the Lua ones.
     bool keep_cpp_windows = false;
+    // The Find window (app/lua_eq_find.cpp, a Hailstone addition that replaces the original's FindLocationWnd): open
+    // or not. The find key (CMD_TOGGLE_FIND_WINDOW) and the Actions window's Find toggle it; each pack draws it (the
+    // modern pack as a page of the map, the gamepad pack as a window of its own).
+    bool find_open = false;
+    // The Find window's guide path (app/guide_path.h): starts it to an NPC (false: no such NPC), ends it, and while
+    // it is shown its line (the player first) for the maps. Unset (tests): eq.FindNpcPath asks the server's find path.
+    std::function<bool(std::uint32_t spawn)> guide_to;
+    std::function<void()> end_guide;
+    // The Find window's Walk there: the navigator walks the player to the NPC (/nav id), the guide path showing;
+    // "" when the walk started, else why not.
+    std::function<std::string(std::uint32_t spawn)> walk_to;
+    const std::vector<glm::vec3>* guide_line = nullptr;
 
     // A quantity dialog a window opened (CQuantityWnd::Open with that window as the owner; the stack split's
     // dialog is the connection's quantity_request()): the slider's range and start, where it shows (none:

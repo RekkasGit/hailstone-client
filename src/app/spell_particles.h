@@ -67,6 +67,8 @@ public:
     void set_floor(FloorFn floor) { floor_ = std::move(floor); }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
+    // The Find window's guide path (app/guide_path.h) to draw, the player first; empty: none.
+    void set_guide_line(std::vector<glm::vec3> line) { guide_line_ = std::move(line); }
 
 private:
     // The find path's look in the world (game/player_path.h, PlayerPath_Update's drawing half): its line as glowing
@@ -90,6 +92,9 @@ private:
     std::unique_ptr<render::ParticleRenderer> renderer_;
     std::optional<std::size_t> path_definition_; // the line's texture as a definition of particles_
     std::vector<std::uint32_t> path_movers_;     // the movers' serials whose emitters exist
+    std::vector<glm::vec3> guide_line_;          // set_guide_line
+    // A trail (game/path_trail.h) as the still particles of `key`, or none.
+    void draw_trail(std::uint32_t key, std::span<const glm::vec3> line, const glm::vec3& color, float far);
     // A delayed cue and when it plays.
     struct Held {
         double at;

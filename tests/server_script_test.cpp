@@ -762,3 +762,64 @@ for _, op in ipairs({0x1423, 0x1425, 0x1427}) do
 end
 )lua");
 }
+
+TEST_CASE("Server script: the Find window's quest NPCs, found as EQEmu finds their quest files, made once a zone") {
+    check_run(R"lua(
+T.files["eqemu_config.json"] = '{"server":{"directories":{"quest_paths":["quests/","hailstone/quests/"]}}}'
+T.files["quests/qeynos/Banker_Bob.pl"] = 'sub EVENT_SAY { quest::say("Hail"); }'
+T.files["quests/qeynos/v0/1234.lua"] = 'function event_trade(e) end\nfunction event_say(e) end' -- by id, versioned
+T.files["quests/global/Wanderer.lua"] = 'local function x() end\nevent_say = function(e) end'
+T.files["quests/qeynos/default.pl"] = 'sub EVENT_SAY {}'   -- runs for every NPC: never counts
+T.files["quests/qeynos/a_rat.pl"] = 'sub EVENT_DEATH {}'    -- a scripted mob, no quest
+eq.get_zone_short_name = function() return "qeynos" end
+eq.get_zone_instance_version = function() return 0 end
+local npcs = { { 1, "Banker_Bob00" }, { 1234, "Guard_Gehnus01" }, { 7, "a_rat03" }, { 8, "Merchant_Mo00" },
+               { 9, "Wanderer00" }, { 1, "Banker_Bob01" } }
+eq.get_entity_list = function()
+  return { GetNPCList = function()
+    local i = 0
+    return { entries = function()
+      i = i + 1
+      local n = npcs[i]
+      if not n then return nil end
+      return { GetNPCTypeID = function() return n[1] end, GetName = function() return n[2] end }
+    end }
+  end }
+end
+load_script()
+local c = client(1, "Tester")
+local function ask()
+  local before = #c.sent
+  local p = Packet(0x1436, 6)
+  p:WriteInt32(0, 0x4e515348); p:WriteInt16(4, 1)
+  T.handlers[Event.unhandled_opcode]({ self = c, packet = p })
+  return #c.sent > before and c.sent[#c.sent] or nil
+end
+local r = assert(ask(), "answered")
+assert(r.op == 0x1437 and r:ReadInt32(0) == 0x4e515348 and r:ReadInt16(4) == 1)
+local got, pos = {}, 8
+for _ = 1, r:ReadInt16(6) do
+  local flags, len = r:ReadInt8(pos), r:ReadInt8(pos + 1)
+  local name = {}
+  for k = 0, len - 1 do name[#name + 1] = string.char(r.b[pos + 2 + k]) end
+  got[table.concat(name)] = flags
+  pos = pos + 2 + len
+end
+assert(pos == r:GetSize(), "the size is the entries'")
+assert(got["Banker_Bob"] == 2, "talks")
+assert(got["Guard_Gehnus"] == 3, "hand-ins and talks, by id in the version's folder")
+assert(got["Wanderer"] == 2, "global by name")
+assert(got["a_rat"] == nil and got["Merchant_Mo"] == nil, "no quest: not listed")
+-- made once: the files are not read again for the next request
+local opens = T.opens["quests/qeynos/Banker_Bob.pl"]
+assert(opens == 1, "read once, got " .. tostring(opens))
+assert(ask())
+assert(T.opens["quests/qeynos/Banker_Bob.pl"] == 1)
+-- three a character in 10 s
+assert(ask() and not ask(), "the fourth in 10 s is dropped")
+-- switched off with the bucket
+T.now = T.now + 11
+T.data["hailstone:quest_npcs"] = "0"
+assert(not ask(), "quest_npcs 0: no answer")
+)lua");
+}

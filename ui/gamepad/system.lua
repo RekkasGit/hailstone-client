@@ -126,7 +126,7 @@ local MORE = {
   { "Adventures", "The adventure you are on", "AdventureRequestWnd" },
   { "Expeditions", "Members and lockouts", "DynamicZoneWnd" },
   { "PvP Stats", "Kills, deaths, the leaderboard", "PvPStatsWnd" },
-  { "Find", "Places and ways out of the zone", "FindLocationWnd" },
+  { "Find", "Merchants, bankers, trainers and more", nil, function() eq.FindOpen(true) end },
   { "Zone Path", "The zones on the way", "ZonePathWnd" },
   { "Alert History", "Alerts you closed", "AlertHistoryWnd" },
   { "Tribute Trophies", "Trophy tribute benefits", "TributeTrophyWnd" },

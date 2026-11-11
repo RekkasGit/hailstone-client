@@ -13,6 +13,7 @@
 // that order; what is wrong in an element is collected ("Rect(X Y )", "Label Error (Text )" ...) and, when anything
 // was, "Atlas Page Error" goes to chat with the text in AtlasPageError.txt.
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -58,5 +59,30 @@ struct AtlasPage {
 
 // One page's text as AtlasWnd_LoadPage reads it.
 AtlasPage parse_atlas_page(std::string_view text);
+
+// The whole atlas as AtlasWnd_LoadDefaultPage @0x620760 walks it: the pages reachable from Default.xml through page
+// links (ClickAction 1), in the order they are found, and every zone link (ClickAction 2) on them. The titles and
+// parents are Hailstone's, for the modern map's breadcrumbs and zone finder.
+struct AtlasPageEntry {
+    std::string file;   // as the first link to it names it
+    std::string title;  // that link's tooltip (else the file without ".xml"); "World" for Default.xml
+    std::string parent; // the page that first links it; empty for Default.xml
+};
+struct AtlasZoneEntry {
+    std::string zone; // the link's FileToOpen: the zone's short name, as written
+    std::string name; // its tooltip (else the short name)
+    std::string page; // the page it is on
+    AtlasRect rect;
+};
+struct AtlasIndex {
+    std::vector<AtlasPageEntry> pages;
+    std::vector<AtlasZoneEntry> zones; // page by page, each page's links in order; a zone may be on several pages
+    // The first page linking the zone (any case), or nullptr.
+    const AtlasZoneEntry* find_zone(std::string_view short_name) const;
+    const AtlasPageEntry* find_page(std::string_view file) const;
+};
+// `read(file)` gives a page's text (nullopt when it cannot be read; such a page is listed with no zones). At most
+// 256 pages are read.
+AtlasIndex index_atlas(const std::function<std::optional<std::string>(const std::string&)>& read);
 
 } // namespace hailstone::game

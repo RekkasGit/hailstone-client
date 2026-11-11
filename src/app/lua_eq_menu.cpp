@@ -65,7 +65,6 @@ const char* toggle_command_window(int command) {
         {C::TOGGLE_LFGROUPWIN, "GroupSearchWnd"},
         {C::CMD_TOGGLE_ALARM, "AlarmWnd"},
         {C::TOGGLE_HELPWIN, "HelpWindow"},         {C::TOGGLE_VIDEOMODEWIN, "VideoModesWindow"},
-        {C::CMD_TOGGLE_FIND_WINDOW, "FindLocationWnd"},
         {C::TOGGLE_STORYWIN, "StoryWnd"},
         {C::TOGGLE_JOURNAL, "JournalNPCWnd"},
         {C::CMD_TOGGLE_PVP_LEADERBOARD, "PvPStatsWnd"}, // the stats, whose Leaderboard button opens the board
@@ -98,7 +97,9 @@ bool menu_command_offered(int command, const std::function<bool(std::string_view
     case C::TOGGLE_SKILLS_WND:
     case C::CMD_TOGGLE_COMBAT_ABILITY_WIN:
     case C::TOGGLE_HOTBOX1WIN:
-    case C::TOGGLE_OPTIONSWIN: return true;
+    case C::TOGGLE_OPTIONSWIN:
+    case C::CMD_TOGGLE_FIND_WINDOW: // Hailstone's Find window (app/lua_eq_find.cpp), drawn by every pack
+        return true;
     // Hailstone: both packs draw the aggro meter in the target window, so it has no row of its own (a server's
     // CascadeMenu.txt row goes too); /aggrometer and its key still toggle the game's AggroMeterWnd.
     case C::CMD_TOGGLE_AGGRO: return false;

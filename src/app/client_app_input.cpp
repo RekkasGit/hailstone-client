@@ -71,12 +71,14 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
         actions_ui_->set_page(i / 10, i % 10);
         return;
     }
-    if (cmd == static_cast<int>(C::CMD_TOGGLE_FIND_WINDOW) && eq_api_ && eq_api_->replaces("FindLocationWnd")) {
-        // __ExecuteCmd case 100: with FindLocationWnd shown, CFindLocationWnd_FindSelected and the window goes;
-        // else a shown find path stops (0x66bf80: PlayerPath_Stop); else the window shows.
-        if (eq_api_->shown("FindLocationWnd")) eq_api_->show("FindLocationWnd", false);
-        else if (conn_->player_path().active()) conn_->stop_find_path();
-        else eq_api_->show("FindLocationWnd", true);
+    if (cmd == static_cast<int>(C::CMD_TOGGLE_FIND_WINDOW)) {
+        // Hailstone's Find window (app/lua_eq_find.cpp) in place of the original's FindLocationWnd, toggled as
+        // __ExecuteCmd case 100 toggles that: shown, it goes; else a shown find path stops (0x66bf80:
+        // PlayerPath_Stop); else it shows.
+        if (eq_host_.find_open) eq_host_.find_open = false;
+        else if (guide_.active()) guide_.stop(); // its guide path likewise
+        else if (conn_ && conn_->player_path().active()) conn_->stop_find_path();
+        else eq_host_.find_open = true;
         return;
     }
     // The window keys and EQ menu entries of the Lua windows: the stock window's show / hide.
