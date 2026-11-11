@@ -300,7 +300,8 @@ struct ConnectionOptions {
     // pass it. Null: no plugins.
     plugin::Hooks* hooks = nullptr;
     // The SOE session options of the world and zone connections (net/session.h; LoginClient::Options::session
-    // does the same for login). The defaults are the original's timers; tests shorten them.
+    // does the same for login). The defaults are the original's timers; tests shorten them. The optional clock
+    // also drives the time-of-day calendar.
     SessionOptions session;
     // The server profile (servers/<id>/, core/server_profile.h) the character's own files go under: the trader's
     // prices (BZR.ini) and chat.ini. Empty: the profile made from the world's name (profile_id_for_world).
@@ -431,7 +432,9 @@ public:
     // The game state last given to the plugin hooks (plugin::kGameState*; 0 none yet).
     int hook_game_state() const { return hook_game_state_; }
     const std::optional<NewZone>& zone_info() const { return new_zone_; }
+    // The last server time is the sky clock's reference; the current calendar advances between packets.
     const std::optional<TimeOfDay>& time_of_day() const { return time_; }
+    std::optional<TimeOfDay> current_time_of_day() const;
     // The OP_Weather messages since the last call (game::Weather::handle_message takes them).
     std::vector<Weather> take_weather() { return std::exchange(weather_messages_, {}); }
     // The zone the server put us in, once per zone-in: load its geometry. Not while the server's files come.
@@ -2936,6 +2939,7 @@ private:
     std::optional<PlayerProfile> profile_;
     std::optional<NewZone> new_zone_;
     std::optional<TimeOfDay> time_;
+    std::chrono::steady_clock::time_point time_received_{};
     game::WorldState world_;
     bool own_spawn_seen_ = false;
     bool weather_seen_ = false;

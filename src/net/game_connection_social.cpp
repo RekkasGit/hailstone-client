@@ -755,9 +755,9 @@ void GameConnection::location_command() {
 
 void GameConnection::time_command() {
     // @0x5207a0: the game time (eqstr 6706), then the local time (12389, "%#c").
-    if (time_) {
-        chat(ChatEvent::Kind::System, game::format_game_time(strings_, static_cast<int>(time_->year), time_->month,
-                                                            time_->day, time_->hour));
+    if (const auto time = current_time_of_day()) {
+        chat(ChatEvent::Kind::System, game::format_game_time(strings_, static_cast<int>(time->year), time->month,
+                                                            time->day, time->hour));
     }
     std::time_t now = std::time(nullptr);
     std::tm tm{};
