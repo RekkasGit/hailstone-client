@@ -984,13 +984,25 @@ local function selPlaces(v)
   return out
 end
 
-local function bulkCurrent()
+-- Whether the snapshot still names the live items. The open dialog asks each frame, so that answer is kept until
+-- the inventory changes (and for at most a second, as refresh() does); fresh = true reads the items regardless
+-- (the confirming click).
+local bulkCheck = { inv = nil, at = 0, places = nil, ok = false }
+local function bulkCurrent(fresh)
+  local inv = eq.ItemsRevision()
+  local now = ui.GetTime()
+  if not fresh and bulkCheck.places == bulk.places and bulkCheck.inv == inv and now - bulkCheck.at < 1
+    and now >= bulkCheck.at then
+    return bulkCheck.ok
+  end
   local live = {}
   for _, r in ipairs(eq.AllItems() or {}) do live[r.place] = r.item end
+  local ok = true
   for _, p in ipairs(bulk.places) do
-    if not matches(bulk.identities[p], live[p]) then return false end
+    if not matches(bulk.identities[p], live[p]) then ok = false break end
   end
-  return true
+  bulkCheck.inv, bulkCheck.at, bulkCheck.places, bulkCheck.ok = inv, now, bulk.places, ok
+  return ok
 end
 
 local function bulkChanged()
@@ -1045,7 +1057,7 @@ local function bulkConfirm(s)
   if go then
     -- Read live identities immediately before handing the places to the job. The modal must not adopt a
     -- replacement or a changed stack, even when the displayed rows or the selection have refreshed meanwhile.
-    if bulkCurrent() then
+    if bulkCurrent(true) then
       local _, why = eq.BulkItems(bulk.mode, bulk.places)
       note(why)
       if not why then selClear() end

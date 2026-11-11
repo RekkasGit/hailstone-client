@@ -301,6 +301,12 @@ eq.BulkItems = function(mode, places, dry)
   if not dry then test_started = test_started + 1 end
   return bulk(mode, places, dry)
 end
+test_all_items = 0
+local all_items = eq.AllItems
+eq.AllItems = function(...)
+  test_all_items = test_all_items + 1
+  return all_items(...)
+end
 )lua") == LUA_OK);
     auto one_frame = [&] {
         api.begin_frame();
@@ -367,6 +373,12 @@ return selected.id, selected.serial, selected.quantity
         REQUIRE(luaL_dostring(state, "test_hit = '##advbulkdestroy'") == LUA_OK);
         one_frame();
         REQUIRE(value("return test_confirm_drawn") > 0);
+        if (when == ChangeAt::Unchanged) {
+            // The open dialog checks the snapshot each frame, but reads the items again only when they change.
+            const auto before = value("return test_all_items");
+            for (int i = 0; i < 5; ++i) one_frame();
+            CHECK(value("return test_all_items") - before <= 1);
+        }
         if (when == ChangeAt::Modal) {
             replace();
             if (rewrite_selection)
