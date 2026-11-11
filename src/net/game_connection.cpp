@@ -1063,9 +1063,20 @@ void GameConnection::handle_zone(const AppPacket& p) {
         else log::warn("a bad OP_HailstoneGuildReply ({} bytes) ignored", p.data.size());
         return;
     }
+    if (p.opcode == kOpHsZoneLinks) {
+        if (auto v = decode_zone_links(p)) {
+            log::info("zone links: {} from the server", v->links.size());
+            zone_links_ = std::move(*v);
+            ++zone_links_serial_;
+        } else {
+            log::warn("zone links: a bad OP_HsZoneLinks ({} bytes) ignored", p.data.size());
+        }
+        return;
+    }
     if (p.opcode == kOpHailstoneSettings) {
         if (auto v = decode_hailstone_settings(p)) {
             log::info("server settings: flags {:#x}", v->flags); // none defined now (net/settings_packets.h)
+            hailstone_script_ = true;
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
         }
@@ -2579,6 +2590,12 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
     default:
         break;
     }
+}
+
+void GameConnection::request_zone_links() {
+    if (!hailstone_script_ || zone_links_asked_ || !zone_session_) return;
+    zone_links_asked_ = true;
+    send_zone(encode_zone_links_request());
 }
 
 } // namespace hailstone::net

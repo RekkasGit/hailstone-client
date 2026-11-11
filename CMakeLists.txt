@@ -127,6 +127,7 @@ add_library(hailstone_engine STATIC
   src/plugin/consent.cpp
   src/plugin/policy.cpp
   src/net/settings_packets.cpp
+  src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
   src/mq/tlo.cpp
@@ -390,6 +391,7 @@ add_library(hailstone_engine STATIC
   src/game/map_files.cpp
   src/game/player_path.cpp
   src/game/atlas.cpp
+  src/game/zone_routes.cpp
   src/game/zone_names.cpp
   src/game/race_models.cpp
   src/game/spawn_heights.cpp
@@ -992,6 +994,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/map_files_test.cpp
     tests/player_path_test.cpp
     tests/atlas_test.cpp
+    tests/zone_routes_test.cpp
+    tests/zone_atlas_api_test.cpp
     tests/map_windows_test.cpp
     tests/map_spawns_test.cpp
     tests/ui_windows_test.cpp

@@ -33,6 +33,14 @@
 -- size, or its time where find can tell) makes the zone hash again and the client list again, instead of sending
 -- bytes that do not match the list.
 --
+-- And it sends how the zones connect, for the map's zone finder: when its World view first opens in a session,
+-- Hailstone asks (OP_HsZoneLinksRequest raw 0x1438: {u32 magic 'HSZL'; u16 version 1}) and this answers
+-- OP_HsZoneLinks (0x1439: {u32 magic; u16 version 1; u16 flags 0; u32 count; count x {u16 from zone id; u16 to zone
+-- id}}; the client's net/zone_link_packets.h): the zone_points rows of version 0 or -1 that the server's expansion
+-- and content flags allow, each pair of zones once. Built at the first request in a zone process with one query of
+-- the content database (and one of content_flags), then kept in memory (#reloadquest builds it again); a
+-- character is answered at most twice a minute. Without it, the client learns the zone lines of the zones it visits.
+--
 -- global/script_init.lua loads it with eq.load_encounter("hailstone"). It registers its player event through the
 -- encounter, so it runs beside the server's own player scripts (Perl or Lua) instead of replacing them.
 
@@ -46,6 +54,7 @@ local settings = {
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
 	files_chunks_per_second = 768, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
 	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
+	zone_links             = 1,  -- send the zone connections for the map's zone finder (0: never answered)
 }
 
 local OP_SETTINGS_REQUEST = 0x1432
@@ -1096,6 +1105,127 @@ local function on_files_request(client, packet)
 	end
 end
 
+-- ---------------------------------------------------------------- the zone links (the map's zone finder)
+
+local OP_ZONE_LINKS_REQUEST = 0x1438
+local OP_ZONE_LINKS         = 0x1439
+local ZONE_LINKS_MAGIC      = 0x4c5a5348
+local ZONE_LINKS_MAX, ZONE_LINKS_SECONDS = 2, 60
+local zone_links_limit = limiter(ZONE_LINKS_SECONDS)
+local zone_links       = nil -- { from1, to1, from2, to2, ... } once built
+
+-- A comma-separated flag list that names one of `set`'s flags.
+local function names_flag(list, set)
+	for flag in tostring(list or ""):gmatch("[^,]+") do
+		if set[flag] then
+			return true
+		end
+	end
+	return false
+end
+
+-- EQEmu's ContentFilterCriteria::apply, for one row: the expansion range (-1: any) holds the server's current
+-- expansion (Expansion:CurrentExpansion, -1 all: 99), a row with content_flags needs one of them enabled, and one
+-- with content_flags_disabled one of those disabled.
+local function content_allows(row, expansion, enabled, disabled)
+	local min, max = tonumber(row.min_expansion) or -1, tonumber(row.max_expansion) or -1
+	if min ~= -1 and min > expansion then return false end
+	if max ~= -1 and max < expansion then return false end
+	if (row.content_flags or "") ~= "" and not names_flag(row.content_flags, enabled) then return false end
+	if (row.content_flags_disabled or "") ~= "" and not names_flag(row.content_flags_disabled, disabled) then return false end
+	return true
+end
+
+local function build_zone_links()
+	local expansion = tonumber(eq.get_rule("Expansion:CurrentExpansion")) or -1
+	if expansion == -1 then
+		expansion = 99
+	end
+	local enabled, disabled = {}, {}
+	local fstmt = query(Database(), "SELECT `flag_name`, `enabled` FROM `content_flags`")
+	if fstmt then
+		local row = fstmt:fetch_hash()
+		while row do
+			if tonumber(row.enabled) == 1 then enabled[row.flag_name] = true else disabled[row.flag_name] = true end
+			row = fstmt:fetch_hash()
+		end
+	end
+	local ok, db = pcall(Database, Database.Content)
+	if not ok or db == nil then
+		db = Database()
+	end
+	local cols = function(a) return string.format("%s.`min_expansion`, %s.`max_expansion`, %s.`content_flags`, %s.`content_flags_disabled`", a, a, a, a) end
+	-- The zone point, the zone it is in and the zone it leads to must each be allowed.
+	local sql = "SELECT s.`zoneidnumber` AS from_id, p.`target_zone_id` AS to_id, " ..
+		cols("p") .. ", " .. cols("s"):gsub("`(%w+)`", "`%1` AS s_%1") .. ", " .. cols("t"):gsub("`(%w+)`", "`%1` AS t_%1") ..
+		" FROM `zone_points` p JOIN `zone` s ON s.`short_name` = p.`zone` AND s.`version` = 0" ..
+		" JOIN `zone` t ON t.`zoneidnumber` = p.`target_zone_id` AND t.`version` = 0" ..
+		" WHERE (p.`version` = 0 OR p.`version` = -1) AND p.`target_zone_id` > 0 AND s.`zoneidnumber` <> p.`target_zone_id`"
+	local stmt = query(db, sql)
+	local filtered = stmt ~= nil
+	if not stmt then -- a schema without the content columns
+		stmt = query(db, "SELECT s.`zoneidnumber` AS from_id, p.`target_zone_id` AS to_id FROM `zone_points` p" ..
+			" JOIN `zone` s ON s.`short_name` = p.`zone` AND s.`version` = 0" ..
+			" WHERE (p.`version` = 0 OR p.`version` = -1) AND p.`target_zone_id` > 0 AND s.`zoneidnumber` <> p.`target_zone_id`")
+	end
+	local seen, list = {}, {}
+	if stmt then
+		local row = stmt:fetch_hash()
+		while row do
+			local from, to = tonumber(row.from_id), tonumber(row.to_id)
+			local allowed = from ~= nil and to ~= nil and from > 0 and from < 65536 and to < 65536
+			if allowed and filtered then
+				local function prefixed(prefix)
+					return { min_expansion = row[prefix .. "min_expansion"], max_expansion = row[prefix .. "max_expansion"],
+						content_flags = row[prefix .. "content_flags"], content_flags_disabled = row[prefix .. "content_flags_disabled"] }
+				end
+				allowed = content_allows(row, expansion, enabled, disabled)
+					and content_allows(prefixed("s_"), expansion, enabled, disabled)
+					and content_allows(prefixed("t_"), expansion, enabled, disabled)
+			end
+			local key = allowed and (from * 65536 + to)
+			if allowed and not seen[key] then
+				seen[key] = true
+				list[#list + 1] = from
+				list[#list + 1] = to
+			end
+			row = stmt:fetch_hash()
+		end
+	end
+	log(string.format("zone links: %d for the map's zone finder", math.floor(#list / 2)))
+	return list
+end
+
+local function on_zone_links_request(client, packet)
+	local ok, first_over = allow(zone_links_limit, client:CharacterID(), ZONE_LINKS_MAX)
+	if not ok then
+		if first_over then
+			log(string.format("%s asks for the zone links too often; the rest of %d s are dropped", client:GetCleanName(), ZONE_LINKS_SECONDS))
+		end
+		return
+	end
+	if setting("enabled") == 0 or setting("zone_links") == 0 or Database == nil then
+		return
+	end
+	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= ZONE_LINKS_MAGIC then
+		return
+	end
+	if zone_links == nil then
+		zone_links = build_zone_links()
+	end
+	local count = math.floor(#zone_links / 2)
+	local p = Packet(OP_ZONE_LINKS, 12 + 4 * count, true)
+	p:WriteInt32(0, ZONE_LINKS_MAGIC)
+	p:WriteInt16(4, 1)
+	p:WriteInt16(6, 0)
+	p:WriteInt32(8, count)
+	for i = 1, count do
+		p:WriteInt16(12 + (i - 1) * 4, zone_links[2 * i - 1])
+		p:WriteInt16(14 + (i - 1) * 4, zone_links[2 * i])
+	end
+	client:QueuePacket(p)
+end
+
 -- ----------------------------------------------------------------
 
 -- The server's settings for the client. No flag is defined now (bit 0, the player count's hiding, is retired: no
@@ -1139,6 +1269,10 @@ local function on_unhandled_opcode(e)
 		on_cancel_invite(e.self, packet)
 		return
 	end
+	if op == OP_ZONE_LINKS_REQUEST then
+		on_zone_links_request(e.self, packet)
+		return
+	end
 	if op ~= OP_SETTINGS_REQUEST then
 		return
 	end
@@ -1160,6 +1294,7 @@ end
 function event_encounter_load(e)
 	encounter = e.encounter
 	setting_cache = {} -- #reloadquest: the buckets as they are now
+	zone_links = nil   -- and the zone links built again when next asked
 	if setting("client_files") ~= 0 then
 		build_client_files(true) -- the hashing is done before the first client asks
 	end

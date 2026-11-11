@@ -226,6 +226,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] /follow's help live (following a player round corners and through a doorway).
 - [ ] Lifts, jumps and safe drops as off-mesh links (drops checked against the fall-damage rules).
 - [ ] Walks across zones (`/travel <zone>`) over the zone lines and zone points.
+- [x] The map's World view and zone finder (docs/navigation.md "Zone atlas"): the atlas pages zoomed and panned, zones searched by name, another zone's map, routes over the server script's zone links or the zone points learned per server, the exits on the map and "Walk there" through the next zone line (modern pack). Unit tests and the server handler under LuaJIT; not tried live.
+- [ ] Zone atlas: live against a server with the script and a stock one; the World view in the gamepad pack; the route going on by itself after each zone (with `/travel`); while another zone's map is shown the minimap draws it too (they share the map state).
 - [x] `/stick` (distance, behind, id; the `Stick` TLO), the `LineOfSight` TLO and `Spawn.LineOfSight` (the abilities' own check). Unit tests on a built mesh; not tried live.
 - [ ] Tactical queries for bots (a kite point; `/stick`'s pin, `!front`, `moveback`, `uw`, and following a changed target without `hold`).
 - [ ] Auto Combat (a script with its own window, an add-on in a repository of its own): Manual (full and partial), Hunter (roam and camp) and Assist modes, Spells and Abilities pages of rows with conditions. Its client side is done: `Me.AbilityReady` / `CombatAbilityReady` / `AltAbilityReady` and timers, `Target.Buff` and the rest from OP_TargetBuffs, `/stick`, line of sight, `hailstone.server_rule`, `hailstone.hold_autoskill` and `autoskill_list`.

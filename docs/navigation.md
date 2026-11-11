@@ -310,6 +310,47 @@ Not yet: MQ2MoveUtils' `pin`, `!front`, `moveback`, `uw` and percent distances.
 search. Lua reads it as `mq.TLO.Navigation.Active()`; plugins with the SDK's `parse` and run `/nav` with
 `do_command`.
 
+## Zone atlas
+
+Code: `game/zone_routes.h` (the links and routes), `game/atlas.h` (`index_atlas`), `net/zone_link_packets.h`, the
+`eq.Atlas*` / `eq.Zone*` functions in `app/lua_eq_map.cpp`, and the modern pack's `ui/modern/lib/atlas.lua` (drawn
+by `map.lua`). Tests: `tests/zone_routes_test.cpp`, the index cases in `tests/atlas_test.cpp`.
+
+The map window's **World** view, a Hailstone addition. RoF2 had an atlas page in the map window (the game folder's
+`Atlas\<skin>\*.xml`, kept as the stock window's MVW_AtlasRenderArea, `eq.DrawAtlas`) and a zone guide fed by the
+server, which EQEmu does not send (`docs/unknowns.md`). The World view draws the same atlas pages, with:
+
+- **The atlas.** Every page reachable from `Default.xml`, zoomed with the wheel (up to 5x) and panned by dragging,
+  with a breadcrumb back to the world. A region click opens its page; a zone click selects it; a double click shows
+  its map in the Zone view, with a bar back to your own (the player, the find path and the height fade are not drawn
+  on another zone's map, and closing the window goes back to your zone). Your zone pulses, the selected zone is
+  outlined, and the zones of the route followed are numbered and joined.
+- **The zone finder.** Every zone the atlas links, by the zone table's long name or the atlas' tooltip and its short
+  name (prefix and word matches first), or the zones of the page shown when nothing is typed; each with its region
+  and expansion. The selected zone's card shows how many zones away it is and the way there, with **On atlas**,
+  **Its map** and **Go here**.
+- **A route followed** (`ui/settings/modern.txt` `atlas.route`): a banner over your zone's map with the next zone
+  and **Walk there**, which runs `/nav locxyz` to the nearest part of the zone line to that zone (2 units inside it,
+  so the walk goes through rather than stopping at it; "Zone lines on the way" above). It needs the 'move'
+  permission like any `/nav`. Your zone's exits are marked on its map (the next one stands out); the map's right-click
+  menu hides them.
+
+**Where routes come from.** How zones connect is kept per server in `servers/<profile>/zone_links.txt`
+(`docs/layout.md`), from two sources:
+
+- the server's list, when it runs Hailstone's server script (`server/README.md` "Zone links"): every zone point the
+  server's expansion and content flags allow. The client asks (OP_HsZoneLinksRequest 0x1438) once a session, the
+  first time the World view is open after a zone has answered the settings request, so a server without the script
+  is never asked;
+- learned: the targets of each zone's OP_SendZonepoints, as the player enters it.
+
+A route has the fewest zone changes (the lowest zone ids first among equals). When the links in their own direction
+give none, a learned link may be used backwards (a zone line seen only from its far side); most zone lines go both
+ways, but not all, so the card says so. The exits on the map come from the zone's zone-line regions and the zone
+points they name (`game::collect_neighbour_lines`, as the neighbour zones use), worked out once the zone points are
+in; a zone point reached some other way (a teleporter NPC, a boat, a door) has no line, so **Walk there** is off for
+it.
+
 ## Not done
 
 - Swimming is not yet seen live end to end (unit tests only; the live try was cut short by an attack). Levitation
