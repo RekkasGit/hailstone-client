@@ -1143,29 +1143,41 @@ print('never')
     CHECK(h.scripts->running("d"));
 }
 
-TEST_CASE("MQ Lua: mq.event's patterns, as MQ's: wildcards, numbered arguments in order, literal text") {
+TEST_CASE("MQ Lua: mq.event's patterns, as MQ's: wildcards, arguments by number, case, links, |${...}|") {
     Host h;
     h.write("ev.lua", R"(
 local mq = require('mq')
 mq.event('slain', '#*#You have slain #1#!#*#', function(line, who) print('slain', who) end)
 mq.event('hits', '#2# hits #1# for #3# points.', function(line, a, b, c) print('hits', a, b, c) end)
+mq.event('gap', 'gap #3# #1#', function(line, a, b, c) print('gap', a, b == '' and '(empty)' or b, c) end)
 mq.event('lit', '(1+1) = [#1#]', function(line, v) print('lit', v) end)
-mq.event('hash', '#a# #1#', function(line, v) print('hash', v) end)
+mq.event('hash', '##a## #1#', function(line, v) print('hash', v) end)
+mq.event('waves', '#1# waves', function(line, who) print('waves', who, line) end)
+mq.event('raw', '#1# nods', function(line, who) print('raw', #who) end, {keepLinks = true})
+mq.event('me', 'hello |${String[Soandso]}|', function(line) print('me', line) end)
+mq.event('any', '#*#', function(line) if #line > 100 then print('long', #line) end end)
 while true do mq.doevents() mq.delay(10) end
 )");
     REQUIRE(h.scripts->run("ev", {}));
     h.pulses(1);
-    for (const char* text : {"You have slain a rat!", "A gnoll hits you for 12 points.", "(1+1) = [2]", "#a# x y",
-                             "(1+1) = 2", "nothing"}) {
+    const std::string link_bob = "\x12" "1Bob\x12";
+    for (const std::string& text : {std::string("You have slain a rat!"), std::string("A GNOLL HITS you FOR 12 POINTS."),
+                                   std::string("gap x y"), std::string("(1+1) = [2]"), std::string("#a# x y"),
+                                   std::string("(1+1) = 2"), link_bob + " waves", link_bob + " nods",
+                                   std::string("Hello SOANDSO"), std::string(3000, 'z')}) {
         plugin::ChatLine line{text, 0, 0};
         h.hooks.chat(line);
     }
     h.pulses(2, 10);
     CHECK(h.printed_line("slain a rat"));
-    CHECK(h.printed_line("hits you A gnoll 12"));
+    CHECK(h.printed_line("hits you A GNOLL 12")); // case ignored, arguments by number
+    CHECK(h.printed_line("gap y (empty) x"));      // a number the pattern lacks: ""
     CHECK(h.printed_line("lit 2"));
     CHECK(h.printed_line("hash x y"));
-    CHECK(h.printed.size() == 4u + 1u); // and the "[Lua] running" line
+    CHECK(h.printed_line("waves Bob Bob waves")); // the link shown as its text, in the line too
+    CHECK(h.printed_line("raw " + std::to_string(link_bob.size()))); // keepLinks: the tag as it came
+    CHECK(h.printed_line("me Hello SOANDSO"));     // |${...}| read when the line came
+    for (const auto& l : h.printed) CHECK(l.find("long") == std::string::npos); // 2048 bytes or more: no events
 }
 
 TEST_CASE("Lua socials: a dry run does nothing but note commands and waits") {
