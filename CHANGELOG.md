@@ -15,6 +15,7 @@
 - Merchants: the merchant window can show only the goods you can use, as on the original client. Items your class or race cannot use, and spell scrolls you already have (or have a higher rank of), are hidden. It is on when you start. Untick **Usable only** beside the search box to see everything; in the gamepad UI, press X on the Buy page
 - Add-ons: **Remove** in a script's or plugin's row works again in the mouse UI. Its question ("Remove ...?") never opened, so nothing was removed
 - Chat: a message with line breaks in it (such as a server's message of the day) is shown on separate lines, instead of its words being thrown across the window
+- Inventory (modern UI): the Mitigation and Avoidance rows show only on a server that gives them (the NMS server). Elsewhere they drew "Unknown Label6668" and "Unknown Label6667" over the AC and ATK numbers
 
 ## 0.7.0-beta (2026-11-09)
 

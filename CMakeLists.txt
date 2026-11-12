@@ -1037,6 +1037,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_search_test.cpp
     tests/chat_ui_test.cpp
     tests/inventory_bandolier_ui_test.cpp
+    tests/inventory_server_labels_ui_test.cpp
     tests/trade_ui_test.cpp
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
