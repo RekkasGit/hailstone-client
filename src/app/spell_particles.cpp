@@ -454,11 +454,10 @@ void SpellParticles::play(net::GameConnection& conn, const Held& cue, const rend
     settings.density *= source_density_for(conn, cast_by, cue.target != 0 ? cue.target : cue.caster);
     if (settings.density <= 0.0f) return;
     // The impact stage's caster is the packet's source: EQPlayer::TriggerSpellEffect (@0x593eb0) passes it to
-    // DoSpellEffect as the caster, the struck spawn as the target. Hailstone: with a source of 0 or one not in the
-    // zone the struck spawn stands in as the caster (its location 1 slots and level), as before; the original's
-    // DoSpellEffect plays nothing without a caster.
+    // DoSpellEffect as the caster, the struck spawn as the target. With a source of 0 or one not in the zone
+    // DoSpellEffect (@0x522500) plays nothing: no caster, no stage.
     auto caster = stage_actor(conn, cast_by, actors);
-    if (!caster && cue.stage == 2) caster = stage_actor(conn, cue.caster, actors);
+    if (!caster && cue.stage == 2) return;
     auto target = stage_actor(conn, cue.target, actors);
     glm::vec3 point = caster ? caster->position : target ? target->position : glm::vec3(0.0f);
     std::int32_t longest = 0;

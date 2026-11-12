@@ -109,7 +109,7 @@ TEST_CASE("Spell landing packets use the source actor and its level for impact-s
     CHECK(particles.simulation().emitters().empty());
 }
 
-TEST_CASE("A spell landing without a known source plays its impact stage with the struck spawn as caster") {
+TEST_CASE("A spell landing without a known source plays no impact stage, as DoSpellEffect without a caster") {
     using namespace net;
     using namespace test;
     Rig rig;
@@ -136,10 +136,7 @@ TEST_CASE("A spell landing without a known source plays its impact stage with th
         rig.conn.receive_zone_packet_for_test(encode(hit));
         app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {assets::SpellEffect{}, effect});
         particles.update(rig.conn, rig.conn.take_spell_effect_cues(), {}, nullptr, 0.01f);
-        const auto& emitters = particles.simulation().emitters();
-        REQUIRE(emitters.size() == 2); // the location 1 slot, past its level 20 gate, on the struck spawn
-        CHECK(emitters[0].actor == 334);
-        CHECK(emitters[1].actor == 334);
+        CHECK(particles.simulation().emitters().empty()); // not even the slot on the struck spawn
     }
 }
 

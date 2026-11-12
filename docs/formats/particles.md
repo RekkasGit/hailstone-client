@@ -23,7 +23,7 @@ The record layout is `assets::EmitterDefinition` (offsets in its comments). Text
 - with E = D - delay (+0x8c) and L = lifetime (+0x7c), the capacity (the particle ring) is 0 when E < 0, else +0x144 when set, else when L >= 0 and E > L: n = trunc(L x rate), initial + n x per tick when initial > per tick, else (n + 1) x per tick; otherwise initial + trunc(E x rate) x per tick; then at least +0x144, at most 100,000;
 - it returns how long the particles show, in ms: D when L < 0, trunc(E x rate) / rate + delay + L when it ticks, else L + delay; 0 past 600 s or with no ring. The stage length is the longest.
 
-The impact stage's caster is the OP_Action's source and its target the struck spawn (EQPlayer::TriggerSpellEffect @0x593eb0 to DoSpellEffect). The original's DoSpellEffect plays nothing without a caster; Hailstone plays the stage with the struck spawn as its caster when the source is 0 or not in the zone.
+The impact stage's caster is the OP_Action's source and its target the struck spawn (EQPlayer::TriggerSpellEffect @0x593eb0 to DoSpellEffect). With a source of 0 or one not in the zone there is no caster, and DoSpellEffect (@0x522500) plays nothing, here too.
 
 ## Spell points
 
