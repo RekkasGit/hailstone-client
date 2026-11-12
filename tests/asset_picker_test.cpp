@@ -193,6 +193,13 @@ TEST_CASE("Asset folder: never one Hailstone writes into") {
         // Inside it: refused, unless the build allows a subfolder of Hailstone's own (HAILSTONE_ALLOW_IN_EQ_FOLDER).
         CHECK(data_folder_conflict(eq, eq / "hailstone", allow).empty() == allow);
         CHECK(data_folder_conflict(eq / "", eq / "hailstone" / ".", allow).empty() == allow);
+        CHECK(data_folder_conflict(eq, eq / "HailStone", allow).empty() == allow); // the name's case is ignored
+        // Anywhere else inside it, at any depth, folders the game reads among them: refused whatever the build.
+        for (const fs::path& inside : {eq / "maps", eq / "maps" / "hailstone", eq / "uifiles" / "x", eq / "Resources",
+                                       eq / "hailstone" / "sub", eq / "hailstone2", eq / "my hailstone"}) {
+            CAPTURE(inside);
+            CHECK_FALSE(data_folder_conflict(eq, inside, allow).empty());
+        }
         // Apart, or the asset folder inside the data folder (Hailstone never writes there): fine.
         CHECK(data_folder_conflict(eq, tmp.path / "hailstone", allow).empty());
         CHECK(data_folder_conflict(eq / "hailstone", eq, allow).empty());
@@ -214,6 +221,33 @@ TEST_CASE("Asset folder: never one Hailstone writes into") {
         CHECK(nested.reason.find("inside this folder") != std::string::npos);
     }
     CHECK(resolve_asset_folder({}, config, only(eq), tmp.path / "data").source == AssetFolderSource::Config);
+}
+
+TEST_CASE("Asset folder: Hailstone's own folder inside a game folder is not indexed") {
+    TempDir base("own"), overlay("own_overlay"), classic("own_classic");
+    auto touch = [](const fs::path& p) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p) << "x";
+    };
+    touch(base.path / "spells_us.txt");
+    touch(base.path / "hailstone" / "hailstone.ini");
+    touch(base.path / "hailstone" / "servers" / "x" / "assets" / "zone.eqg");
+    touch(base.path / "maps" / "hailstone" / "qeynos.txt"); // deeper: a game folder's own, indexed as before
+    touch(overlay.path / "hailstone" / "kept.txt");         // an overlay is Hailstone's folder already: all of it
+    touch(classic.path / "HAILSTONE" / "logs" / "a.txt");
+    touch(classic.path / "old.txt");
+    GameDir game(base.path, overlay.path);
+    game.set_classic(classic.path);
+    CHECK(game.exists("spells_us.txt"));
+    CHECK_FALSE(game.exists("hailstone/hailstone.ini"));
+    CHECK_FALSE(game.exists("hailstone/servers/x/assets/zone.eqg"));
+    CHECK_FALSE(game.exists("hailstone/logs/a.txt"));
+    CHECK(game.exists("maps/hailstone/qeynos.txt"));
+    CHECK(game.exists("hailstone/kept.txt"));
+    CHECK(game.exists("old.txt"));
+    CHECK(game.list("hailstone").size() == 1); // the overlay's
+    game.rescan();
+    CHECK_FALSE(game.exists("hailstone/hailstone.ini"));
 }
 
 TEST_CASE("Asset folder: a live base needs the server-matched files from the server's assets folder") {

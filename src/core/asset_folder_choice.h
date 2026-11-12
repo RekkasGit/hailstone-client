@@ -47,7 +47,8 @@ using AssetFolderValidator = std::function<AssetFolderCheck(const std::filesyste
 // assets.pick is set and it does not hold `data_folder` (data_folder_conflict; an empty one is not checked); else
 // `beside` (when not empty) next: the folder that holds Hailstone's own folder, used when it passes the check and
 // does not hold `data_folder` by data_folder_conflict's rule. It is only a default, never saved, so a moved
-// installation is found again; the caller passes it only in a HAILSTONE_ALLOW_IN_EQ_FOLDER build. Else
+// installation is found again; the caller passes it only in a HAILSTONE_ALLOW_IN_EQ_FOLDER build, when its own
+// folder is named GameDir::kOwnFolder. Else
 // the picker. An override that is no folder goes to the picker, saying so.
 AssetFolderResolution resolve_asset_folder(const std::filesystem::path& override_dir, const Config& config,
                                            const AssetFolderValidator& validate = {},
@@ -60,9 +61,10 @@ bool data_folder_subfolder_allowed();
 
 // Why `asset_folder` cannot be the asset folder when Hailstone writes into `data_folder` (platform::data_dir()):
 // the data folder is that folder or inside it, so Hailstone would write into the installation it must only read.
-// "" when they are apart. With `allow_subfolder` a data folder inside it (<EverQuest>/hailstone/, as a server's
-// patcher may install it) is "" too; only the same folder is refused. Both are made absolute and normal first (the
-// disk is asked for links where it can be).
+// "" when they are apart. With `allow_subfolder` a data folder directly in it named GameDir::kOwnFolder
+// (<EverQuest>/hailstone/, as a server's patcher may install it; the name's case is ignored) is "" too: GameDir never
+// indexes that folder. Any other place inside it, at any depth, is refused all the same, as is the folder itself.
+// Both are made absolute and normal first (the disk is asked for links where it can be).
 std::string data_folder_conflict(const std::filesystem::path& asset_folder, const std::filesystem::path& data_folder,
                                  bool allow_subfolder = data_folder_subfolder_allowed());
 

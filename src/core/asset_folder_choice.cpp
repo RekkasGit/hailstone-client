@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iterator>
 #include <system_error>
 
+#include "core/ascii_case.h"
 #include "core/config.h"
+#include "core/game_dir.h"
 
 namespace hailstone {
 
@@ -111,10 +114,20 @@ std::string data_folder_conflict(const std::filesystem::path& asset_folder, cons
         return "Hailstone keeps its own files in " + data_folder.string() +
                ", this same folder, and would write into the installation, which it only reads. Move Hailstone into "
                "a folder of its own (or set HAILSTONE_DATA_DIR) and start it again.";
-    // A folder of Hailstone's own inside the installation (<EverQuest>/hailstone/, where a server's patcher may install
-    // it): writing there changes none of the installation's files, and game files are read only from the
-    // installation's top folder and its known subfolders. Allowed only in builds made with HAILSTONE_ALLOW_IN_EQ_FOLDER.
-    if (allow_subfolder) return {};
+    // A folder of Hailstone's own directly in the installation (<EverQuest>/hailstone/, where a server's patcher may
+    // install it), and only in builds made with HAILSTONE_ALLOW_IN_EQ_FOLDER: writing there changes none of the
+    // installation's files, and GameDir never indexes that folder (GameDir::kOwnFolder). Any other place inside the
+    // installation (maps/, uifiles/, Resources/ or deeper) holds files the game reads, so it stays refused.
+    const std::u8string name = rel.generic_u8string(); // as UTF-8: generic_string() throws for some names on Windows
+    const bool own_child = std::distance(rel.begin(), rel.end()) == 1 &&
+                           iequals(std::string_view(reinterpret_cast<const char*>(name.data()), name.size()),
+                                   GameDir::kOwnFolder);
+    if (allow_subfolder && own_child) return {};
+    if (allow_subfolder)
+        return "Hailstone keeps its own files in " + data_folder.string() +
+               ", inside this folder, and would write into the installation, which it only reads. Inside the "
+               "EverQuest folder only a folder named \"" + std::string(GameDir::kOwnFolder) +
+               "\" directly in it may hold Hailstone (or set HAILSTONE_DATA_DIR); move it and start it again.";
     return "Hailstone keeps its own files in " + data_folder.string() +
            ", inside this folder, and would write into the installation, which it only reads. Move Hailstone out of "
            "the EverQuest folder (or set HAILSTONE_DATA_DIR) and start it again.";

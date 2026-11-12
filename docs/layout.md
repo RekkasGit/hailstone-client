@@ -100,11 +100,15 @@ the player owns (`data_dir_problem()`), rather than writing anywhere else:
   RoF2 install would otherwise write into the asset folder, which it only reads.
 
 The asset picker refuses an asset folder that holds the Hailstone folder (`data_folder_conflict`), for the same
-reason. A build made with the CMake option `HAILSTONE_ALLOW_IN_EQ_FOLDER=ON` accepts a Hailstone folder in a
-subfolder of the asset folder (`<EverQuest>/hailstone/`, where a server's own patcher may install it): writing there
-changes none of the install's files. The asset folder itself is refused either way. The option is off by default.
-Such a build also starts on the folder that holds the Hailstone folder (`../`) when it is an EverQuest install and
-no saved folder works (a first start, or a moved install); that default is never saved.
+reason. A build made with the CMake option `HAILSTONE_ALLOW_IN_EQ_FOLDER=ON` (off by default) accepts one place
+inside it: a folder named `hailstone` (any case) directly in the asset folder, `<EverQuest>/hailstone/`, where a
+server's own patcher may install Hailstone. Writing there changes none of the install's files, and Hailstone never
+reads that folder as game files: the asset folder is indexed whole, at every depth, except a top-level `hailstone`
+folder (`GameDir::kOwnFolder`; a server's `assets` overlay is indexed whole). Anywhere else inside the asset folder
+(`maps/`, `uifiles/`, `Resources/`, a deeper `hailstone`, another name) holds or may hold files the game reads, and
+stays refused, as does the asset folder itself, in every build. Such a build also starts on the folder that holds a
+Hailstone folder named `hailstone` (`../`) when it is an EverQuest install and no saved folder works (a first start,
+or a moved install); that default is never saved.
 
 The one exception is a macOS app bundle (`.app/Contents/`): replacing the app would delete the data and writing there
 breaks its signature, so a bundle keeps its data in `~/Library/Application Support/hailstone`. A dev build's
