@@ -995,8 +995,9 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ItemsRevision | () → inv, keep | Change counters | — |
 | ItemKept | (id) → bool | Item is marked Keep | — |
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
+| SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
 | ItemStats | () → {{key, label}} (array pairs) | Stats the window filters and sorts by | — |
-| BulkItems | (mode, {place…} [, dry]) → count, err\|nil | Bulk "sell", "destroy" or "tribute" of carried items | actions |
+| BulkItems | (mode, {place…} [, dry]) → count, err\|nil | Bulk "sell", "destroy", "tribute" or "withdraw" (bank to your packs, never equipped) of the chosen items; Keep-marked items are refused | actions |
 | TakeItemSearch | () → text\|nil | /finditem's search, once | — |
 
 #### Abilities (lua_eq_abilities.cpp)
@@ -1340,6 +1341,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `close_spell_book`, `clear_spell_recovery`, `set_window_pet(id)`, `inspect_item(id, augments)` | `actions` | |
 | `max_camera_distance`, `set_max_camera_distance(d)` | `actions` | |
 | `open_bank(banker)` | `actions` | the bank window at a spawn (0 the player), without a banker's checks. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` first |
+| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)` | `read` | every buff slot of the player, or of its pet, as fixed little-endian records (layout in docs/plugins.md "Buff records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_buff_data_bulk)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `eq.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
 | `out_value`, `out_begin_array`, `out_begin_table`, `out_key`, `out_end` | | a UI function's result |
