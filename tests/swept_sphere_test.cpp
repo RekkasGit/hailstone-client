@@ -38,6 +38,45 @@ TEST_CASE("A sphere parallel to a triangle's plane has no vertex edge-region cro
     check.operator()<double>();
 }
 
+TEST_CASE("An edge of no length is met as the sphere around its end") {
+    auto check = []<class F>(sweep::Vec3<F> e) {
+        using V = sweep::Vec3<F>;
+        const V s(0, 0, 0), delta(10, 0, 0);
+        const auto hit = sweep::sphere_edge<F>(V(-5, 0, 0), delta, F(1), F(1), s, e);
+        REQUIRE(hit.hit);
+        CHECK(hit.t == doctest::Approx(0.4)); // the near side of the sphere of radius 1 around s
+        CHECK(hit.normal.x == doctest::Approx(-1.0));
+        // A path that passes farther than the radius from it misses.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, 2, 0), delta, F(1), F(1), s, e).hit);
+        // And a move that ends short of it.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, 0, 0), delta, F(0.3), F(1), s, e).hit);
+    };
+    check.operator()<float>(sweep::Vec3<float>(0));
+    check.operator()<double>(sweep::Vec3<double>(0));
+    // A length whose square underflows a float (1e-46 is below its smallest denormal).
+    check.operator()<float>(sweep::Vec3<float>(1e-23f, 0, 0));
+}
+
+TEST_CASE("A path tangent to an edge's cylinder touches it, its far end included") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        // The edge up the z axis from 0 to 10; a sphere of radius 1 moving along x at y = 1 grazes the cylinder at
+        // t = 0.5 (a discriminant of exactly 0).
+        const V s(0, 0, 0), e(0, 0, 10), delta(10, 0, 0);
+        for (F z : {F(5), F(10)}) { // halfway up, and level with the far end (u = 1)
+            CAPTURE(z);
+            const auto hit = sweep::sphere_edge<F>(V(-5, 1, z), delta, F(1), F(1), s, e);
+            REQUIRE(hit.hit);
+            CHECK(hit.t == F(0.5));
+            CHECK(hit.normal == V(0, 1, 0));
+        }
+        // Just clear of the cylinder: no hit.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, F(1.01), 5), delta, F(1), F(1), s, e).hit);
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
 TEST_CASE("A capsule keeps native candidate order for a centre already inside its side") {
     auto check = []<class F>() {
         using V = sweep::Vec3<F>;

@@ -137,16 +137,22 @@ std::optional<Contact<F>> sweep_edge(const Vec3<F>& c, const Vec3<F>& d, F r, F 
     std::array<F, 2> candidates{};
     std::size_t count = 0;
     auto keep = [&](F t) { if (count < candidates.size()) candidates[count++] = t; };
-    // Roots of a t^2 + 2 h t + k = 0.
+    // Roots of a t^2 + 2 h t + k = 0; on_root(t, tangent), tangent when the discriminant is 0. The tangent test
+    // reads the same discriminant the roots come from: comparing h h with a k apart can disagree with it where the
+    // compiler contracts one of them into a fused multiply-add (Apple Clang on arm64).
     auto roots = [&](F a, F h, F k, auto&& on_root) {
         if (!(a > 0)) return;
         F disc = h * h - a * k;
         if (!(disc >= 0)) return;
         F root = std::sqrt(disc);
-        on_root((-h - root) / a);
-        if (disc != 0) on_root((-h + root) / a);
+        on_root((-h - root) / a, disc == 0);
+        if (disc != 0) on_root((-h + root) / a, false);
     };
-    if (along_axis && ee > 0 && d_len > 0) {
+    if (ee == 0) {
+        // An edge of no length (its ends one point, or a length whose square underflows) is the sphere around its
+        // end: both caps are that sphere and there is no cylinder, so the end's roots are the candidates.
+        roots(dot(d, d), dot(q, d), dot(q, q) - rr, [&](F t, bool) { keep(t); });
+    } else if (along_axis && ee > 0 && d_len > 0) {
         const F edge_length = std::sqrt(ee);
         const Vec3<F> axis = e / edge_length;
         const F along = dot(q, axis);
@@ -167,11 +173,9 @@ std::optional<Contact<F>> sweep_edge(const Vec3<F>& c, const Vec3<F>& d, F r, F 
         Vec3<F> q_across = q - e * (dot(q, e) / ee);
         Vec3<F> d_across = d - e * (dot(d, e) / ee);
         bool cylinder_tangent = false;
-        roots(dot(d_across, d_across), dot(q_across, d_across), dot(q_across, q_across) - rr, [&](F t) {
+        roots(dot(d_across, d_across), dot(q_across, d_across), dot(q_across, q_across) - rr, [&](F t, bool tangent) {
             F u = axis_at(t);
             // A cylinder tangent includes its far endpoint; the two-root case leaves that endpoint to the cap.
-            const bool tangent = dot(q_across, d_across) * dot(q_across, d_across) ==
-                                 dot(d_across, d_across) * (dot(q_across, q_across) - rr);
             if (u >= 0 && (u < 1 || (tangent && u == 1))) {
                 keep(t);
                 cylinder_tangent = tangent;
@@ -179,10 +183,10 @@ std::optional<Contact<F>> sweep_edge(const Vec3<F>& c, const Vec3<F>& d, F r, F 
         });
         const Vec3<F> q_end = c - (s + e);
         const F dd = dot(d, d);
-        if (!cylinder_tangent && count < 2) roots(dd, dot(q, d), dot(q, q) - rr, [&](F t) {
+        if (!cylinder_tangent && count < 2) roots(dd, dot(q, d), dot(q, q) - rr, [&](F t, bool) {
             if (axis_at(t) < 0) keep(t);
         });
-        if (!cylinder_tangent && count < 2) roots(dd, dot(q_end, d), dot(q_end, q_end) - rr, [&](F t) {
+        if (!cylinder_tangent && count < 2) roots(dd, dot(q_end, d), dot(q_end, q_end) - rr, [&](F t, bool) {
             if (axis_at(t) >= 1) keep(t);
         });
     }
@@ -321,6 +325,19 @@ TriangleHit<F> sphere_triangle(const Vec3<F>& centre, const Vec3<F>& delta, F le
 }
 
 template <class F>
+TriangleHit<F> sphere_edge(const Vec3<F>& centre, const Vec3<F>& delta, F t_max, F radius, const Vec3<F>& s,
+                           const Vec3<F>& e) {
+    TriangleHit<F> h;
+    auto c = sweep_edge(centre, delta, radius, t_max, s, e);
+    if (!c) return h;
+    h.hit = true;
+    h.t = c->t;
+    h.normal = normalize_or_zero(centre + delta * c->t - c->point);
+    h.contact_assumed = c->assumed;
+    return h;
+}
+
+template <class F>
 Vec3<F> clamp_point(const Vec3<F>& from, const Vec3<F>& delta, F t) {
     Vec3<F> v = delta * t;
     F len = length(v);
@@ -350,6 +367,7 @@ Skitter<F> skitter(const Vec3<F>& u, const Vec3<F>& delta, F t, const Vec3<F>& n
     template Start<F> start<F>(const Vec3<F>&, const Vec3<F>&, F);                                                  \
     template TriangleHit<F> sphere_triangle<F>(const Vec3<F>&, const Vec3<F>&, F, F, F, const Vec3<F>&,             \
                                                 const Vec3<F>&, const Vec3<F>&, const Vec3<F>&);                     \
+    template TriangleHit<F> sphere_edge<F>(const Vec3<F>&, const Vec3<F>&, F, F, const Vec3<F>&, const Vec3<F>&);    \
     template Vec3<F> clamp_point<F>(const Vec3<F>&, const Vec3<F>&, F);                                             \
     template Skitter<F> skitter<F>(const Vec3<F>&, const Vec3<F>&, F, const Vec3<F>&);
 HAILSTONE_SWEEP_INSTANTIATE(float)
