@@ -68,5 +68,8 @@ services:
       HOME: /src/.docker/msvc-home
       MSVC_DIR: /src/.docker/msvc
       WINEDEBUG: -all
+      # Wine turns Windows file names into Linux ones through the locale: in the image's C locale a name such as
+      # "Журнал 日記" (conversation_journal_test) cannot be made at all.
+      LANG: C.UTF-8
       JOBS: "${JOBS:-}"
     command: tools/docker/msvc_build.sh . build-windows-x64

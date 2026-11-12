@@ -59,7 +59,19 @@ windows() {
         dc --profile setup run --rm msvc-setup
     fi
     dc run --rm windows-x64 tools/docker/msvc_build.sh . "build-windows-x64$tag" "${cmake_args[@]}"
-    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= windows-x64 wine "build-windows-x64$tag/hailstone_tests.exe"; fi
+    if [ $test = 1 ]; then
+        # Microsoft's runtime DLLs next to the tests: Wine's own msvcp140_atomic_wait lacks __std_calloc_crt and the
+        # run crashes.
+        cp -f .docker/msvc/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT/*.dll "build-windows-x64$tag/"
+        # Left out under Wine only (GitHub's Windows runner runs them all): the browser tests (Chromium does not run
+        # under Wine), "cancelled ends a transfer stalled..." (Wine's WinHTTP never ends the call: docs/ci.md says
+        # about 21 s, in a container it hangs), allow_url (Wine's WinHTTP reports another address to the check) and
+        # "File time" (MSVC's time zones need Windows' icu.dll: "Module not found").
+        dc run --rm --no-deps -e EQ_GAME_DIR= \
+            -e WINEDLLOVERRIDES="msvcp140,msvcp140_1,msvcp140_2,msvcp140_atomic_wait,msvcp140_codecvt_ids,vcruntime140,vcruntime140_1,concrt140=n,b" \
+            windows-x64 wine "build-windows-x64$tag/hailstone_tests.exe" '-sfe=*browser_host_test*' \
+            '-tce=*stalled?waiting?for?the?answer*,*allow_url?refuses?an?empty*,File?time:*'
+    fi
     install_tree windows-x64 "build-windows-x64$tag" windows-x64
 }
 
