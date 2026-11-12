@@ -57,7 +57,8 @@ Behaviour is unchanged by all of these.
 ## Not covered
 
 - Nothing runs on GitHub's machines but the checks: a change merged without the builds above is not built anywhere.
-- Linux arm64 and Windows arm64 are not built. macOS arm64 is built only when its workflow is started.
+- Linux arm64 is built only by hand, under QEMU on an x64 machine (`tools/docker/build.sh linux-arm64`, "Builds in
+  containers" below); Windows arm64 is not built. macOS arm64 is built only when its workflow is started.
 - No macOS build has been run on a Mac with a display: the runner has no usable GPU, so the window, MoltenVK and
   the rendering are compiled and linked only.
 - Nothing runs against a real game install or a server unless run by hand; Vulkan and audio device code is only compiled.
@@ -119,21 +120,44 @@ Windows release is made from (docs/updater.md "Making a release").
 
 ### Builds in containers
 
-`compose.yaml` and `tools/docker/build.sh` wrap the images above, so one command builds, tests and installs a platform:
+`tools/docker/build.sh` builds, tests and installs a platform in one command, through `compose.yaml` and the
+Dockerfiles above. It is a shortcut for the commands above, not another way of building: the same images, Release,
+the same `msvc_build.sh`.
 
 ```sh
-tools/docker/build.sh linux-x64                          # build-linux-x64/, dist/linux-x64/hailstone
-MSVC_ACCEPT_LICENSE=1 tools/docker/build.sh windows-x64  # downloads MSVC into .docker/msvc the first time
-tools/docker/build.sh linux-arm64                        # native on an ARM host, under QEMU elsewhere (slow)
-tools/docker/build.sh macos-arm64                        # starts the macOS workflow for HEAD and unpacks its artifact (gh)
-tools/docker/build.sh all
+tools/docker/build.sh linux-x64      # build-linux-x64/, then dist/linux-x64/hailstone
+tools/docker/build.sh windows-x64    # build-windows-x64/, then dist/windows-x64/hailstone
+tools/docker/build.sh linux-arm64    # native on an arm64 machine, under QEMU elsewhere (slow); not a release platform
+tools/docker/build.sh all            # the three; --no-test after the platform skips the tests
 ```
 
-- Each platform keeps its build folder and its ccache (`.docker/ccache/<platform>`), so a rebuild compiles only what changed.
-- The containers run as you (`HOST_UID`/`HOST_GID`), so nothing in the checkout ends up owned by root.
-- `dist/<platform>/hailstone` is what `tools/make_update.py --dist` takes.
-- A server plugin cloned elsewhere is built in with `PLUGIN_DIR=<its clone> PLUGIN_NAME=<folder under plugins/>`.
-- macOS cannot be built in a container: Apple's compiler and SDK run only on a Mac.
+- `CPUS` is the containers' CPU limit (default 8) and `JOBS`, ninja's `-j`, follows it unless set. Keep the sum of
+  every build running on the machine within its cores.
+- `CMAKE_ARGS` adds configure options, split at whitespace (an option cannot hold a space). An existing build folder
+  takes the options given now too.
+- The images are tagged `hailstone-compose-linux:24.04` (`-arm64`) and `hailstone-compose-msvc:24.04`, apart from the
+  ones built by hand above. The Linux image has ccache, kept per platform in `.docker/ccache/<platform>` (ignored by
+  git); the MSVC image adds `wine32`, without which `wineboot` can stop before Wine has a `TEMP` folder and `cl` fails
+  with D8037.
+- The containers run as the checkout's owner, so nothing in it ends up owned by root (and Chromium, which refuses
+  root, can run the browser tests). The checkout is mounted at its own path, and git's folder read-only for the
+  version line; nothing else outside the checkout is visible, so a plugin clone that is a symbolic link to another
+  folder (a worktree's `plugins/nms`) is left out of the build. A plugin cloned into `plugins/` is built and tested as
+  usual; the install leaves it out, as a release does.
+- Only the Linux test runs drop Docker's seccomp and AppArmor profiles: Chromium's sandbox makes user namespaces,
+  which they refuse.
+- Windows uses an existing msvc-wine install, read-only: `MSVC_DIR`, by default `~/opt/msvc` when it has
+  `bin/x64/cl` (the install above), else `.docker/msvc`. With none there, `MSVC_ACCEPT_LICENSE=1` accepts
+  Microsoft's license and downloads one into `MSVC_DIR` (`tools/docker/msvc_setup.sh`, msvc-wine pinned to a
+  commit); without it the script stops. Wine's home is `.docker/wine-home`, one per checkout.
+- The Windows tests run under Wine with Microsoft's runtime DLLs copied beside them, and leave out four cases that
+  fail only under Wine: the browser tests (Chromium does not run under Wine), "cancelled ends a transfer stalled
+  waiting for the answer" (above), "allow_url refuses an empty..." (Wine's WinHTTP reports another address to the
+  check) and "File time" (MSVC's time zones need Windows' `icu.dll`). Nothing runs them for you, CI included: run
+  them on Windows by hand when a change touches the browser, `web/` or file times, and for a release.
+- QEMU for linux-arm64 is not registered by the script, since it changes the host's kernel settings; it prints the
+  pinned `tonistiigi/binfmt` command to run once per boot.
+- macOS is not built here: Apple's compiler and SDK run only on a Mac ("macOS arm64" below).
 
 ## clang-tidy
 
