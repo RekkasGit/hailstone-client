@@ -42,6 +42,7 @@ PAGES = [
     ]),
     ("Scripting and UI", [
         ("docs/plugins.md", "Plugins-and-Scripts"),
+        ("docs/scripting-reference.md", "Scripting-Reference"),
         ("docs/dev-ui.md", "Developer-UI"),
     ]),
     ("Server owners", [

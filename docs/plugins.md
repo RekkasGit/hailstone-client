@@ -13,6 +13,10 @@ frame:
 A player installs scripts and plugins from GitHub with the add-on manager on the login screen (docs/addons.md), or
 puts them in the folders by hand. An add-on gets no more than the capabilities its manifest declares (below).
 
+docs/scripting-reference.md lists every TLO and member, the `mq`, `hailstone`, `ui` and `eq` functions and the
+compiled plugins' host table, hooks and structs in one place. This page explains how they fit together and what the
+rules are.
+
 The folders are in the Hailstone folder (`docs/layout.md`). A compiled plugin's binary can sit directly in
 `plugins/` or in its own folder `plugins/<name>/`; that folder, under the Hailstone folder, is also where
 `host->config_dir` points, so the plugin keeps its settings beside its binary. A script's `mq.pickle` files go to
