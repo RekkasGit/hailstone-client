@@ -99,6 +99,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
 ## 2. Looks and sound
 
+- [x] Shared actor/nameplate/pick/target visibility, idle texture-slot reclamation and capacity retry, four-weight EQG armor bindings, and server-selected carried lights; unit and mock packet tests. Live GPU acceptance remains pending.
+- [ ] Other players' carried lights after an equipment change: stock EQEmu sends nothing for them (docs/unknowns.md); trace how the original updates a remote player's light.
 - [x] Name plates: same-frame per-pixel occlusion against the scene's depth (a hidden name is dropped, no ghost), nearer-over-farther draw order with overlap fading (10 %-20 % coverage to 10 % alpha, tau 0.3 s; the Fade Overlapping Names option), the target always full at its projected head, and a Highlight Target Name option; unit tests and an offline Bazaar viewer check.
 - [x] Name plate text options (Options > Display "Name Plates"): font face, size, bold, shadow / outline / no edge, shrink with distance, guild and owner line size; unit tests for the settings and the distance shrink.
 - [x] Animation layering: the original's upper/lower bone groups, actions over the legs, per-group cross-fades and SyncToBoneGroup, rider actions on the arms, other spawns' water (d8c9fc2; model viewer and unit tests, live split not seen in a screenshot).

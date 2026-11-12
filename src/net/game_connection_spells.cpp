@@ -12,6 +12,7 @@
 #include <optional>
 
 #include "core/log.h"
+#include "game/appearance.h"
 #include "game/coords.h"
 #include "net/game_connection.h"
 #include "game/hit_landing.h"
@@ -584,9 +585,23 @@ bool GameConnection::invisible() const {
     return false;
 }
 
+std::int32_t GameConnection::see_invisible_rank() const {
+    if (const auto* player = world_.player(); player && player->gm) return 3001;
+    std::int32_t rank = 0;
+    with_character([&](game::mechanics::Character& ch) { rank = ch.total_effect(13, true, 0, true, true); });
+    return rank;
+}
+
+bool GameConnection::spawn_invisible(const game::Spawn& s, std::int32_t rank) const {
+    if (market_hidden(s)) return true;
+    const auto* player = world_.player();
+    return player && game::spawn_invisible(*player, s, rank, group_.has_member(s.name));
+}
+
 void GameConnection::make_me_visible(bool appearance) {
     if (state_ != ConnectionState::InZone || !invisible()) return;
     invis_state_ = 0;
+    if (auto player = world_.spawns.find(world_.player_id); player != world_.spawns.end()) player->second.invis_rank = 0;
     for (std::int32_t spa : {0xc, 0x1c, 0x1d, 0x13a, 0x13b, 0x13c, 0x5e})
         if (int slot = own_effect_with(spa); slot >= 0) remove_own_effect(slot);
     SpawnAppearance a;

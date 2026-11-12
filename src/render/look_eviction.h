@@ -4,7 +4,9 @@
 // crowd in the same gear, reuses a look at once, but a hub's arrivals, departures and illusions would otherwise keep
 // every look's mesh and GPU buffers until the zone changes. Kept apart from Vulkan so the rule is tested.
 
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <unordered_set>
 
 namespace hailstone::render {
@@ -14,8 +16,9 @@ inline constexpr std::uint32_t kLookIdleMs = 5 * 60 * 1000;
 inline constexpr std::uint32_t kLookSweepMs = 1000;
 
 // Whether a look last drawn (or put up) in frame `last_frame` at `last_ms` may go now: idle for kLookIdleMs, and
-// at least `frames_in_flight` frames begun since, so no frame still on the GPU reads its buffers. The clock is
-// compared with unsigned wrap-around.
+// at least `frames_in_flight` frames begun since. This is a cache-residency
+// grace period; actual destruction still waits on VkContext's GPU completion point.
+// The clock is compared with unsigned wrap-around.
 constexpr bool look_idle(std::uint64_t last_frame, std::uint32_t last_ms, std::uint64_t now_frame,
                          std::uint32_t now_ms, std::uint32_t frames_in_flight) {
     return now_frame >= last_frame + frames_in_flight && static_cast<std::uint32_t>(now_ms - last_ms) >= kLookIdleMs;
@@ -45,6 +48,62 @@ template <class States> auto worn_meshes(const States& states) {
     for (const auto& kv : states)
         if (kv.second.mesh) worn.insert(kv.second.mesh.get());
     return worn;
+}
+
+// A texture stays while any GPU model reads it: base and tint layers and both
+// material maps count, including defaults and looks retained for a hidden spawn.
+// Rebuilding this set on the idle sweep avoids a separate count that can drift
+// when models are adopted from the preceding zone or an upload fails midway.
+template <class Models> std::unordered_set<std::uint32_t> model_texture_slots(const Models& models) {
+    std::unordered_set<std::uint32_t> used{0}; // the white fallback is permanent
+    for (const auto& kv : models)
+        for (const auto& part : kv.second.parts)
+            for (const std::uint32_t slot : {part.texture, part.texture2, part.normal_map, part.rough_map})
+                if (slot != 0xffffffffu) used.insert(slot);
+    return used;
+}
+
+// Array exhaustion is temporary, unlike an absent image. Once a slot is free,
+// discard the GPU models that baked in a capacity fallback and release those
+// texture claims, so their retained CPU meshes can upload again. A model no
+// spawn wears goes at once (nothing rebuilds it until it is worn again). A worn
+// one is rebuilt on the main thread at its next draw, its textures read there
+// (ActorRenderer::slot_for), so at most `max_worn` of them go per call: the
+// caller sweeps once a second, which keeps a full array's retries from hitching
+// a frame. `worn` holds the keys of the models spawns wear.
+template <class Models, class Worn, class Slots, class Retire, class Release>
+bool retry_capacity_blocked_textures(Models& models, const Worn& worn, std::size_t max_worn, Slots& slots,
+                                     bool capacity_available, Retire&& retire, Release&& release) {
+    if (!capacity_available) return false;
+    bool retried = false;
+    std::size_t worn_retried = 0;
+    for (auto it = models.begin(); it != models.end();) {
+        if (!it->second.capacity_blocked) {
+            ++it;
+            continue;
+        }
+        if (worn.contains(it->first)) {
+            if (worn_retried == max_worn) {
+                ++it;
+                continue;
+            }
+            ++worn_retried;
+        }
+        retire(it->second);
+        it = models.erase(it);
+        retried = true;
+    }
+    // A blocked texture still read by a kept model reads slot 0 there until that model's own retry; a model
+    // installed meanwhile reads the texture afresh.
+    for (auto it = slots.begin(); it != slots.end();) {
+        if (!it->second.capacity_blocked) {
+            ++it;
+            continue;
+        }
+        release(it->first);
+        it = slots.erase(it);
+    }
+    return retried;
 }
 
 } // namespace hailstone::render

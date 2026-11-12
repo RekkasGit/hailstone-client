@@ -1165,6 +1165,8 @@ namespace hailstone::game {
 		bool guild_show = false;
 		std::uint8_t anon = 0;
 		bool afk = false, lfg = false, linkdead = false, gm = false;
+        std::int32_t invis_rank = 0; // spawn HideMode, then SpawnAppearance 3
+        std::uint8_t light_type = 0; // active light from the spawn record and SpawnAppearance 5
 		std::uint8_t pvp = 0;      // PvPFlag +0x349 (the spawn record)
 		std::uint32_t deity = 0;   // +0x518 (the spawn record)
 		// Bazaar flags: the spawn record's trader bit and OP_BecomeTrader (PlayerClient +800), the

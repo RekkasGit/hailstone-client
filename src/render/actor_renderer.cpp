@@ -7,6 +7,7 @@
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -210,6 +211,15 @@ void ActorRenderer::free_model(GpuModel& g) {
     g.indices.destroy(vk_.allocator());
 }
 
+void ActorRenderer::retire_model(GpuModel& g) {
+    Buffer vertices = std::exchange(g.vertices, Buffer{});
+    Buffer indices = std::exchange(g.indices, Buffer{});
+    vk_.retire([allocator = vk_.allocator(), vertices, indices]() mutable {
+        vertices.destroy(allocator);
+        indices.destroy(allocator);
+    });
+}
+
 ActorRenderer::Kept::~Kept() {
     if (!vk || (models.empty() && textures.empty())) return;
     vk->wait_idle();
@@ -249,7 +259,7 @@ std::unique_ptr<ActorRenderer::Kept> ActorRenderer::release_kept() {
         auto d = default_of.find(mesh);
         const bool shared = d != default_of.end() ? model_refs_.contains(d->second) && library_->shares(d->second)
                                                   : mesh_refs_.contains(mesh) && library_->shares(mesh);
-        if (!g.used || !shared) {
+        if (!g.used || !shared || g.capacity_blocked) {
             free_model(g);
             continue;
         }
@@ -363,7 +373,7 @@ void ActorRenderer::rebuild_descriptors(std::uint32_t slot) {
     w.pImageInfo = infos.data();
     vkUpdateDescriptorSets(vk_.device(), 1, &w, 0, nullptr);
     written = static_cast<std::uint32_t>(textures_.size());
-    stats_.textures = textures_.size();
+    stats_.textures = textures_.size() - free_textures_.size();
 }
 
 VkDescriptorSet ActorRenderer::frame_set(const FrameInfo& frame) {
@@ -432,20 +442,24 @@ std::uint32_t ActorRenderer::slot_for(const TextureRef& ref, MeshPlan& plan, Upl
     }
     if (claims_) claims_->installed(key); // has its slot from here on: no job reads it again
     std::uint32_t slot = 0;
+    bool capacity_blocked = false;
     if (ref.map) {
-        if (t.image)
-            if (auto added = add_texture(upload, *t.image, t.use); added && *added <= 0xffff) slot = *added;
+        if (t.image) {
+            if (auto added = add_texture(upload, *t.image, t.use)) slot = *added;
+            else capacity_blocked = true;
+        }
     } else {
         std::optional<std::uint32_t> added = t.image ? add_texture(upload, *t.image, t.use) : std::nullopt;
         if (added) {
             slot = *added;
         } else {
+            capacity_blocked = t.image.has_value();
             // Drawn with slot 0 (plain white), which shows as an untextured grey model: say why, once per texture.
             ++stats_.missing_textures;
             log::warn("character texture {}: {}", ref.name, t.image ? "texture array full" : t.error);
         }
     }
-    texture_slots_.emplace(std::move(key), TextureSlot{slot, std::move(t.lookups)});
+    texture_slots_.emplace(std::move(key), TextureSlot{slot, std::move(t.lookups), capacity_blocked});
     return slot;
 }
 
@@ -506,12 +520,17 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
         return &it->second;
     }
     GpuModel g;
+    const auto resolve = [&](const TextureRef& ref) {
+        const auto slot = slot_for(ref, plan, upload);
+        g.capacity_blocked = g.capacity_blocked || texture_slots_.at(ref.key()).capacity_blocked;
+        return slot;
+    };
     for (auto& pp : plan.parts) {
         Part part = pp.part;
-        part.texture = slot_for(pp.texture, plan, upload);
-        if (pp.texture2) part.texture2 = slot_for(*pp.texture2, plan, upload);
-        part.normal_map = slot_for(pp.normal, plan, upload);
-        part.rough_map = slot_for(pp.rough, plan, upload);
+        part.texture = resolve(pp.texture);
+        if (pp.texture2) part.texture2 = resolve(*pp.texture2);
+        part.normal_map = resolve(pp.normal);
+        part.rough_map = resolve(pp.rough);
         g.parts.push_back(part);
     }
     std::stable_sort(g.parts.begin(), g.parts.end(), [](const Part& a, const Part& b) { return a.pass < b.pass; });
@@ -593,7 +612,9 @@ void ActorRenderer::evict_idle_looks() {
             if (auto g = models_.find(mesh); g != models_.end()) {
                 if (!look_idle(g->second.last_frame, g->second.last_ms, frame, now_ms_, VkContext::kFramesInFlight))
                     return false;
-                free_model(g->second);
+                // Clock age selects the cache entry; the GPU completion point,
+                // rather than a count of begun frames, governs destruction.
+                retire_model(g->second);
                 models_.erase(g);
             }
             mesh_refs_.erase(mesh);
@@ -602,10 +623,60 @@ void ActorRenderer::evict_idle_looks() {
         });
         it = it->second.looks.empty() ? looks_.erase(it) : std::next(it);
     }
+    // Texture slots are reclaimed after an eviction; a capacity retry is tried every sweep while slots are free.
+    if (evicted || !free_textures_.empty()) evict_unused_textures(evicted != 0);
     if (evicted) {
         stats_.models = models_.size();
         log::debug("freed {} idle appearances ({} meshes on the GPU)", evicted, models_.size());
     }
+}
+
+void ActorRenderer::evict_unused_textures(bool reclaim_first) {
+    auto reclaim = [&] {
+        const auto used = model_texture_slots(models_);
+        for (auto it = texture_slots_.begin(); it != texture_slots_.end();) {
+            if (it->second.slot == 0 || used.contains(it->second.slot)) {
+                ++it;
+                continue;
+            }
+            if (claims_) claims_->evicted(it->first);
+            it = texture_slots_.erase(it);
+        }
+        for (std::uint32_t slot = 1; slot < textures_.size(); ++slot) {
+            if (!textures_[slot].image || used.contains(slot)) continue;
+            Texture old = std::exchange(textures_[slot], Texture{});
+            // Each descriptor set is rewritten only after its frame fence. Older
+            // frames keep the old image alive through this completion point, even
+            // when a subsequent upload reuses the numeric slot immediately.
+            vk_.retire([device = vk_.device(), allocator = vk_.allocator(), old]() mutable {
+                old.destroy(device, allocator);
+            });
+            free_textures_.push_back(slot);
+            for (auto& written : descriptor_textures_) written = std::min(written, slot);
+        }
+    };
+    if (reclaim_first) reclaim();
+    if (std::none_of(models_.begin(), models_.end(), [](const auto& kv) { return kv.second.capacity_blocked; })) {
+        stats_.textures = textures_.size() - free_textures_.size();
+        return;
+    }
+    // The GPU models spawns wear (a default mesh included): rebuilt at once when discarded, so retried a few a sweep.
+    std::unordered_set<const assets::CharacterMesh*> worn;
+    for (const auto& kv : spawns_) {
+        const SpawnState& st = kv.second;
+        if (st.mesh) worn.insert(st.mesh.get());
+        else if (st.model)
+            if (auto d = default_meshes_.find(st.model.get()); d != default_meshes_.end() && d->second)
+                worn.insert(d->second.get());
+    }
+    if (retry_capacity_blocked_textures(models_, worn, kMaxWornRetries, texture_slots_, !free_textures_.empty(),
+            [this](GpuModel& model) { retire_model(model); },
+            [this](const std::string& key) { if (claims_) claims_->evicted(key); })) {
+        // The invalidated models may have owned successful uploads too. They
+        // are no longer referenced; make that capacity available for the retry.
+        reclaim();
+    }
+    stats_.textures = textures_.size() - free_textures_.size();
 }
 
 const std::shared_ptr<const assets::CharacterMesh>* ActorRenderer::applied_look(const assets::CharacterModel& model,
@@ -832,6 +903,7 @@ bool ActorRenderer::spawn_pose(std::uint32_t id, SpawnPose& out) const {
         out.bones.emplace_back(parent, child);
     }
     m.skin(world);
+    if (!mesh->append_skin_bones(world)) return false;
     for (auto& w : world) w = instance * w;
     std::vector<glm::vec3> skinned(mesh->vertices.size());
     for (std::size_t v = 0; v < mesh->vertices.size(); ++v) {
@@ -935,12 +1007,17 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
             ++stats_.unposed;
             continue;
         }
-        if (used + m.parents.size() > kMaxBones) {
+        const auto& mesh = a.mesh ? *a.mesh : default_mesh(m);
+        if (used + m.parents.size() + mesh.skin_bindings.size() > kMaxBones) {
             prepared_[i].gpu = nullptr;
             continue;
         }
         pose_bones(a, local, previous, world);
         m.skin(world);
+        if (!mesh.append_skin_bones(world)) {
+            prepared_[i].gpu = nullptr;
+            continue;
+        }
         glm::mat4 instance = instance_matrix(a);
         prepared_[i].bone_offset = used;
         for (const auto& w : world) bones[used++] = instance * w;

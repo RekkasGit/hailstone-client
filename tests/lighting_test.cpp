@@ -12,6 +12,7 @@
 #include "game/inventory.h"
 #include "assets/spell_effects.h"
 #include "game/light_list.h"
+#include "game/world_state.h"
 #include "game/particles.h"
 #include "game/scene_light.h"
 #include "game/sky_clock.h"
@@ -81,6 +82,25 @@ TEST_CASE("carried light: the brightest worn or general-slot item, and its look"
     CHECK(t->radius > 0.0f);
     CHECK(t->color.r > t->color.b); // warm
     CHECK(game::carried_light(11, {})->radius > game::carried_light(1, {})->radius);
+}
+
+TEST_CASE("carried light follows the carrier's displayed body, independently of camera control") {
+    game::Spawn spawn;
+    spawn.light_type = 2;
+    spawn.position = {1, 2, 3};
+    auto light = game::spawn_carried_light(spawn);
+    REQUIRE(light);
+    CHECK(light->position == glm::vec3(1, 2, 7));
+    CHECK(light->color == game::carried_light(2, {})->color);
+    spawn.display_valid = true;
+    spawn.display_position = {20, 30, 40};
+    light = game::spawn_carried_light(spawn);
+    REQUIRE(light);
+    CHECK(light->position == glm::vec3(20, 30, 44));
+    spawn.light_type = 0;
+    CHECK_FALSE(game::spawn_carried_light(spawn));
+    spawn.light_type = 255;
+    CHECK_FALSE(game::spawn_carried_light(spawn));
 }
 
 TEST_CASE("char select key light: on the camera's side, above the model, reaching past it") {

@@ -221,6 +221,15 @@ int CharacterModel::mount_point_bone(std::string_view rider_code) const {
     return find_bone_prefix("RIDER");
 }
 
+bool CharacterMesh::append_skin_bones(std::vector<glm::mat4>& bones) const {
+    const auto body_count = bones.size();
+    for (const auto& binding : skin_bindings)
+        if (binding.host_bone >= body_count) return false;
+    bones.reserve(body_count + skin_bindings.size());
+    for (const auto& binding : skin_bindings) bones.push_back(bones[binding.host_bone] * binding.local);
+    return true;
+}
+
 CharacterMesh CharacterModel::default_mesh() const {
     CharacterMesh m;
     m.vertices = vertices;
@@ -474,7 +483,7 @@ bool add_resource(Map& map, std::unordered_map<std::string, std::uint64_t>& leve
 
 } // namespace
 
-thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
+constinit thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
 
 CharacterLookups::~CharacterLookups() {
     current_ = parent_;

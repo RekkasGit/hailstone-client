@@ -907,6 +907,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/bug_report_window_test.cpp
     tests/startup_error_test.cpp
     tests/look_eviction_test.cpp
+    tests/appearance_systems_test.cpp
     tests/plugin_hooks_test.cpp
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp

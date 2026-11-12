@@ -518,17 +518,28 @@ render::SceneLighting ClientApp::scene_lighting(const game::SceneLight& scene, f
         // The weather: the storm's grey light, the lightning lighting everything from the sky.
         render::apply_storm(sky, weather_look_.storm);
         sky.sky += glm::vec3(weather_look_.flash * 1.5f);
-        // The player's carried light, at about chest height. Without dynamic lights (/dynamiclights off at the zone-in)
-        // none of these lights is made.
-        if (dynamic_lights_ && conn_ && screen_ == Screen::InGame && player_ready_)
-            if (auto l = game::carried_light(game::carried_light_value(conn_->inventory()),
-                                             feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 4.0f))) {
+        // The carried lights, the player's at about chest height. The player's light comes from its own inventory,
+        // every other carrier's from its spawn record and SpawnAppearance 5 (game::carrier_light_value says why).
+        // A spawn the viewer cannot see (market_hidden_, last frame's IsInvisible set) carries none. Without dynamic
+        // lights (/dynamiclights off at the zone-in) none of these lights is made.
+        if (dynamic_lights_ && conn_ && screen_ == Screen::InGame && player_ready_) {
+            const std::uint32_t player_id = conn_->world().player_id;
+            for (const auto& [id, spawn] : conn_->world().spawns) {
+                if (market_hidden_.contains(id)) continue;
+                std::optional<game::LightSource> l;
+                if (id == player_id)
+                    l = game::carried_light(game::carrier_light_value(spawn, player_id, conn_->inventory()),
+                                            feet_ + glm::vec3(0.0f, 0.0f, floor_offset_ + 4.0f));
+                else
+                    l = game::spawn_carried_light(spawn);
+                if (!l) continue;
                 dynamic.push_back(*l);
-                if (moving) {
+                if (moving && id == player_id) {
                     moving->carried = *l;
-                    moving->carrier = conn_->world().player_id;
+                    moving->carrier = id;
                 }
             }
+        }
         // Character select and creation: a key light on the model (game::char_select_key_light; not the original's).
         if (!pre_game_hidden_ && pre_game_scene())
             if (auto it = pre_game_world_->spawns.find(kModelPlayerId); it != pre_game_world_->spawns.end()) {
