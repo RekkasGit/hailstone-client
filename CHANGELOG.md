@@ -18,6 +18,7 @@
 - Add-ons: **Remove** in a script's or plugin's row works again in the mouse UI. Its question ("Remove ...?") never opened, so nothing was removed
 - Chat: a message with line breaks in it (such as a server's message of the day) is shown on separate lines, instead of its words being thrown across the window
 - For add-on authors: the wiki has a new **Scripting Reference** page listing every TLO and its members, the spawn search words, the `mq`, `hailstone`, `ImGui`, `ui` and `eq` functions, and the plugin SDK's callbacks, host functions, hooks and structs
+- For add-on authors: a plugin's window now needs the `move` permission (not `actions`) for the zone finder's Walk there (`eq.ZoneExitWalk`), as for the Find window's, and none to read an item job's progress (`eq.ItemJob`). `eq.HasSlot` now checks the slot it is given, `ui.Image` takes a colour tint as documented, and `eq.DisplayItemData` also gives `stackCount` and `itemType`
 
 ## 0.7.0-beta (2026-11-09)
 

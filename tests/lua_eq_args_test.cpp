@@ -76,6 +76,10 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
         CHECK(run(L, "return eq.DisplayItemData(1).id") == "123");
         CHECK(run(L, "return eq.DisplayItemData(2).id") == "456");
         CHECK(run(L, "return eq.DisplayItemData(0)") == "nil");
+        displays[0].stack_count = 7;
+        displays[0].item_type = 20;
+        CHECK(run(L, "local d = eq.DisplayItemData(1) return d.stackCount .. ' ' .. d.stack_count") == "7 7");
+        CHECK(run(L, "local d = eq.DisplayItemData(1) return d.itemType .. ' ' .. d.item_type") == "20 20");
         auto fails = [&](const std::string& call) { return run(L, "return (pcall(" + call + "))") == "false"; };
         CHECK(fails("eq.WindowPlaced, 'Chat1', 10, 'x'"));
         CHECK(fails("eq.FindItems, 'all'"));
