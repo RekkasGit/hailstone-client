@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wiki: a new Commands and Shortcuts page lists every slash command, the default keys, and the mouse and window shortcuts, and says which of the original client's commands and keys Hailstone does not support yet
 - Hailstone is now licensed under the GNU GPL, version 2 or later, like MacroQuest (it was MIT up to 0.7.0-beta). The plugin SDK stays MIT, and plugins, scripts, UI packs and other add-ons may still use any licence (NOTICE.md). Releases now include LICENSE.txt, NOTICE.md and THIRD_PARTY.md
 - `/time` and scripts' `GameTime` now advance with the zone's clock instead of staying at the time received when zoning in, including the date when a game day, month or year ends
 - A new **Find** window lists the merchants, bankers, guildmasters and other useful NPCs in your zone, nearest first, with a search and a filter for each kind. Click one to target it and see it on the map, then **Show path** for a glowing gold trail to it that goes around walls and buildings and follows you if you take another way, or **Walk there** to have your character walk to it (any movement key stops the walk). The find key, the EQ menu's Find and the Actions window's Find open it: in the modern UI it is a page of the map, which can also mark those NPCs on the map and the minimap (the **NPCs** button; the filters and search apply to the marks too); in the gamepad UI it is under More. It replaces the old Find window, which stayed empty on EQEmu servers. On a server with the updated Hailstone script it also lists the quest givers
