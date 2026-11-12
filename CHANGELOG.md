@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bandolier: swapping sets works with the general slots full when a bag has room. The weapon you swap out goes into the first bag with a free slot that takes it, where the server puts it; before, the swap was refused unless a general slot was free
 - Chat: a server that sends the newer chat message types (colours 355 to 408) can now have them filtered to their own windows, from a new Extended (server) submenu of the chat window's Filters menu, and coloured from 54 new rows at the end of Options > Colors. Nothing changes on a stock EQEmu server, which sends none of them
 - On a fresh install, the login screen starts on the server your game folder's `eqhost.txt` names (its `[LoginServer]` `Host`), as a saved server you can rename or delete. This happens once: a server you delete does not come back
 - On Windows, the asset folder picker uses the Explorer-style folder dialog with its address bar, Quick access and search, instead of the old folder tree
