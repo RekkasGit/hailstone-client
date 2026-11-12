@@ -26,7 +26,6 @@
 #include "game/boats.h"
 #include "game/race_models.h"
 #include "game/combat.h"
-#include "game/chat_native_categories.h"
 #include "game/sound_rules.h"
 #include "game/coords.h"
 #include "game/zone_names.h"
@@ -1963,9 +1962,7 @@ void GameConnection::report_successful_hit(const CombatDamage& d, bool reported)
         // A spell hit: ReportSuccessfulHit's spell branch.
         if (const auto* sp = spell_table_->get(d.spell_id))
             if (auto line = game::spell_hit_message(strings_, world_, *sp, d.target, d.damage))
-                chat(ChatEvent::Kind::Spell, *line, 0,
-                     game::native_spell_hit_chat_color(d.damage, d.target == me, d.source == me,
-                                                       game::native_song_skill(sp->skill)));
+                chat(ChatEvent::Kind::Spell, *line);
     } else if (game::is_environment_hit(d.type)) {
         // The environmental branch (game/combat.h environment_hit): its line, fall_hit, and the victim's Hit1..4
         // when there is damage (the shared tail @0x5311ee; no FlshHit for these types).
@@ -1986,9 +1983,7 @@ void GameConnection::report_successful_hit(const CombatDamage& d, bool reported)
                 c.spell = game::kSoundFallHurt;
                 sound_cues_.push_back(c);
             }
-            if (reported && !e.text.empty())
-                chat(ChatEvent::Kind::Combat, e.text, 0,
-                     game::native_environment_chat_color(d.type, in.on_me, d.source, me));
+            if (reported && !e.text.empty()) chat(ChatEvent::Kind::Combat, e.text, 0, e.color);
             if (d.damage > 0 && !t->is_corpse) {
                 SoundCue c;
                 c.kind = SoundCue::Kind::Hit;
@@ -2625,7 +2620,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                 // BuildConsiderMessage colours by the client's own con level.
                 game::Con con = game::con_level(*t, pstatus_.level, pvp_rules_);
                 chat(ChatEvent::Kind::System, game::consider_message(strings_, *t, pstatus_.level, c->faction, 0, pvp_rules_),
-                     0, game::native_consider_chat_color(con));
+                     game::con_rgb(con));
             }
         }
         break;

@@ -56,6 +56,7 @@ constexpr ChannelColors kColorsByChannel[] = {
     {37, {0x121}},
     {38, {0x12e}},
     {39, {0x11c}},
+    {40, {0x11b}},
     {41, {0x14d}},
     {42, {0x11f}},
     {43, {0x148}},
@@ -98,8 +99,8 @@ constexpr ChatFilterItem kFilterItems[] = {
     {M::Filters, 49, 5870},  // System Messages
     // (then the Chat Channel, Melee and Spells submenus)
     {M::Filters, 11, 6641},  // Skills
-    {M::Randoms, 42, 3343},  // Your random rolls
-    {M::Other, 22, 6642},    // General messages
+    {M::Filters, 42, 3343},  // Randoms
+    {M::Filters, 22, 6642},  // Other
     {M::Filters, 47, 5871},  // Experience Messages
     {M::Filters, 50, 13950}, // /who
     {M::Filters, 52, 6133},  // Pet Responses
@@ -129,60 +130,53 @@ constexpr ChatFilterItem kFilterItems[] = {
     {M::Melee, 35, 15025},  // NPC Enrage
     {M::Melee, 28, 15026},  // My Death
     {M::Melee, 29, 15027},  // Others Death
-    {M::DamageShields, 46, 3376}, // Damage shields while attacking
+    {M::Melee, 46, 3376},   // Damage Shield Reports
     // Spells (+0x19c)
     {M::Spells, 10, 15028}, // Mine
     {M::Spells, 36, 15029}, // Others
     {M::Spells, 37, 15030}, // Failures
-    {M::DirectDamage, 38, 15031}, // Your spell criticals
+    {M::Spells, 38, 15031}, // Criticals
     {M::Spells, 39, 15032}, // Worn Off
-    {M::DirectDamage, 40, 15033}, // Your direct damage
+    {M::Spells, 40, 15033}, // Non Melee Hits
     {M::Spells, 41, 5867},  // Focus Effects
     {M::Spells, 51, 6132},  // Pet Spells
 
-    // Added destinations use native labels so a RoF2 asset folder needs no
-    // newer string table. These IDs are protocol compatibility knowledge;
-    // their presentation is Hailstone's own.
-    {M::Melee, 57, 0, "Your flurries"},
-    {M::Filters, 58, 0, "Debug output"},
-    {M::Melee, 59, 0, "NPC deaths"},
+    // Hailstone (a deliberate difference, docs/mechanics.md "Extended chat routing"): the extended routes 57..107,
+    // reached only by the colours 355..408 a stock EQEmu server never sends, in their own Extended (server) submenu
+    // after the original menu. Their names are Hailstone's own (no eqstr; a RoF2 string file has none for them).
+    // Routes 82, 83, 86, 87, 90..94 and 96 are kept free (ChannelMap keeps their numbers) but not in the menu: the
+    // list they come from gives them colours below 355 (2, 4, 13, 15, 274, 283, 285, 286, 290, 348, 349), and those
+    // keep RoF2's routes here, so nothing reaches them (docs/unknowns.md "Chat").
+    {M::Extended, 57, 0, "Your flurries"},
+    {M::Extended, 58, 0, "Debug output"},
+    {M::Extended, 59, 0, "NPC deaths"},
     {M::Randoms, 60, 0, "Other players' rolls"},
     {M::Randoms, 61, 0, "Group and raid rolls"},
     {M::EnvironmentalDamage, 62, 0, "Your environmental damage"},
     {M::EnvironmentalDamage, 63, 0, "Others' environmental damage"},
     {M::DamageShields, 64, 0, "Damage shields while defending"},
     {M::DamageShields, 65, 0, "Others' damage shields"},
-    {M::Filters, 66, 0, "Events"},
-    {M::Spells, 67, 0, "Overwritten detrimental spells"},
-    {M::Spells, 68, 0, "Overwritten beneficial spells"},
+    {M::Extended, 66, 0, "Events"},
+    {M::Extended, 67, 0, "Overwritten detrimental spells"},
+    {M::Extended, 68, 0, "Overwritten beneficial spells"},
     {M::Other, 69, 0, "Unavailable commands"},
     {M::Other, 70, 0, "Combat ability reuse"},
     {M::Other, 71, 0, "Alternate ability reuse"},
-    {M::Filters, 72, 0, "Destroyed items"},
-    {M::Spells, 73, 0, "Your auras"},
-    {M::Spells, 74, 0, "Others' auras"},
+    {M::Extended, 72, 0, "Destroyed items"},
+    {M::Extended, 73, 0, "Your auras"},
+    {M::Extended, 74, 0, "Others' auras"},
     {M::Healing, 75, 0, "Your healing"},
     {M::Healing, 76, 0, "Others' healing"},
     {M::DamageOverTime, 77, 0, "Your damage over time"},
     {M::DamageOverTime, 78, 0, "Others' damage over time"},
-    {M::Spells, 79, 0, "Bard songs"},
+    {M::Extended, 79, 0, "Bard songs"},
     {M::DirectDamage, 80, 0, "Others' direct damage"},
-    {M::Spells, 81, 0, "Spell emotes"},
-    {M::Filters, 82, 0, "Faction messages"},
-    {M::Filters, 83, 0, "Loot and money"},
-    {M::Melee, 84, 0, "Taunt messages"},
-    {M::Melee, 85, 0, "Others' disciplines"},
-    {M::Filters, 86, 0, "Your achievements"},
-    {M::Filters, 87, 0, "Others' achievements"},
-    {M::Filters, 88, 0, "Food and drink"},
-    {M::Filters, 89, 0, "Raid victories"},
-    {M::Other, 90, 0, "Green messages"},
-    {M::Other, 91, 0, "Blue messages"},
-    {M::Other, 92, 0, "Yellow messages"},
-    {M::Other, 93, 0, "Red messages"},
-    {M::Filters, 94, 0, "Chat channel information"},
-    {M::Filters, 95, 0, "Consider messages"},
-    {M::DirectDamage, 96, 0, "Direct damage received"},
+    {M::Extended, 81, 0, "Spell emotes"},
+    {M::Extended, 84, 0, "Taunt messages"},
+    {M::Extended, 85, 0, "Others' disciplines"},
+    {M::Extended, 88, 0, "Food and drink"},
+    {M::Extended, 89, 0, "Raid victories"},
+    {M::Extended, 95, 0, "Consider messages"},
     {M::DirectDamage, 97, 0, "Others' direct damage criticals"},
     {M::DamageOverTime, 98, 0, "Your damage over time criticals"},
     {M::DamageOverTime, 99, 0, "Others' damage over time criticals"},
@@ -190,23 +184,25 @@ constexpr ChatFilterItem kFilterItems[] = {
     {M::Healing, 101, 0, "Healing received"},
     {M::Healing, 102, 0, "Your critical healing"},
     {M::Healing, 103, 0, "Others' critical healing"},
-    {M::Melee, 104, 0, "Others' melee criticals"},
-    {M::Spells, 105, 0, "Others' spell failures"},
-    {M::Filters, 106, 0, "Client Messages"},
-    {M::Filters, 107, 0, "Alerts"},
+    {M::Extended, 104, 0, "Others' melee criticals"},
+    {M::Extended, 105, 0, "Others' spell failures"},
+    {M::Extended, 106, 0, "Client Messages"},
+    {M::Extended, 107, 0, "Alerts"},
 };
 
 constexpr ChatFilterGroup kFilterGroups[] = {
     {M::ChatChannel, M::Filters, kStrFilterChatChannel, "Chat Channel"},
     {M::Melee, M::Filters, kStrFilterMelee, "Melee"},
     {M::Spells, M::Filters, kStrFilterSpells, "Spells"},
-    {M::DirectDamage, M::Spells, 0, "Direct Damage"},
-    {M::DamageOverTime, M::Spells, 0, "Damage Over Time"},
-    {M::Healing, M::Spells, 0, "Healing"},
-    {M::DamageShields, M::Filters, 0, "Damage Shields"},
-    {M::EnvironmentalDamage, M::Filters, 0, "Environmental Damage"},
-    {M::Randoms, M::Filters, 0, "Random Rolls"},
-    {M::Other, M::Filters, 0, "Other Messages"},
+    // Hailstone: the extended routes' submenus
+    {M::Extended, M::Filters, 0, "Extended (server)"},
+    {M::DirectDamage, M::Extended, 0, "Direct Damage"},
+    {M::DamageOverTime, M::Extended, 0, "Damage Over Time"},
+    {M::Healing, M::Extended, 0, "Healing"},
+    {M::DamageShields, M::Extended, 0, "Damage Shields"},
+    {M::EnvironmentalDamage, M::Extended, 0, "Environmental Damage"},
+    {M::Randoms, M::Extended, 0, "Random Rolls"},
+    {M::Other, M::Extended, 0, "Other Messages"},
 };
 
 constexpr ChatDefaultItem kDefaultItems[] = {
@@ -222,33 +218,22 @@ constexpr ChatDefaultItem kDefaultItems[] = {
 } // namespace
 
 int chat_channel_of_color(std::int32_t color) {
-    if (color >= 356 && color <= 380) return color - 299;
-    if (color >= 390 && color <= 396) return 95;
-    if (color >= 398 && color <= 408) return color - 301;
+    if (color >= kFirstColor && color <= kLastColor)
+        return kChannelFromColor[static_cast<std::size_t>(color - kFirstColor)];
+    // Hailstone (a deliberate difference): the extended colours, which only a server that uses them sends (stock
+    // EQEmu's highest is 340). The original sends every colour outside 0x100..0x15e to channel 22; here so do the
+    // colours 351..355, 381 and 384..387, and any other.
+    if (color >= 356 && color <= 380) return color - 299; // 57..81
+    if (color >= 390 && color <= 396) return 95;          // the seven consider colours
+    if (color >= 398 && color <= 408) return color - 301; // 97..107
     switch (color) {
-    case 2: return 90;
-    case 4: return 91;
-    case 15: return 92;
-    case 13: return 93;
-    case 274: return 82;
-    case 285:
-    case 286: return 83;
-    case 290: return 94;
-    case 348: return 86;
-    case 349: return 87;
     case 382: return 84;
     case 383: return 85;
     case 388: return 88;
     case 389: return 89;
-    case 397: return 40;
-    case 283: return 96;
-    // Stock EQEmu servers use 325 for DoTs. Keep that older wire meaning
-    // alongside modern 376 so both server generations reach the DoT filter.
-    case 325: return 77;
-    default: break;
+    case 397: return 40; // Non Melee Hits
+    default: return kChatChannelOther;
     }
-    if (color < kFirstColor || color > kLastColor) return kChatChannelOther;
-    return kChannelFromColor[static_cast<std::size_t>(color - kFirstColor)];
 }
 
 std::span<const ChatFilterItem> chat_filter_items() { return kFilterItems; }

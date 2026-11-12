@@ -1018,7 +1018,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/chat_windows_test.cpp
     tests/chat_filter_routes_test.cpp
     tests/chat_filter_menu_test.cpp
-    tests/chat_native_categories_test.cpp
+    tests/chat_stock_colors_test.cpp
     tests/hot_button_drag_test.cpp
     tests/ui_keyboard_capture_test.cpp
     tests/inventory_hot_button_test.cpp

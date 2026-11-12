@@ -1,8 +1,12 @@
 #pragma once
 
-// Every chat line selects a destination by its message colour. The original
-// RoF2 destinations keep their IDs; modern categories append destinations
-// 57..107. app/lua_eq_chat.cpp owns the windows and their persisted routing.
+// CChatWindowManager's routing tables (and CChatWindow's WndNotification): every line a chat window shows
+// goes by its colour (dsp_chat's) to one of 57 chat channels (GetChannelFromColor @0x6504c0), and the channel to one
+// window (ChannelMap, +0x8c; the main window unless the Filters menu moved it). The tables here are the original's
+// data; app/lua_eq_chat.cpp keeps the windows.
+// Hailstone (a deliberate difference, docs/mechanics.md "Extended chat routing"): channels 57..107 and the user
+// colours 355..408 extend the tables for a server that sends a later client's extended chat colours. Stock EQEmu
+// sends none of them and the client makes none itself, so they change nothing on a stock server.
 
 #include <cstdint>
 #include <span>
@@ -12,14 +16,17 @@
 
 namespace hailstone::game {
 
-inline constexpr int kChatChannelCount = 108;
-inline constexpr int kChatUserColorCount = 153; // wire colours 256..408
+inline constexpr int kChatChannelCountRoF2 = 57; // ChannelMap's size (SetChannelMap's bound 0x39)
+inline constexpr int kChatChannelCount = 108;    // Hailstone: with the extended channels 57..107
+inline constexpr int kChatUserColorCountRoF2 = 99; // CDisplay's user colours (GetUserDefinedColor's bound 0x62)
+inline constexpr int kChatUserColorCount = 153;    // Hailstone: with the extended colours 355..408 (indices 99..152)
 inline constexpr int kChatChannelOther = 22;  // GetChannelFromColor's answer for any colour it does not list
 inline constexpr int kChatChannelFirstServer = 12; // the chat server's channels 1..10 are channels 12..21
 inline constexpr int kChatHitModeCount = 8;   // CChatWindowManager::HitModes (+0x224; [ChatManager] HitMode0..7)
 
-// The wire colour is distinct from the destination ID. Modern categories use
-// colours through 408; unrecognized colours retain the general Other route.
+// CChatWindowManager::GetChannelFromColor @0x6504c0: the chat channel of a colour (the user colours 0x100..0x15e
+// by the table at 0x650780; any other colour, the basic ones below 256 too, is channel 22). Hailstone adds the
+// extended colours 356..408 (chat_windows.cpp).
 int chat_channel_of_color(std::int32_t color);
 
 // The Filters menu (CChatWindowManager::InitContextMenu @0x6513c0): the menu (+0x180) and its Chat Channel (+0x1a4),
@@ -27,15 +34,16 @@ int chat_channel_of_color(std::int32_t color);
 // the menu's order. An item moves its channel to the window it was picked in, or back to the main window when it
 // was there already (CChatWindow::WndNotification @0x656640, ids 100..0x9c); each menu's "ALL" (13205; ids 0x9d,
 // 0x9e, 0x9f, 0xa0) moves every channel of that menu to the window.
+// Hailstone: Extended (server) and its submenus hold the extended channels 57..107, after the original menu's ALL.
 enum class ChatFilterMenu : std::uint8_t {
     Filters, ChatChannel, Melee, Spells,
-    DirectDamage, DamageOverTime, Healing, DamageShields, EnvironmentalDamage, Randoms, Other
+    Extended, DirectDamage, DamageOverTime, Healing, DamageShields, EnvironmentalDamage, Randoms, Other
 };
 struct ChatFilterItem {
     ChatFilterMenu menu;
     std::uint8_t channel;
-    std::uint32_t eqstr; // optional localized name from the player's string file
-    std::string_view label{}; // fallback for categories absent from older string files
+    std::uint32_t eqstr; // its name; 0 for the chat channels, named by the chat server's joined list
+    std::string_view label{}; // Hailstone: the name of an extended channel (eqstr 0), which RoF2's strings lack
 };
 std::span<const ChatFilterItem> chat_filter_items();
 struct ChatFilterGroup {
@@ -44,13 +52,12 @@ struct ChatFilterGroup {
     std::uint32_t eqstr;
     std::string_view label;
 };
-// Each non-root menu appears once. ALL applies to a menu's direct items only.
+// Each submenu once, with the menu it is in (Filters for the original three). ALL moves a menu's own items only.
 std::span<const ChatFilterGroup> chat_filter_groups();
 // The submenu rows of the Filters menu (after System Messages): Chat Channel 6638, Melee 6639, Spells 6640.
 inline constexpr std::uint32_t kStrFilterChatChannel = 6638, kStrFilterMelee = 6639, kStrFilterSpells = 6640;
 inline constexpr std::uint32_t kStrAll = 13205;
-// A legacy menu's ALL confirmation (eqstr 6040..6043); zero for new groups,
-// whose caller supplies a readable confirmation without requiring new assets.
+// What a menu's ALL says in the window (eqstr 6040..6043, colour 10); 0 for Hailstone's extended submenus.
 std::uint32_t chat_filter_all_eqstr(ChatFilterMenu menu);
 // What moving a channel says after its item's text (" " and eqstr 3135 / 3136, colour 10); 3134 "Filter %1" names
 // an item that is not in the menu.

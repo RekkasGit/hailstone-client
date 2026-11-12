@@ -1,3 +1,4 @@
+// The chat channels of the colours and the Filters menu's items (game/chat_windows.h).
 #include <doctest/doctest.h>
 
 #include "game/chat_windows.h"
@@ -9,10 +10,9 @@
 
 using namespace hailstone::game;
 
-TEST_CASE("Chat filters: every extended wire type selects its stable destination") {
-    // Expected protocol facts are independent of the implementation's ranges.
+TEST_CASE("Chat filters: the extended colours 355..408 go to the extended channels") {
     constexpr std::array<int, 53> destinations = {
-        22, // 355: response-link palette entry, not a routing category
+        22, // 355: a colour of its own, no channel
         57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
         72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
         22, // 381: faction links
@@ -32,45 +32,25 @@ TEST_CASE("Chat filters: every extended wire type selects its stable destination
     CHECK(kChatUserColorCount == 153);
 }
 
-TEST_CASE("Chat filters: reused colours, numbered channels and stock server DoTs") {
-    constexpr std::array<std::array<int, 2>, 13> reassigned = {{
-        {2, 90}, {4, 91}, {15, 92}, {13, 93},
-        {274, 82}, {285, 83}, {286, 83}, {290, 94},
-        {348, 86}, {349, 87}, {283, 96}, {325, 77}, {397, 40}
-    }};
-    for (const auto& [color, channel] : reassigned) {
+TEST_CASE("Chat filters: every colour up to 354 goes to the channel GetChannelFromColor gives it") {
+    // The original's channel of each colour 256..350 (the table at 0x650780, as the client before the extended
+    // channels had it); every other colour up to 354, and below 256, is Other (22).
+    constexpr std::array<int, 95> rof2 = {
+        0,  1,  2,  4,  5,  6,  7,  8,  10, 9,  24, 23, 25, 22, 11, 31, //
+        22, 22, 22, 22, 22, 28, 29, 26, 27, 50, 22, 40, 39, 22, 22, 42, //
+        36, 37, 22, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 30, 38, 32, //
+        33, 34, 35, 0,  1,  2,  4,  5,  6,  7,  8,  12, 13, 14, 15, 16, //
+        17, 18, 19, 20, 21, 22, 22, 3,  43, 46, 22, 44, 45, 41, 47, 49, //
+        51, 52, 53, 22, 22, 22, 54, 22, 22, 4,  55, 22, 8,  4,  56};
+    for (int color = -300; color <= 354; ++color) {
         CAPTURE(color);
-        CHECK(chat_channel_of_color(color) == channel);
+        const int expected = color >= 256 && color <= 350 ? rof2[static_cast<std::size_t>(color - 256)] : kChatChannelOther;
+        CHECK(chat_channel_of_color(color) == expected);
     }
-    for (int channel = 0; channel < 10; ++channel) {
-        CHECK(chat_channel_of_color(291 + channel) == 12 + channel);
-        CHECK(chat_channel_of_color(315 + channel) == 12 + channel);
-    }
-
-    constexpr std::array<std::array<int, 2>, 46> original = {{
-        {256, 0}, {307, 0}, {257, 1}, {308, 1}, {258, 2}, {309, 2},
-        {327, 3}, {259, 4}, {310, 4}, {345, 4}, {260, 5}, {311, 5},
-        {261, 6}, {312, 6}, {262, 7}, {313, 7}, {263, 8}, {314, 8},
-        {265, 9}, {264, 10}, {270, 11}, {267, 23}, {266, 24},
-        {268, 25}, {279, 26}, {280, 27}, {277, 28}, {278, 29},
-        {301, 30}, {271, 31}, {303, 32}, {304, 33}, {305, 34},
-        {306, 35}, {288, 36}, {289, 37}, {302, 38}, {284, 39},
-        {333, 41}, {287, 42}, {328, 43}, {331, 44}, {332, 45},
-        {329, 46}, {334, 47}, {335, 49}
-    }};
-    for (const auto& [color, channel] : original) {
-        CAPTURE(color);
-        CHECK(chat_channel_of_color(color) == channel);
-    }
-    CHECK(chat_channel_of_color(281) == 50);
-    CHECK(chat_channel_of_color(336) == 51);
-    CHECK(chat_channel_of_color(337) == 52);
-    CHECK(chat_channel_of_color(338) == 53);
-    CHECK(chat_channel_of_color(342) == 54);
-    CHECK(chat_channel_of_color(346) == 55);
-    CHECK(chat_channel_of_color(350) == 56);
-    for (const auto color : {-1, 0, 1, 3, 269, 341, 347, 351, 354, 409,
-                            std::numeric_limits<int>::max(), std::numeric_limits<int>::min()}) {
+    // What EQEmu sends most: Chat::NonMelee (283) is Non Melee Hits, Chat::DotDamage (325) Other.
+    CHECK(chat_channel_of_color(283) == 40);
+    CHECK(chat_channel_of_color(325) == kChatChannelOther);
+    for (const auto color : {409, 1000, std::numeric_limits<int>::max(), std::numeric_limits<int>::min()}) {
         CAPTURE(color);
         CHECK(chat_channel_of_color(color) == kChatChannelOther);
     }
@@ -83,12 +63,21 @@ TEST_CASE("Chat filters: menu descriptors cover every destination and form an ac
         ++destinations[item.channel];
         if (item.channel >= 57) CHECK_FALSE(item.label.empty());
     }
+    // Every channel once but the unused 48, and the extended ones no extended colour reaches.
     for (int channel = 0; channel < kChatChannelCount; ++channel) {
         CAPTURE(channel);
-        CHECK(destinations[static_cast<std::size_t>(channel)] == (channel == 48 ? 0 : 1));
+        bool reached = channel < kChatChannelCountRoF2;
+        for (int color = 355; color <= 408 && !reached; ++color) reached = chat_channel_of_color(color) == channel;
+        CHECK(destinations[static_cast<std::size_t>(channel)] == (channel == 48 || !reached ? 0 : 1));
+    }
+    // The extended items are in Hailstone's own submenus only; the original menus keep their RoF2 items.
+    for (const auto& item : chat_filter_items()) {
+        const bool original_menu = item.menu == ChatFilterMenu::Filters || item.menu == ChatFilterMenu::ChatChannel ||
+                                   item.menu == ChatFilterMenu::Melee || item.menu == ChatFilterMenu::Spells;
+        CHECK(original_menu == (item.channel < kChatChannelCountRoF2));
     }
     const auto groups = chat_filter_groups();
-    CHECK(groups.size() == 10);
+    CHECK(groups.size() == 11);
     for (const auto& group : groups) {
         CHECK_FALSE(group.label.empty());
         CHECK(group.menu != ChatFilterMenu::Filters);
@@ -113,7 +102,10 @@ TEST_CASE("Chat filters: menu descriptors cover every destination and form an ac
             return group.menu == item.menu;
         }));
     }
+    CHECK(chat_filter_all_eqstr(ChatFilterMenu::Filters) == 6040);
     CHECK(chat_filter_all_eqstr(ChatFilterMenu::Melee) == 6041);
+    CHECK(chat_filter_all_eqstr(ChatFilterMenu::Spells) == 6042);
+    CHECK(chat_filter_all_eqstr(ChatFilterMenu::ChatChannel) == 6043);
     CHECK(chat_filter_all_eqstr(ChatFilterMenu::Healing) == 0);
     CHECK(chat_filter_all_eqstr(ChatFilterMenu::DamageOverTime) == 0);
 }

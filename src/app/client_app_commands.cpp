@@ -14,6 +14,7 @@
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
 #include "core/msvc_atoi.h"
+#include "game/chat_windows.h"
 #include "game/hotbuttons.h"
 #include "game/option_commands.h"
 #include "game/slash_commands.h"
@@ -341,12 +342,14 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
     }
     if (h == "Cmd_usercolor") {
         // Cmd_usercolor @0x4e9b60 (game::usercolor_command): a help page, or the colour set (SetUserDefinedColor with
-        // index - 1, extended to Hailstone's whole palette) and kept (User_<n>_Red / _Green / _Blue in chat.ini).
+        // index - 1, which ignores anything outside 0..98) and kept (User_<n>_Red / _Green / _Blue in chat.ini).
         game::UserColor u = game::usercolor_command(args);
         if (u.page) {
             for (const char* line : game::usercolor_help_lines(*u.page)) c.show_chat(line, 0x111);
             return true;
         }
+        // Hailstone's extended colours (indices 99..152) are not /usercolor's: the original's 100 is a no-op still.
+        if (u.index - 1 >= game::kChatUserColorCountRoF2) return true;
         std::uint32_t rgb = u.reset ? default_user_color_rgb(u.index - 1)
                                     : static_cast<std::uint32_t>(u.red << 16 | u.green << 8 | u.blue);
         set_user_color(eq_host_, u.index - 1, rgb);

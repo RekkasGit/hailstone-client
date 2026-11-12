@@ -1,3 +1,5 @@
+// The colours of the lines the client makes itself from stock RoF2 packets stay the original's: Hailstone's extended
+// colours 355..408 (game/chat_windows.h) are only ever a server's.
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -7,55 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "game/chat_native_categories.h"
 #include "mock_server/harness.h"
 #include "net/social_packets.h"
 #include "net/spell_packets.h"
 
 using namespace hailstone;
 
-TEST_CASE("Expanded native chat categories distinguish participants without changing the original rules") {
-    constexpr std::array<game::Con, 7> cons = {game::Con::Red, game::Con::Yellow, game::Con::White,
-        game::Con::DarkBlue, game::Con::LightBlue, game::Con::Green, game::Con::Gray};
-    for (std::size_t i = 0; i < cons.size(); ++i)
-        CHECK(game::native_consider_chat_color(cons[i]) == 390 + i);
-    CHECK(game::con_chat_color(game::Con::White) == 10); // the native rule and plugin API retain their meaning
-    CHECK(game::native_death_chat_color(true, false) == 358);
-    CHECK(game::native_death_chat_color(false, false) == 278);
-    CHECK(game::native_death_chat_color(false, true) == 277);
-    for (std::uint8_t type = 0xfa; type <= 0xfd; ++type) {
-        CHECK(game::native_environment_chat_color(type, true, 0, 7) == 361);
-        CHECK(game::native_environment_chat_color(type, false, 0, 7) == 362);
-    }
-    for (std::uint8_t type = 0xf3; type <= 0xfa; ++type) {
-        CHECK(game::native_environment_chat_color(type, true, 10, 7) == 329);
-        CHECK(game::native_environment_chat_color(type, false, 7, 7) == 363);
-        CHECK(game::native_environment_chat_color(type, false, 10, 7) == 364);
-        CHECK(game::native_environment_chat_color(type, true, 0, 7) == 361);
-    }
-    CHECK(game::native_random_chat_color(true, true) == 287);
-    CHECK(game::native_random_chat_color(true, false) == 287);
-    CHECK(game::native_random_chat_color(false, true) == 360);
-    CHECK(game::native_random_chat_color(false, false) == 359);
-    CHECK(game::native_spell_hit_chat_color(-20, false, true, false) == 374);
-    CHECK(game::native_spell_hit_chat_color(-20, false, false, false) == 375);
-    CHECK(game::native_spell_hit_chat_color(-20, true, false, false) == 402);
-    CHECK(game::native_spell_hit_chat_color(20, true, false, false) == 283);
-    CHECK(game::native_spell_hit_chat_color(20, false, true, false) == 397);
-    CHECK(game::native_spell_hit_chat_color(20, false, false, false) == 379);
-    CHECK(game::native_spell_hit_chat_color(0, false, false, false) == 380);
-    for (std::uint8_t skill : std::array<std::uint8_t, 5>{12, 41, 49, 54, 70}) {
-        CHECK(game::native_song_skill(skill));
-        CHECK(game::native_spell_hit_chat_color(0, false, false, game::native_song_skill(skill)) == 378);
-        CHECK(game::native_spell_hit_chat_color(20, true, false, game::native_song_skill(skill)) == 283);
-        CHECK(game::native_spell_hit_chat_color(20, false, true, game::native_song_skill(skill)) == 397);
-        CHECK(game::native_spell_hit_chat_color(-20, true, false, game::native_song_skill(skill)) == 402);
-        CHECK(game::native_spell_hit_chat_color(-20, false, true, game::native_song_skill(skill)) == 374);
-    }
-    CHECK_FALSE(game::native_song_skill(24));
-}
-
-TEST_CASE("Stock RoF2 packets produce the expanded native chat categories once") {
+TEST_CASE("Chat colours: environmental hits, considers, randoms and deaths keep the original's colours") {
     test::Rig rig;
     std::ofstream(rig.dir.path() / "eqstr_us.txt", std::ios::app)
         << "12187 YOU\n12118 FALL %1\n12130 DROWN %1\n12133 THORNS\n12134 THORNS %1\n"
@@ -84,28 +44,38 @@ TEST_CASE("Stock RoF2 packets produce the expanded native chat categories once")
     rig.server.add_spawn(test::make_spawn("Another", 103, 0, 1, -285, -148, 3.5f));
     death.spawn_id = 103;
     rig.server.zone.send_reliable(net::encode(death));
-    rig.server.chat("Marker", 8, "native-category-marker");
+    rig.server.chat("Marker", 8, "stock-colour-marker");
 
     std::vector<net::ChatEvent> lines;
     REQUIRE(rig.until([&] {
         auto batch = rig.chat();
         for (auto& line : batch) lines.push_back(std::move(line));
         return std::any_of(lines.begin(), lines.end(), [](const auto& line) {
-            return line.text.find("native-category-marker") != std::string::npos;
+            return line.text.find("stock-colour-marker") != std::string::npos;
         });
     }));
     auto count = [&](std::uint32_t color) {
         return std::count_if(lines.begin(), lines.end(), [&](const auto& line) { return line.color == color; });
     };
-    for (std::uint32_t color : {361u, 362u, 329u, 363u, 364u, 396u, 358u, 278u}) CHECK(count(color) == 1);
-    CHECK(count(287) == 2); // each roll remains the same two native lines
-    CHECK(count(359) == 2);
-    auto con = std::find_if(lines.begin(), lines.end(), [](const auto& line) { return line.color == 396; });
+    for (const auto& line : lines) {
+        CAPTURE(line.text);
+        CHECK(line.color < 355);
+    }
+    // ReportSuccessfulHit's environmental colours (game/combat.cpp environment_hit): 0x10a on us, 0x149 another's
+    // 0xf3..0xfa, 0x117 another's fall, drowning or lava.
+    CHECK(count(0x10a) == 2);
+    CHECK(count(0x149) == 2);
+    CHECK(count(0x117) == 1);
+    CHECK(count(0x11f) == 4); // every roll's two lines, ours or another's
+    CHECK(count(0x116) == 2); // others' deaths, an NPC's too
+    // BuildConsiderMessage's line: the con colour as RGB, no user colour.
+    auto con = std::find_if(lines.begin(), lines.end(), [](const auto& line) { return line.text.starts_with("CON"); });
     REQUIRE(con != lines.end());
-    CHECK(con->rgb == 0); // the user's per-category palette supplies the colour
+    CHECK(con->color == 0);
+    CHECK(con->rgb != 0);
 }
 
-TEST_CASE("Native spell landing and interruption packets retain text with their specific categories") {
+TEST_CASE("Chat colours: spell landings, bard songs and interruptions keep the original's colours") {
     test::Rig rig;
     REQUIRE(rig.to_zone());
     rig.chat();
@@ -153,19 +123,26 @@ TEST_CASE("Native spell landing and interruption packets retain text with their 
     rig.server.zone.send_reliable(net::encode(hit));
     hit.target = 7; hit.damage = 0;
     rig.server.zone.send_reliable(net::encode(hit));
-    rig.server.chat("Marker", 8, "native-spell-marker");
+    rig.server.chat("Marker", 8, "stock-spell-marker");
     std::vector<net::ChatEvent> lines;
     REQUIRE(rig.until([&] {
         auto batch = rig.chat();
         for (auto& line : batch) lines.push_back(std::move(line));
         return std::any_of(lines.begin(), lines.end(), [](const auto& line) {
-            return line.text.find("native-spell-marker") != std::string::npos;
+            return line.text.find("stock-spell-marker") != std::string::npos;
         });
     }));
     auto count = [&](std::uint32_t color) {
         return std::count_if(lines.begin(), lines.end(), [&](const auto& line) { return line.color == color; });
     };
-    CHECK(count(378) == 2);
-    CHECK(count(289) == 2);
-    for (std::uint32_t color : {406u, 283u, 402u, 374u, 375u, 397u, 379u, 380u}) CHECK(count(color) == 1);
+    for (const auto& line : lines) {
+        CAPTURE(line.text);
+        CHECK(line.color < 355);
+    }
+    CHECK(count(289) == 3); // every interruption, ours or another's: Spell Failures
+    // The bard's cast line and the eight landings: no colour of their own (the spell channel's)
+    CHECK(std::count_if(lines.begin(), lines.end(), [](const auto& line) {
+              return line.color == 0 && (line.text.find("CAST") != std::string::npos ||
+                                         line.text.find("LANDED") != std::string::npos);
+          }) == 9);
 }

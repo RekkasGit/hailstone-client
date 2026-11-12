@@ -145,29 +145,12 @@ TEST_CASE("option commands: /usercolor") {
     CHECK(c.red == 10);
     CHECK(c.blue == 30);
     CHECK(usercolor_command("3 10 20").page == kUserColorUsage);   // blue missing
-    for (int index : {99, 100, 153}) {
-        const std::string prefix = std::to_string(index);
-        auto set = usercolor_command(prefix + " 0 128 255");
-        CHECK_FALSE(set.page.has_value());
-        CHECK(set.index == index);
-        CHECK(set.red == 0);
-        CHECK(set.green == 128);
-        CHECK(set.blue == 255);
-        auto reset = usercolor_command(prefix + " reset");
-        CHECK_FALSE(reset.page.has_value());
-        CHECK(reset.reset);
-        CHECK(reset.index == index);
-    }
-    CHECK(usercolor_command("154 1 2 3").page == kUserColorUsage);
-    CHECK(usercolor_command("154 reset").page == kUserColorUsage);
-    CHECK(usercolor_command("-1 reset").page == kUserColorUsage);
-    CHECK(usercolor_command("153 1 2 256").page == kUserColorUsage);
+    CHECK(usercolor_command("100 1 2 3").page == kUserColorUsage); // index above 99
     CHECK(usercolor_command("3 256 2 3").page == kUserColorUsage);
     c = usercolor_command("12 reset");
     CHECK(c.reset);
     CHECK(c.index == 12);
     CHECK(usercolor_help_lines(0).size() == 5);
-    CHECK(std::string(usercolor_help_lines(0)[1]) == "<number> -> 1 to 153");
     CHECK(usercolor_help_lines(7).size() == 9);
 }
 
