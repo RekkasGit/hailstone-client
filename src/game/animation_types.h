@@ -16,8 +16,8 @@ enum class AnimationType : std::uint8_t {
     Piercing = 2,
     TwoHandSlash = 3,
     TwoHandBluntPiercing = 4,
-    Throw = 5,
-    OffhandAttack = 6,
+    ThrowOrOneHandSlash = 5,   // C05: also one hand slashes (EQG SATK)
+    OffhandOrOneHandSlash = 6, // C06: also one hand slashes
     BashDragonPunch = 7,
     MainhandSlash = 8,
     ShootBow = 9,
