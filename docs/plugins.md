@@ -246,15 +246,30 @@ For a script that fights:
   collision is loaded, and for a coordinate that is not a finite number below 1000000 in size.
 - `/stick` and the `Stick` TLO (`docs/navigation.md`).
 
-Spawn searches use MQ's words:
-- kinds: `pc`, `npc`, `corpse`, `npccorpse`, `pccorpse`, `pet`, `merc`, `any`
-- filters: `id N`, `notid N`, `radius R`, `zradius R`, `range MIN MAX`, `level N`, `class X`, `race X`, `named`,
-  `targetable`, `group`, `nopet`, `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead`, `loc X Y [Z]`
-- names: a partial name, `=Exact` or `exact`
+Spawn searches use MQ's words and its rules (ParseSearchSpawn and SpawnMatchesSearch, `mq/spawn_search.h`):
+- kinds (MQ's spawn types): `pc`, `npc`, `mount`, `pet`, `pcpet`, `npcpet`, `corpse`, `npccorpse`, `pccorpse`,
+  `trigger`, `untargetable`, `trap`, `chest`, `timer`, `aura`, `object`, `banner`, `campfire`, `mercenary`, `flyer`,
+  `any`. A body type, race or class makes a spawn one of these as MQ's GetSpawnType does, so `npc` leaves out
+  mounts, mercenaries, auras, banners, untargetable spawns and the like; it keeps an NPC's pet but not a player's.
+- filters: `id N`, `notid N` (one id: the last), `radius R` (3D, from the player or `loc`), `zradius R` (from the
+  player's z or `loc`'s), `range MIN MAX`, a bare number (that level), `class X` (the long name) or a bare class
+  name (long or short), `race X`, `body X`, `named`, `targetable`, `los`, `group`, `nogroup`, `raid`,
+  `fellowship`, `guild`, `guildname X`, `noguild`, `nopet`, `xtarhater`, `nopcnear [R]` (200 without a number),
+  `gm` (with `npc`: GM trainers), `merchant`, `banker`, `tribute`, `knight`, `tank`, `healer`, `dps`, `slower`
+  (classes; ignored with `npc`), `trader`, `lfg`, `light [NAME]` (MQ's light names: `CDL`, `TR`, `LS`, ...),
+  `playerstate N`, `loc X Y [Z]` (a Z of 0 or none is the player's, and the word after is not taken), `alert N`,
+  `noalert N`, `nearalert N`, `notnearalert N`
+- names: words that are no keyword make a partial name, matched in the name as sent or cleaned; `=Name` or
+  `name =Name` asks for the whole cleaned name (MQ keeps the `#` of a `#Name` there, so `=` never finds one)
 
-`targetable` is the game's own test, as in MQ: the spawn's Targetable flag on and its body type not 11 (EQEmu's
-NoTarget, which servers give portal and trigger NPCs). `Spawn.Targetable` is the flag alone, as in MQ, so a script
-that filters spawns itself checks `BodyType` too.
+Results come nearest first (3D, from the player). `targetable` is the game's own test, as in MQ: the spawn's
+Targetable flag on and its body type not 11 (EQEmu's NoTarget, which servers give portal and trigger NPCs).
+`Spawn.Targetable` is the flag alone, as in MQ, so a script that filters spawns itself checks `BodyType` too.
+
+Differences from MQ: `level N`, `afk`, `linkdead`, `buyer`, `exact` and `merc` are Hailstone's own words. This client
+keeps no alert lists, so `nearalert` finds nothing and the other alert words ask nothing (as in MQ with no such
+list). EQEmu has no fellowships, so `fellowship` finds nothing. `los` keeps a spawn while the zone's collision is not
+loaded. `next` and `prev` (MQ's target cycling) are accepted and do nothing yet.
 
 Not yet:
 - TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is

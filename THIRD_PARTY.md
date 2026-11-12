@@ -76,3 +76,10 @@ License version 2.
 - `src/game/spa_ids.h`: the `eEQSPA` spell effect ids (0..526) and the `eEQSPELLCAT` spell categories (1..176) are
   copied from `src/eqlib/include/eqlib/game/Spells.h` (without its deprecated and alias names), and `SPA_NAMES` 0..520
   from `src/eqlib/include/eqdata/spelleffects.h`. The ids 527 and 528 and the names 521..528 were added in Hailstone.
+
+### MacroQuest used as a specification
+
+- `src/mq/spawn_search.cpp`: the spawn search words and matching rules follow MacroQuest's `ParseSearchSpawn`,
+  `ParseSearchSpawnArgs`, `SpawnMatchesSearch`, `IsNamed`, `IsInGroup`, `IsInRaid`, `IsPCNear`, `CleanupName` and
+  `NthNearestSpawn` (`src/main/MQ2Utilities.cpp`) and its light names (`szLights`). The code was written for
+  Hailstone; none is copied.

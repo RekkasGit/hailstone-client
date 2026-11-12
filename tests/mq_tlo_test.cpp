@@ -147,7 +147,9 @@ TEST_CASE("spawn search: targetable is the game's IsTargetable, body type 11 lef
     w.spawns[11].body_type = 11;
     CHECK(f.p("${Spawn[11].Targetable}") == "TRUE"); // the flag alone, as MQ's Spawn.Targetable
     CHECK(f.p("${SpawnCount[npc targetable]}") == "1");
-    CHECK(f.p("${SpawnCount[npc]}") == "2");
+    // MQ's GetSpawnType makes body type 11 an "untargetable" spawn, which an "npc" search leaves out.
+    CHECK(f.p("${SpawnCount[npc]}") == "1");
+    CHECK(f.p("${SpawnCount[untargetable]}") == "1");
     w.spawns[11].body_type = 1;
     w.spawns[11].targetable = false;
     CHECK(f.p("${SpawnCount[npc targetable]}") == "1");
@@ -162,12 +164,208 @@ TEST_CASE("spawn search: parsed words") {
     CHECK(s.max_level == 9);
     CHECK(s.named);
     CHECK(s.name == "a rat");
-    CHECK(s.not_ids == std::vector<std::uint32_t>{3});
+    CHECK(s.not_id == 3u);
     CHECK(s.id == 7u);
     auto e = mq::parse_spawn_search("pc =Soandso class wizard");
     CHECK(e.exact);
     CHECK(e.name == "Soandso");
     CHECK(e.class_name == "wizard");
+    // MQ's NotID is one id: the last notid's.
+    CHECK(mq::parse_spawn_search("notid 3 notid 4").not_id == 4u);
+    // A bare number is a level; a bare class name (long or short) is the class; the whole text a long class name
+    // with a space is that class, not a name and the "knight" keyword.
+    auto b = mq::parse_spawn_search("npc 45 wiz");
+    CHECK(b.min_level == 45);
+    CHECK(b.max_level == 45);
+    CHECK(b.class_name == "Wizard");
+    CHECK(b.name.empty());
+    auto sk = mq::parse_spawn_search("shadow knight");
+    CHECK(sk.class_name == "Shadow Knight");
+    CHECK_FALSE(sk.knight);
+    // Plain words make the name, the first "=" asks for the whole name; "name" sets it outright.
+    CHECK(mq::parse_spawn_search("Fippy Darkpaw").name == "Fippy Darkpaw");
+    auto n = mq::parse_spawn_search("Fippy name =Lord_Bob");
+    CHECK(n.name == "Lord_Bob");
+    CHECK(n.exact);
+    // loc without z (or z 0) takes the player's z and only two words; nopcnear without a number is 200.
+    auto l = mq::parse_spawn_search("loc 10 20 nopcnear");
+    REQUIRE(l.loc);
+    CHECK(l.loc->x == 10.0f);
+    CHECK(l.loc->y == 20.0f);
+    CHECK_FALSE(l.loc_z);
+    CHECK(l.nopcnear == 200.0f);
+    auto l3 = mq::parse_spawn_search("loc 10 20 30 nopcnear 50");
+    CHECK(l3.loc_z == 30.0f);
+    CHECK(l3.nopcnear == 50.0f);
+    // Flags, light names, player states.
+    auto fl = mq::parse_spawn_search("xtarhater raid nogroup noguild merchant banker tribute tank light TR "
+                                     "playerstate 4 playerstate 8 body Humanoid race Human");
+    CHECK(fl.xtarhater);
+    CHECK(fl.raid);
+    CHECK(fl.nogroup);
+    CHECK(fl.noguild);
+    CHECK(fl.merchant);
+    CHECK(fl.banker);
+    CHECK(fl.tribute);
+    CHECK(fl.tank);
+    CHECK(fl.light);
+    CHECK(fl.light_name == "TR");
+    CHECK(fl.player_state == 12u);
+    CHECK(fl.body_name == "Humanoid");
+    CHECK(fl.race_name == "Human");
+    CHECK(fl.name.empty());
+    // "light" with no light name after it: any light, and the next word stays a word.
+    auto la = mq::parse_spawn_search("light rat");
+    CHECK(la.light);
+    CHECK(la.light_name.empty());
+    CHECK(la.name == "rat");
+    for (auto [word, kind] : {std::pair{"mount", mq::SpawnSearch::Kind::Mount}, {"pcpet", mq::SpawnSearch::Kind::PcPet},
+                              {"npcpet", mq::SpawnSearch::Kind::NpcPet}, {"trigger", mq::SpawnSearch::Kind::Trigger},
+                              {"chest", mq::SpawnSearch::Kind::Chest}, {"aura", mq::SpawnSearch::Kind::Aura},
+                              {"banner", mq::SpawnSearch::Kind::Banner}, {"flyer", mq::SpawnSearch::Kind::Flyer}}) {
+        INFO(word);
+        CHECK(mq::parse_spawn_search(word).kind == kind);
+    }
+}
+
+TEST_CASE("spawn search: MQ's matching rules") {
+    Fixture f;
+    auto& w = net::GameConnectionTestAccess::world(*f.world.conn);
+    auto count = [&](const char* q) { return f.p(std::string("${SpawnCount[") + q + "]}"); };
+
+    // radius is 3D: Fippy is 100 away on the ground and 2 up.
+    CHECK(count("npc radius 100") == "1");
+    CHECK(count("npc radius 100.03") == "2");
+    // radius 0 is a radius (only the player stands at 0); one of 10000 or more is none.
+    CHECK(count("radius 0") == "1");
+    CHECK(count("radius 10000") == "5");
+    // zradius is measured from the player's z: Fippy stands 2 up.
+    CHECK(count("npc zradius 1") == "1");
+    CHECK(count("npc loc 0 100 5 zradius 4") == "1"); // loc's z: Fippy 3 below it
+
+    // A bare number is a level, a bare class word the class.
+    CHECK(count("8") == "1");
+    CHECK(count("cleric") == "2"); // Tester and Groupie
+    CHECK(count("pc CLR") == "2");
+    CHECK(count("class Warrior npc") == "2");
+
+    // Pets: an NPC's pet is "npc" and "npcpet", a player's "pcpet" only; nopet leaves both out.
+    f.world.add(20, "Tester`s_pet", true, 10, game::server_to_world({5, 5, 0}));
+    f.world.add(21, "Fippys_pet", true, 4, game::server_to_world({6, 6, 0}));
+    w.spawns[20].pet_owner_id = 1;
+    w.spawns[21].pet_owner_id = 11;
+    CHECK(count("pcpet") == "1");
+    CHECK(f.p("${Spawn[pcpet].ID}") == "20");
+    CHECK(count("npcpet") == "1");
+    CHECK(f.p("${Spawn[npcpet].ID}") == "21");
+    CHECK(count("pet") == "2");
+    CHECK(count("npc") == "3"); // the rat, Fippy and Fippy's pet
+    CHECK(count("npc nopet") == "2");
+    w.spawns.erase(20);
+    w.spawns.erase(21);
+
+    // Corpses: an NPC's has no deity, a player's has one.
+    CHECK(count("npccorpse") == "1");
+    CHECK(count("pccorpse") == "0");
+    w.spawns[13].deity = 201;
+    CHECK(count("pccorpse") == "1");
+    CHECK(count("npccorpse") == "0");
+    w.spawns[13].deity = 0;
+
+    // Service classes and roles.
+    w.spawns[11].class_id = 41;
+    CHECK(count("merchant") == "1");
+    CHECK(f.p("${Spawn[11].Named}") == "FALSE"); // a merchant is not named
+    w.spawns[11].class_id = 25; // a GM trainer
+    CHECK(count("npc gm") == "1");
+    w.spawns[11].class_id = 1;
+    CHECK(count("npc gm") == "0");
+    CHECK(count("healer") == "2"); // the two clerics
+    CHECK(count("tank") == "3");   // the warriors: the rat, Fippy and the rat's corpse
+    w.spawns[11].class_id = 2;
+    CHECK(count("npc tank") == "2"); // "npc" asks nothing of the roles
+    w.spawns[11].class_id = 1;
+
+    // Group: only with a group, the player too; nogroup the rest.
+    CHECK(count("group") == "2");
+    CHECK(count("pc nogroup") == "0");
+    net::GameConnectionTestAccess::group(*f.world.conn).active = false;
+    CHECK(count("group") == "0");
+    CHECK(count("pc nogroup") == "2");
+    net::GameConnectionTestAccess::group(*f.world.conn).active = true;
+    // Raid: the player always; a member by name and class.
+    CHECK(count("raid") == "1");
+    // Fellowship: EQEmu has none, nothing matches.
+    CHECK(count("fellowship") == "0");
+
+    // nopcnear: Groupie (in the group) does not count; without a group the player does.
+    CHECK(count("npc nopcnear 60") == "2");
+    net::GameConnectionTestAccess::group(*f.world.conn).active = false;
+    CHECK(count("npc nopcnear 60") == "1"); // the rat is 50 from the player
+    net::GameConnectionTestAccess::group(*f.world.conn).active = true;
+
+    // Light, player state, guild.
+    w.spawns[12].light_type = 2;
+    CHECK(count("light") == "1");
+    CHECK(count("light TR") == "1");
+    CHECK(count("light CDL") == "0");
+    w.spawns[12].player_state = 4;
+    CHECK(count("playerstate 4") == "1");
+    CHECK(count("playerstate 3") == "0");
+    w.spawns[12].guild_id = 7;
+    CHECK(count("pc noguild") == "1");
+    CHECK(count("guildname Nobody") == "0"); // an unknown guild: no filter, "Nobody" is the name
+
+    // Names: a part of the name as sent or cleaned; "=" the whole cleaned name, '#' kept.
+    CHECK(count("Fippy_Dark") == "1");
+    CHECK(count("=Fippy Darkpaw") == "1");
+    CHECK(count("=Fippy") == "0");
+    w.spawns[11].name = "#Fippy_Darkpaw000";
+    // The exact name keeps the '#' while the part search drops it, so no "=" text finds a '#' name (MQ's
+    // ExactSearchCleanNames off); a part of it still does.
+    CHECK(count("=Fippy Darkpaw") == "0");
+    CHECK(count("=#Fippy Darkpaw") == "0");
+    CHECK(count("Fippy Darkpaw") == "1");
+
+    // los asks the player's sight check; not known keeps the spawn.
+    std::optional<bool> seen;
+    f.ctx.can_see = [&](std::uint32_t id) -> std::optional<bool> { return id == 10 ? seen : std::optional<bool>(true); };
+    CHECK(count("npc los") == "2");
+    seen = false;
+    CHECK(count("npc los") == "1");
+
+    // No alert lists: nearalert finds nothing, the others ask nothing.
+    CHECK(count("npc nearalert 1") == "0");
+    CHECK(count("npc alert 1 noalert 2 notnearalert 3") == "2");
+}
+
+TEST_CASE("spawn search: xtarhater and the guild words") {
+    Fixture f;
+    auto& c = *f.world.conn;
+    auto& w = net::GameConnectionTestAccess::world(c);
+    mq::SearchSources src = mq::sources_of(c);
+    game::XTargetState xt;
+    xt.slots.resize(3);
+    xt.slots[0] = {1, 1, 10, "a rat"};
+    xt.slots[1] = {2, 1, 11, "Fippy"}; // a specific NPC, not an auto hater
+    src.xtargets = &xt;
+    CHECK(mq::search_spawns(mq::parse_spawn_search("xtarhater"), w, src).size() == 1);
+    xt.slots[0].status = 0; // empty
+    CHECK(mq::search_spawns(mq::parse_spawn_search("xtarhater"), w, src).empty());
+
+    game::GuildState guild;
+    guild.names[7] = "Hailstone Testers";
+    guild.guild_id = 7;
+    w.spawns[12].guild_id = 7;
+    auto q = mq::parse_spawn_search("guild", &guild);
+    CHECK(q.guild_id == 7);
+    CHECK(mq::search_spawns(q, w, src).size() == 1);
+    auto byname = mq::parse_spawn_search("guildname \"hailstone testers\"", &guild);
+    CHECK(byname.guild_id == 7);
+    CHECK(byname.name.empty());
+    // Not in a guild: "guild" is no filter.
+    guild.guild_id = 0xffffffff;
+    CHECK(mq::search_spawns(mq::parse_spawn_search("guild", &guild), w, src).size() == w.spawns.size());
 }
 
 TEST_CASE("TLO: Group, items, Zone and the rest") {
@@ -255,18 +453,29 @@ TEST_CASE("TLO: a registry's own TLOs come and go") {
 
 TEST_CASE("TLO: numbers from text out of range, NaN or infinite are no id, loc or heading") {
     Fixture f;
-    for (const char* q : {"id -5", "id 1e300", "id nan", "id 4294967296", "loc nan 0", "loc inf 0 0"}) {
+    // Ids are read as MQ's GetIntFromString: the integer at the start, nothing (0, no spawn) when there is none or
+    // it is past 32 bits; "-5" is 0xfffffffb, no spawn either.
+    for (const char* q : {"id -5", "id nan", "id 4294967296", "id x"}) {
         INFO(q);
         CHECK(mq::search_spawns(mq::parse_spawn_search(q), f.world.conn->world(), nullptr).empty());
     }
     CHECK(f.p("${Spawn[id -5]}") == "NULL");
-    // An id that fits still matches; a huge radius or level is a limit, not undefined.
+    CHECK(mq::parse_spawn_search("id 1e300").id == 1u); // the "1"
     CHECK(mq::parse_spawn_search("id 7").id == 7u);
+    // A loc of NaN or infinity measures nothing (a NaN distance is never past the radius), and no radius limits
+    // nothing: no undefined cast either way.
+    CHECK(mq::search_spawns(mq::parse_spawn_search("loc nan 0"), f.world.conn->world(), nullptr).size() == 5);
+    CHECK(mq::search_spawns(mq::parse_spawn_search("loc inf 0 0 radius 10"), f.world.conn->world(), nullptr).empty());
+    CHECK(mq::parse_spawn_search("loc 1e300 0").loc->x == 0.0f); // past float: not read, as MQ's float read
+    // A huge radius is no limit, a NaN one too; levels read as integers.
     auto s = mq::parse_spawn_search("notid -1 radius 1e300 level 1e300");
-    CHECK(s.not_ids.empty());
-    CHECK(s.radius == 0.0f);
-    CHECK(s.max_level == std::numeric_limits<int>::max());
-    CHECK(mq::parse_spawn_search("range -1e300 nan").min_level == std::numeric_limits<int>::min());
+    CHECK(s.not_id == 0xffffffffu);
+    CHECK(s.radius >= 10000.0);
+    CHECK(s.max_level == 1);
+    CHECK(mq::search_spawns(mq::parse_spawn_search("radius nan"), f.world.conn->world(), nullptr).size() == 5);
+    auto r = mq::parse_spawn_search("range -1e300 nan");
+    CHECK(r.min_level == -1);
+    CHECK(r.max_level == 200);
     // LineOfSight[] passes the collision grid only finite points within float.
     int asked = 0;
     f.ctx.line_of_sight = [&](const std::array<float, 3>&, const std::array<float, 3>&) -> std::optional<bool> {
@@ -319,4 +528,26 @@ TEST_CASE("TLO: GameTime advances between packets and carries the game calendar"
     CHECK(parse("${GameTime}") == "01:00");
     CHECK(parse("${GameTime.Day}/${GameTime.Month}/${GameTime.Year}") == "1/1/3201");
     CHECK(parse("${GameTime.Night}") == "TRUE");
+}
+
+TEST_CASE("spawn search: random text parses and searches without fault") {
+    // The parser reads what scripts and other players' names put in ${...}: any bytes, any keyword with its words
+    // missing (run it under the sanitizer build).
+    Fixture f;
+    static constexpr const char* kWords[] = {"loc", "range", "id", "name", "light", "guildname", "nopcnear", "radius",
+                                             "zradius", "playerstate", "notid", "\"", "=", "#", "nan", "-1", "1e300",
+                                             "0", "npc", "pcpet", "class", "body", "race", "group", "\t"};
+    std::uint32_t seed = 12345;
+    auto next = [&] { return seed = seed * 1664525u + 1013904223u; };
+    for (int n = 0; n < 2000; ++n) {
+        std::string text;
+        const auto len = next() % 8;
+        for (std::uint32_t k = 0; k < len; ++k) {
+            if (next() % 4 == 0) text += static_cast<char>(next() % 256);
+            else text += kWords[next() % std::size(kWords)];
+            if (next() % 2) text += ' ';
+        }
+        auto q = mq::parse_spawn_search(text, &f.world.conn->guild());
+        CHECK_NOTHROW(mq::search_spawns(q, f.world.conn->world(), mq::sources_of(*f.world.conn)));
+    }
 }
