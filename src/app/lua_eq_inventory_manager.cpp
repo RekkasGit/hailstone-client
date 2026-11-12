@@ -7,7 +7,8 @@
 //                                   character may equip or use it: CharacterZoneClient::CanUseItem(item, 1, 0));
 //                                   place: "i:<slot>[:<sub>]" (worn and carried), "b:..." (bank), "s:..." (shared
 //                                   bank); where: "worn", "carried", "bank", "shared"; bag: the bag's name, for an
-//                                   item in one; kept: marked Keep (or a bag holding a kept item)
+//                                   item in one; kept: marked Keep (or a bag holding a kept item); stale: a banked
+//                                   row from the bank as last seen (below), which nothing can reach
 //                                   item also has serial (the server's exact instance id as text), tribute (its favour),
 //                                   noDestroy and stats: { [key] = value }, the
 //                                   stats it has (not 0), keyed as eq.ItemStats names them
@@ -20,14 +21,19 @@
 //                                   or with dry, it could). dry only counts
 //   text = eq.TakeItemSearch()   -- /finditem's search, once (nil when there is none)
 //   inv, keep = eq.ItemsRevision()  -- change counters: the inventory's and the Keep marks' (a window's cache)
+//   live, age = eq.BankSeen()    -- live: the bank's rows are the bank as the server has it now; else they are the copy
+//                                   as last seen at a bank, age seconds ago (nil: never seen)
 //   on = eq.ItemKept(id)
 //   eq.SetItemKept(id, name, on)    -- marks or unmarks every copy of the item (kept per character)
 //   eq.SetItemsKept({{id=..., name=...}, ...}, on) -- one validated batch and one persistence/revision update
-// The bank's and shared bank's items are known from zoning in, so they are listed while the bank is closed; acting on
-// them still needs the bank open (eq.BankSlotClick).
+// The bank's and shared bank's items: EQEmu's Inventory:LazyLoadBank rule (on by default) leaves them out of the
+// zone-in inventory and sends them only near a banker, so until then the rows are the bank as last seen
+// (game/bank_snapshot.h), marked stale. Acting on banked items needs the bank open (eq.BankSlotClick); the stale copy
+// is never in the inventory, so no click, job or rule can reach it.
 
 #include <charconv>
 #include <cmath>
+#include <ctime>
 #include <format>
 #include <iterator>
 #include <optional>
@@ -160,9 +166,15 @@ int AllItems(lua_State* L) {
     lua_newtable(L);
     if (!h.conn || !h.in_game) return 1;
     const net::GameConnection& c = *h.conn;
-    const auto& inv = c.inventory();
+    // The bank's slots: the inventory's while it holds the bank as the server has it now, else the copy as last seen
+    // (game/bank_snapshot.h), whose rows are marked stale.
+    std::optional<game::Inventory> seen;
+    if (!c.bank_live()) {
+        seen.emplace();
+        seen->load(c.bank_seen().items);
+    }
     lua_Integer n = 0;
-    auto row = [&](const net::Item& it, const net::ItemSlot& at, const char* where, const net::Item* bag) {
+    auto row = [&](const net::Item& it, const net::ItemSlot& at, const char* where, const net::Item* bag, bool stale) {
         lua_createtable(L, 0, 7);
         push_full_item(L, c, it);
         lua_setfield(L, -2, "item");
@@ -179,19 +191,23 @@ int AllItems(lua_State* L) {
             lua_setfield(L, -2, "bag");
         }
         set_bool(L, "kept", c.item_kept(it));
+        if (stale) set_bool(L, "stale", true);
         lua_rawseti(L, -2, ++n);
     };
     auto scan = [&](std::int16_t type, int first, int last, const char* where, bool bags) {
+        const bool banked = type == net::kInvBank || type == net::kInvSharedBank;
+        const bool stale = banked && seen.has_value();
+        const game::Inventory& inv = stale ? *seen : c.inventory();
         for (int s = first; s <= last; ++s) {
             const net::ItemSlot top{type, static_cast<std::int16_t>(s), -1, -1, 0, 0};
             const net::Item* it = inv.at(top);
             if (!it) continue;
-            row(*it, top, where, nullptr);
+            row(*it, top, where, nullptr, stale);
             if (!bags || !it->is_bag()) continue;
             for (int i = 0; i < it->bag_slots; ++i) {
                 net::ItemSlot in = top;
                 in.sub = static_cast<std::int16_t>(i);
-                if (const net::Item* ci = inv.at(in)) row(*ci, in, where, it);
+                if (const net::Item* ci = inv.at(in)) row(*ci, in, where, it, stale);
             }
         }
     };
@@ -204,8 +220,24 @@ int AllItems(lua_State* L) {
 
 int ItemsRevision(lua_State* L) {
     auto& h = host(L);
-    lua_pushinteger(L, h.conn ? static_cast<lua_Integer>(h.conn->inventory().revision()) : 0);
+    // (the bank's view counts too: the copy as last seen is listed in the bank's place until the bank is known)
+    lua_pushinteger(L, h.conn ? static_cast<lua_Integer>(h.conn->inventory().revision() + h.conn->bank_view_revision()) : 0);
     lua_pushinteger(L, h.conn ? static_cast<lua_Integer>(h.conn->kept_items_revision()) : 0);
+    return 2;
+}
+
+// live, age = eq.BankSeen(): live, the bank's rows are the bank as the server has it now; else they are the copy as
+// last seen at a bank, age seconds ago (nil: never seen, so no bank rows)
+int BankSeen(lua_State* L) {
+    auto& h = host(L);
+    const bool live = h.conn && h.in_game && h.conn->bank_live();
+    lua_pushboolean(L, live);
+    if (live || !h.conn || h.conn->bank_seen().seen == 0) {
+        lua_pushnil(L);
+    } else {
+        const auto age = static_cast<std::int64_t>(std::time(nullptr)) - h.conn->bank_seen().seen;
+        lua_pushinteger(L, static_cast<lua_Integer>(age < 0 ? 0 : age));
+    }
     return 2;
 }
 
@@ -356,7 +388,7 @@ void add_inventory_manager_window(std::vector<std::unique_ptr<StockWindow>>& out
 }
 
 void register_inventory_manager_api(lua_State* L, EqHost& h) {
-    static const luaL_Reg fns[] = {{"AllItems", AllItems},
+    static const luaL_Reg fns[] = {{"AllItems", AllItems}, {"BankSeen", BankSeen},
                                    {"ItemsRevision", ItemsRevision},
                                    {"ItemKept", ItemKept},
                                    {"SetItemKept", SetItemKept},

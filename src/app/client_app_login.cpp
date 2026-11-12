@@ -607,6 +607,7 @@ void ClientApp::start_game(const net::WorldTicket& ticket) {
                          ? transient_profile_id(ticket.server_name, server_profile_.host, server_profile_.port)
                          : server_profile_.id;
     copts.profile_id = files_profile_;
+    copts.bank_snapshot_file = true; // the bank as last seen, in the character's bank.dat
     // A saved server's client files come at the first zone-in, into its assets/ (net/server_files.h).
     if (!server_profile_.id.empty()) {
         copts.server_files_dir = profile_assets_dir(server_profile_.id, login_view_.servers_dir).parent_path();

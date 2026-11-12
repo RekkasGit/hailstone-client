@@ -11,8 +11,12 @@
 // every bank item and coin move.
 
 #include <algorithm>
+#include <ctime>
+#include <fstream>
+#include <iterator>
 #include <glm/geometric.hpp>
 
+#include "core/atomic_file.h"
 #include "core/log.h"
 #include "game/distance.h"
 #include "game/world_state.h"
@@ -63,6 +67,11 @@ bool GameConnection::activate_bank(std::uint32_t banker_id) {
     if (auto_fire_) set_auto_fire(false);
     make_me_visible(false);
     bank_check_ms_ = 0; // AboutToShow: NextRefreshTime = 0
+    // Hailstone: with a banker in reach the server has sent what the bank holds (EQEmu's lazy load starts once a banker
+    // is near), so the inventory's bank is the bank, even when it is empty, and the copy as last seen is no longer
+    // listed. A plugin's bank with no banker near (the NMS vault) counts too: what the window shows is the bank then,
+    // and the player's moves into it must be listed.
+    set_bank_live(true);
     log::info("bank: {} open, {} slots", bank_->name, bank_->slots);
     return true;
 }
@@ -75,6 +84,39 @@ void GameConnection::close_bank() {
     chat(ChatEvent::Kind::Tell, strings_.format(12143, std::vector<std::string>{bank_->name}));
     bank_.reset();
     quantity_.reset();
+    capture_bank();
+}
+
+// ---------------------------------------------------------------- the bank as last seen (Hailstone; game/bank_snapshot.h)
+
+void GameConnection::set_bank_live(bool live) {
+    if (bank_live_ == live) return;
+    bank_live_ = live;
+    ++bank_view_revision_;
+}
+
+void GameConnection::capture_bank() {
+    if (!bank_live_) return;
+    bank_seen_ = game::bank_snapshot_of(inventory_, static_cast<std::int64_t>(std::time(nullptr)));
+    ++bank_view_revision_;
+    if (!options_.bank_snapshot_file) return;
+    std::filesystem::path path = own_files().bank_snapshot();
+    if (path.empty()) return;
+    if (!write_file_atomic(path, game::encode_bank_snapshot(bank_seen_))) log::warn("cannot write {}", path.string());
+}
+
+void GameConnection::load_bank_snapshot() {
+    bank_seen_ = {};
+    bank_live_ = false;
+    ++bank_view_revision_;
+    if (!options_.bank_snapshot_file) return;
+    std::filesystem::path path = own_files().bank_snapshot();
+    if (path.empty()) return;
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return;
+    const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (auto s = game::decode_bank_snapshot(std::as_bytes(std::span(bytes.data(), bytes.size())))) bank_seen_ = std::move(*s);
+    else log::warn("{} is not a bank snapshot this build reads; ignored", path.string());
 }
 
 void GameConnection::update_bank() {

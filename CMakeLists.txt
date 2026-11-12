@@ -431,6 +431,7 @@ add_library(hailstone_engine STATIC
   src/game/collision_callbacks.cpp
   src/game/merchant.cpp
   src/game/bank.cpp
+  src/game/bank_snapshot.cpp
   src/game/group.cpp
   src/game/alt_adv.cpp
   src/game/ability_book.cpp
@@ -1107,6 +1108,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/commerce_test.cpp
     tests/bandolier_swap_test.cpp
     tests/bank_test.cpp
+    tests/bank_snapshot_test.cpp
     tests/real_estate_test.cpp
     tests/lua_eq_pregame_test.cpp
     tests/lua_eq_realestate_test.cpp
