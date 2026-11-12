@@ -10,3 +10,5 @@ __pycache__/
 /release/
 # Container builds (compose.yaml, tools/docker/build.sh): ccache, MSVC, the Wine home
 /.docker/
+# luac -p writes this in the folder it runs in
+luac.out
