@@ -527,6 +527,11 @@ TEST_CASE("Chat windows: a layout and colours saved before the extended channels
     fs::path dir = scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
+    // User_1..99 only, as the original and the client before the extended colours keep them.
+    std::string colors = "[TextColors]\n";
+    for (int n = 1; n <= game::kChatUserColorCountRoF2; ++n)
+        colors += std::format("User_{0}_Red={0}\nUser_{0}_Green=1\nUser_{0}_Blue=2\n", n);
+    std::ofstream(dir / "game" / "eqclient.ini", std::ios::binary) << colors;
     GameDir game_dir(dir / "game");
     {
         net::GameConnection conn(game_dir);
@@ -560,11 +565,6 @@ TEST_CASE("Chat windows: a layout and colours saved before the extended channels
         REQUIRE(had_56);
         std::ofstream(dir / "UI_Test_Server.ini", std::ios::binary | std::ios::trunc) << kept;
     }
-    // User_1..99 only, as the original and the client before the extended colours keep them.
-    std::string colors = "[TextColors]\n";
-    for (int n = 1; n <= game::kChatUserColorCountRoF2; ++n)
-        colors += std::format("User_{0}_Red={0}\nUser_{0}_Green=1\nUser_{0}_Blue=2\n", n);
-    std::ofstream(dir / "game" / "eqclient.ini", std::ios::binary) << colors;
     {
         net::GameConnection conn(game_dir);
         ui::ChatView view;
