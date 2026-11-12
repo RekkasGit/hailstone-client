@@ -676,7 +676,7 @@ int ClientApp::run() {
                 draw_text_overlay();
                 lap.mark("text overlay");
                 // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates.
-                auto fov = game::camera_fov(camera_.fov_units, static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
+                auto fov = game::camera_fov(camera_.view_fov_units(), static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
                 pick_camera_.position = camera_.position;
                 pick_camera_.forward = camera_.forward();
                 pick_camera_.right = camera_.right();

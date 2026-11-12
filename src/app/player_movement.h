@@ -147,7 +147,7 @@ public:
     Frame update(const MovementKeys& keys, float yaw, float pitch, float elapsed_ms, std::uint32_t now_ms,
                  net::GameConnection& conn, const assets::ZoneRegions* regions, float floor_offset,
                  const MoveWorld* world, const game::mechanics::Character* character = nullptr,
-                 std::uint32_t step_ms = 0);
+                 std::uint32_t step_ms = 0, bool local_passive = false);
     // The actor's bounding radius (the swept sphere's; PlayerClient +0x101c's vf44):
     // the skeleton's radius times the model scale times COFactor (1).
     void set_collision_radius(float r) { radius_ = r; }
@@ -291,6 +291,8 @@ private:
     bool trace_ = false;
     bool at_helm_ = false;
     std::uint32_t speed_stops_ = 0, turn_stops_ = 0, stun_leans_ = 0; // GameConnection's, as last seen
+    game::mechanics::DrunkenMotion drunken_motion_;
+    std::uint32_t drunkenness_motion_updates_ = 0;
 };
 
 } // namespace hailstone::app

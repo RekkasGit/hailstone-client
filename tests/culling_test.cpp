@@ -167,3 +167,15 @@ TEST_CASE("culling: a spawn is posed when it can show, in the view or in a shado
     // Partly in view: posed.
     CHECK(actor_needs_pose(&f, {95, 200, 30}, 10, false, eye, 260));
 }
+
+TEST_CASE("camera: the FOV offset widens the view without changing the chosen FOV") {
+    FlyCamera chosen, widened;
+    chosen.fov_units = 100.0f;
+    widened.fov_units = 90.0f;
+    widened.fov_offset_units = 10.0f;
+    CHECK(widened.projection(1280, 720, 1000.0f) == chosen.projection(1280, 720, 1000.0f));
+    CHECK(widened.fov_units == 90.0f);
+    widened.fov_offset_units = 0.0f;
+    chosen.fov_units = 90.0f;
+    CHECK(widened.projection(1280, 720, 1000.0f) == chosen.projection(1280, 720, 1000.0f));
+}

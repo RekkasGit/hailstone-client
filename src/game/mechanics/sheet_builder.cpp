@@ -91,7 +91,8 @@ void build_sheet_into(CharacterSheet& s, const net::PlayerProfile& p, const Inve
     s.endurance = static_cast<std::int32_t>(live.endurance);
     s.food = static_cast<std::int32_t>(live.hunger);
     s.drink = static_cast<std::int32_t>(live.thirst);
-    s.drunkenness = static_cast<std::int32_t>(p.intoxication);
+    s.drunkenness = live.drunkenness.value_or(static_cast<std::int32_t>(p.intoxication));
+    s.owner_status = live.owner_status;
 
     for (int slot = 0; slot < kPossessionSlots; ++slot) {
         auto& kept = s.possessions[static_cast<std::size_t>(slot)];

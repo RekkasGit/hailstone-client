@@ -180,6 +180,8 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
     if (!profile_) return;
     static const game::mechanics::GameTables no_tables; // the effect totals read no tables
     game::mechanics::LiveState live;
+    live.drunkenness = drunkenness_;
+    live.owner_status = pstatus_.owner_status;
     live.pvp_rules = pvp_rules_;
     live.level = pstatus_.level;
     live.player_id = world_.player_id;
@@ -572,6 +574,7 @@ void GameConnection::remove_own_effect(int slot) {
     bp.slot = static_cast<std::uint32_t>(slot);
     send_zone(encode(bp));
     b = {};
+    reconcile_eye_control();
 }
 
 bool GameConnection::invisible() const {
@@ -714,6 +717,7 @@ void GameConnection::remove_buff(int slot) {
 void GameConnection::clear_buff_locally(int slot) {
     if (slot < 0 || slot >= game::kBuffSlots) return;
     spells_.buffs[static_cast<std::size_t>(slot)] = {};
+    reconcile_eye_control();
 }
 
 std::vector<int> GameConnection::buff_slots_with_spa(std::int32_t spa) const {
@@ -1008,11 +1012,14 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
     default:
         break;
     }
+    reconcile_eye_control();
 }
 
 void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     static const game::mechanics::GameTables no_tables;
     game::mechanics::LiveState live;
+    live.drunkenness = drunkenness_;
+    live.owner_status = pstatus_.owner_status;
     live.pvp_rules = pvp_rules_;
     live.level = pstatus_.level;
     live.player_id = world_.player_id;

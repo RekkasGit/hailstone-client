@@ -256,8 +256,11 @@ camera behind the player, as before; its stick turns the player in the cameras 1
 
 Deliberate differences: the cameras keep the client's own field of view (ToggleView gives each camera's +0x40, 90 by
 default); the user cameras are not saved (the original's loadOptions reads Camera2-* into camera 1's globals, so its
-zoom check always fails and both are reset to their defaults each session: the same here); zoning, being knocked out
-(the original's overhead view) and drunkenness (first person only) do not change the camera; the missile camera
+zoom check always fails and both are reset to their defaults each session: the same here); zoning does not restore
+the saved camera. Knockout selects overhead until consciousness returns; a drunkenness tick at 70 or above selects
+first person and widens the FOV by the value above 70. The widening is added on top of the player's own FOV
+(Options, /fov) instead of replacing it with camera 0's base FOV, and drops at once when drunkenness falls below 70
+(a reset at death or bind too), so the chosen FOV comes back exactly. The missile camera
 (8, following the player's own arrow) is not used.
 
 ## Movement collision
@@ -1261,6 +1264,9 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   discipline in the last buff slot goes, told to the server with OP_Buff), then the SPA 0x63 movement rate, air
   supply and environment damage (other modules);
 - more than 6 s since the last tick (one timer per character at spawn+0x24c; packets do not restart it):
+  positive drunkenness first decreases by one, even without BaseData. Its new value updates the body's lateral
+  sway; at 70 or above it selects first person and widens the FOV, and at the alcohol-tolerance mount threshold
+  it fades the mount effect and dismounts. Then
   ProcessAffects (`game::six_second_tick`, game/passage_of_time.h, over the ported `mechanics::process_affects`):
   every buff of type 2 and up whose duration was already 0 (or -1 without the permanent formula 50) is removed
   locally (no packet), every positive duration counts down by 1, and its slots apply their per-tick effects: HP
@@ -1280,6 +1286,25 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   character the ticks wait (nothing to compute the regen or the maxima with);
 - more than 18 s: the profile+0x3408 countdown;
 - more than 60 s: stats marked dirty.
+
+The live sheet receives actual running and drunkenness state. Running requires nonzero forward run speed and
+does not apply to a mounted rider. Damage below 1 HP can set the owner status to unconscious (3), stop movement,
+lie down and select the overhead camera; its six-second HP tick bleeds and prints the bleeding message. Positive
+HP recovers consciousness on the tick, stands and restores the camera. Server death remains authoritative.
+SPA 343's flag-1 interruption stops any local cast without an extra interrupt packet, including the bard restart
+path. StopSpellCast (stop_spell_cast.cpp:84-101): a bard's non-song only resets the cast (kept outright with
+recovery at most 100 ms when it is not an item cast), with no interrupt packet and no twist restart for any reason;
+anything else sends the empty OP_ManaChange for reason 0 only (feign death's StopCastAndFeignDeath, /stopsong) and
+resets the cast; a bard song then also restarts the twist for a reason other than 0. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` and `tests/movement_test.cpp`.
+
+SPA 67 acquires an Eye summon named from the first 24 bytes of the player's name. View and control are distinct
+from the player's body and mount: the Eye sends its own spawn ID's movement while the body retains gravity, air
+and environment damage. Fade, despawn, death and zoning restore control and retire the remote view. Once held,
+control stays while that spawn lives under the Eye's name; another matching Eye appearing later does not retire it.
+Deliberate safety differences: ambiguous matching Eye names refuse acquisition rather than using unordered-map
+iteration to choose one, and the name must not go on with a letter after the player's name (EQEmu names the Eye
+`Eye_of_<name>` plus MakeNameUnique's three digits, so `Eye_of_Bobby000` is not Bob's; the original takes any
+partial match). The packet and movement lifecycle is covered by `tests/eye_control_test.cpp`.
 
 The swing timers (melee.h; `ActionsUi::melee_timers` each frame before the movement update): at its start, while
 auto attack is on and the primary flag is still set, both flags clear and the primary, secondary and ranged timers

@@ -287,6 +287,7 @@ struct PlayerStatus {
     std::uint32_t aa_exp = 0; // 0..330
     std::uint8_t level = 0;
     std::uint8_t stand_state = 100; // 100 standing, 110 sitting (SpawnAppearance animation)
+    std::int8_t owner_status = 0; // CharacterBase status: active 0, unconscious 3, dead 4
     bool dead = false;              // own OP_Death seen; cleared by the next zone-in
 };
 
@@ -1447,7 +1448,7 @@ public:
     // (0x594cf0 appends it) joins the twist and its first gem is clicked (HandleSpellLeftClick).
     void melody_command(const std::string& args);
     // CharacterZoneClient_StopCurrentSpellCast(0) as the twist uses it (game_connection_ability_commands.cpp).
-    void stop_current_spell_cast();
+    void stop_current_spell_cast(std::uint8_t reason = 0);
     // Cmd_stopsong @0x4f26b0: a bard stops the song being sung and the twist (/stopsong, the STOP_ACTION key).
     void stop_song();
     // BardCastBard for the profile's class: the spell is sung (a song) by this character.
@@ -1466,9 +1467,15 @@ public:
     void set_mount_queries(game::MountQueries* q) { mount_queries_ = q; }
     // The spawn the local player moves (pinstControlledPlayer): its mount while it rides one, else 0.
     std::uint32_t controlled_id() const { return world_.controlled_id; }
+    std::uint32_t eye_id() const { return world_.eye_id; }
+    void acquire_eye_control();
+    void release_eye_control(bool remove_effect = false);
+    void reconcile_eye_control();
     // A spawn the local player's mount moved (the app runs the mount's physics): its position (world
     // coordinates), heading and motion, as the rider's are (the rider sits on it: PhysicsObject::vf8).
-    void set_controlled_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, float speed_run);
+    void set_controlled_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, float speed_run,
+                               std::uint8_t body_wet = 0, std::uint8_t feet_wet = 0,
+                               std::int32_t colliding_type = 0, float speed_heading = 0.0f);
     // CEverQuest::DoMainLoop's mount-race jump @0x53eb68: the mount's animation 0x14 and OP_Animation {the
     // controlled spawn, 0x14, 0x0a} on channel 4.
     void report_mount_jump();
@@ -1501,6 +1508,11 @@ public:
     // What the character sheet is built from besides the profile, inventory and buffs (game_connection_ticks.cpp):
     // the level, the pools as the server sent them and the ticks moved them, sitting, hunger, auto attack.
     game::mechanics::LiveState live_state() const;
+    std::int32_t drunkenness() const { return drunkenness_; }
+    std::uint32_t drunkenness_updates() const { return drunkenness_updates_; }
+    std::uint32_t drunkenness_motion_updates() const { return drunkenness_motion_updates_; }
+    void update_player_consciousness(bool allow_knockout = false);
+    std::uint32_t consciousness_changes() const { return consciousness_changes_; }
     // The hide and sneak flags the abilities code keeps (app/actions_ui.cpp), so the cast path's
     // MakeMeVisible can end them; take_visibility_cleared() hands back what it ended.
     void note_hide_state(bool hidden, bool sneaking) { hidden_ = hidden; sneaking_ = sneaking; }
@@ -2250,7 +2262,7 @@ public:
     // or dead and waiting to respawn (the local repop). __ProcessMouseEvents @0x539e60 then keeps the mouse from the
     // world and 0x761f10 (CContextMenuManager::PopupMenu's test) opens no context menu. Here the own death, or
     // Cur_HP (own_hp(): the items' HP included) once the server sent the maximum.
-    bool player_down() const { return pstatus_.dead || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
+    bool player_down() const { return pstatus_.dead || pstatus_.owner_status >= 3 || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
     void send_server_filter();
     // Byte 0xddf70d: set by opcode 0x150e and cleared by 0x1f65 (each carrying the player's name); while it
     // is set the chat commands and socials send nothing.
@@ -2714,6 +2726,7 @@ private:
     void stop_spell_cast(std::uint32_t spell = game::kNoSpell);
     // StopSpellCast's bard song part (game_connection_ability_commands.cpp) for `reason` (0 the client's stop).
     void bard_song_stopped(std::uint32_t reason);
+    void restart_bard_twist(std::uint8_t reason);
     void attack_command(const std::string& args);
     void target_by_name(const std::string& name);
     // Social (net/game_connection_social.cpp).
@@ -2983,6 +2996,7 @@ private:
 
     // Combat.
     PlayerStatus pstatus_;
+    std::uint32_t consciousness_changes_ = 0;
     OwnHp own_hp_items_; // what own_hp() adds to pstatus_ (set_own_hp_items)
     void set_own_spawn_hp(); // the player's spawn's HP percent from own_hp() (SetSpawnHP)
     bool auto_attack_ = false;
@@ -3091,6 +3105,11 @@ private:
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
     std::int32_t drunkenness_ = 0; // PcBase's drunkenness as HitBySpell's SPA 160 sets it
+    std::uint32_t drunkenness_updates_ = 0;
+    std::uint32_t drunkenness_motion_updates_ = 0;
+    void send_eye_position(bool force);
+    std::chrono::steady_clock::time_point last_eye_position_send_{};
+    bool eye_motion_dirty_ = false;
     std::optional<MerchantSession> merchant_;
     std::int64_t merchant_check_ms_ = 0; // CMerchantWnd::NextRefreshTime: the range check every 500 ms
     std::optional<TradeSession> trade_;

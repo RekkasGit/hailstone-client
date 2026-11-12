@@ -17,7 +17,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] The distance modifier of effect values, and the extra long-buff slots from level 72 and 75.
 - [x] Buff tick timers held by SPA 0x1b4 and suspendable spells.
 - [x] DoPassageOfTime's 6 s tick runs whole in the client (ProcessAffects' buff HP, mana and endurance, local expiry at 0, the mesmerize break; HP, endurance and mana regen) and its 1 s endurance upkeep; unit and connection tests, not tried live.
-- [ ] The passage-of-time gaps in unknowns.md: CharacterBase::Status for the bleeding line, the running penalty of the endurance regen, StopCurrentSpellCast(1), the drunkenness update, the Eye of summons.
+- [x] Passage-of-time owner status/bleeding, live running endurance penalty, flag-1 cast interruption, drunkenness decay/sway/camera and Eye summon control are implemented with regression coverage. Live acceptance remains open.
 - [x] Combat line filters 13 to 16.
 - [x] Hand-to-hand delay and fist damage from the profile (EQEmu sends 0); the player's own BodyWet in the attack checks.
 - [x] `AltAttack` and the attack lock match the original; the rank swap's limit and GM check ported (never swaps on EQEmu's gold membership).
@@ -262,7 +262,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 
 - [ ] The 60 Hz game clock in a live session: jumps, falls and fall damage, /follow and the camera at 30, 60, 144 and uncapped; turning and strafing feel; a zone's load (a dropped stretch).
 - [ ] The cameras 1..5 (docs/mechanics.md "Cameras") in a live session: each one's place, the sweep against walls and doors, mouse look and the camera keys in each, riding and sitting (the tether's bone 0). Unit tests only so far.
-- [ ] The cameras the original switches to itself: the overhead view while knocked out (KnockedOut @0x5a3d1b, back with RestoreSavedCameraType on GetConscious), first person when drunk (70 and over), the missile camera (8) for the player's own arrow with its option (0xe635a9), and RestoreSavedCameraType after zoning.
+- [x] Knockout selects overhead and restores the saved camera on recovery; drunkenness at 70 and above selects first person and widens the FOV (regression coverage). Open: live acceptance, missile camera 8 and camera restore after zoning.
 
 ## Code health
 

@@ -79,6 +79,7 @@ void GameConnection::mount_up(const std::vector<std::uint32_t>& made) {
 }
 
 void GameConnection::spawn_leaving(std::uint32_t id) {
+    if (id == world_.eye_id || id == world_.player_id) release_eye_control(true);
     game::MountEvents ev;
     game::clear_vehicle_mount_links(world_, id, ev);
     mount_events(ev);
@@ -103,14 +104,21 @@ bool GameConnection::rider_update(std::uint32_t spawn_id, const Motion& m) {
 }
 
 void GameConnection::set_controlled_motion(const glm::vec3& position, float heading, const glm::vec3& velocity,
-                                           float speed_run) {
+                                           float speed_run, std::uint8_t body_wet, std::uint8_t feet_wet,
+                                           std::int32_t colliding_type, float speed_heading) {
     auto it = world_.spawns.find(world_.controlled_id);
     if (it == world_.spawns.end()) return;
     game::Spawn& m = it->second;
+    if (world_.eye_id == m.id && (m.position != position || m.heading != heading || m.speed_run != speed_run))
+        eye_motion_dirty_ = true;
     m.position = position;
     m.heading = heading;
     m.velocity = velocity;
     m.speed_run = speed_run;
+    m.body_wet = body_wet;
+    m.feet_wet = feet_wet;
+    m.colliding_type = colliding_type;
+    m.speed_heading = speed_heading;
     m.update_time = steady_seconds();
 }
 

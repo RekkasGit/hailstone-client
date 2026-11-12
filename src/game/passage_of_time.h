@@ -18,8 +18,8 @@
 //
 // The server's own HP, mana and endurance updates still overwrite the values
 // whenever they come, as in the original: the local tick only moves them on
-// in between. Not ported from these blocks: the drunkenness update before
-// ProcessAffects, the autosave counter, GetConscious, and the 1 s block's
+// in between. The connection updates drunkenness before ProcessAffects and
+// consciousness after HP regen. Not ported: the autosave counter and the 1 s block's
 // movement rate, visibility and air supply (other modules or not needed).
 
 #include <cstdint>
@@ -42,6 +42,21 @@ struct TickPools {
     bool dead = false; // the spawn's +0x125
 };
 
+struct DrunkennessTick {
+    std::int32_t value = 0;
+    bool changed = false;
+    bool remove_mount = false;
+};
+
+// UpdateDrunkenness @0x44af40: one point per buff tick. The mount threshold reads the raw Alcohol Tolerance
+// skill, before any skill modifiers, and compares the value after the decrement.
+DrunkennessTick drunkenness_tick(std::int32_t value, std::int32_t alcohol_tolerance, bool mounted);
+// UpdateDrunkenness chooses first person at 70, then sets the projection to that camera's base FOV + value-70
+// (the base truncated, the original's integer SetFOV argument). Deliberate difference: the widening, value-70 (0
+// below 70), is added on top of the player's chosen FOV each frame instead of replacing it, so the Options or /fov
+// setting comes back exactly, also when drunkenness is reset at once (death, bind) above 70.
+float drunkenness_fov_offset(std::int32_t value);
+
 // What the ticks ask of the connection.
 class PassageHost {
 public:
@@ -56,6 +71,8 @@ public:
     virtual void end_stun() = 0;      // CharacterZoneClient_EndStun
     // ProcessAffects' SPA 0x71 case: without a mount, the "<name>`s_Mount" spawn is mounted (summon_mount_tick).
     virtual void summon_mount() = 0;
+    virtual bool eye_present() { return false; }
+    virtual void view_eye() {}
 };
 
 // The 6 s block. `sheet` is the character as now (its buffs from `spells`, its stored mana and endurance from

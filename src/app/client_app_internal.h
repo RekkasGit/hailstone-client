@@ -921,7 +921,7 @@ private:
     // The spawn not to draw: the player's own in first person (camera 0's activate hides it; no other camera does).
     std::uint32_t hidden_spawn() const {
         return camera_type_ != game::kCameraFirstPerson || eq_host_.customization_zoom >= 0 ? 0u
-                                                                                             : conn_->world().player_id;
+            : (conn_->world().view_id ? conn_->world().view_id : conn_->world().player_id);
     }
     // display.msaa (samples, read at start-up), display.tonemap (auto | none | agx | aces; auto is AgX with the modern
     // lighting and none with the classic), display.exposure (EV), display.shadows (the shadow map's size per cascade,
@@ -1409,6 +1409,9 @@ private:
     std::array<game::mechanics::SwitchSpawn, 1> rider_spawns_{};
     game::DoorRiders door_riders_;
     PlayerMovement movement_;
+    std::optional<PlayerMovement> local_body_movement_; // the passive body while an Eye has the controls
+    std::uint32_t driven_eye_ = 0;
+    float local_body_height_ = 0.0f, local_body_yaw_ = 0.0f, local_body_pitch_ = 0.0f;
     // Riding (game/mounts.h): the link's questions answered from the models and the movement's room test
     // (client_app_player.cpp), and the mount the controls moved last frame (0: the player itself).
     struct MountAnswers final : game::MountQueries {
@@ -1477,6 +1480,10 @@ private:
     // CDisplay::cameraType (game/cameras.h): 0 first person, 1..5 the original's other cameras (cameras_), 6 the
     // camera behind the player (camera_distance_ > 0).
     int camera_type_ = game::kCameraFirstPerson;
+    std::uint32_t consciousness_changes_ = 0;
+    std::uint32_t drunkenness_updates_ = 0;
+    float drunk_fov_offset_ = 0.0f; // on top of camera_.fov_units (game::drunkenness_fov_offset)
+    std::optional<int> unconscious_camera_;
     std::array<game::GameCamera, 6> cameras_;
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)
     // The Options window's Max Camera Zoom sets it (10..150, saved); the NMS patch's /fov too (not saved).

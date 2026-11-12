@@ -23,6 +23,7 @@ struct GameConnectionTestAccess {
     static game::WorldState& world(GameConnection& c) { return c.world_; }
     static PlayerStatus& status(GameConnection& c) { return c.pstatus_; }
     static game::SpellState& spells(GameConnection& c) { return c.spells_; }
+    static std::int32_t& drunkenness(GameConnection& c) { return c.drunkenness_; }
     static game::GroupState& group(GameConnection& c) { return c.group_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
     static Coins& coins(GameConnection& c) { return c.coins_; }

@@ -396,6 +396,8 @@ void ClientApp::update_music() {
 }
 
 void ClientApp::enter_zone() {
+    local_body_movement_.reset();
+    driven_eye_ = 0;
     const game::Spawn* me = conn_->world().player();
     if (!me) return;
     // AvatarHeight (+0x138): EQPlayer::SetHeights' moddat.ini ROffset (3.125 for the player races, which have

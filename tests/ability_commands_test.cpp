@@ -10,6 +10,8 @@
 #include "core/ini_file.h"
 #include "game/combat_ability_menu.h"
 #include "game/hotbuttons.h"
+#include "game/mechanics/sheet_builder.h"
+#include "mock_server/harness.h"
 #include "mq_test_world.h"
 
 using namespace hailstone;
@@ -172,6 +174,140 @@ TEST_CASE("/melody: a gem number of ten digits or more wraps in 32 bits") {
     // 4294967309 is 13 (no such gem: nothing is clicked), 2147483648 is negative and left out.
     c.melody_command("4294967309 2147483648 99999999999");
     CHECK(c.bard_twist() == std::vector<std::int32_t>{13, static_cast<std::int32_t>(99999999999ull % 4294967296ull)});
+}
+
+TEST_CASE("A periodic interrupt clears a normal cast and ends a bard song abruptly") {
+    mq_test::World w("hailstone_periodic_interrupt_test");
+    auto& c = *w.conn;
+    auto& sp = A::spells(c);
+    sp.casting.spell = 200;
+    sp.pending = 2;
+    c.stop_current_spell_cast(1);
+    CHECK_FALSE(sp.casting.casting());
+    CHECK(sp.pending == 1);
+    CHECK(drain(c).empty()); // Non-song interruptions have no song-ended line.
+
+    A::profile(c)->class_ = 8;
+    sp.gems[2].spell = 3373;
+    sp.gems[2].ready = 99;
+    sp.recovery_ready = 99;
+    sp.casting.spell = 3373;
+    c.stop_current_spell_cast(1);
+    CHECK_FALSE(sp.casting.casting());
+    CHECK(sp.gems[2].ready == 0);
+    CHECK(sp.recovery_ready == 0);
+    CHECK(sp.pending == 1); // Songs do not consume an ordinary pending cast.
+    CHECK(drain(c).size() == 1);
+
+    // StopSpellCast keeps a bard's non-song gem with <=100 ms recovery, but resets its item cast.
+    sp.casting.spell = 200; // The fixture has zero recovery.
+    sp.pending = 1;
+    c.stop_current_spell_cast(1);
+    CHECK(sp.casting.spell == 200);
+    CHECK(sp.pending == 0);
+    sp.casting.item_location = {0, 23, 0};
+    c.stop_current_spell_cast(1);
+    CHECK_FALSE(sp.casting.casting());
+}
+
+TEST_CASE("StopSpellCast: a bard's non-song never interrupts or restarts the twist; others interrupt for reason 0") {
+    // stop_spell_cast.cpp:84-101: a bard's non-song returns at the launch data reset (kept outright when its
+    // recovery is at most 100 ms and it is not an item cast). A non-bard's non-song sends the empty OP_ManaChange
+    // for reason 0 only (feign death's StopCastAndFeignDeath is such a caller).
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    auto spells = std::make_shared<game::SpellTable>();
+    REQUIRE(spells->parse(mq_test::spell_line({{0, "6800"}, {1, "Slow Recovery"}, {13, "1000"}, {14, "2000"},
+                                               {83, "1"}}) + "\n" +
+                          mq_test::spell_line({{0, "6801"}, {1, "Quick Recovery"}, {13, "1000"}, {83, "1"}})) == 2);
+    c.set_spell_table_for_test(spells);
+    auto profile = *c.profile();
+    profile.class_ = 8;
+    profile.level = 60;
+    c.set_profile_for_test(profile);
+    auto& sp = A::spells(c);
+    sp.gems[0].spell = 6801; // the twist's gem 1: a restart would cast it
+    sp.gems[0].ready = 0;
+    sp.recovery_ready = 0;
+    c.melody_command("1");
+    REQUIRE(c.next_bard_twist_gem() == 1);
+    const auto mana_changes = [&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::ManaChange); };
+    const auto casts = [&] { return test::MockEqServer::count(rig.server.zone_log, net::Op::CastSpell); };
+    for (std::uint8_t reason : {std::uint8_t{0}, std::uint8_t{1}}) {
+        sp.casting = {};
+        sp.casting.spell = 6800;
+        c.stop_current_spell_cast(reason);
+        CHECK_FALSE(sp.casting.casting());
+    }
+    sp.casting = {};
+    sp.casting.spell = 6801;
+    c.stop_current_spell_cast(0);
+    CHECK(sp.casting.spell == 6801); // short recovery, not an item cast: kept
+    sp.casting.item_location = {0, 23, 0};
+    c.stop_current_spell_cast(0);
+    CHECK_FALSE(sp.casting.casting());
+
+    profile.class_ = 2;
+    c.set_profile_for_test(profile);
+    sp.casting = {};
+    sp.casting.spell = 6800;
+    c.stop_current_spell_cast(1);
+    CHECK_FALSE(sp.casting.casting());
+    sp.casting.spell = 6801;
+    c.stop_current_spell_cast(0);
+    CHECK_FALSE(sp.casting.casting());
+    REQUIRE(rig.until([&] { return mana_changes() >= 1; }));
+    rig.run_for(std::chrono::milliseconds(30));
+    CHECK(mana_changes() == 1); // only the non-bard's reason 0
+    CHECK(casts() == 0);        // no twist restart
+}
+
+TEST_CASE("Unconscious status follows local damage and conscious recovery without overriding death") {
+    mq_test::World w("hailstone_consciousness_test");
+    auto& c = *w.conn;
+    auto& st = A::status(c);
+    st.hp = 0;
+    const auto serial = c.consciousness_changes();
+    c.update_player_consciousness(true);
+    CHECK(st.owner_status == 3);
+    CHECK(st.stand_state == net::kStandLying);
+    CHECK(c.player_down());
+    CHECK(c.live_state().owner_status == 3);
+    CHECK(c.consciousness_changes() == serial + 1);
+    c.update_player_consciousness(true);
+    CHECK(c.consciousness_changes() == serial + 1);
+    st.hp = 1;
+    CHECK(c.player_down()); // Healing waits for GetConscious after the next HP tick.
+    c.update_player_consciousness();
+    CHECK(st.owner_status == 0);
+    CHECK(st.stand_state == net::kStandStanding);
+    CHECK_FALSE(c.player_down());
+    CHECK(c.consciousness_changes() == serial + 2);
+
+    st.owner_status = 4;
+    st.dead = true;
+    st.hp = 100;
+    c.update_player_consciousness();
+    CHECK(st.owner_status == 4);
+    CHECK(st.dead);
+    CHECK(c.consciousness_changes() == serial + 2);
+}
+
+TEST_CASE("a fresh zone clears the previous character body's unconscious or dead status") {
+    for (std::int8_t previous : {std::int8_t{3}, std::int8_t{4}}) {
+        mq_test::World w("hailstone_consciousness_zone_test");
+        auto& c = *w.conn;
+        auto& status = A::status(c);
+        status.owner_status = previous;
+        status.dead = previous == 4;
+        status.stand_state = net::kStandLying;
+        c.receive_world_packet_for_test(net::encode(net::ZoneServerInfo{"127.0.0.1", 9000}));
+        CHECK(status.owner_status == 0);
+        CHECK_FALSE(status.dead);
+        CHECK(status.stand_state == net::kStandStanding);
+        CHECK_FALSE(c.player_down());
+    }
 }
 
 TEST_CASE("/autofire needs a target and swaps auto attack for auto fire") {

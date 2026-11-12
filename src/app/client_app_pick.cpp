@@ -511,12 +511,14 @@ void ClientApp::draw_world_container() {
 }
 
 bool ClientApp::teleport_b(const game::TeleportBArgs& a, const char* what) {
-    const glm::vec3 pos = feet_ + glm::vec3(0, 0, floor_offset_); // the player's +0x64.. (world x, y, z)
+    const glm::vec3 pos = local_body_movement_
+        ? local_body_movement_->controller().body.feet + glm::vec3(0, 0, local_body_height_)
+        : feet_ + glm::vec3(0, 0, floor_offset_); // the player's +0x64.. (world x, y, z)
     game::TeleportBPlayer p;
     p.x = pos.x;
     p.y = pos.y;
     p.z = pos.z;
-    p.heading = game::yaw_to_heading(yaw_);
+    p.heading = game::yaw_to_heading(local_body_movement_ ? local_body_yaw_ : yaw_);
     p.stand_state = conn_->player_status().stand_state;
     p.zone = static_cast<std::int32_t>(conn_->current_zone_dword());
     if (const game::Spawn* me = conn_->world().player()) p.race = me->race;
@@ -540,9 +542,15 @@ bool ClientApp::teleport_b(const game::TeleportBArgs& a, const char* what) {
     bool ok = game::do_teleport_b(p, a, 5, b);
     if (ok && local) {
         // The same zone: the player is moved here; nothing is sent.
-        feet_ = glm::vec3(p.x, p.y, p.z - floor_offset_);
-        yaw_ = game::heading_to_yaw(p.heading);
-        movement_.place(feet_); // the body moves with it (else the next movement step puts the player back)
+        if (local_body_movement_) {
+            local_body_movement_->place(glm::vec3(p.x, p.y, p.z - local_body_height_));
+            local_body_yaw_ = game::heading_to_yaw(p.heading);
+            conn_->set_player_motion({p.x, p.y, p.z}, p.heading, glm::vec3(0), false);
+        } else {
+            feet_ = glm::vec3(p.x, p.y, p.z - floor_offset_);
+            yaw_ = game::heading_to_yaw(p.heading);
+            movement_.place(feet_); // the body moves with it (else the next movement step puts the player back)
+        }
         log::info("{}: moved within the zone to ({:.1f}, {:.1f}, {:.1f})", what, p.x, p.y, p.z);
     }
     return ok;

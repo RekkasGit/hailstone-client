@@ -170,7 +170,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
         if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) continue;
         // The local player and its mount are drawn where the camera puts them (set_local_drawn), else where they are.
         if (id != 0 && (id == player_id || id == controlled_id)) {
-            if (!local_drawn || !s.display_valid) {
+            if (!local_drawn || !s.display_valid || (eye_id && id == player_id)) {
                 s.display_position = target;
                 s.display_heading = s.heading;
                 s.display_valid = true;
@@ -211,6 +211,7 @@ void WorldState::set_local_drawn(const glm::vec3& position, float heading) {
         !std::isfinite(heading))
         return;
     for (std::uint32_t id : {player_id, controlled_id}) {
+        if (eye_id && id == player_id) continue;
         if (id == 0) continue;
         auto it = spawns.find(id);
         if (it == spawns.end()) continue;
