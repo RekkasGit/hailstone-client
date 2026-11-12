@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <format>
+#include <fstream>
 #include <system_error>
 
 #include "core/ini_file.h"
@@ -303,6 +305,75 @@ std::string client_window_title(std::string_view server, std::string_view charac
     std::string title = server.empty() ? std::string("Hailstone") : std::string(server);
     if (!character.empty()) title += " - " + std::string(character);
     return title;
+}
+
+std::optional<ServerProfile> profile_from_eqhost(std::string_view text) {
+    auto trim = [](std::string_view s) {
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) s.remove_prefix(1);
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.remove_suffix(1);
+        return s;
+    };
+    if (text.starts_with("\xEF\xBB\xBF")) text.remove_prefix(3); // a UTF-8 byte order mark
+    std::string_view section;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        std::string_view line = trim(text.substr(0, end));
+        text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1);
+        if (line.starts_with('[')) {
+            const std::size_t close = line.find(']');
+            section = trim(line.substr(1, close == std::string_view::npos ? std::string_view::npos : close - 1));
+            continue;
+        }
+        // Only [LoginServer]'s Host (or one before any section); Host1, Host2 and the like are not read.
+        if (!section.empty() && !iequals(section, "LoginServer")) continue;
+        const std::size_t eq = line.find('=');
+        if (eq == std::string_view::npos || !iequals(trim(line.substr(0, eq)), "host")) continue;
+        std::string_view value = trim(line.substr(eq + 1));
+        // The port after the ':' when there is only one ("name:port"), or after "]" in "[v6]:port". A bare IPv6
+        // address has several and no port. Without a port the profile keeps ServerProfile's default: what the
+        // original client does then is not confirmed (docs/unknowns.md).
+        std::string_view port_text;
+        bool has_port = false;
+        if (value.starts_with('[')) {
+            const std::size_t close = value.find(']');
+            if (close == std::string_view::npos) continue;
+            std::string_view rest = value.substr(close + 1);
+            if (!rest.empty()) {
+                if (rest.front() != ':') continue;
+                port_text = rest.substr(1);
+                has_port = true;
+            }
+            value = value.substr(1, close - 1);
+        } else if (const std::size_t colon = value.find(':');
+                   colon != std::string_view::npos && value.find(':', colon + 1) == std::string_view::npos) {
+            port_text = value.substr(colon + 1);
+            value = value.substr(0, colon);
+            has_port = true;
+        }
+        ServerProfile p;
+        if (has_port) {
+            port_text = trim(port_text);
+            int port = 0;
+            const auto [ptr, ec] = std::from_chars(port_text.data(), port_text.data() + port_text.size(), port);
+            if (ec != std::errc() || ptr != port_text.data() + port_text.size() || port < 1 || port > 65535) continue;
+            p.port = port;
+        }
+        value = trim(value);
+        if (value.empty()) continue;
+        p.host = std::string(value);
+        p.name = p.host;
+        return p;
+    }
+    return std::nullopt;
+}
+
+std::optional<ServerProfile> profile_from_eqhost_file(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return std::nullopt;
+    std::string text(kMaxEqhostBytes, '\0');
+    in.read(text.data(), static_cast<std::streamsize>(text.size()));
+    text.resize(static_cast<std::size_t>(in.gcount()));
+    return profile_from_eqhost(text);
 }
 
 } // namespace hailstone

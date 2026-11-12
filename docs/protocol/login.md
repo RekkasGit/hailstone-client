@@ -6,6 +6,21 @@ Server side: EQEmu `loginserver/client.cpp`, `login_types.h`, `world_server.cpp`
 
 EQEmu's login server listens on separate ports per client family; the RoF2 client uses the "SoD" port (`client_configuration.sod_port`, default 5999), whose opcodes come from `login_opcodes_sod.conf`. Encode passes are none, CRC 2 bytes (see `session.md`). The UDP session options (`LoginClient::Options::session`): max packet 512, no-data timeout 14.8 s, multi-buffer hold 0, no stat requests, resend adjust 2000 (T = min(1.25 rtt + 2000, 8000) ms), 100 reliable slots.
 
+## eqhost.txt
+
+A server's patcher ships `eqhost.txt` in the game folder to name its login server. Hailstone reads it once, to give a
+fresh install its first server (`profile_from_eqhost`, `ui::load_login_settings`): when the asset folder has one and
+there is no saved server, the login server it names becomes a saved server, named after its address, and is picked.
+`login.eqhost_imported` in `hailstone.ini` then records that it was done (or that the player already had servers when
+the file was first seen), so deleting every server does not bring it back; the game folder is never written.
+
+Only the first `Host` line of `[LoginServer]` (or one before any section) is read: `Host=name:port`, `Host=name`,
+`Host=[v6]:port` or a bare IPv6 address. `Host1`, `Host2` and other keys are not, nor the older `[Login Servers]` block
+format. A line without a usable host, or with a port outside 1 to 65535, is skipped for the next. A UTF-8 byte order
+mark is skipped, and at most 64 KiB of the file is read. Without a port the server gets the login screen's default
+for a new server (`ServerProfile::port`, 5997); what the original client uses then is not confirmed
+(docs/unknowns.md).
+
 ## Opcodes
 
 | Opcode | Name | Direction |
