@@ -35,8 +35,10 @@ void load_hot_bar_settings(int bar, ui::UiIni& ini, std::string_view section);
 void register_hot_bar_window(int bar, StockWindow* window);
 void unregister_hot_bar_window(int bar, StockWindow* window);
 
-// The bar's window menu (CHotButtonWnd's ContextMenuID: the right button on the window) at x, y.
-void open_hot_bar_menu(EqHost& host, int bar, float x, float y);
+// The bar's window menu (CHotButtonWnd's ContextMenuID: the right button on the window) at x, y. `layout_lock`: with
+// the Lock layout row (the modern UI's frames, which the window's own menu opens; eq.HotBarMenu, the gamepad pack's
+// pages, has no frame to lock).
+void open_hot_bar_menu(EqHost& host, int bar, float x, float y, bool layout_lock = false);
 // 0x68a170: CQuantityWnd::Open(bar, 175, PercentSize, x, y, 0, 40, "Percent"); its answer (0x24) is the bar's
 // PercentSize, stored (StoreIniInfo). The bar's Button Size and a button's Change Size.
 void open_hot_bar_size(EqHost& host, int bar, float x, float y);
