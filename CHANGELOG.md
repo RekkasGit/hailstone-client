@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Advanced Inventory and `/finditem`: your bank and shared bank are listed and searchable everywhere, not only near a banker. Most EQEmu servers send the bank only when you are near a banker, so away from one Hailstone shows the bank as you last saw it, dimmed and marked "Bank as last seen ... ago", until a banker sends it again. Those items cannot be moved or used until you open the bank. The copy is kept per character, so it is there from your first zone-in
 - Chat: a server that sends the newer chat message types (colours 355 to 408) can now have them filtered to their own windows, from a new Extended (server) submenu of the chat window's Filters menu, and coloured from 54 new rows at the end of Options > Colors. Nothing changes on a stock EQEmu server, which sends none of them
 - On a fresh install, the login screen starts on the server your game folder's `eqhost.txt` names (its `[LoginServer]` `Host`), as a saved server you can rename or delete. This happens once: a server you delete does not come back
 - On Windows, the asset folder picker uses the Explorer-style folder dialog with its address bar, Quick access and search, instead of the old folder tree
