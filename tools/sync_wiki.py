@@ -33,6 +33,7 @@ TREE = REPO_URL + "/tree/main/"
 # (section, [(source path, wiki page name)]). The order is the sidebar's and Home's.
 PAGES = [
     ("Playing", [
+        ("docs/commands.md", "Commands-and-Shortcuts"),
         ("docs/layout.md", "Folder-Layout"),
         ("docs/gamepad.md", "Gamepad"),
         ("docs/addons.md", "Add-ons"),

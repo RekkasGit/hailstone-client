@@ -964,6 +964,48 @@ std::optional<TimeOfDay> decode_time_of_day(const AppPacket& p) {
     });
 }
 
+TimeOfDay advance_time_of_day(const TimeOfDay& ref, std::uint32_t elapsed_s) {
+    std::uint32_t t = elapsed_s * 20u; // game seconds, wrapping at 32 bits as the original's
+    std::uint32_t years = t / 29030400u;
+    t -= years * 29030400u;
+    std::uint32_t months = t / 2419200u;
+    t -= months * 2419200u;
+    std::uint32_t days = t / 86400u;
+    t -= days * 86400u;
+    std::uint32_t hours = t / 3600u;
+    t -= hours * 3600u;
+    std::uint32_t minutes = t / 60u;
+
+    TimeOfDay v = ref;
+    auto u8 = [](std::uint32_t x) { return static_cast<std::uint8_t>(x & 0xffu); };
+    v.minute = u8(minutes + ref.minute);
+    while (v.minute > 59) {
+        v.minute = u8(v.minute - 60u);
+        ++hours;
+    }
+    std::uint8_t h = u8(ref.hour + hours - 1u);
+    while (h > 23) {
+        h = u8(h - 24u);
+        ++days;
+    }
+    v.hour = u8(h + 1u);
+    std::uint8_t d = u8(ref.day + days - 1u);
+    while (d > 27) {
+        d = u8(d - 28u);
+        ++months;
+    }
+    v.day = u8(d + 1u);
+    v.month = u8(ref.month + months);
+    while (v.month > 12) {
+        v.month = u8(v.month - 12u);
+        ++years;
+    }
+    // The year is a signed 32-bit field there; past 9999 it is cleared.
+    auto year = static_cast<std::int32_t>(ref.year + years);
+    v.year = year > 9999 ? 0u : static_cast<std::uint32_t>(year);
+    return v;
+}
+
 AppPacket encode(const Weather& v) {
     ByteWriter w;
     w.le(v.kind);

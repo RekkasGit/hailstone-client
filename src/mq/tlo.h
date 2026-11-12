@@ -196,7 +196,7 @@ bool iequals(std::string_view a, std::string_view b);
 bool icontains(std::string_view haystack, std::string_view needle);
 
 // The game's TLOs and types (mq/tlo_game.cpp): Me, Target, Spawn, SpawnCount, NearestSpawn, Group, Zone, Spell,
-// Cursor, FindItem, FindItemCount, Window, Time, GameTime, EverQuest, Int, Float, Bool, String, Plugin, ...
+// Cursor, FindItem, FindItemCount, Window, Time, GameTime, EverQuest, Int, Float, Bool, String, Math, If, Range, Plugin, ...
 void register_game_tlos(Registry& r);
 
 } // namespace hailstone::mq
