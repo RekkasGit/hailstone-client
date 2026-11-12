@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bandolier: swapping sets works with the general slots full when a bag has room. The weapon you swap out goes into the first bag with a free slot that takes it, where the server puts it; before, the swap was refused unless a general slot was free
 - Modern hot bars: drag a bar's right or bottom edge, or its bottom-right corner, to change its shape ("Buttons per row"); the bar's regular right-click menu has **Lock layout** so it cannot be moved or resized by accident
 - Chat: a chat window can be folded away into its tab strip, with the button at the strip's right end (as the combat ability window folds into its title bar). The tabs stay, so the chat is one click away and keeps the lines that came in while it was folded
 - Advanced Inventory and `/finditem`: your bank and shared bank are listed and searchable everywhere, not only near a banker. Most EQEmu servers send the bank only when you are near a banker, so away from one Hailstone shows the bank as you last saw it, dimmed and marked "Bank as last seen ... ago", until a banker sends it again. Those items cannot be moved or used until you open the bank. The copy is kept per character, so it is there from your first zone-in
