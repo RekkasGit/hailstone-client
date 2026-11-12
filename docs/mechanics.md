@@ -1291,6 +1291,15 @@ spawn. The client chooses only a missile source's launch animation (the attack a
 BATK for arrows) and the target's hit animation (`game::hit_animation`: D02 on a hit for damage, a spell's
 TargetAnim, D01 / D03 / D04 for the environmental types).
 
+A proc's cast animation (a deliberate difference, Hailstone's option `cast_animation_fallback`: hailstone.ini
+`game.cast_animation_fallback`, Options > General "Proc Cast Animations", on by default): the cast stage Hailstone
+adds for a spell that lands with no OP_BeginCast (docs/graphics.md) plays the spell's casting animation on its source,
+and the local player's is sent to the zone as an OP_Animation. For a spell whose casting animation is 0 it plays 43
+(CastHeals) for a beneficial spell (spell type above 0) and 44 (CastNuke) for a detrimental one, locally and in
+the OP_Animation alike (`game::spell_cast_animation`). Off, such a spell plays no animation, as before. The original
+plays no cast stage here at all, and what its cast animation is for a spell without one is not confirmed
+(docs/unknowns.md).
+
 Missiles (`game/missiles.h`): an item missile with a target does not sweep the zone; spell missiles sweep and
 also check the target segment. Source despawn ends its missiles; target despawn removes homing. Item type 9 needs
 a loaded spell id in 1..45000. Duration uses normalized AE duration (capped at 14 s except first-slot SPA 76),

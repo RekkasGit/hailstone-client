@@ -31,6 +31,7 @@
 #include "core/process_serial.h"
 #include "core/server_profile.h"
 #include "game/alt_adv.h"
+#include "game/animation_types.h"
 #include "game/augments.h"
 #include "game/bank.h"
 #include "game/placement.h"
@@ -100,7 +101,6 @@
 #include "net/spell_packets.h"
 #include "net/world_packets.h"
 #include "net/zone_packets.h"
-#include "core/animation_types.h"
 
 namespace hailstone { class GameDir; }
 namespace hailstone::game::mechanics { struct GameTables; }
@@ -427,6 +427,9 @@ public:
     void set_ground_npcs(bool on) { world_.ground_npcs = on; }
     // Hailstone (option illusion_mounts): a rider under an illusion still rides (WorldState::illusion_mounts).
     void set_illusion_mounts(bool on) { world_.illusion_mounts = on; }
+    // Hailstone (option cast_animation_fallback): the added proc cast stage's animation for a spell without a
+    // casting animation (game::spell_cast_animation).
+    void set_cast_animation_fallback(bool on) { cast_animation_fallback_ = on; }
     void reground() { world_.reground(); }
     // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
     void set_player_body_wet(std::uint8_t body_wet) {
@@ -2992,6 +2995,7 @@ private:
     bool auto_attack_ = false;
     bool attack_until_xtarget_clear_ = false;
     bool fast_camp_ = false;
+    bool cast_animation_fallback_ = true; // set_cast_animation_fallback
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
     bool face_on_attack_ = true;

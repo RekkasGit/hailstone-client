@@ -210,7 +210,8 @@ Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the
 first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
 a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the
 impact for them (`EQPlayer::TriggerSpellEffect`). An OP_Action counts as a cast's landing for 3 s after its
-OP_BeginCast's cast time; a bard song's pulses get no cast stage. The proc's bolt or comet, in the modern lighting,
+OP_BeginCast's cast time; a bard song's pulses get no cast stage. Its source plays the spell's casting animation,
+or for a spell without one the heal or nuke cast (docs/mechanics.md, option `cast_animation_fallback`). The proc's bolt or comet, in the modern lighting,
 leaves at the landing as another's spell's does.
 
 Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client

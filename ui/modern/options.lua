@@ -218,6 +218,8 @@ local function generalTab()
       "Toggle whether moving forward automatically makes your character stand up if sitting.")
     check("illusion_mounts", "Ride While Illusioned",
       "Hailstone: an illusion does not stop you summoning and riding a mount. Off: as in the original, many illusions refuse the mount.")
+    check("cast_animation_fallback", "Proc Cast Animations",
+      "Hailstone: a spell that lands without a cast (a weapon or item proc) and has no cast animation of its own plays the heal or the nuke cast animation, by whether it is beneficial. Off: nothing plays for such a spell.")
     bit("click_through", 1, "Click Through Self", "Click through yourself.")
     bit("click_through", 2, "Click Through Pets", "Click through pets.")
     bit("click_through", 4, "Click Through Mercs", "Click through mercenaries.")
