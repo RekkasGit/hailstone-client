@@ -1244,7 +1244,7 @@ std::optional<glm::vec3> nav_destination(const Context& c, std::string_view inde
     } else if (iequals(w[0], "target")) {
         s = spawn_of(c, c.conn->world().target_id);
     } else {
-        for (const game::Spawn* f : search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group()))
+        for (const game::Spawn* f : find_spawns(index, *c.conn, c.can_see))
             if (!is_me(c, *f)) {
                 s = f;
                 break;
@@ -1573,13 +1573,13 @@ void register_game_tlos(Registry& r) {
         if (!c.conn) return V::nil();
         std::int64_t id = 0;
         if (parse_int(index, id)) return spawn_value(spawn_of(c, id));
-        auto found = search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group());
+        auto found = find_spawns(index, *c.conn, c.can_see);
         return found.empty() ? V::nil() : spawn_value(found.front());
     });
     r.add_tlo("SpawnCount", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::integer(0);
         return V::integer(static_cast<std::int64_t>(
-            search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group()).size()));
+            find_spawns(index, *c.conn, c.can_see).size()));
     });
     r.add_tlo("NearestSpawn", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();
@@ -1593,7 +1593,7 @@ void register_game_tlos(Registry& r) {
         } else {
             n = 1;
         }
-        auto found = search_spawns(parse_spawn_search(search), c.conn->world(), &c.conn->group());
+        auto found = find_spawns(search, *c.conn, c.can_see);
         if (n < 1 || n > static_cast<std::int64_t>(found.size())) return V::nil();
         return spawn_value(found[static_cast<std::size_t>(n - 1)]);
     });

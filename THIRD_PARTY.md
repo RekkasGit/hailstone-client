@@ -77,8 +77,13 @@ License version 2.
   copied from `src/eqlib/include/eqlib/game/Spells.h` (without its deprecated and alias names), and `SPA_NAMES` 0..520
   from `src/eqlib/include/eqdata/spelleffects.h`. The ids 527 and 528 and the names 521..528 were added in Hailstone.
 
-MacroQuest is also the specification, read but not copied, for the scripts' TLOs and `${...}` text:
+### MacroQuest used as a specification
+
+- `src/mq/spawn_search.cpp`: the spawn search words and matching rules follow MacroQuest's `ParseSearchSpawn`,
+  `ParseSearchSpawnArgs`, `SpawnMatchesSearch`, `IsNamed`, `IsInGroup`, `IsInRaid`, `IsPCNear`, `CleanupName` and
+  `NthNearestSpawn` (`src/main/MQ2Utilities.cpp`) and its light names (`szLights`). The code was written for
+  Hailstone; none is copied.
 - `src/mq/calc.cpp` (Calculate, FastCalculate, EvaluateRPN, GetArg, GetIntFromString in `MQ2Utilities.cpp` and
-  `include/mq/base/String.h`), the `Math`, `If` and `Range` TLOs and the int, float and string members in
+  `include/mq/base/String.h`), and the `Math`, `If` and `Range` TLOs and the int, float and string members in
   `src/mq/tlo.cpp` and `src/mq/tlo_game.cpp` (`MQ2MathType.cpp`, `MQ2Data.cpp`, `MQ2BasicTypes.cpp`): written for
-  Hailstone from MQ's behaviour, so no MacroQuest code is in them.
+  Hailstone from MQ's behaviour; none is copied.

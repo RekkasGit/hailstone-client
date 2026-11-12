@@ -101,7 +101,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
             if (iequals(args, "mycorpse")) {
                 std::string mine = ctx.conn->character_name() + "'s corpse";
                 SpawnSearch q = parse_spawn_search("pccorpse");
-                for (const game::Spawn* s : search_spawns(q, world, &ctx.conn->group()))
+                for (const game::Spawn* s : search_spawns(q, world, sources_of(*ctx.conn)))
                     if (icontains(s->name, ctx.conn->character_name())) {
                         env_.set_target(s->id);
                         return;
@@ -109,7 +109,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
                 say("There are no spawns matching: (" + mine + ")");
                 return;
             }
-            auto found = search_spawns(parse_spawn_search(args), world, &ctx.conn->group());
+            auto found = find_spawns(args, *ctx.conn, ctx.can_see);
             // A plain name means someone else, not the player (MQ skips you unless asked for).
             for (const game::Spawn* s : found) {
                 if (s->id == world.player_id && found.size() > 1) continue;
@@ -168,7 +168,7 @@ Commands::Commands(CommandEnv env) : env_(std::move(env)) {
                     auto it = world.spawns.find(world.target_id);
                     if (it != world.spawns.end()) s = &it->second;
                 } else {
-                    for (const game::Spawn* f : search_spawns(parse_spawn_search(search), world, &ctx.conn->group()))
+                    for (const game::Spawn* f : find_spawns(search, *ctx.conn, ctx.can_see))
                         if (f->id != world.player_id) {
                             s = f;
                             break;
