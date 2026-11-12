@@ -275,9 +275,13 @@ ServerProfile profile_from_view(const LoginView& view);
 
 // Lists the profiles in `servers`, takes default_ui from ui.name and picks login.profile (else the first, else a
 // new server). When there are none, the old login.host, login.port and login.username keys become a first profile
-// and are erased; returns true when `config` changed and needs saving.
+// and are erased; returns true when `config` changed and needs saving. Still none and `eqhost` (the asset folder's
+// eqhost.txt) names a login server: that becomes the first profile (profile_from_eqhost_file), as a fresh install's
+// default. Only once: login.eqhost_imported is set then, or when an eqhost.txt is there while the player already has
+// a saved server, so a player who deletes every server does not get it back.
 bool load_login_settings(LoginView& view, Config& config,
-                         const std::filesystem::path& servers = platform::servers_dir());
+                         const std::filesystem::path& servers = platform::servers_dir(),
+                         const std::filesystem::path& eqhost = {});
 // Saves the view's server (its server.ini and assets folder), lists the profiles again, picks it and names it in
 // login.profile. Nullopt (with the status set) when it cannot be written; test logins are never saved.
 std::optional<ServerProfile> store_login_settings(LoginView& view, Config& config);

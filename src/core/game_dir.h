@@ -94,6 +94,11 @@ public:
 
     static std::string normalize(std::string_view relative);
 
+    // The folder directly in a game folder (the base or the classic folder) that may hold Hailstone's own files, as
+    // where a server's patcher installs it (<EverQuest>/hailstone/, core/asset_folder_choice.h data_folder_conflict).
+    // Its name's case is ignored. It is never indexed: those are not game files, and they can be many.
+    static constexpr std::string_view kOwnFolder = "hailstone";
+
 private:
     struct Indexed {
         std::string relative; // as on disk, '/' separated

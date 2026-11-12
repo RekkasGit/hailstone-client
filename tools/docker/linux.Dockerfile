@@ -1,7 +1,7 @@
 # Linux release builds: Ubuntu 24.04 (GCC 13, glibc 2.39), so the client runs on 24.04 and newer (docs/ci.md).
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    build-essential cmake git ca-certificates python3 file \
+    build-essential cmake git ca-certificates python3 file ccache \
     ninja-build glslang-tools zlib1g-dev clang libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
     libxfixes-dev libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libdrm-dev libgbm-dev libasound2-dev \
     libpulse-dev libudev-dev libdbus-1-dev && rm -rf /var/lib/apt/lists/*

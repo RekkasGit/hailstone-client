@@ -6,6 +6,8 @@
 #include <map>
 #include <stdexcept>
 
+#include "core/ascii_case.h"
+
 namespace hailstone {
 
 namespace {
@@ -102,6 +104,15 @@ std::shared_ptr<const GameDir::Index> GameDir::scan(const std::filesystem::path&
     for (auto it = std::filesystem::recursive_directory_iterator(root, opts, ec);
          !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
         std::error_code type_ec;
+        // Hailstone's own folder inside a game folder (kOwnFolder) is not walked. An overlay is a folder of
+        // Hailstone's already (servers/<id>/assets), so it is walked whole.
+        if (!overlay && it.depth() == 0 && it->is_directory(type_ec)) {
+            const std::u8string name = it->path().filename().u8string();
+            if (iequals(std::string_view(reinterpret_cast<const char*>(name.data()), name.size()), kOwnFolder)) {
+                it.disable_recursion_pending();
+                continue;
+            }
+        }
         if (!it->is_regular_file(type_ec)) continue;
         auto rel = std::filesystem::relative(it->path(), root, type_ec).generic_string();
         if (type_ec) continue;
