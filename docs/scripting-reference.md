@@ -680,7 +680,7 @@ rectangle (`u0, v0, u1, v1`).
 | CollapsingHeader | (label [, flags]) → bool | |
 | TreeNode | (label) → bool | |
 | TreePop | () → — | |
-| Image | (tex, w, h [, u0, v0, u1, v1]) → — | Draws a Dummy if tex is invalid |
+| Image | (tex, w, h [, u0, v0, u1, v1 [, r, g, b, a]]) → — | r, g, b, a tint it (white by default). Draws a Dummy if tex is invalid |
 
 #### Layout and cursor
 
@@ -932,7 +932,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Item | (slot [, bagSlot]) → item\|nil | Item table for a possessions slot | — |
 | ItemIcon | (icon) → tex,u0,v0,u1,v1 \| nil | Item icon cell | — |
 | ClickSlot | (slot, bagSlot\|nil, "left"\|"leftheld"\|"right"\|phase [, outside]) → ok | Game slot logic: pick up, drop, swap, split, use | actions |
-| HasSlot | (slot, bagSlot\|nil) → bool | Whether the player is in game (the arguments are not used yet) | — |
+| HasSlot | (slot, bagSlot\|nil) → bool | ClickSlot can act there now: in game, a possessions slot 0..33, and with bagSlot a place inside the bag that general slot holds (empty places count) | — |
 | SlotItem | (name, child) → item\|nil | Item in a window's item slot (loot, bank, trade…) | — |
 | BagInfo | (bagWindow) → name, slots, combine, where, slot \| nil | "Bag1".."Bag36" or "WorldContainer". where: "inventory", "bank" or "other" | — |
 | BagSlotItem | (bagWindow, index) → item\|nil | Item in a bag slot (0-based) | — |
@@ -942,7 +942,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | InventorySpace | () → free, total | Empty places in general slots and bags | — |
 | SortItems | (where, mode [, {locked, filters}]) → err\|nil | "sort", "stack" or "tidy" an inventory, bank or bag | actions |
 | SellJunk | ({itemId…}) → err\|nil | Sell those ids to the open merchant | actions |
-| ItemJob | () → done, total, mode, where \| nil | The running item job | actions |
+| ItemJob | () → done, total, mode, where \| nil | The running item job | — |
 | StopItemJob | () → — | Stop it | actions |
 | ItemPreview | () → {open, show, name, onPlayer, serial} \| nil | Object preview window state | — |
 | ItemPreviewImage | (w, h [, "marketplace"]) → tex\|nil | The preview's 3D view for this frame | — |
@@ -1034,7 +1034,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ShowSpell | (id [, temporary]) → — | Open the spell display window | commands |
 | SpellDetails | (id) → title, stml \| nil | Spell display text | — |
 | DisplaySpellId | (n) → spellId\|nil | Spell id of the nth open spell display (1-based) | — |
-| DisplayItemData | (n) → {id, icon, name, lore, value, stack_count, damage, delay, item_type, favor} \| nil | nth open item display's data (keys in snake_case, unlike the other tables) | — |
+| DisplayItemData | (n) → {id, icon, name, lore, value, stackCount, damage, delay, itemType, favor} \| nil | nth open item display's data (`stack_count` and `item_type` are kept too) | — |
 | SpellSets | () → {{name, inUse, spells={id\|-1 ×12}} ×10} | Spell sets | — |
 | SaveSpellSet | (name [, spells]) → n\|nil | Save the gems (or the given spells) as a set | commands |
 | EditSpellSet | (n, name, spells) → n\|nil | Rename a set and replace its spells | commands |
@@ -1149,7 +1149,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ZoneLinks | () → server, zones, limit [, expansion] | Zone connectivity known (asks the server once) | — |
 | ZoneRoute | (to [, from]) → {{id, zone, name, expansion}…, assumed} \| nil | Fewest-zone route | — |
 | ZoneExits | () → {{id, zone, name, expansion, x, y, x0, y0, x1, y1}} | Current zone's zone lines | — |
-| ZoneExitWalk | (zone) → x, y \| nil | /nav walk through the nearest line to `zone` | actions |
+| ZoneExitWalk | (zone) → x, y \| nil | /nav walk through the nearest line to `zone` | move |
 | ShowZoneMap | ([zone]) → — | Map window shows another zone (or own) | — |
 | MapZoneShown | () → long, short, own | Zone the map shows | — |
 

@@ -32,6 +32,7 @@
 - Spell missiles: on a server that sends a missile's spell id (stock EQEmu does not), the missile now shows its spell's flight, area and impact effects instead of vanishing
 - A weapon or item proc whose spell has no cast animation of its own now plays the heal or the nuke cast animation on the one who procced it, by whether the spell is beneficial, and other players see yours too. Options > General **Proc Cast Animations** turns this off
 - For add-on authors: the wiki has a new **Scripting Reference** page listing every TLO and its members, the spawn search words, the `mq`, `hailstone`, `ImGui`, `ui` and `eq` functions, and the plugin SDK's callbacks, host functions, hooks and structs
+- For add-on authors: a plugin's window now needs the `move` permission (not `actions`) for the zone finder's Walk there (`eq.ZoneExitWalk`), as for the Find window's, and none to read an item job's progress (`eq.ItemJob`). `eq.HasSlot` now checks the slot it is given, `ui.Image` takes a colour tint as documented, and `eq.DisplayItemData` also gives `stackCount` and `itemType`
 
 ## 0.7.0-beta (2026-11-09)
 

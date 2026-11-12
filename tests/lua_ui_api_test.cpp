@@ -651,6 +651,62 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
     ImGui::DestroyContext(ctx);
 }
 
+// ui.Image's optional r, g, b, a tint the image (ImageWithBg: Dear ImGui's Image takes no tint); without them it is
+// drawn untinted.
+TEST_CASE("Lua UI: ui.Image takes a tint") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_image_tint_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "i.lua") << "ui.window('I', function()\n"
+                                    "  ui.Begin('I')\n"
+                                    "  ui.Image(TINTED, 8, 8, 0, 0, 1, 1, 1, 0, 0, 1)\n"
+                                    "  ui.Image(PLAIN, 8, 8)\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    static int tinted = 0, plain = 0;
+    hailstone::ui::texture_id_added(&tinted);
+    hailstone::ui::texture_id_added(&plain);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        lua_pushlightuserdata(L, &tinted);
+        lua_setglobal(L, "TINTED");
+        lua_pushlightuserdata(L, &plain);
+        lua_setglobal(L, "PLAIN");
+        std::vector<ImU32> tinted_cols, plain_cols;
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+            tinted_cols.clear();
+            plain_cols.clear();
+            for (const ImDrawList* list : ImGui::GetDrawData()->CmdLists)
+                for (const ImDrawCmd& cmd : list->CmdBuffer) {
+                    auto* out = cmd.GetTexID() == reinterpret_cast<ImTextureID>(&tinted) ? &tinted_cols
+                                : cmd.GetTexID() == reinterpret_cast<ImTextureID>(&plain) ? &plain_cols
+                                                                                          : nullptr;
+                    for (unsigned e = 0; out && e < cmd.ElemCount; ++e)
+                        out->push_back(list->VtxBuffer[static_cast<int>(cmd.VtxOffset + list->IdxBuffer[static_cast<int>(cmd.IdxOffset + e)])].col);
+                }
+        }
+        REQUIRE_FALSE(tinted_cols.empty());
+        REQUIRE_FALSE(plain_cols.empty());
+        for (ImU32 c : tinted_cols) CHECK(c == IM_COL32(255, 0, 0, 255));
+        for (ImU32 c : plain_cols) CHECK(c == IM_COL32(255, 255, 255, 255));
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    hailstone::ui::texture_id_removed(&tinted);
+    hailstone::ui::texture_id_removed(&plain);
+    ImGui::DestroyContext(ctx);
+}
+
 namespace {
 // Two frames of a pack with one script; the global `done` after them.
 bool run_pack_frames(const std::string& name, const std::string& script, int frames = 2,

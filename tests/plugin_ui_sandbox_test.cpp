@@ -225,6 +225,11 @@ TEST_CASE("Plugin UI: eq functions that act need the plugin's capability") {
     CHECK(app::eq_call_caps("ClickSlot") == plugin::kCapActions);
     CHECK(app::eq_call_caps("ShowWindow") == plugin::kCapCommands);
     CHECK(app::eq_call_caps("Item") == 0u);
+    CHECK(app::eq_call_caps("ItemJob") == 0u); // reads the job; StopItemJob acts
+    CHECK(app::eq_call_caps("StopItemJob") == plugin::kCapActions);
+    // Walks: a /nav walk is movement, the Find window's and the zone finder's alike.
+    CHECK(app::eq_call_caps("ZoneExitWalk") == plugin::kCapMove);
+    CHECK(app::eq_call_caps("FindNpcWalk") == plugin::kCapMove);
     // A dry run runs the code it is given with the server's Lua social capabilities: as SetLuaSocial.
     CHECK(app::eq_call_caps("LuaSocialDryRun") == (plugin::kCapCommands | plugin::kCapActions));
     CHECK_FALSE(app::eq_call_caps("NoSuchFunction"));

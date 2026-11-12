@@ -343,7 +343,9 @@ int Image(lua_State *L) {
 		ImGui::Dummy(ImVec2(F(L, 2), F(L, 3)));
 		return 0;
 	}
-	ImGui::Image(tex, ImVec2(F(L, 2), F(L, 3)), ImVec2(F(L, 4, 0), F(L, 5, 0)), ImVec2(F(L, 6, 1), F(L, 7, 1)));
+	// The tint (white by default) through ImageWithBg: Dear ImGui 1.91.9's Image takes none.
+	ImGui::ImageWithBg(tex, ImVec2(F(L, 2), F(L, 3)), ImVec2(F(L, 4, 0), F(L, 5, 0)), ImVec2(F(L, 6, 1), F(L, 7, 1)),
+		ImVec4(0, 0, 0, 0), Color(L, 8));
 	return 0;
 }
 // clicked = ui.ImageButton(id, texture, w, h [, u0, v0, u1, v1])
