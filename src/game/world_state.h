@@ -19,6 +19,7 @@
 #include <glm/glm.hpp>
 
 #include "core/ascii_case.h"
+#include "core/ini_file.h"
 #include "game/spawn_heights.h"
 
 
@@ -2725,9 +2726,7 @@ namespace hailstone::game {
 		std::uint8_t texture = 0;
 	};
 	std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint8_t texture, bool luclin_elementals);
-	// GetEQClientIniBool @0x5fa680 on a value: missing gives the default; true when it starts with T, t or 1 (an empty
-	// one is false). UseLuclinElementals is read this way with default TRUE.
-	bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback);
+	using hailstone::eqclient_ini_bool; // core/ini_file.h
 
 	struct WorldState {
 		std::string zone_short_name;

@@ -120,6 +120,8 @@ What the client does not implement yet, or implements with an approximation it c
 
 ## Characters and models
 
+- `UseLuclinElementals` off: the original's "Global NPC Models" load (@0x492780) skips Global5_chr2, Global5_chr and frog_mount_chr, and `global_character_archives` skips its implicit `global5_chr`. Whether an entry naming one of them in the player's `GlobalLoad.txt` (CDisplay::InitWorld's loop @0x492000) is skipped too is not known, so Hailstone still loads it. Tracing InitWorld's GlobalLoad loop for a check of the option would settle it.
+
 - Drakkin illusions follow the decoded stock EQEmu RoF2 feature offsets. An inspected native form-change path reads a wider record; the conversion boundary and invalid-heritage normalization remain unverified. A packet capture at the native handler boundary would settle those cases.
 
 - Armour colours under an illusion of a race without per-slot armour: the RoF2 client draws a player under a skeleton illusion in dyed armour with undyed bones (seen by the user, 2026-11-04), so `game::drawn_appearance` drops slots 0-6's tints for every race outside `is_pc_model_race`. The original's code path does not show where: DressSpawn and OP_WearChange pass the tint to RefreshEquipSlot, and SwapBodyMaterial has no race rule. Whether the original drops only the tint or also the armour texture variant (SKE's chest has red, blue and grey bones as variants 01..04, which Hailstone still swaps in), and whether it holds for every non-player race, would be settled by tracing SwapBodyMaterial's ReplaceMaterial calls (`ActorClient_SwapBodyMaterial.jsonl`) for an illusioned player.

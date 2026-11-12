@@ -25,28 +25,36 @@
 using namespace hailstone;
 using namespace hailstone::assets;
 
-TEST_CASE("UseLuclinElementals gates implicit and listed global NPC archives") {
+TEST_CASE("UseLuclinElementals gates the implicit global NPC archive, not listed ones") {
     test::ScratchDir dir("elemental_archives");
     std::filesystem::create_directories(dir.path() / "Resources");
-    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt")
-        << "2,0,AAAAC,global5_chr.s3d,x\n2,0,AAAAC,global5_chr2.s3d,x\n"
-           "2,0,AAAAC,frog_mount_chr.s3d,x\n2,0,AAAAC,other_chr.s3d,x\n";
     for (const char* name : {"global5_chr.s3d", "global5_chr2.s3d", "frog_mount_chr.s3d", "other_chr.s3d"})
         std::ofstream(dir.path() / name) << "fixture";
     auto has = [](const std::vector<std::string>& list, const char* name) {
         return std::find(list.begin(), list.end(), name) != list.end();
     };
-    for (const char* value : {"0", "FALSE", "", "1", "TRUE", "true"}) {
+    auto write_ini = [&](const char* value) {
         std::ofstream(dir.path() / "eqclient.ini") << "[Defaults]\nUseLuclinElementals=" << value << '\n';
+    };
+    // No GlobalLoad entry names global5_chr: only the implicit load brings it in.
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt") << "2,0,AAAAC,other_chr.s3d,x\n";
+    for (const char* value : {"0", "FALSE", "", "1", "TRUE", "true"}) {
+        write_ini(value);
         const auto list = global_character_archives(GameDir(dir.path()), true);
         const bool enabled = value[0] == '1' || value[0] == 'T' || value[0] == 't';
         CHECK(has(list, "global5_chr.s3d") == enabled);
-        CHECK(has(list, "global5_chr2.s3d") == enabled);
-        CHECK(has(list, "frog_mount_chr.s3d") == enabled);
         CHECK(has(list, "other_chr.s3d"));
     }
     std::ofstream(dir.path() / "eqclient.ini") << "[Defaults]\n";
     CHECK(has(global_character_archives(GameDir(dir.path())), "global5_chr.s3d")); // absent means on
+    // Entries the player's GlobalLoad.txt names are kept with the option off (not confirmed either way).
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt")
+        << "2,0,AAAAC,global5_chr.s3d,x\n2,0,AAAAC,global5_chr2.s3d,x\n2,0,AAAAC,frog_mount_chr.s3d,x\n";
+    write_ini("FALSE");
+    const auto listed = global_character_archives(GameDir(dir.path()), true);
+    CHECK(has(listed, "global5_chr.s3d"));
+    CHECK(has(listed, "global5_chr2.s3d"));
+    CHECK(has(listed, "frog_mount_chr.s3d"));
 }
 
 namespace {

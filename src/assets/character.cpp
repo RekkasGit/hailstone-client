@@ -371,9 +371,7 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
     IniFile ini;
     if (auto bytes = game.read("eqclient.ini"))
         ini.parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
-    const auto elemental_option = ini.get("Defaults", "UseLuclinElementals");
-    const bool elementals = !elemental_option || (!elemental_option->empty() &&
-        (elemental_option->front() == 'T' || elemental_option->front() == 't' || elemental_option->front() == '1'));
+    const bool elementals = eqclient_ini_bool(ini.get("Defaults", "UseLuclinElementals"), true);
     std::vector<std::string> out;
     auto add = [&](std::string name) {
         name = lower(name);
@@ -415,7 +413,11 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
     }
     // Loaded by ConfigureLuclinModels next to the Luclin models, then the
     // extended armour textures (Global%d_amr).
-    add("global5_chr");
+    // The "Global NPC Models" load (@0x492780) skips Global5_chr2, Global5_chr and frog_mount_chr when
+    // UseLuclinElementals is off, the option CreatePlayerActor's race swap obeys. Only this implicit load is gated:
+    // whether an entry the player's GlobalLoad.txt names explicitly is skipped too is not confirmed, so it still
+    // loads (docs/unknowns.md).
+    if (elementals) add("global5_chr");
     add("global7_chr");
     for (int i = 17; i <= 23; ++i) add("global" + std::to_string(i) + "_amr");
     // GlobalLoad_chr.txt: count, then "code,file" lines (ChrTxt_Load). When
@@ -430,12 +432,7 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
             add(f[1]);
         }
     }
-    // The global NPC load obeys the same option as CreatePlayerActor's race swap.
-    // Filter explicit GlobalLoad entries too, not just the implicit global5 load.
-    std::erase_if(out, [&](const std::string& n) {
-        return !game.exists(n) || (!elementals &&
-            (n == "global5_chr.s3d" || n == "global5_chr2.s3d" || n == "frog_mount_chr.s3d"));
-    });
+    std::erase_if(out, [&](const std::string& n) { return !game.exists(n); });
     return out;
 }
 

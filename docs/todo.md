@@ -113,7 +113,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Complete five-word armor records across spawn/wear/save/preview paths, Hero's Forge category and membership filters, and Drakkin illusion feature updates; unit and mock packet tests.
 - [x] Luclin eye colours and `SwapFace` (e7a5849; model viewer). Open: one-texture Luclin materials' tint (female dwarf faces 2 and 3).
 - [x] Elementals: UseLuclinElementals (default on) draws race 75 as the typed Luclin elementals 209–212 by texture, and off draws those as race 75 (CreatePlayerActor's swap; unit tests and `chrdump` on the live asset folder, not seen live).
-- [x] UseLuclinElementals off skips Global5_chr2, Global5_chr and frog_mount_chr, including explicit GlobalLoad entries; synthetic archive-option tests.
+- [x] UseLuclinElementals off skips the implicit Global5_chr load ("Global NPC Models", @0x492780); synthetic archive-option tests. Hailstone loads neither Global5_chr2 nor frog_mount_chr implicitly.
+- [ ] UseLuclinElementals off: whether the original also skips those archives when `GlobalLoad.txt` names them (docs/unknowns.md); they still load here.
 - [ ] Hero's forge pieces without bones on Luclin models: narrowed (bracers' UVs land on the mail fill; gloves beside the hands); needs the DLL's rigid attach traced (ChangeBoneAttachment @0x10042c60).
 - [x] Head items: the head's armour colour on helms (110650f); "keep head" has no effect in the original; the Velious helms beyond the table don't exist in the RoF2 files.
 Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-feel pass, not ports (user, 2026-10-29: "make it look good"); branches `look-atmosphere` and `look-surfaces`.
