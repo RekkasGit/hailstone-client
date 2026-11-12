@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- On a fresh install, the login screen starts on the server your game folder's `eqhost.txt` names (its `[LoginServer]` `Host`), as a saved server you can rename or delete. This happens once: a server you delete does not come back
+- On Windows, the asset folder picker uses the Explorer-style folder dialog with its address bar, Quick access and search, instead of the old folder tree
+- For server admins with their own patcher: a Hailstone built with the CMake option `HAILSTONE_ALLOW_IN_EQ_FOLDER` may be installed in a folder named `hailstone` directly in the EverQuest folder, and starts on that EverQuest folder (docs/layout.md). Off by default; every other place inside the EverQuest folder is still refused
 - For plugin authors: two new host functions, `get_buff_data_bulk` and `get_pet_buff_data_bulk`, read all of the player's buffs or the pet's in one call (docs/plugins.md "Buff records")
 - Hailstone is now licensed under the GNU GPL, version 2 or later, like MacroQuest (it was MIT up to 0.7.0-beta). The plugin SDK stays MIT, and plugins, scripts, UI packs and other add-ons may still use any licence (NOTICE.md). Releases now include LICENSE.txt, NOTICE.md and THIRD_PARTY.md
 - `/time` and scripts' `GameTime` now advance with the zone's clock instead of staying at the time received when zoning in, including the date when a game day, month or year ends

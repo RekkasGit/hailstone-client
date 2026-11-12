@@ -2,9 +2,11 @@
 
 #ifdef _WIN32
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_init.h>
 #include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_video.h>
 
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -87,6 +89,22 @@ Outcome run_dialog(SDL_DialogFileCallback callback, void* userdata, HWND owner, 
     return Outcome::Answered;
 }
 
+// SDL's own dialog, for when the shell's cannot be made: SDL_ShowOpenFolderDialog must be called on the main thread,
+// so the worker hands it there (SDL_RunOnMainThread runs it during event processing). The window is looked up again
+// by id, as it may be gone by then.
+struct Fallback {
+    SDL_DialogFileCallback callback;
+    void* userdata;
+    SDL_WindowID window;
+    std::string start;
+};
+
+void SDLCALL show_sdl_dialog(void* data) {
+    std::unique_ptr<Fallback> f(static_cast<Fallback*>(data));
+    SDL_Window* window = f->window ? SDL_GetWindowFromID(f->window) : nullptr;
+    SDL_ShowOpenFolderDialog(f->callback, f->userdata, window, f->start.empty() ? nullptr : f->start.c_str(), false);
+}
+
 } // namespace
 #endif
 
@@ -96,15 +114,24 @@ void show_open_folder_dialog(SDL_DialogFileCallback callback, void* userdata, SD
     if (window)
         owner = static_cast<HWND>(
             SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
-    std::string first = start ? start : "";
+    auto fallback = std::make_unique<Fallback>(
+        Fallback{callback, userdata, window ? SDL_GetWindowID(window) : 0, start ? start : ""});
     // Its own thread, as SDL does: the dialog is modal and runs its own message loop, and COM wants a
-    // single-threaded apartment for it, which the render thread need not be.
-    std::thread([callback, userdata, owner, window, first = std::move(first)] {
+    // single-threaded apartment for it, which the main thread need not be. The callback is called exactly once, on
+    // that thread or (after the fallback) wherever SDL calls it; `userdata` is the caller's to keep alive until then
+    // (both callers hand over a shared_ptr of their own, so the thread may outlive the window that opened it).
+    std::thread([owner, f = std::move(fallback)]() mutable {
         const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-        const Outcome outcome = run_dialog(callback, userdata, owner, widen(first));
+        const Outcome outcome = run_dialog(f->callback, f->userdata, owner, widen(f->start));
         if (SUCCEEDED(com)) CoUninitialize();
-        if (outcome == Outcome::NotMade)
-            SDL_ShowOpenFolderDialog(callback, userdata, window, first.empty() ? nullptr : first.c_str(), false);
+        if (outcome == Outcome::Answered) return;
+        SDL_DialogFileCallback callback = f->callback;
+        void* userdata = f->userdata;
+        if (!SDL_RunOnMainThread(&show_sdl_dialog, f.get(), false)) {
+            callback(userdata, nullptr, -1); // SDL_RunOnMainThread set the error
+            return;
+        }
+        f.release(); // show_sdl_dialog owns it now
     }).detach();
 #else
     SDL_ShowOpenFolderDialog(callback, userdata, window, start, false);

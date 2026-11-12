@@ -4,7 +4,8 @@
 // choice, {nullptr} after a cancel, nullptr (and SDL_GetError) on an error, possibly on another thread.
 // On Windows it is the shell's file dialog picking folders (IFileOpenDialog with FOS_PICKFOLDERS: the Explorer-style
 // window with the address bar, Quick access and search), not SDL 3.2's older "Browse For Folder" tree
-// (SHBrowseForFolder). Where that dialog cannot be made, and on other systems, SDL's own dialog is used.
+// (SHBrowseForFolder). Where that dialog cannot be made, and on other systems, SDL's own dialog is used; it is shown
+// from the main thread (SDL_RunOnMainThread on Windows), as SDL requires. Call this on the main thread.
 
 #include <SDL3/SDL_dialog.h>
 
