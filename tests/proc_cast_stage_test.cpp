@@ -4,12 +4,15 @@
 #include <doctest/doctest.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "game/animation_types.h"
 #include "game/spells.h"
 #include "mock_server/harness.h"
 #include "net/spell_packets.h"
+#include "net/zone_packets.h"
 
 using namespace hailstone;
 
@@ -93,4 +96,39 @@ TEST_CASE("A proc's landing plays the cast stage at its source; a cast's landing
         conn.receive_zone_packet_for_test(landing(kSong, mob, me, 0));
         CHECK(cast_stages(conn.take_spell_effect_cues(), mob, true) == 0);
     }
+}
+
+TEST_CASE("A proc's cast animation: the spell's own, else the heal or nuke cast unless the option is off") {
+    using hailstone::spell_cast_animation;
+    CHECK(spell_cast_animation(17, 0, true) == 17);
+    CHECK(spell_cast_animation(17, 1, false) == 17);
+    CHECK(spell_cast_animation(0, 1, true) == 43); // CastHeals: beneficial
+    CHECK(spell_cast_animation(0, 2, true) == 43);
+    CHECK(spell_cast_animation(0, 0, true) == 44); // CastNuke: detrimental
+    CHECK(spell_cast_animation(0, 1, false) == 0);
+
+    test::Rig rig;
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    auto table = std::make_shared<game::SpellTable>();
+    REQUIRE(table->parse(spell_line(kNuke, 24)) == 1); // casting animation 0, detrimental
+    REQUIRE(table->get(kNuke)->casting_anim == 0);
+    conn.set_spell_table_for_test(table);
+    const auto me = static_cast<std::uint16_t>(conn.world().player_id);
+    auto sent_animation = [&]() -> std::optional<net::Animation> {
+        for (const auto& p : rig.server.zone_log)
+            if (p.opcode == net::to_wire(net::Op::Animation))
+                if (auto a = net::decode_animation(p)) return a;
+        return std::nullopt;
+    };
+    bool fallback = true;
+    SUBCASE("on") {}
+    SUBCASE("off") { fallback = false; }
+    conn.set_cast_animation_fallback(fallback);
+    rig.server.zone_log.clear();
+    conn.receive_zone_packet_for_test(landing(kNuke, me, 900, 0));
+    const std::uint8_t expected = fallback ? 44 : 0;
+    CHECK(conn.world().spawns.at(me).action == expected);
+    REQUIRE(rig.until([&] { return sent_animation().has_value(); }));
+    CHECK(sent_animation()->action == expected); // the zone sees what plays here
 }

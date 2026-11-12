@@ -14,7 +14,7 @@ The record layout is `assets::EmitterDefinition` (offsets in its comments). Text
 
 ## Creating emitters
 
-`game::spawn_stage_emitters` runs the slot loop: skip an index < 1 or a caster level below the slot's minimum; location 0 the given point, 1 the caster, 2 the missile (not modelled), 3 the target; the attach id picks one of the actor's spell points (below): 1 point 0; 2..7 points 1..6, or point 0 when the model lacks it; 8 the actor without a point; 9 / 10 the eyes (points 7 / 8; without them the slot is skipped); 11 the mouth (point 9); 12 the actor without a point at the chest's x and y, z the floor below (`CDisplay::GetPlayerFloorHeight` from 0.1 above the spawn), with scale = the actor's particle scale (actor vtable +0x218: its model's `Resources\moddat.ini` `PESFactor`, 1 without one); any other id skips the slot. A point the model lacks leaves the emitter on the actor alone. The key is `spawn id << 16 | spell id`. Density and opacity are eqclient.ini `[Defaults] SpellParticleDensity` and `SpellParticleOpacity` (clamped to [0, 1]; 1.0 with the flag argument).
+`game::spawn_stage_emitters` runs the slot loop: skip an index < 1 or a caster level below the slot's minimum; location 0 the given point, 1 the caster, 2 the live spell missile actor (its spell-point array starts empty; no eye or mouth point is invented), 3 the target; the attach id picks one of the actor's spell points (below): 1 point 0; 2..7 points 1..6, or point 0 when the model lacks it; 8 the actor without a point; 9 / 10 the eyes (points 7 / 8; without them the slot is skipped); 11 the mouth (point 9); 12 the actor without a point at the chest's x and y, z the floor below (`CDisplay::GetPlayerFloorHeight` from 0.1 above the spawn), with scale = the actor's particle scale (actor vtable +0x218: its model's `Resources\moddat.ini` `PESFactor`, 1 without one); any other id skips the slot. A point the model lacks leaves the emitter on the actor alone. The key is `spawn id << 16 | spell id`. Density and opacity are eqclient.ini `[Defaults] SpellParticleDensity` and `SpellParticleOpacity` (clamped to [0, 1]; 1.0 with the flag argument).
 
 `ParticleSystem::create` (`game::emitter_counts`) works as CreateEmitter does:
 
@@ -22,6 +22,8 @@ The record layout is `assets::EmitterDefinition` (offsets in its comments). Text
 - the initial count is trunc(+0x80 x density), at least min(16, +0x80); with +0x84 of 16 or more the per-tick count is trunc(+0x84 x density) at +0x88 ticks a second, below 16 it stays +0x84 and the rate becomes +0x88 x density (fewer ticks, not smaller ones);
 - with E = D - delay (+0x8c) and L = lifetime (+0x7c), the capacity (the particle ring) is 0 when E < 0, else +0x144 when set, else when L >= 0 and E > L: n = trunc(L x rate), initial + n x per tick when initial > per tick, else (n + 1) x per tick; otherwise initial + trunc(E x rate) x per tick; then at least +0x144, at most 100,000;
 - it returns how long the particles show, in ms: D when L < 0, trunc(E x rate) / rate + delay + L when it ticks, else L + delay; 0 past 600 s or with no ring. The stage length is the longest.
+
+The impact stage's caster is the OP_Action's source and its target the struck spawn (EQPlayer::TriggerSpellEffect @0x593eb0 to DoSpellEffect). With a source of 0 or one not in the zone there is no caster, and DoSpellEffect (@0x522500) plays nothing, here too.
 
 ## Spell points
 
@@ -38,6 +40,8 @@ An EQG model's `<model>.prt` (beside its mesh and `.pts`) lists emitters of `Act
 
 When an actor is made, each always-on record whose point exists and whose variant is below 1 makes its emitter on the point (CActor::vf126 @0x1003a950): for 5,000,000 ms whatever +0x58 says, with the actor density and opacity, scale 1, its shape and counts scaled by the actor's emitter-scaling radius over the record's +0xac when that radius is 0 or more (OP_ZoneSpawns sends -1 from stock EQEmu: no scaling). With the floor flag it is made on the floor below the point (+ 0.05), along the actor's matrix, without the point. Held items do the same on their own points: an item's points hang from `ATTACH_TO_ORIGIN`, its origin, which is the holding bone's frame.
 
+Here a floor record stays on its point and follows the actor: what makes the original's again as the actor moves was not traced (docs/unknowns.md). The records are made once per dressed mesh; one that makes nothing (an index past the file's end) is not tried again until the actor's mesh changes.
+
 The client (`app/actor_emitters.h`): the dressed mesh carries the always-on records of the EQG body and of its held items (`assets::MeshEmitter`; EQG held items are drawn too, `CharacterLibrary::item_mesh`); each drawn actor keeps a persistent emitter per record, placed every frame on the point as the actor renderer posed it; eqclient.ini `ActorParticleDensity` / `ActorParticleOpacity`. 12,449 always-on records in the shipped files point into its `ActorEmittersNew.edd` (945 records), 315 past its end (e.g. IT12753's 1059), which make nothing.
 
 The trigger 1 records whose animation is not STND or IDLE (1,020 run-dust records on animation 27 NRUN, footfalls,
@@ -45,10 +49,15 @@ swings, casts) are started by the client each time their animation (the table ro
 on the actor, after +0x54, emitting for at most 1.5 s; the original's timing is not traced (docs/graphics.md,
 Particles). The billboard mode +0x70 is drawn as docs/graphics.md says.
 
+## Blood
+
+A local player's landed sharp-weapon hit queues a bounded target request. The app reads the player's `gequip.s3d` `I_BLOODSPRITE` resource and creates blood only for a supported single-frame sprite and an exact authored `<code>_BLD_DAG` attachment. Track names cannot substitute for that bone. EQG and missing attachment data leave it unset. The material alias 18 resolves to `0x01080507`. The effect emits for 0.5 s at 200 Hz with capacity 100, radial speed 1.25..5, gravity 1, size 0.375 and half opacity. The implementation ships no proprietary asset or table. Pending requests clear on zone teardown; despawned targets produce no emitter. Physical blood is independent of `/showspelleffects`.
+
 ## Simulation and drawing
 
 The update (FUN_10072160, `ParticleSystem::update`), per emitter each frame:
 
+- **Owner basis and opacity.** The actor's or point's axes are normalised (whether the original's carry the actor's scale was not read; the scale applies once, through the scales below). An actor's own emitter takes its point model's PESFactor. The owner's alpha multiplies particle opacity each frame; the renderer fades no actor yet, so it is 1 in play.
 - **Scales.** The size scale (quad size and every motion step) applies when +0x6c is 1, the offset scale (offsets and the spawn shape) when +0x19c is 1. Each is the caller's scale (+0x88); with an actor, its root's GetScaleFactor x its GetParticleScaleFactor (PESFactor); with a point, the point matrix's row length x the point's actor's PESFactor.
 - **Emission** while time is left: once the delay has passed, the initial burst (the definition's +0x80, not the density-scaled count), then each frame the ticks since: trunc(+0x84 x new ticks). Each batch is scaled by the distance factor (+0xa0 / camera distance past +0xa0), at least the constructor's floors (16 / initial, 16 / the ring past the initial burst). A full ring drops the rest: nothing is recycled. The particles whose time is up leave first, so a particle shows the frame it ends.
 - **Spawn.** The particle's origin is the emitter's place plus the offsets times the offset scale, +0xb8 along the axis, +0xbc along transverse 1 and +0xc0 along transverse 2. It keeps a copy of the emitter's basis turned by +0xc4 about transverse 2, then by +0xc8 about transverse 1. Its place is polar about the axis (azimuth in 512ths, radius, axial), scaled by the offset scale: shape 0 a point (azimuth 0), 1 an even ring, 2 a stack of rings (8 rings of 16 for a batch under 9, else 3 to 100 rings by the batch's size), 3 a cylinder side, 4 a disk, 5 a sphere, 6 a box surface, 7 a cone side, 8 a torus, 9 a random ring; elliptic sizes are turned into the polar record. Velocities are drawn between each (min, max) pair: axial, transverse 1, transverse 2, radial, orbital. Lifetime +0x7c; below 0 what is left of the emitter, 0 one frame. Width +0xcc..+0x184 and height +0x17c..+0x180 are drawn once (one draw for both with +0x18c), the start rotation 0..1000 512ths with +0x174, the spin between +0x138 and +0x188.
@@ -61,7 +70,7 @@ The box surface (shape 6) as the graphics DLL places it (its shape switch @0x100
 
 ## In the game
 
-OP_BeginCast plays the cast stage at the caster for the packet's cast time; OP_Action 231 plays the impact stage with the target as caster and target. The zone viewer's `--spell-effect N` plays effect N's cast and impact stages 25 units in front of the camera every 4 s.
+OP_BeginCast plays the cast stage at the caster for the packet's cast time; OP_Action 231 plays the impact stage with the packet source as caster and the struck actor as target. The zone viewer's `--spell-effect N` plays effect N's cast and impact stages 25 units in front of the camera every 4 s.
 
 ## WLD particle clouds (torches, lanterns, braziers)
 

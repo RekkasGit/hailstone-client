@@ -956,6 +956,8 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     out.feet_wet = region_type(regions, body.feet);
     out.head_wet = head_wet;
     out.colliding_type = body.colliding_type;
+    if (cp) conn.note_physics_step(cp->id, now);
+    if (mount && me) conn.note_physics_step(me->id, now); // rider vf8 step completed
     return out;
 }
 

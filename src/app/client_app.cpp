@@ -109,7 +109,9 @@ int ClientApp::run() {
                 steps.emplace();
                 for (const auto& st : frame_steps_) steps->push_back(static_cast<float>(st.elapsed_ms));
             }
-            conn_->set_physics_steps(std::move(steps));
+            const auto completed_time = frame_steps_.empty() ? std::optional<std::uint32_t>{}
+                : std::optional<std::uint32_t>{static_cast<std::uint32_t>(frame_steps_.back().ms + 1)};
+            conn_->set_physics_steps(std::move(steps), completed_time);
             conn_->smooth_vehicles(dt);
         }
         if (screen_ == Screen::InGame && player_ready_) update_player(dt);
@@ -268,7 +270,8 @@ int ClientApp::run() {
             actor_emitter_list_.clear();
             for (const auto& [id, spawn] : conn_->world().spawns)
                 if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty())
-                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id)});
+                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id),
+                                                   actor_renderer_->drawn_alpha(id)});
             // The missiles' (a spell bolt's flames: its model's own emitters, app/world_objects.h).
             const WorldObjects* objects = world_objects_.get();
             if (objects)

@@ -31,6 +31,7 @@
 #include <glm/glm.hpp>
 
 #include "game/particles.h"
+#include "game/spawn_heights.h"
 #include "render/particle_renderer.h"
 
 namespace hailstone { class GameDir; }
@@ -41,12 +42,15 @@ namespace hailstone::app {
 class ActorEmitters {
 public:
     ActorEmitters(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
+    explicit ActorEmitters(std::vector<assets::EmitterDefinition> definitions, game::HeightTables heights = {});
+    const game::ParticleSystem& simulation() const { return particles_; }
 
     // An actor drawn this frame and the mesh it was drawn with.
     struct Actor {
         std::uint32_t id = 0;
         const assets::CharacterMesh* mesh = nullptr;
         bool standing = false; // in its stand or idle animation (render::ActorRenderer::standing)
+        float alpha = 1.0f;
     };
     // A bone's world matrix on an actor as drawn (false: not drawn).
     using BoneWorld = std::function<bool(std::uint32_t id, int bone, glm::mat4& world)>;
@@ -75,6 +79,7 @@ private:
         const assets::CharacterMesh* mesh = nullptr;
         std::uint64_t mesh_serial = 0;
         std::vector<std::uint32_t> keys;
+        float alpha = 1.0f;
         std::vector<std::uint32_t> standing_keys; // the STND / IDLE entries', while it stands
         // The other animation-started entries, by entry: the time into their animation last frame (negative: not
         // playing), a start waiting for the entry's delay (seconds left, negative none) and the emitter running.
@@ -86,6 +91,7 @@ private:
         bool seen = false;
     };
     game::ParticleSystem particles_;
+    game::HeightTables heights_;
     game::SpellParticleSettings settings_;
     float eqclient_density_ = 1.0f;
     std::unique_ptr<render::ParticleRenderer> renderer_;

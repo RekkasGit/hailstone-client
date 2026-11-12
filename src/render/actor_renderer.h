@@ -71,6 +71,7 @@ struct ActorDraw {
     // its own scale, position and yaw are unused.
     bool attached = false;
     glm::mat4 parent{1.0f};
+    float alpha = 1.0f; // actor visibility supplied by its owner, independent of material opacity
 };
 
 struct ActorRenderStats {
@@ -218,6 +219,7 @@ public:
     // (the bone's frame: the matrix a held item or a model point hangs from); false when the spawn was not
     // drawn with a model or the bone is out of range.
     const assets::CharacterModel* drawn_model(std::uint32_t id) const;
+    float drawn_alpha(std::uint32_t id) const; // 0 without a drawn actor
     // The model a spawn wears whether or not it was drawn (drawn_model's, else the one kept for a spawn hidden on
     // purpose, such as the player in first person); nullptr when it has none yet.
     const assets::CharacterModel* spawn_model(std::uint32_t id) const;
@@ -227,6 +229,10 @@ public:
     // The actor's own world matrix as last drawn (its place, turn and scale; the actor's vtable +0x2c4 matrix that
     // spell emitters on it take their axes from); false when it was not drawn.
     bool drawn_transform(std::uint32_t id, glm::mat4& world) const;
+    // Actor vfFC(0): the authored head/name role's posed world translation.
+    // Missing role metadata leaves the output alone and returns false.
+    bool drawn_name_position(std::uint32_t id, glm::vec3& position) const;
+    static bool name_position(const ActorDraw& actor, glm::vec3& position);
     // A bone's world matrix for an instance in its pose (the model viewer's draws).
     static bool bone_world(const ActorDraw& a, int bone, glm::mat4& world);
     // An instance's own world matrix (drawn_transform's, for the model viewer's draws).
@@ -416,6 +422,7 @@ private:
         bool eqg = false;
         glm::vec3 center{0.0f}; // the model origin and its bounding radius at its scale
         float radius = 0.0f;
+        float alpha = 1.0f;
     };
     std::vector<Prepared> prepared_;
     std::vector<std::uint8_t> seen_; // record's: which prepared_ show in its view

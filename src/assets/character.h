@@ -86,6 +86,7 @@ struct MeshEmitter {
     int bone = -1;
     glm::mat4 local{1.0f};
     ModelEmitter emitter;
+    std::string model_code; // the point-owning model's moddat.ini PESFactor
 };
 
 // A number no other mesh made in this run has, so a mesh freed and another made at its address are told apart
@@ -166,6 +167,9 @@ struct CharacterModel {
     // The skeleton's bounding radius (WLD 0x10 flag 2), unscaled; 0 when the
     // file gives none. The actor's GetBoundingRadius is this x its scale.
     float bounding_radius = 0.0f;
+    // Actor role 6 resolves the authored <code>_BLD_DAG, independently of its track name.
+    int blood_bone = -1;
+    int name_bone = -1; // authored actor role 0, independent of spell points
     // EQG models: the named points of `<code>.pts` beside the mesh (spell
     // points, assets/model_points.h). WLD models build theirs from the bone
     // names (assets::wld_model_points), so this stays empty for them.

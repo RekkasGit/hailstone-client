@@ -894,6 +894,16 @@ TEST_CASE("EQG attachment bindings retain the ancestor rule and reject invalid p
     file.bones[1].child = 0;
     CharacterMesh refused;
     CHECK_FALSE(eqg_character::bind_part_to_wld(file, "TST", body, 0, glm::mat4(1.0f), refused));
+TEST_CASE("EQG role zero resolves only an authored HEAD_NAME bone") {
+    const std::vector<glm::vec3> positions{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    const std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {0, 1}};
+    auto data = make_model(false, 1, {{"body", "Opaque.fx", "fixture.dds"}}, positions, uv, {{0, 1, 2, 0, 0}});
+    auto file = eqg_character::parse_mesh(data, "TST");
+    file.bones.resize(1);
+    file.bones[0].name = "HEAD_NAME";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == 0);
+    file.bones[0].name = "SPELLPOINT_HEAD";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == -1);
 }
 
 TEST_CASE("EQG character meshes: a vertex count the file cannot hold is refused before it is allocated") {

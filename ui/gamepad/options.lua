@@ -214,6 +214,7 @@ local PAGES = {
         { "Autosplit coin", "loot_autosplit" }, { "Guild invites", "guild_invites" }, { "Confirm Loot All", "loot_all_confirm" },
         { "Fast item destroy", "fast_item_destroy" }, { "Pet window pops up", "pet_window_popup" },
         { "Auto-duck", "allow_auto_duck" }, { "Auto-stand", "allow_auto_stand" }, { "Ride while illusioned", "illusion_mounts" },
+        { "Proc cast animations", "cast_animation_fallback" },
         { "Use tell windows", "use_tell_windows" },
         { "Attack until XTarget clear", "attack_until_xtarget_clear" },
         { "Auto target XTarget attackers", "auto_target_xtarget" }, { "Face target on attack", "face_on_attack" },

@@ -220,7 +220,7 @@ std::shared_ptr<const CharacterMesh> CharacterLibrary::dress(const CharacterMode
             if (!p) continue;
             for (std::size_t b = 0; b < model.bone_names.size(); ++b)
                 if (model.bone_names[b] == p->bone) {
-                    mesh.emitters.push_back({static_cast<int>(b), point_matrix(*p), e});
+                    mesh.emitters.push_back({static_cast<int>(b), point_matrix(*p), e, model.code});
                     break;
                 }
         }
@@ -680,7 +680,8 @@ void CharacterLibrary::attach_items(const CharacterModel& model, const game::App
         // Its always-on actor emitters: on its points, whose bone is the item's own origin (ATTACH_TO_ORIGIN),
         // i.e. the frame of the bone it is held by.
         for (const auto& e : held->emitters)
-            if (const ModelPoint* p = find_point(held->points, e.point)) mesh.emitters.push_back({bone, point_matrix(*p), e});
+            if (const ModelPoint* p = find_point(held->points, e.point))
+                mesh.emitters.push_back({bone, point_matrix(*p), e, "IT" + std::to_string(number)});
     }
 }
 

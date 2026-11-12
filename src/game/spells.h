@@ -99,6 +99,7 @@ struct SpellData {
     std::int32_t category = 0;                 // 156 (dbstr type 5)
     std::int32_t subcategory = 0;              // 157
     std::int32_t subcategory2 = 0;             // 158 (+0x184; the combat ability window files an ability under both)
+    bool npc_no_los = false;                  // 159 (+0x230): a spell missile's local pulse may bypass NPC line of sight
     std::int32_t endurance_cost = 0;           // 166
     std::int32_t reuse_timer_index = 0;        // 167 (linked timer 1..19)
     bool is_skill = false;                     // 168

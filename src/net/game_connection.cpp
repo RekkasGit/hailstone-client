@@ -632,6 +632,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.others.clear();
         cast_stage_shown_.clear();
         effect_packets_.clear();
+        blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
         loot_.reset();
@@ -833,6 +834,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.heights = {};
     out.heights.height = s.size;
     out.actor_made = false;
+    out.physics_step_ms.reset();
     world_.set_heights(out);
     out.melee_radius = s.melee_radius;
     out.walk_speed = s.walk_speed;
@@ -1976,6 +1978,11 @@ void GameConnection::report_successful_hit(const CombatDamage& d, bool reported)
         }
         // The tail's landed-hit half (@0x5311ee, game/combat.h hit_landed), for every hit type.
         if (game::hit_landed(h)) {
+            // ReportSuccessfulHit's blood branch: only the local attacker's sharp-weapon skills. The renderer
+            // checks the target's BLD_DAG attachment and sprite; other hits never invent an attachment.
+            if (d.source == me && (d.type <= 3 || d.type == 8 || d.type == 10 || d.type == 36 || d.type == 77) &&
+                blood_spurts_.size() < 128)
+                blood_spurts_.push_back(d.target);
             if (d.target == me) {
                 // The spell book closes (its Deactivate: OnShow stands a player it sat down), then a kneeling or
                 // sitting player stands, and a mounted one too (unk_SetStandState(100)).
@@ -2219,6 +2226,7 @@ void GameConnection::simulate_link_loss() {
 void GameConnection::disconnect() {
     reset_tribute_donations();
     release_eye_control();
+    blood_spurts_.clear();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (chat_server_) chat_server_->disconnect();
@@ -2327,6 +2335,10 @@ void GameConnection::autofire_command() {
     }
     set_auto_attack(false);
     set_auto_fire(true);
+}
+
+void GameConnection::play_animation(std::uint32_t spawn_id, AnimationType action) {
+    play_animation(spawn_id, static_cast<std::uint8_t>(action));
 }
 
 void GameConnection::play_animation(std::uint32_t spawn_id, std::uint8_t action) {

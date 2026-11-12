@@ -935,11 +935,20 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
     AnimationClip rest;
     rest.tracks.resize(n);
     for (std::size_t i = 0; i < n; ++i) {
+        if (sk->nodes[i].name == code + "_BLD_DAG") m.blood_bone = static_cast<int>(i);
         const auto* f = w.resolve(sk->nodes[i].track);
         m.bone_names.push_back(f ? f->name : std::string());
         const auto* ref = f ? std::get_if<wld::TrackRef>(&f->data) : nullptr;
         const auto* def = ref ? w.get<wld::TrackDef>(ref->track) : nullptr;
         rest.tracks[i].push_back(def && !def->frames.empty() ? to_pose(def->frames.front()) : BonePose{});
+    }
+    const auto* race_model = game::find_model_code(code);
+    const std::array<std::string, 3> name_dags{code + "HEAD_POINT_DAG", code + "HE_DAG",
+        race_model && race_model->gender == 1 ? "HUFHEAD_POINT_DAG" : "HUMHEAD_POINT_DAG"};
+    for (const auto& name : name_dags) {
+        for (std::size_t i = 0; i < n; ++i)
+            if (sk->nodes[i].name == name) { m.name_bone = static_cast<int>(i); break; }
+        if (m.name_bone >= 0) break;
     }
 
     // Meshes: the skeleton's list (flag 0x200) or the nodes' sprites.

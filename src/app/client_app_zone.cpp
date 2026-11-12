@@ -867,7 +867,31 @@ void ClientApp::update_missiles() {
     }
     game::MissileWorld mw;
     mw.zone_id = conn_->zone_id();
-    mw.spawn = [&world](std::uint32_t id) -> std::optional<game::MissileSpawn> {
+    mw.spell = [this](std::uint32_t id) { return conn_->spell_table().get(id); };
+    mw.launch_point = [this](std::uint32_t id) -> std::optional<glm::vec3> {
+        glm::vec3 point(0.0f);
+        return actor_renderer_ && actor_renderer_->drawn_name_position(id, point) ? std::optional(point) : std::nullopt;
+    };
+    mw.effect = [this](const game::Missile& m, int stage) {
+        if (spell_particles_ && spell_effects_) spell_particles_->missile_effect(*conn_, m, stage, actor_renderer_.get());
+    };
+    mw.ended = [this](const game::Missile& m) {
+        if (spell_particles_) spell_particles_->end_missile(m.serial);
+    };
+    mw.spell_hit = [this](const game::Missile& m) { conn_->spell_missile_hit(m); };
+    if (spell_particles_)
+        spell_particles_->set_missile_pose([this](std::uint32_t serial) -> std::optional<glm::mat4> {
+            for (const auto& m : missiles_.missiles())
+                if (m.serial == serial && m.has_actor && !m.done) {
+                    constexpr float unit = 2.0f * std::numbers::pi_v<float> / 512.0f;
+                    glm::mat4 t = glm::translate(glm::mat4(1), m.actor_position);
+                    t = glm::rotate(t, m.heading * unit, glm::vec3(0, 0, 1));
+                    t = glm::rotate(t, -m.tilt * unit, glm::vec3(0, 1, 0));
+                    return glm::scale(t, glm::vec3(m.actor_scale));
+                }
+            return std::nullopt;
+        });
+    mw.spawn = [this, &world](std::uint32_t id) -> std::optional<game::MissileSpawn> {
         auto it = world.spawns.find(id);
         if (it == world.spawns.end()) return std::nullopt;
         const game::Spawn& s = it->second;
@@ -878,7 +902,34 @@ void ClientApp::update_missiles() {
         m.height = s.heights.height;
         m.race = s.race;
         m.dead = s.stand_state == 0x78;
+        m.speed_run = s.speed_run;
+        m.is_npc = s.is_npc;
+        m.rider_id = s.rider_id;
+        m.has_actor = s.actor_made;
+        if (s.physics_step_ms) {
+            const auto epoch = static_cast<std::uint32_t>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(start_time_.time_since_epoch()).count());
+            m.stepped_at = epoch + (*s.physics_step_ms - 1u);
+        }
         return m;
+    };
+    mw.local_id = world.player_id;
+    mw.spawns = [&world, spawn = mw.spawn] {
+        std::vector<game::MissileSpawn> out;
+        out.reserve(world.spawns.size());
+        for (const auto& [id, s] : world.spawns)
+            if (auto entry = spawn(id)) out.push_back(*entry);
+        return out;
+    };
+    mw.visible = [this](const glm::vec3& from, const glm::vec3& to) {
+        return !collision_ || collision_->line_of_sight(from, to);
+    };
+    mw.contact = [this, &world](const game::Missile& m, const game::MissileSpawn& target) {
+        const auto* spell = conn_->spell_table().get(m.packet.spell);
+        if (!m.area_contact || !spell || !spell->has_effect(76)) return;
+        if (target.id == world.player_id) conn_->ui_message(conn_->strings().format(0x1a44, {}), 0, 0x108);
+        else if (auto it = world.spawns.find(target.id); it != world.spawns.end())
+            conn_->ui_message(conn_->strings().format(0x1a45, std::vector<std::string>{game::display_name(it->second.name)}), 0, 0x108);
     };
     mw.sweep = [this](const glm::vec3& from, const glm::vec3& to, float radius) {
         game::SphereSweep sweep = game::SphereSweep::make(from, to, radius);

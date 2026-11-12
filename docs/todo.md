@@ -8,10 +8,12 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 
 ### Combat and spells (do first)
 - [x] Missiles: a despawned source or target as DeleteMyMissiles handles it; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
-- [ ] Spell missiles (item type 9) with a valid spell id: the original drops them without one, and EQEmu never sends one, so this only matters for a server that does.
+- [x] Valid spell missiles: spell lifetime, launch and ending stages, stationary area contact, source physics clock and spell 859 local presentation. Packet-to-emitter and missile fixtures cover these; live gameplay remains unverified. Invalid or absent spell ids still end immediately.
 - [x] Environmental hits 0xf3 to 0xfd: animations, chat lines, sounds, and our own fall, drowning and lava damage reported like ApplyDamage (eb42f20; falls tested live).
 - [x] ReportSuccessfulHit's shared tail: the spell book closes and a sitting or mounted player stands when damage lands; a spell heal from OP_Damage (ff39361; the stand checked live).
-- [ ] The blood spurt: the trigger is known, the BSPURT_BCD / I_BLOODSPRITE definition and point 6 are not.
+- [x] Blood spurts on supported WLD actors: landed local sharp-weapon hits, exact authored blood attachment and the player's single-frame blood sprite. Synthetic asset and packet-to-emitter coverage; missing attachments or unsupported sprite data safely omit the effect.
+- [x] Spell particles: the impact stage's caster is the packet's source (EQPlayer::TriggerSpellEffect @0x593eb0; nothing when the source is unknown, as DoSpellEffect); the actor's opacity and the point model's PESFactor on actor emitters.
+- [ ] Spell particles: whether an actor's world matrix rows carry its scale (normalised here), and what makes a floor-flag actor emitter again as the actor moves (kept on the actor here). unknowns.md.
 - [x] Linked spell timers and discipline timers from the player profile.
 - [x] Item recast on cast items (already in 789134d).
 - [x] The distance modifier of effect values, and the extra long-buff slots from level 72 and 75.
@@ -24,7 +26,6 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Ranged attacks do not turn the player in the original either.
 - [x] Held buffs seen live (a SPA 436 buff freezes Courage's countdown). Melee checked by hand.
 - [ ] Distance-scaled spell effects live (needs a spell with a distance modifier cast at range). Buff caster ids and temporary pets in the line filters are in unknowns.md.
-- [ ] Spell particles: which spawn is the impact stage's caster (the struck spawn here, the packet's source in the original's EQPlayer::TriggerSpellEffect; unknowns.md).
 - [x] Commands: `/discipline`, `/doability`, `/stopdisc`, `/memspellset`, `/spellscribe`, `/targetgroupbuff` / `/tgb`, `/autofire`, `/melody`, `/dismount`, `/aggrometer`, `/buyer`, `/claim` (f3c5c5d).
 - [ ] `/gems`: the Gems mini-game (CGemsGameWnd, 0x6705f0 to 0x6734e0), a port of its own.
 - [x] (358bf04, checked live: /discipline now runs the NMS reuse timers; the empty list after login matches the original) A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet); the reuse list is empty after zone-in until the server sends timers.

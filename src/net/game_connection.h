@@ -31,6 +31,7 @@
 #include "core/process_serial.h"
 #include "core/server_profile.h"
 #include "game/alt_adv.h"
+#include "game/animation_types.h"
 #include "game/augments.h"
 #include "game/bank.h"
 #include "game/placement.h"
@@ -411,7 +412,14 @@ public:
     // The vehicles' part of smooth, before the local player moves (WorldState::smooth_vehicles).
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).
-    void set_physics_steps(std::optional<std::vector<float>> steps_ms) { world_.physics_steps = std::move(steps_ms); }
+    void set_physics_steps(std::optional<std::vector<float>> steps_ms,
+                           std::optional<std::uint32_t> completed_time_ms = {}) {
+        world_.physics_steps = std::move(steps_ms);
+        world_.physics_step_time_ms = completed_time_ms;
+    }
+    void note_physics_step(std::uint32_t id, std::uint32_t ms) {
+        if (auto it = world_.spawns.find(id); it != world_.spawns.end()) it->second.physics_step_ms = ms;
+    }
     // The game clock's steps this frame on now_ms()'s clock (core/step_clock.h, docs/mechanics.md "Frame rate"): the
     // rules that run once a frame and wait for a frame past their interval (memorizing, scribing, the 1 s and 6 s
     // ticks, the socials' lines) run once per step at its time. nullopt: once a frame, now.
@@ -421,6 +429,9 @@ public:
     void set_ground_npcs(bool on) { world_.ground_npcs = on; }
     // Hailstone (option illusion_mounts): a rider under an illusion still rides (WorldState::illusion_mounts).
     void set_illusion_mounts(bool on) { world_.illusion_mounts = on; }
+    // Hailstone (option cast_animation_fallback): the added proc cast stage's animation for a spell without a
+    // casting animation (game::spell_cast_animation).
+    void set_cast_animation_fallback(bool on) { cast_animation_fallback_ = on; }
     void reground() { world_.reground(); }
     // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
     void set_player_body_wet(std::uint8_t body_wet) {
@@ -460,8 +471,11 @@ public:
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
     // The effect packets since the last call, in order (app/spell_particles.h plays them).
     std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
+    std::vector<std::uint32_t> take_blood_spurts() { return std::exchange(blood_spurts_, {}); }
     // The missiles the server launched since the last call (OP_SomeItemPacketMaybe, game/missiles.h), in order.
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
+    // Spell 859 local presentation; no packet is encoded or sent.
+    void spell_missile_hit(const game::Missile& missile);
     std::vector<SoundCue> take_sound_cues();
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
@@ -615,6 +629,7 @@ public:
     // A one-shot animation on a spawn, as an OP_Animation for it would play it at speed 10 (a missile's
     // launch: Send_OP_Animation_0058f540 -> PlayAttackAnimation on its source).
     void play_animation(std::uint32_t spawn_id, std::uint8_t action);
+    void play_animation(std::uint32_t spawn_id, AnimationType action);
     // OP_ControlBoat {spawn id, take_control}: take_control 1
     // makes that spawn pinstControlledPlayer ("You have the helm, captain.", 1407); release_boat() lets go
     // ({id, 0}). 0: the player itself is controlled.
@@ -2614,6 +2629,8 @@ private:
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
     void handle_spell(Op op, const AppPacket& p);
+    // An OP_Action of type 231; from_server false: a local presentation (spell 859's missile, spell_missile_hit).
+    void handle_spell_action(const Action& action, std::int64_t now, bool from_server);
     // Handle_OP_MemorizeSpell @0x4be150 (game/mechanics/spell_gems.h) on the connection's state.
     void handle_memorize_spell(const MemorizeSpell& m);
     void land_spell_on_me(const Action& a, std::int64_t now);
@@ -3006,6 +3023,7 @@ private:
     bool auto_attack_ = false;
     bool attack_until_xtarget_clear_ = false;
     bool fast_camp_ = false;
+    bool cast_animation_fallback_ = true; // set_cast_animation_fallback
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
     bool face_on_attack_ = true;
@@ -3103,6 +3121,7 @@ private:
     std::vector<SoundCue> sound_cues_;
     std::vector<SpellEffectCue> effect_cues_;
     std::vector<EffectPacketCue> effect_packets_;
+    std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;

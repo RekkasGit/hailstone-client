@@ -1081,6 +1081,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/tradeskill_batch_test.cpp
     tests/tradeskill_combine_test.cpp
     tests/missiles_test.cpp
+    tests/combat_particles_test.cpp
     tests/multiclass_test.cpp
     tests/server_ext_chain_test.cpp
     tests/native_extension_test.cpp
