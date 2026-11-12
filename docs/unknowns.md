@@ -208,6 +208,11 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 - The items window's button greying (005aee70 / 005af1e0 / 005b0c60) and its show filters are not built: the buttons are enabled when a row is selected and no request is pending.
 - Guild halls: an instanced guild hall is the one whose zone word has bit 15 set, as the original tests it. Whether EQEmu-based servers ever set that bit is not known; without it every guild hall zone allows the bank, as on stock EQEmu.
 
+## Scripts (MacroQuest's TLOs)
+
+- `Math.Dec` past 32 bits (`${Math.Dec[123456789ab]}`) is held at 0xFFFFFFFF (-1), as strtoul does; MQ reads it with MSVC's `sscanf("%x")`, whose result there is not checked, and a blank-only index (where MQ's sscanf returns EOF and MQ uses an unset value) is NULL here. Running those two in MacroQuest on Windows would settle it.
+- `String.Compare` and `CompareCS` give -1, 0 or 1; MQ returns `_stricmp` / `strcmp` as they are, whose size (beyond the sign) on MSVC is not checked. `${String[abc].Compare[abz]}` in MacroQuest would settle it.
+
 ## Server-specific extensions
 
 - Ability Book class filter on an NMS multiclass server: the server sends every AA one of the character's classes may use with the class mask 0xFFFFFFF (zone/aa.cpp, the AA rank packet), so the book counts all of them as Shared and a class filter or the class sort cannot tell them apart. Only the AA's real mask, from the server or the AA tables, would settle it. Skills get their classes from the skill cap table at the character's level, and combat abilities from the spell's class levels.

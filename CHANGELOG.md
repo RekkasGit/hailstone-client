@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- For script authors: the `Math` (`${Math.Calc[...]}`, `Rand`, `Distance`, ...), `If` and `Range` TLOs now work, with MacroQuest's arithmetic, and strings, numbers and floats have the rest of MQ's members (`Replace`, `Compare`, `NotEqualCS`, `StripLinks`, `Prettify`, `LowPart`, ...). `Arg`, `Token`, `Mid`, `Left`/`Right[0]` and the index-less members now give what MacroQuest gives, and `Int.Hex` is upper case (`0xFF`, `0xFFFFFFFF` for -1) as in MQ
 - For plugin authors: two new host functions, `get_buff_data_bulk` and `get_pet_buff_data_bulk`, read all of the player's buffs or the pet's in one call (docs/plugins.md "Buff records")
 - Hailstone is now licensed under the GNU GPL, version 2 or later, like MacroQuest (it was MIT up to 0.7.0-beta). The plugin SDK stays MIT, and plugins, scripts, UI packs and other add-ons may still use any licence (NOTICE.md). Releases now include LICENSE.txt, NOTICE.md and THIRD_PARTY.md
 - `/time` and scripts' `GameTime` now advance with the zone's clock instead of staying at the time received when zoning in, including the date when a game day, month or year ends

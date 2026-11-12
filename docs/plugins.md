@@ -216,15 +216,30 @@ Left out on purpose:
 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
 `FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
-`GameTime`, the game TLO (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`. Compiled
-plugins can add more.
+`GameTime`, the game TLO (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
+`If`, `Range`. Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
 - `character` → `spawn`, `buff` → `spell`, `groupmember` → `spawn`.
 - `class`, `race`, `heading` (`Degrees`, `ShortName`, ...), `timestamp` (`TotalSeconds`, `TimeHMS`, ...), `item`.
-- MQ's pure types: `int`, `float` (`Deci`, `Precision`, `Int`), `string` (`Length`, `Upper`, `Left`, `Mid`,
-  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`. `Int[...]` and `float.Int` cut toward zero, and are NULL for NaN, an
-  infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
+- MQ's pure types, with all of MQ's members: `int` (`Hex`, `Reverse`, `Float`, `Double`, `LowPart`, `HighPart`,
+  `Prettify`), `float` (`Deci`, `Centi`, `Milli`, `Precision`, `Int`, `Raw`, `Prettify`), `string` (`Length`, `Upper`,
+  `Lower`, `Left`, `Right`, `Mid`, `Find`, `Compare`, `CompareCS`, `Equal`, `NotEqual`, `EqualCS`, `NotEqualCS`, `Arg`,
+  `Count`, `Token`, `Replace`, `StripLinks`), `bool`. They follow MQ2BasicTypes.cpp, edge cases included: a member
+  that needs an index is NULL without one (`Left[0]` too), `Arg` splits as MQ's GetArg (a run of separators is one, a
+  "quoted run" is one argument), `Token` looks for each next separator from one past the last. MQ's int and int64 are
+  one type here: a value that fits 32 bits has int's `Hex` ("0xFFFFFFFF" for -1) and 16-bit `LowPart`/`HighPart`, a
+  larger one int64's. Two deliberate differences: `float.Prettify` groups the number (MQ's prints the float's bits as
+  an integer), and `Compare` gives -1, 0 or 1 (MQ's only promises the sign). `Int[...]` and `float.Int` cut toward
+  zero, and are NULL for NaN, an infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
+- `Math` (MQ2MathType): `Calc`, `Abs`, `Sqrt`, `Sin`/`Cos`/`Tan` (degrees), `Asin`/`Acos`/`Atan`, `Rand[max]` /
+  `Rand[min,max]` (both included), `Hex`, `Dec`, `Not`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (3D; a missing
+  point or coordinate is the player's). The arithmetic is MQ's Calculate (`mq/calc.h`), quirks included: `NULL`,
+  `TRUE`, `FALSE` are numbers, spaces are skipped, `\` divides whole numbers, `^` is power and `^^` xor, every operator
+  groups from the left (`-2^2` is 4), the bit operators work on 32 bits. A formula that does not calculate (a letter,
+  a division by zero, a stray `)`) is NULL. The result is a float, as MQ keeps it.
+- `If[condition,whentrue,whenfalse]` (or with exactly two `~`, `If[c~a~b]`): the text of one branch, the false one
+  running to the end; NULL when the condition does not calculate. `Range.Between[a,b:n]` and `Range.Inside[a,b:n]`.
 
 For example `Me.PctHPs`, `Me.Buff[n|name].Duration`, `Me.Gem[n|name]`, `Me.SpellReady[n|name]`, `Me.Casting`,
 `Me.Combat`, `Me.XTarget[n]`, `Me.FreeInventory`, `Me.Inventory[mainhand|pack1|23]`, and on spawns `Target.Distance`,

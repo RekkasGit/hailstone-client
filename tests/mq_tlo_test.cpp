@@ -201,6 +201,72 @@ TEST_CASE("TLO: Group, items, Zone and the rest") {
     CHECK(f.p("${Heading[0].ShortName}") == "N");
 }
 
+TEST_CASE("TLO: Math, If and Range follow MQ's") {
+    Fixture f;
+    CHECK(f.p("${Math.Calc[1+2*3]}") == "7.00");
+    CHECK(f.p("${Math.Calc[${Me.PctHPs}<80]}") == "1.00");
+    CHECK(f.p("${Math.Calc[1/0]} ${Math.Calc[]} ${Math.Calc[x]} ${Math}") == "NULL NULL NULL NULL");
+    CHECK(f.p("${Math.Calc[1/3]}") == "0.33");
+    CHECK(mq::evaluate(f.ctx, "Math.Calc[1/3]").f == static_cast<double>(1.0f / 3.0f)); // MQ keeps a float
+    CHECK(f.p("${Math.Abs[-2.5]} ${Math.Sqrt[16]} ${Math.Sin[90]} ${Math.Cos[180]} ${Math.Asin[1]}") ==
+          "2.50 4.00 1.00 -1.00 90.00");
+    CHECK(f.p("${Math.Hex[255]} ${Math.Hex[-1]} ${Math.Not[0]}") == "0xFF 0xFFFFFFFF -1");
+    CHECK(f.p("${Math.Dec[ff]} ${Math.Dec[0x10]} ${Math.Dec[FFFFFFFF]} ${Math.Dec[-1]} ${Math.Dec[zz]}") ==
+          "255 16 -1 -1 NULL");
+    CHECK(f.p("${Math.Dec[123456789ab]}") == "-1"); // past 32 bits: held at 0xFFFFFFFF
+    CHECK(f.p("${Math.Clamp[15,1,10]} ${Math.Clamp[5 1 10]} ${Math.Clamp[0,1,10]} ${Math.Clamp[5,9,1]}") ==
+          "10 5 1 9");
+    CHECK(f.p("${Math.Rand[5,5]} ${Math.Rand[6,5]}") == "5 NULL");
+    for (int i = 0; i < 50; ++i) {
+        const auto v = mq::evaluate(f.ctx, "Math.Rand[3]");
+        REQUIRE(v.kind == Value::Kind::Int);
+        CHECK(v.i >= 0);
+        CHECK(v.i <= 3);
+    }
+    CHECK(f.p("${Math.Distance[3,4,0:0,0,0]}") == "5.00");
+    CHECK(f.p("${Math.Distance[3 4 12:0 0 0]}") == "13.00");
+    CHECK(f.p("${Math.Distance[${Me.Y},${Me.X},${Me.Z}]}") == "0.00"); // the second point is the player
+
+    CHECK(f.p("${If[1>2,yes,no]} ${If[TRUE,yes,no]}") == "no yes");
+    CHECK(f.p("${If[1,a,b,c]} ${If[0,a,b,c]}") == "a b,c"); // the false branch runs to the end
+    CHECK(f.p("${If[1~a,b~c]} ${If[0~a,b~c]}") == "a,b c");
+    CHECK(f.p("${If[x,a,b]} ${If[1,a]} ${If[]}") == "NULL NULL NULL");
+
+    CHECK(f.p("${Range.Between[1,10:10]} ${Range.Inside[1,10:10]} ${Range.Inside[1,10:5]}") == "TRUE FALSE TRUE");
+    CHECK(f.p("${Range.Between[1,10]} ${Range.Between[]}") == "FALSE NULL");
+}
+
+TEST_CASE("TLO: int, float and string members as MQ's") {
+    Fixture f;
+    CHECK(f.p("${Int[255].Hex} ${Int[-1].Hex} ${Int[4294967296].Hex}") == "0xFF 0xFFFFFFFF 0x100000000");
+    CHECK(f.p("${Int[65538].LowPart} ${Int[65538].HighPart} ${Int[8589934595].LowPart} ${Int[8589934595].HighPart}") ==
+          "2 1 3 2");
+    CHECK(f.p("${Int[1234567].Prettify} ${Int[-1234567].Prettify[2]} ${Int[123].Prettify}") ==
+          "1,234,567 -1,234,567.00 123");
+    CHECK(f.p("${Int[5].Double} ${Int[5].Float}") == "5.00 5.00");
+    CHECK(f.p("${Float[1234.5].Prettify} ${Float[1234567.891].Prettify[1]}") == "1,234.50 1,234,567.9");
+    CHECK(f.p("${Float[1.25].Precision} ${Float[1.25].Precision[1]}") == "NULL 1.2");
+
+    CHECK(f.p("${String[abc].Left[0]} ${String[abc].Left[-1]} ${String[abc].Right[-1]} ${String[abc].Right[5]}") ==
+          "NULL ab bc abc");
+    CHECK(f.p("${String[abcdef].Mid[0,2]} ${String[abcdef].Mid[2,]} ${String[abcdef].Mid[2,-1]} ${String[abc].Mid[2]}") ==
+          "ab bcdef bcdef NULL");
+    CHECK(f.p("${String[abc].Mid[9,1]}|") == "|");
+    CHECK(f.p("${String[abc].Find[]} ${String[abc].Count[]} ${String[abc].Equal[]}") == "NULL NULL NULL");
+    CHECK(f.p("${String[abc].Compare[ABD]} ${String[abc].Compare[ABC]} ${String[b].CompareCS[a]}") == "-1 0 1");
+    CHECK(f.p("${String[abc].NotEqualCS[ABC]} ${String[abc].NotEqualCS[abc]}") == "TRUE FALSE");
+    // Arg is MQ's GetArg: runs of separators are one, quotes group, an empty argument is NULL.
+    CHECK(f.p("${String[a,,b].Arg[2,,]} ${String[\"a b\" c].Arg[1]} ${String[a b].Arg[3]} ${String[a b].Arg[x]}") ==
+          "b a b NULL NULL");
+    CHECK(f.p("${String[a  b].Arg[2]}") == "b");
+    // Token looks for each next separator from one past the last one.
+    CHECK(f.p("${String[a,b].Token[1,,]} ${String[,a,b].Token[2,,]} ${String[a,b].Token[3,,]}") == "a b NULL");
+    CHECK(f.p("${String[a,,b].Token[2,,]}|${String[a,,b].Token[3,,]}") == "|b");
+    CHECK(f.p("${String[aXbXc].Replace[X,--]} ${String[aaa].Replace[a,aa]} ${String[abc].Replace[x]}") ==
+          "a--b--c aaaaaa NULL");
+    CHECK(f.p("${String[plain text].StripLinks}") == "plain text");
+}
+
 TEST_CASE("parse: strings, nesting, unknowns") {
     Fixture f;
     CHECK(f.p("${Me.Name.Length}") == "6");
