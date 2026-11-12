@@ -1,106 +1,96 @@
 #!/bin/bash
 # Builds, tests and installs the client for one platform, or all, in containers (compose.yaml, docs/ci.md
 # "Builds in containers").
-#   tools/docker/build.sh linux-x64|linux-arm64|windows-x64|macos-arm64|all [--no-test]
-# Each platform's install lands in dist/<platform>/hailstone, ready for tools/make_update.py --dist.
-# JOBS sets the parallel jobs. windows-x64 downloads MSVC on its first run and needs MSVC_ACCEPT_LICENSE=1.
-# macos-arm64 starts the macOS workflow on GitHub for HEAD (pushed) and unpacks its artifact; it needs gh.
-# A server plugin built in (docs/plugins.md): PLUGIN_DIR=<its clone> PLUGIN_NAME=<folder under plugins/>.
-# A server's own build: BUILD_TAG=<name> keeps its build folders (build-<platform>-<name>) and installs
-# (dist/<name>/<platform>) apart, and CMAKE_ARGS holds its settings, for example
-#   CMAKE_ARGS="-DHAILSTONE_UPDATE_FEED=https://example.org/hailstone/hailstone-update.txt -DHAILSTONE_UPDATE_KEY=<hex>"
-# The ccache is shared, so a second server's build compiles little.
+#   tools/docker/build.sh linux-x64|linux-arm64|windows-x64|all [--no-test]
+# The install lands in dist/<platform>/hailstone, ready for tools/make_update.py --dist (docs/updater.md
+# "Making a release"); the build folder is build-<platform>/.
+#   CPUS        the containers' CPU limit (default 8); JOBS, the parallel jobs, follows it unless set
+#   CMAKE_ARGS  extra configure options, split at whitespace (an option cannot hold a space)
+#   MSVC_DIR    msvc-wine's install (default ~/opt/msvc when it has bin/x64/cl, else .docker/msvc); with no install
+#               there, windows-x64 downloads one only when MSVC_ACCEPT_LICENSE=1
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-what=${1:?usage: tools/docker/build.sh linux-x64|linux-arm64|windows-x64|macos-arm64|all [--no-test]}
-test=1; [ "${2:-}" = --no-test ] && test=0
-# The containers run as the checkout's owner, also when root starts this: Chromium (the browser tests) refuses to run as
-# root, and nothing in the checkout should end up owned by root.
-export HOST_UID=${HOST_UID:-$(stat -c %u . 2>/dev/null || stat -f %u .)} HOST_GID=${HOST_GID:-$(stat -c %g . 2>/dev/null || stat -f %g .)}
+usage="usage: tools/docker/build.sh linux-x64|linux-arm64|windows-x64|all [--no-test]"
+what=${1:?$usage}
+test=1
+if [ "${2:-}" = --no-test ]; then test=0; elif [ -n "${2:-}" ]; then echo "$usage"; exit 1; fi
+
+SRC_DIR=$(pwd -P)
+GIT_COMMON_DIR=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+CPUS=${CPUS:-8}
+JOBS=${JOBS:-$CPUS}
+# The containers run as the checkout's owner, also when root starts this: Chromium (the browser tests) refuses to run
+# as root, and nothing in the checkout should end up owned by root.
+HOST_UID=${HOST_UID:-$(stat -c %u .)}
+HOST_GID=${HOST_GID:-$(stat -c %g .)}
+if [ -z "${MSVC_DIR:-}" ]; then
+    if [ -x "${HOME:-}/opt/msvc/bin/x64/cl" ]; then MSVC_DIR=$HOME/opt/msvc; else MSVC_DIR=$SRC_DIR/.docker/msvc; fi
+fi
+export SRC_DIR GIT_COMMON_DIR CPUS JOBS HOST_UID HOST_GID MSVC_DIR
 if [ "$HOST_UID" = 0 ]; then echo "warning: the checkout belongs to root, so the browser tests will fail (Chromium refuses root)"; fi
-mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/msvc .docker/msvc-home .docker/no-plugin dist
+mkdir -p .docker/ccache/linux-x64 .docker/ccache/linux-arm64 .docker/wine-home dist
 # Started by root, the folders it just made are still root's: hand them to the containers' user (Wine refuses a home
 # folder it does not own).
-if [ "$(id -u)" = 0 ]; then chown "$HOST_UID:$HOST_GID" .docker .docker/ccache .docker/ccache/* .docker/msvc .docker/msvc-home .docker/no-plugin dist; fi
-tag=${BUILD_TAG:+-$BUILD_TAG}
-out=dist${BUILD_TAG:+/$BUILD_TAG}
+if [ "$(id -u)" = 0 ]; then chown "$HOST_UID:$HOST_GID" .docker .docker/ccache .docker/ccache/* .docker/wine-home dist; fi
+# Whitespace-split on purpose; ${cmake_args[@]+...} below keeps an empty array from tripping set -u in old bash.
 read -ra cmake_args <<< "${CMAKE_ARGS:-}"
 
-# Compose v2 (docker compose) or v1 (docker-compose); BuildKit so linux-arm64's image can be built for its platform.
-if docker compose version >/dev/null 2>&1; then dc() { docker compose "$@"; }; else dc() { docker-compose "$@"; }; fi
-export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1
+dc() { docker compose "$@"; }
+docker compose version >/dev/null 2>&1 || { echo "needs Docker Compose v2 (docker compose)"; exit 1; }
 
-install_tree() { # <platform> <build dir> <service>
-    rm -rf "$out/$1"
-    dc run --rm --no-deps "$3" cmake --install "$2" --prefix "$out/$1/hailstone"
-    # The default Windows install also writes zlib's bin/, include/ and lib/ (docs/updater.md step 2).
-    rm -rf "$out/$1/hailstone/bin" "$out/$1/hailstone/include" "$out/$1/hailstone/lib"
-    # A server plugin built in (PLUGIN_NAME) has no install rule of its own (plugins reach players as add-ons):
-    # copy its folder from the build tree, so a build made for one server carries its plugin.
-    if [ -n "${PLUGIN_NAME:-}" ] && [ -d "$2/hailstone/plugins/$PLUGIN_NAME" ]; then
-        mkdir -p "$out/$1/hailstone/plugins"
-        cp -a "$2/hailstone/plugins/$PLUGIN_NAME" "$out/$1/hailstone/plugins/"
-        echo "with plugin $PLUGIN_NAME"
-    fi
-    echo "installed $out/$1/hailstone"
+install_tree() { # <platform> <service>
+    rm -rf "dist/$1"
+    dc run --rm --no-deps "$2" cmake --install "build-$1" --prefix "dist/$1/hailstone"
+    echo "installed dist/$1/hailstone"
 }
 
 linux() { # <platform>
     if [ "$1" = linux-arm64 ] && [ "$(uname -m)" != aarch64 ] && [ ! -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
-        echo "registering QEMU for arm64 (until the next reboot)"
-        docker run --privileged --rm tonistiigi/binfmt --install arm64
+        # Registering QEMU changes the host's kernel settings (until the next reboot), so it is left to you.
+        echo "linux-arm64 on this host needs QEMU registered for arm64; once per boot, run:"
+        echo "  docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 --install arm64"
+        exit 1
     fi
     dc build "$1"
-    dc run --rm "$1" tools/docker/linux_build.sh "build-$1$tag" "${cmake_args[@]}"
-    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= "$1" "build-$1$tag/hailstone_tests"; fi
-    install_tree "$1" "build-$1$tag" "$1"
+    dc run --rm --no-deps "$1" tools/docker/linux_build.sh "build-$1" ${cmake_args[@]+"${cmake_args[@]}"}
+    if [ $test = 1 ]; then dc run --rm --no-deps -e EQ_GAME_DIR= "$1-test" "build-$1/hailstone_tests"; fi
+    install_tree "$1" "$1"
 }
 
 windows() {
     dc build linux-x64
-    dc --profile setup build msvc-setup
-    if [ ! -x .docker/msvc/bin/x64/cl ]; then
+    dc build windows-x64
+    if [ ! -x "$MSVC_DIR/bin/x64/cl" ]; then
         if [ "${MSVC_ACCEPT_LICENSE:-}" != 1 ]; then
-            echo "MSVC is downloaded once: set MSVC_ACCEPT_LICENSE=1 to accept Microsoft's license"; exit 1
+            echo "no MSVC in $MSVC_DIR: set MSVC_DIR to an install, or MSVC_ACCEPT_LICENSE=1 to accept Microsoft's"
+            echo "license and download one there (about 3.3 GB)"
+            exit 1
         fi
-        dc --profile setup run --rm msvc-setup
+        mkdir -p "$MSVC_DIR"
+        dc --profile setup run --rm --no-deps msvc-setup
     fi
-    dc run --rm windows-x64 tools/docker/msvc_build.sh . "build-windows-x64$tag" "${cmake_args[@]}"
+    dc run --rm --no-deps windows-x64 tools/docker/msvc_build.sh . build-windows-x64 ${cmake_args[@]+"${cmake_args[@]}"}
     if [ $test = 1 ]; then
         # Microsoft's runtime DLLs next to the tests: Wine's own msvcp140_atomic_wait lacks __std_calloc_crt and the
         # run crashes.
-        cp -f .docker/msvc/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT/*.dll "build-windows-x64$tag/"
-        # Left out under Wine only (GitHub's Windows runner runs them all): the browser tests (Chromium does not run
-        # under Wine), "cancelled ends a transfer stalled..." (Wine's WinHTTP never ends the call: docs/ci.md says
-        # about 21 s, in a container it hangs), allow_url (Wine's WinHTTP reports another address to the check) and
-        # "File time" (MSVC's time zones need Windows' icu.dll: "Module not found").
+        cp -f "$MSVC_DIR"/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT/*.dll build-windows-x64/
+        # Left out here because they fail only under Wine; this script does not run them, so run them on Windows by
+        # hand (docs/ci.md "Builds in containers"): the browser tests (Chromium does not run under Wine), "cancelled
+        # ends a transfer stalled..." (Wine's WinHTTP never ends the call), allow_url (Wine's WinHTTP reports another
+        # address to the check) and "File time" (MSVC's time zones need Windows' icu.dll).
         dc run --rm --no-deps -e EQ_GAME_DIR= \
             -e WINEDLLOVERRIDES="msvcp140,msvcp140_1,msvcp140_2,msvcp140_atomic_wait,msvcp140_codecvt_ids,vcruntime140,vcruntime140_1,concrt140=n,b" \
-            windows-x64 wine "build-windows-x64$tag/hailstone_tests.exe" '-sfe=*browser_host_test*' \
+            windows-x64 wine build-windows-x64/hailstone_tests.exe '-sfe=*browser_host_test*' \
             '-tce=*stalled?waiting?for?the?answer*,*allow_url?refuses?an?empty*,File?time:*'
     fi
-    install_tree windows-x64 "build-windows-x64$tag" windows-x64
-}
-
-macos() {
-    command -v gh >/dev/null || { echo "macos-arm64 needs the GitHub CLI (gh)"; exit 1; }
-    sha=$(git rev-parse HEAD)
-    if [ -z "$(git branch -r --contains "$sha")" ]; then echo "push $sha first: the workflow builds a pushed commit"; exit 1; fi
-    gh workflow run macos.yml -f ref="$sha"
-    sleep 10
-    run=$(gh run list --workflow macos.yml --limit 1 --json databaseId -q '.[0].databaseId')
-    gh run watch "$run" --exit-status
-    rm -rf "$out/macos-arm64" && mkdir -p "$out/macos-arm64"
-    gh run download "$run" -n hailstone-macos-arm64 -D "$out/macos-arm64"
-    tar -C "$out/macos-arm64" -xf "$out/macos-arm64/hailstone-macos-arm64.tar"
-    rm "$out/macos-arm64/hailstone-macos-arm64.tar"
-    echo "installed $out/macos-arm64/hailstone"
+    install_tree windows-x64 windows-x64
+    # The default Windows install also writes zlib's bin/, include/ and lib/ (docs/updater.md "Making a release").
+    rm -rf dist/windows-x64/hailstone/bin dist/windows-x64/hailstone/include dist/windows-x64/hailstone/lib
 }
 
 case $what in
     linux-x64|linux-arm64) linux "$what" ;;
     windows-x64) windows ;;
-    macos-arm64) macos ;;
-    all) linux linux-x64; windows; linux linux-arm64; macos ;;
-    *) echo "unknown platform $what"; exit 1 ;;
+    all) linux linux-x64; windows; linux linux-arm64 ;;
+    *) echo "$usage"; exit 1 ;;
 esac
