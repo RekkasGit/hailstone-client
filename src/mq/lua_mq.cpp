@@ -24,6 +24,7 @@
 #include "core/saturate.h"
 #include "core/sha256.h"
 #include "core/windows_names.h"
+#include "game/item_links.h"
 #include "game/slash_commands.h"
 #include "game/world_state.h"
 #include "mq/parse.h"
@@ -416,7 +417,7 @@ int l_exit(lua_State* L) {
     return lua_error(L);
 }
 
-void add_event(lua_State* L, Script& s, const char* name, const char* pattern);
+void add_event(lua_State* L, Script& s, const char* name, std::string_view pattern, bool keep_links);
 
 int l_event(lua_State* L) {
     need(L, plugin::kCapEvents, "mq.event");
@@ -425,6 +426,14 @@ int l_event(lua_State* L) {
     const char* name_text = luaL_checklstring(L, 1, &name_n);
     const char* pattern = luaL_checklstring(L, 2, &pattern_n);
     luaL_checktype(L, 3, LUA_TFUNCTION);
+    // MQ's options table: keepLinks (default false) matches and passes the line with its item links.
+    bool keep_links = false;
+    if (!lua_isnoneornil(L, 4)) {
+        luaL_checktype(L, 4, LUA_TTABLE);
+        lua_getfield(L, 4, "keepLinks");
+        keep_links = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+    }
     // The limits (kMaxEvents ...), counted without the event this one replaces. Checked before add_event makes any
     // C++ object: the errors longjmp.
     std::size_t count = 0, bytes = 0;
@@ -439,15 +448,15 @@ int l_event(lua_State* L) {
     if (count >= kMaxEvents) return luaL_error(L, "mq.event: a script has at most %d events", static_cast<int>(kMaxEvents));
     if (bytes + pattern_n > kMaxEventPatterns)
         return luaL_error(L, "mq.event: a script's patterns hold at most %d bytes", static_cast<int>(kMaxEventPatterns));
-    add_event(L, s, name_text, pattern); // every pattern is one (a '#' that starts no #*# or #n# is itself)
+    add_event(L, s, name_text, std::string_view(pattern, pattern_n), keep_links); // every text is a pattern
     return 0;
 }
 
 // The callback is argument 3 on L, the calling thread's stack.
-void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
+void add_event(lua_State* L, Script& s, const char* name, std::string_view pattern, bool keep_links) {
     lua_pushvalue(L, 3);
     const int fn = luaL_ref(L, LUA_REGISTRYINDEX); // (before the Event: it may raise)
-    Script::Event e{name, EventPattern(pattern), fn};
+    Script::Event e{name, EventPattern(pattern), fn, keep_links};
     for (auto& old : s.events)
         if (old.name == name) {
             luaL_unref(L, LUA_REGISTRYINDEX, old.fn);
@@ -460,15 +469,26 @@ void add_event(lua_State* L, Script& s, const char* name, const char* pattern) {
         Script* sp = &s;
         s.host->env.hooks->on_chat(s.owner, [sp](plugin::ChatLine& line) {
             if (sp->status != Script::Status::Running && sp->status != Script::Status::Paused) return plugin::Flow::Continue;
+            if (line.text.size() >= kMaxEventLine) return plugin::Flow::Continue;
+            // MQ matches a line with its item links shown as their text, unless the event keeps them (keepLinks).
+            std::optional<std::string> stripped;
+            // A |...| in a pattern is the script's ${...}, read with the script's own 'read' (MQ's LuaVarProcess);
+            // without it, the text as written. Its value is put in the pattern as text, never parsed again.
+            EventPattern::Resolve resolve = [sp](std::string_view text) {
+                if (!(sp->caps & plugin::kCapRead) || !sp->host) return std::string(text);
+                plugin::CallerScope scope(sp->caps & plugin::kCapRead, sp->name);
+                return parse_macro_data(sp->host->env.context(), text);
+            };
             for (const auto& ev : sp->events) {
-                auto m = ev.pattern.match(line.text);
+                const std::string* text = &line.text;
+                if (!ev.keep_links) {
+                    if (!stripped) stripped = game::strip_links(line.text);
+                    text = &*stripped;
+                }
+                auto m = ev.pattern.match(*text, resolve);
                 if (!m) continue;
-                std::vector<std::string> args{line.text};
-                std::vector<std::pair<int, std::string>> numbered;
-                for (std::size_t g = 0; g < ev.pattern.order().size() && g < m->size(); ++g)
-                    numbered.emplace_back(ev.pattern.order()[g], std::move((*m)[g]));
-                std::sort(numbered.begin(), numbered.end());
-                for (auto& [n, text] : numbered) args.push_back(std::move(text));
+                std::vector<std::string> args{*text};
+                for (auto& a : *m) args.push_back(std::move(a));
                 if (sp->queued.size() < kMaxQueuedEvents)
                     sp->queued.push_back({ev.name, std::move(args), line.from_code ? line.origin_caps : plugin::kCapAll});
             }

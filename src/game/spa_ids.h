@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
 // The spell effect (SPA) ids, their names and the spell categories, by MacroQuest's names, for code that ports
