@@ -7,7 +7,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ## 1. Gameplay a player will hit
 
 ### Combat and spells (do first)
-- [x] Native extended chat routes and user colours: modern combat, healing, spell, consider, random and general categories, with editable colours and per-character routing persistence.
+- [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target as DeleteMyMissiles handles it; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
 - [x] Valid spell missiles: spell lifetime, launch and ending stages, stationary area contact, source physics clock and spell 859 local presentation. Packet-to-emitter and missile fixtures cover these; live gameplay remains unverified. Invalid or absent spell ids still end immediately.
 - [x] Environmental hits 0xf3 to 0xfd: animations, chat lines, sounds, and our own fall, drowning and lava damage reported like ApplyDamage (eb42f20; falls tested live).

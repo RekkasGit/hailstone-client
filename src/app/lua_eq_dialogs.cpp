@@ -208,8 +208,9 @@ constexpr OptionRow kColorRows[] = {
 //  - Chat filters (COptionsWnd::InitChatPage): every filter with its setting, and the selected filter's choices.
 //  - Colors (ColorPageWndNotification, SyncColorPage): the user colours of the table at 0xb39450 with "Sample Text"
 //    (eqstr 6134) in each colour (black shown white); Change Selected Color opens the colour picker on the row's
-//    colour and SaveColors stores the answer; Reset Default Colors asks eqstr 6602 (20 s) and restores both the
-//    RoF2 and extended palette defaults.
+//    colour and SaveColors stores the answer; Reset Default Colors asks eqstr 6602 (20 s) and restores the 99
+//    defaults (RestoreDefaultColors). Hailstone: the 54 extended colours (game/chat_windows.h) follow the
+//    original's rows, by Hailstone's names, and the reset restores them too.
 class OptionsWindow : public StockWindow {
 public:
     OptionsWindow() : StockWindow("OptionsWindow", false) {}
@@ -247,7 +248,8 @@ public:
             return true;
         }
         if (id == "UserColorDefault") {
-            // ConfirmationDialog(0x65, eqstr 6602, Yes / No, 20 s); Yes: restore every palette entry.
+            // ConfirmationDialog(0x65, eqstr 6602, Yes / No, 20 s); Yes: RestoreDefaultColors (all 99 to the defaults;
+            // Hailstone: the extended ones too).
             if (!host.conn) return true;
             EqHost::Confirm c;
             c.text = host.conn->strings().format(6602, {});
@@ -317,7 +319,7 @@ public:
                 color_data_.push_back(r.data);
                 color_list_.rows.push_back(std::move(row));
             }
-            for (int index = 99; index < game::kChatUserColorCount; ++index) {
+            for (int index = game::kChatUserColorCountRoF2; index < game::kChatUserColorCount; ++index) {
                 ListRow row;
                 row.texts = {std::string(extended_chat_color_name(index)), host.conn->strings().format(6134, {})};
                 row.cell_colors = {std::nullopt, argb_to_rgb(0xff000000u | sample_rgb(index))};

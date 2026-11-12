@@ -52,6 +52,7 @@ eq = {
       {id=4, parent=3, name="Direct damage"},
       {id=6, parent=3, name="Healing"},
       {id=9, parent=0, name="Random rolls"},
+      {id=1, parent=0, name="Chat Channel"},
     }
   end,
   ChatSetFilter = function(slot, category, on)
@@ -70,6 +71,7 @@ assert(paths["Filters/Spells/Direct damage/Other damage"])
 assert(paths["Filters/Spells/Healing/Heals received"])
 assert(paths["Filters/Random rolls/Others"])
 assert(not paths["Filters/Healing/Heals received"])
+assert(not paths["Filters/Chat Channel/Show All"]) -- no joined channel: no Chat Channel menu
 assert(#stack == 0)
 assert(#clicks == 2)
 assert(clicks[1][1] == 2 and clicks[1][2] == "Direct damage" and clicks[1][3])

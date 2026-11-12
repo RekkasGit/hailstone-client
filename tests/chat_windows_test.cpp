@@ -114,10 +114,10 @@ TEST_CASE("Chat windows: lines go to the window of their colour's channel (Chann
         CHECK(lua.run("return eq.ChatWindows()[2].title") == "Chat 1");
         CHECK(lua.run("return tostring(eq.ReplaceWindow('Chat2'))") == "true");
         CHECK(lua.run("return lines(2)") == "");
-        // Melee's ALL moves its direct channels; lines already shown stay where they are.
+        // Melee's ALL: its 18 channels come here, and the window says so; lines already shown stay where they are.
         lua.run("eq.ChatSetFilter(2, 'Melee', true)");
         CHECK(lua.run("return lines(2)") == "All melee channels will now filter to this window.");
-        CHECK(lua.run("local n = 0; for _, f in ipairs(eq.ChatFilters(2)) do if f.on then n = n + 1 end end; return n") == "22");
+        CHECK(lua.run("local n = 0; for _, f in ipairs(eq.ChatFilters(2)) do if f.on then n = n + 1 end end; return n") == "18");
         view.add(ui::ChatChannel::System, "You have been slain", 0, 277);
         view.add(ui::ChatChannel::Combat, "You hit a rat for 3 points of damage.", 0, 265); // Your Hits (9)
         CHECK(lua.run("return lines(2)") ==
@@ -410,17 +410,20 @@ end
     ImGui::DestroyContext(ctx);
 }
 
-TEST_CASE("Chat windows: extended routes and nested groups persist without changing server filter settings") {
+// The first extended colour (355..408) that goes to `channel`, 0 when none does.
+int extended_color_of(int channel) {
+    for (int color = 355; color <= 408; ++color)
+        if (game::chat_channel_of_color(color) == channel) return color;
+    return 0;
+}
+
+TEST_CASE("Chat windows: the extended channels take only the extended colours, in their own menu after ALL") {
     ImGuiContext* ctx = ImGui::CreateContext();
     test::ScratchDir scratch("chat_extended_routes");
     fs::path dir = scratch.path();
     fs::create_directories(dir / "game");
     write_strings(dir / "game");
     GameDir game_dir(dir / "game");
-    const std::array<int, 51> colors{
-        356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371, 372,
-        373, 374, 375, 376, 377, 378, 379, 380, 274, 286, 382, 383, 348, 349, 388, 389,
-        2, 4, 15, 13, 290, 390, 283, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408};
     {
         net::GameConnection conn(game_dir);
         ui::ChatView view;
@@ -435,18 +438,20 @@ TEST_CASE("Chat windows: extended routes and nested groups persist without chang
         lua.run(kLines + std::string("_G.lines = lines"));
         CHECK(lua.run("return eq.ChatNewWindow('Extended')") == "2");
         const auto original_server_settings = conn.chat_filters().settings;
-        for (std::size_t index = 0; index < colors.size(); ++index) {
-            const int route = 57 + static_cast<int>(index);
-            lua.run(std::format("eq.ChatSetFilter(2, {}, true); eq.ChatClear(2)", route));
-            const std::string text = std::format("route {}", route);
-            view.add(ui::ChatChannel::System, text, 0, static_cast<std::uint32_t>(colors[index]));
+        for (const auto& item : game::chat_filter_items()) {
+            if (item.channel < game::kChatChannelCountRoF2) continue;
+            CAPTURE(item.channel);
+            int color = extended_color_of(item.channel);
+            REQUIRE(color != 0); // every extended channel in the menu is reached by an extended colour
+            lua.run(std::format("eq.ChatSetFilter(2, {}, true); eq.ChatClear(2)", item.channel));
+            const std::string text = std::format("route {}", item.channel);
+            view.add(ui::ChatChannel::System, text, 0, static_cast<std::uint32_t>(color));
             CHECK(lua.run("return lines(2)") == text);
         }
         CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 107 then return f.name end end") == "Alerts");
-        CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 106 then return f.name end end") == "Client Messages");
-        CHECK(lua.run("return #eq.ChatFilterGroups()") == "10");
+        CHECK(lua.run("return #eq.ChatFilterGroups()") == "11");
         CHECK(lua.run("for _, g in ipairs(eq.ChatFilterGroups()) do if g.name == 'Healing' then return g.parent end end") ==
-              std::to_string(static_cast<int>(game::ChatFilterMenu::Spells)));
+              std::to_string(static_cast<int>(game::ChatFilterMenu::Extended)));
         CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 101 then return f.menu end end") ==
               std::to_string(static_cast<int>(game::ChatFilterMenu::Healing)));
 
@@ -458,7 +463,8 @@ TEST_CASE("Chat windows: extended routes and nested groups persist without chang
         CHECK(lua.run("return lines(2)") == "other direct damage");
         CHECK(conn.chat_filters().settings == original_server_settings);
 
-        // The native context menu and Lua metadata describe the same hierarchy.
+        // The Filters menu is InitContextMenu's (Randoms, Other and the Melee and Spells items where they were),
+        // then Extended (server) after its ALL.
         lua.run("eq.ChatMenu(2)");
         REQUIRE(host.menus.size() == 1);
         auto find = [](const std::vector<app::EqHost::MenuRow>& rows, const char* name) {
@@ -468,17 +474,25 @@ TEST_CASE("Chat windows: extended routes and nested groups persist without chang
         REQUIRE(filters != host.menus[0].rows.end());
         REQUIRE(filters->submenu);
         auto filter_rows = filters->submenu();
+        REQUIRE(filter_rows.size() >= 2);
+        CHECK(filter_rows[filter_rows.size() - 2].text == "ALL");
+        CHECK(filter_rows.back().text == "Extended (server)");
         auto spells = find(filter_rows, "Spells");
         REQUIRE(spells != filter_rows.end());
         REQUIRE(spells->submenu);
-        auto spell_rows = spells->submenu();
-        auto healing = find(spell_rows, "Healing");
-        REQUIRE(healing != spell_rows.end());
+        CHECK(spells->submenu().size() == 9); // the eight RoF2 items and ALL
+        auto melee = find(filter_rows, "Melee");
+        REQUIRE(melee != filter_rows.end());
+        REQUIRE(melee->submenu);
+        CHECK(melee->submenu().size() == 19); // the 18 RoF2 items and ALL
+        REQUIRE(filter_rows.back().submenu);
+        auto extended_rows = filter_rows.back().submenu();
+        auto healing = find(extended_rows, "Healing");
+        REQUIRE(healing != extended_rows.end());
         REQUIRE(healing->submenu);
         auto healing_rows = healing->submenu();
-        CHECK(healing_rows.size() == 6); // five direct routes and ALL
+        CHECK(healing_rows.size() == 6); // five channels and ALL
         CHECK(healing_rows.back().text == "ALL");
-        CHECK_FALSE(healing_rows.back().check);
         api.save_layout();
     }
     {
@@ -494,7 +508,7 @@ TEST_CASE("Chat windows: extended routes and nested groups persist without chang
         Lua lua(api);
         lua.run(kLines + std::string("_G.lines = lines"));
         for (const auto& item : game::chat_filter_items()) {
-            if (item.channel < 57) continue;
+            if (item.channel < game::kChatChannelCountRoF2) continue;
             const int window = item.menu == game::ChatFilterMenu::Healing ? 3 : 2;
             CHECK(lua.run(std::format("for _, f in ipairs(eq.ChatFilters({})) do if f.id == {} then return f.on end end",
                                       window, item.channel)) == "true");
@@ -503,6 +517,77 @@ TEST_CASE("Chat windows: extended routes and nested groups persist without chang
         view.add(ui::ChatChannel::System, "heal after reload", 0, 402);
         CHECK(lua.run("return lines(2)") == "alert after reload");
         CHECK(lua.run("return lines(3)") == "heal after reload");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Chat windows: a layout and colours saved before the extended channels load as they were") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_main_era_layout");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game_dir(dir / "game");
+    {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        CHECK(lua.run("return eq.ChatNewWindow('Combat')") == "2");
+        lua.run("eq.ChatSetFilter(2, 22, true); eq.ChatSetFilter(2, 40, true); eq.ChatSetFilter(2, 56, true)");
+        api.save_layout();
+    }
+    // As the client before the extended channels wrote it: ChannelMap0..56 only.
+    {
+        std::ifstream in(dir / "UI_Test_Server.ini", std::ios::binary);
+        std::string saved{std::istreambuf_iterator<char>(in), {}}, kept, line;
+        bool had_56 = false;
+        for (std::size_t at = 0; at < saved.size();) {
+            std::size_t end = saved.find('\n', at);
+            line = saved.substr(at, end == std::string::npos ? std::string::npos : end + 1 - at);
+            at = end == std::string::npos ? saved.size() : end + 1;
+            int n = -1;
+            if (line.starts_with("ChannelMap")) n = std::atoi(line.c_str() + 10);
+            if (n == 56) had_56 = true;
+            if (n < game::kChatChannelCountRoF2) kept += line;
+        }
+        REQUIRE(had_56);
+        std::ofstream(dir / "UI_Test_Server.ini", std::ios::binary | std::ios::trunc) << kept;
+    }
+    // User_1..99 only, as the original and the client before the extended colours keep them.
+    std::string colors = "[TextColors]\n";
+    for (int n = 1; n <= game::kChatUserColorCountRoF2; ++n)
+        colors += std::format("User_{0}_Red={0}\nUser_{0}_Green=1\nUser_{0}_Blue=2\n", n);
+    std::ofstream(dir / "game" / "eqclient.ini", std::ios::binary) << colors;
+    {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        CHECK(lua.run("return #eq.ChatWindows()") == "2");
+        view.add(ui::ChatChannel::System, "non melee", 0, 283); // Chat::NonMelee: Non Melee Hits (40)
+        view.add(ui::ChatChannel::System, "red", 0, 13);        // Other (22)
+        view.add(ui::ChatChannel::System, "pvp", 0, 350);       // PvP Messages (56)
+        view.add(ui::ChatChannel::System, "alert", 0, 408);     // an extended channel: the main window still
+        CHECK(lua.run("return lines(2)") == "non melee|red|pvp");
+        CHECK(lua.run("return lines(1)") == "alert");
+        for (int index = 0; index < game::kChatUserColorCountRoF2; ++index)
+            CHECK(app::user_color_rgb(index) == (static_cast<std::uint32_t>(index + 1) << 16 | 0x0102u));
+        for (int index = game::kChatUserColorCountRoF2; index < game::kChatUserColorCount; ++index)
+            CHECK(app::user_color_rgb(index) == app::default_user_color_rgb(index));
     }
     ImGui::DestroyContext(ctx);
 }
@@ -592,12 +677,12 @@ TEST_CASE("Chat windows: GetChannelFromColor, the Filters menu, the tell menus' 
     CHECK(game::chat_channel_of_color(324) == 21); // our chat channel 10
     CHECK(game::chat_channel_of_color(277) == 28); // my death
     CHECK(game::chat_channel_of_color(350) == 56); // PvP (0x15e)
-    CHECK(game::chat_channel_of_color(13) == 93);  // red has its own destination
+    CHECK(game::chat_channel_of_color(13) == 22);  // the basic colours: Other
     CHECK(game::chat_channel_of_color(351) == 22);
     // every channel but the unused 48 is in a menu once
     std::array<int, game::kChatChannelCount> seen{};
     for (const auto& it : game::chat_filter_items()) ++seen[it.channel];
-    for (int ch = 0; ch < game::kChatChannelCount; ++ch) CHECK(seen[static_cast<std::size_t>(ch)] == (ch == 48 ? 0 : 1));
+    for (int ch = 0; ch < game::kChatChannelCountRoF2; ++ch) CHECK(seen[static_cast<std::size_t>(ch)] == (ch == 48 ? 0 : 1));
 
     CHECK(game::tell_menu_text("Bob", "tell") == "/tell Bob ");
     CHECK(game::tell_menu_text("server.Bob", "tell") == ";tell server.Bob ");

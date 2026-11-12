@@ -64,8 +64,10 @@ local function update(slot, c)
 end
 
 -- ---------------------------------------------------------------- the chat menu (as classic's)
--- Every category has one destination. Menus come from the same native tree as
--- the stock window menu; ALL changes only the current menu's direct categories.
+-- Filters: the chat window manager's channels by its menus (Filters, Chat Channel, Melee, Spells, and Hailstone's
+-- Extended (server) with its submenus; eq.ChatFilterGroups): each goes to one window; a ticked one comes to this tab,
+-- unticking sends it back to the main window. Show All is the menu's ALL (its own items only). A menu with no items
+-- (Chat Channel before joining one) is left out.
 local function filtersMenu(slot)
   local filters = eq.ChatFilters(slot)
   if #filters == 0 then return end
@@ -74,6 +76,13 @@ local function filtersMenu(slot)
   local rootName = "Filters"
   for _, f in ipairs(filters) do
     if f.menu == 0 then rootName = f.group; break end
+  end
+  local function hasRows(id)
+    for _, f in ipairs(filters) do if f.menu == id then return true end end
+    for _, group in ipairs(groups) do
+      if group.parent == id and hasRows(group.id) then return true end
+    end
+    return false
   end
   local function drawGroup(id, name)
     if ui.MenuItem("Show All##group" .. id) then eq.ChatSetFilter(slot, name, true) end
@@ -85,7 +94,7 @@ local function filtersMenu(slot)
       end
     end
     for _, group in ipairs(groups) do
-      if group.parent == id and ui.BeginMenu(group.name .. "##group" .. group.id) then
+      if group.parent == id and hasRows(group.id) and ui.BeginMenu(group.name .. "##group" .. group.id) then
         drawGroup(group.id, group.name)
         ui.EndMenu()
       end

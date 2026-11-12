@@ -1086,22 +1086,33 @@ race. Off, the original's checks apply.
 
 ## Extended chat routing
 
-Extended message colours are accepted natively and retain their numeric wire
-IDs. Routes 57–107 add the modern damage/heal perspectives, critical results,
-spell notices, randoms, considers and general categories. Reused colours have
-specific destinations too: faction 274, loot/money 285–286, chat information
-290, achievements 348–349 and incoming direct damage 283. Colour 397 is your
-direct damage, route 40. The unmodified EQEmu server's old DoT colour 325 also
-goes to Your DoTs (77), alongside 376; this is an intentional compatibility
-alias rather than the later client's avatar-command classification.
+A deliberate Hailstone difference (`game/chat_windows.h`). The original routes every chat line by its colour to one
+of 57 chat channels (`CChatWindowManager::GetChannelFromColor` @0x6504c0, the user colours 0x100..0x15e by its
+table, every other colour to Other, 22) and keeps 99 user colours (`CDisplay`, User_1..99). Hailstone adds channels
+57..107 and the user colours 355..408 (User_100..153) for a server that sends the colour ids of a later client's
+extended chat filters:
 
-Client-generated lines select the same categories from known packet context:
-NPC deaths, environmental hits, damage-shield perspectives, considers,
-self/group/raid/other random rolls and bard song notifications. Server-formatted
-messages keep the colour the server chose; no text matching guesses their
-category. Categories without an existing local producer are available whenever
-a server or add-on emits their colour. This does not require a server patch or
-change the wire format of server visibility filters.
+- Colours 356..380 go to channels 57..81, 382 / 383 to 84 / 85, 388 / 389 to 88 / 89, the seven consider colours
+  390..396 to 95, 397 to Non Melee Hits (40) and 398..408 to 97..107. 355, 381 and 384..387 go to Other, as every
+  unknown colour does in the original.
+- Every colour up to 354 goes where the original sends it: EQEmu's `Chat::NonMelee` (283) to Non Melee Hits,
+  `Chat::DotDamage` (325) and the basic colours below 256 to Other, 348 to Emotes, 349 to Guild.
+- The lines the client makes itself keep the original's colours (environmental hits 0x10a / 0x149 / 0x117, others'
+  deaths 0x116, randoms 0x11f, spell interruptions 289, considers in their con colour); none uses an extended colour.
+- The Filters menu is InitContextMenu's for channels 0..56 (Randoms, Other, Damage Shield Reports, Criticals and Non
+  Melee Hits where they were; Melee's ALL covers its 18). The extended channels are in an Extended (server) submenu
+  after the menu's ALL, with Direct Damage, Damage Over Time, Healing, Damage Shields, Environmental Damage, Random
+  Rolls and Other Messages under it. Channels 82, 83, 86, 87, 90..94 and 96 keep their numbers but are in no menu:
+  the list the extension comes from gives them colours below 355, which keep RoF2's channels here.
+- The extended user colours follow the original's rows on the Options Colors page, with defaults of Hailstone's
+  own (from related RoF2 colours; the con colours for the consider colours), and Reset Default Colors resets them too.
+  `/usercolor` keeps the original's range (1..99, and 100 a no-op).
+
+Stock EQEmu sends no colour above 340 (`common/eq_constants.h` `Chat`), and nothing in the client makes one, so on a
+stock server every line routes and colours as in the original and the extension has no switch: its channels and
+colours only fill when a server sends their colours. Without the extension (the client before it), such a colour
+went to Other and showed in user colour 0's RGB (`GetUserDefinedColor` reads index 0 for an index past 98), as the
+original does; the names and meanings of 355..408 are not confirmed (docs/unknowns.md "Chat").
 
 ## Chat keys, the PvP rule set, trade and group invites
 

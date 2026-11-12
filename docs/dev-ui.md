@@ -51,31 +51,17 @@ while (window.poll_events()) {
 }
 ```
 
-### Extended chat categories
+### Extended chat channels
 
-Chat-window filters natively cover 108 destinations and 153 user colours
-(message colours 256–408), without a plugin or an enable switch. The original
-route IDs 0–56 remain stable; the modern categories use 57–107. Categories for
-server messages remain quiet until a server sends their message types. The
-29-entry server visibility-filter packet is unchanged: routing a category to a
-window and hiding a server message are separate settings.
-
-The filter tree groups direct damage, damage over time and healing under
-Spells, with separate damage-shield, environmental, random-roll and other
-menus. `eq.ChatFilterGroups()` returns `{id, parent, name}` for each submenu
-(the root is 0). `eq.ChatFilters(slot)` keeps `id`, `group`, `name` and `on`, and
-adds `menu` and `parent`; `eq.ChatSetFilter` still accepts a route ID or a group
-name. A group's ALL changes only its direct rows. Both the native context menu
-and the modern UI use this tree. The gamepad log reads the same routed windows.
-
-Colours are editable and resettable through the existing Colors page, with
-`User_100` through `User_153` saved in the character's `chat.ini`.
-The existing `/usercolor` command accepts colour ordinals 1 through 153 too. New colours
-start from Hailstone's existing semantic colour families rather than importing
-a later proprietary client's palette. Missing newer localized labels have
-readable built-in names, so a RoF2-only asset folder needs no new string file.
-Routes 106 and 107 are generic Client Messages and Alerts; message colours 407
-and 408 remain compatible with extensions that use those IDs.
+The chat windows' channels 57..107 and user colours 355..408 (docs/mechanics.md "Extended chat routing") are
+Hailstone's, used only when a server sends those colours. `eq.ChatFilterGroups()` gives the Filters menu's submenus
+as `{id, parent, name}` (parent 0 is the Filters menu): Chat Channel, Melee and Spells, then Extended (server) and
+its submenus. `eq.ChatFilters(slot)` keeps `id`, `group`, `name` and `on` and adds `menu` and `parent` (the item's
+menu and the menu that holds it); `eq.ChatSetFilter` still takes a channel or a menu's name, a menu's ALL moving its
+own items only. The modern pack draws the menus from these; the gamepad pack has no filter menu. The channels are
+kept as `ChannelMap0..107` in the character's UI ini and the colours as `User_1..153` in its `chat.ini`; a file
+written before them (ChannelMap0..56, User_1..99) loads as it was, the new ones on the main window and at their
+defaults.
 
 ## The Lua windows
 
@@ -137,7 +123,7 @@ The windows are Lua scripts drawn with ImGui, grouped into user interfaces: ever
   - `lua_eq_layout.cpp`: LoadskinWnd (the user interfaces as skins, /loadskin) and LayoutCopyWindow (another character's UI.ini or defaults.ini, for a screen size its keys keep, copied over this character's windowed places: /copylayout; the characters played last first. Hailstone adds the LC_CopyChatCheckBox / LC_CopyOptionsCheckBox boxes, which copy chat.ini and options.ini, and the first-entry offer: activate(0) at the zone-in of a character with no UI.ini, when hailstone.ini ui.offer_layout_copy (option offer_layout_copy, on by default) is on and another character has a layout; LC_FirstVisitText and LC_OfferCheckBox show only then). `lua_eq_video.cpp`: VideoModesWindow (the display modes, refresh rates in full screen, Accept with the keep-it question). `lua_eq_zoneguide.cpp`: FindLocationWnd and ZonePathWnd (no zone guide data on EQEmu). `lua_eq_fellowship.cpp`: FellowshipWnd (create, campsite kits) and AlertHistoryWnd. `lua_eq_story.cpp`: StoryWnd (storyline\\story*.txt, newest first; hailstone.ini news.last_read / news.automatic; shown at the first zone-in when a story is new and Automatic is on).
   - `lua_eq_names.cpp`: NameChangeWnd, NameChangePetWnd and NameChangeMercWnd over `net/game_connection_names.cpp` (CNameChangeWnd and its copies): the server's invitations (OP_InvokeNameChangeImmediate / Lazy, OP_InvokeChangePetName(Immediate), 0x63d7 / 0x4cd9 for the mercenary) open them with the reminder prompt unless the character ini's `[Preferences] Disable*NameChangeReminder` is set (the immediate ones clear it); `/changename`, `/changepetname`, `/changemercname` with no name open the manual prompt; Submit Name (or Enter in the box) runs the command (4..15 characters, the confirmation 0x7c / 0x8c / 0x8d), whose yes sends {new name, character name, 0} as OP_GMNameChange, OP_ChangePetName or 0x36db and shows "Request Pending" until the answer (its result string printed and shown as an OK dialog; a success closes the window); Disable Reminder asks, then saves the flag. The character ini is this client's `hotbuttons.ini` (`ActionsUi::char_ini_int` / `write_char_ini`, `GameConnection::set_character_ini`).
   - `eq.CursorAttachment` (the item on the cursor, `cursor.lua`).
-- User colours: `user_color_rgb(i)` (app/lua_eq_windows.h) is CDisplay's table of 99, read from the character's `chat.ini` [TextColors] over the asset folder's eqclient.ini, with the game's defaults for missing ones; the Colors page writes them to `chat.ini` (`servers/<profile>/characters/<world>/<name>/`, core/character_files.h), as the chat filters page does. The asset folder is never written.
+- User colours: `user_color_rgb(i)` (app/lua_eq_windows.h) is CDisplay's table of 99 (and Hailstone's 54 extended ones), read from the character's `chat.ini` [TextColors] over the asset folder's eqclient.ini, with the game's defaults for missing ones; the Colors page writes them to `chat.ini` (`servers/<profile>/characters/<world>/<name>/`, core/character_files.h), as the chat filters page does. The asset folder is never written.
 - Context menus: a model's `context_menu(host, x, y)` opens its menu with `EqHost::open_menu(x, y, rows)` (rows: text, colour, check, enabled, separator, `act`, `submenu`); `menus.lua` draws them (`eq.GameMenus` / `GameMenuHover` / `GameMenuClick` / `GameMenuClose`; `eq.GameMenus(scale)` measures the rows at a scale, which the modern pack takes from its `menus.scale` setting: 125 % by default, Options > Interface "Menu Size" or Ctrl+wheel over a menu). A right click on a Lua window opens the model's menu when it has one; Alt + right click (or a menu's "Window" row, `EqHost::window_menu`) opens this client's window menu.
 - Dialog owners: a window opens the quantity dialog with `open_quantity(host, QuantityOpen, done)` (`game::quantity_dialog_open`: accepted at once, or shown at the caller's point with the slider's start; `done` gets the quantity), a yes / no question with `EqHost::confirm` and a text question with `EqHost::text_entry`. `EqHost::click_rect` is the screen rectangle of the child the last click went to (the callers' points).
 - Models can also answer drop-downs (`StockWindow::combo` / `combo_select`, `eq.ComboInfo` / `eq.ComboSelect`) and move their window (`take_move`: centred dialogs).

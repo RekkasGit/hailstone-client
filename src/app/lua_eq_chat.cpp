@@ -58,8 +58,9 @@ constexpr std::array<std::uint32_t, 99> kRoF2DefaultUserColors{
     0xffffff, 0xffffff, 0xffffff, 0xff7f00, 0xffffff, 0xffffff, 0xffffff, 0xc00000,
     0x00ff00, 0xffff00, 0xff0000};
 
-// Hailstone's extended palette inherits colours from related existing
-// categories. These are client defaults, not a later game's compiled palette.
+// Hailstone (a deliberate difference, game/chat_windows.h): the user colours 99..152 for the extended colours
+// 355..408, which only a server sends. Their defaults are Hailstone's own picks from related RoF2 colours (and the
+// con colours for the seven consider colours), not a later client's palette.
 const auto kDefaultUserColors = [] {
     std::array<std::uint32_t, game::kChatUserColorCount> colors{};
     colors.fill(kRoF2DefaultUserColors[17]);
@@ -288,7 +289,7 @@ EqHost& host(lua_State* L) { return *static_cast<EqHost*>(lua_touserdata(L, lua_
 } // namespace
 
 std::uint32_t user_color_rgb(int index) {
-    load_colors();
+    load_colors(); // CDisplay::GetUserDefinedColor: an index outside 0..98 (here 0..152) reads colour 0
     return state().user[static_cast<std::size_t>(index >= 0 && index < game::kChatUserColorCount ? index : 0)];
 }
 
@@ -302,7 +303,7 @@ std::string_view extended_chat_color_name(int index) {
 }
 
 void set_user_color(EqHost& host, int index, std::uint32_t rgb) {
-    if (index < 0 || index >= game::kChatUserColorCount) return;
+    if (index < 0 || index >= game::kChatUserColorCount) return; // SetUserDefinedColor ignores the rest (0..98 there)
     load_colors();
     state().user[static_cast<std::size_t>(index)] = rgb & 0xffffff;
     ++state().colors; // (the chat windows' lines in the new colour: eq.ChatText's versions change)
@@ -352,9 +353,9 @@ namespace {
 // ---------------------------------------------------------------- the chat windows (CChatWindowManager)
 //
 // Up to 32 chat windows (CChatWindowManager::ChatWnd, NumWindows +0x80), window 0 the main one. Every line goes by
-// its colour to one of the chat routes (game/chat_windows.h) and from there to the one window ChannelMap
-// gives it (the main window unless its Filters menu moved it); a line a window wrote itself (CChatWindow::
-// AddOutputText: the menus' answers) shows only there. Each window keeps its name, the channel its plain typed text
+// its colour to one of the 57 chat channels (game/chat_windows.h; Hailstone's extended channels 57..107 after them)
+// and from there to the one window ChannelMap gives it (the main window unless its Filters menu moved it); a line a
+// window wrote itself (CChatWindow::AddOutputText: the menus' answers) shows only there. Each window keeps its name, the channel its plain typed text
 // goes to (ChatChannel, with the tell target or the chat channel's index), its language, scrollbar and font.
 //
 // This client's addition: a window can be shown as a tab of another (`dock`); every tab is still a chat window of
@@ -917,20 +918,26 @@ std::vector<Row> filter_menu(int w, game::ChatFilterMenu menu) {
         r.submenu = [w, sub] { return used(w) ? filter_menu(w, sub) : std::vector<Row>{}; };
         return r;
     };
+    auto add_submenus = [&](game::ChatFilterMenu parent) {
+        for (const auto& group : game::chat_filter_groups())
+            if (group.parent == parent && group.menu != game::ChatFilterMenu::Extended)
+                rows.push_back(submenu(group.menu, group.menu != game::ChatFilterMenu::ChatChannel || !joined.empty()));
+    };
     if (menu == game::ChatFilterMenu::Filters) {
         add_items([](const game::ChatFilterItem& it) { return it.channel <= 8 || it.channel == 49; });
-    }
-    for (const auto& group : game::chat_filter_groups())
-        if (group.parent == menu)
-            rows.push_back(submenu(group.menu, group.menu != game::ChatFilterMenu::ChatChannel || !joined.empty()));
-    if (menu == game::ChatFilterMenu::Filters)
+        add_submenus(menu); // Chat Channel, Melee, Spells
         add_items([](const game::ChatFilterItem& it) { return it.channel > 8 && it.channel != 49; });
-    else
+    } else {
+        add_submenus(menu); // (Hailstone's extended submenus)
         add_items([](const game::ChatFilterItem&) { return true; });
+    }
     Row all;
     all.text = eqstr(game::kStrAll);
     all.act = on_window(w, [menu](int win) { all_channels(win, menu); });
     rows.push_back(std::move(all));
+    // Hailstone: the extended channels' submenu after the original menu (its ALL included), so the rows above are
+    // InitContextMenu's.
+    if (menu == game::ChatFilterMenu::Filters) rows.push_back(submenu(game::ChatFilterMenu::Extended, true));
     return rows;
 }
 
@@ -1578,8 +1585,10 @@ int ChatSetTitle(lua_State* L) {
     return 0;
 }
 
-// Flat route rows retain their group label for existing packs and also expose
-// stable menu/parent IDs for packs that draw the hierarchy.
+// filters = eq.ChatFilters(slot)   -- the Filters menu for the tab that is up: { id (the channel), group ("Filters",
+// "Chat Channel", "Melee", "Spells"; eqstr names; Hailstone's extended submenus by their names), name, on (the
+// channel goes to this window), menu and parent (the ChatFilterMenu of the item's menu and of the menu that holds
+// it; eq.ChatFilterGroups) } in the menu's order
 int ChatFilters(lua_State* L) {
     int w = up_window(L, 1);
     lua_newtable(L);
@@ -1608,6 +1617,8 @@ int ChatFilters(lua_State* L) {
     return 1;
 }
 
+// groups = eq.ChatFilterGroups()   -- the Filters menu's submenus: { id (ChatFilterMenu), parent (0: the Filters
+// menu), name }; Chat Channel, Melee and Spells, then Hailstone's Extended (server) and its submenus
 int ChatFilterGroups(lua_State* L) {
     auto groups = game::chat_filter_groups();
     lua_createtable(L, static_cast<int>(groups.size()), 0);
