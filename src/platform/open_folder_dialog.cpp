@@ -125,13 +125,11 @@ void show_open_folder_dialog(SDL_DialogFileCallback callback, void* userdata, SD
         const Outcome outcome = run_dialog(f->callback, f->userdata, owner, widen(f->start));
         if (SUCCEEDED(com)) CoUninitialize();
         if (outcome == Outcome::Answered) return;
-        SDL_DialogFileCallback callback = f->callback;
-        void* userdata = f->userdata;
         if (!SDL_RunOnMainThread(&show_sdl_dialog, f.get(), false)) {
-            callback(userdata, nullptr, -1); // SDL_RunOnMainThread set the error
+            f->callback(f->userdata, nullptr, -1); // SDL_RunOnMainThread set the error
             return;
         }
-        f.release(); // show_sdl_dialog owns it now
+        static_cast<void>(f.release()); // show_sdl_dialog owns it now
     }).detach();
 #else
     SDL_ShowOpenFolderDialog(callback, userdata, window, start, false);
