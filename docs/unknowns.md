@@ -186,6 +186,10 @@ What the client does not implement yet, or implements with an approximation it c
 
 - `mq.event` (`mq/event_pattern.h`, MacroQuest's Blech read as the spec): a `#n#` used twice in one pattern hands on its last; LuaEvent sorts the values with `std::sort`, which MSVC runs as an insertion sort (stable) for up to 32 values, so that holds for up to 32 `#...#`, and past that the order MSVC's introsort leaves them in is not traced. Patterns that share a literal's beginning are matched each on its own (Blech's shared tree can turn down a line one of them alone would match: a deliberate difference). Running a script with such a pattern under MacroQuest would settle the first.
 
+## Chat
+
+- The extended chat colours 355..408 and channels 57..107 (docs/mechanics.md "Extended chat routing"): their names, which colour goes to which channel, and the defaults' meanings were worked out by the contributor from packet captures of a later client (ToB), not from RoF2; nothing confirms them for RoF2 or for a server that sends them. Stock EQEmu sends none of them, so a stock server never reaches them. What RoF2 does with a colour above 354 is what the client did before the extension and does for 355, 381 and 384..387: channel 22 (Other), drawn in user colour 0's RGB (`GetUserDefinedColor` reads index 0 for an index past 98). That list also gives channels 82, 83, 86, 87, 90..94 and 96 colours below 355 (2, 4, 13, 15, 274, 283, 285, 286, 290, 348, 349), which keep RoF2's channels here; those channels are in no menu. A capture of an EQEmu server that sends these colours would settle it.
+
 ## Real estate
 
 Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate") and tested with unit tests and against the mock server, not yet live against a server with housing (Project Triune).

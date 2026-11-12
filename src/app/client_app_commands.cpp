@@ -14,6 +14,7 @@
 #include "app/lua_eq.h"
 #include "app/lua_eq_windows.h"
 #include "core/msvc_atoi.h"
+#include "game/chat_windows.h"
 #include "game/hotbuttons.h"
 #include "game/option_commands.h"
 #include "game/slash_commands.h"
@@ -347,6 +348,8 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
             for (const char* line : game::usercolor_help_lines(*u.page)) c.show_chat(line, 0x111);
             return true;
         }
+        // Hailstone's extended colours (indices 99..152) are not /usercolor's: the original's 100 is a no-op still.
+        if (u.index - 1 >= game::kChatUserColorCountRoF2) return true;
         std::uint32_t rgb = u.reset ? default_user_color_rgb(u.index - 1)
                                     : static_cast<std::uint32_t>(u.red << 16 | u.green << 8 | u.blue);
         set_user_color(eq_host_, u.index - 1, rgb);

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Chat: a server that sends the newer chat message types (colours 355 to 408) can now have them filtered to their own windows, from a new Extended (server) submenu of the chat window's Filters menu, and coloured from 54 new rows at the end of Options > Colors. Nothing changes on a stock EQEmu server, which sends none of them
 - On a fresh install, the login screen starts on the server your game folder's `eqhost.txt` names (its `[LoginServer]` `Host`), as a saved server you can rename or delete. This happens once: a server you delete does not come back
 - On Windows, the asset folder picker uses the Explorer-style folder dialog with its address bar, Quick access and search, instead of the old folder tree
 - For server admins with their own patcher: a Hailstone built with the CMake option `HAILSTONE_ALLOW_IN_EQ_FOLDER` may be installed in a folder named `hailstone` directly in the EverQuest folder, and starts on that EverQuest folder (docs/layout.md). Off by default; every other place inside the EverQuest folder is still refused
