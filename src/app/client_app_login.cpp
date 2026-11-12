@@ -554,7 +554,8 @@ void ClientApp::list_worlds() {
     for (std::size_t i : server_rows_) {
         const net::ServerInfo& s = servers_[i];
         const bool fav = std::find(favorites.begin(), favorites.end(), s.name) != favorites.end();
-        server_view_.servers.push_back({s.name, s.status_text(), s.can_join(), fav});
+        // Every world can be played: the original asks the server whatever the status (LoginClient::request_play)
+        server_view_.servers.push_back({s.name, s.status_text(), true, fav});
         if (!picked.empty() && s.name == picked && server_view_.selected < 0)
             server_view_.selected = static_cast<int>(server_view_.servers.size()) - 1;
     }

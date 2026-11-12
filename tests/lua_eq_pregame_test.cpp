@@ -262,7 +262,7 @@ TEST_CASE("eq.ServerSelect: the worlds, the one played last, and Play only for a
     CHECK(ui.api.replaces("serverselect"));
     CHECK(ui("return eq.ServerSelectDo('play')") == "false"); // nothing picked
     CHECK(ui("return eq.ServerSelectDo('play', 3)") == "false");
-    CHECK(v.selected == 2); // picked, but it is down
+    CHECK(v.selected == 2); // picked, but the host marked it unjoinable
     CHECK_FALSE(ui.host.server_select_action);
     CHECK(ui("return eq.ServerSelectDo('play', 2)") == "true");
     CHECK(v.selected == 1);

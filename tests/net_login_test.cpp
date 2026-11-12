@@ -204,7 +204,6 @@ TEST_CASE("server list and play reply, plain and compressed") {
     CHECK(list[1].id == 9);
     CHECK(list[1].status == 4);
     CHECK(std::string(list[1].status_text()) == "Locked");
-    CHECK(list[1].can_join());
     auto cut = data;
     cut.pop_back();
     CHECK_THROWS(login_codec::parse_server_list(cut));
@@ -237,22 +236,20 @@ TEST_CASE("server list and play reply, plain and compressed") {
     CHECK(login_error_text(999999).find("999999") != std::string::npos);
 }
 
-TEST_CASE("server status keeps locked worlds joinable for server-authorized GM admission") {
+TEST_CASE("server status text: the locked bit wins over the down bit, as eqmain's server row has it") {
     net::ServerInfo server;
     for (int flags : {0, 2}) {
         server.status = flags;
         CHECK(std::string(server.status_text()) == "Up");
-        CHECK(server.can_join());
     }
-    server.status = 4;
-    CHECK(std::string(server.status_text()) == "Locked");
-    CHECK(server.can_join());
-    for (int flags : {1, 3, 5}) {
+    for (int flags : {1, 3}) {
         server.status = flags;
-        CHECK_FALSE(server.can_join());
+        CHECK(std::string(server.status_text()) == "Down");
     }
-    server.status = 1;
-    CHECK(std::string(server.status_text()) == "Down");
+    for (int flags : {4, 5}) { // @0x10036750: 6007 Locked for 5 too ("Locked (Down)" only with a player count)
+        server.status = flags;
+        CHECK(std::string(server.status_text()) == "Locked");
+    }
 }
 
 TEST_CASE("login reply: a compressed body inflates to at most 1 MB, however large it is") {

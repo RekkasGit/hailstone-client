@@ -19,7 +19,7 @@ local function px(n) return T.px(n) end
 
 -- The world's status on the right of a row ending at x1: the pill. Returns where it starts.
 local function status(s, x1, cy)
-  local c = s.status == "Locked" and C.gold or (s.canJoin and C.good or C.bad)
+  local c = s.status == "Locked" and C.gold or ((s.canJoin and s.status ~= "Down") and C.good or C.bad)
   local text = s.status ~= "" and s.status or (s.canJoin and "Up" or "Down")
   return x1 - P.pill(x1, cy, text, c, 1) - px(14)
 end

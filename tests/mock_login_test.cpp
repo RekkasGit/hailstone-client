@@ -84,44 +84,36 @@ TEST_CASE("mock login: login, server list and play hand over a world ticket") {
     rig.client.close();
 }
 
-TEST_CASE("mock login: locked world admission is decided by the server response") {
-    auto config = MockConfig::standard();
-    config.server_status = 4;
+TEST_CASE("mock login: a locked or down world is asked like any other, and the server decides") {
+    // ServerSelectWnd::WndNotification (@0x10038310) checks only the locale: EQEmu's world admits a GM to a locked
+    // world (Down is a locked one with no zone booted) and answers 326 to anyone else.
     bool admitted = true;
     SUBCASE("the world admits this account") {}
-    SUBCASE("the world refuses this account") { config.play_error = 326; admitted = false; }
-    LoginRig rig(std::move(config));
-    rig.start("tester", "secret");
-    REQUIRE(rig.until_state(LoginState::LoggedIn));
-    rig.client.request_server_list();
-    REQUIRE(rig.until_state(LoginState::ServerList));
-    REQUIRE(rig.client.servers().size() == 1);
-    const auto& world = rig.client.servers().front();
-    REQUIRE(std::string(world.status_text()) == "Locked");
-    REQUIRE(world.can_join());
-    rig.client.request_play(world.id);
-    if (admitted) REQUIRE(rig.until_state(LoginState::PlayAccepted));
-    else {
-        REQUIRE(rig.until_state(LoginState::Failed));
-        CHECK(rig.client.error_id() == 326);
-        CHECK_FALSE(rig.client.ticket());
+    SUBCASE("the world refuses this account") { admitted = false; }
+    for (std::int32_t status : {4, 1, 5}) {
+        CAPTURE(status);
+        auto config = MockConfig::standard();
+        config.server_status = status;
+        if (!admitted) config.play_error = login_error::WorldUnavailable;
+        LoginRig rig(std::move(config));
+        rig.start("tester", "secret");
+        REQUIRE(rig.until_state(LoginState::LoggedIn));
+        rig.client.request_server_list();
+        REQUIRE(rig.until_state(LoginState::ServerList));
+        REQUIRE(rig.client.servers().size() == 1);
+        const auto& world = rig.client.servers().front();
+        CHECK(std::string(world.status_text()) == (status == 1 ? "Down" : "Locked"));
+        const auto sequence = rig.client.sequence();
+        rig.client.request_play(world.id);
+        CHECK(rig.client.sequence() == sequence + 1); // the request went out
+        if (admitted) {
+            REQUIRE(rig.until_state(LoginState::PlayAccepted));
+        } else {
+            REQUIRE(rig.until_state(LoginState::Failed));
+            CHECK(rig.client.error_id() == login_error::WorldUnavailable);
+            CHECK_FALSE(rig.client.ticket());
+        }
     }
-}
-
-TEST_CASE("mock login: a down world also blocks direct and automatic Play requests") {
-    auto config = MockConfig::standard();
-    config.server_status = 1;
-    LoginRig rig(std::move(config));
-    rig.start("tester", "secret");
-    REQUIRE(rig.until_state(LoginState::LoggedIn));
-    rig.client.request_server_list();
-    REQUIRE(rig.until_state(LoginState::ServerList));
-    const auto sequence = rig.client.sequence();
-    rig.client.request_play(rig.client.servers().front().id);
-    CHECK(rig.client.state() == LoginState::ServerList);
-    CHECK(rig.client.sequence() == sequence);
-    CHECK(rig.client.error_id() == 326);
-    CHECK_FALSE(rig.client.ticket());
 }
 
 TEST_CASE("mock login: the ticket gets a GameConnection through world authentication to the character list") {

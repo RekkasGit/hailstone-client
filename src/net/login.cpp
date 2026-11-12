@@ -540,15 +540,11 @@ void LoginClient::request_server_list() {
 
 void LoginClient::request_play(std::uint32_t server_id) {
     if (state_ != LoginState::ServerList) return;
-    // ServerSelectWnd::WndNotification: a server for another locale is refused here (unless show-player-count).
+    // ServerSelectWnd::WndNotification (@0x10038310): a server for another locale is refused here (unless
+    // show-player-count). That is its only check: a down or locked world is asked like any other, and the server
+    // decides (EQEmu's world admits an account at GM:MinStatusToBypassLockedServer, else answers 326).
     for (const auto& s : servers_) {
         if (s.id != server_id) continue;
-        if (!s.can_join()) {
-            error_id_ = 326;
-            error_ = login_error_text(error_id_);
-            notice_ = error_;
-            return;
-        }
         if (!login_.show_player_count && !locale_matches(s.country, options_.locale)) {
             error_id_ = login_error::WrongLocale;
             error_ = login_error_text(login_error::WrongLocale);

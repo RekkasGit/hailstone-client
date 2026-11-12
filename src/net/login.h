@@ -56,6 +56,7 @@ constexpr std::int32_t Terminated = 112;          // the server dropped us after
 constexpr std::int32_t OfflineTraderOnline = 114; // offer to remove the character
 constexpr std::int32_t CharacterOnline = 302;     // offer to remove the character
 constexpr std::int32_t JoinFailed = 324;          // play request unanswered
+constexpr std::int32_t WorldUnavailable = 326;    // EQEmu: a locked world refused this account
 constexpr std::int32_t NoConnection = 6011;       // no login host could be reached
 constexpr std::int32_t FailedAttempts = 6018;     // "%1 failed login attempts"
 constexpr std::int32_t WrongLocale = 6028;        // the server's country is not the client's
@@ -90,8 +91,9 @@ struct ServerInfo {
     std::int32_t players = 0;
     std::string country;
     std::string language;
-    // A lock restricts admission on the world server (GMs may enter); only the down bit blocks a play attempt.
-    bool can_join() const { return (status & 1) == 0; }
+    // eqmain's server row (@0x10036750): the locked bit wins over the down bit (6007 Locked, else 6006 Down, else
+    // 6005 Up; with show-player-count a locked and down world reads "Locked (Down)" and an up one its player count,
+    // which no Hailstone UI shows). The status never stops a play request: the server decides (see request_play).
     const char* status_text() const { return (status & 4) ? "Locked" : (status & 1) ? "Down" : "Up"; }
 };
 

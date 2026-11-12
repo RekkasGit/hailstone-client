@@ -1427,7 +1427,9 @@ ServerSelectAction server_select_screen(ServerSelectView& view) {
             }
             if (pad && ImGui::IsItemFocused()) view.selected = i;
             ImGui::TableNextColumn();
-            ImGui::TextColored(s.status == "Locked" ? kLockedColor : s.can_join ? kGoodColor : kErrorColor,
+            ImGui::TextColored(s.status == "Locked"                  ? kLockedColor
+                               : s.can_join && s.status != "Down" ? kGoodColor
+                                                                  : kErrorColor,
                                "%s", s.status.c_str());
             // The favourite mark (after the row, which lets it take the click): a favourite world is listed first
             ImGui::TableNextColumn();
