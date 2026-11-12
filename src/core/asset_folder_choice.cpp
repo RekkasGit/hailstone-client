@@ -23,10 +23,35 @@ std::string folder_key(const std::filesystem::path& p) {
 }
 } // namespace
 
+// The override, then assets.path (resolve_asset_folder without `beside`).
+static AssetFolderResolution resolve_saved_asset_folder(const std::filesystem::path& override_dir, const Config& config,
+                                                        const AssetFolderValidator& check,
+                                                        const std::filesystem::path& data_folder);
+
 AssetFolderResolution resolve_asset_folder(const std::filesystem::path& override_dir, const Config& config,
                                            const AssetFolderValidator& validate,
-                                           const std::filesystem::path& data_folder) {
+                                           const std::filesystem::path& data_folder,
+                                           const std::filesystem::path& beside) {
     auto check = [&](const std::filesystem::path& p) { return validate ? validate(p) : validate_asset_folder(p); };
+    AssetFolderResolution out = resolve_saved_asset_folder(override_dir, config, check, data_folder);
+    // Nothing saved works (a first start, or a moved folder): the installation Hailstone sits in, when it is one.
+    if (out.source == AssetFolderSource::Picker && !beside.empty() && !asset_folder_pick_requested(config) &&
+        (override_dir.empty() || out.reason.empty())) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(beside, ec) && check(beside).ok &&
+            (data_folder.empty() || data_folder_conflict(beside, data_folder, true).empty())) {
+            out.source = AssetFolderSource::Found;
+            out.path = beside;
+            out.reason.clear();
+            out.check = {};
+        }
+    }
+    return out;
+}
+
+static AssetFolderResolution resolve_saved_asset_folder(const std::filesystem::path& override_dir, const Config& config,
+                                                        const AssetFolderValidator& check,
+                                                        const std::filesystem::path& data_folder) {
     AssetFolderResolution out;
     std::filesystem::path saved = config.get_string("assets.path", "");
     if (!override_dir.empty()) {
@@ -62,7 +87,16 @@ AssetFolderResolution resolve_asset_folder(const std::filesystem::path& override
     return out;
 }
 
-std::string data_folder_conflict(const std::filesystem::path& asset_folder, const std::filesystem::path& data_folder) {
+bool data_folder_subfolder_allowed() {
+#if defined(HAILSTONE_ALLOW_IN_EQ_FOLDER) && HAILSTONE_ALLOW_IN_EQ_FOLDER
+    return true;
+#else
+    return false;
+#endif
+}
+
+std::string data_folder_conflict(const std::filesystem::path& asset_folder, const std::filesystem::path& data_folder,
+                                 bool allow_subfolder) {
     namespace fs = std::filesystem;
     if (asset_folder.empty() || data_folder.empty()) return {};
     auto normal = [](const fs::path& p) {
@@ -73,6 +107,14 @@ std::string data_folder_conflict(const std::filesystem::path& asset_folder, cons
     };
     fs::path rel = normal(data_folder).lexically_relative(normal(asset_folder));
     if (rel.empty() || *rel.begin() == "..") return {};
+    if (rel == ".")
+        return "Hailstone keeps its own files in " + data_folder.string() +
+               ", this same folder, and would write into the installation, which it only reads. Move Hailstone into "
+               "a folder of its own (or set HAILSTONE_DATA_DIR) and start it again.";
+    // A folder of Hailstone's own inside the installation (<EverQuest>/hailstone/, where a server's patcher may install
+    // it): writing there changes none of the installation's files, and game files are read only from the
+    // installation's top folder and its known subfolders. Allowed only in builds made with HAILSTONE_ALLOW_IN_EQ_FOLDER.
+    if (allow_subfolder) return {};
     return "Hailstone keeps its own files in " + data_folder.string() +
            ", inside this folder, and would write into the installation, which it only reads. Move Hailstone out of "
            "the EverQuest folder (or set HAILSTONE_DATA_DIR) and start it again.";

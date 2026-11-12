@@ -140,26 +140,79 @@ TEST_CASE("Asset folder: the recent folders") {
     CHECK(config.get_string("assets.path") == (fs::current_path() / "RoF2").string());
 }
 
+TEST_CASE("Asset folder: the EverQuest folder Hailstone sits in is the default when nothing saved works") {
+    TempDir tmp("beside");
+    const fs::path eq = tmp.path / "EverQuest";
+    const fs::path hs = eq / "hailstone";
+    fs::create_directories(hs);
+    Config config;
+    // A first start: found, and not saved.
+    auto r = resolve_asset_folder({}, config, only(eq), hs, eq);
+    CHECK(r.source == AssetFolderSource::Found);
+    CHECK(same_folder(r.path, eq));
+    CHECK(r.reason.empty());
+    CHECK(config.get_string("assets.path", "").empty());
+    // Not an installation: the picker, as before.
+    CHECK(resolve_asset_folder({}, config, only(tmp.path / "other"), hs, eq).source == AssetFolderSource::Picker);
+    // No `beside` (a build without HAILSTONE_ALLOW_IN_EQ_FOLDER): the picker.
+    CHECK(resolve_asset_folder({}, config, only(eq), hs).source == AssetFolderSource::Picker);
+    // Hailstone's folder is the EverQuest folder itself: refused even as a default.
+    CHECK(resolve_asset_folder({}, config, only(eq), eq, eq).source == AssetFolderSource::Picker);
+    // A saved folder that works wins; one that is gone falls back to the found one.
+    const fs::path other = tmp.path / "RoF2";
+    fs::create_directories(other);
+    config.set("assets.path", other.string());
+    auto both = [&](const fs::path& p) {
+        AssetFolderCheck c;
+        c.is_directory = true;
+        c.ok = same_folder(p, eq) || same_folder(p, other);
+        return c;
+    };
+    CHECK(resolve_asset_folder({}, config, both, hs, eq).source == AssetFolderSource::Config);
+    config.set("assets.path", (tmp.path / "moved").string());
+    CHECK(resolve_asset_folder({}, config, both, hs, eq).source == AssetFolderSource::Found);
+    // "Change asset folder" asked for the picker: it shows.
+    request_asset_folder_pick(config, true);
+    CHECK(resolve_asset_folder({}, config, both, hs, eq).source == AssetFolderSource::Picker);
+    request_asset_folder_pick(config, false);
+    // An override that is no folder is not replaced by the found one: the picker says why.
+    auto bad = resolve_asset_folder(tmp.path / "nope", config, both, hs, eq);
+    CHECK(bad.source == AssetFolderSource::Picker);
+    CHECK_FALSE(bad.reason.empty());
+}
+
 TEST_CASE("Asset folder: never one Hailstone writes into") {
     TempDir tmp("conflict");
     const fs::path eq = tmp.path / "RoF2";
     fs::create_directories(eq / "hailstone");
-    // The data folder is the asset folder, or inside it: refused, saying why.
-    CHECK_FALSE(data_folder_conflict(eq, eq).empty());
-    CHECK_FALSE(data_folder_conflict(eq, eq / "hailstone").empty());
-    CHECK_FALSE(data_folder_conflict(eq / "", eq / "hailstone" / ".").empty());
-    // Apart, or the asset folder inside the data folder (Hailstone never writes there): fine.
-    CHECK(data_folder_conflict(eq, tmp.path / "hailstone").empty());
-    CHECK(data_folder_conflict(eq / "hailstone", eq).empty());
-    CHECK(data_folder_conflict(tmp.path / "RoF", tmp.path / "RoF2").empty());
-    CHECK(data_folder_conflict(eq, {}).empty());
+    for (bool allow : {false, true}) {
+        CAPTURE(allow);
+        // The data folder is the asset folder itself: refused, saying why, whatever the build.
+        CHECK_FALSE(data_folder_conflict(eq, eq, allow).empty());
+        CHECK_FALSE(data_folder_conflict(eq / "", eq / ".", allow).empty());
+        // Inside it: refused, unless the build allows a subfolder of Hailstone's own (HAILSTONE_ALLOW_IN_EQ_FOLDER).
+        CHECK(data_folder_conflict(eq, eq / "hailstone", allow).empty() == allow);
+        CHECK(data_folder_conflict(eq / "", eq / "hailstone" / ".", allow).empty() == allow);
+        // Apart, or the asset folder inside the data folder (Hailstone never writes there): fine.
+        CHECK(data_folder_conflict(eq, tmp.path / "hailstone", allow).empty());
+        CHECK(data_folder_conflict(eq / "hailstone", eq, allow).empty());
+        CHECK(data_folder_conflict(tmp.path / "RoF", tmp.path / "RoF2", allow).empty());
+        CHECK(data_folder_conflict(eq, {}, allow).empty());
+    }
 
-    // A saved assets.path that holds the data folder goes to the picker, saying why.
+    // A saved assets.path that holds the data folder goes to the picker, saying why (this build's rule).
     Config config;
     config.set("assets.path", eq.string());
-    auto r = resolve_asset_folder({}, config, only(eq), eq / "hailstone");
+    auto r = resolve_asset_folder({}, config, only(eq), eq);
     CHECK(r.source == AssetFolderSource::Picker);
-    CHECK(r.reason.find("inside this folder") != std::string::npos);
+    CHECK(r.reason.find("this same folder") != std::string::npos);
+    auto nested = resolve_asset_folder({}, config, only(eq), eq / "hailstone");
+    if (data_folder_subfolder_allowed()) {
+        CHECK(nested.source == AssetFolderSource::Config);
+    } else {
+        CHECK(nested.source == AssetFolderSource::Picker);
+        CHECK(nested.reason.find("inside this folder") != std::string::npos);
+    }
     CHECK(resolve_asset_folder({}, config, only(eq), tmp.path / "data").source == AssetFolderSource::Config);
 }
 

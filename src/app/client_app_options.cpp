@@ -149,7 +149,17 @@ void ClientApp::apply_video_options() {
 }
 
 bool ClientApp::choose_asset_folder() {
-    AssetFolderResolution r = resolve_asset_folder(opts_.game_dir, config_, {}, platform::data_dir());
+    // A build for a patcher that installs Hailstone in <EverQuest>/hailstone/ starts on that EverQuest folder when
+    // nothing saved works (HAILSTONE_ALLOW_IN_EQ_FOLDER); others keep asking.
+    // install_dir() ends in a separator (SDL_GetBasePath), so its parent_path() is the folder itself: drop the
+    // empty last part first, else the "EverQuest folder" checked is Hailstone's own.
+    std::filesystem::path beside;
+    if (data_folder_subfolder_allowed()) {
+        std::filesystem::path own = platform::install_dir();
+        if (!own.has_filename()) own = own.parent_path();
+        beside = own.parent_path();
+    }
+    AssetFolderResolution r = resolve_asset_folder(opts_.game_dir, config_, {}, platform::data_dir(), beside);
     std::optional<std::filesystem::path> folder;
     if (r.source != AssetFolderSource::Picker) {
         folder = r.path;
@@ -180,7 +190,10 @@ bool ClientApp::choose_asset_folder() {
         return false;
     }
     asset_source_ = r.source;
-    log::info("asset folder {}{}", folder->string(), r.source == AssetFolderSource::Override ? " (--game-dir / EQ_GAME_DIR)" : "");
+    log::info("asset folder {}{}", folder->string(),
+              r.source == AssetFolderSource::Override ? " (--game-dir / EQ_GAME_DIR)"
+              : r.source == AssetFolderSource::Found  ? " (the EverQuest folder Hailstone is in)"
+                                                      : "");
     return true;
 }
 
