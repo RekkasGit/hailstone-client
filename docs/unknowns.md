@@ -183,6 +183,8 @@ What the client does not implement yet, or implements with an approximation it c
 - Slash-command numbers (`/split`, `game::cmd_atol`; and every other atoi of typed, server or text-file numbers in `game/`, `core::msvc_atoi`): the original's atol on its 32-bit long; the client accumulates the digits in 32 bits and wraps, as the port's MSVC atoi does (`spell_description.cpp`), and `/split` sums the four amounts with a 32-bit wrap. Whether the CRT the original links wraps or saturates (LONG_MAX) a number out of range is not traced; only `/split` amounts past 2147483647 differ. Reading the atol / strtol the original links would settle it.
 - The chat log (/log): the client keeps the file open while logging and writes each line through at once; whether `CEverQuest::OutputTextToLog` @0x5130c0 opens and closes the file per line, or holds it, is not traced. The difference shows only when the file is moved or deleted while logging: on Linux and macOS the lines then go to the removed file until `/log` names a file again or is turned off and on (on Windows the open file cannot be deleted). Reading OutputTextToLog's file handling would settle it.
 
+- `mq.event` (`mq/event_pattern.h`, MacroQuest's Blech read as the spec): a `#n#` used twice in one pattern hands on its last; LuaEvent sorts the values with `std::sort`, which MSVC runs as an insertion sort (stable) for up to 32 values, so that holds for up to 32 `#...#`, and past that the order MSVC's introsort leaves them in is not traced. Patterns that share a literal's beginning are matched each on its own (Blech's shared tree can turn down a line one of them alone would match: a deliberate difference). Running a script with such a pattern under MacroQuest would settle the first.
+
 ## Chat
 
 - The extended chat colours 355..408 and channels 57..107 (docs/mechanics.md "Extended chat routing"): their names, which colour goes to which channel, and the defaults' meanings come from the contributor's list of a later client's chat filters, not from RoF2 or an open source; nothing here confirms them. Stock EQEmu sends none of them, so a stock server never reaches them. What RoF2 does with a colour above 354 is what the client did before the extension and does for 355, 381 and 384..387: channel 22 (Other), drawn in user colour 0's RGB (`GetUserDefinedColor` reads index 0 for an index past 98). That list also gives channels 82, 83, 86, 87, 90..94 and 96 colours below 355 (2, 4, 13, 15, 274, 283, 285, 286, 290, 348, 349), which keep RoF2's channels here; those channels are in no menu. A capture of a server that sends these colours, or the source of the list, would settle it.
@@ -211,6 +213,11 @@ Real estate is built to the original (docs/protocol/rof2-packets.md "Real estate
 - The text of the Store All / Pack / Unpack questions is not traced, so the windows use their own wording; the access groups' and permissions' names are this client's labels. The cost text is this client's own (PopulateCostCombo @0x74d240 not traced), and alternate currency names use dbstr type 0x13, a guess. The plot window's title (the address, plus " (id)" for a GM) is a guess.
 - The items window's button greying (005aee70 / 005af1e0 / 005b0c60) and its show filters are not built: the buttons are enabled when a row is selected and no request is pending.
 - Guild halls: an instanced guild hall is the one whose zone word has bit 15 set, as the original tests it. Whether EQEmu-based servers ever set that bit is not known; without it every guild hall zone allows the bank, as on stock EQEmu.
+
+## Scripts (MacroQuest's TLOs)
+
+- `Math.Dec` past 32 bits (`${Math.Dec[123456789ab]}`) is held at 0xFFFFFFFF (-1), as strtoul does; MQ reads it with MSVC's `sscanf("%x")`, whose result there is not checked, and a blank-only index (where MQ's sscanf returns EOF and MQ uses an unset value) is NULL here. Running those two in MacroQuest on Windows would settle it.
+- `String.Compare` and `CompareCS` give -1, 0 or 1; MQ returns `_stricmp` / `strcmp` as they are, whose size (beyond the sign) on MSVC is not checked. `${String[abc].Compare[abz]}` in MacroQuest would settle it.
 
 ## Server-specific extensions
 

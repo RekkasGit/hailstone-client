@@ -347,7 +347,13 @@ std::string long_date_time(int y, int m, int d, int hh, int mm, int ss) {
 std::string format_game_time(const EqStrings& strings, int y, int m, int d, int hour) {
     int h24 = ((hour - 1) % 24 + 24) % 24;
     int h12 = h24 % 12 == 0 ? 12 : h24 % 12;
-    std::string text = std::format("{} - {} {}", long_date(y, m, d), h12, h24 < 12 ? "AM" : "PM");
+    // EQWorldData::CurrentGameTime @0x7dc130 gives _wcsftime the weekday (day - 1) % 7, not the real calendar's:
+    // every game month starts on a Sunday.
+    m = std::clamp(m, 1, 12);
+    d = std::clamp(d, 1, 31);
+    std::string date = std::format("{}, {} {}, {}", kWeekdays[static_cast<std::size_t>((d - 1) % 7)],
+                                   kMonths[static_cast<std::size_t>(m - 1)], d, y);
+    std::string text = std::format("{} - {} {}", date, h12, h24 < 12 ? "AM" : "PM");
     return strings.format(6706, std::vector<std::string>{text});
 }
 

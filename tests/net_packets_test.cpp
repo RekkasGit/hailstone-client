@@ -876,6 +876,29 @@ TEST_CASE("OP_NewZone round-trips at the rof2_structs.h offsets") {
     CHECK(encode(*d).data == p.data);
 }
 
+TEST_CASE("the game clock runs on from OP_TimeOfDay as EQWorldData::AdvanceTime") {
+    const TimeOfDay ref{13, 45, 2, 3, 3170}; // 12:45 PM on the 2nd of March 3170
+    auto at = [&](std::uint32_t seconds) { return advance_time_of_day(ref, seconds); };
+    auto same = [](const TimeOfDay& a, const TimeOfDay& b) {
+        return a.hour == b.hour && a.minute == b.minute && a.day == b.day && a.month == b.month && a.year == b.year;
+    };
+    CHECK(same(at(0), ref));
+    CHECK(same(at(2), ref));                                 // a game minute is 3 real seconds
+    CHECK(same(at(3), TimeOfDay{13, 46, 2, 3, 3170}));
+    CHECK(same(at(15 * 3), TimeOfDay{14, 0, 2, 3, 3170}));   // minutes carry into the hour
+    CHECK(same(at(180), TimeOfDay{14, 45, 2, 3, 3170}));     // an hour is 3 real minutes
+    // Hour 24 is midnight; past it the day turns (11 game hours from 13:45 is 00:45, hour 24; 12 is hour 1 of the 3rd).
+    CHECK(same(at(11 * 180), TimeOfDay{24, 45, 2, 3, 3170}));
+    CHECK(same(at(12 * 180), TimeOfDay{1, 45, 3, 3, 3170}));
+    // Day 28 carries into the next month, month 12 into the next year.
+    CHECK(same(advance_time_of_day(TimeOfDay{1, 0, 28, 12, 3170}, 24 * 180), TimeOfDay{1, 0, 1, 1, 3171}));
+    CHECK(same(advance_time_of_day(TimeOfDay{1, 0, 1, 1, 3170}, 12 * 28 * 24 * 180), TimeOfDay{1, 0, 1, 1, 3171}));
+    CHECK(advance_time_of_day(TimeOfDay{1, 0, 28, 12, 9999}, 24 * 180).year == 0u); // past 9999 it is cleared
+    // The 32-bit product wraps as the original's: 2^32 / 20 s on, it starts again from the reference.
+    CHECK(at(214748364u).year == 3170u + 148u); // 147 years and 11 months, which carry past month 12 from March
+    CHECK(same(at(214748365u), ref));           // 20 times this wraps to 4 game seconds
+}
+
 TEST_CASE("small zone packets round-trip") {
     auto tod = decode_time_of_day(encode(TimeOfDay{13, 45, 2, 3, 3170}));
     REQUIRE(tod);
