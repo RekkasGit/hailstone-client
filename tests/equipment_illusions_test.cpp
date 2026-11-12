@@ -93,7 +93,7 @@ TEST_CASE("Appearance filter: ApplyNewArmorFilter's bits by kind and membership"
     CHECK(new_armor_bits(0, true, false, false) == 0x0b);
     CHECK(new_armor_bits(0, false, true, false) == 0x0a);
     CHECK(new_armor_bits(0, false, false, true) == 0x0c);
-    for (std::uint8_t corpse : {2, 3}) CHECK(new_armor_bits(corpse, true, true, true) == 0);
+    for (std::uint8_t corpse : {std::uint8_t{2}, std::uint8_t{3}}) CHECK(new_armor_bits(corpse, true, true, true) == 0);
     game::Appearance a;
     CHECK(a.new_armor_bits == game::kNewArmorUnknownKind); // either category bit shows an unknown kind
     CHECK_FALSE(game::appearance_new_armor_filtered(a, 8));
