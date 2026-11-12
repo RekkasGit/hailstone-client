@@ -12,6 +12,7 @@
 #include "game/anim_layers.h"
 #include "game/mechanics/anim_select.h"
 #include "vector_files.h"
+#include "game/animation_types.h"
 
 using namespace hailstone::game::mechanics;
 using hailstone::test::Json;
@@ -109,7 +110,7 @@ TEST_CASE("OldModelAnimSpeed vectors") {
 
 TEST_CASE("Animation tables") {
     CHECK(new_style_tag(kAnimWalk) == "WALK");
-    CHECK(new_to_old_anim(kAnimRun) == kOldRun);
+    CHECK(new_to_old_anim(kAnimRun) == static_cast<uint8_t>(hailstone::AnimationType::Run));
     CHECK(old_anim_clip(new_to_old_anim(kAnimSwim)) == "P06");
     CHECK(old_anim_clip(new_to_old_anim(kAnimSit)) == "P07");
     CHECK(new_style_blend_ms(kAnimWalk, kAnimStand) == 175.0f);
@@ -124,22 +125,22 @@ TEST_CASE("Animation tables") {
     CHECK(is_jump_animation(0x7c, true));
     CHECK_FALSE(is_jump_animation(0x13, true));
     CHECK_FALSE(is_jump_animation(0x20, false));
-    CHECK(old_anim_clip(0x4a) == "P09");
+    CHECK(old_anim_clip(static_cast<uint8_t>(hailstone::AnimationType::Sitting)) == "P09");
     CHECK(old_anim_clip(0x4e) == "L10");
     CHECK(old_anim_clip(0x4d) == "S29");
     CHECK(old_anim_clip(0x4f).empty());
     CHECK(new_style_tag(0x50) == "SLPR");
     CHECK(new_style_tag(0xb6) == "SATK");
     CHECK(new_style_tag(0x4f).empty());
-    CHECK(new_to_old_anim(0x51) == 5);    // BLPR -> C05
-    CHECK(new_to_old_anim(0x5c) == 8);    // PATK -> C08
-    CHECK(new_to_old_anim(0x98) == 0x46); // NBOW -> S28
-    CHECK(old_to_new_anim(5) == 0x50);    // C05 -> SLPR
-    CHECK(old_to_new_anim(6) == 0x53);    // C06 -> SLSC
-    CHECK(old_to_new_anim(0x1a) == 0x6f); // O01 -> IDLE
-    CHECK(old_to_new_anim(0x48) == 0x6f); // O02 -> IDLE
-    CHECK(old_to_new_anim(0x49) == 0x77); // O03 -> SIDL
-    CHECK(old_to_new_anim(0x23) == 0x4f); // P04: none
+    CHECK(new_to_old_anim(0x51) == static_cast<uint8_t>(hailstone::AnimationType::ThrowOrOneHandSlash));    // BLPR -> C05
+    CHECK(new_to_old_anim(0x5c) == static_cast<uint8_t>(hailstone::AnimationType::MainhandSlash));    // PATK -> C08
+    CHECK(new_to_old_anim(0x98) == static_cast<uint8_t>(hailstone::AnimationType::Bow_70)); // NBOW -> S28
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::ThrowOrOneHandSlash)) == 0x50);    // C05 -> SLPR
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::OffhandOrOneHandSlash)) == 0x53);    // C06 -> SLSC
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::Idle)) == 0x6f); // O01 -> IDLE
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::IdleAfter)) == 0x6f); // O02 -> IDLE
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::SitIdle)) == 0x77); // O03 -> SIDL
+    CHECK(old_to_new_anim(static_cast<uint8_t>(hailstone::AnimationType::NoEmote_35)) == 0x4f); // P04: none
     CHECK(old_to_new_anim(0x6e) == 0x6e);
     CHECK(new_style_fallback(0x54) == 0x53); // BLSC -> SLSC
     CHECK(new_style_fallback(0x53) == 0x50); // SLSC -> SLPR

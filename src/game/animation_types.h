@@ -7,11 +7,11 @@
 
 #include <cstdint>
 
-#include "game/mechanics/anim_select.h"
 
 namespace hailstone {
 
-enum class AnimationType : std::uint8_t {
+ enum class AnimationType : std::uint8_t {
+    None = 0,
     Kick = 1,
     Piercing = 2,
     TwoHandSlash = 3,
@@ -28,28 +28,28 @@ enum class AnimationType : std::uint8_t {
     Embarrassed_14 = 14,
     FallingBackwards = 15,
     Death = 16,
-    Walk = game::mechanics::kOldWalk,
-    Run = game::mechanics::kOldRun,
-    JumpRun = game::mechanics::kOldJumpRun,
-    JumpStand = game::mechanics::kOldJumpStand,
-    Fall = game::mechanics::kOldFall,
-    DuckWalk = game::mechanics::kOldDuckWalk,
-    Climb = game::mechanics::kOldClimb,
-    Duck = game::mechanics::kOldDuck,
-    Tread = game::mechanics::kOldTread,
-    Idle = game::mechanics::kOldIdle,
+    Walk =17,
+    Run = 18,
+    JumpRun = 19,
+    JumpStand = 20,
+    Fall = 21,
+    DuckWalk = 22,
+    Climb = 23,
+    Duck = 24,
+    Tread = 25,
+    Idle = 26,
     Cheer = 27,
     Disgusted = 28,
     Wave = 29,
     Rude = 30,
     Yawn = 31,
-    Stand = game::mechanics::kOldStand,
-    SitStand = game::mechanics::kOldSitStand,
-    Turn = game::mechanics::kOldTurn,
+    Stand = 32,
+    SitStand = 33,
+    Turn = 34,
     NoEmote_35 = 35,
-    Kneel = game::mechanics::kOldKneel,
-    Swimming = game::mechanics::kOldSwim,
-    Sit = game::mechanics::kOldSit,
+    Kneel = 36,
+    Swimming = 37,
+    Sit = 38,
     NoEmote_39 = 39,
     NoEmote_40 = 40,
     NoEmote_41 = 41,
@@ -82,9 +82,15 @@ enum class AnimationType : std::uint8_t {
     Shiver = 68,
     TapFoot = 69,
     Bow_70 = 70,
-    StandAfter = game::mechanics::kOldStandAfter,
-    IdleAfter = game::mechanics::kOldIdleAfter,
-    SitIdle = game::mechanics::kOldSitIdle,
+    StandAfter = 71,
+    IdleAfter = 72,
+    SitIdle = 73,
+    Sitting=74,
+    Unknown_2=75,
+    Unknown_3=76,
+    Unknown_4=77,
+    Swimming_2=78,
+    Unknown_6=79
 };
 
 // The animation a spell landing without an OP_BeginCast plays on its source (GameConnection's added proc cast
