@@ -6,6 +6,7 @@
 #include "core/log.h"
 #include "game/coords.h"
 #include "game/combat.h"
+#include "game/chat_native_categories.h"
 #include "game/death_report.h"
 #include "game/mechanics/character.h"
 #include "net/game_connection.h"
@@ -140,6 +141,8 @@ void GameConnection::handle_death(const Death& d) {
     // The death text: ours in colour 0x115 and on the screen, others' in 0x116 when reported.
     while (chat_at < r.chat.size()) {
         std::uint32_t color = r.chat[chat_at].color;
+        if (color == game::kOwnDeathColor || color == game::kOtherDeathColor)
+            color = game::native_death_chat_color(in.dead_type == 1, in.dead_is_local);
         std::string line = text(r.chat[chat_at++]);
         if (r.screen_text) text_overlay_.display(line, 10, 10, 0xc0, 1000, 1000, 4000, static_cast<std::uint32_t>(now_ms()));
         chat(ChatEvent::Kind::Combat, std::move(line), 0, color);

@@ -13,7 +13,10 @@
 #include <lua.hpp>
 
 #include "app/lua_eq.h"
+#include "app/lua_eq_windows.h"
+#include "core/ini_file.h"
 #include "game/chat_windows.h"
+#include "game/combat.h"
 #include "game/item_links.h"
 #include "game/server_ext.h"
 #include "game/social.h"
@@ -111,10 +114,10 @@ TEST_CASE("Chat windows: lines go to the window of their colour's channel (Chann
         CHECK(lua.run("return eq.ChatWindows()[2].title") == "Chat 1");
         CHECK(lua.run("return tostring(eq.ReplaceWindow('Chat2'))") == "true");
         CHECK(lua.run("return lines(2)") == "");
-        // Melee's ALL: its 18 channels come here, and the window says so; lines already shown stay where they are.
+        // Melee's ALL moves its direct channels; lines already shown stay where they are.
         lua.run("eq.ChatSetFilter(2, 'Melee', true)");
         CHECK(lua.run("return lines(2)") == "All melee channels will now filter to this window.");
-        CHECK(lua.run("local n = 0; for _, f in ipairs(eq.ChatFilters(2)) do if f.on then n = n + 1 end end; return n") == "18");
+        CHECK(lua.run("local n = 0; for _, f in ipairs(eq.ChatFilters(2)) do if f.on then n = n + 1 end end; return n") == "22");
         view.add(ui::ChatChannel::System, "You have been slain", 0, 277);
         view.add(ui::ChatChannel::Combat, "You hit a rat for 3 points of damage.", 0, 265); // Your Hits (9)
         CHECK(lua.run("return lines(2)") ==
@@ -407,6 +410,177 @@ end
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("Chat windows: extended routes and nested groups persist without changing server filter settings") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_extended_routes");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    GameDir game_dir(dir / "game");
+    const std::array<int, 51> colors{
+        356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371, 372,
+        373, 374, 375, 376, 377, 378, 379, 380, 274, 286, 382, 383, 348, 349, 388, 389,
+        2, 4, 15, 13, 290, 390, 283, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408};
+    {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        CHECK(lua.run("return eq.ChatNewWindow('Extended')") == "2");
+        const auto original_server_settings = conn.chat_filters().settings;
+        for (std::size_t index = 0; index < colors.size(); ++index) {
+            const int route = 57 + static_cast<int>(index);
+            lua.run(std::format("eq.ChatSetFilter(2, {}, true); eq.ChatClear(2)", route));
+            const std::string text = std::format("route {}", route);
+            view.add(ui::ChatChannel::System, text, 0, static_cast<std::uint32_t>(colors[index]));
+            CHECK(lua.run("return lines(2)") == text);
+        }
+        CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 107 then return f.name end end") == "Alerts");
+        CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 106 then return f.name end end") == "Client Messages");
+        CHECK(lua.run("return #eq.ChatFilterGroups()") == "10");
+        CHECK(lua.run("for _, g in ipairs(eq.ChatFilterGroups()) do if g.name == 'Healing' then return g.parent end end") ==
+              std::to_string(static_cast<int>(game::ChatFilterMenu::Spells)));
+        CHECK(lua.run("for _, f in ipairs(eq.ChatFilters(2)) do if f.id == 101 then return f.menu end end") ==
+              std::to_string(static_cast<int>(game::ChatFilterMenu::Healing)));
+
+        CHECK(lua.run("return eq.ChatNewWindow('Healing')") == "3");
+        lua.run("eq.ChatSetFilter(3, 'Healing', true); eq.ChatClear(3); eq.ChatClear(2)");
+        view.add(ui::ChatChannel::System, "received heal", 0, 402);
+        view.add(ui::ChatChannel::System, "other direct damage", 0, 379);
+        CHECK(lua.run("return lines(3)") == "received heal");
+        CHECK(lua.run("return lines(2)") == "other direct damage");
+        CHECK(conn.chat_filters().settings == original_server_settings);
+
+        // The native context menu and Lua metadata describe the same hierarchy.
+        lua.run("eq.ChatMenu(2)");
+        REQUIRE(host.menus.size() == 1);
+        auto find = [](const std::vector<app::EqHost::MenuRow>& rows, const char* name) {
+            return std::find_if(rows.begin(), rows.end(), [&](const auto& row) { return row.text == name; });
+        };
+        auto filters = find(host.menus[0].rows, "Filters");
+        REQUIRE(filters != host.menus[0].rows.end());
+        REQUIRE(filters->submenu);
+        auto filter_rows = filters->submenu();
+        auto spells = find(filter_rows, "Spells");
+        REQUIRE(spells != filter_rows.end());
+        REQUIRE(spells->submenu);
+        auto spell_rows = spells->submenu();
+        auto healing = find(spell_rows, "Healing");
+        REQUIRE(healing != spell_rows.end());
+        REQUIRE(healing->submenu);
+        auto healing_rows = healing->submenu();
+        CHECK(healing_rows.size() == 6); // five direct routes and ALL
+        CHECK(healing_rows.back().text == "ALL");
+        CHECK_FALSE(healing_rows.back().check);
+        api.save_layout();
+    }
+    {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        Lua lua(api);
+        lua.run(kLines + std::string("_G.lines = lines"));
+        for (const auto& item : game::chat_filter_items()) {
+            if (item.channel < 57) continue;
+            const int window = item.menu == game::ChatFilterMenu::Healing ? 3 : 2;
+            CHECK(lua.run(std::format("for _, f in ipairs(eq.ChatFilters({})) do if f.id == {} then return f.on end end",
+                                      window, item.channel)) == "true");
+        }
+        view.add(ui::ChatChannel::System, "alert after reload", 0, 408);
+        view.add(ui::ChatChannel::System, "heal after reload", 0, 402);
+        CHECK(lua.run("return lines(2)") == "alert after reload");
+        CHECK(lua.run("return lines(3)") == "heal after reload");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+TEST_CASE("Chat palette: extended colours load, edit, persist and reset without writing game assets") {
+    constexpr std::array considers{game::Con::Red, game::Con::Yellow, game::Con::White,
+                                   game::Con::DarkBlue, game::Con::LightBlue, game::Con::Green, game::Con::Gray};
+    for (std::size_t index = 0; index < considers.size(); ++index)
+        CHECK(app::default_user_color_rgb(390 - 256 + static_cast<int>(index)) == game::con_rgb(considers[index]));
+    ImGuiContext* ctx = ImGui::CreateContext();
+    test::ScratchDir scratch("chat_extended_colors");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    write_strings(dir / "game");
+    const std::string asset_ini = "[TextColors]\nUser_3_Red=7\nUser_3_Green=8\nUser_3_Blue=9\n"
+                                  "User_100_Red=1\nUser_100_Green=2\nUser_100_Blue=3\n"
+                                  "User_153_Red=4\nUser_153_Green=5\nUser_153_Blue=6\n";
+    std::ofstream(dir / "game" / "eqclient.ini", std::ios::binary) << asset_ini;
+    GameDir game_dir(dir / "game");
+    auto chosen_color = [](int index) { return 0x010000u + static_cast<std::uint32_t>(index) * 0x0101u; };
+    for (int session = 0; session < 2; ++session) {
+        net::GameConnection conn(game_dir);
+        ui::ChatView view;
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &game_dir;
+        host.conn = &conn;
+        host.chat = &view;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        auto names = api.list_texts("OptionsWindow", "ColorChooseList");
+        CHECK(names.size() == 151); // 97 existing visible rows plus all 54 extended colours
+        for (int index = 99; index < game::kChatUserColorCount; ++index) {
+            CHECK_FALSE(app::extended_chat_color_name(index).empty());
+            CHECK(std::count(names.begin(), names.end(), app::extended_chat_color_name(index)) == 1);
+        }
+        if (session == 0) {
+            CHECK(app::user_color_rgb(99) == 0x010203u);
+            CHECK(app::user_color_rgb(152) == 0x040506u);
+            auto alerts = std::find(names.begin(), names.end(), "Alerts");
+            REQUIRE(alerts != names.end());
+            CHECK(api.click_list("OptionsWindow", "ColorChooseList", static_cast<int>(alerts - names.begin()), 0));
+            CHECK(api.click_child("OptionsWindow", "UserColorChange"));
+            REQUIRE(host.color_pick);
+            host.color_pick->done(0xff123456u);
+            CHECK(app::user_color_rgb(152) == 0x123456u);
+            for (int index = 99; index < game::kChatUserColorCount; ++index)
+                app::set_user_color(host, index, chosen_color(index));
+            app::set_user_color(host, 153, 0xabcdefu); // outside the palette
+            IniFile saved;
+            REQUIRE(saved.load(dir / "chat.ini"));
+            CHECK_FALSE(saved.get("TextColors", "User_154_Red"));
+            for (int index = 99; index < game::kChatUserColorCount; ++index)
+                CHECK(saved.get_int("TextColors", std::format("User_{}_Red", index + 1), -1) ==
+                      static_cast<int>((chosen_color(index) >> 16) & 0xffu));
+        } else {
+            for (int index = 99; index < game::kChatUserColorCount; ++index)
+                CHECK(app::user_color_rgb(index) == chosen_color(index));
+            CHECK(app::user_color_rgb(2) == 0x070809u); // unchanged read-only asset default
+            CHECK(api.click_child("OptionsWindow", "UserColorDefault"));
+            REQUIRE(host.confirm);
+            host.confirm->done(false);
+            CHECK(app::user_color_rgb(152) == chosen_color(152));
+            host.confirm->done(true);
+            for (int index = 0; index < game::kChatUserColorCount; ++index)
+                CHECK(app::user_color_rgb(index) == app::default_user_color_rgb(index));
+            CHECK(app::user_color_rgb(153) == app::user_color_rgb(0));
+            IniFile saved;
+            REQUIRE(saved.load(dir / "chat.ini"));
+            CHECK(saved.get_int("TextColors", "User_153_Red", -1) ==
+                  static_cast<int>((app::default_user_color_rgb(152) >> 16) & 0xffu));
+        }
+    }
+    std::ifstream unchanged(dir / "game" / "eqclient.ini", std::ios::binary);
+    CHECK(std::string(std::istreambuf_iterator<char>(unchanged), {}) == asset_ini);
+    ImGui::DestroyContext(ctx);
+}
+
 TEST_CASE("Chat windows: GetChannelFromColor, the Filters menu, the tell menus' text, LastTell_Add") {
     CHECK(game::chat_channel_of_color(256) == 0);  // say
     CHECK(game::chat_channel_of_color(307) == 0);  // our say
@@ -418,7 +592,7 @@ TEST_CASE("Chat windows: GetChannelFromColor, the Filters menu, the tell menus' 
     CHECK(game::chat_channel_of_color(324) == 21); // our chat channel 10
     CHECK(game::chat_channel_of_color(277) == 28); // my death
     CHECK(game::chat_channel_of_color(350) == 56); // PvP (0x15e)
-    CHECK(game::chat_channel_of_color(13) == 22);  // the basic colours: Other
+    CHECK(game::chat_channel_of_color(13) == 93);  // red has its own destination
     CHECK(game::chat_channel_of_color(351) == 22);
     // every channel but the unused 48 is in a menu once
     std::array<int, game::kChatChannelCount> seen{};

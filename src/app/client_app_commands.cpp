@@ -341,7 +341,7 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
     }
     if (h == "Cmd_usercolor") {
         // Cmd_usercolor @0x4e9b60 (game::usercolor_command): a help page, or the colour set (SetUserDefinedColor with
-        // index - 1, which ignores anything outside 0..98) and kept (User_<n>_Red / _Green / _Blue in chat.ini).
+        // index - 1, extended to Hailstone's whole palette) and kept (User_<n>_Red / _Green / _Blue in chat.ini).
         game::UserColor u = game::usercolor_command(args);
         if (u.page) {
             for (const char* line : game::usercolor_help_lines(*u.page)) c.show_chat(line, 0x111);

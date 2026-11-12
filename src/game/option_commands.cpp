@@ -7,6 +7,7 @@
 
 #include "core/msvc_atoi.h"
 #include "core/wrap_math.h"
+#include "game/chat_windows.h"
 #include "game/slash_commands.h"
 #include "platform/local_time.h"
 
@@ -211,8 +212,9 @@ ShowNames shownames_command(std::string_view args, std::string_view off) {
 
 namespace {
 
-// /usercolor's help (the exe's own lines): the usage, then page1..page7.
-constexpr const char* kUsage[] = {"Format: /usercolor <number> <red> <green> <blue>", "<number> -> 1 to 69",
+// The legacy help pages retain their numbering; Hailstone's palette extends
+// the accepted colour numbers through 153. All names appear in Options/Colors.
+constexpr const char* kUsage[] = {"Format: /usercolor <number> <red> <green> <blue>", "<number> -> 1 to 153",
                                   "<red> <green> <blue> -> 0 to 255",
                                   "To reset a user color use /usercolor <number> reset",
                                   "To display a list of usercolor #'s use /usercolor help"};
@@ -291,13 +293,16 @@ UserColor usercolor_command(std::string_view args) {
             if (is_numeric_string(words[3])) c.blue = eq_atoi(words[3]);
         }
     }
-    // A reset takes the default colour later (the channels are not known here): only the index is checked then.
+    // A reset takes the default colour later. The extended bound is shared
+    // with the Options palette; zero retains the original harmless no-op.
     if (c.reset) {
-        if (static_cast<std::uint32_t>(c.index) > 0x63) c.page = kUserColorUsage;
+        if (static_cast<std::uint32_t>(c.index) > static_cast<std::uint32_t>(kChatUserColorCount))
+            c.page = kUserColorUsage;
         return c;
     }
     if (static_cast<std::uint32_t>(c.red) > 0xff || static_cast<std::uint32_t>(c.green) > 0xff ||
-        static_cast<std::uint32_t>(c.blue) > 0xff || static_cast<std::uint32_t>(c.index) > 0x63)
+        static_cast<std::uint32_t>(c.blue) > 0xff ||
+        static_cast<std::uint32_t>(c.index) > static_cast<std::uint32_t>(kChatUserColorCount))
         c.page = kUserColorUsage;
     return c;
 }

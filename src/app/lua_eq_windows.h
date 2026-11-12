@@ -410,11 +410,12 @@ std::string load_stml_page(const GameDir* game, const std::string& path, std::st
 
 // CChatWindowManager::GetRGBAFromIndex as 0xRRGGBB (app/lua_eq_chat.cpp), and text made safe inside STML.
 std::uint32_t chat_index_rgb(int index);
-// The 99 user colours (CDisplay's table @0xd1f3d8, 0xRRGGBB): eqclient.ini [TextColors] User_<n>_Red/Green/Blue as
-// the loader @0x48a160 reads them (the default table @0xac2c40 when one of the three is missing). Out of range
-// indices read colour 0 (GetUserDefinedColor).
+// User colours 256..408 as 0xRRGGBB: the character's chat.ini over read-only
+// eqclient.ini [TextColors] User_<n>_Red/Green/Blue. Extended defaults inherit
+// related RoF2 colours; an out-of-range index reads colour 0.
 std::uint32_t user_color_rgb(int index);
 std::uint32_t default_user_color_rgb(int index);
+std::string_view extended_chat_color_name(int index); // index 99..152; empty outside the extended palette
 // COptionsWnd::SaveColors: CDisplay::SetUserDefinedColor and the three keys the original writes to eqclient.ini,
 // here to the character's chat.ini (core/character_files.h).
 void set_user_color(EqHost& host, int index, std::uint32_t rgb);

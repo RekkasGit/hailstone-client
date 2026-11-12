@@ -13,6 +13,7 @@
 
 #include "core/log.h"
 #include "game/appearance.h"
+#include "game/chat_native_categories.h"
 #include "game/coords.h"
 #include "net/game_connection.h"
 #include "game/hit_landing.h"
@@ -907,7 +908,8 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 if (bard && sp && server_ext().own_begin_cast_line(*this, *sp)) {
                     spell_message(12205, {spell_name(*spell_table_, b->spell_id)});
                 } else if (bard) {
-                    if (sp && !sp->cast_by_me.empty()) chat(ChatEvent::Kind::Spell, sp->cast_by_me);
+                    if (sp && !sp->cast_by_me.empty())
+                        chat(ChatEvent::Kind::Spell, sp->cast_by_me, 0, game::kChatBardSongs);
                 } else {
                     spell_message(12205, {spell_name(*spell_table_, b->spell_id)}); // You begin casting %1.
                 }
@@ -921,7 +923,8 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
                 if (it != world_.spawns.end() && b->spell_id != 0xffffffffu) {
                     std::string who = game::display_name(it->second.name);
                     if (!bard) spell_message(12206, {who}); // %1 begins to cast a spell.
-                    else if (sp && !sp->cast_by_other.empty()) spell_message(12207, {who, sp->cast_by_other});
+                    else if (sp && !sp->cast_by_other.empty())
+                        spell_message(12207, {who, sp->cast_by_other}, game::kChatBardSongs);
                 }
             }
         }
@@ -930,7 +933,8 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
         if (auto ic = decode_interrupt_cast(p)) {
             // Message only; the OP_ManaChange that comes with it ends the cast.
             spells_.others.erase(ic->spawn_id);
-            chat(ChatEvent::Kind::Spell, strings_.format(ic->message_id, ic->args), 0, 289); // spell failures
+            chat(ChatEvent::Kind::Spell, strings_.format(ic->message_id, ic->args), 0,
+                 ic->spawn_id != 0 && ic->spawn_id != me ? game::kChatSpellFailuresOthers : 289u);
         }
         break;
     case Op::Buff:

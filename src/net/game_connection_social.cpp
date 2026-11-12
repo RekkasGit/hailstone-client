@@ -13,6 +13,7 @@
 #include <format>
 
 #include "core/log.h"
+#include "game/chat_native_categories.h"
 #include "game/coords.h"
 #include "game/eq_names.h"
 #include "game/item_options.h"
@@ -2005,8 +2006,11 @@ void GameConnection::handle_social(Op op, const AppPacket& p) {
             bool ignored = std::any_of(social_.ignored.begin(), social_.ignored.end(),
                                        [&](const std::string& i) { return iequals(after_last_dot(i), r->name); });
             if (!ignored) {
-                system(1086, {r->name}, 0x11f);
-                system(1087, {std::to_string(r->low), std::to_string(r->high), std::to_string(r->result)}, 0x11f);
+                const auto roller = after_last_dot(r->name);
+                const auto color = game::native_random_chat_color(
+                    iequals(roller, character_), group_.has_member(roller) || raid_.is_member(roller));
+                system(1086, {r->name}, color);
+                system(1087, {std::to_string(r->low), std::to_string(r->high), std::to_string(r->result)}, color);
             }
         }
         break;

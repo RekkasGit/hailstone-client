@@ -1084,6 +1084,25 @@ race. Off, the original's checks apply.
   Display "Target Name Through Walls", off by default) is on, a sight of the target the original does not give. Its highlight is switchable (`display.target_plate_highlight`, Options > Display "Highlight Target Name", on by default):
   docs/graphics.md "Name plates".
 
+## Extended chat routing
+
+Extended message colours are accepted natively and retain their numeric wire
+IDs. Routes 57–107 add the modern damage/heal perspectives, critical results,
+spell notices, randoms, considers and general categories. Reused colours have
+specific destinations too: faction 274, loot/money 285–286, chat information
+290, achievements 348–349 and incoming direct damage 283. Colour 397 is your
+direct damage, route 40. The unmodified EQEmu server's old DoT colour 325 also
+goes to Your DoTs (77), alongside 376; this is an intentional compatibility
+alias rather than the later client's avatar-command classification.
+
+Client-generated lines select the same categories from known packet context:
+NPC deaths, environmental hits, damage-shield perspectives, considers,
+self/group/raid/other random rolls and bard song notifications. Server-formatted
+messages keep the colour the server chose; no text matching guesses their
+category. Categories without an existing local producer are available whenever
+a server or add-on emits their colour. This does not require a server patch or
+change the wire format of server visibility filters.
+
 ## Chat keys, the PvP rule set, trade and group invites
 
 Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle chat input mode 1000, con level

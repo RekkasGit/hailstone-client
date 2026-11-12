@@ -102,11 +102,11 @@ inline constexpr int kUserColorUsage = 0; // the help pages of usercolor_help_li
 struct UserColor {
     std::optional<int> page; // a help page to show (and nothing else)
     bool reset = false;      // "<index> reset": the default colour (__SaveColors)
-    std::int32_t index = -1, red = -1, green = -1, blue = -1; // Set: index 0..99 (SetUserDefinedColor(index - 1))
+    std::int32_t index = -1, red = -1, green = -1, blue = -1; // User ordinal 1..153; zero is a legacy no-op
 };
 // Cmd_usercolor @0x4e9b60: no argument, or anything out of range, gives the usage page; "help" / "page1".."page7" a
-// page; "<index> reset" or "<index> <r> <g> <b>" (each only when numeric) sets a colour. The index is 0..99 and each
-// channel 0..255 (out of range: the usage). Colour 0x111 throughout.
+// page; "<index> reset" or "<index> <r> <g> <b>" sets a colour. Hailstone extends the accepted ordinal through 153
+// to match its Options palette. Each RGB component is 0..255; out of range gives usage. Colour 0x111 throughout.
 UserColor usercolor_command(std::string_view args);
 std::span<const char* const> usercolor_help_lines(int page);
 

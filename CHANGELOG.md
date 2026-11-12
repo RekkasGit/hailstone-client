@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Chat filters now include the modern damage, healing, critical, spell, environmental, random and other categories natively, with editable colours and saved window destinations. They work without an add-on or feature switch; server-only categories receive messages when the server sends them
 - For plugin authors: two new host functions, `get_buff_data_bulk` and `get_pet_buff_data_bulk`, read all of the player's buffs or the pet's in one call (docs/plugins.md "Buff records")
 - Hailstone is now licensed under the GNU GPL, version 2 or later, like MacroQuest (it was MIT up to 0.7.0-beta). The plugin SDK stays MIT, and plugins, scripts, UI packs and other add-ons may still use any licence (NOTICE.md). Releases now include LICENSE.txt, NOTICE.md and THIRD_PARTY.md
 - `/time` and scripts' `GameTime` now advance with the zone's clock instead of staying at the time received when zoning in, including the date when a game day, month or year ends

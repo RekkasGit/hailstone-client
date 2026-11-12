@@ -51,6 +51,32 @@ while (window.poll_events()) {
 }
 ```
 
+### Extended chat categories
+
+Chat-window filters natively cover 108 destinations and 153 user colours
+(message colours 256–408), without a plugin or an enable switch. The original
+route IDs 0–56 remain stable; the modern categories use 57–107. Categories for
+server messages remain quiet until a server sends their message types. The
+29-entry server visibility-filter packet is unchanged: routing a category to a
+window and hiding a server message are separate settings.
+
+The filter tree groups direct damage, damage over time and healing under
+Spells, with separate damage-shield, environmental, random-roll and other
+menus. `eq.ChatFilterGroups()` returns `{id, parent, name}` for each submenu
+(the root is 0). `eq.ChatFilters(slot)` keeps `id`, `group`, `name` and `on`, and
+adds `menu` and `parent`; `eq.ChatSetFilter` still accepts a route ID or a group
+name. A group's ALL changes only its direct rows. Both the native context menu
+and the modern UI use this tree. The gamepad log reads the same routed windows.
+
+Colours are editable and resettable through the existing Colors page, with
+`User_100` through `User_153` saved in the character's `chat.ini`.
+The existing `/usercolor` command accepts colour ordinals 1 through 153 too. New colours
+start from Hailstone's existing semantic colour families rather than importing
+a later proprietary client's palette. Missing newer localized labels have
+readable built-in names, so a RoF2-only asset folder needs no new string file.
+Routes 106 and 107 are generic Client Messages and Alerts; message colours 407
+and 408 remain compatible with extensions that use those IDs.
+
 ## The Lua windows
 
 The windows are Lua scripts drawn with ImGui, grouped into user interfaces: every folder of `ui/` with a `ui.ini` is one (`src/ui/ui_packs.h`), copied next to the executable at build time and reloaded when its scripts change (the build copies only the scripts whose contents changed and deletes those gone from the source, `cmake/SyncUiPacks.cmake`, so a rebuild reloads only what it changed). Each saved server keeps its own (`servers/<id>/server.ini` `[Server] ui`, picked on the login screen's Interface list, which every pack's login screen shows on its main card, or in Options > Display > Interface > User Interface; the login screen switches to it at once, and a saved server keeps it at once); `hailstone.ini` `ui.name` is the one for a new server or a test login (`modern` when it is missing), and each keeps its scripts' settings in `ui/settings/<name>.txt` of the Hailstone folder (not inside the pack, which an update replaces).
