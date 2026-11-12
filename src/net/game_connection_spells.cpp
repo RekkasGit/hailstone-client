@@ -24,6 +24,7 @@
 #include "net/spell_packets.h"
 #include "net/ability_packets.h"
 #include "game/race_models.h"
+#include "core/animation_types.h"
 
 namespace hailstone::net {
 
@@ -746,7 +747,15 @@ void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool
     // 859's local landing plays only the impact, and never sends an animation.
     if (const game::SpellData* sp = spell_table_->get(a.spell_id);
         from_server && sp && a.source != 0 && (a.effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
-        play_animation(a.source, sp->casting_anim);
+        if (sp->casting_anim > 0) {
+            play_animation(a.source, sp->casting_anim);
+        } else {
+            if (sp->spell_type > 0) {
+                play_animation(a.source, AnimationType::CastHeals);
+            } else {
+                play_animation(a.source, AnimationType::CastNuke);
+            }
+        }
         // Our own: the zone is told of the animation too, as the server does not pass it on to players with
         // some chat filters on; a second one does not interrupt a playing animation and is range limited.
         if (a.source == world_.player_id) {

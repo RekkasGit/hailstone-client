@@ -33,6 +33,7 @@
 #include "net/opcodes.h"
 #include "net/packet_io.h"
 #include "game/attack_check.h"
+#include "core/animation_types.h"
 
 namespace hailstone::net {
 
@@ -2235,6 +2236,11 @@ void GameConnection::autofire_command() {
     set_auto_fire(true);
 }
 
+void GameConnection::play_animation(std::uint32_t spawn_id, AnimationType action) {
+
+    play_animation(spawn_id, static_cast<uint8_t>(action));
+
+}
 void GameConnection::play_animation(std::uint32_t spawn_id, std::uint8_t action) {
     auto it = world_.spawns.find(spawn_id);
     if (it == world_.spawns.end()) return;
