@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+A zone takes less memory while it loads: the world's fully opaque textures get their mip chain built by the graphics card instead of on the CPU, and the zone's own uploads are staged to the card in pieces rather than all at once. On a large zone (dragonscale) the peak falls by about 115 MB (1,468 MB → 1,353 MB of commit, 740 MB → 625 MB of working set); a small classic zone holds about the same
+- Decoded character WLD data is released after model and appearance construction finishes, including nested and concurrent builds; memory diagnostics now report source releases and retained model, appearance and item cache payloads.
+- Unused character WLDs retain a compact validated resource index instead of all decoded meshes and animation frames; full WLD data loads when a model or material first uses it. Memory logs report each first-use decode and the number of materialized WLDs after zoning.
+- Memory diagnostics log character archive storage and parsed WLD estimates, startup and zone resident memory, and GPU allocation bytes.
+- Character archives no longer hold whole `.s3d` files in the heap: `PfsArchive::open` maps them read-only, so the bytes live in the file cache and only the index is private. The parsed WLDs behind the models stay private as before, so the full historical archive increment is not reclaimed by this alone
+- Character animation aliases and duplicate tracks share key data; constant tracks store one key while preserving their original frame count, loop period and interpolation. Model memory diagnostics count shared key arrays once.
+- Memory diagnostics now report Windows private commit alongside resident memory and split cached model payloads into animation/skeleton, geometry/materials and other data.
+- Memory diagnostics now report Windows private commit alongside resident memory and split cached model payloads into animation/skeleton, geometry/materials and other data.
 - Modern hot bars: drag a bar's right or bottom edge, or its bottom-right corner, to change its shape ("Buttons per row"); the bar's regular right-click menu has **Lock layout** so it cannot be moved or resized by accident
 - Chat: a chat window can be folded away into its tab strip, with the button at the strip's right end (as the combat ability window folds into its title bar). The tabs stay, so the chat is one click away and keeps the lines that came in while it was folded
 - Chat: a server that sends the newer chat message types (colours 355 to 408) can now have them filtered to their own windows, from a new Extended (server) submenu of the chat window's Filters menu, and coloured from 54 new rows at the end of Options > Colors. Nothing changes on a stock EQEmu server, which sends none of them
