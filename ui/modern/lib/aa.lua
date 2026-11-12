@@ -5,7 +5,8 @@
 -- the era (the expansion the ability came with), activated or passive, the rank and the next rank's cost (a head's
 -- click sorts by it, its drag moves the column; sorted by name to start with, the text a size up from other
 -- windows'); and the selected ability at the side: its rank, the next rank's cost, the level and the abilities it
--- needs, its reuse time, the game's description, Train (and "all ranks" where the server allows it) and Hotkey.
+-- needs, its reuse time, the game's description, Train (with "all ranks": the server's buy all, else the client buys rank after rank) and Hotkey;
+-- the selection stays on the ability as its ranks are bought.
 -- Deliberate differences: the stock window shows one tab's list at a time, in the game's order. Rows are the game's
 -- (eq.ListClick selects the ability, so Train and Hotkey act on it; dragging a row puts the ability's hot button on
 -- the cursor, as on the stock list); an ability greyed is one the game will not train now. The requirements come from
@@ -577,7 +578,7 @@ local function details(x, y, w, h, s)
   ui.SetCursorScreenPos(ix, y + h - pad - foot + 4 * s)
   if trainAll then
     W.Check(WINDOW, "TrainAllButton", "Buy every rank I can",
-      { tooltip = "Train buys all the ranks of this ability you can afford" })
+      { tooltip = "Train buys every rank of this ability you can afford, one after another" })
   end
   ui.SetCursorScreenPos(ix, y + h - pad - btnH)
   ui.BeginGroup()

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- AA window: after you buy a rank the window stays on that ability, so **Train** buys the next rank without clicking the ability again. **Buy every rank I can** now works on every server: on a stock EQEmu server the client buys the ranks one after another until you run out of points or reach the last rank
 - Chat: a server that sends the newer chat message types (colours 355 to 408) can now have them filtered to their own windows, from a new Extended (server) submenu of the chat window's Filters menu, and coloured from 54 new rows at the end of Options > Colors. Nothing changes on a stock EQEmu server, which sends none of them
 - On a fresh install, the login screen starts on the server your game folder's `eqhost.txt` names (its `[LoginServer]` `Host`), as a saved server you can rename or delete. This happens once: a server you delete does not come back
 - On Windows, the asset folder picker uses the Explorer-style folder dialog with its address bar, Quick access and search, instead of the old folder tree
