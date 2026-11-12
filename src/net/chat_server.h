@@ -81,10 +81,15 @@ class ChatServer {
 public:
     struct Options {
         SessionOptions session = ucs_session_options();
-        // Hailstone safety limits: an acknowledged login with no answer must not wait forever, and a failed
-        // transport retries without replaying commands. An explicit refusal waits for new credentials.
+        // Hailstone safety limits, a deliberate difference: the original never retries by itself
+        // (CEverQuest::ChatServerGiveTime @0x5382d0 deletes a disconnected proxy and forgets the server until the next
+        // OP_SetChatServer2; reconnect_delay zero does the same). An acknowledged login with no answer must not wait forever, and a failed transport
+        // retries without replaying commands, doubling the delay each time and giving up after a few attempts. A
+        // refusal (an explicit one, or stock UCS closing the link before any login reply) waits for new credentials.
         std::chrono::milliseconds login_timeout{30000};
-        std::chrono::milliseconds reconnect_delay{5000}; // zero disables automatic retry
+        std::chrono::milliseconds reconnect_delay{5000}; // the first retry's delay; zero disables automatic retry
+        std::chrono::milliseconds max_reconnect_delay{60000};
+        std::size_t max_reconnect_attempts = 5; // retries in a row without an accepted login
         std::size_t max_pending_packets = 128;
         std::size_t max_pending_bytes = 256u << 10;
         std::size_t max_before_login_events = 256;
@@ -128,6 +133,8 @@ private:
     std::string error_;
     Clock::time_point attempt_started_, login_started_, last_probe_, retry_at_;
     bool retry_pending_ = false;
+    std::size_t retries_ = 0; // automatic retries since connect() or the last accepted login
+    bool channels_until_disconnect_polled_ = false; // undelivered messages still need the old channel numbers
     std::deque<ChatServerEvent> events_;
     std::deque<ChatServerEvent> before_login_; // EQEmu sends friend/ignore lists before its login reply
     std::size_t before_login_bytes_ = 0;

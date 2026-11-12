@@ -60,7 +60,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Bazaar: Find Trader, Hide Traders, the result row's Buy button, the stall check, the price load of a selected slot (f7401f3; Hide Traders by unit tests only).
 - [x] Barter: the feature check, offline mode, Hide Buyers (f7401f3; Hide Buyers and the feature check by unit tests only).
 - [x] Mail: the ignore list (kept and edited only, as in the original); the composition window's From (351d492).
-- [x] UCS authentication gates chat/mail commands and login-time events; bounded queues, denial, timeout and reconnect lifecycle covered by independent mock peers. Live reconnection acceptance remains open.
+- [x] UCS authentication gates chat/mail commands and login-time events; bounded queues, denial (an explicit refusal or the stock UCS closing the link before its reply), timeout and the backed-off reconnect lifecycle covered by independent mock peers.
+- [ ] UCS: check reconnection after a lost chat link, and a wrong chat key, against a live stock EQEmu server.
 - [x] Mail's From seen live after a mail login: "SOE.EQ.nmsdev.Nmscmistwo" (2026-10-29; the chat server answers logins again).
 - [x] Bazaar: the PC and NPC target keys skip hidden traders and buyers (unit tests). The NMS bazaar's porch stalls (type 153) lie outside the zone geometry, so only the FRUGS302 rugs work as stalls (server data).
 - [x] Bazaar: a right click on a trader or buyer the server sends as an NPC (Project Triune's offline traders) opens its shop or barter window: RightClickedOnPlayer tests the trader / buyer flag after the service classes for any spawn, not only players (mock test; the right click on the Triune bazaar traders not retried live).

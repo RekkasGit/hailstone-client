@@ -1861,6 +1861,11 @@ void GameConnection::handle_chat_server_event(const ChatServerEvent& e) {
     using K = ChatServerEvent::Kind;
     switch (e.kind) {
     case K::Disconnected:
+        // CEverQuest::ChatServerGiveTime @0x5382d0 deletes a proxy whose link is down (GetStatus @0x7ef820 == 0), and
+        // ~UniversalChatProxy @0x427db0 frees the buddy list with it; the ignore list BeingIgnored @0x516a00 walks is
+        // the proxy's too, so with no proxy nothing is ignored. Friends, ignores and mail all go with the session.
+        social_.friends.clear();
+        social_.ignored.clear();
         autojoined_ = false;
         handle_mail_event(e);
         break;

@@ -65,18 +65,27 @@ Servicing the session only from the owner's `update()`, once a frame, is not eno
 
 ## Timings
 
-UCS has a separate profile (`ucs_session_options`), rather than inheriting the world/zone timings below:
-24 reliable slots, 10,000 bytes, no multi-buffer hold, no statistics requests, a 5 s SessionRequest retry and a 30 s
-connection deadline. Keepalive is 44 s, or 14.8 s with ChatKeepAlive; there is no receive-idle timeout. Reliable data
-has a 120 s transport limit. The chat owner also checks the oldest unacknowledged data every more than 5 s and
-fails the link once that data is over 30 s old. These ages are independent of incoming keepalives.
+UCS has a separate profile (`ucs_session_options`), rather than inheriting the world/zone timings below. It is the
+UdpManager Params block `UniversalChatProxy_Connect` @0x7f0040 builds on the defaults of `Params::Params(0)` @0x426e70,
+checked in the disassembly: 24 reliable slots (0x2c/0x2d), 10,000 bytes (0x2b), no multi-buffer hold (0x15 set to 0;
+the default is 50 ms), no statistics requests (0x1a), a 5 s SessionRequest retry (0x21) and a 30 s connection deadline
+(`UdpManager_EstablishConnection`'s argument). Keepalive is 44 s, or 14.8 s with ChatKeepAlive (0xe); there is no
+receive-idle timeout. Reliable data has a 120 s transport limit (0x13, left at its default; 0x12 too, so no receive-idle limit). The chat owner
+(`UniversalChatProxy_GiveTime` @0x7efea0) also checks the oldest unacknowledged data every more than 5 s and fails
+the link once that data is over 30 s old. These ages are independent of incoming keepalives.
 
 Transport connection does not authenticate UCS. Commands wait for a complete successful MailLogin reply;
 friend/ignore events sent by stock EQEmu before that reply are held until it arrives. Pending commands and events
 are bounded (128 commands / 256 KiB, 256 events / 1 MiB). DNS and the transport handshake share a 30 s connection
-deadline; once MailLogin is sent, its reply has a separate 30 s deadline. Hailstone deliberately retries transient failures after 5 s, discarding pending work rather
-than replaying a mail or channel command into a new session. An explicit refusal requires fresh connection
-credentials. Late replies cannot authenticate a replacement attempt. Mailbox and transient mail state are cleared
+deadline; once MailLogin is sent, its reply has a separate 30 s deadline (Hailstone's). The original never
+reconnects by itself (`CEverQuest::ChatServerGiveTime` @0x5382d0 deletes a disconnected proxy and waits for the next
+OP_SetChatServer2). Hailstone deliberately retries transient failures, after 5 s and then twice as long each time up
+to 60 s, at most 5 times in a row (the count restarts after an accepted login; `reconnect_delay` 0 turns retries off),
+discarding pending work rather than replaying a mail or channel command into a new session. A refusal requires fresh
+connection credentials (the next OP_SetChatServer2): an explicit refusal reply, or the link closing after MailLogin
+went out and before any reply, which is how stock EQEmu UCS answers a bad key (ucs/clientlist.cpp closes the stream).
+Events accepted after the login and not yet polled are still delivered before the Disconnected event. Late replies
+cannot authenticate a replacement attempt. Mailbox, transient mail state and the friends and ignore lists are cleared
 when the authenticated session is lost (`tests/ucs_session_test.cpp`).
 
 | What | Value | Note |

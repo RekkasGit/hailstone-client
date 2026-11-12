@@ -219,6 +219,119 @@ TEST_CASE("UCS denial drops queued work and requires fresh credentials before an
     CHECK(rig.chat.error().empty());
 }
 
+TEST_CASE("UCS link closed before any login reply is a refusal, as stock UCS sends no refusal packet") {
+    // EQEmu's UCS answers a bad key by closing the stream (ucs/clientlist.cpp: KeyValid = false, Close()).
+    UcsRig rig;
+    REQUIRE(rig.start());
+    CHECK(rig.chat.send_command("join stale"));
+    rig.peer.send_disconnect();
+    REQUIRE(rig.until([&] { return rig.chat.failed(); }));
+    CHECK(rig.chat.error().find("before answering the login") != std::string::npos);
+    auto events = rig.events();
+    REQUIRE(events.size() == 1);
+    CHECK(events.front().kind == ChatServerEvent::Kind::Disconnected);
+    for (int i = 0; i < 20; ++i) {
+        rig.clock.advance(1min);
+        rig.step();
+    }
+    CHECK(rig.peer.sessions() == 1);
+    CHECK(rig.received.size() == 1);
+    rig.chat.connect(identity(rig.peer.port())); // the next OP_SetChatServer2
+    REQUIRE(rig.until([&] { return rig.peer.sessions() == 2 && rig.received.size() == 2; }));
+    REQUIRE(rig.authenticate());
+    CHECK(rig.received.size() == 2);
+}
+
+TEST_CASE("UCS automatic retries back off, stop after the limit and restart their count on a login") {
+    ManualClock clock;
+    clock.hold();
+    SoeEndpoint peer(SoeEndpoint::default_params(), 1);
+    auto opt = options(clock);
+    opt.reconnect_delay = 5s;
+    opt.max_reconnect_delay = 15s;
+    opt.max_reconnect_attempts = 3;
+    ChatServer chat(std::move(opt));
+    std::size_t logins = 0;
+    auto step = [&] {
+        chat.update();
+        peer.poll();
+        while (auto packet = peer.take())
+            if (packet->opcode == 0x01) ++logins;
+    };
+    chat.connect(identity(peer.port()));
+    REQUIRE(pump(step, [&] { return logins == 1; }));
+    // Each attempt is acknowledged and never answered: the login timeout fails it with a retry.
+    auto expire_and_wait = [&](std::chrono::milliseconds delay) {
+        clock.advance(30s);
+        step();
+        REQUIRE(chat.failed());
+        const auto before = peer.sessions();
+        clock.advance(delay - 1ms);
+        step();
+        CHECK(peer.sessions() == before);
+        clock.advance(1ms);
+        return pump(step, [&] { return peer.sessions() == before + 1 && logins == static_cast<std::size_t>(before + 1); });
+    };
+    REQUIRE(expire_and_wait(5s));
+    REQUIRE(expire_and_wait(10s));
+    REQUIRE(expire_and_wait(15s)); // 20 s capped at 15 s
+    clock.advance(30s);
+    step();
+    REQUIRE(chat.failed());
+    for (int i = 0; i < 10; ++i) {
+        clock.advance(1min);
+        step();
+    }
+    CHECK(peer.sessions() == 4); // three retries, then it waits for new credentials
+    chat.connect(identity(peer.port()));
+    REQUIRE(pump(step, [&] { return peer.sessions() == 5 && logins == 5; }));
+    REQUIRE(expire_and_wait(5s));
+    peer.send_reliable(mailbox_reply());
+    REQUIRE(pump(step, [&] { return chat.connected(); }));
+    peer.send_disconnect(); // after an accepted login: a lost link, retried from the first delay again
+    REQUIRE(pump(step, [&] { return chat.failed(); }));
+    clock.advance(4999ms);
+    step();
+    CHECK(peer.sessions() == 6);
+    clock.advance(1ms);
+    REQUIRE(pump(step, [&] { return peer.sessions() == 7; }));
+}
+
+TEST_CASE("UCS failure keeps authenticated events not yet polled and their channel numbers") {
+    UcsRig rig;
+    REQUIRE(rig.start());
+    REQUIRE(rig.authenticate());
+    rig.events();
+    rig.peer.send_reliable(strings(0x02, {"general"}));
+    REQUIRE(rig.until([&] { return rig.chat.channels() == std::vector<std::string>{"general"}; }));
+    rig.peer.drop_next_acks(1000);
+    CHECK(rig.chat.send_command("join slow"));
+    REQUIRE(rig.until([&] { return rig.received.size() == 2; }));
+    rig.peer.send_reliable(strings(0x03, {"$SOE.EQ.test.Hero", "SOE.EQ.test.Friend", "a tell", "SPAM:0:"}));
+    rig.peer.send_reliable(strings(0x03, {"general", "SOE.EQ.test.Friend", "channel text", "SPAM:0:"}));
+    REQUIRE(rig.until([&] { return rig.peer.unacked() == 0; }));
+    rig.clock.advance(35001ms);
+    rig.peer.send_keepalive();
+    rig.step(); // the unacknowledged-command check fails the link in the same update
+    REQUIRE(rig.chat.failed());
+    auto first = rig.chat.poll();
+    REQUIRE(first);
+    CHECK(first->kind == ChatServerEvent::Kind::Channels);
+    auto tell = rig.chat.poll();
+    REQUIRE(tell);
+    CHECK(tell->kind == ChatServerEvent::Kind::Message);
+    CHECK(tell->text == "a tell");
+    auto text = rig.chat.poll();
+    REQUIRE(text);
+    CHECK(text->text == "channel text");
+    CHECK(rig.chat.channels() == std::vector<std::string>{"general"}); // still numbered as /1
+    auto gone = rig.chat.poll();
+    REQUIRE(gone);
+    CHECK(gone->kind == ChatServerEvent::Kind::Disconnected);
+    CHECK(rig.chat.channels().empty());
+    CHECK_FALSE(rig.chat.poll());
+}
+
 TEST_CASE("UCS acknowledged login without a reply expires and retries without stale commands") {
     UcsRig rig;
     REQUIRE(rig.start());
@@ -340,8 +453,14 @@ TEST_CASE("UCS mail integration authenticates, switches boxes, reads and deletes
     REQUIRE(rig.until([&] { return !rig.server.ucs_log.empty(); }));
     CHECK_FALSE(rig.conn.chat_server_connected());
     CHECK_FALSE(rig.conn.mail_send("Other", "Waiting", "Body"));
+    rig.server.ucs.send_reliable(buddy_reply("Friend"));
+    auto ignored = strings(0x15, {"SOE.EQ.test.Pest"});
+    ignored.data.insert(ignored.data.begin(), std::byte{0});
+    rig.server.ucs.send_reliable(ignored);
     rig.server.ucs.send_reliable(mailbox_reply());
     REQUIRE(rig.until([&] { return rig.conn.chat_server_connected() && rig.conn.mail().mailboxes.size() == 2; }));
+    CHECK(rig.conn.social().friends == std::vector<std::string>{"Friend"});
+    CHECK(rig.conn.social().ignored == std::vector<std::string>{"SOE.EQ.test.Pest"});
     rig.conn.mail_select_mailbox(1);
     rig.server.ucs.send_reliable(strings(0x14, {"1"}));
     REQUIRE(rig.until([&] { return rig.conn.mail().current == 1; }));
@@ -372,4 +491,7 @@ TEST_CASE("UCS mail integration authenticates, switches boxes, reads and deletes
     CHECK(rig.conn.mail().headers.empty());
     CHECK(rig.conn.mail().expected == -1);
     CHECK_FALSE(rig.conn.mail_send("Other", "Offline", "Body"));
+    // The original's lists belong to the proxy, which ChatServerGiveTime deletes when its link is down.
+    CHECK(rig.conn.social().friends.empty());
+    CHECK(rig.conn.social().ignored.empty());
 }

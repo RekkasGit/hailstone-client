@@ -46,6 +46,15 @@ AppPacket text_packet(std::uint16_t op, std::initializer_list<std::string_view> 
 
 } // namespace
 
+// UniversalChatProxy_Connect @0x7f0040 builds its own UdpManager Params on top of Params::Params(0) @0x426e70
+// (the defaults) and connects with UdpManager_EstablishConnection(host, port, 30000). Checked in the
+// disassembly; "Params n" is the n-th dword:
+//   0xe  keepalive 44000 ms, or 14800 ms (0x39d0) with eqclient.ini [Defaults] ChatKeepAlive nonzero;
+//   0x12 no-data timeout: not set, the default 0 (none);
+//   0x13 unacknowledged-reliable timeout: not set, the default 120000 ms;
+//   0x15 multi-buffer hold: set to 0 (the default is 50 ms; the 50 ms this file once cited was that default);
+//   0x1a SessionStatRequest interval: set to 0 (none);
+//   0x21 SessionRequest resend: 5000 ms; 0x2b reliable window bytes: 10000; 0x2c/0x2d slots: 24.
 SessionOptions ucs_session_options(bool short_keepalive) {
     SessionOptions opt;
     opt.connect_timeout = std::chrono::milliseconds(30000);
@@ -197,11 +206,13 @@ void ChatServer::connect(const ChatServerInfo& info) {
         return;
     }
     active_ = true;
+    retries_ = 0;
     begin_attempt();
 }
 
 void ChatServer::begin_attempt() {
     retry_pending_ = false;
+    channels_until_disconnect_polled_ = false;
     attempt_started_ = now();
     last_probe_ = attempt_started_;
     login_sent_ = false;
@@ -239,23 +250,34 @@ void ChatServer::fail(std::string error, bool retry) {
     resolving_.reset();
     session_.reset();
     login_sent_ = logged_in_ = false;
-    channels_.clear();
     pending_.clear();
     pending_bytes_ = 0;
+    // Only the unauthenticated rows are dropped. Events accepted after the login (tells, channel text received
+    // earlier in this update) are still delivered, before the Disconnected that retires the session; the channel
+    // list they are numbered against stays until that Disconnected is polled.
     before_login_.clear();
     before_login_bytes_ = 0;
-    events_.clear();
+    if (events_.empty()) channels_.clear();
+    else channels_until_disconnect_polled_ = true;
     ChatServerEvent event;
     event.kind = ChatServerEvent::Kind::Disconnected;
     events_.push_back(std::move(event));
-    retry_pending_ = active_ && retry && options_.reconnect_delay.count() > 0;
-    if (retry_pending_) retry_at_ = now() + options_.reconnect_delay;
-    else active_ = false;
+    retry_pending_ = active_ && retry && options_.reconnect_delay.count() > 0 && retries_ < options_.max_reconnect_attempts;
+    if (retry_pending_) {
+        // Hailstone's back-off: 5, 10, 20, 40 s ... capped, so a server that keeps failing is not hammered.
+        auto delay = options_.reconnect_delay;
+        for (std::size_t i = 0; i < retries_ && delay < options_.max_reconnect_delay; ++i) delay *= 2;
+        retry_at_ = now() + std::min(delay, std::max(options_.max_reconnect_delay, options_.reconnect_delay));
+        ++retries_;
+    } else {
+        active_ = false;
+    }
 }
 
 void ChatServer::accept_event(ChatServerEvent event) {
     if (event.kind == ChatServerEvent::Kind::Channels) {
         channels_.clear();
+        channels_until_disconnect_polled_ = false;
         if (!event.text.empty())
             for (auto& c : split(event.text, ',')) channels_.push_back(trim(c));
     }
@@ -286,8 +308,13 @@ void ChatServer::update() {
     }
     if (!session_) return;
     session_->update();
-    if (session_->state() == SessionState::Disconnected)
+    if (session_->state() == SessionState::Disconnected) {
+        // Stock UCS answers a key or address mismatch by closing the stream, never with a refusal packet
+        // (EQEmu ucs/clientlist.cpp Clientlist::Process: KeyValid = false, then ClientStream->Close()). A close after
+        // the login went out and before any reply is therefore a refusal: retrying would only repeat it.
+        if (login_sent_ && !logged_in_) return fail("the chat server closed the link before answering the login", false);
         return fail(session_->error().empty() ? "the chat server disconnected" : session_->error(), true);
+    }
     if (!login_sent_ && session_->state() == SessionState::Connecting &&
         now() - attempt_started_ >= options_.session.connect_timeout)
         return fail("chat server connection timed out", true);
@@ -307,6 +334,7 @@ void ChatServer::update() {
             if (!e->accepted) return fail("the chat server refused the login", false);
             if (logged_in_) continue; // a repeated application reply does not replay commands or reset mail
             logged_in_ = true;
+            retries_ = 0;
             error_.clear();
             accept_event(std::move(*e));
             while (!before_login_.empty()) {
@@ -369,6 +397,10 @@ std::optional<ChatServerEvent> ChatServer::poll() {
     if (events_.empty()) return std::nullopt;
     auto e = std::move(events_.front());
     events_.pop_front();
+    if (e.kind == ChatServerEvent::Kind::Disconnected && channels_until_disconnect_polled_) {
+        channels_.clear();
+        channels_until_disconnect_polled_ = false;
+    }
     return e;
 }
 
@@ -384,6 +416,7 @@ void ChatServer::disconnect() {
     before_login_bytes_ = 0;
     events_.clear();
     channels_.clear();
+    channels_until_disconnect_polled_ = false;
 }
 
 } // namespace hailstone::net
