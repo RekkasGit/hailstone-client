@@ -17,6 +17,7 @@
 #include "core/work_budget.h"
 #include "game/anim_layers.h"
 #include "game/appearance.h"
+#include "game/appearance_data.h"
 #include "game/combat.h"
 #include "game/coords.h"
 #include "game/mechanics/anim_select.h"
@@ -1284,7 +1285,11 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         // within the frame's budget) the previous one stays. One applied before for the same model and look is
         // taken at once.
         // Races without per-slot armour show no armour colours (game::drawn_appearance).
-        const game::Appearance look = game::drawn_appearance(s.appearance, s.race);
+        game::Appearance look = game::drawn_appearance(s.appearance, s.race);
+        // Only what the active ActorNewArmorFilter makes of the spawn's kind and group/raid membership counts, so
+        // a group join does not rebuild a look the filter draws the same.
+        const game::AppearanceData* data = library_->appearance_data();
+        game::resolve_new_armor_filter(look, data ? data->new_armor_filter : 0u);
         if (!st.dressed || !(st.appearance == look)) {
             st.appearance = look;
             st.dressed = true;

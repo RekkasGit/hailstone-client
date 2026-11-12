@@ -2,6 +2,7 @@
 // position updates, /dismount's unseat and the mount-race jump.
 
 #include <chrono>
+#include <utility>
 
 #include "core/log.h"
 #include "game/coords.h"
@@ -73,13 +74,26 @@ void GameConnection::mount_up(const std::vector<std::uint32_t>& made) {
         auto it = world_.spawns.find(id);
         if (it == world_.spawns.end()) continue;
         game::MountEvents ev;
-        game::make_rider_mount_up(world_, it->second, mount_queries(), ev);
+        const auto previous_mount = std::exchange(it->second.form_mount_id, 0u);
+        if (previous_mount) {
+            // do_change_form re-seats only after the replacement actor's attachment
+            // points and height are known. Use the saved identity, not a name lookup.
+            auto mount = world_.spawns.find(previous_mount);
+            if (mount != world_.spawns.end())
+                game::do_stand(world_, it->second, &mount->second, mount_queries(), ev);
+        } else {
+            game::make_rider_mount_up(world_, it->second, mount_queries(), ev);
+        }
         mount_events(ev);
     }
 }
 
 void GameConnection::spawn_leaving(std::uint32_t id) {
     if (id == world_.eye_id || id == world_.player_id) release_eye_control(true);
+    for (auto& [other_id, spawn] : world_.spawns) {
+        (void)other_id;
+        if (spawn.form_mount_id == id) spawn.form_mount_id = 0;
+    }
     game::MountEvents ev;
     game::clear_vehicle_mount_links(world_, id, ev);
     mount_events(ev);

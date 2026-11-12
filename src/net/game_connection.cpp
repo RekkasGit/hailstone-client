@@ -383,8 +383,37 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
+    // The original reapplies the new-armor filter to a member who joins or leaves the group or raid
+    // (PlayerClient_ApplyNewArmorFilterGroupMember / RaidMember); a new spawn has it made in apply_spawn.
+    if (new_armor_membership_changed())
+        for (auto& entry : world_.spawns) refresh_new_armor_bits(entry.second);
     raise_hook_events();
     marketplace_frame(now_ms());
+}
+
+void GameConnection::refresh_new_armor_bits(game::Spawn& s) const {
+    // Type (+0x125) as the spawn record set it; a spawn that died here keeps the bits it had (the death does not
+    // reapply the filter) until the next membership change.
+    const std::uint8_t type = s.is_corpse ? 2 : s.is_npc ? 1 : 0;
+    s.appearance.new_armor_bits = game::new_armor_bits(type, s.id == world_.player_id, group_.has_member(s.name),
+                                                       raid_.is_member(s.name));
+}
+
+bool GameConnection::new_armor_membership_changed() {
+    bool same = new_armor_player_ == world_.player_id;
+    std::size_t n = 0;
+    auto visit = [&](const std::string& name) {
+        if (same && (n >= new_armor_members_.size() || new_armor_members_[n] != name)) same = false;
+        ++n;
+    };
+    for (const auto& m : group_.slots) visit(m.name);
+    for (const auto& m : raid_.members) visit(m.name);
+    if (same && n == new_armor_members_.size()) return false;
+    new_armor_player_ = world_.player_id;
+    new_armor_members_.clear();
+    for (const auto& m : group_.slots) new_armor_members_.push_back(m.name);
+    for (const auto& m : raid_.members) new_armor_members_.push_back(m.name);
+    return true;
 }
 
 void GameConnection::send_world(const AppPacket& p) {
@@ -836,6 +865,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.heights.height = s.size;
     out.actor_made = false;
     out.physics_step_ms.reset();
+    out.form_mount_id = 0;
     world_.set_heights(out);
     out.melee_radius = s.melee_radius;
     out.walk_speed = s.walk_speed;
@@ -888,10 +918,16 @@ void GameConnection::apply_spawn(const Spawn& s) {
     a.class_id = s.class_;
     for (std::size_t i = 0; i < 9; ++i) {
         a.material[i] = s.equipment[i].material;
+        a.material_variation[i] = s.equipment[i].unknown1;
+        a.elite_material[i] = s.equipment[i].elite_material;
         a.hero_forge[i] = s.equipment[i].hero_forge_model;
+        a.new_armor_type[i] = s.equipment[i].material2;
         a.tint[i] = s.long_equipment ? s.equipment_tint[i] : 0;
     }
     game::normalize_appearance(a, s.race);
+    // EQPlayer::EQPlayer applies the new-armor filter. Every corpse (NPC 2 from EQEmu for a player's and an
+    // NPC's alike; RoF2 takes any Type above 1 as a corpse) has hero's forge hidden.
+    refresh_new_armor_bits(out);
     note_pet_spawn(out);
     reconcile_eye_control();
 }
@@ -1378,7 +1414,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             auto it = world_.spawns.find(w->spawn_id);
             if (it != world_.spawns.end())
                 game::apply_wear_change(it->second.appearance, w->slot, w->armor.material, w->armor.hero_forge_model,
-                                        w->tint);
+                                        w->tint, w->armor.unknown1, w->armor.elite_material, w->armor.material2);
         }
         break;
     case Op::Illusion:
@@ -1388,6 +1424,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // do_change_form: 0xff / -1 keep a field.
                 game::Spawn& sp = it->second;
                 game::Appearance& a = sp.appearance;
+                game::MountEvents unseat;
+                if (const auto mount = game::change_form_unseat(world_, sp, unseat)) sp.form_mount_id = mount;
+                mount_events(unseat);
                 if (ill->race != 0xffff && ill->race != 0) sp.race = ill->race;
                 if (ill->gender != 0xff) sp.gender = ill->gender;
                 if (ill->size > 0.0f) sp.size = ill->size;
@@ -1407,6 +1446,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 if (ill->hair_color != 0xff) a.hair_color = ill->hair_color;
                 if (ill->beard != 0xff) a.beard = ill->beard;
                 if (ill->beard_color != 0xff) a.beard_color = ill->beard_color;
+                if (ill->drakkin_heritage != 0xffffffffu) a.drakkin_heritage = ill->drakkin_heritage;
+                if (ill->drakkin_tattoo != 0xffffffffu) a.drakkin_tattoo = ill->drakkin_tattoo;
+                if (ill->drakkin_details != 0xffffffffu) a.drakkin_details = ill->drakkin_details;
             }
         }
         break;

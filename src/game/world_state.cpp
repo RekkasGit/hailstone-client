@@ -44,12 +44,6 @@ std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint
     }
 }
 
-bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback) {
-    if (!text) return fallback;
-    char c = text->empty() ? '\0' : (*text)[0];
-    return c == 'T' || c == 't' || c == '1';
-}
-
 namespace {
 // How far a spawn at rest may settle onto the floor (see WorldState::smooth).
 constexpr float kRestSettleReach = 5.0f;

@@ -378,13 +378,16 @@ SaveRequest GameConnection::save_request(std::uint8_t kind) const {
         v.heading = static_cast<std::int32_t>(motion_known_ ? heading_ : me->heading); // __ftol2_sse
     }
     // PcBase_GetArmorProperties(0..21): the profile's records, the nine worn ones set from the actor first
-    // (PlayerClient_GetEquipmentSlotPtr); the actor's are the spawn's material and hero forge model here.
+    // (PlayerClient_GetEquipmentSlotPtr), retaining the complete five-word armor record.
     if (profile_)
         for (std::size_t i = 0; i < v.armor.size() && i < profile_->equipment.size(); ++i) v.armor[i] = profile_->equipment[i];
     if (me)
         for (std::size_t i = 0; i < 9; ++i) {
             v.armor[i].material = me->appearance.material[i];
+            v.armor[i].unknown1 = me->appearance.material_variation[i];
+            v.armor[i].elite_material = me->appearance.elite_material[i];
             v.armor[i].hero_forge_model = me->appearance.hero_forge[i];
+            v.armor[i].material2 = me->appearance.new_armor_type[i];
         }
     v.vehicle = false; // no vehicles
     v.minutes_played = profile_ ? profile_->time_played_min : 0;

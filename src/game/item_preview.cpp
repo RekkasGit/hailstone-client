@@ -56,18 +56,23 @@ Appearance preview_appearance(Appearance a, const net::Item& item, const net::It
     int material = -1;
     for (int s = 2; s <= 19 && material < 0; ++s)
         if (slots & (1u << s)) material = preview_material_slot(s);
-    const std::uint32_t own = item_model_number(item.id_file);
+    auto held = [&](int slot, const net::Item* shown) {
+        apply_wear_change(a, static_cast<std::uint8_t>(slot), held_model(shown), shown ? shown->heros_forge_model : 0,
+                          shown ? shown->color : 0, shown ? shown->material_unknown1 : 0,
+                          shown ? shown->elite_material : 0, shown ? shown->material_unknown2 : 0);
+    };
     if (material == kSlotPrimary) {
-        a.material[kSlotSecondary] = two_handed(item) ? 0 : held_model(secondary);
-        a.material[kSlotPrimary] = own;
+        held(kSlotSecondary, two_handed(item) ? nullptr : secondary);
+        held(kSlotPrimary, &item);
     } else if (material == kSlotSecondary) {
-        a.material[kSlotSecondary] = own;
-        a.material[kSlotPrimary] = primary && !two_handed(*primary) ? held_model(primary) : 0;
+        held(kSlotSecondary, &item);
+        held(kSlotPrimary, primary && !two_handed(*primary) ? primary : nullptr);
     } else if (material >= 0) {
-        apply_wear_change(a, static_cast<std::uint8_t>(material), item.material, item.heros_forge_model, item.color);
+        apply_wear_change(a, static_cast<std::uint8_t>(material), item.material, item.heros_forge_model, item.color,
+                          item.material_unknown1, item.elite_material, item.material_unknown2);
     } else if (slots & 0x800u) {
-        a.material[kSlotPrimary] = 0;
-        a.material[kSlotSecondary] = own;
+        held(kSlotPrimary, nullptr);
+        held(kSlotSecondary, &item);
     }
     return a;
 }

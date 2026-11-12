@@ -80,10 +80,14 @@ std::string appearance_key(const CharacterModel& m, const game::Appearance& a) {
     add(a.hair_style);
     add(a.beard);
     add(a.show_helm);
+    add(a.new_armor_bits);
     for (std::size_t i = 0; i < 9; ++i) {
         add(a.material[i]);
+        add(a.material_variation[i]);
+        add(a.elite_material[i]);
         add(a.tint[i]);
         add(a.hero_forge[i]);
+        add(a.new_armor_type[i]);
     }
     for (std::uint32_t v : {std::uint32_t{a.hair_color}, std::uint32_t{a.beard_color}, std::uint32_t{a.eye_color1},
                             std::uint32_t{a.eye_color2}, a.drakkin_heritage, a.drakkin_tattoo, a.drakkin_details,

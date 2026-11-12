@@ -20,6 +20,23 @@ namespace hailstone::game {
         // player's group, with no equivalent raid exemption.
         return !group_member;
     }
+	std::uint8_t new_armor_bits(std::uint8_t spawn_type, bool local_player, bool group_member, bool raid_member) {
+		if (spawn_type == 1) return 0x10;
+		if (spawn_type != 0) return 0;
+		std::uint8_t bits = 0x08;
+		if (local_player) bits |= 0x01 | 0x02; // IsSelfOrGroupMember counts the local player too
+		if (group_member) bits |= 0x02;
+		if (raid_member) bits |= 0x04;
+		return bits;
+	}
+
+	bool appearance_new_armor_filtered(const Appearance& a, std::uint32_t filter) {
+		return (filter & a.new_armor_bits) == 0;
+	}
+
+	void resolve_new_armor_filter(Appearance& a, std::uint32_t filter) {
+		a.new_armor_bits = appearance_new_armor_filtered(a, filter) ? 0 : kNewArmorAllBits;
+	}
 
 	bool is_pc_model_race(std::uint32_t race) {
 		return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;
@@ -40,13 +57,16 @@ namespace hailstone::game {
 	}
 
 	bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
-		std::uint32_t tint) {
+		std::uint32_t tint, std::uint32_t variation, std::uint32_t elite_material, std::uint32_t new_armor_type) {
 		if (slot >= 9) return false;
 		if (slot < kSlotPrimary && a.texture != kNoTexture) return false; // fixed body texture
 		// material -1 resets the slot (the actor part goes back to its default).
 		a.material[slot] = material == 0xffffffffu ? 0 : material;
+		a.material_variation[slot] = variation;
+		a.elite_material[slot] = elite_material;
 		a.tint[slot] = tint;
 		a.hero_forge[slot] = hero_forge;
+		a.new_armor_type[slot] = new_armor_type;
 		return true;
 	}
 

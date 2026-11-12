@@ -19,6 +19,7 @@
 #include <glm/glm.hpp>
 
 #include "core/ascii_case.h"
+#include "core/ini_file.h"
 #include "game/spawn_heights.h"
 
 
@@ -32,6 +33,9 @@ namespace hailstone::game {
 	// "a_rat01" -> "a rat", "#Guard_Bob00" -> "Guard Bob": leading '#' and trailing digits stripped, underscores to
 // spaces.
 	std::string display_name(const std::string& name);
+	// Appearance::new_armor_bits for a spawn whose kind is not known: the player (8) or the NPC (0x10) bit of
+	// ActorNewArmorFilter shows its hero's forge armour.
+	inline constexpr std::uint8_t kNewArmorUnknownKind = 0x18;
 	// What a spawn looks like (spawn packet, OP_WearChange, OP_Illusion). Slots
 	// are the nine visible ones: 0 head, 1 chest, 2 arms, 3 wrists, 4 hands,
 	// 5 legs, 6 feet, 7 primary, 8 secondary (game/appearance.h).
@@ -50,8 +54,20 @@ namespace hailstone::game {
 		// Per slot: armour material (slots 0-6) or item model number IT<n>
 		// (slots 7, 8), and the tint 0xAARRGGBB (a zero high byte = untinted).
 		std::array<std::uint32_t, 9> material{};
+		// The rest of the five-word armour record (ArmorProperties: type, variation, material, newArmorID,
+		// newArmorType; EQEmu's Texture_Struct Material, Unknown1, EliteMaterial, HeroForgeModel, Material2), kept
+		// whole: RefreshEquipSlot @00594e50 hands the wire's record to PlayerClient_SetActorEquipmentSlot
+		// @0042e6f0, which stores it as the ActorClient's ArmorProperties (+0x8c) in the same order.
+		std::array<std::uint32_t, 9> material_variation{}; // variation (+4)
+		std::array<std::uint32_t, 9> elite_material{};     // material (+8): game::ArmorRecord::material2
 		std::array<std::uint32_t, 9> tint{};
-		std::array<std::uint32_t, 9> hero_forge{};
+		std::array<std::uint32_t, 9> hero_forge{};         // newArmorID (+0xc)
+		std::array<std::uint32_t, 9> new_armor_type{};     // newArmorType (+0x10)
+		// PlayerClient_ApplyNewArmorFilter @0x595de0: the ActorNewArmorFilter bits that show this spawn's hero's
+		// forge armour (game::new_armor_bits). A spawn whose kind is not known (character select, previews)
+		// has kNewArmorUnknownKind. The renderer collapses the bits to shown or hidden for the active filter
+		// (game::resolve_new_armor_filter), so a change the filter does not see rebuilds nothing.
+		std::uint8_t new_armor_bits = kNewArmorUnknownKind;
 		// NpcTintIndex (spawn +0x51c; OP_SpawnAppearance 39): npct.ini Value<n>
 		// tints new-style models (ActorClient_ApplyNpcTint); 0 none.
 		std::uint32_t npc_tint = 0;
@@ -1145,6 +1161,7 @@ namespace hailstone::game {
 		// Riding (game/mounts.h): EQPlayer::GetMount (+0x154) and PlayerBase_GetRider (+0x158) as spawn ids, 0 none.
 		std::uint32_t mount_id = 0;
 		std::uint32_t rider_id = 0;
+		std::uint32_t form_mount_id = 0; // re-seat after a form change rebuilds this actor
 		float walk_speed = 0.0f, run_speed = 0.0f; // the spawn record's walkspeed / runspeed (+0x330 / +0x350)
 		std::uint8_t hp_percent = 100;
 		std::uint8_t stand_state = 100; // SpawnAppearance animation: 100 stand, 110 sit, 111 crouch, 115 lying
@@ -2722,9 +2739,7 @@ namespace hailstone::game {
 		std::uint8_t texture = 0;
 	};
 	std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint8_t texture, bool luclin_elementals);
-	// GetEQClientIniBool @0x5fa680 on a value: missing gives the default; true when it starts with T, t or 1 (an empty
-	// one is false). UseLuclinElementals is read this way with default TRUE.
-	bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback);
+	using hailstone::eqclient_ini_bool; // core/ini_file.h
 
 	struct WorldState {
 		std::string zone_short_name;

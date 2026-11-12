@@ -41,6 +41,7 @@
 
 namespace hailstone { class GameDir; }
 namespace hailstone::game {
+struct ActorLook;
 struct Appearance;
 struct AppearanceData;
 } // namespace hailstone::game
@@ -343,6 +344,10 @@ private:
 // shared. Throws std::runtime_error when the pieces do not fit the skeleton.
 void append_wld_mesh(const wld::WldFile& wld, const wld::Fragment& mesh, std::size_t bone_count,
                      std::int64_t owner, CharacterMesh& out);
+
+// The ActorClient fields the appearance functions read (game/actor_look.h) for `model` in appearance `a`; `data`
+// gives the new-armor filter (null: hero's forge hidden).
+game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, const game::AppearanceData* data);
 } // namespace detail
 
 // The graphics DLL's resource level an archive's definitions are added at.

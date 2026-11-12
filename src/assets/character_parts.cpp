@@ -459,7 +459,7 @@ private:
     }
 };
 
-namespace {
+namespace detail {
 
 game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, const game::AppearanceData* data) {
     game::ActorLook look;
@@ -477,22 +477,26 @@ game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, 
     look.beard = a.beard;
     look.texture_type = a.texture;
     look.head_type = a.helm;
+    // The record goes over word for word, as RefreshEquipSlot @00594e50 stores the wire's ArmorProperties at
+    // ActorClient +0x8c (PlayerClient_SetActorEquipmentSlot @0042e6f0): EQEmu's Unknown1 is the variation and
+    // its EliteMaterial the +8 material UpdateNewArmorSlot overlays (A_<code>_<a>_<b>_S<c>).
     for (std::size_t i = 0; i < 9; ++i) {
         look.tint[i] = a.tint[i];
         look.armor[i].material = static_cast<std::int32_t>(a.material[i]);
+        look.armor[i].variation = static_cast<std::int32_t>(a.material_variation[i]);
+        look.armor[i].material2 = static_cast<std::int32_t>(a.elite_material[i]);
         look.armor[i].new_armor_id = a.hero_forge[i];
+        look.armor[i].new_armor_type = a.new_armor_type[i];
     }
     look.show_helm = a.show_helm;
     look.heritage = static_cast<std::int32_t>(a.drakkin_heritage);
     look.tattoo = static_cast<std::int32_t>(a.drakkin_tattoo);
     look.details = static_cast<std::int32_t>(a.drakkin_details);
-    // ActorNewArmorFilter: players (8) and NPCs (0x10); the spawn's kind is
-    // not known here, so hero's forge shows when either bit is set (24 by default).
-    look.new_armor_filtered = data ? (data->new_armor_filter & 0x18u) == 0 : true;
+    look.new_armor_filtered = game::appearance_new_armor_filtered(a, data ? data->new_armor_filter : 0u);
     return look;
 }
 
-} // namespace
+} // namespace detail
 
 void CharacterLibrary::dress_luclin(const CharacterModel& model, const game::Appearance& a, CharacterMesh& mesh) const {
     // The palette starts as the model's own materials: <code><part><material>
@@ -515,7 +519,7 @@ void CharacterLibrary::dress_luclin(const CharacterModel& model, const game::App
         mesh.tints[mi] = 0;
     }
     DressEnv env(*this, model, mesh, false);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.luclin_model = true;
     game::find_eye_materials(look, env); // UpdateDAGPointers, when the actor is made
     // ActorClient::SwapAllBodyMaterials @0x40bf80: every body slot from
@@ -541,7 +545,7 @@ std::uint32_t CharacterLibrary::try_fheb(const CharacterModel& model, game::Appe
     Lock lock(*mutex_);
     CharacterMesh scratch = model.default_mesh();
     DressEnv env(*this, model, scratch, model.eqg);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.luclin_model = model.luclin;
     game::find_eye_materials(look, env);
     std::uint32_t took = color ? game::set_fheb_color(look, env, value, type, 0) : game::set_fheb(look, env, value, type, 0);
@@ -557,7 +561,7 @@ std::uint32_t CharacterLibrary::try_fheb(const CharacterModel& model, game::Appe
 
 void CharacterLibrary::dress_new_model(const CharacterModel& model, const game::Appearance& a, CharacterMesh& mesh) const {
     DressEnv env(*this, model, mesh, true);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.new_style = true;
     game::apply_facial_features(look, env);
     env.build();

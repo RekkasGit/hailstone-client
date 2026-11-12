@@ -2670,6 +2670,11 @@ private:
     // a rider's update also moves its mount.
     bool rider_update(std::uint32_t spawn_id, const Motion& m);
     void spawn_leaving(std::uint32_t id);
+    // PlayerClient_ApplyNewArmorFilter's inputs for one spawn (Appearance::new_armor_bits): its kind, and whether it
+    // is the local player, a group or a raid member.
+    void refresh_new_armor_bits(game::Spawn& s) const;
+    // Whether the local player, the group or the raid changed since the last call (no allocation when not).
+    bool new_armor_membership_changed();
     // CEverQuest_ProcessCursorQueue @0x5321a0, once a frame (net/game_connection_items.cpp).
     void process_cursor_queue();
     bool item_command(const std::string& command, const std::string& args);
@@ -3423,6 +3428,9 @@ private:
 
     // Groups and pets.
     game::GroupState group_;
+    // The local player's id and the group then raid member names Appearance::new_armor_bits were last made with.
+    std::uint32_t new_armor_player_ = 0;
+    std::vector<std::string> new_armor_members_;
     game::PetState pets_;
     std::vector<std::pair<std::uint32_t, game::BuffSlot>> pet_buffs_;
     game::PetToggleStates pet_toggles_{};

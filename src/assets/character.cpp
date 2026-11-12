@@ -23,6 +23,7 @@
 
 #include "assets/eqg_character.h"
 #include "core/game_dir.h"
+#include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 #include "core/log.h"
 #include "game/appearance_data.h"
@@ -376,6 +377,10 @@ bool chr_txt_entry_is_s3d(const GameDir& game, std::string_view code, std::strin
 }
 
 std::vector<std::string> global_character_archives(const GameDir& game, bool luclin) {
+    IniFile ini;
+    if (auto bytes = game.read("eqclient.ini"))
+        ini.parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
+    const bool elementals = eqclient_ini_bool(ini.get("Defaults", "UseLuclinElementals"), true);
     std::vector<std::string> out;
     auto add = [&](std::string name) {
         name = lower(name);
@@ -417,7 +422,11 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
     }
     // Loaded by ConfigureLuclinModels next to the Luclin models, then the
     // extended armour textures (Global%d_amr).
-    add("global5_chr");
+    // The "Global NPC Models" load (@0x492780) skips Global5_chr2, Global5_chr and frog_mount_chr when
+    // UseLuclinElementals is off, the option CreatePlayerActor's race swap obeys. Only this implicit load is gated:
+    // whether an entry the player's GlobalLoad.txt names explicitly is skipped too is not confirmed, so it still
+    // loads (docs/unknowns.md).
+    if (elementals) add("global5_chr");
     add("global7_chr");
     for (int i = 17; i <= 23; ++i) add("global" + std::to_string(i) + "_amr");
     // GlobalLoad_chr.txt: count, then "code,file" lines (ChrTxt_Load). When
