@@ -781,6 +781,27 @@ active trader or buyer session; it cannot remain available for a later remote sa
 not both: marking one clears the other. `eq.SetItemsKept` validates a batch before applying it, then persists it and
 changes the Keep revision once.
 
+## The bank as last seen
+
+A Hailstone addition, with no counterpart in the original. EQEmu's `Inventory:LazyLoadBank` rule (on by default)
+leaves the bank and shared bank out of OP_CharInventory. It sends them as item packets (type 0x67), once per zone and
+only when a banker comes near the player (Client::Process, Mob::IsCloseToBanker). So after most zone-ins the client
+does not know what the bank holds, and the Advanced Inventory and `/finditem` would find nothing there.
+
+The client keeps a copy (`game/bank_snapshot.h`, `GameConnection::bank_seen`). It is taken from the inventory whenever
+the bank is known and the client is about to lose it or the player has finished with it: the next OP_CharInventory,
+the bank window closing, camping out and disconnecting. It is saved per character in `bank.dat` and read on entering
+the world. The bank counts as known (`bank_live`) from an OP_CharInventory that holds bank items, from an item packet
+for a bank or shared bank slot, or from the bank window opening. It counts as not known from an OP_CharInventory
+without any.
+
+While the bank is not known, `eq.AllItems` and `eq.FindItems` list the copy in the bank's place. Its rows are marked
+`stale`, and `eq.BankSeen` says how long ago it was taken. The window shows them dimmed, says "Bank as last seen ..."
+in its footer, and refuses to move or use them. The copy is never put in the inventory, so no click, bulk job, lore
+check, item count or hot button can reach what it holds. Moving or using a banked item still needs the bank window
+open, which needs a banker in reach. The copy may be out of date: for one, the shared bank can be changed by the
+account's other characters. Opening the bank shows what the server has.
+
 ## The Advanced Inventory's bulk actions
 
 Also Hailstone's own: selected rows in either the Advanced Inventory list or grid can be sold, donated as tribute,

@@ -836,7 +836,7 @@ public:
 
     // The window's ContextMenuID: the bar's own menu (game/hot_button_sets.h).
     bool context_menu(EqHost& host, float x, float y) override {
-        open_hot_bar_menu(host, bar_, x, y);
+        open_hot_bar_menu(host, bar_, x, y, true);
         return true;
     }
 

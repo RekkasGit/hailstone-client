@@ -120,8 +120,18 @@ local function groupOf(r)
     return "c" .. r.slot, "General " .. (r.slot - 22) .. ": " .. (r.sub >= 0 and (r.bag or "Bag") or r.item.name)
   end
   local word = r.where == "shared" and "Shared bank" or "Bank"
-  if not bagged then return r.where, word .. ", loose" end
-  return r.where:sub(1, 1) .. r.slot, word .. " " .. (r.slot + 1) .. ": " .. (r.sub >= 0 and (r.bag or "Bag") or r.item.name)
+  local seen = r.stale and " (as last seen)" or ""
+  if not bagged then return r.where, word .. ", loose" .. seen end
+  return r.where:sub(1, 1) .. r.slot,
+    word .. " " .. (r.slot + 1) .. ": " .. (r.sub >= 0 and (r.bag or "Bag") or r.item.name) .. seen
+end
+
+-- How long ago, in a few words ("5 min", "3 h", "2 days").
+local function ago(sec)
+  if sec < 60 then return "under a minute" end
+  if sec < 3600 then return math.floor(sec / 60) .. " min" end
+  if sec < 172800 then return math.floor(sec / 3600) .. " h" end
+  return math.floor(sec / 86400) .. " days"
 end
 
 local function refresh()
@@ -353,9 +363,11 @@ local function bankRec(r)
   rec = { id = "##advbank" .. r.place, place = shared and r.place or tools.Place("bank", r.slot, sub) }
   rec.onClick = function(button, outside)
     if tools.Intercept(rec.place, rec.item, button) then return end
-    if not bankOpen() then
+    -- a stale row is the bank as last seen (eq.BankSeen): nothing there to click until a banker sends the bank
+    if rec.stale or not bankOpen() then
       if button == "left" or button == "right" or button == "rightup" then
-        note("That is in your " .. (shared and "shared bank" or "bank") .. ": open the bank to move or use it.")
+        note(rec.stale and "That is your bank as you last saw it: visit a banker to move or use it."
+          or ("That is in your " .. (shared and "shared bank" or "bank") .. ": open the bank to move or use it."))
       end
       return
     end
@@ -371,7 +383,7 @@ local function slotFor(r, x, y, size, s)
     return items.InvSlot(r.slot, r.sub >= 0 and r.sub or nil, x, y, size, s, nil) or r.item
   end
   local rec = bankRec(r)
-  rec.item = r.item
+  rec.item, rec.stale = r.item, r.stale == true
   items.Slot(rec.id, x, y, size, s, r.item, nil, r._place, rec.onClick)
   tools.Marks(x, y, size, s, r.item, rec.place)
   if not bankOpen() then ui.DrawRectFilled(x, y, x + size, y + size, 0, 0, 0, 0.18, 6 * s) end
@@ -434,7 +446,7 @@ local function itemMenu(r)
   if ui.IsItemHovered() then ui.SetTooltip(it.sellable and "Sell marked sells it at a merchant" or "Merchants will not buy it") end
   ui.Separator()
   local banked = r.where == "bank" or r.where == "shared"
-  local reach = not banked or bankOpen()
+  local reach = not banked or (bankOpen() and not r.stale)
   if ui.MenuItem("Pick up", false, reach) then
     if banked then eq.BankSlotClick(r.slot, r.sub >= 0 and r.sub or nil, "left", r.where == "shared")
     else eq.ClickSlot(r.slot, r.sub >= 0 and r.sub or nil, "left") end
@@ -446,7 +458,8 @@ local function itemMenu(r)
   if r.sub >= 0 and r.where ~= "shared" and ui.MenuItem("Open its bag", false, reach) then eq.PlaceClick(r.place, "open") end
   ui.Separator()
   if ui.MenuItem("Show only \"" .. T.Fit(it.name, 200, T.font.small) .. "\"") then search = it.name end
-  if not reach then ui.TextDisabled("Open the bank to move or use it") end
+  if r.stale then ui.TextDisabled("Your bank as last seen: visit a banker to move or use it")
+  elseif not reach then ui.TextDisabled("Open the bank to move or use it") end
 end
 
 local function filtersOn()
@@ -826,7 +839,7 @@ local function listRow(v, r, px, py, cw, s, th, col)
   local cy = py + (rh - 2 * s - th) / 2
   local banked = r.where == "bank" or r.where == "shared"
   T.Text(colPlace, cy, T.Fit(r._place, col.placeW, T.font.small),
-    banked and C.gold or (r.where == "worn" and C.accent or C.muted), T.font.small)
+    r.stale and C.faint or (banked and C.gold or (r.where == "worn" and C.accent or C.muted)), T.font.small)
   if r._level > 0 then T.Text(col.level, cy, tostring(r._level), C.muted, T.font.small, "right") end
   if cfg.stat ~= "" then
     local sv = r._stats[cfg.stat]
@@ -1142,7 +1155,17 @@ local function footer(x, y, w, s, v)
     tx = tx + 14 * s + T.Text(tx + 14 * s, y + 15 * s, keep .. " kept", C.muted, T.font.small) + 18 * s
     ui.DrawCircleFilled(tx + 4 * s, y + 15 * s + th / 2, 4 * s, C.danger[1], C.danger[2], C.danger[3], 1)
     local mv = money(sellCp)
-    T.Text(tx + 14 * s, y + 15 * s, sell .. " to sell" .. (mv ~= "" and (" (worth " .. mv .. ")") or ""), C.muted, T.font.small)
+    tx = tx + 14 * s + T.Text(tx + 14 * s, y + 15 * s, sell .. " to sell" .. (mv ~= "" and (" (worth " .. mv .. ")") or ""),
+      C.muted, T.font.small) + 18 * s
+    -- the bank's rows are the bank as last seen until a banker sends it in this zone (eq.BankSeen)
+    local live, age = eq.BankSeen()
+    if not live and age then
+      local bw = T.Text(tx, y + 15 * s, "Bank as last seen " .. ago(age) .. " ago", C.faint, T.font.small)
+      if ui.IsMouseHoveringRect(tx, y + 15 * s, tx + bw, y + 15 * s + th) then
+        ui.SetTooltip("This server sends your bank only near a banker. Until then the bank and shared bank show what\n"
+          .. "they held when you last saw them; visit a banker to update them and to move or use what they hold.")
+      end
+    end
   end
   -- right: Sell marked at an open merchant, then Stack / Sort / ...
   local x1 = x + w

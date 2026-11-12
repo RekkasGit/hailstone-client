@@ -100,7 +100,14 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
     case Op::CharInventory:
         if (auto items = decode_char_inventory(p)) {
             log::info("inventory: {} items ({} bytes)", items->size(), p.data.size());
+            // Hailstone: with EQEmu's Inventory:LazyLoadBank (on by default) the bank is not in it and comes later,
+            // near a banker: the bank as it was goes into the copy listed until then (game/bank_snapshot.h).
+            capture_bank();
+            const bool with_bank = std::any_of(items->begin(), items->end(), [](const Item& it) {
+                return it.slot.type == kInvBank || it.slot.type == kInvSharedBank;
+            });
             inventory_.load(std::move(*items));
+            set_bank_live(with_bank);
         } else {
             log::warn("could not decode OP_CharInventory ({} bytes)", p.data.size());
         }
@@ -159,7 +166,11 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
                 item_refreshes_.push_back(item);
                 if (item_refreshes_.size() > 16) item_refreshes_.pop_front();
             }
+            const bool banked = at.type == kInvBank || at.type == kInvSharedBank;
             if (!inventory_.put(at, std::move(item))) log::debug("item packet for unusable slot {}/{}", at.type, at.slot);
+            // Hailstone: an item for a bank slot is the server's bank now (EQEmu's lazy load sends the bank this
+            // way, then the shared bank, all in one pass): the copy as last seen is no longer listed.
+            else if (banked) set_bank_live(true);
             if (is_worn(at)) refresh_worn_slot(at.slot);
             break;
         }
