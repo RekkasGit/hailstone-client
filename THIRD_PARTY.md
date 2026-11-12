@@ -76,6 +76,11 @@ License version 2.
 - `src/game/spa_ids.h`: the `eEQSPA` spell effect ids (0..526) and the `eEQSPELLCAT` spell categories (1..176) are
   copied from `src/eqlib/include/eqlib/game/Spells.h` (without its deprecated and alias names), and `SPA_NAMES` 0..520
   from `src/eqlib/include/eqdata/spelleffects.h`. The ids 527 and 528 and the names 521..528 were added in Hailstone.
+- `src/game/world_state.h`: the race ids (`Race`) and the player race constants (`EQR_*`), the con colour, stand
+  state and spawn kind macros, the body type names (`szBodyType`), `eSpawnType`, `CharacterProperty`, `PlayerClass`,
+  and `Spawn::IsNamed`, `GetSpawnType`, `GetTypeDesc` and `GetRaceIDName` follow MacroQuest's eqlib constants and
+  `src/main/MQ2Utilities.cpp` almost line for line. `IsNamed` was changed in Hailstone and mixes MacroQuest's older
+  and newer tests.
 
 ### MacroQuest used as a specification
 
