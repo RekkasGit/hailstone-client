@@ -110,7 +110,10 @@ TEST_CASE("plugin tcp: a link always a little behind keeps only what it has not 
         }
         return moved >= (std::size_t{48} << 20);
     }));
-    CHECK(conn->waiting_for_test() > 0);
+    // A good part of the 4 MiB the fill left waiting still waited while the reader lagged (one 64 KiB read cannot
+    // let the full system buffers take 3 MiB). Whether some still waits once the loop stops depends on how fast the
+    // system drains loopback (on some hosts it drains it all), so that is not checked.
+    CHECK(most_waiting >= (std::size_t{1} << 20));
     // At most about twice what waits, not the 48 MiB that went through.
     CHECK(most <= 2 * most_waiting + 2 * chunk.size());
     CHECK(most < (std::size_t{48} << 20));
