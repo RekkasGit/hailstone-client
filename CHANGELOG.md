@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Scripts: `mq.event` patterns now match chat lines the way MacroQuest's do. Text is matched ignoring case, each `#1#` or `#*#` takes text up to the first place the next part of the pattern appears, `#name#` matches without being passed on, `|${...}|` matches what the script's `${...}` reads when the line comes, `##` and `||` stand for `#` and `|`, missing argument numbers are passed as empty strings, and item links are matched as their text unless the event is made with `{keepLinks = true}`. Lines of 2048 characters or more raise no events, as in MQ
 - For plugin authors: two new host functions, `get_buff_data_bulk` and `get_pet_buff_data_bulk`, read all of the player's buffs or the pet's in one call (docs/plugins.md "Buff records")
 - Hailstone is now licensed under the GNU GPL, version 2 or later, like MacroQuest (it was MIT up to 0.7.0-beta). The plugin SDK stays MIT, and plugins, scripts, UI packs and other add-ons may still use any licence (NOTICE.md). Releases now include LICENSE.txt, NOTICE.md and THIRD_PARTY.md
 - `/time` and scripts' `GameTime` now advance with the zone's clock instead of staying at the time received when zoning in, including the date when a game day, month or year ends

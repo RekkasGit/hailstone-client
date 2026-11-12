@@ -182,6 +182,7 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `${Int[...]}` and `float.Int` defined for NaN, infinities and huge numbers (tests/mq_tlo_test.cpp, tests/mq_lua_test.cpp).
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
 - [x] `mq.event` patterns matched in linear time with the regex's own results (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp checks it against the regex on random patterns).
+- [x] `mq.event` patterns match as MacroQuest's Lua events do (Blech): case-insensitive, every `#...#` up to the first place the next literal is, `#name#`, `|${...}|`, `##` / `||`, arguments by number with gaps, item links shown as their text unless `keepLinks` (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `HailstoneWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).
