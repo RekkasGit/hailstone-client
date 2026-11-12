@@ -1414,7 +1414,8 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         if (!motion) motion = &model->first_clip({"P01", "O01", "L01"}, holding);
         st.motion_clip = motion;
         // A stand request that played P08 from +0x10c4 leaves 0x20 or 0x47 there (0x4b15b0's idle path).
-        if (!new_style && layers.follow_up == static_cast<uint8_t>(hailstone::AnimationType::StandAfter)) layers.follow_up = choice.follow_up;
+        if (!new_style && layers.follow_up == static_cast<std::uint8_t>(AnimationType::StandAfter))
+            layers.follow_up = choice.follow_up;
 
         // What both bone groups play without an action.
         LayerRequest req;

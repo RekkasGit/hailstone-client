@@ -2,15 +2,14 @@
 
 // The action numbers of OP_Animation and PlayerClient::PlayAnimation (spells' casting_anim and TargetAnim, the
 // missile launch animations): the old-style numbering, whose clips are game::mechanics::old_anim_clip's. The
-// locomotion numbers are game/mechanics/anim_select.h's OldStyleAnim and are taken from there; the other names
-// describe what a classic model plays.
+// locomotion numbers (Walk..Idle, Stand..Sit, StandAfter..SitIdle) are also the ones the classic model's movement
+// selection (game/mechanics/anim_select.h) starts; the other names describe what a classic model plays.
 
 #include <cstdint>
 
-
 namespace hailstone {
 
- enum class AnimationType : std::uint8_t {
+enum class AnimationType : std::uint8_t {
     None = 0,
     Kick = 1,
     Piercing = 2,
@@ -28,7 +27,7 @@ namespace hailstone {
     Embarrassed_14 = 14,
     FallingBackwards = 15,
     Death = 16,
-    Walk =17,
+    Walk = 17,
     Run = 18,
     JumpRun = 19,
     JumpStand = 20,
@@ -85,12 +84,12 @@ namespace hailstone {
     StandAfter = 71,
     IdleAfter = 72,
     SitIdle = 73,
-    Sitting=74,
-    Unknown_2=75,
-    Unknown_3=76,
-    Unknown_4=77,
-    Swimming_2=78,
-    Unknown_6=79
+    Rider_74 = 74, // P09; 0x4a..0x4c and 0x4e are the rider animations (game/anim_layers.h)
+    Rider_75 = 75, // L11
+    Rider_76 = 76, // L12
+    S29_77 = 77,
+    Rider_78 = 78, // L10
+    End = 79,      // 0x4f: one past the last old-style number (old_anim_clip is empty from it)
 };
 
 // The animation a spell landing without an OP_BeginCast plays on its source (GameConnection's added proc cast

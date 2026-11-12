@@ -22,10 +22,9 @@
 #include <cstdint>
 #include <functional>
 #include <string_view>
+
 #include "game/animation_types.h"
 #include "game/mechanics/fpu.h"
-
-
 
 namespace hailstone::game::mechanics {
 
@@ -166,7 +165,7 @@ std::uint8_t new_to_old_anim(std::uint8_t code);
 // The code the old-to-new map (0xaaf5c8, the new-style object's slot 0x14)
 // gives an old-style number (C05 5 -> SLPR 0x50; 0x4f for none); a code of
 // 0x4f or above is returned as it is.
-uint8_t old_to_new_anim(uint8_t old);
+std::uint8_t old_to_new_anim(std::uint8_t old);
 // A sequence's fallback (-8: SLSC -> SLPR -> STND; 0x4f ends the chain).
 std::uint8_t new_style_fallback(std::uint8_t code);
 // A sequence's flags: +0x19 (the attacks) and +0x1a.
@@ -185,20 +184,13 @@ float new_style_blend_ms(std::uint8_t from, std::uint8_t to);
 
 // ---- old-style (classic) models
 
-// Old-style animation numbers and their classic clip codes.
-//enum OldStyleAnim : std::uint8_t {
-//    kOldWalk = 17, kOldRun = 0x12, kOldJumpRun = 0x13, kOldJumpStand = 0x14, kOldFall = 0x15,
-//    kOldDuckWalk = 0x16, kOldClimb = 0x17, kOldDuck = 0x18, kOldTread = 0x19, kOldIdle = 0x1a,
-//    kOldStand = 0x20, kOldSitStand = 0x21, kOldTurn = 0x22, kOldKneel = 0x24, kOldSwim = 0x25, kOldSit = 0x26,
-//    kOldStandAfter = 0x47, kOldIdleAfter = 0x48, kOldSitIdle = 0x49, // P08, O02, O03
-//};
 // The animation object's vf24 on +0x10c0: a jump. Old-style objects (PlayerAnimationBase @0x4afd90) L03 / L04
 // (0x13 / 0x14), new-style ones (@0x588cf0) JMPA / JMPU (0x7b / 0x7c).
 bool is_jump_animation(std::uint8_t anim, bool new_style);
 // The classic clip code of an old-style number ("L01"): the names table at
 // 0xb787a0 (C01..C11, D01..D05, L01..L12, O01..O03, P01..P09, S01..S29,
 // T01..T09), or empty for 0 and numbers from 0x4f.
-std::string_view old_anim_clip(uint8_t old);
+std::string_view old_anim_clip(std::uint8_t old);
 
 // What 0x4afe60 reads (PlayerBase offsets).
 struct OldStyleAnimInput {

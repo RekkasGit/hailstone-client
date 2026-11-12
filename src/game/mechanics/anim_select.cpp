@@ -2,14 +2,12 @@
 // Follows the original's PlayerAnimation_SelectMovementAnim @0x5888a0,
 // 0x58af10, 0x4afc90 and 0x4afe60. The float steps follow the original's x87 instruction order;
 // comments give the addresses.
-#include "game/animation_types.h"
 #include "game/mechanics/anim_select.h"
 
 #include <bit>
 #include <cmath>
 #include <cstring>
 #include <limits>
-
 
 namespace hailstone::game::mechanics {
 
@@ -205,7 +203,7 @@ std::uint8_t new_to_old_anim(std::uint8_t code) {
     return s ? s->old : 0;
 }
 
-uint8_t old_to_new_anim(uint8_t old) { return old < 79 ? kOldToNew[old] : old; }
+std::uint8_t old_to_new_anim(std::uint8_t old) { return old < 0x4f ? kOldToNew[old] : old; }
 
 std::uint8_t new_style_fallback(std::uint8_t code) {
     const Sequence* s = sequence(code);
@@ -239,10 +237,12 @@ float new_style_blend_ms(std::uint8_t from, std::uint8_t to) {
 }
 
 bool is_jump_animation(std::uint8_t anim, bool new_style) {
-    return new_style ? anim == kAnimJumpRun || anim == kAnimJumpStand : anim == static_cast<uint8_t>(AnimationType::JumpRun) || anim == static_cast<uint8_t>(AnimationType::JumpStand);
+    if (new_style) return anim == kAnimJumpRun || anim == kAnimJumpStand;
+    return anim == static_cast<std::uint8_t>(AnimationType::JumpRun) ||
+           anim == static_cast<std::uint8_t>(AnimationType::JumpStand);
 }
 
-std::string_view old_anim_clip(uint8_t old) { return old > 0 && old < 79 ? kOldNames[old] : std::string_view{}; }
+std::string_view old_anim_clip(std::uint8_t old) { return old > 0 && old < 0x4f ? kOldNames[old] : std::string_view{}; }
 
 bool movement_still(float y, float x, float z, const Fpu& f) {
     // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; compared with 0.01.
@@ -466,7 +466,7 @@ MovementAnimResult select_movement_anim(const MovementAnimInput& in, const Fpu& 
 OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu& f) {
     OldStyleAnimResult res;
     auto animate = [&](AnimationType anim, bool a, bool b, float speed, bool c) {
-        res.start = { true, static_cast<uint8_t>(anim), a, b, speed, c };
+        res.start = {true, static_cast<std::uint8_t>(anim), a, b, speed, c};
     };
     auto race_is = [&](std::int32_t r) { return in.race == r; };
     const bool still = movement_still(in.speed_y, in.speed_x, in.speed_z, f) && !in.has_mount;
@@ -502,7 +502,8 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
             } else if (0.0f < in.speed_heading) {
                 animate(in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Turn, true, true, 1.0f, true);
             } else if (0.0f > in.speed_heading) {
-                animate(in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Turn, true, false, 1.0f, true);
+                animate(in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Turn, true, false, 1.0f,
+                        true);
             }
             return res;
         }
@@ -536,7 +537,7 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
     }
     bool a = true, b = false, c = false;
     if (in.state_1198 == 1) {
-       AnimationType anim;
+        AnimationType anim;
         float speed = 1.0f;
         if (in.zone_id == 0x54 && -4800.0f < in.y) {
             anim = AnimationType::Stand;
@@ -606,10 +607,10 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
     b = false;
     res.idle_sounds = true;
     if (in.body_wet >= 5) {
-        animate(race_is(0x31) && in.flag ? AnimationType::JumpRun : AnimationType::Swim, false, false, speed, true);
+        animate(race_is(0x31) && in.flag ? AnimationType::JumpRun : AnimationType::Swimming, false, false, speed, true);
         return res;
     }
-    AnimationType anim =AnimationType::None;
+    AnimationType anim = AnimationType::None;
     if (in.feet_wet < 5) {
         anim = in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Walk;
         const float fall = in.speed_z;

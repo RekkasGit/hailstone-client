@@ -2,8 +2,8 @@
 
 #include <array>
 
-#include "game/mechanics/anim_select.h"
 #include "game/animation_types.h"
+#include "game/mechanics/anim_select.h"
 
 namespace hailstone::game {
 
@@ -71,7 +71,7 @@ bool classic_action_upper_only(std::uint8_t action, bool mounted, bool humanoid,
 bool classic_legs_take_motion(std::uint8_t playing, std::uint8_t wanted, bool humanoid) {
     if (!humanoid || !classic_legs_under_action(wanted) || !classic_action_over_legs(playing)) return false;
     // P01 and the rider animations also need the playing animation in 0xdced88, which no action is.
-    return wanted != static_cast<uint8_t>(AnimationType::Stand) && wanted != 0x4a && wanted != 0x4e;
+    return wanted != static_cast<std::uint8_t>(AnimationType::Stand) && wanted != 0x4a && wanted != 0x4e;
 }
 
 bool classic_may_interrupt(std::uint8_t requested, std::uint8_t playing, bool class_0x3e) {
