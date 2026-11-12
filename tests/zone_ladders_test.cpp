@@ -325,7 +325,7 @@ TEST_CASE("zone ladders: other spawns' contact probes climb a passable ladder un
     std::vector<app::WorldObjects::DoorHit> doors;
     auto probe = [&](const std::optional<plugin::Rules>& rules) {
         app::ZoneMoveWorld world(&mesh, nullptr, nullptr);
-        world.apply_rules(rules, {}, false);
+        world.apply_remote_rules(rules);
         world.set_contact_probe(&doors);
         // A spawn walking toward the wall, into the passable ladder in front of it.
         return app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, world);
@@ -343,6 +343,31 @@ TEST_CASE("zone ladders: other spawns' contact probes climb a passable ladder un
     app::ZoneMoveWorld bare(&mesh, nullptr, nullptr);
     bare.set_contact_probe(&doors);
     CHECK(app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, bare) == 0);
+}
+
+TEST_CASE("zone ladders: other spawns' contact probes do not take the player's /nav pass-door list") {
+    std::vector<game::Door> doors(2);
+    doors[0].id = 3;
+    doors[0].state = 1; // open
+    doors[1].id = 4;    // shut
+    // The player's world while /nav passes open doors: the open one is passed.
+    app::ZoneMoveWorld player(nullptr, nullptr, nullptr);
+    player.apply_rules(std::nullopt, doors, true);
+    CHECK(player.passable_doors() == std::vector<std::uint8_t>{3});
+    // Another spawn's probe meets every door, whatever the player's /nav does, and keeps the passable ladders.
+    app::ZoneMoveWorld remote(nullptr, nullptr, nullptr);
+    remote.set_passable_doors({3});
+    remote.apply_remote_rules(std::nullopt);
+    CHECK(remote.passable_doors().empty());
+    const game::CollisionMesh mesh = wall_scene(Wall::PassableLadder);
+    app::ZoneMoveWorld climb(&mesh, nullptr, nullptr);
+    climb.apply_remote_rules(std::nullopt);
+    std::vector<app::WorldObjects::DoorHit> hits;
+    climb.set_contact_probe(&hits);
+    game::Spawn spawn;
+    spawn.race = 1;
+    spawn.heights.avatar_height = 3.75f;
+    CHECK(app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, climb) == 6);
 }
 
 TEST_CASE("zone ladders: the contact probe answers as the full sweep does for a solid ladder and a wall") {

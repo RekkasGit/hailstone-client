@@ -145,14 +145,14 @@ int ClientApp::run() {
             // as the player's floor test does; the landing check above keeps the zone's floor alone.
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
-            // The other spawns' ladder contact (remote_collision_type), built with the player's movement rules
-            // (ZoneMoveWorld::apply_rules) and in the contact-probe mode, which reuses one door buffer. Only spawns
+            // The other spawns' ladder contact (remote_collision_type), built with the player's passable-ladder rule
+            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, which reuses one door buffer. Only spawns
             // within the actor clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
             game::WorldState::RemoteCollisionFn remote_collision;
             std::optional<ZoneMoveWorld> remote_world;
             if (collision_ && screen_ == Screen::InGame) {
                 remote_world.emplace(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
-                remote_world->apply_rules(conn_->server_rules(), conn_->doors(), nav_ && nav_->passes_open_doors());
+                remote_world->apply_remote_rules(conn_->server_rules());
                 remote_world->set_contact_probe(&remote_door_hits_);
                 remote_collision = [&remote_world](const game::Spawn& spawn, const glm::vec3& from,
                                                    const glm::vec3& to) {

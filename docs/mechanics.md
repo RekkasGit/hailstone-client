@@ -1389,8 +1389,9 @@ it does nothing). Which group plays what:
 - Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
   forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
   switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.
-  The probe's world follows the player's movement rules (`ZoneMoveWorld::apply_rules`: passable ladders, the doors
-  /nav passes), so other spawns climb Cabilis's passable ladders when the player would. Hailstone, for the frame's
+  The probe's world follows the player's passable-ladder rule (`ZoneMoveWorld::apply_remote_rules`), so other
+  spawns climb Cabilis's passable ladders when the player would; the open doors the player's /nav or /stick passes
+  are the player's own, and other spawns' probes meet every door. Hailstone, for the frame's
   cost: only spawns within the actor clip of the player are probed (`WorldState::remote_probe_range`, the camera's
   `game::actor_clip_distance`, 550 at the default ActorClipPlane); a farther one is not drawn and has no contact.
   Only a ladder gives a contact the animation shows, so the probe sweeps the doors only after a ladder hit (a door

@@ -142,6 +142,10 @@ public:
                 if (d.state != game::kSwitchClosed) open.push_back(d.id);
         set_passable_doors(std::move(open));
     }
+    // The rules of the other spawns' contact probes: the passable ladders as apply_rules sets them, but never the
+    // doors the player's /nav or /stick passes (those are the player's own; another spawn meets every door).
+    void apply_remote_rules(const std::optional<plugin::Rules>& rules) { apply_rules(rules, {}, false); }
+    const std::vector<std::uint8_t>& passable_doors() const { return pass_doors_; }
     // The other spawns' contact probe (remote_collision_type): sweep() then answers only what the contact needs.
     // Only a ladder gives a contact the animation shows (CollidingType 6), and a door hit after it overrides it
     // with the switch type (3), so the doors are swept only after a ladder hit, into `door_buffer` (kept by the
