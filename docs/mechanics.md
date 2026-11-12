@@ -1065,7 +1065,8 @@ race. Off, the original's checks apply.
 
 ## Name sprites
 
-`draw_nameplates` (app) with `game::name_sprite_switched_on`, `name_sprite_shows_guild` and `npc_owner_line`
+`draw_nameplates` (app) with `game::name_sprite_switched_on`, `name_sprite_shows_guild`, `name_sprite_market_words`
+and `npc_owner_line`
 (`game/combat.h`), after PlayerClient::SetNameSpriteState @0x58e2d0 and unk_PlayerClient_UpdateNameSprite @0x58f050:
 
 - Options > Display "Show Player Names" / "Show NPC Names" (hailstone.ini `display.pc_names`, `display.npc_names`;
@@ -1075,6 +1076,11 @@ race. Off, the original's checks apply.
   person, where the model is hidden. Hailstone adds a switch for it alone (a deliberate difference: Options > Display
   "Show My Name", hailstone.ini `display.own_name`, on by default); "Show Player Names" off hides it too. Not done:
   the original shows the title window's chosen title and suffix on the player's own sprite while that window is open.
+- A player's name starts with "Offline " (eqstr 766) in offline mode (the spawn record's other_data bit 1, then
+  SpawnAppearance 53), then "Trader " (5503) in trader mode or else "Buyer " (6055) as a buyer; either of those two
+  takes the title's place (`game::name_sprite_market_words`). An offline trader reads "Offline Trader Name". Only a
+  player's (spawn type 0): an NPC the server marks as a trader keeps its plain name, as in the original. Stock EQEmu
+  sets neither offline flag, so its traders and buyers show only "Trader " / "Buyer ".
 - Their colours are this client's, not the original's; NPC names in their consider colour are a Hailstone option
   (`display.con_name_colour`, on by default): docs/graphics.md "Name plates".
 - Hailstone's own, not the original's: a plate's text is hidden wherever the scene (geometry, doors, characters) is

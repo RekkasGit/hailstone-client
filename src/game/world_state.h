@@ -1195,6 +1195,8 @@ namespace hailstone::game {
 		// Bazaar flags: the spawn record's trader bit and OP_BecomeTrader (PlayerClient +800), the
 		// buyer bit (other_data bit 0) and OP_Barter's buyer appearance.
 		bool trader = false, buyer = false;
+		// bOfflineMode (+0x194): the spawn record's other_data bit 1, then SpawnAppearance 53 (an offline trader or buyer).
+		bool offline = false;
 		// PlayerClient +0x14c: the spawn record's PlayerState, changed by OP_PlayerStateAdd / Remove (bit 0x2 sheathed,
 		// /sheathe; 0x8 aggressive, /aggressive).
 		std::uint32_t player_state = 0;

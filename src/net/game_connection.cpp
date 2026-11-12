@@ -898,6 +898,7 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.deity = s.deity;
     out.trader = s.trader;
     out.buyer = (s.other_data & 1) != 0;
+    out.offline = (s.other_data & 2) != 0;
     out.player_state = s.player_state;
     game::Appearance& a = out.appearance;
     a = {};
@@ -2738,6 +2739,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                     break;
                 }
                 case 52: s->guild_show = a->parameter != 0; break; // bGuildShowAnim
+                case 53: s->offline = a->parameter != 0; break;    // bOfflineMode
                 case 24:
                     s->afk = a->parameter != 0;
                     // Handle_OP_SpawnAppearance 0x18: the spawn's AFK through vtable +0xd4; ours is the local flag
