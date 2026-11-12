@@ -753,11 +753,19 @@ void GameConnection::location_command() {
     system(13177, {std::format("{:.2f}", s.y), std::format("{:.2f}", s.x), std::format("{:.2f}", s.z)});
 }
 
+std::optional<TimeOfDay> GameConnection::game_time() const {
+    // The original advances its copy at most every 3 s (EQWorldData +0x14), always from the time the packet came, so
+    // it is never more than a game minute behind this; this one is worked out at each call.
+    if (!time_) return std::nullopt;
+    // Util::FastTime counts whole seconds: the difference of the two readings.
+    return advance_time_of_day(*time_, static_cast<std::uint32_t>(now_ms() / 1000 - time_at_ms_ / 1000));
+}
+
 void GameConnection::time_command() {
-    // @0x5207a0: the game time (eqstr 6706), then the local time (12389, "%#c").
-    if (time_) {
-        chat(ChatEvent::Kind::System, game::format_game_time(strings_, static_cast<int>(time_->year), time_->month,
-                                                            time_->day, time_->hour));
+    // @0x5207a0: the game time now (eqstr 6706, EQWorldData::CurrentGameTime), then the local time (12389, "%#c").
+    if (auto now = game_time()) {
+        chat(ChatEvent::Kind::System,
+             game::format_game_time(strings_, static_cast<int>(now->year), now->month, now->day, now->hour));
     }
     std::time_t now = std::time(nullptr);
     std::tm tm{};

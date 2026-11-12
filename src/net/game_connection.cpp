@@ -1232,6 +1232,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     case Op::TimeOfDay:
         time_ = decode_time_of_day(p);
+        time_at_ms_ = now_ms();
         break;
     case Op::Weather:
         if (auto w = decode_weather(p)) {

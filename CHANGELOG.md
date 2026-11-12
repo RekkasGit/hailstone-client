@@ -14,6 +14,7 @@
 - Stuns follow the original client: a stun that lands while you are already stunned no longer restarts it, a stun under 1 second lasts 1 second, stun immunity is respected, a stun that ends while you are mesmerized lasts until the mez ends, "You are stunned!" and "You are unstunned." are printed, and sounds take on the dazed echo while you are stunned
 - Merchants: the merchant window can show only the goods you can use, as on the original client. Items your class or race cannot use, and spell scrolls you already have (or have a higher rank of), are hidden. It is on when you start. Untick **Usable only** beside the search box to see everything; in the gamepad UI, press X on the Buy page
 - Add-ons: **Remove** in a script's or plugin's row works again in the mouse UI. Its question ("Remove ...?") never opened, so nothing was removed
+- `/time` shows the game time now, as on the original client. It always showed the time from when you zoned in. The MacroQuest `${GameTime}` TLO had the same fault and is fixed too. Its weekday is now the game's (every game month starts on a Sunday), as on the original, instead of the real calendar's
 - Chat: a message with line breaks in it (such as a server's message of the day) is shown on separate lines, instead of its words being thrown across the window
 
 ## 0.7.0-beta (2026-11-09)

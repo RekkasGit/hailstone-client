@@ -1188,17 +1188,18 @@ void register_misc_types() {
         return V::boolean(t.tm_hour < 6 || t.tm_hour >= 19);
     });
 
-    // GameTime: Norrath's clock (OP_TimeOfDay).
+    // GameTime: Norrath's clock (OP_TimeOfDay, run on since it came).
     Type& gt = const_cast<Type&>(*g.gametime);
     gt.to_value = [](const Context& c, const Value&) -> V {
-        if (!c.conn || !c.conn->time_of_day()) return V::nil();
-        const auto& t = *c.conn->time_of_day();
-        return V::string(std::format("{:02}:{:02}", t.hour, t.minute));
+        auto t = c.conn ? c.conn->game_time() : std::nullopt;
+        if (!t) return V::nil();
+        return V::string(std::format("{:02}:{:02}", t->hour, t->minute));
     };
     auto gf = [](const char* name, auto fn) {
         add(g.gametime, name, [fn](const Context& c, const Value&, std::string_view) -> V {
-            if (!c.conn || !c.conn->time_of_day()) return V::nil();
-            return fn(*c.conn->time_of_day());
+            auto t = c.conn ? c.conn->game_time() : std::nullopt;
+            if (!t) return V::nil();
+            return fn(*t);
         });
     };
     gf("Hour", [](const net::TimeOfDay& t) { return V::integer(t.hour); });

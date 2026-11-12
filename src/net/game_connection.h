@@ -431,7 +431,11 @@ public:
     // The game state last given to the plugin hooks (plugin::kGameState*; 0 none yet).
     int hook_game_state() const { return hook_game_state_; }
     const std::optional<NewZone>& zone_info() const { return new_zone_; }
+    // The OP_TimeOfDay last received, as it came (the sky runs its own clock from it, game::SkyClock).
     const std::optional<TimeOfDay>& time_of_day() const { return time_; }
+    // The game clock now: OP_TimeOfDay run on since it came (EQWorldData::AdvanceTime, net::advance_time_of_day).
+    // /time and the GameTime TLO read this; nothing before the server sent the time.
+    std::optional<TimeOfDay> game_time() const;
     // The OP_Weather messages since the last call (game::Weather::handle_message takes them).
     std::vector<Weather> take_weather() { return std::exchange(weather_messages_, {}); }
     // The zone the server put us in, once per zone-in: load its geometry. Not while the server's files come.
@@ -2936,6 +2940,7 @@ private:
     std::optional<PlayerProfile> profile_;
     std::optional<NewZone> new_zone_;
     std::optional<TimeOfDay> time_;
+    std::int64_t time_at_ms_ = 0; // when time_ came (now_ms)
     game::WorldState world_;
     bool own_spawn_seen_ = false;
     bool weather_seen_ = false;

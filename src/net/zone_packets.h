@@ -335,6 +335,11 @@ struct TimeOfDay {
 };
 AppPacket encode(const TimeOfDay& v);
 std::optional<TimeOfDay> decode_time_of_day(const AppPacket& p);
+// EQWorldData::AdvanceTime @0x7dbff0: the game date `elapsed_s` whole real seconds (Util::FastTime's) after `ref`
+// came. Twenty game seconds a real second (one game minute per 3 s), the 32-bit product wrapping as the original's; the whole
+// minutes, hours, days, months and years are added to `ref` with its byte arithmetic and carries (hours 1..24, days
+// 1..28, months 1..12), and a year past 9999 becomes 0.
+TimeOfDay advance_time_of_day(const TimeOfDay& ref, std::uint32_t elapsed_s);
 
 // OP_Weather (12 bytes, or 8: EQEmu's weather changes and #set weather send only the two words the original reads):
 // kind (0 rain, 1 snow, 0xff stop), intensity (the server's 1..10, 0 fades out), a third word the original does not
