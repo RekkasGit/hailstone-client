@@ -408,7 +408,8 @@ public:
                 const game::WorldState::ActorModelFn& actor_model = {},
                 const game::WorldState::RegionFn& region = {},
                 const game::WorldState::VehicleFn& vehicle_under = {},
-                const game::WorldState::FloorFn& ground_floor = {});
+                const game::WorldState::FloorFn& ground_floor = {},
+                const game::WorldState::RemoteCollisionFn& collision = {});
     // The vehicles' part of smooth, before the local player moves (WorldState::smooth_vehicles).
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).
@@ -420,6 +421,7 @@ public:
     void note_physics_step(std::uint32_t id, std::uint32_t ms) {
         if (auto it = world_.spawns.find(id); it != world_.spawns.end()) it->second.physics_step_ms = ms;
     }
+    void set_remote_probe_range(float range) { world_.remote_probe_range = range; }
     // The game clock's steps this frame on now_ms()'s clock (core/step_clock.h, docs/mechanics.md "Frame rate"): the
     // rules that run once a frame and wait for a frame past their interval (memorizing, scribing, the 1 s and 6 s
     // ticks, the socials' lines) run once per step at its time. nullopt: once a frame, now.

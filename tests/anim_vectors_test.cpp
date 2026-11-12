@@ -600,6 +600,39 @@ TEST_CASE("New-style tracks: fallbacks, columns, alternates and variants") {
     CHECK(track(0x6f) == "IDLE_BA_3");
 }
 
+TEST_CASE("New-style riders select mount tracks and retain their resolved style") {
+    Model m{{"STND_BA_1", "STND_MT_1", "WALK_MT_1", "SLPR_MT_1", "SLPR_1H_1"}};
+    auto has = [&](std::string_view name) { return m.has(name); };
+    hailstone::game::NewStyleTrackInput input;
+    input.mounted = true;
+    input.player_state = 0xc0; // the mount style wins over dual wield
+    auto standing = hailstone::game::new_style_track(0x6e, input, has, {});
+    CHECK(standing.clip == "STND_MT_1");
+    CHECK(standing.column == 5);
+    auto action = hailstone::game::new_style_track(0x50, input, has, {});
+    CHECK(action.clip == "SLPR_MT_1");
+    CHECK(hailstone::game::new_style_clip_column(action.clip) == 5);
+    CHECK(hailstone::game::new_style_clip_column("STND_1H_3") == 1);
+    CHECK(hailstone::game::new_style_clip_column("P09") == 0);
+    hailstone::game::SpawnAnimState state;
+    hailstone::game::SpawnAnimInput in;
+    in.new_style = true;
+    in.mounted = true;
+    in.player_state = 0xc0;
+    in.walk_speed = 0.7f;
+    in.run_speed = 1.25f;
+    in.model_scale = 1.0f;
+    in.velocity = {0.0f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    auto choice = frame(state, in, m);
+    CHECK(choice.clip == "WALK_MT_1");
+    CHECK(choice.column == 5);
+    CHECK(state.column == 5);
+    auto repeated = frame(state, in, m);
+    CHECK(repeated.clip == choice.clip);
+    CHECK_FALSE(repeated.restart);
+}
+
 TEST_CASE("OP_Animation actions: the clip, else 0x4b1210's replacement") {
     auto clip = [](std::uint8_t action, const Model& m) {
         return hailstone::game::action_clip(action, [&](std::string_view c) { return m.has(c); });

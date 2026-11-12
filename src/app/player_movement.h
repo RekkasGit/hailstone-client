@@ -30,6 +30,7 @@ namespace hailstone::assets { class ZoneRegions; }
 namespace hailstone::net { class GameConnection; }
 
 namespace hailstone::game::mechanics { class Character; }
+namespace hailstone::game { struct Spawn; }
 
 namespace hailstone::app {
 
@@ -97,6 +98,11 @@ public:
     virtual std::vector<std::uint8_t> touch_overlap(const glm::vec3&, float) const { return {}; }
     virtual std::optional<float> ceiling_above(const glm::vec3& p) const = 0;
 };
+
+// The selected remote CollisionPass actor-contact state (ladder / switch), using the same collision sphere as
+// the local movement adapter. This does not replace the server's position or the remote predictor's motion.
+std::int32_t remote_collision_type(const game::Spawn& spawn, const glm::vec3& from, const glm::vec3& to,
+                                    const MoveWorld& world);
 
 class PlayerMovement {
 public:

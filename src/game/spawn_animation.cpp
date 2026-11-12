@@ -56,13 +56,13 @@ struct Rows {
     }
 };
 
-// 0x588730: the column for an animation (no forced column, no mount: slot 0x34's 0x200 state and
-// GetMount are not modelled).
+// 0x588730: a rider's mount column, otherwise the equipped-weapon style.
 int column_for(std::uint8_t code, const NewStyleTrackInput& in) {
+    if (in.mounted) return 5;
     if (!(in.player_state & kPrimaryEquipped)) return 0;
     if (in.player_state & kSecondaryEquipped) return 3;
     int column = code == 0x56 || code == 0x57 ? 2 : code == 0x58 ? 4 : 1;
-    return in.forced_column != -1 ? in.forced_column : column;
+    return in.forced_column >= 0 && in.forced_column < 6 ? in.forced_column : column;
 }
 
 // 0x5885e0: STDA / IDLA for STND / IDLE while aggressive or after an attack (the playing sequence's
@@ -125,10 +125,21 @@ NewStyleTrack new_style_track(std::uint8_t code, const NewStyleTrackInput& in,
     int variant = count == 1 ? 0 : (rand ? rand() : 0) % count;
     NewStyleTrack out;
     out.code = track;
+    out.column = column;
     out.track = track_of(track, column);
     out.clip = out.track + "_" + std::to_string(variant + 1);
     if (!has_clip(out.clip)) out.clip = out.track + "_1"; // the variants are taken as numbered from 1 without gaps
     return out;
+}
+
+std::int32_t new_style_clip_column(std::string_view clip) {
+    const auto split = clip.find('_');
+    if (split == std::string_view::npos) return 0;
+    auto style = clip.substr(split + 1);
+    style = style.substr(0, style.find('_'));
+    for (std::int32_t column = 0; column < 6; ++column)
+        if (style == assets::eqg_character::kTrackStyles[column]) return column;
+    return 0;
 }
 
 namespace {
@@ -140,6 +151,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
                                        const std::function<int()>& roll, const std::function<int()>& rand) {
     const mech::Fpu fpu(mech::FpuPrecision::Single24);
     SpawnAnimChoice keep{st.clip, st.reverse, st.rate, st.loop, false, 100.0f, st.anim, in.follow_up};
+    keep.column = st.column;
     auto start = [&](const std::string& clip, std::uint8_t anim, bool reverse, float rate, bool loop,
                      float blend_ms) {
         // The same animation asked again does not restart it (0x4b0900); a
@@ -148,6 +160,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
         SpawnAnimChoice c{clip, reverse, rate, loop, !same, blend_ms, anim, in.follow_up};
         st.started = true;
         st.track.clear();
+        st.column = 0;
         st.anim = anim;
         st.clip = clip;
         st.reverse = reverse;
@@ -158,7 +171,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
 
     // A new-style code on its track (new_style_track); the same sequence and column asked again keeps its
     // variant (0x58ac90's mode 3: nothing changes).
-    NewStyleTrackInput track_in{in.player_state, st.anim, -1};
+    NewStyleTrackInput track_in{in.player_state, st.anim, -1, in.mounted};
     auto start_new = [&](std::uint8_t code, bool reverse, float rate, bool loop) -> std::optional<SpawnAnimChoice> {
         NewStyleTrack t = new_style_track(code, track_in, has_clip, rand);
         if (t.clip.empty()) return std::nullopt;
@@ -169,6 +182,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
         std::string clip = st.started && t.track == st.track ? st.clip : t.clip;
         SpawnAnimChoice c = start(clip, t.code, reverse, rate, loop, blend);
         st.track = t.track;
+        st.column = c.column = t.column;
         return c;
     };
 
@@ -229,7 +243,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
         // 0x58af10: a still player (and no mount) goes to ChooseIdleAnimation, a moving one to
         // SelectMovementAnim (which clears +0x360).
         mech::AnimStart r;
-        if (mech::movement_still(vy, vx, vz, fpu)) {
+        if (!in.mounted && mech::movement_still(vy, vx, vz, fpu)) {
             mech::IdleAnimInput idle;
             idle.turning = in.turning;
             idle.player_state = in.player_state;
@@ -248,6 +262,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
             r = ir.start;
         } else {
             mech::MovementAnimInput m;
+            m.mounted = in.mounted;
             m.speed_y = vy;
             m.speed_x = vx;
             m.speed_z = vz;

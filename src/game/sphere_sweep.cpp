@@ -130,56 +130,72 @@ std::optional<Contact<F>> sweep_edge(const Vec3<F>& c, const Vec3<F>& d, F r, F 
 
     // Where along the axis (0 at s, 1 at s + e) the centre is at time t.
     auto axis_at = [&](F t) { return ee > 0 ? dot(q + d * t, e) / ee : F(0); };
-    // The path's crossings of the capsule's surface, by part: the cylinder's side (0 <= u < 1) and the spheres at
-    // the start (u < 0) and the far end (u >= 1).
-    enum class Part { Side, Start, Far };
-    struct Crossing {
-        F t;
-        Part part;
-    };
-    // The crossing the hit is taken from: the earliest of the side's and the start sphere's wherever they lie along
-    // the path (so a centre already inside that leaves within the move touches at once) and the far sphere's within
-    // the move. That asymmetry is the original's, as its recordings show: a centre inside the capsule moving out
-    // through the far end touches at once, one moving out through the start end touches when it leaves.
-    std::optional<Crossing> first, last;
-    bool within = false;
-    auto cross = [&](F t, Part part) {
-        if (!last || t > last->t) last = Crossing{t, part};
-        if (part == Part::Far && !(t >= 0 && t <= 1)) return;
-        if (!first || t < first->t) first = Crossing{t, part};
-        if (t >= 0 && t <= 1) within = true;
-    };
-    // Roots of a t^2 + 2 h t + k = 0.
+    // The native capsule query generates at most two candidates, in part order rather than time order: cylinder,
+    // start cap, then far cap. Its [0,1] filter counts usable candidates without compacting this time array.
+    // SweptSphereEdge selects candidate zero when exactly one is usable, even when that candidate is outside the
+    // move. Preserve that observable rule rather than replacing it with the earliest geometric intersection.
+    std::array<F, 2> candidates{};
+    std::size_t count = 0;
+    auto keep = [&](F t) { if (count < candidates.size()) candidates[count++] = t; };
+    // Roots of a t^2 + 2 h t + k = 0; on_root(t, tangent), tangent when the discriminant is 0. The tangent test
+    // reads the same discriminant the roots come from: comparing h h with a k apart can disagree with it where the
+    // compiler contracts one of them into a fused multiply-add (Apple Clang on arm64).
     auto roots = [&](F a, F h, F k, auto&& on_root) {
         if (!(a > 0)) return;
         F disc = h * h - a * k;
         if (!(disc >= 0)) return;
         F root = std::sqrt(disc);
-        on_root((-h - root) / a);
-        on_root((-h + root) / a);
+        on_root((-h - root) / a, disc == 0);
+        if (disc != 0) on_root((-h + root) / a, false);
     };
-    if (!along_axis) {
+    if (ee == 0) {
+        // An edge of no length (its ends one point, or a length whose square underflows) is the sphere around its
+        // end: both caps are that sphere and there is no cylinder, so the end's roots are the candidates.
+        roots(dot(d, d), dot(q, d), dot(q, q) - rr, [&](F t, bool) { keep(t); });
+    } else if (along_axis && ee > 0 && d_len > 0) {
+        const F edge_length = std::sqrt(ee);
+        const Vec3<F> axis = e / edge_length;
+        const F along = dot(q, axis);
+        const Vec3<F> across = q - axis * along;
+        const F cap_sq = rr - dot(across, across);
+        const F direction = dot(d, axis);
+        if (direction > 0 && cap_sq >= 0) {
+            const F cap = std::sqrt(cap_sq);
+            keep((-along - cap) / d_len);
+            keep((edge_length - along + cap) / d_len);
+        } else if (direction < 0 && cap_sq > 0) {
+            const F cap = std::sqrt(cap_sq);
+            keep((along + cap) / d_len);
+            keep(-(edge_length - along + cap) / d_len);
+        }
+    } else if (!along_axis) {
         // The cylinder: the parts of q and d across the axis.
         Vec3<F> q_across = q - e * (dot(q, e) / ee);
         Vec3<F> d_across = d - e * (dot(d, e) / ee);
-        roots(dot(d_across, d_across), dot(q_across, d_across), dot(q_across, q_across) - rr, [&](F t) {
+        bool cylinder_tangent = false;
+        roots(dot(d_across, d_across), dot(q_across, d_across), dot(q_across, q_across) - rr, [&](F t, bool tangent) {
             F u = axis_at(t);
-            if (u >= 0 && u < 1) cross(t, Part::Side);
+            // A cylinder tangent includes its far endpoint; the two-root case leaves that endpoint to the cap.
+            if (u >= 0 && (u < 1 || (tangent && u == 1))) {
+                keep(t);
+                cylinder_tangent = tangent;
+            }
+        });
+        const Vec3<F> q_end = c - (s + e);
+        const F dd = dot(d, d);
+        if (!cylinder_tangent && count < 2) roots(dd, dot(q, d), dot(q, q) - rr, [&](F t, bool) {
+            if (axis_at(t) < 0) keep(t);
+        });
+        if (!cylinder_tangent && count < 2) roots(dd, dot(q_end, d), dot(q_end, q_end) - rr, [&](F t, bool) {
+            if (axis_at(t) >= 1) keep(t);
         });
     }
-    Vec3<F> q_end = c - (s + e);
-    F dd = dot(d, d);
-    roots(dd, dot(q, d), dot(q, q) - rr, [&](F t) {
-        if (along_axis || axis_at(t) < 0) cross(t, Part::Start);
-    });
-    roots(dd, dot(q_end, d), dot(q_end, q_end) - rr, [&](F t) {
-        if (along_axis || axis_at(t) >= 1) cross(t, Part::Far);
-    });
-    if (!within) return std::nullopt; // no crossing within the move, even from inside the capsule
-    // A path that enters through an end sphere and leaves through the cylinder's side after the move is no hit,
-    // though it enters within the move: so the original's recordings have it.
-    if (first->part != Part::Side && last->part == Part::Side && last->t > 1) return std::nullopt;
-    F t = std::max(first->t, F(0));
+    std::size_t usable = 0;
+    for (std::size_t i = 0; i < count; ++i) if (candidates[i] >= 0 && candidates[i] <= 1) ++usable;
+    if (usable == 0) return std::nullopt;
+    F first = candidates[0];
+    if (usable == 2) first = std::min(first, candidates[1]);
+    F t = std::max(first, F(0));
     if (!(t < t_max)) return std::nullopt;
     Vec3<F> point = s + e * std::clamp(axis_at(t), F(0), F(1));
     if (!(dot(d, point) >= dot(d, c))) return std::nullopt; // the edge must lie ahead of the centre
@@ -250,8 +266,9 @@ std::optional<Contact<F>> sweep_triangle(const Vec3<F>& c, const Vec3<F>& d, F r
         Vec3<F> q = v[k] - c;
         if (dot(q, q) < r * r) return std::nullopt;
         if (!(dot(q, d) > 0)) return std::nullopt;
-        // A move along the plane is not refused here: t is then infinite and x mostly NaN, and an undecided
-        // comparison takes the edge before the vertex, as the original's recordings show.
+        // SweptSphereTriangle's edge-region selector @0x7a63c0 needs a crossing of the plane through the vertex.
+        // A parallel path has no crossing; dividing by zero here instead picked an edge through NaN comparisons.
+        if (toward == 0) return std::nullopt;
         F t = (dot(n, v[k]) - dot(n, c)) / toward;
         Vec3<F> x = c + d * t;
         if (!(dot(e[k], v[k]) <= dot(e[k], x))) {
@@ -308,6 +325,19 @@ TriangleHit<F> sphere_triangle(const Vec3<F>& centre, const Vec3<F>& delta, F le
 }
 
 template <class F>
+TriangleHit<F> sphere_edge(const Vec3<F>& centre, const Vec3<F>& delta, F t_max, F radius, const Vec3<F>& s,
+                           const Vec3<F>& e) {
+    TriangleHit<F> h;
+    auto c = sweep_edge(centre, delta, radius, t_max, s, e);
+    if (!c) return h;
+    h.hit = true;
+    h.t = c->t;
+    h.normal = normalize_or_zero(centre + delta * c->t - c->point);
+    h.contact_assumed = c->assumed;
+    return h;
+}
+
+template <class F>
 Vec3<F> clamp_point(const Vec3<F>& from, const Vec3<F>& delta, F t) {
     Vec3<F> v = delta * t;
     F len = length(v);
@@ -337,6 +367,7 @@ Skitter<F> skitter(const Vec3<F>& u, const Vec3<F>& delta, F t, const Vec3<F>& n
     template Start<F> start<F>(const Vec3<F>&, const Vec3<F>&, F);                                                  \
     template TriangleHit<F> sphere_triangle<F>(const Vec3<F>&, const Vec3<F>&, F, F, F, const Vec3<F>&,             \
                                                 const Vec3<F>&, const Vec3<F>&, const Vec3<F>&);                     \
+    template TriangleHit<F> sphere_edge<F>(const Vec3<F>&, const Vec3<F>&, F, F, const Vec3<F>&, const Vec3<F>&);    \
     template Vec3<F> clamp_point<F>(const Vec3<F>&, const Vec3<F>&, F);                                             \
     template Skitter<F> skitter<F>(const Vec3<F>&, const Vec3<F>&, F, const Vec3<F>&);
 HAILSTONE_SWEEP_INSTANTIATE(float)

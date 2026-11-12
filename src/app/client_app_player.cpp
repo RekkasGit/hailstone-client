@@ -738,16 +738,11 @@ void ClientApp::update_player(float dt) {
         world.set_npcs(&npc_bodies_);
         {
             const auto& rules = conn_->server_rules();
-            world.set_passable_ladders(!(rules && rules->configured && !rules->passable_ladders));
             if (collision_) collision_->set_solid_ladders(!(rules && rules->configured && !rules->solid_ladders));
         }
-        // /nav or /stick moving the player: the doors not shut do not block it (Navigator::passes_open_doors).
-        if (nav_ && nav_->passes_open_doors()) {
-            std::vector<std::uint8_t> open;
-            for (const game::Door& d : conn_->doors())
-                if (d.state != game::kSwitchClosed) open.push_back(d.id);
-            world.set_passable_doors(std::move(open));
-        }
+        // The passable ladders, and while /nav or /stick moves the player, the doors not shut do not block it
+        // (Navigator::passes_open_doors). The other spawns' contact probes follow the same rules (update()).
+        world.apply_rules(conn_->server_rules(), conn_->doors(), nav_ && nav_->passes_open_doors());
         move_test_.drive(since_zone_in, mk, yaw_, pitch_, movement_, *conn_, zone_ ? &*zone_ : nullptr, &world, feet_);
         // Dead: no moving until the server moves us to the bind point.
         if (conn_->player_status().dead) mk = MovementKeys{};

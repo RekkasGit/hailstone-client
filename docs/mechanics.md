@@ -306,11 +306,13 @@ How a move meets walls:
   game's 24-bit FPU precision is single precision), not the original's instruction stream, so its results agree
   with the original's recordings within a tolerance rather than bit for bit (see "Vectors" below and
   docs/unknowns.md). Where the original's edge case reports a hit without a contact point (a sphere already holding
-  the edge's start vertex), the contact is that vertex. The capsule (edge) test's rules for a centre already inside
-  the capsule, which the description leaves open, follow the recordings: it touches at once when it leaves through
-  the cylinder or the far end within the move, when it leaves through the start end, and not at all when it stays
-  inside to the move's end; a path entering through an end sphere and leaving through the cylinder after the move is
-  no hit. Lengths are summed in double (the x87's exponent range), a NaN length gives a NaN stop. `game/collision_callbacks.*`: the movement collision
+  the edge's start vertex), the contact is that vertex. Capsule candidates retain cylinder, start-cap and far-cap
+  enumeration order. The usable-root count does not compact that list: one usable root selects its first candidate,
+  while two select the smaller candidate, with negative time clamped to zero. Axial paths and tangent roots follow
+  their separate observed branches. A parallel edge-region approach is refused rather than selected through a
+  division by zero. Synthetic float/double cases in `tests/swept_sphere_test.cpp` cover these choices; native FPU
+  rounding is still not claimed bit for bit. Lengths are summed in double (the x87's exponent range), a NaN length
+  gives a NaN stop. `game/collision_callbacks.*`: the movement collision
   filter (with and without rider) and the colliding-type setter.
 - `game/swept_sphere.*`, `game/collision.*`, `game/object_collision.*`: the collision-library side (no vectors):
   triangle records with the passable (WLD 0x10, EQG 1) and transparent flags and n = normalize((v0 - v1) x
@@ -331,7 +333,10 @@ How a move meets walls:
   21 classic zones, 655 of 665 closed doors sit in their doorways (the slab and the way through it clear of the
   zone's geometry); with the heading turned clockwise 313 do. Walked live: halas door 14 and felwithea door 1 stop
   the player closed (2.3 from the slab's centre) and let it through open.
-- Vectors (tests/movement_vectors_test.cpp): DoCollisionMovement 1000, SweptSphereTriangle 3000,
+- Vector results measured before the capsule and parallel edge-region changes above
+  (tests/movement_vectors_test.cpp). **The current sweep has not been replayed against these recordings**: the
+  numbers below are the earlier implementation's, and `movement_vectors_test` must be run with
+  `HAILSTONE_VECTORS_DIR` set before they are trusted again (docs/todo.md). DoCollisionMovement 1000, SweptSphereTriangle 3000,
   SweepStopAndSlide 3000, s3dCollideActorSweep 2000, CollisionHit_SetCollidingType 1500,
   CollisionFilter_Movement 2000. The sweep's three are compared within a tolerance (t 1e-4, unit vectors 1e-3,
   points 1e-3 + 1e-6 of their size, each grown by 8 floats of the inputs' size over the move or the radius, as the
@@ -1428,6 +1433,9 @@ it does nothing). Which group plays what:
   to the legs while the unfinished action keeps the upper body (0x5890a0, 0x58ac90's modes); another
   sequence (stand, idle) starts on both groups when either group's mode is 2, cutting the action (0x589410).
   Each group's cross-fade is (new.blendIn + that group's old blendOut) / 2.
+- New-style riders select movement and idle sequences from mounted style column 5, using the mount's motion.
+  The layer groups retain the requested style column as part of sequence identity, so the same sequence in a
+  different column can start without restarting a repeated request for the same column.
 - A request that finds the upper body busy (`render/actor_layers.cpp` start_action). Classic: an OP_Animation reaches
   0x4b15b0 through the object's slot 3 with restart 1 and key 1, and 0x4b0900 decides whether it may start at
   once (`game::classic_may_interrupt`: the blend and rider animations, D05, 0x21 and 0x2c always; never over itself;
@@ -1456,8 +1464,17 @@ it does nothing). Which group plays what:
   a new-style model) once, unless it or the duck walk 0x16 (L06 / CWLK) is playing; 'd' (100) from 'o' plays it
   backward. A plain play, not a held posture: a walk or a jump replaces it, and a still ducking spawn asks for
   nothing more, so the crouch shows without moving (`game::choose_spawn_animation`).
-- Climbing: the local player's CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which
-  play L07 / CLMB forward going up and reversed going down. Other spawns' +0x24 is 0 here (docs/unknowns.md).
+- Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
+  forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
+  switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.
+  The probe's world follows the player's passable-ladder rule (`ZoneMoveWorld::apply_remote_rules`), so other
+  spawns climb Cabilis's passable ladders when the player would; the open doors the player's /nav or /stick passes
+  are the player's own, and other spawns' probes meet every door. Hailstone, for the frame's
+  cost: only spawns within the actor clip of the player are probed (`WorldState::remote_probe_range`, the camera's
+  `game::actor_clip_distance`, 550 at the default ActorClipPlane); a farther one is not drawn and has no contact.
+  Only a ladder gives a contact the animation shows, so the probe sweeps the doors only after a ladder hit (a door
+  hit then gives the switch type over it, as in the full sweep), and not the vehicles or NPC bodies.
+  This publishes animation contact state; full remote collision correction and the physical-radius gap remain open.
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`: CollisionPass's
   sub_00506d20 at the spawn's z and CheckRegionChange at the feet + 0.25), so they swim and tread water.
 

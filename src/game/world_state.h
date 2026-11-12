@@ -2783,12 +2783,15 @@ namespace hailstone::game {
 		// `vehicle_under` (optional) gives the vehicle whose deck is under a point (0: none): a spawn an update puts
 		// there rides it (game/boats.h).
 		using VehicleFn = std::function<std::uint32_t(const glm::vec3&)>;
+		// The moving remote spawn's sweep, for CollisionHit_SetCollidingType (+0x24). This observes actor hits;
+		// complete remote CollisionPass positioning remains separate from the interpolation below.
+		using RemoteCollisionFn = std::function<std::int32_t(const Spawn&, const glm::vec3&, const glm::vec3&)>;
 		// The local player and the mount it rides (controlled_id) are not eased: they are drawn where set_local_drawn put
 		// them this frame, else at their position.
 		// `ground_floor` (optional): the floor ground_npcs measures against, which has the doors too (a portal stone's
 		// base, a platform); unset, `floor`.
 		void smooth(float dt, double now, const FloorFn& floor = {}, const RegionFn& region = {},
-			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {});
+			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {}, const RemoteCollisionFn& collision = {});
 		// Where the local player is drawn this frame: where the camera is, between the game clock's last two steps
 		// (app/client_app_player.cpp). Sets the drawn place and heading (0..512) of the player and of the mount it rides at
 		// once, so the eye on a mount follows it in the same frame; the next smooth keeps them and forgets the call.
@@ -2804,6 +2807,11 @@ namespace hailstone::game {
 		// dt (the original's code as written). The drawn place eases over the frame's dt either way.
 		std::optional<std::vector<float>> physics_steps;
 		std::optional<std::uint32_t> physics_step_time_ms; // current frame last completed StepClock time + 1
+		// Hailstone: how far from the local player another moving spawn has smooth's contact probe (the
+		// RemoteCollisionFn, a full movement sweep per step). It only picks the climbing animation, so a spawn
+		// farther than this, which is not drawn, is not probed and has no contact. The client sets it to the
+		// camera's actor clip (game::actor_clip_distance: 550 at the default ActorClipPlane 50). 0: no limit.
+		float remote_probe_range = 550.0f;
 		// Hailstone (option ground_npcs, a deliberate difference; docs/mechanics.md "Grounding NPCs"): an NPC on the
 		// ground (flymode 0, or EQEmu's 3 out of water) that stands over the floor (by more than 0.25, at most 50), as EQEmu servers with a poor map
 		// leave some, is drawn on the floor. Only where it is drawn changes (display_position, so picking and the NPC

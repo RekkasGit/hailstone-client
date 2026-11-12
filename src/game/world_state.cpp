@@ -91,13 +91,17 @@ void WorldState::smooth_vehicles(float dt, double now) {
 }
 
 void WorldState::smooth(float dt, double now, const FloorFn& floor, const RegionFn& region,
-                        const VehicleFn& vehicle_under, const FloorFn& ground_floor) {
+                        const VehicleFn& vehicle_under, const FloorFn& ground_floor, const RemoteCollisionFn& collision) {
     const FloorFn& grounding = ground_floor ? ground_floor : floor;
     if (!vehicles_smoothed) smooth_vehicles(dt, now);
     vehicles_smoothed = false;
     float k = 1.0f - std::exp(-dt * 12.0f);
     const float one = dt * 1000.0f;
     const std::span<const float> steps = physics_steps ? std::span<const float>(*physics_steps) : std::span<const float>(&one, 1);
+    // Where the contact probes' range is measured from: the body the player moves (its mount while riding).
+    std::optional<glm::vec3> probe_from;
+    if (auto me = spawns.find(controlled_id ? controlled_id : player_id); me != spawns.end())
+        probe_from = me->second.position;
     for (auto& [id, s] : spawns) {
         if (id != player_id && id != controlled_id && is_vehicle_race(s.race, s.gender)) continue;
         // A spawn an update put on a vehicle's deck rides it (game/boats.h) until an update puts it elsewhere.
@@ -128,6 +132,18 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             for (float ms : steps) {
                 const glm::vec3 before = b.position;
                 mechanics::step_remote_spawn(b, ms, s.is_npc);
+                // DoCollisionMovement resets +0x24 when moving, and actor hits set it again. A still spawn keeps
+                // its last contact. Riders and NoCollide bodies do not run this sweep. The current remote
+                // predictor leaves vertical integration to server updates, but a vertical move still probes.
+                if (collision && !s.mount_id && !s.is_corpse &&
+                    (b.position != before || b.velocity.z != 0.0f)) {
+                    const bool no_collide = std::find(s.properties.begin(), s.properties.end(), 0x64u) != s.properties.end();
+                    // Hailstone: past remote_probe_range (not drawn) the sweep is not run and the moving spawn has
+                    // no contact, as DoCollisionMovement's reset leaves it when nothing is hit.
+                    const bool near = !probe_from || remote_probe_range <= 0.0f ||
+                                      glm::distance(b.position, *probe_from) <= remote_probe_range;
+                    s.colliding_type = no_collide || !near ? 0 : collision(s, before, b.position);
+                }
                 // CollisionPass's landing check (LandingAndFallCheck) runs with every step, so a spawn stands at
                 // floor + AvatarHeight (feet = z - AvatarHeight) at rest too: the server places NPCs with its own
                 // per-race offsets (EQEmu's GetZOffset: 0.7 x 0.2 x size for a dwarf), not the client's AvatarHeight.
