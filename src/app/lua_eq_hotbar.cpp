@@ -345,7 +345,7 @@ void open_hot_bar_size(EqHost& host, int bar, float x, float y) {
     });
 }
 
-void open_hot_bar_menu(EqHost& host, int bar, float x, float y) {
+void open_hot_bar_menu(EqHost& host, int bar, float x, float y, bool layout_lock) {
     if (!host.conn || !valid_bar(bar)) return;
     const std::string screen = screen_of(bar);
     std::vector<EqHost::MenuRow> rows;
@@ -418,7 +418,7 @@ void open_hot_bar_menu(EqHost& host, int bar, float x, float y) {
     rows.push_back(std::move(spinner));
     // The frame's layout lock (hud.lock.<screen>, the same lock the modern UI's menu has): a drag no longer moves or
     // resizes the bar. Hailstone's row, not the original's.
-    if (host.set_layout_setting) {
+    if (layout_lock && host.set_layout_setting) {
         rows.push_back(separator());
         const std::string lock_key = "hud.lock." + screen;
         EqHost::MenuRow lock = row("Lock layout", [&host, lock_key] {
