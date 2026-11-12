@@ -17,6 +17,7 @@ void GameConnection::report_env_damage(std::uint32_t damage, std::uint8_t type) 
     if (state_ != ConnectionState::InZone || world_.player_id == 0 || damage == 0) return;
     send_zone(encode(EnvDamage{world_.player_id, damage, type}));
     pstatus_.hp -= damage;
+    update_player_consciousness(true);
     // ApplyDamage's hit report (its callers pass report 1):
     // unless the HP fell to the floor (-10 - SPA 0x148: the knock-out path), OP_Damage (0x6f15) with the hit {the
     // player, no attacker, the type, spell -1, the damage}, which EQEmu passes on to the clients close by (back to

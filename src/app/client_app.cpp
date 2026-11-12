@@ -109,7 +109,9 @@ int ClientApp::run() {
                 steps.emplace();
                 for (const auto& st : frame_steps_) steps->push_back(static_cast<float>(st.elapsed_ms));
             }
-            conn_->set_physics_steps(std::move(steps));
+            const auto completed_time = frame_steps_.empty() ? std::optional<std::uint32_t>{}
+                : std::optional<std::uint32_t>{static_cast<std::uint32_t>(frame_steps_.back().ms + 1)};
+            conn_->set_physics_steps(std::move(steps), completed_time);
             conn_->smooth_vehicles(dt);
         }
         if (screen_ == Screen::InGame && player_ready_) update_player(dt);
@@ -145,7 +147,22 @@ int ClientApp::run() {
             // as the player's floor test does; the landing check above keeps the zone's floor alone.
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor);
+            // The other spawns' ladder contact (remote_collision_type), built with the player's passable-ladder rule
+            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, which reuses one door buffer. Only spawns
+            // within the actor clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
+            game::WorldState::RemoteCollisionFn remote_collision;
+            std::optional<ZoneMoveWorld> remote_world;
+            if (collision_ && screen_ == Screen::InGame) {
+                remote_world.emplace(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
+                remote_world->apply_remote_rules(conn_->server_rules());
+                remote_world->set_contact_probe(&remote_door_hits_);
+                remote_collision = [&remote_world](const game::Spawn& spawn, const glm::vec3& from,
+                                                   const glm::vec3& to) {
+                    return remote_collision_type(spawn, from, to, *remote_world);
+                };
+                conn_->set_remote_probe_range(game::actor_clip_distance(actor_clip_plane_, view_.far_plane));
+            }
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");
@@ -252,6 +269,8 @@ int ClientApp::run() {
             const double bolt_now = bolt_clock();
             if (spell_bolts_ && lighting_mode_ == render::LightingMode::Modern)
                 spell_bolts_->take_cues(*conn_, cues, bolt_now);
+            update_guide();
+            spell_particles_->set_guide_line(guide_.line());
             spell_particles_->update(*conn_, cues, effect_packets, actor_renderer_.get(), dt);
             spell_particles_->prepare();
             if (spell_bolts_)
@@ -266,7 +285,8 @@ int ClientApp::run() {
             actor_emitter_list_.clear();
             for (const auto& [id, spawn] : conn_->world().spawns)
                 if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty())
-                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id)});
+                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id),
+                                                   actor_renderer_->drawn_alpha(id)});
             // The missiles' (a spell bolt's flames: its model's own emitters, app/world_objects.h).
             const WorldObjects* objects = world_objects_.get();
             if (objects)
@@ -464,6 +484,26 @@ int ClientApp::run() {
                 lap.mark("plan point shadows");
                 settle_frame_.shadow_builds = point_builds.size();
                 if (zone_renderer_) zone_renderer_->set_lighting(lighting);
+                // The zone's exits for the map and its zone finder (EqHost::zone_exits), once its zone points are in.
+                if (in_game && zone_ && conn_ && eq_host_.zone_exits_zone == 0 && conn_->zone_id() != 0 &&
+                    !conn_->zone_points().empty()) {
+                    std::vector<game::ZonePointTarget> points;
+                    for (const auto& p : conn_->zone_points()) points.push_back({p.number, p.zone_id, p.x, p.y, p.z});
+                    const auto zid = static_cast<std::uint32_t>(conn_->zone_id());
+                    eq_host_.zone_exits.clear();
+                    for (const auto& g : game::collect_neighbour_lines(zone_->regions, zone_->bounds_min, zone_->bounds_max,
+                                                                       points, zid)) {
+                        EqHost::ZoneExit e;
+                        e.zone_id = g.zone_id;
+                        for (int i = 0; i < 3; ++i) {
+                            e.lo[i] = g.lo[i];
+                            e.hi[i] = g.hi[i];
+                        }
+                        for (const auto& c : g.cells) e.cells.push_back({c.lo.x, c.lo.y, c.lo.z, c.hi.x, c.hi.y, c.hi.z});
+                        eq_host_.zone_exits.push_back(std::move(e));
+                    }
+                    eq_host_.zone_exits_zone = zid;
+                }
                 if (neighbours_) {
                     // The zone past each outdoor zone line, once the zone points are in (app/neighbour_zones.h).
                     if (in_game && zone_ && conn_ && !neighbours_->entered()) {
@@ -686,7 +726,7 @@ int ClientApp::run() {
                 draw_text_overlay();
                 lap.mark("text overlay");
                 // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates.
-                auto fov = game::camera_fov(camera_.fov_units, static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
+                auto fov = game::camera_fov(camera_.view_fov_units(), static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
                 pick_camera_.position = camera_.position;
                 pick_camera_.forward = camera_.forward();
                 pick_camera_.right = camera_.right();
@@ -728,6 +768,30 @@ int ClientApp::run() {
     audio_.reset();
     return 0;
 }
+
+void ClientApp::update_guide() {
+    // The Find window's guide path (app/guide_path.h): the NPC's place, found again over the mesh as the player goes.
+    if (!guide_.active() || !conn_) return;
+    if (conn_->world().zone_short_name != guide_zone_) {
+        guide_.stop();
+        return;
+    }
+    std::optional<glm::vec3> goal;
+    const auto& spawns = conn_->world().spawns;
+    if (auto it = spawns.find(guide_.spawn()); it != spawns.end() && !it->second.is_corpse)
+        goal = it->second.display_valid ? it->second.display_position : it->second.position;
+    const double now = std::chrono::duration<double>(Clock::now() - start_time_).count();
+    const std::string name = guide_.name();
+    auto u = guide_.update(feet_, goal, now, [this](const glm::vec3& from, const glm::vec3& to) {
+        return nav_ ? nav_->plan_between(from, to) : std::nullopt;
+    });
+    // Hailstone's own lines (the original has no guide path).
+    if (u.arrived) conn_->ui_message("You have reached " + name + ".");
+    else if (u.gone) conn_->ui_message(name + " is no longer here.");
+    else if (u.no_way) conn_->ui_message("There is no way to " + name + " from here.");
+    else if (u.waiting_mesh) conn_->ui_message("The path to " + name + " will show once this zone's map is ready.");
+}
+
 
 } // namespace client_internal
 

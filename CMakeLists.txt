@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 # The oldest macOS a build runs on (set before project()). 13.3 is the first whose libc++ formats floating-point
 # numbers (std::format of a float, std::to_chars), which the client uses; the bundled MoltenVK needs 12.0.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the build runs on")
-project(hailstone VERSION 0.6.0 LANGUAGES C CXX)
+project(hailstone VERSION 0.7.0 LANGUAGES C CXX)
 # The release's pre-release label (SemVer: "0.1.0-alpha"); empty for a final release. With the version it is what the
 # updater compares against a release's manifest (core/version.h, docs/updater.md), so change both with each release.
 set(HAILSTONE_VERSION_LABEL "beta")
@@ -127,6 +127,8 @@ add_library(hailstone_engine STATIC
   src/plugin/consent.cpp
   src/plugin/policy.cpp
   src/net/settings_packets.cpp
+  src/net/quest_npc_packets.cpp
+  src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
   src/mq/tlo.cpp
@@ -260,6 +262,7 @@ add_library(hailstone_engine STATIC
   src/game/spell_record.cpp
   src/game/spells.cpp
   src/game/passage_of_time.cpp
+  src/game/eye_control.cpp
   src/game/spell_sets.cpp
   src/game/group_role_sets.cpp
   src/game/group_search.cpp
@@ -383,6 +386,8 @@ add_library(hailstone_engine STATIC
   src/game/zone_lines.cpp
   src/game/neighbour_zones.cpp
   src/game/world_state.cpp
+  src/game/useful_npcs.cpp
+  src/game/path_trail.cpp
   src/game/boats.cpp
   src/game/npc_collision.cpp
   src/game/mounts.cpp
@@ -390,6 +395,7 @@ add_library(hailstone_engine STATIC
   src/game/map_files.cpp
   src/game/player_path.cpp
   src/game/atlas.cpp
+  src/game/zone_routes.cpp
   src/game/zone_names.cpp
   src/game/race_models.cpp
   src/game/spawn_heights.cpp
@@ -490,6 +496,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq.cpp
   src/app/automation.cpp
   src/app/navigator.cpp
+  src/app/guide_path.cpp
   src/app/lua_eq_values.cpp
   src/app/lua_eq_hud.cpp
   src/app/lua_eq_hotbar.cpp
@@ -526,6 +533,7 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq_layout.cpp
   src/app/lua_eq_video.cpp
   src/app/lua_eq_zoneguide.cpp
+  src/app/lua_eq_find.cpp
   src/app/lua_eq_fellowship.cpp
   src/app/lua_eq_story.cpp
   src/app/lua_eq_journal.cpp
@@ -825,6 +833,9 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
+# The licence (GPL-2.0-or-later, NOTICE.md) and the third-party notices travel with the binary.
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE DESTINATION . RENAME LICENSE.txt)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE.md ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY.md DESTINATION .)
 if(HAILSTONE_MOLTENVK_DYLIB)
   # macOS: Vulkan itself, beside the binary (platform/paths.h bundled_vulkan_library), with its licence.
   install(FILES ${HAILSTONE_MOLTENVK_DYLIB} DESTINATION .)
@@ -900,6 +911,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/bug_report_window_test.cpp
     tests/startup_error_test.cpp
     tests/look_eviction_test.cpp
+    tests/appearance_systems_test.cpp
     tests/plugin_hooks_test.cpp
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp
@@ -963,15 +975,18 @@ if(HAILSTONE_BUILD_TESTS)
     tests/tcp_socket_test.cpp
     tests/plugin_tcp_test.cpp
     tests/merchant_buy_test.cpp
+    tests/merchant_usable_test.cpp
     tests/ascii_case_test.cpp
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
     tests/net_session_test.cpp
+    tests/ucs_session_test.cpp
     tests/reliable_channel_vectors_test.cpp
     tests/vehicle_ladder_vectors_test.cpp
     tests/boats_test.cpp
     tests/npc_collision_test.cpp
     tests/mounts_test.cpp
+    tests/spawn_is_named_test.cpp
     tests/world_state_smooth_test.cpp
     tests/attack_check_test.cpp
     tests/attack_rules_vectors_test.cpp
@@ -994,6 +1009,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/map_files_test.cpp
     tests/player_path_test.cpp
     tests/atlas_test.cpp
+    tests/zone_routes_test.cpp
+    tests/zone_atlas_api_test.cpp
     tests/map_windows_test.cpp
     tests/map_spawns_test.cpp
     tests/ui_windows_test.cpp
@@ -1012,6 +1029,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/app_frame_work_test.cpp
     tests/frame_pace_test.cpp
     tests/alt_currency_ui_test.cpp
+    tests/useful_npcs_test.cpp
+    tests/guide_path_test.cpp
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp
     tests/auto_inventory_ui_test.cpp
@@ -1046,6 +1065,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/character_test.cpp
     tests/rider_seat_test.cpp
     tests/appearance_test.cpp
+    tests/equipment_illusions_test.cpp
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
     tests/plate_test_test.cpp
@@ -1054,6 +1074,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
+    tests/eye_control_test.cpp
     tests/item_packets_test.cpp
     tests/augments_test.cpp
     tests/item_preview_test.cpp
@@ -1066,6 +1087,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/tradeskill_batch_test.cpp
     tests/tradeskill_combine_test.cpp
     tests/missiles_test.cpp
+    tests/combat_particles_test.cpp
     tests/multiclass_test.cpp
     tests/server_ext_chain_test.cpp
     tests/native_extension_test.cpp
@@ -1141,6 +1163,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/item_sort_test.cpp
     tests/kept_items_test.cpp
     tests/inventory_manager_ui_test.cpp
+    tests/commerce_edges_test.cpp
+    tests/tribute_donation_test.cpp
     tests/audio_vectors_test.cpp
     tests/melee_vectors_test.cpp
     tests/spawn_heights_vectors_test.cpp
@@ -1152,6 +1176,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/player_placement_test.cpp
     tests/step_landing_test.cpp
     tests/jump_hang_test.cpp
+    tests/stop_moving_test.cpp
     tests/zone_ladders_test.cpp
     tests/chat_trade_vectors_test.cpp
     tests/hotbutton_tracking_vectors_test.cpp

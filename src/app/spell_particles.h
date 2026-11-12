@@ -33,6 +33,7 @@
 namespace hailstone { class GameDir; }
 namespace hailstone::assets { struct CharacterModel; }
 namespace hailstone::render { class ActorRenderer; }
+namespace hailstone::game { struct Missile; }
 namespace hailstone::net { class GameConnection; struct SpellEffectCue; struct EffectPacketCue; }
 
 namespace hailstone::app {
@@ -40,6 +41,19 @@ namespace hailstone::app {
 class SpellParticles {
 public:
     SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
+    // The same gameplay-to-emitter runtime without a GPU; useful to offline tools and protocol integration tests.
+    SpellParticles(std::vector<assets::EmitterDefinition> definitions, std::vector<assets::SpellEffect> effects);
+    const game::ParticleSystem& simulation() const { return particles_; }
+    // Offline tools may supply the same named blood-point pose that the actor renderer normally resolves.
+    using BloodPoint = std::function<std::optional<glm::mat4>(std::uint32_t)>;
+    void set_blood_point(BloodPoint point) { blood_point_ = std::move(point); }
+    // The sprite must come from the caller's game assets. No sprite: no blood emitter.
+    void set_blood_sprite(assets::EmitterDefinition definition);
+    using MissilePose = std::function<std::optional<glm::mat4>(std::uint32_t serial)>;
+    void set_missile_pose(MissilePose pose) { missile_pose_ = std::move(pose); }
+    void missile_effect(const net::GameConnection& conn, const game::Missile& missile, int stage,
+                        const render::ActorRenderer* actors);
+    void end_missile(std::uint32_t serial);
 
     // Plays the frame's spell effect cues (those with a delay when it is up) and effect packets, and advances the
     // emitters; `actors` (may be null) gives the spawns' poses for their spell points.
@@ -67,6 +81,8 @@ public:
     void set_floor(FloorFn floor) { floor_ = std::move(floor); }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
+    // The Find window's guide path (app/guide_path.h) to draw, the player first; empty: none.
+    void set_guide_line(std::vector<glm::vec3> line) { guide_line_ = std::move(line); }
 
 private:
     // The find path's look in the world (game/player_path.h, PlayerPath_Update's drawing half): its line as glowing
@@ -74,6 +90,8 @@ private:
     void update_path(net::GameConnection& conn);
     // The point's world matrix on a spawn as last drawn.
     std::optional<glm::mat4> point_world(const render::ActorRenderer& actors, std::uint32_t id, int point);
+    std::optional<glm::mat4> blood_point_world(const render::ActorRenderer* actors, std::uint32_t id) const;
+    void update_blood(net::GameConnection& conn, const render::ActorRenderer* actors);
 
     // GetParticleScaleFactor: the model's moddat.ini PESFactor.
     float particle_scale(const assets::CharacterModel& model) const;
@@ -89,7 +107,13 @@ private:
     std::array<float, game::kSpellFxSourceCount> source_density_{1.0f, 1.0f, 1.0f};
     std::unique_ptr<render::ParticleRenderer> renderer_;
     std::optional<std::size_t> path_definition_; // the line's texture as a definition of particles_
+    std::optional<std::size_t> blood_definition_;
+    BloodPoint blood_point_;
+    MissilePose missile_pose_;
     std::vector<std::uint32_t> path_movers_;     // the movers' serials whose emitters exist
+    std::vector<glm::vec3> guide_line_;          // set_guide_line
+    // A trail (game/path_trail.h) as the still particles of `key`, or none.
+    void draw_trail(std::uint32_t key, std::span<const glm::vec3> line, const glm::vec3& color, float far);
     // A delayed cue and when it plays.
     struct Held {
         double at;

@@ -386,6 +386,8 @@ game::AAReadiness GameConnection::aa_readiness(std::uint32_t rank_id) const {
         // TotalEffect(SPA 264, items, the ability's group, AAs, buffs) through the character rules.
         static const game::mechanics::GameTables no_tables;
         game::mechanics::LiveState live;
+        live.drunkenness = drunkenness_;
+        live.owner_status = pstatus_.owner_status;
         live.pvp_rules = pvp_rules_;
         live.level = pstatus_.level;
         live.player_id = world_.player_id;
@@ -492,6 +494,8 @@ game::TraineeView GameConnection::trainee() const {
     v.at_skill_limit = [this, cls, level](std::uint32_t s) {
         if (s >= 100) return false;
         game::mechanics::LiveState live;
+        live.drunkenness = drunkenness_;
+        live.owner_status = pstatus_.owner_status;
         live.pvp_rules = pvp_rules_;
         live.level = level;
         live.player_id = world_.player_id;

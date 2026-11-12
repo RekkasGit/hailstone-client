@@ -44,12 +44,6 @@ std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint
     }
 }
 
-bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback) {
-    if (!text) return fallback;
-    char c = text->empty() ? '\0' : (*text)[0];
-    return c == 'T' || c == 't' || c == '1';
-}
-
 namespace {
 // How far a spawn at rest may settle onto the floor (see WorldState::smooth).
 constexpr float kRestSettleReach = 5.0f;
@@ -83,19 +77,25 @@ void WorldState::smooth_vehicles(float dt, double now) {
     const std::span<const float> steps = physics_steps ? std::span<const float>(*physics_steps) : std::span<const float>(&one, 1);
     for (auto& [id, s] : spawns) {
         if (id == player_id || id == controlled_id || id == driven_id || !is_vehicle_race(s.race, s.gender)) continue;
-        step_vehicle(s, dt, now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0, steps);
+        const bool fresh = now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0;
+        step_vehicle(s, dt, fresh, steps);
+        if (fresh && !steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
     }
     vehicles_smoothed = true;
 }
 
 void WorldState::smooth(float dt, double now, const FloorFn& floor, const RegionFn& region,
-                        const VehicleFn& vehicle_under, const FloorFn& ground_floor) {
+                        const VehicleFn& vehicle_under, const FloorFn& ground_floor, const RemoteCollisionFn& collision) {
     const FloorFn& grounding = ground_floor ? ground_floor : floor;
     if (!vehicles_smoothed) smooth_vehicles(dt, now);
     vehicles_smoothed = false;
     float k = 1.0f - std::exp(-dt * 12.0f);
     const float one = dt * 1000.0f;
     const std::span<const float> steps = physics_steps ? std::span<const float>(*physics_steps) : std::span<const float>(&one, 1);
+    // Where the contact probes' range is measured from: the body the player moves (its mount while riding).
+    std::optional<glm::vec3> probe_from;
+    if (auto me = spawns.find(controlled_id ? controlled_id : player_id); me != spawns.end())
+        probe_from = me->second.position;
     for (auto& [id, s] : spawns) {
         if (id != player_id && id != controlled_id && is_vehicle_race(s.race, s.gender)) continue;
         // A spawn an update put on a vehicle's deck rides it (game/boats.h) until an update puts it elsewhere.
@@ -110,7 +110,9 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             if (s.on_vehicle) {
                 auto vit = spawns.find(s.on_vehicle);
                 if (vit != spawns.end()) {
-                    step_rider(s, vit->second, dt, now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0, steps);
+                    const bool fresh = now - s.update_time <= mechanics::kSpawnStaleMs / 1000.0;
+                    step_rider(s, vit->second, dt, fresh, steps);
+                    if (fresh && !steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
                     continue;
                 }
                 s.on_vehicle = 0;
@@ -124,6 +126,18 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             for (float ms : steps) {
                 const glm::vec3 before = b.position;
                 mechanics::step_remote_spawn(b, ms, s.is_npc);
+                // DoCollisionMovement resets +0x24 when moving, and actor hits set it again. A still spawn keeps
+                // its last contact. Riders and NoCollide bodies do not run this sweep. The current remote
+                // predictor leaves vertical integration to server updates, but a vertical move still probes.
+                if (collision && !s.mount_id && !s.is_corpse &&
+                    (b.position != before || b.velocity.z != 0.0f)) {
+                    const bool no_collide = std::find(s.properties.begin(), s.properties.end(), 0x64u) != s.properties.end();
+                    // Hailstone: past remote_probe_range (not drawn) the sweep is not run and the moving spawn has
+                    // no contact, as DoCollisionMovement's reset leaves it when nothing is hit.
+                    const bool near = !probe_from || remote_probe_range <= 0.0f ||
+                                      glm::distance(b.position, *probe_from) <= remote_probe_range;
+                    s.colliding_type = no_collide || !near ? 0 : collision(s, before, b.position);
+                }
                 // CollisionPass's landing check (LandingAndFallCheck) runs with every step, so a spawn stands at
                 // floor + AvatarHeight (feet = z - AvatarHeight) at rest too: the server places NPCs with its own
                 // per-race offsets (EQEmu's GetZOffset: 0.7 x 0.2 x size for a dwarf), not the client's AvatarHeight.
@@ -143,6 +157,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
             s.velocity = b.velocity;
             s.heading = b.heading;
             s.position = b.position;
+            if (!steps.empty() && physics_step_time_ms) s.physics_step_ms = physics_step_time_ms;
             // CollisionPass after the step: PlayerClient::sub_00506d20 @0x506d20 takes the region at the spawn's z
             // as its body environment (+0xa2, BodyEnvironmentChange) and CheckRegionChange @0x508e10 the region at
             // the feet + 0.25 (z + 0.25 - (the collision height - AvatarHeight)) as its feet environment (+0xa1,
@@ -170,7 +185,7 @@ void WorldState::smooth(float dt, double now, const FloorFn& floor, const Region
         if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) continue;
         // The local player and its mount are drawn where the camera puts them (set_local_drawn), else where they are.
         if (id != 0 && (id == player_id || id == controlled_id)) {
-            if (!local_drawn || !s.display_valid) {
+            if (!local_drawn || !s.display_valid || (eye_id && id == player_id)) {
                 s.display_position = target;
                 s.display_heading = s.heading;
                 s.display_valid = true;
@@ -211,6 +226,7 @@ void WorldState::set_local_drawn(const glm::vec3& position, float heading) {
         !std::isfinite(heading))
         return;
     for (std::uint32_t id : {player_id, controlled_id}) {
+        if (eye_id && id == player_id) continue;
         if (id == 0) continue;
         auto it = spawns.find(id);
         if (it == spawns.end()) continue;

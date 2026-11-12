@@ -3,6 +3,7 @@
 #include "net/notice_packets.h"
 #include "net/player_packets.h"
 #include "net/settings_packets.h"
+#include "net/spell_packets.h"
 
 #include <algorithm>
 #include <fstream>
@@ -12,13 +13,16 @@
 #include <iterator>
 #include <random>
 
+#include "core/ascii_case.h"
 #include "core/game_dir.h"
+#include "core/byte_io.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "core/zone_name.h"
 #include "core/log.h"
 #include "core/process_serial.h"
 #include "game/appearance.h"
+#include "game/eye_control.h"
 #include "game/boats.h"
 #include "game/race_models.h"
 #include "game/combat.h"
@@ -58,6 +62,12 @@ constexpr auto kZoneChangeRetryDelay = std::chrono::milliseconds(500);
 constexpr auto kWorldDropWait = std::chrono::seconds(30);
 constexpr auto kZoneDropWait = std::chrono::seconds(120);
 constexpr auto kLogoutDropWait = std::chrono::seconds(3);
+
+// PlayerZoneClient::ChangePosition @0x5a0bc0 stops a spawn (StopMoving: SpeedRun +0x7c and the turn rate +0x8c 0)
+// that sits, loots or lies down.
+bool stops_motion(std::uint8_t state) {
+    return state == kStandSitting || state == kStandLooting || state == kStandLying;
+}
 
 } // namespace
 
@@ -138,6 +148,7 @@ void GameConnection::fail(std::string message) {
     log::warn("connection: {}", message);
     error_ = std::move(message);
     state_ = ConnectionState::Disconnected;
+    reset_tribute_donations();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (zone_session_) zone_session_->disconnect();
@@ -161,6 +172,7 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
 }
 
 void GameConnection::start(const WorldTicket& ticket) {
+    reset_tribute_donations();
     ticket_ = ticket;
     camped_out_.reset();
     link_death_.reset();
@@ -371,8 +383,37 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
+    // The original reapplies the new-armor filter to a member who joins or leaves the group or raid
+    // (PlayerClient_ApplyNewArmorFilterGroupMember / RaidMember); a new spawn has it made in apply_spawn.
+    if (new_armor_membership_changed())
+        for (auto& entry : world_.spawns) refresh_new_armor_bits(entry.second);
     raise_hook_events();
     marketplace_frame(now_ms());
+}
+
+void GameConnection::refresh_new_armor_bits(game::Spawn& s) const {
+    // Type (+0x125) as the spawn record set it; a spawn that died here keeps the bits it had (the death does not
+    // reapply the filter) until the next membership change.
+    const std::uint8_t type = s.is_corpse ? 2 : s.is_npc ? 1 : 0;
+    s.appearance.new_armor_bits = game::new_armor_bits(type, s.id == world_.player_id, group_.has_member(s.name),
+                                                       raid_.is_member(s.name));
+}
+
+bool GameConnection::new_armor_membership_changed() {
+    bool same = new_armor_player_ == world_.player_id;
+    std::size_t n = 0;
+    auto visit = [&](const std::string& name) {
+        if (same && (n >= new_armor_members_.size() || new_armor_members_[n] != name)) same = false;
+        ++n;
+    };
+    for (const auto& m : group_.slots) visit(m.name);
+    for (const auto& m : raid_.members) visit(m.name);
+    if (same && n == new_armor_members_.size()) return false;
+    new_armor_player_ = world_.player_id;
+    new_armor_members_.clear();
+    for (const auto& m : group_.slots) new_armor_members_.push_back(m.name);
+    for (const auto& m : raid_.members) new_armor_members_.push_back(m.name);
+    return true;
 }
 
 void GameConnection::send_world(const AppPacket& p) {
@@ -569,8 +610,14 @@ void GameConnection::handle_world(const AppPacket& p) {
         world_drop_deadline_ = Clock::now() + kWorldDropWait;
         world_.spawns.clear();
         ++world_.spawn_set_serial;
+        findable_npcs_.clear(); // the old zone's ids
+        quest_npcs_.clear();    // and quest NPCs: the next zone's are asked for when wanted
+        quest_npcs_asked_ = false;
         world_.player_id = 0;
         world_.controlled_id = 0;
+        world_.eye_id = world_.view_id = 0;
+        eye_motion_dirty_ = false;
+        last_eye_position_send_ = {};
         // No target into the new zone: its spawn ids are the new zone's, so the old one would name another NPC.
         world_.target_id = 0;
         target_of_target_ = 0;
@@ -582,6 +629,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         motion_known_ = false;
         new_zone_.reset();
         profile_.reset();
+        drunkenness_ = 0;
+        invis_state_ = 0;
         zone_points_.clear();
         zone_change_pending_ = false;
         auto_attack_ = sent_auto_attack_ = false;
@@ -594,11 +643,13 @@ void GameConnection::handle_world(const AppPacket& p) {
         auras_.clear();
         aggro_.lock_id = aggro_.target_id = aggro_.secondary_id = 0;
         aggro_.pct = {};
-        stun_until_ms_ = 0;
+        stun_timer_ms_ = 0;
+        stun_state_ = false;
         controlled_boat_ = standing_on_ = 0;
         spell_book_open_ = false; // MoveToZone closes the book
         respawn_.reset();
         pstatus_.dead = false;
+        pstatus_.owner_status = 0;
         pstatus_.stand_state = 100;
         spells_.casting = {};
         spells_.pending = 0;
@@ -610,6 +661,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         spells_.others.clear();
         cast_stage_shown_.clear();
         effect_packets_.clear();
+        blood_spurts_.clear();
         spells_.target_buffs.clear();
         spells_.target_buffs_entity = 0;
         loot_.reset();
@@ -622,6 +674,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_group_for_zone();
         reset_social_for_zone();
         reset_commerce_for_zone();
+        reset_tribute_donations();
         reset_progress_for_zone();
         reset_player_for_zone();
         reset_market_for_zone();
@@ -783,9 +836,10 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
                             const game::WorldState::ActorModelFn& actor_model,
                             const game::WorldState::RegionFn& region,
                             const game::WorldState::VehicleFn& vehicle_under,
-                            const game::WorldState::FloorFn& ground_floor) {
+                            const game::WorldState::FloorFn& ground_floor,
+                            const game::WorldState::RemoteCollisionFn& collision) {
     mount_up(world_.make_actors(actor_model));
-    world_.smooth(dt, steady_seconds(), floor, region, vehicle_under, ground_floor);
+    world_.smooth(dt, steady_seconds(), floor, region, vehicle_under, ground_floor, collision);
 }
 
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
@@ -810,6 +864,8 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.heights = {};
     out.heights.height = s.size;
     out.actor_made = false;
+    out.physics_step_ms.reset();
+    out.form_mount_id = 0;
     world_.set_heights(out);
     out.melee_radius = s.melee_radius;
     out.walk_speed = s.walk_speed;
@@ -835,6 +891,9 @@ void GameConnection::apply_spawn(const Spawn& s) {
     out.lfg = s.lfg;
     out.linkdead = s.linkdead;
     out.gm = s.gm;
+    out.invis_rank = s.invis;
+    out.light_type = s.light;
+    if (out.id == world_.player_id) invis_state_ = out.invis_rank;
     out.pvp = s.pvp;
     out.deity = s.deity;
     out.trader = s.trader;
@@ -859,11 +918,18 @@ void GameConnection::apply_spawn(const Spawn& s) {
     a.class_id = s.class_;
     for (std::size_t i = 0; i < 9; ++i) {
         a.material[i] = s.equipment[i].material;
+        a.material_variation[i] = s.equipment[i].unknown1;
+        a.elite_material[i] = s.equipment[i].elite_material;
         a.hero_forge[i] = s.equipment[i].hero_forge_model;
+        a.new_armor_type[i] = s.equipment[i].material2;
         a.tint[i] = s.long_equipment ? s.equipment_tint[i] : 0;
     }
     game::normalize_appearance(a, s.race);
+    // EQPlayer::EQPlayer applies the new-armor filter. Every corpse (NPC 2 from EQEmu for a player's and an
+    // NPC's alike; RoF2 takes any Type above 1 as a corpse) has hero's forge hidden.
+    refresh_new_armor_bits(out);
     note_pet_spawn(out);
+    reconcile_eye_control();
 }
 
 void GameConnection::finish_server_files() {
@@ -1035,6 +1101,32 @@ void GameConnection::finish_zone_in() {
     task_compass_dirty_ = true;
 }
 
+void GameConnection::request_quest_npcs() {
+    // Only of a server whose zone answered the settings request (it runs the script): others never see the opcode.
+    if (quest_npcs_asked_ || !zone_ready_ || !hailstone_script_) return;
+    quest_npcs_asked_ = true;
+    send_zone(encode_quest_npcs_request());
+}
+
+std::optional<TimeOfDay> GameConnection::current_time_of_day() const {
+    if (!time_) return std::nullopt;
+    const auto now = options_.session.clock ? options_.session.clock() : Clock::now();
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - time_received_).count();
+    TimeOfDay current = *time_;
+    // EQEmu common/eqtime.cpp, GetCurrentEQTimeOfDay: three real seconds per minute,
+    // hours 1..24, days 1..28 and months 1..12. The packet's time already includes the zone's offset.
+    std::int64_t carry = std::max<std::int64_t>(0, seconds) / 3 + current.minute;
+    current.minute = static_cast<std::uint8_t>(carry % 60);
+    carry = carry / 60 + (current.hour == 0 ? 23 : current.hour - 1);
+    current.hour = static_cast<std::uint8_t>(carry % 24 + 1);
+    carry = carry / 24 + std::max(1, static_cast<int>(current.day)) - 1;
+    current.day = static_cast<std::uint8_t>(carry % 28 + 1);
+    carry = carry / 28 + std::max(1, static_cast<int>(current.month)) - 1;
+    current.month = static_cast<std::uint8_t>(carry % 12 + 1);
+    current.year += static_cast<std::uint32_t>(carry / 12);
+    return current;
+}
+
 void GameConnection::handle_zone(const AppPacket& p) {
     if (options_.zone_packet_tap) options_.zone_packet_tap(p);
     if (p.opcode == kOpHsFiles) {
@@ -1056,9 +1148,35 @@ void GameConnection::handle_zone(const AppPacket& p) {
         else log::warn("a bad OP_HailstoneGuildReply ({} bytes) ignored", p.data.size());
         return;
     }
+    if (p.opcode == kOpHsQuestNpcs) {
+        if (auto list = decode_quest_npcs(p)) {
+            quest_npcs_.clear();
+            for (const auto& n : *list) {
+                std::string key = game::display_name(n.name);
+                for (char& ch : key) ch = ascii_lower(ch);
+                auto& f = quest_npcs_[key];
+                f = static_cast<std::uint8_t>(f | n.flags);
+            }
+            log::info("find: {} quest NPCs from the server", quest_npcs_.size());
+        } else {
+            log::warn("find: a bad OP_HsQuestNpcs ({} bytes) ignored", p.data.size());
+        }
+        return;
+    }
+    if (p.opcode == kOpHsZoneLinks) {
+        if (auto v = decode_zone_links(p)) {
+            log::info("zone links: {} from the server", v->links.size());
+            zone_links_ = std::move(*v);
+            ++zone_links_serial_;
+        } else {
+            log::warn("zone links: a bad OP_HsZoneLinks ({} bytes) ignored", p.data.size());
+        }
+        return;
+    }
     if (p.opcode == kOpHailstoneSettings) {
         if (auto v = decode_hailstone_settings(p)) {
             log::info("server settings: flags {:#x}", v->flags); // none defined now (net/settings_packets.h)
+            hailstone_script_ = true;
         } else {
             log::warn("server settings: a bad OP_HailstoneSettings ({} bytes) ignored", p.data.size());
         }
@@ -1127,6 +1245,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     switch (op) {
     case Op::PlayerProfile:
         profile_ = decode_player_profile(p);
+        if (profile_) drunkenness_ = static_cast<std::int32_t>(std::min(profile_->intoxication, 200u));
         if (profile_) {
             pstatus_.hp = profile_->cur_hp;
             pstatus_.mana = profile_->mana;
@@ -1168,6 +1287,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         apply_spawn(*s);
         if (!own_spawn_seen_ && s->name == character_) {
             world_.player_id = s->spawn_id;
+            invis_state_ = s->invis;
             own_spawn_seen_ = true;
             // The character's anonymity is the server's (the spawn record's anon bits, EQEmu's m_pp.anon): the
             // Options window's boxes (Options/Anonymous) take it as Handle_OP_SpawnAppearance 0x15 does for us.
@@ -1188,6 +1308,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
         break;
     case Op::TimeOfDay:
         time_ = decode_time_of_day(p);
+        time_received_ = options_.session.clock ? options_.session.clock() : Clock::now();
         break;
     case Op::Weather:
         if (auto w = decode_weather(p)) {
@@ -1293,7 +1414,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
             auto it = world_.spawns.find(w->spawn_id);
             if (it != world_.spawns.end())
                 game::apply_wear_change(it->second.appearance, w->slot, w->armor.material, w->armor.hero_forge_model,
-                                        w->tint);
+                                        w->tint, w->armor.unknown1, w->armor.elite_material, w->armor.material2);
         }
         break;
     case Op::Illusion:
@@ -1303,6 +1424,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // do_change_form: 0xff / -1 keep a field.
                 game::Spawn& sp = it->second;
                 game::Appearance& a = sp.appearance;
+                game::MountEvents unseat;
+                if (const auto mount = game::change_form_unseat(world_, sp, unseat)) sp.form_mount_id = mount;
+                mount_events(unseat);
                 if (ill->race != 0xffff && ill->race != 0) sp.race = ill->race;
                 if (ill->gender != 0xff) sp.gender = ill->gender;
                 if (ill->size > 0.0f) sp.size = ill->size;
@@ -1322,6 +1446,9 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 if (ill->hair_color != 0xff) a.hair_color = ill->hair_color;
                 if (ill->beard != 0xff) a.beard = ill->beard;
                 if (ill->beard_color != 0xff) a.beard_color = ill->beard_color;
+                if (ill->drakkin_heritage != 0xffffffffu) a.drakkin_heritage = ill->drakkin_heritage;
+                if (ill->drakkin_tattoo != 0xffffffffu) a.drakkin_tattoo = ill->drakkin_tattoo;
+                if (ill->drakkin_details != 0xffffffffu) a.drakkin_details = ill->drakkin_details;
             }
         }
         break;
@@ -1603,8 +1730,10 @@ void GameConnection::handle_zone(const AppPacket& p) {
         if (auto url = decode_weblink(p)) web_links_.push_back(std::move(*url));
         break;
     case Op::Stun:
-        // The server's own UnStun sends nothing, so the duration ends it.
-        if (auto ms = decode_stun(p)) stun_until_ms_ = now_ms() + *ms;
+        // The case @0x4c7093: StunMe(duration, 0, 0, the lean byte) with a local character. EQEmu's UnStun sends a
+        // duration of 0 too (a fear fading with Combat:EnableFearPathing off, a quest's UnStun): StunMe ignores it
+        // while a stun runs, and makes it a 1000 ms stun otherwise.
+        if (auto s = decode_stun(p)) stun_me(s->duration_ms, s->lean);
         break;
     case Op::ItemPreviewRequest:
         handle_item_preview(p);
@@ -1644,6 +1773,13 @@ void GameConnection::handle_zone(const AppPacket& p) {
     }
     case Op::FindPersonReply:
         path_reply(p);
+        break;
+    case Op::SendFindableNPCs:
+        // Handle_OP_SendFindableNPCs: an addition (or a change) of the spawn, or its removal.
+        if (auto n = decode_findable_npc(p)) {
+            if (n->remove) findable_npcs_.erase(n->spawn_id);
+            else findable_npcs_[n->spawn_id] = std::move(*n);
+        }
         break;
     case Op::LFGuild:
         if (auto v = decode_lfguild(p)) {
@@ -1885,6 +2021,11 @@ void GameConnection::report_successful_hit(const CombatDamage& d, bool reported)
         }
         // The tail's landed-hit half (@0x5311ee, game/combat.h hit_landed), for every hit type.
         if (game::hit_landed(h)) {
+            // ReportSuccessfulHit's blood branch: only the local attacker's sharp-weapon skills. The renderer
+            // checks the target's BLD_DAG attachment and sprite; other hits never invent an attachment.
+            if (d.source == me && (d.type <= 3 || d.type == 8 || d.type == 10 || d.type == 36 || d.type == 77) &&
+                blood_spurts_.size() < 128)
+                blood_spurts_.push_back(d.target);
             if (d.target == me) {
                 // The spell book closes (its Deactivate: OnShow stands a player it sat down), then a kneeling or
                 // sitting player stands, and a mounted one too (unk_SetStandState(100)).
@@ -1967,6 +2108,8 @@ void GameConnection::set_player_motion(const glm::vec3& position, float heading,
 void GameConnection::send_position(bool force) {
     // A dead player's spawn is a corpse now; nothing to report until the re-zone.
     if (!zone_session_ || world_.player_id == 0 || pstatus_.dead) return;
+    reconcile_eye_control();
+    send_eye_position(force);
     auto now = Clock::now();
     if (!force && (!motion_dirty_ || now - last_position_send_ < kPositionInterval)) return;
     // DoMainLoop: the sequence is the position tracker's sample count, then sample 2 is recorded.
@@ -2008,6 +2151,66 @@ void GameConnection::send_position(bool force) {
     last_sent_position_ = position_;
     last_sent_heading_ = heading_;
     motion_dirty_ = false;
+}
+
+void GameConnection::acquire_eye_control() {
+    if (state_ != ConnectionState::InZone || pstatus_.dead || own_effect_with(67) < 0) return;
+    if (!game::take_eye_control(world_, game::find_eye_summon(world_))) return;
+    // SetViewActor @0x48f030 acknowledges the remote view with its ID (0 restores the local view). Stock EQEmu
+    // ignores this message, but it is still part of the original client's view transition.
+    ByteWriter ack;
+    ack.le(world_.view_id);
+    send_zone(AppPacket(to_wire(Op::AckPacket), ack.take()));
+    eye_motion_dirty_ = true;
+    moving_ = false;
+    motion_dirty_ = true;
+}
+
+void GameConnection::release_eye_control(bool remove_effect) {
+    if (!world_.eye_id) return;
+    if (remove_effect)
+        if (int slot = own_effect_with(67); slot >= 0) {
+            send_zone(encode_buff_remove_request(static_cast<std::uint32_t>(slot), world_.player_id));
+            spells_.buffs[static_cast<std::size_t>(slot)] = {};
+        }
+    if (!game::release_eye_control(world_)) return;
+    eye_motion_dirty_ = false;
+    last_eye_position_send_ = {};
+    ByteWriter ack;
+    ack.le<std::uint32_t>(0);
+    send_zone(AppPacket(to_wire(Op::AckPacket), ack.take()));
+}
+
+void GameConnection::reconcile_eye_control() {
+    if (!world_.eye_id) return;
+    // The held Eye stays held while its spawn lives under the Eye's name; the ambiguity search is only for taking
+    // control. Re-running it here let another player's same-prefix Eye retire ours (and remove our buff).
+    const bool retired = !game::is_own_eye(world_, world_.eye_id);
+    if (pstatus_.dead || retired || own_effect_with(67) < 0) release_eye_control(retired || pstatus_.dead);
+}
+
+void GameConnection::send_eye_position(bool force) {
+    const auto eye = world_.spawns.find(world_.eye_id);
+    if (eye == world_.spawns.end() || !zone_session_) return;
+    const auto now = Clock::now();
+    if (!force && (!eye_motion_dirty_ || now - last_eye_position_send_ < kPositionInterval)) return;
+    const game::Spawn& spawn = eye->second;
+    ClientPositionUpdate u;
+    u.sequence = position_tracker_.sequence();
+    u.spawn_id = static_cast<std::uint16_t>(spawn.id);
+    const auto p = game::world_to_server(spawn.position);
+    const auto v = game::world_to_server(spawn.velocity);
+    u.motion.x = p.x;
+    u.motion.y = p.y;
+    u.motion.z = p.z;
+    u.motion.heading = spawn.heading;
+    u.motion.delta_x = v.x;
+    u.motion.delta_y = v.y;
+    u.motion.delta_z = v.z;
+    u.motion.animation = static_cast<std::int32_t>(std::clamp(spawn.speed_run, -12.8f, 12.7f) * 40.0f);
+    send_zone(encode(u), false);
+    last_eye_position_send_ = now;
+    eye_motion_dirty_ = false;
 }
 
 void GameConnection::leave_zone_dropped() {
@@ -2064,6 +2267,9 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    reset_tribute_donations();
+    release_eye_control();
+    blood_spurts_.clear();
     world_drop_pending_ = false;
     zone_exit_ = ZoneExit::None;
     if (chat_server_) chat_server_->disconnect();
@@ -2172,6 +2378,10 @@ void GameConnection::autofire_command() {
     }
     set_auto_attack(false);
     set_auto_fire(true);
+}
+
+void GameConnection::play_animation(std::uint32_t spawn_id, AnimationType action) {
+    play_animation(spawn_id, static_cast<std::uint8_t>(action));
 }
 
 void GameConnection::play_animation(std::uint32_t spawn_id, std::uint8_t action) {
@@ -2304,6 +2514,10 @@ bool GameConnection::set_stand_state(std::uint32_t state, bool room_to_stand) {
         remove_mount_affect();
         mount_events(ev);
     }
+    if (stops_motion(want)) {
+        ++speed_stops_;
+        ++turn_stops_;
+    }
     motion_dirty_ = true; // a sit/stand change marks the position dirty
     return true;
 }
@@ -2423,6 +2637,7 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                     pstatus_.hp -= d->damage;
                     if (pstatus_.max_hp > 0 && pstatus_.hp > pstatus_.max_hp) pstatus_.hp = pstatus_.max_hp;
                 }
+                update_player_consciousness(true);
             }
             report_successful_hit(*d, hit_reported(d->target, d->source));
             // Hailstone (auto_target_xtarget): an NPC attacking the player, a pick due when there is no target.
@@ -2470,6 +2685,20 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
                         game::dismount(world_, *s, ev);
                         mount_events(ev);
                     }
+                    // ChangePosition's StopMoving: sitting, looting or lying down clears SpeedRun and the turn
+                    // rate, so a spawn that feigns while it runs stops where it is instead of running on with its
+                    // last update's speed while that update is under 12 s old (mechanics::kSpawnStaleMs).
+                    const bool changed = id == me ? pstatus_.stand_state != want : s && s->stand_state != want;
+                    if (changed && stops_motion(want)) {
+                        if (s) {
+                            s->speed_run = 0.0f;
+                            s->speed_heading = 0.0f;
+                        }
+                        if (id == me) {
+                            ++speed_stops_;
+                            ++turn_stops_;
+                        }
+                    }
                     if (s) s->stand_state = want;
                     if (id == me) pstatus_.stand_state = want;
                 }
@@ -2477,6 +2706,8 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
             // Social appearance types (EQEmu AppearanceType; Handle_OP_SpawnAppearance).
             if (auto* s = spawn(id)) {
                 switch (a->type) {
+                case 3: s->invis_rank = static_cast<std::int32_t>(a->parameter); break;
+                case 5: s->light_type = static_cast<std::uint8_t>(a->parameter); break;
                 case 18: s->linkdead = a->parameter != 0; break;
                 case 19: s->fly_mode = static_cast<std::uint8_t>(a->parameter); break; // PlayerPhysics_SetFlyMode
                 case 20: s->gm = a->parameter != 0; break;
@@ -2552,6 +2783,12 @@ void GameConnection::handle_combat(Op op, const AppPacket& p) {
     default:
         break;
     }
+}
+
+void GameConnection::request_zone_links() {
+    if (!hailstone_script_ || zone_links_asked_ || !zone_session_) return;
+    zone_links_asked_ = true;
+    send_zone(encode_zone_links_request());
 }
 
 } // namespace hailstone::net

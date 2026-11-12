@@ -30,6 +30,7 @@ namespace hailstone::assets { class ZoneRegions; }
 namespace hailstone::net { class GameConnection; }
 
 namespace hailstone::game::mechanics { class Character; }
+namespace hailstone::game { struct Spawn; }
 
 namespace hailstone::app {
 
@@ -98,6 +99,11 @@ public:
     virtual std::optional<float> ceiling_above(const glm::vec3& p) const = 0;
 };
 
+// The selected remote CollisionPass actor-contact state (ladder / switch), using the same collision sphere as
+// the local movement adapter. This does not replace the server's position or the remote predictor's motion.
+std::int32_t remote_collision_type(const game::Spawn& spawn, const glm::vec3& from, const glm::vec3& to,
+                                    const MoveWorld& world);
+
 class PlayerMovement {
 public:
     void reset(const glm::vec3& feet, float yaw);
@@ -147,7 +153,7 @@ public:
     Frame update(const MovementKeys& keys, float yaw, float pitch, float elapsed_ms, std::uint32_t now_ms,
                  net::GameConnection& conn, const assets::ZoneRegions* regions, float floor_offset,
                  const MoveWorld* world, const game::mechanics::Character* character = nullptr,
-                 std::uint32_t step_ms = 0);
+                 std::uint32_t step_ms = 0, bool local_passive = false);
     // The actor's bounding radius (the swept sphere's; PlayerClient +0x101c's vf44):
     // the skeleton's radius times the model scale times COFactor (1).
     void set_collision_radius(float r) { radius_ = r; }
@@ -295,6 +301,9 @@ private:
     bool trace_ = false;
     bool at_helm_ = false;
     std::optional<bool> key_override_;
+    std::uint32_t speed_stops_ = 0, turn_stops_ = 0, stun_leans_ = 0; // GameConnection's, as last seen
+    game::mechanics::DrunkenMotion drunken_motion_;
+    std::uint32_t drunkenness_motion_updates_ = 0;
 };
 
 } // namespace hailstone::app

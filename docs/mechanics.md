@@ -256,8 +256,11 @@ camera behind the player, as before; its stick turns the player in the cameras 1
 
 Deliberate differences: the cameras keep the client's own field of view (ToggleView gives each camera's +0x40, 90 by
 default); the user cameras are not saved (the original's loadOptions reads Camera2-* into camera 1's globals, so its
-zoom check always fails and both are reset to their defaults each session: the same here); zoning, being knocked out
-(the original's overhead view) and drunkenness (first person only) do not change the camera; the missile camera
+zoom check always fails and both are reset to their defaults each session: the same here); zoning does not restore
+the saved camera. Knockout selects overhead until consciousness returns; a drunkenness tick at 70 or above selects
+first person and widens the FOV by the value above 70. The widening is added on top of the player's own FOV
+(Options, /fov) instead of replacing it with camera 0's base FOV, and drops at once when drunkenness falls below 70
+(a reset at death or bind too), so the chosen FOV comes back exactly. The missile camera
 (8, following the player's own arrow) is not used.
 
 ## Movement collision
@@ -303,11 +306,13 @@ How a move meets walls:
   game's 24-bit FPU precision is single precision), not the original's instruction stream, so its results agree
   with the original's recordings within a tolerance rather than bit for bit (see "Vectors" below and
   docs/unknowns.md). Where the original's edge case reports a hit without a contact point (a sphere already holding
-  the edge's start vertex), the contact is that vertex. The capsule (edge) test's rules for a centre already inside
-  the capsule, which the description leaves open, follow the recordings: it touches at once when it leaves through
-  the cylinder or the far end within the move, when it leaves through the start end, and not at all when it stays
-  inside to the move's end; a path entering through an end sphere and leaving through the cylinder after the move is
-  no hit. Lengths are summed in double (the x87's exponent range), a NaN length gives a NaN stop. `game/collision_callbacks.*`: the movement collision
+  the edge's start vertex), the contact is that vertex. Capsule candidates retain cylinder, start-cap and far-cap
+  enumeration order. The usable-root count does not compact that list: one usable root selects its first candidate,
+  while two select the smaller candidate, with negative time clamped to zero. Axial paths and tangent roots follow
+  their separate observed branches. A parallel edge-region approach is refused rather than selected through a
+  division by zero. Synthetic float/double cases in `tests/swept_sphere_test.cpp` cover these choices; native FPU
+  rounding is still not claimed bit for bit. Lengths are summed in double (the x87's exponent range), a NaN length
+  gives a NaN stop. `game/collision_callbacks.*`: the movement collision
   filter (with and without rider) and the colliding-type setter.
 - `game/swept_sphere.*`, `game/collision.*`, `game/object_collision.*`: the collision-library side (no vectors):
   triangle records with the passable (WLD 0x10, EQG 1) and transparent flags and n = normalize((v0 - v1) x
@@ -328,7 +333,10 @@ How a move meets walls:
   21 classic zones, 655 of 665 closed doors sit in their doorways (the slab and the way through it clear of the
   zone's geometry); with the heading turned clockwise 313 do. Walked live: halas door 14 and felwithea door 1 stop
   the player closed (2.3 from the slab's centre) and let it through open.
-- Vectors (tests/movement_vectors_test.cpp): DoCollisionMovement 1000, SweptSphereTriangle 3000,
+- Vector results measured before the capsule and parallel edge-region changes above
+  (tests/movement_vectors_test.cpp). **The current sweep has not been replayed against these recordings**: the
+  numbers below are the earlier implementation's, and `movement_vectors_test` must be run with
+  `HAILSTONE_VECTORS_DIR` set before they are trusted again (docs/todo.md). DoCollisionMovement 1000, SweptSphereTriangle 3000,
   SweepStopAndSlide 3000, s3dCollideActorSweep 2000, CollisionHit_SetCollidingType 1500,
   CollisionFilter_Movement 2000. The sweep's three are compared within a tolerance (t 1e-4, unit vectors 1e-3,
   points 1e-3 + 1e-6 of their size, each grown by 8 floats of the inputs' size over the move or the radius, as the
@@ -735,6 +743,18 @@ find affect slot 1600). Each record is replayed call for call against the record
   sitting player (110), so a feigned one stays down until /sit or /stand (CEverQuest::Sit: anything but standing or
   ducking stands up). The client hands ProcessControls the feigned state as 115 (`CharacterInput::lying`).
 
+## The merchant's "Show only items I can use"
+
+The merchant window's purchase page has a check box, MW_UsableButton, ticked when the window is made (CMerchantWnd's
+constructor: SetCheck(1), and PurchasePageHandler +0x60 cleared). While it is ticked, the list
+(PurchasePageHandler::UpdateList @0x6f0bb0, `game::merchant_usable_hides`) leaves out a common item (item class 0)
+whose class mask lacks the character's class or whose race mask lacks the race's bit (0x6f7160: races below 13 as they
+are, Iksar 13, Vah Shir 14, Froglok 15, Drakkin 16, any other 17), and a spell scroll whose spell is in the book, or
+whose group has a higher rank in the book (from the top rank down while above the scroll's). Bags and books always
+show. Level, deity and lore are not looked at. A click on the box flips +0x60 and rebuilds the list; the state lasts
+for the session. The modern pack's box is "Usable only" beside "Affordable only"; the gamepad pack's Buy page switches
+it with X.
+
 ## Kept items: Hailstone's Keep mark
 
 A deliberate difference, with no counterpart in the original: the Advanced Inventory window (Hailstone's own,
@@ -750,24 +770,37 @@ left where it is:
 - putting it in a trade, with a player or an NPC (`trade_drop_cursor`, which a give to an NPC goes through);
 - selling it to a merchant, a point merchant or an adventure merchant (`merchant_sell`, `point_merchant_sell`,
   `adventure_merchant_sell`); Sell marked leaves kept items out;
-- sending it by parcel (`send_parcel`).
+- sending it by parcel (`send_parcel`);
+- selling to a barter buyer, posting a bazaar offer or offering it as buyer compensation;
+- donating it to a personal or guild tribute master.
 
-Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing. Not
-covered yet: selling to a barter buyer and the bazaar trader's offers (docs/todo.md). An item is marked Keep or Sell,
-not both: marking one clears the other.
+Nothing goes to the server: the refusals are the client not sending the move, so a stock EQEmu needs nothing.
+Checks run again at confirmation, not only when a quantity dialog opens. Marking an offered item Keep ends the
+active trader or buyer session; it cannot remain available for a later remote sale. A satchel item that is not listed
+(no price) does not end it. An item is marked Keep or Sell,
+not both: marking one clears the other. `eq.SetItemsKept` validates a batch before applying it, then persists it and
+changes the Keep revision once.
 
 ## The Advanced Inventory's bulk actions
 
-Also Hailstone's own: rows selected in the Advanced Inventory's list (a click, Ctrl, Shift, Ctrl+A) can be sold,
-donated as tribute or destroyed together (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
-item at a time, through the same packets a player's clicks would send, and takes only what is carried (the general
-slots and their bags; nothing worn or banked) and never a kept item:
+Also Hailstone's own: selected rows in either the Advanced Inventory list or grid can be sold, donated as tribute,
+destroyed or withdrawn from the bank (`GameConnection::start_bulk_job`, `eq.BulkItems`). Each runs as a job, one
+item at a time, through the same packets a player's clicks would send. Sell and tribute take only carried items
+(the general slots and their bags); destroy can also take banked items while the bank is open. These three actions
+exclude kept items. Withdraw only moves banked items into inventory, so Keep does not block it. Nothing worn is
+taken. The selection records each item's serial and quantity: a replacement in the same slot is not acted on.
 
 - Sell, at an open merchant: each sale is OP_ShopPlayerSell for the whole stack, the next after the merchant's answer,
   as Sell marked does. Not a bag, nor what the merchant refuses (`game::sell_refusal`).
-- Tribute, at an open (personal) tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
+- Tribute, at an open personal or guild tribute master: each item is picked up and donated from the cursor (OP_TributeItem,
   as the window's Donate), the next after the server's answer; one it refuses (0 favour) goes back to its slot. An item
-  worth no favour (Favor 0, which EQEmu refuses) or a bag is left out. No answer in 5 seconds stops the job.
+  worth no favour or a bag is left out. Guild donations use GuildFavor and wait for the guild reply counter;
+  personal donations use Favor. Changing or closing the master stops the job. No answer in 5 seconds stops it.
+- Withdraw, at an open bank: each chosen bank or shared-bank item goes through the cursor into the first free general
+  slot, else the first bag with room (`stow_cursor_in_packs`: auto-inventory's last steps, without its worn-slot merge
+  and equip, so nothing withdrawn is equipped). Selecting
+  a bag and its children moves the bag once. Closing the bank stops the job; if inventory fills, the held item is
+  put back when its original slot is still free.
 - Destroy: each item is picked up and destroyed from the cursor (OP_MoveItem to nowhere, as DestroyHeldItemOrMoney),
   with no confirmation per item: the window asks once, naming what goes. A bag that holds anything is left out (it
   would take its contents), and so is an item with the No Destroy flag.
@@ -775,6 +808,19 @@ slots and their bags; nothing worn or banked) and never a kept item:
 The window says beforehand how many of the selection each action takes. A job stops, with a line in the chat and
 what the cursor holds put away, if the items change under it (the cursor, a trade, a merchant or the quantity
 window), as Sort does.
+
+Selection identity is checked before confirmation as well as while the job runs: the item ID, serial and quantity
+must still match, and a destroy rechecks No Destroy and bag contents immediately before pickup and destruction.
+An empty selected bag that acquired contents is left intact. Trader Add and the buyer-start acknowledgment also
+recheck Keep; a late start reply cannot publish newly protected compensation.
+
+Item donations allow one unresolved request across personal and guild tribute. Neither reply has an instance or
+transaction ID, so a batch's five-second timeout retains its pending identity and another item donation waits for
+the answer, a new zone/session, the same kind of master's window being answered again, or 30 seconds. Stock EQEmu
+answers in the handler or not at all (Handle_OP_TributeItem returns without a reply when the master is gone or out
+of range, the guild handler when the character has no guild), so the answer to a master opened after the donation
+comes after any answer to it; closing the window alone keeps waiting, so a reply still in flight is reconciled. A reply reconciles only one unchanged original instance, even if it moved;
+replacement cursor items and ambiguous or changed stacks are preserved, with a message to refresh by zoning.
 
 ## Using items
 
@@ -976,6 +1022,22 @@ Remote spawns and the floor: a moving spawn on the ground (flymode 0) is kept at
 settles onto a floor at most 5 below or above it (`WorldState::smooth`), so an NPC that an EQEmu server with a poor
 map leaves standing higher stays in the air.
 
+Stopping: another spawn is stepped on with its last update's SpeedRun and turn rate while that update is at most 12 s
+old (AdvanceSpawn). A SpawnAppearance stand state of sitting (110), looting (105) or lying down (115, feign death)
+clears both (PlayerZoneClient::ChangePosition @0x5a0bc0's StopMoving), so the spawn slides to a stop on the velocity
+it had instead of running on. The local player's body loses them the same way, and its SpeedRun when a stun starts
+(CharacterZoneClient::StunMe @0x4432c0, the mount's too; `GameConnection::speed_stops`): ProcessControls only stops
+asking for speed while the player cannot move.
+
+Stuns (OP_Stun, the case @0x4c7093: StunMe(duration, 0, 0, the byte at +4)). StunMe does nothing under stun immunity
+(TotalEffect(40) > 0) or while a stun's timer runs; a duration below 1000 ms is 1000 ms for a player, so EQEmu's
+UnStun, an OP_Stun of 0 (a fear fading with Combat:EnableFearPathing off, a quest's UnStun), stuns for a second when
+none runs and changes nothing when one does. A stun sets the timer and the stunned state, prints "You are stunned!"
+(chat filter 0x1a hides it), stops the player and its mount, sets the listener's room 0x17, and with the byte at +4
+sets the turn rate to 32, which turns the player until it can move again (EQEmu sends 0). DoPassageOfTime clears the
+timer once it passes and ends the stun (EndStun: "You are unstunned.") unless the player is mesmerized; then the mez's
+removal ends it.
+
 Grounding NPCs (a deliberate difference, Hailstone's option `ground_npcs`: hailstone.ini `display.ground_npcs`,
 Options > Graphics "Ground Floating NPCs", on by default): an NPC or corpse on the ground that stands more than 0.25
 and at most 50 over the floor there (the zone's terrain and placed objects, and the doors, as the player's own floor
@@ -1147,6 +1209,8 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
 
 ## AFK and the NPC target keys
 
+Actor drawing, nameplates, mouse picking and PC/NPC target cycling share viewer visibility (`game::spawn_invisible`, PlayerZoneClient::IsInvisible @0x5a1850). Spawn invisibility ranks and SpawnAppearance type 3 updates are compared with the viewer's SPA 13 total; group members have the awareness exemption, and a GM target stays hidden from a non-GM viewer whose rank reaches it. The player's own model is hidden only for a GM whose hide mode is 3001 (the function's first test). Corpses and zero-HP targets are never hidden; any other spawn with property 100 (PlayerBase::HasProperty(0x64): body type 100 or 100 in the spawn record's property list) is always hidden, whatever the viewer sees (before this, Hailstone drew such spawns). The viewer's SPA 13 total is built from the character sheet only while some spawn is hidden at a rank, at most once a frame for drawing. Remote signed HP is unavailable, so the server's percentage supplies that gate. Visibility is independent of material opacity. Unit and mock packet tests cover ranks, buff changes, membership and reused spawn ids.
+
 - AFK: there is no idle timer in the client. The local AFK flag changes only with the /afk command (13199 / 13200,
   `;afk on|off silent` to the chat server, OP_SpawnAppearance {me, 0x18, flag}) and OP_SpawnAppearance type 0x18 for
   our own spawn; while it is set a tell gets the away reply (1418 and the /afk message, or 1419). A replaced player
@@ -1207,6 +1271,9 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   discipline in the last buff slot goes, told to the server with OP_Buff), then the SPA 0x63 movement rate, air
   supply and environment damage (other modules);
 - more than 6 s since the last tick (one timer per character at spawn+0x24c; packets do not restart it):
+  positive drunkenness first decreases by one, even without BaseData. Its new value updates the body's lateral
+  sway; at 70 or above it selects first person and widens the FOV, and at the alcohol-tolerance mount threshold
+  it fades the mount effect and dismounts. Then
   ProcessAffects (`game::six_second_tick`, game/passage_of_time.h, over the ported `mechanics::process_affects`):
   every buff of type 2 and up whose duration was already 0 (or -1 without the permanent formula 50) is removed
   locally (no packet), every positive duration counts down by 1, and its slots apply their per-tick effects: HP
@@ -1226,6 +1293,25 @@ The periodic update drives the timed mechanics. It and UseSkill send uninitialis
   character the ticks wait (nothing to compute the regen or the maxima with);
 - more than 18 s: the profile+0x3408 countdown;
 - more than 60 s: stats marked dirty.
+
+The live sheet receives actual running and drunkenness state. Running requires nonzero forward run speed and
+does not apply to a mounted rider. Damage below 1 HP can set the owner status to unconscious (3), stop movement,
+lie down and select the overhead camera; its six-second HP tick bleeds and prints the bleeding message. Positive
+HP recovers consciousness on the tick, stands and restores the camera. Server death remains authoritative.
+SPA 343's flag-1 interruption stops any local cast without an extra interrupt packet, including the bard restart
+path. StopSpellCast (stop_spell_cast.cpp:84-101): a bard's non-song only resets the cast (kept outright with
+recovery at most 100 ms when it is not an item cast), with no interrupt packet and no twist restart for any reason;
+anything else sends the empty OP_ManaChange for reason 0 only (feign death's StopCastAndFeignDeath, /stopsong) and
+resets the cast; a bard song then also restarts the twist for a reason other than 0. See `tests/passage_of_time_test.cpp`, `tests/ability_commands_test.cpp` and `tests/movement_test.cpp`.
+
+SPA 67 acquires an Eye summon named from the first 24 bytes of the player's name. View and control are distinct
+from the player's body and mount: the Eye sends its own spawn ID's movement while the body retains gravity, air
+and environment damage. Fade, despawn, death and zoning restore control and retire the remote view. Once held,
+control stays while that spawn lives under the Eye's name; another matching Eye appearing later does not retire it.
+Deliberate safety differences: ambiguous matching Eye names refuse acquisition rather than using unordered-map
+iteration to choose one, and the name must not go on with a letter after the player's name (EQEmu names the Eye
+`Eye_of_<name>` plus MakeNameUnique's three digits, so `Eye_of_Bobby000` is not Bob's; the original takes any
+partial match). The packet and movement lifecycle is covered by `tests/eye_control_test.cpp`.
 
 The swing timers (melee.h; `ActionsUi::melee_timers` each frame before the movement update): at its start, while
 auto attack is on and the primary flag is still set, both flags clear and the primary, secondary and ranged timers
@@ -1263,10 +1349,35 @@ spawn. The client chooses only a missile source's launch animation (the attack a
 BATK for arrows) and the target's hit animation (`game::hit_animation`: D02 on a hit for damage, a spell's
 TargetAnim, D01 / D03 / D04 for the environmental types).
 
-Missiles (`game/missiles.h`): only a missile without a target sweeps the zone, so one with a target flies through
-walls, as in the original. When a spawn goes (DeleteMyMissiles), the missiles it shot end and those aimed at it lose
-their target: they stop homing and sweep from then on. Item type 9 (spell) missiles need a valid spell id, which
-EQEmu never sends, so they end before they are drawn, in the original too.
+A proc's cast animation (a deliberate difference, Hailstone's option `cast_animation_fallback`: hailstone.ini
+`game.cast_animation_fallback`, Options > General "Proc Cast Animations", on by default): the cast stage Hailstone
+adds for a spell that lands with no OP_BeginCast (docs/graphics.md) plays the spell's casting animation on its source,
+and the local player's is sent to the zone as an OP_Animation. For a spell whose casting animation is 0 it plays 43
+(CastHeals) for a beneficial spell (spell type above 0) and 44 (CastNuke) for a detrimental one, locally and in
+the OP_Animation alike (`game::spell_cast_animation`). Off, such a spell plays no animation, as before. The original
+plays no cast stage here at all, and what its cast animation is for a spell without one is not confirmed
+(docs/unknowns.md).
+
+Missiles (`game/missiles.h`): an item missile with a target does not sweep the zone; spell missiles sweep and
+also check the target segment. Source despawn ends its missiles; target despawn removes homing. Item type 9 needs
+a loaded spell id in 1..45000. Duration uses normalized AE duration (capped at 14 s except first-slot SPA 76),
+otherwise 30 s for travel type 3 or 50 ms. Area target types 8, 21, 22, 23, 28 and 45 stay at the target or
+destination and play stage 2; other spell missiles launch stage 1. SPA 76 area contact checks moving targets every
+2 s inside 2.5 times AE range with sight; other local contact attempts use a 3 s gate and source sight, respecting
+NPCNoLoS. Contact emits presentation messages, never authoritative damage. Spell 54 plays its destruction impact
+one velocity step behind, at that point in the world with the source as caster and no target (EQMissile_UpdateAll
+@0x501415), so it outlives the missile. Spell 859 can run a local hit presentation inside a strict 40-unit
+horizontal radius, at the local player's level (@0x501342); it sends no packet, applies no successful-landing flag,
+grants no buff and does not end the source's cast.
+
+Large-source launch placement uses the renderer's actual posed role-0/name anchor. Missing authored or posed data
+keeps the packet origin rather than inventing an attachment. Missile pulse timing uses a source's completed
+physics step, not its last packet arrival: a non-area launch moves (now - that step) x 0.02 velocity steps further.
+Hailstone: a step time not before now counts as none, and the age stops at 12 s (when a remote spawn stops
+stepping), so a stale or wrapped time cannot throw the missile across the zone. Spawns start with an absent clock; local movement, fresh remote and
+boat/rider steps publish StepClock time + 1. The app explicitly bridges that relative time to the missile's
+32-bit steady clock. Empty step batches and stale spawns do not advance it. Fixtures cover the clock and actual
+packet-to-emitter flow; recorded native vectors and live acceptance remain pending.
 
 Environmental hits (types 0xf3..0xfd: mind burns, rotting, chilled, freezing, tormented, burned, thorns, burning,
 drowning, falling, a trap; `game::environment_hit`): the player's own fall, drowning or lava damage goes through
@@ -1284,8 +1395,8 @@ sitting player and, while mounted, sets standing too; then the target's Hit1..4 
 here; the melee branch adds FlshHit 0x93 / 0x94 before it). Handle_OP_Damage itself, for a hit on the player by
 another, closes the book for any damage above 0 (a beneficial spell's too), takes melee and environmental damage
 off the HP, and heals a spell's negative damage. The tail's blood spurt (`PlayerClient_SpawnBloodSpurt` @0x58f1c0)
-goes with the player's own landed hit of skill 0..3, 8, 10, 36 or 77 when the target's actor has point 6; it is not
-drawn (docs/unknowns.md).
+goes with the player's own landed hit of skill 0..3, 8, 10, 36 or 77 when the target has its exact authored blood
+attachment and the player's sprite can be loaded (docs/formats/particles.md).
 
 ## Animations
 
@@ -1322,6 +1433,9 @@ it does nothing). Which group plays what:
   to the legs while the unfinished action keeps the upper body (0x5890a0, 0x58ac90's modes); another
   sequence (stand, idle) starts on both groups when either group's mode is 2, cutting the action (0x589410).
   Each group's cross-fade is (new.blendIn + that group's old blendOut) / 2.
+- New-style riders select movement and idle sequences from mounted style column 5, using the mount's motion.
+  The layer groups retain the requested style column as part of sequence identity, so the same sequence in a
+  different column can start without restarting a repeated request for the same column.
 - A request that finds the upper body busy (`render/actor_layers.cpp` start_action). Classic: an OP_Animation reaches
   0x4b15b0 through the object's slot 3 with restart 1 and key 1, and 0x4b0900 decides whether it may start at
   once (`game::classic_may_interrupt`: the blend and rider animations, D05, 0x21 and 0x2c always; never over itself;
@@ -1350,12 +1464,23 @@ it does nothing). Which group plays what:
   a new-style model) once, unless it or the duck walk 0x16 (L06 / CWLK) is playing; 'd' (100) from 'o' plays it
   backward. A plain play, not a held posture: a walk or a jump replaces it, and a still ducking spawn asks for
   nothing more, so the crouch shows without moving (`game::choose_spawn_animation`).
-- Climbing: the local player's CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which
-  play L07 / CLMB forward going up and reversed going down. Other spawns' +0x24 is 0 here (docs/unknowns.md).
+- Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
+  forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
+  switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.
+  The probe's world follows the player's passable-ladder rule (`ZoneMoveWorld::apply_remote_rules`), so other
+  spawns climb Cabilis's passable ladders when the player would; the open doors the player's /nav or /stick passes
+  are the player's own, and other spawns' probes meet every door. Hailstone, for the frame's
+  cost: only spawns within the actor clip of the player are probed (`WorldState::remote_probe_range`, the camera's
+  `game::actor_clip_distance`, 550 at the default ActorClipPlane); a farther one is not drawn and has no contact.
+  Only a ladder gives a contact the animation shows, so the probe sweeps the doors only after a ladder hit (a door
+  hit then gives the switch type over it, as in the full sweep), and not the vehicles or NPC bodies.
+  This publishes animation contact state; full remote collision correction and the physical-radius gap remain open.
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`: CollisionPass's
   sub_00506d20 at the spawn's z and CheckRegionChange at the feet + 0.25), so they swim and tread water.
 
 ## Character appearance
+
+An illusion received while mounted runs the form-change unseat before rebuilding the actor. The saved mount identity is used to re-seat only after the new actor is made; a departed mount clears that pending identity so a reused spawn id cannot attach another mount. This retains the existing `illusion_mounts` option. Disabling `UseLuclinElementals` also skips the implicit global NPC archive load (`global5_chr`); an archive the player's `GlobalLoad.txt` names is still loaded (docs/unknowns.md). Mock packet tests cover the material records, Drakkin features and mount lifecycle; archive-option tests use synthetic files.
 
 `game/actor_look.*` follows the ActorClient appearance functions (the recorded vectors in
 `tests/appearance_vectors_test.cpp`); `assets/character_parts.cpp` (Luclin and new models) and

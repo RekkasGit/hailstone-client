@@ -203,7 +203,10 @@ void ClientApp::show_select_model() {
     // IT<primary> / IT<secondary> ("0" without one).
     for (std::size_t s = 0; s < 9; ++s) {
         a.material[s] = e.equip[s].material;
+        a.material_variation[s] = e.equip[s].unknown1;
+        a.elite_material[s] = e.equip[s].elite_material;
         a.hero_forge[s] = e.equip[s].hero_forge_model;
+        a.new_armor_type[s] = e.equip[s].material2;
         a.tint[s] = e.equip[s].color;
     }
     a.material[7] = e.primary_id_file > 0 ? e.primary_id_file : 0;
@@ -280,8 +283,11 @@ void ClientApp::update_pre_game(float dt) {
             // items, the held models 7 and 8 "0": creation's model is bare.
             game::Appearance& a = m->appearance;
             a.material = {};
+            a.material_variation = {};
+            a.elite_material = {};
             a.tint = {};
             a.hero_forge = {};
+            a.new_armor_type = {};
             a.texture = game::kNoTexture;
             a.helm = 0;
             m->name.clear();

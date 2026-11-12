@@ -23,13 +23,18 @@ struct GameConnectionTestAccess {
     static game::WorldState& world(GameConnection& c) { return c.world_; }
     static PlayerStatus& status(GameConnection& c) { return c.pstatus_; }
     static game::SpellState& spells(GameConnection& c) { return c.spells_; }
+    static std::int32_t& drunkenness(GameConnection& c) { return c.drunkenness_; }
     static game::GroupState& group(GameConnection& c) { return c.group_; }
+    static std::vector<std::pair<std::uint32_t, game::BuffSlot>>& pet_buffs(GameConnection& c) { return c.pet_buffs_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
     static Coins& coins(GameConnection& c) { return c.coins_; }
     static std::optional<PlayerProfile>& profile(GameConnection& c) { return c.profile_; }
     static std::string& character(GameConnection& c) { return c.character_; }
     static bool& auto_attack(GameConnection& c) { return c.auto_attack_; }
     static ConnectionState& state(GameConnection& c) { return c.state_; }
+    static std::optional<NewZone>& new_zone(GameConnection& c) { return c.new_zone_; }
+    static std::vector<ZonePoint>& zone_points(GameConnection& c) { return c.zone_points_; }
+    static void handle_zone(GameConnection& c, const AppPacket& p) { c.handle_zone(p); }
     static game::AltAdvState& alt_adv(GameConnection& c) { return c.alt_adv_; }
     static void update_usable_gems(GameConnection& c) { c.update_usable_gems(); }
     static void memorize_tick(GameConnection& c, std::int64_t now) { c.memorize_tick(now); }
@@ -46,6 +51,7 @@ struct GameConnectionTestAccess {
         ++c.server_rules_serial_;
     }
     static void update_server_rules(GameConnection& c) { c.update_server_rules(); }
+    static void update_bulk_job(GameConnection& c, std::int64_t now) { c.update_bulk_job(now); }
     static void with_character(const GameConnection& c, const std::function<void(game::mechanics::Character&)>& fn) {
         c.with_character(fn);
     }
@@ -87,6 +93,10 @@ struct World {
             // Spell effects (86.., bases 20..): a mez (SPA 31) and a slow to 70% (SPA 11), detrimental.
             f << spell_line({{0, "3001"}, {1, "Test Mesmerize"}, {17, "8"}, {20, "1"}, {83, "0"}, {86, "31"}}) << "\n";
             f << spell_line({{0, "3002"}, {1, "Test Slow"}, {17, "30"}, {20, "70"}, {83, "0"}, {86, "11"}}) << "\n";
+            // A disease counter (SPA 35, base 4) in the second effect slot, after a DoT.
+            f << spell_line({{0, "3004"}, {1, "Test Plague"}, {17, "10"}, {20, "-10"}, {21, "4"}, {83, "0"}, {86, "0"},
+                             {87, "35"}})
+              << "\n";
             // A bard song (the Bard level, column 111, 1).
             f << spell_line({{0, "3373"}, {1, "Test Chant"}, {13, "1000"}, {17, "3"}, {83, "0"}, {111, "1"}}) << "\n";
         }

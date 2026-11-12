@@ -8,18 +8,21 @@
 //                                   place: "i:<slot>[:<sub>]" (worn and carried), "b:..." (bank), "s:..." (shared
 //                                   bank); where: "worn", "carried", "bank", "shared"; bag: the bag's name, for an
 //                                   item in one; kept: marked Keep (or a bag holding a kept item)
-//                                   item also has tribute (its favour), noDestroy and stats: { [key] = value }, the
+//                                   item also has serial (the server's exact instance id as text), tribute (its favour),
+//                                   noDestroy and stats: { [key] = value }, the
 //                                   stats it has (not 0), keyed as eq.ItemStats names them
 //   list = eq.ItemStats()        -- { { key, label }, ... }: the stats the window filters and sorts by, in its order
 //   count, err = eq.BulkItems(mode, { place, ... } [, dry])
-//                                -- the Advanced Inventory's bulk actions (mode "sell", "destroy", "tribute"; places as
-//                                   eq.AllItems gives them, only carried ones taken; GameConnection::start_bulk_job):
+//                                -- the Advanced Inventory's bulk actions ("sell", "destroy", "tribute", "withdraw");
+//                                   destroy also accepts banked items while the bank is open; withdraw takes banked
+//                                   items through the cursor into inventory. GameConnection::start_bulk_job:
 //                                   count is how many of them the action takes, err why it cannot run (nil: it started,
 //                                   or with dry, it could). dry only counts
 //   text = eq.TakeItemSearch()   -- /finditem's search, once (nil when there is none)
 //   inv, keep = eq.ItemsRevision()  -- change counters: the inventory's and the Keep marks' (a window's cache)
 //   on = eq.ItemKept(id)
 //   eq.SetItemKept(id, name, on)    -- marks or unmarks every copy of the item (kept per character)
+//   eq.SetItemsKept({{id=..., name=...}, ...}, on) -- one validated batch and one persistence/revision update
 // The bank's and shared bank's items are known from zoning in, so they are listed while the bank is closed; acting on
 // them still needs the bank open (eq.BankSlotClick).
 
@@ -127,6 +130,8 @@ void set_bool(lua_State* L, const char* k, bool v) {
 // eq.Item's table and what the window filters and sorts by.
 void push_full_item(lua_State* L, const net::GameConnection& c, const net::Item& it) {
     push_item(L, &it);
+    lua_pushlstring(L, it.serial.data(), it.serial.size());
+    lua_setfield(L, -2, "serial"); // preserve the server's instance identifier as text, including leading zeros
     set_int(L, "value", it.value);
     set_bool(L, "noTrade", it.no_trade());
     set_bool(L, "temporary", it.no_rent == 0);
@@ -218,9 +223,14 @@ int ItemStats(lua_State* L) {
     return 1;
 }
 
-// "i:<slot>[:<sub>]" (the possessions; a bank's "b:" or "s:" place is not one a bulk action takes)
+// The AllItems place keys, including banked selections while the bank is open.
 std::optional<net::ItemSlot> carried_place(std::string_view text) {
-    if (text.size() < 3 || text[0] != 'i' || text[1] != ':') return std::nullopt;
+    if (text.size() < 3 || text[1] != ':') return std::nullopt;
+    std::int16_t type = 0;
+    if (text[0] == 'i') type = net::kInvPossessions;
+    else if (text[0] == 'b') type = net::kInvBank;
+    else if (text[0] == 's') type = net::kInvSharedBank;
+    else return std::nullopt;
     text.remove_prefix(2);
     int slot = 0, sub = -1;
     auto r = std::from_chars(text.data(), text.data() + text.size(), slot);
@@ -231,7 +241,7 @@ std::optional<net::ItemSlot> carried_place(std::string_view text) {
         if (r2.ec != std::errc{} || r2.ptr != text.data() + text.size() || sub < 0) return std::nullopt;
     }
     if (slot < 0 || slot > 0x7fff || sub > 0x7fff) return std::nullopt;
-    return net::ItemSlot::possessions(static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub));
+    return net::ItemSlot{type, static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub), -1};
 }
 
 int BulkItems(lua_State* L) {
@@ -241,8 +251,9 @@ int BulkItems(lua_State* L) {
     std::optional<M> mode = mode_arg == "sell"      ? std::optional<M>(M::Sell)
                             : mode_arg == "destroy" ? std::optional<M>(M::Destroy)
                             : mode_arg == "tribute" ? std::optional<M>(M::Tribute)
+                            : mode_arg == "withdraw" ? std::optional<M>(M::Withdraw)
                                                     : std::nullopt;
-    if (!mode) return luaL_argerror(L, 1, "\"sell\", \"destroy\" or \"tribute\"");
+    if (!mode) return luaL_argerror(L, 1, "\"sell\", \"destroy\", \"tribute\" or \"withdraw\"");
     ui::lua::unview(L, 2);
     std::vector<net::ItemSlot> slots;
     if (lua_istable(L, 2))
@@ -292,6 +303,47 @@ int SetItemKept(lua_State* L) {
     return 0;
 }
 
+int SetItemsKept(lua_State* L) {
+    auto& h = host(L);
+    ui::lua::unview(L, 1);
+    luaL_checktype(L, 1, LUA_TTABLE);
+    const std::size_t count = lua_rawlen(L, 1);
+    if (count > 4096) return luaL_argerror(L, 1, "too many items");
+    // Validate before constructing owned C++ values: a Lua argument error must not strand partial marks.
+    for (std::size_t i = 1; i <= count; ++i) {
+        lua_rawgeti(L, 1, static_cast<lua_Integer>(i));
+        ui::lua::unview(L, -1);
+        luaL_checktype(L, -1, LUA_TTABLE);
+        lua_pushliteral(L, "id");
+        lua_rawget(L, -2);
+        const lua_Integer id = luaL_checkinteger(L, -1);
+        lua_pop(L, 1);
+        if (id < 1 || static_cast<std::uint64_t>(id) > 0xffffffffu)
+            return luaL_argerror(L, 1, "an item id is out of range");
+        lua_pushliteral(L, "name");
+        lua_rawget(L, -2);
+        luaL_optstring(L, -1, "");
+        lua_pop(L, 2);
+    }
+    std::vector<std::pair<std::uint32_t, std::string>> items;
+    items.reserve(count);
+    for (std::size_t i = 1; i <= count; ++i) {
+        lua_rawgeti(L, 1, static_cast<lua_Integer>(i));
+        ui::lua::unview(L, -1);
+        lua_pushliteral(L, "id");
+        lua_rawget(L, -2);
+        const auto id = static_cast<std::uint32_t>(lua_tointeger(L, -1));
+        lua_pop(L, 1);
+        lua_pushliteral(L, "name");
+        lua_rawget(L, -2);
+        const char* name = lua_tostring(L, -1);
+        items.emplace_back(id, name ? name : "");
+        lua_pop(L, 2);
+    }
+    if (h.conn) h.conn->set_items_kept(items, lua_toboolean(L, 2) != 0);
+    return 0;
+}
+
 class InventoryManagerWindow : public StockWindow {
 public:
     InventoryManagerWindow() : StockWindow("InventoryManagerWnd", false) {}
@@ -308,6 +360,7 @@ void register_inventory_manager_api(lua_State* L, EqHost& h) {
                                    {"ItemsRevision", ItemsRevision},
                                    {"ItemKept", ItemKept},
                                    {"SetItemKept", SetItemKept},
+                                   {"SetItemsKept", SetItemsKept},
                                    {"ItemStats", ItemStats},
                                    {"BulkItems", BulkItems},
                                    {"TakeItemSearch", TakeItemSearch},

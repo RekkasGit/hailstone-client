@@ -11,10 +11,10 @@ namespace hailstone::render {
 namespace mech = game::mechanics;
 
 bool GroupTrack::start(const assets::AnimationClip* c, std::uint8_t code, float speed, bool loops, bool reversed,
-                       float blend_s, bool restart) {
+                       float blend_s, bool restart, std::int32_t style_column) {
     if (!c) return false;
     if (!std::isfinite(speed) || speed < 0.0f) speed = 0.0f;
-    if (c == clip && reversed == reverse && !restart) {
+    if (c == clip && reversed == reverse && column == style_column && !restart) {
         // BlendToAnimation leaves the animation it plays alone; the caller's speed still reaches it
         // (SetCurrentAnimationParameters, 0x4b15b0's "keep" path / 0x58ac90's mode 3).
         rate = speed;
@@ -34,6 +34,7 @@ bool GroupTrack::start(const assets::AnimationClip* c, std::uint8_t code, float 
     }
     clip = c;
     anim = code;
+    column = style_column;
     rate = speed;
     loop = loops;
     reverse = reversed;
@@ -64,7 +65,7 @@ bool GroupTrack::completed() const {
 }
 
 void GroupTrack::sync_to(const GroupTrack& other) {
-    if (clip && clip == other.clip) time = other.time;
+    if (clip && clip == other.clip && column == other.column) time = other.time;
 }
 
 namespace {
@@ -93,14 +94,15 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
     GroupTrack& lo = group[game::kLowerBones];
     bool upper_only = false;
     if (req.new_style) {
-        // 0x58afa0: each group's mode (0x58ac90; the style column is not tracked, so a sequence asked
-        // again is the same one) decides. A rider plays only sequences of layer kind 1, and those on the upper
+        // 0x58afa0: each group's sequence and style mode decides. A rider plays only sequences of layer kind 1, on the upper
         // body (0x588e20); a kind 1 sequence plays there alone too while the legs walk, run or turn (kind 2).
         const std::uint8_t kind = mech::new_style_layer_kind(anim);
         auto mode_of = [&](const GroupTrack& g) {
             game::LayerModeInput li;
             li.wanted = anim;
+            li.column = req.action_column;
             li.playing = g.anim;
+            li.playing_column = g.column;
             li.completed = g.completed();
             return game::new_style_layer_mode(li);
         };
@@ -122,7 +124,7 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
                 if (lower_mode == 0 || (lower_mode != 2 && upper_mode != 2)) return false;
                 upper_only = lower_mode != 2;
                 if (upper_mode != 2) {
-                    lo.start(clip, anim, rate, false, false, blend_seconds(req, lo.anim, anim, 100.0f));
+                    lo.start(clip, anim, rate, false, false, blend_seconds(req, lo.anim, anim, 100.0f), false, req.action_column);
                     return false;
                 }
             } else {
@@ -147,9 +149,9 @@ bool ActorLayers::start_action(const assets::AnimationClip* clip, std::uint8_t a
         upper_only = game::classic_action_upper_only(anim, req.mounted, req.humanoid, req.speed_run);
     }
     // BlendToAnimation: a group already playing the clip keeps it.
-    up.start(clip, anim, rate, false, false, blend_seconds(req, up.anim, anim, 100.0f));
+    up.start(clip, anim, rate, false, false, blend_seconds(req, up.anim, anim, 100.0f), false, req.action_column);
     if (!upper_only) {
-        lo.start(clip, anim, rate, false, false, blend_seconds(req, lo.anim, anim, 100.0f));
+        lo.start(clip, anim, rate, false, false, blend_seconds(req, lo.anim, anim, 100.0f), false, req.action_column);
         up.sync_to(lo);
     }
     action = clip;
@@ -198,10 +200,13 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
             // action; otherwise nothing changes.
             game::LayerModeInput li;
             li.wanted = req.base_anim;
+            li.column = req.base_column;
             li.playing = lo.anim;
+            li.playing_column = lo.column;
             li.completed = lo.completed();
             const std::uint8_t lower_mode = game::new_style_layer_mode(li);
             li.playing = up.anim;
+            li.playing_column = up.column;
             li.completed = up.completed();
             const std::uint8_t upper_mode = game::new_style_layer_mode(li);
             if (lower_mode != 0 && upper_mode != 0 && (lower_mode == 2 || upper_mode == 2)) {
@@ -219,12 +224,12 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
     }
     if (legs_free)
         lo.start(req.base, req.base_anim, req.rate, req.loop, req.reverse,
-                 blend_seconds(req, lo.anim, req.base_anim, req.blend_ms), req.restart);
+                 blend_seconds(req, lo.anim, req.base_anim, req.blend_ms), req.restart, req.base_column);
     if (!action) {
         // Back on the base clip, the upper body takes the legs' position when they play the same
         // (the lower group's SyncToBoneGroup call after both are started).
         if (up.start(req.base, req.base_anim, req.rate, req.loop, req.reverse,
-                     blend_seconds(req, up.anim, req.base_anim, req.blend_ms), req.restart))
+                     blend_seconds(req, up.anim, req.base_anim, req.blend_ms), req.restart, req.base_column))
             up.sync_to(lo);
     }
     up.advance(dt);
@@ -235,7 +240,7 @@ bool ActorLayers::step(const LayerRequest& req, float dt) {
 bool ActorLayers::split() const {
     const GroupTrack& up = group[game::kUpperBones];
     const GroupTrack& lo = group[game::kLowerBones];
-    return up.clip != lo.clip || up.reverse != lo.reverse || up.time != lo.time || up.previous != lo.previous ||
+    return up.clip != lo.clip || up.column != lo.column || up.reverse != lo.reverse || up.time != lo.time || up.previous != lo.previous ||
            up.blend != lo.blend || (up.previous && up.previous_time != lo.previous_time);
 }
 

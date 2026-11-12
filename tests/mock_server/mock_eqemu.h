@@ -79,6 +79,7 @@ struct MockConfig {
     std::map<std::uint16_t, MockZone> zones;
     soe::SessionParams zone_params = SoeEndpoint::default_params();
     std::uint32_t own_spawn_id = 7;
+    std::int32_t server_status = 0; // login-list flags: 1 down, 4 locked; admission still uses play_error
 
     // One character (Gennro, a human warrior in qeynos2 with two NPCs, a guard and a zone line into qeynos) and
     // two zones.

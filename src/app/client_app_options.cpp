@@ -347,6 +347,8 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
     if (o == "own_name") return own_name_ ? 1 : 0;
     // Hailstone: a rider under an illusion still rides (game::WorldState::illusion_mounts), on by default.
     if (o == "illusion_mounts") return config_.get_bool("game.illusion_mounts", true) ? 1 : 0;
+    // Hailstone: a proc's cast animation for a spell without one (game::spell_cast_animation), on by default.
+    if (o == "cast_animation_fallback") return config_.get_bool("game.cast_animation_fallback", true) ? 1 : 0;
     // Hailstone: the right-click menu on other players (game::opens_player_menu), on by default.
     if (o == "player_menu") return player_menu_ ? 1 : 0;
     if (o == "font_face") {
@@ -564,6 +566,12 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         if (conn_) conn_->set_illusion_mounts(v != 0);
         return;
     }
+    if (o == "cast_animation_fallback") {
+        config_.set_bool("game.cast_animation_fallback", v != 0);
+        config_.save(config_path_);
+        if (conn_) conn_->set_cast_animation_fallback(v != 0);
+        return;
+    }
     if (o == "player_menu") {
         player_menu_ = v != 0;
         config_.set_bool("mouse.player_menu", player_menu_);
@@ -717,6 +725,7 @@ void ClientApp::apply_connection_settings() {
     conn_->set_fast_camp(config_.get_bool("game.fast_camp", false));
     conn_->set_ground_npcs(config_.get_bool("display.ground_npcs", true));
     conn_->set_illusion_mounts(config_.get_bool("game.illusion_mounts", true));
+    conn_->set_cast_animation_fallback(config_.get_bool("game.cast_animation_fallback", true));
 }
 
 void ClientApp::use_character_settings(const std::filesystem::path& character_dir) {

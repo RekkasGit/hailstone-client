@@ -73,12 +73,14 @@ void ClientApp::key_command(const game::KeyMap::Event& e) {
         actions_ui_->set_page(i / 10, i % 10);
         return;
     }
-    if (cmd == static_cast<int>(C::CMD_TOGGLE_FIND_WINDOW) && eq_api_ && eq_api_->replaces("FindLocationWnd")) {
-        // __ExecuteCmd case 100: with FindLocationWnd shown, CFindLocationWnd_FindSelected and the window goes;
-        // else a shown find path stops (0x66bf80: PlayerPath_Stop); else the window shows.
-        if (eq_api_->shown("FindLocationWnd")) eq_api_->show("FindLocationWnd", false);
-        else if (conn_->player_path().active()) conn_->stop_find_path();
-        else eq_api_->show("FindLocationWnd", true);
+    if (cmd == static_cast<int>(C::CMD_TOGGLE_FIND_WINDOW)) {
+        // Hailstone's Find window (app/lua_eq_find.cpp) in place of the original's FindLocationWnd, toggled as
+        // __ExecuteCmd case 100 toggles that: shown, it goes; else a shown find path stops (0x66bf80:
+        // PlayerPath_Stop); else it shows.
+        if (eq_host_.find_open) eq_host_.find_open = false;
+        else if (guide_.active()) guide_.stop(); // its guide path likewise
+        else if (conn_ && conn_->player_path().active()) conn_->stop_find_path();
+        else eq_host_.find_open = true;
         return;
     }
     // The window keys and EQ menu entries of the Lua windows: the stock window's show / hide.
@@ -303,20 +305,26 @@ void ClientApp::movement_command(int command, bool down, bool accept) {
 }
 
 void ClientApp::set_camera_type(int type) {
-    if (type != game::kCameraWheelFollow) {
-        if (camera_distance_ > 0.0f) pad_camera_distance_ = camera_distance_;
-        camera_distance_ = 0.0f;
-    }
-    if (type == game::kCameraIsometric && !iso()) {
+    game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+    game::select_camera(s, type);
+    apply_camera_selection(s);
+}
+
+// Every camera change ends here, so going into the isometric camera or out of it keeps the field of view right
+// (it has its own, and the one it replaced comes back).
+void ClientApp::apply_camera_selection(const game::CameraSelection& s) {
+    if (s.type == game::kCameraIsometric && !iso()) {
         iso_saved_fov_ = camera_.fov_units;
         iso_camera_.placed = false;
         // It starts looking the way the player faces.
         iso_camera_.yaw = yaw_;
-    } else if (type != game::kCameraIsometric && iso()) {
+    } else if (s.type != game::kCameraIsometric && iso()) {
         camera_.fov_units = iso_saved_fov_;
         iso_focus_distance_ = 0.0f;
     }
-    camera_type_ = type;
+    camera_type_ = s.type;
+    camera_distance_ = s.distance;
+    pad_camera_distance_ = s.pad_distance;
 }
 
 void ClientApp::update_iso_camera(const glm::vec3& feet, float dt) {
@@ -412,10 +420,11 @@ void ClientApp::toggle_view() { set_camera_type(game::toggle_view_next(camera_ty
 void ClientApp::set_view(bool behind) {
     if (!behind) {
         set_camera_type(game::kCameraFirstPerson);
-    } else if (camera_type_ != game::kCameraWheelFollow) {
-        camera_distance_ = std::clamp(pad_camera_distance_, 1.0f, max_camera_distance_);
-        set_camera_type(game::kCameraWheelFollow); // (out of the isometric camera: its own field of view goes)
+        return;
     }
+    game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+    game::select_behind(s, max_camera_distance_);
+    apply_camera_selection(s); // (out of the isometric camera: its own field of view goes)
 }
 
 void ClientApp::take_screenshot() {
@@ -443,9 +452,11 @@ game::CameraTarget ClientApp::camera_target(const glm::vec3& feet) const {
     t.position = feet + glm::vec3(0, 0, floor_offset_); // the spawn's z: the feet plus AvatarHeight
     t.heading = game::yaw_to_heading(yaw_);
     const game::Spawn* me = conn_ ? conn_->world().player() : nullptr;
+    if (conn_ && conn_->world().view_id)
+        if (auto it = conn_->world().spawns.find(conn_->world().view_id); it != conn_->world().spawns.end()) me = &it->second;
     if (!me) return t;
     t.eye_height = game::eye_height(me->heights, me->race, me->mount_id != 0);
-    const std::uint32_t stand = conn_->player_status().stand_state;
+    const std::uint32_t stand = me->id == conn_->world().player_id ? conn_->player_status().stand_state : me->stand_state;
     t.ducking = stand == net::kStandCrouching;
     t.sitting = stand == net::kStandSitting;
     if (me->mount_id) {
@@ -490,6 +501,8 @@ void ClientApp::update_game_camera(const glm::vec3& feet) {
 
 glm::vec3 ClientApp::eye_position() const {
     const game::Spawn* me = conn_ ? conn_->world().player() : nullptr;
+    if (conn_ && conn_->world().view_id)
+        if (auto it = conn_->world().spawns.find(conn_->world().view_id); it != conn_->world().spawns.end()) me = &it->second;
     // PlayerClient vfd0 for a classic model on foot: ViewHeight - AvatarHeight above z (7.44 above the feet for a
     // human). New-style models use the actor definition's +0x48, whose writer is not traced (docs/unknowns.md).
     float eye = me ? game::eye_height(me->heights, me->race, me->mount_id != 0) : 0.0f;
@@ -525,9 +538,11 @@ glm::vec3 ClientApp::eye_position() const {
 // What the abilities code needs from the client this frame (app/actions_ui.h).
 AbilityView ClientApp::ability_view() const {
     AbilityView v;
-    v.position = feet_ + glm::vec3(0, 0, floor_offset_);
-    v.heading = game::yaw_to_heading(yaw_);
-    v.velocity = last_velocity_;
+    v.position = local_body_movement_
+        ? local_body_movement_->controller().body.feet + glm::vec3(0, 0, local_body_height_)
+        : feet_ + glm::vec3(0, 0, floor_offset_);
+    v.heading = game::yaw_to_heading(local_body_movement_ ? local_body_yaw_ : yaw_);
+    v.velocity = local_body_movement_ ? local_body_movement_->controller().body.velocity : last_velocity_;
     if (auto seen = can_see_spawn(conn_->world().target_id)) v.can_see_target = *seen;
     return v;
 }
@@ -565,7 +580,8 @@ std::optional<bool> ClientApp::can_see_spawn(std::uint32_t id) const {
 // the spawn) unless tab_line_of_sight is off; without the zone's collision every NPC counts as in sight.
 void ClientApp::prepare_target_cycle() {
     target_manager_.skip_pets = option_value("tab_skip_pets").value_or(1) != 0;
-    target_manager_.invisible = [this](const game::Spawn& s) { return conn_->market_hidden(s); };
+    const auto see_invisible = viewer_see_invisible_rank();
+    target_manager_.invisible = [this, see_invisible](const game::Spawn& s) { return conn_->spawn_invisible(s, see_invisible); };
     if (option_value("tab_line_of_sight").value_or(1) != 0)
         target_manager_.in_sight = [this](const game::Spawn& s) { return can_see_spawn(s.id).value_or(true); };
     else

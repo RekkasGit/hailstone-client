@@ -165,4 +165,10 @@ void IniFile::erase_section(std::string_view section) {
     std::erase_if(sections_, [&](const Section& s) { return iequal(s.name, clean); });
 }
 
+bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback) {
+    if (!text) return fallback;
+    char c = text->empty() ? '\0' : (*text)[0];
+    return c == 'T' || c == 't' || c == '1';
+}
+
 } // namespace hailstone

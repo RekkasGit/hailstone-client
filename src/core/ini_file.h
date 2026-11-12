@@ -46,4 +46,8 @@ private:
     std::vector<Section> sections_;
 };
 
+// GetEQClientIniBool @0x5fa680 on a value: missing gives the default; true when it starts with T, t or 1 (an empty
+// one is false). UseLuclinElementals is read this way with default TRUE.
+bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback);
+
 } // namespace hailstone

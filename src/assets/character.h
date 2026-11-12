@@ -41,6 +41,7 @@
 
 namespace hailstone { class GameDir; }
 namespace hailstone::game {
+struct ActorLook;
 struct Appearance;
 struct AppearanceData;
 } // namespace hailstone::game
@@ -86,6 +87,7 @@ struct MeshEmitter {
     int bone = -1;
     glm::mat4 local{1.0f};
     ModelEmitter emitter;
+    std::string model_code; // the point-owning model's moddat.ini PESFactor
 };
 
 // A number no other mesh made in this run has, so a mesh freed and another made at its address are told apart
@@ -115,7 +117,15 @@ private:
 };
 
 struct CharacterMesh {
+    struct SkinBinding {
+        std::uint16_t host_bone = 0;
+        glm::mat4 local{1.0f};
+    };
     MeshSerial serial;
+    // Attachment palette entries after the model's own bones. A WLD host's
+    // raw bone matrix needs a separate inverse bind for each EQG influence.
+    std::vector<SkinBinding> skin_bindings;
+    bool append_skin_bones(std::vector<glm::mat4>& bones) const;
     std::vector<MeshEmitter> emitters;
     std::vector<SkinnedVertex> vertices;
     std::vector<std::uint32_t> indices; // triangle list
@@ -158,6 +168,9 @@ struct CharacterModel {
     // The skeleton's bounding radius (WLD 0x10 flag 2), unscaled; 0 when the
     // file gives none. The actor's GetBoundingRadius is this x its scale.
     float bounding_radius = 0.0f;
+    // Actor role 6 resolves the authored <code>_BLD_DAG, independently of its track name.
+    int blood_bone = -1;
+    int name_bone = -1; // authored actor role 0, independent of spell points
     // EQG models: the named points of `<code>.pts` beside the mesh (spell
     // points, assets/model_points.h). WLD models build theirs from the bone
     // names (assets::wld_model_points), so this stays empty for them.
@@ -257,7 +270,8 @@ public:
 
 private:
     void note_one(char table, const std::string& name);
-    static thread_local CharacterLookups* current_;
+    // Visible here so other translation units need no dynamic TLS initialization wrapper.
+    static constinit thread_local CharacterLookups* current_;
     CharacterLookups* parent_;
     std::unordered_set<std::string> names_;
 };
@@ -330,6 +344,10 @@ private:
 // shared. Throws std::runtime_error when the pieces do not fit the skeleton.
 void append_wld_mesh(const wld::WldFile& wld, const wld::Fragment& mesh, std::size_t bone_count,
                      std::int64_t owner, CharacterMesh& out);
+
+// The ActorClient fields the appearance functions read (game/actor_look.h) for `model` in appearance `a`; `data`
+// gives the new-armor filter (null: hero's forge hidden).
+game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, const game::AppearanceData* data);
 } // namespace detail
 
 // The graphics DLL's resource level an archive's definitions are added at.

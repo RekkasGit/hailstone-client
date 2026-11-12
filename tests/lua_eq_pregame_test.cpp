@@ -252,18 +252,21 @@ TEST_CASE("eq.ServerSelect: the worlds, the one played last, and Play only for a
     Ui ui;
     CHECK(ui("return eq.ServerSelect()") == "nil");
     ui::ServerSelectView v;
-    v.servers = {{"Open World", "Up", true}, {"Locked World", "Locked", false}};
+    v.servers = {{"Open World", "Up", true}, {"Locked World", "Locked", true}, {"Down World", "Down", false}};
     ui.host.server_select = &v;
     ui.host.last_server = "Locked World";
     ui.host.login_server = "Alpha";
     CHECK(ui("local v = eq.ServerSelect() return v.server .. ' ' .. #v.servers .. ' ' .. v.selected .. ' ' .. v.last .. "
              "' ' .. tostring(v.servers[1].players) .. ' ' .. tostring(v.servers[2].canJoin)") ==
-          "Alpha 2 0 2 nil false"); // no player count reaches any UI
+          "Alpha 3 0 2 nil true"); // no player count reaches any UI
     CHECK(ui.api.replaces("serverselect"));
     CHECK(ui("return eq.ServerSelectDo('play')") == "false"); // nothing picked
-    CHECK(ui("return eq.ServerSelectDo('play', 2)") == "false");
-    CHECK(v.selected == 1); // picked, but it cannot be joined
+    CHECK(ui("return eq.ServerSelectDo('play', 3)") == "false");
+    CHECK(v.selected == 2); // picked, but the host marked it unjoinable
     CHECK_FALSE(ui.host.server_select_action);
+    CHECK(ui("return eq.ServerSelectDo('play', 2)") == "true");
+    CHECK(v.selected == 1);
+    CHECK(ui.host.server_select_action == static_cast<int>(ui::ServerSelectAction::Play));
     CHECK(ui("return eq.ServerSelectDo('play', 1)") == "true");
     CHECK(v.selected == 0);
     CHECK(ui.host.server_select_action == static_cast<int>(ui::ServerSelectAction::Play));

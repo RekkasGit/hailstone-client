@@ -201,14 +201,17 @@ the impact seen from further raises that rule.
 The server can also play an effect by its spellsnew.eff number on a spawn (OP_SpellEffect, OP_AddNimbusEffect;
 `game/spell_effect_timers.h`): a nimbus, such as an item's or a buff's aura of orbs or flames, is one. Its emitters ask
 for a forced 5,000 s, so it stays on the spawn until OP_RemoveNimbusEffect stops it (EQEmu sends that when the buff
-fades) or the zone changes. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
+fades) or the zone changes. An effect that arrives before its spawn's model has loaded (a server resending the nimbuses
+as you zone in) keeps the point each emitter asks for and takes it once the model is drawn, at the spawn's place
+until then; the original's spawn always has its points. EQEmu sends a nimbus only to those in the zone when it is cast: a player zoning in later
 does not see it, on the original client either.
 
 Hailstone's own: a spell that lands with no OP_BeginCast before it also gets the cast stage at its source, when its
 first OP_Action arrives, so an item, weapon or augment proc looks like a cast of the same spell. Stock EQEmu begins
 a buff's proc with an OP_BeginCast (cast time 0) but not those (`Mob::TryWeaponProc`); the original plays only the
 impact for them (`EQPlayer::TriggerSpellEffect`). An OP_Action counts as a cast's landing for 3 s after its
-OP_BeginCast's cast time; a bard song's pulses get no cast stage. The proc's bolt or comet, in the modern lighting,
+OP_BeginCast's cast time; a bard song's pulses get no cast stage. Its source plays the spell's casting animation,
+or for a spell without one the heal or nuke cast (docs/mechanics.md, option `cast_animation_fallback`). The proc's bolt or comet, in the modern lighting,
 leaves at the landing as another's spell's does.
 
 Hailstone's own (the original has one spell density and an "On For" filter, SpellParticleCastFilter, which this client
@@ -378,7 +381,7 @@ the screen. A ring smaller than the cap keeps its size; the band, dashes and che
 
 The classic client leaves its loading screen only when everything it shows is built. Here the zone, its objects and doors, the sky and the flora are built before the zone-in ends (`load_zone`, on the
 main thread while the session's own thread keeps acknowledging), but some things are only built as the world is
-first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then; a look no spawn has worn for five minutes is freed, mesh and GPU buffers but not its shared textures, so a hub's comings and goings do not keep every look until the zone changes: `render/look_eviction.h`), the
+first drawn: the spawns' appearances, built on a worker thread and put up a few milliseconds' worth a frame (`ActorRenderer::kBuildBudgetMs`, drawn undressed until then; a look no spawn has worn for five minutes is freed, mesh, GPU buffers and texture slots no surviving model references, so a hub's comings and goings do not keep every look until the zone changes: `render/look_eviction.h`), the
 light shadow cubes one a frame, and the UI pack's in-game windows and the data the server sends with the zone-in
 (buffs, stats, chat). Leaving the loading screen at the zone-in showed all of them arriving over the first second or
 three.
@@ -635,6 +638,8 @@ Warm lights (torches, fires) flicker by up to 12 %. Characters and objects take 
 light list as before.
 
 ## Light shadows
+
+Modern scene lighting gives every visible carrier its light (`game::carrier_light_value`). The player's comes from its own inventory (the brightest worn or general-slot item), as before: stock EQEmu sets a client's spawn light only when it builds the spawn packet, ignores the client's own SpawnAppearance type 5 and sends type 5 only for NPCs, corpses, bots and mercenaries. Every other carrier uses its spawn record's light, changed by SpawnAppearance type 5. The existing carried-light palette sets its color and radius; dynamic lights remain switchable. Other carriers' lights follow their displayed body position. The local player's carried light retains its dedicated shadow slot; other carriers join the nearby point-light list.
 
 The zone's lights, the light the player carries and the spells' cast shadows in the modern lighting
 (`render/point_shadows.h`), so a torch no longer lights the far side of a wall. The classic renderer has no shadows at all.

@@ -296,7 +296,7 @@ void MockEqServer::on_login_packet(const AppPacket& p) {
         cstr(w, config.server_name);
         cstr(w, "us");
         cstr(w, "en");
-        w.le<std::int32_t>(0); // up
+        w.le<std::int32_t>(config.server_status);
         w.le<std::int32_t>(1); // players
         send_login_reply(login_op::ServerListResponse, w.take());
         break;

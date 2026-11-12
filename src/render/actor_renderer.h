@@ -71,6 +71,7 @@ struct ActorDraw {
     // its own scale, position and yaw are unused.
     bool attached = false;
     glm::mat4 parent{1.0f};
+    float alpha = 1.0f; // actor visibility supplied by its owner, independent of material opacity
 };
 
 struct ActorRenderStats {
@@ -224,12 +225,20 @@ public:
     // (the bone's frame: the matrix a held item or a model point hangs from); false when the spawn was not
     // drawn with a model or the bone is out of range.
     const assets::CharacterModel* drawn_model(std::uint32_t id) const;
+    float drawn_alpha(std::uint32_t id) const; // 0 without a drawn actor
+    // The model a spawn wears whether or not it was drawn (drawn_model's, else the one kept for a spawn hidden on
+    // purpose, such as the player in first person); nullptr when it has none yet.
+    const assets::CharacterModel* spawn_model(std::uint32_t id) const;
     // The dressed mesh it was drawn with (nullptr: none, or the model's default geometry).
     const assets::CharacterMesh* drawn_mesh(std::uint32_t id) const;
     bool drawn_bone(std::uint32_t id, int bone, glm::mat4& world) const;
     // The actor's own world matrix as last drawn (its place, turn and scale; the actor's vtable +0x2c4 matrix that
     // spell emitters on it take their axes from); false when it was not drawn.
     bool drawn_transform(std::uint32_t id, glm::mat4& world) const;
+    // Actor vfFC(0): the authored head/name role's posed world translation.
+    // Missing role metadata leaves the output alone and returns false.
+    bool drawn_name_position(std::uint32_t id, glm::vec3& position) const;
+    static bool name_position(const ActorDraw& actor, glm::vec3& position);
     // A bone's world matrix for an instance in its pose (the model viewer's draws).
     static bool bone_world(const ActorDraw& a, int bone, glm::mat4& world);
     // An instance's own world matrix (drawn_transform's, for the model viewer's draws).
@@ -285,12 +294,14 @@ private:
         bool used = false; // drawn since the renderer was made (release_kept keeps only these)
         std::uint64_t last_frame = 0; // VkContext::frames_begun() when last drawn or put up
         std::uint32_t last_ms = 0;    // now_ms_ then
+        bool capacity_blocked = false; // a texture exists but the descriptor array was full
     };
     // A texture's slot (0: none, drawn white), with the names reading it looked up in the library
     // (assets::CharacterLookups): a zone archive defining one of them may give another image.
     struct TextureSlot {
         std::uint32_t slot = 0;
         assets::CharacterLookups::Names lookups;
+        bool capacity_blocked = false;
     };
     struct SpawnState {
         std::shared_ptr<const assets::CharacterModel> model;
@@ -382,8 +393,13 @@ private:
     };
     std::unordered_map<const assets::CharacterModel*, Looks> looks_;
     // Frees the looks no spawn wears that have not been drawn for kLookIdleMs (render/look_eviction.h): their meshes
-    // and buffers, not the textures (shared slots). Swept every kLookSweepMs, from prepare_spawns.
+    // and buffers. Shared textures go only when no remaining model reads their slot.
+    // Swept every kLookSweepMs, from prepare_spawns.
     void evict_idle_looks();
+    // Frees the texture slots no model reads (when `reclaim_first`), then retries capacity-blocked models
+    // (render/look_eviction.h), at most kMaxWornRetries worn ones a sweep.
+    void evict_unused_textures(bool reclaim_first);
+    static constexpr std::size_t kMaxWornRetries = 1;
     std::uint32_t last_look_sweep_ms_ = 0;
     const std::shared_ptr<const assets::CharacterMesh>* applied_look(const assets::CharacterModel& model,
                                                                      const game::Appearance& a) const;
@@ -412,6 +428,7 @@ private:
         bool eqg = false;
         glm::vec3 center{0.0f}; // the model origin and its bounding radius at its scale
         float radius = 0.0f;
+        float alpha = 1.0f;
     };
     std::vector<Prepared> prepared_;
     std::vector<std::uint8_t> seen_; // record's: which prepared_ show in its view
@@ -454,6 +471,7 @@ private:
     // Takes `kept` over, then frees what this renderer's library would not hand out the same.
     void adopt(Kept& kept);
     void free_model(GpuModel& g);
+    void retire_model(GpuModel& g);
     std::uint32_t max_textures_ = 0;
     std::array<std::uint32_t, VkContext::kFramesInFlight> descriptor_textures_{}; // textures written into each set
 

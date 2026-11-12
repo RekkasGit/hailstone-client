@@ -23,6 +23,7 @@
 
 #include "assets/eqg_character.h"
 #include "core/game_dir.h"
+#include "core/ini_file.h"
 #include "core/msvc_atoi.h"
 #include "core/log.h"
 #include "game/appearance_data.h"
@@ -221,6 +222,15 @@ int CharacterModel::mount_point_bone(std::string_view rider_code) const {
     return find_bone_prefix("RIDER");
 }
 
+bool CharacterMesh::append_skin_bones(std::vector<glm::mat4>& bones) const {
+    const auto body_count = bones.size();
+    for (const auto& binding : skin_bindings)
+        if (binding.host_bone >= body_count) return false;
+    bones.reserve(body_count + skin_bindings.size());
+    for (const auto& binding : skin_bindings) bones.push_back(bones[binding.host_bone] * binding.local);
+    return true;
+}
+
 CharacterMesh CharacterModel::default_mesh() const {
     CharacterMesh m;
     m.vertices = vertices;
@@ -367,6 +377,10 @@ bool chr_txt_entry_is_s3d(const GameDir& game, std::string_view code, std::strin
 }
 
 std::vector<std::string> global_character_archives(const GameDir& game, bool luclin) {
+    IniFile ini;
+    if (auto bytes = game.read("eqclient.ini"))
+        ini.parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
+    const bool elementals = eqclient_ini_bool(ini.get("Defaults", "UseLuclinElementals"), true);
     std::vector<std::string> out;
     auto add = [&](std::string name) {
         name = lower(name);
@@ -408,7 +422,11 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
     }
     // Loaded by ConfigureLuclinModels next to the Luclin models, then the
     // extended armour textures (Global%d_amr).
-    add("global5_chr");
+    // The "Global NPC Models" load (@0x492780) skips Global5_chr2, Global5_chr and frog_mount_chr when
+    // UseLuclinElementals is off, the option CreatePlayerActor's race swap obeys. Only this implicit load is gated:
+    // whether an entry the player's GlobalLoad.txt names explicitly is skipped too is not confirmed, so it still
+    // loads (docs/unknowns.md).
+    if (elementals) add("global5_chr");
     add("global7_chr");
     for (int i = 17; i <= 23; ++i) add("global" + std::to_string(i) + "_amr");
     // GlobalLoad_chr.txt: count, then "code,file" lines (ChrTxt_Load). When
@@ -474,7 +492,7 @@ bool add_resource(Map& map, std::unordered_map<std::string, std::uint64_t>& leve
 
 } // namespace
 
-thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
+constinit thread_local CharacterLookups* CharacterLookups::current_ = nullptr;
 
 CharacterLookups::~CharacterLookups() {
     current_ = parent_;
@@ -926,11 +944,20 @@ CharacterModel CharacterLibrary::build_actor(const std::string& code, const wld:
     AnimationClip rest;
     rest.tracks.resize(n);
     for (std::size_t i = 0; i < n; ++i) {
+        if (sk->nodes[i].name == code + "_BLD_DAG") m.blood_bone = static_cast<int>(i);
         const auto* f = w.resolve(sk->nodes[i].track);
         m.bone_names.push_back(f ? f->name : std::string());
         const auto* ref = f ? std::get_if<wld::TrackRef>(&f->data) : nullptr;
         const auto* def = ref ? w.get<wld::TrackDef>(ref->track) : nullptr;
         rest.tracks[i].push_back(def && !def->frames.empty() ? to_pose(def->frames.front()) : BonePose{});
+    }
+    const auto* race_model = game::find_model_code(code);
+    const std::array<std::string, 3> name_dags{code + "HEAD_POINT_DAG", code + "HE_DAG",
+        race_model && race_model->gender == 1 ? "HUFHEAD_POINT_DAG" : "HUMHEAD_POINT_DAG"};
+    for (const auto& name : name_dags) {
+        for (std::size_t i = 0; i < n; ++i)
+            if (sk->nodes[i].name == name) { m.name_bone = static_cast<int>(i); break; }
+        if (m.name_bone >= 0) break;
     }
 
     // Meshes: the skeleton's list (flag 0x200) or the nodes' sprites.

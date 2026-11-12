@@ -86,6 +86,20 @@ glm::vec3 wheel_follow_position(const glm::vec3& eye, const glm::vec3& back, flo
 // cameras (the wheel-follow 6, the isometric 7) count as 0.
 int toggle_view_next(int type);
 
+// Which camera is active and the wheel camera's distance (0 outside camera 6), with the distance it returns to.
+struct CameraSelection {
+    int type = kCameraFirstPerson;
+    float distance = 0.0f;
+    float pad_distance = 20.0f;
+};
+// Any camera but 6: the wheel camera's distance is kept to return to, then 0.
+void select_camera(CameraSelection& s, int type);
+// Camera 6 at the kept distance (1..max); nothing when it is already active.
+void select_behind(CameraSelection& s, float max_distance);
+// KnockedOut saves the active camera and selects overhead; GetConscious selects the saved one again: camera 6 comes
+// back at its distance, as select_behind brings it.
+void restore_camera(CameraSelection& s, int saved, float max_distance);
+
 // Camera virtual +0x2c: true for the chase and user cameras only (0x5aa530); the zoom and camera turn keys need it.
 bool camera_active(int type);
 

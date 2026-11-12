@@ -71,6 +71,11 @@ template <class F>
 TriangleHit<F> sphere_triangle(const Vec3<F>& centre, const Vec3<F>& delta, F length_inverse, F t_max, F radius,
                                const Vec3<F>& n, const Vec3<F>& v0, const Vec3<F>& v1, const Vec3<F>& v2);
 
+// The edge case alone (the capsule of radius `radius` around the segment s + e u, 0 <= u <= 1), as
+// sphere_triangle reaches it; for the tests of edges a triangle seldom hands it (no length, a tangent path).
+template <class F>
+TriangleHit<F> sphere_edge(const Vec3<F>& centre, const Vec3<F>& delta, F t_max, F radius, const Vec3<F>& s,
+                           const Vec3<F>& e);
 // GetClampPoint: the sphere stops 0.001 short of delta * t along the path.
 template <class F>
 Vec3<F> clamp_point(const Vec3<F>& from, const Vec3<F>& delta, F t);

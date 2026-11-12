@@ -193,6 +193,25 @@ int toggle_view_next(int type) {
     return next < 6 ? next : 0;
 }
 
+void select_camera(CameraSelection& s, int type) {
+    if (type != kCameraWheelFollow) {
+        if (s.distance > 0.0f) s.pad_distance = s.distance;
+        s.distance = 0.0f;
+    }
+    s.type = type;
+}
+
+void select_behind(CameraSelection& s, float max_distance) {
+    if (s.type == kCameraWheelFollow) return;
+    s.distance = std::clamp(s.pad_distance, 1.0f, max_distance);
+    s.type = kCameraWheelFollow;
+}
+
+void restore_camera(CameraSelection& s, int saved, float max_distance) {
+    if (saved == kCameraWheelFollow) select_behind(s, max_distance);
+    else select_camera(s, saved);
+}
+
 bool camera_active(int type) { return type == kCameraChase || type == kCameraUser1 || type == kCameraUser2; }
 
 void center_view(int type, GameCamera& cam) {

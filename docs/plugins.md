@@ -13,6 +13,10 @@ frame:
 A player installs scripts and plugins from GitHub with the add-on manager on the login screen (docs/addons.md), or
 puts them in the folders by hand. An add-on gets no more than the capabilities its manifest declares (below).
 
+docs/scripting-reference.md lists every TLO and member, the `mq`, `hailstone`, `ui` and `eq` functions and the
+compiled plugins' host table, hooks and structs in one place. This page explains how they fit together and what the
+rules are.
+
 The folders are in the Hailstone folder (`docs/layout.md`). A compiled plugin's binary can sit directly in
 `plugins/` or in its own folder `plugins/<name>/`; that folder, under the Hailstone folder, is also where
 `host->config_dir` points, so the plugin keeps its settings beside its binary. A script's `mq.pickle` files go to
@@ -293,7 +297,7 @@ A script can extend the client as a compiled plugin does, with no native code: t
 | `ui_function(name, fn)`, `option{name, label, min, max, get, set}`, `menu(label, command)` | for its windows, as a compiled plugin's (`ui`); `eq.Plugin("<script name>")` |
 | `player()`, `spawn(id)`, `spawns()`, `spell(id)`, `item(slot [, sub])`, `buff(i)`, `xtarget(i)`, `eqstr(id, ...)`, `zone_name(id)`, `server()` | the game state as tables (`read`); `server()` is the server this login is on (`{name, host, port, world, world_host}`, nil before the world login); `player()`'s `cur_hp` and `max_hp`, like a compiled plugin's `HailstonePlayer` and `Me.CurrentHPs`, include the items' HP that EQEmu's own HP update leaves out, as the windows show them |
 | `spell(id)` display fields | raw spell data: `range`, `ae_range`, `push_back`, `duration_formula`, `duration_cap` (ticks), `spell_type`, `resist`, `resist_adj`, `spell_icon`, `category`, `subcategory`, `cast_on_you`, `cast_on_other`, `wear_off`, and `effects` (12 1-based entries with `effect`, `base`, `base2`, `max`, `formula`). These are the loaded record values, not computed duration or effect descriptions; a script decides how to present them. |
-| `eq.DisplaySpellId(n)`, `eq.DisplayItemData(n)` | in a Lua UI window, read the actual spell ID or item in display instance 1..6, or nil when absent. Item data gives `id`, `name`, `icon`, `lore`, `value` (copper), `stack_count`, `damage`, `delay`, `item_type` and `favor`; this is the inspected item, not necessarily one in inventory. |
+| `eq.DisplaySpellId(n)`, `eq.DisplayItemData(n)` | in a Lua UI window, read the actual spell ID or item in display instance 1..6, or nil when absent. Item data gives `id`, `name`, `icon`, `lore`, `value` (copper), `stackCount`, `damage`, `delay`, `itemType` and `favor` (`stack_count` and `item_type`, the names before, are kept); this is the inspected item, not necessarily one in inventory. |
 | `right_click_item(slot [, class])`, `close_spell_book()`, `clear_spell_recovery()`, `set_window_pet(id)`, `inspect_item(id [, augments])`, `set_max_camera_distance(d)` | the client's own actions (`actions`) |
 | `chat(text [, color])`, `server_dir()`, `character_dir()`, `max_camera_distance()` | a chat line in one of the game's colours; its folders for the server and the character (below: `plugin-config/<name>/`, the name written as for `mq.configDir`; a Lua social's dry run and face get the path and make no folder). A script with the name of a compiled plugin (installed, loaded or the add-on manager's, in any case) gets `plugin-config/script%3A<name>/` instead, so it cannot read or change what the plugin keeps there (a server's key); the add-on manager installs no script and plugin of one name either (docs/addons.md) |
 | `server_rule(section, key)` | a setting from a section of the server's `hailstone.cfg` that is not the client's own (`[autocombat] hunter = off`), as written; nil when the server has no `hailstone.cfg` or does not set it |
@@ -407,6 +411,10 @@ with any compiler. On macOS the client loads only `.dylib`: CMake names a `MODUL
 plugin's own build sets `CMAKE_SHARED_MODULE_SUFFIX` to `.dylib` (or the target's `SUFFIX`); the client's build does
 this for the plugins built in its tree. It follows MacroQuest's plugin shape: export the callbacks you need and use the MQ-style helpers.
 
+**Licence.** The client is GPL-2.0-or-later, but `sdk/` is MIT (`sdk/LICENSE`), and NOTICE.md's plugin and add-on
+exception lets a plugin built against it, or a script using the `mq` module and `eq.*`, use any licence, closed ones
+included. A plugin that copies the client's own code (anything outside `sdk/`) is covered by the GPL instead.
+
 ```c
 #include "hailstone_plugin.h"
 HAILSTONE_PLUGIN   /* the two required exports and the `host` global (the host table) */
@@ -502,7 +510,8 @@ same changes as a plugin, with no change to Hailstone itself. With the `extend` 
   the profile holds it), `aa_value` (an owned alternate ability's slot value, by its ability id), and `eqstr` for a
   game string with its `%1` filled. A spawn also carries its rider, mercenary and GM flags, whether it is one of the
   player's group, its con colour and its body types. Each struct starts with its size; the client fills what both know, so a plugin built
-  for an older client keeps working. `server_info` gives the
+  for an older client keeps working. `get_buff_data_bulk` gives every buff slot of the player in one call and
+  `get_pet_buff_data_bulk` the pet window's buffs, as fixed little-endian records (Buff records below). `server_info` gives the
   server this login is on (the saved server's name, host and port, the world's name and address), so a plugin for
   one server can tell it from another that sends the same packets.
 - **take item clicks** (`item_right_click`, then the client's own with `right_click_item`, which needs `actions`)
@@ -543,6 +552,30 @@ load it. Calls added to the host table since then keep ABI 3: test `HAILSTONE_HO
 call, since a client older than the call has a shorter table. The structs a plugin passes to be filled (`HailstonePlayer`, `HailstoneSpawn`,
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
+
+Buff records: `get_buff_data_bulk(host, out, out_size)` and `get_pet_buff_data_bulk(host, out, out_size)` (with
+`read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, get_buff_data_bulk)` first) write the whole records
+that fit in `out_size` and return the bytes written. The fields are little-endian and unaligned: read them with
+`ByteReader`, never by casting a struct onto the buffer.
+
+- `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (33) bytes per buff slot, slot 0 first, for all
+  `HailstonePlayer.buff_slots` slots (the songs from slot 42, the discipline slot last), so 2079 bytes for RoF2's 63.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | u32 | spell id; 0 an empty slot, whose other fields are 0 but the counter type, -1 |
+  | 4 | u32 | the caster's spawn id |
+  | 8 | u32 | tics left, as the server sent them |
+  | 12 | u32 | hits left |
+  | 16 | u32 | the spell's type: 0 detrimental, 1 beneficial, 2 beneficial group-only (0 for a spell not in spells_us.txt) |
+  | 20 | i32 | counter type of the spell's first counter effect: -1 none, 0 disease, 1 poison, 2 curse, 3 corruption |
+  | 24 | i32 | that effect's base: the counters the buff starts with (MacroQuest's `Spell.CounterNumber`) |
+  | 28 | i32 | the counters left, as the server sent them; stock EQEmu always sends 0 |
+  | 32 | u8 | 1 for a song slot |
+
+- `get_pet_buff_data_bulk`: one record of `HAILSTONE_PET_BUFF_RECORD_SIZE` (16) bytes per buff in the pet window,
+  in the order the server sent them (0 bytes with no pet): u32 the pet window's slot, u32 spell id, u32 tics, u32 the
+  spell's type (as above).
 
 ### Connections (ABI 2)
 
@@ -706,9 +739,11 @@ a line in the log once.
 
 | Needs | `eq` functions |
 |---|---|
-| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
-| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the social editors, `eq.gamepad.set_*` |
-| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute or destroy chosen items), `eq.ItemJob`, `eq.SetItemKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
+| nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ItemJob`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
+| `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the Find window (`eq.FindOpen`) and its guide path (`eq.FindNpcPath`), the social editors, `eq.gamepad.set_*` |
+| `target` | `eq.FindNpcTarget` (the Find window's row) |
+| `move` | `eq.FindNpcWalk` (the Find window's Walk there) and `eq.ZoneExitWalk` (the zone finder's), both `/nav` walks |
+| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute, destroy or withdraw chosen items), `eq.StopItemJob`, `eq.SetItemKept` / `eq.SetItemsKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
 | checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 
 What stays shared: a plugin can still write into the tables the pack keeps in its globals (that is how its windows
@@ -882,8 +917,8 @@ leaving it out holds them to the zone-in.
 Two custom opcodes that EQEmu's `patch_RoF2.conf` does not list (`src/net/settings_packets.h`); the server's Lua
 script handles them by their wire values. Both are little-endian:
 
-- Settings request **0x1424**, client → zone, after every zone-in: `{u32 magic; u16 version 1}`
-- Settings **0x1425**, zone → client: `{u32 magic; u16 version 1; u32 flags}`. No flag is defined now
+- Settings request **0x1432**, client → zone, after every zone-in: `{u32 magic; u16 version 1}`
+- Settings **0x1433**, zone → client: `{u32 magic; u16 version 1; u32 flags}`. No flag is defined now
   (bit 0 hid the world's player count on the server list, which no UI shows any more). Later fields go after these
   and are ignored by clients that do not know them.
 

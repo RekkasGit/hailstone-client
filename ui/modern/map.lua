@@ -8,17 +8,27 @@
 --     one there, or "Mark my spot"; the list at the right centres on one, renames or removes it;
 --   * Auto Z (eq.MapAutoZ): lines and labels well above or below you fade, here and on the minimap; the arrow
 --     beside its button sets how far above (+) and below (-) you they stay whole;
---   * the cursor's location (as /loc gives it) and its distance from you, under the map.
+--   * the cursor's location (as /loc gives it) and its distance from you, under the map;
+--   * your zone's exits (eq.ZoneExits: where each zone line leads), and a route followed (lib/atlas.lua) as a banner
+--     with the next zone and "Walk there";
+--   * World: the atlas and the zone finder (lib/atlas.lua); a zone's map can be shown from there, with a bar back to
+--     your own. The window opens in the view it was left in (map.view);
+--   * Find (Hailstone's Find window, eq.FindNpcs; the find key opens the map on it): the zone's merchants, bankers,
+--     guildmasters, other services and the server's points of interest, nearest first, with a search and a filter
+--     per kind; a row clicked targets the NPC and centres the map on it, "Show path" draws the glowing guide path to
+--     it, "Walk there" walks you there (the navigator), and the NPCs button marks the listed NPCs on the map.
 -- The map's own editing (lines, labels, layers) is the classic map toolbar's: "Edit" opens it.
 local hud = dofile("lib/hud.lua")
+local atlas = dofile("lib/atlas.lua")
 local T = hud.T
 local C = T.color
 local WINDOW = "MapViewWnd"
 
-local SIDE_W, TOOL_H, STATUS_H = 220, 36, 24
+local SIDE_W, TOOL_H, STATUS_H = 250, 36, 24
 local ZMIN, ZMAX = 1, 40
 
-local M = { zoom = 1, follow = true, cx = nil, cy = nil, open = false, sel = nil, rename = nil, menuAt = nil }
+local M = { zoom = 1, follow = true, cx = nil, cy = nil, open = false, sel = nil, rename = nil, menuAt = nil, view = "zone",
+  findWas = false }
 
 local COLORS = {
   { 0.48, 0.78, 1.00 }, { 1.00, 0.80, 0.36 }, { 0.40, 0.90, 0.55 }, { 1.00, 0.42, 0.42 }, { 0.80, 0.55, 1.00 },
@@ -106,13 +116,17 @@ local function toolButton(id, x, y, w, s, label, on, tip)
   return clicked
 end
 
-local function sidebar(x, y, w, h, s, list, px, py)
-  T.Text(x, y, "Markers", C.text, T.font.normal)
-  if T.Button("##markme", x, y + 24 * s, x + w, y + 50 * s, s, "Mark my spot", { primary = true, enabled = px ~= nil }) then
+local function markersPage(x, y, w, h, s, list, px, py, own)
+  if not own then
+    T.Text(x, y + 4 * s, "Your markers are on your", C.faint, T.font.small)
+    T.Text(x, y + 20 * s, "own zone's map.", C.faint, T.font.small)
+    return
+  end
+  if T.Button("##markme", x, y, x + w, y + 26 * s, s, "Mark my spot", { primary = true, enabled = px ~= nil }) then
     M.sel = addMarker(px, py)
     M.rename = M.sel
   end
-  local ly = y + 60 * s
+  local ly = y + 36 * s
   if #list == 0 then
     T.Text(x, ly, "None yet. Right-click the map", C.faint, T.font.small)
     T.Text(x, ly + 16 * s, "to put one there.", C.faint, T.font.small)
@@ -176,6 +190,199 @@ local function sidebar(x, y, w, h, s, list, px, py)
   ui.EndChild()
 end
 
+local viewZone -- (the Zone / World section, below)
+
+-- ---------------------------------------------------------------- Find (eq.FindNpcs; lib/find.lua)
+local FL = dofile("lib/find.lua")
+local F = FL.state
+local CATS = FL.CATS
+local findRows = FL.rows
+
+-- Walk there (eq.FindNpcWalk): the navigator walks you to it; why not, in the Find page, when it cannot.
+local function walkTo(id)
+  local ok, why = eq.FindNpcWalk(id)
+  F.why = (not ok and why ~= "") and why or nil
+end
+
+local function selectNpc(r)
+  F.sel = r.id
+  eq.FindNpcTarget(r.id)
+  M.follow, M.cx, M.cy = false, r.x, r.y
+  M.zoom = math.max(M.zoom, 3)
+end
+
+local function findPage(x, y, w, h, s, rows, own)
+  if not own then
+    T.Text(x, y + 4 * s, "Find lists your own zone's", C.faint, T.font.small)
+    T.Text(x, y + 20 * s, "NPCs, on its map.", C.faint, T.font.small)
+    if T.Button("##findmine", x, y + 44 * s, x + w, y + 70 * s, s, "Back to my zone", { primary = true }) then
+      viewZone(nil)
+    end
+    return
+  end
+  local wx, wy = ui.GetWindowPos()
+  ui.SetCursorPos(x - wx, y - wy)
+  ui.SetNextItemWidth(w)
+  F.search = ui.InputTextWithHint("##findsearch", "Search names", F.search, 64)
+  -- the kinds, two to a row
+  local hidden = FL.hidden()
+  local cy, cw = y + 32 * s, (w - 4 * s) / 2
+  for i, c in ipairs(CATS) do
+    local key = c[1]
+    local bx, by = x + ((i - 1) % 2) * (cw + 4 * s), cy + ((i - 1) // 2) * 30 * s
+    if toolButton("##fc" .. key, bx, by, cw, s, FL.SHORT[key] or c[2], not hidden[key], c[2]) then
+      FL.setHidden(key, not hidden[key])
+    end
+    local col = FL.COLORS[key]
+    ui.DrawCircleFilled(bx + 9 * s, by + 13 * s, 3.5 * s, col[1], col[2], col[3], hidden[key] and 0.35 or 1)
+  end
+  local ly = cy + ((#CATS + 1) // 2) * 30 * s + 4 * s
+  local footer = 34 * s
+  ui.SetCursorPos(x - wx, ly - wy)
+  ui.BeginChild("##findlist", w, math.max(y + h - ly - footer, 1), false)
+  local rw = ui.GetContentRegionAvail()
+  local _, th = T.TextSize("Ag", T.font.small)
+  F.hover = nil
+  if #rows == 0 then
+    local any = F.search:match("%S")
+    T.Text(x, ly + 4 * s, any and "Nothing matches." or "Nothing to find here.", C.faint, T.font.small)
+    if not any then T.Text(x, ly + 20 * s, "No merchants, bankers or trainers.", C.faint, T.font.small) end
+  end
+  for i, r in ipairs(rows) do
+    local rx, ry = ui.GetCursorScreenPos()
+    local rh = 40 * s
+    ui.InvisibleButton("##fn" .. i, rw, rh)
+    local hov, on = ui.IsItemHovered(), F.sel == r.id
+    if hov then F.hover = r.id end
+    if on then
+      ui.DrawRectFilled(rx, ry, rx + rw, ry + rh, C.accent[1], C.accent[2], C.accent[3], 0.15, 6 * s)
+    elseif hov then
+      ui.DrawRectFilled(rx, ry, rx + rw, ry + rh, C.ink[1], C.ink[2], C.ink[3], 0.05, 6 * s)
+    end
+    local col = FL.COLORS[r.category] or FL.COLORS.poi
+    ui.DrawCircleFilled(rx + 12 * s, ry + rh / 2, 5 * s, col[1], col[2], col[3], 1)
+    -- quests from the server script on an NPC listed for its trade: a "!" beside its dot
+    if (r.quests or 0) > 0 and r.category ~= "quest" then
+      local q = FL.COLORS.quest
+      T.Text(rx + 12 * s, ry + 2 * s, "!", { q[1], q[2], q[3], 1 }, T.font.tiny, "center")
+      if ui.IsItemHovered() then ui.SetTooltip("Has quests too") end
+    end
+    local dist = string.format("%d", math.floor(r.distance))
+    local dw = T.TextSize(dist, T.font.tiny)
+    T.Text(rx + 24 * s, ry + 4 * s, T.Fit(r.name, rw - 34 * s - dw, T.font.small), C.text, T.font.small)
+    T.Text(rx + rw - 4 * s, ry + 6 * s, dist, C.faint, T.font.tiny, "right")
+    T.Text(rx + 24 * s, ry + 6 * s + th, T.Fit(r.subtitle ~= "" and r.subtitle or r.label, rw - 30 * s, T.font.tiny),
+      C.faint, T.font.tiny)
+    if ui.IsItemClicked(ui.Mouse.Left) then selectNpc(r) end
+    if hov and ui.IsMouseDoubleClicked(ui.Mouse.Left) then eq.FindNpcPath(r.id) end
+    if ui.IsItemClicked(ui.Mouse.Right) then
+      F.menu = r
+      ui.OpenPopup("##findmenu")
+      T.TakeRightClick()
+    end
+  end
+  if ui.BeginPopup("##findmenu") then
+    local r = F.menu
+    if r then
+      ui.TextDisabled(r.name)
+      ui.Separator()
+      if ui.MenuItem("Target") then eq.FindNpcTarget(r.id) end
+      if ui.MenuItem("Show the path") then eq.FindNpcPath(r.id) end
+      if ui.MenuItem("Walk there") then walkTo(r.id) end
+      if ui.MenuItem("Centre the map here") then M.follow, M.cx, M.cy = false, r.x, r.y end
+    end
+    ui.EndPopup()
+  end
+  ui.EndChild()
+  -- the selected NPC: its path, a walk there, and ending the path
+  local fy = y + h - footer + 6 * s
+  local pathShown = eq.FindPathShown()
+  local n = pathShown and 3 or 2
+  local bw = (w - (n - 1) * 6 * s) / n
+  local on = F.sel ~= nil
+  if T.Button("##findpath", x, fy, x + bw, fy + 26 * s, s, "Show path", { primary = true, enabled = on }) then
+    F.why = nil
+    eq.FindNpcPath(F.sel)
+  end
+  if T.Button("##findwalk", x + bw + 6 * s, fy, x + 2 * bw + 6 * s, fy + 26 * s, s, "Walk there", { enabled = on }) then
+    walkTo(F.sel)
+  end
+  if ui.IsItemHovered() then ui.SetTooltip("Walks you there (any movement key stops it)") end
+  if pathShown and T.Button("##findend", x + 2 * (bw + 6 * s), fy, x + w, fy + 26 * s, s, "End") then
+    F.why = nil
+    eq.EndFind()
+  end
+  if F.why then T.Text(x, fy - 16 * s, T.Fit("Can't walk there: " .. F.why, w, T.font.tiny), C.faint, T.font.tiny) end
+end
+
+-- The listed NPCs on the map (the NPCs button), and the selected or hovered one always.
+local function drawNpcMarks(rows, toScreen, s, all)
+  for _, r in ipairs(rows) do
+    local lit = r.id == F.sel or r.id == F.hover
+    if all or lit then
+      local sx, sy = toScreen(r.x, r.y)
+      FL.drawMark(sx, sy, r, s, lit, lit or M.zoom >= 3, T)
+    end
+  end
+end
+
+-- ---------------------------------------------------------------- Zone / World
+-- A zone's map in the Zone view (your own: nil).
+function viewZone(short)
+  eq.ShowZoneMap(short)
+  local _, here = eq.ZoneName()
+  M.view, M.zoom, M.cx, M.cy = "zone", 1, nil, nil
+  ui.SetSetting("map.view", "zone")
+  M.follow = short == nil or (here or ""):lower() == short:lower()
+end
+
+local function openWorld(short)
+  if M.view ~= "world" then
+    M.view = "world"
+    ui.SetSetting("map.view", "world")
+    atlas.Opened()
+  end
+  if short then atlas.Show(short) end
+end
+
+-- The Zone / World switch at the toolbar's left; returns its width.
+local function viewSwitch(x, y, s)
+  local bw = 58 * s
+  if toolButton("##vzone", x, y, bw, s, "Zone", M.view ~= "world", "This zone's map") then
+    M.view = "zone"
+    ui.SetSetting("map.view", "zone")
+  end
+  if toolButton("##vworld", x + bw + 2 * s, y, bw, s, "World", M.view == "world", "The atlas and the zone finder") then
+    openWorld()
+  end
+  return 2 * bw + 14 * s
+end
+
+local function worldBody(x, y, w, h, s)
+  local tx = x + viewSwitch(x, y, s)
+  local side = ui.GetSetting("map.sidebar") ~= "0"
+  local right = x + w - 30 * s
+  -- zoom, at the right
+  if toolButton("##azin", right - 34 * s, y, 30 * s, s, "+", false, "Zoom in") then
+    atlas.zoom = math.min(5, atlas.zoom * 1.25)
+  end
+  if toolButton("##azout", right - 68 * s, y, 30 * s, s, "-", false, "Zoom out") then
+    atlas.zoom = math.max(1, atlas.zoom / 1.25)
+    if atlas.zoom <= 1.0001 then atlas.cx, atlas.cy = nil, nil end
+  end
+  atlas.DrawCrumbs(tx, y, s, right - 76 * s - tx)
+  if toolButton("##side", x + w - 30 * s, y, 30 * s, s, side and ">" or "<", false, side and "Hide the zone finder" or "Show the zone finder") then
+    ui.SetSetting("map.sidebar", side and "0" or "1")
+  end
+  local mx0, my0 = x, y + TOOL_H * s
+  local mx1 = x + w - (side and (SIDE_W + 12) * s or 0)
+  local my1 = y + h - STATUS_H * s
+  atlas.DrawView(mx0, my0, mx1, my1, s, viewZone)
+  T.Text(mx0 + 4 * s, my1 + 5 * s, T.Fit("Wheel: zoom   Drag: pan   Click a region to open it, a zone to select it, double-click for its map",
+    mx1 - mx0 - 8 * s, T.font.small), C.faint, T.font.small)
+  if side then atlas.DrawFinder(mx1 + 12 * s, my0, SIDE_W * s, my1 - my0, s, viewZone) end
+end
+
 -- ---------------------------------------------------------------- window
 local OPTS = {
   size = function() return 1000, 680 end,
@@ -184,9 +391,16 @@ local OPTS = {
   place = function(sw, sh, w, h) return sw / 2 - w / 2, sh / 2 - h / 2 end,
 }
 local function body(x, y, w, h, s)
-  local list = drawnMarkers()
+  if M.view == "world" then return worldBody(x, y, w, h, s) end
+  local _, shownZone, own = eq.MapZoneShown()
+  local list = own and drawnMarkers() or {}
+  local side = ui.GetSetting("map.sidebar") ~= "0"
+  local findTab = ui.GetSetting("map.sideTab") ~= "markers"
+  local showNpcs = FL.marks()
+  -- Find's NPCs are your own zone's: listed and marked only on its map
+  local npcs = (own and ((side and findTab) or showNpcs)) and findRows() or {}
   -- the toolbar
-  local tx = x
+  local tx = x + viewSwitch(x, y, s)
   local zoomOut = toolButton("##zout", tx, y, 30 * s, s, "-", false, "Zoom out")
   tx = tx + 34 * s
   T.Text(tx + 28 * s, y + 6 * s, string.format("x%.1f", M.zoom), C.muted, T.font.small, "center")
@@ -205,6 +419,10 @@ local function body(x, y, w, h, s)
     ui.SetSetting("map.showMarkers", showMarks and "0" or "1")
   end
   tx = tx + 84 * s
+  if toolButton("##npcs", tx, y, 60 * s, s, "NPCs", showNpcs, "Mark the NPCs Find lists on the map") then
+    ui.SetSetting("map.npcMarks", showNpcs and "0" or "1")
+  end
+  tx = tx + 64 * s
   local autoZ = eq.MapAutoZ()
   if toolButton("##autoz", tx, y, 64 * s, s, "Auto Z", autoZ, "Fade what is above or below you") then eq.MapAutoZ(not autoZ) end
   tx = tx + 66 * s
@@ -217,9 +435,9 @@ local function body(x, y, w, h, s)
   if toolButton("##edit", tx, y, 54 * s, s, "Edit", false, "The map toolbar (lines, labels, layers)") then
     eq.ShowWindow("MapToolbarWnd", true)
   end
-  local side = ui.GetSetting("map.sidebar") ~= "0"
-  if toolButton("##side", x + w - 30 * s, y, 30 * s, s, side and ">" or "<", false, side and "Hide the markers" or "Show the markers") then
+  if toolButton("##side", x + w - 30 * s, y, 30 * s, s, side and ">" or "<", false, side and "Hide the side panel" or "Find and markers") then
     ui.SetSetting("map.sidebar", side and "0" or "1")
+    if side and findTab then eq.FindOpen(false); M.findWas = false end
   end
   if zoomIn then M.zoom = math.min(ZMAX, M.zoom * 1.5) end
   if zoomOut then M.zoom = math.max(ZMIN, M.zoom / 1.5) end
@@ -258,6 +476,9 @@ local function body(x, y, w, h, s)
         T.Text(sx + 9 * s, sy - 8 * s, m.name, TEXT_COLORS[m.color] or TEXT_COLORS[1], T.font.small)
       end
     end
+    drawNpcMarks(npcs, toScreen, s, showNpcs)
+    -- the exits (your own zone's)
+    if own and ui.GetSetting("map.exits") ~= "0" then atlas.DrawExits(toScreen, s) end
     if hovered then cursorMap = { toMap(mouseX, mouseY) } end
     -- panning
     local io = ui.GetIO()
@@ -283,7 +504,7 @@ local function body(x, y, w, h, s)
       M.follow = false
       M.cx, M.cy = toMap(mouseX, mouseY)
     end
-    if hovered and ui.IsMouseClicked(ui.Mouse.Right) and not ui.GetIO().alt then
+    if own and hovered and ui.IsMouseClicked(ui.Mouse.Right) and not ui.GetIO().alt then
       M.menuAt = { toMap(mouseX, mouseY) }
       ui.OpenPopup("##mapmenu")
       T.TakeRightClick()
@@ -291,6 +512,23 @@ local function body(x, y, w, h, s)
     if not M.follow and M.zoom <= ZMIN + 0.001 and not M.cx then M.cx, M.cy = nil, nil end
   else
     T.Text(ccx, ccy - 8 * s, "No map for this zone.", C.muted, T.font.small, "center")
+  end
+  -- another zone's map: a bar back to yours; your own: the route followed
+  if not own then
+    local name = eq.MapZoneShown()
+    local bx0, by0, bx1 = mx0 + 10 * s, my0 + 8 * s, mx1 - 10 * s
+    ui.DrawRectFilled(bx0, by0, bx1, by0 + 34 * s, 0, 0, 0, 0.6, 8 * s)
+    local _, th = T.TextSize("Ag", T.font.small)
+    T.Text(bx0 + 12 * s, by0 + (34 * s - th) / 2, T.Fit("Viewing " .. (name or shownZone or ""), bx1 - bx0 - 260 * s, T.font.small),
+      C.text, T.font.small)
+    if T.Button("##mapback", bx1 - 120 * s, by0 + 4 * s, bx1 - 6 * s, by0 + 30 * s, s, "Back to my zone", { primary = true }) then
+      viewZone(nil)
+    end
+    if T.Button("##mapatlas", bx1 - 236 * s, by0 + 4 * s, bx1 - 126 * s, by0 + 30 * s, s, "On the atlas") then
+      openWorld(shownZone)
+    end
+  else
+    atlas.DrawRouteBanner(mx0, my0, mx1, s, openWorld)
   end
   ui.PopClipRect()
   ui.DrawRect(mx0, my0, mx1, my1, C.ink[1], C.ink[2], C.ink[3], 0.08, 8 * s, 1)
@@ -308,6 +546,9 @@ local function body(x, y, w, h, s)
       if eq.FindPathShown() and ui.MenuItem("End the find path") then eq.EndFind() end
       if ui.MenuItem("Centre here") then M.follow, M.cx, M.cy = false, at[1], at[2] end
       if ui.MenuItem("Back to me") then M.follow = true end
+      ui.Separator()
+      local showExits = ui.GetSetting("map.exits") ~= "0"
+      if ui.MenuItem("Show the zone's exits", showExits) then ui.SetSetting("map.exits", showExits and "0" or "1") end
     end
     ui.EndPopup()
   end
@@ -325,7 +566,21 @@ local function body(x, y, w, h, s)
       d and string.format("   %d away", math.floor(d)) or ""), C.muted, T.font.small, "right")
   end
 
-  if side then sidebar(mx1 + 12 * s, my0, SIDE_W * s, my1 - my0, s, list, px, py) end
+  if side then
+    local sx0, sw = mx1 + 12 * s, SIDE_W * s
+    local tw = (sw - 4 * s) / 2
+    if toolButton("##tabfind", sx0, my0, tw, s, "Find", findTab, "Merchants, bankers, trainers and more") and not findTab then
+      ui.SetSetting("map.sideTab", "find")
+      eq.FindOpen(true); M.findWas = true
+    end
+    if toolButton("##tabmarks", sx0 + tw + 4 * s, my0, tw, s, "Markers", not findTab, "Your own markers") and findTab then
+      ui.SetSetting("map.sideTab", "markers")
+      eq.FindOpen(false); M.findWas = false
+    end
+    local py0 = my0 + 34 * s
+    if findTab then findPage(sx0, py0, sw, my1 - py0, s, npcs, own)
+    else markersPage(sx0, py0, sw, my1 - py0, s, list, px, py, own) end
+  end
 
   -- renaming a marker
   if M.rename then
@@ -354,13 +609,44 @@ end
 ui.window("Map", function()
   if not eq.InGame() then return end
   local shown = eq.WindowShown(WINDOW)
+  -- Find (eq.FindOpen) is this window's Find page: the find key opening it shows the map on that page, closing it
+  -- closes the map, and the map closing closes it.
+  local findOpen = eq.FindOpen()
+  if findOpen ~= M.findWas then
+    M.findWas = findOpen
+    if findOpen then
+      ui.SetSetting("map.sidebar", "1")
+      ui.SetSetting("map.sideTab", "find")
+      -- Find is your own zone's: the Zone view on your own map
+      M.view = "zone"
+      ui.SetSetting("map.view", "zone")
+      local _, _, own = eq.MapZoneShown()
+      if not own then eq.ShowZoneMap(nil) end
+      if not shown then eq.ShowWindow(WINDOW, true) end
+    elseif shown and ui.GetSetting("map.sideTab") ~= "markers" then
+      eq.ShowWindow(WINDOW, false)
+      shown = false
+    end
+  end
   if not shown then
+    if M.open then
+      -- closed while showing another zone's map: your own again (the minimap draws the same map)
+      local _, _, own = eq.MapZoneShown()
+      if not own then eq.ShowZoneMap(nil) end
+      if findOpen then
+        eq.FindOpen(false)
+        M.findWas = false
+      end
+    end
     M.open = false
     return
   end
-  if not M.open then -- each time it opens: the whole zone, following you
+  if not M.open then -- each time it opens: the whole zone, following you, in the view it was left in
     M.open, M.zoom, M.follow = true, 1, true
+    M.view = ui.GetSetting("map.view") == "world" and "world" or "zone"
+    if M.view == "world" then atlas.Opened() end
   end
-  local zone = eq.ZoneName() or ""
+  local zone = eq.MapZoneShown() or ""
+  if M.view == "world" then zone = "World" end
   hud.Dialog(WINDOW, zone ~= "" and zone or "Map", OPTS, body)
 end)

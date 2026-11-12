@@ -375,8 +375,7 @@ public:
         else if (id == "AMP_WalkButton") out.shown = c.running();
         else if (id == "AMP_InviteButton") out.shown = c.group().inviter.empty();
         else if (id == "AMP_FollowButton") out.shown = !c.group().inviter.empty();
-        else if (id == "AMP_EndFindButton") out.shown = false;  // no /find path running
-        else if (id == "AMP_FindButton") out.enabled = false;   // /find is not built
+        else if (id == "AMP_EndFindButton") out.shown = c.player_path().active() || host.guide_line;
         else if (id == "ACP_MeleeAttackButton" || id == "ACP_RangeAttackButton") {
             // CombatPageOnProcessFrame: both checked while the primary swing is not ready or auto fire is on.
             HostButtonQueries q(host);
@@ -441,6 +440,11 @@ public:
         else if (id == "AMP_StandButton") c.set_sitting(false);
         else if (id == "AMP_RunButton") c.set_running(true);
         else if (id == "AMP_WalkButton") c.set_running(false);
+        else if (id == "AMP_FindButton") menu(game::MenuButton::Find); // the find key: Hailstone's Find window
+        else if (id == "AMP_EndFindButton") {
+            if (c.player_path().active()) c.stop_find_path();
+            if (host.guide_line && host.end_guide) host.end_guide();
+        }
         else if (id == "ACP_MeleeAttackButton" || id == "ACP_RangeAttackButton") {
             game::HotButton b;
             b.type = game::HotButtonType::WeaponSlot;

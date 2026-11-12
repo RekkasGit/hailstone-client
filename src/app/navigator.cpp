@@ -434,6 +434,17 @@ std::optional<float> Navigator::path_length(const glm::vec3& world) const {
     return len;
 }
 
+std::optional<std::vector<glm::vec3>> Navigator::plan_between(const glm::vec3& from, const glm::vec3& to) {
+    ensure_zone();
+    if (!zone_) return std::nullopt;
+    nav::PathResult r = zone_->mesh().find_path(from, to, options_);
+    if (!r.found()) {
+        if (!zone_->complete()) return std::nullopt; // the tiles on the way may not be built yet
+        return std::vector<glm::vec3>{};
+    }
+    return std::move(r.points);
+}
+
 std::optional<std::uint8_t> Navigator::door_in_way(const Frame& f) const {
     // A body-sized sphere a few units on towards the next corner (along it in 3D, so a swimmer's way up or down
     // counts, then level), as the movement sweep meets the doors.

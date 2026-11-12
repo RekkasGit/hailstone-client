@@ -65,6 +65,11 @@ struct MeshFile {
 
 // Throws std::runtime_error when malformed.
 MeshFile parse_mesh(std::span<const std::byte> data, std::string_view name);
+// Preserve an EQG attachment's bind-space vertices and influences on a WLD
+// body. The resulting mesh uses CharacterMesh's attachment bone palette.
+bool bind_part_to_wld(const MeshFile& file, std::string_view body_code,
+                      std::span<const std::string> body_bones, int anchor,
+                      const glm::mat4& adjustment, CharacterMesh& mesh);
 
 struct Track {
     std::string bone;

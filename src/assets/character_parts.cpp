@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <map>
 #include <set>
+#include <stdexcept>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -300,7 +301,17 @@ private:
     void append(CharacterMesh& piece, std::uint32_t tint) {
         auto vbase = static_cast<std::uint32_t>(mesh_.vertices.size());
         auto mbase = static_cast<std::uint32_t>(mesh_.materials.size());
-        mesh_.vertices.insert(mesh_.vertices.end(), piece.vertices.begin(), piece.vertices.end());
+        const auto body_bones = model_.bone_names.size();
+        const auto prior_bindings = mesh_.skin_bindings.size();
+        if (body_bones + prior_bindings + piece.skin_bindings.size() > 0x10000u)
+            throw std::runtime_error("too many attachment bones");
+        for (auto vertex : piece.vertices) {
+            if (!piece.skin_bindings.empty())
+                for (auto& bone : vertex.bones)
+                    if (bone >= body_bones) bone = static_cast<std::uint16_t>(bone + prior_bindings);
+            mesh_.vertices.push_back(vertex);
+        }
+        mesh_.skin_bindings.insert(mesh_.skin_bindings.end(), piece.skin_bindings.begin(), piece.skin_bindings.end());
         for (const auto& m : piece.materials) {
             mesh_.materials.push_back(m);
             mesh_.tints.push_back(render_tint(tint));
@@ -388,54 +399,10 @@ private:
             // bone; unnamed ones follow the dag point.
             auto file = lib_.eqg_ ? lib_.eqg_->part_mesh(a.name) : nullptr;
             if (!file) return false;
-            const std::size_t n = file->bones.size();
-            auto parents = eqg_character::part_bone_parents(*file);
-            if (!parents) {
-                log::debug("EQG part {}: cycle in bone hierarchy", a.name);
-                return false;
-            }
-            const std::vector<std::int32_t>& parent = *parents;
-            std::vector<glm::mat4> world(n, glm::mat4(1.0f));
-            std::vector<bool> done(n, false);
-            auto local = [&](std::size_t i) {
-                const BonePose& b = file->bones[i].bind;
-                return glm::translate(glm::mat4(1.0f), b.translation) * glm::mat4_cast(b.rotation) *
-                       glm::scale(glm::mat4(1.0f), b.scale);
-            };
-            for (std::size_t pass = 0; pass < n; ++pass)
-                for (std::size_t i = 0; i < n; ++i) {
-                    if (done[i]) continue;
-                    std::int32_t p = parent[i];
-                    if (p < 0) world[i] = local(i), done[i] = true;
-                    else if (done[static_cast<std::size_t>(p)]) world[i] = world[static_cast<std::size_t>(p)] * local(i), done[i] = true;
-                }
-            std::vector<int> body(n, -1);
-            for (std::size_t i = 0; i < n; ++i) {
-                std::string target = model_.code + upper(file->bones[i].name) + "_TRACK";
-                for (std::size_t b = 0; b < model_.bone_names.size(); ++b)
-                    if (upper(model_.bone_names[b]) == target) body[i] = static_cast<int>(b);
-            }
             std::vector<std::size_t> all(file->pieces.size());
             for (std::size_t i = 0; i < all.size(); ++i) all[i] = i;
             eqg_character::append_pieces(*file, all, piece);
-            for (auto& v : piece.vertices) {
-                std::size_t k = 0;
-                for (std::size_t j = 1; j < 4; ++j)
-                    if (v.weights[static_cast<glm::length_t>(j)] > v.weights[static_cast<glm::length_t>(k)]) k = j;
-                std::int32_t b = v.bones[k] < n ? static_cast<std::int32_t>(v.bones[k]) : -1;
-                while (b >= 0 && body[static_cast<std::size_t>(b)] < 0) b = parent[static_cast<std::size_t>(b)];
-                glm::mat4 to_bone = adjust;
-                int target = anchor;
-                if (b >= 0) {
-                    to_bone = adjust * glm::inverse(world[static_cast<std::size_t>(b)]);
-                    target = body[static_cast<std::size_t>(b)];
-                }
-                v.position = glm::vec3(to_bone * glm::vec4(v.position, 1.0f));
-                glm::vec3 nn = glm::mat3(to_bone) * v.normal;
-                v.normal = glm::dot(nn, nn) > 1e-12f ? glm::normalize(nn) : v.normal;
-                v.bones = {static_cast<std::uint16_t>(target), 0, 0, 0};
-                v.weights = {1.0f, 0.0f, 0.0f, 0.0f};
-            }
+            if (!eqg_character::bind_part_to_wld(*file, model_.code, model_.bone_names, anchor, adjust, piece)) return false;
             // EQG triangles wind the other way round from WLD ones (the actor renderer turns the front face for
             // EQG models), so on a WLD body each is reversed, or only its inside faces would be drawn.
             for (std::size_t i = 0; i + 2 < piece.indices.size(); i += 3) std::swap(piece.indices[i + 1], piece.indices[i + 2]);
@@ -492,7 +459,7 @@ private:
     }
 };
 
-namespace {
+namespace detail {
 
 game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, const game::AppearanceData* data) {
     game::ActorLook look;
@@ -510,22 +477,26 @@ game::ActorLook look_of(const CharacterModel& model, const game::Appearance& a, 
     look.beard = a.beard;
     look.texture_type = a.texture;
     look.head_type = a.helm;
+    // The record goes over word for word, as RefreshEquipSlot @00594e50 stores the wire's ArmorProperties at
+    // ActorClient +0x8c (PlayerClient_SetActorEquipmentSlot @0042e6f0): EQEmu's Unknown1 is the variation and
+    // its EliteMaterial the +8 material UpdateNewArmorSlot overlays (A_<code>_<a>_<b>_S<c>).
     for (std::size_t i = 0; i < 9; ++i) {
         look.tint[i] = a.tint[i];
         look.armor[i].material = static_cast<std::int32_t>(a.material[i]);
+        look.armor[i].variation = static_cast<std::int32_t>(a.material_variation[i]);
+        look.armor[i].material2 = static_cast<std::int32_t>(a.elite_material[i]);
         look.armor[i].new_armor_id = a.hero_forge[i];
+        look.armor[i].new_armor_type = a.new_armor_type[i];
     }
     look.show_helm = a.show_helm;
     look.heritage = static_cast<std::int32_t>(a.drakkin_heritage);
     look.tattoo = static_cast<std::int32_t>(a.drakkin_tattoo);
     look.details = static_cast<std::int32_t>(a.drakkin_details);
-    // ActorNewArmorFilter: players (8) and NPCs (0x10); the spawn's kind is
-    // not known here, so hero's forge shows when either bit is set (24 by default).
-    look.new_armor_filtered = data ? (data->new_armor_filter & 0x18u) == 0 : true;
+    look.new_armor_filtered = game::appearance_new_armor_filtered(a, data ? data->new_armor_filter : 0u);
     return look;
 }
 
-} // namespace
+} // namespace detail
 
 void CharacterLibrary::dress_luclin(const CharacterModel& model, const game::Appearance& a, CharacterMesh& mesh) const {
     // The palette starts as the model's own materials: <code><part><material>
@@ -548,7 +519,7 @@ void CharacterLibrary::dress_luclin(const CharacterModel& model, const game::App
         mesh.tints[mi] = 0;
     }
     DressEnv env(*this, model, mesh, false);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.luclin_model = true;
     game::find_eye_materials(look, env); // UpdateDAGPointers, when the actor is made
     // ActorClient::SwapAllBodyMaterials @0x40bf80: every body slot from
@@ -574,7 +545,7 @@ std::uint32_t CharacterLibrary::try_fheb(const CharacterModel& model, game::Appe
     Lock lock(*mutex_);
     CharacterMesh scratch = model.default_mesh();
     DressEnv env(*this, model, scratch, model.eqg);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.luclin_model = model.luclin;
     game::find_eye_materials(look, env);
     std::uint32_t took = color ? game::set_fheb_color(look, env, value, type, 0) : game::set_fheb(look, env, value, type, 0);
@@ -590,7 +561,7 @@ std::uint32_t CharacterLibrary::try_fheb(const CharacterModel& model, game::Appe
 
 void CharacterLibrary::dress_new_model(const CharacterModel& model, const game::Appearance& a, CharacterMesh& mesh) const {
     DressEnv env(*this, model, mesh, true);
-    game::ActorLook look = look_of(model, a, appearance_data());
+    game::ActorLook look = detail::look_of(model, a, appearance_data());
     look.new_style = true;
     game::apply_facial_features(look, env);
     env.build();

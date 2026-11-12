@@ -42,6 +42,8 @@ public:
     CastQueries(GameConnection& c, cast::State& st, std::uint8_t) : c_(c), st_(st) {
         if (c.profile_) {
             game::mechanics::LiveState live;
+            live.drunkenness = c.drunkenness_;
+            live.owner_status = c.pstatus_.owner_status;
             live.level = c.pstatus_.level;
             live.pvp_rules = c.pvp_rules_;
             live.player_id = c.world_.player_id;

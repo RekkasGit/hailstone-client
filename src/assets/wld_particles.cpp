@@ -27,6 +27,7 @@ std::optional<std::uint32_t> particle_material_alias(std::uint32_t handle) {
     // The default installer writes 0x80000017 -> 0x011b0507; the setter keeps
     // the low 31 bits as the index (< 42) into the state cache's table.
     if (handle == 0x80000017u) return 0x011b0507u;
+    if (handle == 0x80000018u) return 0x01080507u; // blood's alpha material (default installer 0x1009abe1)
     return std::nullopt;
 }
 

@@ -9,6 +9,23 @@
 
 using namespace hailstone::render;
 
+TEST_CASE("Texture claims: eviction permits a reload without an old job releasing the new claim") {
+    auto claims = std::make_shared<TextureClaims>();
+    ClaimHold old_result(claims);
+    REQUIRE(old_result.claim("armor"));
+    claims->installed("armor");
+    CHECK_FALSE(claims->claim("armor"));
+    claims->evicted("armor");
+    ClaimHold replacement(claims);
+    REQUIRE(replacement.claim("armor"));
+    old_result = ClaimHold(); // an old upload result outlives the evicted image
+    CHECK(claims->pending("armor"));
+    CHECK_FALSE(claims->claim("armor"));
+    replacement = ClaimHold(); // a cancelled replacement returns its own generation
+    CHECK_FALSE(claims->pending("armor"));
+    CHECK(claims->claim("armor"));
+}
+
 TEST_CASE("Texture claims: a dropped job gives its claims back; installed textures stay claimed") {
     auto claims = std::make_shared<TextureClaims>();
     {

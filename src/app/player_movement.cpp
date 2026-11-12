@@ -28,6 +28,34 @@ namespace hailstone::app {
 
 namespace mech = game::mechanics;
 
+std::int32_t remote_collision_type(const game::Spawn& spawn, const glm::vec3& from, const glm::vec3& to,
+                                    const MoveWorld& world) {
+    if (!world.collision_loaded()) return 0;
+    const float radius = mech::sweep_radius({spawn.heights.avatar_height, spawn.race});
+    const float lift = mech::collision_height_offset(spawn.stand_state, spawn.body_wet, spawn.race,
+                                                     spawn.heights.avatar_height, radius);
+    const glm::vec3 offset(0.0f, 0.0f, lift);
+    const MoveWorld::Sweep hit = world.sweep(from + offset, to + offset, radius);
+    std::int32_t type = 0;
+    auto contact = [&](std::int32_t actor_type) {
+        game::HitActor actor;
+        actor.type = actor_type;
+        actor.has_owner = true;
+        actor.collisions_enabled = true;
+        actor.kind = 1;
+        actor.player_found = true;
+        if (auto result = game::collision_hit_set_colliding_type(actor, false); result.colliding_type)
+            type = *result.colliding_type;
+    };
+    if (hit.ladder_hit) contact(game::kActorLadder);
+    // ZoneMoveWorld visits doors after the zone's placed ladder geometry, just as the local adapter does.
+    for (const auto& door : hit.door_hits) {
+        (void)door;
+        contact(game::kActorSwitch);
+    }
+    return type;
+}
+
 namespace {
 
 // Zone flags from the original's zone table (ZoneManager::ZoneManager
@@ -138,21 +166,6 @@ mech::MovementFacts fallback_facts(const net::GameConnection& conn, const net::P
 std::uint8_t region_type(const assets::ZoneRegions* regions, const glm::vec3& p) {
     if (!regions || regions->empty()) return 0;
     return static_cast<std::uint8_t>(regions->lookup(p).flags & 0xff);
-}
-
-// PlayerClient vf94 @0x5063d0, the height the collision sphere's centre sits
-// above the spawn's z: 0 ducking (StandState 0x6f), dead (0x78) or in a
-// liquid; else 1.9, or for barbarians, trolls and ogres (races 2, 9, 10)
-// AvatarHeight x 0.5 when that is more; then at least the actor's bounding
-// radius (not for a vehicle race). The original's AvatarHeight x 0.75 branch
-// is only reached with a negative AvatarHeight and then gives 1.9 too.
-float height_offset(std::uint8_t stand_state, std::uint8_t body_wet, std::uint32_t race, float avatar_height,
-                    float radius) {
-    if (stand_state == 0x6f || stand_state == 0x78 || body_wet >= 5) return 0.0f;
-    float h = 1.9f;
-    if (race == 2 || race == 9 || race == 10) h = std::max(avatar_height * 0.5f, 1.9f);
-    if (0.0f < h) h = std::max(h, radius);
-    return h;
 }
 
 using mech::Vec3f;
@@ -425,7 +438,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
     RoomCheck out;
     if (!world) return out;
     const mech::PhysicsBody& body = ctl_.body;
-    float height = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    float height = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     PlayerCollision pc(collision_, world, actor_, radius_, height, now, false);
     pc.avatar_height = floor_offset;
     pc.special_height = special_height;
@@ -459,7 +472,7 @@ PlayerMovement::RoomCheck PlayerMovement::can_i_fit_here_now(const MoveWorld* wo
 // starting below the top finds nothing, and the player hangs there with its feet inside the step, unable to move.
 float PlayerMovement::floor_probe_lift(float floor_offset) const {
     const mech::PhysicsBody& body = ctl_.body;
-    const float h = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    const float h = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     return std::max(0.0f, h - radius_);
 }
 
@@ -483,6 +496,8 @@ void PlayerMovement::reset(const glm::vec3& feet, float yaw) {
     ctl_.reset(feet, game::yaw_to_heading(yaw));
     last_second_ = 0;
     last_step_ = 0;
+    drunken_motion_ = {};
+    drunkenness_motion_updates_ = 0;
     air_ = -1;
     feet_regions_ = {};
     player_ceiling_.reset();
@@ -500,7 +515,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
                                              std::uint32_t now, net::GameConnection& conn,
                                              const assets::ZoneRegions* regions, float floor_offset,
                                              const MoveWorld* world, const game::mechanics::Character* character,
-                                             std::uint32_t step_ms) {
+                                             std::uint32_t step_ms, bool local_passive) {
     // The character's values (game/mechanics/movement_inputs.h): TotalEffect, STR / STA with items and
     // buffs, adjusted skills, the heroic AGI bonus, CalcCarriedWeight, Cur_HP / Max_HP; the profile and the
     // buffs' base values before the character is built.
@@ -513,18 +528,45 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     // Riding (game/mounts.h): the body is the local player's mount, pinstControlledPlayer; ProcessControls, the
     // jump and the physics run on it with its speeds, heights and race, and the rider's character.
     const game::Spawn* mount = nullptr;
-    if (auto it = conn.world().spawns.find(conn.controlled_id()); conn.controlled_id() && it != conn.world().spawns.end())
-        mount = &it->second;
-    const game::Spawn* cp = mount ? mount : me;
+    const std::uint32_t controlled = local_passive ? (me ? me->mount_id : 0) : conn.controlled_id();
+    const bool eye = !local_passive && conn.eye_id() != 0;
+    const game::Spawn* remote = nullptr;
+    if (auto it = conn.world().spawns.find(controlled); controlled && it != conn.world().spawns.end())
+        remote = &it->second;
+    if (!eye) mount = remote;
+    const game::Spawn* cp = remote ? remote : me;
     ctl_.body.mount_race = mount && game::is_mount_race(mount->race);
     const net::PlayerProfile* prof = conn.profile() ? &*conn.profile() : nullptr;
     const net::PlayerStatus& st = conn.player_status();
+    if (!eye && conn.drunkenness_motion_updates() != drunkenness_motion_updates_) {
+        drunkenness_motion_updates_ = conn.drunkenness_motion_updates();
+        mech::update_drunken_motion(body, drunken_motion_, conn.drunkenness(), !mount);
+    }
     std::uint16_t zone = conn.zone_id();
 
     // Mouse look sets the heading (HandleMouseLook); the pitch is CameraAngle.
     body.heading = game::yaw_to_heading(yaw);
     body.camera_angle = pitch * 256.0f / glm::pi<float>();
     const float camera_angle_in = body.camera_angle;
+    // A stun starting, sitting, looting or lying down stops the body (GameConnection::speed_stops): ProcessControls
+    // only stops asking for speed while it cannot move, so the speed the body had would carry it on.
+    if (conn.speed_stops() != speed_stops_) {
+        body.speed_run = 0.0f;
+        if (st.owner_status == 3) body.velocity = glm::vec3(0.0f);
+    }
+    if (conn.turn_stops() != turn_stops_) body.speed_heading = 0.0f;
+    // StunMe's lean: the turn rate 32, which turns the stunned player until it can move again.
+    if (conn.stun_leans() != stun_leans_) body.speed_heading = 32.0f;
+    speed_stops_ = conn.speed_stops();
+    turn_stops_ = conn.turn_stops();
+    stun_leans_ = conn.stun_leans();
+    if (local_passive) {
+        body.speed_run = body.speed_heading = 0.0f;
+        auto& passive = ctl_.controls_state();
+        passive.keys = {};
+        passive.autorun = passive.strafing = 0;
+        passive.strafe_scale = passive.held_scale = 0.0f;
+    }
 
     // Vehicle_BeforeStep @0x8d2220 / Vehicle_AfterStep @0x8d22e0 around the vehicle's step: a body standing on a
     // vehicle (+0x150) goes into the vehicle's frame as it was and back into the world as it is now, so it keeps its
@@ -616,6 +658,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     if (cp && cp->run_speed > 0.0f) ch.run_speed = cp->run_speed;
     if (cp && cp->walk_speed > 0.0f) ch.walk_speed = cp->walk_speed;
     ch.riding = mount != nullptr;
+    ch.remote_control = eye;
     ch.in_combat = conn.in_combat();
     ch.avatar_height = cp ? cp->heights.avatar_height : floor_offset;
     ch.sneak_speed = mech::sneak_speed(cls, level);
@@ -628,9 +671,15 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     ch.dead = st.dead;
     ch.frozen = conn.sitting() || st.dead || conn.stunned();
     ch.interface_locked = conn.interface_locked();
+    if (local_passive) ch.interface_locked = true; // the local body still falls, swims and takes environment damage
+    if (eye) {
+        ch.frozen = conn.stunned() || st.owner_status > 0 || (cp && cp->stand_state == net::kStandFreeze);
+        ch.weight_factor = 1.0f;
+    }
     // PlayerZoneClient's Sneak flag: the server's SpawnAppearance 15 (Handle_OP_SpawnAppearance), kept by the
     // abilities code. Sneaking uses sneak_speed and halves the back speed (controls.h).
     ch.sneaking = conn.sneaking();
+    if (eye) ch.sneaking = false;
     ch.race = static_cast<std::int32_t>(race_);
     ch.crouch_window = crouch_window_;
     std::int32_t rate = mech::movement_rate_effect(facts.spa99, facts.spa3);
@@ -639,7 +688,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         mount ? mech::eqspa_movement_rate(rate, me && me->run_speed > 0.0f ? me->run_speed : 0.7f, ch.run_walk != 0,
                                           facts.spa271, mount->run_speed)
               : mech::eqspa_movement_rate(rate, ch.run_speed, ch.run_walk != 0, facts.spa271);
-    ch.speed_multiplier = mount ? mr.mount_multiplier.value_or(0.0f) : mr.speed_multiplier;
+    ch.speed_multiplier = eye ? 0.0f : (mount ? mr.mount_multiplier.value_or(0.0f) : mr.speed_multiplier);
     ch.spa290 = facts.spa290;
     std::int32_t carried = facts.carried;
     mech::WeightInput w;
@@ -657,7 +706,8 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
 
     // Levitation (UpdateLevitationState after each effect cache rebuild):
     // SpellCache_GetBuffValue(57, 0) gives mode 2, else (57, 1) mode 5.
-    body.fly_mode = mech::levitation_mode(body.fly_mode, facts.levitate_mode2 != 0, facts.levitate_mode5 != 0,
+    if (eye && cp) body.fly_mode = static_cast<mech::FlyMode>(cp->fly_mode);
+    else body.fly_mode = mech::levitation_mode(body.fly_mode, facts.levitate_mode2 != 0, facts.levitate_mode5 != 0,
                                           std::nullopt,
                                           in(kNoLevitateZones, zone));
 
@@ -680,13 +730,14 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     ci.forward_sits = conn.client_option(game::ClientOption::AllowAutoStand);
     ci.loot_window_open = conn.loot_session().has_value();
     ci.auto_duck = auto_duck_.active != 0;
-    ch.sitting = conn.sitting();
-    ch.looting = st.stand_state == net::kStandLooting;
+    ch.sitting = eye ? cp && cp->stand_state == net::kStandSitting : conn.sitting();
+    ch.looting = eye ? cp && cp->stand_state == net::kStandLooting : st.stand_state == net::kStandLooting;
     // Feigning (115) reaches ProcessControls as itself: neither standing nor ducking, it cannot move, and the
     // forward key's auto-stand (sitting only) leaves it lying.
-    ch.lying = st.stand_state == net::kStandLying;
+    ch.lying = eye ? cp && cp->stand_state == net::kStandLying : st.stand_state == net::kStandLying || st.owner_status == 3;
     // The crouch is the player's stand state (111), from the DUCK key or the standing jump.
-    ctl_.crouching = conn.player_status().stand_state == net::kStandCrouching;
+    ctl_.crouching = eye ? cp && cp->stand_state == net::kStandCrouching
+                         : conn.player_status().stand_state == net::kStandCrouching;
     last_ch_ = ch;
     last_facts_ = facts;
     mech::ControlEvents ev;
@@ -754,6 +805,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     // dropped stretch after a hitch took).
     if (last_step_ == 0) last_step_ = now - static_cast<std::uint32_t>(elapsed_ms);
     ctl_.step(env, static_cast<float>(step_ms ? step_ms : now - last_step_), ch, hover_floor);
+    if (!eye && !mount) mech::apply_drunken_motion(body, drunken_motion_);
     last_step_ = now;
 
     // The landing check (PlayerZoneClient_LandingAndFallCheck, PlayerClient
@@ -780,9 +832,9 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         out.land_sound = land.land_sound;
         if (land.landed) out.landing_speed = vz;
         // A ridden mount lands as the controlled spawn: IHaveFallen does nothing for a spawn without a PcClient.
-        if (land.fell && !mount) out.fall_damage = land.damage.damage;
-        if (land.damage.safe_fall_used && !mount) conn.report_safe_fall();
-        if (land.damage.damage > 0 && !mount)
+        if (land.fell && !mount && !eye) out.fall_damage = land.damage.damage;
+        if (land.damage.safe_fall_used && !mount && !eye) conn.report_safe_fall();
+        if (land.damage.damage > 0 && !mount && !eye)
             conn.report_env_damage(static_cast<std::uint32_t>(land.damage.damage), mech::kEnvDamageFalling);
     } else {
         // Nothing below (outside the zone's geometry): hold the height.
@@ -800,7 +852,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     cs.floor_height = body.floor_height;
     cs.body_wet = body.body_wet;
     cs.colliding_type = body.colliding_type;
-    float height = height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
+    float height = mech::collision_height_offset(ctl_.stand_state(), body.body_wet, race_, floor_offset, radius_);
     lift_ = floor_offset + height;
     PlayerCollision pc(cs, world, actor_, radius_, height, now,
                        mech::can_swim_jump_now(ctl_.next_swim(), now));
@@ -850,7 +902,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         cs.physics[5] = speed_z;
     // 0x507430 after saving the last good position: PlayerClient_RecordPositionSample(1) there, then
     // Send_OP_FloatListThing(0) (once a second, the samples older than 2 s).
-    if (kept_move) {
+    if (kept_move && !eye) {
         const glm::vec3 at(cs.physics[0], cs.physics[1], cs.physics[2]);
         conn.record_position_sample(game::kPositionMove, &at);
         conn.send_position_history(false);
@@ -892,7 +944,7 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
 
     // Once a second (DoPassageOfTime's 1000 ms block): air supply and drowning.
     if (last_second_ == 0) last_second_ = now;
-    if (now - last_second_ > 1000 && prof && !st.dead) {
+    if (now - last_second_ > 1000 && prof && !st.dead && !eye) {
         last_second_ = now;
         std::int32_t max_air = mech::max_air_supply(facts.stamina, facts.spa246, prof->race);
         max_air_ = max_air;
@@ -927,6 +979,8 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
     out.feet_wet = region_type(regions, body.feet);
     out.head_wet = head_wet;
     out.colliding_type = body.colliding_type;
+    if (cp) conn.note_physics_step(cp->id, now);
+    if (mount && me) conn.note_physics_step(me->id, now); // rider vf8 step completed
     return out;
 }
 

@@ -71,34 +71,40 @@ std::int32_t GameConnection::current_bard_twist_gem() const {
     return index < bard_twist_.size() ? bard_twist_[index] : 0;
 }
 
-void GameConnection::stop_current_spell_cast() {
-    // CharacterZoneClient_StopCurrentSpellCast @0x433460: StopSpellCast(0, the spawn's casting spell +0x448).
-    // StopSpellCast @0x4348a0 with reason 0, for a bard song (a bard, the spell not a skill (+0x244), a bard level
-    // 1..254): the interrupt (an empty OP_ManaChange; EQEmu ends the song), the casting gem and the launch data
-    // reset, the gem timers of memorised spells without a recast cleared, the recovery lock (+0x3cc) cleared and
-    // "Your song ends." (12687, colour 0x108; bard_song_stopped). Anything else only counts the pending request down
-    // here.
+void GameConnection::stop_current_spell_cast(std::uint8_t reason) {
+    // StopCurrentSpellCast @0x433460 forwards the reason and current spell. StopSpellCast @0x4348a0 sends the
+    // empty OP_ManaChange only for reason 0; ProcessAffects' reason 1 is already a local interruption.
     const game::SpellData* s = spell_table_->get(spells_.casting.spell);
-    if (!s || !bard_song(*s)) {
-        spells_.pending = std::max(0, spells_.pending - 1);
+    const bool song = s && bard_song(*s);
+    if (!song) spells_.pending = std::max(0, spells_.pending - 1);
+    // A bard's non-song (stop_spell_cast.cpp:84-101) ends at the launch data reset: no interrupt packet and no
+    // twist restart, whatever the reason. A spell with recovery at most 100 ms that is not an item cast (the
+    // +0x450/+0x454 test) is kept without the reset.
+    if (profile_ && profile_->class_ == kBard && !song) {
+        if (!(s && !spells_.casting.is_item_cast() && s->recovery_time <= 100)) spells_.casting = {};
         return;
     }
-    send_zone(encode_stop_cast_request());
+    if (!s) return;
+    if (reason == 0) send_zone(encode_stop_cast_request());
     spells_.casting = {};
-    bard_song_stopped(0);
+    if (song) bard_song_stopped(reason);
 }
 
 void GameConnection::bard_song_stopped(std::uint32_t reason) {
     // StopSpellCast after the launch reset, for a bard song: the gem timers of memorised spells without a recast
     // (+0x18) cleared, the recovery lock (+0x3cc) cleared, "Your song ends abruptly." (12686, reason 1) or "Your
-    // song ends." (12687), colour 0x108 (the original skips it when chat filter 9 is set to 1: not kept here).
+    // song ends." (12687), colour 0x108, unless chat filter 9 is 1.
     for (int gem = 0; gem < game::kSpellGems; ++gem) {
         auto& g = spells_.gems[static_cast<std::size_t>(gem)];
         const game::SpellData* m = g.spell != game::kNoSpell ? spell_table_->get(g.spell) : nullptr;
         if (!m || m->recast_time == 0) g.ready = 0;
     }
     spells_.recovery_ready = 0;
-    system(reason == 1 ? 12686 : 12687, {}, 0x108);
+    if (chat_filters_.mode(9) != 1) system(reason == 1 ? 12686 : 12687, {}, 0x108);
+    restart_bard_twist(static_cast<std::uint8_t>(reason));
+}
+
+void GameConnection::restart_bard_twist(std::uint8_t reason) {
     // Then, for the local bard and a reason other than 0, the twist's current gem 1..9 plays again (the cast
     // stopped first), unless a buff has SPA 96.
     if (reason == 0 || !profile_ || profile_->class_ != kBard) return;

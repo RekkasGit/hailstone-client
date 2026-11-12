@@ -117,6 +117,9 @@ bool GameConnection::store_trader_price(std::uint32_t price) {
     const game::TraderSlot sel = *picked;
     const Item* sel_item = inventory_.at(sel.where);
     if (!sel_item) return false;
+    if ((!sel.serial.empty() && sel.serial != sel_item->serial) ||
+        (sel.item_id != 0 && sel.item_id != sel_item->id)) return false;
+    if (price != 0 && refuse_kept(sel_item, "offer for sale")) return false;
     bool any = false;
     for (auto& s : trader_.slots) {
         const Item* it = inventory_.at(s.where);
@@ -151,8 +154,13 @@ void GameConnection::trader_add() {
     std::uint32_t price = trader_.entered_price;
     if (price == 0 || !trader_.trader || !selected_slot(trader_)) return;
     const game::TraderSlot sel = *selected_slot(trader_);
+    if (refuse_kept_id(sel.item_id, "sell")) return;
+    const Item* selected = inventory_.at(sel.where);
+    if (!selected || selected->id != sel.item_id || selected->serial != sel.serial) return;
     for (auto& s : trader_.slots) {
         if (s.active || s.item_id != sel.item_id) continue;
+        const Item* item = inventory_.at(s.where);
+        if (!item || item->id != s.item_id || item->serial != s.serial || refuse_kept(item, "sell")) continue;
         send_zone(encode(TraderPrice{kTraderPriceUpdate, s.serial, 0, price}));
     }
 }
@@ -192,7 +200,13 @@ int GameConnection::trader_start() {
     int n = 0;
     for (std::size_t i = 0; i < trader_.slots.size(); ++i) {
         auto& s = trader_.slots[i];
+        s.active = false;
         if (s.price == 0) continue;
+        const Item* item = inventory_.at(s.where);
+        if (refuse_kept_id(s.item_id, "offer for sale")) continue;
+        if (!item || item->id != s.item_id || item->serial != s.serial) continue;
+        if (refuse_kept(item, "offer for sale")) continue;
+        if (n >= static_cast<int>(b.serials.size())) break;
         b.serials[static_cast<std::size_t>(n)] = s.serial;
         b.prices[static_cast<std::size_t>(n)] = s.price;
         s.active = true;
@@ -618,6 +632,9 @@ void GameConnection::barter_send_line(const BuyLine& line) {
         if (line.slot < static_cast<std::uint32_t>(game::kBuyLineCount)) barter_window_.lines[line.slot] = line;
         return;
     }
+    if (line.toggle)
+        for (const auto& item : line.trade_items)
+            if (refuse_kept_id(item.item_id, "offer as compensation")) return;
     if (state_ == ConnectionState::InZone) send_zone(encode_modify_buy_line(line));
 }
 
@@ -850,6 +867,9 @@ void GameConnection::barter_toggle_line() {
     }
     BuyLine flipped = l;
     flipped.toggle = !flipped.toggle;
+    if (flipped.toggle)
+        for (const auto& item : flipped.trade_items)
+            if (refuse_kept_id(item.item_id, "offer as compensation")) return;
     if (state_ == ConnectionState::InZone) send_zone(encode_modify_buy_line(flipped));
     barter_reset_editor();
 }
@@ -877,6 +897,11 @@ void GameConnection::barter_start_stop() {
     // StartStopButton: Send_OP_Barter_00420ff0(!buyer mode): {2} or {3}; asking for off clears the flag at once.
     auto& w = barter_window_;
     if (state_ != ConnectionState::InZone) return;
+    if (!w.buyer_mode)
+        for (const auto& line : w.lines)
+            if (line.enabled && line.toggle)
+                for (const auto& item : line.trade_items)
+                    if (refuse_kept_id(item.item_id, "offer as compensation")) return;
     send_zone(encode_buyer_mode(!w.buyer_mode));
     if (w.buyer_mode) w.buyer_mode = false;
 }
@@ -953,7 +978,10 @@ std::optional<std::uint32_t> GameConnection::barter_merchant_sell_start() {
         return std::nullopt;
     }
     for (const auto& l : m.lines)
-        if (l.slot == m.selected_slot) return std::min<std::uint32_t>(l.quantity, game::kMaxSaleQuantity);
+        if (l.slot == m.selected_slot) {
+            if (refuse_kept_id(l.item_id, "sell")) return std::nullopt;
+            return std::min<std::uint32_t>(l.quantity, game::kMaxSaleQuantity);
+        }
     return std::nullopt;
 }
 
@@ -964,6 +992,7 @@ void GameConnection::barter_merchant_sell(std::uint32_t quantity) {
     if (m.buyer_id == 0 || state_ != ConnectionState::InZone) return;
     for (const auto& l : m.lines) {
         if (l.slot != m.selected_slot) continue;
+        if (refuse_kept_id(l.item_id, "sell")) return;
         ++m.pending;
         BuyerSale sale;
         sale.method = kBarterAtBuyer;
@@ -1089,6 +1118,7 @@ std::optional<std::uint32_t> GameConnection::barter_search_sell_start(int line) 
     }
     if (s.pending > 0) return std::nullopt;
     const auto& l = s.lines[static_cast<std::size_t>(line)];
+    if (refuse_kept_id(l.item_id, "sell")) return std::nullopt;
     if (profile_ && l.buyer_id == profile_->character_id) {
         chat(ChatEvent::Kind::System, "You cannot sell an item to yourself!", 0, 13);
         return std::nullopt;
@@ -1118,6 +1148,7 @@ void GameConnection::barter_search_sell(std::uint32_t quantity) {
     if (s.sale_line < 0 || s.sale_line >= static_cast<int>(s.lines.size()) || state_ != ConnectionState::InZone) return;
     quantity = std::min<std::uint32_t>(quantity, game::kMaxSaleQuantity);
     const auto& l = s.lines[static_cast<std::size_t>(s.sale_line)];
+    if (refuse_kept_id(l.item_id, "sell")) return;
     if (l.item_id != kKronoItemId && !game::barter_has_items(inventory_, l.item_id, quantity)) {
         chat(ChatEvent::Kind::System,
              "Your transaction failed because you don't possess the specified quantity of the item you wish to sell.", 0, 13);
@@ -1206,8 +1237,16 @@ void GameConnection::handle_barter(const AppPacket& p) {
         break;
     case kBuyerModeOn: {
         // 6058, the flag, the welcome text (0x13) and the enabled, active lines (OP_BuyerItems 6).
-        barter_status(0, eq(strings_, 6058));
         w.buyer_mode = true;
+        // Keep may have changed while the start request was in flight. Retire the session before publishing lines.
+        for (const auto& line : w.lines)
+            if (line.enabled && line.toggle)
+                for (const auto& item : line.trade_items)
+                    if (refuse_kept_id(item.item_id, "trade")) {
+                        barter_start_stop();
+                        return;
+                    }
+        barter_status(0, eq(strings_, 6058));
         send_zone(encode_buyer_welcome(w.welcome));
         std::vector<BuyLine> lines;
         for (const auto& l : w.lines)

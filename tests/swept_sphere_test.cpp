@@ -18,6 +18,92 @@
 using namespace hailstone::game;
 namespace mech = hailstone::game::mechanics;
 
+TEST_CASE("A sphere parallel to a triangle's plane has no vertex edge-region crossing") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        const V a(0, 0, 0), b(10, 0, 0), c(0, 10, 0), n(0, 0, -1);
+        const V delta(4, 4, 0);
+        const F inverse = F(1) / std::sqrt(F(32));
+        // The sphere crosses the triangle plane but starts outside both edges meeting at A. Its centre path
+        // never crosses that plane, so the edge-region selector refuses it before choosing a capsule.
+        const auto outside = sweep::sphere_triangle<F>(V(-2, -2, 0), delta, inverse, F(1), F(1), n, a, b, c);
+        CHECK_FALSE(outside.hit);
+        // A sphere already inside the triangle still overlaps immediately; the parallel rejection is local to
+        // the vertex's edge-region case.
+        const auto inside = sweep::sphere_triangle<F>(V(1, 1, 0), delta, inverse, F(1), F(1), n, a, b, c);
+        CHECK(inside.hit);
+        CHECK(inside.t == F(0));
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
+TEST_CASE("An edge of no length is met as the sphere around its end") {
+    auto check = []<class F>(sweep::Vec3<F> e) {
+        using V = sweep::Vec3<F>;
+        const V s(0, 0, 0), delta(10, 0, 0);
+        const auto hit = sweep::sphere_edge<F>(V(-5, 0, 0), delta, F(1), F(1), s, e);
+        REQUIRE(hit.hit);
+        CHECK(hit.t == doctest::Approx(0.4)); // the near side of the sphere of radius 1 around s
+        CHECK(hit.normal.x == doctest::Approx(-1.0));
+        // A path that passes farther than the radius from it misses.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, 2, 0), delta, F(1), F(1), s, e).hit);
+        // And a move that ends short of it.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, 0, 0), delta, F(0.3), F(1), s, e).hit);
+    };
+    check.operator()<float>(sweep::Vec3<float>(0));
+    check.operator()<double>(sweep::Vec3<double>(0));
+    // A length whose square underflows a float (1e-46 is below its smallest denormal).
+    check.operator()<float>(sweep::Vec3<float>(1e-23f, 0, 0));
+}
+
+TEST_CASE("A path tangent to an edge's cylinder touches it, its far end included") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        // The edge up the z axis from 0 to 10; a sphere of radius 1 moving along x at y = 1 grazes the cylinder at
+        // t = 0.5 (a discriminant of exactly 0).
+        const V s(0, 0, 0), e(0, 0, 10), delta(10, 0, 0);
+        for (F z : {F(5), F(10)}) { // halfway up, and level with the far end (u = 1)
+            CAPTURE(z);
+            const auto hit = sweep::sphere_edge<F>(V(-5, 1, z), delta, F(1), F(1), s, e);
+            REQUIRE(hit.hit);
+            CHECK(hit.t == F(0.5));
+            CHECK(hit.normal == V(0, 1, 0));
+        }
+        // Just clear of the cylinder: no hit.
+        CHECK_FALSE(sweep::sphere_edge<F>(V(-5, F(1.01), 5), delta, F(1), F(1), s, e).hit);
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
+TEST_CASE("A capsule keeps native candidate order for a centre already inside its side") {
+    auto check = []<class F>() {
+        using V = sweep::Vec3<F>;
+        const V a(0, 0, 0), b(10, 0, 0), c(0, 10, 0), n(0, 0, -1);
+        auto hit = [&](V delta) {
+            return sweep::sphere_triangle<F>(V(2, F(-0.5), 0), delta, F(1) / glm::length(delta),
+                                              F(1), F(1), n, a, b, c);
+        };
+        // The cylinder exit is generated before a start-cap root behind the move. Only one root is within the
+        // move, so the selector retains that first cylinder candidate instead of sorting the negative cap first.
+        const auto side = hit(V(4, -1, 0));
+        REQUIRE(side.hit);
+        CHECK(side.t == doctest::Approx(0.5));
+        // Along the edge toward its start, the initial start-sphere crossing is inside the cylinder. The capsule
+        // boundary is the far side of that sphere, at x=-sqrt(1-0.5^2), rather than its near side at +sqrt(...).
+        const auto start = hit(V(-12, 0, 0));
+        REQUIRE(start.hit);
+        CHECK(start.t == doctest::Approx((F(2) + std::sqrt(F(0.75))) / F(12)));
+        // The reverse direction retains the original's asymmetric first-candidate selection, clamped to zero.
+        const auto far = hit(V(12, 0, 0));
+        REQUIRE(far.hit);
+        CHECK(far.t == F(0));
+    };
+    check.operator()<float>();
+    check.operator()<double>();
+}
+
 namespace {
 
 // A wall in the plane x = 10 from y -100..100, z -50..50, wound so that its

@@ -30,6 +30,7 @@
 #include <functional>
 #include <optional>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -45,6 +46,10 @@ struct SpellParticleSettings {
 };
 // From the ini values (missing -> 1.0), clamped to [0, 1].
 SpellParticleSettings spell_particle_settings(std::optional<float> density, std::optional<float> opacity);
+
+// SpawnBloodSpurt's short-lived cloud, with the player's own I_BLOODSPRITE texture. The resource-manager
+// converter gives this cloud a sphere emission, fixed lifetime and a non-additive material (0x58f1c0/0x10071640).
+assets::EmitterDefinition blood_spurt_definition(std::string texture);
 
 // Hailstone (not in the original): whose a spell effect stage is, for the Options window's per-source spell
 // particle densities, which scale SpellParticleDensity. The original has one density and an "On For" filter
@@ -91,7 +96,13 @@ struct StageActor {
     std::optional<float> floor;
     // GetParticleScaleFactor (actor vtable +0x218): its model's moddat.ini PESFactor, 1 without one. Attach 12's scale.
     float particle_scale = 1.0f;
+    // Whether its model is known. Hailstone: a spawn whose model has not loaded yet (an effect sent as it zones in)
+    // has no points to read; the original's actor always has them. Its slots keep the point they ask for, and the
+    // attachment finds it once the model is drawn (or keeps to the spawn's place).
+    bool model_known = true;
     bool has_point(int n) const { return n >= 0 && n < 16 && (points >> n) & 1u; }
+    // has_point, or for a model not known yet any of the ten.
+    bool may_have_point(int n) const { return model_known ? has_point(n) : n >= 0 && n < 10; }
 };
 
 // SpellEffect_SpawnStageEmitters' slot loop for stage 0 (cast), 1
@@ -100,7 +111,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
-                                                      bool full = false);
+                                                      bool full = false, const StageActor* missile = nullptr);
 
 // The duration a zone fixture's emitter is created with (add_fixture), ms.
 inline constexpr std::int32_t kFixtureDurationMs = 9999000;
@@ -202,6 +213,7 @@ struct EmitterAttachment {
     // GetParticleScaleFactor (+0x218, moddat.ini PESFactor) and the actor's root GetScaleFactor (+0xa0).
     float particle_scale = 1.0f;
     float actor_scale = 1.0f;
+    float alpha = 1.0f; // GetAlpha of the actor or the point's owning actor, sampled every frame
 };
 using AttachmentFn = std::function<std::optional<EmitterAttachment>(std::uint32_t actor, std::int32_t point)>;
 
@@ -234,6 +246,9 @@ public:
     void set_viewer(std::optional<glm::vec3> viewer) { viewer_ = viewer; }
     // Stops every emitter with this key (effect manager vtable +0x38).
     void stop(std::uint32_t key);
+    // Remove a particular owner's attachment without affecting its other spells (e.g. a despawned blood point).
+    void stop_attachment(std::uint32_t actor, std::int32_t point);
+    void stop_actor(std::uint32_t actor);
     // The density of the persistent emitters (zone fixtures, actors' own): what they emit from now on scales with
     // it (the effect manager's density setters, +0xa4 environment / +0xac actor).
     void set_persistent_density(float density);

@@ -147,6 +147,10 @@ public:
     static constexpr float kStickMeleeShare = 0.75f;
     nav::NavStatus status() const override;
     std::optional<float> path_length(const glm::vec3& world) const override;
+    // A path over the mesh from `from` to `to` for the Find window's guide path (app/guide_path.h), with the walk's
+    // options: nullopt while the mesh is not ready (its build is started), empty when there is no way. A partial
+    // path ends where it gets nearest.
+    std::optional<std::vector<glm::vec3>> plan_between(const glm::vec3& from, const glm::vec3& to);
     nav::PathOptions& options() override { return options_; }
     void rebuild() override;
     void set_overlay(bool on) override {

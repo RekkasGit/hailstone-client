@@ -36,9 +36,9 @@ struct ParticleTexture {
 std::optional<ParticleTexture> particle_texture(const wld::WldFile& wld, wld::Ref sprite);
 
 // The renderer's default material alias table entry for a negative WLD
-// material handle (CRender's default alias installer). Only 0x80000017, the one
-// every shipped 0x26 uses, is known: it resolves to 0x011b0507 (OpenEQ
-// docs/WLD_PARTICLE_MATERIALS.md). nullopt for any other alias.
+// material handle (CRender's default alias installer). 0x80000017, the one
+// ordinary clouds use, resolves to 0x011b0507 (OpenEQ docs/WLD_PARTICLE_MATERIALS.md); blood's
+// 0x80000018 resolves to 0x01080507 (stock default installer 0x1009abe1). nullopt for other aliases.
 std::optional<std::uint32_t> particle_material_alias(std::uint32_t handle);
 
 // The DLL's 0x34 -> emitter descriptor conversion (0x1001c650). `name` is the

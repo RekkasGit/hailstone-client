@@ -69,6 +69,7 @@ struct Host {
         ne.cache_dir = world.dir / "cache";
         ne.config_dir = world.dir / "config";
         ne.web = web;
+        ne.connection = [this] { return world.conn.get(); };
         plugins = std::make_unique<plugin::NativePlugins>(ne);
     }
     ~Host() {
@@ -688,4 +689,66 @@ TEST_CASE("native plugins: web_message with no buffer gives the length and keeps
     CHECK(h.printed_line("[Probe] message 4, next"));
     h.run("/probemessage 0");
     CHECK(h.printed_line("[Probe] message -1, -"));
+}
+
+TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid out as the SDK says") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    using A = net::GameConnectionTestAccess;
+    auto& sp = A::spells(*h.world.conn);
+    REQUIRE(sp.buffs.size() == 63);
+    // The world's Holy Armor (slot 0) and Selo's (slot 3); a disease counter and a song.
+    sp.buffs[5].spell = 3004;
+    sp.buffs[5].caster_id = 10;
+    sp.buffs[5].tics = 7;
+    sp.buffs[5].num_hits = 2;
+    sp.buffs[5].slot_data[1] = 3;
+    sp.buffs[42].spell = 3373;
+    sp.buffs[42].tics = 3;
+    h.run("/probebuffs 4096");
+    CHECK(h.printed_line("[Probe] buff 0: 11 0 10 0 1 -1 0 0 0"));
+    CHECK(h.printed_line("[Probe] buff 3: 717 0 2 0 1 -1 0 0 0"));
+    CHECK(h.printed_line("[Probe] buff 5: 3004 10 7 2 0 0 4 3 0")); // disease, starts at 4, 3 left
+    CHECK(h.printed_line("[Probe] buff 42: 3373 0 3 0 0 -1 0 0 1"));
+    CHECK(h.printed_line("[Probe] buffs 2079 bytes, 59 empty")); // 63 slots of 33 bytes
+    // Only whole records go into a buffer too small for all.
+    h.printed.clear();
+    h.run("/probebuffs 40");
+    CHECK(h.printed_line("[Probe] buff 0: 11 0 10 0 1 -1 0 0 0"));
+    CHECK(h.printed_line("[Probe] buffs 33 bytes, 0 empty"));
+    h.run("/probebuffs 32");
+    CHECK(h.printed_line("[Probe] buffs 0 bytes, 0 empty"));
+
+    // No pet buffs: nothing. Then the pet window's, in the server's order with its slots.
+    h.run("/probepetbuffs 1024");
+    CHECK(h.printed_line("[Probe] pet buffs 0 bytes"));
+    auto pet_buff = [](std::uint32_t spell, std::uint32_t tics) {
+        game::BuffSlot b;
+        b.spell = spell;
+        b.tics = tics;
+        return b;
+    };
+    A::pet_buffs(*h.world.conn) = {{2, pet_buff(3002, 5)}, {0, pet_buff(11, 1)}, {7, pet_buff(99999, 4)}};
+    h.run("/probepetbuffs 1024");
+    CHECK(h.printed_line("[Probe] pet buff 2: 3002 5 0"));
+    CHECK(h.printed_line("[Probe] pet buff 0: 11 1 1"));
+    CHECK(h.printed_line("[Probe] pet buff 7: 99999 4 0")); // a spell not known: type 0
+    CHECK(h.printed_line("[Probe] pet buffs 48 bytes"));
+    h.printed.clear();
+    h.run("/probepetbuffs 31");
+    CHECK(h.printed_line("[Probe] pet buff 2: 3002 5 0"));
+    CHECK_FALSE(h.printed_line("[Probe] pet buff 0: 11 1 1"));
+    CHECK(h.printed_line("[Probe] pet buffs 16 bytes"));
+}
+
+TEST_CASE("native plugins: the buff bulk reads need 'read'") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(h.plugins->load("HostProbe"));
+    h.run("/probebuffs 4096");
+    CHECK(h.printed_line("[Probe] buffs 0 bytes, 0 empty"));
+    CHECK(h.printed_line("[Plugin] HostProbe: get_buff_data_bulk needs the server's 'read' permission"));
+    h.run("/probepetbuffs 1024");
+    CHECK(h.printed_line("[Probe] pet buffs 0 bytes"));
 }

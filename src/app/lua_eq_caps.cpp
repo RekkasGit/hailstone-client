@@ -6,6 +6,8 @@
 //   kCapActions   acts in the game: a stock window's buttons and lists (which run its handler, whatever it does:
 //                 buy, trade, destroy, accept), items, the cursor, spells, abilities, hot buttons, parcels, the menus'
 //                 commands
+//   kCapTarget    changes the target (the Find window's row: eq.FindNpcTarget)
+//   kCapMove      moves the player (the Find window's Walk there: eq.FindNpcWalk, a /nav walk)
 // eq.ChatSubmit's line goes through the command filter (mq/commands.h), which holds it to the caller's capabilities
 // as any command a plugin sends: it needs nothing here. The pre-game screens, the scripts' and the
 // plugins' functions and the web's check plugin code themselves (app/lua_eq_pregame.cpp, lua_eq_scripts.cpp,
@@ -30,6 +32,8 @@ namespace {
 
 using plugin::kCapActions;
 using plugin::kCapCommands;
+using plugin::kCapMove;
+using plugin::kCapTarget;
 
 struct Entry {
     std::string_view name;
@@ -40,7 +44,7 @@ struct Entry {
 constexpr Entry kCalls[] = {
     // Reading, drawing, a window's place, size, hover, menus opened (a menu's row is GameMenuClick or CascadeClick)
     {"InGame", 0}, {"UiReady", 0}, {"GameState", 0}, {"Name", 0}, {"SlotName", 0}, {"Item", 0}, {"ItemIcon", 0},
-    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"AltCurrencies", 0}, {"UiTexture", 0},
+    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"ItemJob", 0}, {"AltCurrencies", 0}, {"UiTexture", 0},
     {"ReplaceWindow", 0}, {"WindowShown", 0}, {"WindowPlaced", 0}, {"WindowText", 0}, {"WindowTitle", 0},
     {"WindowList", 0}, {"WindowClient", 0}, {"SizeWindow", 0}, {"ChildShown", 0}, {"ChildArt", 0}, {"ChildState", 0},
     {"ChildGauge", 0}, {"ChildColor", 0}, {"ChildTooltip", 0}, {"ChildUnder", 0}, {"ChildRect", 0}, {"TabPage", 0},
@@ -59,7 +63,9 @@ constexpr Entry kCalls[] = {
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
     {"DisplaySpellId", 0}, {"DisplayItemData", 0},
     {"SpellSets", 0}, {"DrawMap", 0}, {"MapZoom", 0}, {"MapMouseDown", 0}, {"MapMouseUp", 0}, {"MapPanReset", 0},
-    {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
+    {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"AtlasIndex", 0}, {"AtlasPageData", 0}, {"AtlasTexture", 0}, {"ZoneLinks", 0}, {"ZoneRoute", 0},
+    {"ZoneExits", 0}, {"ShowZoneMap", 0}, {"MapZoneShown", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
+    {"FindNpcs", 0}, {"FindCategories", 0},
     {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},
     {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"LuaSocialEditRequest", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
     {"SocialEditorSocial", 0}, {"SocialLine", 0}, {"SlashCommands", 0}, {"CurrentSocial", 0},
@@ -90,7 +96,8 @@ constexpr Entry kCalls[] = {
     {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands},
     {"HotBarSetting", kCapCommands}, {"ShowSpell", kCapCommands}, {"SaveSpellSet", kCapCommands},
     {"DeleteSpellSet", kCapCommands}, {"EditSpellSet", kCapCommands}, {"EndFind", kCapCommands},
-    {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands},
+    {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands}, {"ZoneExitWalk", kCapMove},
+    {"FindNpcTarget", kCapTarget}, {"FindNpcPath", kCapCommands}, {"FindOpen", kCapCommands}, {"FindNpcWalk", kCapMove},
     {"StopLuaSocial", kCapCommands}, {"OpenLuaSocialEditor", kCapCommands}, {"OpenSocialEditor", kCapCommands},
     {"gamepad.set_mode", kCapCommands}, {"gamepad.set_binding", kCapCommands},
     {"gamepad.set_cross_slot", kCapCommands}, {"gamepad.set_setting", kCapCommands},
@@ -102,7 +109,7 @@ constexpr Entry kCalls[] = {
     {"GameMenuClick", kCapActions}, {"ClickHotButton", kCapActions}, {"PickUp", kCapActions},
     {"PressButtonFrom", kCapActions}, {"ClearCursorButton", kCapActions}, {"SpellGemClick", kCapActions},
     {"BagSlotClick", kCapActions}, {"BankSlotClick", kCapActions}, {"PlaceClick", kCapActions},
-    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"ItemJob", kCapActions}, {"StopItemJob", kCapActions},
+    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SetItemsKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"StopItemJob", kCapActions},
     {"SendParcel", kCapActions}, {"SendParcelMoney", kCapActions}, {"RetrieveParcel", kCapActions},
     {"ClaimAllParcels", kCapActions}, {"AbilityBookUse", kCapActions}, {"AbilityBookAutoskillEnable", kCapActions},
     {"UseSkill", kCapActions}, {"SpellBookClick", kCapActions}, {"SpellBookMemorize", kCapActions},

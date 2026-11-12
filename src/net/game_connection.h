@@ -31,6 +31,7 @@
 #include "core/process_serial.h"
 #include "core/server_profile.h"
 #include "game/alt_adv.h"
+#include "game/animation_types.h"
 #include "game/augments.h"
 #include "game/bank.h"
 #include "game/placement.h"
@@ -86,10 +87,12 @@
 #include "net/commerce.h"
 #include "net/market_packets.h"
 #include "net/settings_packets.h"
+#include "net/zone_link_packets.h"
 #include "plugin/policy.h"
 #include "net/server_files.h"
 #include "net/merchant_packets.h"
 #include "net/movement_packets.h"
+#include "net/quest_npc_packets.h"
 #include "net/player_packets.h"
 #include "net/tribute_packets.h"
 #include "net/marketplace_packets.h"
@@ -285,6 +288,7 @@ struct PlayerStatus {
     std::uint32_t aa_exp = 0; // 0..330
     std::uint8_t level = 0;
     std::uint8_t stand_state = 100; // 100 standing, 110 sitting (SpawnAppearance animation)
+    std::int8_t owner_status = 0; // CharacterBase status: active 0, unconscious 3, dead 4
     bool dead = false;              // own OP_Death seen; cleared by the next zone-in
 };
 
@@ -298,7 +302,8 @@ struct ConnectionOptions {
     // pass it. Null: no plugins.
     plugin::Hooks* hooks = nullptr;
     // The SOE session options of the world and zone connections (net/session.h; LoginClient::Options::session
-    // does the same for login). The defaults are the original's timers; tests shorten them.
+    // does the same for login). The defaults are the original's timers; tests shorten them. The optional clock
+    // also drives the time-of-day calendar.
     SessionOptions session;
     // The server profile (servers/<id>/, core/server_profile.h) the character's own files go under: the trader's
     // prices (BZR.ini) and chat.ini. Empty: the profile made from the world's name (profile_id_for_world).
@@ -403,11 +408,20 @@ public:
                 const game::WorldState::ActorModelFn& actor_model = {},
                 const game::WorldState::RegionFn& region = {},
                 const game::WorldState::VehicleFn& vehicle_under = {},
-                const game::WorldState::FloorFn& ground_floor = {});
+                const game::WorldState::FloorFn& ground_floor = {},
+                const game::WorldState::RemoteCollisionFn& collision = {});
     // The vehicles' part of smooth, before the local player moves (WorldState::smooth_vehicles).
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).
-    void set_physics_steps(std::optional<std::vector<float>> steps_ms) { world_.physics_steps = std::move(steps_ms); }
+    void set_physics_steps(std::optional<std::vector<float>> steps_ms,
+                           std::optional<std::uint32_t> completed_time_ms = {}) {
+        world_.physics_steps = std::move(steps_ms);
+        world_.physics_step_time_ms = completed_time_ms;
+    }
+    void note_physics_step(std::uint32_t id, std::uint32_t ms) {
+        if (auto it = world_.spawns.find(id); it != world_.spawns.end()) it->second.physics_step_ms = ms;
+    }
+    void set_remote_probe_range(float range) { world_.remote_probe_range = range; }
     // The game clock's steps this frame on now_ms()'s clock (core/step_clock.h, docs/mechanics.md "Frame rate"): the
     // rules that run once a frame and wait for a frame past their interval (memorizing, scribing, the 1 s and 6 s
     // ticks, the socials' lines) run once per step at its time. nullopt: once a frame, now.
@@ -417,6 +431,9 @@ public:
     void set_ground_npcs(bool on) { world_.ground_npcs = on; }
     // Hailstone (option illusion_mounts): a rider under an illusion still rides (WorldState::illusion_mounts).
     void set_illusion_mounts(bool on) { world_.illusion_mounts = on; }
+    // Hailstone (option cast_animation_fallback): the added proc cast stage's animation for a spell without a
+    // casting animation (game::spell_cast_animation).
+    void set_cast_animation_fallback(bool on) { cast_animation_fallback_ = on; }
     void reground() { world_.reground(); }
     // The player's BodyWet (+0xa2) from this frame's movement, on its spawn.
     void set_player_body_wet(std::uint8_t body_wet) {
@@ -429,7 +446,9 @@ public:
     // The game state last given to the plugin hooks (plugin::kGameState*; 0 none yet).
     int hook_game_state() const { return hook_game_state_; }
     const std::optional<NewZone>& zone_info() const { return new_zone_; }
+    // The last server time is the sky clock's reference; the current calendar advances between packets.
     const std::optional<TimeOfDay>& time_of_day() const { return time_; }
+    std::optional<TimeOfDay> current_time_of_day() const;
     // The OP_Weather messages since the last call (game::Weather::handle_message takes them).
     std::vector<Weather> take_weather() { return std::exchange(weather_messages_, {}); }
     // The zone the server put us in, once per zone-in: load its geometry. Not while the server's files come.
@@ -454,8 +473,11 @@ public:
     std::vector<SpellEffectCue> take_spell_effect_cues() { return std::exchange(effect_cues_, {}); }
     // The effect packets since the last call, in order (app/spell_particles.h plays them).
     std::vector<EffectPacketCue> take_effect_packets() { return std::exchange(effect_packets_, {}); }
+    std::vector<std::uint32_t> take_blood_spurts() { return std::exchange(blood_spurts_, {}); }
     // The missiles the server launched since the last call (OP_SomeItemPacketMaybe, game/missiles.h), in order.
     std::vector<game::MissilePacket> take_missiles() { return std::exchange(missiles_, {}); }
+    // Spell 859 local presentation; no packet is encoded or sent.
+    void spell_missile_hit(const game::Missile& missile);
     std::vector<SoundCue> take_sound_cues();
     // What spells landing on the player changed that the movement owns
     // (EQ_Character::HitBySpell, game/hit_landing.h): taken once a frame.
@@ -476,6 +498,12 @@ public:
     float player_heading() const { return heading_; }
     // Zone points of the current zone (OP_SendZonepoints): targets by zone_points.number.
     const std::vector<ZonePoint>& zone_points() const { return zone_points_; }
+    // The server's zone connections for the map's zone finder (net/zone_link_packets.h): asked at most once a session,
+    // and only once a zone has answered OP_HailstoneSettingsRequest (Hailstone's server script is there; a stock
+    // server never answers). Cheap to call every frame.
+    void request_zone_links();
+    const std::optional<ZoneLinks>& zone_links() const { return zone_links_; }
+    std::uint32_t zone_links_serial() const { return zone_links_serial_; }
     // The current zone's id and instance (from OP_NewZone; 0 before it arrives).
     std::uint16_t zone_id() const { return new_zone_ ? new_zone_->zone_id : 0; }
     // The spawns ProcessSwitches checks for a moving floor switch's riders (the app's player); null: none.
@@ -603,6 +631,7 @@ public:
     // A one-shot animation on a spawn, as an OP_Animation for it would play it at speed 10 (a missile's
     // launch: Send_OP_Animation_0058f540 -> PlayAttackAnimation on its source).
     void play_animation(std::uint32_t spawn_id, std::uint8_t action);
+    void play_animation(std::uint32_t spawn_id, AnimationType action);
     // OP_ControlBoat {spawn id, take_control}: take_control 1
     // makes that spawn pinstControlledPlayer ("You have the helm, captain.", 1407); release_boat() lets go
     // ({id, 0}). 0: the player itself is controlled.
@@ -750,6 +779,9 @@ public:
     // (PlayerManagerClient::GetSpawnByName, then PlayerPath_FindSpawn, as 0x59da00), or to the target; nothing
     // to find ends the path.
     void find_target(const std::string& name = {});
+    // The path to a spawn by id, the player facing it when it comes (PlayerPath_FindSpawnByID(id, 1)); for the Find
+    // window (app/lua_eq_find.cpp). False when there is no such spawn.
+    bool find_spawn(std::uint32_t spawn_id);
     // PlayerPath_FindMapLocation (MapViewMap::HandleRButtonDown): the path to a point of the map, world coordinates
     // at the player's height.
     void find_map_location(const glm::vec3& at);
@@ -771,8 +803,18 @@ public:
         game::FindKind kind = game::FindKind::Spawn;
     };
     std::optional<FailedFind> take_failed_find() { return std::exchange(failed_find_, std::nullopt); }
-    // Counts the find replies (each closes FindLocationWnd: Show(false) before HandleFindPersonReply).
+    // Counts the shown find replies (the original's FindLocationWnd closed on each: Show(false) before
+    // HandleFindPersonReply).
     std::uint32_t find_replies() const { return find_replies_; }
+    // The zone's findable NPCs (OP_SendFindableNPCs: the server's `findable` flag), by spawn id; cleared on zoning.
+    // The original's find window listed them (Handle_OP_SendFindableNPCs); the Find window here does too
+    // (game/useful_npcs.h).
+    const std::unordered_map<std::uint32_t, FindableNpc>& findable_npcs() const { return findable_npcs_; }
+    // The zone's quest NPCs from Hailstone's server script (net/quest_npc_packets.h), by their names as shown
+    // (game::display_name, ASCII lower case): kQuestNpcItems / kQuestNpcTalks. Asked once a zone, the first time the
+    // Find window wants them (request_quest_npcs); empty without the script. Cleared on zoning.
+    void request_quest_npcs();
+    const std::unordered_map<std::string, std::uint8_t>& quest_npcs() const { return quest_npcs_; }
     // The path's finish emitters, taken by the world's effects (PlayerPath_OnDestinationReached).
     std::optional<glm::vec3> take_path_finish() { return std::exchange(path_finish_, std::nullopt); }
 
@@ -889,7 +931,17 @@ public:
     std::vector<JournalLine> take_journal_lines() { return std::exchange(journal_lines_, {}); }
 
     // ---- stuns (OP_Stun: u32 duration ms first): while stunned the character neither moves, casts nor uses skills.
-    bool stunned() const { return now_ms() < stun_until_ms_; }
+    // The character's stun state (CharacterZoneClient +0x100 = 1). StunMe sets it with the timer (the spawn's +0x43c);
+    // DoPassageOfTime ends it once the timer passes, unless the player is mesmerized (EndStun then waits for the mez).
+    bool stunned() const { return stun_state_; }
+    // How many times the local player was made to stop. SpeedRun (+0x7c): a stun starting (CharacterZoneClient::StunMe
+    // @0x4432c0, which stops the mount too) or sitting, looting or lying down (PlayerZoneClient::ChangePosition
+    // @0x5a0bc0's StopMoving); the turn rate (+0x8c): ChangePosition's alone. Movement clears its body's speeds when
+    // these change; it stops asking for speed while it cannot move, so the speed it had would carry it on.
+    std::uint32_t speed_stops() const { return speed_stops_; }
+    std::uint32_t turn_stops() const { return turn_stops_; }
+    // How many stuns leaned the player: StunMe's last argument sets the turn rate (+0x8c) to 32.
+    std::uint32_t stun_leans() const { return stun_leans_; }
 
     // ---- food and drink (OP_Consume): a right click eats through OP_ItemVerifyReply (handle_item_verify_reply);
     // below kAutoEatLevel (of EQEmu's 6000) the first food or drink in the general slots and their bags is eaten
@@ -1070,6 +1122,7 @@ public:
         std::optional<bool> opted_in;
         std::uint32_t master_id = 0;
         std::int32_t last_donation = 0;
+        std::uint32_t donation_answers = 0;
         std::uint32_t active_cost() const;
         std::int64_t time_left(std::int64_t now) const;
     };
@@ -1412,7 +1465,7 @@ public:
     // (0x594cf0 appends it) joins the twist and its first gem is clicked (HandleSpellLeftClick).
     void melody_command(const std::string& args);
     // CharacterZoneClient_StopCurrentSpellCast(0) as the twist uses it (game_connection_ability_commands.cpp).
-    void stop_current_spell_cast();
+    void stop_current_spell_cast(std::uint8_t reason = 0);
     // Cmd_stopsong @0x4f26b0: a bard stops the song being sung and the twist (/stopsong, the STOP_ACTION key).
     void stop_song();
     // BardCastBard for the profile's class: the spell is sung (a song) by this character.
@@ -1431,9 +1484,15 @@ public:
     void set_mount_queries(game::MountQueries* q) { mount_queries_ = q; }
     // The spawn the local player moves (pinstControlledPlayer): its mount while it rides one, else 0.
     std::uint32_t controlled_id() const { return world_.controlled_id; }
+    std::uint32_t eye_id() const { return world_.eye_id; }
+    void acquire_eye_control();
+    void release_eye_control(bool remove_effect = false);
+    void reconcile_eye_control();
     // A spawn the local player's mount moved (the app runs the mount's physics): its position (world
     // coordinates), heading and motion, as the rider's are (the rider sits on it: PhysicsObject::vf8).
-    void set_controlled_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, float speed_run);
+    void set_controlled_motion(const glm::vec3& position, float heading, const glm::vec3& velocity, float speed_run,
+                               std::uint8_t body_wet = 0, std::uint8_t feet_wet = 0,
+                               std::int32_t colliding_type = 0, float speed_heading = 0.0f);
     // CEverQuest::DoMainLoop's mount-race jump @0x53eb68: the mount's animation 0x14 and OP_Animation {the
     // controlled spawn, 0x14, 0x0a} on channel 4.
     void report_mount_jump();
@@ -1466,6 +1525,11 @@ public:
     // What the character sheet is built from besides the profile, inventory and buffs (game_connection_ticks.cpp):
     // the level, the pools as the server sent them and the ticks moved them, sitting, hunger, auto attack.
     game::mechanics::LiveState live_state() const;
+    std::int32_t drunkenness() const { return drunkenness_; }
+    std::uint32_t drunkenness_updates() const { return drunkenness_updates_; }
+    std::uint32_t drunkenness_motion_updates() const { return drunkenness_motion_updates_; }
+    void update_player_consciousness(bool allow_knockout = false);
+    std::uint32_t consciousness_changes() const { return consciousness_changes_; }
     // The hide and sneak flags the abilities code keeps (app/actions_ui.cpp), so the cast path's
     // MakeMeVisible can end them; take_visibility_cleared() hands back what it ended.
     void note_hide_state(bool hidden, bool sneaking) { hidden_ = hidden; sneaking_ = sneaking; }
@@ -1481,6 +1545,10 @@ public:
     // SpawnAppearance {me, 15, 0}).
     void make_me_visible(bool appearance);
     bool invisible() const;
+    // Viewer awareness, shared by drawing, name plates, picking and target
+    // cycling. Compute the effect rank once for a batch of spawns.
+    std::int32_t see_invisible_rank() const;
+    bool spawn_invisible(const game::Spawn& spawn, std::int32_t see_invisible_rank) const;
     // /stopcast: asks the server to interrupt (empty OP_ManaChange).
     void stop_cast();
     // CSpellBookWnd::StartSpellMemorization: memorize the book slot's spell into a gem.
@@ -1558,6 +1626,9 @@ public:
     void destroy_held();
     // Puts the cursor item into the first free general slot or bag slot; false when it stays on the cursor.
     bool auto_inventory();
+    // auto_inventory's last steps only: the first free general slot, else the first bag with room; never a worn slot
+    // (Hailstone's bulk withdraw, which is not the original's and must not equip what it takes from the bank).
+    bool stow_cursor_in_packs();
     // Hailstone: the items marked Keep (game/kept_items.h; the Advanced Inventory window), kept per character in
     // kept_items.txt (read at enter_world, written at each change). A kept item, or a bag holding one, is not
     // destroyed, dropped on the ground, put in a trade or a give, sold to a merchant or sent by parcel: each of those
@@ -1565,6 +1636,8 @@ public:
     const game::KeptItems& kept_items() const { return kept_items_; }
     bool item_kept(const Item& item) const { return kept_items_.holds_kept(item); }
     void set_item_kept(std::uint32_t id, std::string_view name, bool on);
+    // One persistence update for a set of marks (the Advanced Inventory's bulk mark actions).
+    void set_items_kept(const std::vector<std::pair<std::uint32_t, std::string>>& items, bool on);
     // Counts the changes to the marks (a window's cache of them).
     std::uint64_t kept_items_revision() const { return kept_revision_; }
     // CharacterZoneClient::CanUseItem(item, 1, 0) for our character, quietly (the Advanced Inventory's "usable").
@@ -1579,7 +1652,7 @@ public:
     // bags or the open bank's (what is loose in a general or bank slot stays). `locked` slots are left as they are;
     // `filters` give bags (by top-level slot) a kind of item. Empty when it started, else why not.
     enum class ItemJobScope : std::uint8_t { Bag, Inventory, Bank };
-    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell, Destroy, Tribute };
+    enum class ItemJobMode : std::uint8_t { Sort, Stack, Tidy, Sell, Destroy, Tribute, Withdraw };
     struct ItemJobOptions {
         std::vector<ItemSlot> locked;
         std::vector<std::pair<ItemSlot, game::ItemCategory>> filters;
@@ -2210,7 +2283,7 @@ public:
     // or dead and waiting to respawn (the local repop). __ProcessMouseEvents @0x539e60 then keeps the mouse from the
     // world and 0x761f10 (CContextMenuManager::PopupMenu's test) opens no context menu. Here the own death, or
     // Cur_HP (own_hp(): the items' HP included) once the server sent the maximum.
-    bool player_down() const { return pstatus_.dead || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
+    bool player_down() const { return pstatus_.dead || pstatus_.owner_status >= 3 || (pstatus_.max_hp > 0 && own_hp().cur < 1); }
     void send_server_filter();
     // Byte 0xddf70d: set by opcode 0x150e and cleared by 0x1f65 (each carrying the player's name); while it
     // is set the chat commands and socials send nothing.
@@ -2558,6 +2631,8 @@ private:
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
     void handle_spell(Op op, const AppPacket& p);
+    // An OP_Action of type 231; from_server false: a local presentation (spell 859's missile, spell_missile_hit).
+    void handle_spell_action(const Action& action, std::int64_t now, bool from_server);
     // Handle_OP_MemorizeSpell @0x4be150 (game/mechanics/spell_gems.h) on the connection's state.
     void handle_memorize_spell(const MemorizeSpell& m);
     void land_spell_on_me(const Action& a, std::int64_t now);
@@ -2595,6 +2670,11 @@ private:
     // a rider's update also moves its mount.
     bool rider_update(std::uint32_t spawn_id, const Motion& m);
     void spawn_leaving(std::uint32_t id);
+    // PlayerClient_ApplyNewArmorFilter's inputs for one spawn (Appearance::new_armor_bits): its kind, and whether it
+    // is the local player, a group or a raid member.
+    void refresh_new_armor_bits(game::Spawn& s) const;
+    // Whether the local player, the group or the raid changed since the last call (no allocation when not).
+    bool new_armor_membership_changed();
     // CEverQuest_ProcessCursorQueue @0x5321a0, once a frame (net/game_connection_items.cpp).
     void process_cursor_queue();
     bool item_command(const std::string& command, const std::string& args);
@@ -2674,6 +2754,7 @@ private:
     void stop_spell_cast(std::uint32_t spell = game::kNoSpell);
     // StopSpellCast's bard song part (game_connection_ability_commands.cpp) for `reason` (0 the client's stop).
     void bard_song_stopped(std::uint32_t reason);
+    void restart_bard_twist(std::uint8_t reason);
     void attack_command(const std::string& args);
     void target_by_name(const std::string& name);
     // Social (net/game_connection_social.cpp).
@@ -2905,6 +2986,7 @@ private:
     std::optional<PlayerProfile> profile_;
     std::optional<NewZone> new_zone_;
     std::optional<TimeOfDay> time_;
+    std::chrono::steady_clock::time_point time_received_{};
     game::WorldState world_;
     bool own_spawn_seen_ = false;
     bool weather_seen_ = false;
@@ -2942,11 +3024,13 @@ private:
 
     // Combat.
     PlayerStatus pstatus_;
+    std::uint32_t consciousness_changes_ = 0;
     OwnHp own_hp_items_; // what own_hp() adds to pstatus_ (set_own_hp_items)
     void set_own_spawn_hp(); // the player's spawn's HP percent from own_hp() (SetSpawnHP)
     bool auto_attack_ = false;
     bool attack_until_xtarget_clear_ = false;
     bool fast_camp_ = false;
+    bool cast_animation_fallback_ = true; // set_cast_animation_fallback
     bool attack_held_for_xtarget_ = false; // kept on at the target's death (attack_until_xtarget_clear)
     bool auto_target_xtarget_ = true;
     bool face_on_attack_ = true;
@@ -3008,6 +3092,7 @@ private:
     void load_kept_items();
     // A kept item (or a bag holding one) about to be `verb`ed ("destroy", "drop", ...): says so, and true.
     bool refuse_kept(const Item* item, std::string_view verb);
+    bool refuse_kept_id(std::uint32_t id, std::string_view verb);
     net::Coins coins_;
     net::Coins pending_split_; // opcode 0x3ed4's coin (0xddfcd4..0xddfce0), credited by process_cursor_queue
     std::optional<LootSession> loot_;
@@ -3043,12 +3128,18 @@ private:
     std::vector<SoundCue> sound_cues_;
     std::vector<SpellEffectCue> effect_cues_;
     std::vector<EffectPacketCue> effect_packets_;
+    std::vector<std::uint32_t> blood_spurts_; // local player landed sharp-weapon hit target IDs
     // Per caster, the spell whose cast stage has played (its OP_BeginCast, or the one added for a proc) and until when
     // (now_ms) an OP_Action of it counts as that cast's landing rather than a proc.
     std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::int64_t>> cast_stage_shown_;
     std::vector<game::MissilePacket> missiles_;
     LandingEffects landing_;
     std::int32_t drunkenness_ = 0; // PcBase's drunkenness as HitBySpell's SPA 160 sets it
+    std::uint32_t drunkenness_updates_ = 0;
+    std::uint32_t drunkenness_motion_updates_ = 0;
+    void send_eye_position(bool force);
+    std::chrono::steady_clock::time_point last_eye_position_send_{};
+    bool eye_motion_dirty_ = false;
     std::optional<MerchantSession> merchant_;
     std::int64_t merchant_check_ms_ = 0; // CMerchantWnd::NextRefreshTime: the range check every 500 ms
     std::optional<TradeSession> trade_;
@@ -3067,6 +3158,10 @@ private:
         int phase = 0;
         std::uint32_t answers = 0;
         std::int64_t deadline_ms = 0;
+        bool guild_tribute = false;
+        std::uint32_t tribute_master = 0;
+        // A replacement stack of the same item must not inherit a destructive action.
+        std::vector<std::pair<std::string, std::uint32_t>> expected;
     };
     std::optional<ItemJob> item_job_;
     std::string item_job_blocked(ItemJobScope scope) const; // why a job cannot run now (empty: it can)
@@ -3202,6 +3297,30 @@ private:
     void resend_blocked_buffs();
     Tribute tribute_;
     GuildTribute guild_tribute_;
+    struct PendingTributeDonation {
+        bool guild = false;
+        ItemSlot slot;
+        std::uint32_t quantity = 0, master_id = 0;
+        Item item;
+        std::int64_t expires_ms = 0; // session_now_ms() after which no answer is expected any more
+    };
+    // Neither reply carries an instance or transaction ID. Keep this single request even after a batch timeout,
+    // so a late reply cannot be mistaken for another donation. Other inventory actions remain available.
+    // EQEmu answers in the handler or not at all (a master out of range or gone, no guild), so the request is
+    // also dropped when that channel's master window is answered again (the answer to an open sent after the
+    // donation comes after the donation's own) and after kTributeReplyLimitMs.
+    std::optional<PendingTributeDonation> pending_tribute_donation_;
+    static constexpr std::int64_t kTributeReplyLimitMs = 30000;
+    // The session's clock (ConnectionOptions::session.clock when a test sets one) in ms, on now_ms()'s scale.
+    std::int64_t session_now_ms() const;
+    bool tribute_donation_waiting() const {
+        return pending_tribute_donation_ && session_now_ms() < pending_tribute_donation_->expires_ms;
+    }
+    void expire_tribute_donation();
+    bool begin_tribute_donation(bool guild, const Item& item, std::uint32_t master_id);
+    bool finish_tribute_donation(bool guild, const ItemSlot& slot, std::uint32_t quantity,
+                                std::uint32_t master_id, bool consumed);
+    void reset_tribute_donations() { pending_tribute_donation_.reset(); }
     std::uint32_t guild_platinum_pending_ = 0; // a guild platinum donation awaiting its answer
     void handle_tribute(Op op, const AppPacket& p);
     Expedition expedition_;
@@ -3212,6 +3331,13 @@ private:
     game::PlayerPath::FloorFn path_floor_;
     std::optional<FailedFind> failed_find_;
     std::uint32_t find_replies_ = 0;
+    std::unordered_map<std::uint32_t, FindableNpc> findable_npcs_;
+    std::unordered_map<std::string, std::uint8_t> quest_npcs_;
+    bool quest_npcs_asked_ = false;
+    bool hailstone_script_ = false;   // a zone answered OP_HailstoneSettingsRequest
+    bool zone_links_asked_ = false;
+    std::optional<ZoneLinks> zone_links_;
+    std::uint32_t zone_links_serial_ = 0;
     std::optional<glm::vec3> path_finish_;
     bool path_settings_loaded_ = false;
     game::PathSettings path_settings_;
@@ -3236,7 +3362,12 @@ private:
     std::function<void(std::string_view, std::string_view, const std::string&)> ui_ini_put_;
     std::function<std::string()> visible_chat_text_;
     Claims claims_;
-    std::int64_t stun_until_ms_ = 0;
+    std::int64_t stun_timer_ms_ = 0; // the spawn's +0x43c: when the stun ends (0: none running)
+    bool stun_state_ = false;        // CharacterZoneClient +0x100 = 1
+    std::uint32_t speed_stops_ = 0, turn_stops_ = 0, stun_leans_ = 0;
+    // CharacterZoneClient::StunMe @0x4432c0 and CharacterZoneClient_EndStun @0x4433d0 (game_connection_ticks.cpp).
+    void stun_me(std::uint32_t duration_ms, bool lean);
+    void end_stun();
     bool alarm_open_ = false;
     std::int64_t alarm_due_ms_ = 0;
     std::array<NameChangeWindow, kNameKinds> name_change_{};
@@ -3297,6 +3428,9 @@ private:
 
     // Groups and pets.
     game::GroupState group_;
+    // The local player's id and the group then raid member names Appearance::new_armor_bits were last made with.
+    std::uint32_t new_armor_player_ = 0;
+    std::vector<std::string> new_armor_members_;
     game::PetState pets_;
     std::vector<std::pair<std::uint32_t, game::BuffSlot>> pet_buffs_;
     game::PetToggleStates pet_toggles_{};

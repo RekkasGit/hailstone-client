@@ -6,9 +6,9 @@
 -- hailstone.cfg the client sets no rules.
 --
 -- It also carries guild invitations across zones. EQEmu's own /guildinvite finds the invitee only in the inviter's
--- zone. Hailstone sends OP_HailstoneGuild (raw 0x1422) instead when the invitee is not in its zone and the zone answered
+-- zone. Hailstone sends OP_HailstoneGuild (raw 0x1430) instead when the invitee is not in its zone and the zone answered
 -- its hello; every packet both ways is {u32 magic 'NMSG'; u16 version 1; u16 action; char name[64]; u32 guild id;
--- u32 value}, 80 bytes. Actions: 0 the hello after every zone-in (answered with OP_HailstoneGuildReply 0x1423 action 0,
+-- u32 value}, 80 bytes. Actions: 0 the hello after every zone-in (answered with OP_HailstoneGuildReply 0x1431 action 0,
 -- value 1: world-wide invitations); 1 an invitation (name: whom) -> the script checks the inviter's permission,
 -- leaves the invitation in a data bucket and signals the invitee's zone, which sends the invitee's client
 -- OP_HailstoneGuildReply action 1 (name: the inviter); 2 the invitee's answer (value: the rank to accept, 9 or 11 to
@@ -16,14 +16,14 @@
 -- to its hello, and any other client, keeps to EQEmu's own same-zone invitation.
 --
 -- And it sends the server's settings for the client: after every zone-in Hailstone sends OP_HailstoneSettingsRequest (raw
--- 0x1424): {u32 magic 'NMSP'; u16 version 1}, and this answers OP_HailstoneSettings (0x1425): {u32 magic; u16 version 1;
+-- 0x1432): {u32 magic 'NMSP'; u16 version 1}, and this answers OP_HailstoneSettings (0x1433): {u32 magic; u16 version 1;
 -- u32 flags (none defined now; bit 0 hid the player count, which no Hailstone UI shows any more)}. Clients older
 -- than it never ask, so they never get it.
 --
 -- And it sends the server's client files: what the server owner puts in client_files/ (beside eqemu_config.json:
 -- hailstone.cfg, spells_us.txt, eqstr_us.txt ..., and the folders assets/, plugins/ and scripts/). At its first
--- zone-in of a login Hailstone asks for the list (OP_HsFilesRequest raw 0x1426 action 1) and downloads what it lacks a piece at a time (action 2), answered with
--- OP_HsFiles 0x1427 (the client's net/server_files_packets.h has the layout). The list is SHA-256 hashed with
+-- zone-in of a login Hailstone asks for the list (OP_HsFilesRequest raw 0x1434 action 1) and downloads what it lacks a piece at a time (action 2), answered with
+-- OP_HsFiles 0x1435 (the client's net/server_files_packets.h has the layout). The list is SHA-256 hashed with
 -- sha256sum (GNU find and xargs; on Windows PowerShell's Get-FileHash) when the zone starts (and at #reloadquest),
 -- and again when a client asks and it is older than files_rescan seconds (300; never under 30); the hashes are kept
 -- in client_files/.hailstone-cache, so only new or changed files are hashed again. Names starting with '.' are not
@@ -32,6 +32,25 @@
 -- timer) and are served in order, a client at a time in turn. A file that changed on disk since it was hashed (its
 -- size, or its time where find can tell) makes the zone hash again and the client list again, instead of sending
 -- bytes that do not match the list.
+--
+-- And it tells the client's Find window which of the zone's NPCs have quests: Hailstone asks once a zone, when the
+-- window first lists the zone's NPCs (OP_HsQuestNpcsRequest raw 0x1436: {u32 magic 'HSQN'; u16 version 1}), and this
+-- answers OP_HsQuestNpcs 0x1437: {u32 magic; u16 version 1; u16 count; count x {u8 flags (1 takes hand-ins, 2
+-- talks); u8 length; the npc_types name}}. An NPC has quests when its own quest file (found as EQEmu finds it:
+-- quests/<zone>/v<version>/, quests/<zone>/, quests/global/; by id, name or name_id; .lua or .pl; the first in each
+-- of quest_paths' folders) handles EVENT_ITEM / event_trade (hand-ins) or EVENT_SAY / event_say (talks). The default
+-- scripts and global_npc are left out: they run for every NPC. The NPCs are the zone's spawn tables' (one query)
+-- and the ones alive now (spawned by scripts). The list is made once per zone process, at the first request, and
+-- kept (#reloadquest makes it again).
+--
+-- And it sends how the zones connect, for the map's zone finder: when its World view first opens in a session,
+-- Hailstone asks (OP_HsZoneLinksRequest raw 0x1438: {u32 magic 'HSZL'; u16 version 1}) and this answers
+-- OP_HsZoneLinks (0x1439: {u32 magic; u16 version 1; u16 flags 0; u32 count; count x {u16 from zone id; u16 to zone
+-- id}; i16 current expansion (-1 all); u32 zone count; count x u16 zone id}; the client's net/zone_link_packets.h):
+-- the zone_points rows of version 0 or -1 that the server's expansion and content flags allow, each pair of zones
+-- once, then the zones they allow (the client lists and routes through only those). Built at the first request in a zone process with one query of
+-- the content database (and one of content_flags), then kept in memory (#reloadquest builds it again); a
+-- character is answered at most twice a minute. Without it, the client learns the zone lines of the zones it visits.
 --
 -- global/script_init.lua loads it with eq.load_encounter("hailstone"). It registers its player event through the
 -- encounter, so it runs beside the server's own player scripts (Perl or Lua) instead of replacing them.
@@ -46,11 +65,28 @@ local settings = {
 	files_rescan           = 300, -- seconds the client_files/ list is kept before a client's request looks again (min 30)
 	files_chunks_per_second = 768, -- file pieces (32 KB) one client is sent a second, more wait; 0: no limit
 	files_chunks_per_second_zone = 1024, -- the same for all of the zone's clients together; 0: no limit
+	quest_npcs             = 1,  -- tell Hailstone's Find window which of the zone's NPCs have quests (0: say nothing)
+	zone_links             = 1,  -- send the zone connections for the map's zone finder (0: never answered)
 }
 
-local OP_SETTINGS_REQUEST = 0x1424
-local OP_SETTINGS         = 0x1425
+local OP_SETTINGS_REQUEST = 0x1432
+local OP_SETTINGS         = 0x1433
 local MAGIC      = 0x50534d4e
+
+-- Hailstone 0.7.0 and older send the same packets 0x0e lower (0x1422-0x1427). They are still answered, on the
+-- opcodes the client asked on, so a server that updates this script keeps serving clients that have not updated.
+-- (On Project Triune's servers the old 0x1422 is its own opcode and never comes here: those old clients get no
+-- cross-zone guild invitations, as before.) Kept per client entity, which a zone-in makes anew.
+local OLD_OPCODES_VAR   = "hailstone_old_opcodes"
+local OLD_OPCODES_SHIFT = 0x0e
+
+-- The opcode to answer `client` on: `op`, or its old number for a client that asked on the old ones.
+local function reply_op(client, op)
+	if client:GetEntityVariable(OLD_OPCODES_VAR) == "1" then
+		return op - OLD_OPCODES_SHIFT
+	end
+	return op
+end
 
 local function log(msg)
 	eq.debug("[hailstone] " .. msg)
@@ -123,8 +159,8 @@ end
 
 -- ---------------------------------------------------------------- guild invitations across zones
 
-local OP_GUILD       = 0x1422
-local OP_GUILD_REPLY = 0x1423
+local OP_GUILD       = 0x1430
+local OP_GUILD_REPLY = 0x1431
 local GUILD_MAGIC    = 0x47534d4e
 local GUILD_SIZE     = 80
 local GUILD_HELLO, GUILD_INVITE, GUILD_ANSWER = 0, 1, 2
@@ -139,8 +175,8 @@ local HAILSTONE_VAR  = "hailstone_client"
 
 local encounter -- for the delivery timers
 
-local function guild_packet(action, name, guild_id, value)
-	local p = Packet(OP_GUILD_REPLY, GUILD_SIZE, true)
+local function guild_packet(client, action, name, guild_id, value)
+	local p = Packet(reply_op(client, OP_GUILD_REPLY), GUILD_SIZE, true)
 	p:WriteInt32(0, GUILD_MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt16(6, action)
@@ -246,7 +282,7 @@ local function guild_deliver(client)
 	end
 	i.state = "d"
 	write_invite(id, i)
-	client:QueuePacket(guild_packet(GUILD_INVITE, i.inviter, i.guild_id, i.rank))
+	client:QueuePacket(guild_packet(client, GUILD_INVITE, i.inviter, i.guild_id, i.rank))
 end
 
 -- What EQEmu sends a new member (EntityList::SendGuildMemberAdd: Client::SendGuildRanks, SendGuildRankNames,
@@ -405,7 +441,7 @@ local function on_guild_packet(client, packet)
 	if action == GUILD_HELLO then
 		client:SetEntityVariable(HAILSTONE_VAR, "1")
 		local on = setting("enabled") ~= 0 and setting("guild_invites_world") ~= 0 and Database ~= nil
-		client:QueuePacket(guild_packet(GUILD_HELLO, "", 0, on and 1 or 0))
+		client:QueuePacket(guild_packet(client, GUILD_HELLO, "", 0, on and 1 or 0))
 		return
 	end
 	if setting("enabled") == 0 or setting("guild_invites_world") == 0 or Database == nil then
@@ -493,8 +529,8 @@ end
 
 -- ---------------------------------------------------------------- the server's client files
 
-local OP_FILES_REQUEST = 0x1426
-local OP_FILES         = 0x1427
+local OP_FILES_REQUEST = 0x1434
+local OP_FILES         = 0x1435
 local FILES_MAGIC      = 0x4c465348 -- "HSFL"
 local FILES_DIR        = "client_files" -- the zones' working folder is the server folder
 local FILES_PAGE       = 64             -- list entries a packet
@@ -796,7 +832,7 @@ local function send_files_page(client, first)
 	for i = first + 1, first + count do
 		size = size + 38 + #list[i].path
 	end
-	local p = Packet(OP_FILES, size, true)
+	local p = Packet(reply_op(client, OP_FILES), size, true)
 	files_header(p, 1)
 	p:WriteInt32(8, files.id)
 	p:WriteInt32(12, #list)
@@ -817,7 +853,7 @@ local function send_files_page(client, first)
 end
 
 local function send_files_error(client, id, index, code)
-	local p = Packet(OP_FILES, 20, true)
+	local p = Packet(reply_op(client, OP_FILES), 20, true)
 	files_header(p, 3)
 	p:WriteInt32(8, id)
 	p:WriteInt32(12, index)
@@ -874,7 +910,7 @@ local function send_files_chunk(client, id, index, offset, length)
 		send_files_error(client, id, index, 2)
 		return
 	end
-	local p = Packet(OP_FILES, 24 + length, true)
+	local p = Packet(reply_op(client, OP_FILES), 24 + length, true)
 	files_header(p, 2)
 	p:WriteInt32(8, id)
 	p:WriteInt32(12, index)
@@ -1081,6 +1117,305 @@ local function on_files_request(client, packet)
 	end
 end
 
+-- ---------------------------------------------------------------- the Find window's quest NPCs
+
+local OP_QUEST_REQUEST = 0x1436
+local OP_QUEST_NPCS    = 0x1437
+local QUEST_MAGIC      = 0x4e515348 -- "HSQN"
+local QUEST_FLAG_ITEMS, QUEST_FLAG_TALKS = 1, 2
+local QUEST_MAX        = 4000 -- names in a reply (the count is a u16; a zone has a few hundred)
+local QUEST_FILE_MAX   = 1048576 -- bytes of a quest file read for its handlers
+
+local quest_list = nil -- { { name, flags }, ... } once made: kept for the zone process
+
+-- quest_paths from eqemu_config.json (beside which the zone runs), else its "quests" folder, else "quests".
+local function quest_dirs()
+	local dirs = {}
+	local f = io.open("eqemu_config.json", "rb")
+	local text = f and f:read(262144) or ""
+	if f then f:close() end
+	local list = text:match('"quest_paths"%s*:%s*(%b[])')
+	if list then
+		for d in list:gmatch('"([^"]*)"') do dirs[#dirs + 1] = d end
+	end
+	if #dirs == 0 then dirs[1] = text:match('"quests"%s*:%s*"([^"]*)"') or "quests" end
+	for i, d in ipairs(dirs) do dirs[i] = d:gsub("[/\\]+$", "") end
+	return dirs
+end
+
+-- `flags` with `bit` set (EQEmu's Lua is 5.1: no bit operators).
+local function with_flag(flags, bit)
+	if math.floor(flags / bit) % 2 == 1 then return flags end
+	return flags + bit
+end
+
+-- The handlers a quest file has (QUEST_FLAG_*), each file read once.
+local quest_file_flags = {}
+local function file_flags(path)
+	local known = quest_file_flags[path]
+	if known ~= nil then return known end
+	local flags = 0
+	local f = io.open(path, "rb")
+	if f then
+		local text = f:read(QUEST_FILE_MAX) or ""
+		f:close()
+		if text:find("sub%s+EVENT_ITEM") or text:find("function%s+event_trade") or text:find("event_trade%s*=%s*function") then
+			flags = with_flag(flags, QUEST_FLAG_ITEMS)
+		end
+		if text:find("sub%s+EVENT_SAY") or text:find("function%s+event_say") or text:find("event_say%s*=%s*function") then
+			flags = with_flag(flags, QUEST_FLAG_TALKS)
+		end
+	else
+		flags = false -- no such file
+	end
+	quest_file_flags[path] = flags
+	return flags
+end
+
+-- The NPC's quest file as EQEmu looks for it (QuestParserCollection::GetQIByNPCQuest, without the default scripts),
+-- and its handlers; 0 without one.
+local function npc_flags(dirs, zone, version, id, name)
+	name = name:gsub("`", "-")
+	local bases = { tostring(id), name, name .. "_" .. id }
+	for _, dir in ipairs(dirs) do
+		for _, folder in ipairs({ dir .. "/" .. zone .. "/v" .. version, dir .. "/" .. zone, dir .. "/global" }) do
+			for _, base in ipairs(bases) do
+				for _, ext in ipairs({ ".lua", ".pl" }) do
+					local flags = file_flags(folder .. "/" .. base .. ext)
+					if flags then return flags end
+				end
+			end
+		end
+	end
+	return 0
+end
+
+local function build_quest_list()
+	local started = os.clock()
+	local zone    = (eq.get_zone_short_name() or ""):gsub("[^%w_]", "")
+	local version = tonumber(eq.get_zone_instance_version()) or 0
+	-- the NPCs: the spawn tables' for this zone and version, and those alive now
+	local npcs, seen = {}, {}
+	local function add(id, name)
+		id = tonumber(id)
+		if id and name and name ~= "" and not seen[id] then
+			seen[id] = true
+			npcs[#npcs + 1] = { id = id, name = name }
+		end
+	end
+	if Database then
+		for _, r in ipairs(rows(string.format(
+			"SELECT DISTINCT nt.`id`, nt.`name` FROM `spawn2` s JOIN `spawnentry` se ON se.`spawngroupID` = s.`spawngroupID` " ..
+			"JOIN `npc_types` nt ON nt.`id` = se.`npcID` WHERE s.`zone` = '%s' AND (s.`version` = %d OR s.`version` = -1)",
+			zone, version))) do
+			add(r.id, r.name)
+		end
+	end
+	local list = eq.get_entity_list():GetNPCList()
+	for npc in (list and list.entries or function() end) do
+		local name = (npc:GetName() or ""):gsub("%d+$", "") -- the spawn's name with its number
+		add(npc:GetNPCTypeID(), name)
+	end
+	local dirs, out, names = quest_dirs(), {}, {}
+	for _, n in ipairs(npcs) do
+		local flags = npc_flags(dirs, zone, version, n.id, n.name)
+		if flags ~= 0 and #out < QUEST_MAX then
+			local key = n.name:sub(1, 64)
+			if names[key] then
+				if math.floor(flags / QUEST_FLAG_ITEMS) % 2 == 1 then names[key].flags = with_flag(names[key].flags, QUEST_FLAG_ITEMS) end
+				if math.floor(flags / QUEST_FLAG_TALKS) % 2 == 1 then names[key].flags = with_flag(names[key].flags, QUEST_FLAG_TALKS) end
+			else
+				names[key] = { name = key, flags = flags }
+				out[#out + 1] = names[key]
+			end
+		end
+	end
+	log(string.format("quest NPCs of %s: %d of %d NPCs, %.0f ms", zone, #out, #npcs, (os.clock() - started) * 1000))
+	return out
+end
+
+-- A client asks once a zone (and again after it zones back): QUEST_REQUESTS a character in QUEST_SECONDS.
+local QUEST_REQUESTS, QUEST_SECONDS = 3, 10
+local quest_limit = limiter(QUEST_SECONDS)
+
+local function on_quest_request(client, packet)
+	if setting("enabled") == 0 or setting("quest_npcs") == 0 then
+		return
+	end
+	if not allow(quest_limit, client:CharacterID(), QUEST_REQUESTS) then
+		return
+	end
+	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= QUEST_MAGIC then
+		return
+	end
+	quest_list = quest_list or build_quest_list()
+	local size = 8
+	for _, q in ipairs(quest_list) do size = size + 2 + #q.name end
+	local p = Packet(OP_QUEST_NPCS, size, true)
+	p:WriteInt32(0, QUEST_MAGIC)
+	p:WriteInt16(4, 1)
+	p:WriteInt16(6, #quest_list)
+	local pos = 8
+	for _, q in ipairs(quest_list) do
+		p:WriteInt8(pos, q.flags)
+		p:WriteInt8(pos + 1, #q.name)
+		p:WriteFixedLengthString(pos + 2, q.name, #q.name)
+		pos = pos + 2 + #q.name
+	end
+	client:QueuePacket(p)
+end
+
+-- ---------------------------------------------------------------- the zone links (the map's zone finder)
+
+local OP_ZONE_LINKS_REQUEST = 0x1438
+local OP_ZONE_LINKS         = 0x1439
+local ZONE_LINKS_MAGIC      = 0x4c5a5348
+local ZONE_LINKS_MAX, ZONE_LINKS_SECONDS = 2, 60
+local zone_links_limit = limiter(ZONE_LINKS_SECONDS)
+local zone_links       = nil -- { from1, to1, from2, to2, ... } once built
+local zone_list        = nil -- { zone id, ... } the zones allowed; nil for a schema without the content columns
+local zone_expansion   = -1  -- Expansion:CurrentExpansion as the rule says it (-1 all)
+
+-- A comma-separated flag list that names one of `set`'s flags.
+local function names_flag(list, set)
+	for flag in tostring(list or ""):gmatch("[^,]+") do
+		if set[flag] then
+			return true
+		end
+	end
+	return false
+end
+
+-- EQEmu's ContentFilterCriteria::apply, for one row: the expansion range (-1: any) holds the server's current
+-- expansion (Expansion:CurrentExpansion, -1 all: 99), a row with content_flags needs one of them enabled, and one
+-- with content_flags_disabled one of those disabled.
+local function content_allows(row, expansion, enabled, disabled)
+	local min, max = tonumber(row.min_expansion) or -1, tonumber(row.max_expansion) or -1
+	if min ~= -1 and min > expansion then return false end
+	if max ~= -1 and max < expansion then return false end
+	if (row.content_flags or "") ~= "" and not names_flag(row.content_flags, enabled) then return false end
+	if (row.content_flags_disabled or "") ~= "" and not names_flag(row.content_flags_disabled, disabled) then return false end
+	return true
+end
+
+local function build_zone_links()
+	local expansion = tonumber(eq.get_rule("Expansion:CurrentExpansion")) or -1
+	zone_expansion = expansion
+	if expansion == -1 then
+		expansion = 99
+	end
+	local enabled, disabled = {}, {}
+	local fstmt = query(Database(), "SELECT `flag_name`, `enabled` FROM `content_flags`")
+	if fstmt then
+		local row = fstmt:fetch_hash()
+		while row do
+			if tonumber(row.enabled) == 1 then enabled[row.flag_name] = true else disabled[row.flag_name] = true end
+			row = fstmt:fetch_hash()
+		end
+	end
+	local ok, db = pcall(Database, Database.Content)
+	if not ok or db == nil then
+		db = Database()
+	end
+	local cols = function(a) return string.format("%s.`min_expansion`, %s.`max_expansion`, %s.`content_flags`, %s.`content_flags_disabled`", a, a, a, a) end
+	-- The zone point, the zone it is in and the zone it leads to must each be allowed.
+	local sql = "SELECT s.`zoneidnumber` AS from_id, p.`target_zone_id` AS to_id, " ..
+		cols("p") .. ", " .. cols("s"):gsub("`(%w+)`", "`%1` AS s_%1") .. ", " .. cols("t"):gsub("`(%w+)`", "`%1` AS t_%1") ..
+		" FROM `zone_points` p JOIN `zone` s ON s.`short_name` = p.`zone` AND s.`version` = 0" ..
+		" JOIN `zone` t ON t.`zoneidnumber` = p.`target_zone_id` AND t.`version` = 0" ..
+		" WHERE (p.`version` = 0 OR p.`version` = -1) AND p.`target_zone_id` > 0 AND s.`zoneidnumber` <> p.`target_zone_id`"
+	local stmt = query(db, sql)
+	local filtered = stmt ~= nil
+	if not stmt then -- a schema without the content columns
+		stmt = query(db, "SELECT s.`zoneidnumber` AS from_id, p.`target_zone_id` AS to_id FROM `zone_points` p" ..
+			" JOIN `zone` s ON s.`short_name` = p.`zone` AND s.`version` = 0" ..
+			" WHERE (p.`version` = 0 OR p.`version` = -1) AND p.`target_zone_id` > 0 AND s.`zoneidnumber` <> p.`target_zone_id`")
+	end
+	local seen, list = {}, {}
+	if stmt then
+		local row = stmt:fetch_hash()
+		while row do
+			local from, to = tonumber(row.from_id), tonumber(row.to_id)
+			local allowed = from ~= nil and to ~= nil and from > 0 and from < 65536 and to < 65536
+			if allowed and filtered then
+				local function prefixed(prefix)
+					return { min_expansion = row[prefix .. "min_expansion"], max_expansion = row[prefix .. "max_expansion"],
+						content_flags = row[prefix .. "content_flags"], content_flags_disabled = row[prefix .. "content_flags_disabled"] }
+				end
+				allowed = content_allows(row, expansion, enabled, disabled)
+					and content_allows(prefixed("s_"), expansion, enabled, disabled)
+					and content_allows(prefixed("t_"), expansion, enabled, disabled)
+			end
+			local key = allowed and (from * 65536 + to)
+			if allowed and not seen[key] then
+				seen[key] = true
+				list[#list + 1] = from
+				list[#list + 1] = to
+			end
+			row = stmt:fetch_hash()
+		end
+	end
+	-- The zones themselves (version 0), as allowed.
+	zone_list = nil
+	local zstmt = filtered and query(db, "SELECT z.`zoneidnumber` AS id, " .. cols("z") ..
+		" FROM `zone` z WHERE z.`version` = 0 AND z.`zoneidnumber` > 0 AND z.`zoneidnumber` < 65536")
+	if zstmt then
+		zone_list = {}
+		local zseen = {}
+		local row = zstmt:fetch_hash()
+		while row do
+			local id = tonumber(row.id)
+			if id and not zseen[id] and content_allows(row, expansion, enabled, disabled) then
+				zseen[id] = true
+				zone_list[#zone_list + 1] = id
+			end
+			row = zstmt:fetch_hash()
+		end
+	end
+	log(string.format("zone links: %d, %s zones, for the map's zone finder", math.floor(#list / 2),
+		zone_list and tostring(#zone_list) or "all"))
+	return list
+end
+
+local function on_zone_links_request(client, packet)
+	local ok, first_over = allow(zone_links_limit, client:CharacterID(), ZONE_LINKS_MAX)
+	if not ok then
+		if first_over then
+			log(string.format("%s asks for the zone links too often; the rest of %d s are dropped", client:GetCleanName(), ZONE_LINKS_SECONDS))
+		end
+		return
+	end
+	if setting("enabled") == 0 or setting("zone_links") == 0 or Database == nil then
+		return
+	end
+	if packet:GetSize() < 6 or packet:ReadInt32(0) ~= ZONE_LINKS_MAGIC then
+		return
+	end
+	if zone_links == nil then
+		zone_links = build_zone_links()
+	end
+	local count = math.floor(#zone_links / 2)
+	local zones = zone_list and #zone_list or 0
+	local p = Packet(OP_ZONE_LINKS, 12 + 4 * count + (zone_list and 6 + 2 * zones or 0), true)
+	p:WriteInt32(0, ZONE_LINKS_MAGIC)
+	p:WriteInt16(4, 1)
+	p:WriteInt16(6, 0)
+	p:WriteInt32(8, count)
+	for i = 1, count do
+		p:WriteInt16(12 + (i - 1) * 4, zone_links[2 * i - 1])
+		p:WriteInt16(14 + (i - 1) * 4, zone_links[2 * i])
+	end
+	if zone_list then
+		local at = 12 + 4 * count
+		p:WriteInt16(at, zone_expansion)
+		p:WriteInt32(at + 2, zones)
+		for i = 1, zones do
+			p:WriteInt16(at + 6 + (i - 1) * 2, zone_list[i])
+		end
+	end
+	client:QueuePacket(p)
+end
+
 -- ----------------------------------------------------------------
 
 -- The server's settings for the client. No flag is defined now (bit 0, the player count's hiding, is retired: no
@@ -1090,7 +1425,7 @@ local function send_settings(client)
 		return
 	end
 	local flags = 0
-	local p = Packet(OP_SETTINGS, 10, true)
+	local p = Packet(reply_op(client, OP_SETTINGS), 10, true)
 	p:WriteInt32(0, MAGIC)
 	p:WriteInt16(4, 1)
 	p:WriteInt32(6, flags)
@@ -1105,6 +1440,13 @@ local settings_limit = limiter(SETTINGS_SECONDS)
 local function on_unhandled_opcode(e)
 	local packet = e.packet
 	local op     = packet:GetProtocolOpcode()
+	if op == OP_GUILD - OLD_OPCODES_SHIFT or op == OP_FILES_REQUEST - OLD_OPCODES_SHIFT
+		or op == OP_SETTINGS_REQUEST - OLD_OPCODES_SHIFT then
+		e.self:SetEntityVariable(OLD_OPCODES_VAR, "1")
+		op = op + OLD_OPCODES_SHIFT
+	elseif op == OP_GUILD or op == OP_FILES_REQUEST or op == OP_SETTINGS_REQUEST then
+		e.self:SetEntityVariable(OLD_OPCODES_VAR, "0")
+	end
 	if op == OP_GUILD then
 		on_guild_packet(e.self, packet)
 		return
@@ -1115,6 +1457,14 @@ local function on_unhandled_opcode(e)
 	end
 	if op == OP_CANCEL_INVITE then
 		on_cancel_invite(e.self, packet)
+		return
+	end
+	if op == OP_QUEST_REQUEST then
+		on_quest_request(e.self, packet)
+		return
+	end
+	if op == OP_ZONE_LINKS_REQUEST then
+		on_zone_links_request(e.self, packet)
 		return
 	end
 	if op ~= OP_SETTINGS_REQUEST then
@@ -1138,6 +1488,8 @@ end
 function event_encounter_load(e)
 	encounter = e.encounter
 	setting_cache = {} -- #reloadquest: the buckets as they are now
+	quest_list, quest_file_flags = nil, {} -- and the quest files as they are now
+	zone_links = nil   -- and the zone links built again when next asked
 	if setting("client_files") ~= 0 then
 		build_client_files(true) -- the hashing is done before the first client asks
 	end

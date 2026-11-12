@@ -470,6 +470,21 @@ ui.window("Wrap", function()
   if skipped then ui.SetCursorPos(x0, y); ui.Dummy(0, 0) end
   out["ref" .. frame] = select(2, ui.GetCursorPos())
   ui.EndChild()
+  if frame == 4 then -- (last: the rows drawn would push the outputs above out of the window's sight)
+    -- a chat line holding new lines (a server's MOTD): each starts a row, an empty one is a blank row, one at the
+    -- end adds nothing
+    local motd = stml.Parse('<c "#808080">[06:53:16] </c>Be Free! \n\nDo Not Pay\n')
+    stml.DrawLine(motd, 2000, nil, "k")
+    out.motd = kept(motd)
+    local gp = G.layout(G.parse('<c "#808080">[06:53:16] </c>Be Free! \n\nDo Not Pay\n'), 2000)
+    local gr = {}
+    for _, r in ipairs(gp) do
+      local t = {}
+      for _, p in ipairs(r) do t[#t + 1] = p[1] end
+      gr[#gr + 1] = table.concat(t)
+    end
+    out.gpMotd = table.concat(gr, "|")
+  end
   ui.End()
 end)
 )lua";
@@ -501,6 +516,8 @@ end)
         CHECK(get("narrowSame") == "true");
         CHECK(get("narrowRows") != "0");
         CHECK(get("measuredSame") == "true");
+        CHECK(get("motd") == "[06:53:16] ,Be ,Free! ,|row,Do |row,Not ,Pay");
+        CHECK(get("gpMotd") == "[06:53:16] Be Free! ||Do Not Pay");
         CHECK(get("gpSame") == "true");
         CHECK(get("gpNew") == "true");
         CHECK(get("blockSame") == "true");
@@ -631,6 +648,62 @@ TEST_CASE("Lua UI: images draw only live textures the client handed out") {
         CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
     }
     hailstone::ui::texture_id_removed(&live);
+    ImGui::DestroyContext(ctx);
+}
+
+// ui.Image's optional r, g, b, a tint the image (ImageWithBg: Dear ImGui's Image takes no tint); without them it is
+// drawn untinted.
+TEST_CASE("Lua UI: ui.Image takes a tint") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_image_tint_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "i.lua") << "ui.window('I', function()\n"
+                                    "  ui.Begin('I')\n"
+                                    "  ui.Image(TINTED, 8, 8, 0, 0, 1, 1, 1, 0, 0, 1)\n"
+                                    "  ui.Image(PLAIN, 8, 8)\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    static int tinted = 0, plain = 0;
+    hailstone::ui::texture_id_added(&tinted);
+    hailstone::ui::texture_id_added(&plain);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_State* L = lua.state();
+        lua_pushlightuserdata(L, &tinted);
+        lua_setglobal(L, "TINTED");
+        lua_pushlightuserdata(L, &plain);
+        lua_setglobal(L, "PLAIN");
+        std::vector<ImU32> tinted_cols, plain_cols;
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+            tinted_cols.clear();
+            plain_cols.clear();
+            for (const ImDrawList* list : ImGui::GetDrawData()->CmdLists)
+                for (const ImDrawCmd& cmd : list->CmdBuffer) {
+                    auto* out = cmd.GetTexID() == reinterpret_cast<ImTextureID>(&tinted) ? &tinted_cols
+                                : cmd.GetTexID() == reinterpret_cast<ImTextureID>(&plain) ? &plain_cols
+                                                                                          : nullptr;
+                    for (unsigned e = 0; out && e < cmd.ElemCount; ++e)
+                        out->push_back(list->VtxBuffer[static_cast<int>(cmd.VtxOffset + list->IdxBuffer[static_cast<int>(cmd.IdxOffset + e)])].col);
+                }
+        }
+        REQUIRE_FALSE(tinted_cols.empty());
+        REQUIRE_FALSE(plain_cols.empty());
+        for (ImU32 c : tinted_cols) CHECK(c == IM_COL32(255, 0, 0, 255));
+        for (ImU32 c : plain_cols) CHECK(c == IM_COL32(255, 255, 255, 255));
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    hailstone::ui::texture_id_removed(&tinted);
+    hailstone::ui::texture_id_removed(&plain);
     ImGui::DestroyContext(ctx);
 }
 

@@ -237,4 +237,49 @@ AtlasPage parse_atlas_page(std::string_view text) {
     return page;
 }
 
+namespace {
+bool same_name(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
+           });
+}
+} // namespace
+
+const AtlasZoneEntry* AtlasIndex::find_zone(std::string_view short_name) const {
+    for (const auto& z : zones)
+        if (same_name(z.zone, short_name)) return &z;
+    return nullptr;
+}
+
+const AtlasPageEntry* AtlasIndex::find_page(std::string_view file) const {
+    for (const auto& p : pages)
+        if (same_name(p.file, file)) return &p;
+    return nullptr;
+}
+
+AtlasIndex index_atlas(const std::function<std::optional<std::string>(const std::string&)>& read) {
+    AtlasIndex index;
+    index.pages.push_back({"Default.xml", "World", ""});
+    for (std::size_t i = 0; i < index.pages.size() && i < 256; ++i) {
+        const std::string file = index.pages[i].file; // copied: push_back below may move the entry
+        auto text = read(file);
+        if (!text) continue;
+        AtlasPage page = parse_atlas_page(*text);
+        for (const auto& l : page.links) {
+            if (l.action == 1 && !index.find_page(l.target)) {
+                std::string title = l.tooltip;
+                if (title.empty()) {
+                    title = l.target;
+                    if (title.size() > 4 && same_name(std::string_view(title).substr(title.size() - 4), ".xml"))
+                        title.resize(title.size() - 4);
+                }
+                index.pages.push_back({l.target, std::move(title), file});
+            } else if (l.action == 2) {
+                index.zones.push_back({l.target, l.tooltip.empty() ? l.target : l.tooltip, file, l.rect});
+            }
+        }
+    }
+    return index;
+}
+
 } // namespace hailstone::game

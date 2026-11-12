@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "app/player_movement.h"
+#include "app/zone_move_world.h"
 #include "assets/zone.h"
 #include "core/game_dir.h"
 #include "game/collision.h"
@@ -63,7 +64,7 @@ game::CollisionMesh wall_scene(Wall wall) {
     return game::CollisionMesh::from_triangles(std::move(t));
 }
 
-// The zone mesh as ZoneMoveWorld uses it (app/client_app_internal.h): the sweep's final triangle tells a ladder hit, and
+// The zone mesh as ZoneMoveWorld uses it (app/zone_move_world.h): the sweep's final triangle tells a ladder hit, and
 // with `passable_ladders` (hailstone.cfg [movement]) so does a passable ladder met short of the stop.
 class MeshWorld final : public app::MoveWorld {
 public:
@@ -314,6 +315,80 @@ TEST_CASE("zone ladders: walking into a passable ladder climbs it only with [mov
     // A plain wall or a solid ladder is the same either way.
     CHECK(walk_at_wall(Wall::Plain, true).top_z < 1.0f);
     CHECK(walk_at_wall(Wall::Ladder, true).top_z > 30.0f);
+}
+
+TEST_CASE("zone ladders: other spawns' contact probes climb a passable ladder under the player's rules") {
+    const game::CollisionMesh mesh = wall_scene(Wall::PassableLadder);
+    game::Spawn spawn;
+    spawn.race = 1;
+    spawn.heights.avatar_height = 3.75f;
+    std::vector<app::WorldObjects::DoorHit> doors;
+    auto probe = [&](const std::optional<plugin::Rules>& rules) {
+        app::ZoneMoveWorld world(&mesh, nullptr, nullptr);
+        world.apply_remote_rules(rules);
+        world.set_contact_probe(&doors);
+        // A spawn walking toward the wall, into the passable ladder in front of it.
+        return app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, world);
+    };
+    // No hailstone.cfg: on, as for the player.
+    CHECK(probe(std::nullopt) == 6);
+    plugin::Rules on;
+    on.configured = true;
+    CHECK(probe(on) == 6);
+    // The server's [movement] passable_ladders = off: walked through, as in the original.
+    plugin::Rules off = on;
+    off.passable_ladders = false;
+    CHECK(probe(off) == 0);
+    // The world built without the rules (as remote probes were): no climb.
+    app::ZoneMoveWorld bare(&mesh, nullptr, nullptr);
+    bare.set_contact_probe(&doors);
+    CHECK(app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, bare) == 0);
+}
+
+TEST_CASE("zone ladders: other spawns' contact probes do not take the player's /nav pass-door list") {
+    std::vector<game::Door> doors(2);
+    doors[0].id = 3;
+    doors[0].state = 1; // open
+    doors[1].id = 4;    // shut
+    // The player's world while /nav passes open doors: the open one is passed.
+    app::ZoneMoveWorld player(nullptr, nullptr, nullptr);
+    player.apply_rules(std::nullopt, doors, true);
+    CHECK(player.passable_doors() == std::vector<std::uint8_t>{3});
+    // Another spawn's probe meets every door, whatever the player's /nav does, and keeps the passable ladders.
+    app::ZoneMoveWorld remote(nullptr, nullptr, nullptr);
+    remote.set_passable_doors({3});
+    remote.apply_remote_rules(std::nullopt);
+    CHECK(remote.passable_doors().empty());
+    const game::CollisionMesh mesh = wall_scene(Wall::PassableLadder);
+    app::ZoneMoveWorld climb(&mesh, nullptr, nullptr);
+    climb.apply_remote_rules(std::nullopt);
+    std::vector<app::WorldObjects::DoorHit> hits;
+    climb.set_contact_probe(&hits);
+    game::Spawn spawn;
+    spawn.race = 1;
+    spawn.heights.avatar_height = 3.75f;
+    CHECK(app::remote_collision_type(spawn, {0, 0, 3.75f}, {9.5f, 0, 3.75f}, climb) == 6);
+}
+
+TEST_CASE("zone ladders: the contact probe answers as the full sweep does for a solid ladder and a wall") {
+    game::Spawn spawn;
+    spawn.race = 1;
+    spawn.heights.avatar_height = 3.75f;
+    std::vector<app::WorldObjects::DoorHit> doors;
+    for (Wall wall : {Wall::Plain, Wall::Ladder, Wall::PassableLadder}) {
+        CAPTURE(static_cast<int>(wall));
+        const game::CollisionMesh mesh = wall_scene(wall);
+        app::ZoneMoveWorld full(&mesh, nullptr, nullptr);
+        full.apply_rules(std::nullopt, {}, false);
+        app::ZoneMoveWorld contact(&mesh, nullptr, nullptr);
+        contact.apply_rules(std::nullopt, {}, false);
+        contact.set_contact_probe(&doors);
+        for (float y : {0.0f, 4.0f, 20.0f}) {
+            CAPTURE(y);
+            CHECK(app::remote_collision_type(spawn, {0, y, 3.75f}, {12, y, 3.75f}, full) ==
+                  app::remote_collision_type(spawn, {0, y, 3.75f}, {12, y, 3.75f}, contact));
+        }
+    }
 }
 
 TEST_CASE("zone ladders: hailstone.cfg [movement] passable_ladders") {

@@ -116,6 +116,7 @@
 #include "app/actions_ui.h"
 #include "app/neighbour_zones.h"
 #include "app/world_objects.h"
+#include "app/zone_move_world.h"
 #include "app/group_ui.h"
 #include "app/social_ui.h"
 #include "app/sound_events.h"
@@ -143,6 +144,7 @@
 #include "ui/web_textures.h"
 #include "web/browser_host.h"
 #include "app/web_service.h"
+#include "app/guide_path.h"
 #include "app/navigator.h"
 #include "ui/asset_picker.h"
 #include "core/asset_folder_choice.h"
@@ -154,142 +156,13 @@ namespace client_internal {
 using Clock = std::chrono::steady_clock;
 
 // Movement itself is the original's (app/player_movement.h,
-// game/mechanics/movement.h); these are the collision probes around it.
+// game/mechanics/movement.h); app/zone_move_world.h is the collision probes around it.
 constexpr float kNameplateRange = 250.0f;
 constexpr float kMaxCameraDistance = 60.0f;
 // Hailstone: the Graphics options' Max Camera Zoom (display.max_camera_distance) has the NMS /fov's range.
 constexpr int kMinCameraZoomSetting = 10;
 constexpr int kMaxCameraZoomSetting = 150;
 
-// The zone's collision for PlayerMovement (MoveWorld): the static mesh, the
-// doors and the BSP.
-class ZoneMoveWorld final : public MoveWorld {
-public:
-    ZoneMoveWorld(const game::CollisionMesh* mesh, const WorldObjects* objects, const assets::ZoneRegions* regions)
-        : mesh_(mesh), objects_(objects), regions_(regions) {}
-    bool collision_loaded() const override { return mesh_ != nullptr; }
-    std::optional<std::pair<glm::vec3, glm::vec3>> world_box() const override {
-        return mesh_ ? mesh_->bounds() : std::nullopt;
-    }
-    Sweep sweep(const glm::vec3& from, const glm::vec3& to, float radius) const override {
-        game::SphereSweep s = game::SphereSweep::make(from, to, radius);
-        Sweep out;
-        if (mesh_ && s.valid()) {
-            const std::int32_t tri = mesh_->sweep_sphere_hit(s);
-            out.ladder_hit = tri >= 0 && (mesh_->triangles()[static_cast<std::size_t>(tri)].flags & game::kTriangleLadder);
-            if (objects_) {
-                std::vector<WorldObjects::DoorHit> hits;
-                out.door_hit = objects_->sweep_sphere(s, &hits, pass_doors_.empty() ? nullptr : &pass_doors_);
-                for (const auto& h : hits) out.door_hits.push_back({h.id, h.type});
-            }
-            // A boat's hull and rails are walls too (game/boats.h), not only its deck a floor.
-            sweep_vehicles(s, radius);
-            // Hailstone: live NPCs are walls to the player (game/npc_collision.h), never floors or ceilings.
-            if (npcs_) game::sweep_npcs(s, *npcs_);
-            // Hailstone: a passable ladder (Cabilis's LADDERCB101) met short of the stop is climbed, though it
-            // never stops the sphere (CollisionMesh::touches_passable_ladder).
-            if (passable_ladders_ && !out.ladder_hit) out.ladder_hit = mesh_->touches_passable_ladder(s);
-        }
-        out.out = game::sweep_output(s);
-        out.collided = s.collided;
-        return out;
-    }
-    Sweep world_sweep(const glm::vec3& from, const glm::vec3& to, float radius) const override {
-        game::SphereSweep s = game::SphereSweep::make(from, to, radius);
-        s.floor_only = true;
-        Sweep out;
-        // GetCeilingHeight's actor filter (0x4764d0) refuses switch actors (vf30 == 3): the doors never count.
-        if (mesh_ && s.valid()) mesh_->sweep_sphere(s);
-        out.out = game::sweep_output(s);
-        out.collided = s.collided;
-        return out;
-    }
-    bool in_world(const glm::vec3& p) const override { return !regions_ || regions_->in_world(p); }
-    std::optional<float> floor_below(const glm::vec3& p, float step_up) const override {
-        std::optional<float> floor = mesh_ ? mesh_->floor_below(p, step_up) : std::nullopt;
-        if (objects_) {
-            // Doors, lifts and platforms are floors too.
-            auto door_floor = objects_->floor_below(p, step_up);
-            if (door_floor && (!floor || *door_floor > *floor)) floor = door_floor;
-        }
-        return floor;
-    }
-    float floor_sweep(const glm::vec3& from, const glm::vec3& to, float radius, std::uint32_t* vehicle = nullptr,
-                      std::vector<FloorSwitchHit>* switches = nullptr) const override {
-        game::SphereSweep s = game::SphereSweep::make(from, to, radius);
-        s.floor_only = true;
-        if (mesh_ && s.valid()) {
-            mesh_->sweep_sphere(s);
-            if (objects_) {
-                std::vector<WorldObjects::DoorHit> hits;
-                objects_->sweep_floor_switches(s, switches ? &hits : nullptr);
-                // CollsnCallbackForFloor's distance: t / (1 / |d|).
-                const float length = glm::length(s.delta);
-                if (switches)
-                    for (const auto& h : hits) switches->push_back({h.id, h.type, h.t * length});
-            }
-            // The vehicles' models (a player actor whose spawn has vf50): the nearest hit's spawn is the Vehicle.
-            if (std::uint32_t v = sweep_vehicles(s, radius); v && vehicle) *vehicle = v;
-        }
-        return game::sweep_output(s).position.z;
-    }
-    // The vehicle under a point: a short drop onto the decks only (another spawn's update on a boat, game/boats.h).
-    std::uint32_t vehicle_under(const glm::vec3& p) const {
-        game::SphereSweep s = game::SphereSweep::make(p + glm::vec3(0, 0, 2.0f), p - glm::vec3(0, 0, 8.0f), 0.5f);
-        s.floor_only = true;
-        return s.valid() ? sweep_vehicles(s, 0.5f) : 0;
-    }
-    std::vector<std::uint8_t> touch_overlap(const glm::vec3& at, float radius) const override {
-        std::vector<std::uint8_t> out;
-        game::SphereSweep s = game::SphereSweep::make(at, at, radius);
-        if (!objects_ || !s.valid()) return out;
-        std::vector<WorldObjects::DoorHit> hits;
-        objects_->touch_overlap(s, hits);
-        for (const auto& h : hits) out.push_back(h.id);
-        return out;
-    }
-    // The NPC bodies the movement sweep stops at (ClientApp::update_npc_bodies); null: none.
-    void set_npcs(const std::vector<game::NpcBody>* bodies) { npcs_ = bodies; }
-    // Hailstone: walking into a ladder whose polygons are all passable climbs it (hailstone.cfg [movement]
-    // passable_ladders); off, as in the original, it is only mounted by a click from the top.
-    void set_passable_ladders(bool on) { passable_ladders_ = on; }
-    // Doors the sweep goes through (Navigator::passes_open_doors: those not shut, while /nav or /stick moves).
-    void set_passable_doors(std::vector<std::uint8_t> ids) { pass_doors_ = std::move(ids); }
-    // The vehicle spawns' models as they were drawn (PlayerClient_IsVehicleRace), for the floor test and the walls;
-    // `standing_on` is the vehicle the player stands on, which wins a tie between overlapping decks (game/boats.h).
-    using Vehicle = game::VehicleHull;
-    void set_vehicles(const std::vector<Vehicle>* v, std::uint32_t standing_on = 0) {
-        vehicles_ = v;
-        standing_on_ = standing_on;
-    }
-    // The sweep against the vehicles near it; the id of the one whose triangle stopped it nearest (0: none did).
-    std::uint32_t sweep_vehicles(game::SphereSweep& s, float radius) const {
-        return vehicles_ ? game::sweep_hulls(s, *vehicles_, radius, standing_on_) : 0;
-    }
-    // A probe of the helm's boat (game/boats.h hull_probes): stopped by the zone, its doors and objects or another
-    // vehicle short of `to`; a probe that touches something where it starts is not held by it.
-    bool hull_blocked(const glm::vec3& from, const glm::vec3& to, float radius, std::uint32_t boat) const {
-        game::SphereSweep s = game::SphereSweep::make(from, to, radius);
-        if (!mesh_ || !s.valid()) return false;
-        mesh_->sweep_sphere(s);
-        if (objects_) objects_->sweep_sphere(s, nullptr);
-        if (vehicles_) game::sweep_hulls(s, *vehicles_, radius, 0, boat);
-        return s.collided && s.t > 0.0f;
-    }
-    std::optional<float> ceiling_above(const glm::vec3& p) const override {
-        return mesh_ ? mesh_->ceiling_above(p) : std::nullopt;
-    }
-
-private:
-    const game::CollisionMesh* mesh_;
-    const WorldObjects* objects_;
-    const assets::ZoneRegions* regions_;
-    const std::vector<Vehicle>* vehicles_ = nullptr;
-    std::uint32_t standing_on_ = 0;
-    const std::vector<game::NpcBody>* npcs_ = nullptr;
-    bool passable_ladders_ = false;
-    std::vector<std::uint8_t> pass_doors_;
-};
 
 // The game window as it was when the client last closed (hailstone.ini window.*), unless --window-size asked for
 // a size: the UI's places are kept for that screen, so starting it smaller piles the windows up.
@@ -768,6 +641,7 @@ private:
     // to 0. TOGGLECAM's cycle (CDisplay::ToggleView) is game::toggle_view_next. Into or out of the isometric camera
     // (7) the field of view changes to its own and back.
     void set_camera_type(int type);
+    void apply_camera_selection(const game::CameraSelection& s);
     // /camera (Hailstone's own): which camera, and the isometric camera's settings.
     void camera_command(const std::string& args);
     // CDisplay::ToggleView @0x494160 (TOGGLECAM, the hot button's): the next camera of game::toggle_view_next.
@@ -922,12 +796,16 @@ private:
     // The spawns PlayerZoneClient::IsInvisible hides for Hide Traders and Hide Buyers (GameConnection::market_hidden),
     // gathered each frame: not drawn, named or clicked.
     void update_market_hidden(bool in_game);
+    // The viewer's see-invisible rank for a batch of spawn_invisible tests: GameConnection::see_invisible_rank
+    // builds the character sheet, so it is asked only when some spawn is hidden at a rank (0 otherwise, which no
+    // test then reads). Drawing asks once a frame; lighting reads market_hidden_.
+    std::int32_t viewer_see_invisible_rank() const;
     std::unordered_set<std::uint32_t> market_hidden_;
     game::PlateFade plate_fade_; // each overlapped name's fade toward its target alpha (game/nameplate_overlap.h)
     // The spawn not to draw: the player's own in first person (camera 0's activate hides it; no other camera does).
     std::uint32_t hidden_spawn() const {
         return camera_type_ != game::kCameraFirstPerson || eq_host_.customization_zoom >= 0 ? 0u
-                                                                                             : conn_->world().player_id;
+            : (conn_->world().view_id ? conn_->world().view_id : conn_->world().player_id);
     }
     // display.msaa (samples, read at start-up), display.tonemap (auto | none | agx | aces; auto is AgX with the modern
     // lighting and none with the classic), display.exposure (EV), display.shadows (the shadow map's size per cascade,
@@ -1099,6 +977,8 @@ private:
     std::unique_ptr<Updater> updater_;
     UpdateSettings update_settings_;
     bool update_restart_ = false;   // Restart now: install at the end of the run, then start the new version
+    bool update_asked_ = false;     // the player pressed Download this run (a quit may then install it)
+    bool update_installs_at_quit() const;
     bool update_confirmed_ = false; // the login screen was shown: a pending update started fine
     // The add-on manager (app/client_app_addons.cpp): null when nothing can be fetched this run. The lists beside the
     // add-ons (the picked server's own, the ones put in by hand, that server's rules) are read every few seconds.
@@ -1269,6 +1149,7 @@ private:
     bool listener_indoors_ = false;
     std::uint8_t head_wet_ = 0;
     bool special_room_ = false;
+    bool stun_room_ = false; // the stun's room 0x17 is set (StunMe), until the stun ends
     // The global music selections made (EqSoundManager::SetMusicSelection's callers).
     bool music_attack_ = false, music_bank_ = false, music_merchant_ = false, music_trainer_ = false, music_loot_ = false;
     bool music_dead_ = false, music_select_ = false;
@@ -1389,6 +1270,10 @@ private:
     std::vector<game::ZoneLadder> zone_ladders_; // the zone's own ladders (game/zone_ladders.h), clickable
     // Navigation (app/navigator.h): /nav, /moveto and the Navigation TLO; after collision_, which it reads.
     std::unique_ptr<Navigator> nav_;
+    // The Find window's guide path (app/guide_path.h) over nav_'s mesh, drawn by spell_particles_ and the maps.
+    GuidePath guide_;
+    std::string guide_zone_; // the zone it was started in: zoning ends it (spawn ids are the zone's)
+    void update_guide();
     game::ZoneLineTrigger zone_line_;
     game::ViewDistance view_;
     // The per-frame fog and scene light (CDisplay_UpdateSkyWeatherAndFog and SetFog), the player's light level
@@ -1409,6 +1294,9 @@ private:
     std::array<game::mechanics::SwitchSpawn, 1> rider_spawns_{};
     game::DoorRiders door_riders_;
     PlayerMovement movement_;
+    std::optional<PlayerMovement> local_body_movement_; // the passive body while an Eye has the controls
+    std::uint32_t driven_eye_ = 0;
+    float local_body_height_ = 0.0f, local_body_yaw_ = 0.0f, local_body_pitch_ = 0.0f;
     // Riding (game/mounts.h): the link's questions answered from the models and the movement's room test
     // (client_app_player.cpp), and the mount the controls moved last frame (0: the player itself).
     struct MountAnswers final : game::MountQueries {
@@ -1446,6 +1334,9 @@ private:
     // Hailstone: the live NPCs near the player as the movement sweep's walls (game/npc_collision.h), unless the
     // server's hailstone.cfg turns them off ([movement] npc_collision).
     std::vector<game::NpcBody> npc_bodies_;
+    // The other spawns' contact probes' door hits (ZoneMoveWorld::set_contact_probe), kept so a probe does not
+    // allocate.
+    std::vector<WorldObjects::DoorHit> remote_door_hits_;
     void update_npc_bodies();
     // PlayerClient::TouchingSwitch for the local player on door `id` (game/mechanics/touching_switch.h); returns
     // whether pTouchingSwitch is cleared afterwards.
@@ -1477,6 +1368,10 @@ private:
     // CDisplay::cameraType (game/cameras.h): 0 first person, 1..5 the original's other cameras (cameras_), 6 the
     // camera behind the player (camera_distance_ > 0), 7 the isometric camera (iso_camera_).
     int camera_type_ = game::kCameraFirstPerson;
+    std::uint32_t consciousness_changes_ = 0;
+    std::uint32_t drunkenness_updates_ = 0;
+    float drunk_fov_offset_ = 0.0f; // on top of camera_.fov_units (game::drunkenness_fov_offset)
+    std::optional<int> unconscious_camera_;
     std::array<game::GameCamera, 6> cameras_;
     // The isometric camera (game/iso_camera.h): its state, its settings (hailstone.ini camera.iso_*), the field of
     // view the other cameras use while it has its own, and this frame's distance from the player (the view and the

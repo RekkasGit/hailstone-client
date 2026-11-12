@@ -645,10 +645,21 @@ int ClickSlot(lua_State* L) {
     return 1;
 }
 
-// ok = eq.HasSlot(slot, bagSlot|nil)   -- true when ClickSlot can act on that slot now
+// ok = eq.HasSlot(slot, bagSlot|nil)   -- true when ClickSlot can act on that slot now: in game, a possessions
+// slot (worn 0..22, general 23..32, the cursor 33), and with bagSlot a place (0-based) inside the bag in that
+// general slot. An empty slot or bag place counts: ClickSlot drops the cursor's item there.
 int HasSlot(lua_State* L) {
     auto& h = Impl::of(L).host;
-    lua_pushboolean(L, h.conn && h.in_game);
+    const lua_Integer slot = luaL_checkinteger(L, 1);
+    const lua_Integer bag = lua_isnoneornil(L, 2) ? -1 : luaL_checkinteger(L, 2);
+    bool ok = h.conn && h.in_game && slot >= 0 && slot <= net::kSlotCursor;
+    if (ok && bag != -1) {
+        const net::Item* it = slot >= net::kSlotGeneral1 && slot <= net::kSlotGeneral10
+                                  ? h.conn->inventory().at(net::ItemSlot::possessions(static_cast<std::int16_t>(slot)))
+                                  : nullptr;
+        ok = it && it->is_bag() && bag >= 0 && bag < it->bag_slots;
+    }
+    lua_pushboolean(L, ok);
     return 1;
 }
 
@@ -1584,6 +1595,7 @@ const char* mode_name(net::GameConnection::ItemJobMode m) {
            : m == M::Sell    ? "sell"
            : m == M::Destroy ? "destroy"
            : m == M::Tribute ? "tribute"
+           : m == M::Withdraw ? "withdraw"
                              : "sort";
 }
 
@@ -1670,7 +1682,7 @@ int SellJunk(lua_State* L) {
 }
 
 // done, total, mode, where = eq.ItemJob()   -- the job running (mode: "sort", "stack", "tidy", "sell", "destroy",
-// "tribute"; where:
+// "tribute", "withdraw"; where:
 // "inventory", "bank" or "bag"); nil when none is
 int ItemJob(lua_State* L) {
     auto& h = Impl::of(L).host;
@@ -2868,6 +2880,7 @@ void register_socialedit_api(lua_State* L, EqHost& host); // app/lua_eq_socialed
 void register_luasocial_api(lua_State* L, EqHost& host);  // app/lua_eq_luasocial.cpp
 void register_hotbar_api(lua_State* L, EqHost& host);     // app/lua_eq_hotbar.cpp
 void register_web_api(lua_State* L, EqHost& host);        // app/lua_eq_web.cpp
+void register_find_api(lua_State* L, EqHost& host);       // app/lua_eq_find.cpp
 int CompassStrips(lua_State* L);                     // app/lua_eq_misc.cpp
 int CompassMarkers(lua_State* L);                    // app/lua_eq_misc.cpp
 
@@ -2885,6 +2898,7 @@ void EqApi::register_functions(lua_State* L) {
     register_luasocial_api(L, impl_->host);
     register_hotbar_api(L, impl_->host);
     register_web_api(L, impl_->host);
+    register_find_api(L, impl_->host);
     lua_pushlightuserdata(L, &impl_->host);
     lua_pushcclosure(L, CompassStrips, 1);
     lua_setfield(L, -2, "CompassStrips");
@@ -2937,7 +2951,7 @@ void EqApi::register_functions(lua_State* L) {
         "ChildColor", "TabPage", "ItemPreview",
         "ChildTooltip", "DebugScreens", "ChildUnder", "VoiceChat", "ChildRect", "WindowClient", "CursorAttachment",
         "DebugTree", "ComboInfo", "Option", "UiIni", "OptionChoices", "BagInfo", "Parcels", "FindItems",
-        "InventorySpace", "BagSlotItem", "CascadeMenus", "GameMenus", "ContextMenus", "PluginConsent"};
+        "InventorySpace", "BagSlotItem", "CascadeMenus", "GameMenus", "ContextMenus", "ItemJob"};
     auto changes_lists = [](lua_State* L2) -> int {
         Impl::of(L2).lists_changed();
         return fns[static_cast<std::size_t>(lua_tointeger(L2, lua_upvalueindex(2)))].func(L2);
