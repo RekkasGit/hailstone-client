@@ -1,149 +1,120 @@
 #include "mq/event_pattern.h"
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-
-#include "mq/tlo.h"
+#include <charconv>
 
 namespace hailstone::mq {
 
 namespace {
 
-// ECMAScript's '.' (as libstdc++ has it) matches anything but these.
-bool line_break(char c) { return c == '\n' || c == '\r'; }
+// Blech compares ignoring the case of A-Z only (its own Equalness, _strnicmp in the C locale); other bytes as they are.
+char fold(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
+
+std::string folded(std::string_view s) {
+    std::string out(s);
+    for (char& c : out) c = fold(c);
+    return out;
+}
+
+// The number LuaEvent hands a #name# on as (GetIntFromString: the name trimmed of " \t\r\n", then as many digits as
+// std::from_chars reads, "2nd" being 2); 0 when it is none, not above 0 or above kMaxArg.
+int scan_number(std::string_view name) {
+    const std::size_t b = name.find_first_not_of(" \t\r\n");
+    if (b == std::string_view::npos) return 0;
+    name.remove_prefix(b);
+    name = name.substr(0, name.find_last_not_of(" \t\r\n") + 1);
+    int n = 0;
+    std::from_chars(name.data(), name.data() + name.size(), n);
+    return n > 0 && n <= EventPattern::kMaxArg ? n : 0;
+}
 
 } // namespace
 
 EventPattern::EventPattern(std::string_view pattern) : size_(pattern.size()) {
-    auto literal = [&](char c) {
-        if (tokens_.empty() || tokens_.back().kind != Token::Kind::Literal) tokens_.push_back({Token::Kind::Literal, {}});
-        tokens_.back().text += c;
+    // Blech takes the pattern as a C string: it ends at a NUL.
+    pattern = pattern.substr(0, pattern.find('\0'));
+    using K = Token::Kind;
+    K mode = K::Literal;
+    std::string part;
+    // A run is added only when it holds something (Blech's AddEvent): a lone '#' at the end is dropped.
+    auto flush = [&] {
+        if (part.empty()) return;
+        if (mode == K::Literal) {
+            if (!tokens_.empty() && tokens_.back().kind == K::Literal) tokens_.back().text += folded(part);
+            else tokens_.push_back({K::Literal, folded(part), 0});
+        } else if (mode == K::Print) {
+            tokens_.push_back({K::Print, part, 0});
+            print_vars_ = true;
+        } else {
+            const int n = scan_number(part);
+            tokens_.push_back({K::Scan, part, n});
+            if (n > max_number_) max_number_ = n;
+        }
+        part.clear();
     };
     for (std::size_t i = 0; i < pattern.size(); ++i) {
         const char c = pattern[i];
-        if (c == '#') {
-            const std::size_t close = pattern.find('#', i + 1);
-            if (close != std::string_view::npos) {
-                const std::string_view inner = pattern.substr(i + 1, close - i - 1);
-                std::int64_t n = 0;
-                if (inner == "*") {
-                    tokens_.push_back({Token::Kind::Any, {}});
-                    i = close;
-                    continue;
-                }
-                if (parse_int(inner, n) && n > 0) {
-                    tokens_.push_back({Token::Kind::Arg, {}});
-                    order_.push_back(static_cast<int>(n));
-                    i = close;
-                    continue;
-                }
+        const char next = i + 1 < pattern.size() ? pattern[i + 1] : '\0';
+        if (c == '#' || c == '|') {
+            if (mode == K::Literal && next == c) { // ## and || are the character itself
+                part += c;
+                ++i;
+                continue;
             }
-        }
-        literal(c); // a '#' that starts no #*# or #n# is itself; the scan goes on after it
-    }
-}
-
-namespace {
-
-// The rows of match()'s table, kept from call to call: each script's events are matched against every chat line,
-// and a fresh table each time was an allocation per event per line. Rarely bigger than a few KB; one that grew past
-// kKeepBytes (a long pattern matched on a long line) is let go after its call.
-constexpr std::size_t kKeepBytes = std::size_t{1} << 20;
-thread_local std::vector<unsigned char> g_rows;
-
-struct Rows {
-    std::vector<unsigned char>& v = g_rows;
-    unsigned char* get(std::size_t bytes) {
-        if (v.size() < bytes) v.resize(bytes);
-        return v.data();
-    }
-    ~Rows() {
-        if (v.capacity() > kKeepBytes) std::vector<unsigned char>().swap(v);
-    }
-};
-
-} // namespace
-
-void EventPattern::fill_row(std::size_t i, std::string_view line, const unsigned char* next, unsigned char* row) const {
-    const std::size_t n = line.size();
-    const Token& k = tokens_[i];
-    if (k.kind == Token::Kind::Literal) {
-        const std::size_t len = k.text.size();
-        std::fill(row, row + n + 1, static_cast<unsigned char>(0));
-        for (std::size_t p = 0; p + len <= n; ++p)
-            row[p] = next[p + len] && line.compare(p, len, k.text) == 0;
-        return;
-    }
-    row[n] = next[n];
-    for (std::size_t p = n; p-- > 0;) row[p] = next[p] || (!line_break(line[p]) && row[p + 1]);
-}
-
-bool EventPattern::may_match(std::string_view line) const {
-    // Each literal must come in its order, the first at the start and the last at the end: most lines fail here for
-    // most patterns, without the table.
-    std::size_t pos = 0;
-    for (std::size_t i = 0; i < tokens_.size(); ++i) {
-        const Token& k = tokens_[i];
-        if (k.kind != Token::Kind::Literal) continue;
-        if (i == 0) {
-            if (!line.starts_with(k.text)) return false;
-            pos = k.text.size();
-        } else {
-            const std::size_t at = line.find(k.text, pos);
-            if (at == std::string_view::npos) return false;
-            pos = at + k.text.size();
-        }
-        if (i + 1 == tokens_.size() && !line.ends_with(k.text)) return false;
-    }
-    return true;
-}
-
-std::optional<std::vector<std::string>> EventPattern::match(std::string_view line) const {
-    if (!may_match(line)) return std::nullopt;
-    const std::size_t n = line.size(), t = tokens_.size(), w = n + 1;
-    Rows rows;
-    // Whether the whole line matches: two rows, each from the one after it (tokens i.. match line[p..] to its end).
-    {
-        unsigned char* next = rows.get(2 * w);
-        unsigned char* row = next + w;
-        std::fill(next, next + w, static_cast<unsigned char>(0));
-        next[n] = 1;
-        for (std::size_t i = t; i-- > 0;) {
-            fill_row(i, line, next, row);
-            std::swap(next, row);
-        }
-        if (!next[0]) return std::nullopt;
-    }
-    // It does: the whole table, fits[i * w + p], for the arguments.
-    unsigned char* fits = rows.get((t + 1) * w);
-    std::fill(fits + t * w, fits + (t + 1) * w, static_cast<unsigned char>(0));
-    fits[t * w + n] = 1;
-    for (std::size_t i = t; i-- > 0;) fill_row(i, line, &fits[(i + 1) * w], &fits[i * w]);
-    // The regex's own choice at each wildcard (a backtracking search takes the first that leads to a match): #*# the
-    // longest, #n# the shortest, of those after which the rest still matches.
-    std::vector<std::string> args;
-    args.reserve(order_.size());
-    std::size_t p = 0;
-    for (std::size_t i = 0; i < t; ++i) {
-        const Token& k = tokens_[i];
-        if (k.kind == Token::Kind::Literal) {
-            p += k.text.size();
+            flush();
+            const K var = c == '#' ? K::Scan : K::Print;
+            mode = mode == var ? K::Literal : var; // (a '#' inside |...| ends it and starts a #...#, as in Blech)
             continue;
         }
-        const unsigned char* next = &fits[(i + 1) * w];
-        std::size_t end = p;
-        while (end < n && !line_break(line[end])) ++end;
-        std::size_t q = p;
-        if (k.kind == Token::Kind::Any) {
-            q = end;
-            while (!next[q]) --q;
-        } else {
-            while (!next[q]) ++q;
-            args.emplace_back(line.substr(p, q - p));
-        }
-        p = q;
+        part += c;
     }
+    flush();
+}
+
+std::optional<std::vector<std::string>> EventPattern::match(std::string_view line, const Resolve& resolve) const {
+    line = line.substr(0, line.find('\0')); // a C string to Blech too
+    if (line.empty() || tokens_.empty()) return std::nullopt; // (Blech is not fed an empty line; MQ crashes on "")
+    const std::string low = folded(line);
+    std::vector<std::string> args(static_cast<std::size_t>(max_number_));
+    const Token* pending = nullptr; // the #...# whose end is not known yet
+    std::size_t pos = 0;            // where the line is matched from
+    std::string fixed;              // the literal text since it (literals and |...| values together)
+    auto take = [&](std::size_t end) {
+        if (pending->number > 0) args[static_cast<std::size_t>(pending->number - 1)] = std::string(line.substr(pos, end - pos));
+    };
+    for (const Token& k : tokens_) {
+        if (k.kind == Token::Kind::Literal) {
+            fixed += k.text;
+            continue;
+        }
+        if (k.kind == Token::Kind::Print) {
+            fixed += folded(resolve ? resolve(k.text) : k.text);
+            continue;
+        }
+        if (pending) {
+            if (fixed.empty()) {
+                take(pos); // two #...# with nothing between: the first gets ""
+            } else {
+                const std::size_t at = low.find(fixed, pos); // the first place it is
+                if (at == std::string::npos) return std::nullopt;
+                take(at);
+                pos = at + fixed.size();
+            }
+        } else {
+            if (low.compare(pos, fixed.size(), fixed) != 0) return std::nullopt; // the start of the line
+            pos += fixed.size();
+        }
+        fixed.clear();
+        pending = &k;
+    }
+    if (!pending) return low == fixed ? std::optional(std::move(args)) : std::nullopt;
+    if (fixed.empty()) {
+        take(line.size());
+        return args;
+    }
+    // Blech's walk takes the first place the last literal is, and that must end the line.
+    const std::size_t at = low.find(fixed, pos);
+    if (at == std::string::npos || at + fixed.size() != line.size()) return std::nullopt;
+    take(at);
     return args;
 }
 

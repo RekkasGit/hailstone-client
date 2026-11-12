@@ -131,6 +131,7 @@ add_library(hailstone_engine STATIC
   src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
+  src/mq/calc.cpp
   src/mq/tlo.cpp
   src/mq/tlo_game.cpp
   src/mq/spawn_search.cpp
@@ -919,6 +920,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp
     tests/mq_tlo_test.cpp
+    tests/mq_calc_test.cpp
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
@@ -1050,6 +1052,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_search_test.cpp
     tests/chat_ui_test.cpp
     tests/inventory_bandolier_ui_test.cpp
+    tests/inventory_server_labels_ui_test.cpp
     tests/trade_ui_test.cpp
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
