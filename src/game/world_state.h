@@ -33,6 +33,9 @@ namespace hailstone::game {
 	// "a_rat01" -> "a rat", "#Guard_Bob00" -> "Guard Bob": leading '#' and trailing digits stripped, underscores to
 // spaces.
 	std::string display_name(const std::string& name);
+	// Appearance::new_armor_bits for a spawn whose kind is not known: the player (8) or the NPC (0x10) bit of
+	// ActorNewArmorFilter shows its hero's forge armour.
+	inline constexpr std::uint8_t kNewArmorUnknownKind = 0x18;
 	// What a spawn looks like (spawn packet, OP_WearChange, OP_Illusion). Slots
 	// are the nine visible ones: 0 head, 1 chest, 2 arms, 3 wrists, 4 hands,
 	// 5 legs, 6 feet, 7 primary, 8 secondary (game/appearance.h).
@@ -51,15 +54,20 @@ namespace hailstone::game {
 		// Per slot: armour material (slots 0-6) or item model number IT<n>
 		// (slots 7, 8), and the tint 0xAARRGGBB (a zero high byte = untinted).
 		std::array<std::uint32_t, 9> material{};
-		// Keep every word of the RoF2 armor record, including fields whose meaning
-		// varies by model. Dressing and saves must not reconstruct them from two ids.
-		std::array<std::uint32_t, 9> material_variation{};
-		std::array<std::uint32_t, 9> elite_material{};
+		// The rest of the five-word armour record (ArmorProperties: type, variation, material, newArmorID,
+		// newArmorType; EQEmu's Texture_Struct Material, Unknown1, EliteMaterial, HeroForgeModel, Material2), kept
+		// whole: RefreshEquipSlot @00594e50 hands the wire's record to PlayerClient_SetActorEquipmentSlot
+		// @0042e6f0, which stores it as the ActorClient's ArmorProperties (+0x8c) in the same order.
+		std::array<std::uint32_t, 9> material_variation{}; // variation (+4)
+		std::array<std::uint32_t, 9> elite_material{};     // material (+8): game::ArmorRecord::material2
 		std::array<std::uint32_t, 9> tint{};
-		std::array<std::uint32_t, 9> hero_forge{};
-		std::array<std::uint32_t, 9> material2{};
-		bool npc = false; // ActorNewArmorFilter selects players and NPCs independently
-		bool new_armor_filter_exempt = false; // local player and group/raid members
+		std::array<std::uint32_t, 9> hero_forge{};         // newArmorID (+0xc)
+		std::array<std::uint32_t, 9> new_armor_type{};     // newArmorType (+0x10)
+		// PlayerClient_ApplyNewArmorFilter @0x595de0: the ActorNewArmorFilter bits that show this spawn's hero's
+		// forge armour (game::new_armor_bits). A spawn whose kind is not known (character select, previews)
+		// has kNewArmorUnknownKind. The renderer collapses the bits to shown or hidden for the active filter
+		// (game::resolve_new_armor_filter), so a change the filter does not see rebuilds nothing.
+		std::uint8_t new_armor_bits = kNewArmorUnknownKind;
 		// NpcTintIndex (spawn +0x51c; OP_SpawnAppearance 39): npct.ini Value<n>
 		// tints new-style models (ActorClient_ApplyNpcTint); 0 none.
 		std::uint32_t npc_tint = 0;

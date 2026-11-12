@@ -206,7 +206,7 @@ void ClientApp::show_select_model() {
         a.material_variation[s] = e.equip[s].unknown1;
         a.elite_material[s] = e.equip[s].elite_material;
         a.hero_forge[s] = e.equip[s].hero_forge_model;
-        a.material2[s] = e.equip[s].material2;
+        a.new_armor_type[s] = e.equip[s].material2;
         a.tint[s] = e.equip[s].color;
     }
     a.material[7] = e.primary_id_file > 0 ? e.primary_id_file : 0;
@@ -287,7 +287,7 @@ void ClientApp::update_pre_game(float dt) {
             a.elite_material = {};
             a.tint = {};
             a.hero_forge = {};
-            a.material2 = {};
+            a.new_armor_type = {};
             a.texture = game::kNoTexture;
             a.helm = 0;
             m->name.clear();

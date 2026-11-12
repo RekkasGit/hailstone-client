@@ -383,7 +383,7 @@ SaveRequest GameConnection::save_request(std::uint8_t kind) const {
             v.armor[i].unknown1 = me->appearance.material_variation[i];
             v.armor[i].elite_material = me->appearance.elite_material[i];
             v.armor[i].hero_forge_model = me->appearance.hero_forge[i];
-            v.armor[i].material2 = me->appearance.material2[i];
+            v.armor[i].material2 = me->appearance.new_armor_type[i];
         }
     v.vehicle = false; // no vehicles
     v.minutes_played = profile_ ? profile_->time_played_min : 0;

@@ -27,7 +27,7 @@ TEST_CASE("item preview: a body item carries the complete material record withou
     CHECK(preview.material_variation[1] == 9);
     CHECK(preview.elite_material[1] == 12);
     CHECK(preview.hero_forge[1] == 15);
-    CHECK(preview.material2[1] == 18);
+    CHECK(preview.new_armor_type[1] == 18);
     CHECK(original.material[1] == 1);
     CHECK(original.elite_material[1] == 0);
 }

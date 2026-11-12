@@ -57,16 +57,16 @@ TEST_CASE("Appearance integration: spawn and wear records retain all five words 
         CHECK(a.material_variation[slot] == s.equipment[slot].unknown1);
         CHECK(a.elite_material[slot] == s.equipment[slot].elite_material);
         CHECK(a.hero_forge[slot] == s.equipment[slot].hero_forge_model);
-        CHECK(a.material2[slot] == s.equipment[slot].material2);
+        CHECK(a.new_armor_type[slot] == s.equipment[slot].material2);
     }
-    CHECK(a.new_armor_filter_exempt); // local player is always exempt
+    CHECK(a.new_armor_bits == (0x08 | 0x02 | 0x01)); // a player, self (group bit) and the local player
     net::WearChange wear;
     wear.spawn_id = static_cast<std::uint16_t>(s.spawn_id);
     wear.slot = game::kSlotHands;
     wear.armor = {3, 71, 72, 73, 74};
     wear.tint = 0xffabcdefu;
     rig.server.zone.send_reliable(net::encode(wear));
-    REQUIRE(rig.until([&] { return a.material2[wear.slot] == 74; }));
+    REQUIRE(rig.until([&] { return a.new_armor_type[wear.slot] == 74; }));
     CHECK(a.material_variation[wear.slot] == 71);
     CHECK(a.elite_material[wear.slot] == 72);
     CHECK(a.tint[wear.slot] == 0xffabcdefu);
@@ -85,29 +85,61 @@ TEST_CASE("Appearance integration: spawn and wear records retain all five words 
     CHECK(decoded->armor[0].unknown1 == 101); // untouched slots survive too
 }
 
-TEST_CASE("Appearance filter: player and NPC categories and membership exemptions are independent") {
-    for (bool npc : {false, true}) {
-        game::Appearance a;
-        a.npc = npc;
-        CHECK(game::appearance_new_armor_filtered(a, 0));
-        CHECK(game::appearance_new_armor_filtered(a, 8) == npc);
-        CHECK(game::appearance_new_armor_filtered(a, 16) == !npc);
-        CHECK_FALSE(game::appearance_new_armor_filtered(a, 24));
-        a.new_armor_filter_exempt = true;
-        CHECK_FALSE(game::appearance_new_armor_filtered(a, 0));
-    }
+TEST_CASE("Appearance filter: ApplyNewArmorFilter's bits by kind and membership") {
+    using game::new_armor_bits;
+    CHECK(new_armor_bits(1, false, false, false) == 0x10);
+    CHECK(new_armor_bits(1, true, true, true) == 0x10); // membership counts for players only
+    CHECK(new_armor_bits(0, false, false, false) == 0x08);
+    CHECK(new_armor_bits(0, true, false, false) == 0x0b);
+    CHECK(new_armor_bits(0, false, true, false) == 0x0a);
+    CHECK(new_armor_bits(0, false, false, true) == 0x0c);
+    for (std::uint8_t corpse : {2, 3}) CHECK(new_armor_bits(corpse, true, true, true) == 0);
+    game::Appearance a;
+    CHECK(a.new_armor_bits == game::kNewArmorUnknownKind); // either category bit shows an unknown kind
+    CHECK_FALSE(game::appearance_new_armor_filtered(a, 8));
+    CHECK_FALSE(game::appearance_new_armor_filtered(a, 16));
+    CHECK(game::appearance_new_armor_filtered(a, 0));
+    a.new_armor_bits = new_armor_bits(0, false, true, false);
+    CHECK(game::appearance_new_armor_filtered(a, 0x10 | 0x04 | 0x01));
+    CHECK_FALSE(game::appearance_new_armor_filtered(a, 2));
+    a.new_armor_bits = 0; // a corpse: hidden whatever the filter
+    CHECK(game::appearance_new_armor_filtered(a, 0x1f));
+    // Resolved for the default filter (24) a group member and a stranger look the same; for filter 2 they do not.
+    game::Appearance stranger, member;
+    stranger.new_armor_bits = new_armor_bits(0, false, false, false);
+    member.new_armor_bits = new_armor_bits(0, false, true, false);
+    auto resolved = [](game::Appearance x, std::uint32_t filter) {
+        game::resolve_new_armor_filter(x, filter);
+        return x;
+    };
+    CHECK(resolved(stranger, 24) == resolved(member, 24));
+    CHECK_FALSE(resolved(stranger, 2) == resolved(member, 2));
+    CHECK(game::appearance_new_armor_filtered(resolved(stranger, 2), 2));
+    CHECK_FALSE(game::appearance_new_armor_filtered(resolved(member, 2), 2));
+}
+
+TEST_CASE("Appearance filter: spawn kinds, corpses and group/raid membership") {
     Rig rig;
     REQUIRE(rig.to_zone());
     auto npc = make_spawn("Armored_NPC", 301, 1, 1, 0, 0, 3);
     rig.server.add_spawn(npc);
     REQUIRE(rig.until([&] { return rig.conn.world().spawns.contains(301); }));
-    CHECK(rig.conn.world().spawns.at(301).appearance.npc);
-    CHECK_FALSE(rig.conn.world().spawns.at(301).appearance.new_armor_filter_exempt);
+    CHECK(rig.conn.world().spawns.at(301).appearance.new_armor_bits == 0x10);
+    // EQEmu sends NPC 2 for every corpse, a player's too; RoF2 hides hero's forge on any Type above 1.
+    auto corpse = make_spawn("Gennro's_corpse", 303, 2, 1, 0, 0, 3);
+    rig.conn.receive_zone_packet_for_test(net::encode(corpse));
+    CHECK(rig.conn.world().spawns.at(303).appearance.new_armor_bits == 0);
     auto member = make_spawn("Armored_Visitor", 302, 0, 1, 0, 0, 3);
     rig.conn.receive_zone_packet_for_test(net::encode(member));
-    const auto exempt = [&] { return rig.conn.world().spawns.at(302).appearance.new_armor_filter_exempt; };
+    auto& bits = rig.conn.world_for_test().spawns.at(302).appearance.new_armor_bits;
+    const auto exempt = [&] { return (bits & 0x06) != 0; };
     rig.step();
-    CHECK_FALSE(exempt());
+    CHECK(bits == 0x08);
+    // Nothing changed: the bits are not made again every frame.
+    bits = 0x80;
+    rig.step();
+    CHECK(bits == 0x80);
+    bits = 0x08;
     net::GroupUpdateB group;
     group.group_id = 7;
     group.leader = rig.conn.world().player()->name;
@@ -121,6 +153,7 @@ TEST_CASE("Appearance filter: player and NPC categories and membership exemption
     rig.conn.receive_zone_packet_for_test(net::encode(group));
     rig.step();
     CHECK(exempt());
+    CHECK(bits == 0x0a);
     group.members.pop_back();
     rig.conn.receive_zone_packet_for_test(net::encode(group));
     rig.step();

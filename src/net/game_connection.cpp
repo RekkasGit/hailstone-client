@@ -378,13 +378,37 @@ void GameConnection::update() {
         server_rules_.reset();
         ++server_rules_serial_;
     }
-    // ApplyNewArmorFilter exempts our own actor and current group/raid members.
-    // Refresh after the packet batch so joins and leaves also invalidate dressed looks.
-    for (auto& [id, spawn] : world_.spawns)
-        spawn.appearance.new_armor_filter_exempt = id == world_.player_id ||
-            group_.has_member(spawn.name) || raid_.is_member(spawn.name);
+    // The original reapplies the new-armor filter to a member who joins or leaves the group or raid
+    // (PlayerClient_ApplyNewArmorFilterGroupMember / RaidMember); a new spawn has it made in apply_spawn.
+    if (new_armor_membership_changed())
+        for (auto& entry : world_.spawns) refresh_new_armor_bits(entry.second);
     raise_hook_events();
     marketplace_frame(now_ms());
+}
+
+void GameConnection::refresh_new_armor_bits(game::Spawn& s) const {
+    // Type (+0x125) as the spawn record set it; a spawn that died here keeps the bits it had (the death does not
+    // reapply the filter) until the next membership change.
+    const std::uint8_t type = s.is_corpse ? 2 : s.is_npc ? 1 : 0;
+    s.appearance.new_armor_bits = game::new_armor_bits(type, s.id == world_.player_id, group_.has_member(s.name),
+                                                       raid_.is_member(s.name));
+}
+
+bool GameConnection::new_armor_membership_changed() {
+    bool same = new_armor_player_ == world_.player_id;
+    std::size_t n = 0;
+    auto visit = [&](const std::string& name) {
+        if (same && (n >= new_armor_members_.size() || new_armor_members_[n] != name)) same = false;
+        ++n;
+    };
+    for (const auto& m : group_.slots) visit(m.name);
+    for (const auto& m : raid_.members) visit(m.name);
+    if (same && n == new_armor_members_.size()) return false;
+    new_armor_player_ = world_.player_id;
+    new_armor_members_.clear();
+    for (const auto& m : group_.slots) new_armor_members_.push_back(m.name);
+    for (const auto& m : raid_.members) new_armor_members_.push_back(m.name);
+    return true;
 }
 
 void GameConnection::send_world(const AppPacket& p) {
@@ -874,16 +898,18 @@ void GameConnection::apply_spawn(const Spawn& s) {
     a.drakkin_details = s.drakkin_details;
     a.npc_tint = s.npc_tint_id;
     a.class_id = s.class_;
-    a.npc = s.npc == 1 || s.npc == 2; // NPCs and NPC corpses retain their category
     for (std::size_t i = 0; i < 9; ++i) {
         a.material[i] = s.equipment[i].material;
         a.material_variation[i] = s.equipment[i].unknown1;
         a.elite_material[i] = s.equipment[i].elite_material;
         a.hero_forge[i] = s.equipment[i].hero_forge_model;
-        a.material2[i] = s.equipment[i].material2;
+        a.new_armor_type[i] = s.equipment[i].material2;
         a.tint[i] = s.long_equipment ? s.equipment_tint[i] : 0;
     }
     game::normalize_appearance(a, s.race);
+    // EQPlayer::EQPlayer applies the new-armor filter. Every corpse (NPC 2 from EQEmu for a player's and an
+    // NPC's alike; RoF2 takes any Type above 1 as a corpse) has hero's forge hidden.
+    refresh_new_armor_bits(out);
     note_pet_spawn(out);
 }
 
