@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <limits>
 #include <cstdlib>
 #include <format>
 
@@ -16,7 +18,12 @@ namespace hailstone::net {
 
 namespace {
 
-std::uint32_t to_u32(const std::string& s) { return static_cast<std::uint32_t>(std::strtoul(s.c_str(), nullptr, 10)); }
+std::optional<std::uint32_t> to_u32(const std::string& s) {
+    std::uint32_t value = 0;
+    auto [end, error] = std::from_chars(s.data(), s.data() + s.size(), value);
+    if (error != std::errc{} || end != s.data() + s.size()) return std::nullopt;
+    return value;
+}
 
 bool iequals(std::string_view a, std::string_view b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
@@ -37,8 +44,9 @@ bool GameConnection::mail_send_command(const std::string& text) {
         system(4529);
         return false;
     }
-    chat_server_->send_mail_command(text);
-    return true;
+    if (chat_server_->send_mail_command(text)) return true;
+    system(4529);
+    return false;
 }
 
 void GameConnection::mail_set_forwarding(bool on) {
@@ -58,15 +66,16 @@ void GameConnection::mail_close() { mail_.window_open = false; }
 
 void GameConnection::mail_select_mailbox(int index) {
     // MailMgr_SelectMailbox @0x46ab80: "[selectmailbox <n>".
+    if (index < 0 || static_cast<std::size_t>(index) >= mail_.mailboxes.size()) return;
     mail_send_command(std::format("[selectmailbox {}", index));
 }
 
 void GameConnection::mail_request_headers() {
     // MailMgr_RequestHeaders @0x46c010: the headers are dropped, "[getheaders".
+    if (!mail_send_command("[getheaders")) return;
     mail_.headers.clear();
     mail_.expected = -1;
     mail_.unread = false;
-    mail_send_command("[getheaders");
 }
 
 bool GameConnection::mail_request_body(std::uint32_t id) {
@@ -148,21 +157,37 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
                                                                          : std::to_string(n);
     };
     switch (e.kind) {
+    case K::Disconnected:
+        mail_.mailboxes.clear();
+        mail_.current = 0;
+        mail_.headers.clear();
+        mail_.expected = -1;
+        mail_.unread = false;
+        mail_.max_id = 0;
+        mail_.delivery.clear();
+        break;
     case K::MailboxList:
         // MailMgr_OnMailboxList @0x46d930. The original tells the chat service the forwarding setting when its
         // options window syncs the mail page (COptionsWnd::sub_00700dc0, at the UI's creation, when the chat
         // service is there); here when the mail login is answered, the first moment the chat service takes commands.
+        if (!e.accepted) break;
         mail_.mailboxes = f;
+        mail_.current = 0;
+        mail_.headers.clear();
+        mail_.expected = -1;
+        mail_.unread = false;
+        mail_.max_id = 0;
         log::info("mail: {} mailbox(es){}{}", f.size(), f.empty() ? "" : ", the first ", f.empty() ? "" : f[0]);
         mail_set_forwarding(client_option(game::ClientOption::MailForwarding));
         break;
     case K::MailboxChange: {
         // 0x521210: "You switched to mailbox %1." (4534) and the headers are fetched.
-        int n = f.empty() ? -1 : std::atoi(f[0].c_str());
-        if (n < 0) {
+        auto box = f.empty() ? std::nullopt : to_u32(f[0]);
+        if (!box || *box >= mail_.mailboxes.size()) {
             system(4535, {f.empty() ? std::string() : f[0]});
             break;
         }
+        int n = static_cast<int>(*box);
         mail_.current = n;
         system(4534, {box_name(n)});
         mail_request_headers();
@@ -171,10 +196,13 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
     case K::MailHeaderCount: {
         // The header count (0x5213f0..): 4538 / 4539 / 4540 with the mailbox name, 4541 on failure.
         if (f.size() < 4) break;
-        int box = std::atoi(f[0].c_str());
-        if (box != mail_.current) break;
+        auto box_value = to_u32(f[0]);
+        auto count_value = to_u32(f[3]);
+        if (!box_value || *box_value != static_cast<std::uint32_t>(mail_.current) ||
+            !count_value || *count_value > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) break;
+        int box = static_cast<int>(*box_value);
         bool ok = f[2] != "0";
-        auto count = static_cast<std::int32_t>(to_u32(f[3]));
+        auto count = static_cast<std::int32_t>(*count_value);
         if (!ok) {
             system(4541, {box_name(box)});
             break;
@@ -187,11 +215,14 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
     }
     case K::MailHeader: {
         // 0x533650 → MailMgr_OnHeader @0x4698b0 (the current mailbox only).
-        if (f.size() < 8 || std::atoi(f[0].c_str()) != mail_.current) break;
+        if (f.size() < 8) break;
+        auto box = to_u32(f[0]), id = to_u32(f[3]), time = to_u32(f[4]), status = to_u32(f[5]);
+        if (!box || *box != static_cast<std::uint32_t>(mail_.current) || !id || !time || !status ||
+            *status > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) break;
         game::MailHeader h;
-        h.id = to_u32(f[3]);
-        h.timestamp = to_u32(f[4]);
-        h.status = game::mail_status_from_server(std::atoi(f[5].c_str()));
+        h.id = *id;
+        h.timestamp = *time;
+        h.status = game::mail_status_from_server(static_cast<std::int32_t>(*status));
         h.from = f[6];
         h.subject = f[7];
         if (!is_ignored(game::mail_short_name(h.from))) mail_.store(std::move(h));
@@ -204,16 +235,19 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
         // (MailMgr +0xe0, set by 0x4688f0 from the options' mail page), the sound NewMailAudioNotification
         // (+0xe1, 0x468900).
         if (f.size() < 6) break;
-        int box = std::atoi(f[0].c_str());
+        auto box_value = to_u32(f[0]), id = to_u32(f[1]), time = to_u32(f[2]), status = to_u32(f[3]);
+        if (!box_value || *box_value >= mail_.mailboxes.size() || !id || !time || !status ||
+            *status > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) break;
+        int box = static_cast<int>(*box_value);
         bool notify = client_option(game::ClientOption::NewMailNotify);
         if (box != mail_.current) {
             if (notify) system(4533, {}, 15);
             break;
         }
         game::MailHeader h;
-        h.id = to_u32(f[1]);
-        h.timestamp = to_u32(f[2]);
-        h.status = game::mail_status_from_server(std::atoi(f[3].c_str()));
+        h.id = *id;
+        h.timestamp = *time;
+        h.status = game::mail_status_from_server(static_cast<std::int32_t>(*status));
         h.from = f[4];
         h.subject = f[5];
         if (notify) system(4547, {game::mail_short_name(h.from), h.subject}, 10);
@@ -227,13 +261,15 @@ void GameConnection::handle_mail_event(const ChatServerEvent& e) {
     }
     case K::MailBody: {
         // 0x51a600 → MailMgr_OnMessageBody @0x46db20.
-        if (f.size() < 3 || std::atoi(f[0].c_str()) != mail_.current) break;
+        if (f.size() < 3) break;
+        auto box = to_u32(f[0]), id = to_u32(f[1]);
+        if (!box || *box != static_cast<std::uint32_t>(mail_.current) || !id) break;
         bool ok = f.size() < 4 || f[3] != "0";
         if (!ok) {
             log::warn("Mail System: could not fetch message body.");
             break;
         }
-        auto it = mail_.headers.find(to_u32(f[1]));
+        auto it = mail_.headers.find(*id);
         if (it == mail_.headers.end()) break;
         it->second.body = f[2];
         std::string to;

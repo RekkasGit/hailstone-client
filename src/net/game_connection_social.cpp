@@ -1754,7 +1754,7 @@ void GameConnection::send_chat_server_message(const std::string& text, bool via_
         return;
     }
     if (!chat_server_ || chat_server_->failed()) return system(4529); // Please wait until we reconnect you ...
-    chat_server_->send_mail_command(text);
+    if (!chat_server_->send_mail_command(text)) system(4529);
 }
 
 void GameConnection::chat_server_command(const std::string& text) {
@@ -1795,10 +1795,10 @@ void GameConnection::friends_command(const std::string& args) {
     if (who.size() >= 0x30) return system(12981);
     bool known = std::any_of(social_.friends.begin(), social_.friends.end(), [&](const std::string& f) { return iequals(f, who); });
     if (known) {
-        chat_server_->send_command("buddy -" + who);
+        if (!chat_server_->send_command("buddy -" + who)) return system(4529);
         system(12982, {who});
     } else {
-        chat_server_->send_command("buddy " + who);
+        if (!chat_server_->send_command("buddy " + who)) return system(4529);
         system(12984, {who});
     }
 }
@@ -1818,14 +1818,14 @@ void GameConnection::ignore_command(const std::string& args) {
     }
     for (const auto& entry : social_.ignored) {
         if (iequals(after_last_dot(entry), who)) {
-            chat_server_->send_command("ignoreplayer -" + entry);
+            if (!chat_server_->send_command("ignoreplayer -" + entry)) return system(4529);
             system(13241, {who});
             return;
         }
     }
     for (const auto& [id, s] : world_.spawns)
         if (s.is_npc && iequals(base_name(s.name), who)) return system(13242); // That person cannot be ignored.
-    chat_server_->send_command("ignoreplayer " + who);
+    if (!chat_server_->send_command("ignoreplayer " + who)) system(4529);
 }
 
 void GameConnection::update_chat_server() {
@@ -1836,7 +1836,13 @@ void GameConnection::update_chat_server() {
         // container name); the world server's host is the fallback.
         if (info.host == "localhost" || info.host.find('.') == std::string::npos) info.host = ticket_.world_host;
         if (!chat_server_ || chat_server_->failed() || !(chat_server_target_ == info.host + ":" + std::to_string(info.port) + "/" + info.character)) {
-            if (!chat_server_) chat_server_ = std::make_unique<ChatServer>();
+            if (!chat_server_) {
+                IniFile ini;
+                if (auto path = game_.find("eqclient.ini")) ini.load(*path);
+                ChatServer::Options chat_options;
+                chat_options.session = ucs_session_options(ini.get_int("Defaults", "ChatKeepAlive", 0) != 0);
+                chat_server_ = std::make_unique<ChatServer>(std::move(chat_options));
+            }
             chat_server_->connect(info);
             autojoined_ = false;
             chat_server_target_ = info.host + ":" + std::to_string(info.port) + "/" + info.character;
@@ -1854,6 +1860,22 @@ void GameConnection::handle_chat_server_event(const ChatServerEvent& e) {
     // HandleUniversalChatMessage @0x5215a0.
     using K = ChatServerEvent::Kind;
     switch (e.kind) {
+    case K::Disconnected:
+        // CEverQuest::ChatServerGiveTime @0x5382d0 deletes a proxy whose link is down (GetStatus @0x7ef820 == 0), and
+        // ~UniversalChatProxy @0x427db0 frees the buddy list with it; the ignore list BeingIgnored @0x516a00 walks is
+        // the proxy's too, so with no proxy nothing is ignored. Friends, ignores and mail all go with the session.
+        social_.friends.clear();
+        social_.ignored.clear();
+        autojoined_ = false;
+        handle_mail_event(e);
+        break;
+    case K::MailboxList:
+        // The new authenticated proxy replaces the old per-session lists. EQEmu's friend rows were held until
+        // this reply, so they arrive after the clear even though it sent them before the reply on the wire.
+        social_.friends.clear();
+        social_.ignored.clear();
+        handle_mail_event(e);
+        break;
     case K::Message: {
         // UniversalChatProxy::vf1's channel message (channel, sender, text, then "SPAM:<n>:"), sorted into the
         // channel number HandleUniversalChatMessage takes: -1 the server's own text (no channel), -4 a tell to us
