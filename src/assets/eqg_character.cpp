@@ -584,6 +584,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
             any = true;
             auto& keys = a.tracks[it->second];
             keys.clear();
+            keys.reserve(a.frame_count);
             for (std::uint32_t fr = 0; fr < a.frame_count; ++fr) {
                 std::uint32_t ms = fr * step;
                 auto up = std::upper_bound(t.times_ms.begin(), t.times_ms.end(), ms);
@@ -611,6 +612,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
     }
     m.bounds_min = lo;
     m.bounds_max = hi;
+    m.compact_animations();
     return m;
 }
 

@@ -17,6 +17,10 @@ unsigned long process_id();
 // The process's resident memory (the working set on Windows) in bytes; nullopt where it cannot be read.
 std::optional<std::uint64_t> resident_memory();
 
+// Windows PROCESS_MEMORY_COUNTERS_EX::PrivateUsage (private committed bytes, not working set). Returns nullopt
+// on other systems or when the query fails; virtual size and RSS are not substitutes for private commit.
+std::optional<std::uint64_t> private_commit_memory();
+
 // Lowers the calling thread's scheduling priority (nice 10), for a background loader: the frame and the network come
 // first. Linux only, where each thread has its own nice value; elsewhere it does nothing.
 void lower_current_thread_priority();

@@ -69,6 +69,17 @@ std::optional<std::uint64_t> resident_memory() {
 #endif
 }
 
+std::optional<std::uint64_t> private_commit_memory() {
+#if defined(_WIN32)
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = static_cast<DWORD>(sizeof counters);
+    if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
+                             static_cast<DWORD>(sizeof counters)))
+        return static_cast<std::uint64_t>(counters.PrivateUsage);
+#endif
+    return std::nullopt;
+}
+
 void lower_current_thread_priority() {
 #if defined(__linux__)
     setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10);

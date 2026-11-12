@@ -80,3 +80,36 @@ model, DDS, TGA, XMI and table parsers produced no findings.
   later parts of the player profile) are reached only with all-zero or counting data.
 - `ReliableChannel` (timing logic, no parser) and the game-connection state machines beyond the `Session`.
 - Windows/macOS: the sanitizer build was run on Linux with GCC only.
+
+## Windows allocation profiling
+
+The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that freed objects leaked. WPR's Heap profile records heap allocation/free activity; VirtualAllocation records virtual allocation activity. The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports. See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis) and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
+
+Use one client, starting before login and ending after the repeated zoning route. Build with symbols first (`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build), and retain its matching `hailstone.exe` and linker `hailstone.pdb`. A Release build without the matching PDB can identify modules but cannot reliably resolve Hailstone allocation stacks to functions. Put traces under the ignored `build-msvc/` folder.
+
+In an **elevated PowerShell** at the repository root, with Hailstone closed:
+
+```powershell
+wpr -status
+wpr -HeapTracingConfig hailstone.exe
+```
+
+If another recording is active, finish that recording before starting this one; do not cancel someone else's session. Note the current heap-tracing configuration so it can be restored afterward. When it was initially disabled:
+
+```powershell
+New-Item -ItemType Directory -Force .\build-msvc\memory-profile | Out-Null
+$trace = Join-Path (Resolve-Path .\build-msvc\memory-profile) ("route-{0:yyyyMMdd-HHmmss}.etl" -f (Get-Date))
+wpr -HeapTracingConfig hailstone.exe enable
+wpr -start Heap -start VirtualAllocation -filemode
+```
+
+Check each command succeeds. Then launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to the first zone. Stop the recording **while the client remains in that zone**, so outstanding allocations can be examined before shutdown frees them:
+
+```powershell
+wpr -stop $trace
+wpr -HeapTracingConfig hailstone.exe disable
+```
+
+Always restore the initial tracing configuration after collecting or abandoning the run (leave it enabled if it was already enabled before this procedure). Heap tracing configuration affects newly launched clients, which is why the client must be restarted after enabling it. Trace-enabled measurements have instrumentation overhead; compare normal runtime memory using the client logs as well.
+
+Open the ETL in Windows Performance Analyzer and load the matching executable/PDB symbols. Filter to the Hailstone PID. In Heap Allocations, compare outstanding allocations at first settled Kael and return-to-Kael, grouped by allocation stack. Inspect VirtualAlloc Commit LifeTimes for large committed regions outside those heap allocations. Keep the associated `hailstone.log` for the route; native heap allocations, allocator-retained commit and graphics-driver regions are distinct categories, and the same bytes must not be added twice. Trace collection itself does not establish which category explains a gap.
