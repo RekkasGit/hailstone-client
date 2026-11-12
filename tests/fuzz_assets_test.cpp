@@ -23,6 +23,7 @@
 #include "assets/xmi.h"
 #include "core/byte_io.h"
 #include "core/ini_file.h"
+#include "core/server_profile.h"
 #include "nav/nav_mesh.h"
 #include "fuzz_support.h"
 #include "pfs_fixtures.h"
@@ -517,6 +518,8 @@ TEST_CASE("fuzz: XMI, sound and effect tables, ini and tag text") {
               (void)ini.get_int("HotButtons", "Page1Button1", 2);
               (void)ini.to_string();
           });
+    sweep("eqhost.txt", {text_bytes("\xEF\xBB\xBF[LoginServer]\r\nHost=login.example.org:5999\r\n"), text_bytes("[LoginServer]\nHost=[2001:db8::1]:65535\nHost=2001:db8::1\nHost=x:99999999999\n")}, 0, 400,
+          [&](std::span<const std::byte> d) { (void)profile_from_eqhost(as_text(d)); });
     sweep("zone line tags", {text_bytes("DRNTP00TOP_ZONE_NEKTULOS_000000000000_000000000000"), text_bytes("WTN_pool"), text_bytes("DRP_x")}, 0, 300,
           [&](std::span<const std::byte> d) {
               (void)decode_zone_line(as_text(d));

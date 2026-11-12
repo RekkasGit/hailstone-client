@@ -1084,6 +1084,36 @@ race. Off, the original's checks apply.
   Display "Target Name Through Walls", off by default) is on, a sight of the target the original does not give. Its highlight is switchable (`display.target_plate_highlight`, Options > Display "Highlight Target Name", on by default):
   docs/graphics.md "Name plates".
 
+## Extended chat routing
+
+A deliberate Hailstone difference (`game/chat_windows.h`). The original routes every chat line by its colour to one
+of 57 chat channels (`CChatWindowManager::GetChannelFromColor` @0x6504c0, the user colours 0x100..0x15e by its
+table, every other colour to Other, 22) and keeps 99 user colours (`CDisplay`, User_1..99). Hailstone adds channels
+57..107 and the user colours 355..408 (User_100..153) for a server that sends the colour ids of a later client's
+extended chat filters:
+
+- Colours 356..380 go to channels 57..81, 382 / 383 to 84 / 85, 388 / 389 to 88 / 89, the seven consider colours
+  390..396 to 95, 397 to Non Melee Hits (40) and 398..408 to 97..107. 355, 381 and 384..387 go to Other, as every
+  unknown colour does in the original.
+- Every colour up to 354 goes where the original sends it: EQEmu's `Chat::NonMelee` (283) to Non Melee Hits,
+  `Chat::DotDamage` (325) and the basic colours below 256 to Other, 348 to Emotes, 349 to Guild.
+- The lines the client makes itself keep the original's colours (environmental hits 0x10a / 0x149 / 0x117, others'
+  deaths 0x116, randoms 0x11f, spell interruptions 289, considers in their con colour); none uses an extended colour.
+- The Filters menu is InitContextMenu's for channels 0..56 (Randoms, Other, Damage Shield Reports, Criticals and Non
+  Melee Hits where they were; Melee's ALL covers its 18). The extended channels are in an Extended (server) submenu
+  after the menu's ALL, with Direct Damage, Damage Over Time, Healing, Damage Shields, Environmental Damage, Random
+  Rolls and Other Messages under it. Channels 82, 83, 86, 87, 90..94 and 96 keep their numbers but are in no menu:
+  the list the extension comes from gives them colours below 355, which keep RoF2's channels here.
+- The extended user colours follow the original's rows on the Options Colors page, with defaults of Hailstone's
+  own (from related RoF2 colours; the con colours for the consider colours), and Reset Default Colors resets them too.
+  `/usercolor` keeps the original's range (1..99, and 100 a no-op).
+
+Stock EQEmu sends no colour above 340 (`common/eq_constants.h` `Chat`), and nothing in the client makes one, so on a
+stock server every line routes and colours as in the original and the extension has no switch: its channels and
+colours only fill when a server sends their colours. Without the extension (the client before it), such a colour
+went to Other and showed in user colour 0's RGB (`GetUserDefinedColor` reads index 0 for an index past 98), as the
+original does; the names and meanings of 355..408 are not confirmed (docs/unknowns.md "Chat").
+
 ## Chat keys, the PvP rule set, trade and group invites
 
 Vectors in `tests/chat_trade_vectors_test.cpp` (set chat input mode 1500, toggle chat input mode 1000, con level

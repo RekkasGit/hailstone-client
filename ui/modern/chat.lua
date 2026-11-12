@@ -68,27 +68,43 @@ local function update(slot, c)
 end
 
 -- ---------------------------------------------------------------- the chat menu (as classic's)
--- Filters: the chat window manager's channels by its menus (Filters, Chat Channel, Melee, Spells): each goes to one
--- window; a ticked one comes to this tab, unticking sends it back to the main window. Show All is the menu's ALL.
+-- Filters: the chat window manager's channels by its menus (Filters, Chat Channel, Melee, Spells, and Hailstone's
+-- Extended (server) with its submenus; eq.ChatFilterGroups): each goes to one window; a ticked one comes to this tab,
+-- unticking sends it back to the main window. Show All is the menu's ALL (its own items only). A menu with no items
+-- (Chat Channel before joining one) is left out.
 local function filtersMenu(slot)
   local filters = eq.ChatFilters(slot)
   if #filters == 0 then return end
   if not ui.BeginMenu("Filters") then return end
-  local groups, seen = {}, {}
+  local groups = eq.ChatFilterGroups()
+  local rootName = "Filters"
   for _, f in ipairs(filters) do
-    if not seen[f.group] then seen[f.group] = true; groups[#groups + 1] = f.group end
+    if f.menu == 0 then rootName = f.group; break end
   end
-  for gi, group in ipairs(groups) do
-    if ui.BeginMenu(group .. "##group" .. gi) then
-      if ui.MenuItem("Show All##" .. group) then eq.ChatSetFilter(slot, group, true) end
-      if ui.MenuItem("Hide All##" .. group) then eq.ChatSetFilter(slot, group, false) end
-      ui.Separator()
-      for _, f in ipairs(filters) do
-        if f.group == group and ui.MenuItem(f.name .. "##filter" .. f.id, f.on) then eq.ChatSetFilter(slot, f.id, not f.on) end
+  local function hasRows(id)
+    for _, f in ipairs(filters) do if f.menu == id then return true end end
+    for _, group in ipairs(groups) do
+      if group.parent == id and hasRows(group.id) then return true end
+    end
+    return false
+  end
+  local function drawGroup(id, name)
+    if ui.MenuItem("Show All##group" .. id) then eq.ChatSetFilter(slot, name, true) end
+    if ui.MenuItem("Hide All##group" .. id) then eq.ChatSetFilter(slot, name, false) end
+    ui.Separator()
+    for _, f in ipairs(filters) do
+      if f.menu == id and ui.MenuItem(f.name .. "##filter" .. f.id, f.on) then
+        eq.ChatSetFilter(slot, f.id, not f.on)
       end
-      ui.EndMenu()
+    end
+    for _, group in ipairs(groups) do
+      if group.parent == id and hasRows(group.id) and ui.BeginMenu(group.name .. "##group" .. group.id) then
+        drawGroup(group.id, group.name)
+        ui.EndMenu()
+      end
     end
   end
+  drawGroup(0, rootName)
   if ui.BeginMenu("Hit Modes") then
     for i, h in ipairs(eq.ChatHitModes()) do
       if ui.BeginMenu(h.name .. "##hit" .. i) then

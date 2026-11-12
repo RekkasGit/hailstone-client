@@ -12,6 +12,7 @@
 #include <format>
 #include <fstream>
 #include <functional>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -42,7 +43,7 @@ std::uint32_t user_color_rgb(int index);
 namespace {
 
 // The default user colours (0xac2c40, {r, g, b, pad} each; __SaveColors).
-constexpr std::array<std::uint32_t, 99> kDefaultUserColors{
+constexpr std::array<std::uint32_t, 99> kRoF2DefaultUserColors{
     0xffffff, 0xbe28be, 0x00ffff, 0x28f028, 0x008000, 0x008000, 0xff0000, 0x5a5aff,
     0x5a5aff, 0xffffff, 0xff0000, 0xffffff, 0xffffff, 0xffff00, 0x5a5aff, 0xffffff,
     0xffffff, 0xffffff, 0xffffff, 0xf0f000, 0xf0f000, 0xffffff, 0xffffff, 0xffffff,
@@ -57,9 +58,67 @@ constexpr std::array<std::uint32_t, 99> kDefaultUserColors{
     0xffffff, 0xffffff, 0xffffff, 0xff7f00, 0xffffff, 0xffffff, 0xffffff, 0xc00000,
     0x00ff00, 0xffff00, 0xff0000};
 
+// Hailstone (a deliberate difference, game/chat_windows.h): the user colours 99..152 for the extended colours
+// 355..408, which only a server sends. Their defaults are Hailstone's own picks from related RoF2 colours (and the
+// con colours for the seven consider colours), not a later client's palette.
+const auto kDefaultUserColors = [] {
+    std::array<std::uint32_t, game::kChatUserColorCount> colors{};
+    colors.fill(kRoF2DefaultUserColors[17]);
+    std::copy(kRoF2DefaultUserColors.begin(), kRoF2DefaultUserColors.end(), colors.begin());
+    auto inherit = [&](std::initializer_list<int> destinations, int source) {
+        for (int color : destinations)
+            colors[static_cast<std::size_t>(color - 256)] = kRoF2DefaultUserColors[static_cast<std::size_t>(source - 256)];
+    };
+    inherit({355}, 326); // dialog links: item links
+    inherit({356}, 305); // flurries
+    inherit({357, 365}, 335); // diagnostic and event messages
+    inherit({358}, 278); // NPC deaths
+    inherit({359, 360}, 287); // random rolls
+    inherit({361, 362, 374, 375, 379, 397, 402}, 283); // spell and environmental numbers
+    inherit({363, 364}, 329); // damage shields
+    inherit({366, 367}, 284); // overwritten buffs
+    inherit({368, 369, 370, 406}, 289); // command and ability failures
+    inherit({371}, 286); // destroyed items
+    inherit({372, 378}, 264); // own auras and songs
+    inherit({373, 380}, 288); // others' auras and spell emotes
+    inherit({376, 377, 401}, 325); // damage over time
+    inherit({381}, 274); // faction links
+    inherit({382}, 270); // taunt
+    inherit({383}, 271); // disciplines
+    inherit({384, 386}, 259); // positive changes
+    inherit({385}, 262); // negative changes
+    inherit({388, 407}, 273); // general information
+    inherit({389}, 327); // raid victories
+    inherit({408}, 269); // alerts
+    inherit({398, 399, 400, 403, 404}, 302); // critical spell and healing numbers
+    inherit({405}, 301); // critical melee numbers
+    colors[387 - 256] = 0x808080; // locked encounters
+    // Routing a consider through the editable palette retains Hailstone's
+    // existing difficulty colours until the player chooses replacements.
+    constexpr std::array consider{game::Con::Red, game::Con::Yellow, game::Con::White,
+                                  game::Con::DarkBlue, game::Con::LightBlue, game::Con::Green, game::Con::Gray};
+    for (std::size_t index = 0; index < consider.size(); ++index)
+        colors[390 - 256 + index] = game::con_rgb(consider[index]);
+    return colors;
+}();
+
+constexpr std::array<std::string_view, game::kChatUserColorCount - 99> kExtendedColorNames{
+    "Dialog links", "Your flurries", "Debug output", "NPC deaths", "Other players' rolls", "Group and raid rolls",
+    "Your environmental damage", "Others' environmental damage", "Damage shields hitting you", "Other damage shields",
+    "Event messages", "Detrimental buffs replaced", "Beneficial buffs replaced", "Unavailable commands",
+    "Combat ability recovery", "Alternate ability recovery", "Destroyed items", "Your auras", "Other auras",
+    "Your healing", "Other healing", "Your damage over time", "Other damage over time", "Bard songs",
+    "Other direct spell damage", "Spell emotes", "Faction links", "Taunts", "Other combat abilities",
+    "Item stat increases", "Item stat decreases", "Attackable encounters", "Locked encounters", "Food and drink",
+    "Raid victories", "Consider: red", "Consider: yellow", "Consider: white", "Consider: blue", "Consider: light blue",
+    "Consider: green", "Consider: gray", "Direct spell damage", "Other critical spell damage",
+    "Your critical damage over time", "Other critical damage over time", "Damage over time received", "Healing received",
+    "Your critical healing", "Other critical healing", "Other critical melee hits", "Other spell failures",
+    "Client Messages", "Alerts"};
+
 struct ChatState {
     EqHost* host = nullptr;
-    std::array<std::uint32_t, 99> user{}; // RGB of user colours 256.. (index colour - 256)
+    std::array<std::uint32_t, game::kChatUserColorCount> user{}; // RGB of colours 256..408 (index colour - 256)
     bool colors_loaded = false;
     std::filesystem::path chat_ini; // the character's chat.ini (core/character_files.h); empty: eqclient.ini alone
     std::deque<std::string> history;       // newest last
@@ -230,16 +289,21 @@ EqHost& host(lua_State* L) { return *static_cast<EqHost*>(lua_touserdata(L, lua_
 } // namespace
 
 std::uint32_t user_color_rgb(int index) {
-    load_colors(); // CDisplay::GetUserDefinedColor: an index outside 0..98 reads colour 0
-    return state().user[static_cast<std::size_t>(index >= 0 && index <= 0x62 ? index : 0)];
+    load_colors(); // CDisplay::GetUserDefinedColor: an index outside 0..98 (here 0..152) reads colour 0
+    return state().user[static_cast<std::size_t>(index >= 0 && index < game::kChatUserColorCount ? index : 0)];
 }
 
 std::uint32_t default_user_color_rgb(int index) {
-    return kDefaultUserColors[static_cast<std::size_t>(index >= 0 && index <= 0x62 ? index : 0)];
+    return kDefaultUserColors[static_cast<std::size_t>(index >= 0 && index < game::kChatUserColorCount ? index : 0)];
+}
+
+std::string_view extended_chat_color_name(int index) {
+    return index >= 99 && index < game::kChatUserColorCount ?
+        kExtendedColorNames[static_cast<std::size_t>(index - 99)] : std::string_view{};
 }
 
 void set_user_color(EqHost& host, int index, std::uint32_t rgb) {
-    if (index < 0 || index > 0x62) return; // SetUserDefinedColor ignores the rest
+    if (index < 0 || index >= game::kChatUserColorCount) return; // SetUserDefinedColor ignores the rest (0..98 there)
     load_colors();
     state().user[static_cast<std::size_t>(index)] = rgb & 0xffffff;
     ++state().colors; // (the chat windows' lines in the new colour: eq.ChatText's versions change)
@@ -289,9 +353,9 @@ namespace {
 // ---------------------------------------------------------------- the chat windows (CChatWindowManager)
 //
 // Up to 32 chat windows (CChatWindowManager::ChatWnd, NumWindows +0x80), window 0 the main one. Every line goes by
-// its colour to one of the 57 chat channels (game/chat_windows.h) and from there to the one window ChannelMap
-// gives it (the main window unless its Filters menu moved it); a line a window wrote itself (CChatWindow::
-// AddOutputText: the menus' answers) shows only there. Each window keeps its name, the channel its plain typed text
+// its colour to one of the 57 chat channels (game/chat_windows.h; Hailstone's extended channels 57..107 after them)
+// and from there to the one window ChannelMap gives it (the main window unless its Filters menu moved it); a line a
+// window wrote itself (CChatWindow::AddOutputText: the menus' answers) shows only there. Each window keeps its name, the channel its plain typed text
 // goes to (ChatChannel, with the tell target or the chat channel's index), its language, scrollbar and font.
 //
 // This client's addition: a window can be shown as a tab of another (`dock`); every tab is still a chat window of
@@ -774,9 +838,28 @@ std::vector<std::string> joined_channels() {
     return out;
 }
 
-// An item's text: its eqstr, or the joined chat channel's name.
+std::string filter_label(std::uint32_t id, std::string_view fallback) {
+    EqHost* h = chat_host();
+    if (id && h && h->conn && h->conn->strings().has(id)) return eqstr(id);
+    return fallback.empty() ? eqstr(id) : std::string(fallback);
+}
+
+std::string filter_group_text(game::ChatFilterMenu menu) {
+    if (menu == game::ChatFilterMenu::Filters) return filter_label(game::kStrFilters, "Filters");
+    for (const auto& group : game::chat_filter_groups())
+        if (group.menu == menu) return filter_label(group.eqstr, group.label);
+    return {};
+}
+
+game::ChatFilterMenu filter_group_parent(game::ChatFilterMenu menu) {
+    for (const auto& group : game::chat_filter_groups())
+        if (group.menu == menu) return group.parent;
+    return game::ChatFilterMenu::Filters;
+}
+
+// An item's localized or native label, or the joined chat channel's name.
 std::string filter_text(const game::ChatFilterItem& it, const std::vector<std::string>& joined) {
-    if (it.eqstr) return eqstr(it.eqstr);
+    if (it.eqstr || !it.label.empty()) return filter_label(it.eqstr, it.label);
     std::size_t k = static_cast<std::size_t>(it.channel - game::kChatChannelFirstServer);
     return k < joined.size() ? joined[k] : eqstr(game::kStrFilterNumbered, {std::to_string(it.channel)});
 }
@@ -803,7 +886,9 @@ void all_channels(int w, game::ChatFilterMenu menu) {
             continue;
         m.channel_map[it.channel] = w;
     }
-    window_text(w, eqstr(game::chat_filter_all_eqstr(menu)), 10);
+    std::uint32_t message = game::chat_filter_all_eqstr(menu);
+    window_text(w, message ? eqstr(message) :
+        std::format("{} channels will now filter to this window.", filter_group_text(menu)), 10);
     changed();
 }
 
@@ -826,26 +911,33 @@ std::vector<Row> filter_menu(int w, game::ChatFilterMenu menu) {
             rows.push_back(std::move(r));
         }
     };
-    auto submenu = [&](std::uint32_t name, game::ChatFilterMenu sub, bool enabled) {
+    auto submenu = [&](game::ChatFilterMenu sub, bool enabled) {
         Row r;
-        r.text = eqstr(name);
+        r.text = filter_group_text(sub);
         if (!enabled) return disabled(std::move(r));
         r.submenu = [w, sub] { return used(w) ? filter_menu(w, sub) : std::vector<Row>{}; };
         return r;
     };
+    auto add_submenus = [&](game::ChatFilterMenu parent) {
+        for (const auto& group : game::chat_filter_groups())
+            if (group.parent == parent && group.menu != game::ChatFilterMenu::Extended)
+                rows.push_back(submenu(group.menu, group.menu != game::ChatFilterMenu::ChatChannel || !joined.empty()));
+    };
     if (menu == game::ChatFilterMenu::Filters) {
         add_items([](const game::ChatFilterItem& it) { return it.channel <= 8 || it.channel == 49; });
-        rows.push_back(submenu(game::kStrFilterChatChannel, game::ChatFilterMenu::ChatChannel, !joined.empty()));
-        rows.push_back(submenu(game::kStrFilterMelee, game::ChatFilterMenu::Melee, true));
-        rows.push_back(submenu(game::kStrFilterSpells, game::ChatFilterMenu::Spells, true));
+        add_submenus(menu); // Chat Channel, Melee, Spells
         add_items([](const game::ChatFilterItem& it) { return it.channel > 8 && it.channel != 49; });
     } else {
+        add_submenus(menu); // (Hailstone's extended submenus)
         add_items([](const game::ChatFilterItem&) { return true; });
     }
     Row all;
     all.text = eqstr(game::kStrAll);
     all.act = on_window(w, [menu](int win) { all_channels(win, menu); });
     rows.push_back(std::move(all));
+    // Hailstone: the extended channels' submenu after the original menu (its ALL included), so the rows above are
+    // InitContextMenu's.
+    if (menu == game::ChatFilterMenu::Filters) rows.push_back(submenu(game::ChatFilterMenu::Extended, true));
     return rows;
 }
 
@@ -1494,7 +1586,9 @@ int ChatSetTitle(lua_State* L) {
 }
 
 // filters = eq.ChatFilters(slot)   -- the Filters menu for the tab that is up: { id (the channel), group ("Filters",
-// "Chat Channel", "Melee", "Spells"; eqstr names), name, on (the channel goes to this window) } in the menu's order
+// "Chat Channel", "Melee", "Spells"; eqstr names; Hailstone's extended submenus by their names), name, on (the
+// channel goes to this window), menu and parent (the ChatFilterMenu of the item's menu and of the menu that holds
+// it; eq.ChatFilterGroups) } in the menu's order
 int ChatFilters(lua_State* L) {
     int w = up_window(L, 1);
     lua_newtable(L);
@@ -1505,20 +1599,39 @@ int ChatFilters(lua_State* L) {
         if (it.menu == game::ChatFilterMenu::ChatChannel &&
             static_cast<std::size_t>(it.channel - game::kChatChannelFirstServer) >= joined.size())
             continue;
-        std::uint32_t group = it.menu == game::ChatFilterMenu::Filters    ? game::kStrFilters
-                              : it.menu == game::ChatFilterMenu::Melee    ? game::kStrFilterMelee
-                              : it.menu == game::ChatFilterMenu::Spells   ? game::kStrFilterSpells
-                                                                          : game::kStrFilterChatChannel;
-        lua_createtable(L, 0, 4);
+        lua_createtable(L, 0, 6);
         lua_pushinteger(L, it.channel);
         lua_setfield(L, -2, "id");
-        lua_pushstring(L, eqstr(group).c_str());
+        lua_pushstring(L, filter_group_text(it.menu).c_str());
         lua_setfield(L, -2, "group");
+        lua_pushinteger(L, static_cast<lua_Integer>(it.menu));
+        lua_setfield(L, -2, "menu");
+        lua_pushinteger(L, static_cast<lua_Integer>(filter_group_parent(it.menu)));
+        lua_setfield(L, -2, "parent");
         lua_pushstring(L, filter_text(it, joined).c_str());
         lua_setfield(L, -2, "name");
         lua_pushboolean(L, manager().channel_map[it.channel] == w);
         lua_setfield(L, -2, "on");
         lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+
+// groups = eq.ChatFilterGroups()   -- the Filters menu's submenus: { id (ChatFilterMenu), parent (0: the Filters
+// menu), name }; Chat Channel, Melee and Spells, then Hailstone's Extended (server) and its submenus
+int ChatFilterGroups(lua_State* L) {
+    auto groups = game::chat_filter_groups();
+    lua_createtable(L, static_cast<int>(groups.size()), 0);
+    lua_Integer index = 0;
+    for (const auto& group : groups) {
+        lua_createtable(L, 0, 3);
+        lua_pushinteger(L, static_cast<lua_Integer>(group.menu));
+        lua_setfield(L, -2, "id");
+        lua_pushinteger(L, static_cast<lua_Integer>(group.parent));
+        lua_setfield(L, -2, "parent");
+        lua_pushstring(L, filter_group_text(group.menu).c_str());
+        lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++index);
     }
     return 1;
 }
@@ -1531,13 +1644,8 @@ int ChatSetFilter(lua_State* L) {
     bool on = lua_toboolean(L, 3) != 0;
     if (lua_type(L, 2) == LUA_TSTRING) {
         std::string group = lua_tostring(L, 2);
-        for (auto menu : {game::ChatFilterMenu::Filters, game::ChatFilterMenu::ChatChannel, game::ChatFilterMenu::Melee,
-                          game::ChatFilterMenu::Spells}) {
-            std::uint32_t id = menu == game::ChatFilterMenu::Filters    ? game::kStrFilters
-                               : menu == game::ChatFilterMenu::Melee    ? game::kStrFilterMelee
-                               : menu == game::ChatFilterMenu::Spells   ? game::kStrFilterSpells
-                                                                        : game::kStrFilterChatChannel;
-            if (group != eqstr(id)) continue;
+        auto apply_group = [&](game::ChatFilterMenu menu) {
+            if (group != filter_group_text(menu)) return false;
             if (on) {
                 all_channels(w, menu);
             } else {
@@ -1545,7 +1653,11 @@ int ChatSetFilter(lua_State* L) {
                     if (it.menu == menu && manager().channel_map[it.channel] == w) manager().channel_map[it.channel] = 0;
                 changed();
             }
-        }
+            return true;
+        };
+        if (apply_group(game::ChatFilterMenu::Filters)) return 0;
+        for (const auto& descriptor : game::chat_filter_groups())
+            if (apply_group(descriptor.menu)) break;
         return 0;
     }
     lua_Integer ch = luaL_checkinteger(L, 2);
@@ -2032,6 +2144,7 @@ void register_chat_api(lua_State* L, EqHost& h) {
                                    {"ChatSetAlwaysHere", ChatSetAlwaysHere},
                                    {"ChatNewWindow", ChatNewWindow}, {"ChatCloseWindow", ChatCloseWindow},
                                    {"ChatSetTitle", ChatSetTitle}, {"ChatFilters", ChatFilters},
+                                   {"ChatFilterGroups", ChatFilterGroups},
                                    {"ChatSetFilter", ChatSetFilter}, {"ChatSetFont", ChatSetFont},
                                    {"ChatDefaultChannels", ChatDefaultChannels}, {"ChatSetDefault", ChatSetDefault},
                                    {"ChatClear", ChatClear}, {"ChatNewTab", ChatNewTab},

@@ -1272,7 +1272,8 @@ ServerProfile profile_from_view(const LoginView& view) {
     return p;
 }
 
-bool load_login_settings(LoginView& view, Config& config, const std::filesystem::path& servers) {
+bool load_login_settings(LoginView& view, Config& config, const std::filesystem::path& servers,
+                         const std::filesystem::path& eqhost) {
     view.servers_dir = servers;
     view.profiles = list_profiles(servers);
     view.default_ui = config.get_string("ui.name", "modern");
@@ -1291,6 +1292,25 @@ bool load_login_settings(LoginView& view, Config& config, const std::filesystem:
             config.set("login.profile", p.id);
             changed = true;
             view.profiles = list_profiles(servers);
+        }
+    }
+    // The asset folder's eqhost.txt gives a fresh install its first server, once: login.eqhost_imported (in
+    // hailstone.ini, never the game folder) records that it was imported, or that the player already had servers
+    // when one was there, so deleting every server later does not bring it back.
+    if (!eqhost.empty() && !config.get_bool("login.eqhost_imported", false)) {
+        if (!view.profiles.empty()) {
+            config.set_bool("login.eqhost_imported", true);
+            changed = true;
+        } else {
+            if (auto p = profile_from_eqhost_file(eqhost)) {
+                p->id = make_profile_id(p->name, servers);
+                if (save_profile(*p, servers)) {
+                    config.set("login.profile", p->id);
+                    config.set_bool("login.eqhost_imported", true);
+                    changed = true;
+                    view.profiles = list_profiles(servers);
+                }
+            }
         }
     }
     int index = view.profiles.empty() ? -1 : 0;
