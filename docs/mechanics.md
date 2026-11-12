@@ -330,8 +330,10 @@ How a move meets walls:
   21 classic zones, 655 of 665 closed doors sit in their doorways (the slab and the way through it clear of the
   zone's geometry); with the heading turned clockwise 313 do. Walked live: halas door 14 and felwithea door 1 stop
   the player closed (2.3 from the slab's centre) and let it through open.
-- Historical baseline vector results, before the capsule/parallel-helper corrections above
-  (tests/movement_vectors_test.cpp): DoCollisionMovement 1000, SweptSphereTriangle 3000,
+- Vector results measured before the capsule and parallel edge-region changes above
+  (tests/movement_vectors_test.cpp). **The current sweep has not been replayed against these recordings**: the
+  numbers below are the earlier implementation's, and `movement_vectors_test` must be run with
+  `HAILSTONE_VECTORS_DIR` set before they are trusted again (docs/todo.md). DoCollisionMovement 1000, SweptSphereTriangle 3000,
   SweepStopAndSlide 3000, s3dCollideActorSweep 2000, CollisionHit_SetCollidingType 1500,
   CollisionFilter_Movement 2000. The sweep's three are compared within a tolerance (t 1e-4, unit vectors 1e-3,
   points 1e-3 + 1e-6 of their size, each grown by 8 floats of the inputs' size over the move or the radius, as the
@@ -1387,6 +1389,12 @@ it does nothing). Which group plays what:
 - Climbing: CollidingType (+0x24, 6 on a ladder) reaches 0x4afe60 / SelectMovementAnim, which plays L07 / CLMB
   forward going up and reversed going down. Fresh moving remote spawns probe the same world sweep for ladder and
   switch contacts; a stationary spawn retains its contact, while riders, corpses and NoCollide actors do not probe.
+  The probe's world follows the player's movement rules (`ZoneMoveWorld::apply_rules`: passable ladders, the doors
+  /nav passes), so other spawns climb Cabilis's passable ladders when the player would. Hailstone, for the frame's
+  cost: only spawns within the actor clip of the player are probed (`WorldState::remote_probe_range`, the camera's
+  `game::actor_clip_distance`, 550 at the default ActorClipPlane); a farther one is not drawn and has no contact.
+  Only a ladder gives a contact the animation shows, so the probe sweeps the doors only after a ladder hit (a door
+  hit then gives the switch type over it, as in the full sweep), and not the vehicles or NPC bodies.
   This publishes animation contact state; full remote collision correction and the physical-radius gap remain open.
 - Other spawns' FeetWet / BodyWet (+0xa1 / +0xa2) are probed with each step (`WorldState::smooth`: CollisionPass's
   sub_00506d20 at the spawn's z and CheckRegionChange at the feet + 0.25), so they swim and tread water.

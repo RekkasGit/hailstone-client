@@ -411,6 +411,7 @@ public:
     void smooth_vehicles(float dt);
     // The game clock's steps for the other spawns' physics (WorldState::physics_steps; nullopt: one per frame).
     void set_physics_steps(std::optional<std::vector<float>> steps_ms) { world_.physics_steps = std::move(steps_ms); }
+    void set_remote_probe_range(float range) { world_.remote_probe_range = range; }
     // The game clock's steps this frame on now_ms()'s clock (core/step_clock.h, docs/mechanics.md "Frame rate"): the
     // rules that run once a frame and wait for a frame past their interval (memorizing, scribing, the 1 s and 6 s
     // ticks, the socials' lines) run once per step at its time. nullopt: once a frame, now.

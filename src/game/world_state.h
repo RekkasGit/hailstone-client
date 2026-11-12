@@ -2800,6 +2800,11 @@ namespace hailstone::game {
 		// and the vehicles' physics (AdvanceSpawn's per-step friction) runs once for each. Unset: one step of the frame's
 		// dt (the original's code as written). The drawn place eases over the frame's dt either way.
 		std::optional<std::vector<float>> physics_steps;
+		// Hailstone: how far from the local player another moving spawn has smooth's contact probe (the
+		// RemoteCollisionFn, a full movement sweep per step). It only picks the climbing animation, so a spawn
+		// farther than this, which is not drawn, is not probed and has no contact. The client sets it to the
+		// camera's actor clip (game::actor_clip_distance: 550 at the default ActorClipPlane 50). 0: no limit.
+		float remote_probe_range = 550.0f;
 		// Hailstone (option ground_npcs, a deliberate difference; docs/mechanics.md "Grounding NPCs"): an NPC on the
 		// ground (flymode 0, or EQEmu's 3 out of water) that stands over the floor (by more than 0.25, at most 50), as EQEmu servers with a poor map
 		// leave some, is drawn on the floor. Only where it is drawn changes (display_position, so picking and the NPC

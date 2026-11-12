@@ -84,6 +84,33 @@ TEST_CASE("smooth: set_local_drawn places the player and its mount, and smooth k
     CHECK(me.display_position == glm::vec3(12.0f, 20.0f, 0.0f));
 }
 
+TEST_CASE("smooth: only spawns within remote_probe_range of the player have the contact probe") {
+    WorldState w;
+    w.player_id = 1;
+    add(w, 1, {0.0f, 0.0f, 0.0f});
+    Spawn& near = add(w, 5, {100.0f, 0.0f, 0.0f});
+    Spawn& far = add(w, 6, {600.0f, 0.0f, 0.0f});
+    near.speed_run = far.speed_run = 1.0f;
+    far.colliding_type = 6; // a contact from when it was near
+    std::vector<std::uint32_t> probed;
+    WorldState::RemoteCollisionFn collision = [&](const Spawn& actor, const glm::vec3&, const glm::vec3&) {
+        probed.push_back(actor.id);
+        return 6;
+    };
+    w.smooth(0.016f, 1.0, {}, {}, {}, {}, collision);
+    CHECK(probed == std::vector<std::uint32_t>{5});
+    CHECK(near.colliding_type == 6);
+    CHECK(far.colliding_type == 0); // moved without a probe: no contact
+    // The range follows the setting (the client's actor clip); 0 is no limit.
+    probed.clear();
+    w.remote_probe_range = 50.0f;
+    w.smooth(0.016f, 1.0, {}, {}, {}, {}, collision);
+    CHECK(probed.empty());
+    w.remote_probe_range = 0.0f;
+    w.smooth(0.016f, 1.0, {}, {}, {}, {}, collision);
+    CHECK(probed.size() == 2);
+}
+
 TEST_CASE("smooth: remote climbing contact follows movement steps and clears on the next free move") {
     WorldState w;
     Spawn& moving = add(w, 5, {1.0f, 2.0f, 3.0f});
