@@ -131,6 +131,7 @@ add_library(hailstone_engine STATIC
   src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
+  src/mq/calc.cpp
   src/mq/tlo.cpp
   src/mq/tlo_game.cpp
   src/mq/spawn_search.cpp
@@ -262,6 +263,7 @@ add_library(hailstone_engine STATIC
   src/game/spell_record.cpp
   src/game/spells.cpp
   src/game/passage_of_time.cpp
+  src/game/eye_control.cpp
   src/game/spell_sets.cpp
   src/game/group_role_sets.cpp
   src/game/group_search.cpp
@@ -828,6 +830,9 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/icons/ DESTINATION icons)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pictures/ DESTINATION pictures)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/flora/ DESTINATION flora)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md DESTINATION .) # the login screen's What's new
+# The licence (GPL-2.0-or-later, NOTICE.md) and the third-party notices travel with the binary.
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE DESTINATION . RENAME LICENSE.txt)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE.md ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY.md DESTINATION .)
 if(HAILSTONE_MOLTENVK_DYLIB)
   # macOS: Vulkan itself, beside the binary (platform/paths.h bundled_vulkan_library), with its licence.
   install(FILES ${HAILSTONE_MOLTENVK_DYLIB} DESTINATION .)
@@ -903,10 +908,12 @@ if(HAILSTONE_BUILD_TESTS)
     tests/bug_report_window_test.cpp
     tests/startup_error_test.cpp
     tests/look_eviction_test.cpp
+    tests/appearance_systems_test.cpp
     tests/plugin_hooks_test.cpp
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp
     tests/mq_tlo_test.cpp
+    tests/mq_calc_test.cpp
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
@@ -971,6 +978,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/ui_pack_windows_test.cpp
     tests/ui_pack_stale_state_test.cpp
     tests/net_session_test.cpp
+    tests/ucs_session_test.cpp
     tests/reliable_channel_vectors_test.cpp
     tests/vehicle_ladder_vectors_test.cpp
     tests/boats_test.cpp
@@ -1037,6 +1045,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_search_test.cpp
     tests/chat_ui_test.cpp
     tests/inventory_bandolier_ui_test.cpp
+    tests/inventory_server_labels_ui_test.cpp
     tests/trade_ui_test.cpp
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
@@ -1055,6 +1064,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/character_test.cpp
     tests/rider_seat_test.cpp
     tests/appearance_test.cpp
+    tests/equipment_illusions_test.cpp
     tests/appearance_vectors_test.cpp
     tests/combat_test.cpp
     tests/plate_test_test.cpp
@@ -1063,6 +1073,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spells_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
+    tests/eye_control_test.cpp
     tests/item_packets_test.cpp
     tests/augments_test.cpp
     tests/item_preview_test.cpp
@@ -1075,6 +1086,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/tradeskill_batch_test.cpp
     tests/tradeskill_combine_test.cpp
     tests/missiles_test.cpp
+    tests/combat_particles_test.cpp
     tests/multiclass_test.cpp
     tests/server_ext_chain_test.cpp
     tests/native_extension_test.cpp
@@ -1147,6 +1159,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/item_sort_test.cpp
     tests/kept_items_test.cpp
     tests/inventory_manager_ui_test.cpp
+    tests/commerce_edges_test.cpp
+    tests/tribute_donation_test.cpp
     tests/audio_vectors_test.cpp
     tests/melee_vectors_test.cpp
     tests/spawn_heights_vectors_test.cpp

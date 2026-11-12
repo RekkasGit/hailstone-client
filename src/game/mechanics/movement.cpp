@@ -523,6 +523,10 @@ public:
     // body's; the rider's own is overwritten on its next physics step (PhysicsObject::vf8 @0x59e170: the local
     // rider's Angle = its mount actor's pitch, vf8c), so the rider and the camera look where the mount does.
     void add_pitch(ControlWho who, float delta) override {
+        if (ch_.remote_control && who == ControlWho::Local) {
+            s_.local.pitch = add_physics_pitch(s_.local.pitch, delta, false);
+            return;
+        }
         if (ch_.riding && who == ControlWho::Local) {
             s_.local.pitch = add_physics_pitch(s_.local.pitch, delta, true);
             return;
@@ -628,7 +632,7 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
     s.quiet_net_log = ch.gm_flag;
     s.skip_controls = ch.interface_locked;
     s.now = now;
-    s.controlled_is_local = !ch.riding;
+    s.controlled_is_local = !ch.riding && !ch.remote_control;
     ControlSpawn& c = s.controlled;
     c.speed_multiplier = ch.speed_multiplier;
     c.swim_state = b.body_wet;
@@ -671,7 +675,8 @@ ControlEvents MovementController::controls(const ControlInput& in, const Charact
     PlayerJump jq(*this, c, ch, ev);
     JumpState js{s.jump_started, s.jump_ended, static_cast<std::uint8_t>(in.auto_duck ? 1 : 0), s.local_dirty,
                  s.other_dirty};
-    JumpSpawn sp{b.velocity.z, b.speed_run, jump_strength, b.body_wet, c.sneaking, !ch.riding};
+    JumpSpawn sp{b.velocity.z, b.speed_run, jump_strength, b.body_wet, c.sneaking,
+                 !ch.riding && !ch.remote_control};
     main_loop_jump(js, sp, jq, now);
     s.jump_started = js.jump_started;
     s.jump_ended = js.jump_ended;

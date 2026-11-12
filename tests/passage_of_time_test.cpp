@@ -17,6 +17,7 @@
 #include "game/spells.h"
 #include "game/world_state.h"
 #include "mock_server/harness.h"
+#include "mq_test_world.h"
 #include "net/spell_packets.h"
 #include "net/zone_packets.h"
 
@@ -34,13 +35,14 @@ struct Host final : PassageHost {
     std::vector<std::uint32_t> lines;
     std::vector<std::pair<int, bool>> removed;
     SpellState* spells = nullptr;
+    int interrupts = 0;
     void chat(std::uint32_t eqstr, std::uint32_t) override { lines.push_back(eqstr); }
     void remove_buff(int slot, bool notify) override {
         removed.emplace_back(slot, notify);
         if (spells) spells->buffs[static_cast<std::size_t>(slot)] = {};
     }
     std::int32_t rand() override { return 0; }
-    void stop_cast() override {}
+    void stop_cast() override { ++interrupts; }
     void end_stun() override { lines.push_back(0x30c0); }
     void summon_mount() override {}
 };
@@ -367,4 +369,155 @@ TEST_CASE("The connection runs the ticks: the buffs and regen move the pools bet
     // The server's next update still wins.
     conn.receive_zone_packet_for_test(net::encode_points_update(false, {100, 5000, static_cast<std::uint16_t>(me)}));
     CHECK(conn.player_status().mana == 100);
+}
+
+TEST_CASE("The connection's endurance tick follows actual running, walking and stopping") {
+    test::Rig rig;
+    {
+        std::filesystem::create_directories(rig.dir.path() / "Resources");
+        std::ofstream(rig.dir.path() / "Resources" / "BaseData.txt") << kBaseData;
+    }
+    rig.game.rescan();
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    net::PlayerProfile pp = *conn.profile();
+    pp.class_ = 2;
+    pp.level = 60;
+    pp.str = pp.sta = pp.cha = pp.dex = pp.int_ = pp.agi = pp.wis = 75;
+    conn.set_profile_for_test(pp);
+    conn.set_spell_table_for_test(std::make_shared<SpellTable>());
+    conn.player_status_mut().level = 60;
+    conn.player_status_mut().endurance = 50;
+    std::int64_t now = net::GameConnection::now_ms() + 7000;
+    auto tick = [&] {
+        conn.passage_of_time_for_test(now);
+        now += 6001;
+        return conn.player_status().endurance;
+    };
+
+    conn.set_running(true);
+    conn.set_speed_run(0.0f);
+    CHECK_FALSE(conn.live_state().running);
+    CHECK(tick() == 57); // Base 5, plus half while not attacking; standing in run mode is not running.
+
+    conn.set_speed_run(0.7f);
+    CHECK(conn.live_state().running);
+    CHECK(tick() == 60); // Running costs level / 15 = 4 per tick.
+
+    conn.set_running(false);
+    CHECK_FALSE(conn.live_state().running);
+    CHECK(tick() == 67); // The same nonzero SpeedRun in walk mode has no running penalty.
+
+    conn.set_running(true);
+    conn.set_speed_run(-0.7f);
+    CHECK(conn.live_state().running);
+    CHECK(tick() == 70); // Backward movement also has a nonzero SpeedRun.
+
+    conn.set_speed_run(0.0f);
+    CHECK_FALSE(conn.live_state().running);
+    CHECK(tick() == 77);
+
+    conn.world_for_test().spawns.at(conn.world().player_id).mount_id = 987;
+    conn.set_speed_run(0.7f); // The mount moves; the rider's own SpeedRun stays zero.
+    CHECK_FALSE(conn.live_state().running);
+    CHECK(tick() == 84);
+}
+
+TEST_CASE("Drunkenness decays once per buff tick and compares the new value with raw tolerance") {
+    CHECK(drunkenness_tick(0, 0, true).value == 0);
+    CHECK_FALSE(drunkenness_tick(0, 0, true).changed);
+    CHECK(drunkenness_tick(1, 0, true).value == 0);
+    CHECK_FALSE(drunkenness_tick(50, 0, true).remove_mount); // 49 is below tolerance 0's threshold50.
+    CHECK(drunkenness_tick(51, 0, true).remove_mount);
+    CHECK_FALSE(drunkenness_tick(51, 0, false).remove_mount);
+    CHECK_FALSE(drunkenness_tick(101, 102, true).remove_mount); // threshold101, value100.
+    CHECK(drunkenness_tick(151, 250, true).remove_mount); // threshold caps at150.
+    // The widening is an offset on the player's own FOV, 0 below 70 (a reset to 0 restores the chosen FOV).
+    CHECK(drunkenness_fov_offset(0) == 0);
+    CHECK(drunkenness_fov_offset(69) == 0);
+    CHECK(drunkenness_fov_offset(70) == 0);
+    CHECK(drunkenness_fov_offset(120) == 50);
+
+    // The timed update runs even when BaseData is missing; a skipped regen must not accelerate sobering.
+    mq_test::World w("hailstone_drunkenness_tick_test");
+    auto& c = *w.conn;
+    net::GameConnectionTestAccess::drunkenness(c) = 80;
+    const auto start = net::GameConnection::now_ms() + 7000;
+    c.passage_of_time_for_test(start);
+    CHECK(c.drunkenness() == 79);
+    CHECK(c.live_state().drunkenness == 79);
+    const auto serial = c.drunkenness_updates();
+    c.passage_of_time_for_test(start + 6000);
+    CHECK(c.drunkenness() == 79);
+    CHECK(c.drunkenness_updates() == serial);
+    c.passage_of_time_for_test(start + 6001);
+    CHECK(c.drunkenness() == 78);
+    CHECK(c.drunkenness_updates() == serial + 1);
+
+    // Removing the local summon buff before ProcessAffects prevents it from remounting in the same tick.
+    auto mount_spells = std::make_shared<SpellTable>();
+    REQUIRE(mount_spells->parse(mq_test::spell_line({{0, "1130"}, {1, "Fixture Mount"}, {86, "113"}, {17, "10"}})) == 1);
+    c.set_spell_table_for_test(mount_spells);
+    auto& world = net::GameConnectionTestAccess::world(c);
+    auto& mount = world.spawns[99];
+    mount.id = 99;
+    mount.race = 216;
+    mount.rider_id = world.player_id;
+    world.spawns.at(world.player_id).mount_id = 99;
+    world.controlled_id = 99;
+    auto& summon = net::GameConnectionTestAccess::spells(c).buffs[1];
+    summon.spell = 1130;
+    summon.tics = 10;
+    net::GameConnectionTestAccess::drunkenness(c) = 51;
+    c.passage_of_time_for_test(start + 12002);
+    CHECK(c.drunkenness() == 50);
+    CHECK(summon.empty());
+    CHECK(world.spawns.at(world.player_id).mount_id == 0);
+    CHECK(world.controlled_id == 0);
+}
+
+TEST_CASE("The live buff adapter interrupts only an interruptible cast") {
+    Fixture f;
+    f.spell(11, {{343, 100}});
+    f.spell(12, {});
+    f.buff(0, 11, 10);
+    f.state.casting.spell = 12;
+    REQUIRE(f.tick(7001));
+    CHECK(f.host.interrupts == 1);
+    f.spells.at(12).uninterruptable = true;
+    REQUIRE(f.tick(13002));
+    CHECK(f.host.interrupts == 1);
+    f.state.casting = {};
+    REQUIRE(f.tick(19003));
+    CHECK(f.host.interrupts == 1);
+}
+
+TEST_CASE("The live unconscious status feeds bleeding regen and recovery waits for the six-second tick") {
+    test::Rig rig;
+    {
+        std::filesystem::create_directories(rig.dir.path() / "Resources");
+        std::ofstream(rig.dir.path() / "Resources" / "BaseData.txt") << kBaseData;
+    }
+    rig.game.rescan();
+    REQUIRE(rig.to_zone());
+    auto& c = rig.conn;
+    net::PlayerProfile pp = *c.profile();
+    pp.class_ = 2;
+    pp.level = 60;
+    c.set_profile_for_test(pp);
+    c.set_spell_table_for_test(std::make_shared<SpellTable>());
+    c.player_status_mut().level = 60;
+    c.player_status_mut().hp = -6;
+    c.update_player_consciousness(true);
+    REQUIRE(c.player_status().owner_status == 3);
+    const auto now = net::GameConnection::now_ms() + 7000;
+    c.passage_of_time_for_test(now);
+    CHECK(c.player_status().hp == -7);
+    CHECK(c.player_status().owner_status == 3);
+    c.player_status_mut().hp = 1; // A server heal is immediately readable, but the status is still unconscious.
+    c.passage_of_time_for_test(now + 6000);
+    CHECK(c.player_status().owner_status == 3);
+    c.passage_of_time_for_test(now + 6001);
+    CHECK(c.player_status().owner_status == 0);
+    CHECK(c.player_status().stand_state == net::kStandStanding);
 }

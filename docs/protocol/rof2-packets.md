@@ -95,7 +95,7 @@ What world checks:
 | ZoneEntry / NewSpawn | Z→C | 0x5089 / 0x6097 | one spawn per packet (below) |
 | PlayerProfile | Z→C | 0x6506 | variable (below) |
 | NewZone | Z→C | 0x1795 | 948 B NewZone_Struct; decoded: names (+0/+64/+192), ztype +470, fog RGB +471/+475/+479 (×4), fog min/max clip +484/+500 (4 floats each), gravity +516, time type +520, rain/snow +521..+536, sky +570, exp mult +584, safe y/x/z +588/+592/+596, max z +604, underworld +608, minclip/maxclip +612/+616, short name 2 +704, zone id/instance +852/+854, underworld teleport +868, suspend buffs +876, lava +880/+884, no bind +889, no attack +890, fall damage +894, fast regen +896.., fog density +916, no levitate +940 |
-| TimeOfDay | Z→C | 0x5070 | 8 B: u8 hour, minute, day, month, u32 year |
+| TimeOfDay | Z→C | 0x5070 | 8 B: u8 hour, minute, day, month, u32 year. The calendar advances from this reference by one game minute per three real seconds (hours 1..24, 28 days per month, 12 months per year), as the original's `EQWorldData::AdvanceTime` does (`net::advance_time_of_day`, docs/formats/sky.md) and EQEmu's `common/eqtime.cpp` agrees. `/time` and MQ `GameTime` read the advancing calendar; each packet replaces the reference, even when its fields are unchanged |
 | Weather | Z→C | 0x661e | 12 B: u32 val1 (0xff), u32 type (0x31 rain, 2 snow), u32 mode |
 | ReqClientSpawn, SendExpZonein, WorldObjectsSent, ClientReady, SendAATable, UpdateAA, Logout | C→Z | 0x35fa, 0x5f8e, 0x5ae2, 0x345d, 0x66b5, 0x66f0, 0x4ac6 | empty |
 | ClientUpdate | C→Z | 0x7dfc | 46 B: u16 sequence, u16 spawn id, u16 vehicle id, 4 B, f32 Δx, u32 heading:12 (heading×4 mod 2048), f32 x, f32 Δz, f32 z, f32 y, u32 animation:10, f32 Δy, u32 Δheading:10 signed (×20) |

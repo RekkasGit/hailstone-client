@@ -267,3 +267,22 @@ TEST_CASE("wheel_follow_position: the camera behind the player stops where the s
     };
     CHECK(wheel_follow_position(eye, back, 15.0f, refused) == eye);
 }
+
+TEST_CASE("knockout's overhead camera keeps the wheel camera's distance and restores it") {
+    CameraSelection s{kCameraWheelFollow, 35.0f, 20.0f};
+    const int saved = s.type;
+    select_camera(s, kCameraOverhead);
+    CHECK(s.type == kCameraOverhead);
+    CHECK(s.distance == 0.0f); // nothing else reads camera 6's distance while overhead is active
+    CHECK(s.pad_distance == 35.0f);
+    restore_camera(s, saved, 150.0f);
+    CHECK(s.type == kCameraWheelFollow);
+    CHECK(s.distance == 35.0f);
+
+    CameraSelection first{kCameraFirstPerson, 0.0f, 20.0f};
+    select_camera(first, kCameraOverhead);
+    restore_camera(first, kCameraFirstPerson, 150.0f);
+    CHECK(first.type == kCameraFirstPerson);
+    CHECK(first.distance == 0.0f);
+    CHECK(first.pad_distance == 20.0f);
+}

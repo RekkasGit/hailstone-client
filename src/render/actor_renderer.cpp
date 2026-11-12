@@ -7,6 +7,7 @@
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -16,6 +17,7 @@
 #include "core/work_budget.h"
 #include "game/anim_layers.h"
 #include "game/appearance.h"
+#include "game/appearance_data.h"
 #include "game/combat.h"
 #include "game/coords.h"
 #include "game/mechanics/anim_select.h"
@@ -210,6 +212,15 @@ void ActorRenderer::free_model(GpuModel& g) {
     g.indices.destroy(vk_.allocator());
 }
 
+void ActorRenderer::retire_model(GpuModel& g) {
+    Buffer vertices = std::exchange(g.vertices, Buffer{});
+    Buffer indices = std::exchange(g.indices, Buffer{});
+    vk_.retire([allocator = vk_.allocator(), vertices, indices]() mutable {
+        vertices.destroy(allocator);
+        indices.destroy(allocator);
+    });
+}
+
 ActorRenderer::Kept::~Kept() {
     if (!vk || (models.empty() && textures.empty())) return;
     vk->wait_idle();
@@ -249,7 +260,7 @@ std::unique_ptr<ActorRenderer::Kept> ActorRenderer::release_kept() {
         auto d = default_of.find(mesh);
         const bool shared = d != default_of.end() ? model_refs_.contains(d->second) && library_->shares(d->second)
                                                   : mesh_refs_.contains(mesh) && library_->shares(mesh);
-        if (!g.used || !shared) {
+        if (!g.used || !shared || g.capacity_blocked) {
             free_model(g);
             continue;
         }
@@ -363,7 +374,7 @@ void ActorRenderer::rebuild_descriptors(std::uint32_t slot) {
     w.pImageInfo = infos.data();
     vkUpdateDescriptorSets(vk_.device(), 1, &w, 0, nullptr);
     written = static_cast<std::uint32_t>(textures_.size());
-    stats_.textures = textures_.size();
+    stats_.textures = textures_.size() - free_textures_.size();
 }
 
 VkDescriptorSet ActorRenderer::frame_set(const FrameInfo& frame) {
@@ -432,20 +443,24 @@ std::uint32_t ActorRenderer::slot_for(const TextureRef& ref, MeshPlan& plan, Upl
     }
     if (claims_) claims_->installed(key); // has its slot from here on: no job reads it again
     std::uint32_t slot = 0;
+    bool capacity_blocked = false;
     if (ref.map) {
-        if (t.image)
-            if (auto added = add_texture(upload, *t.image, t.use); added && *added <= 0xffff) slot = *added;
+        if (t.image) {
+            if (auto added = add_texture(upload, *t.image, t.use)) slot = *added;
+            else capacity_blocked = true;
+        }
     } else {
         std::optional<std::uint32_t> added = t.image ? add_texture(upload, *t.image, t.use) : std::nullopt;
         if (added) {
             slot = *added;
         } else {
+            capacity_blocked = t.image.has_value();
             // Drawn with slot 0 (plain white), which shows as an untextured grey model: say why, once per texture.
             ++stats_.missing_textures;
             log::warn("character texture {}: {}", ref.name, t.image ? "texture array full" : t.error);
         }
     }
-    texture_slots_.emplace(std::move(key), TextureSlot{slot, std::move(t.lookups)});
+    texture_slots_.emplace(std::move(key), TextureSlot{slot, std::move(t.lookups), capacity_blocked});
     return slot;
 }
 
@@ -506,12 +521,17 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
         return &it->second;
     }
     GpuModel g;
+    const auto resolve = [&](const TextureRef& ref) {
+        const auto slot = slot_for(ref, plan, upload);
+        g.capacity_blocked = g.capacity_blocked || texture_slots_.at(ref.key()).capacity_blocked;
+        return slot;
+    };
     for (auto& pp : plan.parts) {
         Part part = pp.part;
-        part.texture = slot_for(pp.texture, plan, upload);
-        if (pp.texture2) part.texture2 = slot_for(*pp.texture2, plan, upload);
-        part.normal_map = slot_for(pp.normal, plan, upload);
-        part.rough_map = slot_for(pp.rough, plan, upload);
+        part.texture = resolve(pp.texture);
+        if (pp.texture2) part.texture2 = resolve(*pp.texture2);
+        part.normal_map = resolve(pp.normal);
+        part.rough_map = resolve(pp.rough);
         g.parts.push_back(part);
     }
     std::stable_sort(g.parts.begin(), g.parts.end(), [](const Part& a, const Part& b) { return a.pass < b.pass; });
@@ -593,7 +613,9 @@ void ActorRenderer::evict_idle_looks() {
             if (auto g = models_.find(mesh); g != models_.end()) {
                 if (!look_idle(g->second.last_frame, g->second.last_ms, frame, now_ms_, VkContext::kFramesInFlight))
                     return false;
-                free_model(g->second);
+                // Clock age selects the cache entry; the GPU completion point,
+                // rather than a count of begun frames, governs destruction.
+                retire_model(g->second);
                 models_.erase(g);
             }
             mesh_refs_.erase(mesh);
@@ -602,10 +624,60 @@ void ActorRenderer::evict_idle_looks() {
         });
         it = it->second.looks.empty() ? looks_.erase(it) : std::next(it);
     }
+    // Texture slots are reclaimed after an eviction; a capacity retry is tried every sweep while slots are free.
+    if (evicted || !free_textures_.empty()) evict_unused_textures(evicted != 0);
     if (evicted) {
         stats_.models = models_.size();
         log::debug("freed {} idle appearances ({} meshes on the GPU)", evicted, models_.size());
     }
+}
+
+void ActorRenderer::evict_unused_textures(bool reclaim_first) {
+    auto reclaim = [&] {
+        const auto used = model_texture_slots(models_);
+        for (auto it = texture_slots_.begin(); it != texture_slots_.end();) {
+            if (it->second.slot == 0 || used.contains(it->second.slot)) {
+                ++it;
+                continue;
+            }
+            if (claims_) claims_->evicted(it->first);
+            it = texture_slots_.erase(it);
+        }
+        for (std::uint32_t slot = 1; slot < textures_.size(); ++slot) {
+            if (!textures_[slot].image || used.contains(slot)) continue;
+            Texture old = std::exchange(textures_[slot], Texture{});
+            // Each descriptor set is rewritten only after its frame fence. Older
+            // frames keep the old image alive through this completion point, even
+            // when a subsequent upload reuses the numeric slot immediately.
+            vk_.retire([device = vk_.device(), allocator = vk_.allocator(), old]() mutable {
+                old.destroy(device, allocator);
+            });
+            free_textures_.push_back(slot);
+            for (auto& written : descriptor_textures_) written = std::min(written, slot);
+        }
+    };
+    if (reclaim_first) reclaim();
+    if (std::none_of(models_.begin(), models_.end(), [](const auto& kv) { return kv.second.capacity_blocked; })) {
+        stats_.textures = textures_.size() - free_textures_.size();
+        return;
+    }
+    // The GPU models spawns wear (a default mesh included): rebuilt at once when discarded, so retried a few a sweep.
+    std::unordered_set<const assets::CharacterMesh*> worn;
+    for (const auto& kv : spawns_) {
+        const SpawnState& st = kv.second;
+        if (st.mesh) worn.insert(st.mesh.get());
+        else if (st.model)
+            if (auto d = default_meshes_.find(st.model.get()); d != default_meshes_.end() && d->second)
+                worn.insert(d->second.get());
+    }
+    if (retry_capacity_blocked_textures(models_, worn, kMaxWornRetries, texture_slots_, !free_textures_.empty(),
+            [this](GpuModel& model) { retire_model(model); },
+            [this](const std::string& key) { if (claims_) claims_->evicted(key); })) {
+        // The invalidated models may have owned successful uploads too. They
+        // are no longer referenced; make that capacity available for the retry.
+        reclaim();
+    }
+    stats_.textures = textures_.size() - free_textures_.size();
 }
 
 const std::shared_ptr<const assets::CharacterMesh>* ActorRenderer::applied_look(const assets::CharacterModel& model,
@@ -709,6 +781,12 @@ const assets::CharacterModel* ActorRenderer::drawn_model(std::uint32_t id) const
     return it == last_draws_.end() ? nullptr : it->second.model;
 }
 
+float ActorRenderer::drawn_alpha(std::uint32_t id) const {
+    auto it = last_draws_.find(id);
+    if (it == last_draws_.end() || !it->second.model || !std::isfinite(it->second.alpha)) return 0.0f;
+    return std::clamp(it->second.alpha, 0.0f, 1.0f);
+}
+
 const assets::CharacterModel* ActorRenderer::spawn_model(std::uint32_t id) const {
     if (const assets::CharacterModel* m = drawn_model(id)) return m;
     auto it = spawns_.find(id);
@@ -778,6 +856,18 @@ bool ActorRenderer::bone_world(const ActorDraw& a, int bone, glm::mat4& world) {
     return true;
 }
 
+bool ActorRenderer::name_position(const ActorDraw& actor, glm::vec3& position) {
+    glm::mat4 world;
+    if (!actor.model || !bone_world(actor, actor.model->name_bone, world)) return false;
+    position = glm::vec3(world[3]);
+    return true;
+}
+
+bool ActorRenderer::drawn_name_position(std::uint32_t id, glm::vec3& position) const {
+    const auto it = last_draws_.find(id);
+    return it != last_draws_.end() && name_position(it->second, position);
+}
+
 bool ActorRenderer::seat_rider(const ActorDraw& mount, ActorDraw& rider, const game::HeightTables* tables) {
     if (!mount.model || !rider.model) return false;
     int bone = mount.model->mount_point_bone(rider.model->code);
@@ -832,6 +922,7 @@ bool ActorRenderer::spawn_pose(std::uint32_t id, SpawnPose& out) const {
         out.bones.emplace_back(parent, child);
     }
     m.skin(world);
+    if (!mesh->append_skin_bones(world)) return false;
     for (auto& w : world) w = instance * w;
     std::vector<glm::vec3> skinned(mesh->vertices.size());
     for (std::size_t v = 0; v < mesh->vertices.size(); ++v) {
@@ -904,7 +995,8 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
     // Upload new models first: that may add textures, and the descriptor
     // sets must be complete before they are bound.
     for (std::size_t i = 0; i < actors.size(); ++i)
-        if (actors[i].model && actors[i].clip) {
+        if (actors[i].model && actors[i].clip && std::isfinite(actors[i].alpha) && actors[i].alpha > 0.0f) {
+            prepared_[i].alpha = std::min(1.0f, actors[i].alpha);
             prepared_[i].gpu = gpu_model(actors[i].mesh ? *actors[i].mesh : default_mesh(*actors[i].model), upload);
             prepared_[i].eqg = actors[i].model->eqg;
         }
@@ -935,12 +1027,17 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
             ++stats_.unposed;
             continue;
         }
-        if (used + m.parents.size() > kMaxBones) {
+        const auto& mesh = a.mesh ? *a.mesh : default_mesh(m);
+        if (used + m.parents.size() + mesh.skin_bindings.size() > kMaxBones) {
             prepared_[i].gpu = nullptr;
             continue;
         }
         pose_bones(a, local, previous, world);
         m.skin(world);
+        if (!mesh.append_skin_bones(world)) {
+            prepared_[i].gpu = nullptr;
+            continue;
+        }
         glm::mat4 instance = instance_matrix(a);
         prepared_[i].bone_offset = used;
         for (const auto& w : world) bones[used++] = instance * w;
@@ -1056,7 +1153,8 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
             const Prepared& p = prepared_[i];
             bool any = false;
             for (const auto& part : p.gpu->parts) {
-                if (static_cast<int>(part.pass) != pass) continue;
+                const Pass draw_pass = p.alpha < 1.0f && part.pass == Pass::Opaque ? Pass::Blended : part.pass;
+                if (static_cast<int>(draw_pass) != pass) continue;
                 if (!bound_set) {
                     VkDescriptorSet sets[2] = {frame_set(frame), vk_.shadow_set()};
                     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
@@ -1086,8 +1184,8 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
                 pc.tint = part.tint;
                 pc.texture2 = (part.texture2 == 0xffffffffu ? 0xffffu : part.texture2) | part.normal_map << 16;
                 pc.bone_offset = p.bone_offset;
-                pc.fog = part.fog ? glm::vec4(view.fog_start, view.fog_end, part.alpha_ref, part.opacity)
-                                  : glm::vec4(kNoFogStart, kNoFogEnd, part.alpha_ref, part.opacity);
+                pc.fog = part.fog ? glm::vec4(view.fog_start, view.fog_end, part.alpha_ref, part.opacity * p.alpha)
+                                  : glm::vec4(kNoFogStart, kNoFogEnd, part.alpha_ref, part.opacity * p.alpha);
                 vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                    sizeof(pc), &pc);
                 vkCmdDrawIndexed(cmd, part.index_count, 1, part.first_index, 0, 0);
@@ -1187,7 +1285,11 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         // within the frame's budget) the previous one stays. One applied before for the same model and look is
         // taken at once.
         // Races without per-slot armour show no armour colours (game::drawn_appearance).
-        const game::Appearance look = game::drawn_appearance(s.appearance, s.race);
+        game::Appearance look = game::drawn_appearance(s.appearance, s.race);
+        // Only what the active ActorNewArmorFilter makes of the spawn's kind and group/raid membership counts, so
+        // a group join does not rebuild a look the filter draws the same.
+        const game::AppearanceData* data = library_->appearance_data();
+        game::resolve_new_armor_filter(look, data ? data->new_armor_filter : 0u);
         if (!st.dressed || !(st.appearance == look)) {
             st.appearance = look;
             st.dressed = true;
@@ -1274,6 +1376,11 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         game::SpawnAnimInput in;
         in.velocity = is_player && player_motion_.valid ? player_motion_.velocity : s.velocity;
         in.speed_run = speed_run;
+        in.mounted = mount != nullptr;
+        if (mount && new_style) {
+            in.velocity = mount->velocity;
+            in.speed_run = mount->speed_run;
+        }
         in.feet_wet = is_player && player_motion_.valid ? player_motion_.feet_wet : s.feet_wet;
         in.body_wet = is_player && player_motion_.valid ? player_motion_.body_wet : s.body_wet;
         in.walk_speed = s.walk_speed;
@@ -1295,8 +1402,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         in.owner_id = s.pet_owner_id;
         in.first_person = is_player && player_motion_.first_person;
         if (!new_style) in.follow_up = layers.follow_up;
-        // +0x24 is the local player's own; other spawns' is not probed (docs/unknowns.md).
-        in.colliding_type = is_player && player_motion_.valid ? player_motion_.colliding_type : 0;
+        in.colliding_type = is_player && player_motion_.valid ? player_motion_.colliding_type : s.colliding_type;
         const bool done = st.motion_clip && lower.clip == st.motion_clip && !lower.loop &&
                           lower.time >= st.motion_clip->duration_seconds();
         game::SpawnAnimChoice choice = game::choose_spawn_animation(
@@ -1317,12 +1423,13 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
         req.humanoid = humanoid;
         req.speed_run = speed_run;
         req.follow_up_after = choice.follow_up;
+        req.base_column = choice.column;
         if (s.is_corpse || s.stand_state == 115) {
             req.base = &model->first_clip({"D05", "D04", "P01"}, holding);
             req.base_anim = 0x10; // D05
             req.loop = false;
             req.corpse = true;
-        } else if (mount) {
+        } else if (mount && !new_style) {
             // 0x4b15b0 on a rider: its movement and idle animations become the mount race's rider animation
             // (racedata.txt's last field, empty in the shipped file: 0x4a, P09), or 0x4e (L10) while the mount runs
             // at its run speed or faster; a model without the clip falls back as 0x4b1210 does (0x4e to 0x4a,
@@ -1350,9 +1457,10 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             st.action_seq_known = true;
         } else if (s.action_seq != st.action_seq) {
             st.action_seq = s.action_seq;
-            game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1};
+            game::NewStyleTrackInput track_in{s.player_state, st.anim.anim, -1, mount != nullptr};
             std::uint8_t playing = s.action;
             std::string code = game::action_clip(s.action, has_clip, new_style, track_in, rand_int, &playing);
+            req.action_column = game::new_style_clip_column(code);
             const assets::AnimationClip* c = code.empty() ? nullptr : model->clip(code, holding);
             const bool started = c && layers.start_action(c, playing, s.action_speed / 10.0f, req);
             log::debug("animation: {} ({}) action {} speed {} -> {}{}", s.name, id, s.action, s.action_speed,

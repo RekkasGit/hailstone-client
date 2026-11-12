@@ -33,7 +33,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
                                                       std::uint32_t spell_id, const StageActor* caster,
                                                       const StageActor* target, const glm::vec3& point,
                                                       std::int32_t duration_ms, const SpellParticleSettings& settings,
-                                                      bool full) {
+                                                      bool full, const StageActor* missile) {
     std::vector<SpellEmitterRequest> out;
     if (stage < 0 || stage > 2) return out;
     const std::int32_t level = caster ? caster->level : 1;
@@ -48,7 +48,7 @@ std::vector<SpellEmitterRequest> spawn_stage_emitters(const assets::SpellEffect&
         r.opacity = full ? 1.0f : settings.opacity;
         switch (slot.location) {
         case 1: at = caster; break;
-        case 2: at = nullptr; break; // the missile: not modelled
+        case 2: at = missile; break;
         case 3: at = target; break;
         default: break;
         }
@@ -190,6 +190,27 @@ ParticleSystem::ParticleSystem(std::vector<assets::EmitterDefinition> definition
     for (const auto& d : definitions_) glows_.push_back(particle_glows(d));
 }
 
+assets::EmitterDefinition blood_spurt_definition(std::string texture) {
+    assets::EmitterDefinition d;
+    d.name = "BloodSpurt";
+    d.texture = std::move(texture);
+    d.bone_orientation = 1;
+    d.no_zwrite = 1;
+    d.duration = -0.5f;
+    d.lifetime = 0.5f;
+    d.per_tick = 1;
+    d.ticks_per_second = 200.0f;
+    d.capacity = 100;
+    d.shape = 5;
+    d.motion[3] = {1.25f, 5.0f, 0.0f};
+    d.gravity = 1.0f;
+    d.scale1 = 0.375f;
+    d.scale2 = d.max_opacity = 0.5f;
+    d.frames = 1;
+    d.frames_per_second = 10.0f;
+    return d;
+}
+
 float ParticleSystem::random(float a, float b) {
     return a + (b - a) * std::uniform_real_distribution<float>(0.0f, 1.0f)(rng_);
 }
@@ -247,6 +268,14 @@ void ParticleSystem::set_persistent_density(float density) {
 
 void ParticleSystem::stop(std::uint32_t key) {
     std::erase_if(emitters_, [&](const Emitter& e) { return e.key == key; });
+}
+
+void ParticleSystem::stop_attachment(std::uint32_t actor, std::int32_t point) {
+    std::erase_if(emitters_, [&](const Emitter& e) { return e.actor == actor && e.point == point; });
+}
+
+void ParticleSystem::stop_actor(std::uint32_t actor) {
+    std::erase_if(emitters_, [&](const Emitter& e) { return e.actor == actor; });
 }
 
 void ParticleSystem::move(std::uint32_t key, const glm::vec3& origin) {
@@ -443,8 +472,10 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
         // or with a point the point matrix's row length x the point's actor's GetParticleScaleFactor.
         float size_scale = d.actor_scales_size == 1 && e.actor == 0 ? e.scale : 1.0f;
         float offset_scale = d.actor_scales_offsets == 1 ? e.scale : 1.0f;
+        float actor_alpha = 1.0f;
         if (e.actor != 0 && attachment)
             if (auto at = attachment(e.actor, e.point)) {
+                actor_alpha = std::isfinite(at->alpha) ? std::clamp(at->alpha, 0.0f, 1.0f) : 0.0f;
                 if (!e.point_only) {
                     const float actor = at->actor_scale * at->particle_scale;
                     if (d.actor_scales_size == 1) size_scale = actor;
@@ -526,7 +557,7 @@ void ParticleSystem::update(float dt, const AttachmentFn& attachment) {
             const float rem = p.lifetime - p.age;
             auto ramp_in = [&](float t) { return t > 0.0f && p.age < t ? p.age / t : 1.0f; };
             auto ramp_out = [&](float t) { return t > 0.0f && rem < t ? std::max(rem, 0.0f) / t : 1.0f; };
-            const float alpha = std::min(ramp_in(d.fade_in) * ramp_out(d.fade_out), d.max_opacity) * e.opacity;
+            const float alpha = std::min(ramp_in(d.fade_in) * ramp_out(d.fade_out), d.max_opacity) * e.opacity * actor_alpha;
             p.size_factor = d.scale1 * size_scale * ramp_in(d.grow) * ramp_out(d.shrink);
             p.ramp_height = ramp_out(d.shrink_x);
             p.ramp_width = ramp_out(d.shrink_y);

@@ -43,6 +43,8 @@ inline constexpr std::size_t kMaxEvents = 256;                      // events of
 inline constexpr std::size_t kMaxEventPattern = 1024;               // bytes of one pattern
 inline constexpr std::size_t kMaxEventPatterns = std::size_t{32} << 10; // bytes of all of one script's patterns
 inline constexpr std::size_t kMaxEventName = 256;                   // bytes of an event's name
+// A chat line this long or longer raises no events (LuaEventProcessor::Process: MQ_MAX_STRING, 2048).
+inline constexpr std::size_t kMaxEventLine = 2048;
 inline constexpr std::int64_t kPressMs = 50;            // a Lua social in press mode runs to its end within this
 inline constexpr std::int64_t kFaceMs = 5;              // a social's face
 inline constexpr std::int64_t kFaceEveryMs = 200;       // how often a face runs
@@ -166,6 +168,7 @@ struct Script {
         std::string name;
         EventPattern pattern;
         int fn = LUA_NOREF;
+        bool keep_links = false; // mq.event's {keepLinks = true}: the line with its item links, not their text
     };
     std::vector<Event> events;
     bool chat_hooked = false;

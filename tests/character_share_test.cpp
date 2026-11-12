@@ -108,6 +108,37 @@ TEST_CASE("character lookups: a library's lookups are noted, and a nested record
     CHECK(std::is_sorted(all->begin(), all->end()));
 }
 
+TEST_CASE("character lookups: a fresh thread has its own collector and restores the empty state") {
+    CHECK_FALSE(CharacterLookups::active());
+    {
+        CharacterLookups outer;
+        CharacterLookups::note('f', "main");
+        bool before = true, during = false, after = true;
+        CharacterLookups::Names worker_names;
+        std::thread worker([&] {
+            before = CharacterLookups::active();
+            {
+                CharacterLookups inner;
+                CharacterLookups::note('f', "worker");
+                during = CharacterLookups::active();
+                worker_names = inner.names();
+            }
+            after = CharacterLookups::active();
+        });
+        worker.join();
+        CHECK_FALSE(before);
+        CHECK(during);
+        CHECK_FALSE(after);
+        REQUIRE(worker_names);
+        CHECK(has(worker_names, "fworker"));
+        CHECK_FALSE(has(worker_names, "fmain"));
+        CHECK(CharacterLookups::active());
+        CHECK(has(outer.names(), "fmain"));
+        CHECK_FALSE(has(outer.names(), "fworker"));
+    }
+    CHECK_FALSE(CharacterLookups::active());
+}
+
 TEST_CASE("character lookups: only names a zone archive defines keep a result out of the shared cache") {
     auto global = archive("global_chr.s3d", {"humch0001.bmp", "elfch0001.bmp"});
     // The zone's archive has its own copy of one global texture and one texture of its own.

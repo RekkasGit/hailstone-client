@@ -3,6 +3,7 @@
 #include "app/client_app_internal.h"
 
 #include "game/boats.h"
+#include "game/passage_of_time.h"
 
 namespace hailstone::app::client_internal {
 
@@ -287,7 +288,7 @@ void ClientApp::update_npc_bodies() {
 void ClientApp::update_riding() {
     mount_answers_.app = this;
     conn_->set_mount_queries(&mount_answers_);
-    std::uint32_t cid = conn_->controlled_id();
+    std::uint32_t cid = conn_->eye_id() ? 0 : conn_->controlled_id();
     if (cid && cid == riding_id_ && Clock::now() - riding_logged_ > std::chrono::seconds(1)) {
         riding_logged_ = Clock::now();
         log::debug("riding: feet ({:.1f}, {:.1f}, {:.1f}) speed {:.3f}", feet_.x, feet_.y, feet_.z, last_speed_run_);
@@ -309,6 +310,60 @@ void ClientApp::update_player(float dt) {
     // packets until the server's 0xcadf ends the wait (+0x1f05), so nothing else of the game runs. Here the window
     // keeps drawing and the packets are handled, but the player neither acts nor moves until then.
     if (conn_ && conn_->waiting_for_port()) return;
+    if (conn_ && driven_eye_ != conn_->eye_id()) {
+        // An Eye takes only the controls and view. Keep the local physics body alive at its own position, with
+        // gravity, air and environment damage, then return to that body on a fade, death or depop.
+        if (local_body_movement_) {
+            movement_ = std::move(*local_body_movement_);
+            local_body_movement_.reset();
+            feet_ = movement_.controller().body.feet;
+            floor_offset_ = local_body_height_;
+            yaw_ = local_body_yaw_;
+            pitch_ = local_body_pitch_;
+        }
+        driven_eye_ = conn_->eye_id();
+        if (auto eye = conn_->world().spawns.find(driven_eye_); driven_eye_ && eye != conn_->world().spawns.end()) {
+            local_body_height_ = floor_offset_;
+            local_body_yaw_ = yaw_;
+            local_body_pitch_ = pitch_;
+            local_body_movement_.emplace(std::move(movement_));
+            movement_ = PlayerMovement{};
+            floor_offset_ = eye->second.heights.avatar_height;
+            feet_ = eye->second.position - glm::vec3(0, 0, floor_offset_);
+            yaw_ = game::heading_to_yaw(eye->second.heading);
+            pitch_ = 0.0f;
+            movement_.reset(feet_, yaw_);
+            movement_.controls_state().local.pitch = local_body_pitch_ * 256.0f / glm::pi<float>();
+            movement_.push(eye->second.velocity);
+        }
+        step_move_ = glm::vec3(0.0f);
+        step_turn_ = step_pitch_ = 0.0f;
+    }
+    // KnockedOut saves the current camera and selects overhead once. GetConscious restores it; a new zone's
+    // active status also clears the saved unconscious view when the connection's status is reset.
+    if (conn_ && conn_->consciousness_changes() != consciousness_changes_) {
+        consciousness_changes_ = conn_->consciousness_changes();
+        if (conn_->player_status().owner_status == 3) {
+            if (!unconscious_camera_) unconscious_camera_ = camera_type_;
+            set_camera_type(game::kCameraOverhead);
+        }
+    }
+    if (conn_ && conn_->player_status().owner_status == 0 && unconscious_camera_) {
+        game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
+        game::restore_camera(s, *unconscious_camera_, max_camera_distance_);
+        camera_type_ = s.type;
+        camera_distance_ = s.distance;
+        pad_camera_distance_ = s.pad_distance;
+        unconscious_camera_.reset();
+    }
+    if (conn_ && conn_->drunkenness_updates() != drunkenness_updates_) {
+        drunkenness_updates_ = conn_->drunkenness_updates();
+        drunk_fov_offset_ = game::drunkenness_fov_offset(conn_->drunkenness());
+        if (conn_->drunkenness() >= 70) set_camera_type(game::kCameraFirstPerson);
+    }
+    // The widening follows the ticks, but a value below 70 (a sudden reset too) drops it at once.
+    if (!conn_ || game::drunkenness_fov_offset(conn_->drunkenness()) == 0.0f) drunk_fov_offset_ = 0.0f;
+    camera_.fov_offset_units = drunk_fov_offset_;
     // Behind the loading screen (zone_settle_) the keys and the pad do not reach the world.
     bool keys = !ui_.wants_keyboard() && !zone_settling();
     const auto& in = window_.input();
@@ -574,7 +629,7 @@ void ClientApp::update_player(float dt) {
         // A Hailstone change, switchable (nav.follow, /nav option follow): the navigation mesh helps where the straight
         // line fails (app/navigator.h assist_follow): round walls and corners, unstuck, and on up to the navigator's
         // leash instead of the original's 200.
-        if (std::uint32_t follow = conn_->interface_locked() ? 0 : conn_->follow_target()) {
+        if (std::uint32_t follow = conn_->interface_locked() || conn_->eye_id() ? 0 : conn_->follow_target()) {
             auto it = conn_->world().spawns.find(follow);
             std::uint8_t stand = conn_->player_status().stand_state;
             if (nav_ && nav_->status().active) nav_->stop(""); // a /follow replaces a /nav walk
@@ -651,7 +706,7 @@ void ClientApp::update_player(float dt) {
         }
         // Navigation (app/navigator.h): /nav and /moveto steer as /follow does, by the heading and the movement keys,
         // so the walk keeps the movement rules. The player's own turn, move or strafe keys end it, as they end /follow.
-        if (nav_) {
+        if (nav_ && !conn_->eye_id()) {
             nav::SteerOutput steer = nav_->frame(nf);
             if (steer.active) {
                 yaw_ = steer.yaw;
@@ -683,16 +738,11 @@ void ClientApp::update_player(float dt) {
         world.set_npcs(&npc_bodies_);
         {
             const auto& rules = conn_->server_rules();
-            world.set_passable_ladders(!(rules && rules->configured && !rules->passable_ladders));
             if (collision_) collision_->set_solid_ladders(!(rules && rules->configured && !rules->solid_ladders));
         }
-        // /nav or /stick moving the player: the doors not shut do not block it (Navigator::passes_open_doors).
-        if (nav_ && nav_->passes_open_doors()) {
-            std::vector<std::uint8_t> open;
-            for (const game::Door& d : conn_->doors())
-                if (d.state != game::kSwitchClosed) open.push_back(d.id);
-            world.set_passable_doors(std::move(open));
-        }
+        // The passable ladders, and while /nav or /stick moves the player, the doors not shut do not block it
+        // (Navigator::passes_open_doors). The other spawns' contact probes follow the same rules (update()).
+        world.apply_rules(conn_->server_rules(), conn_->doors(), nav_ && nav_->passes_open_doors());
         move_test_.drive(since_zone_in, mk, yaw_, pitch_, movement_, *conn_, zone_ ? &*zone_ : nullptr, &world, feet_);
         // Dead: no moving until the server moves us to the bind point.
         if (conn_->player_status().dead) mk = MovementKeys{};
@@ -742,8 +792,12 @@ void ClientApp::update_player(float dt) {
         {
             // Spells that landed on us since the last frame (EQ_Character::HitBySpell).
             auto landing = conn_->take_landing_effects();
-            if (landing.velocity_change != glm::vec3(0.0f)) movement_.push(landing.velocity_change);
-            if (landing.heading) yaw_ = game::heading_to_yaw(*landing.heading);
+            auto& body = local_body_movement_ ? *local_body_movement_ : movement_;
+            if (landing.velocity_change != glm::vec3(0.0f)) body.push(landing.velocity_change);
+            if (landing.heading) {
+                if (local_body_movement_) local_body_yaw_ = game::heading_to_yaw(*landing.heading);
+                else yaw_ = game::heading_to_yaw(*landing.heading);
+            }
         }
         const auto now_ms = static_cast<std::uint32_t>(st.ms + 1); // the step's time (as Clock::now() - start_time_ + 1)
         {
@@ -785,7 +839,7 @@ void ClientApp::update_player(float dt) {
         }
         // At the helm of a small boat (OP_ControlBoat, game/boats.h steer_boat): the movement keys sail it; the player
         // stands still on its deck and is carried.
-        const bool at_helm = conn_->controlled_boat() && conn_->controlled_boat() == conn_->standing_on();
+        const bool at_helm = !conn_->eye_id() && conn_->controlled_boat() && conn_->controlled_boat() == conn_->standing_on();
         movement_.set_at_helm(at_helm);
         if (at_helm) {
             const auto& held = movement_.controller().held_keys();
@@ -811,6 +865,20 @@ void ClientApp::update_player(float dt) {
         PlayerMovement::Frame frame = movement_.update(mk, yaw_, pitch_, dt_step * 1000.0f, now_ms, *conn_,
                                                        zone_ ? &zone_->regions : nullptr, floor_offset_, &world, melee_ch,
                                                        st.elapsed_ms);
+        if (local_body_movement_) {
+            local_body_pitch_ = movement_.controls_state().local.pitch * glm::pi<float>() / 256.0f;
+            auto body = local_body_movement_->update({}, local_body_yaw_, local_body_pitch_, dt_step * 1000.0f,
+                now_ms, *conn_, zone_ ? &zone_->regions : nullptr, local_body_height_, &world, melee_ch,
+                st.elapsed_ms, true);
+            conn_->set_player_motion(body.feet + glm::vec3(0, 0, local_body_height_),
+                                     game::yaw_to_heading(local_body_yaw_), body.velocity, body.moving);
+            conn_->set_air_supply(local_body_movement_->air_supply());
+            conn_->set_player_body_wet(body.body_wet);
+            conn_->set_standing_on(local_body_movement_->standing_on());
+            if (actor_renderer_)
+                actor_renderer_->set_player_motion({true, body.velocity, body.speed_run, body.feet_wet, body.body_wet,
+                    body.speed_heading, conn_->auto_attack(), false, body.colliding_type});
+        }
         if (melee_on) {
             const auto& cs = movement_.controls_state();
             actions_ui_->attack_state().primary_ready = cs.primary_ready;
@@ -819,7 +887,7 @@ void ClientApp::update_player(float dt) {
         }
         for (const auto& line : frame.messages) game_view_.chat.add(ui::ChatChannel::System, line);
         conn_->set_speed_run(frame.speed_run); // the spell book refuses to open while it is above 0
-        if (frame.stand_state) conn_->set_stand_state(*frame.stand_state, room_to_stand());
+        if (frame.stand_state && !local_body_movement_) conn_->set_stand_state(*frame.stand_state, room_to_stand());
         // ProcessControls' forward key while unable to move, with AllowAutoStand: CEverQuest::Sit stands a sitting
         // player up; a looting one has the loot window closed.
         if (frame.sit_toggle) conn_->sit_toggle();
@@ -880,8 +948,8 @@ void ClientApp::update_player(float dt) {
         // EQPlayer::TurnOffAutoFollow; not for the strafe /follow's mesh help pressed itself (the player's own keys still).
         if (frame.follow_off && conn_->follow_target() && (!follow_assist_strafed_ || player_moved)) conn_->stop_follow(true);
         motion_body_wet_ = frame.body_wet;
-        conn_->set_player_body_wet(frame.body_wet);
-        if (actor_renderer_)
+        if (!local_body_movement_) conn_->set_player_body_wet(frame.body_wet);
+        if (actor_renderer_ && !local_body_movement_)
             actor_renderer_->set_player_motion({true, frame.velocity, frame.speed_run, frame.feet_wet, frame.body_wet,
                                                 frame.speed_heading, conn_->auto_attack(),
                                                 camera_type_ == game::kCameraFirstPerson,
@@ -898,22 +966,25 @@ void ClientApp::update_player(float dt) {
 
         // Riding: the body is the mount (pinstControlledPlayer), and the rider sits where it is (PhysicsObject::vf8);
         // DoMainLoop sends the mount's physics under the rider's id (@0x53e28b), which set_player_motion does.
-        if (riding_id_)
+        if (riding_id_ || conn_->eye_id())
             conn_->set_controlled_motion(feet_ + glm::vec3(0, 0, floor_offset_), game::yaw_to_heading(yaw_),
-                                         frame.velocity, frame.speed_run);
+                                         frame.velocity, frame.speed_run, frame.body_wet, frame.feet_wet,
+                                         frame.colliding_type, frame.speed_heading);
         // +0x150: the vehicle the floor test stood on; the position goes out in its frame
         // (PackPlayerPositionUpdateOnVehicle).
-        if (movement_.standing_on() != conn_->standing_on())
+        if (!local_body_movement_ && movement_.standing_on() != conn_->standing_on())
             log::info("vehicle: standing on {} (was {})", movement_.standing_on(), conn_->standing_on());
-        conn_->set_standing_on(movement_.standing_on());
+        if (!local_body_movement_) conn_->set_standing_on(movement_.standing_on());
         // +0x2d4 (the movement's pTouchingSwitch, game/mechanics/touching_switch.h): the trader stall check reads it.
         if (std::int32_t t = movement_.touching_switch(); t >= 0) conn_->set_touching_switch(static_cast<std::uint8_t>(t));
         else conn_->set_touching_switch(std::nullopt);
-        conn_->set_player_motion(feet_ + glm::vec3(0, 0, floor_offset_), game::yaw_to_heading(yaw_), frame.velocity,
-                                 frame.moving);
-        conn_->set_air_supply(movement_.air_supply());
+        if (!local_body_movement_) {
+            conn_->set_player_motion(feet_ + glm::vec3(0, 0, floor_offset_), game::yaw_to_heading(yaw_), frame.velocity,
+                                     frame.moving);
+            conn_->set_air_supply(movement_.air_supply());
+        }
         // Zone lines (game/zone_lines.h): CheckRegionChange -> DoTeleport (game/zoning.h).
-        if (zone_)
+        if (zone_ && !local_body_movement_)
             if (auto text = zone_line_.update(feet_, zone_->regions)) region_teleport(*text);
         // What this step moved and turned, for the drawing between it and the next (below).
         step_move_ = feet_ - step_from_feet;

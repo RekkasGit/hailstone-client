@@ -44,7 +44,7 @@ struct Entry {
 constexpr Entry kCalls[] = {
     // Reading, drawing, a window's place, size, hover, menus opened (a menu's row is GameMenuClick or CascadeClick)
     {"InGame", 0}, {"UiReady", 0}, {"GameState", 0}, {"Name", 0}, {"SlotName", 0}, {"Item", 0}, {"ItemIcon", 0},
-    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"AltCurrencies", 0}, {"UiTexture", 0},
+    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"ItemJob", 0}, {"AltCurrencies", 0}, {"UiTexture", 0},
     {"ReplaceWindow", 0}, {"WindowShown", 0}, {"WindowPlaced", 0}, {"WindowText", 0}, {"WindowTitle", 0},
     {"WindowList", 0}, {"WindowClient", 0}, {"SizeWindow", 0}, {"ChildShown", 0}, {"ChildArt", 0}, {"ChildState", 0},
     {"ChildGauge", 0}, {"ChildColor", 0}, {"ChildTooltip", 0}, {"ChildUnder", 0}, {"ChildRect", 0}, {"TabPage", 0},
@@ -96,7 +96,7 @@ constexpr Entry kCalls[] = {
     {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands},
     {"HotBarSetting", kCapCommands}, {"ShowSpell", kCapCommands}, {"SaveSpellSet", kCapCommands},
     {"DeleteSpellSet", kCapCommands}, {"EditSpellSet", kCapCommands}, {"EndFind", kCapCommands},
-    {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands}, {"ZoneExitWalk", kCapActions},
+    {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands}, {"ZoneExitWalk", kCapMove},
     {"FindNpcTarget", kCapTarget}, {"FindNpcPath", kCapCommands}, {"FindOpen", kCapCommands}, {"FindNpcWalk", kCapMove},
     {"StopLuaSocial", kCapCommands}, {"OpenLuaSocialEditor", kCapCommands}, {"OpenSocialEditor", kCapCommands},
     {"gamepad.set_mode", kCapCommands}, {"gamepad.set_binding", kCapCommands},
@@ -109,7 +109,7 @@ constexpr Entry kCalls[] = {
     {"GameMenuClick", kCapActions}, {"ClickHotButton", kCapActions}, {"PickUp", kCapActions},
     {"PressButtonFrom", kCapActions}, {"ClearCursorButton", kCapActions}, {"SpellGemClick", kCapActions},
     {"BagSlotClick", kCapActions}, {"BankSlotClick", kCapActions}, {"PlaceClick", kCapActions},
-    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"ItemJob", kCapActions}, {"StopItemJob", kCapActions},
+    {"SortItems", kCapActions}, {"SetItemKept", kCapActions}, {"SetItemsKept", kCapActions}, {"SellJunk", kCapActions}, {"BulkItems", kCapActions}, {"StopItemJob", kCapActions},
     {"SendParcel", kCapActions}, {"SendParcelMoney", kCapActions}, {"RetrieveParcel", kCapActions},
     {"ClaimAllParcels", kCapActions}, {"AbilityBookUse", kCapActions}, {"AbilityBookAutoskillEnable", kCapActions},
     {"UseSkill", kCapActions}, {"SpellBookClick", kCapActions}, {"SpellBookMemorize", kCapActions},

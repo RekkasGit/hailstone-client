@@ -114,8 +114,10 @@ void GameConnection::handle_death(const Death& d) {
             report_hit(*line, d.killer_id, r.hit_report);
     if (d.damage > 0 && d.attack_skill < 231) melee_sound(d.spawn_id, d.killer_id, static_cast<std::int32_t>(d.damage));
     if (r.local_died) {
+        release_eye_control(true);
         death_tip_pending_ = true; // 0x531730: CEverQuest +0x39580 = 1 (the death tip at the next zone-in)
         pstatus_.dead = true;
+        pstatus_.owner_status = 4;
         pstatus_.hp = 0;
         set_auto_attack(false);
     }
@@ -134,6 +136,7 @@ void GameConnection::handle_death(const Death& d) {
     dead->speed_run = 0.0f;
     dead->speed_heading = 0.0f;
     dead->fly_mode = 0;
+    if (dead->id == world_.eye_id) release_eye_control(true);
     // The death text: ours in colour 0x115 and on the screen, others' in 0x116 when reported.
     while (chat_at < r.chat.size()) {
         std::uint32_t color = r.chat[chat_at].color;
@@ -165,6 +168,7 @@ void GameConnection::handle_zone_to_bind(const AppPacket& p) {
         pstatus_.endurance = pstatus_.max_endurance;
         drunkenness_ = 0;
         pstatus_.dead = false;
+        pstatus_.owner_status = 0;
         // In a raid: CRaid::SetTargetRaidPlayer(0) and ClearInvitedState (a pending invitation is dropped).
         if (raid_.active) {
             raid_.target.clear();
@@ -374,13 +378,16 @@ SaveRequest GameConnection::save_request(std::uint8_t kind) const {
         v.heading = static_cast<std::int32_t>(motion_known_ ? heading_ : me->heading); // __ftol2_sse
     }
     // PcBase_GetArmorProperties(0..21): the profile's records, the nine worn ones set from the actor first
-    // (PlayerClient_GetEquipmentSlotPtr); the actor's are the spawn's material and hero forge model here.
+    // (PlayerClient_GetEquipmentSlotPtr), retaining the complete five-word armor record.
     if (profile_)
         for (std::size_t i = 0; i < v.armor.size() && i < profile_->equipment.size(); ++i) v.armor[i] = profile_->equipment[i];
     if (me)
         for (std::size_t i = 0; i < 9; ++i) {
             v.armor[i].material = me->appearance.material[i];
+            v.armor[i].unknown1 = me->appearance.material_variation[i];
+            v.armor[i].elite_material = me->appearance.elite_material[i];
             v.armor[i].hero_forge_model = me->appearance.hero_forge[i];
+            v.armor[i].material2 = me->appearance.new_armor_type[i];
         }
     v.vehicle = false; // no vehicles
     v.minutes_played = profile_ ? profile_->time_played_min : 0;

@@ -12,6 +12,26 @@
 using namespace hailstone;
 using namespace hailstone::game;
 
+TEST_CASE("item preview: a body item carries the complete material record without changing the player") {
+    Appearance original;
+    original.material[1] = 1;
+    net::Item chest;
+    chest.equip_slots = 1u << 17;
+    chest.material = 3;
+    chest.material_unknown1 = 9;
+    chest.elite_material = 12;
+    chest.heros_forge_model = 15;
+    chest.material_unknown2 = 18;
+    const auto preview = preview_appearance(original, chest, nullptr, nullptr);
+    CHECK(preview.material[1] == 3);
+    CHECK(preview.material_variation[1] == 9);
+    CHECK(preview.elite_material[1] == 12);
+    CHECK(preview.hero_forge[1] == 15);
+    CHECK(preview.new_armor_type[1] == 18);
+    CHECK(original.material[1] == 1);
+    CHECK(original.elite_material[1] == 0);
+}
+
 namespace {
 
 net::Item item(std::uint32_t slots, const char* id_file) {

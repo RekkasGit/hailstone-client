@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -24,6 +25,107 @@
 
 using namespace hailstone;
 using namespace hailstone::assets;
+
+TEST_CASE("WLD blood attachment uses the authored DAG name, independently of its track") {
+    using namespace test::wld_fixtures;
+    struct NameRole { const char* code; const char* dag; int bone; };
+    for (const auto role : std::array{
+            NameRole{"TST", "TSTHEAD_POINT_DAG", 2}, NameRole{"TST", "TSTHE_DAG", 2},
+            NameRole{"TST", "HUMHEAD_POINT_DAG", 2}, NameRole{"TST", "HUFHEAD_POINT_DAG", -1},
+            NameRole{"HUF", "HUFHEAD_POINT_DAG", 2}, NameRole{"HUF", "HUMHEAD_POINT_DAG", -1}}) {
+    for (bool blood_dag : {false, true}) {
+        WldBuilder b;
+        auto bitmap = b.add(0x03, b.str("A_SPRITE"), bitmap_name("fixture.bmp"));
+        ByteWriter info;
+        info.le<std::uint32_t>(0);
+        info.le<std::uint32_t>(1);
+        info.le(bitmap);
+        auto sprite_info = b.add(0x04, 0, info);
+        ByteWriter ref;
+        ref.le(sprite_info);
+        ref.le<std::uint32_t>(0);
+        auto sprite = b.add(0x05, 0, ref);
+        auto mat = b.add(0x30, b.str("A_MDF"), material(0x80000001, sprite));
+        auto materials = b.add(0x31, 0, refs({mat, mat, mat}));
+        auto geometry = b.add(0x36, b.str("TST_DMSPRITEDEF"), mesh(materials, false));
+        ref = {};
+        ref.le(geometry);
+        ref.le<std::uint32_t>(0);
+        auto mesh_ref = b.add(0x2d, 0, ref);
+        ByteWriter track;
+        track.le<std::int32_t>(0);
+        track.le<std::uint32_t>(0);
+        const std::array tracks{b.add(0x13, b.str("TST_BLD_TRACK"), track),
+                                b.add(0x13, b.str("TST_ARM_TRACK"), track),
+                                b.add(0x13, b.str("TST_ROOT_TRACK"), track)};
+        ByteWriter skeleton;
+        skeleton.le<std::uint32_t>(0); // the root node owns this rigid fixture mesh
+        skeleton.le<std::uint32_t>(3);
+        skeleton.le<std::int32_t>(0);
+        const std::array<std::string, 3> dags{"TST_ROOT_DAG", blood_dag ? std::string(role.code) + "_BLD_DAG" : "OTHER_BLD_DAG", role.dag};
+        for (std::size_t i = 0; i < dags.size(); ++i) {
+            skeleton.le(b.str(dags[i]));
+            skeleton.le<std::uint32_t>(0);
+            skeleton.le(tracks[i]);
+            skeleton.le<std::int32_t>(i == 0 ? mesh_ref : 0);
+            skeleton.le<std::uint32_t>(0);
+        }
+        auto skeleton_def = b.add(0x10, b.str("TST_HS_DEF"), skeleton);
+        ref = {};
+        ref.le(skeleton_def);
+        ref.le<std::uint32_t>(0);
+        auto skeleton_ref = b.add(0x11, 0, ref);
+        ByteWriter actor;
+        for (std::uint32_t v : {0u, 0u, 0u, 1u, 0u}) actor.le(v);
+        actor.le(skeleton_ref);
+        b.add(0x14, b.str(std::string(role.code) + "_ACTORDEF"), actor);
+        auto archive = std::make_shared<CharacterArchive>();
+        archive->archive = std::make_shared<PfsArchive>(PfsArchive::from_memory(
+            test::pfs_fixtures::make_pfs({{"fixture.wld", b.build()}}), "blood_fixture.s3d"));
+        archive->wlds.push_back(wld::WldFile::parse(*archive->archive->read("fixture.wld"), "fixture.wld"));
+        CharacterLibrary library({archive});
+        auto model = library.build(role.code);
+        REQUIRE(model.bone_names.size() == 3);
+        CHECK(model.bone_names[0] == "TST_BLD_TRACK"); // a misleading track is not a blood point
+        CHECK(model.bone_names[1] == "TST_ARM_TRACK");
+        CHECK(model.blood_bone == (blood_dag ? 1 : -1));
+        CHECK(model.name_bone == role.bone);
+    }
+    }
+    CHECK(CharacterModel{}.blood_bone == -1);
+}
+
+TEST_CASE("UseLuclinElementals gates the implicit global NPC archive, not listed ones") {
+    test::ScratchDir dir("elemental_archives");
+    std::filesystem::create_directories(dir.path() / "Resources");
+    for (const char* name : {"global5_chr.s3d", "global5_chr2.s3d", "frog_mount_chr.s3d", "other_chr.s3d"})
+        std::ofstream(dir.path() / name) << "fixture";
+    auto has = [](const std::vector<std::string>& list, const char* name) {
+        return std::find(list.begin(), list.end(), name) != list.end();
+    };
+    auto write_ini = [&](const char* value) {
+        std::ofstream(dir.path() / "eqclient.ini") << "[Defaults]\nUseLuclinElementals=" << value << '\n';
+    };
+    // No GlobalLoad entry names global5_chr: only the implicit load brings it in.
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt") << "2,0,AAAAC,other_chr.s3d,x\n";
+    for (const char* value : {"0", "FALSE", "", "1", "TRUE", "true"}) {
+        write_ini(value);
+        const auto list = global_character_archives(GameDir(dir.path()), true);
+        const bool enabled = value[0] == '1' || value[0] == 'T' || value[0] == 't';
+        CHECK(has(list, "global5_chr.s3d") == enabled);
+        CHECK(has(list, "other_chr.s3d"));
+    }
+    std::ofstream(dir.path() / "eqclient.ini") << "[Defaults]\n";
+    CHECK(has(global_character_archives(GameDir(dir.path())), "global5_chr.s3d")); // absent means on
+    // Entries the player's GlobalLoad.txt names are kept with the option off (not confirmed either way).
+    std::ofstream(dir.path() / "Resources" / "GlobalLoad.txt")
+        << "2,0,AAAAC,global5_chr.s3d,x\n2,0,AAAAC,global5_chr2.s3d,x\n2,0,AAAAC,frog_mount_chr.s3d,x\n";
+    write_ini("FALSE");
+    const auto listed = global_character_archives(GameDir(dir.path()), true);
+    CHECK(has(listed, "global5_chr.s3d"));
+    CHECK(has(listed, "global5_chr2.s3d"));
+    CHECK(has(listed, "frog_mount_chr.s3d"));
+}
 
 namespace {
 

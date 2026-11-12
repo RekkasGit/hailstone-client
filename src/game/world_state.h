@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #pragma once
 
 // What the client knows about the zone it is in: the spawns the server has
@@ -19,6 +20,7 @@
 #include <glm/glm.hpp>
 
 #include "core/ascii_case.h"
+#include "core/ini_file.h"
 #include "game/spawn_heights.h"
 
 
@@ -32,6 +34,9 @@ namespace hailstone::game {
 	// "a_rat01" -> "a rat", "#Guard_Bob00" -> "Guard Bob": leading '#' and trailing digits stripped, underscores to
 // spaces.
 	std::string display_name(const std::string& name);
+	// Appearance::new_armor_bits for a spawn whose kind is not known: the player (8) or the NPC (0x10) bit of
+	// ActorNewArmorFilter shows its hero's forge armour.
+	inline constexpr std::uint8_t kNewArmorUnknownKind = 0x18;
 	// What a spawn looks like (spawn packet, OP_WearChange, OP_Illusion). Slots
 	// are the nine visible ones: 0 head, 1 chest, 2 arms, 3 wrists, 4 hands,
 	// 5 legs, 6 feet, 7 primary, 8 secondary (game/appearance.h).
@@ -50,8 +55,20 @@ namespace hailstone::game {
 		// Per slot: armour material (slots 0-6) or item model number IT<n>
 		// (slots 7, 8), and the tint 0xAARRGGBB (a zero high byte = untinted).
 		std::array<std::uint32_t, 9> material{};
+		// The rest of the five-word armour record (ArmorProperties: type, variation, material, newArmorID,
+		// newArmorType; EQEmu's Texture_Struct Material, Unknown1, EliteMaterial, HeroForgeModel, Material2), kept
+		// whole: RefreshEquipSlot @00594e50 hands the wire's record to PlayerClient_SetActorEquipmentSlot
+		// @0042e6f0, which stores it as the ActorClient's ArmorProperties (+0x8c) in the same order.
+		std::array<std::uint32_t, 9> material_variation{}; // variation (+4)
+		std::array<std::uint32_t, 9> elite_material{};     // material (+8): game::ArmorRecord::material2
 		std::array<std::uint32_t, 9> tint{};
-		std::array<std::uint32_t, 9> hero_forge{};
+		std::array<std::uint32_t, 9> hero_forge{};         // newArmorID (+0xc)
+		std::array<std::uint32_t, 9> new_armor_type{};     // newArmorType (+0x10)
+		// PlayerClient_ApplyNewArmorFilter @0x595de0: the ActorNewArmorFilter bits that show this spawn's hero's
+		// forge armour (game::new_armor_bits). A spawn whose kind is not known (character select, previews)
+		// has kNewArmorUnknownKind. The renderer collapses the bits to shown or hidden for the active filter
+		// (game::resolve_new_armor_filter), so a change the filter does not see rebuilds nothing.
+		std::uint8_t new_armor_bits = kNewArmorUnknownKind;
 		// NpcTintIndex (spawn +0x51c; OP_SpawnAppearance 39): npct.ini Value<n>
 		// tints new-style models (ActorClient_ApplyNpcTint); 0 none.
 		std::uint32_t npc_tint = 0;
@@ -61,6 +78,9 @@ namespace hailstone::game {
 
 		bool operator==(const Appearance&) const = default;
 	};
+	// From here to the player races (EQR_*), and Spawn's IsNamed, GetSpawnType, GetTypeDesc and GetRaceIDName below:
+	// copied from MacroQuest (GPL-2.0, Copyright (C) 2002-present MacroQuest Authors; THIRD_PARTY.md), for plugins
+	// and TLOs that port MacroQuest logic. IsNamed was changed here (it mixes MacroQuest's older and newer tests).
 	namespace Race {
 		constexpr uint16_t Doug = 0;
 		constexpr uint16_t Human = 1;
@@ -1122,6 +1142,8 @@ namespace hailstone::game {
 		// (mechanics::step_remote_spawn) for 12 s after the update.
 		glm::vec3 velocity{ 0.0f };    // world units per physics tick (50 ms), from the update's deltas
 		float speed_run = 0.0f;      // the update's animation field x 0.025
+		// Last completed StepClock time since app start + 1; absent until this spawn incarnation steps.
+		std::optional<std::uint32_t> physics_step_ms;
 		float speed_heading = 0.0f;  // heading units per tick
 		double update_time = 0.0;    // when position was last set (seconds, steady clock)
 		float snap_error = 0.0f;     // how far the last update moved the stepped position (diagnostics)
@@ -1131,6 +1153,7 @@ namespace hailstone::game {
 		// The region types under it (+0xa1 FeetWet, +0xa2 BodyWet: 0 dry, 5 water, ...), probed with each step
 		// (WorldState::smooth's `region`); the local player's come from its own controller.
 		std::uint8_t feet_wet = 0, body_wet = 0;
+		std::int32_t colliding_type = 0; // movement sweep's actor type (+0x24); 6 enables climbing animation
 		// EQPlayer::SetHeights' results (game/spawn_heights.h): heights.avatar_height is the spawn's z above its
 		// feet, heights.model_scale its actor's scale. WorldState::set_heights keeps them.
 		SpawnHeights heights;
@@ -1142,6 +1165,7 @@ namespace hailstone::game {
 		// Riding (game/mounts.h): EQPlayer::GetMount (+0x154) and PlayerBase_GetRider (+0x158) as spawn ids, 0 none.
 		std::uint32_t mount_id = 0;
 		std::uint32_t rider_id = 0;
+		std::uint32_t form_mount_id = 0; // re-seat after a form change rebuilds this actor
 		float walk_speed = 0.0f, run_speed = 0.0f; // the spawn record's walkspeed / runspeed (+0x330 / +0x350)
 		std::uint8_t hp_percent = 100;
 		std::uint8_t stand_state = 100; // SpawnAppearance animation: 100 stand, 110 sit, 111 crouch, 115 lying
@@ -1164,6 +1188,8 @@ namespace hailstone::game {
 		bool guild_show = false;
 		std::uint8_t anon = 0;
 		bool afk = false, lfg = false, linkdead = false, gm = false;
+        std::int32_t invis_rank = 0; // spawn HideMode, then SpawnAppearance 3
+        std::uint8_t light_type = 0; // active light from the spawn record and SpawnAppearance 5
 		std::uint8_t pvp = 0;      // PvPFlag +0x349 (the spawn record)
 		std::uint32_t deity = 0;   // +0x518 (the spawn record)
 		// Bazaar flags: the spawn record's trader bit and OP_BecomeTrader (PlayerClient +800), the
@@ -1201,6 +1227,7 @@ namespace hailstone::game {
 		glm::vec3 vehicle_local{ 0.0f }, vehicle_display_local{ 0.0f };
 		float vehicle_local_heading = 0.0f, vehicle_display_local_heading = 0.0f;
 		double vehicle_checked = -1.0;
+		// Copied from MacroQuest, with the race tables above (THIRD_PARTY.md).
 		static bool IsNamed(const game::Spawn* pSpawn)
 		{
 			if (pSpawn)
@@ -2717,9 +2744,7 @@ namespace hailstone::game {
 		std::uint8_t texture = 0;
 	};
 	std::optional<ElementalSwap> luclin_elemental_swap(std::uint16_t race, std::uint8_t texture, bool luclin_elementals);
-	// GetEQClientIniBool @0x5fa680 on a value: missing gives the default; true when it starts with T, t or 1 (an empty
-	// one is false). UseLuclinElementals is read this way with default TRUE.
-	bool eqclient_ini_bool(const std::optional<std::string>& text, bool fallback);
+	using hailstone::eqclient_ini_bool; // core/ini_file.h
 
 	struct WorldState {
 		std::string zone_short_name;
@@ -2728,6 +2753,8 @@ namespace hailstone::game {
 		std::uint32_t target_id = 0; // the player's current target, 0 = none
 		// pinstControlledPlayer: the spawn the local player moves when it is not itself (its mount; game/mounts.h).
 		std::uint32_t controlled_id = 0;
+		std::uint32_t eye_id = 0; // SPA67 remote control, distinct from a rider's mount
+		std::uint32_t view_id = 0; // SetViewActor's spawn, 0: the local player
 		// The small boat the local player has the helm of (OP_ControlBoat, game/boats.h steer_boat): the player moves it,
 		// so it is not stepped.
 		std::uint32_t driven_id = 0;
@@ -2776,12 +2803,15 @@ namespace hailstone::game {
 		// `vehicle_under` (optional) gives the vehicle whose deck is under a point (0: none): a spawn an update puts
 		// there rides it (game/boats.h).
 		using VehicleFn = std::function<std::uint32_t(const glm::vec3&)>;
+		// The moving remote spawn's sweep, for CollisionHit_SetCollidingType (+0x24). This observes actor hits;
+		// complete remote CollisionPass positioning remains separate from the interpolation below.
+		using RemoteCollisionFn = std::function<std::int32_t(const Spawn&, const glm::vec3&, const glm::vec3&)>;
 		// The local player and the mount it rides (controlled_id) are not eased: they are drawn where set_local_drawn put
 		// them this frame, else at their position.
 		// `ground_floor` (optional): the floor ground_npcs measures against, which has the doors too (a portal stone's
 		// base, a platform); unset, `floor`.
 		void smooth(float dt, double now, const FloorFn& floor = {}, const RegionFn& region = {},
-			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {});
+			const VehicleFn& vehicle_under = {}, const FloorFn& ground_floor = {}, const RemoteCollisionFn& collision = {});
 		// Where the local player is drawn this frame: where the camera is, between the game clock's last two steps
 		// (app/client_app_player.cpp). Sets the drawn place and heading (0..512) of the player and of the mount it rides at
 		// once, so the eye on a mount follows it in the same frame; the next smooth keeps them and forgets the call.
@@ -2796,6 +2826,12 @@ namespace hailstone::game {
 		// and the vehicles' physics (AdvanceSpawn's per-step friction) runs once for each. Unset: one step of the frame's
 		// dt (the original's code as written). The drawn place eases over the frame's dt either way.
 		std::optional<std::vector<float>> physics_steps;
+		std::optional<std::uint32_t> physics_step_time_ms; // current frame last completed StepClock time + 1
+		// Hailstone: how far from the local player another moving spawn has smooth's contact probe (the
+		// RemoteCollisionFn, a full movement sweep per step). It only picks the climbing animation, so a spawn
+		// farther than this, which is not drawn, is not probed and has no contact. The client sets it to the
+		// camera's actor clip (game::actor_clip_distance: 550 at the default ActorClipPlane 50). 0: no limit.
+		float remote_probe_range = 550.0f;
 		// Hailstone (option ground_npcs, a deliberate difference; docs/mechanics.md "Grounding NPCs"): an NPC on the
 		// ground (flymode 0, or EQEmu's 3 out of water) that stands over the floor (by more than 0.25, at most 50), as EQEmu servers with a poor map
 		// leave some, is drawn on the floor. Only where it is drawn changes (display_position, so picking and the NPC

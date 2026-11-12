@@ -6,6 +6,37 @@
 #include <unordered_set>
 
 namespace hailstone::game {
+    // PlayerZoneClient::IsInvisible @0x5a1850 (rof2decomp spawn_visibility.cpp). The spawn itself is invisible only
+    // to a GM (virtual +0xdc, PlayerClient_IsGM @0x597f40) whose hide mode (+0x338) is 3001; corpses (type >= 2) and
+    // spawns at 0 HP never are; PlayerBase::HasProperty(0x64) (body type 100, or 100 in the property list) always is.
+    bool spawn_invisible(const Spawn& viewer, const Spawn& target, std::int32_t see_invisible_rank, bool group_member) {
+        if (viewer.id == target.id) return viewer.gm && target.invis_rank == 3001;
+        if (target.is_corpse || target.hp_percent == 0) return false;
+        if (target.body_type == 100 || std::find(target.properties.begin(), target.properties.end(), 100u) != target.properties.end())
+            return true;
+        if (target.invis_rank <= 0) return false;
+        if (see_invisible_rank >= target.invis_rank) return target.gm && !viewer.gm;
+        // PcClient's awareness override (0x5801d0 / 0x4493c0) checks the
+        // player's group, with no equivalent raid exemption.
+        return !group_member;
+    }
+	std::uint8_t new_armor_bits(std::uint8_t spawn_type, bool local_player, bool group_member, bool raid_member) {
+		if (spawn_type == 1) return 0x10;
+		if (spawn_type != 0) return 0;
+		std::uint8_t bits = 0x08;
+		if (local_player) bits |= 0x01 | 0x02; // IsSelfOrGroupMember counts the local player too
+		if (group_member) bits |= 0x02;
+		if (raid_member) bits |= 0x04;
+		return bits;
+	}
+
+	bool appearance_new_armor_filtered(const Appearance& a, std::uint32_t filter) {
+		return (filter & a.new_armor_bits) == 0;
+	}
+
+	void resolve_new_armor_filter(Appearance& a, std::uint32_t filter) {
+		a.new_armor_bits = appearance_new_armor_filtered(a, filter) ? 0 : kNewArmorAllBits;
+	}
 
 	bool is_pc_model_race(std::uint32_t race) {
 		return race <= 12 || race == 128 || race == 130 || race == 330 || race == 522;
@@ -26,13 +57,16 @@ namespace hailstone::game {
 	}
 
 	bool apply_wear_change(Appearance& a, std::uint8_t slot, std::uint32_t material, std::uint32_t hero_forge,
-		std::uint32_t tint) {
+		std::uint32_t tint, std::uint32_t variation, std::uint32_t elite_material, std::uint32_t new_armor_type) {
 		if (slot >= 9) return false;
 		if (slot < kSlotPrimary && a.texture != kNoTexture) return false; // fixed body texture
 		// material -1 resets the slot (the actor part goes back to its default).
 		a.material[slot] = material == 0xffffffffu ? 0 : material;
+		a.material_variation[slot] = variation;
+		a.elite_material[slot] = elite_material;
 		a.tint[slot] = tint;
 		a.hero_forge[slot] = hero_forge;
+		a.new_armor_type[slot] = new_armor_type;
 		return true;
 	}
 

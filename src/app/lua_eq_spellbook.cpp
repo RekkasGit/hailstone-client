@@ -240,16 +240,18 @@ int DisplayItemData(lua_State* L) {
         return 1;
     }
     const auto& item = (*displays)[static_cast<std::size_t>(n - 1)];
-    lua_createtable(L, 0, 10);
+    lua_createtable(L, 0, 12);
     set_int(L, "id", item.id);
     set_int(L, "icon", item.icon);
     set_str(L, "name", item.name);
     set_str(L, "lore", item.lore);
     set_int(L, "value", item.value);
     set_int(L, "stack_count", item.stack_count);
+    set_int(L, "stackCount", item.stack_count); // camelCase as eq's other tables; the snake_case keys stay for callers
     set_int(L, "damage", item.damage);
     set_int(L, "delay", item.delay);
     set_int(L, "item_type", item.item_type);
+    set_int(L, "itemType", item.item_type);
     set_int(L, "favor", item.favor);
     return 1;
 }

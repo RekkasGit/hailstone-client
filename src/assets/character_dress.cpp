@@ -80,10 +80,14 @@ std::string appearance_key(const CharacterModel& m, const game::Appearance& a) {
     add(a.hair_style);
     add(a.beard);
     add(a.show_helm);
+    add(a.new_armor_bits);
     for (std::size_t i = 0; i < 9; ++i) {
         add(a.material[i]);
+        add(a.material_variation[i]);
+        add(a.elite_material[i]);
         add(a.tint[i]);
         add(a.hero_forge[i]);
+        add(a.new_armor_type[i]);
     }
     for (std::uint32_t v : {std::uint32_t{a.hair_color}, std::uint32_t{a.beard_color}, std::uint32_t{a.eye_color1},
                             std::uint32_t{a.eye_color2}, a.drakkin_heritage, a.drakkin_tattoo, a.drakkin_details,
@@ -220,7 +224,7 @@ std::shared_ptr<const CharacterMesh> CharacterLibrary::dress(const CharacterMode
             if (!p) continue;
             for (std::size_t b = 0; b < model.bone_names.size(); ++b)
                 if (model.bone_names[b] == p->bone) {
-                    mesh.emitters.push_back({static_cast<int>(b), point_matrix(*p), e});
+                    mesh.emitters.push_back({static_cast<int>(b), point_matrix(*p), e, model.code});
                     break;
                 }
         }
@@ -680,7 +684,8 @@ void CharacterLibrary::attach_items(const CharacterModel& model, const game::App
         // Its always-on actor emitters: on its points, whose bone is the item's own origin (ATTACH_TO_ORIGIN),
         // i.e. the frame of the bone it is held by.
         for (const auto& e : held->emitters)
-            if (const ModelPoint* p = find_point(held->points, e.point)) mesh.emitters.push_back({bone, point_matrix(*p), e});
+            if (const ModelPoint* p = find_point(held->points, e.point))
+                mesh.emitters.push_back({bone, point_matrix(*p), e, "IT" + std::to_string(number)});
     }
 }
 

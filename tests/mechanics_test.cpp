@@ -445,6 +445,20 @@ TEST_CASE("build_sheet: the profile's fist values, the buff timer hold and the b
     CHECK_FALSE(s.buffs[1].caster_distance);
 }
 
+TEST_CASE("build_sheet: current intoxication replaces the received profile, including fully sober") {
+    net::PlayerProfile profile;
+    profile.intoxication = 80;
+    Inventory inventory;
+    SpellState spells;
+    LiveState live;
+    CHECK(build_sheet(profile, inventory, spells, live).drunkenness == 80);
+    live.drunkenness = 120;
+    CHECK(build_sheet(profile, inventory, spells, live).drunkenness == 120);
+    live.drunkenness = 0;
+    CHECK(build_sheet(profile, inventory, spells, live).drunkenness == 0);
+    CHECK(profile.intoxication == 80); // The received snapshot is independent from changing local state.
+}
+
 TEST_CASE("build_sheet_into: a sheet built again in place is the sheet build_sheet makes") {
     // The per-frame character (StatsUi, GameConnection::with_character) is rebuilt into the last frame's sheet so
     // its items reuse their storage; nothing of the last state may stay.

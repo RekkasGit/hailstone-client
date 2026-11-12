@@ -146,6 +146,12 @@ TEST_CASE("particle_cloud_definition follows the DLL's 0x34 converter") {
     CHECK(d.additive == 1u); // 0x80000017 -> 0x011b0507: bit 24 set, bit 20 set
     CHECK(d.no_zwrite == 1u);
 
+    SUBCASE("blood sprite's installed material alias uses alpha blending") {
+        tex.material = 0x80000018u;
+        CHECK(particle_material_alias(tex.material) == 0x01080507u);
+        CHECK(particle_cloud_definition(c, tex, "BloodFixture").additive == 0u);
+    }
+
     SUBCASE("without bit 0x100: no fade, half opacity") {
         c.bits = 0x30400;
         auto e = particle_cloud_definition(c, tex, "X");

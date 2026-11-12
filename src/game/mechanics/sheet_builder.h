@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include "game/mechanics/character_sheet.h"
@@ -37,6 +38,8 @@ struct LiveState {
     bool fast_regen_resting = false;   // PcZoneClient_IsRestingForFastRegen (OP_RestState and the buffs)
     bool attacking = false;            // auto attack on
     bool running = false;              // moving at run speed
+    std::optional<std::int32_t> drunkenness; // current PcBase value; unset uses the received profile
+    std::int32_t owner_status = 0;     // CharacterBase status (3: unconscious), used by bleeding HP regen
     std::uint32_t player_id = 0;       // own spawn id (caster checks)
     std::int64_t now_ms = 0;           // the buff clock (game::BuffSlot::received_ms)
     std::int32_t pvp_rules = 0;        // 0xdcee70 (OP_LogServer +4): any rule set scales PvP resist debuffs x 1.5

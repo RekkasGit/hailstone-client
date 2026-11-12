@@ -16,6 +16,12 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure
 a finding aborts the test with a stack trace. The whole existing suite (561 test cases, 44 skipped for missing
 `EQ_GAME_DIR` / vector files) ran clean under it before any fix; the findings below all came from the new fuzz tests.
 
+The lookup collector's per-thread pointer is declared and defined `constinit thread_local`: every thread starts
+with a null collector, and other translation units need no dynamic initialization wrapper. This also avoids an
+observed GCC 13.3/ELF TLS-relaxation interaction that made an optimized sanitizer null check reuse flags from an
+ADD after the linker replaced it with LEA. Sanitizer checks remain enabled; lookup tests cover nested scopes and
+a fresh worker thread's independent state.
+
 ## Fuzz-style tests (always on, a few seconds)
 
 `tests/fuzz_net_test.cpp`, `tests/fuzz_assets_test.cpp`, helpers in `tests/fuzz_support.h`. Inputs are deterministic

@@ -162,6 +162,21 @@ TEST_CASE("inventory hot button: held on a slot, dropped on a bar") {
     api.register_functions(L);
     lua_setglobal(L, "eq");
 
+    // eq.HasSlot: a possessions slot, and a bag place only inside the bag that slot holds (empty places count).
+    CHECK(run(L, "return eq.HasSlot(0)") == "true");
+    CHECK(run(L, "return eq.HasSlot(33)") == "true");
+    CHECK(run(L, "return eq.HasSlot(34)") == "false");
+    CHECK(run(L, "return eq.HasSlot(-1)") == "false");
+    CHECK(run(L, "return eq.HasSlot(23, 0)") == "true");
+    CHECK(run(L, "return eq.HasSlot(23, 7)") == "true");
+    CHECK(run(L, "return eq.HasSlot(23, 8)") == "false"); // the backpack has 8 places
+    CHECK(run(L, "return eq.HasSlot(25, 0)") == "false"); // a potion is no bag
+    CHECK(run(L, "return eq.HasSlot(24, 0)") == "false"); // nothing there
+    CHECK(run(L, "return eq.HasSlot(13, 0)") == "false"); // a worn slot holds no open bag
+    host.in_game = false;
+    CHECK(run(L, "return eq.HasSlot(23)") == "false");
+    host.in_game = true;
+
     // The mock's profile has coin on the cursor (a type 3 attachment: nothing attaches over it). Into the purse first.
     CHECK(run(L, "return eq.ClickSlot(25, nil, 'leftheld')") == "false");
     for (int t = 0; t < 4; ++t)

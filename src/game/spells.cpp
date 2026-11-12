@@ -216,6 +216,8 @@ std::optional<SpellData> SpellTable::parse_line(std::string_view line) {
         s.formula[k] = i32(70 + k);
         s.effect[k] = i32(86 + k);
     }
+    // LoadTextSpells limits the missile duration except for a first-slot SPA 76 cloud (native +0x24/+0x11c).
+    if (s.ae_duration > 14000 && s.effect[0] != 76) s.ae_duration = 14000;
     s.book_icon = i32(56);
     s.gem_icon = i32(57);
     for (std::size_t k = 0; k < 4; ++k) {
@@ -254,6 +256,7 @@ std::optional<SpellData> SpellTable::parse_line(std::string_view line) {
         s.category = i32(156);
         s.subcategory = i32(157);
         s.subcategory2 = i32(158);
+        s.npc_no_los = b(159);
         s.endurance_cost = i32(166);
         s.reuse_timer_index = i32(167);
         s.is_skill = b(168);

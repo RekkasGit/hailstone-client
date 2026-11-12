@@ -148,11 +148,10 @@ public:
     // SPA 0x71: summon_mount_tick does GetMount, the "<name>`s_Mount" lookup and the ride itself.
     bool has_mount() override { return false; }
     bool find_summon(bool eye) override {
-        // SPA 0x43 (the Eye of summons taking over the view) is not followed by this client: no eye is looked for.
-        return !eye;
+        return eye ? host_.eye_present() : true;
     }
     void ride_mount() override { host_.summon_mount(); }
-    void view_eye() override {}
+    void view_eye() override { host_.view_eye(); }
     std::int32_t spell_level_needed(const AffectSpell* spell, int class_id) override {
         const SpellData* d = spell ? ch_.spell(spell->id) : nullptr;
         return d ? d->level_needed(static_cast<std::uint8_t>(class_id)) : 0xff;
@@ -232,6 +231,18 @@ std::int32_t clamped_endurance(const Character& ch, mechanics::CharacterSheet& s
 }
 
 } // namespace
+
+DrunkennessTick drunkenness_tick(std::int32_t value, std::int32_t alcohol_tolerance, bool mounted) {
+    DrunkennessTick out{value, false, false};
+    if (value <= 0) return out;
+    out.value = value - 1;
+    out.changed = true;
+    const std::int32_t threshold = std::min(150, alcohol_tolerance / 2 + 50);
+    out.remove_mount = mounted && out.value >= threshold;
+    return out;
+}
+
+float drunkenness_fov_offset(std::int32_t value) { return value < 70 ? 0.0f : static_cast<float>(value - 70); }
 
 bool six_second_tick_due(const SpellState& spells, std::int64_t now_ms) {
     return elapsed_over(now_ms, spells.last_buff_tick_ms, kSixSeconds);

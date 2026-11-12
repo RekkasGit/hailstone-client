@@ -18,6 +18,7 @@ namespace hailstone::render {
 struct GroupTrack {
     const assets::AnimationClip* clip = nullptr;
     std::uint8_t anim = 0xfe; // the animation it plays (old-style number or new-style code; 0xfe none)
+    std::int32_t column = 0; // new-style sequence's style column
     float time = 0.0f;        // seconds into `clip` (counting from its start even when reversed)
     float rate = 1.0f;
     bool loop = true;
@@ -32,7 +33,7 @@ struct GroupTrack {
     // BlendToAnimation (blend_seconds > 0 on a group that plays something) or SetCurrentAnimation. The clip it
     // already plays (same direction) only takes the new rate and loop flag, unless `restart`. True when it started.
     bool start(const assets::AnimationClip* c, std::uint8_t code, float speed, bool loops, bool reversed,
-               float blend_s, bool restart = false);
+               float blend_s, bool restart = false, std::int32_t style_column = 0);
     void advance(float dt);
     // CBoneGroup::HasCompletedCycle @0x1003f4b0: nothing playing, or one length / |speed| has passed since it
     // started.
@@ -60,6 +61,8 @@ struct LayerRequest {
     float speed_run = 0.0f;  // +0x7c
     std::uint8_t follow_up_after = 0x20; // classic: what +0x10c4 becomes when the stand request plays the follow-up
                                          // (game::SpawnAnimChoice::follow_up)
+    std::int32_t base_column = 0;
+    std::int32_t action_column = 0;
 };
 
 struct ActorLayers {

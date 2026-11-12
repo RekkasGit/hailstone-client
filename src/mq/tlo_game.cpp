@@ -5,6 +5,7 @@
 #include <ctime>
 #include <format>
 #include <optional>
+#include <random>
 
 #include <glm/geometric.hpp>
 
@@ -15,6 +16,7 @@
 #include "game/inventory.h"
 #include "game/spells.h"
 #include "game/world_state.h"
+#include "mq/calc.h"
 #include "mq/spawn_search.h"
 #include "mq/tlo.h"
 #include "nav/nav_control.h"
@@ -1188,17 +1190,17 @@ void register_misc_types() {
         return V::boolean(t.tm_hour < 6 || t.tm_hour >= 19);
     });
 
-    // GameTime: Norrath's clock (OP_TimeOfDay).
+    // GameTime: Norrath's clock, advancing between OP_TimeOfDay packets.
     Type& gt = const_cast<Type&>(*g.gametime);
     gt.to_value = [](const Context& c, const Value&) -> V {
-        if (!c.conn || !c.conn->time_of_day()) return V::nil();
-        const auto& t = *c.conn->time_of_day();
-        return V::string(std::format("{:02}:{:02}", t.hour, t.minute));
+        const auto t = c.conn ? c.conn->current_time_of_day() : std::nullopt;
+        if (!t) return V::nil();
+        return V::string(std::format("{:02}:{:02}", t->hour, t->minute));
     };
     auto gf = [](const char* name, auto fn) {
         add(g.gametime, name, [fn](const Context& c, const Value&, std::string_view) -> V {
-            if (!c.conn || !c.conn->time_of_day()) return V::nil();
-            return fn(*c.conn->time_of_day());
+            const auto t = c.conn ? c.conn->current_time_of_day() : std::nullopt;
+            return t ? fn(*t) : V::nil();
         });
     };
     gf("Hour", [](const net::TimeOfDay& t) { return V::integer(t.hour); });
@@ -1242,7 +1244,7 @@ std::optional<glm::vec3> nav_destination(const Context& c, std::string_view inde
     } else if (iequals(w[0], "target")) {
         s = spawn_of(c, c.conn->world().target_id);
     } else {
-        for (const game::Spawn* f : search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group()))
+        for (const game::Spawn* f : find_spawns(index, *c.conn, c.can_see))
             if (!is_me(c, *f)) {
                 s = f;
                 break;
@@ -1335,6 +1337,167 @@ void register_stick() {
     t.to_value = [on](const Context& c, const Value&) { return V::string(on(c) ? "ON" : "OFF"); };
 }
 
+// MQ's DegToRad is 180/pi: Sin[x] takes degrees, Asin gives them.
+constexpr double kDegToRad = 57.295779513082320876846364344191;
+
+// MQ's GetVec3FromString: up to three numbers split by commas (or, with no comma, by spaces); a missing one is the
+// default's, an empty one gives back the whole default.
+static glm::vec3 vec3_from_text(std::string_view s, const glm::vec3& fail) {
+    const auto trim_blank = [](std::string_view t) {
+        while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front()))) t.remove_prefix(1);
+        while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back()))) t.remove_suffix(1);
+        return t;
+    };
+    s = trim_blank(s);
+    glm::vec3 out = fail;
+    const char delim = s.find(',') != std::string_view::npos ? ',' : ' ';
+    std::size_t start = 0;
+    for (int k = 0; k < 3 && start != std::string_view::npos; ++k) {
+        const std::size_t end = s.find(delim, start);
+        const std::string_view part = trim_blank(s.substr(start, end == std::string_view::npos ? s.npos : end - start));
+        if (part.empty()) return fail;
+        out[k] = static_cast<float>(double_from_text(part, fail[k]));
+        if (end == std::string_view::npos) break;
+        start = s.find_first_not_of(' ', end + 1);
+    }
+    return out;
+}
+
+// MQ's Math, If and Range (MQ2MathType.cpp, MQ2Data.cpp dataIf, MQ2BasicTypes.cpp MQ2RangeType as the
+// specification), over mq/calc.h. Math's and Range's members are NULL without an index.
+static void register_math(Registry& r) {
+    Type& math = r.type("math");
+    const Type* math_type = &math;
+    math.to_value = [](const Context&, const Value&) { return V::nil(); }; // ${Math} alone is NULL
+    // A Calculate result as MQ's float type keeps it (Dest.Float = (float)result).
+    const auto calc_member = [&math](const char* name, double (*fn)(double)) {
+        math.members[name] = [fn](const Context&, const Value&, std::string_view index) -> V {
+            if (index.empty()) return V::nil();
+            const auto v = calculate(index);
+            return v ? V::number(static_cast<double>(static_cast<float>(fn(*v)))) : V::nil();
+        };
+    };
+    calc_member("Calc", [](double x) { return x; });
+    calc_member("Sqrt", [](double x) { return std::sqrt(x); });
+    calc_member("Sin", [](double x) { return std::sin(x / kDegToRad); });
+    calc_member("Cos", [](double x) { return std::cos(x / kDegToRad); });
+    calc_member("Tan", [](double x) { return std::tan(x / kDegToRad); });
+    calc_member("Asin", [](double x) { return std::asin(x) * kDegToRad; });
+    calc_member("Acos", [](double x) { return std::acos(x) * kDegToRad; });
+    calc_member("Atan", [](double x) { return std::atan(x) * kDegToRad; });
+    math.members["Abs"] = [](const Context&, const Value&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        const auto v = calculate(index);
+        if (!v) return V::nil();
+        float f = static_cast<float>(*v);
+        if (f < 0) f = -f; // (-0 stays -0, as in MQ)
+        return V::number(f);
+    };
+    // Rand[max] or Rand[min,max]: a whole number from min (0) to max, both included; NULL when min > max.
+    math.members["Rand"] = [](const Context&, const Value&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        int lo = 0, hi = 0;
+        if (const auto comma = index.find(','); comma != std::string_view::npos) {
+            lo = int_from_text(index.substr(0, comma), 0);
+            hi = int_from_text(index.substr(comma + 1), 0);
+        } else {
+            hi = int_from_text(index, 0);
+        }
+        if (lo > hi) return V::nil();
+        thread_local std::mt19937 rng{std::random_device{}()};
+        return V::integer(std::uniform_int_distribution<int>(lo, hi)(rng));
+    };
+    math.members["Not"] = [](const Context&, const Value&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        return V::integer(~int_from_text(index, 0));
+    };
+    math.members["Hex"] = [](const Context&, const Value&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        return V::string(std::format("0x{:X}", static_cast<std::uint32_t>(int_from_text(index, 0))));
+    };
+    // Dec[hex]: MQ's sscanf "%x": blanks, a sign, an optional 0x, hex digits; NULL when there are none. Past 32 bits
+    // it is held at 0xFFFFFFFF, strtoul's way (docs/unknowns.md: what MSVC's scanf does there is unconfirmed).
+    math.members["Dec"] = [](const Context&, const Value&, std::string_view index) -> V {
+        const auto hex = [&index](std::size_t at) {
+            return at < index.size() && std::isxdigit(static_cast<unsigned char>(index[at])) != 0;
+        };
+        std::size_t i = 0;
+        while (i < index.size() && std::isspace(static_cast<unsigned char>(index[i]))) ++i;
+        bool negative = false;
+        if (i < index.size() && (index[i] == '-' || index[i] == '+')) negative = index[i++] == '-';
+        if (i + 1 < index.size() && index[i] == '0' && (index[i + 1] == 'x' || index[i + 1] == 'X') && hex(i + 2)) i += 2;
+        std::uint64_t v = 0;
+        bool any = false;
+        for (; hex(i); ++i) {
+            const int ch = std::tolower(static_cast<unsigned char>(index[i]));
+            const auto digit = static_cast<std::uint64_t>(ch <= '9' ? ch - '0' : ch - 'a' + 10);
+            v = std::min<std::uint64_t>(v * 16 + digit, 0x1'0000'0000ull);
+            any = true;
+        }
+        if (!any) return V::nil();
+        auto u = static_cast<std::uint32_t>(std::min<std::uint64_t>(v, 0xFFFF'FFFFull));
+        if (negative) u = 0u - u;
+        return V::integer(static_cast<std::int32_t>(u));
+    };
+    // Clamp[n,min,max]: arguments split by commas or blanks; min wins when min > max.
+    math.members["Clamp"] = [](const Context&, const Value&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        const int n = int_from_text(get_arg(index, 1, true), 0);
+        const int lo = int_from_text(get_arg(index, 2, true), 0);
+        const int hi = int_from_text(get_arg(index, 3, true), 0);
+        return V::integer(std::max(lo, std::min(n, hi)));
+    };
+    // Distance[y,x,z:y,x,z]: 3D, in MQ's Loc order (the server's coordinates); a missing coordinate, or the whole
+    // second point, is the player's.
+    math.members["Distance"] = [](const Context& c, const Value&, std::string_view index) -> V {
+        const game::Spawn* m = me(c);
+        if (index.empty() || !m) return V::nil();
+        const glm::vec3 sp = game::world_to_server(spawn_position(*m));
+        const glm::vec3 player{sp.y, sp.x, sp.z};
+        const auto colon = index.find(':');
+        const glm::vec3 a = vec3_from_text(index.substr(0, colon), player);
+        const glm::vec3 b = colon == std::string_view::npos ? player : vec3_from_text(index.substr(colon + 1), player);
+        return V::number(glm::distance(a, b));
+    };
+    r.add_tlo("Math", [math_type](const Context&, std::string_view) { return V::object(math_type, 0); });
+
+    // If[condition,whentrue,whenfalse], or with exactly two '~' If[condition~whentrue~whenfalse]: the text of one
+    // branch (the false one runs to the end, commas included); NULL when the condition does not calculate.
+    r.add_tlo("If", [](const Context&, std::string_view index) -> V {
+        if (index.empty()) return V::nil();
+        const char sep = std::count(index.begin(), index.end(), '~') == 2 ? '~' : ',';
+        const auto first = index.find(sep);
+        if (first == std::string_view::npos) return V::nil();
+        const auto second = index.find(sep, first + 1);
+        if (second == std::string_view::npos) return V::nil();
+        const auto cond = calculate(index.substr(0, first));
+        if (!cond) return V::nil();
+        return V::string(std::string(*cond != 0.0 ? index.substr(first + 1, second - first - 1) : index.substr(second + 1)));
+    });
+
+    // Range.Between[a,b:n] (a <= n <= b) and Range.Inside[a,b:n] (a < n < b); FALSE without the ':' or ','.
+    Type& range = r.type("range");
+    const Type* range_type = &range;
+    range.to_value = [](const Context&, const Value&) { return V::nil(); };
+    const auto range_member = [&range](const char* name, bool inclusive) {
+        range.members[name] = [inclusive](const Context&, const Value&, std::string_view index) -> V {
+            if (index.empty()) return V::nil();
+            const auto colon = index.find(':');
+            if (colon == std::string_view::npos) return V::boolean(false);
+            const std::string_view ends = index.substr(0, colon);
+            const auto comma = ends.find(',');
+            if (comma == std::string_view::npos) return V::boolean(false);
+            const std::int64_t n = int64_from_text(index.substr(colon + 1), 0);
+            const std::int64_t lo = int64_from_text(ends.substr(0, comma), 0);
+            const std::int64_t hi = int64_from_text(ends.substr(comma + 1), 0);
+            return V::boolean(inclusive ? (n >= lo && n <= hi) : (n > lo && n < hi));
+        };
+    };
+    range_member("Between", true);
+    range_member("Inside", false);
+    r.add_tlo("Range", [range_type](const Context&, std::string_view) { return V::object(range_type, 0); });
+}
+
 void register_game_tlos(Registry& r) {
     g.spawn = &r.type("spawn");
     g.character = &r.type("character");
@@ -1410,13 +1573,13 @@ void register_game_tlos(Registry& r) {
         if (!c.conn) return V::nil();
         std::int64_t id = 0;
         if (parse_int(index, id)) return spawn_value(spawn_of(c, id));
-        auto found = search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group());
+        auto found = find_spawns(index, *c.conn, c.can_see);
         return found.empty() ? V::nil() : spawn_value(found.front());
     });
     r.add_tlo("SpawnCount", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::integer(0);
         return V::integer(static_cast<std::int64_t>(
-            search_spawns(parse_spawn_search(index), c.conn->world(), &c.conn->group()).size()));
+            find_spawns(index, *c.conn, c.can_see).size()));
     });
     r.add_tlo("NearestSpawn", [](const Context& c, std::string_view index) -> V {
         if (!c.conn) return V::nil();
@@ -1430,7 +1593,7 @@ void register_game_tlos(Registry& r) {
         } else {
             n = 1;
         }
-        auto found = search_spawns(parse_spawn_search(search), c.conn->world(), &c.conn->group());
+        auto found = find_spawns(search, *c.conn, c.can_see);
         if (n < 1 || n > static_cast<std::int64_t>(found.size())) return V::nil();
         return spawn_value(found[static_cast<std::size_t>(n - 1)]);
     });
@@ -1490,6 +1653,7 @@ void register_game_tlos(Registry& r) {
         return V::boolean(!(l.empty() || l == "false" || l == "null" || l == "0"));
     });
     r.add_tlo("String", [](const Context&, std::string_view index) { return V::string(std::string(index)); });
+    register_math(r);
     r.add_tlo("Select", [](const Context&, std::string_view index) {
         // Select[x,a,b,c]: the 1-based position of x among the rest, 0 when absent.
         auto a = split_index(index);

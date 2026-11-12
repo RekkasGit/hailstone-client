@@ -310,8 +310,12 @@ TEST_CASE("played and time texts") {
     CHECK(game::format_duration(s, 7200) == "2 hours");
     CHECK(game::long_date(2026, 10, 20) == "Tuesday, October 20, 2026");
     CHECK(game::long_date_time(2026, 10, 20, 9, 5, 0) == "Tuesday, October 20, 2026 09:05:00");
-    CHECK(game::format_game_time(s, 3176, 3, 14, 1) == "Game Time: " + game::long_date(3176, 3, 14) + " - 12 AM");
-    CHECK(game::format_game_time(s, 3176, 3, 14, 14) == "Game Time: " + game::long_date(3176, 3, 14) + " - 1 PM");
+    // The weekday is the game's, (day - 1) % 7 from Sunday (EQWorldData::CurrentGameTime), not the calendar's.
+    CHECK(game::format_game_time(s, 3176, 3, 14, 1) == "Game Time: Saturday, March 14, 3176 - 12 AM");
+    CHECK(game::format_game_time(s, 3176, 3, 14, 14) == "Game Time: Saturday, March 14, 3176 - 1 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 1, 13) == "Game Time: Sunday, March 1, 3176 - 12 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 28, 13) == "Game Time: Saturday, March 28, 3176 - 12 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 9, 13) == "Game Time: Monday, March 9, 3176 - 12 PM");
 }
 
 TEST_CASE("chat templates per channel (msg_new_text)") {

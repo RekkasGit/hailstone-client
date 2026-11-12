@@ -72,7 +72,7 @@ With the sky time hour:minute (the world time from OP_TimeOfDay, hours 1..24 as 
 
 The level steps every 36 real seconds (= 12 game minutes); this client uses the continuous value.
 
-The game clock advances the sky time by elapsed ms / 3000 minutes since the last time change, i.e. **one game minute per 3 real seconds**. `game::SkyClock` keeps the last OP_TimeOfDay and runs on from it.
+The game clock advances the sky time by elapsed ms / 3000 minutes since the last time change, i.e. **one game minute per 3 real seconds**. `game::SkyClock` keeps the last OP_TimeOfDay and runs on from it. The calendar clock that `/time` and the `GameTime` TLO show runs at the same rate: `EQWorldData::AdvanceTime` @0x7dbff0 adds the game time since the packet came (20 × the whole real seconds elapsed, a 32-bit product) to its date with carries (hours 1..24, days 1..28, months 1..12, a year past 9999 cleared); `net::advance_time_of_day` follows it, and `GameConnection::current_time_of_day()` gives it. `/time` prints it as `EQWorldData::CurrentGameTime` @0x7dc130 does, `%#x - %#I %p` with the weekday (day − 1) % 7 from Sunday, so every game month starts on a Sunday.
 
 ### Day-cycle heading
 

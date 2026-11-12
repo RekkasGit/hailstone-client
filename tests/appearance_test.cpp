@@ -581,6 +581,50 @@ hailstone::game::ActorLook luclin_look(std::int32_t race, std::uint8_t gender, c
 
 } // namespace
 
+namespace {
+
+// A new-style model whose every part exists: UpdateNewArmorSlot's texture and overlay names.
+struct ArmorEnv : FaceEnv {
+    std::vector<std::string> overlays;
+    bool new_model() override { return true; }
+    bool has_part(std::int32_t) override { return true; }
+    std::optional<std::string> part_object(std::int32_t) override { return std::string("CH"); }
+    void overlay_part(std::int32_t, const std::string& name) override { overlays.push_back(name); }
+};
+
+} // namespace
+
+TEST_CASE("armour record words 2 and 3 dress as the variation and the overlay material (ActorClient +0x8c)") {
+    using namespace hailstone::game;
+    hailstone::assets::CharacterModel model;
+    model.code = "DRF";
+    Appearance a;
+    a.material[kSlotChest] = 2;
+    a.material_variation[kSlotChest] = 3; // EQEmu Unknown1: ArmorProperties variation (+4)
+    a.elite_material[kSlotChest] = 5;     // EQEmu EliteMaterial: ArmorProperties material (+8)
+    a.new_armor_type[kSlotChest] = 9;     // newArmorType (+0x10)
+    AppearanceData data;
+    ActorLook look = hailstone::assets::detail::look_of(model, a, &data);
+    CHECK(look.armor[kSlotChest].variation == 3);
+    CHECK(look.armor[kSlotChest].material2 == 5);
+    CHECK(look.armor[kSlotChest].new_armor_type == 9);
+    ArmorEnv env;
+    update_new_armor_slot(look, env, kSlotChest);
+    REQUIRE_FALSE(env.attached.empty());
+    CHECK(env.attached.front().first == "DRF_02_03_CH");
+    REQUIRE(env.overlays.size() == 1);
+    CHECK(env.overlays.front() == "A_DRF_02_03_S05");
+    // Without the elite word there is no overlay, and variation 0 names the base texture.
+    a.material_variation[kSlotChest] = 0;
+    a.elite_material[kSlotChest] = 0;
+    look = hailstone::assets::detail::look_of(model, a, &data);
+    ArmorEnv bare;
+    update_new_armor_slot(look, bare, kSlotChest);
+    REQUIRE_FALSE(bare.attached.empty());
+    CHECK(bare.attached.front().first == "DRF_02_00_CH");
+    CHECK(bare.overlays.empty());
+}
+
 TEST_CASE("SwapFace names the Luclin head materials by face variant and index") {
     using namespace hailstone::game;
     FaceEnv env;

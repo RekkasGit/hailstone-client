@@ -9,7 +9,9 @@
 #include "game/doors.h"
 #include "game/follow.h"
 #include "game/mechanics/anim_select.h"
+#include "game/mechanics/remote_spawns.h"
 #include "game/sine_table.h"
+#include "game/spells.h"
 
 namespace hailstone::game {
 
@@ -49,6 +51,59 @@ float segment_distance_squared(const glm::vec3& p, const glm::vec3& from, const 
         dz -= dir.z * t;
     }
     return static_cast<float>(dz * dz + dy * dy + dx * dx);
+}
+
+} // namespace
+
+float spell_launch_steps(std::optional<std::uint32_t> stepped_at, std::uint32_t now) {
+    // Hailstone: the original reads (now - the source's +0x30) x 0.02 unchecked, its spawns stepping every frame.
+    // Here a time past now counts as none, and the age stops at 12 s, where a remote spawn stops stepping
+    // (AdvanceSpawn): a stale or wrapped timestamp cannot throw the missile across the zone.
+    // The age as a signed difference, so the 32-bit clock's wrap still reads as a short age.
+    if (!stepped_at) return 0.0f;
+    const std::uint32_t age = now - *stepped_at;
+    if (age == 0 || age > 0x7fffffffu) return 0.0f;
+    return static_cast<float>(std::min(age, mechanics::kSpawnStaleMs)) * 0.02f;
+}
+
+namespace {
+
+void missile_contacts(Missile& m, std::uint32_t now, const MissileWorld& world) {
+    if (m.packet.item_type != kMissileItemSpell || !world.spell || m.done) return;
+    const SpellData* spell = world.spell(m.packet.spell);
+    if (!spell) return;
+    auto visible = [&](const MissileSpawn& from, const glm::vec3& to) {
+        glm::vec3 origin = from.position;
+        if (from.race == 8 || from.race == 11 || from.race == 12) origin.z += 1.0f;
+        return !world.visible || world.visible(origin, to); // 0x4fcc20: a disabled collision query is clear
+    };
+    auto contact = [&](const MissileSpawn& target) {
+        if (!target.has_actor || !world.contact) return;
+        if (target.rider_id != 0 && world.spawn)
+            if (auto rider = world.spawn(target.rider_id)) {
+                world.contact(m, *rider);
+                return;
+            }
+        world.contact(m, target);
+    };
+    if (spell->has_effect(76)) {
+        m.area_contact = true;
+        if (now <= m.next_contact) return;
+        m.next_contact = now + 2000;
+        if (world.spawns)
+            for (const auto& target : world.spawns())
+                if (target.speed_run != 0.0f && glm::distance(target.position, m.position) <= spell->ae_range * 2.5f &&
+                    visible(target, m.position))
+                    contact(target);
+    } else {
+        auto local = world.spawn ? world.spawn(world.local_id) : std::nullopt;
+        auto source = world.spawn ? world.spawn(m.packet.source_id) : std::nullopt;
+        if (local && source && glm::distance(local->position, m.position) < spell->ae_range &&
+            (visible(*source, local->position) || (spell->npc_no_los && source->is_npc)) && now > m.next_contact) {
+            m.next_contact = now + 3000;
+            contact(*local);
+        }
+    }
 }
 
 } // namespace
@@ -161,12 +216,45 @@ Missile make_missile(const MissilePacket& p, std::uint32_t now, std::uint32_t la
 void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
     if (m.packet.item_type != kMissileItemSpell && now < m.launch_at) return;
     std::optional<MissileSpawn> source = world.spawn ? world.spawn(m.packet.source_id) : std::nullopt;
-    if (!source || m.packet.item_type == kMissileItemSpell) {
-        m.done = true; // no source; a spell missile (not modelled, see the header)
+    if (!source) {
+        m.done = true;
         return;
     }
-    m.ends_at = now + 6000;
-    m.position += m.velocity; // one step of its own velocity (x, y, then z)
+    int stage = 0;
+    if (m.packet.item_type == kMissileItemSpell) {
+        const SpellData* spell = m.packet.spell >= 1 && m.packet.spell <= kMaxSpellId && world.spell
+                                     ? world.spell(m.packet.spell) : nullptr;
+        if (!spell) {
+            m.done = true;
+            return;
+        }
+        m.ends_at = now + (spell->ae_duration != 0 ? spell->ae_duration : spell->travel_type == 3 ? 30000u : 50u);
+        const bool area = spell->target_type == 8 || spell->target_type == 21 || spell->target_type == 22 ||
+                          spell->target_type == 23 || spell->target_type == 28 || spell->target_type == 45;
+        stage = area ? 2 : 1;
+        if (area) {
+            if (spell->target_type == 45) m.position = m.packet.location;
+            else if (auto target = world.spawn ? world.spawn(m.packet.target_id) : std::nullopt) m.position = target->position;
+            // A missing area target leaves the packet's safe position; the native stack value is unspecified.
+            m.velocity = glm::vec3(0.0f);
+            m.speed = 0.0f;
+        } else {
+            if (large_source(source->race)) {
+                if (auto point = world.launch_point ? world.launch_point(source->id) : std::nullopt) {
+                    m.position = *point + glm::vec3(m.velocity.x * 32.5f, m.velocity.y * 32.5f, -12.0f);
+                }
+                m.pitch = -72.0f;
+                m.velocity.z += cmath_sin(m.pitch) * m.speed;
+            }
+            if (spell->travel_type == 3) m.velocity.z = 0.0f;
+            else {
+                m.position += m.velocity * (5.5f + spell_launch_steps(source->stepped_at, now));
+            }
+        }
+    } else {
+        m.ends_at = now + 6000;
+        m.position += m.velocity; // one step of its own velocity (x, y, then z)
+    }
     // CreateActor's collision sphere (the fifth float): with the range byte 0.1 (1.0 for the large races),
     // without it 1.5 (20.5).
     if (m.packet.range == 0) m.radius = large_source(source->race) ? 20.5f : 1.5f;
@@ -180,6 +268,7 @@ void process_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
     m.aim_distance = 2000.0f;
     m.last_step = now;
     m.last_aim = now;
+    if (stage != 0 && world.effect) world.effect(m, stage);
 }
 
 void missile_ai(Missile& m, std::uint32_t now, const MissileWorld& world) {
@@ -332,18 +421,21 @@ bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
                          d.z > -0.001f);
     // (Not moving: the counter at +0xf0, which nothing here raises, would date +0xf4.)
     if (still(m.velocity)) {
+        missile_contacts(m, now, world);
         if (now > m.ends_at) return false;
     } else {
         if (now > m.ends_at) return false;
-        if (!moved) return false; // item type 9 would go on (not modelled)
-        if (m.target_id == 0) {
+        if (!moved && m.packet.item_type != kMissileItemSpell) return false;
+        if (moved && (m.target_id == 0 || m.packet.item_type == kMissileItemSpell)) {
             // The sweep (its result is always 0; a hit ends the missile through the callback and the
             // skitter distance it leaves).
             if (world.sweep && world.sweep(from, to, m.radius)) return false;
-        } else if (std::optional<MissileSpawn> t = world.spawn ? world.spawn(m.target_id) : std::nullopt) {
-            // The ray from the actor to the new position against the target's Height.
-            if (segment_distance_squared(t->position, from, d) < t->height * t->height) m.done = true; // HitActor
         }
+        if (moved && m.target_id != 0)
+            if (std::optional<MissileSpawn> t = world.spawn ? world.spawn(m.target_id) : std::nullopt) {
+                // The ray from the actor to the new position against the target's Height.
+                if (segment_distance_squared(t->position, from, d) < t->height * t->height) m.done = true; // HitActor
+            }
         if (m.done) return false;
         m.position = to;
     }
@@ -360,6 +452,22 @@ bool move_missile(Missile& m, std::uint32_t now, const MissileWorld& world) {
 }
 
 void MissileList::update(std::uint32_t now, const MissileWorld& world) {
+    auto retire = [&](const Missile& m) {
+        if (m.has_actor && m.packet.item_type == kMissileItemSpell && m.packet.spell == 54 && world.effect) {
+            // Placed in the world where the missile was, not on its actor: the actor goes with the missile
+            // (ended below), and the impact must outlive it.
+            Missile impact = m;
+            impact.position -= impact.velocity;
+            impact.actor_position = impact.position;
+            impact.has_actor = false;
+            world.effect(impact, 2);
+        }
+        if (m.has_actor && m.packet.item_type == kMissileItemSpell && m.packet.spell == 859 && world.spell_hit)
+            if (auto local = world.spawn ? world.spawn(world.local_id) : std::nullopt;
+                local && glm::distance(glm::vec2(local->position), glm::vec2(m.position)) < 40.0f)
+                world.spell_hit(m);
+        if (world.ended) world.ended(m);
+    };
     for (std::size_t i = 0; i < missiles_.size();) {
         Missile& m = missiles_[i];
         bool keep = true;
@@ -370,6 +478,7 @@ void MissileList::update(std::uint32_t now, const MissileWorld& world) {
                 if (m.has_actor)
                     log::debug("missile {} ended at ({:.1f}, {:.1f}, {:.1f}): its source is gone", m.packet.model,
                                m.position.x, m.position.y, m.position.z);
+                retire(m);
                 missiles_.erase(missiles_.begin() + static_cast<std::ptrdiff_t>(i));
                 continue;
             }
@@ -393,7 +502,10 @@ void MissileList::update(std::uint32_t now, const MissileWorld& world) {
                            m.position.y, m.position.z, now - (m.ends_at - 6000), m.done ? ": hit" : now > m.ends_at ? ": lifetime" : "");
         }
         if (keep) ++i;
-        else missiles_.erase(missiles_.begin() + static_cast<std::ptrdiff_t>(i));
+        else {
+            retire(m);
+            missiles_.erase(missiles_.begin() + static_cast<std::ptrdiff_t>(i));
+        }
     }
 }
 

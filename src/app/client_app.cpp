@@ -109,7 +109,9 @@ int ClientApp::run() {
                 steps.emplace();
                 for (const auto& st : frame_steps_) steps->push_back(static_cast<float>(st.elapsed_ms));
             }
-            conn_->set_physics_steps(std::move(steps));
+            const auto completed_time = frame_steps_.empty() ? std::optional<std::uint32_t>{}
+                : std::optional<std::uint32_t>{static_cast<std::uint32_t>(frame_steps_.back().ms + 1)};
+            conn_->set_physics_steps(std::move(steps), completed_time);
             conn_->smooth_vehicles(dt);
         }
         if (screen_ == Screen::InGame && player_ready_) update_player(dt);
@@ -145,7 +147,22 @@ int ClientApp::run() {
             // as the player's floor test does; the landing check above keeps the zone's floor alone.
             game::WorldState::FloorFn ground_floor;
             if (collision_) ground_floor = [this](const glm::vec3& p) { return grounding_floor(p); };
-            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor);
+            // The other spawns' ladder contact (remote_collision_type), built with the player's passable-ladder rule
+            // (ZoneMoveWorld::apply_remote_rules; not the doors the player's /nav passes) and in the contact-probe mode, which reuses one door buffer. Only spawns
+            // within the actor clip are probed (WorldState::remote_probe_range): farther ones are not drawn.
+            game::WorldState::RemoteCollisionFn remote_collision;
+            std::optional<ZoneMoveWorld> remote_world;
+            if (collision_ && screen_ == Screen::InGame) {
+                remote_world.emplace(&*collision_, world_objects_.get(), zone_ ? &zone_->regions : nullptr);
+                remote_world->apply_remote_rules(conn_->server_rules());
+                remote_world->set_contact_probe(&remote_door_hits_);
+                remote_collision = [&remote_world](const game::Spawn& spawn, const glm::vec3& from,
+                                                   const glm::vec3& to) {
+                    return remote_collision_type(spawn, from, to, *remote_world);
+                };
+                conn_->set_remote_probe_range(game::actor_clip_distance(actor_clip_plane_, view_.far_plane));
+            }
+            conn_->smooth(dt, floor, actor_model, region, vehicle_under, ground_floor, remote_collision);
             trace_spawn(dt);
         }
         update_lap.mark("spawn smoothing");
@@ -268,7 +285,8 @@ int ClientApp::run() {
             actor_emitter_list_.clear();
             for (const auto& [id, spawn] : conn_->world().spawns)
                 if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty())
-                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id)});
+                    actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id),
+                                                   actor_renderer_->drawn_alpha(id)});
             // The missiles' (a spell bolt's flames: its model's own emitters, app/world_objects.h).
             const WorldObjects* objects = world_objects_.get();
             if (objects)
@@ -676,7 +694,7 @@ int ClientApp::run() {
                 draw_text_overlay();
                 lap.mark("text overlay");
                 // The camera as CCamera::GetScreenRay reads it, in the 3D view's window (mouse) coordinates.
-                auto fov = game::camera_fov(camera_.fov_units, static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
+                auto fov = game::camera_fov(camera_.view_fov_units(), static_cast<int>(f->extent.width), static_cast<int>(f->extent.height));
                 pick_camera_.position = camera_.position;
                 pick_camera_.forward = camera_.forward();
                 pick_camera_.right = camera_.right();

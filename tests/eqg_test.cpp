@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "assets/eqg.h"
 #include "assets/eqg_character.h"
@@ -827,6 +828,84 @@ TEST_CASE("EQG part bones: parents from the child lists; a cyclic hierarchy is r
     p = eqg_character::part_bone_parents(m);
     REQUIRE(p);
     CHECK(*p == std::vector<std::int32_t>{-1, 0, 0});
+}
+
+TEST_CASE("EQG attachments on WLD bodies retain four independent bind-space influences") {
+    eqg_character::MeshFile file;
+    std::vector<std::string> body;
+    for (int i = 0; i < 4; ++i) {
+        eqg_character::Bone bone;
+        bone.name = "Arm" + std::to_string(i);
+        bone.bind.translation.x = static_cast<float>(i + 1);
+        file.bones.push_back(bone);
+        body.push_back("TSTARM" + std::to_string(i) + "_TRACK");
+    }
+    CharacterMesh mesh;
+    SkinnedVertex vertex;
+    vertex.position = {5, 7, 2};
+    vertex.bones = {0, 1, 2, 3};
+    vertex.weights = {0.1f, 0.2f, 0.3f, 0.4f};
+    mesh.vertices.push_back(vertex);
+    const auto adjustment = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 3));
+    REQUIRE(eqg_character::bind_part_to_wld(file, "TST", body, 0, adjustment, mesh));
+    REQUIRE(mesh.skin_bindings.size() == 4);
+    CHECK(mesh.vertices[0].position == vertex.position);
+    CHECK(mesh.vertices[0].weights == vertex.weights);
+    const auto evaluate = [&](float motion) {
+        std::vector<glm::mat4> posed;
+        for (int i = 0; i < 4; ++i)
+            posed.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(10.0f * static_cast<float>(i + 1) + motion, 0, 0)));
+        REQUIRE(mesh.append_skin_bones(posed));
+        glm::vec4 point(0.0f);
+        const auto& v = mesh.vertices[0];
+        for (int k = 0; k < 4; ++k) point += posed[v.bones[static_cast<std::size_t>(k)]] * glm::vec4(v.position, 1) * v.weights[k];
+        return glm::vec3(point);
+    };
+    // Each body joint moved by 9*(i+1) from its own authored bind. The
+    // weighted displacement is 27, rather than the dominant joint's 36.
+    CHECK(glm::length(evaluate(0) - glm::vec3(32, 7, 5)) < 1e-4f);
+    CHECK(glm::length(evaluate(10) - glm::vec3(42, 7, 5)) < 1e-4f);
+}
+
+TEST_CASE("EQG attachment bindings retain the ancestor rule and reject invalid palettes") {
+    eqg_character::MeshFile file;
+    eqg_character::Bone root, child;
+    root.name = "Arm";
+    root.bind.translation = {1, 0, 0};
+    root.children = 1;
+    root.child = 1;
+    child.name = "Unknown";
+    child.bind.translation = {3, 0, 0};
+    file.bones = {root, child};
+    const std::vector<std::string> body{"TSTARM_TRACK"};
+    CharacterMesh mesh;
+    mesh.vertices.resize(1);
+    mesh.vertices[0].position = {5, 0, 0};
+    mesh.vertices[0].bones[0] = 1;
+    REQUIRE(eqg_character::bind_part_to_wld(file, "TST", body, 0, glm::mat4(1.0f), mesh));
+    std::vector<glm::mat4> pose{glm::translate(glm::mat4(1.0f), glm::vec3(10, 0, 0))};
+    REQUIRE(mesh.append_skin_bones(pose));
+    CHECK(glm::vec3(pose[mesh.vertices[0].bones[0]] * glm::vec4(5, 0, 0, 1)) == glm::vec3(14, 0, 0));
+    mesh.skin_bindings[0].host_bone = 1; // an attachment cannot refer to another attachment entry
+    pose.resize(1);
+    CHECK_FALSE(mesh.append_skin_bones(pose));
+    CHECK(pose.size() == 1);
+    file.bones[1].children = 1;
+    file.bones[1].child = 0;
+    CharacterMesh refused;
+    CHECK_FALSE(eqg_character::bind_part_to_wld(file, "TST", body, 0, glm::mat4(1.0f), refused));
+}
+
+TEST_CASE("EQG role zero resolves only an authored HEAD_NAME bone") {
+    const std::vector<glm::vec3> positions{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    const std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {0, 1}};
+    auto data = make_model(false, 1, {{"body", "Opaque.fx", "fixture.dds"}}, positions, uv, {{0, 1, 2, 0, 0}});
+    auto file = eqg_character::parse_mesh(data, "TST");
+    file.bones.resize(1);
+    file.bones[0].name = "HEAD_NAME";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == 0);
+    file.bones[0].name = "SPELLPOINT_HEAD";
+    CHECK(eqg_character::build_model(file, "TST", {}).name_bone == -1);
 }
 
 TEST_CASE("EQG character meshes: a vertex count the file cannot hold is refused before it is allocated") {

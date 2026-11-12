@@ -12,6 +12,7 @@
 #include <optional>
 
 #include "core/log.h"
+#include "game/appearance.h"
 #include "game/coords.h"
 #include "net/game_connection.h"
 #include "game/hit_landing.h"
@@ -180,6 +181,8 @@ void GameConnection::with_character(const std::function<void(game::mechanics::Ch
     if (!profile_) return;
     static const game::mechanics::GameTables no_tables; // the effect totals read no tables
     game::mechanics::LiveState live;
+    live.drunkenness = drunkenness_;
+    live.owner_status = pstatus_.owner_status;
     live.pvp_rules = pvp_rules_;
     live.level = pstatus_.level;
     live.player_id = world_.player_id;
@@ -572,6 +575,7 @@ void GameConnection::remove_own_effect(int slot) {
     bp.slot = static_cast<std::uint32_t>(slot);
     send_zone(encode(bp));
     b = {};
+    reconcile_eye_control();
 }
 
 bool GameConnection::invisible() const {
@@ -581,9 +585,23 @@ bool GameConnection::invisible() const {
     return false;
 }
 
+std::int32_t GameConnection::see_invisible_rank() const {
+    if (const auto* player = world_.player(); player && player->gm) return 3001;
+    std::int32_t rank = 0;
+    with_character([&](game::mechanics::Character& ch) { rank = ch.total_effect(13, true, 0, true, true); });
+    return rank;
+}
+
+bool GameConnection::spawn_invisible(const game::Spawn& s, std::int32_t rank) const {
+    if (market_hidden(s)) return true;
+    const auto* player = world_.player();
+    return player && game::spawn_invisible(*player, s, rank, group_.has_member(s.name));
+}
+
 void GameConnection::make_me_visible(bool appearance) {
     if (state_ != ConnectionState::InZone || !invisible()) return;
     invis_state_ = 0;
+    if (auto player = world_.spawns.find(world_.player_id); player != world_.spawns.end()) player->second.invis_rank = 0;
     for (std::int32_t spa : {0xc, 0x1c, 0x1d, 0x13a, 0x13b, 0x13c, 0x5e})
         if (int slot = own_effect_with(spa); slot >= 0) remove_own_effect(slot);
     SpawnAppearance a;
@@ -714,6 +732,7 @@ void GameConnection::remove_buff(int slot) {
 void GameConnection::clear_buff_locally(int slot) {
     if (slot < 0 || slot >= game::kBuffSlots) return;
     spells_.buffs[static_cast<std::size_t>(slot)] = {};
+    reconcile_eye_control();
 }
 
 std::vector<int> GameConnection::buff_slots_with_spa(std::int32_t spa) const {
@@ -725,6 +744,78 @@ std::vector<int> GameConnection::buff_slots_with_spa(std::int32_t spa) const {
         if (const auto* s = spell_table_->get(b.spell); s && s->has_effect_before_blank(spa)) out.push_back(i);
     }
     return out;
+}
+
+void GameConnection::handle_spell_action(const Action& a, std::int64_t now, bool from_server) {
+    if (a.type != 231) return;
+    log::debug("action: spell {} {} -> {} flag {}", a.spell_id, a.source, a.target, a.effect_flag);
+    // The caster's animation (PlayerZoneClient::IWasHit -> TriggerSpellEffect); visuals later. Only a landing the
+    // server sent ends the source's cast: spell 859's local presentation says nothing about it.
+    if (from_server) spells_.others.erase(a.source);
+    SoundCue c;
+    c.kind = SoundCue::Kind::SpellLanded;
+    c.source = a.source;
+    c.target = a.target;
+    c.spell = a.spell_id;
+    sound_cues_.push_back(c);
+    // Hailstone: a spell landing with no OP_BeginCast before it (EQEmu sends one for a buff's proc but not for an
+    // item, weapon or augment proc, Mob::TryWeaponProc) gets the cast stage at its source as a cast would. The
+    // original plays only the impact here (EQPlayer::TriggerSpellEffect @0x593d10). Only the first of a landing's
+    // two OP_Actions (flag 4 marks the second), not a bard song's pulse, and only for one the server sent: spell
+    // 859's local landing plays only the impact, and never sends an animation.
+    if (const game::SpellData* sp = spell_table_->get(a.spell_id);
+        from_server && sp && a.source != 0 && (a.effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
+        // Hailstone: a spell without a casting animation plays CastHeals or CastNuke (option
+        // cast_animation_fallback, game::spell_cast_animation).
+        const std::uint8_t anim = spell_cast_animation(sp->casting_anim, sp->spell_type, cast_animation_fallback_);
+        play_animation(a.source, anim);
+        // Our own: the zone is told of the animation too, as the server does not pass it on to players with
+        // some chat filters on; a second one does not interrupt a playing animation and is range limited.
+        if (a.source == world_.player_id) {
+            Animation animation;
+            animation.spawn_id = static_cast<std::uint16_t>(world_.player_id);
+            animation.action = anim;
+            animation.speed = 10;
+            send_zone(encode(animation));
+        }
+        auto shown = cast_stage_shown_.find(a.source);
+        if (shown == cast_stage_shown_.end() || shown->second.first != a.spell_id || now > shown->second.second) {
+            SpellEffectCue cue{0, a.source, 0, a.spell_id, 0};
+            cue.proc = true;
+            effect_cues_.push_back(cue);
+            // An area proc's other targets, landing with it, share this one.
+            cast_stage_shown_[a.source] = {a.spell_id, now + kProcLandingMs};
+        }
+    }
+    // The impact stage: the source as its caster, the struck spawn as its target (app/spell_particles.h).
+    effect_cues_.push_back({2, a.target, a.target, a.spell_id, 0, a.source});
+    // PlayerZoneClient::IWasHit @0x5a07b0: a spell on us with packet flag 4 goes through EQ_Character::HitBySpell
+    // (game/hit_landing.h).
+    if (a.target == world_.player_id && (a.effect_flag & 4) != 0 && profile_ && spell_table_)
+        land_spell_on_me(a, now);
+}
+
+void GameConnection::spell_missile_hit(const game::Missile& missile) {
+    // EQMissile's destruction case for spell 859 calls IWasHit with flag zero only inside 40 horizontal units.
+    // It is a local presentation: no OP_Action is sent, no success flag is manufactured, and no buff is applied.
+    const auto* me = world_.player();
+    const auto* spell = spell_table_->get(859);
+    if (!me || !spell || !missile.has_actor || missile.packet.item_type != game::kMissileItemSpell ||
+        missile.packet.spell != 859 ||
+        glm::distance(glm::vec2(me->position), glm::vec2(missile.position)) >= 40.0f)
+        return;
+    Action action;
+    action.target = static_cast<std::uint16_t>(me->id);
+    action.source = static_cast<std::uint16_t>(missile.packet.source_id);
+    action.level = static_cast<std::uint16_t>(missile.packet.item_extra);
+    action.instrument_mod = 1.0f;
+    action.force = spell->push_back;
+    action.hit_heading = missile.heading;
+    action.hit_pitch = missile.tilt;
+    action.type = 231;
+    action.spell_id = 859;
+    action.spell_level = pstatus_.level; // the local player's GetLevel, as the original's (@0x501342) is
+    handle_spell_action(action, now_ms(), false);
 }
 
 void GameConnection::handle_spell(Op op, const AppPacket& p) {
@@ -896,60 +987,7 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
         }
         break;
     case Op::Action:
-        if (auto a = decode_action(p)) {
-            uint16_t source = a->source;
-            if (a->type == 231) {
-                log::debug("action: spell {} {} -> {} flag {}", a->spell_id, a->source, a->target, a->effect_flag);
-                // The caster's animation (PlayerZoneClient::IWasHit → TriggerSpellEffect); visuals later.
-                spells_.others.erase(a->source);
-                SoundCue c;
-                c.kind = SoundCue::Kind::SpellLanded;
-                c.source = a->source;
-                c.target = a->target;
-                c.spell = a->spell_id;
-                sound_cues_.push_back(c);
-                // Hailstone: a spell landing with no OP_BeginCast before it (EQEmu sends one for a buff's proc but
-                // not for an item, weapon or augment proc, Mob::TryWeaponProc) gets the cast stage at its source as
-                // a cast would. The original plays only the impact here (EQPlayer::TriggerSpellEffect @0x593d10).
-                // Only the first of a landing's two OP_Actions (flag 4 marks the second), not a bard song's pulse.
-                if (const game::SpellData* sp = spell_table_->get(a->spell_id);
-                    sp && a->source != 0 && (a->effect_flag & 4) == 0 && !is_song_skill(sp->skill)) {
-                   
-                    //Play the animation for the spell that was specified
-                    play_animation(source, sp->casting_anim);
-                    //if this is us doing a local play, broadcast the animation out to the rest of the zone
-                    //as the server won't send it out by default, if they have 'chat filters' on for whatever reason.
-                    //doing this twice won't hurt anything as it won't interrupt a playing animation and is still limited in range.
-                    if (source == world_.player_id)
-                    {
-                        Animation za;
-                        za.spawn_id = static_cast<std::uint16_t>(world_.player_id);
-                        za.action = static_cast<std::uint8_t>(sp->casting_anim);
-                        za.speed = 10;
-                        send_zone(encode(za));
-                    }
-
-                    auto shown = cast_stage_shown_.find(a->source);
-                    if (shown == cast_stage_shown_.end() || shown->second.first != a->spell_id ||
-                        now > shown->second.second) {
-                        SpellEffectCue cue{0, a->source, 0, a->spell_id, 0};
-                        cue.proc = true;
-                        effect_cues_.push_back(cue);
-                        // An area proc's other targets, landing with it, share this one.
-                        cast_stage_shown_[a->source] = {a->spell_id, now + kProcLandingMs};
-                       
-                    }
-                }
-                // The impact stage on the target (played for the target, as
-                // the landing path passes it as both caster and target).
-                effect_cues_.push_back({2, a->target, a->target, a->spell_id, 0, a->source});
-                // PlayerZoneClient::IWasHit @0x5a07b0: a spell on us with packet flag 4 goes through
-                // EQ_Character::HitBySpell (game/hit_landing.h).
-                if (a->target == world_.player_id && (a->effect_flag & 4) != 0 && profile_ && spell_table_)
-                    land_spell_on_me(*a, now);
-                    
-            }
-        }
+        if (auto action = decode_action(p)) handle_spell_action(*action, now, true);
         break;
     case Op::SpellEffect:
         // CEverQuest::HandleWorldMessage @0x4d0087: +0x19 set adds a timed effect, clear removes it.
@@ -1008,11 +1046,14 @@ void GameConnection::handle_spell(Op op, const AppPacket& p) {
     default:
         break;
     }
+    reconcile_eye_control();
 }
 
 void GameConnection::land_spell_on_me(const Action& a, std::int64_t now) {
     static const game::mechanics::GameTables no_tables;
     game::mechanics::LiveState live;
+    live.drunkenness = drunkenness_;
+    live.owner_status = pstatus_.owner_status;
     live.pvp_rules = pvp_rules_;
     live.level = pstatus_.level;
     live.player_id = world_.player_id;

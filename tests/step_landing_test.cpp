@@ -67,7 +67,11 @@ private:
         game::SphereSweep s = game::SphereSweep::make(from, to, radius);
         s.floor_only = floor_only;
         Sweep out;
-        if (s.valid()) mesh_.sweep_sphere(s);
+        if (s.valid()) {
+            const auto triangle = mesh_.sweep_sphere_hit(s);
+            out.ladder_hit = triangle >= 0 &&
+                (mesh_.triangles()[static_cast<std::size_t>(triangle)].flags & game::kTriangleLadder) != 0;
+        }
         out.out = game::sweep_output(s);
         out.collided = s.collided;
         return out;
@@ -110,4 +114,19 @@ TEST_CASE("Player movement: a step the sphere rides over is landed on, not hung 
         REQUIRE(m.floor_height());
         CHECK(*m.floor_height() == doctest::Approx(4.0f).epsilon(0.01));
     }
+}
+
+TEST_CASE("Remote movement: a real ladder sweep supplies the climbing contact state") {
+    std::vector<game::CollisionTriangle> triangles;
+    quad(triangles, {10, -10, 0}, {10, 10, 0}, {10, 10, 20}, {10, -10, 20}, {-1, 0, 0});
+    for (auto& triangle : triangles) triangle.flags |= game::kTriangleObject | game::kTriangleLadder;
+    const auto mesh = game::CollisionMesh::from_triangles(std::move(triangles));
+    const MeshWorld world(mesh);
+    game::Spawn spawn;
+    spawn.race = 1;
+    spawn.heights.avatar_height = 3.75f;
+    // The sphere centre is lifted from the spawn z, as with the local movement's actual sweep.
+    CHECK(app::remote_collision_type(spawn, {5, 0, 4}, {12, 0, 4}, world) == 6);
+    CHECK(app::remote_collision_type(spawn, {5, 30, 4}, {12, 30, 4}, world) == 0);
+    CHECK(app::remote_collision_type(spawn, {12, 0, 4}, {15, 0, 4}, world) == 0); // leaving the back face
 }

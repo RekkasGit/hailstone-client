@@ -65,16 +65,39 @@ Servicing the session only from the owner's `update()`, once a frame, is not eno
 
 ## Timings
 
+UCS has a separate profile (`ucs_session_options`), rather than inheriting the world/zone timings below. It is the
+UdpManager Params block `UniversalChatProxy_Connect` @0x7f0040 builds on the defaults of `Params::Params(0)` @0x426e70,
+checked in the disassembly: 24 reliable slots (0x2c/0x2d), 10,000 bytes (0x2b), no multi-buffer hold (0x15 set to 0;
+the default is 50 ms), no statistics requests (0x1a), a 5 s SessionRequest retry (0x21) and a 30 s connection deadline
+(`UdpManager_EstablishConnection`'s argument). Keepalive is 44 s, or 14.8 s with ChatKeepAlive (0xe); there is no
+receive-idle timeout. Reliable data has a 120 s transport limit (0x13, left at its default; 0x12 too, so no receive-idle limit). The chat owner
+(`UniversalChatProxy_GiveTime` @0x7efea0) also checks the oldest unacknowledged data every more than 5 s and fails
+the link once that data is over 30 s old. These ages are independent of incoming keepalives.
+
+Transport connection does not authenticate UCS. Commands wait for a complete successful MailLogin reply;
+friend/ignore events sent by stock EQEmu before that reply are held until it arrives. Pending commands and events
+are bounded (128 commands / 256 KiB, 256 events / 1 MiB). DNS and the transport handshake share a 30 s connection
+deadline; once MailLogin is sent, its reply has a separate 30 s deadline (Hailstone's). The original never
+reconnects by itself (`CEverQuest::ChatServerGiveTime` @0x5382d0 deletes a disconnected proxy and waits for the next
+OP_SetChatServer2). Hailstone deliberately retries transient failures, after 5 s and then twice as long each time up
+to 60 s, at most 5 times in a row (the count restarts after an accepted login; `reconnect_delay` 0 turns retries off),
+discarding pending work rather than replaying a mail or channel command into a new session. A refusal requires fresh
+connection credentials (the next OP_SetChatServer2): an explicit refusal reply, or the link closing after MailLogin
+went out and before any reply, which is how stock EQEmu UCS answers a bad key (ucs/clientlist.cpp closes the stream).
+Events accepted after the login and not yet polled are still delivered before the Disconnected event. Late replies
+cannot authenticate a replacement attempt. Mailbox, transient mail state and the friends and ignore lists are cleared
+when the authenticated session is lost (`tests/ucs_session_test.cpp`).
+
 | What | Value | Note |
 |---|---|---|
-| SessionRequest resend | 1000 ms | param 0x21 |
-| Connect timeout | 10 s (`SessionOptions::connect_timeout`) | client choice |
-| Link dead: nothing received for | 180 s world and zone (`SessionOptions::idle_timeout`); 14.8 s login, 44 s chat | param 0x12 (NetMgr +0x50 → UdpConnection +0x15c, checked in `UdpConnection_InternalGiveTime` @0x8c638e: the silence reaching it ends the link, reason 2). Login and chat set none; there the limits are the client's (docs/unknowns.md) |
+| SessionRequest resend | 1000 ms default; 5000 ms UCS | param 0x21 |
+| Connect timeout | 10 s default; 30 s UCS (`SessionOptions::connect_timeout`) | client choice; includes DNS |
+| Link dead: nothing received for | 180 s world and zone (`SessionOptions::idle_timeout`); 14.8 s login; disabled UCS | param 0x12 (NetMgr +0x50 → UdpConnection +0x15c, checked in `UdpConnection_InternalGiveTime` @0x8c638e: the silence reaching it ends the link, reason 2). Login and chat set none; there the limits are the client's (docs/unknowns.md) |
 | SessionStatRequest interval | 30 s | param 0x1a |
 | Client keepalive (00 06) | after 15 s without sending (`SessionOptions::keepalive_interval`) | param 0xe; 14.8 s login, 44 s chat (14.8 s with `[Defaults] ChatKeepAlive`). EQEmu drops a client it has not heard from for 60 s (`stale_connection_ms`) |
 | Server keepalive | every 9 s of server silence | EQEmu `keepalive_delay_ms` |
-| Unacked reliable limit | 180 s | params 0x12/0x13 |
-| Multi-buffer hold | 150 ms world and zone, 0 login (`SessionOptions::hold_time`) | param 0x15 |
+| Unacked reliable limit | 180 s default; 120 s UCS | params 0x12/0x13; UCS also checks oldest unacked >30 s at the application layer |
+| Multi-buffer hold | 150 ms world and zone, 0 login and UCS (`SessionOptions::hold_time`) | param 0x15 |
 | Service thread pass | every 20 ms (`SessionOptions::service_interval`) | |
 | Server drops a client whose oldest unacked packet is | 30 s | EQEmu `resend_timeout` |
 | Drain before disconnect | until all reliable data is acked, at most 10 s | |
