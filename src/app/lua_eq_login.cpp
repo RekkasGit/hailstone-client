@@ -72,8 +72,8 @@ public:
         list_.labels = {"Server:", "Status:"};
         list_.widths = {400, 100};
         for (const auto& s : v.servers) {
-            ListRow r{{s.name, s.status}}; // Up or Down: no player count
-            if (!s.can_join) r.color = Rgb{1.0f, 0.3f, 0.3f};
+            ListRow r{{s.name, s.status}}; // Up, Down or Locked: no player count
+            if (!s.can_join || s.status == "Down") r.color = Rgb{1.0f, 0.3f, 0.3f};
             list_.rows.push_back(std::move(r));
         }
         list_.selected = v.selected;

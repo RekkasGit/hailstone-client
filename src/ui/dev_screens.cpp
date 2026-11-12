@@ -32,6 +32,7 @@ constexpr ImGuiWindowFlags kDialogFlags = ImGuiWindowFlags_NoResize | ImGuiWindo
 const ImVec4 kErrorColor{1.0f, 0.42f, 0.38f, 1.0f};
 const ImVec4 kDimColor{0.62f, 0.64f, 0.68f, 1.0f};
 const ImVec4 kGoodColor{0.45f, 0.85f, 0.45f, 1.0f};
+const ImVec4 kLockedColor{1.0f, 0.75f, 0.30f, 1.0f};
 
 // Places the next window centred on the screen with a size in font-height units.
 void center_next_window(float width_em, float height_em = 0.0f) {
@@ -1426,7 +1427,10 @@ ServerSelectAction server_select_screen(ServerSelectView& view) {
             }
             if (pad && ImGui::IsItemFocused()) view.selected = i;
             ImGui::TableNextColumn();
-            ImGui::TextColored(s.can_join ? kGoodColor : kErrorColor, "%s", s.status.c_str());
+            ImGui::TextColored(s.status == "Locked"                  ? kLockedColor
+                               : s.can_join && s.status != "Down" ? kGoodColor
+                                                                  : kErrorColor,
+                               "%s", s.status.c_str());
             // The favourite mark (after the row, which lets it take the click): a favourite world is listed first
             ImGui::TableNextColumn();
             if (ImGui::SmallButton(s.favorite ? "Unstar##fav" : "Star##fav")) {

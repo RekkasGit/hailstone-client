@@ -351,13 +351,17 @@ TEST_CASE("UI packs: each draws the login, server select and character select sc
             s.host.login = nullptr;
 
             ui::ServerSelectView worlds;
-            worlds.servers = {{"Open World", "Up", true, true}, {"Locked World", "Locked", false}}; // (a favourite: its star)
+            worlds.servers = {{"Open World", "Up", true, true}, {"Locked World", "Locked", true},
+                             {"Down World", "Down", false}};
             worlds.selected = 0;
             s.host.server_select = &worlds;
             s.host.last_server = "Open World";
             s.host.login_server = "Alpha";
             s.frames(3);
             CHECK(s.api.replaces("serverselect"));
+            REQUIRE(luaL_dostring(s.lua.state(), "local v=eq.ServerSelect(); assert(v.servers[2].status=='Locked' and v.servers[2].canJoin); "
+                                     "assert(eq.ServerSelectDo('play',2)); assert(not eq.ServerSelectDo('play',3))") == LUA_OK);
+            CHECK(s.host.server_select_action == static_cast<int>(ui::ServerSelectAction::Play));
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             worlds.addon_hint = "Open World has a Hailstone add-on: go Back and open Add-ons to look at it.";
             s.frames(2);
