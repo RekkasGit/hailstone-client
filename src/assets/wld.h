@@ -346,7 +346,7 @@ public:
     // released are released. The next lease of a retained WLD takes it back without decoding again: a cache miss in
     // CharacterLibrary (a model, a dressing) does not inflate and parse global_chr.wld once more for each model. A
     // WLD that is destroyed leaves the set. 0 turns retention off (released as the last lease ends).
-    static constexpr std::size_t kDefaultRetainBudget = std::size_t{256} << 20;
+    static constexpr std::size_t kDefaultRetainBudget = std::size_t{128} << 20;
     static void set_retain_budget(std::size_t bytes); // releases at once what no longer fits
     static std::size_t retain_budget();
     static std::size_t retained_total(); // the estimated bytes held by the retained set now
