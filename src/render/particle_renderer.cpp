@@ -92,7 +92,21 @@ bool particle_corners(const game::Particle& p, std::uint32_t billboard, const gl
     }
     const float hw = 0.5f * p.width * p.size_factor * p.ramp_width, hh = 0.5f * p.height * p.size_factor * p.ramp_height;
     glm::vec3 ax, ay; // half extents towards the texture's right and top
-    if (billboard == 2) {
+    if (billboard == game::kWorldBasisBillboard) {
+        const float across = glm::length(p.axes[0]), forward = glm::length(p.axes[1]);
+        if (!(across > 1e-6f) || !(forward > 1e-6f) || !std::isfinite(across) || !std::isfinite(forward)) return false;
+        ax = p.axes[0] * (hw / across);
+        ay = p.axes[1] * (hh / forward);
+    } else if (billboard == game::kTrailStrandBillboard) {
+        const float forward = glm::length(p.axes[1]);
+        if (!(forward > 1e-6f) || !std::isfinite(forward)) return false;
+        const glm::vec3 tangent = p.axes[1] / forward;
+        const glm::vec3 across = glm::cross(tangent, glm::cross(up, right));
+        const float width = glm::length(across);
+        if (!(width > 1e-6f) || !std::isfinite(width)) return false;
+        ax = across * (hw / width);
+        ay = tangent * hh;
+    } else if (billboard == 2) {
         // Flat on the world's horizontal plane, turned by the rotation (0x10074d6b..0x100750cd).
         ay = glm::vec3(c, sn, 0.0f) * hh;
         ax = glm::vec3(sn, -c, 0.0f) * hw;
@@ -405,7 +419,7 @@ void ParticleRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, 
             std::uint32_t tex = dl.tex | (d.additive ? kAdditiveBit : 0u);
             // A flat one lying on what it meets (a rune circle on the ground) would fade away whole: it fades over
             // a quarter unit.
-            if (d.billboard == 2) soft = 0.25f;
+            if (d.billboard == 2 || d.billboard == game::kWorldBasisBillboard) soft = 0.25f;
             quad(p, tex, dl.grid, glm::vec4(light, std::max(soft, 0.25f)), glm::vec4(h.color, h.through),
                  d.billboard, d.depth_offset);
         }

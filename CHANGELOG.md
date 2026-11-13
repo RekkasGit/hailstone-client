@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Find: Map > Show path now draws the selected world trail on the initial login, including servers without downloaded asset files; terrain bindings follow zone replacement and asset reloads
+- Options > Display > Find Trail selects a gold MQ2Nav-style ground line (the default) or fourteen thin, winding rainbow threads hovering a few feet above the terrain. Both follow hills and valleys and leave gaps at missing ground. The choice applies immediately and is saved per character; gamepad users can find it under Options > Interface
 - A zone takes less memory while it loads: the world's fully opaque textures (power-of-two sizes) get their mip chain built by the graphics card instead of on the CPU, filtered in linear light as before, and the zone's own uploads are staged to the card in pieces rather than all at once. The PR author measured the peak on a large zone (dragonscale) falling by about 115 MB of commit before the change was narrowed to keep distant textures looking as they did; a small classic zone holds about the same
 - The game's archives (`.s3d`, `.eqg`, `.pfs`) in the asset folder are mapped read-only instead of copied into memory, so their bytes live in the system's file cache. A server's own files (its assets folder) are still read into memory, as the server files update replaces them while the client runs. A game file that another program truncates while Hailstone runs can now crash the client (docs/hardening.md)
 - Character models load their source data on first use and keep only the most recently used of it, up to 128 MiB, so building one model after another does not decode the same file again; animation aliases and duplicate tracks share their key data, and constant tracks store one key, with the same timing

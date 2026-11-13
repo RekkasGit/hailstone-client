@@ -191,9 +191,29 @@ TEST_CASE("Settings files: the keys a character's settings leave in hailstone.in
                             "ui.scale", "audio.pregame_music", "plugins.autoload", "scripts.autoload", "news.last_read"})
         CHECK_MESSAGE(Config::is_shared_key(key), key);
     for (const char* key : {"display.render_scale", "display.shadows", "display.max_fps", "display.clip_plane",
+                            "display.find_trail_style",
                             "audio.master", "mouse.sensitivity", "KEYMAPPING_JUMP_1", "gamepad.deadzone",
                             "combat.auto_target_xtarget", "ui.font_face", "game.fast_camp"})
         CHECK_MESSAGE(!Config::is_shared_key(key), key);
+}
+
+TEST_CASE("Settings files: Find trail choice is restored independently for each character") {
+    test::ScratchDir tmp("find_trail_settings");
+    const auto shared = tmp.path() / "hailstone.ini";
+    const auto one = tmp.path() / "One" / "hailstone.ini";
+    const auto two = tmp.path() / "Two" / "hailstone.ini";
+    Config config;
+    REQUIRE(config.save(shared));
+    REQUIRE(config.attach_character(one));
+    CHECK(config.get_int("display.find_trail_style", 0) == 0);
+    config.set_int("display.find_trail_style", 1);
+    REQUIRE(config.save(shared));
+    REQUIRE(config.attach_character(two));
+    CHECK(config.get_int("display.find_trail_style", 0) == 0);
+    REQUIRE(config.attach_character(one));
+    CHECK(config.get_int("display.find_trail_style", 0) == 1);
+    config.detach_character();
+    CHECK(config.get_int("display.find_trail_style", 0) == 0);
 }
 
 TEST_CASE("Settings files: the log keeps the earlier runs' files") {

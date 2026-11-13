@@ -491,7 +491,9 @@ public:
             std::filesystem::create_directories(platform::ui_packs_dir() / ui::kPictureFolder, ec);
         }
         audio_->music_selection(audio::kMusicLogin, pregame_music_); // CDisplay_InitDisplay
-        spell_particles_ = std::make_unique<SpellParticles>(vk_, game_, shader_dir_);
+        spell_particles_ = std::make_unique<SpellParticles>(vk_, game_, shader_dir_, [this] {
+            return collision_ ? &*collision_ : nullptr;
+        });
         log_memory("startup: spell particles");
         spell_bolts_ = std::make_unique<SpellBolts>(vk_, shader_dir_);
         actor_emitters_ = std::make_unique<ActorEmitters>(vk_, game_, shader_dir_);

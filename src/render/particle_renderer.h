@@ -73,7 +73,10 @@ constexpr float kParticleGlow = 2.5f;
 // A particle's quad corners (top-left, top-right, bottom-right, bottom-left: the texture's top edge first) for an
 // EDD billboard mode (+0x70), as EQGraphicsDX9's quad builder (in FUN_10072160) places them: 1 a streak along the
 // particle's axis, widened on the screen's x; 2 flat on the world's horizontal plane; anything else facing the
-// camera (`right`, `up`). The rotation turns modes 0 and 2. False when it is not drawn (below the axis).
+// camera (`right`, `up`). The rotation turns modes 0 and 2. Hailstone's kWorldBasisBillboard instead takes the
+// width and height directions from the particle's axes[0] and axes[1], without camera-facing rotation.
+// kTrailStrandBillboard keeps the segment along axes[1], with its width facing the camera.
+// False when it is not drawn (below the axis, an invalid generated basis, or a strand viewed end-on).
 bool particle_corners(const game::Particle& p, std::uint32_t billboard, const glm::vec3& right, const glm::vec3& up,
                       std::array<glm::vec3, 4>& corners);
 

@@ -733,6 +733,8 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
     // Hailstone: NPCs the server leaves in the air are drawn on the floor (game::WorldState::ground_npcs), on by default.
     if (name == "ground_npcs") return config_.get_bool("display.ground_npcs", true) ? 1 : 0;
+    if (name == "find_trail_style")
+        return static_cast<int>(game::normalize_find_trail_style(config_.get_int("display.find_trail_style", 0)));
     // Hailstone: the target ring's cues (the sweep on a new target, the pulse while attacking), on by default, and its
     // hidden part showing faintly through what stands in front, off by default (app/target_ring.cpp).
     if (name == "target_ring_cues") return ring_cues_ ? 1 : 0;
@@ -763,6 +765,11 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
 }
 
 bool ClientApp::set_display_option(std::string_view name, int value) {
+    if (name == "find_trail_style") {
+        config_.set_int("display.find_trail_style", static_cast<int>(game::normalize_find_trail_style(value)));
+        config_.save(config_path_);
+        return true;
+    }
     if (name == "grass") {
         // CAdvancedDisplayOptionsWnd's +0x22c: ShowGrass, the scene's flora (virtual +0xb8), saved.
         grass_ = value != 0;

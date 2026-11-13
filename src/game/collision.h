@@ -19,6 +19,7 @@
 // set_solid_ladders(true); they then leave out the ladder's own polygons.
 // Everything else, and triangles(), keeps the ladder's polygons.
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -115,6 +116,12 @@ public:
 
 private:
     static constexpr float kCell = 64.0f;
+    static constexpr std::size_t kGroundDivisions = 16;
+    static constexpr float kGroundCell = kCell / static_cast<float>(kGroundDivisions);
+    struct GroundSubgrid {
+        std::array<std::size_t, kGroundDivisions * kGroundDivisions + 1> offsets{};
+        std::vector<std::uint32_t> candidates;
+    };
     static std::int64_t cell_key(std::int32_t x, std::int32_t y) {
         return (static_cast<std::int64_t>(x) << 32) ^ static_cast<std::uint32_t>(y);
     }
@@ -126,6 +133,12 @@ private:
         if (f > 1.0e9f) return 1000000000;
         return static_cast<std::int32_t>(f);
     }
+    static std::size_t ground_subcell(float c, std::int32_t coarse) {
+        const double local = (static_cast<double>(c) - static_cast<double>(coarse) * kCell) / kGroundCell;
+        if (!(local > 0.0)) return 0; // NaN too; no unchecked float-to-integer conversion
+        if (local >= static_cast<double>(kGroundDivisions)) return kGroundDivisions - 1;
+        return static_cast<std::size_t>(local);
+    }
     void index();
     // fn(triangle) for every triangle listed in the grid cell under (p.x, p.y), then the huge ones.
     template <class Fn>
@@ -136,6 +149,9 @@ private:
     // Triangles for the floor and sight probes (never a ladder's slab).
     static bool probe_solid(const CollisionTriangle& t) {
         return !(t.flags & (kTrianglePassable | kTriangleTransparent | 0x10 | kTriangleLadderSlab));
+    }
+    static bool visible_ground(const CollisionTriangle& t) {
+        return probe_solid(t) && !(t.flags & kTriangleInvisible) && t.normal.z > 0.0f;
     }
     // Whether the movement's queries take the triangle: the slab with solid_ladders_, else the ladder's own polygons
     // (a polygon of a ladder that is not passable means the ladder has a slab).
@@ -151,6 +167,9 @@ private:
     std::vector<CollisionTriangle> triangles_;
     std::vector<float> light_; // per triangle (triangle_light); empty from from_triangles
     std::unordered_map<std::int64_t, std::vector<std::uint32_t>> cells_;
+    // Immutable finer candidate lists only for dense cells, used by ground_below. Movement and other probes keep
+    // their original coarse lists; only visible, upward-facing probe surfaces enter these 4-unit subdivisions.
+    std::unordered_map<std::int64_t, GroundSubgrid> ground_cells_;
     std::vector<std::uint32_t> big_; // triangles too large for the grid
     std::optional<std::pair<glm::vec3, glm::vec3>> bounds_;
     bool solid_ladders_ = false;
