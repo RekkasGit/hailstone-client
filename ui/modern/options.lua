@@ -378,7 +378,7 @@ local function displayTab()
     check("own_name", "Show My Name",
       "Hailstone: your own name over your head in the third-person views, with your title and guild as /shownames sets them for everyone.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
-    combo("find_trail_style", "Find Trail", { "MQ2Nav-style line (default)", "Rainbow trail" },
+    combo("find_trail_style", "Find Trail", { "Gold line (default)", "Rainbow trail" },
       "Choose the gold ground line or thin, winding rainbow strands hovering a few feet above the terrain along your Find route.")
     check("con_name_colour", "Con-Coloured NPC Names", "Hailstone: NPC names take their consider colour, as your target's does. Off keeps them yellow.")
     check("target_plate_highlight", "Highlight Target Name",

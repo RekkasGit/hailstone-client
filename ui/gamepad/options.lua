@@ -150,7 +150,7 @@ local PAGES = {
   end },
   { "Interface", function()
     local rows = {}
-    local trail = optionRow("Find trail", "find_trail_style", { "MQ2Nav-style line (default)", "Rainbow trail" })
+    local trail = optionRow("Find trail", "find_trail_style", { "Gold line (default)", "Rainbow trail" })
     if trail then rows[#rows + 1] = trail end
     local uiName = eq.Option("ui_name")
     if uiName ~= nil then

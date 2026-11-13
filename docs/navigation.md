@@ -357,7 +357,7 @@ A partial path (the NPC off the mesh) is drawn as far as it goes. The maps draw 
 
 Options > Display > **Find Trail** (gamepad: Options > Interface) chooses the appearance of both the guide path
 and the server's find path (PlayerPath). The choice applies immediately and is saved per character in
-`hailstone.ini` as `display.find_trail_style`: **MQ2Nav-style line (default)** (0), or **Rainbow trail** (1).
+`hailstone.ini` as `display.find_trail_style`: **Gold line (default)** (0), or **Rainbow trail** (1).
 Unknown values select the default. This is a rendering choice over the existing routes; it does not start a walk.
 The world trail is available on the first zone entry, including servers without downloaded assets. Its terrain
 source follows zone loads and reloads rather than keeping the previous zone's surface.

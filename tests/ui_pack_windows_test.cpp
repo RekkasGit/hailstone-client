@@ -2613,7 +2613,7 @@ TEST_CASE("UI packs: Options changes the Find trail style in both directions") {
                 ui.Selectable = function(label, ...)
                     local clicked = selectable(label, ...)
                     local name = label:match("^Rainbow trail##") and "rainbow"
-                        or label:match("^MQ2Nav%-style line %(default%)##") and "navigation"
+                        or label:match("^Gold line %(default%)##") and "navigation"
                     if name then
                         local x0, y0, x1, y1 = ui.GetItemRect()
                         findTrailWidgets[name] = { (x0 + x1) / 2, (y0 + y1) / 2 }
