@@ -86,3 +86,76 @@ TEST_CASE("bandolier swap: a weapon with no room to go back cancels the swap; wi
     CHECK(id_at(conn, net::kSlotGeneral10) == 1002);
     REQUIRE(rig.until([&] { return swaps_sent(rig.server, 1) == 1 && swaps_sent(rig.server, 0) == 1; }));
 }
+
+TEST_CASE("bandolier swap: with the general slots full, a returned weapon goes into the first bag that takes it") {
+    // A player's bug report: swapping only worked with a free general slot, though whole giant bags stood empty. The
+    // weapon goes where EQEmu's MoveItemToInventory puts it: the first free general slot, or the first free slot of
+    // a bag that fits it by the server's test (CanItemFitInContainer), in slot order.
+    MockConfig config = MockConfig::standard();
+    auto& inv = config.characters[0].inventory;
+    inv.push_back(make_item(1001, "Cudgel", 13));
+    net::Item quiver = make_item(500, "Quiver", net::kSlotGeneral1);
+    quiver.item_class = 1;
+    quiver.bag_type = 2; // arrows only
+    quiver.bag_slots = 10;
+    quiver.bag_size = 4;
+    inv.push_back(quiver);
+    net::Item bag = make_item(501, "Giant Bag", net::kSlotGeneral1 + 1);
+    bag.item_class = 1;
+    bag.bag_slots = 10;
+    bag.bag_size = 4;
+    inv.push_back(bag);
+    for (std::int16_t s = net::kSlotGeneral1 + 2; s <= net::kSlotGeneral10; ++s)
+        inv.push_back(make_item(2000u + static_cast<std::uint32_t>(s), "Rock", s));
+    Rig rig(std::move(config));
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+
+    REQUIRE(conn.bandolier_create(0, "1h"));
+    rig.server.item_packet(net::kItemPacketCharInventory, make_item(1002, "Dagger", 13));
+    REQUIRE(rig.until([&] { return id_at(conn, 13) == 1002; }));
+    REQUIRE(conn.bandolier_create(1, "nodmg"));
+    rig.server.item_packet(net::kItemPacketCharInventory, make_item(1001, "Cudgel", 13));
+    REQUIRE(rig.until([&] { return id_at(conn, 13) == 1001; }));
+
+    // No Dagger anywhere: the Cudgel comes off and goes past the quiver into the giant bag's first slot.
+    REQUIRE(conn.bandolier_activate(1));
+    CHECK(id_at(conn, 13) == 0);
+    const net::Item* in_bag = conn.inventory().at(ItemSlot::possessions(net::kSlotGeneral1 + 1, 0));
+    REQUIRE(in_bag);
+    CHECK(in_bag->id == 1001);
+    CHECK(conn.inventory().at(ItemSlot::possessions(net::kSlotGeneral1, 0)) == nullptr);
+    // And back: the Cudgel is found in the bag (InventoryProfile::HasItem's order) and equipped again.
+    REQUIRE(conn.bandolier_activate(0));
+    CHECK(id_at(conn, 13) == 1001);
+    CHECK(conn.inventory().at(ItemSlot::possessions(net::kSlotGeneral1 + 1, 0)) == nullptr);
+    REQUIRE(rig.until([&] { return swaps_sent(rig.server, 1) == 1 && swaps_sent(rig.server, 0) == 1; }));
+}
+
+TEST_CASE("bandolier swap: the server's bag test, not the original's") {
+    net::Item weapon;
+    weapon.size = 3;
+    weapon.item_type = 0;
+    net::Item b;
+    b.item_class = 1;
+    b.bag_size = 4;
+    b.bag_slots = 10;
+    CHECK(game::server_bag_accepts(b, weapon));
+    b.bag_size = 2;
+    CHECK_FALSE(game::server_bag_accepts(b, weapon)); // too big
+    b.bag_size = 4;
+    b.bag_type = 2;
+    CHECK_FALSE(game::server_bag_accepts(b, weapon)); // a quiver: arrows only
+    weapon.item_type = 27;
+    CHECK(game::server_bag_accepts(b, weapon));
+    b.bag_type = 8;
+    CHECK_FALSE(game::server_bag_accepts(b, weapon)); // a bandolier bag: small throwing items only
+    weapon.item_type = 19;
+    CHECK(game::server_bag_accepts(b, weapon));
+    // A tradeskill bag (58) refuses a weapon by the original's CanGoInBag; EQEmu's MoveItemToInventory takes it.
+    b.bag_type = 58;
+    weapon.item_type = 0;
+    CHECK(game::bag_fit(b, weapon) == 8);
+    CHECK(game::server_bag_accepts(b, weapon));
+    CHECK_FALSE(game::server_bag_accepts(weapon, weapon)); // not a bag
+}

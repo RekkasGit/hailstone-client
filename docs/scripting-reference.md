@@ -991,8 +991,9 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| AllItems | () → {{item, place, where, slot, sub, bag, kept}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats) | — |
+| AllItems | () → {{item, place, where, slot, sub, bag, kept, stale}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats). stale: a banked row from the bank as last seen (eq.BankSeen), not in reach | — |
 | ItemsRevision | () → inv, keep | Change counters | — |
+| BankSeen | () → live, age | live: the bank's rows are the bank as the server has it now; else they are the copy as last seen at a bank, age seconds ago (nil: never seen) | — |
 | ItemKept | (id) → bool | Item is marked Keep | — |
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |

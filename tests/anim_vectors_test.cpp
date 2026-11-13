@@ -109,7 +109,7 @@ TEST_CASE("OldModelAnimSpeed vectors") {
 
 TEST_CASE("Animation tables") {
     CHECK(new_style_tag(kAnimWalk) == "WALK");
-    CHECK(new_to_old_anim(kAnimRun) == kOldRun);
+    CHECK(new_to_old_anim(kAnimRun) == static_cast<std::uint8_t>(hailstone::AnimationType::Run));
     CHECK(old_anim_clip(new_to_old_anim(kAnimSwim)) == "P06");
     CHECK(old_anim_clip(new_to_old_anim(kAnimSit)) == "P07");
     CHECK(new_style_blend_ms(kAnimWalk, kAnimStand) == 175.0f);
@@ -340,6 +340,32 @@ TEST_CASE("Classic models: walk, run, backward, still") {
     c = frame(st, in, m, false, 90);
     CHECK(c.clip == "O01");
     CHECK_FALSE(c.loop);
+}
+
+TEST_CASE("Classic models: moving in deep water swims P06 (0x25), not the C10 action") {
+    // 0x4afe60's wet branch starts 0x25 (P06); a model with C10 (action 10) must still swim with P06.
+    Model m{{"P01", "L01", "L09", "P06", "C10"}};
+    hailstone::game::SpawnAnimState st;
+    hailstone::game::SpawnAnimInput in;
+    in.race = 1;
+    in.walk_speed = 0.46f;
+    in.now_ms = 1000;
+    in.feet_wet = 5;
+    in.body_wet = 5;
+    in.velocity = {0.3f, 0.4f, 0.0f};
+    in.speed_run = 0.4f;
+    auto c = frame(st, in, m);
+    CHECK(c.clip == "P06");
+    CHECK(c.loop);
+
+    OldStyleAnimInput o;
+    o.speed_y = 0.3f;
+    o.speed_x = 0.4f;
+    o.body_wet = 5;
+    o.race = 1;
+    const OldStyleAnimResult r = select_old_style_anim(o, Fpu(FpuPrecision::Double53));
+    CHECK(r.start.played);
+    CHECK(r.start.anim == 0x25);
 }
 
 TEST_CASE("Classic models: sitting down and standing up") {

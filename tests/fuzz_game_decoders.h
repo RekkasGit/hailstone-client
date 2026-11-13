@@ -8,6 +8,7 @@
 #include <span>
 #include <string_view>
 
+#include "game/bank_snapshot.h"
 #include "game/barter.h"
 #include "game/missiles.h"
 #include "game/zoning.h"

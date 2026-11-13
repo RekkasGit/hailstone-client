@@ -141,7 +141,7 @@ std::optional<Sky> load_sky(const GameDir& game, int index) {
         log::warn("sky.s3d not found; no sky");
         return std::nullopt;
     }
-    auto archive = std::make_shared<const PfsArchive>(PfsArchive::open(*path));
+    auto archive = std::make_shared<const PfsArchive>(PfsArchive::open(*path, PfsArchive::storage_for(game, *path)));
     auto data = archive->read("sky.wld");
     if (!data) throw std::runtime_error(archive->label() + ": missing sky.wld");
     auto w = wld::WldFile::parse(*data, archive->label() + ":sky.wld");

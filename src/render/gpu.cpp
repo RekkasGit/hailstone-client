@@ -1,6 +1,7 @@
 #include "render/gpu.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstring>
 
@@ -75,12 +76,51 @@ Buffer UploadBatch::buffer(std::span<const std::byte> data, VkBufferUsageFlags u
     Buffer target;
     vk_check(vmaCreateBuffer(vk_.allocator(), &info, &ai, &target.buffer, &target.allocation, nullptr), "create buffer");
     target.size = info.size;
-    buffers_.push_back({staging(data), target});
+    buffers_.push_back({staging(data), target, 0, 0});
     return target;
 }
 
-std::optional<assets::Image> prepare_texture_image(const assets::Image& source, TextureUse use) {
+Buffer UploadBatch::buffer_pieces(std::span<const std::byte> data, VkBufferUsageFlags usage, std::size_t piece_bytes) {
+    VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    info.size = std::max<VkDeviceSize>(data.size(), 4);
+    info.usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VmaAllocationCreateInfo ai{};
+    ai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    Buffer target;
+    vk_check(vmaCreateBuffer(vk_.allocator(), &info, &ai, &target.buffer, &target.allocation, nullptr), "create buffer");
+    target.size = info.size;
+    if (data.empty() || piece_bytes == 0) return target;
+    // Each piece is submitted on its own, so its staging is released as the GPU reads it and the next piece is
+    // staged; the whole buffer is never held twice.
+    for (std::size_t off = 0; off < data.size(); off += piece_bytes) {
+        const std::size_t n = std::min(piece_bytes, data.size() - off);
+        buffers_.push_back({staging(data.subspan(off, n)), target, off, n});
+        submit();
+        // The piece's staging goes once the GPU has read it, so the next piece does not pile up behind it.
+        vk_.release_finished_uploads(piece_bytes);
+    }
+    return target;
+}
+
+std::size_t UploadBatch::staging_bytes() const {
+    std::size_t n = 0;
+    for (const auto& b : buffers_) n += b.staging.size;
+    for (const auto& t : textures_) n += t.staging.size;
+    return n;
+}
+
+bool gpu_builds_mips(const assets::Image& image, TextureUse use) {
+    auto pow2 = [](std::uint32_t v) { return v != 0 && (v & (v - 1)) == 0; };
+    return use != TextureUse::Data && image.format == assets::PixelFormat::RGBA8 && image.mips.size() == 1 &&
+           (image.width > 1 || image.height > 1) && pow2(image.width) && pow2(image.height) && assets::is_opaque(image);
+}
+
+std::optional<assets::Image> prepare_texture_image(const assets::Image& source, TextureUse use, bool gpu_mips) {
     if (use != TextureUse::Data && source.mips.size() == 1 && (source.width > 1 || source.height > 1)) {
+        // A fully opaque power-of-two image: its chain is a plain average, which the GPU builds as the CPU would
+        // (blitted on an sRGB view, in linear light), so it goes up as it is and the chain is never held in host
+        // memory. Anything else (a colour key, coverage to keep, an odd size) gets the CPU's chain.
+        if (gpu_mips && gpu_builds_mips(source, use)) return std::nullopt;
         assets::Image converted = assets::to_rgba8(source);
         if (use == TextureUse::OpaqueColor) assets::make_opaque(converted);
         else assets::remove_color_key(converted);
@@ -112,6 +152,16 @@ void drop_large_mips(assets::Image& image, std::uint32_t max_size) {
     }
 }
 
+void prepare_capped_texture(assets::Image& image, TextureUse& use, std::uint32_t max_size) {
+    if (max_size == 0) return;
+    // The chain is built here even for an image the GPU could build it for: only a chain has levels to drop.
+    if (auto built = prepare_texture_image(image, use, false)) {
+        image = std::move(*built);
+        use = TextureUse::Data;
+    }
+    drop_large_mips(image, max_size);
+}
+
 Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     const assets::Image* image = &source;
     assets::Image converted;
@@ -122,6 +172,14 @@ Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     if (image == &source && source.format != assets::PixelFormat::RGBA8 && !vk_.caps().bc_textures) {
         converted = assets::to_rgba8(source);
         image = &converted;
+    }
+    // The GPU builds the chain of what prepare_texture_image left to it (gpu_builds_mips), on an sRGB view; a device
+    // that cannot blit that format gets the CPU's chain instead.
+    bool srgb_mips = image == &source && gpu_builds_mips(source, use);
+    if (srgb_mips && !vk_.caps().srgb_mip_blit) {
+        converted = *prepare_texture_image(source, use, false);
+        image = &converted;
+        srgb_mips = false;
     }
 
     const bool generate = image->format == assets::PixelFormat::RGBA8 && image->mips.size() == 1;
@@ -148,6 +206,18 @@ Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = format;
+    // An image whose chain the GPU builds is sRGB-typed, so vkCmdBlitImage decodes to linear, filters and encodes
+    // back (as assets::build_color_mips filters in linear light); its view stays UNORM, so the shaders read the same
+    // values as from a CPU-built chain (they decode sRGB themselves).
+    const std::array<VkFormat, 2> view_formats{VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB};
+    VkImageFormatListCreateInfo format_list{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO};
+    if (srgb_mips) {
+        info.format = VK_FORMAT_R8G8B8A8_SRGB;
+        info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+        format_list.viewFormatCount = static_cast<std::uint32_t>(view_formats.size());
+        format_list.pViewFormats = view_formats.data();
+        info.pNext = &format_list;
+    }
     info.extent = {image->width, image->height, 1};
     info.mipLevels = levels;
     info.arrayLayers = 1;
@@ -176,7 +246,7 @@ void UploadBatch::submit() {
     for (const auto& t : textures_) staged += t.staging.size;
     const std::uint64_t serial = vk_.submit_upload([&](VkCommandBuffer cmd) {
         for (auto& b : buffers_) {
-            VkBufferCopy copy{0, 0, b.target.size};
+            VkBufferCopy copy{0, b.target_offset, b.size ? b.size : b.staging.size};
             vkCmdCopyBuffer(cmd, b.staging.buffer, b.target.buffer, 1, &copy);
         }
         for (auto& t : textures_) {

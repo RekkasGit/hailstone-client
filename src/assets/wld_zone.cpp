@@ -318,7 +318,7 @@ std::string lower(std::string s) {
 std::shared_ptr<const PfsArchive> open_archive(const GameDir& game, const std::string& file) {
     auto path = game.find(file);
     if (!path) return nullptr;
-    return std::make_shared<const PfsArchive>(PfsArchive::open(*path));
+    return std::make_shared<const PfsArchive>(PfsArchive::open(*path, PfsArchive::storage_for(game, *path)));
 }
 
 wld::WldFile parse_member(const PfsArchive& archive, std::string_view member) {

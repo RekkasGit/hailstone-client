@@ -12,6 +12,7 @@
 
 #include "assets/eqg_character.h"
 #include "game/anim_layers.h"
+#include "game/animation_types.h"
 #include "game/mechanics/anim_select.h"
 
 namespace hailstone::game {
@@ -32,7 +33,11 @@ constexpr std::array<std::uint8_t, 0x50> kOldReplacement = {
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, // 0x30..
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x1a, 0x20, 0x20, 0x11, 0x12, 0x20, 0x4a, 0x20, // 0x40..
 };
-std::uint8_t old_replacement(std::uint8_t a) { return a < kOldReplacement.size() ? kOldReplacement[a] : 0x20; }
+constexpr std::uint8_t num(AnimationType a) { return static_cast<std::uint8_t>(a); }
+
+AnimationType old_replacement(AnimationType a) {
+    return num(a) < kOldReplacement.size() ? static_cast<AnimationType>(kOldReplacement[num(a)]) : AnimationType::Stand;
+}
 
 constexpr std::uint32_t kAggressive = 0x4, kForcedAggressive = 0x8, kPrimaryEquipped = 0x40,
                         kSecondaryEquipped = 0x80; // 0x9d77a4 / 0x9d77a8 / 0x9d77b4 / 0x9d77b8
@@ -198,7 +203,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
                 }
             } else if (has_clip("P02")) {
                 st.posture = true;
-                return start("P02", mech::kOldSitStand, false, 1.0f, false, 100.0f);
+                return start("P02", num(AnimationType::SitStand), false, 1.0f, false, 100.0f);
             }
         } else if (in.stand_state == 100 && from == 110) {
             // 0x58afa0: STNG asked reversed plays STDG forward.
@@ -209,7 +214,7 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
                 }
             } else if (has_clip("P02")) {
                 st.posture = true;
-                return start("P02", mech::kOldSitStand, true, 1.0f, false, 100.0f);
+                return start("P02", num(AnimationType::SitStand), true, 1.0f, false, 100.0f);
             }
         } else if (in.stand_state == 111 || (in.stand_state == 100 && from == 111)) {
             // PlayerZoneClient::ChangePosition @0x5a0bc0: crouching plays the duck (0x18) once, unless it or the
@@ -218,14 +223,14 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
             // otherwise leaves it (a still ducking spawn asks nothing, nor does a still one after the duck).
             const bool down = in.stand_state == 111;
             if (in.new_style) {
-                const std::uint8_t duck = mech::old_to_new_anim(mech::kOldDuck);
-                const std::uint8_t walk = mech::old_to_new_anim(mech::kOldDuckWalk);
+                const std::uint8_t duck = mech::old_to_new_anim(num(AnimationType::Duck));
+                const std::uint8_t walk = mech::old_to_new_anim(num(AnimationType::DuckWalk));
                 if (!down || (st.anim != duck && st.anim != walk))
                     if (auto c = start_new(duck, !down, 1.0f, false)) return *c;
-            } else if (has_clip(mech::old_anim_clip(mech::kOldDuck)) &&
-                       (!down || (st.anim != mech::kOldDuck && st.anim != mech::kOldDuckWalk))) {
-                return start(std::string(mech::old_anim_clip(mech::kOldDuck)), mech::kOldDuck, !down, 1.0f, false,
-                             100.0f);
+            } else if (has_clip(mech::old_anim_clip(num(AnimationType::Duck))) &&
+                       (!down || (st.anim != num(AnimationType::Duck) && st.anim != num(AnimationType::DuckWalk)))) {
+                return start(std::string(mech::old_anim_clip(num(AnimationType::Duck))), num(AnimationType::Duck),
+                             !down, 1.0f, false, 100.0f);
             }
         }
     }
@@ -311,58 +316,60 @@ SpawnAnimChoice choose_spawn_animation(SpawnAnimState& st, const SpawnAnimInput&
     mech::OldStyleAnimResult r = mech::select_old_style_anim(o, fpu);
     if (r.set_still_since) st.still_since = r.still_since;
     if (!r.start.played) return keep;
-    std::uint8_t anim = r.start.anim;
+    AnimationType anim = static_cast<AnimationType>(r.start.anim);
     // 0x4b15b0: while sitting, standing becomes sitting and the idle the
     // seated fidget; other stances drop idle requests.
     if (in.stand_state == 110) {
-        if (anim == 0x20 || anim == 0x47) anim = mech::kOldSit;
-        else if (anim == 0x1a || anim == 0x48) anim = mech::kOldSitIdle;
-        else if (anim >= 0x27 && anim <= 0x29) return keep;
+        if (anim == AnimationType::Stand || anim == AnimationType::StandAfter) anim = AnimationType::Sit;
+        else if (anim == AnimationType::Idle || anim == AnimationType::IdleAfter) anim = AnimationType::SitIdle;
+        else if (anim >= AnimationType::NoEmote_39 && anim <= AnimationType::NoEmote_41) return keep;
     }
     if (in.stand_state != 100) {
-        bool idle_request = r.start.anim == 0x20 || r.start.anim == 0x22 || r.start.anim == 0x47 ||
-                            r.start.anim == 0x1a || r.start.anim == 0x48 ||
-                            static_cast<std::uint16_t>(r.start.anim - 0xc) <= 3;
-        if (idle_request && anim != mech::kOldSit && anim != mech::kOldSitIdle) return keep;
+        const AnimationType asked = static_cast<AnimationType>(r.start.anim);
+        // 12..15 (the emotes ShakeHeadNo_12..FallingBackwards) count as idle requests too.
+        bool idle_request = asked == AnimationType::Stand || asked == AnimationType::Turn ||
+                            asked == AnimationType::StandAfter || asked == AnimationType::Idle ||
+                            asked == AnimationType::IdleAfter || static_cast<std::uint16_t>(r.start.anim - 0xc) <= 3;
+        if (idle_request && anim != AnimationType::Sit && anim != AnimationType::SitIdle) return keep;
     }
-    auto has_anim = [&](std::uint8_t a) {
-        std::string_view c = mech::old_anim_clip(a);
+    auto has_anim = [&](AnimationType a) {
+        std::string_view c = mech::old_anim_clip(num(a));
         return !c.empty() && has_clip(c);
     };
     // 0x4b15b0: an animation the model lacks takes 0x4b1210's replacement (the seated ones play nothing).
     if (!has_anim(anim)) {
-        if (anim == mech::kOldSit || anim == mech::kOldSitIdle) return keep; // nothing starts
+        if (anim == AnimationType::Sit || anim == AnimationType::SitIdle) return keep; // nothing starts
         anim = old_replacement(anim);
     }
     // Its idle block: what is still missing is a stand request. A stand request plays the follow-up (+0x10c4)
     // when there is one, else P01, or P08 when the animation playing (+0x10c0) is not one 0x4b0860 names; an
     // idle (O01) after such an animation is O02 (0x48), 0x4b1210's O01 for a model without it.
-    std::uint8_t follow_up = in.follow_up;
+    AnimationType follow_up = static_cast<AnimationType>(in.follow_up);
     const bool plain = classic_plain_stand_after(st.anim);
-    if (!has_anim(anim) || anim == mech::kOldStand) {
-        anim = mech::kOldStand;
-        if (in.follow_up == 0x20) {
-            if (!plain) anim = mech::kOldStandAfter;
+    if (!has_anim(anim) || anim == AnimationType::Stand) {
+        anim = AnimationType::Stand;
+        if (in.follow_up == num(AnimationType::Stand)) {
+            if (!plain) anim = AnimationType::StandAfter;
         } else {
             // An action as the follow-up is the layers' to play (render/actor_layers.h); the base stays P01.
-            if (in.follow_up == mech::kOldStandAfter) anim = mech::kOldStandAfter;
-            follow_up = plain ? 0x20 : mech::kOldStandAfter;
+            if (in.follow_up == num(AnimationType::StandAfter)) anim = AnimationType::StandAfter;
+            follow_up = plain ? AnimationType::Stand : AnimationType::StandAfter;
         }
-    } else if (anim == mech::kOldIdle && !plain) {
-        anim = mech::kOldIdleAfter;
+    } else if (anim == AnimationType::Idle && !plain) {
+        anim = AnimationType::IdleAfter;
         if (!has_anim(anim)) anim = old_replacement(anim);
     }
     // Still missing (P08 on most models): the stand; a model without P01 plays nothing.
     if (!has_anim(anim)) {
-        anim = mech::kOldStand;
+        anim = AnimationType::Stand;
         if (!has_anim(anim)) return keep;
     }
-    const std::string clip(mech::old_anim_clip(anim));
-    double rate = mech::old_model_anim_speed(anim, r.start.speed, in.race, in.gender, false, false, fpu);
+    const std::string clip(mech::old_anim_clip(num(anim)));
+    double rate = mech::old_model_anim_speed(num(anim), r.start.speed, in.race, in.gender, false, false, fpu);
     // 0x4b15b0 starts the layers with a 100 ms blend (0x9c3988) whatever the animation; the tag table's
     // blend times are the new-style object's.
-    SpawnAnimChoice c = start(clip, anim, r.start.reverse, static_cast<float>(rate), !r.start.play_once, 100.0f);
-    c.follow_up = follow_up;
+    SpawnAnimChoice c = start(clip, num(anim), r.start.reverse, static_cast<float>(rate), !r.start.play_once, 100.0f);
+    c.follow_up = num(follow_up);
     return c;
 }
 
@@ -384,8 +391,8 @@ std::string action_clip(std::uint8_t action, const std::function<bool(std::strin
     if (action == 0 || action >= 0x4f) return {};
     std::string code(mech::old_anim_clip(action));
     if (has_clip(code)) return code;
-    std::uint8_t r = old_replacement(action);
-    std::string alt = r == mech::kOldStand ? std::string() : std::string(mech::old_anim_clip(r));
+    AnimationType r = old_replacement(static_cast<AnimationType>(action));
+    std::string alt = r == AnimationType::Stand ? std::string() : std::string(mech::old_anim_clip(num(r)));
     return !alt.empty() && has_clip(alt) ? alt : std::string{};
 }
 

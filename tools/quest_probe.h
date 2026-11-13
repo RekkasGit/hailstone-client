@@ -26,6 +26,11 @@
 //   expect-item ITEMID / expect-no-item ITEMID / expect-chat TEXT (any chat line since the previous expect-chat)
 //   cancel TITLE        abandons the active task
 //   stop-on-fail        stops the run at the first failed check
+//   bandolier N         activates bandolier set N (the client's swap), then prints the possessions
+//   dump-inventory      prints the possessions (worn, general, cursor, and the bags there)
+//   snapshot            keeps the possessions as the client sees them now
+//   expect-snapshot     the possessions are what the snapshot kept (after a zone, the server's own inventory)
+//   expect-at SLOT SUB ITEMID   possessions slot SLOT (bag slot SUB, -1 the slot itself) holds ITEMID (0: empty)
 
 #include <algorithm>
 #include <cctype>
@@ -331,6 +336,37 @@ private:
             chat_.clear();
             check(ok, "chat \"" + rest + "\"");
             next();
+        } else if (cmd == "bandolier") {
+            const bool ok = conn.bandolier_activate(std::atoi(rest.c_str()));
+            check(ok, "bandolier set " + rest + (ok ? " swapped" : " not swapped"));
+            print_possessions(conn);
+            pause(now, 1500);
+        } else if (cmd == "dump-inventory") {
+            print_possessions(conn);
+            next();
+        } else if (cmd == "snapshot") {
+            snapshot_ = possessions(conn);
+            std::printf("  QUEST: snapshot of %zu slots\n", snapshot_.size());
+            next();
+        } else if (cmd == "expect-snapshot") {
+            const auto have = possessions(conn);
+            for (const auto& l : snapshot_)
+                if (std::find(have.begin(), have.end(), l) == have.end()) std::printf("  QUEST: was   %s\n", l.c_str());
+            for (const auto& l : have)
+                if (std::find(snapshot_.begin(), snapshot_.end(), l) == snapshot_.end()) std::printf("  QUEST: now   %s\n", l.c_str());
+            check(have == snapshot_, "possessions match the snapshot (" + std::to_string(have.size()) + " slots)");
+            next();
+        } else if (cmd == "expect-at") {
+            std::istringstream in(rest);
+            int slot = 0, sub = -1;
+            std::uint32_t id = 0;
+            in >> slot >> sub >> id;
+            const net::Item* it = conn.inventory().at(
+                net::ItemSlot::possessions(static_cast<std::int16_t>(slot), static_cast<std::int16_t>(sub)));
+            const std::uint32_t got = it ? it->id : 0;
+            check(got == id, "slot " + std::to_string(slot) + "/" + std::to_string(sub) + " holds " + std::to_string(got) +
+                                 (got == id ? "" : ", wanted " + std::to_string(id)));
+            next();
         } else if (cmd == "cancel") {
             if (const game::Task* t = find_task(conn, rest)) conn.cancel_task(t->type, t->sequence);
             pause(now, 2000);
@@ -507,6 +543,28 @@ private:
         for (const auto& c : ts.completed) std::printf("    completed %u '%s'\n", c.task_id, c.title.c_str());
     }
 
+    // "slot/sub id count name" for every possessions item, in slot order.
+    static std::vector<std::string> possessions(const net::GameConnection& conn) {
+        std::vector<std::string> out;
+        auto line = [&](int slot, int sub, const net::Item& it) {
+            out.push_back(std::to_string(slot) + "/" + std::to_string(sub) + " " + std::to_string(it.id) + " x" +
+                          std::to_string(it.stackable() ? it.stack_count : 1) + " " + it.name);
+        };
+        for (const auto& [key, top] : conn.inventory().items()) {
+            if (key.first != net::kInvPossessions) continue;
+            line(key.second, -1, top);
+            std::vector<const net::BagItem*> in(top.contents.size());
+            for (std::size_t i = 0; i < in.size(); ++i) in[i] = &top.contents[i];
+            std::sort(in.begin(), in.end(), [](const net::BagItem* a, const net::BagItem* b) { return a->index < b->index; });
+            for (const auto* b : in) line(key.second, static_cast<int>(b->index), b->item);
+        }
+        return out;
+    }
+
+    static void print_possessions(const net::GameConnection& conn) {
+        for (const auto& l : possessions(conn)) std::printf("  QUEST:   %s\n", l.c_str());
+    }
+
     void check(bool ok, const std::string& what) {
         std::printf("  QUEST %s [%zu]: %s\n", ok ? "PASS" : "FAIL", index_ + 1, what.c_str());
         (ok ? passed_ : failed_)++;
@@ -550,6 +608,7 @@ private:
 
     std::vector<std::string> lines_;
     std::vector<std::string> chat_;
+    std::vector<std::string> snapshot_;
     std::size_t index_ = 0;
     int phase_ = 0;
     int kills_ = 0;

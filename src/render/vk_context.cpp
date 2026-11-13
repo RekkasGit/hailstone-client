@@ -358,6 +358,13 @@ void VkContext::pick_physical_device() {
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(physical_, &features);
     caps_.bc_textures = features.textureCompressionBC == VK_TRUE;
+    {
+        VkFormatProperties fp{};
+        vkGetPhysicalDeviceFormatProperties(physical_, VK_FORMAT_R8G8B8A8_SRGB, &fp);
+        constexpr VkFormatFeatureFlags need = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
+                                              VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        caps_.srgb_mip_blit = (fp.optimalTilingFeatures & need) == need;
+    }
     caps_.max_anisotropy = features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 0.0f;
     caps_.msaa_counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
@@ -977,6 +984,17 @@ std::uint64_t VkContext::submit_upload(const std::function<void(VkCommandBuffer)
         retired_.collect({frames_done_, uploads_.completed()});
     }
     return serial;
+}
+
+void VkContext::release_finished_uploads(std::uint64_t budget_bytes) {
+    // Over the budget: wait for the oldest upload, so its staging goes now rather than at the next frame.
+    while (budget_bytes > 0 && uploads_.bytes_in_flight() > budget_bytes && uploads_.pending() > 1) {
+        uploads_.wait_oldest(
+            [this](const Upload& w) { vk_check(vkWaitForFences(device_, 1, &w.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences"); },
+            [this](const Upload& w) { recycle_upload(w); });
+        retired_.collect({frames_done_, uploads_.completed()});
+    }
+    collect_retired();
 }
 
 void VkContext::immediate_submit(const std::function<void(VkCommandBuffer)>& record) {

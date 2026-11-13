@@ -262,6 +262,8 @@ void PerfUi::draw(const PerfInputs& in) {
     if (ImGui::CollapsingHeader("Memory", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("memory", 2, kTable)) {
         if (auto rss = platform::resident_memory())
             row("Process (resident)", "%s", bytes_text(static_cast<double>(*rss)).c_str());
+        if (auto commit = platform::private_commit_memory())
+            row("Process (private commit)", "%s", bytes_text(static_cast<double>(*commit)).c_str());
         if (in.gpu) {
             row("GPU", "%s", in.gpu->gpu_name().c_str());
             const auto heaps = in.gpu->heap_use();
