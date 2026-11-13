@@ -121,7 +121,7 @@ std::optional<assets::Image> prepare_texture_image(const assets::Image& source, 
         // (blitted on an sRGB view, in linear light), so it goes up as it is and the chain is never held in host
         // memory. Anything else (a colour key, coverage to keep, an odd size) gets the CPU's chain.
         if (gpu_mips && gpu_builds_mips(source, use)) return std::nullopt;
-            assets::Image converted = assets::to_rgba8(source);
+        assets::Image converted = assets::to_rgba8(source);
         if (use == TextureUse::OpaqueColor) assets::make_opaque(converted);
         else assets::remove_color_key(converted);
         assets::build_color_mips(converted);
