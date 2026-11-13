@@ -1352,6 +1352,7 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     //the disc slot only goes out when the buffer has room for it: every buff and song slot is the minimum
     //precent C++ from padding the struct as we are blasting this into the array.
     static_assert(sizeof(HS_BulkBuffData) == HAILSTONE_BUFF_RECORD_SIZE);
+    static_assert(sizeof(BuffBulkData) == HAILSTONE_BUFF_RECORD_SIZE);
     //needs to be able to fit the data, or return nothing
     constexpr int kNormalBuffSlots = game::kLongBuffSlots + game::kShortBuffSlots; // the disc slot is the one after
     constexpr int32_t kMinBuffBytes = kNormalBuffSlots * static_cast<int32_t>(sizeof(HS_BulkBuffData));
