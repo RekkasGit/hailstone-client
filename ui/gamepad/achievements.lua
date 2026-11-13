@@ -39,8 +39,9 @@ local browser = dofile("lib/achievement_browser.lua").new({
 })
 ui.window("Achievements", function()
   if not eq.InGame() then browser.reset(); return end
+  local open = W.shown("AchievementsWnd") -- every frame, hidden too: the achievement key toggles it only while claimed
   local state = browser.readState()
-  if not state or not state.shown or not W.shown("AchievementsWnd") then K.cancel(keyboard); return end
+  if not state or not state.shown or not open then K.cancel(keyboard); return end
   T.frame()
   local height = math.max(780, (ui.GetIO().height - 60) / T.S)
   if W.begin("Achievements",{w=1780,h=height,title="Achievements",

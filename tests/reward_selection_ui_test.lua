@@ -74,6 +74,7 @@ for _, pack in ipairs({"modern", "gamepad"}) do
     RestorePendingRewards=function(...)return record("restore",...)end,
     RewardSelectionClose=function(...)return record("close",...)end,
     ShowWindow=function(...)return record("window",...)end,
+    ReplaceWindow=function()return false end,
   },{__index=function(_,name)error("Unexpected game/action API: "..name)end})
   local function click(label,selected,width,height)
     local id=key(label);lastWidget=id

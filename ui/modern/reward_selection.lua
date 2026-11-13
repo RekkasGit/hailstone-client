@@ -364,6 +364,7 @@ end
 
 ui.window("Select Reward",function()
   if not eq.InGame()then closed();return end
+  eq.ReplaceWindow(WINDOW) -- every frame, hidden too: the reward key toggles the window only while a pack claims it
   local state=readState()
   if not state or not state.shown then closed();return end
   if laneName=="pending"and not(state.pending or {}).shown and(state.preview or {}).shown then changeLane("preview")end

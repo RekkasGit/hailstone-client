@@ -96,6 +96,7 @@ for _, pack in ipairs({ "modern", "gamepad" }) do
     AchievementClearCompare=function() return record("clearcompare") end,
     AchievementReward=function(...) return record("reward",...) end,
     AchievementLink=function(...) return record("link",...) end,
+    ReplaceWindow=function() return false end,
     ShowWindow=function(screen,shown)
       record("window",screen,shown)
       if screen=="AchievementsWnd" then state.shown=shown elseif detail then detail.shown=shown end

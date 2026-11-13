@@ -25,6 +25,7 @@ local function size(scale)
 end
 ui.window("Achievements", function()
   if not eq.InGame() then browser.reset(); return end
+  eq.ReplaceWindow("AchievementsWnd") -- every frame, hidden too: the achievement key toggles it only while claimed
   local state = browser.readState()
   if not state or not state.shown then return end
   hud.Dialog("AchievementsWnd", "Achievements", {shown=true,size=size,resizable={760,580},

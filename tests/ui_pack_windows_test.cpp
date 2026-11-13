@@ -1662,6 +1662,34 @@ TEST_CASE("UI packs (modern): an invitation to a group pops up with who sent it"
 
 // A server's compiled plugins ask before they load (docs/plugins.md): each pack draws the question in the client's
 // place (eq.PluginConsent; "PluginConsent" replaced), and nothing while there is none.
+// A window key reaches a pack's window only while the pack claims it (eq.ReplaceWindow, each frame): the achievement
+// and reward keys must work while their windows are hidden.
+TEST_CASE("UI packs: each claims the achievement and reward windows while they are hidden, so their keys open them") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_progress_keys_") + pack);
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            s.frames(2);
+            CHECK_FALSE(s.api.shown("AchievementsWnd"));
+            CHECK_FALSE(s.api.shown("RewardSelectionWnd"));
+            CHECK(s.api.replaces("AchievementsWnd"));
+            CHECK(s.api.replaces("RewardSelectionWnd"));
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 TEST_CASE("UI packs: the server plugins' question draws in each pack in the client's place") {
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);
