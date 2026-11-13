@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <array>
 #include <limits>
+#include <optional>
 
 #include <cmath>
 #include <chrono>
@@ -20,6 +22,8 @@
 #include "core/game_dir.h"
 #include "core/log.h"
 #include "game/collision.h"
+#include "game/coords.h"
+#include "game/revamped_zone.h"
 #include "game_files.h"
 #include "pfs_fixtures.h"
 #include "scratch_dir.h"
@@ -712,6 +716,106 @@ TEST_CASE("Zones the live client revamped under the RoF2 name load as S3D, or no
     CHECK_THROWS_WITH(load_zone(game, "bazaar"), doctest::Contains("revamped zone"));
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+TEST_CASE("A revamped zone's safe-point test: a floor at most 10 units under the point, or a step up over it") {
+    // A floor at z 0 over x, y 0..100.
+    std::vector<game::CollisionTriangle> tris;
+    for (auto [a, b, c] : {std::array<glm::vec3, 3>{glm::vec3(0, 0, 0), glm::vec3(100, 0, 0), glm::vec3(100, 100, 0)},
+                           std::array<glm::vec3, 3>{glm::vec3(0, 0, 0), glm::vec3(100, 100, 0), glm::vec3(0, 100, 0)}}) {
+        tris.push_back(game::CollisionTriangle::make(a, b, c, 0));
+    }
+    auto mesh = game::CollisionMesh::from_triangles(tris);
+    CHECK(game::safe_point_on_floor(mesh, {50, 50, 3.6f})); // PEQ's Bazaar version 1 on the live bazaar.eqg
+    CHECK(game::safe_point_on_floor(mesh, {50, 50, 10.0f}));
+    CHECK(game::safe_point_on_floor(mesh, {50, 50, -3.0f}));        // within the step up
+    CHECK_FALSE(game::safe_point_on_floor(mesh, {50, 50, 15.9f}));  // Nektulos version 0 on the live nektulos.eqg
+    CHECK_FALSE(game::safe_point_on_floor(mesh, {50, 50, -5.0f}));  // under the floor
+    CHECK_FALSE(game::safe_point_on_floor(mesh, {150, 50, 3.0f}));  // no floor (Bazaar version 0)
+    REQUIRE(game::safe_point_height(mesh, {50, 50, 3.0f}));
+    CHECK(*game::safe_point_height(mesh, {50, 50, 3.0f}) == doctest::Approx(3.0f));
+}
+
+namespace {
+
+// A binary-ZON zone archive <zone>.eqg in `dir` with one terrain: a 100 x 100 floor.
+void write_floor_zone(const std::filesystem::path& dir, const std::string& zone) {
+    std::vector<glm::vec3> pos{{0, 0, 0}, {100, 0, 0}, {100, 100, 0}, {0, 100, 0}};
+    std::vector<glm::vec2> uv{{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+    auto ter = make_model(true, 1, {{"ground", "Opaque_MPLBasic.fx", "ground_c.dds"}}, pos, uv,
+                          {{0, 1, 2, 0, 0}, {0, 2, 3, 0, 0}});
+    Strings s;
+    auto name = s.add("TER_floor.TER");
+    ByteWriter w;
+    w.le<std::uint32_t>(eqg::kZonMagic);
+    w.le<std::uint32_t>(1);
+    w.le<std::uint32_t>(static_cast<std::uint32_t>(s.bytes.size()));
+    w.le<std::uint32_t>(1); // models
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.le<std::uint32_t>(0);
+    w.bytes(s.bytes);
+    w.le(name);
+    auto eqg = hailstone::test::pfs_fixtures::make_pfs({{zone + ".zon", w.take()}, {"ter_floor.ter", ter}});
+    std::ofstream f(dir / (zone + ".eqg"), std::ios::binary);
+    f.write(reinterpret_cast<const char*>(eqg.data()), static_cast<std::streamsize>(eqg.size()));
+}
+
+} // namespace
+
+TEST_CASE("A live folder's revamped .eqg loads when the server's safe point stands on its floor") {
+    hailstone::test::ScratchDir dir("eqg_revamped_safe");
+    write_floor_zone(dir.path(), "bazaar");
+    write_floor_zone(dir.path(), "tutoriala");
+    std::ofstream(dir.path() / "spells_us_str.txt") << "x"; // a live folder
+    GameDir game(dir.path());
+    // Where the floor is in world coordinates, from the zone itself.
+    const Zone plain = load_eqg_zone(game, "bazaar");
+    const glm::vec3 mid = (plain.bounds_min + plain.bounds_max) * 0.5f;
+    const float floor_z = plain.bounds_max.z;
+
+    // No word from the server: refused, as before.
+    CHECK_THROWS_WITH(load_zone(game, "bazaar"), doctest::Contains("revamped zone"));
+    // The safe point stands on the floor: the zone loads, and the test's collision mesh is there to keep.
+    {
+        std::optional<game::CollisionMesh> built;
+        auto zone = load_zone(game, "Bazaar", {}, game::safe_point_test({mid.x, mid.y, floor_z + 3.0f}, built));
+        CHECK(zone.terrain.size() == 1);
+        REQUIRE(built);
+        CHECK(built->floor_below({mid.x, mid.y, floor_z + 3.0f}, 0.0f));
+    }
+    // Too high over the floor, or off it: refused.
+    {
+        std::optional<game::CollisionMesh> built;
+        CHECK_THROWS_WITH(load_zone(game, "bazaar", {}, game::safe_point_test({mid.x, mid.y, floor_z + 30.0f}, built)),
+                          doctest::Contains("does not match the server's safe point"));
+        CHECK_THROWS_WITH(load_zone(game, "bazaar", {},
+                                    game::safe_point_test({plain.bounds_max.x + 50.0f, mid.y, floor_z + 3.0f}, built)),
+                          doctest::Contains("does not match the server's safe point"));
+    }
+    // A zone that is not revamped loads by the original's rule; the test is not asked.
+    bool asked = false;
+    auto tutorial = load_zone(game, "tutoriala", {}, [&](const Zone&) { return asked = true; });
+    CHECK(tutorial.terrain.size() == 1);
+    CHECK_FALSE(asked);
+    // The server's own files bring the .eqg: loaded without asking (GameDir::from_overlay).
+    hailstone::test::ScratchDir overlay("eqg_revamped_overlay");
+    write_floor_zone(overlay.path(), "bazaar");
+    GameDir served(dir.path(), overlay.path());
+    auto from_server = load_zone(served, "bazaar", {}, [&](const Zone&) { return asked = true; });
+    CHECK(from_server.terrain.size() == 1);
+    CHECK_FALSE(asked);
+}
+
+TEST_CASE("The live bazaar.eqg: PEQ's version 1 safe point stands on it, version 0's does not" *
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto& game = *hailstone::test::game_dir();
+    if (!game.exists("bazaar.eqg") || game.exists("bazaar.s3d")) return; // a RoF2 folder: nothing to test
+    auto zone = load_eqg_zone(game, "bazaar");
+    auto mesh = game::CollisionMesh::build(zone);
+    // PEQ's zone table, server x y z: version 1 (expansion 9 on) and version 0 (expansions 3 to 8).
+    CHECK(game::safe_point_on_floor(mesh, game::server_to_world({-71.0f, -250.0f, 33.0f})));
+    CHECK_FALSE(game::safe_point_on_floor(mesh, game::server_to_world({140.0f, -821.0f, 5.0f})));
 }
 
 TEST_CASE("EQG character meshes: with bones v runs up from the texture's bottom (1 - v), without it is as stored") {
