@@ -203,7 +203,9 @@ std::uint8_t new_to_old_anim(std::uint8_t code) {
     return s ? s->old : 0;
 }
 
-std::uint8_t old_to_new_anim(std::uint8_t old) { return old < 0x4f ? kOldToNew[old] : old; }
+std::uint8_t old_to_new_anim(std::uint8_t old) {
+    return old < static_cast<std::uint8_t>(AnimationType::End) ? kOldToNew[old] : old;
+}
 
 std::uint8_t new_style_fallback(std::uint8_t code) {
     const Sequence* s = sequence(code);
@@ -242,7 +244,9 @@ bool is_jump_animation(std::uint8_t anim, bool new_style) {
            anim == static_cast<std::uint8_t>(AnimationType::JumpStand);
 }
 
-std::string_view old_anim_clip(std::uint8_t old) { return old > 0 && old < 0x4f ? kOldNames[old] : std::string_view{}; }
+std::string_view old_anim_clip(std::uint8_t old) {
+    return old > 0 && old < static_cast<std::uint8_t>(AnimationType::End) ? kOldNames[old] : std::string_view{};
+}
 
 bool movement_still(float y, float x, float z, const Fpu& f) {
     // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; compared with 0.01.
