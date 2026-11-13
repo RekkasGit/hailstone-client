@@ -991,8 +991,9 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| AllItems | () → {{item, place, where, slot, sub, bag, kept}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats) | — |
+| AllItems | () → {{item, place, where, slot, sub, bag, kept, stale}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats). stale: a banked row from the bank as last seen (eq.BankSeen), not in reach | — |
 | ItemsRevision | () → inv, keep | Change counters | — |
+| BankSeen | () → live, age | live: the bank's rows are the bank as the server has it now; else they are the copy as last seen at a bank, age seconds ago (nil: never seen) | — |
 | ItemKept | (id) → bool | Item is marked Keep | — |
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
@@ -1072,7 +1073,8 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ChatCloseTab | (slot, tab) → — | Close a tab | commands |
 | ChatSelectTab | (slot, tab) → — | Bring a tab up | commands |
 | ChatSetTitle | (slot, title) → — | Rename the tab | commands |
-| ChatFilters | (slot) → {{id, group, name, on}} | Filters menu for the tab | — |
+| ChatFilters | (slot) → {{id, group, name, on, menu, parent}} | Route rows for the tab; menu and parent are stable group IDs | — |
+| ChatFilterGroups | () → {{id, parent, name}} | Filter menu hierarchy; parent 0 is the root | — |
 | ChatSetFilter | (slot, id\|groupName, on) → — | Route a channel here or back to main | commands |
 | ChatSetFont | (slot, font) → — | Tab font index | commands |
 | ChatDefaultChannels | () → {names} | Channel menu items (0-based order) | — |

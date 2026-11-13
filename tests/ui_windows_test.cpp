@@ -702,3 +702,41 @@ TEST_CASE("Tracking window: its controls run the /track commands, auto update ke
     read.load(ini);
     CHECK(read.on(game::ClientOption::TrackAutoUpdate));
 }
+
+// The hot bar's Lock layout row (Hailstone's): on the window's own menu (the modern UI's frames), with the layout
+// setting it toggles; not on eq.HotBarMenu's (the gamepad pack's pages, which have no frame to lock).
+TEST_CASE("Hot bar: Lock layout on the window's menu only, toggling hud.lock.<window>") {
+    const GameDir* g = test::game_dir();
+    if (!g) return;
+    Harness t(*g);
+    std::map<std::string, std::string, std::less<>> settings;
+    t.host.layout_setting = [&](std::string_view key) {
+        auto it = settings.find(key);
+        return it == settings.end() ? std::string() : it->second;
+    };
+    t.host.set_layout_setting = [&](std::string_view key, std::string_view value) {
+        settings[std::string(key)] = std::string(value);
+    };
+    auto lock_row = [&]() -> const app::EqHost::MenuRow* {
+        REQUIRE(t.host.menus.size() == 1);
+        for (const auto& r : t.host.menus[0].rows)
+            if (r.text == "Lock layout") return &r;
+        return nullptr;
+    };
+    CHECK(t.api->context_menu("HotButtonWnd2", 10, 10));
+    const app::EqHost::MenuRow* lock = lock_row();
+    REQUIRE(lock);
+    CHECK_FALSE(lock->check);
+    const int at = static_cast<int>(lock - t.host.menus[0].rows.data());
+    CHECK(t.api->menu_click(0, at));
+    CHECK(settings["hud.lock.HotButtonWnd2"] == "1");
+    CHECK(t.api->context_menu("HotButtonWnd2", 10, 10));
+    REQUIRE(lock_row());
+    CHECK(lock_row()->check);
+    CHECK(t.api->menu_click(0, at));
+    CHECK(settings["hud.lock.HotButtonWnd2"] == "0");
+    // eq.HotBarMenu's path (no layout lock): the row is not there
+    t.host.menus.clear();
+    app::open_hot_bar_menu(t.host, 1, 10, 10);
+    CHECK(lock_row() == nullptr);
+}

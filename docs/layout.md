@@ -55,6 +55,8 @@ hailstone/
                              hailstone.ini, the client's settings for this character ("A character's settings" below);
                              kept_items.txt (the items marked Keep in the Advanced Inventory window, one
                              "<item id> <name>" a line; game/kept_items.h);
+                             bank.dat (the bank and shared bank as last seen, which the Advanced Inventory lists
+                             while the server has not sent the bank; game/bank_snapshot.h);
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
                              opacity, locks: the `hud.*` settings);
                              eqlog.txt (or /log on <name>: <name>.txt), the chat log; plugin-config/<plugin>/ a
@@ -98,6 +100,17 @@ the player owns (`data_dir_problem()`), rather than writing anywhere else:
 - the folder is not writable (an install under Program Files or /usr);
 - the folder is a game install (it holds `eqgame.exe`, `spells_us.txt` or `eqclient.ini`): Hailstone unpacked into the
   RoF2 install would otherwise write into the asset folder, which it only reads.
+
+The asset picker refuses an asset folder that holds the Hailstone folder (`data_folder_conflict`), for the same
+reason. A build made with the CMake option `HAILSTONE_ALLOW_IN_EQ_FOLDER=ON` (off by default) accepts one place
+inside it: a folder named `hailstone` (any case) directly in the asset folder, `<EverQuest>/hailstone/`, where a
+server's own patcher may install Hailstone. Writing there changes none of the install's files, and Hailstone never
+reads that folder as game files: the asset folder is indexed whole, at every depth, except a top-level `hailstone`
+folder (`GameDir::kOwnFolder`; a server's `assets` overlay is indexed whole). Anywhere else inside the asset folder
+(`maps/`, `uifiles/`, `Resources/`, a deeper `hailstone`, another name) holds or may hold files the game reads, and
+stays refused, as does the asset folder itself, in every build. Such a build also starts on the folder that holds a
+Hailstone folder named `hailstone` (`../`) when it is an EverQuest install and no saved folder works (a first start,
+or a moved install); that default is never saved.
 
 The one exception is a macOS app bundle (`.app/Contents/`): replacing the app would delete the data and writing there
 breaks its signature, so a bundle keeps its data in `~/Library/Application Support/hailstone`. A dev build's

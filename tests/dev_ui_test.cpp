@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include "core/server_profile.h"
 #include "core/config.h"
 #include "game/eq_names.h"
 #include "platform/open_folder.h"
@@ -125,6 +126,100 @@ TEST_CASE("Login profiles: saved and picked again, never the password") {
     CHECK_FALSE(std::filesystem::exists(servers.path / "my-server"));
     REQUIRE(out.profiles.size() == 1);
     CHECK(ui::selected_profile_id(out) == "play-example-org");
+}
+
+TEST_CASE("Login profiles: eqhost.txt's login server") {
+    using namespace hailstone;
+    // [LoginServer]'s first Host line, with its port.
+    auto p = profile_from_eqhost("[LoginServer]\r\nHost=login.example.org:5999\r\nHost=other:1\r\n");
+    REQUIRE(p);
+    CHECK(p->host == "login.example.org");
+    CHECK(p->port == 5999);
+    CHECK(p->name == "login.example.org");
+    CHECK(p->id.empty());
+    // No port: ServerProfile's default, as a new server in the login screen gets.
+    auto bare = profile_from_eqhost("[LoginServer]\nhost = 10.1.2.3 \n");
+    REQUIRE(bare);
+    CHECK(bare->host == "10.1.2.3");
+    CHECK(bare->port == ServerProfile{}.port);
+    // A byte order mark, and a Host before any section.
+    auto bom = profile_from_eqhost("\xEF\xBB\xBFHost=bom.example.org:6000\n");
+    REQUIRE(bom);
+    CHECK(bom->host == "bom.example.org");
+    CHECK(bom->port == 6000);
+    // IPv6: a bare address has no port; "[v6]:port" has one.
+    auto v6 = profile_from_eqhost("[LoginServer]\nHost=2001:db8::1\n");
+    REQUIRE(v6);
+    CHECK(v6->host == "2001:db8::1");
+    CHECK(v6->port == ServerProfile{}.port);
+    auto v6port = profile_from_eqhost("[LoginServer]\nHost=[2001:db8::1]:5999\n");
+    REQUIRE(v6port);
+    CHECK(v6port->host == "2001:db8::1");
+    CHECK(v6port->port == 5999);
+    // Only Host in [LoginServer]: Host1, other sections and broken lines are skipped for a later good one.
+    auto later = profile_from_eqhost("[Other]\nHost=no:1\n[LoginServer]\nHost1=no:2\nHost=x:0\nHost=x:65536\n"
+                                     "Host=x:12ab\nHost=x:\nHost=[::1]x\nHost=:5999\nHost=good:65535\n");
+    REQUIRE(later);
+    CHECK(later->host == "good");
+    CHECK(later->port == 65535);
+    CHECK_FALSE(profile_from_eqhost("[LoginServer]\n"));
+    CHECK_FALSE(profile_from_eqhost("Host=:5999\nHost=x:99999\nHost=x:-1\nHost=x: \n"));
+    CHECK_FALSE(profile_from_eqhost(""));
+
+    // The file: only its first kMaxEqhostBytes are read.
+    TempServers dir;
+    const std::filesystem::path big = dir.path / "big.txt";
+    {
+        std::ofstream out(big, std::ios::binary);
+        out << std::string(kMaxEqhostBytes, '\n') << "[LoginServer]\nHost=late:5999\n";
+    }
+    CHECK_FALSE(profile_from_eqhost_file(big));
+    CHECK_FALSE(profile_from_eqhost_file(dir.path / "missing.txt"));
+}
+
+TEST_CASE("Login profiles: a fresh install starts on the server its eqhost.txt names, once") {
+    using namespace hailstone;
+    TempServers servers;
+    const std::filesystem::path eqhost = servers.path / "eqhost.txt";
+    std::ofstream(eqhost) << "[LoginServer]\nHost=login.example.org:5999\n";
+    // No saved server: the eqhost.txt one is made, picked and named in login.profile.
+    Config cfg;
+    ui::LoginView view;
+    CHECK(ui::load_login_settings(view, cfg, servers.path, eqhost));
+    REQUIRE(view.profiles.size() == 1);
+    CHECK(view.selected == 0);
+    CHECK(view.host == "login.example.org");
+    CHECK(view.port == 5999);
+    CHECK(cfg.get_string("login.profile") == view.profiles[0].id);
+    CHECK(cfg.get_bool("login.eqhost_imported", false));
+    // Loaded again: nothing more is added.
+    ui::LoginView again;
+    CHECK_FALSE(ui::load_login_settings(again, cfg, servers.path, eqhost));
+    CHECK(again.profiles.size() == 1);
+    // The player deletes it: it does not come back.
+    REQUIRE(remove_profile(view.profiles[0].id, servers.path));
+    ui::LoginView emptied;
+    CHECK_FALSE(ui::load_login_settings(emptied, cfg, servers.path, eqhost));
+    CHECK(emptied.profiles.empty());
+
+    // A player who already has a server when the file is first seen: it is never imported, not even after they
+    // delete theirs.
+    TempServers other;
+    ServerProfile mine;
+    mine.host = "mine.example.org";
+    mine.name = mine.host;
+    mine.id = make_profile_id(mine.name, other.path);
+    REQUIRE(save_profile(mine, other.path));
+    Config cfg2;
+    ui::LoginView had;
+    CHECK(ui::load_login_settings(had, cfg2, other.path, eqhost));
+    CHECK(had.profiles.size() == 1);
+    CHECK(had.host == "mine.example.org");
+    CHECK(cfg2.get_bool("login.eqhost_imported", false));
+    REQUIRE(remove_profile(mine.id, other.path));
+    ui::LoginView none;
+    CHECK_FALSE(ui::load_login_settings(none, cfg2, other.path, eqhost));
+    CHECK(none.profiles.empty());
 }
 
 TEST_CASE("Login profiles: each server keeps its own user interface") {

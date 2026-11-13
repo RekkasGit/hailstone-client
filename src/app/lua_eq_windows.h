@@ -412,9 +412,11 @@ std::string load_stml_page(const GameDir* game, const std::string& path, std::st
 std::uint32_t chat_index_rgb(int index);
 // The 99 user colours (CDisplay's table @0xd1f3d8, 0xRRGGBB): eqclient.ini [TextColors] User_<n>_Red/Green/Blue as
 // the loader @0x48a160 reads them (the default table @0xac2c40 when one of the three is missing). Out of range
-// indices read colour 0 (GetUserDefinedColor).
+// indices read colour 0 (GetUserDefinedColor). Hailstone adds 54 (indices 99..152, the extended colours 355..408;
+// game/chat_windows.h), with defaults of its own.
 std::uint32_t user_color_rgb(int index);
 std::uint32_t default_user_color_rgb(int index);
+std::string_view extended_chat_color_name(int index); // index 99..152; empty outside the extended palette
 // COptionsWnd::SaveColors: CDisplay::SetUserDefinedColor and the three keys the original writes to eqclient.ini,
 // here to the character's chat.ini (core/character_files.h).
 void set_user_color(EqHost& host, int index, std::uint32_t rgb);

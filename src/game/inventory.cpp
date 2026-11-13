@@ -163,6 +163,13 @@ int bag_fit(const Item& bag, const Item& item) {
     return 1;
 }
 
+bool server_bag_accepts(const Item& bag, const Item& item) {
+    if (!bag.is_bag() || item.size > bag.bag_size) return false;
+    if (bag.bag_type == 2 && item.item_type != 27) return false;
+    if (bag.bag_type == 8 && item.item_type != 19) return false;
+    return true;
+}
+
 std::uint32_t bag_fit_message(int fit) {
     switch (fit) {
     case 2: return 5246;
