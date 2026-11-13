@@ -51,6 +51,7 @@
 #include "game/item_moves.h"
 #include "game/item_sort.h"
 #include "game/kept_items.h"
+#include "game/bank_snapshot.h"
 #include "game/inventory.h"
 #include "game/item_links.h"
 #include "game/mail.h"
@@ -317,6 +318,9 @@ struct ConnectionOptions {
     std::filesystem::path server_files_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
+    // Hailstone: the bank as last seen is read from and saved to the character's bank.dat (game/bank_snapshot.h).
+    // Off: kept for the session only (tests, which share character names).
+    bool bank_snapshot_file = false;
 };
 
 // The modifier keys of a click on an item slot (CXWndManager::GetKeyboardFlags: Shift, Ctrl, Alt).
@@ -1798,6 +1802,14 @@ public:
     bool activate_bank(std::uint32_t banker_id);
     void close_bank();
     const std::optional<BankSession>& bank() const { return bank_; }
+    // Hailstone: the bank as last seen (game/bank_snapshot.h). bank_live(): the inventory holds the bank as the server
+    // has it in this zone (it came with OP_CharInventory or in item packets, or the bank window opened); until then
+    // the bank's slots are empty in inventory() and bank_seen() is the copy to list in their place (seen 0: never
+    // seen). The copy is never in inventory(), so nothing can move, use or count what it holds.
+    bool bank_live() const { return bank_live_; }
+    const game::BankSnapshot& bank_seen() const { return bank_seen_; }
+    // Changes when bank_live() or bank_seen() does (a window's cache).
+    std::uint64_t bank_view_revision() const { return bank_view_revision_; }
     const game::BankCoins& bank_coins() const { return bank_coins_; }
     // Coin on the cursor by wire type (0 copper .. 3 platinum).
     const std::array<std::uint32_t, 4>& cursor_coins() const { return cursor_coins_; }
@@ -2052,7 +2064,8 @@ public:
     // LaunchSpellData_GetCastItem @0x59fcf0: the item at the cast's location when it is an item cast, else null.
     Item* cast_item();
     // The AA window's train button / /alternateadv buy: OP_AAAction 3 when trainable, else eqstr 13277.
-    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks).
+    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks). On a
+    // server without action 4 the client buys the ranks one at a time itself (continue_aa_buy_all).
     bool aa_train(std::uint32_t rank_id, bool train_all = false);
     // The AA window's Train button (CAAWnd::WndNotification @0x60aa80): with AANoConfirm it trains at once, else it
     // asks first (4041 / 4042 with the cost and the name, 20 s).
@@ -2681,6 +2694,9 @@ private:
     void handle_level_update(std::uint32_t new_level);
     void reset_progress_for_zone();
     void request_aa_data();
+    // A client-side "buy all ranks" (aa_train with train_all on a server without action 4): once the rank last
+    // bought is owned and the points are updated, the next rank is bought while it can be trained.
+    void continue_aa_buy_all();
     bool combine_checks(std::uint32_t container_type, const std::vector<const Item*>& contents);
     bool combine_gates(std::uint32_t container_type); // the race and class containers' refusals
     void send_combine(const ItemSlot& container_slot, std::uint32_t container_type);
@@ -3180,6 +3196,13 @@ private:
     std::int64_t merchant_check_ms_ = 0; // CMerchantWnd::NextRefreshTime: the range check every 500 ms
     std::optional<TradeSession> trade_;
     std::optional<BankSession> bank_;
+    game::BankSnapshot bank_seen_;     // Hailstone: the bank as last seen (bank.dat)
+    bool bank_live_ = false;
+    std::uint64_t bank_view_revision_ = 0;
+    void set_bank_live(bool live);
+    // While bank_live(): bank_seen() becomes the inventory's bank now, saved to bank.dat (bank_snapshot_file).
+    void capture_bank();
+    void load_bank_snapshot();
     std::int64_t bank_check_ms_ = 0; // CBankWnd::NextRefreshTime
     game::BankCoins bank_coins_;
     std::array<std::uint32_t, 4> cursor_coins_{};
@@ -3298,6 +3321,7 @@ private:
     void update_task_compass();
     game::TextOverlay text_overlay_;
     bool aa_requested_ = false;
+    std::uint32_t aa_buy_all_ = 0; // the rank a client-side "buy all ranks" is waiting on (0: none)
     mutable std::unique_ptr<game::mechanics::GameTables> tables_; // SkillCaps / BaseData, loaded when first needed
     std::int64_t sat_down_ms_ = 0;  // the spawn's +0x374: when the player sat down (0 standing)
     bool was_sitting_ = false;

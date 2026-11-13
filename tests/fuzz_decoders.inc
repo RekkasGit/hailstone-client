@@ -323,6 +323,7 @@ HAILSTONE_FUZZ_DECODER(decode_zone_unavail)
 #if defined(HAILSTONE_HAS_TRIUNE)
 #include "fuzz_decoders_triune.inc" // the private Project Triune plugin, when checked out
 #endif
+HAILSTONE_FUZZ_GAME_DECODER(decode_bank_snapshot)
 HAILSTONE_FUZZ_GAME_DECODER(decode_missile_packet)
 HAILSTONE_FUZZ_GAME_DECODER(decode_zone_to_bind)
 HAILSTONE_FUZZ_GAME_DECODER(parse_buy_line_ini)

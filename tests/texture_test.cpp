@@ -1,17 +1,23 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 
 #include "assets/pfs.h"
 #include "assets/texture.h"
 #include "core/byte_io.h"
 #include "game_files.h"
+#include "render/gpu.h"
 #include "ui/ui_textures.h"
 
 using namespace hailstone::assets;
 using hailstone::ByteWriter;
+using hailstone::render::TextureUse;
+using hailstone::render::prepare_texture_image;
 
 TEST_CASE("UI animation art: XML frame crops retain original dimensions and aspect") {
     const std::string xml = R"xml(<XML><Ui2DAnimation item="FixtureBadge"><Frames>
@@ -799,4 +805,168 @@ TEST_CASE("a DDS cube map becomes an octahedral map, each direction from its fac
     CHECK(at({-1, 0.1f, 0.1f}) == colors[1]);
     CHECK(at({0.1f, 1, 0.1f}) == colors[4]);
     CHECK(at({0.1f, -1, -0.1f}) == colors[5]);
+}
+
+TEST_CASE("is_opaque tells a texture that needs no coverage-aware chain from one that does") {
+    Image img;
+    img.width = 2;
+    img.height = 1;
+    img.format = PixelFormat::RGBA8;
+    img.mips.push_back(std::vector<std::byte>(8, std::byte{0xff}));
+    CHECK(is_opaque(img));
+    img.mips[0][7] = std::byte{0x00}; // one clear texel
+    CHECK_FALSE(is_opaque(img));
+    img.mips[0][7] = std::byte{0x80}; // half clear
+    CHECK_FALSE(is_opaque(img));
+    img.mips[0][7] = std::byte{0xff};
+
+    // A compressed image is not one the chain rule applies to: it keeps the compression it was stored in.
+    Image bc;
+    bc.width = 4;
+    bc.height = 4;
+    bc.format = PixelFormat::BC3;
+    bc.mips.push_back(std::vector<std::byte>(32, std::byte{0xff}));
+    CHECK_FALSE(is_opaque(bc));
+}
+
+TEST_CASE("An opaque texture goes up with the GPU building its mips; a cut-out one keeps the CPU's chain") {
+    Image opaque;
+    opaque.width = 4;
+    opaque.height = 4;
+    opaque.format = PixelFormat::RGBA8;
+    opaque.mips.push_back(std::vector<std::byte>(4 * 4 * 4, std::byte{0xff}));
+
+    // Left alone: the upload generates the levels itself (render/gpu.cpp UploadBatch::texture).
+    CHECK_FALSE(prepare_texture_image(opaque, TextureUse::Color).has_value());
+    CHECK_FALSE(prepare_texture_image(opaque, TextureUse::OpaqueColor).has_value());
+
+    // A cut-out keeps the CPU's chain: its coverage is scaled so alpha-tested foliage does not thin out.
+    Image cutout = opaque;
+    cutout.mips[0][3] = std::byte{0x00};
+    auto prepared = prepare_texture_image(cutout, TextureUse::Color);
+    REQUIRE(prepared.has_value());
+    CHECK(prepared->mips.size() > 1); // 4x4, 2x2, 1x1
+    CHECK(prepared->mips[1].size() == 2 * 2 * 4);
+
+    // A texture with a chain of its own keeps it (a game DDS with mips).
+    Image with_mips = opaque;
+    with_mips.mips.push_back(std::vector<std::byte>(2 * 2 * 4, std::byte{0xff}));
+    CHECK_FALSE(prepare_texture_image(with_mips, TextureUse::Color).has_value());
+}
+
+namespace {
+
+Image opaque_image(std::uint32_t w, std::uint32_t h, std::uint32_t seed) {
+    Image img;
+    img.width = w;
+    img.height = h;
+    img.format = PixelFormat::RGBA8;
+    std::vector<std::byte> px(std::size_t(w) * h * 4);
+    std::uint32_t x = seed;
+    for (std::size_t i = 0; i < px.size(); ++i) {
+        x = x * 1664525u + 1013904223u; // a fixed pseudo-random pattern, high contrast between neighbours
+        px[i] = (i % 4 == 3) ? std::byte{0xff} : static_cast<std::byte>(x >> 24);
+    }
+    img.mips.push_back(std::move(px));
+    return img;
+}
+
+double to_linear(int c) {
+    const double v = c / 255.0;
+    return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+}
+
+int to_srgb(double v) {
+    v = std::clamp(v, 0.0, 1.0);
+    const double s = v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+    return static_cast<int>(std::lround(s * 255.0));
+}
+
+} // namespace
+
+TEST_CASE("The GPU builds a texture's mips only where they come out as the CPU's linear-light chain") {
+    using hailstone::render::gpu_builds_mips;
+    CHECK(gpu_builds_mips(opaque_image(16, 8, 1), TextureUse::Color));
+    CHECK(gpu_builds_mips(opaque_image(16, 8, 1), TextureUse::OpaqueColor));
+    CHECK(gpu_builds_mips(opaque_image(1, 8, 1), TextureUse::Color));
+    CHECK_FALSE(gpu_builds_mips(opaque_image(16, 8, 1), TextureUse::Data)); // data: its own (UNORM) blit
+    CHECK_FALSE(gpu_builds_mips(opaque_image(1, 1, 1), TextureUse::Color)); // nothing to build
+    // An odd size: the CPU's 2x2 box and a 2:1 linear blit read different texels, so the CPU keeps it.
+    auto npot = opaque_image(12, 8, 2);
+    CHECK_FALSE(gpu_builds_mips(npot, TextureUse::Color));
+    auto chain = prepare_texture_image(npot, TextureUse::Color);
+    REQUIRE(chain.has_value());
+    CHECK(chain->mips.size() == 4); // 12x8, 6x4, 3x2, 1x1
+    auto cutout = opaque_image(16, 8, 3);
+    cutout.mips[0][3] = std::byte{0};
+    CHECK_FALSE(gpu_builds_mips(cutout, TextureUse::Color));
+    // Asked to, prepare_texture_image builds the chain the GPU would have built.
+    auto pot = opaque_image(16, 8, 4);
+    CHECK_FALSE(prepare_texture_image(pot, TextureUse::Color).has_value());
+    REQUIRE(prepare_texture_image(pot, TextureUse::Color, false).has_value());
+}
+
+TEST_CASE("An sRGB blit chain of an opaque texture matches assets::build_color_mips") {
+    // What vkCmdBlitImage does on the R8G8B8A8_SRGB image (render/gpu.cpp UploadBatch::texture): each level from the
+    // one above, each texel the 2x2 average of its sources decoded to linear, encoded back to 8-bit sRGB. The CPU
+    // chain keeps full precision between levels, so a level may differ by a rounding step; gamma-space averaging (the
+    // UNORM blit) is off by far more on this high-contrast pattern.
+    for (auto [w, h] : {std::pair{16u, 16u}, std::pair{32u, 8u}, std::pair{4u, 64u}}) {
+        const auto source = opaque_image(w, h, w * 31 + h);
+        REQUIRE(hailstone::render::gpu_builds_mips(source, TextureUse::Color));
+        Image cpu = source;
+        build_color_mips(cpu);
+        std::vector<std::vector<int>> levels{{}};
+        for (auto b : source.mips[0]) levels[0].push_back(std::to_integer<int>(b));
+        std::uint32_t lw = w, lh = h;
+        int worst = 0, worst_gamma = 0;
+        while (lw > 1 || lh > 1) {
+            const std::uint32_t nw = std::max(1u, lw / 2), nh = std::max(1u, lh / 2);
+            const auto& prev = levels.back();
+            std::vector<int> next(std::size_t(nw) * nh * 4);
+            for (std::uint32_t y = 0; y < nh; ++y)
+                for (std::uint32_t x = 0; x < nw; ++x)
+                    for (int k = 0; k < 4; ++k) {
+                        double lin = 0.0, gamma = 0.0;
+                        int n = 0;
+                        for (std::uint32_t sy = y * 2; sy < std::min(lh, y * 2 + 2); ++sy)
+                            for (std::uint32_t sx = x * 2; sx < std::min(lw, x * 2 + 2); ++sx, ++n) {
+                                const int c = prev[(std::size_t(sy) * lw + sx) * 4 + std::size_t(k)];
+                                lin += k == 3 ? c / 255.0 : to_linear(c);
+                                gamma += c;
+                            }
+                        const int blit = k == 3 ? static_cast<int>(std::lround(lin / n * 255.0)) : to_srgb(lin / n);
+                        next[(std::size_t(y) * nw + x) * 4 + std::size_t(k)] = blit;
+                        const std::size_t level = levels.size();
+                        const int want = std::to_integer<int>(cpu.mips.at(level).at((std::size_t(y) * nw + x) * 4 + std::size_t(k)));
+                        worst = std::max(worst, std::abs(blit - want));
+                        if (level == 1)
+                            worst_gamma = std::max(worst_gamma, std::abs(static_cast<int>(std::lround(gamma / n)) - want));
+                    }
+            levels.push_back(std::move(next));
+            lw = nw;
+            lh = nh;
+        }
+        CHECK(levels.size() == cpu.mips.size());
+        CHECK(worst <= 2);
+        CHECK(worst_gamma > 8); // the difference the sRGB view is there to avoid
+    }
+}
+
+TEST_CASE("A capped texture gets its chain on the CPU and loses the levels above the cap, opaque or not") {
+    using hailstone::render::prepare_capped_texture;
+    auto image = opaque_image(64, 32, 5);
+    auto use = TextureUse::Color;
+    prepare_capped_texture(image, use, 16);
+    CHECK(use == TextureUse::Data);
+    CHECK(image.width == 16);
+    CHECK(image.height == 8);
+    CHECK(image.mips.size() == 5); // 16x8 .. 1x1
+    // No cap: left as it is, for the upload to build the chain.
+    auto plain = opaque_image(64, 32, 5);
+    auto plain_use = TextureUse::Color;
+    prepare_capped_texture(plain, plain_use, 0);
+    CHECK(plain_use == TextureUse::Color);
+    CHECK(plain.mips.size() == 1);
+    CHECK(plain.width == 64);
 }

@@ -308,7 +308,7 @@ std::shared_ptr<const assets::PfsArchive> WorldObjects::archive(const std::strin
     std::shared_ptr<const assets::PfsArchive> a;
     if (auto path = game_.find(file)) {
         try {
-            a = std::make_shared<const assets::PfsArchive>(assets::PfsArchive::open(*path));
+            a = std::make_shared<const assets::PfsArchive>(assets::PfsArchive::open(*path, assets::PfsArchive::storage_for(game_, *path)));
         } catch (const std::exception& e) {
             log::warn("{}: {}", file, e.what());
         }

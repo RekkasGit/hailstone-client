@@ -80,3 +80,57 @@ model, DDS, TGA, XMI and table parsers produced no findings.
   later parts of the player profile) are reached only with all-zero or counting data.
 - `ReliableChannel` (timing logic, no parser) and the game-connection state machines beyond the `Session`.
 - Windows/macOS: the sanitizer build was run on Linux with GCC only.
+
+## Mapped game archives
+
+`PfsArchive::open` maps an archive read-only (`platform::MappedFile`) when the caller asks for it, which every caller
+that finds a file through `GameDir` does for a file in the asset folder or the classic folder
+(`PfsArchive::storage_for`). Those folders are never written by Hailstone. A file in a server's overlay
+(`servers/<id>/assets`, which the server files sync replaces while the client runs) is read into the heap once, as every
+archive was before: on Windows a rename over a file with a mapped view is typically refused, and the sync would fail.
+When a mapping cannot be made (no address space, a file system that cannot map, an empty file), the file is read into
+the heap instead.
+
+The cost: bytes are no longer read once at open. A game file that another program truncates or rewrites in place while
+it is mapped (a patcher or launcher run alongside the client, a sync tool writing into the game folder) can crash the
+client with SIGBUS on Linux and macOS or `EXCEPTION_IN_PAGE_ERROR` on Windows when a member past the new end is read,
+or hand the parsers bytes that change under them. The parsers bound every read against the mapping's length as they did
+against a heap buffer, so changed bytes are treated like any malformed file; a fault from a shrunk file is not caught.
+It is accepted because Hailstone never writes the game folder (docs/layout.md) and nothing else is expected to while
+the client runs, a patcher that does is expected to replace files by rename (which leaves the old mapping intact on
+POSIX) rather than truncate them, and the gain is the archives' size in private memory. Overlay files, the ones that do
+change under a running client, are never mapped. A file replaced by rename is picked up the next time the archive is opened
+(another zone, `CharacterArchiveCache::clear()` after an asset-folder or overlay change).
+
+## Windows allocation profiling
+
+The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that freed objects leaked. WPR's Heap profile records heap allocation/free activity; VirtualAllocation records virtual allocation activity. The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports. See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis) and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).
+
+Use one client, starting before login and ending after the repeated zoning route. Build with symbols first (`cmake --build build-msvc --config RelWithDebInfo --target hailstone` for a Visual Studio build), and retain its matching `hailstone.exe` and linker `hailstone.pdb`. A Release build without the matching PDB can identify modules but cannot reliably resolve Hailstone allocation stacks to functions. Put traces under the ignored `build-msvc/` folder.
+
+In an **elevated PowerShell** at the repository root, with Hailstone closed:
+
+```powershell
+wpr -status
+wpr -HeapTracingConfig hailstone.exe
+```
+
+If another recording is active, finish that recording before starting this one; do not cancel someone else's session. Note the current heap-tracing configuration so it can be restored afterward. When it was initially disabled:
+
+```powershell
+New-Item -ItemType Directory -Force .\build-msvc\memory-profile | Out-Null
+$trace = Join-Path (Resolve-Path .\build-msvc\memory-profile) ("route-{0:yyyyMMdd-HHmmss}.etl" -f (Get-Date))
+wpr -HeapTracingConfig hailstone.exe enable
+wpr -start Heap -start VirtualAllocation -filemode
+```
+
+Check each command succeeds. Then launch `build-msvc/hailstone/hailstone.exe`, log in, run the route and return to the first zone. Stop the recording **while the client remains in that zone**, so outstanding allocations can be examined before shutdown frees them:
+
+```powershell
+wpr -stop $trace
+wpr -HeapTracingConfig hailstone.exe disable
+```
+
+Always restore the initial tracing configuration after collecting or abandoning the run (leave it enabled if it was already enabled before this procedure). Heap tracing configuration affects newly launched clients, which is why the client must be restarted after enabling it. Trace-enabled measurements have instrumentation overhead; compare normal runtime memory using the client logs as well.
+
+Open the ETL in Windows Performance Analyzer and load the matching executable/PDB symbols. Filter to the Hailstone PID. In Heap Allocations, compare outstanding allocations at first settled Kael and return-to-Kael, grouped by allocation stack. Inspect VirtualAlloc Commit LifeTimes for large committed regions outside those heap allocations. Keep the associated `hailstone.log` for the route; native heap allocations, allocator-retained commit and graphics-driver regions are distinct categories, and the same bytes must not be added twice. Trace collection itself does not establish which category explains a gap.

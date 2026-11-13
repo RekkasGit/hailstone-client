@@ -992,8 +992,9 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| AllItems | () → {{item, place, where, slot, sub, bag, kept}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats) | — |
+| AllItems | () → {{item, place, where, slot, sub, bag, kept, stale}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats). stale: a banked row from the bank as last seen (eq.BankSeen), not in reach | — |
 | ItemsRevision | () → inv, keep | Change counters | — |
+| BankSeen | () → live, age | live: the bank's rows are the bank as the server has it now; else they are the copy as last seen at a bank, age seconds ago (nil: never seen) | — |
 | ItemKept | (id) → bool | Item is marked Keep | — |
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
@@ -1367,7 +1368,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `close_spell_book`, `clear_spell_recovery`, `set_window_pet(id)`, `inspect_item(id, augments)` | `actions` | |
 | `max_camera_distance`, `set_max_camera_distance(d)` | `actions` | |
 | `open_bank(banker)` | `actions` | the bank window at a spawn (0 the player), without a banker's checks. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` first |
-| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)` | `read` | every buff slot of the player, or of its pet, as fixed little-endian records (layout in docs/plugins.md "Buff records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_buff_data_bulk)` first |
+| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)`, `get_spawns_data_bulk(out, size)` | `read` | every buff slot of the player (`size` at least 1798, or 0 comes back), the pet window's buffs, or every spawn in the zone (`size` at least 4096, or 0 comes back; 4112 for any record), as packed records in the machine's byte order (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `eq.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
 | `out_value`, `out_begin_array`, `out_begin_table`, `out_key`, `out_end` | | a UI function's result |

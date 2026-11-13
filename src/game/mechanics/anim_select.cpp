@@ -203,7 +203,9 @@ std::uint8_t new_to_old_anim(std::uint8_t code) {
     return s ? s->old : 0;
 }
 
-std::uint8_t old_to_new_anim(std::uint8_t old) { return old < 0x4f ? kOldToNew[old] : old; }
+std::uint8_t old_to_new_anim(std::uint8_t old) {
+    return old < static_cast<std::uint8_t>(AnimationType::End) ? kOldToNew[old] : old;
+}
 
 std::uint8_t new_style_fallback(std::uint8_t code) {
     const Sequence* s = sequence(code);
@@ -237,10 +239,14 @@ float new_style_blend_ms(std::uint8_t from, std::uint8_t to) {
 }
 
 bool is_jump_animation(std::uint8_t anim, bool new_style) {
-    return new_style ? anim == kAnimJumpRun || anim == kAnimJumpStand : anim == kOldJumpRun || anim == kOldJumpStand;
+    if (new_style) return anim == kAnimJumpRun || anim == kAnimJumpStand;
+    return anim == static_cast<std::uint8_t>(AnimationType::JumpRun) ||
+           anim == static_cast<std::uint8_t>(AnimationType::JumpStand);
 }
 
-std::string_view old_anim_clip(std::uint8_t old) { return old > 0 && old < 0x4f ? kOldNames[old] : std::string_view{}; }
+std::string_view old_anim_clip(std::uint8_t old) {
+    return old > 0 && old < static_cast<std::uint8_t>(AnimationType::End) ? kOldNames[old] : std::string_view{};
+}
 
 bool movement_still(float y, float x, float z, const Fpu& f) {
     // 0x58af17: loads x, y, z; y*y, x*x, x*x + y*y, z*z, sum + z*z; compared with 0.01.
@@ -463,8 +469,8 @@ MovementAnimResult select_movement_anim(const MovementAnimInput& in, const Fpu& 
 
 OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu& f) {
     OldStyleAnimResult res;
-    auto animate = [&](std::uint8_t anim, bool a, bool b, float speed, bool c) {
-        res.start = {true, anim, a, b, speed, c};
+    auto animate = [&](AnimationType anim, bool a, bool b, float speed, bool c) {
+        res.start = {true, static_cast<std::uint8_t>(anim), a, b, speed, c};
     };
     auto race_is = [&](std::int32_t r) { return in.race == r; };
     const bool still = movement_still(in.speed_y, in.speed_x, in.speed_z, f) && !in.has_mount;
@@ -474,33 +480,34 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
     }
     if (still) {
         if (in.state_1198 == 1) {
-            animate(kOldStand, false, false, 1.0f, false);
+            animate(AnimationType::Stand, false, false, 1.0f, false);
             return res;
         }
         res.idle_sounds = true;
         if (in.display_time == in.still_since) {
             if (in.stand_state == 0x6f) {
-                animate(kOldDuck, true, false, 10000.0f, true);
+                animate(AnimationType::Duck, true, false, 10000.0f, true);
             } else if (in.body_wet < 5 && in.animation != 0x25 && in.animation != 0x19) {
-                animate(kOldStand, false, false, 1.0f, true);
+                animate(AnimationType::Stand, false, false, 1.0f, true);
             } else {
-                animate(kOldTread, false, false, 1.0f, false);
+                animate(AnimationType::Tread, false, false, 1.0f, false);
             }
             return res;
         }
         if (in.body_wet >= 5 && !race_is(0x18) && !race_is(0x3d) && !race_is(0x4a)) {
-            animate(kOldTread, false, false, 1.0f, false);
+            animate(AnimationType::Tread, false, false, 1.0f, false);
             return res;
         }
         if (in.flag) {
             if (race_is(0x31)) {
-                animate(kOldJumpRun, true, false, 1.5f, true);
+                animate(AnimationType::JumpRun, true, false, 1.5f, true);
             } else if (in.state_1198 == 1) {
-                animate(kOldStand, false, false, 1.0f, false);
+                animate(AnimationType::Stand, false, false, 1.0f, false);
             } else if (0.0f < in.speed_heading) {
-                animate(in.stand_state == 0x6f ? kOldDuckWalk : kOldTurn, true, true, 1.0f, true);
+                animate(in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Turn, true, true, 1.0f, true);
             } else if (0.0f > in.speed_heading) {
-                animate(in.stand_state == 0x6f ? kOldDuckWalk : kOldTurn, true, false, 1.0f, true);
+                animate(in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Turn, true, false, 1.0f,
+                        true);
             }
             return res;
         }
@@ -512,34 +519,34 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
             if (!(in.can_idle && in.can_idle(in.animation)) || in.attacking) return res;
             std::int32_t chance = in.owner_38c != 0 ? 0x63 : 0x4b;
             if (roll <= chance || in.byte_1229 != 0) {
-                animate(kOldStand, false, false, 1.0f, false);
+                animate(AnimationType::Stand, false, false, 1.0f, false);
             } else if (in.spawn_type == 1 && (race_is(0x31) || race_is(0x9e) || race_is(0xc4))) {
-                animate(kOldIdle, true, false, 1.5f, false);
+                animate(AnimationType::Idle, true, false, 1.5f, false);
             } else {
-                animate(kOldIdle, true, false, 1.0f, false);
+                animate(AnimationType::Idle, true, false, 1.0f, false);
             }
             return res;
         }
         if (in.stand_state == 0x6f) return res;
         if (in.animation == 0x25 || in.animation == 0x19) return res;
-        animate(kOldStand, false, false, 1.0f, in.animation == 0x11 || in.animation == 0x12);
+        animate(AnimationType::Stand, false, false, 1.0f, in.animation == 0x11 || in.animation == 0x12);
         return res;
     }
 
     res.set_still_since = true;
     res.still_since = 0;
     if (in.byte_163 != 0) {
-        animate(kOldFall, false, false, 1.0f, true);
+        animate(AnimationType::Fall, false, false, 1.0f, true);
         return res;
     }
     bool a = true, b = false, c = false;
     if (in.state_1198 == 1) {
-        std::uint8_t anim;
+        AnimationType anim;
         float speed = 1.0f;
         if (in.zone_id == 0x54 && -4800.0f < in.y) {
-            anim = kOldStand;
+            anim = AnimationType::Stand;
         } else {
-            anim = kOldRun;
+            anim = AnimationType::Run;
             a = false;
             if (in.animation != 0x11 && !(in.animation == 0x12 && !(0.0f >= in.speed_run))) {
                 if (in.animation == 0x12) {
@@ -547,15 +554,15 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
                     speed = 0.5f;
                 }
                 a = true;
-                anim = kOldWalk;
+                anim = AnimationType::Walk;
             }
         }
         animate(anim, a, b, speed, false);
         return res;
     }
     if (in.colliding_type == 6) {
-        if (0.0f < in.speed_z) animate(kOldClimb, true, false, 1.0f, true);
-        else if (0.0f > in.speed_z) animate(kOldClimb, true, true, 1.0f, true);
+        if (0.0f < in.speed_z) animate(AnimationType::Climb, true, false, 1.0f, true);
+        else if (0.0f > in.speed_z) animate(AnimationType::Climb, true, true, 1.0f, true);
         res.idle_sounds = true;
         return res;
     }
@@ -563,27 +570,27 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
     if (0.001f > y && -0.001f < y && 0.001f > x && -0.001f < x) {
         res.idle_sounds = true;
         if (in.body_wet >= 5) {
-            animate(race_is(0x31) && in.flag ? kOldJumpRun : kOldTread, true, false, 1.0f, false);
+            animate(race_is(0x31) && in.flag ? AnimationType::JumpRun : AnimationType::Tread, true, false, 1.0f, false);
             return res;
         }
         if (in.feet_wet >= 5) return res;
-        std::uint8_t anim;
+        AnimationType anim;
         const float fall = in.speed_z;
         if (static_cast<double>(in.jump_strength) * 0.5 <= fall) {
-            anim = kOldJumpStand;
+            anim = AnimationType::JumpStand;
             c = true;
         } else if (-2.25f > fall && in.dword_180 == 0) {
             if (in.stand_state == 0x6e) {
-                animate(kOldStand, false, false, 1.0f, true);
+                animate(AnimationType::Stand, false, false, 1.0f, true);
                 return res;
             }
-            anim = kOldFall;
+            anim = AnimationType::Fall;
             a = false;
             c = true;
         } else if (race_is(0x31) && in.flag) {
-            anim = kOldJumpRun;
+            anim = AnimationType::JumpRun;
         } else {
-            animate(kOldStand, false, false, 1.0f, true);
+            animate(AnimationType::Stand, false, false, 1.0f, true);
             return res;
         }
         animate(anim, a, false, 1.0f, c);
@@ -604,30 +611,30 @@ OldStyleAnimResult select_old_style_anim(const OldStyleAnimInput& in, const Fpu&
     b = false;
     res.idle_sounds = true;
     if (in.body_wet >= 5) {
-        animate(race_is(0x31) && in.flag ? kOldJumpRun : kOldSwim, false, false, speed, true);
+        animate(race_is(0x31) && in.flag ? AnimationType::JumpRun : AnimationType::Swimming, false, false, speed, true);
         return res;
     }
-    std::uint8_t anim = 0xff;
+    AnimationType anim = AnimationType::None;
     if (in.feet_wet < 5) {
-        anim = in.stand_state == 0x6f ? kOldDuckWalk : kOldWalk;
+        anim = in.stand_state == 0x6f ? AnimationType::DuckWalk : AnimationType::Walk;
         const float fall = in.speed_z;
         if (in.jump_strength <= fall) {
             speed = 1.0f;
-            anim = kOldJumpRun;
+            anim = AnimationType::JumpRun;
             a = true;
         } else if (-3.2f > fall) {
-            anim = kOldFall;
+            anim = AnimationType::Fall;
             c = true;
         } else if (below(in.walk_speed, in.speed_run)) {
-            if (in.stand_state != 0x6f) anim = kOldRun;
+            if (in.stand_state != 0x6f) anim = AnimationType::Run;
         } else if (!(in.speed_z == 0.0f)) {
             c = false;
         }
     } else if (in.animation != 0x19 && in.animation != 0x25) {
-        anim = below(in.walk_speed, in.speed_run) ? kOldRun : kOldWalk;
+        anim = below(in.walk_speed, in.speed_run) ? AnimationType::Run : AnimationType::Walk;
     }
     if (0.0f > in.speed_run && in.animation != 0x25 && in.animation != 0x19) b = true;
-    if (anim != 0xff) animate(anim, a, b, speed, c);
+    if (anim != AnimationType::None) animate(anim, a, b, speed, c);
     return res;
 }
 

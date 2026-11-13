@@ -55,6 +55,8 @@ hailstone/
                              hailstone.ini, the client's settings for this character ("A character's settings" below);
                              kept_items.txt (the items marked Keep in the Advanced Inventory window, one
                              "<item id> <name>" a line; game/kept_items.h);
+                             bank.dat (the bank and shared bank as last seen, which the Advanced Inventory lists
+                             while the server has not sent the bank; game/bank_snapshot.h);
                              ui-<pack>.txt, the UI's window layout for this character (places, sizes, scales,
                              opacity, locks: the `hud.*` settings);
                              eqlog.txt (or /log on <name>: <name>.txt), the chat log; plugin-config/<plugin>/ a

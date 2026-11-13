@@ -147,6 +147,7 @@ GameConnection::~GameConnection() { disconnect(); }
 void GameConnection::fail(std::string message) {
     reset_rewards();
     log::warn("connection: {}", message);
+    capture_bank();
     error_ = std::move(message);
     state_ = ConnectionState::Disconnected;
     reset_tribute_donations();
@@ -805,6 +806,7 @@ void GameConnection::enter_world(const std::string& name, bool return_home) {
     load_chat_filters(); // the character's chat.ini over eqclient.ini's
     load_client_options(); // and options.ini
     load_kept_items();     // Hailstone: the Keep marks (kept_items.txt)
+    load_bank_snapshot();  // Hailstone: the bank as last seen (bank.dat)
     EnterWorld e;
     e.name = name;
     // DoCharacterSelection @0x53aac0: byte 0x44 is the Return Home flag and byte 0x45 is set with it (or with the
@@ -2232,6 +2234,7 @@ void GameConnection::leave_zone_dropped() {
         if (raid_.active) raid_.target.clear();
         raid_.clear();
         raid_.inviter.clear(); // ResetRaid's state 1 ends an invitation too
+        capture_bank();
         state_ = ConnectionState::Disconnected;
         error_ = "Camped out.";
         camped_out_ = camp_kind_;
@@ -2274,6 +2277,7 @@ void GameConnection::simulate_link_loss() {
 }
 
 void GameConnection::disconnect() {
+    capture_bank();
     reset_rewards();
     reset_tribute_donations();
     release_eye_control();

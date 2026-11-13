@@ -601,7 +601,12 @@ guild permission 1500, AA window filter 3000, PC skill limit 3000):
   OP_GuildDelete {guild id, own name} and 9061).
 - `game/alt_adv.*`: the AA window list in ascending rank id order, through `aa_filter_accepts` ("Passive" asks for the
   effect list's first value, non-zero when the ability has effects). The window's "trainable only" check box drives
-  it; the kind, expansion and category combos stay at "any".
+  it; the kind, expansion and category combos stay at "any". Deliberate differences: once the selected rank is
+  bought the window selects the ability's next rank, so Train buys it without another click on the row; and the
+  "buy every rank" box works on any server: one that switches on `aa_train_all` gets OP_AAAction 4, any other gets
+  OP_AAAction 3 for each rank in turn, the next sent when EQEmu's answer to the last (OP_RespondAA, then
+  OP_AAExpUpdate) shows it owned, until the last rank, too few points, a plain train or zoning (other updates, such
+  as experience from a kill, and a refused purchase, which EQEmu does not answer, leave it waiting).
 - `game/training.*`: `pc_skill_limit` and `at_skill_limit` feed the trainer's 12930 refusal for every skill: the
   character's skill cap, the skill's level-capped flag, SPA 263 / 248 from `total_effect`, the highest level from
   the sheet (the current level: EQEmu's profile carries no other).
@@ -780,6 +785,27 @@ active trader or buyer session; it cannot remain available for a later remote sa
 (no price) does not end it. An item is marked Keep or Sell,
 not both: marking one clears the other. `eq.SetItemsKept` validates a batch before applying it, then persists it and
 changes the Keep revision once.
+
+## The bank as last seen
+
+A Hailstone addition, with no counterpart in the original. EQEmu's `Inventory:LazyLoadBank` rule (on by default)
+leaves the bank and shared bank out of OP_CharInventory. It sends them as item packets (type 0x67), once per zone and
+only when a banker comes near the player (Client::Process, Mob::IsCloseToBanker). So after most zone-ins the client
+does not know what the bank holds, and the Advanced Inventory and `/finditem` would find nothing there.
+
+The client keeps a copy (`game/bank_snapshot.h`, `GameConnection::bank_seen`). It is taken from the inventory whenever
+the bank is known and the client is about to lose it or the player has finished with it: the next OP_CharInventory,
+the bank window closing, camping out and disconnecting. It is saved per character in `bank.dat` and read on entering
+the world. The bank counts as known (`bank_live`) from an OP_CharInventory that holds bank items, from an item packet
+for a bank or shared bank slot, or from the bank window opening. It counts as not known from an OP_CharInventory
+without any.
+
+While the bank is not known, `eq.AllItems` and `eq.FindItems` list the copy in the bank's place. Its rows are marked
+`stale`, and `eq.BankSeen` says how long ago it was taken. The window shows them dimmed, says "Bank as last seen ..."
+in its footer, and refuses to move or use them. The copy is never put in the inventory, so no click, bulk job, lore
+check, item count or hot button can reach what it holds. Moving or using a banked item still needs the bank window
+open, which needs a banker in reach. The copy may be out of date: for one, the shared bank can be changed by the
+account's other characters. Opening the bank shows what the server has.
 
 ## The Advanced Inventory's bulk actions
 

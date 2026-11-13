@@ -277,19 +277,89 @@ TEST_CASE("global archive index: CharacterArchiveCache builds it once, and again
     };
     write("global_chr.s3d", archive_bytes("global_chr.s3d", {"AAA", "BBB"}, {}, std::byte{1}));
     write("tst_chr.s3d", archive_bytes("tst_chr.s3d", {"AAA"}, {}, std::byte{3}));
+    write("global5_chr.s3d", archive_bytes("global5_chr.s3d", {"CCC"}, {}, std::byte{4}));
     GameDir game(dir.path());
+    // The lease rules alone: decoded WLDs go as the last lease ends (wld::WldFile's retained set off).
+    const auto saved_budget = wld::WldFile::retain_budget();
+    wld::WldFile::release_retained();
+    wld::WldFile::set_retain_budget(0);
+    struct Restore {
+        std::size_t budget;
+        ~Restore() { wld::WldFile::set_retain_budget(budget); }
+    } restore{saved_budget};
     CharacterArchiveCache cache(false);
     auto a = cache.library_for_zone(game, "tst");
     auto b = cache.library_for_zone(game, "other");
     REQUIRE(a->global_index());
     CHECK(a->global_index() == b->global_index());
+    for (const auto& ar : a->archives())
+        for (const auto& w : ar->wlds) CHECK_FALSE(w.materialized());
+    CHECK(a->has_model("CCC"));
+    for (const auto& ar : a->archives())
+        for (const auto& w : ar->wlds) CHECK_FALSE(w.materialized());
     CHECK(a->build("AAA").source.starts_with("tst_chr.s3d"));
     CHECK(b->build("AAA").source.starts_with("global_chr.s3d"));
     CHECK(a->build("BBB").source.starts_with("global_chr.s3d"));
+    auto model = a->model("BBB");
+    REQUIRE(model);
+    const auto saved_vertices = model->vertices;
+    auto look = a->dress(*model, game::Appearance{});
+    REQUIRE(look);
+    auto actor = a->actor_mesh("BBB");
+    REQUIRE(actor);
+    CHECK(actor->mesh.indices == model->indices);
+    // A cached model and look own their geometry after all source leases have ended.
+    for (const auto& ar : a->archives())
+        for (const auto& w : ar->wlds) CHECK_FALSE(w.materialized());
+    auto again = a->model("BBB");
+    CHECK(again == model);
+    CHECK(a->dress(*model, game::Appearance{}) == look);
+    CHECK(model->vertices.size() == saved_vertices.size());
+    REQUIRE_FALSE(model->vertices.empty());
+    CHECK(model->vertices.front().position == saved_vertices.front().position);
+    CHECK(a->cache_memory().models == 1); // local and shared entries refer to the same object
+    CHECK(a->cache_memory().appearances == 1);
+    for (const auto& ar : a->archives())
+        if (ar->archive->label() == "global5_chr.s3d")
+            for (const auto& w : ar->wlds) CHECK_FALSE(w.materialized());
     cache.clear(); // another asset folder or overlay: read and indexed again
     auto c = cache.library_for_zone(game, "tst");
     CHECK(c->global_index() != a->global_index());
     CHECK(c->build("AAA").source.starts_with("tst_chr.s3d"));
+}
+
+TEST_CASE("models built one after another from one character WLD decode it once while it is retained") {
+    test::ScratchDir dir("chr-retain");
+    auto bytes = archive_bytes("global_chr.s3d", {"AAA", "BBB", "CCC"}, {}, std::byte{1});
+    std::ofstream(dir.path() / "global_chr.s3d", std::ios::binary)
+        .write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    GameDir game(dir.path());
+    const auto saved_budget = wld::WldFile::retain_budget();
+    struct Restore {
+        std::size_t budget;
+        ~Restore() { wld::WldFile::set_retain_budget(budget); }
+    } restore{saved_budget};
+    auto decodes = [](const CharacterLibrary& lib) {
+        std::size_t n = 0;
+        for (const auto& ar : lib.archives())
+            for (const auto& w : ar->wlds) n += w.decode_stats().decodes;
+        return n;
+    };
+    SUBCASE("retained (the default budget)") {
+        wld::WldFile::set_retain_budget(wld::WldFile::kDefaultRetainBudget);
+        CharacterArchiveCache cache(false);
+        auto lib = cache.library_for_zone(game, "tst");
+        for (const char* code : {"AAA", "BBB", "CCC"}) REQUIRE(lib->model(code)); // each its own cache miss
+        CHECK(decodes(*lib) == 1);
+    }
+    SUBCASE("not retained: each model decodes it again") {
+        wld::WldFile::release_retained();
+        wld::WldFile::set_retain_budget(0);
+        CharacterArchiveCache cache(false);
+        auto lib = cache.library_for_zone(game, "tst");
+        for (const char* code : {"AAA", "BBB", "CCC"}) REQUIRE(lib->model(code));
+        CHECK(decodes(*lib) == 3);
+    }
 }
 
 TEST_CASE("global archive index: a zone's library resolves as one over all its archives" *
