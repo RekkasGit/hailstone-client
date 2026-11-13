@@ -1077,6 +1077,7 @@ char* CleanupName(char* szName, size_t BufferSize, bool Article, bool ForWhoList
         case '#':
             if (!ForWhoList)
                 break;
+            [[fallthrough]]; // for the who list a '#' is kept
         default:
             szTemp[j++] = szName[i];
         }
@@ -1291,7 +1292,7 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
         pBuffer += sizeof(rec);
 
         std::string_view bodyDesc = "";
-        if (spawn.body_type >= 0 && static_cast<std::size_t>(spawn.body_type) < std::size(game::szBodyType)) {
+        if (static_cast<std::size_t>(spawn.body_type) < std::size(game::szBodyType)) { // body_type is unsigned
             bodyDesc = game::szBodyType[spawn.body_type];
         }
         write_str16(pBuffer, bodyDesc);
@@ -1432,11 +1433,10 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
             break;
         }
         const auto& buff = buffs[static_cast<std::size_t>(slot)];
-        BuffBulkData pkt{};
-        pkt.ID = buff.spell;
-        pkt.counterType = 0; // 0 for empty slots
+        BuffBulkData pkt{}; // an empty slot stays all zeros, its spell id too (the client keeps kNoSpell there)
         if (!buff.empty())
         {
+            pkt.ID = static_cast<int>(buff.spell);
             //get said spell for some data we need
             //blast the id into the buffer and move pointer forward
             pkt.casterID = buff.caster_id;
