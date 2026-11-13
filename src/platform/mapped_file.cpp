@@ -130,10 +130,7 @@ MappedFile MappedFile::open(const std::filesystem::path& path) {
         ::close(fd);
         throw std::runtime_error("cannot map " + path.string());
     }
-    // Archive reads jump between the directory at the end and scattered members: tell the kernel not to readahead.
-#if defined(MADV_RANDOM)
-    (void)::madvise(view, size, MADV_RANDOM);
-#endif
+    // The default readahead (no madvise): inflating a member reads its blocks in order.
     ::close(fd);
     MappedFile out;
     out.view_bytes_ = static_cast<const std::byte*>(view);

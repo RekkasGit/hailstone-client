@@ -317,7 +317,7 @@ std::shared_ptr<const CharacterArchive> load_character_archive(const GameDir& ga
     auto path = game.find(file);
     if (!path) return nullptr;
     auto out = std::make_shared<CharacterArchive>();
-    out->archive = std::make_shared<const PfsArchive>(PfsArchive::open(*path));
+    out->archive = std::make_shared<const PfsArchive>(PfsArchive::open(*path, PfsArchive::storage_for(game, *path)));
     for (const auto& member : out->archive->names()) {
         if (!member.ends_with(".wld")) continue;
         auto source = out->archive;

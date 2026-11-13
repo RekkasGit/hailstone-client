@@ -24,15 +24,27 @@
 
 #include "platform/mapped_file.h"
 
+namespace hailstone { class GameDir; }
+
 namespace hailstone::assets {
 
 class PfsArchive {
 public:
-    // Throws std::runtime_error on a malformed archive.
-    // open() maps the file read-only (platform::MappedFile) instead of copying it into the heap: only the index
-    // below is private memory, and the mapping keeps the bytes it was opened from when the path is replaced.
-    static PfsArchive open(const std::filesystem::path& path);
+    // Where an opened archive's bytes live. Heap: read into a private buffer once, as from_memory holds them. Mapped:
+    // a read-only mapping of the file (platform::MappedFile), so only the index below is private memory and the bytes
+    // stay in the system's file cache. A mapped file must not be replaced or rewritten while the archive lives:
+    // Windows refuses to rename over a file with a mapped view, and a file truncated in place faults the reader
+    // (docs/hardening.md). So only a file Hailstone never writes is mapped: storage_for() decides.
+    enum class Storage : std::uint8_t { Heap, Mapped };
+
+    // Throws std::runtime_error on a malformed archive. Mapped falls back to Heap when the file cannot be mapped.
+    static PfsArchive open(const std::filesystem::path& path, Storage storage = Storage::Heap);
     static PfsArchive from_memory(std::vector<std::byte> data, std::string label = "<memory>");
+
+    // The storage for `path`, a file `game` found: Mapped for one in its asset folder or classic folder (read-only,
+    // never written by Hailstone), Heap for one in its overlay (a server's servers/<id>/assets, which the server files
+    // sync replaces while the client runs) and for anything else.
+    static Storage storage_for(const GameDir& game, const std::filesystem::path& path);
 
     // File names as stored (lower case), in data-offset order.
     const std::vector<std::string>& names() const { return names_; }
@@ -61,9 +73,9 @@ private:
         std::uint32_t size = 0;
     };
 
-    // The archive's bytes, shared between copies: an owned buffer (from_memory) or a read-only file mapping
-    // (open). Copies share it; a moved-from archive shares nothing.
-    struct Storage {
+    // The archive's bytes, shared between copies: an owned buffer (from_memory, open with Heap) or a read-only file
+    // mapping (open with Mapped). Copies share it; a moved-from archive shares nothing.
+    struct Bytes {
         std::vector<std::byte> owned;
         platform::MappedFile mapped_file;
         std::span<const std::byte> view() const {
@@ -76,7 +88,7 @@ private:
     std::span<const std::byte> bytes() const { return storage_ ? storage_->view() : std::span<const std::byte>{}; }
 
     std::string label_;
-    std::shared_ptr<const Storage> storage_;
+    std::shared_ptr<const Bytes> storage_;
     std::vector<std::string> names_;
     std::unordered_map<std::string, Entry> by_name_;
 };

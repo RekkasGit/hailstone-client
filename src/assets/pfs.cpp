@@ -8,6 +8,7 @@
 
 #include "core/byte_io.h"
 #include "core/game_dir.h"
+#include "core/log.h"
 
 namespace hailstone::assets {
 
@@ -109,20 +110,57 @@ void zlib_inflate(std::span<const std::byte> in, std::span<std::byte> out) {
         throw std::runtime_error("zlib block did not inflate to its declared size");
 }
 
-PfsArchive PfsArchive::open(const std::filesystem::path& path) {
-    PfsArchive a;
-    a.label_ = path.filename().string();
-    auto storage = std::make_shared<Storage>();
-    storage->mapped_file = platform::MappedFile::open(path);
-    a.storage_ = storage;
-    a.parse_index();
-    return a;
+PfsArchive PfsArchive::open(const std::filesystem::path& path, Storage storage) {
+    if (storage == Storage::Mapped) {
+        auto bytes = std::make_shared<Bytes>();
+        try {
+            bytes->mapped_file = platform::MappedFile::open(path);
+        } catch (const std::exception& e) {
+            // No address space for it, or a file system that cannot map: read it as before.
+            log::debug("{}: not mapped ({}); reading it into memory", path.string(), e.what());
+            bytes.reset();
+        }
+        // An empty file maps to nothing: the heap read below gives the same "not a PFS archive".
+        if (bytes && bytes->mapped_file.mapped()) {
+            PfsArchive a;
+            a.label_ = path.filename().string();
+            a.storage_ = std::move(bytes);
+            a.parse_index();
+            return a;
+        }
+    }
+    auto data = read_file(path);
+    if (!data) throw std::runtime_error("cannot read " + path.string());
+    return from_memory(std::move(*data), path.filename().string());
+}
+
+namespace {
+// Whether `path` is inside `root`, by their components (both as GameDir builds them: the root joined with the
+// file's relative path).
+bool within(const std::filesystem::path& path, const std::filesystem::path& root) {
+    if (root.empty()) return false;
+    const auto p = path.lexically_normal(), r = root.lexically_normal();
+    auto pi = p.begin();
+    for (auto ri = r.begin(); ri != r.end(); ++ri, ++pi) {
+        if (ri->empty() && std::next(ri) == r.end()) break; // a trailing separator
+        if (pi == p.end() || *pi != *ri) return false;
+    }
+    return pi != p.end();
+}
+} // namespace
+
+PfsArchive::Storage PfsArchive::storage_for(const GameDir& game, const std::filesystem::path& path) {
+    // The overlay first: a data folder may sit inside the game folder (<EverQuest>/hailstone/, GameDir::kOwnFolder).
+    if (auto overlay = game.overlay(); overlay && within(path, *overlay)) return Storage::Heap;
+    if (within(path, game.base_root())) return Storage::Mapped;
+    if (auto classic = game.classic(); classic && within(path, *classic)) return Storage::Mapped;
+    return Storage::Heap;
 }
 
 PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string label) {
     PfsArchive a;
     a.label_ = std::move(label);
-    auto storage = std::make_shared<Storage>();
+    auto storage = std::make_shared<Bytes>();
     storage->owned = std::move(data);
     a.storage_ = storage;
     a.parse_index();

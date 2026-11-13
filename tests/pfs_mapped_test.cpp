@@ -22,6 +22,7 @@
 
 using hailstone::assets::PfsArchive;
 using hailstone::platform::MappedFile;
+constexpr auto kMapped = PfsArchive::Storage::Mapped;
 
 namespace {
 
@@ -64,6 +65,9 @@ TEST_CASE("MappedFile: a missing file throws and an empty file is unmapped, not 
     CHECK(m.view().empty());
 }
 
+// POSIX only: Windows typically refuses to rename over a file with a mapped view, which is why only files Hailstone never
+// replaces are mapped (PfsArchive::storage_for).
+#if !defined(_WIN32)
 TEST_CASE("MappedFile keeps the bytes it was opened from when the path is replaced") {
     hailstone::test::ScratchDir dir{"mapped_replace"};
     auto path = dir.path() / "a.bin";
@@ -80,6 +84,8 @@ TEST_CASE("MappedFile keeps the bytes it was opened from when the path is replac
     CHECK(std::ranges::equal(fresh.view(), second));
 }
 
+#endif
+
 TEST_CASE("PfsArchive::open matches from_memory but holds no heap copy of the archive") {
     using namespace hailstone::test::pfs_fixtures;
     std::vector<std::byte> text(10000);
@@ -88,7 +94,7 @@ TEST_CASE("PfsArchive::open matches from_memory but holds no heap copy of the ar
     hailstone::test::ScratchDir dir{"pfs_open"};
     auto path = dir.path() / "test.s3d";
     write_bytes(path, archive);
-    auto disk = PfsArchive::open(path);
+    auto disk = PfsArchive::open(path, kMapped);
     auto heap = PfsArchive::from_memory(archive, "test.s3d");
     CHECK(disk.mapped());
     CHECK(disk.storage_bytes() == archive.size());
@@ -104,6 +110,7 @@ TEST_CASE("PfsArchive::open matches from_memory but holds no heap copy of the ar
     CHECK_FALSE(disk.read("missing.txt"));
 }
 
+#if !defined(_WIN32)
 TEST_CASE("PfsArchive::open keeps the old archive when the path is replaced under it") {
     using namespace hailstone::test::pfs_fixtures;
     hailstone::test::ScratchDir dir{"pfs_replace"};
@@ -111,18 +118,20 @@ TEST_CASE("PfsArchive::open keeps the old archive when the path is replaced unde
     auto one = make_pfs({{"a.txt", std::vector<std::byte>(10, std::byte{'1'})}});
     auto two = make_pfs({{"a.txt", std::vector<std::byte>(10, std::byte{'2'})}});
     write_bytes(path, one);
-    auto old = PfsArchive::open(path);
+    auto old = PfsArchive::open(path, kMapped);
     auto staging = dir.path() / "staging.s3d";
     write_bytes(staging, two);
     std::error_code ec;
-    // Replacing while mapped must succeed: the mapping shares delete (see platform/mapped_file.h).
+    // On POSIX the rename goes ahead and the mapping keeps the old file (see platform/mapped_file.h).
     REQUIRE(hailstone::platform::replace_file_synced(staging, path, ec));
     REQUIRE(old.read("a.txt"));
     CHECK((*old.read("a.txt"))[0] == std::byte{'1'});
-    auto fresh = PfsArchive::open(path);
+    auto fresh = PfsArchive::open(path, kMapped);
     REQUIRE(fresh.read("a.txt"));
     CHECK((*fresh.read("a.txt"))[0] == std::byte{'2'});
 }
+
+#endif
 
 TEST_CASE("PfsArchive copies share storage and stay valid when the original dies") {
     using namespace hailstone::test::pfs_fixtures;
@@ -132,7 +141,7 @@ TEST_CASE("PfsArchive copies share storage and stay valid when the original dies
     write_bytes(path, archive);
     std::optional<PfsArchive> copy;
     {
-        auto original = PfsArchive::open(path);
+        auto original = PfsArchive::open(path, kMapped);
         copy = original; // a copy, not a move: it must share the storage
         CHECK(copy->mapped());
     }
@@ -146,12 +155,12 @@ TEST_CASE("PfsArchive::open refuses malformed archives the way from_memory does"
     hailstone::test::ScratchDir dir{"pfs_bad"};
     auto bad = dir.path() / "bad.s3d";
     write_bytes(bad, std::vector<std::byte>(64, std::byte{0x11}));
-    CHECK_THROWS(PfsArchive::open(bad));
+    CHECK_THROWS(PfsArchive::open(bad, kMapped));
     CHECK_THROWS(PfsArchive::from_memory(std::vector<std::byte>(64, std::byte{0x11})));
-    CHECK_THROWS(PfsArchive::open(dir.path() / "missing.s3d"));
+    CHECK_THROWS(PfsArchive::open(dir.path() / "missing.s3d", kMapped));
     auto empty = dir.path() / "empty.s3d";
     std::ofstream(empty, std::ios::binary) << "";
-    CHECK_THROWS(PfsArchive::open(empty));
+    CHECK_THROWS(PfsArchive::open(empty, kMapped));
     // A directory offset past the end of the mapped file is bounds-checked as it was in a heap buffer.
     using namespace hailstone::test::pfs_fixtures;
     auto good = make_pfs({{"a.txt", std::vector<std::byte>(10, std::byte{'w'})}});
@@ -165,7 +174,7 @@ TEST_CASE("PfsArchive::open refuses malformed archives the way from_memory does"
     f.write(reinterpret_cast<const char*>(offset.data().data()), 4);
     REQUIRE(f);
     f.close();
-    CHECK_THROWS(PfsArchive::open(past));
+    CHECK_THROWS(PfsArchive::open(past, kMapped));
 }
 
 TEST_CASE("PfsArchive::open reads concurrently from the mapping") {
@@ -175,7 +184,7 @@ TEST_CASE("PfsArchive::open reads concurrently from the mapping") {
     hailstone::test::ScratchDir dir{"pfs_threads"};
     auto path = dir.path() / "test.s3d";
     write_bytes(path, make_pfs({{"blob.bin", blob}}));
-    auto archive = PfsArchive::open(path);
+    auto archive = PfsArchive::open(path, kMapped);
     constexpr int kThreads = 8;
     std::vector<std::thread> threads;
     std::atomic<bool> ok{true};
@@ -229,10 +238,67 @@ TEST_CASE("CharacterArchive accounting separates mapped archive bytes from parse
     auto path = dir.path() / "model_chr.s3d";
     write_bytes(path, archive_bytes);
     hailstone::assets::CharacterArchive file_backed;
-    file_backed.archive = std::make_shared<const PfsArchive>(PfsArchive::open(path));
+    file_backed.archive = std::make_shared<const PfsArchive>(PfsArchive::open(path, kMapped));
     file_backed.wlds.push_back(wld::WldFile::parse(wld_bytes, "model_chr.s3d:model.wld"));
     CHECK(file_backed.archive->mapped());
     CHECK(file_backed.archive_bytes() == archive_bytes.size());
     CHECK(file_backed.owned_bytes() == 0);
     CHECK(file_backed.parsed_bytes() == owned.parsed_bytes());
+}
+
+TEST_CASE("PfsArchive::open reads into memory by default, and maps only when asked") {
+    using namespace hailstone::test::pfs_fixtures;
+    auto bytes = make_pfs({{"a.txt", std::vector<std::byte>(30, std::byte{'h'})}});
+    hailstone::test::ScratchDir dir{"pfs_heap"};
+    auto path = dir.path() / "test.s3d";
+    write_bytes(path, bytes);
+    auto heap = PfsArchive::open(path);
+    CHECK_FALSE(heap.mapped());
+    CHECK(heap.owned_bytes() == bytes.size());
+    auto mapped = PfsArchive::open(path, kMapped);
+    CHECK(mapped.mapped());
+    CHECK(heap.read("a.txt").value() == mapped.read("a.txt").value());
+    // An empty file cannot be mapped: the heap read's answer, not a crash or an empty archive.
+    auto empty = dir.path() / "empty.s3d";
+    std::ofstream(empty, std::ios::binary) << "";
+    CHECK_THROWS(PfsArchive::open(empty, kMapped));
+}
+
+TEST_CASE("PfsArchive::storage_for maps the game folder's files and reads the overlay's into memory") {
+    hailstone::test::ScratchDir dir{"pfs_storage"};
+    const auto base = dir.path() / "game";
+    const auto overlay = dir.path() / "data" / "servers" / "test" / "assets";
+    const auto classic = dir.path() / "classic";
+    // A data folder inside the game folder (<EverQuest>/hailstone/, as a server's patcher installs it).
+    const auto nested = base / "hailstone" / "servers" / "test" / "assets";
+    for (const auto& d : {base, overlay, classic, nested}) std::filesystem::create_directories(d);
+    auto touch = [](const std::filesystem::path& p) { std::ofstream(p, std::ios::binary) << "x"; };
+    touch(base / "global_chr.s3d");
+    touch(base / "gfaydark.s3d");
+    touch(overlay / "gfaydark.s3d");
+    touch(classic / "old_chr.s3d");
+    touch(nested / "newzone.s3d");
+
+    hailstone::GameDir game(base, overlay);
+    game.set_classic(classic);
+    auto storage = [&](std::string_view name) {
+        auto p = game.find(name);
+        REQUIRE(p);
+        return PfsArchive::storage_for(game, *p);
+    };
+    CHECK(storage("global_chr.s3d") == PfsArchive::Storage::Mapped); // the asset folder: never written
+    CHECK(storage("gfaydark.s3d") == PfsArchive::Storage::Heap);     // replaced by the server's copy
+    CHECK(storage("old_chr.s3d") == PfsArchive::Storage::Mapped);    // the classic folder: never written
+    CHECK(PfsArchive::storage_for(game, dir.path() / "elsewhere.s3d") == PfsArchive::Storage::Heap);
+    // A sibling whose name starts like the base is not inside it.
+    CHECK(PfsArchive::storage_for(game, dir.path() / "game2" / "a.s3d") == PfsArchive::Storage::Heap);
+
+    hailstone::GameDir inside(base, nested);
+    auto p = inside.find("newzone.s3d");
+    REQUIRE(p);
+    CHECK(PfsArchive::storage_for(inside, *p) == PfsArchive::Storage::Heap);
+    CHECK(PfsArchive::storage_for(inside, *inside.find("global_chr.s3d")) == PfsArchive::Storage::Mapped);
+    // No overlay: the base's files are mapped.
+    hailstone::GameDir plain(base);
+    CHECK(PfsArchive::storage_for(plain, *plain.find("gfaydark.s3d")) == PfsArchive::Storage::Mapped);
 }

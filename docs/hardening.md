@@ -81,6 +81,27 @@ model, DDS, TGA, XMI and table parsers produced no findings.
 - `ReliableChannel` (timing logic, no parser) and the game-connection state machines beyond the `Session`.
 - Windows/macOS: the sanitizer build was run on Linux with GCC only.
 
+## Mapped game archives
+
+`PfsArchive::open` maps an archive read-only (`platform::MappedFile`) when the caller asks for it, which every caller
+that finds a file through `GameDir` does for a file in the asset folder or the classic folder
+(`PfsArchive::storage_for`). Those folders are never written by Hailstone. A file in a server's overlay
+(`servers/<id>/assets`, which the server files sync replaces while the client runs) is read into the heap once, as every
+archive was before: on Windows a rename over a file with a mapped view is typically refused, and the sync would fail.
+When a mapping cannot be made (no address space, a file system that cannot map, an empty file), the file is read into
+the heap instead.
+
+The cost: bytes are no longer read once at open. A game file that another program truncates or rewrites in place while
+it is mapped (a patcher or launcher run alongside the client, a sync tool writing into the game folder) can crash the
+client with SIGBUS on Linux and macOS or `EXCEPTION_IN_PAGE_ERROR` on Windows when a member past the new end is read,
+or hand the parsers bytes that change under them. The parsers bound every read against the mapping's length as they did
+against a heap buffer, so changed bytes are treated like any malformed file; a fault from a shrunk file is not caught.
+It is accepted because Hailstone never writes the game folder (docs/layout.md) and nothing else is expected to while
+the client runs, a patcher that does is expected to replace files by rename (which leaves the old mapping intact on
+POSIX) rather than truncate them, and the gain is the archives' size in private memory. Overlay files, the ones that do
+change under a running client, are never mapped. A file replaced by rename is picked up the next time the archive is opened
+(another zone, `CharacterArchiveCache::clear()` after an asset-folder or overlay change).
+
 ## Windows allocation profiling
 
 The memory checkpoints distinguish resident memory, Windows private commit, GPU allocations and estimated character payloads. When the remaining private commit has no measured owner, use allocation stacks instead of assuming that freed objects leaked. WPR's Heap profile records heap allocation/free activity; VirtualAllocation records virtual allocation activity. The installed recorder's `wpr -profiles` and `wpr -help heap` show which commands it supports. See Microsoft's [Recording for Heap Analysis](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/recording-for-heap-analysis) and [WPR command-line options](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options).

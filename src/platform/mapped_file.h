@@ -14,13 +14,14 @@ namespace hailstone::platform {
 // A read-only mapped file. Move-only, like a handle: copies would each map the file again. The view stays valid
 // until the mapping is unmapped (moved-from or destroyed); concurrent reads of the view are safe.
 //
-// Replacement: the mapping is of the file as opened. Renaming a new file over the path (the server files sync, the
-// client's own atomic writes) does not disturb the view: it keeps showing the old bytes until unmapped, and a fresh
-// open sees the new file. On Windows the file is opened sharing read, write and delete, so that rename can go ahead
-// while a mapping is held.
+// Replacement: on POSIX, renaming a new file over the path leaves the view showing the old bytes until it is
+// unmapped, and a fresh open sees the new file. On Windows a rename over a file with a mapped view is typically refused (the
+// sharing flags below let the file be opened and deleted, not replaced while a section exists), so map only files
+// nothing replaces while they are mapped: assets::PfsArchive::storage_for maps the game folder's files and reads the
+// server overlay's (which the server files sync replaces) into memory.
 //
-// The underlying file must not be edited or truncated in place while mapped; replace it by rename instead.
-// In-place truncation can fault a reader on POSIX.
+// The underlying file must not be edited or truncated in place while mapped: a read of a page past the new end faults
+// (SIGBUS on POSIX, EXCEPTION_IN_PAGE_ERROR on Windows), and an edit shows through. See docs/hardening.md.
 //
 // OS calls live here only; callers see a span. The Windows and POSIX spellings differ in their .cpp, nothing else.
 class MappedFile {
