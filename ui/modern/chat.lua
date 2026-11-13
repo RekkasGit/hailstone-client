@@ -18,7 +18,7 @@ stml.LINK = C.chatLink -- (this copy of stml: chat links in the colour made for 
 
 local chats = {} -- by slot: { version, lines, input, focus, follow, links, tab, rename, renameOpen }
 
--- Item links in the input: the game puts a link in as its tag; the input shows the name and the tags go back in when
+-- Item and achievement links: the input shows labels; exact tags go back in when
 -- the line is sent (lib/chatlinks.lua).
 local chatlinks = dofile("lib/chatlinks.lua")
 local function collapseLinks(c, text, offset) return chatlinks.Collapse(c.links, text, offset) end
@@ -291,6 +291,7 @@ local function body(slot, c, w, title, x, y, width, height, s)
     if replace then c.input, c.links = "", {} end
     local offset = #c.input
     c.input = c.input .. collapseLinks(c, taken, offset)
+    c.inputError = nil
     c.focus = 3
     c.grab = 30 -- (asked for until the input has the keys: a name link's click holds the mouse on the output)
   end
@@ -318,14 +319,18 @@ local function body(slot, c, w, title, x, y, width, height, s)
     ui.DrawRect(ix0, iy, ix1, iy + INPUT * s, C.accent[1], C.accent[2], C.accent[3], 0.6, 6 * s, 1)
   end
   if c.focus > 0 then c.focus = c.focus - 1 end
+  if text ~= c.input then c.inputError = nil end
   c.input = text
   if text == "" and next(c.links) then c.links = {} end
   if enter then
-    if text ~= "" then eq.ChatSubmit(slot, expandLinks(c, text)) end
-    c.input = ""
-    c.links = {}
-    c.follow = true
+    local expanded, reason = chatlinks.ForSubmit(c.links, text)
+    if expanded then
+      if expanded ~= "" then eq.ChatSubmit(slot, expanded) end
+      c.input, c.links, c.inputError = "", {}, nil
+      c.follow = true
+    else c.inputError = reason end
   end
+  if c.inputError then ui.SetTooltip(c.inputError) end
 
   if ui.IsWindowHovered(ui.HoveredFlags.ChildWindows) then
     if ui.IsMouseClicked(ui.Mouse.Left) and not active then eq.ChatActivate(slot) end

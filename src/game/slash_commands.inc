@@ -3,7 +3,7 @@
 // Do not edit by hand.
 // HAILSTONE_SLASH(name, eqstr id of the localised name (-1 none), original handler, restriction,
 //            /help category, flags)
-// 383 commands.
+// 384 commands.
 HAILSTONE_SLASH("/who", 13950, "Cmd_who", 0, 1, 0)
 HAILSTONE_SLASH("/consider", 13951, "Cmd_consider", 0, 1, 0)
 HAILSTONE_SLASH("/feedback", 13953, "Cmd_feedback", 0, 1, 0)
@@ -382,6 +382,7 @@ HAILSTONE_SLASH("/merclog", -1, "Cmd_merclog", 0, 1, 1)
 HAILSTONE_SLASH("/comparetaskraid", -1, "Cmd_comparetaskraid", 0, 1, 0)
 HAILSTONE_SLASH("/compareexpedraid", -1, "Cmd_compareexpedraid", 0, 1, 0)
 HAILSTONE_SLASH("/welcomescreen", -1, "Cmd_welcomescreen", 0, 1, 1)
+HAILSTONE_SLASH("/achievements", -1, "Cmd_achievements", 0, 1, 1)
 HAILSTONE_SLASH("/racechange", -1, "Cmd_racechange", 0, 1, 0)
 HAILSTONE_SLASH("/realestate", -1, "Cmd_realestate", 0, 1, 0)
 HAILSTONE_SLASH("/stopsocial", -1, "Cmd_stopsocial", 0, 1, 0)

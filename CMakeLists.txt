@@ -231,6 +231,10 @@ add_library(hailstone_engine STATIC
   src/net/guild_bank_packets.cpp
   src/net/real_estate_packets.cpp
   src/net/task_packets.cpp
+  src/net/reward_packets.cpp
+  src/net/achievement_packets.cpp
+  src/net/game_connection_rewards.cpp
+  src/net/game_connection_achievements.cpp
   src/net/social_packets.cpp
   src/net/chat_server.cpp
   src/game/social.cpp
@@ -445,6 +449,8 @@ add_library(hailstone_engine STATIC
   src/game/placement.cpp
   src/game/text_overlay.cpp
   src/game/tasks.cpp
+  src/game/reward_selection.cpp
+  src/game/achievements.cpp
   src/game/task_window.cpp
   src/game/mechanics/movement.cpp
   src/game/mechanics/movement_inputs.cpp
@@ -516,6 +522,8 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq_social.cpp
   src/app/lua_eq_realestate.cpp
   src/app/lua_eq_progress.cpp
+  src/app/lua_eq_rewards.cpp
+  src/app/lua_eq_achievements.cpp
   src/app/lua_eq_group_search.cpp
   src/app/lua_eq_marketplace.cpp
   src/app/lua_eq_map.cpp
@@ -1139,6 +1147,18 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_packets_test.cpp
     tests/progress_test.cpp
     tests/task_window_test.cpp
+    tests/reward_packets_test.cpp
+    tests/reward_selection_test.cpp
+    tests/reward_connection_test.cpp
+    tests/lua_eq_rewards_test.cpp
+    tests/reward_selection_ui_test.cpp
+    tests/achievement_packets_test.cpp
+    tests/achievements_test.cpp
+    tests/achievement_connection_test.cpp
+    tests/achievement_chat_test.cpp
+    tests/achievement_chat_input_test.cpp
+    tests/lua_eq_achievements_test.cpp
+    tests/achievements_ui_test.cpp
     tests/social_test.cpp
     tests/options_social_test.cpp
     tests/player_market_test.cpp

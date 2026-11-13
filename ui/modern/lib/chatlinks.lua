@@ -1,10 +1,30 @@
--- Item links in a chat input: the game puts a link in as its tag ("\18" .. type .. 76 hex digits .. name .. "\18");
--- the input shows the name (Collapse, which keeps the tag and where it went in `links`) and the tags go back in when
--- the line is sent (Expand).
+-- Item and achievement links show only their labels in the editor. Exact tags
+-- stay in `links` and are restored for handoff and explicit submission.
 local M = {}
 
 -- The wide form (76 digits, 8-digit ids) first, then the stock one (55 digits, 5-digit ids).
-local LINK_TAGS = { "\18(%d)(" .. string.rep("%x", 76) .. ")(.-)\18", "\18(%d)(" .. string.rep("%x", 55) .. ")(.-)\18" }
+local ITEM_BODIES = { "^%d" .. string.rep("%x", 76) .. "(.*)$", "^%d" .. string.rep("%x", 55) .. "(.*)$" }
+
+local function label(body)
+  if body:sub(1, 1) == "3" then
+    local metadata, name = body:match("^3(.-)'(.*)$")
+    if not metadata or #metadata > 65536 or not metadata:match("%^") or not metadata:match("%^$") or
+        body:find("[%z\1-\17\19-\31\127]") then return "Achievement", false end
+    local player, id, status, rest = metadata:match("^([^%^]+)%^(%d+)%^([0-3])%^(.*)$")
+    if not player or #player > 63 or #id > 10 or (#id == 10 and id > "4294967295") then return "Achievement", false end
+    -- The catalog determines the number and meaning of these numeric values;
+    -- semantic validation remains in the host. Never convert their widths here.
+    for value in rest:gmatch("([^%^]*)%^") do
+      if not value:match("^%-?%d+$") then return "Achievement", false end
+    end
+    if rest ~= "" and not rest:match("%^$") then return "Achievement", false end
+    return name ~= "" and name or "Achievement", true
+  end
+  for _, pattern in ipairs(ITEM_BODIES) do
+    local name = body:match(pattern)
+    if name then return name ~= "" and name or "Item", true end
+  end
+end
 
 -- text with each link tag as its name; the tags go to the end of `links`, in order, each with where its name is in
 -- the input (`at`: the byte it starts on, the text going in after `offset` bytes of it).
@@ -12,22 +32,26 @@ function M.Collapse(links, text, offset)
   offset = offset or 0
   local out, n, pos = {}, 0, 1
   while true do
-    local best = nil
-    for _, pattern in ipairs(LINK_TAGS) do
-      local i, j, _, _, name = text:find(pattern, pos)
-      if i and (not best or i < best[1]) then best = { i, j, name } end
-    end
-    if not best then break end
-    local i, j, name = best[1], best[2], best[3]
+    local i, j, body = text:find("\18(.-)\18", pos)
+    if not i then break end
+    local name, valid = label(body)
     local plain = text:sub(pos, i - 1)
     out[#out + 1] = plain
     n = n + #plain
-    links[#links + 1] = { name = name, tag = text:sub(i, j), at = offset + n + 1 }
-    out[#out + 1] = name
-    n = n + #name
+    if name then
+      if valid then links[#links + 1] = { name = name, tag = text:sub(i, j), at = offset + n + 1 } end
+      out[#out + 1] = name
+      n = n + #name
+    else
+      out[#out + 1] = text:sub(i, j)
+      n = n + j - i + 1
+    end
     pos = j + 1
   end
-  out[#out + 1] = text:sub(pos)
+  local tail = text:sub(pos)
+  -- An incomplete pasted achievement envelope must not expose its metadata.
+  local incomplete = tail:find("\18" .. "3", 1, true)
+  out[#out + 1] = incomplete and (tail:sub(1, incomplete - 1) .. "Achievement") or tail
   return table.concat(out)
 end
 
@@ -91,6 +115,25 @@ function M.Expand(links, text)
   end
   out[#out + 1] = text:sub(pos)
   return table.concat(out)
+end
+
+-- Link insertion uses the English host editor's ten-tag/512-byte budget. The
+-- ordinary text editor keeps its existing longer limit. Validate tagged drafts
+-- after expansion instead of cutting through a tag during network submission.
+function M.ForSubmit(links, text, prefix)
+  local expanded = (prefix or "") .. M.Expand(links, text)
+  local count, pos = 0, 1
+  while true do
+    local first = expanded:find("\18", pos, true)
+    if not first then break end
+    local last = expanded:find("\18", first + 1, true)
+    if not last then return nil, "Chat input contains an incomplete link." end
+    count = count + 1
+    if count > 10 then return nil, "Chat input exceeds ten links." end
+    pos = last + 1
+  end
+  if count > 0 and #expanded > 512 then return nil, "Chat input exceeds 512 bytes including links." end
+  return expanded
 end
 
 return M

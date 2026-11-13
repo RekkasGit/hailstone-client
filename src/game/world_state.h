@@ -1124,6 +1124,7 @@ namespace hailstone::game {
 	constexpr int EQR_SOL_SKELETON = 803;
 	struct Spawn {
 		std::uint32_t id = 0;
+		std::uint64_t incarnation = 0; // connection-issued identity of the full spawn record, independent of its numeric id
 		std::string name;      // as sent (e.g. "a_rat01"); see display_name()
 		std::string last_name;
 		std::string title, suffix; // the spawn record's AA title prefix and suffix (OP_SetTitleReply changes them)

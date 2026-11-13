@@ -125,6 +125,7 @@ local MORE = {
   { "NPC Journal", "What NPCs said to you", "JournalNPCWnd" },
   { "Adventures", "The adventure you are on", "AdventureRequestWnd" },
   { "Expeditions", "Members and lockouts", "DynamicZoneWnd" },
+  { "Rewards", "Pending rewards and task previews", "RewardSelectionWnd" },
   { "PvP Stats", "Kills, deaths, the leaderboard", "PvPStatsWnd" },
   { "Find", "Merchants, bankers, trainers and more", nil, function() eq.FindOpen(true) end },
   { "Zone Path", "The zones on the way", "ZonePathWnd" },

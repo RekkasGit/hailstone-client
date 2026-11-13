@@ -408,9 +408,64 @@ The window's rows are the skills with a guildmaster limit above 0 that the class
 
 The element text is the server's description, else the type's template (with / without a target: kill 3468, loot 3498 / 3470, deliver 3469, speak 6001, explore 6002, tradeskill 6048, forage 6049, fish 6050, cast on 6052 / 6051, use skill on 6054 / 6053, touch 6117, collect 611 / 610) with %1 the goal, %2 the target, %3 the items, %4 the spell names and %5 the skill names (";"-separated ids joined with " or ").
 
+**Reward selection** (`net/reward_packets`, `game/reward_selection`). These are stock RoF2 managers, independent of a server's reward providers. Pending rewards use `0x6411` (`AchievementReward`); task previews use `0x6471` (`RewardSelection`) and cannot claim.
+
+| Action | Direction | Layout after u32 action |
+|---|---|---|
+| 0 | Z→C | u8 has reward, then one reward set when true; pending upserts by pending id, preview replaces |
+| 7 | Z→C | i32 set count, u8 display flags, then reward sets; an empty collection clears the view |
+| 1 | C→Z | u32 set id, wire option id, entry id, item id |
+| 1 | Z→C | u32 item id, then one serialized RoF2 item, without an ItemPacketType prefix |
+| 3 | C→Z | pending id, set id, wire option id, then four zero bytes; pending manager only |
+| 3 | Z→C | the same three ids, u8 success, three padding bytes |
+| 4 | C→Z | u32 task id; preview manager only |
+| 5 | C→Z | u32 achievement definition **index**, not achievement id; pending manager |
+| 6 | C→Z | no body; explicitly restore pending rewards |
+
+A set is pending id, set id, title C string, f32 display multiplier, repeated set id, i32 option count. Each option is u32 wire id, u32 entry count, u8 common-to-all, u8 flags, label C string, then typed entries. Each entry starts with u32 type, entry id, string id, description C string. Types are text (0), money (1: platinum/gold/silver/copper DWORDs), items (2: count and id/quantity/u8 lore/lore-group/name records), experience (3), alternate ability (4: rank and cumulative rank), AA points (5: amount and a byte flag), and generic points (11: four DWORDs, amount in the third and currency in the fourth). Unknown types reject the whole packet. Wire option ids belong to the received collection; they are not a provider's catalog ids. Pending action 0 with no reward does not erase unrelated tabs; preview action 0 clears the previous preview first. Action 7 replaces either lane. These distinctions were checked against the stock manager receivers (`0x4656e0` / `0x465a90`).
+
+Numeric display applies the set multiplier separately to each signed 32-bit money denomination, the AA-points amount and the generic-points amount, truncating toward zero. Item quantities, alternate-ability ranks and descriptions are unchanged (`0x464290` / `0x464740` / `0x464900`). Raw unsigned wire values remain available in the API. A product outside the signed 32-bit display range is marked Unavailable instead of reproducing a platform-specific integer-conversion overflow. This affects presentation only; the server owns grants.
+
+Host limits are 8 MiB per packet, 256 sets, 4096 options, 16384 entries and items, and 2 MiB aggregate text. Individual titles, option labels and item names are limited to 4096 bytes and descriptions to 16384. Decode is atomic. Inspection verifies the requested/header/serialized item id and uses the ordinary bounded item-display queue; it never changes inventory.
+
+The UI captures process-unique revision and tab tokens before asking to claim or inspect. Requests reserve their ownership before outgoing extension callbacks and revalidate it before transport. One claim can be pending at a time. The host's conservative 10-second timeout marks a dispatched claim uncertain; replacing or restoring the collection does not authorize another claim or retry it. Only a matching terminal reply or session/zone retirement drains that reservation. An old reply cannot remove a tab from a newer collection. Item inspection replies have only an item id, with no request nonce: retired ids are held until their replies drain, and cannot be reused in the meantime (256 per lane). Closing, zoning and reconnecting retire view ownership. Getters and drawing never query or claim rewards.
+
+**Achievements** (`net/achievement_packets`, `game/achievements`). The server sends definitions and authoritative character state; the client neither evaluates criteria nor awards points, completion or rewards locally. These stock managers do not require a server-specific addon or bundled catalog files. Keep the received definition order, including hidden definitions: an achievement id and a definition index are different identities.
+
+| Packet | Direction | Opcode | Layout |
+|---|---|---|---|
+| Definitions | Z→C | 0xdab0 | u32 inflated length, exact zlib stream; inflated catalog below |
+| Primary update | Z→C | 0x618f | u32 serial, u8 dense, u32 count; per row, u32 definition index only when sparse, then state |
+| Progress | Z→C | 0x2b42 | u32 count, then 20-byte records: achievement id, component id, requirement id, requirement type, current count |
+| Comparison snapshot | Z→C | 0x059d | one state for every received definition, no leading count or target identity; never initializes own state |
+| Refresh | C→Z | 0x47cb | native one-byte 0x30 (servers may also accept an empty request) |
+| Open window | Z→C | 0x171e | empty; opens the window without querying again |
+| Compare request | C→Z | 0x1665 | u32 target spawn id, u32 requester spawn id |
+| Link inspection | C→Z / Z→C | 0x675d / 0x28e0 | player name C string, u32 achievement id, state with counts, u8 trailing flag |
+| Earned | Z→C | 0x17f8 | u32 achiever spawn id, achievement id, sound id, caret-delimited link metadata C string |
+| Guild announcement | Z→C | GuildUpdate action 3 | action at 0, fixed 64-byte player name at 12, achievement id at 80, link metadata at 84 |
+
+The inflated catalog starts with a category count and categories: id, parent id (`0xffffffff` for a root), name, description, icon C strings, display order, association count and `{achievement id, text C string, display order}` records, then child count and child ids. Next is a definition count and definitions: id, name/description C strings, icon id, persistent byte, version, four component vectors in types 0..3 order, points, and a DWORD reward flag. A component has id, u8 type, required count, name/description C strings, and u8 display order. That byte is not the full requirement id carried by progress.
+
+A state is i16 status (Completed 0, Open 1, Locked 2, Hidden 3), then 16-bit LSB-first satisfaction words for component types **1, 2, 0**, with each bucket rounded up separately. Only Completed carries a completion timestamp. Link inspection additionally carries one DWORD count per component in that same bucket order. Type 3 is descriptive and has no runtime bits or counts. Link metadata uses player name, achievement id, status, signed decimal 16-bit words, optional completed timestamp and counts, each followed by `^`. A chat envelope is `0x12 + '3' + metadata + apostrophe + visible name + 0x12`; the current received catalog supplies the displayed name, and plain text/notification data are escaped once. Sharing writes the full tag into chat composition and does not send a chat message automatically.
+
+Initialization is definitions, complete dense primary, then progress, including an empty progress packet. Counts remain unknown until that last step; only then can omitted records mean zero. Progress replaces the value at the full achievement/component/requirement/type key. Distinct requirement counts are summed using a wider display integer; counts and satisfaction bits never infer status. A sparse state update preserves known counters. Serial comparison handles wrap; replayed/older primary serials are rejected. Hidden or class-ineligible definitions keep their wire indices even though the UI does not list them.
+
+Catalog replacement retires selection, linked detail and comparison ownership. All data retires on character/zone/connection changes. A comparison reserves its current catalog and exact nearby PC spawn incarnation (within 20) before outgoing callbacks; only one identity-less reply may be outstanding. Cancellation or the host's 10-second timeout retains a tombstone until that reply drains or the session retires. A late reply cannot attach to a newer comparison. Link inspection checks the named local player's incarnation, catalog and current detail reservation; changing the selected target does not change link ownership. A nonlocal link can display its received snapshot without a network request. These views never overwrite the character's primary state. Refresh, comparison, link inspection and reward actions are explicit; getters and frame drawing send nothing.
+
+A comparison or link inspection still in flight when definitions change retains its original decoding catalog.
+A valid old reply drains that retired reservation without updating the new catalog's views, even when definition
+counts, component shapes or ids changed. Malformed replies do not clear a reservation, and repeated catalog
+replacements retain the original schema until its reply drains or the session retires. Comparison and inspection
+requests from the same replaced catalog share its immutable storage; opening a request does not copy the catalog.
+
+Catalog decode is atomic and validates unique ids, category parent/child consistency, cycles and association references. Host ceilings are 8 MiB per packet, 64 MiB inflated catalog, 8192 categories, 65536 definitions, 262144 components (4096 per definition), associations and requirement records, 32 MiB aggregate catalog text, and 64 KiB link metadata. Individual names/icons are limited to 4096 bytes and descriptions/association text to 16384. Limits are host policy, not native container-capacity claims.
+
+Earned notifications require a matching received PC spawn/name. Their chat uses achievement colours 348 (self) / 349 (others) and filter 32 (show all / self only / hide); the sound cue uses the packet's sound id at its achiever, including stock sound 3695 from the player's assets. The bounded event queue and sound are independent of the chat filter. Guild announcements also allow an unspawned member and produce only filtered guild chat. Hailstone adds a self-completion overlay using the existing overlay's standard fades; exact native notification timing is still listed in unknowns. Neither path changes own completion state. Callback reentry rechecks the catalog and spawn incarnation before posting any remaining effects.
+
 ### Chat and slash commands (`game/slash_commands.{h,cpp}`, `net/game_connection_social.cpp`)
 
-A typed line is matched against the 391-entry command table less the commands this client leaves out (the four voice macro commands, /achievements, /tcg and /mp3; 383 remain, `src/game/slash_commands.inc`, `tools/gen_slash_commands.py`): localised names first, then built-in names, a typed word matching the first command (in table order) that it is a case-insensitive prefix of (`/wh` = `/who`, `/g` = `/gsay`, `/s` = `/split`, `/lfg` = `/lfgroup` by its localised name). GM-only entries never match for players. No match: eqstr 12380 for a `/` word, else the default channel (say). `;` and `[` lines go to the chat server. Dead players get 538 unless the entry's flag bit 0 allows it.
+A typed line is matched against the 391-entry command table less the commands this client leaves out (the four voice macro commands, /legendsofnorrath, /tcg and /mp3; 384 remain, `src/game/slash_commands.inc`, `tools/gen_slash_commands.py`): localised names first, then built-in names, a typed word matching the first command (in table order) that it is a case-insensitive prefix of (`/wh` = `/who`, `/g` = `/gsay`, `/s` = `/split`, `/lfg` = `/lfgroup` by its localised name). GM-only entries never match for players. No match: eqstr 12380 for a `/` word, else the default channel (say). `;` and `[` lines go to the chat server. Dead players get 538 unless the entry's flag bit 0 allows it. `/achievements` toggles the stock window and sends a refresh only on an explicit open; its native command flag allows it while dead.
 
 Chat out (OP_ChannelMessage 0x2b2d) is echoed locally with the client's own template and the server's copy of our own line is dropped on arrival (lines whose sender is the player are skipped; a tell's copy comes back on channel 7 or 14 and prints 1400 "You told %1, '%2'"). Echoes: say 12344, group 12346 (12345 without a group), shout 12348, auction 12350, OOC 12352, guild 12263 (12242 without a guild), raid 5109 (5108 without a raid), emote "<name> <text>" (channel 22). Incoming templates: 1410 say, 1414 group, 1415 guild, 1416 tell, 1420 shout, 1421 auction, 1422 OOC, 5112 raid, 1036 emote; the language part is 1411 " in <language>," (language names from the client's table) or 1412 when the skill is 24 or less. EQEmu sends a sent tell back as channel 14 (TellEcho).
 

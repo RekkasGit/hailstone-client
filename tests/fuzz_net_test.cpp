@@ -21,8 +21,10 @@
 
 #include "core/byte_io.h"
 #include "fuzz_game_decoders.h"
+#include "fuzz_achievements.h"
 #include "fuzz_support.h"
 #include "net/aa_packets.h"
+#include "net/achievement_packets.h"
 #include "net/ability_packets.h"
 #include "net/adventure_packets.h"
 #include "net/aggro_packets.h"
@@ -45,6 +47,7 @@
 #include "net/opcodes.h"
 #include "net/pet_packets.h"
 #include "net/real_estate_packets.h"
+#include "net/reward_packets.h"
 #include "net/player_packets.h"
 #include "net/session.h"
 #include "net/server_files_packets.h"
@@ -206,6 +209,47 @@ TEST_CASE("fuzz: typed decoders never throw, hang or over-allocate on truncated 
         }
         CHECK_MESSAGE(failures == 0, dec.name << " failed " << failures << " cases");
     }
+}
+
+TEST_CASE("fuzz: achievement variable layouts run with a received catalog and independent wire seeds") {
+    fuzz::QuietLog quiet;
+    namespace fixture = test::achievement_fixture;
+    std::vector<Bytes> seeds;
+    const auto add = [&](unsigned choice, const AppPacket& packet) {
+        Bytes bytes{static_cast<std::byte>(choice)};
+        bytes.insert(bytes.end(), packet.data.begin(), packet.data.end()); seeds.push_back(std::move(bytes));
+    };
+    add(0, fixture::primary()); add(1, fixture::comparison()); add(2, fixture::inspect());
+    ByteWriter earned; earned.le<std::uint32_t>(77); earned.le<std::uint32_t>(900); earned.le<std::uint32_t>(3695);
+    fixture::string(earned, fixture::metadata()); add(3, {kOpAchievementEarned, earned.take()});
+    ByteWriter guild; guild.le<std::uint32_t>(3); guild.le<std::uint64_t>(0); guild.fixed_string("Peer", 64);
+    guild.le<std::uint32_t>(0); guild.le<std::uint32_t>(900); fixture::string(guild, fixture::metadata());
+    add(4, {to_wire(Op::GuildUpdate), guild.take()});
+    Bytes metadata{std::byte{5}};
+    for (const auto c : fixture::metadata()) metadata.push_back(static_cast<std::byte>(c));
+    seeds.push_back(std::move(metadata)); add(6, fixture::catalog());
+    (void)fuzz_achievements::catalog(); // Build the fixed context outside each allocation/timing guard.
+    ByteWriter forged; forged.le(static_cast<std::uint32_t>(kMaxAchievementCatalogBytes));
+    forged.le<std::uint16_t>(0); const auto forged_bytes = forged.take();
+    fuzz::reset_largest_allocation();
+    REQUIRE(fuzz::run_case("achievement forged inflate size", forged_bytes, Throws::Never,
+        [&](std::span<const std::byte>) { CHECK_FALSE(decode_achievement_catalog({kOpAchievementDefinitions, forged_bytes})); }));
+    CHECK(fuzz::largest_allocation() < (1u << 20)); // declared size alone cannot reserve 64 MiB
+    Rng rng(0xac41e);
+    std::size_t failures = 0;
+    for (const auto& seed : seeds) {
+        for (std::size_t n = 0; n <= seed.size(); ++n) {
+            const Bytes prefix(seed.begin(), seed.begin() + static_cast<std::ptrdiff_t>(n));
+            if (!fuzz::run_case("achievement catalog context", prefix, Throws::Never,
+                [&](std::span<const std::byte> bytes) { fuzz_achievements::feed(bytes); })) ++failures;
+        }
+        for (int i = 0; i < 256 && failures == 0; ++i) {
+            const auto bytes = fuzz::mutate(seed, rng);
+            if (!fuzz::run_case("achievement catalog context", bytes, Throws::Never,
+                [&](std::span<const std::byte> input) { fuzz_achievements::feed(input); })) ++failures;
+        }
+    }
+    CHECK(failures == 0);
 }
 
 TEST_CASE("fuzz: decoders that look at the opcode, over every known opcode value") {

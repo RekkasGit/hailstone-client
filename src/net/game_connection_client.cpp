@@ -85,20 +85,26 @@ bool GameConnection::client_info_command(std::string_view h, const std::string& 
         ask(std::move(c));
         return true;
     }
+    if (h == "Cmd_achievements") {
+        // Cmd_achievements @0x4edb00: hide a visible window; otherwise request
+        // the server snapshot with 0x47cb / byte 0x30. No HP/death gate.
+        show_achievements(!achievements_.shown());
+        return true;
+    }
     if (h == "Cmd_acompare") {
         // Cmd_acompare @0x4e7c40: a target (5203), within 20 (CDisplay::PlayerDistance, 5204), a player (5205), each
-        // refusal colour 0x10e; then Send_AchievementCompareRequest @0x51fb90. EQEmu has no achievements.
+        // refusal colour 0x10e; then Send_AchievementCompareRequest @0x51fb90.
         auto it = world_.spawns.find(world_.target_id);
         const game::Spawn* me = world_.player();
         if (it == world_.spawns.end() || !me) return system(5203, {}, 0x10e), true;
         if (distance_to(world_.target_id) > 20.0f) return system(5204, {}, 0x10e), true;
         if (it->second.is_npc || it->second.is_corpse) return system(5205, {}, 0x10e), true;
-        if (state_ == ConnectionState::InZone) send_zone(encode_achievement_compare(world_.target_id, me->id));
+        compare_achievements();
         return true;
     }
     if (h == "Cmd_aclearcompare") {
-        // Cmd_aclearcompare @0x4e7ce0: AchievementManager::ResetComparisonStates. No comparison is ever received
-        // here (no achievements), so there is nothing to reset.
+        // Cmd_aclearcompare @0x4e7ce0: AchievementManager::ResetComparisonStates.
+        clear_achievement_comparison();
         return true;
     }
     if (h == "Cmd_lfguild") {

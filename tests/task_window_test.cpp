@@ -12,6 +12,11 @@
 #include "game/eq_strings.h"
 #include "game/task_window.h"
 #include "game/tasks.h"
+#include "app/lua_eq_windows.h"
+#include "core/byte_io.h"
+#include "mock_server/harness.h"
+#include "net/task_packets.h"
+#include "plugin/hooks.h"
 
 using namespace hailstone;
 using namespace hailstone::game;
@@ -235,4 +240,101 @@ TEST_CASE("task window: the compass mark") {
     CHECK(m->position.x == 4.0f); // strstr is case-sensitive: "guard_bob" is not in "Guard_Bob00"
     st.tasks[0].elements[1].done_count = 1;
     CHECK_FALSE(task_compass_mark(st, 3, spawns));
+}
+
+TEST_CASE("task window: Preview Reward sends the selected task ID and refuses stale slots") {
+    plugin::Hooks hooks;
+    const auto owner = hooks.new_owner("task preview fixture");
+    std::vector<net::AppPacket> requests;
+    hooks.on_packet(owner, plugin::Stream::Zone, plugin::Direction::Out, 0, [&](net::AppPacket& p) {
+        if (p.opcode == net::to_wire(net::Op::RewardSelection) || p.opcode == net::to_wire(net::Op::AchievementReward))
+            requests.push_back(p);
+        return plugin::Flow::Continue;
+    });
+    test::ManualClock clock;
+    auto options = test::quick_options();
+    options.session.clock = clock.source();
+    options.hooks = &hooks;
+    test::Rig rig(test::MockConfig::standard(), options);
+    REQUIRE(rig.to_zone());
+    clock.hold();
+
+    Task alpha;
+    alpha.type = kTaskTypeQuest;
+    alpha.sequence = 3;
+    alpha.task_id = 9001;
+    alpha.title = "Alpha";
+    alpha.has_rewards = alpha.reward_set = true;
+    Task zebra = alpha;
+    zebra.sequence = 0;
+    zebra.task_id = 70000;
+    zebra.title = "Zebra";
+    rig.server.zone.send_reliable(net::encode_task_description(alpha));
+    rig.server.zone.send_reliable(net::encode_task_description(zebra));
+    REQUIRE(rig.until([&] { return rig.conn.tasks().find_id(alpha.task_id) && rig.conn.tasks().find_id(zebra.task_id); }));
+
+    app::EqHost host;
+    host.conn = &rig.conn;
+    host.game = &rig.game;
+    host.in_game = host.ui_ready = true;
+    std::vector<std::unique_ptr<app::StockWindow>> windows;
+    app::add_progress_windows(windows);
+    auto found = std::find_if(windows.begin(), windows.end(), [](const auto& window) { return window->screen() == "TaskWnd"; });
+    REQUIRE(found != windows.end());
+    auto& window = **found;
+    REQUIRE(window.click(host, "TASK_PreviewRewardButton", "left", false));
+    CHECK(requests.empty()); // no row has been selected/built yet
+    window.set_shown(host, true);
+    window.frame(host);
+    CHECK(requests.empty()); // drawing/opening the journal does not ask for any rewards
+    const auto* list = window.list(host, "TASK_TaskList");
+    REQUIRE(list);
+    const auto row = std::find_if(list->rows.begin(), list->rows.end(), [](const auto& value) {
+        return value.texts.size() > 1 && value.texts[1] == "Zebra";
+    });
+    REQUIRE(row != list->rows.end());
+    REQUIRE(window.list_click(host, "TASK_TaskList", static_cast<int>(row - list->rows.begin()), false, 0));
+    app::Child button;
+    window.child(host, "TASK_PreviewRewardButton", button);
+    REQUIRE(button.enabled == true);
+    CHECK_FALSE(window.click(host, "TASK_PreviewRewardButton", "right", false));
+    CHECK(requests.empty());
+    REQUIRE(window.click(host, "TASK_PreviewRewardButton", "left", false));
+    REQUIRE(requests.size() == 1);
+    CHECK(requests.front().opcode == net::to_wire(net::Op::RewardSelection));
+    ByteReader reader(requests.front().data);
+    CHECK(reader.le<std::uint32_t>() == 4u);
+    CHECK(reader.le<std::uint32_t>() == zebra.task_id); // neither sequence 0 nor the sorted list's row
+    CHECK(reader.empty());
+
+    // Reuse the selected slot before the journal has processed its rebuild. The new task is itself eligible,
+    // so only the row's captured identity prevents an unintended query for the replacement.
+    zebra.task_id = 80000;
+    zebra.title = "Replacement";
+    rig.server.zone.send_reliable(net::encode_task_description(zebra));
+    REQUIRE(rig.until([&] { return rig.conn.tasks().find_id(zebra.task_id) != nullptr; }));
+    clock.advance(std::chrono::milliseconds{501});
+    button = {};
+    window.child(host, "TASK_PreviewRewardButton", button);
+    CHECK(button.enabled == false);
+    REQUIRE(window.click(host, "TASK_PreviewRewardButton", "left", false));
+    CHECK(requests.size() == 1);
+
+    window.frame(host); // selects the first current task after the old identity disappeared
+    alpha.reward_set = false;
+    rig.server.zone.send_reliable(net::encode_task_description(alpha));
+    REQUIRE(rig.until([&] { const auto* task = rig.conn.tasks().find_id(alpha.task_id); return task && !task->reward_set; }));
+    clock.advance(std::chrono::milliseconds{501});
+    button = {};
+    window.child(host, "TASK_PreviewRewardButton", button);
+    CHECK(button.enabled == false);
+    REQUIRE(window.click(host, "TASK_PreviewRewardButton", "left", false));
+    app::Child monster;
+    window.child(host, "TASK_MonsterButton", monster);
+    CHECK(monster.enabled == false);
+    REQUIRE(window.click(host, "TASK_MonsterButton", "left", false));
+    window.frame(host);
+    clock.advance(std::chrono::milliseconds{501});
+    window.frame(host);
+    CHECK(requests.size() == 1);
 }

@@ -145,6 +145,8 @@ void GameConnection::reload_game_files() {
 GameConnection::~GameConnection() { disconnect(); }
 
 void GameConnection::fail(std::string message) {
+    reset_achievements();
+    reset_rewards();
     log::warn("connection: {}", message);
     capture_bank();
     error_ = std::move(message);
@@ -173,6 +175,8 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
 }
 
 void GameConnection::start(const WorldTicket& ticket) {
+    reset_achievements();
+    reset_rewards();
     reset_tribute_donations();
     ticket_ = ticket;
     camped_out_.reset();
@@ -310,6 +314,8 @@ void GameConnection::update() {
         }
     }
 
+    rewards_.update(reward_now_ms());
+    update_achievements();
     camp_tick();
     auto_target_tick(); // before attack_hold_tick: a new target ends the attack hold with auto attack still on
     attack_hold_tick();
@@ -428,15 +434,20 @@ void GameConnection::send_world(const AppPacket& p) {
     world_session_->send(p);
 }
 
-void GameConnection::send_zone(const AppPacket& p, bool reliable) {
-    if (!zone_session_) return;
+bool GameConnection::send_zone(const AppPacket& p, bool reliable, const std::function<bool()>& still_current) {
+    if (!zone_session_ || zone_session_->state() != SessionState::Connected) return false;
+    if (still_current && !still_current()) return false;
+    const auto* session = zone_session_.get();
     if (options_.hooks && options_.hooks->has_packet_hooks(plugin::Stream::Zone, plugin::Direction::Out)) {
         AppPacket copy = p;
-        if (options_.hooks->packet(plugin::Stream::Zone, plugin::Direction::Out, copy) == plugin::Flow::Drop) return;
-        if (zone_session_) zone_session_->send(copy, reliable);
-        return;
+        if (options_.hooks->packet(plugin::Stream::Zone, plugin::Direction::Out, copy) == plugin::Flow::Drop) return false;
+        if (zone_session_.get() != session || zone_session_->state() != SessionState::Connected) return false;
+        if (still_current && !still_current()) return false;
+        zone_session_->send(copy, reliable);
+        return true;
     }
     zone_session_->send(p, reliable);
+    return true;
 }
 
 void GameConnection::raise_hook_events() {
@@ -677,6 +688,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_commerce_for_zone();
         reset_tribute_donations();
         reset_progress_for_zone();
+        reset_achievements();
+        reset_rewards();
         reset_player_for_zone();
         reset_market_for_zone();
         path_.stop();
@@ -847,10 +860,10 @@ void GameConnection::smooth(float dt, const game::WorldState::FloorFn& floor,
 void GameConnection::smooth_vehicles(float dt) { world_.smooth_vehicles(dt, steady_seconds()); }
 
 void GameConnection::apply_spawn(const Spawn& s) {
-    const std::size_t had = world_.spawns.size();
     game::Spawn& out = world_.spawns[s.spawn_id];
-    if (world_.spawns.size() != had) ++world_.spawn_set_serial;
+    ++world_.spawn_set_serial; // a full same-id replacement also retires the previous identity
     out.id = s.spawn_id;
+    out.incarnation = core::next_process_identity();
     out.name = s.name;
     out.last_name = s.last_name;
     out.title = s.title;
@@ -1137,6 +1150,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
     if (handle_name_change(p)) return; // net/game_connection_names.cpp
     if (handle_group_search(p)) return; // the group finder's replies (net/game_connection_group_search.cpp)
     if (handle_marketplace(p)) return;  // the marketplace's packets (net/game_connection_marketplace.cpp)
+    if (handle_rewards(p)) return; // the two stock Select Reward managers
+    if (handle_achievements(p)) return;
     if (handle_real_estate(p)) return; // net/game_connection_real_estate.cpp
     if (p.opcode == kOpHailstoneGuildReply) {
         if (auto g = decode_hailstone_guild(p)) handle_hailstone_guild(*g);
@@ -1916,6 +1931,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 chat(ChatEvent::Kind::System, "Zoning...");
                 send_zone(encode_delete_own_spawn(world_.player_id));
                 state_ = ConnectionState::Zoning;
+                reset_achievements();
+                reset_rewards();
                 status_ = "Leaving the zone";
                 zone_exit_ = ZoneExit::Zoning;
                 zone_exit_deadline_ = Clock::now() + kZoneDropWait;
@@ -2209,6 +2226,8 @@ void GameConnection::send_eye_position(bool force) {
 }
 
 void GameConnection::leave_zone_dropped() {
+    reset_achievements();
+    reset_rewards();
     // The zone has dropped the link (or was closed after the wait).
     ZoneExit exit = std::exchange(zone_exit_, ZoneExit::None);
     if (exit == ZoneExit::Zoning) {
@@ -2264,6 +2283,8 @@ void GameConnection::simulate_link_loss() {
 
 void GameConnection::disconnect() {
     capture_bank();
+    reset_achievements();
+    reset_rewards();
     reset_tribute_donations();
     release_eye_control();
     blood_spurts_.clear();

@@ -814,7 +814,7 @@ rectangle (`u0, v0, u1, v1`).
 
 ### `eq`
 
-`eq` has 283 functions (with `eq.gamepad.*`). The **Cap** column is what a plugin's code needs to call it; `—` means
+The tables below include `eq.gamepad.*`. The **Cap** column is what a plugin's code needs to call it; `—` means
 nothing beyond `ui`. A UI pack's own code may call everything. A refused call does nothing and gives `nil`, with one
 line in the log. The list is `src/app/lua_eq_caps.cpp`; a function missing from it is taken to act and needs
 `actions`. `self` means the function checks the caller itself, as each group's note says.
@@ -842,6 +842,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Gauge | (eqType) → fraction\|nil, text, value [, r, g, b] | EQType gauge: fraction 0..1, raw value (0..1000 or special negatives), tint for special values | — |
 | AltCurrencies | ([showMissing]) → {{name, count, icon, maxStack}} | Alternate currencies in the InventoryWindow list's order | — |
 | UiTexture | (file) → tex, w, h \| nil | Texture from uifiles/default | — |
+| UiAnimation | (name) → tex, u0, v0, u1, v1, w, h \| nil | First frame of a named installed XML animation, with its authored dimensions | — |
 | Option | (name) → int\|nil | Client option value (ui/<pack>/options.lua) | — |
 | SetOption | (name, int) → — | Change, apply and save a client option | commands |
 | OptionChoices | (name) → {string} | Choices the client lists for an option (e.g. "resolution") | — |
@@ -1021,6 +1022,30 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | AbilityBookAutoskillMove | (key, delta) → — | Move in the list (-1 / +1) | commands |
 | AbilityBookAutoskillRule | (key, endurance, mana, targetHp, targetHpAbove, selfHp, when, keepBuff) → — | Set an entry's rule | commands |
 | AbilityBookAutoskillEnable | (on) → — | Autoskill master switch | actions |
+
+#### Achievements and rewards (lua_eq_achievements.cpp, lua_eq_rewards.cpp)
+
+| Function | Args → returns | What | Cap |
+|---|---|---|---|
+| Achievements | ([catalogToken, stateRevision]) → table\|nil | Received catalog, own state, totals and comparison status; matching tokens omit unchanged tables | — |
+| Achievement | () → table\|nil | Current own or linked detail, including its revision | — |
+| AchievementOpen | (catalogToken, definitionIndex) → accepted, reason | Select one of your achievements by its received zero-based index | commands |
+| AchievementRefresh | () → accepted, reason | Explicitly request a fresh catalog and state | actions |
+| AchievementCompare | () → accepted, reason | Compare the nearby targeted player | actions |
+| AchievementClearCompare | () → accepted, reason | Clear the comparison; retire a reply still in flight | commands |
+| AchievementReward | (catalogToken, definitionIndex) → accepted, reason | Open the selected achievement's server-provided rewards | actions |
+| AchievementLink | (catalogToken, definitionIndex) → accepted, reason | Insert the selected achievement link into chat composition | chat |
+| RewardSelection | ([pendingRevision, previewRevision]) → table\|nil | Separate pending and preview lanes; matching revisions omit unchanged tabs | — |
+| RewardSelectionClaim | (revision, tabToken, wireOption) → accepted, reason | Confirm a received pending choice; previews cannot claim | actions |
+| RewardSelectionInspect | (lane, revision, tabToken, wireOption, entryId, itemId) → accepted, reason | Explicitly request a received reward item's details | actions |
+| RestorePendingRewards | () → accepted, reason | Request pending rewards without retrying a claim | actions |
+| RewardSelectionClose | (lane) → accepted, reason | Close the pending or preview lane | commands |
+
+Catalog, state, detail, lane-revision and tab tokens are opaque decimal strings: pass them back unchanged, never
+through `tonumber`. Definition indices and wire ids are unsigned 32-bit integers. `lane` is `"pending"` or
+`"preview"`. Getters and drawing are passive; an accepted action means it was admitted to transport, not that the
+server granted a reward. The full table shapes and cache rules are in [docs/dev-ui.md](dev-ui.md), under the
+achievement and reward-selection APIs.
 
 #### Spell book and spell sets (lua_eq_spellbook.cpp)
 

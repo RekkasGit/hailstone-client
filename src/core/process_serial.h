@@ -16,4 +16,12 @@ inline std::uint32_t next_process_serial() {
     return n;
 }
 
+// UI ownership tokens must also distinguish replacement connection objects.
+inline std::uint64_t next_process_identity() {
+    static std::atomic<std::uint64_t> counter{0};
+    std::uint64_t n = counter.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (n == 0) n = counter.fetch_add(1, std::memory_order_relaxed) + 1;
+    return n;
+}
+
 } // namespace hailstone::core

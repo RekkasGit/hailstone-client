@@ -338,6 +338,8 @@ struct EqApi::Impl {
         add_social_windows(windows);
         add_real_estate_windows(windows);
         add_progress_windows(windows);
+        add_reward_selection_window(windows);
+        add_achievement_windows(windows);
         add_group_search_windows(windows);
         add_map_windows(windows);
         add_player_windows(windows);
@@ -700,6 +702,19 @@ int UiTexture(lua_State* L) {
     lua_pushinteger(L, t->width);
     lua_pushinteger(L, t->height);
     return 3;
+}
+
+// texture, u0, v0, u1, v1, width, height = eq.UiAnimation(name)
+// Explicitly requested stock XML art retains the frame's original aspect.
+int UiAnimation(lua_State* L) {
+    auto& h = Impl::of(L).host;
+    std::size_t length = 0;
+    const char* name = luaL_checklstring(L, 1, &length);
+    const auto image = h.textures ? h.textures->animation_image(std::string_view(name, length)) : std::nullopt;
+    if (!image) { lua_pushnil(L); return 1; }
+    push_cell(L, image->cell);
+    lua_pushinteger(L, image->width); lua_pushinteger(L, image->height);
+    return 7;
 }
 
 // ---------------------------------------------------------------- stock windows
@@ -2886,6 +2901,8 @@ void register_spellbook_api(lua_State* L, EqHost& host); // app/lua_eq_spellbook
 void register_abilities_api(lua_State* L, EqHost& host); // app/lua_eq_abilities.cpp
 void register_ability_book_api(lua_State* L, EqHost& host); // app/lua_eq_abilitybook.cpp
 void register_inventory_manager_api(lua_State* L, EqHost& host); // app/lua_eq_inventory_manager.cpp
+void register_reward_selection_api(lua_State* L, EqHost& host); // app/lua_eq_rewards.cpp
+void register_achievement_api(lua_State* L, EqHost& host); // app/lua_eq_achievements.cpp
 void register_exchange_api(lua_State* L, EqHost& host);  // app/lua_eq_exchange.cpp
 void register_social_api(lua_State* L, EqHost& host);    // app/lua_eq_social.cpp
 void register_stats_api(lua_State* L, EqHost& host);     // app/lua_eq_stats.cpp
@@ -2904,6 +2921,8 @@ void EqApi::register_functions(lua_State* L) {
     register_abilities_api(L, impl_->host);
     register_ability_book_api(L, impl_->host);
     register_inventory_manager_api(L, impl_->host);
+    register_reward_selection_api(L, impl_->host);
+    register_achievement_api(L, impl_->host);
     register_exchange_api(L, impl_->host);
     register_social_api(L, impl_->host);
     register_stats_api(L, impl_->host);
@@ -2925,7 +2944,7 @@ void EqApi::register_functions(lua_State* L) {
     static const luaL_Reg fns[] = {
         {"InGame", InGame}, {"UiReady", UiReady}, {"GameState", GameState}, {"Name", Name}, {"SlotName", SlotName},
         {"Item", Item}, {"ItemIcon", ItemIcon}, {"Money", Money}, {"Label", Label}, {"Gauge", Gauge},
-        {"ClickSlot", ClickSlot}, {"HasSlot", HasSlot}, {"AltCurrencies", AltCurrencies}, {"UiTexture", UiTexture},
+        {"ClickSlot", ClickSlot}, {"HasSlot", HasSlot}, {"AltCurrencies", AltCurrencies}, {"UiTexture", UiTexture}, {"UiAnimation", UiAnimation},
         {"ReplaceWindow", ReplaceWindow}, {"WindowPlaced", WindowPlaced}, {"ShowWindow", ShowWindow}, {"WindowButton", WindowButton},
         {"WindowText", WindowText}, {"ChildShown", ChildShown}, {"WindowList", WindowList}, {"ChildArt", ChildArtFn},
         {"GemTint", GemTint}, {"GemOverlay", GemOverlay}, {"GemInfo", GemInfo}, {"ButtonCoolDown", ButtonCoolDown}, {"CoolDownColor", CoolDownColor}, {"ItemPreview", ItemPreview}, {"ItemPreviewImage", ItemPreviewImage}, {"ItemPreviewControl", ItemPreviewControl}, {"BuffSlot", BuffSlot}, {"BuffOverlay", BuffOverlay}, {"ClickChild", ClickChild}, {"ClickChildAt", ClickChildAt},
@@ -2957,7 +2976,7 @@ void EqApi::register_functions(lua_State* L) {
     // this frame (Impl::list) before it runs. A function missing here costs only a list built again.
     static constexpr std::string_view kReads[] = {
         "InGame", "UiReady", "GameState", "Name", "SlotName", "Item", "ItemIcon", "Money", "Label", "Gauge", "HasSlot",
-        "AltCurrencies", "UiTexture", "ReplaceWindow", "WindowShown", "WindowPlaced", "WindowText", "ChildShown",
+        "AltCurrencies", "UiTexture", "UiAnimation", "ReplaceWindow", "WindowShown", "WindowPlaced", "WindowText", "ChildShown",
         "WindowList", "ChildArt", "GemTint", "GemOverlay", "ButtonCoolDown", "CoolDownColor", "ItemPreviewImage",
         "BuffSlot", "BuffOverlay", "HotButton", "HotButtonFace", "HotButtonChecked", "HotButtonState", "HotButtonInfo",
         "GemInfo", "HoldingButton", "SlotItem", "ListInfo", "ListRow", "ChildState", "WindowTitle", "ChildGauge",

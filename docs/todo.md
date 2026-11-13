@@ -50,6 +50,14 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Position history (PositionTracker, OP_FloatListThing), the retried and the 30-minute saves, closing on loading screens (60069a0). Missing samples are listed in unknowns.md.
 
 ### Items and commerce
+- [x] Stock achievements: bounded compressed catalog, primary state and counters, categories/search/status filters, linked details, nearby-player comparisons, explicit reward views and refresh, both UI packs; codec/model/bridge/mock-server and actual Lua-pack fixtures. Live use reported generally working (2026-11-12); targeted acceptance remains below.
+- [x] Achievement browser usability: collapsible categories with deduplicated completion totals, compact status/points rows, inline selected objectives and reward actions, readable dates, exact full-width count text, and responsive layouts in both packs. Linked details stay independent; no request runs from filtering or drawing.
+- [x] Catalog reloads retain the decoding schema of in-flight comparison/link requests: valid retired replies drain without updating newer views, even after definition/component changes; malformed replies and timeouts retain their guards.
+- [x] Reward-window presentation: numbered choices with measured long-name captions, full item details and explicit tile/name inspection, prominent claim/confirmation controls, and separate maintenance actions in both packs.
+- [x] Stock XML category badges with base/hover/selected variants, preserved native aspect and same-row right-aligned counts; missing art keeps the category name. Reward selection uses explicit full-card choices, grant summaries and a fixed claim/confirmation footer in both packs.
+- [ ] Achievements: live catalog refresh, earned/guild messages, local/nonlocal links, comparison and reward delivery; native completion timing, icon resource selection and legacy achievement gauges (docs/unknowns.md).
+- [x] Stock pending reward selection and task reward previews (`0x6411` / `0x6471`), both UI packs, explicit claims and item inspection; codec, model, bridge, mock-server and Lua UI tests. Live use reported generally working (2026-11-12); the refined reward window still needs targeted live claims/inspection acceptance below.
+- [ ] Reward selection: offered-task preview controls and live claims/inspection on a RoF2 server (docs/unknowns.md).
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).
 - [x] The tradeskill window: favourites, request waits, combine checks, trivial colours (experiment and auto-combine were already in).
