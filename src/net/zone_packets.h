@@ -124,7 +124,7 @@ struct Spawn {
     std::uint8_t anon = 0;
     std::uint16_t invis = 0;
     bool trader = false, targetable = false, targetable_with_hotkey = false, show_name = false;
-    std::uint8_t other_data = 0; // bit0 buyer, bit2 interactive/LDoN, bit4 title, bit5 suffix
+    std::uint8_t other_data = 0; // bit0 buyer, bit1 offline mode, bit2 interactive/LDoN, bit4 title, bit5 suffix
     float emitter_scaling_radius = -1;
     std::uint32_t default_emitter_id = 0;
     std::optional<InteractiveObject> interactive;

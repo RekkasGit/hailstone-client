@@ -322,6 +322,30 @@ TEST_CASE("mock server: SpawnAppearance 22 / 23 / 52 print the guild join, leave
     CHECK(conn.world().player()->guild_rank == 0);
 }
 
+TEST_CASE("mock server: an offline trader's spawn record (other_data bit 1) and SpawnAppearance 53 set its offline flag") {
+    Rig rig(MockConfig::standard(), quick_options());
+    auto& conn = rig.conn;
+    auto& server = rig.server;
+    REQUIRE(rig.to_zone());
+    net::Spawn away = make_spawn("Seller", 140, 0, 1, -285, -148, 3.5f);
+    away.trader = true;
+    away.other_data = 2; // bOfflineMode
+    server.add_spawn(away);
+    net::Spawn here = make_spawn("Shopper", 141, 0, 1, -280, -148, 3.5f);
+    here.trader = true;
+    server.add_spawn(here);
+    REQUIRE(rig.until([&] { return conn.world().spawns.contains(140) && conn.world().spawns.contains(141); }));
+    CHECK(conn.world().spawns.at(140).offline);
+    CHECK(conn.world().spawns.at(140).trader);
+    CHECK_FALSE(conn.world().spawns.at(140).buyer);
+    CHECK_FALSE(conn.world().spawns.at(141).offline);
+
+    server.zone.send_reliable(encode(SpawnAppearance{141, 53, 1}));
+    REQUIRE(rig.until([&] { return conn.world().spawns.at(141).offline; }));
+    server.zone.send_reliable(encode(SpawnAppearance{140, 53, 0}));
+    REQUIRE(rig.until([&] { return !conn.world().spawns.at(140).offline; }));
+}
+
 TEST_CASE("mock server: copying another character's chat settings and game options (the layout copy's Hailstone boxes)") {
     EmptyGameDir servers;
     ConnectionOptions options = quick_options();
