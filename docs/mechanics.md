@@ -605,7 +605,8 @@ guild permission 1500, AA window filter 3000, PC skill limit 3000):
   bought the window selects the ability's next rank, so Train buys it without another click on the row; and the
   "buy every rank" box works on any server: one that switches on `aa_train_all` gets OP_AAAction 4, any other gets
   OP_AAAction 3 for each rank in turn, the next sent when EQEmu's answer to the last (OP_RespondAA, then
-  OP_AAExpUpdate) shows it owned, until the last rank, too few points, a refusal or a plain train.
+  OP_AAExpUpdate) shows it owned, until the last rank, too few points, a plain train or zoning (other updates, such
+  as experience from a kill, and a refused purchase, which EQEmu does not answer, leave it waiting).
 - `game/training.*`: `pc_skill_limit` and `at_skill_limit` feed the trainer's 12930 refusal for every skill: the
   character's skill cap, the skill's level-capped flag, SPA 263 / 248 from `total_effect`, the highest level from
   the sheet (the current level: EQEmu's profile carries no other).
