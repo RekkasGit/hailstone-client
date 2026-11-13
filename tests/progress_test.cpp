@@ -306,8 +306,8 @@ TEST_CASE("aa: CanTrainAbility, MeetsPrerequisites and CanSeeAbility") {
 }
 
 // "Buy every rank" on a server without the buy-all action (a stock EQEmu): the client sends OP_AAAction 3 for the next
-// rank each time EQEmu's answer to the last purchase (the owned list, then the points) shows it bought, and stops at
-// the last rank, at a refusal, and on a plain train.
+// rank each time EQEmu's answer to the last purchase (the owned list, then the points) shows it bought, waits through
+// other updates, and stops at the last rank and on a plain train.
 TEST_CASE("aa: buy all ranks on a stock server buys one rank after another") {
     test::Rig rig(test::MockConfig::standard());
     auto& conn = rig.conn;
@@ -347,23 +347,25 @@ TEST_CASE("aa: buy all ranks on a stock server buys one rank after another") {
     for (const AppPacket& p : rig.server.zone_log)
         if (p.opcode == to_wire(Op::AAAction)) CHECK(decode_aa_action(p)->action != kAATrainAll);
 
-    // A refused purchase (the points update without the rank owned) ends the chain.
+    // An update without the rank owned (experience from a kill) leaves the chain waiting for it.
     RespondAA none;
     conn.receive_zone_packet_for_test(encode(none));
     conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 0}));
     REQUIRE(conn.aa_train(100, true));
     REQUIRE(rig.until([&] { return trains().size() == 4; }));
-    conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 0}));
-    bought(100, 8); // bought later (another way): the chain has ended
+    conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 50}));
     rig.run_for(std::chrono::milliseconds(50));
     CHECK(trains().size() == 4);
-
-    // A plain train buys one rank.
-    REQUIRE(conn.aa_train(101));
+    bought(100, 8);
     REQUIRE(rig.until([&] { return trains().size() == 5; }));
+    CHECK(trains().back() == 101);
+
+    // A refused purchase (EQEmu sends nothing) leaves it waiting too; a plain train ends it and buys one rank.
+    REQUIRE(conn.aa_train(101));
+    REQUIRE(rig.until([&] { return trains().size() == 6; }));
     bought(101, 6);
     rig.run_for(std::chrono::milliseconds(50));
-    CHECK(trains().size() == 5);
+    CHECK(trains().size() == 6);
 }
 
 TEST_CASE("aa: reuse timers translate the server's clock; readiness subtracts SPA 264") {

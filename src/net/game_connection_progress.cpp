@@ -421,10 +421,10 @@ bool GameConnection::aa_train(std::uint32_t rank_id, bool train_all) {
 void GameConnection::continue_aa_buy_all() {
     // EQEmu's FinishAlternateAdvancementPurchase answers a purchase with the next rank (OP_SendAATable), the owned
     // list (OP_RespondAA) and then the points (OP_AAExpUpdate), so this runs on the last. An update with the rank
-    // not owned (refused, or an experience update in between) ends the chain: it stops early rather than buy
-    // something later that the player did not ask for.
-    if (!aa_buy_all_) return;
-    const game::AltAbility* a = alt_adv_.has(aa_buy_all_) ? alt_adv_.get(aa_buy_all_) : nullptr;
+    // not owned yet (experience from a kill, the AA share changed, a refused purchase, which EQEmu does not answer)
+    // leaves the chain waiting: every other way to buy a rank is a plain aa_train, which ends it, as zoning does.
+    if (!aa_buy_all_ || !alt_adv_.has(aa_buy_all_)) return;
+    const game::AltAbility* a = alt_adv_.get(aa_buy_all_);
     aa_buy_all_ = 0;
     if (!a || a->next_id <= 0) return;
     auto next = static_cast<std::uint32_t>(a->next_id);
