@@ -1115,18 +1115,27 @@ Zone load_eqg_zone(const GameDir& game, std::string_view name_view, const ZoneLo
     return zone;
 }
 
-Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel& cancel) {
+Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel& cancel,
+               const RevampedZoneTest& revamped_test) {
     if (cancel && cancel()) throw ZoneLoadCancelled();
-    // A revamped zone with only the live client's new .eqg: not the zone a RoF2 server places its spawns on, unless
-    // the server's own files bring it.
-    if (is_revamped_zone_name(name) && is_eqg_zone(game, name) &&
-        !game.from_overlay(lower(std::string(name)) + ".eqg") && is_live_asset_folder(game))
-        throw std::runtime_error("zone archive " + lower(std::string(name)) +
-                                 ".s3d not found (the live client's " + lower(std::string(name)) +
-                                 ".eqg is a revamped zone: the server's assets folder needs the RoF2 " +
-                                 lower(std::string(name)) + ".s3d)");
+    // A revamped zone with only the live client's new .eqg: refused unless the server's own files bring it or the
+    // test shows the server runs it (game/revamped_zone.h). A RoF2 server may place its spawns on the old geometry
+    // (PEQ's Bazaar version 0) or on the revamp (version 1); the original loads the .eqg by name either way.
+    const std::string lname = lower(std::string(name));
+    const bool unconfirmed_revamp = is_revamped_zone_name(lname) && is_eqg_zone(game, lname) &&
+                                    !game.from_overlay(lname + ".eqg") && is_live_asset_folder(game);
+    auto refuse = [&](const std::string& why) {
+        return std::runtime_error("zone archive " + lname + ".s3d not found (the live client's " + lname +
+                                  ".eqg is a revamped zone" + why + ": the server's assets folder needs the RoF2 " +
+                                  lname + ".s3d)");
+    };
+    if (unconfirmed_revamp && !revamped_test) throw refuse("");
     Zone zone = is_eqg_zone(game, name) ? load_eqg_zone(game, name, cancel) : load_classic_zone(game, name, cancel);
     if (cancel && cancel()) throw ZoneLoadCancelled();
+    if (unconfirmed_revamp) {
+        if (!revamped_test(zone)) throw refuse(" that does not match the server's safe point");
+        log::info("{}: loading the live client's revamped {}.eqg, the zone the server runs", lname, lname);
+    }
     if (std::size_t n = add_environment_emitters(game, zone)) log::info("{}: {} environment emitters", zone.name, n);
     return zone;
 }

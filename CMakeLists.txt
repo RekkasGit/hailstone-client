@@ -389,6 +389,7 @@ add_library(hailstone_engine STATIC
   src/game/spell_effect_timers.cpp
   src/game/sine_table.cpp
   src/game/collision.cpp
+  src/game/revamped_zone.cpp
   src/nav/nav_mesh.cpp
   src/nav/zone_nav.cpp
   src/nav/path_follower.cpp

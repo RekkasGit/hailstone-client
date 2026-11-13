@@ -11,12 +11,14 @@
 #include <SDL3/SDL_video.h>
 
 #include "assets/zone_flora.h"
+#include "core/ascii_case.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "mq/lua_mq.h"
 #include "game/mechanics/abilities.h"
 #include "game/option_commands.h"
 #include "game/particles.h"
+#include "game/revamped_zone.h"
 #include "nav/zone_nav.h"
 #include "platform/process.h"
 #include <unordered_set>
@@ -36,7 +38,16 @@ void ClientApp::load_zone(const std::string& short_name) {
     auto mark = [&](const char* phase) { log_memory(std::string("zone load: ") + phase); };
     mark("start");
     try {
-        zone_ = assets::load_zone(game_, short_name);
+        // A live folder's revamped .eqg loads when the server's safe point (OP_NewZone, already here: it asked for
+        // this load) stands on its floor (game/revamped_zone.h). The test's collision mesh is kept below: nothing
+        // added to the zone after the load (flora, emitters) is collision geometry.
+        std::optional<game::CollisionMesh> tested_collision;
+        assets::RevampedZoneTest revamped_test;
+        if (conn_)
+            if (const auto& z = conn_->zone_info(); z && iequals(z->zone_short_name, short_name))
+                revamped_test = game::safe_point_test(game::server_to_world({z->safe_x, z->safe_y, z->safe_z}),
+                                                      tested_collision);
+        zone_ = assets::load_zone(game_, short_name, {}, revamped_test);
         mark("zone data");
         // Hailstone's own flora for a zone without any (assets/zone_flora.h, display.zone_flora).
         if (config_.get_bool("display.zone_flora", true)) {
@@ -76,7 +87,7 @@ void ClientApp::load_zone(const std::string& short_name) {
         if (spell_particles_) spell_particles_->clear();
         if (spell_bolts_) spell_bolts_->clear();
         if (actor_emitters_) actor_emitters_->clear();
-        collision_ = game::CollisionMesh::build(*zone_);
+        collision_ = tested_collision ? std::move(*tested_collision) : game::CollisionMesh::build(*zone_);
         mark("collision");
         if (conn_) conn_->reground(); // ground_npcs measured the spawns against no floor, or the last zone's
         zone_ladders_ = game::zone_ladders(*zone_);
