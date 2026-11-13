@@ -160,6 +160,7 @@ add_library(hailstone_engine STATIC
   src/render/point_shadow_pass.cpp
   src/game/weather.cpp
   src/render/weather_renderer.cpp
+  src/platform/mapped_file.cpp
   src/platform/udp_socket.cpp
   src/platform/tcp_socket.cpp
   src/net/session_codec.cpp
@@ -332,6 +333,8 @@ add_library(hailstone_engine STATIC
   src/assets/eqg_zone.cpp
   src/assets/flora.cpp
   src/assets/zone_flora.cpp
+  src/assets/animation_track.cpp
+  src/assets/character_memory.cpp
   src/assets/character.cpp
   src/assets/character_dress.cpp
   src/assets/character_parts.cpp
@@ -951,6 +954,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/zone_settle_test.cpp
     tests/work_budget_test.cpp
     tests/latest_jobs_test.cpp
+    tests/animation_track_test.cpp
+    tests/character_memory_test.cpp
     tests/character_share_test.cpp
     tests/light_grid_test.cpp
     tests/retire_queue_test.cpp
@@ -1000,6 +1005,8 @@ if(HAILSTONE_BUILD_TESTS)
     tests/net_login_test.cpp
     tests/net_packets_test.cpp
     tests/pfs_test.cpp
+    tests/pfs_mapped_test.cpp
+    tests/wld_deferred_test.cpp
     tests/wld_test.cpp
     tests/eqg_test.cpp
     tests/regions_test.cpp

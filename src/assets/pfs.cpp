@@ -8,6 +8,7 @@
 
 #include "core/byte_io.h"
 #include "core/game_dir.h"
+#include "core/log.h"
 
 namespace hailstone::assets {
 
@@ -109,23 +110,76 @@ void zlib_inflate(std::span<const std::byte> in, std::span<std::byte> out) {
         throw std::runtime_error("zlib block did not inflate to its declared size");
 }
 
-PfsArchive PfsArchive::open(const std::filesystem::path& path) {
+PfsArchive PfsArchive::open(const std::filesystem::path& path, Storage storage) {
+    if (storage == Storage::Mapped) {
+        auto bytes = std::make_shared<Bytes>();
+        try {
+            bytes->mapped_file = platform::MappedFile::open(path);
+        } catch (const std::exception& e) {
+            // No address space for it, or a file system that cannot map: read it as before.
+            log::debug("{}: not mapped ({}); reading it into memory", path.string(), e.what());
+            bytes.reset();
+        }
+        // An empty file maps to nothing: the heap read below gives the same "not a PFS archive".
+        if (bytes && bytes->mapped_file.mapped()) {
+            PfsArchive a;
+            a.label_ = path.filename().string();
+            a.storage_ = std::move(bytes);
+            a.parse_index();
+            return a;
+        }
+    }
     auto data = read_file(path);
     if (!data) throw std::runtime_error("cannot read " + path.string());
     return from_memory(std::move(*data), path.filename().string());
 }
 
+namespace {
+// Whether `path` is inside `root`, by their components (both as GameDir builds them: the root joined with the
+// file's relative path).
+bool within(const std::filesystem::path& path, const std::filesystem::path& root) {
+    if (root.empty()) return false;
+    const auto p = path.lexically_normal(), r = root.lexically_normal();
+    auto pi = p.begin();
+    for (auto ri = r.begin(); ri != r.end(); ++ri, ++pi) {
+        if (ri->empty() && std::next(ri) == r.end()) break; // a trailing separator
+        if (pi == p.end() || *pi != *ri) return false;
+    }
+    return pi != p.end();
+}
+} // namespace
+
+PfsArchive::Storage PfsArchive::storage_for(const GameDir& game, const std::filesystem::path& path) {
+    // The overlay first: a data folder may sit inside the game folder (<EverQuest>/hailstone/, GameDir::kOwnFolder).
+    if (auto overlay = game.overlay(); overlay && within(path, *overlay)) return Storage::Heap;
+    if (within(path, game.base_root())) return Storage::Mapped;
+    if (auto classic = game.classic(); classic && within(path, *classic)) return Storage::Mapped;
+    return Storage::Heap;
+}
+
 PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string label) {
     PfsArchive a;
     a.label_ = std::move(label);
-    a.data_ = std::move(data);
+    auto storage = std::make_shared<Bytes>();
+    storage->owned = std::move(data);
+    a.storage_ = storage;
+    a.parse_index();
+    return a;
+}
 
-    ByteReader r(a.data_);
+bool PfsArchive::mapped() const { return storage_ && storage_->mapped_file.mapped(); }
+
+std::size_t PfsArchive::storage_bytes() const { return bytes().size(); }
+
+std::size_t PfsArchive::owned_bytes() const { return storage_ ? storage_->owned.size() : 0; }
+
+void PfsArchive::parse_index() {
+    ByteReader r(bytes());
     auto dir_offset = r.le<std::uint32_t>();
-    if (r.le<std::uint32_t>() != kMagic) throw std::runtime_error(a.label_ + ": not a PFS archive");
+    if (r.le<std::uint32_t>() != kMagic) throw std::runtime_error(label_ + ": not a PFS archive");
     r.seek(dir_offset);
     auto count = r.le<std::uint32_t>();
-    if (count > r.remaining() / 12) throw std::runtime_error(a.label_ + ": bad PFS directory count");
+    if (count > r.remaining() / 12) throw std::runtime_error(label_ + ": bad PFS directory count");
 
     std::vector<Entry> entries(count);
     for (auto& e : entries) {
@@ -138,15 +192,15 @@ PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string labe
     if (table == entries.end())
         table = std::max_element(entries.begin(), entries.end(),
                                  [](const Entry& x, const Entry& y) { return x.offset < y.offset; });
-    if (table == entries.end()) throw std::runtime_error(a.label_ + ": PFS archive has no name table");
+    if (table == entries.end()) throw std::runtime_error(label_ + ": PFS archive has no name table");
     Entry table_entry = *table;
     entries.erase(table);
 
     std::unordered_map<std::uint32_t, Entry> by_crc;
     for (const auto& e : entries) by_crc.emplace(e.crc, e);
 
-    if (table_entry.size > kMaxNameTableSize) throw std::runtime_error(a.label_ + ": PFS name table is too large");
-    auto table_data = a.inflate_entry(table_entry);
+    if (table_entry.size > kMaxNameTableSize) throw std::runtime_error(label_ + ": PFS name table is too large");
+    auto table_data = inflate_entry(table_entry);
     ByteReader tr(table_data);
     auto name_count = tr.le<std::uint32_t>();
     for (std::uint32_t i = 0; i < name_count; ++i) {
@@ -155,12 +209,11 @@ PfsArchive PfsArchive::from_memory(std::vector<std::byte> data, std::string labe
         auto it = by_crc.find(pfs_name_crc(key));
         if (it == by_crc.end()) continue;
         // A name listed again is one member: callers walk names(), so a repeat would parse it once per copy.
-        if (a.by_name_.emplace(key, it->second).second) a.names_.push_back(std::move(key));
+        if (by_name_.emplace(key, it->second).second) names_.push_back(std::move(key));
     }
-    std::sort(a.names_.begin(), a.names_.end(), [&](const std::string& x, const std::string& y) {
-        return a.by_name_.at(x).offset < a.by_name_.at(y).offset;
+    std::sort(names_.begin(), names_.end(), [&](const std::string& x, const std::string& y) {
+        return by_name_.at(x).offset < by_name_.at(y).offset;
     });
-    return a;
 }
 
 bool PfsArchive::contains(std::string_view name) const { return by_name_.contains(GameDir::normalize(name)); }
@@ -178,7 +231,7 @@ std::optional<std::vector<std::byte>> PfsArchive::read_prefix(std::string_view n
     if (e.size > kMaxMemberSize) throw std::runtime_error(label_ + ": PFS file is larger than any game file");
     // At most the member's declared size, itself capped above: `max` cannot make this allocate more.
     std::vector<std::byte> out(std::min<std::size_t>(max, e.size));
-    ByteReader r(data_);
+    ByteReader r(bytes());
     r.seek(e.offset);
     std::size_t have = 0;
     for (std::uint64_t total = 0; have < out.size();) {
@@ -200,7 +253,7 @@ std::vector<std::byte> PfsArchive::inflate_entry(const Entry& e) const {
     // as its compressed bytes back it: each block expands by at most kMaxDeflateRatio, and the blocks add up to
     // exactly the file's size.
     if (e.size > kMaxMemberSize) throw std::runtime_error(label_ + ": PFS file is larger than any game file");
-    ByteReader r(data_);
+    ByteReader r(bytes());
     r.seek(e.offset);
     for (std::uint64_t total = 0; total < e.size;) {
         auto deflated = r.le<std::uint32_t>();
