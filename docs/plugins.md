@@ -194,7 +194,7 @@ end, after what it registered is taken back. For the same reason an `mq.TLO` val
 | `mq.TLO.<Name>...` | MQ's TLOs (below). Call with no arguments for the plain value (`mq.TLO.Me.PctHPs()`, `nil` for NULL). Call with arguments for an indexed member (`mq.TLO.Me.Buff(1).Duration.TotalSeconds()`, `mq.TLO.Spawn('npc radius 50').ID()`). Values also work with `tostring`, `..`, `==`, `<` and `<=`. |
 | `mq.cmd(line)`, `mq.cmd.<name>(args...)`, `mq.cmdf(fmt, ...)` | a command line, with `${...}` parsed |
 | `mq.delay(ms \| '2s' \| '500ms' \| '1m' [, condition])` | wait, until the time passes or `condition()` is true. A wait beyond 9e15 ms (`math.huge`) is cut to that; NaN is an error |
-| `mq.event(name, pattern, fn)`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events: the whole line must match; `#*#` matches any text (as much as it can); `#1#`, `#2#`, ... (as little as they can) are passed to `fn(line, arg1, ...)` in their number's order; neither takes a line break; any other `#` is literal (`mq/event_pattern.h`). A script has at most 256 events, a pattern is at most 1024 bytes and a name 256, and a script's patterns together at most 32 KB (an error past them): every pattern is matched against every chat line, outside the script's time slice. A line another script or a plugin wrote (`print`, `/echo`, `WriteChatf`) raises events too, as `/echo` does in MQ, but a handler then gets no more than that code may do: one that would get more runs as a thread of its own (as a bind), held to both scripts' capabilities for each of its resumes, and `doevents` goes on without waiting for it |
+| `mq.event(name, pattern, fn [, {keepLinks = true}])`, `mq.unevent`, `mq.doevents([name])`, `mq.flushevents([name])` | chat events, matched as MacroQuest's Lua events match them (its Blech: `mq/event_pattern.h`): text is compared ignoring the case of A-Z; a literal before the first `#...#` must start the line, and a pattern without any must be the whole line; each `#...#` (`#*#`, `#1#`, `#2#`, ..., or any other name, such as `#who#`) takes text up to the first place the literal after it is found, the last one the rest of the line, and the literal after that one must be found first at the line's end (so `#*# says #1#` on `A says B says C` gives `B says C`); line breaks are ordinary text. `fn(line, arg1, arg2, ...)` gets each `#n#`'s text by its number, `""` for a number the pattern lacks, up to the highest `#n#` (at most 255; a larger one, `#*#` and other names match without being passed on). `|text|` matches what the script's `${...}` in it reads when the line comes (with the script's `read`; without it, the text as written), and its value is never parsed again; `##` and `||` stand for `#` and `|`. The line is matched and passed with its item links shown as their text, unless the event has `keepLinks`; lines of 2048 bytes or more and empty lines raise no events. Each pattern is matched on its own, where MQ's shared tree of patterns can turn down a line (a deliberate difference). A script has at most 256 events, a pattern is at most 1024 bytes and a name 256, and a script's patterns together at most 32 KB (an error past them): every pattern is matched against every chat line, outside the script's time slice. A line another script or a plugin wrote (`print`, `/echo`, `WriteChatf`) raises events too, as `/echo` does in MQ, but a handler then gets no more than that code may do: one that would get more runs as a thread of its own (as a bind), held to both scripts' capabilities for each of its resumes, and `doevents` goes on without waiting for it |
 | `mq.bind('/cmd', fn)`, `mq.unbind` | a command (needs `commands`); `fn` gets the words and may `mq.delay`. The client's own commands cannot be bound: the game's (with their abbreviations, so not `/g` or `/r` either), `/lua`, `/plugin` and MQ's (`/echo`, ...), nor a name another script or plugin has now (an error naming it): what the player types for one is never handed to another. A bind runs with the script's capabilities and those of whoever ran the command (another script, a plugin, the player all) together, at its start and again after each `mq.delay` |
 | `mq.imgui.init(name, fn)`, `mq.imgui.destroy`, `mq.imgui.exists` | a window drawn each frame with `ImGui` |
 | `mq.web.open(url [, w, h])`, `.navigate`, `.nav`, `.close`, `.eval`, `.post`, `.messages`, `.text`, `.state`, `.tabs`, `.view(tab, w, h)`, `.available` | the script's own tabs of the in-game browser ("Web pages" below); `view` in an `mq.imgui` window |
@@ -216,15 +216,30 @@ Left out on purpose:
 
 `Me`, `Target`, `Spawn[...]`, `SpawnCount[...]`, `NearestSpawn[n, ...]`, `Group`, `Zone`, `Spell[id|name]`, `Cursor`,
 `FindItem[name|=exact]`, `FindItemCount[...]`, `Pet`, `Window[name]` (`.Open`), `Plugin[name]` (`.IsLoaded`), `Time`,
-`GameTime`, the game TLO (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`. Compiled
-plugins can add more.
+`GameTime`, the game TLO (`.GameState`, `.Server`), `Heading[deg]`, `Int`, `Float`, `Bool`, `String`, `Select`, `Math`,
+`If`, `Range`. Compiled plugins can add more.
 
 The data types use MQ's member names and inheritance:
 - `character` → `spawn`, `buff` → `spell`, `groupmember` → `spawn`.
 - `class`, `race`, `heading` (`Degrees`, `ShortName`, ...), `timestamp` (`TotalSeconds`, `TimeHMS`, ...), `item`.
-- MQ's pure types: `int`, `float` (`Deci`, `Precision`, `Int`), `string` (`Length`, `Upper`, `Left`, `Mid`,
-  `Find`, `Arg`, `Token`, `Equal`, ...), `bool`. `Int[...]` and `float.Int` cut toward zero, and are NULL for NaN, an
-  infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
+- MQ's pure types, with all of MQ's members: `int` (`Hex`, `Reverse`, `Float`, `Double`, `LowPart`, `HighPart`,
+  `Prettify`), `float` (`Deci`, `Centi`, `Milli`, `Precision`, `Int`, `Raw`, `Prettify`), `string` (`Length`, `Upper`,
+  `Lower`, `Left`, `Right`, `Mid`, `Find`, `Compare`, `CompareCS`, `Equal`, `NotEqual`, `EqualCS`, `NotEqualCS`, `Arg`,
+  `Count`, `Token`, `Replace`, `StripLinks`), `bool`. They follow MQ2BasicTypes.cpp, edge cases included: a member
+  that needs an index is NULL without one (`Left[0]` too), `Arg` splits as MQ's GetArg (a run of separators is one, a
+  "quoted run" is one argument), `Token` looks for each next separator from one past the last. MQ's int and int64 are
+  one type here: a value that fits 32 bits has int's `Hex` ("0xFFFFFFFF" for -1) and 16-bit `LowPart`/`HighPart`, a
+  larger one int64's. Two deliberate differences: `float.Prettify` groups the number (MQ's prints the float's bits as
+  an integer), and `Compare` gives -1, 0 or 1 (MQ's only promises the sign). `Int[...]` and `float.Int` cut toward
+  zero, and are NULL for NaN, an infinity or a number past a 64-bit integer (what MQ gives for those is not checked).
+- `Math` (MQ2MathType): `Calc`, `Abs`, `Sqrt`, `Sin`/`Cos`/`Tan` (degrees), `Asin`/`Acos`/`Atan`, `Rand[max]` /
+  `Rand[min,max]` (both included), `Hex`, `Dec`, `Not`, `Clamp[n,min,max]`, `Distance[y,x,z:y,x,z]` (3D; a missing
+  point or coordinate is the player's). The arithmetic is MQ's Calculate (`mq/calc.h`), quirks included: `NULL`,
+  `TRUE`, `FALSE` are numbers, spaces are skipped, `\` divides whole numbers, `^` is power and `^^` xor, every operator
+  groups from the left (`-2^2` is 4), the bit operators work on 32 bits. A formula that does not calculate (a letter,
+  a division by zero, a stray `)`) is NULL. The result is a float, as MQ keeps it.
+- `If[condition,whentrue,whenfalse]` (or with exactly two `~`, `If[c~a~b]`): the text of one branch, the false one
+  running to the end; NULL when the condition does not calculate. `Range.Between[a,b:n]` and `Range.Inside[a,b:n]`.
 
 For example `Me.PctHPs`, `Me.Buff[n|name].Duration`, `Me.Gem[n|name]`, `Me.SpellReady[n|name]`, `Me.Casting`,
 `Me.Combat`, `Me.XTarget[n]`, `Me.FreeInventory`, `Me.Inventory[mainhand|pack1|23]`, and on spawns `Target.Distance`,
@@ -246,15 +261,30 @@ For a script that fights:
   collision is loaded, and for a coordinate that is not a finite number below 1000000 in size.
 - `/stick` and the `Stick` TLO (`docs/navigation.md`).
 
-Spawn searches use MQ's words:
-- kinds: `pc`, `npc`, `corpse`, `npccorpse`, `pccorpse`, `pet`, `merc`, `any`
-- filters: `id N`, `notid N`, `radius R`, `zradius R`, `range MIN MAX`, `level N`, `class X`, `race X`, `named`,
-  `targetable`, `group`, `nopet`, `gm`, `trader`, `buyer`, `afk`, `lfg`, `linkdead`, `loc X Y [Z]`
-- names: a partial name, `=Exact` or `exact`
+Spawn searches use MQ's words and its rules (ParseSearchSpawn and SpawnMatchesSearch, `mq/spawn_search.h`):
+- kinds (MQ's spawn types): `pc`, `npc`, `mount`, `pet`, `pcpet`, `npcpet`, `corpse`, `npccorpse`, `pccorpse`,
+  `trigger`, `untargetable`, `trap`, `chest`, `timer`, `aura`, `object`, `banner`, `campfire`, `mercenary`, `flyer`,
+  `any`. A body type, race or class makes a spawn one of these as MQ's GetSpawnType does, so `npc` leaves out
+  mounts, mercenaries, auras, banners, untargetable spawns and the like; it keeps an NPC's pet but not a player's.
+- filters: `id N`, `notid N` (one id: the last), `radius R` (3D, from the player or `loc`), `zradius R` (from the
+  player's z or `loc`'s), `range MIN MAX`, a bare number (that level), `class X` (the long name) or a bare class
+  name (long or short), `race X`, `body X`, `named`, `targetable`, `los`, `group`, `nogroup`, `raid`,
+  `fellowship`, `guild`, `guildname X`, `noguild`, `nopet`, `xtarhater`, `nopcnear [R]` (200 without a number),
+  `gm` (with `npc`: GM trainers), `merchant`, `banker`, `tribute`, `knight`, `tank`, `healer`, `dps`, `slower`
+  (classes; ignored with `npc`), `trader`, `lfg`, `light [NAME]` (MQ's light names: `CDL`, `TR`, `LS`, ...),
+  `playerstate N`, `loc X Y [Z]` (a Z of 0 or none is the player's, and the word after is not taken), `alert N`,
+  `noalert N`, `nearalert N`, `notnearalert N`
+- names: words that are no keyword make a partial name, matched in the name as sent or cleaned; `=Name` or
+  `name =Name` asks for the whole cleaned name (MQ keeps the `#` of a `#Name` there, so `=` never finds one)
 
-`targetable` is the game's own test, as in MQ: the spawn's Targetable flag on and its body type not 11 (EQEmu's
-NoTarget, which servers give portal and trigger NPCs). `Spawn.Targetable` is the flag alone, as in MQ, so a script
-that filters spawns itself checks `BodyType` too.
+Results come nearest first (3D, from the player). `targetable` is the game's own test, as in MQ: the spawn's
+Targetable flag on and its body type not 11 (EQEmu's NoTarget, which servers give portal and trigger NPCs).
+`Spawn.Targetable` is the flag alone, as in MQ, so a script that filters spawns itself checks `BodyType` too.
+
+Differences from MQ: `level N`, `afk`, `linkdead`, `buyer`, `exact` and `merc` are Hailstone's own words. This client
+keeps no alert lists, so `nearalert` finds nothing and the other alert words ask nothing (as in MQ with no such
+list). EQEmu has no fellowships, so `fellowship` finds nothing. `los` keeps a spawn while the zone's collision is not
+loaded. `next` and `prev` (MQ's target cycling) are accepted and do nothing yet.
 
 Not yet:
 - TLOs: `Raid`, `Mercenary`, `Corpse`, `Merchant`, `Ground`, `Macro` and other MQ plugins' TLOs (`Navigation` is

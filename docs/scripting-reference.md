@@ -1072,7 +1072,8 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ChatCloseTab | (slot, tab) → — | Close a tab | commands |
 | ChatSelectTab | (slot, tab) → — | Bring a tab up | commands |
 | ChatSetTitle | (slot, title) → — | Rename the tab | commands |
-| ChatFilters | (slot) → {{id, group, name, on}} | Filters menu for the tab | — |
+| ChatFilters | (slot) → {{id, group, name, on, menu, parent}} | Route rows for the tab; menu and parent are stable group IDs | — |
+| ChatFilterGroups | () → {{id, parent, name}} | Filter menu hierarchy; parent 0 is the root | — |
 | ChatSetFilter | (slot, id\|groupName, on) → — | Route a channel here or back to main | commands |
 | ChatSetFont | (slot, font) → — | Tab font index | commands |
 | ChatDefaultChannels | () → {names} | Channel menu items (0-based order) | — |

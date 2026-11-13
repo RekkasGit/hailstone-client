@@ -1,11 +1,34 @@
 #pragma once
 
-// An mq.event pattern (MacroQuest's): #*# is any text, #n# (n > 0) the n-th argument passed to the callback, and
-// everything else is literal; the whole line must match. Matched as the ECMAScript std::regex it once was (#*# a
-// greedy .*, #n# a lazy (.*?), neither across a line break): the same lines match with the same arguments. It runs in
-// time linear in the line for a given pattern, where the regex backtracked (about n^k steps for k arguments on a line
-// that does not match, on the main thread, for every chat line).
+// An mq.event pattern, matched as MacroQuest matches it: MQ's Lua events feed each chat line to Blech (Lax/Blech
+// 1.7.4, contrib/Blech/Blech.h, with '#' the scan and '|' the print delimiter; plugins/lua/LuaEvent.cpp), read as
+// the spec, not copied.
+//
+//  - #name# takes text from the line: #*#, #1#, #2#, ... or any other name (#target#). Only a whole number above 0
+//    is handed to the script; the others match and are dropped. A '#' with no closing one makes the rest of the
+//    pattern a name, so it takes the rest of the line.
+//  - |text| is the text's ${...} parsed when a line comes (MQ's LuaVarProcess); outside it, `##` is a literal '#'
+//    and `||` a literal '|'.
+//  - The rest is literal, matched ignoring the case of A-Z.
+//  - A literal before the first #...# must start the line; with no #...# at all the line must be the pattern.
+//    Each #...# takes text up to the first place the literal after it is found (none: up to where the next #...#
+//    starts, so the first of two adjacent ones gets ""). The last one takes the rest of the line; the literal after
+//    it must be found first at the very end. So #*# takes as little as the line allows too: "#*# says #1#" on
+//    "A says B says C" gives #1# "B says C".
+//  - A line break is a character like any other, and an empty line matches nothing.
+//
+// One deliberate difference: Blech keeps all of a script's events in one tree of shared prefixes and walks it once
+// per line; where two patterns share a literal's beginning, the walk can turn down a line that pattern alone would
+// match. Here each pattern is matched on its own, as its text says.
+//
+// A #n# above kMaxArg is not handed on (a deliberate difference: MQ makes a table of n arguments, and #2000000000#
+// runs it out of memory).
+//
+// A match is one pass over the pattern: a string search for each literal in what is left of the line, never trying
+// another place for an earlier one (no backtracking, so no regex blowup on a line built to be slow).
+
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,27 +38,30 @@ namespace hailstone::mq {
 
 class EventPattern {
 public:
+    static constexpr int kMaxArg = 255;
+
     explicit EventPattern(std::string_view pattern);
 
-    // The numbers of the #n# in the pattern, in their order there.
-    const std::vector<int>& order() const { return order_; }
-    // The text of each #n#, in the pattern's order, when the whole line matches.
-    std::optional<std::vector<std::string>> match(std::string_view line) const;
+    // The text a |name| stands for now (the script's ${...} parsed); null: the name as written.
+    using Resolve = std::function<std::string(std::string_view name)>;
+    bool has_print_vars() const { return print_vars_; }
 
-    // The pattern's text: its tokens' bytes as written (what a script's events are held to, mq/lua_script.h).
+    // When the line matches: what the callback gets after the line, MQ's way: #n#'s text at [n - 1], "" for a number
+    // the pattern lacks, up to the highest #n# (a number used twice: its last). Empty without any #n#.
+    std::optional<std::vector<std::string>> match(std::string_view line, const Resolve& resolve = {}) const;
+
+    // The pattern's bytes as written (what a script's events are held to, mq/lua_script.h).
     std::size_t size() const { return size_; }
 
 private:
     struct Token {
-        enum class Kind { Literal, Any, Arg } kind = Kind::Literal;
-        std::string text; // a literal's
+        enum class Kind { Literal, Print, Scan } kind = Kind::Literal;
+        std::string text; // a literal's text (A-Z folded to a-z), a print variable's name
+        int number = 0;   // a scan variable's #n# (0: not handed on)
     };
-    // A quick test that fails for most lines a pattern cannot match: its literals in their order.
-    bool may_match(std::string_view line) const;
-    // Row i of the table from row i + 1 (`next`): whether tokens i.. match line[p..] to its end, for each p.
-    void fill_row(std::size_t i, std::string_view line, const unsigned char* next, unsigned char* row) const;
     std::vector<Token> tokens_;
-    std::vector<int> order_;
+    int max_number_ = 0;
+    bool print_vars_ = false;
     std::size_t size_ = 0;
 };
 

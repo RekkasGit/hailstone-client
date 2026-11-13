@@ -52,7 +52,7 @@ template <typename T> std::optional<T> id_number(const std::vector<std::string>&
 
 const game::Spawn* find_spawn(const net::GameConnection& conn, std::string_view search) {
     const game::WorldState& world = conn.world();
-    for (const game::Spawn* s : search_spawns(parse_spawn_search(search), world, &conn.group()))
+    for (const game::Spawn* s : find_spawns(search, conn))
         if (s->id != world.player_id) return s;
     return nullptr;
 }

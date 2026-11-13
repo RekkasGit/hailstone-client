@@ -324,6 +324,44 @@ return fails, solves
     lua_close(L);
 }
 
+// A rolled-up chat (its tab strip only) keeps just its strip's height in the default layout, so the room the open
+// chat would take is the screen's again.
+TEST_CASE("UI layout: a rolled-up chat keeps only its tab strip's room") {
+    fs::path file = ui_dir() / "modern" / "lib" / "layout.lua";
+    if (!fs::exists(file)) return;
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    int rc = luaL_dofile(L, file.string().c_str());
+    REQUIRE_MESSAGE(rc == LUA_OK, (rc == LUA_OK ? "" : lua_tostring(L, -1)));
+    lua_setglobal(L, "layout");
+    const char* code = R"lua(
+local L = layout
+local function solve(rolled)
+  local frames = {
+    Chat1 = { w = 470, h = 26, fit = true, rolled = rolled },
+    HotButtonWnd = { w = 614, h = 58 }, PlayerWindow = { w = 300, h = 116 },
+    CompassWindow = { w = 300, h = 30 }, EQMainWnd = { w = 44, h = 44 },
+  }
+  local r = L.Solve(1280, 800, 1, frames)
+  return r.Chat1.w, r.Chat1.h, r.Chat1.y
+end
+local rw, rh, ry = solve(true)
+local ow, oh, oy = solve(false)
+return rw, rh, ry, ow, oh, oy
+)lua";
+    rc = luaL_loadstring(L, code);
+    REQUIRE_MESSAGE(rc == LUA_OK, (rc == LUA_OK ? "" : lua_tostring(L, -1)));
+    rc = lua_pcall(L, 0, 6, 0);
+    REQUIRE_MESSAGE(rc == LUA_OK, (rc == LUA_OK ? "" : lua_tostring(L, -1)));
+    const double oy = lua_tonumber(L, -1), oh = lua_tonumber(L, -2), ow = lua_tonumber(L, -3);
+    const double ry = lua_tonumber(L, -4), rh = lua_tonumber(L, -5), rw = lua_tonumber(L, -6);
+    CHECK(rw == doctest::Approx(ow));          // still the width the layout gives the chat
+    CHECK(rh == doctest::Approx(26));          // (the strip)
+    CHECK(oh > rh);
+    CHECK(ry > oy);                            // it sits lower, and the room above it is free
+    lua_close(L);
+}
+
 // The modern UI's grid snapping (ui/modern/lib/snap.lua): a dragged window's near or far edge goes to the nearest
 // grid line, or flush with the screen's edge when that is nearer, in whole pixels.
 TEST_CASE("UI snap: a window lands on the nearest grid line or screen edge") {

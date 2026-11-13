@@ -131,6 +131,7 @@ add_library(hailstone_engine STATIC
   src/net/zone_link_packets.cpp
   src/net/server_files_packets.cpp
   src/net/server_files.cpp
+  src/mq/calc.cpp
   src/mq/tlo.cpp
   src/mq/tlo_game.cpp
   src/mq/spawn_search.cpp
@@ -350,6 +351,7 @@ add_library(hailstone_engine STATIC
   src/platform/mouse_capture.cpp
   src/platform/open_folder.cpp
   src/platform/folder_dialog.cpp
+  src/platform/open_folder_dialog.cpp
   src/platform/http_get.cpp
   src/platform/credentials.cpp
   src/platform/child_processes.cpp
@@ -657,6 +659,12 @@ set(HAILSTONE_ADDON_INDEX "https://raw.githubusercontent.com/projecthailstone/ha
     CACHE STRING "The add-on index's address; empty: no suggested add-ons")
 # Hailstone's page, which the login screen's GitHub button opens (docs/updater.md "What the player sees").
 set(HAILSTONE_PROJECT_PAGE "https://github.com/projecthailstone/hailstone-client" CACHE STRING "Hailstone's web page")
+# A server whose patcher installs Hailstone inside the EverQuest folder (<EverQuest>/hailstone/) builds with this on:
+# Hailstone's folder may then be a subfolder of the asset folder (core/asset_folder_choice.h data_folder_conflict).
+# Off, any folder inside the EverQuest folder is refused, as before. The EverQuest folder itself is always refused.
+option(HAILSTONE_ALLOW_IN_EQ_FOLDER "Allow Hailstone's folder to be a subfolder of the EverQuest folder" OFF)
+set_property(SOURCE src/core/asset_folder_choice.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+             HAILSTONE_ALLOW_IN_EQ_FOLDER=$<BOOL:${HAILSTONE_ALLOW_IN_EQ_FOLDER}>)
 set(HAILSTONE_UPDATE_KEY_DEFAULT "")
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub)
   file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/update-key.pub HAILSTONE_UPDATE_KEY_DEFAULT REGEX "^[0-9a-fA-F]+$" LIMIT_COUNT 1)
@@ -667,7 +675,7 @@ set_property(SOURCE src/app/updater.cpp APPEND PROPERTY COMPILE_DEFINITIONS
              HAILSTONE_ADDON_INDEX="${HAILSTONE_ADDON_INDEX}" HAILSTONE_PROJECT_PAGE="${HAILSTONE_PROJECT_PAGE}")
 target_link_libraries(hailstone_engine PUBLIC SDL3::SDL3 Vulkan::Headers volk::volk_headers GPUOpen::VulkanMemoryAllocator glm::glm ZLIB::ZLIB)
 if(WIN32)
-  target_link_libraries(hailstone_engine PUBLIC ws2_32 advapi32 dbghelp winhttp)
+  target_link_libraries(hailstone_engine PUBLIC ws2_32 advapi32 dbghelp winhttp ole32 shell32)
 elseif(APPLE)
   target_link_libraries(hailstone_engine PUBLIC "-framework Security" "-framework CoreFoundation")
 else()
@@ -912,6 +920,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/plugin_policy_test.cpp
     tests/server_files_test.cpp
     tests/mq_tlo_test.cpp
+    tests/mq_calc_test.cpp
     tests/mq_combat_test.cpp
     tests/automation_test.cpp
     tests/mq_lua_test.cpp
@@ -1016,6 +1025,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mail_windows_test.cpp
     tests/marketplace_test.cpp
     tests/chat_windows_test.cpp
+    tests/chat_filter_routes_test.cpp
+    tests/chat_filter_menu_test.cpp
+    tests/chat_stock_colors_test.cpp
     tests/hot_button_drag_test.cpp
     tests/ui_keyboard_capture_test.cpp
     tests/inventory_hot_button_test.cpp
@@ -1043,6 +1055,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_search_test.cpp
     tests/chat_ui_test.cpp
     tests/inventory_bandolier_ui_test.cpp
+    tests/inventory_server_labels_ui_test.cpp
     tests/trade_ui_test.cpp
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp

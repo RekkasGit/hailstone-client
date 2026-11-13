@@ -59,6 +59,7 @@ constexpr Entry kCalls[] = {
     {"CompassMarkers", 0}, {"AbilityBook", 0}, {"AbilityBookState", 0}, {"Disciplines", 0}, {"UsableSkills", 0},
     {"BankItem", 0}, {"CursorCoin", 0}, {"TradeState", 0}, {"IconSelectionIcons", 0}, {"IconSelectionIcon", 0},
     {"HotBarMenu", 0}, {"ChatWindows", 0}, {"ChatText", 0}, {"ChatHistory", 0}, {"ChatInfo", 0}, {"ChatFilters", 0},
+    {"ChatFilterGroups", 0},
     {"ChatDefaultChannels", 0}, {"ChatTellWindows", 0}, {"ChatHitModes", 0}, {"ChatMenu", 0}, {"CharacterStats", 0},
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
     {"DisplaySpellId", 0}, {"DisplayItemData", 0},

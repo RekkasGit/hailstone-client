@@ -7,6 +7,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ## 1. Gameplay a player will hit
 
 ### Combat and spells (do first)
+- [x] Extended chat channels 57..107 and user colours 355..408 for servers that send a later client's chat colours (a Hailstone extension; stock routing and colours unchanged; docs/mechanics.md "Extended chat routing").
 - [x] Missiles: a despawned source or target as DeleteMyMissiles handles it; flying through walls with a target is the original's behaviour (60b1934). Not tested live (no archer).
 - [x] Valid spell missiles: spell lifetime, launch and ending stages, stationary area contact, source physics clock and spell 859 local presentation. Packet-to-emitter and missile fixtures cover these; live gameplay remains unverified. Invalid or absent spell ids still end immediately.
 - [x] Environmental hits 0xf3 to 0xfd: animations, chat lines, sounds, and our own fall, drowning and lava damage reported like ApplyDamage (eb42f20; falls tested live).
@@ -88,6 +89,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Session limits against a hostile or broken server: early packets bounded in bytes (4 MiB) as well as count, the delivered-but-unread queue bounded (64 MiB, then the session ends), an ack for a packet not yet sent ignored, a too-short first fragment ends the session instead of reassembling garbage or silently losing what follows, datagrams failing the CRC no longer keep the link alive, oversized datagrams dropped on every platform (unit and mock tests).
 - [ ] What the original checks in OP_OutOfSession, and whether its last-receive time is set before its CRC check (unknowns.md). Until then a forged `00 1d` from the server's address ends a session (unknowns.md).
 - [ ] Whether the original checks the address a SessionResponse comes from (the client takes any with its connect code, as multi-homed EQEmu hosts need; unknowns.md).
+- [ ] eqhost.txt: the port the original uses for a `Host` without one, and whether it reads `Host1`.. (unknowns.md).
 - [ ] The original CRT's atol on a number out of range: wrap or saturate (`/split`, `game::cmd_atol`; unknowns.md).
 
 ### Real estate (player housing, guild halls)
@@ -181,7 +183,11 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] `mq.delay` and the hooks' number answers defined for NaN, infinities and huge numbers (tests/mq_lua_test.cpp, tests/lua_plugin_test.cpp).
 - [x] `${Int[...]}` and `float.Int` defined for NaN, infinities and huge numbers (tests/mq_tlo_test.cpp, tests/mq_lua_test.cpp).
 - [x] `mq.TLO` values' metatable locked, so a script cannot swap in a `__gc` (tests/mq_lua_test.cpp).
-- [x] `mq.event` patterns matched in linear time with the regex's own results (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp checks it against the regex on random patterns).
+- [x] MQ's `Math` TLO (its Calculate arithmetic), `If` and `Range`, and the rest of MQ's int, float and string members, with MQ's edge cases (`mq/calc.h`; tests/mq_calc_test.cpp, tests/mq_tlo_test.cpp).
+- [x] Spawn searches follow MacroQuest's words and matching rules: spawn types, pets, 3D radius, named test, group, raid, guild, xtarget, light, player state (`mq/spawn_search.h`; tests/mq_tlo_test.cpp).
+- [ ] MacroQuest's alert lists (`/alert`, and the spawn search's `alert`, `noalert`, `nearalert`, `notnearalert`): none kept yet, so those words act as with an empty list.
+- [ ] The spawn search's `next` / `prev` (MacroQuest's `/target next`, cycling from the current target through the matching spawns): accepted and ignored.
+- [x] `mq.event` patterns match as MacroQuest's Lua events do (Blech): case-insensitive, every `#...#` up to the first place the next literal is, `#name#`, `|${...}|`, `##` / `||`, arguments by number with gaps, item links shown as their text unless `keepLinks` (`mq/event_pattern.h`; tests/mq_event_pattern_test.cpp).
 - [x] Host functions only on the client's thread: off-thread calls do nothing (`MainOnly`), the caller's capabilities are none there (tests/native_plugins_test.cpp, tests/plugins/HostProbe.cpp).
 - [x] C++ exceptions out of a plugin caught at every entry point (`guarded`); a failed `InitializePlugin` leaves nothing registered (tests/native_plugins_test.cpp).
 - [x] `web_state` fills what a shorter `HailstoneWebState` holds; its `size_t` size kept for ABI 3 (tests/native_plugins_test.cpp).
