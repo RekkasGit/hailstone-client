@@ -5,8 +5,10 @@
 #include <cmath>
 
 #include <cstring>
+#include <limits>
 #include <numbers>
 #include <random>
+#include <utility>
 #include <vector>
 
 #include "app/zone_particles.h"
@@ -473,6 +475,70 @@ TEST_CASE("particle billboard modes: facing and turning clockwise, streaking alo
     // Below the axis without +0x198: not drawn.
     p.hidden = true;
     CHECK_FALSE(render::particle_corners(p, 0, right, up, c));
+}
+
+TEST_CASE("Generated terrain ribbons keep their sloped world basis as the camera moves") {
+    game::Particle p;
+    p.position = {10, 20, 30};
+    p.width = 2.0f;
+    p.height = 4.0f;
+    p.rotation = 128.0f; // generated ribbons ignore camera-facing rotation
+    p.axes[0] = {0, 3, 0};
+    p.axes[1] = {4, 0, 3};
+    std::array<glm::vec3, 4> first, moved;
+    REQUIRE(render::particle_corners(p, game::kWorldBasisBillboard, {0, 1, 0}, {0, 0, 1}, first));
+    REQUIRE(render::particle_corners(p, game::kWorldBasisBillboard, {1, 0, 0}, {0, 0, -1}, moved));
+    for (std::size_t i = 0; i < first.size(); ++i) {
+        CHECK(glm::length(first[i] - moved[i]) < 1e-5f);
+        CHECK(first[i].z - 30.0f == doctest::Approx(0.75f * (first[i].x - 10.0f)));
+    }
+    CHECK(glm::length(first[1] - first[0]) == doctest::Approx(2.0f));
+    CHECK(glm::length(first[3] - first[0]) == doctest::Approx(4.0f));
+    CHECK(glm::length(first[0] - glm::vec3(11.6f, 19.0f, 31.2f)) < 1e-5f);
+
+    // The original's unrecognised values retain its camera-facing fallback, including mode 3.
+    std::array<glm::vec3, 4> facing;
+    REQUIRE(render::particle_corners(p, 0, {0, 1, 0}, {0, 0, 1}, facing));
+    REQUIRE(render::particle_corners(p, 3, {0, 1, 0}, {0, 0, 1}, moved));
+    for (std::size_t i = 0; i < facing.size(); ++i) CHECK(glm::length(facing[i] - moved[i]) < 1e-5f);
+
+    p.axes[0] = {0, 0, 0};
+    CHECK_FALSE(render::particle_corners(p, game::kWorldBasisBillboard, {0, 1, 0}, {0, 0, 1}, moved));
+    p.axes[0] = {1, 0, 0};
+    p.axes[1].x = std::numeric_limits<float>::quiet_NaN();
+    CHECK_FALSE(render::particle_corners(p, game::kWorldBasisBillboard, {0, 1, 0}, {0, 0, 1}, moved));
+}
+
+TEST_CASE("Find strand segments keep their 3D ends and constant width while facing the camera") {
+    game::Particle p;
+    p.position = {10, 20, 30};
+    p.width = 0.08f;
+    p.height = 10.0f;
+    p.axes[1] = {4, 0, 3};
+    p.rotation = 128.0f;
+    const glm::vec3 tangent = glm::normalize(p.axes[1]);
+    std::array<glm::vec3, 4> corners;
+    for (const auto& camera : {std::pair{glm::vec3(0, 1, 0), glm::vec3(0, 0, 1)},
+                               std::pair{glm::vec3(1, 0, 0), glm::vec3(0, 0, 1)}}) {
+        const auto& [right, up] = camera;
+        REQUIRE(render::particle_corners(p, game::kTrailStrandBillboard, right, up, corners));
+        CHECK(glm::length((corners[0] + corners[1]) * 0.5f - glm::vec3(14, 20, 33)) < 1e-5f);
+        CHECK(glm::length((corners[2] + corners[3]) * 0.5f - glm::vec3(6, 20, 27)) < 1e-5f);
+        const glm::vec3 across = corners[1] - corners[0];
+        CHECK(glm::length(across) == doctest::Approx(0.08f).epsilon(0.001));
+        CHECK(std::abs(glm::dot(across, tangent)) < 1e-5f);
+        CHECK(std::abs(glm::dot(across, glm::cross(up, right))) < 1e-5f);
+    }
+    // A segment pointing straight into the camera has no visible ribbon plane.
+    p.axes[1] = {0, 1, 0};
+    CHECK_FALSE(render::particle_corners(p, game::kTrailStrandBillboard, {1, 0, 0}, {0, 0, 1}, corners));
+    p.axes[1] = {0, 0, 0};
+    CHECK_FALSE(render::particle_corners(p, game::kTrailStrandBillboard, {1, 0, 0}, {0, 0, 1}, corners));
+    p.axes[1] = {1, 0, std::numeric_limits<float>::infinity()};
+    CHECK_FALSE(render::particle_corners(p, game::kTrailStrandBillboard, {1, 0, 0}, {0, 0, 1}, corners));
+    p.axes[1] = {1, 0, 0};
+    CHECK_FALSE(render::particle_corners(p, game::kTrailStrandBillboard,
+                                       {std::numeric_limits<float>::quiet_NaN(), 0, 0}, {0, 0, 1}, corners));
 }
 
 namespace {

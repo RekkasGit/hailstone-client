@@ -690,9 +690,6 @@ TEST_CASE("native plugins: web_message with no buffer gives the length and keeps
     h.run("/probemessage 0");
     CHECK(h.printed_line("[Probe] message -1, -"));
 }
-/// <summary>
-/// This test is no longer valid, please make a new test
-/// </summary>
 TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid out as the SDK says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
@@ -715,9 +712,9 @@ TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid o
     CHECK(h.printed_line("[Probe] buffs 1798 bytes, 58 empty")); // slots 0-61 of 29 bytes; the discipline slot not sent
     // All the slots or nothing: a buffer smaller than 62 records gets none.
     h.printed.clear();
-    h.run("/probebuffs");
+    h.run("/probebuffs 1797");
     CHECK(h.printed_line("[Probe] buffs 0 bytes, 0 empty"));
-    h.run("/probebuffs");
+    h.run("/probebuffs 1798");
     CHECK(h.printed_line("[Probe] buffs 1798 bytes, 58 empty"));
 
     // No pet buffs: nothing. Then the pet window's, in the server's order (the slots are not sent).
@@ -737,15 +734,12 @@ TEST_CASE("native plugins: get_buff_data_bulk and get_pet_buff_data_bulk, laid o
     CHECK(h.printed_line("[Probe] pet buffs 36 bytes")); // 3 records of 12 bytes
     // Only whole records go into a buffer too small for all.
     h.printed.clear();
-    h.run("/probepetbuffs");
+    h.run("/probepetbuffs 35");
     CHECK(h.printed_line("[Probe] pet buff: 3002 5 0"));
     CHECK(h.printed_line("[Probe] pet buff: 11 1 1"));
     CHECK_FALSE(h.printed_line("[Probe] pet buff: 99999 4 0"));
     CHECK(h.printed_line("[Probe] pet buffs 24 bytes"));
 }
-/// <summary>
-/// This test is no longer valid, please make a new test
-/// </summary>
 TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
@@ -765,9 +759,6 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     h.run("/probespawns 4112");
     CHECK(h.printed_line("[Probe] spawns 1, player 0 0 0, 0 bytes left"));
 }
-/// <summary>
-/// This test is no longer valid, please make a new test
-/// </summary>
 TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll & ~plugin::kCapRead);
@@ -778,6 +769,5 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     h.run("/probepetbuffs 1024");
     CHECK(h.printed_line("[Probe] pet buffs 0 bytes"));
     h.run("/probespawns 16384");
-    CHECK(h.printed_line("[Probe] spawns 0 bytes"));
-    CHECK(h.printed_line("[Plugin] HostProbe: get_spawns_data_bulk needs the server's 'read' permission"));
+    CHECK(h.printed_line("[Probe] spawns 0 bytes")); // the denial is said once per plugin, above
 }

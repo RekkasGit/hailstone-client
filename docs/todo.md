@@ -48,8 +48,18 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] Zone points that request a teleport by index: sent already; the player is now held while waiting (untested, EQEmu never sets them).
 - [x] Reachable zone lines in toxxulia, mistythicket and oldbloodfield: a client fallback fires buried EQG zone-line boxes from the ground over them (81d4a59; 39 boxes across the EQG zones; all 7 lines in the three zones checked live). oldbloodfield's ATP_3 has no zone point 30 in the server's table.
 - [x] Position history (PositionTracker, OP_FloatListThing), the retried and the 30-minute saves, closing on loading screens (60069a0). Missing samples are listed in unknowns.md.
+- [x] The live folder's revamped bazaar, lavastorm and highpasshold load when the server's safe point (OP_NewZone) stands on their floor (game/revamped_zone.h): PEQ's Bazaar and Lava Storm version 1 (expansion 9 on) and its only High Pass Hold row. Version 0's safe points have no floor there, so those stay refused.
+- [ ] Arena and Nektulos with a live folder: its arena.s3d and nektulos.s3d win over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp: their spawns stand on the live .eqg, not the .s3d (unknowns.md, Movement and collision).
 
 ### Items and commerce
+- [x] Stock achievements: bounded compressed catalog, primary state and counters, categories/search/status filters, linked details, nearby-player comparisons, explicit reward views and refresh, both UI packs; codec/model/bridge/mock-server and actual Lua-pack fixtures. Live use reported generally working (2026-11-12); targeted acceptance remains below.
+- [x] Achievement browser usability: collapsible categories with deduplicated completion totals, compact status/points rows, inline selected objectives and reward actions, readable dates, exact full-width count text, and responsive layouts in both packs. Linked details stay independent; no request runs from filtering or drawing.
+- [x] Catalog reloads retain the decoding schema of in-flight comparison/link requests: valid retired replies drain without updating newer views, even after definition/component changes; malformed replies and timeouts retain their guards.
+- [x] Reward-window presentation: numbered choices with measured long-name captions, full item details and explicit tile/name inspection, prominent claim/confirmation controls, and separate maintenance actions in both packs.
+- [x] Stock XML category badges with base/hover/selected variants, preserved native aspect and same-row right-aligned counts; missing art keeps the category name. Reward selection uses explicit full-card choices, grant summaries and a fixed claim/confirmation footer in both packs.
+- [ ] Achievements: live catalog refresh, earned/guild messages, local/nonlocal links, comparison and reward delivery; native completion timing, icon resource selection and legacy achievement gauges (docs/unknowns.md).
+- [x] Stock pending reward selection and task reward previews (`0x6411` / `0x6471`), both UI packs, explicit claims and item inspection; codec, model, bridge, mock-server and Lua UI tests. Live use reported generally working (2026-11-12); the refined reward window still needs targeted live claims/inspection acceptance below.
+- [ ] Reward selection: offered-task preview controls and live claims/inspection on a RoF2 server (docs/unknowns.md).
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).
 - [x] The tradeskill window: favourites, request waits, combine checks, trivial colours (experiment and auto-combine were already in).
@@ -245,7 +255,9 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] Zone atlas: live against a server with the script and a stock one; the World view in the gamepad pack; the route going on by itself after each zone (with `/travel`); while another zone's map is shown the minimap draws it too (they share the map state).
 - [x] `/stick` (distance, behind, id; the `Stick` TLO), the `LineOfSight` TLO and `Spawn.LineOfSight` (the abilities' own check). Unit tests on a built mesh; not tried live.
 - [x] The Find window (Hailstone's, in place of FindLocationWnd; docs/navigation.md "Find"): the zone's merchants, bankers, guildmasters, other services and the findable list (OP_SendFindableNPCs) as the modern map's Find page and a gamepad window; search, kinds, target, the find path, NPC marks on the map. Unit and UI-pack tests; not tried live.
-- [x] Find: the guide path over the client's own mesh (`app/guide_path.h`), found again as the player strays or the NPC moves; the find path and the guide path drawn as an even, floor-hugging trail with moving bands and a beacon (`game/path_trail.h`). Unit tests; not tried live.
+- [x] Find: the guide path over the client's own mesh (`app/guide_path.h`), found again as the player strays or the NPC moves; shared terrain support for the find path's and guide path's trail styles (`game/path_trail.h`). Unit tests; not tried live.
+- [x] Find: fourteen thin rainbow threads wind and curl a few feet above the terrain through hills and valleys, follow the route's floor in multilevel areas, and omit unsupported stretches. Geometry and particle integration tests; live appearance still to check.
+- [x] Find: Options selects a gold ground line (default) or rainbow strands, applied immediately and saved per character in both UI packs. Geometry, runtime switching and settings tests; live acceptance still open.
 - [x] Find: Walk there (the navigator to within 10, the guide path showing; gamepad X). Unit tests; not tried live.
 - [x] Find: the modern minimap marks the NPCs the map marks (the same kinds and search). UI-pack tests; not tried live.
 - [x] Find: quest givers from the server script (0x1436 / 0x1437: the NPCs whose own quest file takes hand-ins or talks, made once per zone process and kept; `quest_npcs`). Unit tests and the script's test harness; not tried on a live server.
@@ -258,6 +270,18 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Swimming: water surfaces in the mesh, the look pitch steered while swimming (breath, diving, climbing out).
 - [x] Zone lines marked exactly into the mesh; a walk stops before stepping into one (seen live at Oasis / North Ro).
 - [ ] Swimming live end to end (a long swim, diving, climbing out); levitation paths.
+
+## Isometric camera (docs/isometric.md)
+- [x] The camera (type 7): pitch, field of view, free turn, zoom, easing; fog, far plane, region and shadow cascades measured from the player; `/camera`.
+- [x] WASD relative to the camera (or classic: `camera.iso_wasd`), the turn keys turning the camera, the gamepad's sticks.
+- [x] Click to move and to interact, on the navigator: the ground (held, following the cursor), doors, ground items, ladders; a right click walking to an NPC or a corpse. Never an attack.
+- [ ] Live: clicks across a zone, a merchant and a corpse walked to, a door on the way, the held button; the gamepad.
+- [x] A mark where a click's walk ends.
+- [x] Seeing the player through what is in front: a dithered cut round the player of what is nearer and above their feet (zone, objects, grass), clicks through it.
+- [x] The circle only while something is in the way; the roof cut under cover; the silhouette; picks through the cut; a ring under the cursor.
+- [x] Options (modern Display > Isometric Camera, the gamepad pack's Camera page; `iso_*` through `eq.Option`), the pad action `camera_iso`, `/camera` toggles. No key command of its own (the key table is the original's): `/camera toggle` on a hot button.
+- [ ] Whole objects fading as one; tuning the cut, the roof and the silhouette against real zones.
+- [ ] Live: the roof in buildings, caves and stacked dungeons; the silhouette; the hover ring; the options in both packs.
 
 ## 4. Check live (implemented, not confirmed)
 

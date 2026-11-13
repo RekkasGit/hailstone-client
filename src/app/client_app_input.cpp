@@ -4,7 +4,9 @@
 #include "app/lua_eq_menu.h"
 #include "game/mechanics/abilities.h"
 #include "game/boats.h"
+#include "game/slash_commands.h"
 #include "core/env.h"
+#include "core/float_chars.h"
 
 namespace hailstone::app::client_internal {
 
@@ -305,9 +307,112 @@ void ClientApp::movement_command(int command, bool down, bool accept) {
 void ClientApp::set_camera_type(int type) {
     game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
     game::select_camera(s, type);
+    apply_camera_selection(s);
+}
+
+// Every camera change ends here, so going into the isometric camera or out of it keeps the field of view right
+// (it has its own, and the one it replaced comes back).
+void ClientApp::apply_camera_selection(const game::CameraSelection& s) {
+    if (s.type == game::kCameraIsometric && !iso()) {
+        iso_saved_fov_ = camera_.fov_units;
+        iso_camera_.placed = false;
+        // It starts looking the way the player faces.
+        iso_camera_.yaw = yaw_;
+    } else if (s.type != game::kCameraIsometric && iso()) {
+        camera_.fov_units = iso_saved_fov_;
+        iso_focus_distance_ = 0.0f;
+    }
     camera_type_ = s.type;
     camera_distance_ = s.distance;
     pad_camera_distance_ = s.pad_distance;
+}
+
+void ClientApp::update_iso_camera(const glm::vec3& feet, float dt) {
+    camera_.fov_units = game::iso_fov_units(iso_settings_.fov_degrees);
+    const glm::vec3 target = feet + glm::vec3(0.0f, 0.0f, iso_focus_height());
+    const game::IsoPose pose = game::update_iso_camera(iso_camera_, target, dt, iso_settings_);
+    camera_.position = pose.position;
+    camera_.yaw = pose.yaw;
+    camera_.pitch = pose.pitch;
+    iso_focus_distance_ = pose.focus_distance;
+    update_iso_reveal(dt);
+}
+
+void ClientApp::camera_command(const std::string& args) {
+    // /camera                 which camera, and the isometric camera's settings
+    // /camera iso|first|behind|toggle
+    // /camera pitch <deg> | fov <deg> | distance <units>   (the isometric camera; saved)
+    // /camera wasd camera|classic   (its movement keys: relative to the camera, or as in the other cameras)
+    // /camera reveal <units>        (the cut through what stands in front of the player: its radius; 0 off)
+    // /camera roof|silhouette|marker|hover|always on|off   (the cut's roof, the silhouette, the click marker, the
+    //                                hover ring, the cut even when nothing is in the way)
+    std::string_view rest = args;
+    std::string word = game::next_cmd_arg(rest);
+    for (char& ch : word) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    auto say = [this](const std::string& text) { conn_->show_chat(text, 15); };
+    auto save = [this] { save_iso_settings(); };
+    if (word.empty()) {
+        if (iso()) {
+            // What the cut is doing now (for tuning it against a place).
+            const game::IsoReveal r = iso_reveal();
+            say(std::format("Cut now: circle {:.0f}% (radius {:.0f} at you), roof {:.0f}% (above {:.0f}, {:.0f} round you; "
+                            "your eyes at {:.0f}).",
+                            iso_cone_strength_ * 100.0f, r.shape.x, iso_roof_strength_ * 100.0f, iso_roof_height_,
+                            r.roof.y, eye_position().z));
+        }
+        say(std::format("Camera {}{}. Isometric: pitch {:.0f}, fov {:.0f}, distance {:.0f}, wasd {}, reveal {:.0f}. "
+                        "Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
+                        "/camera wasd camera|classic",
+                        camera_type_, iso() ? " (isometric)" : "", glm::degrees(iso_settings_.pitch),
+                        iso_settings_.fov_degrees, iso_camera_.distance, iso_wasd_camera_ ? "camera" : "classic",
+                        iso_reveal_radius_));
+        return;
+    }
+    if (word == "iso" || word == "isometric") {
+        set_camera_type(game::kCameraIsometric);
+    } else if (word == "first") {
+        set_camera_type(game::kCameraFirstPerson);
+    } else if (word == "behind") {
+        set_camera_type(game::kCameraFirstPerson);
+        set_view(true);
+    } else if (word == "toggle") {
+        set_camera_type(iso() ? game::kCameraFirstPerson : game::kCameraIsometric);
+        if (!iso()) set_view(true);
+    } else if (word == "roof" || word == "silhouette" || word == "marker" || word == "hover" || word == "always") {
+        std::string how = game::next_cmd_arg(rest);
+        for (char& ch : how) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (how != "on" && how != "off") {
+            say(std::format("Usage: /camera {} on|off", word));
+            return;
+        }
+        set_iso_option(word == "always" ? "iso_reveal_always" : "iso_" + word, how == "on" ? 1 : 0);
+        return; // set_iso_option saves
+    } else if (word == "wasd") {
+        std::string how = game::next_cmd_arg(rest);
+        for (char& ch : how) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (how == "camera") iso_wasd_camera_ = true;
+        else if (how == "classic") iso_wasd_camera_ = false;
+        else {
+            say("Usage: /camera wasd camera|classic");
+            return;
+        }
+    } else if (word == "pitch" || word == "fov" || word == "distance" || word == "reveal") {
+        std::string value = game::next_cmd_arg(rest);
+        float v = 0.0f;
+        if (value.empty() || float_from_chars(value.data(), value.data() + value.size(), v).ec != std::errc{}) {
+            say(std::format("Usage: /camera {} <value>", word));
+            return;
+        }
+        if (word == "pitch") iso_settings_.pitch = glm::radians(std::clamp(v, 20.0f, 89.0f));
+        else if (word == "fov") iso_settings_.fov_degrees = std::clamp(v, 10.0f, 90.0f);
+        else if (word == "reveal") iso_reveal_radius_ = std::clamp(v, 0.0f, 60.0f);
+        else iso_camera_.distance = std::clamp(v, iso_settings_.min_distance, iso_settings_.max_distance);
+    } else {
+        say("Usage: /camera [iso|first|behind|toggle], /camera pitch|fov|distance|reveal <value>, "
+            "/camera wasd camera|classic, /camera roof|silhouette|marker|hover|always on|off");
+        return;
+    }
+    save();
 }
 
 void ClientApp::toggle_view() { set_camera_type(game::toggle_view_next(camera_type_)); }
@@ -319,8 +424,7 @@ void ClientApp::set_view(bool behind) {
     }
     game::CameraSelection s{camera_type_, camera_distance_, pad_camera_distance_};
     game::select_behind(s, max_camera_distance_);
-    camera_type_ = s.type;
-    camera_distance_ = s.distance;
+    apply_camera_selection(s); // (out of the isometric camera: its own field of view goes)
 }
 
 void ClientApp::take_screenshot() {
@@ -709,6 +813,8 @@ void ClientApp::update_combat_input() {
             return;
         }
         PickTarget hit = pick_at(at->x, at->y, game::kClickRequired, game::kClickSkip, "left click");
+        // The isometric camera's click to move (game/click_intent.h): the ground, or a thing out of reach, is walked to.
+        if (iso() && iso_click(*at, hit, false)) return;
         // A mount race with a rider (PlayerBase_IsMountRace, 0x58cfb0) gives the rider (LMouseUp @0x53875b).
         if (hit.kind == PickTarget::Kind::Spawn) {
             const auto& spawns = conn_->world().spawns;

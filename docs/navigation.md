@@ -18,6 +18,10 @@ The heading is set at once, as `/follow`'s FollowPlayerAI sets it (`game/follow.
 The player's own forward, back, turn or strafe keys end a walk, as they end `/follow`. Starting a walk ends `/follow`.
 Nothing moves while the player cannot (sitting, frozen, dead, `/safelock`); the walk carries on when they can.
 
+The isometric camera's click to move (`docs/isometric.md`) walks with it too: `Navigator::walk_to_click` for the
+ground (quiet when the mesh goes only part of the way, straight at the point in a zone without a mesh), `go_to_spawn`
+and `go_to_door` for what a click walks to.
+
 ## The mesh
 
 Built from the zone's collision triangles (`game::CollisionMesh`): what the movement sweep collides with is what is
@@ -341,7 +345,7 @@ gamepad pack as a window of its own (More > Find).
 
 ### The guide path
 
-`app/guide_path.h`: a gold trail from the player to the NPC over the client's own mesh (`Navigator::plan_between`, the
+`app/guide_path.h`: a trail from the player to the NPC over the client's own mesh (`Navigator::plan_between`, the
 walk's options), so it goes round walls on every zone; the server's find path is a straight line where the server
 has no mesh of its own. It is found again when the player is more than 8 (flat) off it or the NPC has moved 6 since,
 at most every half second, and trimmed behind the player. It ends within 12 of the NPC (and 10 in height) with "You
@@ -351,13 +355,36 @@ A partial path (the NPC off the mesh) is drawn as far as it goes. The maps draw 
 
 ### The trail
 
-`game/path_trail.h`: both the guide path and the find path (PlayerPath, in its pale blue) are drawn as soft glowing
-sprites (spellsnew's `blobb.dds`, additive) sampled every 1.4 along the line and each put on the floor (one more than
-6 off the line keeps the line's height), so the trail neither clumps at corners nor gaps on straights nor cuts
-through a hill. Bright bands run along it towards the destination at 9 a second, it fades in over the first 5 and out
-at its far end (the guide path's 120..170; the find path's at Path.ini's FadeEnd), and a breathing glow with rings of
-light rising from it marks the end. The original draws the find path as a textured tube; this look is Hailstone's.
-The find path's travelling Path.ini emitters and its finish emitters are as before.
+Options > Display > **Find Trail** (gamepad: Options > Interface) chooses the appearance of both the guide path
+and the server's find path (PlayerPath). The choice applies immediately and is saved per character in
+`hailstone.ini` as `display.find_trail_style`: **Gold line (default)** (0), or **Rainbow trail** (1).
+Unknown values select the default. This is a rendering choice over the existing routes; it does not start a walk.
+The world trail is available on the first zone entry, including servers without downloaded assets. Its terrain
+source follows zone loads and reloads rather than keeping the previous zone's surface.
+
+`game/path_trail.h`: the default is a narrow gold ribbon with a dark border, in the style of MQ2Nav's route line.
+It follows the local ground plane and is depth-tested against the scene. It reuses Hailstone's navigation routes
+and ground sampling; the diagnostic mesh overlay is separate (`/nav ui`).
+
+The rainbow choice draws fourteen thin, continuous strands, two in each of seven colours. Each winds sideways
+and curls vertically with its own phase, hovering about 3 world units above the terrain (a 0.7-unit vertical
+wave). Solid, untextured line segments face the camera across their narrow width, so the colours read as separate
+threads instead of diffuse particle puffs. Bright bands move towards the destination at 9 units a second. The
+strands fade in over the first 5 units and out at the far end (the guide path's 120..170; the find path's at
+Path.ini's FadeEnd). The original draws the find path as a textured tube; this look is Hailstone's.
+
+The ground line is lifted 0.35 units; the rainbow's hover height follows the same terrain profile. Ground probes
+start at the player and advance in small steps from the last supported height, so a hill or valley can rise or fall more than
+6 units away from the line between route points. Each strand is grounded separately across the trail's width.
+Nearby steps are followed; missing ground or a sharp drop leaves a gap instead of bridging unsupported space or
+snapping to a distant floor below a bridge. Route vertices can anchor the next supported stretch. Tunnel roofs
+are not selected by casting down from high above the zone. Without loaded collision there is no trail.
+
+This changes the trail's presentation, not the route: the guide uses the client's navigation mesh, while a server
+without its own mesh can still send a straight route. Ground projection does not find a way around a wall.
+The selected style replaces the find path's travelling Path.ini particle clouds, which followed the old elevated line.
+Its completion emitters play only at a supported destination, grounded as the trail is. The route, arrival checks,
+sounds and map colours stay as before.
 
 Not yet: the gamepad pack's minimap marks, and a key of the client's own for a walk to the target (`/nav target` on a hot button does it) (docs/todo.md).
 

@@ -75,6 +75,8 @@
 #include "game/race_models.h"
 #include "game/char_create_look.h"
 #include "game/cameras.h"
+#include "game/iso_camera.h"
+#include "game/iso_occlusion.h"
 #include "game/char_select_camera.h"
 #include "game/eq_names.h"
 #include "game/mechanics/character.h"
@@ -491,7 +493,9 @@ public:
             std::filesystem::create_directories(platform::ui_packs_dir() / ui::kPictureFolder, ec);
         }
         audio_->music_selection(audio::kMusicLogin, pregame_music_); // CDisplay_InitDisplay
-        spell_particles_ = std::make_unique<SpellParticles>(vk_, game_, shader_dir_);
+        spell_particles_ = std::make_unique<SpellParticles>(vk_, game_, shader_dir_, [this] {
+            return collision_ ? &*collision_ : nullptr;
+        });
         log_memory("startup: spell particles");
         spell_bolts_ = std::make_unique<SpellBolts>(vk_, shader_dir_);
         actor_emitters_ = std::make_unique<ActorEmitters>(vk_, game_, shader_dir_);
@@ -501,6 +505,8 @@ public:
         view_ = game::compute_view_distance({}, opts_.clip_plane);
         camera_distance_ = opts_.camera_distance;
         camera_type_ = camera_distance_ > 0.0f ? game::kCameraWheelFollow : game::kCameraFirstPerson;
+        // The isometric camera when it was the one in use (hailstone.ini camera.iso, /camera).
+        if (config_.get_bool("camera.iso", false)) set_camera_type(game::kCameraIsometric);
         game::reset_camera_defaults(cameras_);
         if (!opts_.auto_user.empty()) {
             // Test logins never use the player's remembered server: a test account's password must not reach a
@@ -667,8 +673,12 @@ private:
     // CameraAngle = 0 in the first person camera is here, as the pitch is pitch_.
     void movement_command(int command, bool down, bool accept);
     // SetCameraType @0x48adf0 (game/cameras.h): another type than 6 puts the camera behind the player's distance
-    // to 0. TOGGLECAM's cycle (CDisplay::ToggleView) is game::toggle_view_next.
+    // to 0. TOGGLECAM's cycle (CDisplay::ToggleView) is game::toggle_view_next. Into or out of the isometric camera
+    // (7) the field of view changes to its own and back.
     void set_camera_type(int type);
+    void apply_camera_selection(const game::CameraSelection& s);
+    // /camera (Hailstone's own): which camera, and the isometric camera's settings.
+    void camera_command(const std::string& args);
     // CDisplay::ToggleView @0x494160 (TOGGLECAM, the hot button's): the next camera of game::toggle_view_next.
     void toggle_view();
     // The gamepad's camera button (Hailstone's own): first person, or the camera behind the player at its last
@@ -901,6 +911,7 @@ private:
     std::optional<glm::vec3> world_point_at(float x, float y);
     // Item placement mode (game/placement.h) each frame: the ghost under the mouse, re-validated.
     void update_placement();
+    // `why` names the pick in the log; null picks quietly.
     PickTarget pick_at(float x, float y, std::uint32_t required, std::uint32_t skip, const char* why);
     // CEverQuest::LeftClickedOnPlayer.
     void left_click_spawn(std::uint32_t id);
@@ -1390,13 +1401,104 @@ private:
     float floor_offset_ = 0.0f;
     float camera_distance_ = 0.0f; // the camera behind the player's (6) distance; 0 outside it (the mouse wheel's)
     // CDisplay::cameraType (game/cameras.h): 0 first person, 1..5 the original's other cameras (cameras_), 6 the
-    // camera behind the player (camera_distance_ > 0).
+    // camera behind the player (camera_distance_ > 0), 7 the isometric camera (iso_camera_).
     int camera_type_ = game::kCameraFirstPerson;
     std::uint32_t consciousness_changes_ = 0;
     std::uint32_t drunkenness_updates_ = 0;
     float drunk_fov_offset_ = 0.0f; // on top of camera_.fov_units (game::drunkenness_fov_offset)
     std::optional<int> unconscious_camera_;
     std::array<game::GameCamera, 6> cameras_;
+    // The isometric camera (game/iso_camera.h): its state, its settings (hailstone.ini camera.iso_*), the field of
+    // view the other cameras use while it has its own, and this frame's distance from the player (the view and the
+    // shadow cascades are measured from the player with it).
+    game::IsoCamera iso_camera_;
+    game::IsoCameraSettings iso_settings_;
+    float iso_saved_fov_ = game::kStockFovUnits;
+    float iso_focus_distance_ = 0.0f;
+    bool iso() const { return camera_type_ == game::kCameraIsometric; }
+    // Places camera_ for the isometric camera this frame, looking at the player drawn at `feet`.
+    void update_iso_camera(const glm::vec3& feet, float dt);
+    // The isometric camera's click to move and movement relative to the camera (app/client_app_iso.cpp): WASD
+    // relative to the camera or classic (hailstone.ini camera.iso_wasd); the gamepad's stick as last read in game mode
+    // (x right, y up; zero when it moves nothing); a click's walk under way, and what to click when it arrives; the
+    // left button held on the ground (the walk follows the cursor).
+    bool iso_wasd_camera_ = true;
+    glm::vec2 pad_iso_stick_{0.0f};
+    bool iso_walking_ = false;
+    struct IsoPending {
+        PickTarget hit;
+        bool right = false;
+    };
+    std::optional<IsoPending> iso_pending_;
+    bool iso_hold_ = false;
+    glm::vec3 iso_hold_point_{0.0f};
+    Clock::time_point iso_hold_at_{};
+    // A click in the isometric camera (game/click_intent.h): true when it walks instead of the original's click.
+    bool iso_click(const glm::vec2& at, const PickTarget& hit, bool right);
+    // Each frame: a key ends a click's walk, the held button aims it, an arrival makes its click.
+    void update_iso_clicks(bool player_moved);
+    // How near a walk to spawn `id` goes before its click.
+    float iso_spawn_arrive(std::uint32_t id) const;
+    // Each step: the movement keys as a heading relative to the camera (turns the player) and the forward key the
+    // controls see (PlayerMovement::set_key_override); nullopt outside the isometric camera or with no key held.
+    std::optional<bool> iso_key_override();
+    // Each frame: the turn keys turn the isometric camera.
+    void iso_turn_keys(float dt);
+    // The cut through what stands in front of the player this frame (game/iso_occlusion.h): off outside the isometric
+    // camera or with camera.iso_reveal 0 (its radius at the player).
+    float iso_reveal_radius_ = 20.0f;
+    game::IsoReveal iso_reveal() const;
+    // The cut's parts (game/iso_occlusion.h): the cone only while something is in the way (or always), the roof while
+    // something is over the player (camera.iso_roof); their strengths eased each frame, and the roof's height.
+    bool iso_reveal_always_ = false;
+    bool iso_roof_ = true;
+    float iso_roof_radius_ = 60.0f;
+    float iso_cone_strength_ = 0.0f, iso_roof_strength_ = 0.0f, iso_roof_height_ = 0.0f;
+    void update_iso_reveal(float dt);
+    // The player's silhouette where something the cut leaves still hides them (camera.iso_silhouette).
+    bool iso_silhouette_ = true;
+    // The click marker and the hover ring, each switchable (camera.iso_marker, camera.iso_hover).
+    bool iso_marker_on_ = true, iso_hover_on_ = true;
+    // What is under the cursor (a spawn, a door, a ground object) and its ring on the floor; picked ten times a
+    // second or when the mouse moves.
+    struct IsoHover {
+        bool shown = false;
+        std::uint32_t spawn = 0;
+        glm::vec3 feet{0.0f};
+        float radius = 2.0f;
+    };
+    IsoHover iso_hover_;
+    glm::vec2 iso_hover_at_{-1.0f};
+    Clock::time_point iso_hover_time_{};
+    std::unique_ptr<render::TargetRingRenderer> iso_hover_renderer_;
+    void update_iso_hover();
+    void draw_iso_hover(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
+                        double seconds);
+    // The isometric camera's options (eq.Option / eq.SetOption "iso_*") and settings (hailstone.ini camera.iso_*).
+    std::optional<int> iso_option(std::string_view o) const;
+    bool set_iso_option(std::string_view o, int v);
+    void load_iso_settings();
+    void save_iso_settings();
+    // The zone's triangles for a pick, less what the isometric camera's cut takes away there.
+    std::function<void(const game::PickSegment&, const game::PickTriangleSink&)> pick_world() const;
+    // How far above the feet the isometric camera looks: the middle of the body.
+    float iso_focus_height() const { return floor_offset_ * 0.5f + 2.0f; }
+    // The mark where a click's walk ends (a ring on the ground, drawn as the target ring is): where, since when (the
+    // click's flash), and when the walk ended (it fades); its own ring renderer, made on first use.
+    struct IsoMarker {
+        glm::vec3 point{0.0f};
+        bool active = false;
+        bool click = false;      // a new click, its flash timed from the next draw (not the held button's aim)
+        bool ending = false;     // the walk ended, its fade timed from the next draw
+        double since = 0.0;      // the click (the draw's clock)
+        double ended = -1.0;     // < 0: the walk goes on
+    };
+    IsoMarker iso_marker_;
+    std::unique_ptr<render::TargetRingRenderer> iso_marker_renderer_;
+    void set_iso_marker(const glm::vec3& point, bool click);
+    bool iso_marker_shown() const { return iso() && iso_marker_.active; }
+    void draw_iso_marker(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
+                         double seconds);
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)
     // The Options window's Max Camera Zoom sets it (10..150, saved); the NMS patch's /fov too (not saved).
     float max_camera_distance_ = kMaxCameraDistance;

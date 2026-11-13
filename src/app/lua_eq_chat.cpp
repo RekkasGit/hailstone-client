@@ -207,6 +207,39 @@ std::string escape(std::string_view text) {
 // Hailstone (the modern chat): a player's name in a line links as <a WndNotify="1001,name">; a click opens a tell
 // to them (open_tell).
 constexpr int kNameLink = 1001;
+constexpr int kAchievementLink = 1002;
+
+// STML's attribute parser does not decode entities. Hex keeps the exact received
+// metadata out of markup syntax, including quotes and literal entity-like text.
+std::string achievement_link_data(std::string_view metadata) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(metadata.size() * 2);
+    for (const unsigned char ch : metadata) {
+        out.push_back(digits[ch >> 4]);
+        out.push_back(digits[ch & 15]);
+    }
+    return out;
+}
+
+std::optional<std::string> achievement_link_metadata(std::string_view data) {
+    if (data.empty() || data.size() > net::kMaxAchievementLinkBytes * 2 || data.size() % 2)
+        return std::nullopt;
+    const auto digit = [](char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+        if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+        return -1;
+    };
+    std::string out;
+    out.reserve(data.size() / 2);
+    for (std::size_t i = 0; i < data.size(); i += 2) {
+        const int high = digit(data[i]), low = digit(data[i + 1]);
+        if (high < 0 || low < 0) return std::nullopt;
+        out.push_back(static_cast<char>((high << 4) | low));
+    }
+    return out;
+}
 
 bool iequal(std::string_view a, std::string_view b);
 
@@ -274,6 +307,23 @@ std::string line_stml(const ui::ChatLine& l, bool names, bool stamps = false) {
         }
         out += escape_linking(text.substr(at, a - at), name);
         std::string tag = l.text.substr(a + 1, b - a - 1);
+        if (!tag.empty() && tag.front() == '3') {
+            const auto achievement = game::parse_achievement_chat_link(tag);
+            std::string shown = achievement ? achievement->text : "Achievement";
+            EqHost* h = state().host;
+            const auto* catalog = h && h->conn && h->conn->achievements().catalog()
+                ? &*h->conn->achievements().catalog() : nullptr;
+            const auto parsed = achievement && catalog
+                ? net::parse_achievement_link(achievement->metadata, *catalog) : std::nullopt;
+            const auto* definition = parsed ? catalog->find(parsed->achievement_id) : nullptr;
+            if (definition) {
+                shown = definition->name;
+                out += std::format("<a WndNotify=\"{},{}\">{}</a>", kAchievementLink,
+                    achievement_link_data(parsed->metadata), escape(shown));
+            } else out += escape(shown);
+            at = b + 1;
+            continue;
+        }
         auto link = game::parse_item_link(tag);
         std::string shown = link ? link->text : tag;
         std::string data;
@@ -404,7 +454,7 @@ struct ChatManager {
     std::uint64_t serial = 1;   // bumped by every change (every window's eq.ChatText version changes)
     std::uint32_t next_serial = 1;
     const ui::ChatView* scanned = nullptr; // what scan_windows last looked at
-    std::uint64_t scanned_revision = 0, scanned_serial = 0, scanned_colors = 0;
+    std::uint64_t scanned_revision = 0, scanned_serial = 0, scanned_colors = 0, scanned_achievement_catalog = 0;
     std::uint64_t next_gen = 1;                             // ChatWnd::gen's source (never reset)
     ui::UiIni* ini = nullptr;
 
@@ -771,7 +821,10 @@ bool unread(const ui::ChatView& v, int w) {
 // `w`: a window that must have a generation (one made since the last pass has none).
 void scan_windows(const ui::ChatView& v, int w_asked) {
     ChatManager& m = manager();
-    bool fresh = m.scanned != &v || m.scanned_serial != m.serial || m.scanned_colors != state().colors;
+    const auto* h = state().host;
+    const auto catalog = h && h->conn ? h->conn->achievements().catalog_token() : 0;
+    bool fresh = m.scanned != &v || m.scanned_serial != m.serial || m.scanned_colors != state().colors ||
+        m.scanned_achievement_catalog != catalog;
     if (!fresh && m.scanned_revision == v.revision && wnd(w_asked).gen) return;
     std::array<std::uint64_t, kMaxChatWindows> first{}, last{};
     std::array<std::size_t, kMaxChatWindows> count{};
@@ -805,6 +858,7 @@ void scan_windows(const ui::ChatView& v, int w_asked) {
     m.scanned_revision = v.revision;
     m.scanned_serial = m.serial;
     m.scanned_colors = state().colors;
+    m.scanned_achievement_catalog = catalog; // existing links revalidate after catalog replacement/retirement
 }
 
 // ---------------------------------------------------------------- the menus (CChatWindowManager::InitContextMenu)
@@ -1761,9 +1815,16 @@ int ChatSetHitMode(lua_State* L) {
 }
 
 // eq.ChatLink(slot, message, data)   -- a link clicked in the output: 27 an item link (asks the server for it), 1001
-// a name link (open_tell)
+// a name link (open_tell), 1002 a validated achievement snapshot.
 int ChatLink(lua_State* L) {
     EqHost& h = host(L);
+    if (luaL_checkinteger(L, 2) == kAchievementLink) {
+        std::size_t length = 0;
+        const char* data = luaL_checklstring(L, 3, &length);
+        if (const auto metadata = achievement_link_metadata(std::string_view(data, length)); metadata && h.conn)
+            h.conn->inspect_achievement_link(*metadata);
+        return 0;
+    }
     if (luaL_checkinteger(L, 2) == kNameLink) {
         open_tell(luaL_checkstring(L, 3));
         return 0;

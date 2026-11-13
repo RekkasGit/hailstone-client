@@ -1103,6 +1103,18 @@ At run time:
 - `display.material_maps` (on by default) and the viewer's `--no-material-maps` turn the maps off.
 - Every viewer, the model viewer too, takes `--textures`.
 
+## The isometric camera's cut
+
+In the isometric camera (`docs/isometric.md`) `zone.frag`, `object.frag` and `flora.frag` drop the pixels of what
+stands between the camera and the player: `reveal_discard` in `shaders/lighting.glsl`, from `SceneLighting`'s
+`reveal_origin`, `reveal_axis` and `reveal_shape` (`game/iso_occlusion.h`; off, as in every other camera, when
+`reveal_origin.w` and `reveal_roof.w` are 0). The test is a cone round the camera-to-player line, above the player's
+feet and nearer than them, or (`reveal_roof`) everything over a height within a flat radius of the player, against a
+4x4 ordered dither; the shadow passes' own shaders do not have it. The click marker and the hover ring of that camera
+are a second and a third `TargetRingRenderer`. The player's silhouette is a fourth actor pipeline
+(`shaders/actor_silhouette.frag`: depth test LESS, no depth write, premultiplied blend, the opaque parts only), drawn
+before the actors.
+
 ## Name plates
 
 NPC names are drawn in the spawn's consider colour (`game::con_rgb` of `game::con_level`, the colour Hailstone's target plate already uses) instead of this client's yellow (255, 220, 120). Mercenaries keep their blue and corpses stay grey, while other players' names stay light blue. This is a deliberate difference (Hailstone option `con_name_colour`, Options > Display, `hailstone.ini` `display.con_name_colour`, default on); turning it off restores the yellow for NPC names. The target keeps its consider colour in both settings.
@@ -1153,6 +1165,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.distance_blur` | 0, 1 | 1 | the far distance's slight blur; modern only |
 | `display.neighbour_zones` | 0, 1 | 1 | the zone past an outdoor zone line drawn in the distance (Neighbour zones); modern only; `/neighbourzones [on \| off]` |
 | `display.target_ring_cues` | 0, 1 | 1 | the target ring's sweep on a new target and pulse while attacking (Target Ring Cues; The target ring) |
+| `display.find_trail_style` | 0, 1 | 0 | Find paths: 0 the gold ground line, 1 rainbow strands; Options > Display (gamepad: Interface), saved per character and changed immediately; docs/navigation.md "The trail" |
 | `display.target_ring_xray` | 0, 1 | 0 | the target ring's hidden part showing faintly through what stands in front (Target Ring Through Models) |
 | `display.target_ring_color.<Section>` | RRGGBB | (TargetIndicator.ini's) | the target ring's colour for a con, Trivial .. Deadly (Target Ring) |
 | `display.target_ring_opacity` | 25 .. 200 | 100 | the target ring's alpha, in % of its con's |

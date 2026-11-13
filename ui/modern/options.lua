@@ -290,6 +290,28 @@ local function displayTab()
       end)
     end
   end)
+  -- Hailstone's isometric camera (docs/isometric.md): the iso_* options, also /camera.
+  section("Isometric Camera", function()
+    local deg = function(v) return v .. "°" end
+    check("iso_camera", "Isometric Camera",
+      "Look down on your character from above and to one side, and click to move. /camera iso and /camera behind "
+      .. "switch too; a hot button with /camera toggle gives it a key.")
+    slider("iso_pitch", "Pitch", 20, 89, deg, "How steeply the camera looks down.")
+    slider("iso_fov", "Field of View", 10, 90, deg, "Degrees across the screen. Narrower looks flatter, more isometric.")
+    combo("iso_wasd", "Movement Keys", { "Relative to the camera", "Classic" },
+      "Relative to the camera: W, A, S and D move up, left, down and right on the screen and the turn keys turn the "
+      .. "camera. Classic: as in the other cameras.")
+    slider("iso_reveal", "See-Through Circle", 0, 60, function(v) return v == 0 and "Off" or (v .. " units") end,
+      "Walls, trees and hills between the camera and your character are cut away in a circle this size round you.")
+    check("iso_reveal_always", "See-Through Always",
+      "Cut the circle even when nothing is in the way. Off: only while something hides your character.")
+    check("iso_roof", "Lift Roofs and Ceilings",
+      "Under a roof or a ceiling, everything above your head round you is taken away, so rooms and caves show "
+      .. "from above.")
+    check("iso_silhouette", "Silhouette Behind Walls", "Your character's outline shows where something still hides them.")
+    check("iso_marker", "Click Marker", "A ring on the ground where a click is taking you.")
+    check("iso_hover", "Highlight Under Cursor", "A ring under the character, door or item the mouse is over.")
+  end)
   section("Interface", function()
     local uiName = eq.Option("ui_name")
     if uiName ~= nil then
@@ -356,6 +378,8 @@ local function displayTab()
     check("own_name", "Show My Name",
       "Hailstone: your own name over your head in the third-person views, with your title and guild as /shownames sets them for everyone.")
     check("npc_names", "Show NPC Names", "The names over NPCs.")
+    combo("find_trail_style", "Find Trail", { "Gold line (default)", "Rainbow trail" },
+      "Choose the gold ground line or thin, winding rainbow strands hovering a few feet above the terrain along your Find route.")
     check("con_name_colour", "Con-Coloured NPC Names", "Hailstone: NPC names take their consider colour, as your target's does. Off keeps them yellow.")
     check("target_plate_highlight", "Highlight Target Name",
       "Hailstone: makes your target's name easy to spot, on a dark background with a coloured edge and a small bouncing arrow above it. Turn it off to show the name as plain text in its colour.")

@@ -1,6 +1,7 @@
 #include "app/spell_particles.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -12,6 +13,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "game/collision.h"
 #include "game/path_trail.h"
 #include "game/spells.h"
 #include "game/missiles.h"
@@ -86,10 +88,14 @@ std::optional<BloodSprite> load_blood_sprite(const GameDir& game) {
 } // namespace
 
 SpellParticles::SpellParticles(std::vector<assets::EmitterDefinition> definitions,
-                               std::vector<assets::SpellEffect> effects)
-    : effects_(std::move(effects)), particles_(std::move(definitions)) {}
+                               std::vector<assets::SpellEffect> effects, CollisionSource collision)
+    : effects_(std::move(effects)), particles_(std::move(definitions)) {
+    bind_collision(std::move(collision));
+}
 
-SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir) {
+SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir,
+                               CollisionSource collision) {
+    bind_collision(std::move(collision));
     try {
         if (auto data = game.read("spellsnew.edd")) particles_ = game::ParticleSystem(assets::parse_edd(*data));
         if (auto data = game.read("spellsnew.eff")) effects_ = assets::parse_spell_effects(*data);
@@ -127,6 +133,18 @@ SpellParticles::SpellParticles(render::VkContext& vk, const GameDir& game, const
         log::info("spell particles: {} emitter definitions, {} effects, density {:.2f}, opacity {:.2f}",
                   particles_.definitions().size(), effects_.size(), settings_.density, settings_.opacity);
     }
+}
+
+void SpellParticles::bind_collision(CollisionSource collision) {
+    if (!collision) return;
+    floor_ = [source = collision](const glm::vec3& p) -> std::optional<float> {
+        const auto* mesh = source();
+        return mesh ? mesh->floor_below(p, 0.0f) : std::nullopt;
+    };
+    trail_floor_ = [source = std::move(collision)](const glm::vec3& p) -> std::optional<float> {
+        const auto* mesh = source();
+        return mesh ? mesh->ground_below(p) : std::nullopt;
+    };
 }
 
 void SpellParticles::set_blood_sprite(assets::EmitterDefinition definition) {
@@ -307,32 +325,59 @@ namespace {
 constexpr std::uint32_t kPathLineKey = 0xfff00000u;
 constexpr std::uint32_t kPathFinishKey = 0xfff00001u;
 constexpr std::uint32_t kGuideLineKey = 0xfff00002u;
-std::uint32_t mover_key(std::uint32_t serial, int i) { return 0xfff10000u + ((serial & 0x3fffu) << 2) + static_cast<std::uint32_t>(i); }
 } // namespace
 
-void SpellParticles::draw_trail(std::uint32_t key, std::span<const glm::vec3> line, const glm::vec3& color, float far) {
+void SpellParticles::draw_trail(std::uint32_t key, std::span<const glm::vec3> line, float far) {
+    game::TrailStyle st;
+    st.far_end = far;
+    st.far_start = far * 0.7f;
+    if (find_trail_style_ == game::FindTrailStyle::Navigation) {
+        if (!navigation_definition_) {
+            assets::EmitterDefinition d;
+            d.name = "FindNavigationLine";
+            d.no_zwrite = 1;
+            d.billboard = game::kWorldBasisBillboard;
+            d.frames = 1;
+            navigation_definition_ = particles_.add_definition(std::move(d));
+        }
+        std::vector<game::Particle> quads;
+        const auto ribbon = game::build_navigation_trail(line, st, clock_, trail_floor_);
+        quads.reserve(ribbon.size());
+        for (const auto& piece : ribbon) {
+            game::Particle q;
+            q.position = piece.position;
+            q.axes[0] = piece.across;
+            q.axes[1] = piece.forward;
+            q.width = piece.width;
+            q.height = piece.length;
+            q.color = glm::vec4(piece.color, piece.alpha);
+            quads.push_back(q);
+        }
+        if (quads.empty()) particles_.stop(key);
+        else particles_.set_still(key, *navigation_definition_, std::move(quads));
+        return;
+    }
     if (!path_definition_) {
-        // A soft blob (spellsnew's blobb.dds, a finish emitter's texture), additive, not writing depth.
+        // Solid, thin segments: their width faces the camera while their endpoints follow the hovering strands.
         assets::EmitterDefinition d;
-        d.name = "PlayerPath";
-        d.texture = "blobb.dds";
+        d.name = "FindRainbowStrands";
         d.additive = 1;
         d.no_zwrite = 1;
+        d.billboard = game::kTrailStrandBillboard;
         d.frames = 1;
         path_definition_ = particles_.add_definition(std::move(d));
     }
-    game::TrailStyle st;
-    st.color = color;
-    st.far_end = far;
-    st.far_start = far * 0.7f;
-    game::TrailFloorFn floor;
-    if (floor_) floor = [this](const glm::vec3& p) { return floor_(p); };
     std::vector<game::Particle> quads;
-    for (const auto& t : game::build_trail(line, st, clock_, floor)) {
+    const auto trail = game::build_rainbow_strands(line, st, clock_, trail_floor_);
+    quads.reserve(trail.size());
+    for (const auto& t : trail) {
         game::Particle q;
         q.position = t.position;
-        q.width = q.height = t.size;
-        q.color = glm::vec4(color, t.alpha);
+        q.axes[0] = t.across;
+        q.axes[1] = t.forward;
+        q.width = t.width;
+        q.height = t.length;
+        q.color = glm::vec4(t.color, t.alpha);
         q.lifetime = 1.0f;
         quads.push_back(q);
     }
@@ -344,52 +389,28 @@ void SpellParticles::update_path(net::GameConnection& conn) {
     if (particles_.empty()) return;
     const game::PlayerPath& path = conn.player_path();
     const game::PathSettings& ps = path.settings();
-    // The line: a trail of soft glowing sprites (game/path_trail.h) from the player along PlayerPath's points. This
-    // client's look: the original draws a textured tube (ThickLineSystem with Path.ini's Texture and ShapeSet). It
-    // fades out where Path.ini's FadeStart / FadeEnd fade the original's.
+    // Both styles follow PlayerPath's route and fade at Path.ini's range. This client's look replaces the original
+    // textured tube (ThickLineSystem with Path.ini's Texture and ShapeSet).
     {
         std::vector<glm::vec3> line;
         if (path.active()) {
             const auto& pts = path.points(); // the destination first: the trail runs from the player
             line.assign(pts.rbegin(), pts.rend());
+            // PlayerPath stores its grounded points at FloorOffset * AvatarHeight, rather than at the feet.
+            // Undo that presentation offset before following terrain; large races can be more than six above it.
+            if (const auto* me = conn.world().player(); me && !me->gm)
+                for (auto& p : line) p.z -= path.floor_offset();
         }
-        draw_trail(kPathLineKey, line, glm::vec3(0.6f, 0.85f, 1.0f), std::max(ps.fade_end, 40.0f));
+        draw_trail(kPathLineKey, line, std::max(ps.fade_end, 40.0f));
     }
-    // The Find window's guide path (app/guide_path.h): the same trail, gold.
-    draw_trail(kGuideLineKey, guide_line_, glm::vec3(1.0f, 0.8f, 0.35f), 170.0f);
-    // The movers: their four EmitterN emitters made where a mover is first placed, moved along with it, and taken away
-    // when it is off the path or gone (a reused mover has a new serial).
-    std::vector<std::uint32_t> live;
-    if (path.active())
-        for (const auto& m : path.movers()) {
-            auto at = path.mover_position(m);
-            if (!at) continue;
-            live.push_back(m.serial);
-            for (int i = 0; i < 4; ++i) {
-                const auto& es = ps.emitters[static_cast<std::size_t>(i)];
-                if (es.definition < 1) continue;
-                std::uint32_t key = mover_key(m.serial, i);
-                if (particles_.has(key)) {
-                    particles_.move(key, *at);
-                    continue;
-                }
-                game::SpellEmitterRequest r;
-                r.emitter = es.definition;
-                r.key = key;
-                r.duration_ms = es.life_span;
-                r.density = es.density * settings_.density;
-                r.opacity = es.opacity * settings_.opacity;
-                r.position = *at;
-                r.persistent = true;
-                particles_.create(r);
-            }
-        }
-    for (std::uint32_t serial : path_movers_)
-        if (std::find(live.begin(), live.end(), serial) == live.end())
-            for (int i = 0; i < 4; ++i) particles_.stop(mover_key(serial, i));
-    path_movers_ = std::move(live);
+    // The Find window's guide path (app/guide_path.h): the same selected style.
+    draw_trail(kGuideLineKey, guide_line_, 170.0f);
+    // The selected trail replaces Path.ini's travelling clouds: those follow elevated, sine-displaced points and
+    // would obscure the strands or float above the ground. PlayerPath's timing, sounds and route stay unchanged.
     // PlayerPath_OnDestinationReached: the FinishEmitterN at the destination for their LifeSpan.
-    if (auto at = conn.take_path_finish())
+    if (auto at = conn.take_path_finish(); at && trail_floor_) {
+        auto ground = trail_floor_(*at + glm::vec3(0, 0, 0.5f));
+        if (!ground || !std::isfinite(*ground) || *ground > at->z + 0.5f || *ground < at->z - 6.0f) return;
         for (const auto& es : ps.finish_emitters) {
             if (es.definition < 1) continue;
             game::SpellEmitterRequest r;
@@ -398,9 +419,10 @@ void SpellParticles::update_path(net::GameConnection& conn) {
             r.duration_ms = es.life_span;
             r.density = es.density * settings_.density;
             r.opacity = es.opacity * settings_.opacity;
-            r.position = *at;
+            r.position = {at->x, at->y, *ground + 0.35f};
             particles_.create(r);
         }
+    }
 }
 
 std::optional<game::StageActor> SpellParticles::stage_actor(const net::GameConnection& conn, std::uint32_t id,
@@ -504,7 +526,6 @@ void SpellParticles::clear() {
     particles_.clear();
     held_.clear();
     timers_.clear();
-    path_movers_.clear();
 }
 
 std::vector<game::LightSource> SpellParticles::lights(std::size_t max) const {

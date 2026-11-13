@@ -219,9 +219,17 @@ adds BC7 textures under a DX10 header, which the texture loader already reads. W
   support by 2 units). With a live base, everfrost's and lavastorm's files come from the classic folder before the
   base's (`classic_preferred_file`). That client lacks bazaar.s3d, highpasshold.s3d, barter.eqg and freeporttemple.eqg:
   only RoF2 has them, so a server's `assets/` brings them. Live also has new `.eqg` zones under the RoF2 names
-  arena, bazaar, highpasshold, lavastorm and nektulos: those load as `.s3d` when there is one, and with a live base
-  and none the zone is refused rather than loaded as the revamp, unless the server's own files bring the `.eqg`
-  (`is_revamped_zone_name`). Live's chapterhouse, clz, crescent, relic, tutoriala and tutorialb differ from RoF2's
+  arena, bazaar, highpasshold, lavastorm and nektulos: those load as `.s3d` when there is one. With a live base and
+  none, the `.eqg` loads only when the server's own files bring it, or when the safe point the server sends at
+  zone-in (OP_NewZone) stands on its floor: a floor at most 10 units under it (`is_revamped_zone_name`,
+  `game/revamped_zone.h`). Otherwise the zone is refused rather than loaded as the revamp. A stock server can run
+  either geometry under the one name: PEQ's Bazaar version 0 (expansions 3 to 8) is the old zone, version 1
+  (expansion 9 on) the revamp, and the zone-in packets do not say which. The original client loads the `.eqg` by name
+  alone (`CDisplay::StartWorldDisplay` tries `.EQG` first), so this test is a deliberate difference. Measured on PEQ's
+  rows against the live files: Bazaar and Lava Storm version 1 and High Pass Hold (one row) pass, and version 0's
+  safe points have no floor under them. The loaded zone and its collision mesh are kept, not built again. A neighbour
+  zone loaded ahead has no safe point yet and keeps the refusal. Live's arena.s3d and nektulos.s3d still win,
+  although PEQ runs the revamp there (docs/unknowns.md). Live's chapterhouse, clz, crescent, relic, tutoriala and tutorialb differ from RoF2's
   too (the classic-era client's clz and tutorials as well) and may not match the server's maps.
 - **`racedata.txt`.** Live has a line per race and gender: race, gender (0, 1, or 2 for both), the 44 sound ids in
   index order, the male and female heights, then the model code at field 50. `parse_race_sounds` and

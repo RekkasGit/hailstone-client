@@ -384,7 +384,7 @@ TEST_CASE("key map: the original's defaults, names and ini round trip") {
     // (Shift+C, Shift+V, Shift+H, Ctrl+Shift+S), and so do real estate's leave key and the customer service key (P);
     // the welcome screen's key has none.
     for (KeyCommand c : {KeyCommand::CMD_TOGGLE_CLAIM_WIN, KeyCommand::CMD_VOTE_RESULTS, KeyCommand::CMD_HISTORIC_ALERTS,
-                         KeyCommand::CMD_SOCIAL_SHARE, KeyCommand::CMD_MARKETPLACE_GOLD, KeyCommand::CMD_ACHIEVEMENT_WINDOW,
+                         KeyCommand::CMD_SOCIAL_SHARE, KeyCommand::CMD_MARKETPLACE_GOLD,
                          KeyCommand::CMD_REAL_ESTATE_LEAVE, KeyCommand::TOGGLE_FELLOWSHIPWIN,
                          KeyCommand::CMD_TOGGLE_TICKET_WND, KeyCommand::CMD_WELCOMESCREEN}) {
         int i = static_cast<int>(c);
@@ -396,6 +396,27 @@ TEST_CASE("key map: the original's defaults, names and ini round trip") {
     CHECK_FALSE(key_command_dropped(static_cast<int>(KeyCommand::CMD_MARKETPLACE)));
     CHECK_FALSE(km.binding(static_cast<int>(KeyCommand::CMD_MARKETPLACE), 0).bound());
     CHECK_FALSE(key_command_dropped(static_cast<int>(KeyCommand::CMD_MERCENARIES)));
+    CHECK_FALSE(key_command_dropped(static_cast<int>(KeyCommand::CMD_ACHIEVEMENT_WINDOW)));
+    CHECK(std::find(listed_commands().begin(), listed_commands().end(), static_cast<int>(KeyCommand::CMD_ACHIEVEMENT_WINDOW)) != listed_commands().end());
+    // Select Reward has its own stock window; veteran /claim remains separate.
+    const int reward = static_cast<int>(KeyCommand::CMD_TOGGLE_REWARD_SELECTION_WIN);
+    CHECK_FALSE(key_command_dropped(reward));
+    CHECK(std::find(listed_commands().begin(), listed_commands().end(), reward) != listed_commands().end());
+    CHECK(command_category(reward) == 0x40u);
+    {
+        const KeyCombo key{0x58, true, true, false};
+        REQUIRE(km.bind(reward, 0, key));
+        std::vector<KeyMap::Event> events;
+        km.key_down(key, events);
+        REQUIRE(events.size() == 1);
+        CHECK(events.front().command == reward);
+        CHECK(events.front().down);
+        events.clear();
+        km.key_up(key.code, events);
+        REQUIRE(events.size() == 1);
+        CHECK(events.front().command == reward);
+        CHECK_FALSE(events.front().down);
+    }
     // Real estate's item placement keys are listed (placement mode is built).
     for (int i = static_cast<int>(KeyCommand::CMD_REAL_ESTATE_ITEM_PLACEMENT_TOGGLE_MODE);
          i <= static_cast<int>(KeyCommand::CMD_REAL_ESTATE_ITEM_PLACEMENT_ROTATE_ITEM_WHEEL_ROTATION_90_DEGREES); ++i) {

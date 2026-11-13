@@ -108,6 +108,8 @@ LightSource char_select_key_light(const glm::vec3& feet, float height, const glm
 }
 
 bool particle_glows(const assets::EmitterDefinition& definition) {
+    // Find threads are emissive guide lines; pooling all their colours would wash a broad patch of ground white.
+    if (definition.billboard == kTrailStrandBillboard) return false;
     std::string name = definition.texture;
     for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     auto any = [&](std::initializer_list<std::string_view> words) {

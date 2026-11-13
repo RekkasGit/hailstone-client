@@ -40,6 +40,7 @@ PAGES = [
         ("docs/updater.md", "Updater"),
         ("docs/browser.md", "Browser"),
         ("docs/navigation.md", "Navigation"),
+        ("docs/isometric.md", "Isometric-Camera"),
     ]),
     ("Scripting and UI", [
         ("docs/plugins.md", "Plugins-and-Scripts"),

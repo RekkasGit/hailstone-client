@@ -197,6 +197,7 @@ ActorRenderer::~ActorRenderer() {
     for (VkPipeline p : pipelines_)
         if (p) vkDestroyPipeline(d, p, nullptr);
     if (shadow_pipeline_) vkDestroyPipeline(d, shadow_pipeline_, nullptr);
+    if (silhouette_pipeline_) vkDestroyPipeline(d, silhouette_pipeline_, nullptr);
     if (point_shadow_pipeline_) vkDestroyPipeline(d, point_shadow_pipeline_, nullptr);
     if (layout_) vkDestroyPipelineLayout(d, layout_, nullptr);
     if (pool_) vkDestroyDescriptorPool(d, pool_, nullptr);
@@ -1195,6 +1196,46 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
     }
 }
 
+void ActorRenderer::draw_silhouette(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,
+                                    std::span<const std::uint32_t> ids, const glm::vec4& color) {
+    // prepared_ids_ runs with prepared_ when prepare_spawns posed them (not the viewer's explicit instances).
+    if (!silhouette_pipeline_ || ids.empty() || prepared_ids_.size() != prepared_.size()) return;
+    VkCommandBuffer cmd = frame.cmd;
+    PushConstants pc{};
+    pc.view_proj = view_proj;
+    pc.fog_color = color;
+    pc.camera_pos = glm::vec4(camera_pos, 0.0f);
+    bool bound = false;
+    int front = -1;
+    for (std::size_t i = 0; i < prepared_.size(); ++i) {
+        const Prepared& p = prepared_[i];
+        if (!p.gpu || std::find(ids.begin(), ids.end(), prepared_ids_[i]) == ids.end()) continue;
+        if (!bound) {
+            VkDescriptorSet sets[2] = {frame_set(frame), vk_.shadow_set()};
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, silhouette_pipeline_);
+            vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
+            bound = true;
+        }
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(cmd, 0, 1, &p.gpu->vertices.buffer, &offset);
+        vkCmdBindIndexBuffer(cmd, p.gpu->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+        const VkFrontFace want_front = p.eqg ? opposite(kEqFrontFace) : kEqFrontFace;
+        if (front != static_cast<int>(want_front)) {
+            vkCmdSetFrontFace(cmd, want_front);
+            front = static_cast<int>(want_front);
+        }
+        pc.bone_offset = p.bone_offset;
+        vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        // The body's opaque parts only: blended and additive ones (hair cards, glows) would outline their quads.
+        for (const auto& part : p.gpu->parts) {
+            if (part.pass != Pass::Opaque) continue;
+            vkCmdDrawIndexed(cmd, part.index_count, 1, part.first_index, 0, 0);
+            ++stats_.draws;
+        }
+    }
+}
+
 const std::unordered_set<std::uint32_t>& ActorRenderer::draw_spawns(const FrameInfo& frame, const glm::mat4& view_proj,
                                                                     const glm::vec3& camera_pos,
                                                                     const game::ViewDistance& view,
@@ -1657,6 +1698,52 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
         info.layout = layout_;
         vk_check(vkCreateGraphicsPipelines(d, vk_.pipeline_cache(), 1, &info, nullptr, &pipelines_[pass]),
                  "vkCreateGraphicsPipelines (actors)");
+    }
+
+    // The isometric camera's silhouette (draw_silhouette): the same skinning, a flat colour where the actor is behind
+    // what is drawn already (reverse-Z: a smaller depth is farther), blended over it (premultiplied), no depth write.
+    {
+        VkShaderModule xfs = load_shader(d, shader_dir / "actor_silhouette.frag.spv");
+        VkPipelineShaderStageCreateInfo xstages[2] = {
+            stages[0],
+            {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, xfs, "main",
+             nullptr},
+        };
+        xstages[0].pSpecializationInfo = nullptr;
+        VkPipelineMultisampleStateCreateInfo xms = ms;
+        xms.alphaToCoverageEnable = VK_FALSE;
+        VkPipelineDepthStencilStateCreateInfo xdss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+        xdss.depthTestEnable = VK_TRUE;
+        xdss.depthWriteEnable = VK_FALSE;
+        xdss.depthCompareOp = VK_COMPARE_OP_LESS;
+        VkPipelineColorBlendAttachmentState xba{};
+        xba.colorWriteMask = 0xf;
+        xba.blendEnable = VK_TRUE;
+        xba.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        xba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        xba.colorBlendOp = VK_BLEND_OP_ADD;
+        xba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        xba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        xba.alphaBlendOp = VK_BLEND_OP_ADD;
+        VkPipelineColorBlendStateCreateInfo xcb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+        xcb.attachmentCount = 1;
+        xcb.pAttachments = &xba;
+        VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+        info.pNext = &ri;
+        info.stageCount = 2;
+        info.pStages = xstages;
+        info.pVertexInputState = &vi;
+        info.pInputAssemblyState = &ia;
+        info.pViewportState = &vp;
+        info.pRasterizationState = &rs;
+        info.pMultisampleState = &xms;
+        info.pDepthStencilState = &xdss;
+        info.pColorBlendState = &xcb;
+        info.pDynamicState = &ds;
+        info.layout = layout_;
+        vk_check(vkCreateGraphicsPipelines(d, vk_.pipeline_cache(), 1, &info, nullptr, &silhouette_pipeline_),
+                 "vkCreateGraphicsPipelines (actor silhouette)");
+        vkDestroyShaderModule(d, xfs, nullptr);
     }
 
     // Shadow casters (draw_shadow): skinned with the cascade as view_proj, depth only, no culling.

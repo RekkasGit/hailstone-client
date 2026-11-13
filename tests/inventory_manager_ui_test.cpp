@@ -612,6 +612,23 @@ TEST_CASE("/finditem and /advi go to the Advanced Inventory's handler") {
     CHECK(calls[1] == std::pair<std::string, std::string>{"Hailstone_finditem", ""});
 }
 
+TEST_CASE("/camera goes to the client's camera handler (docs/isometric.md)") {
+    Rig rig;
+    REQUIRE(rig.to_zone());
+    std::vector<std::pair<std::string, std::string>> calls;
+    rig.conn.set_client_commands([&](std::string_view h, const std::string& args) {
+        calls.emplace_back(std::string(h), args);
+        return true;
+    });
+    rig.conn.send_command("/camera");
+    rig.conn.send_command("/camera reveal 25");
+    rig.conn.send_command("/CAMERA iso");
+    REQUIRE(calls.size() == 3);
+    CHECK(calls[0] == std::pair<std::string, std::string>{"Hailstone_camera", ""});
+    CHECK(calls[1] == std::pair<std::string, std::string>{"Hailstone_camera", "reveal 25"});
+    CHECK(calls[2] == std::pair<std::string, std::string>{"Hailstone_camera", "iso"});
+}
+
 TEST_CASE("Advanced Inventory: the bank as last seen is listed, marked stale, and out of reach") {
     fs::path src = ui_dir() / "modern";
     ScratchDir scratch("inventory_manager_bank_seen");

@@ -88,6 +88,9 @@ void ClientApp::update_gamepad(float dt) {
     edge(move.left, pad_stick_.left, game::KeyCommand::STRAFE_LEFT);
     edge(move.right, pad_stick_.right, game::KeyCommand::STRAFE_RIGHT);
     pad_stick_ = move;
+    // The isometric camera moves the player along the stick's own angle (ClientApp::iso_key_override).
+    const bool stick_moves = move.forward || move.back || move.left || move.right;
+    pad_iso_stick_ = stick_moves ? glm::vec2(pad.axis(PadAxis::LX), -pad.axis(PadAxis::LY)) : glm::vec2(0.0f);
     pad_camera(pad, dt);
 }
 
@@ -99,6 +102,7 @@ void ClientApp::release_pad_game_input() {
     for (const auto& e : events)
         if (e.action.kind == game::PadAction::Kind::Command) pad_events_.push_back({e.action.command, false});
     const game::StickMove none;
+    pad_iso_stick_ = glm::vec2(0.0f);
     if (pad_stick_.forward) pad_events_.push_back({static_cast<int>(game::KeyCommand::FORWARD), false});
     if (pad_stick_.back) pad_events_.push_back({static_cast<int>(game::KeyCommand::BACK), false});
     if (pad_stick_.left) pad_events_.push_back({static_cast<int>(game::KeyCommand::STRAFE_LEFT), false});
@@ -137,6 +141,11 @@ void ClientApp::pad_action(const game::PadEvent& e) {
     case K::CameraToggle:
         // First person, or the camera behind the player at its last distance (the mouse wheel's camera_distance_).
         set_view(camera_type_ != game::kCameraWheelFollow);
+        break;
+    case K::CameraIso:
+        // The isometric camera, or back to the camera behind the player.
+        if (iso()) set_view(true);
+        else set_camera_type(game::kCameraIsometric);
         break;
     case K::Interact: pad_interact(); break;
     case K::Cancel: pad_cancel(); break;
@@ -227,6 +236,13 @@ void ClientApp::pad_camera(const platform::GamepadState& pad, float dt) {
     const bool camera6 = camera_type_ == game::kCameraWheelFollow;
     const std::uint32_t stand = conn_->player_status().stand_state;
     const bool can_move = (stand == net::kStandStanding || stand == net::kStandCrouching) && !conn_->stunned();
+    if (iso()) {
+        // The isometric camera: sideways turns the camera about the player, up and down zoom.
+        const game::GamepadSettings& s = gamepad_->settings();
+        game::iso_turn(iso_camera_, -rx * s.camera_speed * dt);
+        game::iso_zoom(iso_camera_, -(s.invert_y ? -ry : ry) * 4.0f * dt, iso_settings_);
+        return;
+    }
     if (!camera6 && !can_move) return;
     const game::GamepadSettings& s = gamepad_->settings();
     const float k = s.camera_speed * dt;
