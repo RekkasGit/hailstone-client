@@ -1,8 +1,13 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -11,9 +16,12 @@
 #include "app/spell_particles.h"
 #include "assets/character.h"
 #include "core/byte_io.h"
+#include "game/collision.h"
 #include "game/missiles.h"
+#include "game/path_trail.h"
 #include "game/spells.h"
 #include "mock_server/harness.h"
+#include "net/movement_packets.h"
 #include "net/spell_packets.h"
 #include "net/zone_packets.h"
 
@@ -59,6 +67,309 @@ std::string spell_line(std::uint32_t id, unsigned target_type = 0, unsigned ae_d
 }
 
 } // namespace
+
+static_assert(!std::is_constructible_v<app::SpellParticles, render::VkContext&, const GameDir&,
+                                       const std::filesystem::path&>,
+              "The GPU runtime must be given the current collision source at construction");
+
+TEST_CASE("Find trails bind collision at startup and follow zone replacements without an asset reload") {
+    test::Rig rig;
+    std::optional<game::CollisionMesh> collision;
+    auto source = [&]() -> const game::CollisionMesh* { return collision ? &*collision : nullptr; };
+    auto ground = [](float z) {
+        const glm::vec3 a(-10, -10, z), b(-10, 10, z), c(100, 10, z), d(100, -10, z);
+        return game::CollisionMesh::from_triangles({game::CollisionTriangle::make(a, b, c, 0),
+                                                    game::CollisionTriangle::make(a, c, d, 0)});
+    };
+    app::SpellParticles particles({assets::EmitterDefinition{}}, {}, source);
+    particles.set_guide_line({{0, 0, 0}, {60, 0, 0}});
+    auto hidden = [&](app::SpellParticles& runtime) {
+        for (const auto style : {game::FindTrailStyle::Navigation, game::FindTrailStyle::Rainbow}) {
+            runtime.set_find_trail_style(style);
+            runtime.update(rig.conn, {}, {}, nullptr, 0.01f);
+            CHECK(runtime.simulation().emitters().empty());
+        }
+    };
+    auto shown = [&](app::SpellParticles& runtime, float floor) {
+        for (const auto style : {game::FindTrailStyle::Navigation, game::FindTrailStyle::Rainbow}) {
+            CAPTURE(static_cast<int>(style));
+            CAPTURE(floor);
+            runtime.set_find_trail_style(style);
+            runtime.update(rig.conn, {}, {}, nullptr, 0.01f);
+            const auto& emitters = runtime.simulation().emitters();
+            REQUIRE(emitters.size() == 1);
+            REQUIRE(emitters.front().still);
+            REQUIRE(emitters.front().particles.size() > 100);
+            for (const auto& p : emitters.front().particles) {
+                const float clearance = p.position.z - floor;
+                CHECK(clearance >= (style == game::FindTrailStyle::Navigation ? 0.3f : 2.0f));
+                CHECK(clearance <= (style == game::FindTrailStyle::Navigation ? 0.4f : 4.0f));
+            }
+        }
+    };
+    hidden(particles); // construction precedes the first zone's collision
+    collision = ground(0);
+    REQUIRE(collision->ground_below({0, 0, 0.5f}) == std::optional(0.0f));
+    shown(particles, 0); // no set_floor/set_trail_floor or asset reload is needed
+
+    collision.reset();
+    hidden(particles); // zoning takes the old terrain away, including the old trail
+    collision = ground(20);
+    hidden(particles); // the previous zone's route is unsupported in this zone
+    particles.set_guide_line({{0, 0, 20}, {60, 0, 20}});
+    shown(particles, 20);
+
+    app::SpellParticles replacement({assets::EmitterDefinition{}}, {}, source);
+    replacement.set_guide_line({{0, 0, 20}, {60, 0, 20}});
+    shown(replacement, 20); // the asset-reload construction path uses the same binding
+    collision.reset();
+    hidden(particles);
+    hidden(replacement);
+    collision = ground(-25);
+    hidden(replacement); // no cached floor from the zone at z=20
+    replacement.set_guide_line({{0, 0, -25}, {60, 0, -25}});
+    shown(replacement, -25);
+}
+
+TEST_CASE("Find's continuous rainbow strands retain terrain clearance and motion through the runtime") {
+    test::Rig rig;
+    app::SpellParticles particles({assets::EmitterDefinition{}}, {});
+    particles.set_find_trail_style(game::FindTrailStyle::Rainbow);
+    const std::vector<glm::vec3> line{{0, 0, 0}, {60, 0, 0}};
+    particles.set_guide_line(line);
+    // A spell's attachment floor is a separate query and cannot supply the Find trail's surface.
+    particles.set_floor([](const glm::vec3&) -> std::optional<float> { return -1000.0f; });
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(particles.simulation().emitters().empty());
+
+    auto height = [](float x) { return 12.0f * std::sin(x * 3.14159265f / 60.0f); };
+    bool supported = true;
+    particles.set_trail_floor([&](const glm::vec3& p) -> std::optional<float> {
+        const float z = height(p.x);
+        return supported && z <= p.z ? std::optional(z) : std::nullopt;
+    });
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    const auto& emitters = particles.simulation().emitters();
+    REQUIRE(emitters.size() == 1);
+    CHECK(emitters.front().still);
+    const auto& definition = particles.simulation().definitions().at(emitters.front().definition);
+    CHECK(definition.texture.empty());
+    CHECK(definition.billboard == game::kTrailStrandBillboard);
+    CHECK(definition.additive == 1);
+    REQUIRE(emitters.front().particles.size() > 200);
+    bool red = false, green = false, blue = false, on_hill = false;
+    for (const auto& p : emitters.front().particles) {
+        const float clearance = p.position.z - height(p.position.x);
+        CHECK(clearance >= 2.0f);
+        CHECK(clearance <= 4.0f);
+        CHECK(p.width > 0.0f);
+        CHECK(p.width <= 0.1f);
+        CHECK(p.height > p.width * 2.0f);
+        CHECK(glm::length(p.axes[1]) == doctest::Approx(1.0f));
+        red |= p.color.r > 0.8f && p.color.g < 0.5f && p.color.b < 0.5f;
+        green |= p.color.g > 0.8f && p.color.r < 0.5f && p.color.b < 0.5f;
+        blue |= p.color.b > 0.8f && p.color.r < 0.5f && p.color.g < 0.5f;
+        on_hill |= p.position.z > 10.0f;
+    }
+    CHECK(red);
+    CHECK(green);
+    CHECK(blue);
+    CHECK(on_hill);
+
+    std::vector<glm::vec3> before;
+    for (const auto& p : emitters.front().particles) before.push_back(p.position);
+    particles.update(rig.conn, {}, {}, nullptr, 0.5f);
+    REQUIRE(emitters.size() == 1);
+    bool moved = false;
+    for (std::size_t i = 0; i < std::min(before.size(), emitters.front().particles.size()); ++i) {
+        const auto& p = emitters.front().particles[i];
+        moved |= glm::length(p.position - before[i]) > 0.02f;
+        const float clearance = p.position.z - height(p.position.x);
+        CHECK(clearance >= 2.0f);
+        CHECK(clearance <= 4.0f);
+    }
+    CHECK(moved);
+
+    supported = false;
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(particles.simulation().emitters().empty());
+    supported = true;
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(particles.simulation().emitters().size() == 1);
+    particles.set_guide_line({});
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(particles.simulation().emitters().empty());
+}
+
+TEST_CASE("Server Find and guide trails each use rainbow particles and stop independently") {
+    test::Rig rig;
+    app::SpellParticles particles({assets::EmitterDefinition{}}, {});
+    particles.set_find_trail_style(game::FindTrailStyle::Rainbow);
+    particles.set_trail_floor([](const glm::vec3& p) -> std::optional<float> {
+        return p.z >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
+    particles.set_guide_line({{0, 0, 2}, {60, 0, 2}});
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(particles.simulation().emitters().size() == 1);
+    const auto guide_key = particles.simulation().emitters().front().key;
+
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply({{0, 60, 2}, {0, 0, 2}, {0, 60, 2}}));
+    REQUIRE(rig.conn.player_path().active());
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(particles.simulation().emitters().size() == 2);
+    for (const auto& emitter : particles.simulation().emitters()) {
+        CHECK(emitter.still);
+        bool red = false, blue = false;
+        for (const auto& p : emitter.particles) {
+            red |= p.color.r > 0.8f && p.color.g < 0.5f && p.color.b < 0.5f;
+            blue |= p.color.b > 0.8f && p.color.r < 0.5f && p.color.g < 0.5f;
+        }
+        CHECK(red);
+        CHECK(blue);
+    }
+    rig.conn.stop_find_path();
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    REQUIRE(particles.simulation().emitters().size() == 1);
+    CHECK(particles.simulation().emitters().front().key == guide_key);
+    particles.set_guide_line({});
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(particles.simulation().emitters().empty());
+}
+
+TEST_CASE("Find's rainbow replaces elevated travelling clouds and grounds large avatars and finish effects") {
+    test::Rig rig;
+    std::filesystem::create_directories(rig.dir.path() / "SpellEffects");
+    {
+        std::ofstream ini(rig.dir.path() / "SpellEffects" / "Path.ini");
+        ini << "[Path]\nFloorOffset=1\nMaxEmitterCount=1\nEmitterPeriod=0\nEmitterSpeed=0\n"
+               "EmitterStartCoordinate=-30\nEmitter0=Cloud\nFinishEmitter0=Cloud\n"
+               "[Cloud]\nDefinition=1\nLifeSpan=1000\n";
+        REQUIRE(ini.good());
+    }
+    rig.game.rescan();
+    REQUIRE(rig.to_zone());
+    auto& world = rig.conn.world_for_test();
+    auto& me = world.spawns.at(world.player_id);
+    me.gm = false;
+    me.heights.avatar_height = 12.0f;
+    me.position = {0, 0, 14};
+    rig.conn.set_player_motion(me.position, 0, {}, false);
+    game::Spawn target;
+    target.id = 333;
+    target.name = "FixtureGuide";
+    target.is_npc = true;
+    target.position = {60, 0, 14};
+    world.spawns.emplace(target.id, target);
+    auto ground = [](const glm::vec3& p, float step_up) -> std::optional<float> {
+        return p.z + step_up >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    };
+    rig.conn.set_path_floor(ground);
+    REQUIRE(rig.conn.find_spawn(333));
+    REQUIRE(rig.conn.player_path().floor_offset() == 12.0f);
+    REQUIRE(rig.conn.player_path().settings().emitters[0].definition == 1);
+    rig.conn.receive_zone_packet_for_test(net::encode_find_person_reply({{60, 0, 14}, {0, 0, 14}, {60, 0, 14}}));
+    // Drive this owned component's frame clock explicitly; the connection's session clock does not drive it.
+    auto& path = const_cast<game::PlayerPath&>(rig.conn.player_path());
+    const auto tick = net::GameConnection::eq_time();
+    path.update({0, 0, 14}, tick + 1, rig.conn.zone_id(), false, ground);
+    path.update({0, 0, 14}, tick + 2, rig.conn.zone_id(), false, ground);
+    REQUIRE(path.active());
+    REQUIRE_FALSE(path.movers().empty());
+    REQUIRE(std::any_of(path.movers().begin(), path.movers().end(),
+                        [&](const auto& mover) { return path.mover_position(mover).has_value(); }));
+    REQUIRE(path.points().front().z == doctest::Approx(14.0f));
+
+    bool supported = true;
+    app::SpellParticles particles({assets::EmitterDefinition{}, dot()}, {});
+    particles.set_find_trail_style(game::FindTrailStyle::Rainbow);
+    particles.set_trail_floor([&](const glm::vec3& p) -> std::optional<float> {
+        return supported && p.z >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    const auto& emitters = particles.simulation().emitters();
+    REQUIRE(emitters.size() == 1); // the configured moving cloud is replaced by thin, connected rainbow segments
+    REQUIRE(emitters.front().still);
+    REQUIRE(emitters.front().particles.size() > 100);
+    for (const auto& p : emitters.front().particles) {
+        CHECK(p.position.z >= 4.0f);
+        CHECK(p.position.z <= 6.0f);
+        CHECK(p.width <= 0.1f);
+        CHECK(p.height > p.width * 2.0f);
+    }
+
+    SUBCASE("completion effects start on supported ground") { supported = true; }
+    SUBCASE("unsupported completion effects are omitted") { supported = false; }
+    rig.conn.set_player_motion({60, 0, 14}, 0, {}, false);
+    rig.conn.update();
+    REQUIRE_FALSE(path.active());
+    REQUIRE(path.finished());
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    if (supported) {
+        REQUIRE(emitters.size() == 1);
+        CHECK_FALSE(emitters.front().still);
+        CHECK(near(emitters.front().origin, {60, 0, 2.35f}));
+    } else {
+        CHECK(emitters.empty());
+    }
+}
+
+TEST_CASE("Find defaults to a bordered navigation line and style changes replace the active geometry") {
+    test::Rig rig;
+    app::SpellParticles particles({assets::EmitterDefinition{}}, {});
+    CHECK(particles.find_trail_style() == game::FindTrailStyle::Navigation);
+    particles.set_trail_floor([](const glm::vec3& p) -> std::optional<float> {
+        return p.z >= 2.0f ? std::optional(2.0f) : std::nullopt;
+    });
+    particles.set_guide_line({{0, 0, 2}, {60, 0, 2}});
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    const auto& simulation = particles.simulation();
+    const auto& emitters = simulation.emitters();
+    REQUIRE(emitters.size() == 1);
+    const auto key = emitters.front().key;
+    const auto navigation_definition = emitters.front().definition;
+    auto check_navigation = [&] {
+        REQUIRE(emitters.size() == 1);
+        CHECK(emitters.front().key == key);
+        CHECK(emitters.front().still);
+        CHECK(emitters.front().definition == navigation_definition);
+        const auto& definition = simulation.definitions().at(emitters.front().definition);
+        CHECK(definition.additive == 0);
+        CHECK(definition.billboard == game::kWorldBasisBillboard);
+        bool gold = false, border = false;
+        REQUIRE_FALSE(emitters.front().particles.empty());
+        for (const auto& p : emitters.front().particles) {
+            gold |= p.color.r > 0.7f && p.color.g > 0.4f && p.color.b < 0.35f;
+            border |= p.color.r < 0.2f && p.color.g < 0.2f && p.color.b < 0.2f;
+            CHECK_FALSE((p.color.b > 0.8f && p.color.r < 0.5f && p.color.g < 0.5f));
+            CHECK(p.position.z == doctest::Approx(2.35f).epsilon(0.02));
+        }
+        CHECK(gold);
+        CHECK(border);
+    };
+    check_navigation();
+    for (int pass = 0; pass < 2; ++pass) {
+        particles.set_find_trail_style(game::FindTrailStyle::Rainbow);
+        particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+        REQUIRE(emitters.size() == 1);
+        CHECK(emitters.front().key == key);
+        CHECK(emitters.front().definition != navigation_definition);
+        CHECK(simulation.definitions().at(emitters.front().definition).additive == 1);
+        CHECK(simulation.definitions().at(emitters.front().definition).texture.empty());
+        CHECK(simulation.definitions().at(emitters.front().definition).billboard == game::kTrailStrandBillboard);
+        bool blue = false;
+        for (const auto& p : emitters.front().particles) {
+            blue |= p.color.b > 0.8f && p.color.r < 0.5f && p.color.g < 0.5f;
+            CHECK_FALSE((p.color.r < 0.2f && p.color.g < 0.2f && p.color.b < 0.2f));
+        }
+        CHECK(blue);
+        particles.set_find_trail_style(game::FindTrailStyle::Navigation);
+        particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+        check_navigation();
+    }
+    particles.set_guide_line({});
+    particles.update(rig.conn, {}, {}, nullptr, 0.01f);
+    CHECK(emitters.empty());
+}
 
 TEST_CASE("Spell landing packets use the source actor and its level for impact-stage emitters") {
     using namespace net;

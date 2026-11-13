@@ -26,6 +26,7 @@
 #include "core/ini_file.h"
 #include "game/light_list.h"
 #include "game/particles.h"
+#include "game/path_trail.h"
 #include "game/spawn_heights.h"
 #include "game/spell_effect_timers.h"
 #include "render/particle_renderer.h"
@@ -33,16 +34,20 @@
 namespace hailstone { class GameDir; }
 namespace hailstone::assets { struct CharacterModel; }
 namespace hailstone::render { class ActorRenderer; }
-namespace hailstone::game { struct Missile; }
+namespace hailstone::game { class CollisionMesh; struct Missile; }
 namespace hailstone::net { class GameConnection; struct SpellEffectCue; struct EffectPacketCue; }
 
 namespace hailstone::app {
 
 class SpellParticles {
 public:
-    SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir);
+    // Resolve the current zone on each probe: construction precedes zone load, and zoning replaces the mesh.
+    using CollisionSource = std::function<const game::CollisionMesh*()>;
+    SpellParticles(render::VkContext& vk, const GameDir& game, const std::filesystem::path& shader_dir,
+                   CollisionSource collision);
     // The same gameplay-to-emitter runtime without a GPU; useful to offline tools and protocol integration tests.
-    SpellParticles(std::vector<assets::EmitterDefinition> definitions, std::vector<assets::SpellEffect> effects);
+    SpellParticles(std::vector<assets::EmitterDefinition> definitions, std::vector<assets::SpellEffect> effects,
+                   CollisionSource collision = {});
     const game::ParticleSystem& simulation() const { return particles_; }
     // Offline tools may supply the same named blood-point pose that the actor renderer normally resolves.
     using BloodPoint = std::function<std::optional<glm::mat4>(std::uint32_t)>;
@@ -79,14 +84,19 @@ public:
     // The floor below a point (attach 12's GetPlayerFloorHeight): the zone's collision, when it is loaded.
     using FloorFn = std::function<std::optional<float>(const glm::vec3&)>;
     void set_floor(FloorFn floor) { floor_ = std::move(floor); }
+    // Visible, upward-facing ground for Find trails; separate from spell attachment floors.
+    void set_trail_floor(FloorFn floor) { trail_floor_ = std::move(floor); }
     // The light the glowing effects give off (game::particle_lights), the `max` brightest.
     std::vector<game::LightSource> lights(std::size_t max) const;
     // The Find window's guide path (app/guide_path.h) to draw, the player first; empty: none.
     void set_guide_line(std::vector<glm::vec3> line) { guide_line_ = std::move(line); }
+    void set_find_trail_style(game::FindTrailStyle style) { find_trail_style_ = style; }
+    game::FindTrailStyle find_trail_style() const { return find_trail_style_; }
 
 private:
+    void bind_collision(CollisionSource collision);
     // The find path's look in the world (game/player_path.h, PlayerPath_Update's drawing half): its line as glowing
-    // still particles, the travelling EmitterN emitters and the FinishEmitterN at the end.
+    // still navigation ribbons or rainbow strands and the supported FinishEmitterN at the end.
     void update_path(net::GameConnection& conn);
     // The point's world matrix on a spawn as last drawn.
     std::optional<glm::mat4> point_world(const render::ActorRenderer& actors, std::uint32_t id, int point);
@@ -99,6 +109,7 @@ private:
     std::vector<assets::SpellEffect> effects_;
     game::HeightTables heights_; // moddat.ini's PESFactors
     FloorFn floor_;
+    FloorFn trail_floor_;
     IniFile sp_offsets_; // Resources\SPOffsets.ini
     assets::SpellPoints spell_points_;
     game::ParticleSystem particles_;
@@ -106,14 +117,15 @@ private:
     float eqclient_density_ = 1.0f;
     std::array<float, game::kSpellFxSourceCount> source_density_{1.0f, 1.0f, 1.0f};
     std::unique_ptr<render::ParticleRenderer> renderer_;
-    std::optional<std::size_t> path_definition_; // the line's texture as a definition of particles_
+    std::optional<std::size_t> path_definition_; // the thin rainbow segments' definition
+    std::optional<std::size_t> navigation_definition_;
+    game::FindTrailStyle find_trail_style_ = game::FindTrailStyle::Navigation;
     std::optional<std::size_t> blood_definition_;
     BloodPoint blood_point_;
     MissilePose missile_pose_;
-    std::vector<std::uint32_t> path_movers_;     // the movers' serials whose emitters exist
     std::vector<glm::vec3> guide_line_;          // set_guide_line
     // A trail (game/path_trail.h) as the still particles of `key`, or none.
-    void draw_trail(std::uint32_t key, std::span<const glm::vec3> line, const glm::vec3& color, float far);
+    void draw_trail(std::uint32_t key, std::span<const glm::vec3> line, float far);
     // A delayed cue and when it plays.
     struct Held {
         double at;

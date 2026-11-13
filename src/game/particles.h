@@ -152,6 +152,12 @@ float emission_distance_factor(float reduce_distance, float floor, float distanc
 // 5..8 -> 4x2, 9..16 -> 4x4, other -> 1x1.
 glm::uvec2 flipbook_grid(std::uint32_t frames);
 
+// Hailstone's generated terrain ribbons: width and height lie along Particle::axes[0] and axes[1].
+// Kept outside the original EDD billboard modes so their unknown values still face the camera.
+inline constexpr std::uint32_t kWorldBasisBillboard = 0x100;
+// Generated Find strands keep their segment tangent in axes[1] and turn their width toward the camera.
+inline constexpr std::uint32_t kTrailStrandBillboard = 0x101;
+
 // One particle: the DLL's 0x80-byte ring record (polar about the emitter's axis, plus a world drift) and what the
 // update works out for drawing it.
 struct Particle {

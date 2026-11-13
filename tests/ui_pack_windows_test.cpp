@@ -2571,6 +2571,122 @@ TEST_CASE("UI packs (modern): the Options window's Textures section picks the te
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("UI packs: Options changes the Find trail style in both directions") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        INFO(pack);
+        test::ScratchDir scratch("ui_pack_find_trail_options");
+        const fs::path dir = scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / pack, dir / pack,
+                 fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* pixels = nullptr;
+        int width = 0, height = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+        {
+            Session s(dir, pack);
+            int selected = 0;
+            std::vector<int> changes;
+            s.host.find_option = [&](std::string_view name) -> std::optional<int> {
+                return name == "find_trail_style" ? std::optional(selected) : std::nullopt;
+            };
+            s.host.set_option = [&](std::string_view name, int value) {
+                if (name == "find_trail_style") {
+                    changes.push_back(value);
+                    selected = value;
+                }
+            };
+            lua_State* L = s.lua.state();
+            // Record real control coordinates without changing their activation or rendering.
+            REQUIRE(luaL_dostring(L, R"lua(
+                findTrailWidgets = {}
+                local combo, selectable, text = ui.BeginCombo, ui.Selectable, ui.DrawText
+                ui.BeginCombo = function(label, ...)
+                    local open = combo(label, ...)
+                    if label == "##find_trail_style" then
+                        local x0, y0, x1, y1 = ui.GetItemRect()
+                        findTrailWidgets.combo = { (x0 + x1) / 2, (y0 + y1) / 2 }
+                    end
+                    return open
+                end
+                ui.Selectable = function(label, ...)
+                    local clicked = selectable(label, ...)
+                    local name = label:match("^Rainbow trail##") and "rainbow"
+                        or label:match("^Gold line %(default%)##") and "navigation"
+                    if name then
+                        local x0, y0, x1, y1 = ui.GetItemRect()
+                        findTrailWidgets[name] = { (x0 + x1) / 2, (y0 + y1) / 2 }
+                    end
+                    return clicked
+                end
+                ui.DrawText = function(...)
+                    local label = select(7, ...)
+                    if label == "Interface" or label == "Find trail" then
+                        local x, y = ...
+                        local w, h = ui.CalcTextSize(label)
+                        findTrailWidgets[label] = { x + w / 2, y + h / 2 }
+                    end
+                    return text(...)
+                end
+                eq.ShowWindow("OptionsWindow", true)
+            )lua") == LUA_OK);
+            s.frames(3);
+            auto point = [&](const char* name) {
+                lua_getglobal(L, "findTrailWidgets");
+                lua_getfield(L, -1, name);
+                REQUIRE_MESSAGE(lua_istable(L, -1), name);
+                lua_rawgeti(L, -1, 1);
+                const float x = static_cast<float>(lua_tonumber(L, -1));
+                lua_pop(L, 1);
+                lua_rawgeti(L, -1, 2);
+                const float y = static_cast<float>(lua_tonumber(L, -1));
+                lua_pop(L, 3);
+                return ImVec2(x, y);
+            };
+            auto click = [&](const ImVec2& at) {
+                ImGuiIO& io = ImGui::GetIO();
+                io.AddMousePosEvent(at.x, at.y);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, true);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, false);
+                s.frames(3);
+            };
+            if (std::string_view(pack) == "modern") {
+                std::optional<ImVec2> tab_at;
+                ImGuiContext& g = *ImGui::GetCurrentContext();
+                for (int i = 0; i < g.TabBars.GetMapSize() && !tab_at; ++i)
+                    if (ImGuiTabBar* bar = g.TabBars.TryGetMapData(i))
+                        for (ImGuiTabItem& tab : bar->Tabs)
+                            if (std::string_view(ImGui::TabBarGetTabName(bar, &tab)) == "Display")
+                                tab_at = ImVec2(bar->BarRect.Min.x + tab.Offset + tab.Width / 2,
+                                                (bar->BarRect.Min.y + bar->BarRect.Max.y) / 2);
+                REQUIRE(tab_at);
+                click(*tab_at);
+                CHECK(changes.empty());
+                click(point("combo"));
+                click(point("rainbow"));
+                REQUIRE(selected == 1);
+                click(point("combo"));
+                click(point("navigation"));
+            } else {
+                click(point("Interface"));
+                CHECK(changes.empty());
+                click(point("Find trail"));
+                REQUIRE(selected == 1);
+                click(point("Find trail"));
+            }
+            CHECK(selected == 0);
+            REQUIRE(changes.size() == 2);
+            CHECK(changes[0] == 1);
+            CHECK(changes[1] == 0);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 // A bag window resized: as many slots to a row as its width holds, its height grown to fit the rows; unsized, rows
 // of five. A click lands on the slot drawn under the mouse (eq.BagSlotClick's index).
 TEST_CASE("UI packs (modern): a resized bag window lays its slots out to its width") {

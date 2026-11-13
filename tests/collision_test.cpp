@@ -1,7 +1,9 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <iterator>
 #include <limits>
+#include <optional>
 #include <random>
 #include <vector>
 
@@ -34,6 +36,37 @@ hailstone::assets::Zone flat_zone() {
     m.parts.push_back({0, static_cast<std::uint32_t>(m.indices.size()), 0});
     z.terrain.push_back(m);
     return z;
+}
+
+// The original ground query without its spatial index. Keeping the same float intersection arithmetic isolates
+// candidate-selection errors, including boundaries and triangles shared by several cells.
+std::optional<float> reference_ground(std::span<const hailstone::game::CollisionTriangle> triangles, const glm::vec3& p) {
+    using namespace hailstone::game;
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) return std::nullopt;
+    std::optional<float> best;
+    for (const auto& tri : triangles) {
+        if (tri.flags & (kTrianglePassable | kTriangleTransparent | 0x10 | kTriangleLadderSlab | kTriangleInvisible)) continue;
+        if (!(tri.normal.z > 0.0f)) continue;
+        const glm::vec2 a(tri.v0), b(tri.v1), c(tri.v2), q(p);
+        const float d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+        if (std::abs(d) < 1e-6f) continue;
+        const float u = ((b.y - c.y) * (q.x - c.x) + (c.x - b.x) * (q.y - c.y)) / d;
+        const float v = ((c.y - a.y) * (q.x - c.x) + (a.x - c.x) * (q.y - c.y)) / d;
+        const float w = 1.0f - u - v;
+        if (u < 0.0f || v < 0.0f || w < 0.0f) continue;
+        const float z = u * tri.v0.z + v * tri.v1.z + w * tri.v2.z;
+        if (z <= p.z && (!best || z > *best)) best = z;
+    }
+    return best;
+}
+
+void ground_quad(std::vector<hailstone::game::CollisionTriangle>& triangles, float x, float y, float size, float z,
+                 float slope_x, float slope_y, std::uint8_t flags = 0, bool upward = true) {
+    using hailstone::game::CollisionTriangle;
+    const glm::vec3 a(x, y, z), b(x, y + size, z + slope_y * size);
+    const glm::vec3 c(x + size, y + size, z + (slope_x + slope_y) * size), d(x + size, y, z + slope_x * size);
+    triangles.push_back(upward ? CollisionTriangle::make(a, b, c, flags) : CollisionTriangle::make(a, c, b, flags));
+    triangles.push_back(upward ? CollisionTriangle::make(a, c, d, flags) : CollisionTriangle::make(a, d, c, flags));
 }
 } // namespace
 
@@ -245,6 +278,97 @@ TEST_CASE("ground_below and roof_above see what is drawn: a tunnel roof is no gr
     auto hidden = CollisionMesh::build(zone(hailstone::assets::BlendMode::Invisible));
     CHECK(hidden.floor_below({10, 10, 5}, 0).value() == doctest::Approx(0));
     CHECK(!hidden.ground_below({10, 10, 5}).has_value());
+}
+
+TEST_CASE("ground_below: dense subdivisions match a full triangle scan on slopes stacked floors and boundaries") {
+    using namespace hailstone::game;
+    std::vector<CollisionTriangle> triangles;
+    const std::uint8_t flags[] = {0, kTrianglePassable, kTriangleTransparent, kTriangleInvisible, 0x10,
+                                  kTriangleLadderSlab, kTriangleLadder, kTriangleObject};
+    for (int x = -16; x < 16; ++x)
+        for (int y = -16; y < 16; ++y) {
+            const float px = static_cast<float>(x) * 4.0f, py = static_cast<float>(y) * 4.0f;
+            const float z = px * 0.125f - py * 0.0625f;
+            ground_quad(triangles, px, py, 4, z, 0.125f, -0.0625f);
+            const auto f = flags[static_cast<std::size_t>((x + 16) * 32 + y + 16) % std::size(flags)];
+            ground_quad(triangles, px, py, 4, z + 12, -0.0625f, 0.125f, f);
+            if ((x + y) % 3 == 0) ground_quad(triangles, px, py, 4, z + 30, 0, 0, 0, false);
+        }
+    // Sparse cells use the coarse index, while these enormous triangles stay outside either grid.
+    ground_quad(triangles, 300, -300, 12, 5, 0.125f, 0.25f);
+    triangles.push_back(CollisionTriangle::make({10000, -10000, -80}, {-10000, -10000, -80}, {-10000, 10000, -80}, 0));
+    triangles.push_back(CollisionTriangle::make({10000, -10000, -90}, {-10000, 10000, -90}, {10000, 10000, -90}, 0));
+    triangles.push_back(CollisionTriangle::make({10000, -10000, 80}, {-10000, -10000, 80}, {-10000, 10000, 80}, kTriangleInvisible));
+    const auto mesh = CollisionMesh::from_triangles(triangles);
+    std::size_t found = 0, missing = 0;
+    auto check = [&](const glm::vec3& p) {
+        CAPTURE(p.x);
+        CAPTURE(p.y);
+        CAPTURE(p.z);
+        const auto expected = reference_ground(triangles, p);
+        const auto actual = mesh.ground_below(p);
+        CHECK(actual.has_value() == expected.has_value());
+        if (actual && expected) {
+            CHECK(*actual == *expected);
+            ++found;
+        } else ++missing;
+    };
+    std::mt19937 rng(1783);
+    std::uniform_real_distribution<float> xy(-80.0f, 80.0f), z(-100.0f, 60.0f);
+    for (int i = 0; i < 5000; ++i) {
+        glm::vec3 p;
+        p.x = xy(rng);
+        p.y = xy(rng);
+        p.z = z(rng);
+        check(p);
+    }
+    const float inf = std::numeric_limits<float>::infinity();
+    for (int x = -8; x <= 8; ++x)
+        for (int y = -8; y <= 8; ++y) {
+            const float px = static_cast<float>(x) * 8.0f, py = static_cast<float>(y) * 8.0f;
+            for (const float qx : {std::nextafter(px, -inf), px, std::nextafter(px, inf)})
+                for (const float qy : {std::nextafter(py, -inf), py, std::nextafter(py, inf)}) {
+                    check({qx, qy, 5});
+                    check({qx, qy, 40});
+                }
+        }
+    for (const auto& p : {glm::vec3(305, -295, 50), glm::vec3(-3000, -3000, 0), glm::vec3(3000, 3000, 0),
+                          glm::vec3(1e30f, -1e30f, 50)}) check(p);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    for (const float height : {inf, -inf, nan}) {
+        check({4, -4, height});
+        check({305, -295, height});
+        check({-3000, -3000, height});
+    }
+    for (const auto& p : {glm::vec3(nan, 0, 5), glm::vec3(0, nan, 5), glm::vec3(inf, 0, 5), glm::vec3(0, -inf, 5)}) check(p);
+    CHECK(found > 5000);
+    CHECK(missing > 100);
+}
+
+TEST_CASE("ground_below: refined candidates leave movement and roof probes unchanged and reject malformed vertices") {
+    using namespace hailstone::game;
+    std::vector<CollisionTriangle> triangles;
+    for (int x = 0; x < 16; ++x)
+        for (int y = 0; y < 16; ++y)
+            ground_quad(triangles, static_cast<float>(x) * 4, static_cast<float>(y) * 4, 4, 0, 0, 0);
+    ground_quad(triangles, 0, 0, 64, 10, 0, 0, kTriangleInvisible);
+    ground_quad(triangles, 0, 0, 64, 20, 0, 0, 0, false);
+    ground_quad(triangles, 0, 0, 64, 30, 0, 0, kTrianglePassable);
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    for (const auto& v : {glm::vec3(nan, 0, 40), glm::vec3(0, inf, 40), glm::vec3(0, 0, nan)}) {
+        auto malformed = CollisionTriangle::make({0, 0, 40}, {0, 64, 40}, {64, 64, 40}, 0);
+        malformed.v0 = v;
+        malformed.normal = {0, 0, 1}; // public synthetic triangle data can be inconsistent
+        triangles.push_back(malformed);
+    }
+    const auto mesh = CollisionMesh::from_triangles(std::move(triangles));
+    CHECK(mesh.ground_below({8, 8, 50}).value() == doctest::Approx(0));
+    CHECK(mesh.ground_below({8, 8, inf}).value() == doctest::Approx(0));
+    CHECK_FALSE(mesh.ground_below({8, 8, -inf}).has_value());
+    CHECK_FALSE(mesh.ground_below({8, 8, nan}).has_value());
+    CHECK(mesh.floor_below({8, 8, 50}, 0).value() == doctest::Approx(20));
+    CHECK(mesh.ceiling_above({8, 8, 5}).value() == doctest::Approx(10));
+    CHECK(mesh.roof_above({8, 8, 5}).value() == doctest::Approx(20));
 }
 
 TEST_CASE("a triangle too large for the grid is met by every query") {

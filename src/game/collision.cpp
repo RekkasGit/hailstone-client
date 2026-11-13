@@ -177,6 +177,33 @@ void CollisionMesh::index() {
         for (auto x = x0; x <= x1; ++x)
             for (auto y = y0; y <= y1; ++y) cells_[cell_key(x, y)].push_back(t);
     }
+    // Find trails ask for thousands of exact ground heights per frame. Dense terrain can put several thousand
+    // triangles in one coarse cell; narrow its ground-only candidates without changing any intersection maths.
+    for (const auto& [key, candidates] : cells_) {
+        if (candidates.size() <= 128) continue;
+        const auto bits = std::bit_cast<std::uint64_t>(key);
+        const auto cx = std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(bits >> 32));
+        const auto cy = std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(bits));
+        std::array<std::vector<std::uint32_t>, kGroundDivisions * kGroundDivisions> bins;
+        for (const std::uint32_t t : candidates) {
+            const auto& tri = triangles_[t];
+            if (!visible_ground(tri) || !finite(tri.v0) || !finite(tri.v1) || !finite(tri.v2)) continue;
+            const glm::vec3 lo = glm::min(glm::min(tri.v0, tri.v1), tri.v2);
+            const glm::vec3 hi = glm::max(glm::max(tri.v0, tri.v1), tri.v2);
+            // Keep boundary neighbours too: a barycentric weight can round to zero a float's step beyond an edge.
+            const float inf = std::numeric_limits<float>::infinity();
+            const auto x0 = ground_subcell(std::nextafter(lo.x, -inf), cx);
+            const auto x1 = ground_subcell(std::nextafter(hi.x, inf), cx);
+            const auto y0 = ground_subcell(std::nextafter(lo.y, -inf), cy);
+            const auto y1 = ground_subcell(std::nextafter(hi.y, inf), cy);
+            for (auto x = x0; x <= x1; ++x)
+                for (auto y = y0; y <= y1; ++y) bins[y * kGroundDivisions + x].push_back(t);
+        }
+        auto& grid = ground_cells_[key];
+        for (std::size_t part = 0; part < bins.size(); ++part) grid.offsets[part + 1] = grid.offsets[part] + bins[part].size();
+        grid.candidates.reserve(grid.offsets.back());
+        for (const auto& bin : bins) grid.candidates.insert(grid.candidates.end(), bin.begin(), bin.end());
+    }
 }
 
 template <class Fn>
@@ -234,12 +261,25 @@ std::vector<CollisionMesh::SurfaceHit> CollisionMesh::surfaces_above(const glm::
 }
 
 std::optional<float> CollisionMesh::ground_below(const glm::vec3& p) const {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) return std::nullopt;
     std::optional<float> best;
-    for_each_at(p, [&](const CollisionTriangle& tri) {
-        if (!probe_solid(tri) || (tri.flags & kTriangleInvisible) || !(tri.normal.z > 0.0f)) return;
+    auto check = [&](const CollisionTriangle& tri) {
         const auto z = height_in(tri, glm::vec2(p));
         if (z && *z <= p.z && (!best || *z > *best)) best = z;
-    });
+    };
+    const auto cx = cell_of(p.x), cy = cell_of(p.y);
+    const auto key = cell_key(cx, cy);
+    if (const auto it = ground_cells_.find(key); it != ground_cells_.end()) {
+        const auto x = ground_subcell(p.x, cx), y = ground_subcell(p.y, cy);
+        const auto part = y * kGroundDivisions + x;
+        const auto& grid = it->second;
+        for (auto i = grid.offsets[part]; i < grid.offsets[part + 1]; ++i) check(triangles_[grid.candidates[i]]);
+    } else if (const auto cell = cells_.find(key); cell != cells_.end()) {
+        for (const std::uint32_t t : cell->second)
+            if (visible_ground(triangles_[t])) check(triangles_[t]);
+    }
+    for (const std::uint32_t t : big_)
+        if (visible_ground(triangles_[t])) check(triangles_[t]);
     return best;
 }
 

@@ -271,6 +271,8 @@ int ClientApp::run() {
                 spell_bolts_->take_cues(*conn_, cues, bolt_now);
             update_guide();
             spell_particles_->set_guide_line(guide_.line());
+            spell_particles_->set_find_trail_style(game::normalize_find_trail_style(
+                config_.get_int("display.find_trail_style", 0)));
             spell_particles_->update(*conn_, cues, effect_packets, actor_renderer_.get(), dt);
             spell_particles_->prepare();
             if (spell_bolts_)

@@ -138,6 +138,12 @@ TEST_CASE("particle lights: the glowing emitters, merged when close, by their ti
     CHECK_FALSE(game::particle_glows(def("smokec.dds", true)));
     CHECK(game::particle_glows(def("flamesp501.dds", false)));
     CHECK_FALSE(game::particle_glows(def("cloudsp501.dds", false)));
+    auto thread = def("", true);
+    thread.billboard = game::kTrailStrandBillboard;
+    CHECK_FALSE(game::particle_glows(thread));
+    game::ParticleSystem guides({thread});
+    guides.set_still(1, 0, {game::Particle{}});
+    CHECK(game::particle_lights(guides, {}, 8).empty());
 
     // Record 0 is never used (the EDD's numbers start at 1).
     std::vector<assets::EmitterDefinition> defs = {{}, def("sparkle.dds", true), def("cloudsp501.dds", false),
