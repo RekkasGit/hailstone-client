@@ -5,8 +5,8 @@
 //   /probestate n  web_state(tab 1) with a struct whose size says n bytes, as a plugin built with a shorter one
 //   /probemessage n  web_message(tab 1) into a buffer of n bytes (0: no buffer)
 //   /probetcp port    tcp_open("127.0.0.1", port); /probetcpsend h  tcp_send(h, "hello") and tcp_state(h)
-//   /probebuffs n, /probepetbuffs n  get_buff_data_bulk / get_pet_buff_data_bulk into n bytes, read with ByteReader
-//   /probespawns n  get_spawns_data_bulk into n bytes (at most 16384), read with ByteReader
+//   /probebuffs [n], /probepetbuffs [n], /probespawns [n]  get_buff_data_bulk / get_pet_buff_data_bulk /
+//   get_spawns_data_bulk into n bytes (the whole buffer without n), read with ByteReader
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -71,12 +71,16 @@ void probe_tcp_send(void*, const char* args) {
     WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
 }
 
+// A bulk read's buffer size: the command's number, at most `whole`; `whole` without one.
+std::int32_t size_arg(const char* args, std::size_t whole) {
+    const std::size_t n = args && *args ? std::strtoul(args, nullptr, 10) : whole;
+    return static_cast<std::int32_t>(n < whole ? n : whole);
+}
+
 // The occupied slots one line each; the empty ones only counted, and only when laid out as empty.
 void probe_buffs(void*, const char* args) {
     unsigned char buf[4096]; // at least 62 * HAILSTONE_BUFF_RECORD_SIZE (1798), or nothing comes back
-    const std::size_t n = std::strtoul(args, nullptr, 10);
-    
-    const std::int32_t r = host->get_buff_data_bulk(host->host, buf, sizeof(buf));
+    const std::int32_t r = host->get_buff_data_bulk(host->host, buf, size_arg(args, sizeof buf));
     hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
     int empty = 0;
     for (int slot = 0; rd.remaining() >= HAILSTONE_BUFF_RECORD_SIZE; ++slot) {
@@ -84,7 +88,7 @@ void probe_buffs(void*, const char* args) {
             hits = rd.le<std::int32_t>(), type = rd.le<std::int32_t>(), counter = rd.le<std::int32_t>(),
             base = rd.le<std::int32_t>();
         const auto song = rd.le<std::uint8_t>();
-        if (spell == 0) { // an empty slot: every field 0, including the counter type
+        if (spell == 0 || spell == -1) { // an empty slot: the client's empty spell id goes out as it is (-1)
             ++empty;
             continue;
         }
@@ -97,9 +101,7 @@ void probe_buffs(void*, const char* args) {
 
 void probe_pet_buffs(void*, const char* args) {
     unsigned char buf[1024];
-    const std::size_t n = std::strtoul(args, nullptr, 10);
-   
-    const std::int32_t r = host->get_pet_buff_data_bulk(host->host, buf, sizeof(buf));
+    const std::int32_t r = host->get_pet_buff_data_bulk(host->host, buf, size_arg(args, sizeof buf));
     hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
     while (rd.remaining() >= HAILSTONE_PET_BUFF_RECORD_SIZE) {
         const auto spell = rd.le<std::int32_t>(), tics = rd.le<std::int32_t>(), type = rd.le<std::int32_t>();
@@ -113,9 +115,7 @@ void probe_pet_buffs(void*, const char* args) {
 // the records the header counts (0 when every record's strings are framed right).
 void probe_spawns(void*, const char* args) {
     static unsigned char buf[1024*1024];
-    const std::size_t n = std::strtoul(args, nullptr, 10);
-    
-    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, sizeof(buf));
+    const std::int32_t r = host->get_spawns_data_bulk(host->host, buf, size_arg(args, sizeof buf));
     if (r <= 0) {
         WriteChatf("[Probe] spawns %d bytes", static_cast<int>(r));
         return;
@@ -144,7 +144,7 @@ void probe_spawns(void*, const char* args) {
         WriteChatf("[Probe] spawn %d: %d %d %d %lld %s", static_cast<int>(id), static_cast<int>(level),
                    static_cast<int>(class_id), static_cast<int>(race), static_cast<long long>(pct), name.c_str());
     }
-    WriteChatf("[Probe] spawns %u, player loc %d %d %d, %d bytes left", static_cast<unsigned>(count), static_cast<int>(px),
+    WriteChatf("[Probe] spawns %u, player %d %d %d, %d bytes left", static_cast<unsigned>(count), static_cast<int>(px),
                static_cast<int>(py), static_cast<int>(pz), static_cast<int>(rd.remaining()));
 }
 
