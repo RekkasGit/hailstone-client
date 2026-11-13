@@ -2062,7 +2062,8 @@ public:
     // LaunchSpellData_GetCastItem @0x59fcf0: the item at the cast's location when it is an item cast, else null.
     Item* cast_item();
     // The AA window's train button / /alternateadv buy: OP_AAAction 3 when trainable, else eqstr 13277.
-    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks).
+    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks). On a
+    // server without action 4 the client buys the ranks one at a time itself (continue_aa_buy_all).
     bool aa_train(std::uint32_t rank_id, bool train_all = false);
     // The AA window's Train button (CAAWnd::WndNotification @0x60aa80): with AANoConfirm it trains at once, else it
     // asks first (4041 / 4042 with the cost and the name, 20 s).
@@ -2657,6 +2658,9 @@ private:
     void handle_level_update(std::uint32_t new_level);
     void reset_progress_for_zone();
     void request_aa_data();
+    // A client-side "buy all ranks" (aa_train with train_all on a server without action 4): once the rank last
+    // bought is owned and the points are updated, the next rank is bought while it can be trained.
+    void continue_aa_buy_all();
     bool combine_checks(std::uint32_t container_type, const std::vector<const Item*>& contents);
     bool combine_gates(std::uint32_t container_type); // the race and class containers' refusals
     void send_combine(const ItemSlot& container_slot, std::uint32_t container_type);
@@ -3271,6 +3275,7 @@ private:
     void update_task_compass();
     game::TextOverlay text_overlay_;
     bool aa_requested_ = false;
+    std::uint32_t aa_buy_all_ = 0; // the rank a client-side "buy all ranks" is waiting on (0: none)
     mutable std::unique_ptr<game::mechanics::GameTables> tables_; // SkillCaps / BaseData, loaded when first needed
     std::int64_t sat_down_ms_ = 0;  // the spawn's +0x374: when the player sat down (0 standing)
     bool was_sitting_ = false;

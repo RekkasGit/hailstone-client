@@ -305,6 +305,67 @@ TEST_CASE("aa: CanTrainAbility, MeetsPrerequisites and CanSeeAbility") {
     CHECK_FALSE(s.can_train(*s.get(400), who));
 }
 
+// "Buy every rank" on a server without the buy-all action (a stock EQEmu): the client sends OP_AAAction 3 for the next
+// rank each time EQEmu's answer to the last purchase (the owned list, then the points) shows it bought, and stops at
+// the last rank, at a refusal, and on a plain train.
+TEST_CASE("aa: buy all ranks on a stock server buys one rank after another") {
+    test::Rig rig(test::MockConfig::standard());
+    auto& conn = rig.conn;
+    REQUIRE(rig.to_zone());
+    for (auto [id, r, prev, next] : {std::tuple{100u, 1, -1, 101}, std::tuple{101u, 2, 100, 102},
+                                     std::tuple{102u, 3, 101, -1}}) {
+        game::AltAbility a = rank(id, 10, r, prev, next);
+        a.classes = 1u << 1; // the mock's warrior
+        a.level_req = 1;
+        conn.receive_zone_packet_for_test(encode_send_aa_table(a));
+    }
+    conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 0}));
+    auto trains = [&] {
+        std::vector<std::uint32_t> out;
+        for (const AppPacket& p : rig.server.zone_log)
+            if (p.opcode == to_wire(Op::AAAction))
+                if (auto a = decode_aa_action(p); a && a->action == kAATrain) out.push_back(a->ability);
+        return out;
+    };
+    auto bought = [&](std::uint32_t id, std::uint32_t points) {
+        RespondAA r;
+        r.owned = {{id, 1, 0}};
+        conn.receive_zone_packet_for_test(encode(r));
+        conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, points, 0}));
+    };
+
+    REQUIRE(conn.aa_train(100, true));
+    REQUIRE(rig.until([&] { return trains().size() == 1; }));
+    bought(100, 8);
+    REQUIRE(rig.until([&] { return trains().size() == 2; }));
+    bought(101, 6);
+    REQUIRE(rig.until([&] { return trains().size() == 3; }));
+    CHECK(trains() == std::vector<std::uint32_t>{100, 101, 102});
+    bought(102, 4); // the last rank: nothing more
+    rig.run_for(std::chrono::milliseconds(50));
+    CHECK(trains().size() == 3);
+    for (const AppPacket& p : rig.server.zone_log)
+        if (p.opcode == to_wire(Op::AAAction)) CHECK(decode_aa_action(p)->action != kAATrainAll);
+
+    // A refused purchase (the points update without the rank owned) ends the chain.
+    RespondAA none;
+    conn.receive_zone_packet_for_test(encode(none));
+    conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 0}));
+    REQUIRE(conn.aa_train(100, true));
+    REQUIRE(rig.until([&] { return trains().size() == 4; }));
+    conn.receive_zone_packet_for_test(encode(AAExpUpdate{0, 10, 0}));
+    bought(100, 8); // bought later (another way): the chain has ended
+    rig.run_for(std::chrono::milliseconds(50));
+    CHECK(trains().size() == 4);
+
+    // A plain train buys one rank.
+    REQUIRE(conn.aa_train(101));
+    REQUIRE(rig.until([&] { return trains().size() == 5; }));
+    bought(101, 6);
+    rig.run_for(std::chrono::milliseconds(50));
+    CHECK(trains().size() == 5);
+}
+
 TEST_CASE("aa: reuse timers translate the server's clock; readiness subtracts SPA 264") {
     game::AltAdvState s;
     game::AltAbility a = rank(500, 50, 1, -1, -1);

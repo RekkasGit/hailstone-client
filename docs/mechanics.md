@@ -601,7 +601,11 @@ guild permission 1500, AA window filter 3000, PC skill limit 3000):
   OP_GuildDelete {guild id, own name} and 9061).
 - `game/alt_adv.*`: the AA window list in ascending rank id order, through `aa_filter_accepts` ("Passive" asks for the
   effect list's first value, non-zero when the ability has effects). The window's "trainable only" check box drives
-  it; the kind, expansion and category combos stay at "any".
+  it; the kind, expansion and category combos stay at "any". Deliberate differences: once the selected rank is
+  bought the window selects the ability's next rank, so Train buys it without another click on the row; and the
+  "buy every rank" box works on any server: one that switches on `aa_train_all` gets OP_AAAction 4, any other gets
+  OP_AAAction 3 for each rank in turn, the next sent when EQEmu's answer to the last (OP_RespondAA, then
+  OP_AAExpUpdate) shows it owned, until the last rank, too few points, a refusal or a plain train.
 - `game/training.*`: `pc_skill_limit` and `at_skill_limit` feed the trainer's 12930 refusal for every skill: the
   character's skill cap, the skill's level-capped flag, SPA 263 / 248 from `total_effect`, the highest level from
   the sheet (the current level: EQEmu's profile carries no other).
