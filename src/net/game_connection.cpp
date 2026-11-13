@@ -145,6 +145,7 @@ void GameConnection::reload_game_files() {
 GameConnection::~GameConnection() { disconnect(); }
 
 void GameConnection::fail(std::string message) {
+    reset_achievements();
     reset_rewards();
     log::warn("connection: {}", message);
     capture_bank();
@@ -174,6 +175,7 @@ void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t 
 }
 
 void GameConnection::start(const WorldTicket& ticket) {
+    reset_achievements();
     reset_rewards();
     reset_tribute_donations();
     ticket_ = ticket;
@@ -686,6 +688,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         reset_commerce_for_zone();
         reset_tribute_donations();
         reset_progress_for_zone();
+        reset_achievements();
         reset_rewards();
         reset_player_for_zone();
         reset_market_for_zone();
@@ -1928,6 +1931,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 chat(ChatEvent::Kind::System, "Zoning...");
                 send_zone(encode_delete_own_spawn(world_.player_id));
                 state_ = ConnectionState::Zoning;
+                reset_achievements();
                 reset_rewards();
                 status_ = "Leaving the zone";
                 zone_exit_ = ZoneExit::Zoning;
@@ -2222,6 +2226,7 @@ void GameConnection::send_eye_position(bool force) {
 }
 
 void GameConnection::leave_zone_dropped() {
+    reset_achievements();
     reset_rewards();
     // The zone has dropped the link (or was closed after the wait).
     ZoneExit exit = std::exchange(zone_exit_, ZoneExit::None);
@@ -2278,6 +2283,7 @@ void GameConnection::simulate_link_loss() {
 
 void GameConnection::disconnect() {
     capture_bank();
+    reset_achievements();
     reset_rewards();
     reset_tribute_donations();
     release_eye_control();

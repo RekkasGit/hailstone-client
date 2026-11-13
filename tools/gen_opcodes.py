@@ -22,10 +22,13 @@ DEFAULT_OUT = Path(__file__).resolve().parent.parent / "src/net/opcodes_rof2.inc
 
 LINE = re.compile(r"^OP_([A-Za-z0-9_]+)\s*=\s*0x([0-9A-Fa-f]{1,4})\b")
 
-# Stock RoF2 managers absent from EQEmu's current conf. PendingRewardMgr's
-# two native instances use 0x6411 and +0x60 (stock receive dispatches
-# 0x4656e0/0x465a90; achievement window request 0x4edb00). These are not server-private
-# extension opcodes. Keep the original conf's order and append only gaps.
+# RoF2 opcodes absent from EQEmu's current conf; keep the original conf's order and append only gaps.
+# Confirmed in the original client: 0x6411 and 0x6471 (PendingRewardMgr's two instances; receive dispatches
+# 0x4656e0/0x465a90, sends of kinds 4/5/6/8), 0x47cb (Cmd_achievements, the window request 0x4edb00, byte 0x30),
+# 0x1665 (Send_AchievementCompareRequest @0x51fb90) and 0x17f8 (a HandleWorldMessage receive, @0x4c1760).
+# Taken from the server side of EQEmu#5119 and not yet traced in the original (docs/unknowns.md "Achievements"):
+# 0xdab0, 0x618f, 0x2b42, 0x059d, 0x28e0, 0x171e and 0x675d. src/net/achievement_packets.h and reward_packets.h
+# repeat these values as constants for switch labels; tests/achievement_packets_test.cpp checks they agree.
 STOCK_ROF2_ADDITIONS = (
     ("AchievementReward", 0x6411), ("RewardSelection", 0x6471),
     ("AchievementDefinitions", 0xDAB0), ("AchievementUpdate", 0x618F),

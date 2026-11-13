@@ -3,6 +3,9 @@
 #include <limits>
 
 #include "achievement_test_packets.h"
+#include "net/opcodes.h"
+#include "net/player_packets.h"
+#include "net/reward_packets.h"
 
 using namespace hailstone;
 using namespace hailstone::net;
@@ -33,6 +36,21 @@ AppPacket graph(std::uint32_t first_parent, std::uint32_t second_parent) {
     w.le<std::uint32_t>(0); return compressed(w.take());
 }
 } // namespace
+
+TEST_CASE("achievement packets: the switch-label opcode constants agree with the opcode table") {
+    CHECK(kOpAchievementDefinitions == to_wire(Op::AchievementDefinitions));
+    CHECK(kOpAchievementPrimary == to_wire(Op::AchievementUpdate));
+    CHECK(kOpAchievementProgress == to_wire(Op::AchievementProgress));
+    CHECK(kOpAchievementSnapshot == to_wire(Op::AchievementState));
+    CHECK(kOpAchievementInspect == to_wire(Op::AchievementComparisonReply));
+    CHECK(kOpAchievementEarned == to_wire(Op::AchievementEarned));
+    CHECK(kOpAchievementWindow == to_wire(Op::AchievementWindow));
+    CHECK(kOpAchievementWindowRequest == to_wire(Op::AchievementRequest));
+    CHECK(kOpAchievementLinkRequest == to_wire(Op::AchievementLinkRequest));
+    CHECK(kOpAchievementCompare == to_wire(Op::AchievementCompareRequest));
+    CHECK(kOpPendingRewards == to_wire(Op::AchievementReward));
+    CHECK(kOpRewardPreview == to_wire(Op::RewardSelection));
+}
 
 TEST_CASE("achievement packets: exact compressed catalog retains received indices and descriptive bucket") {
     const auto decoded = decode_achievement_catalog(fixture::catalog());

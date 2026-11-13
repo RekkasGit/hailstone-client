@@ -28,7 +28,6 @@ bool GameConnection::reward_request_ready(std::string* why) const {
     return false;
 }
 void GameConnection::reset_rewards() {
-    reset_achievements();
     rewards_.reset();
     reward_view_requested_ms_ = {};
     reward_inspect_requested_ms_ = {};
@@ -79,22 +78,6 @@ bool GameConnection::preview_task_reward(std::uint32_t task_id) {
         return false;
     }
     rewards_.show(game::RewardLane::Preview);
-    return true;
-}
-bool GameConnection::view_achievement_reward(std::uint32_t index) {
-    // The catalog/controller supplies its received vector index, not an achievement ID.
-    if (!reward_request_ready()) return false;
-    const auto now = reward_now_ms();
-    if (rate_limited(reward_view_requested_ms_[0], now, 500)) return false;
-    const auto old = reward_view_requested_ms_[0];
-    const auto revision = rewards_.lane(game::RewardLane::Pending).revision;
-    reward_view_requested_ms_[0] = now;
-    const auto current = [&] { return reward_request_ready() && rewards_.lane(game::RewardLane::Pending).revision == revision; };
-    if (!send_zone(encode_achievement_reward_view(index), true, current)) {
-        if (current() && reward_view_requested_ms_[0] == now) reward_view_requested_ms_[0] = old;
-        return false;
-    }
-    rewards_.show(game::RewardLane::Pending);
     return true;
 }
 bool GameConnection::reward_claim(std::uint64_t revision, std::uint64_t token, std::uint32_t option,

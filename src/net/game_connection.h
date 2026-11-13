@@ -2152,7 +2152,6 @@ public:
     void close_reward_selection(game::RewardLane lane);
     bool request_pending_rewards();
     bool preview_task_reward(std::uint32_t task_id);
-    bool view_achievement_reward(std::uint32_t definition_index);
     bool reward_claim(std::uint64_t revision, std::uint64_t tab_token, std::uint32_t wire_option_id,
                       std::string* why = nullptr);
     bool reward_inspect(game::RewardLane lane, std::uint64_t revision, std::uint64_t tab_token,

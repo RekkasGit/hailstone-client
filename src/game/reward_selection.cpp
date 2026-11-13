@@ -217,7 +217,7 @@ void RewardSelection::update(std::int64_t now) {
     if (claim_ && now >= claim_->sent_ms && now - claim_->sent_ms >= kRequestTimeoutMs) {
         lanes_[0].claim_pending = false;
         lanes_[0].claim_uncertain = true;
-        lanes_[0].message = "The reward result is unknown. Do not repeat the choice; reconnect to restore server state if its reply never arrives.";
+        lanes_[0].message = "The reward result is unknown. Do not repeat the choice; zone or reconnect to restore the server's state if its reply never arrives.";
     }
     for (const auto value : {RewardLane::Pending, RewardLane::Preview}) {
         const auto i = index(value);
