@@ -9,6 +9,7 @@ local pad = dofile("lib/pad.lua")
 local W = dofile("lib/window.lua")
 local S = dofile("lib/stml.lua")
 local K = dofile("lib/keyboard.lua")
+local chatlinks = dofile("lib/chatlinks.lua")
 local C = T.C
 S.LINK = C.chatLink -- (this copy of stml: chat links in the colour made for the chat's page)
 
@@ -51,13 +52,20 @@ local tickerRows = {}
 
 -- The chat keys (Enter, '/', ...): the text they start with; opens the log with the keyboard on its input.
 local typed = nil
+local input, inputLinks, inputError = "", {}, nil
+local slotIdx = 1
 
 -- ---------------------------------------------------------------- ticker
 ui.window("Chat Ticker", function()
+  if not eq.InGame() then input, inputLinks, inputError, typed = "", {}, nil, nil; return end
   if not W.shown("Chat1") then return end
-  local start = eq.ChatTakeFocus(1)
+  local start, replace
+  for index, window in ipairs(eq.ChatWindows()) do
+    start, replace = eq.ChatTakeFocus(window.slot, chatlinks.Expand(inputLinks, input))
+    if start then slotIdx = index; break end
+  end
   if start then
-    typed = start
+    typed = { text = start, replace = replace }
     GPSTATE.chatOpen = true
     -- the pad's Back + Start (its "chat" binding presses the chat key) opens the on-screen keyboard, not a typed line
     GPSTATE.chatByKeyboard = not (pad.down("back") and pad.down("start"))
@@ -90,7 +98,7 @@ ui.window("Chat Ticker", function()
     local x0, y0 = ui.GetWindowPos()
     ui.SetCursorPos(0, 0)
     if ui.InvisibleButton("##ticker", w, h) then
-      typed = ""
+      typed = { text = "", replace = true }
       GPSTATE.chatOpen = true
       GPSTATE.chatByKeyboard = true
     end
@@ -132,10 +140,8 @@ local PHRASES = { "Hail", "Hello!", "Thanks!", "Ready", "Not ready", "Incoming!"
 -- only this window, so its password is typed here).
 local STARTS = { { "/safelock ...", "/safelock " } }
 local channel = 1
-local slotIdx = 1
 local scroll = 0 -- lines up from the newest
 local mode = "quick" -- "quick" or "keys"
-local input = ""
 local shift = false
 -- The pad's focus goes to the first phrase or key: when the chat opens with the pad, and when Y switches between
 -- the two (the focused button is gone then).
@@ -149,15 +155,20 @@ local function focusHere()
   end
 end
 
-local function send(text)
-  if text == "" then return end
+local function send(text, composed)
+  if text == "" then return true end
   local windows = eq.ChatWindows()
   local slot = windows[slotIdx] and windows[slotIdx].slot or 1
-  if text:sub(1, 1) == "/" then eq.ChatSubmit(slot, text) else eq.ChatSubmit(slot, CHANNELS[channel][2] .. text) end
+  local prefix = text:sub(1, 1) == "/" and "" or CHANNELS[channel][2]
+  local expanded, reason = chatlinks.ForSubmit(composed and inputLinks or {}, text, prefix)
+  if not expanded then inputError = reason; return false end
+  eq.ChatSubmit(slot, expanded)
+  inputError = nil
+  return true
 end
 
 ui.window("Chat Log", function()
-  if not eq.InGame() then return end
+  if not eq.InGame() then input, inputLinks, inputError, typed = "", {}, nil, nil; return end
   -- Back + Start: the chat input (here, the keyboard)
   -- (in game mode the client's own back+start binding opens it, through the chat key: the ticker above, this frame)
   if ((pad.down("back") and pad.pressed("start")) or (pad.down("start") and pad.pressed("back")))
@@ -169,7 +180,9 @@ ui.window("Chat Log", function()
   end
   -- another window's tell or reply (W.chat): the keyboard with that text, the pad's focus on the window
   if GPSTATE.chatText then
-    input, mode, GPSTATE.chatText = GPSTATE.chatText, "keys", nil
+    inputLinks = {}
+    input, mode, GPSTATE.chatText = chatlinks.Collapse(inputLinks, GPSTATE.chatText), "keys", nil
+    inputError = nil
     GPSTATE.chatOpen, GPSTATE.chatByKeyboard = true, false
   end
   if not GPSTATE.chatOpen then return end
@@ -178,7 +191,9 @@ ui.window("Chat Log", function()
   if f - chatDrawn > 1 and not GPSTATE.chatByKeyboard then focusFirst = true end
   chatDrawn = f
   if typed then
-    input, mode, typed = typed, "keys", nil
+    if typed.replace then input, inputLinks = "", {} end
+    input = input .. chatlinks.Collapse(inputLinks, typed.text, #input)
+    mode, typed, inputError = "keys", nil, nil
     GPSTATE.chatFocusInput = GPSTATE.chatByKeyboard -- (the pad uses the on-screen keys)
   end
   local windows = eq.ChatWindows()
@@ -256,6 +271,7 @@ ui.window("Chat Log", function()
         if (#PHRASES + i - 1) % cols ~= 0 then ui.SameLine(0, T.px(10)) else ui.SetCursorPos(rx0 - wx, select(2, ui.GetCursorScreenPos()) - wy) end
         if T.button("##qs" .. i, c[1], bw, T.px(56), {}, pad) then
           input, mode, focusFirst = c[2], "keys", true
+          inputLinks, inputError = {}, nil
         end
       end
     else
@@ -265,15 +281,18 @@ ui.window("Chat Log", function()
         ui.SetKeyboardFocusHere()
         GPSTATE.chatFocusInput = false
       end
-      local text, entered = ui.InputText("##chatinput", input, 256, ui.InputTextFlags.EnterReturnsTrue, { moveToEnd = true })
+      local text, entered = ui.InputText("##chatinput", input, 2048, ui.InputTextFlags.EnterReturnsTrue, { moveToEnd = true })
+      if text ~= input then inputError = nil end
+      input = text
+      if input == "" then inputLinks = {} end
       if entered then
-        send(text)
-        input = ""
-        -- opened by a chat key or a click: Enter sends and closes, as the game's chat input does
-        if GPSTATE.chatByKeyboard then GPSTATE.chatOpen = false end
-      else
-        input = text
+        if send(text, true) then
+          input, inputLinks = "", {}
+          -- Enter sends and closes only after an intact line was accepted.
+          if GPSTATE.chatByKeyboard then GPSTATE.chatOpen = false end
+        end
       end
+      if inputError then ui.TextWrapped(inputError) end
       ui.SetCursorPos(rx0 - wx, select(2, ui.GetCursorScreenPos()) + T.px(10) - wy)
       local kw = (rw - 9 * T.px(8)) / 10
       for r, row in ipairs(K.KEYS) do
@@ -297,8 +316,7 @@ ui.window("Chat Log", function()
       if T.button("##back", "Delete", third, T.px(60), {}, pad) then input = input:sub(1, -2) end
       ui.SameLine(0, T.px(8))
       if T.button("##send", "Send", third, T.px(60), { primary = true }, pad) then
-        send(input)
-        input = ""
+        if send(input, true) then input, inputLinks = "", {} end
       end
     end
   end

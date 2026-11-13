@@ -105,7 +105,7 @@ bool ClientApp::set_video_option(std::string_view name, int value) {
     } else if (name == "fov") {
         // Degrees across (below an aspect of 2); below 0 the original's 90 units (63.3 degrees).
         float units = value < 0 ? game::kStockFovUnits : std::clamp(static_cast<float>(value), 45.0f, 120.0f) / kDegreesPerFovUnit;
-        camera_.fov_units = units;
+        (iso() ? iso_saved_fov_ : camera_.fov_units) = units; // the isometric camera keeps its own until it is left
         config_.set("display.fov", value < 0 ? std::string() : std::format("{:.2f}", units));
     } else if (name == "ui_name") {
         if (value < 0 || value >= static_cast<int>(ui_packs_.size())) return true;
@@ -138,7 +138,7 @@ void ClientApp::apply_frame_options() {
     opts_.max_fps = max_fps_arg_ ? *max_fps_arg_ : std::max(0, config_.get_int("display.max_fps", 0)); // --max-fps first
     background_fps_ = background_fps_setting(config_.get_int("display.background_fps", 0));
     float fov = config_float("display.fov", 0.0f);
-    camera_.fov_units = fov > 0.0f ? fov : game::kStockFovUnits;
+    (iso() ? iso_saved_fov_ : camera_.fov_units) = fov > 0.0f ? fov : game::kStockFovUnits;
 }
 
 void ClientApp::apply_video_options() {
@@ -358,6 +358,7 @@ std::optional<int> ClientApp::option_value(std::string_view o) const {
         return conn_ && eq_api_ ? eq_api_->window_setting("PetInfoWindow", "popup") : std::nullopt;
     if (auto d = display_option(o)) return d;
     if (auto v = video_option(o)) return v;
+    if (auto i = iso_option(o)) return i;
     if (o == "pc_names") return pc_names_ ? 1 : 0;
     // Hailstone: the player's own name over its head (game::NameSpriteSwitches), on by default.
     if (o == "own_name") return own_name_ ? 1 : 0;
@@ -464,7 +465,7 @@ void ClientApp::set_option_value(std::string_view o, int v) {
         if (eq_api_) eq_api_->set_window_setting("PetInfoWindow", "popup", v);
         return;
     }
-    if (set_display_option(o, v) || set_video_option(o, v)) return;
+    if (set_display_option(o, v) || set_video_option(o, v) || set_iso_option(o, v)) return;
     if (o == "font_face") {
         // GeneralPageWndNotification's font button: the face set and saved (Fonts / Font.<set>.0).
         auto choices = option_choices("font_face");
@@ -714,6 +715,7 @@ void ClientApp::apply_settings() {
         std::clamp(config_.get_int("display.max_camera_distance", static_cast<int>(kMaxCameraDistance)),
                    kMinCameraZoomSetting, kMaxCameraZoomSetting));
     camera_distance_ = std::min(camera_distance_, max_camera_distance_);
+    load_iso_settings(); // the isometric camera's (game/iso_camera.h; /camera, Options)
     mouse_sensitivity_ = std::clamp(config_.get_int("mouse.sensitivity", 10), 0, 20);
     {
         // loadOptions: MousePointerSpeedMod 0..10, anything else 0.

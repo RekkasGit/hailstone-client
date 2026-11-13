@@ -97,11 +97,12 @@ game::EqStrings test_strings() {
 
 TEST_CASE("slash commands: the original's table and prefix matching") {
     auto table = game::slash_commands();
-    CHECK(table.size() == 383); // the original's 391 without the four voice macro commands, three of Daybreak's and /mp3
-    // Daybreak's services are left out too: achievements, the card game. The Marketplace and real estate stay (a
+    CHECK(table.size() == 384); // the original's 391 without four voice macro commands, two card-game names and /mp3
+    // The card game is left out. Achievements, the Marketplace and real estate stay (a
     // server that runs them answers their packets).
     CHECK(command_name("/marketplace") == "/marketplace");
-    for (const char* c : {"/achievements", "/legendsofnorrath", "/tcg"})
+    CHECK(command_name("/achievements") == "/achievements");
+    for (const char* c : {"/legendsofnorrath", "/tcg"})
         CHECK(command_name(c) == "-");
     CHECK(command_name("/realestate") == "/realestate");
     CHECK(command_name("/leaverealestate") == "/leaverealestate");

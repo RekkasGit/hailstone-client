@@ -56,6 +56,7 @@
 #include "game/collision.h"
 #include "game/combat.h"
 #include "game/coords.h"
+#include "game/revamped_zone.h"
 #include "game/zone_lines.h"
 #include "core/log.h"
 #include "net/game_connection.h"
@@ -380,6 +381,12 @@ int main(int argc, char** argv) {
                     std::printf("  zone: safe %.1f %.1f %.1f, clip %.0f-%.0f, fog %.0f-%.0f, sky %u, time type %u, ztype %u\n", z->safe_x, z->safe_y, z->safe_z, z->minclip, z->maxclip, z->fog_minclip[0], z->fog_maxclip[0], z->sky, z->time_type, z->zone_type);
                 if (const auto& t = conn.time_of_day())
                     std::printf("  time: hour %u minute %u day %u month %u year %u\n", t->hour, t->minute, t->day, t->month, t->year);
+                // A live folder's revamped .eqg loads when the server's safe point stands on it (game/revamped_zone.h).
+                auto revamped_test = [&](std::optional<game::CollisionMesh>& built) -> assets::RevampedZoneTest {
+                    const auto& z = conn.zone_info();
+                    if (!z) return {};
+                    return game::safe_point_test(game::server_to_world({z->safe_x, z->safe_y, z->safe_z}), built);
+                };
                 int shown = 0;
                 for (const auto& [id, s] : w.spawns)
                     if (shown++ < 8) std::printf("    %u %s L%u race %u at %.1f %.1f %.1f\n", id, s.name.c_str(), s.level, s.race, s.position.x, s.position.y, s.position.z);
@@ -395,8 +402,9 @@ int main(int argc, char** argv) {
                 }
                 if (check_floor) {
                     // Do server x/y match the zone files' x/y, and how high above the floor is z?
-                    auto zone = assets::load_zone(game, w.zone_short_name);
-                    auto mesh = game::CollisionMesh::build(zone);
+                    std::optional<game::CollisionMesh> tested;
+                    auto zone = assets::load_zone(game, w.zone_short_name, {}, revamped_test(tested));
+                    auto mesh = tested ? std::move(*tested) : game::CollisionMesh::build(zone);
                     int same = 0, swapped = 0, n = 0;
                     for (const auto& [id, s] : w.spawns) {
                         auto a = mesh.floor_below(s.position, 0.5f);
@@ -412,7 +420,8 @@ int main(int argc, char** argv) {
                 }
                 deadline = Clock::now() + std::chrono::seconds(seconds + 60);
                 if (zone_line >= 0 && !zl_done && w.player()) {
-                    zl_zone = assets::load_zone(game, w.zone_short_name);
+                    std::optional<game::CollisionMesh> tested;
+                    zl_zone = assets::load_zone(game, w.zone_short_name, {}, revamped_test(tested));
                     zl_feet = w.player()->position - glm::vec3(0, 0, w.player()->heights.avatar_height);
                     zl_trigger.reset();
                     std::printf("  %zu zone points from the server\n", conn.zone_points().size());

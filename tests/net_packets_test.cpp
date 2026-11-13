@@ -69,6 +69,27 @@ TEST_CASE("opcode table maps names and wire values from patch_RoF2.conf") {
     }
 }
 
+TEST_CASE("opcode table: both native Select Reward managers have independent stock mappings") {
+    CHECK(to_wire(Op::AchievementReward) == 0x6411);
+    CHECK(to_wire(Op::RewardSelection) == 0x6471);
+    CHECK(from_wire(0x6411) == Op::AchievementReward);
+    CHECK(from_wire(0x6471) == Op::RewardSelection);
+    CHECK(std::string(op_name(Op::AchievementReward)) == "AchievementReward");
+    CHECK(std::string(op_name(Op::RewardSelection)) == "RewardSelection");
+}
+
+TEST_CASE("opcode table: stock achievement managers retain their native wire identities") {
+    for (const auto& [opcode, wire] : {std::pair{Op::AchievementDefinitions, 0xdab0},
+         std::pair{Op::AchievementUpdate, 0x618f}, std::pair{Op::AchievementProgress, 0x2b42},
+         std::pair{Op::AchievementState, 0x059d}, std::pair{Op::AchievementComparisonReply, 0x28e0},
+         std::pair{Op::AchievementEarned, 0x17f8}, std::pair{Op::AchievementWindow, 0x171e},
+         std::pair{Op::AchievementRequest, 0x47cb}, std::pair{Op::AchievementLinkRequest, 0x675d},
+         std::pair{Op::AchievementCompareRequest, 0x1665}}) {
+        CHECK(to_wire(opcode) == wire);
+        CHECK(from_wire(static_cast<std::uint16_t>(wire)) == opcode);
+    }
+}
+
 TEST_CASE("eq_crc32 is the client's __MemChecker0 (CRC32 without final inversion)") {
     const char* s = "123456789";
     // Standard CRC-32 of "123456789" is 0xcbf43926; without the final xor it is ~that.

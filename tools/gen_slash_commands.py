@@ -5,8 +5,8 @@ table (__CommandList @0x00acd5a8, CMDLIST[392]), as a CSV extracted from the exe
 
 The voice macro commands (/vplay, /vtell, /vgroup, /vraid: Cmd_vplay and the three Send_OP_VoiceMacroIn handlers)
 are left out on purpose: Hailstone does not implement voice macros, so those words answer as unknown commands. So
-are the commands of Daybreak's services EQEmu has no part of: /achievements and /tcg (the Legends of Norrath card
-game). /marketplace, /realestate and /leaverealestate stay: a server that runs a store or housing answers them.
+are the commands of Daybreak's services EQEmu has no part of: /tcg (the Legends of Norrath card
+game). /achievements, /marketplace, /realestate and /leaverealestate stay: a server that provides them answers them.
 /mp3 is left out too: Hailstone has no music player for the player's own files.
 
 usage: tools/gen_slash_commands.py SLASH_COMMANDS_CSV > src/game/slash_commands.inc
@@ -15,7 +15,7 @@ import csv
 import sys
 
 # Handlers of features this client leaves out (see the docstring).
-DROPPED = ("Cmd_vplay", "Send_OP_VoiceMacroIn_", "Cmd_achievements", "Cmd_legendsofnorrath", "Cmd_mp3")
+DROPPED = ("Cmd_vplay", "Send_OP_VoiceMacroIn_", "Cmd_legendsofnorrath", "Cmd_mp3")
 
 rows = []
 with open(sys.argv[1], newline="", encoding="utf-8") as f:

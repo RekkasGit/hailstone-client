@@ -207,6 +207,14 @@ std::string npc_owner_line(const Spawn& s, bool pet_owner_names);
 // a guild id other than -1 (and 0, EQEmu's none in a spawn record), bGuildShowAnim (the spawn's guild_show) and the
 // player not anonymous (Anon 0, or the roleplaying bit 2 set).
 bool name_sprite_shows_guild(const Spawn& s, int show_names);
+// SetNameSpriteState's words before a player's name: "Offline " (eqstr 766) with bOfflineMode, then "Trader " (5503)
+// with the trader flag or else "Buyer " (6055) with the buyer flag, either of which takes the title's place. Nothing
+// for an NPC or a corpse, as the original (an NPC the server marks as a trader keeps its plain name).
+struct NameSpriteMarketWords {
+    std::string prefix;          // empty, or the words with their trailing spaces
+    bool replaces_title = false; // a trader's or buyer's title is not shown
+};
+NameSpriteMarketWords name_sprite_market_words(const Spawn& s, const EqStrings& strings);
 // Whether a spawn has a name sprite by the name switches (unk_PlayerClient_UpdateNameSprite @0x58f050 skips PCs and
 // NPCs whose name sprites are switched off, and the local player while its model is hidden in first person). The
 // local player's has a switch of its own, Hailstone's (display.own_name; the original has none): pc_names and

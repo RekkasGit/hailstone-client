@@ -31,6 +31,7 @@ enum CameraType : int {
     kCameraUser2 = 4,
     kCameraTether = 5,
     kCameraWheelFollow = 6, // this client's camera behind the player
+    kCameraIsometric = 7,   // this client's isometric camera (game/iso_camera.h)
 };
 
 // A camera object: its fields, and the position the update leaves (+0x04..+0x0c) and the one before (+0x1c..+0x24).
@@ -81,8 +82,8 @@ CameraPose update_camera(int type, GameCamera& cam, const CameraTarget& target, 
 // those steps as the player moved. A refused sweep leaves the camera at the eye. Without a sweep: the full distance.
 glm::vec3 wheel_follow_position(const glm::vec3& eye, const glm::vec3& back, float distance, const CameraSweep& sweep);
 
-// CDisplay::ToggleView @0x494160 (not drunk): the camera after `type`: 0 -> 1 -> .. -> 5 -> 0, and the wheel-follow
-// camera (6) counts as 0.
+// CDisplay::ToggleView @0x494160 (not drunk): the camera after `type`: 0 -> 1 -> .. -> 5 -> 0, and this client's own
+// cameras (the wheel-follow 6, the isometric 7) count as 0.
 int toggle_view_next(int type);
 
 // Which camera is active and the wheel camera's distance (0 outside camera 6), with the distance it returns to.

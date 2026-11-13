@@ -11,12 +11,14 @@
 #include <SDL3/SDL_video.h>
 
 #include "assets/zone_flora.h"
+#include "core/ascii_case.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "mq/lua_mq.h"
 #include "game/mechanics/abilities.h"
 #include "game/option_commands.h"
 #include "game/particles.h"
+#include "game/revamped_zone.h"
 #include "nav/zone_nav.h"
 #include "platform/process.h"
 #include <unordered_set>
@@ -36,7 +38,16 @@ void ClientApp::load_zone(const std::string& short_name) {
     auto mark = [&](const char* phase) { log_memory(std::string("zone load: ") + phase); };
     mark("start");
     try {
-        zone_ = assets::load_zone(game_, short_name);
+        // A live folder's revamped .eqg loads when the server's safe point (OP_NewZone, already here: it asked for
+        // this load) stands on its floor (game/revamped_zone.h). The test's collision mesh is kept below: nothing
+        // added to the zone after the load (flora, emitters) is collision geometry.
+        std::optional<game::CollisionMesh> tested_collision;
+        assets::RevampedZoneTest revamped_test;
+        if (conn_)
+            if (const auto& z = conn_->zone_info(); z && iequals(z->zone_short_name, short_name))
+                revamped_test = game::safe_point_test(game::server_to_world({z->safe_x, z->safe_y, z->safe_z}),
+                                                      tested_collision);
+        zone_ = assets::load_zone(game_, short_name, {}, revamped_test);
         mark("zone data");
         // Hailstone's own flora for a zone without any (assets/zone_flora.h, display.zone_flora).
         if (config_.get_bool("display.zone_flora", true)) {
@@ -76,7 +87,7 @@ void ClientApp::load_zone(const std::string& short_name) {
         if (spell_particles_) spell_particles_->clear();
         if (spell_bolts_) spell_bolts_->clear();
         if (actor_emitters_) actor_emitters_->clear();
-        collision_ = game::CollisionMesh::build(*zone_);
+        collision_ = tested_collision ? std::move(*tested_collision) : game::CollisionMesh::build(*zone_);
         mark("collision");
         if (conn_) conn_->reground(); // ground_npcs measured the spawns against no floor, or the last zone's
         zone_ladders_ = game::zone_ladders(*zone_);
@@ -335,8 +346,11 @@ game::SceneFogFrame ClientApp::scene_fog_frame(float sky_hour, double t) {
     int hour = static_cast<int>(std::floor(h));
     in.minute = std::clamp(static_cast<int>((h - static_cast<float>(hour)) * 60.0f), 0, 59);
     in.hour = hour < 1 ? hour + 24 : hour; // GetSkyTime: 1..24
-    if (zone_ && !zone_->regions.empty() && zone_->regions.in_world(camera_.position))
-        camera_region_ = static_cast<std::uint8_t>(zone_->regions.lookup(camera_.position).flags & 0xff);
+    // The isometric camera (Hailstone's own) floats over the scenery: the region is the player's eye's, so its water
+    // and lava tints are the player's and not the air's or the hillside's the camera hangs in.
+    const glm::vec3 region_at = iso() ? eye_position() : camera_.position;
+    if (zone_ && !zone_->regions.empty() && zone_->regions.in_world(region_at))
+        camera_region_ = static_cast<std::uint8_t>(zone_->regions.lookup(region_at).flags & 0xff);
     in.camera_region = camera_region_;
     if (conn_) {
         // EQ_Character::InitInnates with the actor's race (an illusion's too) and the profile's class: the client's

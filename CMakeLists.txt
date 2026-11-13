@@ -231,6 +231,10 @@ add_library(hailstone_engine STATIC
   src/net/guild_bank_packets.cpp
   src/net/real_estate_packets.cpp
   src/net/task_packets.cpp
+  src/net/reward_packets.cpp
+  src/net/achievement_packets.cpp
+  src/net/game_connection_rewards.cpp
+  src/net/game_connection_achievements.cpp
   src/net/social_packets.cpp
   src/net/chat_server.cpp
   src/game/social.cpp
@@ -385,6 +389,7 @@ add_library(hailstone_engine STATIC
   src/game/spell_effect_timers.cpp
   src/game/sine_table.cpp
   src/game/collision.cpp
+  src/game/revamped_zone.cpp
   src/nav/nav_mesh.cpp
   src/nav/zone_nav.cpp
   src/nav/path_follower.cpp
@@ -411,6 +416,9 @@ add_library(hailstone_engine STATIC
   src/game/char_create_look.cpp
   src/game/char_select_camera.cpp
   src/game/cameras.cpp
+  src/game/iso_camera.cpp
+  src/game/click_intent.cpp
+  src/game/iso_occlusion.cpp
   src/game/spawn_animation.cpp
   src/game/anim_layers.cpp
   src/game/hit_landing.cpp
@@ -445,6 +453,8 @@ add_library(hailstone_engine STATIC
   src/game/placement.cpp
   src/game/text_overlay.cpp
   src/game/tasks.cpp
+  src/game/reward_selection.cpp
+  src/game/achievements.cpp
   src/game/task_window.cpp
   src/game/mechanics/movement.cpp
   src/game/mechanics/movement_inputs.cpp
@@ -516,6 +526,8 @@ add_library(hailstone_engine STATIC
   src/app/lua_eq_social.cpp
   src/app/lua_eq_realestate.cpp
   src/app/lua_eq_progress.cpp
+  src/app/lua_eq_rewards.cpp
+  src/app/lua_eq_achievements.cpp
   src/app/lua_eq_group_search.cpp
   src/app/lua_eq_marketplace.cpp
   src/app/lua_eq_map.cpp
@@ -707,6 +719,7 @@ hailstone_add_shaders(hailstone_shaders
   shaders/spawn.frag
   shaders/actor.vert
   shaders/actor.frag
+  shaders/actor_silhouette.frag
   shaders/object.vert
   shaders/object.frag
   shaders/sky.vert
@@ -787,7 +800,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/projecttriune/CMakeLists.txt)
   set(HAILSTONE_HAS_TRIUNE ON)
 endif()
 
-add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${HAILSTONE_WIN_MANIFEST} ${HAILSTONE_WIN_CLIENT_RESOURCES})
+add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_iso.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${HAILSTONE_WIN_MANIFEST} ${HAILSTONE_WIN_CLIENT_RESOURCES})
 target_compile_options(hailstone PRIVATE ${HAILSTONE_WARNINGS})
 # Windows: a Release (or MinSizeRel) client is a GUI program, so no console window opens beside it; main() stays the
 # entry point. Other builds keep the console for the log. Errors that stop a start are shown in a dialog either way
@@ -1139,6 +1152,18 @@ if(HAILSTONE_BUILD_TESTS)
     tests/group_packets_test.cpp
     tests/progress_test.cpp
     tests/task_window_test.cpp
+    tests/reward_packets_test.cpp
+    tests/reward_selection_test.cpp
+    tests/reward_connection_test.cpp
+    tests/lua_eq_rewards_test.cpp
+    tests/reward_selection_ui_test.cpp
+    tests/achievement_packets_test.cpp
+    tests/achievements_test.cpp
+    tests/achievement_connection_test.cpp
+    tests/achievement_chat_test.cpp
+    tests/achievement_chat_input_test.cpp
+    tests/lua_eq_achievements_test.cpp
+    tests/achievements_ui_test.cpp
     tests/social_test.cpp
     tests/options_social_test.cpp
     tests/player_market_test.cpp
@@ -1155,6 +1180,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/key_commands_test.cpp
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
+    tests/iso_camera_test.cpp
+    tests/click_intent_test.cpp
+    tests/iso_occlusion_test.cpp
     tests/gamepad_bindings_test.cpp
     tests/anim_vectors_test.cpp
     tests/anim_layers_test.cpp

@@ -6,9 +6,8 @@
 --   * History: the completed tasks, searchable; a click asks the server for that one's objectives.
 -- Everything is the game's: the rows are TASK_TaskList / TASK_TaskElementList / QUEST_* (eq.ListRow), a card click
 -- selects in the original (eq.ListClick), the description is TASK_Description, the kind and timer the
--- model's TASK_Summary (app/lua_eq_progress.cpp), Abandon the original's TASK_AbandonButton. The Shared Task page,
--- Monster Select and Preview Reward are not built by the client (it has no reward selection window), so they are
--- left out.
+-- model's TASK_Summary (app/lua_eq_progress.cpp), Abandon the original's TASK_AbandonButton, and Preview Reward
+-- opens the selected task's server-owned reward preview. The Shared Task page and Monster Select remain omitted.
 local hud = dofile("lib/hud.lua")
 local W = dofile("lib/widgets.lua")
 local K = dofile("lib/quests_kit.lua")
@@ -200,11 +199,15 @@ local function page(listId, s, w, h, body, opts)
   ui.EndChild()
 end
 
-local function abandonFoot(s, btnH)
+local function taskFoot(s, btnH)
   return function()
     local avail = ui.GetContentRegionAvail()
-    local bw = 130 * s
-    ui.SetCursorPos(select(1, ui.GetCursorPos()) + avail - bw, select(2, ui.GetCursorPos()) + 6 * s)
+    local gap = 8 * s
+    local bw = math.min(130 * s, (avail - gap) / 2)
+    ui.SetCursorPos(select(1, ui.GetCursorPos()) + avail - 2 * bw - gap, select(2, ui.GetCursorPos()) + 6 * s)
+    W.Button(WINDOW, "TASK_PreviewRewardButton", "Preview Reward",
+      { width = bw, height = btnH, tooltip = "Ask the server to preview the selected task's rewards" })
+    ui.SameLine(0, gap)
     -- the stock Remove: the game asks "Are you sure you want to quit ...?" itself
     W.Button(WINDOW, "TASK_AbandonButton", "Abandon",
       { danger = true, width = bw, height = btnH, tooltip = "Give up the selected task" })
@@ -260,7 +263,7 @@ local function drawWindow(x, y, w, h, s)
     page("TASK_TaskList", s, cw, bodyH, function() details(s) end, {
       hint = "Search tasks", titleCol = 2, timeCol = 3,
       emptyText = "No active tasks.", emptyHint = "People around the world have work to offer.",
-      footH = btnH + 10 * s, foot = abandonFoot(s, btnH),
+      footH = btnH + 10 * s, foot = taskFoot(s, btnH),
       leftFootH = leftFootH,
       leftFoot = timer ~= "" and function()
         ui.Dummy(0, 4 * s)

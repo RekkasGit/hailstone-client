@@ -206,6 +206,10 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
         }
         return true;
     }
+    if (h == "Hailstone_camera") {
+        camera_command(args);
+        return true;
+    }
     if (h == "Hailstone_finditem") {
         // The Advanced Inventory (/finditem, /advi): no argument shows or hides it; text opens it searching for that
         // (its filters cleared, so the search covers everything the character has).

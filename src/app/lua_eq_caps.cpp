@@ -44,7 +44,7 @@ struct Entry {
 constexpr Entry kCalls[] = {
     // Reading, drawing, a window's place, size, hover, menus opened (a menu's row is GameMenuClick or CascadeClick)
     {"InGame", 0}, {"UiReady", 0}, {"GameState", 0}, {"Name", 0}, {"SlotName", 0}, {"Item", 0}, {"ItemIcon", 0},
-    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"ItemJob", 0}, {"AltCurrencies", 0}, {"UiTexture", 0},
+    {"Money", 0}, {"Label", 0}, {"Gauge", 0}, {"HasSlot", 0}, {"ItemJob", 0}, {"AltCurrencies", 0}, {"UiTexture", 0}, {"UiAnimation", 0},
     {"ReplaceWindow", 0}, {"WindowShown", 0}, {"WindowPlaced", 0}, {"WindowText", 0}, {"WindowTitle", 0},
     {"WindowList", 0}, {"WindowClient", 0}, {"SizeWindow", 0}, {"ChildShown", 0}, {"ChildArt", 0}, {"ChildState", 0},
     {"ChildGauge", 0}, {"ChildColor", 0}, {"ChildTooltip", 0}, {"ChildUnder", 0}, {"ChildRect", 0}, {"TabPage", 0},
@@ -63,6 +63,11 @@ constexpr Entry kCalls[] = {
     {"ChatDefaultChannels", 0}, {"ChatTellWindows", 0}, {"ChatHitModes", 0}, {"ChatMenu", 0}, {"CharacterStats", 0},
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
     {"DisplaySpellId", 0}, {"DisplayItemData", 0},
+    {"RewardSelection", 0},
+    {"Achievements", 0}, {"Achievement", 0},
+    {"AchievementOpen", kCapCommands}, {"AchievementClearCompare", kCapCommands},
+    {"AchievementRefresh", kCapActions}, {"AchievementCompare", kCapActions},
+    {"AchievementReward", kCapActions}, {"AchievementLink", plugin::kCapChat},
     {"SpellSets", 0}, {"DrawMap", 0}, {"MapZoom", 0}, {"MapMouseDown", 0}, {"MapMouseUp", 0}, {"MapPanReset", 0},
     {"DrawMinimap", 0}, {"DrawZoneMap", 0}, {"DrawAtlas", 0}, {"AtlasIndex", 0}, {"AtlasPageData", 0}, {"AtlasTexture", 0}, {"ZoneLinks", 0}, {"ZoneRoute", 0},
     {"ZoneExits", 0}, {"ShowZoneMap", 0}, {"MapZoneShown", 0}, {"FindPathShown", 0}, {"ZoneName", 0}, {"GameTime", 0},
@@ -102,7 +107,10 @@ constexpr Entry kCalls[] = {
     {"StopLuaSocial", kCapCommands}, {"OpenLuaSocialEditor", kCapCommands}, {"OpenSocialEditor", kCapCommands},
     {"gamepad.set_mode", kCapCommands}, {"gamepad.set_binding", kCapCommands},
     {"gamepad.set_cross_slot", kCapCommands}, {"gamepad.set_setting", kCapCommands},
+    {"RewardSelectionClose", kCapCommands},
     // Acting in the game
+    {"RewardSelectionClaim", kCapActions}, {"RewardSelectionInspect", kCapActions},
+    {"RestorePendingRewards", kCapActions},
     {"ClickSlot", kCapActions}, {"ClickChild", kCapActions}, {"ClickChildAt", kCapActions},
     {"WindowButton", kCapActions}, {"StmlLink", kCapActions}, {"SetWindowText", kCapActions},
     {"ListClick", kCapActions}, {"ListHeaderClick", kCapActions}, {"ComboSelect", kCapActions},

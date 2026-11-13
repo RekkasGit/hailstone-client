@@ -236,6 +236,10 @@ public:
     // At the helm of a small boat (game/boats.h steer_boat): the movement keys sail the boat, so ProcessControls sees
     // none of them held (they stay held for the helm and for afterwards).
     void set_at_helm(bool on) { at_helm_ = on; }
+    // The isometric camera's movement relative to the camera (game::iso_move): the player was turned to the way the
+    // keys point, so ProcessControls sees only forward held (`forward`) or nothing, and no back, turn or strafe key
+    // (they stay held for afterwards). nullopt: the keys as held.
+    void set_key_override(std::optional<bool> forward) { key_override_ = forward; }
 
 private:
     // A test placement is a teleport: the actor and the floor cache start over there.
@@ -296,6 +300,7 @@ private:
     std::optional<bool> jump_animation_;
     bool trace_ = false;
     bool at_helm_ = false;
+    std::optional<bool> key_override_;
     std::uint32_t speed_stops_ = 0, turn_stops_ = 0, stun_leans_ = 0; // GameConnection's, as last seen
     game::mechanics::DrunkenMotion drunken_motion_;
     std::uint32_t drunkenness_motion_updates_ = 0;

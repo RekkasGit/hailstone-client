@@ -1,8 +1,8 @@
 -- Offered tasks: replaces the game's TaskSelectWnd (an NPC's task offer). The offers as cards (title, how long it
 -- runs), the selected one's description and first objectives at the right, Accept and Decline All. The cards are
 -- the original's TaskList (a click selects there: eq.ListClick), the text its Description, the buttons its own, so
--- accepting is the game's (closing the window declines, as the stock window does). Preview Reward is left out: the
--- client has no reward selection window.
+-- accepting is the game's (closing the window declines, as the stock window does). Offer-preview controls remain
+-- unavailable here; active-task previews use TaskWnd.
 local hud = dofile("lib/hud.lua")
 local W = dofile("lib/widgets.lua")
 local K = dofile("lib/quests_kit.lua")

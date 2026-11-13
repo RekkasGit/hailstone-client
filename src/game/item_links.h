@@ -13,7 +13,8 @@
 // widths are accepted: the wide form when its 76 characters are hex digits,
 // else the stock one.
 //
-// Other tag codes (1 player, 2 spam, 3 achievement) are shown as their text.
+// Achievement tags ('3') place caret-delimited metadata before an apostrophe
+// and the visible name. Other tag codes (1 player, 2 spam) stay plain text.
 
 #include <array>
 #include <cstdint>
@@ -44,10 +45,18 @@ struct ItemLink {
 // Parses what lies between the two \x12 of an item tag (code included).
 std::optional<ItemLink> parse_item_link(std::string_view tag);
 
+struct AchievementChatLink {
+    std::string metadata, text;
+};
+// The chat envelope only. The metadata still needs net::parse_achievement_link
+// against the current received catalog before it can be activated.
+std::optional<AchievementChatLink> parse_achievement_chat_link(std::string_view tag);
+
 // A run of chat text: plain text, or a link.
 struct ChatSegment {
     std::string text;
     std::optional<ItemLink> link;
+    std::optional<AchievementChatLink> achievement = std::nullopt;
 };
 
 // Splits a chat line into text and links. Unterminated tags stay as text.
