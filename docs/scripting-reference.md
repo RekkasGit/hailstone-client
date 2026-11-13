@@ -924,7 +924,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | PressButtonFrom | (window, child [, row]) → ok | Run the hotbutton a drag would make (a pad's "use"). Not for hot bars | actions |
 | HoldingButton | () → bool | A hotbutton is on the cursor | — |
 | ClearCursorButton | () → — | Drop the cursor's hotbutton | actions |
-| CursorAttachment | () → {icon, iconRect, rect, quantity, font, spell, …} \| nil | What the mouse carries. Images are {texture,u0,v0,u1,v1}, rects are {x,y,w,h} | — |
+| CursorAttachment | () → {icon, iconRect, rect, quantity, font, spell, coin, …} \| nil | What the mouse carries. Images are {texture,u0,v0,u1,v1}, rects are {x,y,w,h}. Money on the cursor has `coin` (0 pp .. 3 cp) and its count in `quantity`, and no `icon` | — |
 
 #### Items, bags, item jobs, item preview (lua_eq.cpp)
 
