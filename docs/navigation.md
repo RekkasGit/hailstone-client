@@ -18,6 +18,10 @@ The heading is set at once, as `/follow`'s FollowPlayerAI sets it (`game/follow.
 The player's own forward, back, turn or strafe keys end a walk, as they end `/follow`. Starting a walk ends `/follow`.
 Nothing moves while the player cannot (sitting, frozen, dead, `/safelock`); the walk carries on when they can.
 
+The isometric camera's click to move (`docs/isometric.md`) walks with it too: `Navigator::walk_to_click` for the
+ground (quiet when the mesh goes only part of the way, straight at the point in a zone without a mesh), `go_to_spawn`
+and `go_to_door` for what a click walks to.
+
 ## The mesh
 
 Built from the zone's collision triangles (`game::CollisionMesh`): what the movement sweep collides with is what is

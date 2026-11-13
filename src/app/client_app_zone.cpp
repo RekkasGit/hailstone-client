@@ -346,8 +346,11 @@ game::SceneFogFrame ClientApp::scene_fog_frame(float sky_hour, double t) {
     int hour = static_cast<int>(std::floor(h));
     in.minute = std::clamp(static_cast<int>((h - static_cast<float>(hour)) * 60.0f), 0, 59);
     in.hour = hour < 1 ? hour + 24 : hour; // GetSkyTime: 1..24
-    if (zone_ && !zone_->regions.empty() && zone_->regions.in_world(camera_.position))
-        camera_region_ = static_cast<std::uint8_t>(zone_->regions.lookup(camera_.position).flags & 0xff);
+    // The isometric camera (Hailstone's own) floats over the scenery: the region is the player's eye's, so its water
+    // and lava tints are the player's and not the air's or the hillside's the camera hangs in.
+    const glm::vec3 region_at = iso() ? eye_position() : camera_.position;
+    if (zone_ && !zone_->regions.empty() && zone_->regions.in_world(region_at))
+        camera_region_ = static_cast<std::uint8_t>(zone_->regions.lookup(region_at).flags & 0xff);
     in.camera_region = camera_region_;
     if (conn_) {
         // EQ_Character::InitInnates with the actor's race (an illusion's too) and the profile's class: the client's

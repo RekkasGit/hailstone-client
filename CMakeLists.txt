@@ -416,6 +416,9 @@ add_library(hailstone_engine STATIC
   src/game/char_create_look.cpp
   src/game/char_select_camera.cpp
   src/game/cameras.cpp
+  src/game/iso_camera.cpp
+  src/game/click_intent.cpp
+  src/game/iso_occlusion.cpp
   src/game/spawn_animation.cpp
   src/game/anim_layers.cpp
   src/game/hit_landing.cpp
@@ -716,6 +719,7 @@ hailstone_add_shaders(hailstone_shaders
   shaders/spawn.frag
   shaders/actor.vert
   shaders/actor.frag
+  shaders/actor_silhouette.frag
   shaders/object.vert
   shaders/object.frag
   shaders/sky.vert
@@ -796,7 +800,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/projecttriune/CMakeLists.txt)
   set(HAILSTONE_HAS_TRIUNE ON)
 endif()
 
-add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${HAILSTONE_WIN_MANIFEST} ${HAILSTONE_WIN_CLIENT_RESOURCES})
+add_executable(hailstone src/app/main.cpp src/app/client_app.cpp src/app/client_app_ui.cpp src/app/client_app_draw.cpp src/app/target_ring.cpp src/app/client_app_input.cpp src/app/client_app_testdrive.cpp src/app/client_app_pick.cpp src/app/client_app_iso.cpp src/app/client_app_items.cpp src/app/client_app_player.cpp src/app/client_app_zone.cpp src/app/client_app_pregame.cpp src/app/client_app_options.cpp src/app/client_app_commands.cpp src/app/client_app_info.cpp src/app/client_app_web.cpp src/app/client_app_login.cpp src/app/client_app_gamepad.cpp src/app/client_app_bugreport.cpp src/app/client_app_update.cpp src/app/client_app_addons.cpp src/app/input_script.cpp src/app/model_viewer.cpp ${HAILSTONE_WIN_MANIFEST} ${HAILSTONE_WIN_CLIENT_RESOURCES})
 target_compile_options(hailstone PRIVATE ${HAILSTONE_WARNINGS})
 # Windows: a Release (or MinSizeRel) client is a GUI program, so no console window opens beside it; main() stays the
 # entry point. Other builds keep the console for the log. Errors that stop a start are shown in a dialog either way
@@ -1176,6 +1180,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/key_commands_test.cpp
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
+    tests/iso_camera_test.cpp
+    tests/click_intent_test.cpp
+    tests/iso_occlusion_test.cpp
     tests/gamepad_bindings_test.cpp
     tests/anim_vectors_test.cpp
     tests/anim_layers_test.cpp

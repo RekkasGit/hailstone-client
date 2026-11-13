@@ -753,6 +753,16 @@ PlayerMovement::Frame PlayerMovement::update(const MovementKeys& keys, float yaw
         ev = ctl_.controls(ci, ch, now);
         cs.keys = held;
         cs.autorun = autorun;
+    } else if (key_override_) {
+        auto& cs = ctl_.controls_state();
+        const mech::ControlKeys held = cs.keys;
+        cs.keys.forward = *key_override_;
+        cs.keys.backward = cs.keys.turn_left = cs.keys.turn_right = false;
+        cs.keys.strafe_left = cs.keys.strafe_right = false;
+        ci.forward = *key_override_;
+        ci.back = ci.turn_left = ci.turn_right = ci.strafe_left = ci.strafe_right = false;
+        ev = ctl_.controls(ci, ch, now);
+        cs.keys = held;
     } else {
         ev = ctl_.controls(ci, ch, now);
     }

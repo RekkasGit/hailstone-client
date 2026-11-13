@@ -189,7 +189,7 @@ CameraPose update_camera(int type, GameCamera& cam, const CameraTarget& target, 
 }
 
 int toggle_view_next(int type) {
-    int next = (type == kCameraWheelFollow ? 0 : type) + 1;
+    int next = (type == kCameraWheelFollow || type == kCameraIsometric ? 0 : type) + 1;
     return next < 6 ? next : 0;
 }
 

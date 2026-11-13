@@ -163,7 +163,7 @@ bool Navigator::plan(const glm::vec3& from) {
         partial_ = r.partial;
     }
     if (points.empty()) return false;
-    if (partial_ && !partial_told_ && env_.chat) {
+    if (partial_ && !partial_told_ && env_.chat && !goal_.quiet) {
         partial_told_ = true;
         env_.chat(std::format("[Nav] {} cannot be reached over the mesh; going as near as it allows.", goal_.label));
     }
@@ -227,6 +227,22 @@ std::string Navigator::go_to_point(const glm::vec3& world, float distance, std::
     g.straight = straight;
     g.label = std::move(label);
     return begin(std::move(g));
+}
+
+std::string Navigator::walk_to_click(const glm::vec3& world, float distance) {
+    stick_.reset();
+    Goal g;
+    g.kind = GoalKind::Point;
+    g.point = world;
+    g.distance = distance > 0.0f ? distance : 2.0f;
+    g.quiet = true;
+    g.label = "the spot clicked";
+    std::string why = begin(g);
+    if (why == "this zone has no navigation mesh") {
+        g.straight = true;
+        why = begin(std::move(g));
+    }
+    return why;
 }
 
 std::string Navigator::go_to_spawn(std::uint32_t id, float distance) {

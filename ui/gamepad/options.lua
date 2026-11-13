@@ -3,6 +3,7 @@
 --   Buttons       what each button does in game mode (eq.gamepad.binding / set_binding), A picks a new action
 --   Cross Hotbar  which hot button each cross hotbar slot fires (eq.gamepad.cross_slot / set_cross_slot)
 --   Interface, Game, Display, Audio   the client options (eq.Option / eq.SetOption), as the classic Options window
+--   Camera        the isometric camera's (the iso_* options, docs/isometric.md)
 -- Every row is changed with the D-pad left / right (or A); the mouse clicks a row (right click: back).
 local T = dofile("lib/theme.lua")
 local pad = dofile("lib/pad.lua")
@@ -56,6 +57,7 @@ local ACTIONS = {
   { "CAST1", "Cast gem 1" }, { "CAST2", "Cast gem 2" }, { "CAST3", "Cast gem 3" }, { "CAST4", "Cast gem 4" },
   { "STOP_CAST", "Stop casting" }, { "INVENTORY", "Inventory" }, { "SPELLBOOK", "Spell book" },
   { "menu", "Main menu" }, { "cursor", "Cursor mode" }, { "camera_toggle", "First person / behind" },
+  { "camera_iso", "Isometric camera" },
   { "chat", "Chat keyboard" }, { "none", "Nothing" },
 }
 local ACTION_NAME = {}
@@ -242,6 +244,24 @@ local PAGES = {
       optionRow("Ground floating NPCs", "ground_npcs", "bool"),
       -- the texture pack (display.texture_folder, from the next start): Off, then each folder of textures/
       optionRow("Texture pack (next start)", "texture_pack", eq.OptionChoices("texture_pack")),
+    }
+    for i = 1, 12 do if list[i] then rows[#rows + 1] = list[i] end end
+    return rows
+  end },
+  { "Camera", function()
+    -- Hailstone's isometric camera (docs/isometric.md): the iso_* options.
+    local rows = {}
+    local list = {
+      optionRow("Isometric camera", "iso_camera", "bool"),
+      optionRow("Pitch", "iso_pitch", { 20, 89, 1, "°" }),
+      optionRow("Field of view", "iso_fov", { 10, 90, 1, "°" }),
+      optionRow("Movement", "iso_wasd", { "Relative to the camera", "Classic" }),
+      optionRow("See-through circle", "iso_reveal", { 0, 60, 2, " units" }),
+      optionRow("See-through always", "iso_reveal_always", "bool"),
+      optionRow("Lift roofs and ceilings", "iso_roof", "bool"),
+      optionRow("Silhouette behind walls", "iso_silhouette", "bool"),
+      optionRow("Click marker", "iso_marker", "bool"),
+      optionRow("Highlight under cursor", "iso_hover", "bool"),
     }
     for i = 1, 12 do if list[i] then rows[#rows + 1] = list[i] end end
     return rows

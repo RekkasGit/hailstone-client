@@ -58,6 +58,7 @@ TEST_CASE("CDisplay::ToggleView cycles 0..5; the wheel-follow camera counts as 0
     CHECK(toggle_view_next(kCameraUser2) == kCameraTether);
     CHECK(toggle_view_next(kCameraTether) == kCameraFirstPerson);
     CHECK(toggle_view_next(kCameraWheelFollow) == kCameraOverhead);
+    CHECK(toggle_view_next(kCameraIsometric) == kCameraOverhead);
     // Virtual +0x2c: the chase and user cameras only.
     CHECK_FALSE(camera_active(kCameraFirstPerson));
     CHECK_FALSE(camera_active(kCameraOverhead));

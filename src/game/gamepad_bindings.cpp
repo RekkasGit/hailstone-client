@@ -33,6 +33,7 @@ constexpr std::pair<Kind, std::string_view> kPadActions[] = {
     {Kind::HotPagePrev, "hotpage_prev"},
     {Kind::HotPageNext, "hotpage_next"},
     {Kind::Chat, "chat"},
+    {Kind::CameraIso, "camera_iso"},
 };
 
 std::string lower(std::string_view s) {

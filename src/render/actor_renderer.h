@@ -151,6 +151,12 @@ public:
                         std::uint32_t hide_id, float dt);
     const std::unordered_set<std::uint32_t>& draw_prepared(const FrameInfo& frame, const glm::mat4& view_proj,
                                                            const glm::vec3& camera_pos, const game::ViewDistance& view);
+    // The isometric camera's silhouette (shaders/actor_silhouette.frag): the prepared instances of the spawns `ids`
+    // (the player, and its mount) as a flat colour where they are behind what is drawn already. Before
+    // draw_prepared, after the zone and its objects, so the actors drawn after cover it where they are in sight.
+    // `color` is linear, its alpha the strength.
+    void draw_silhouette(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,
+                         std::span<const std::uint32_t> ids, const glm::vec4& color);
     // The prepared instances' opaque and alpha-tested parts into shadow cascade `cascade` (the cascades from the
     // last set_lighting), between VkContext::begin_shadow_cascade and end_shadow_cascade.
     void draw_shadow(const FrameInfo& frame, std::uint32_t cascade);
@@ -480,6 +486,7 @@ private:
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline pipelines_[3]{};
     VkPipeline shadow_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline silhouette_pipeline_ = VK_NULL_HANDLE; // draw_silhouette
     glm::vec3 shadow_from_{0.0f};
     float shadow_reach_ = 0.0f;
     std::optional<Frustum> pose_view_; // set_pose_view

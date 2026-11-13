@@ -104,7 +104,7 @@ gamepad.cross.<set>.<slot> = <bar>:<button>
 
 `<action>` is a `KeyCommand` name (`game::command_by_name`; the `CMD_` prefix may be left out or added, so
 `CMD_FORWARD` and `FORWARD` are the same), `hot:<bar>:<button>`, `none`, or a pad action (`menu`, `cursor`,
-`camera_toggle`, `interact`, `cancel`, `target_prev`, `target_next`, `target_group` (D-pad up's self and group
+`camera_toggle`, `camera_iso` (the isometric camera on or off, docs/isometric.md), `interact`, `cancel`, `target_prev`, `target_next`, `target_group` (D-pad up's self and group
 cycle), `hotpage_prev`, `hotpage_next` (D-pad left / right), `chat`). `<input>` is a button name, a trigger chord
 (`lt+a`, `rt+up`, `lt+rt+x`) or `back+start`. Only the bindings that differ from the defaults are written. A chord
 with no binding of its own gives its cross hotbar slot (D-pad and face buttons) or the plain button's action. The

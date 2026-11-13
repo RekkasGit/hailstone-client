@@ -74,6 +74,8 @@ TEST_CASE("Pad inputs and actions parse and print as hailstone.ini writes them")
     CHECK_FALSE(parse_pad_action("hot:11:1"));
     CHECK_FALSE(parse_pad_action("hot:1:13"));
     CHECK(parse_pad_action("camera_toggle") == PadAction::of(Kind::CameraToggle));
+    CHECK(parse_pad_action("camera_iso") == PadAction::of(Kind::CameraIso));
+    CHECK(pad_action_text(PadAction::of(Kind::CameraIso)) == "camera_iso");
     CHECK(parse_pad_action("none") == PadAction{});
     CHECK(parse_pad_action("") == PadAction{});
     CHECK_FALSE(parse_pad_action("NO_SUCH_COMMAND"));

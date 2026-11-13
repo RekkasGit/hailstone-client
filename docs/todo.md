@@ -269,6 +269,18 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [x] Zone lines marked exactly into the mesh; a walk stops before stepping into one (seen live at Oasis / North Ro).
 - [ ] Swimming live end to end (a long swim, diving, climbing out); levitation paths.
 
+## Isometric camera (docs/isometric.md)
+- [x] The camera (type 7): pitch, field of view, free turn, zoom, easing; fog, far plane, region and shadow cascades measured from the player; `/camera`.
+- [x] WASD relative to the camera (or classic: `camera.iso_wasd`), the turn keys turning the camera, the gamepad's sticks.
+- [x] Click to move and to interact, on the navigator: the ground (held, following the cursor), doors, ground items, ladders; a right click walking to an NPC or a corpse. Never an attack.
+- [ ] Live: clicks across a zone, a merchant and a corpse walked to, a door on the way, the held button; the gamepad.
+- [x] A mark where a click's walk ends.
+- [x] Seeing the player through what is in front: a dithered cut round the player of what is nearer and above their feet (zone, objects, grass), clicks through it.
+- [x] The circle only while something is in the way; the roof cut under cover; the silhouette; picks through the cut; a ring under the cursor.
+- [x] Options (modern Display > Isometric Camera, the gamepad pack's Camera page; `iso_*` through `eq.Option`), the pad action `camera_iso`, `/camera` toggles. No key command of its own (the key table is the original's): `/camera toggle` on a hot button.
+- [ ] Whole objects fading as one; tuning the cut, the roof and the silhouette against real zones.
+- [ ] Live: the roof in buildings, caves and stacked dungeons; the silhouette; the hover ring; the options in both packs.
+
 ## 4. Check live (implemented, not confirmed)
 
 - [x] Shift-click / Ctrl-click quantity flags (checked live).
