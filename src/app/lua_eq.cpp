@@ -1703,13 +1703,15 @@ int StopItemJob(lua_State* L) {
     return 0;
 }
 
-// The bank's slot count: the open bank's, else every slot the bank can have (its items are known from zoning in).
+// The bank's slot count: the open bank's, else every slot the bank can have.
 int bank_slot_count(EqHost& h) { return h.conn->bank() ? h.conn->bank()->slots : 24; }
 
 // count, slots, list = eq.FindItems(where, text)   -- the items whose name holds text (any case) in the general slots
-// and their bags ("inventory"), the bank's slots and bags ("bank", known even while it is closed) or both ("all");
-// slots: { [top-level slot] = matches there, the bag's contents included } (the first place's kind); list: { { item
-// (eq.Item's), place ("i:29:3"), bag (the bag's name, or nil) }, ... } in place order
+// and their bags ("inventory"), the bank's slots and bags ("bank") or both ("all"); slots: { [top-level slot] =
+// matches there, the bag's contents included } (the first place's kind); list: { { item (eq.Item's), place
+// ("i:29:3"), bag (the bag's name, or nil), stale }, ... } in place order. Until the server has sent the bank in this
+// zone (EQEmu's Inventory:LazyLoadBank sends it only near a banker) the bank's matches come from the bank as last
+// seen (game/bank_snapshot.h; eq.BankSeen), marked stale.
 int FindItems(lua_State* L) {
     auto& h = Impl::of(L).host;
     const char* where_arg = luaL_checkstring(L, 1);
@@ -1724,7 +1726,12 @@ int FindItems(lua_State* L) {
     lua_newtable(L); // slots
     lua_newtable(L); // list
     if (h.conn && h.in_game && !text.empty()) {
-        const auto& inv = h.conn->inventory();
+        std::optional<game::Inventory> seen; // the bank as last seen, while the bank is not known in this zone
+        if (!h.conn->bank_live()) {
+            seen.emplace();
+            seen->load(h.conn->bank_seen().items);
+        }
+        bool stale = false;
         auto row = [&](const net::Item& it, const net::ItemSlot& at, const net::Item* bag) {
             lua_createtable(L, 0, 3);
             push_item(L, &it);
@@ -1737,9 +1744,15 @@ int FindItems(lua_State* L) {
                 lua_pushstring(L, bag->name.c_str());
                 lua_setfield(L, -2, "bag");
             }
+            if (stale) {
+                lua_pushboolean(L, 1);
+                lua_setfield(L, -2, "stale");
+            }
             lua_rawseti(L, -2, ++listed);
         };
         auto scan = [&](std::int16_t type, int first, int last, bool count_slots) {
+            stale = type == net::kInvBank && seen.has_value();
+            const game::Inventory& inv = stale ? *seen : h.conn->inventory();
             for (int s = first; s <= last; ++s) {
                 net::ItemSlot top{type, static_cast<std::int16_t>(s), -1, -1, 0, 0};
                 const net::Item* it = inv.at(top);

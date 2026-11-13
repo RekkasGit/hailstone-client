@@ -51,6 +51,7 @@
 #include "game/item_moves.h"
 #include "game/item_sort.h"
 #include "game/kept_items.h"
+#include "game/bank_snapshot.h"
 #include "game/inventory.h"
 #include "game/item_links.h"
 #include "game/mail.h"
@@ -315,6 +316,9 @@ struct ConnectionOptions {
     std::filesystem::path server_files_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
+    // Hailstone: the bank as last seen is read from and saved to the character's bank.dat (game/bank_snapshot.h).
+    // Off: kept for the session only (tests, which share character names).
+    bool bank_snapshot_file = false;
 };
 
 // The modifier keys of a click on an item slot (CXWndManager::GetKeyboardFlags: Shift, Ctrl, Alt).
@@ -1796,6 +1800,14 @@ public:
     bool activate_bank(std::uint32_t banker_id);
     void close_bank();
     const std::optional<BankSession>& bank() const { return bank_; }
+    // Hailstone: the bank as last seen (game/bank_snapshot.h). bank_live(): the inventory holds the bank as the server
+    // has it in this zone (it came with OP_CharInventory or in item packets, or the bank window opened); until then
+    // the bank's slots are empty in inventory() and bank_seen() is the copy to list in their place (seen 0: never
+    // seen). The copy is never in inventory(), so nothing can move, use or count what it holds.
+    bool bank_live() const { return bank_live_; }
+    const game::BankSnapshot& bank_seen() const { return bank_seen_; }
+    // Changes when bank_live() or bank_seen() does (a window's cache).
+    std::uint64_t bank_view_revision() const { return bank_view_revision_; }
     const game::BankCoins& bank_coins() const { return bank_coins_; }
     // Coin on the cursor by wire type (0 copper .. 3 platinum).
     const std::array<std::uint32_t, 4>& cursor_coins() const { return cursor_coins_; }
@@ -3144,6 +3156,13 @@ private:
     std::int64_t merchant_check_ms_ = 0; // CMerchantWnd::NextRefreshTime: the range check every 500 ms
     std::optional<TradeSession> trade_;
     std::optional<BankSession> bank_;
+    game::BankSnapshot bank_seen_;     // Hailstone: the bank as last seen (bank.dat)
+    bool bank_live_ = false;
+    std::uint64_t bank_view_revision_ = 0;
+    void set_bank_live(bool live);
+    // While bank_live(): bank_seen() becomes the inventory's bank now, saved to bank.dat (bank_snapshot_file).
+    void capture_bank();
+    void load_bank_snapshot();
     std::int64_t bank_check_ms_ = 0; // CBankWnd::NextRefreshTime
     game::BankCoins bank_coins_;
     std::array<std::uint32_t, 4> cursor_coins_{};

@@ -29,7 +29,7 @@
 //   --pet-test (tools/group_probe.h)
 //   merchants, hail and trade: --shop, --list-merchants, --hail, --handin,
 //   --trade-with, --trade-accept (tools/shop_probe.h)
-//   bank, coin moves and stack splits: --bank, --bank-keep (tools/bank_probe.h)
+//   bank, coin moves and stack splits: --bank, --bank-keep; the bank as last seen: --bank-file (tools/bank_probe.h)
 //   AAs, training, tasks and combines: --aa, --train, --task, --combine, --object (tools/progress_probe.h)
 //   duels, inspect, commands, the bazaar and mail: --cmd, --duel, --inspect, --trader, --shop-trader,
 //   --bazaar, --mail, --mail-send (tools/market_probe.h)
@@ -233,6 +233,7 @@ int main(int argc, char** argv) {
     auto extensions = std::make_shared<game::ExtensionChain>();
     copts.hooks = &hooks;
     copts.plugins = extensions;
+    bank.configure(copts);
     net::GameConnection conn(game, copts);
     // The plugins' cache and config (the NMS plugin's auth_key): a new owner-only folder of this run's in the shared
     // temp folder, removed at the end, never a fixed name another user could have made or linked first.

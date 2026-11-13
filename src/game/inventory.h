@@ -71,6 +71,12 @@ bool can_go_in_equip_slot(const net::Item& item, int slot, const net::Item* prim
 // 2 placeable bag, 3 non-empty bag into a bag, 5 too big, 6 quiver needs
 // arrows, 7 bandolier needs throwing items, 8 tradeskill bag, 10 type 60.
 int bag_fit(const net::Item& bag, const net::Item& item);
+// EQEmu's InventoryProfile::CanItemFitInContainer, the test Client::MoveItemToInventory uses when the bandolier swap
+// returns an item to a bag: not too big, a quiver (bag type 2) takes arrows (27) only and a bandolier bag (8) small
+// throwing items (19) only. Looser than bag_fit (no placeable, tradeskill or type 60 refusal). The server never says
+// where a swap put things, so the client's prediction has to use the server's test, not the original's, or the two
+// inventories part (docs/unknowns.md).
+bool server_bag_accepts(const net::Item& bag, const net::Item& item);
 // ItemBase_CanStackWith @007b1160.
 bool can_stack_with(const net::Item& a, const net::Item& b);
 // The eqstr id CanGoInBag prints for a bag_fit() result (0 = none).
