@@ -3,6 +3,8 @@
 // The playable client's internals, shared by the client_app*.cpp files: the ClientApp class
 // and its collision world. Only those files include it.
 
+#include <format>
+
 #include "app/updater.h"
 #include "platform/process.h"
 #include "core/step_clock.h"
@@ -211,18 +213,25 @@ enum class Screen { Login, Servers, Characters, Create, Loading, InGame };
 
 class ClientApp {
 public:
-    // Sparse lifecycle snapshots; heap allocation bytes and RSS overlap on shared-memory GPUs.
-    void log_memory(std::string_view phase) const {
+    // Sparse lifecycle snapshots, at debug level (`summary`: info, the one line per zone-in). Heap allocation bytes
+    // and RSS overlap on shared-memory GPUs.
+    void log_memory(std::string_view phase, bool summary = false) const {
+        const log::Level level = summary ? log::Level::Info : log::Level::Debug;
+        if (!log::enabled(level)) return;
         constexpr double mib = 1024.0 * 1024.0;
+        auto line = [&](std::string text) {
+            if (summary) log::info("{}", text);
+            else log::debug("{}", text);
+        };
         if (auto rss = platform::resident_memory())
-            log::info("memory checkpoint: {}: resident {:.2f} MiB", phase, double(*rss) / mib);
+            line(std::format("memory checkpoint: {}: resident {:.2f} MiB", phase, double(*rss) / mib));
         if (auto commit = platform::private_commit_memory())
-            log::info("memory checkpoint: {}: private commit {:.2f} MiB", phase, double(*commit) / mib);
+            line(std::format("memory checkpoint: {}: private commit {:.2f} MiB", phase, double(*commit) / mib));
         const auto heaps = vk_.heap_use();
         for (std::size_t i = 0; i < heaps.size(); ++i)
-            log::info("memory GPU: {}: heap {} ({}), allocation bytes {:.2f} MiB, {} allocations",
-                      phase, i, heaps[i].device_local ? "device-local" : "host", double(heaps[i].allocated) / mib,
-                      heaps[i].allocations);
+            line(std::format("memory GPU: {}: heap {} ({}), allocation bytes {:.2f} MiB, {} allocations", phase, i,
+                             heaps[i].device_local ? "device-local" : "host", double(heaps[i].allocated) / mib,
+                             heaps[i].allocations));
     }
 
     // The Lua UI goes first: its state's finalizers may still reach what the eq.* functions hold (eq_host_, eq_api_,

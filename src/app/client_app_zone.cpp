@@ -202,7 +202,7 @@ void ClientApp::update_zone_settle() {
               total, zone_loaded_ms_, zone_in_ms_, zone_settle_.frames(),
               zone_in_ms_ >= 0 && total >= 0 ? total - zone_in_ms_ : -1, zone_settle_.most_waiting(),
               zone_settle_.timed_out() ? "; timed out: " + zone_settle_.detail() : std::string());
-    log_memory("zone-in: settled appearances");
+    log_memory("zone-in: settled appearances", true);
     if (actor_library_) {
         std::size_t loaded = 0, count = 0, bytes = 0, decodes = 0, releases = 0;
         std::unordered_set<const assets::CharacterArchive*> seen;

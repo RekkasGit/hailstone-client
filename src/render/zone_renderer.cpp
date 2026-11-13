@@ -34,13 +34,13 @@
 namespace hailstone::render {
 
 namespace {
-// What a step of the zone's build leaves in memory, so a build that holds much more than its geometry can be read.
-void mark(const char* phase) {
-    static const auto start = std::chrono::steady_clock::now();
+// What a step of the zone's build leaves in memory, so a build that holds much more than its geometry can be read
+// (debug level). The time counts from the start of this build (Prepared::started).
+void mark(const char* phase, std::chrono::steady_clock::time_point start) {
+    if (!log::enabled(log::Level::Debug)) return;
     if (auto rss = platform::resident_memory())
-        log::info("zone build: {}: {:.0f} MB resident (+{:.2f}s)",
-                  phase, double(*rss) / (1024 * 1024),
-                  std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+        log::debug("zone build: {}: {:.0f} MB resident (+{:.2f}s)", phase, double(*rss) / (1024 * 1024),
+                   std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
 }
 } // namespace
 
@@ -262,6 +262,7 @@ bool has_mpl_triple(const assets::Mesh& mesh, const assets::Material& m) {
 } // namespace
 
 struct ZoneRenderer::Prepared {
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now(); // for the build's log lines
     std::vector<GpuVertex> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<Draw> draws;
@@ -305,7 +306,7 @@ void ZoneRenderer::upload(Prepared& p) {
             vk_.release_finished_uploads(kStagingBudget);
         }
     }
-    mark("textures staged");
+    mark("textures staged", p.started);
     light_grid_buffers_[0] = upload.buffer(p.lights, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     light_grid_buffers_[1] = upload.buffer(p.grid_cells, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     light_grid_buffers_[2] = upload.buffer(p.grid_indices, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
@@ -314,7 +315,7 @@ void ZoneRenderer::upload(Prepared& p) {
     index_buffer_ = upload.buffer_pieces(std::as_bytes(std::span(p.indices)), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                          kStagingBudget);
     upload.submit();
-    mark("submitted");
+    mark("submitted", p.started);
     log::info("zone renderer prepared: {} textures ({} MB), {} vertices ({} MB), {} indices ({} MB)", textures_.size(),
               texture_bytes / (1024 * 1024), p.vertices.size(), p.vertices.size() * sizeof(GpuVertex) / (1024 * 1024),
               p.indices.size(), p.indices.size() * sizeof(std::uint32_t) / (1024 * 1024));
@@ -469,7 +470,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                                                 std::uint32_t max_images) {
     PreparedPtr prepared(new Prepared);
     Prepared& prep = *prepared;
-    mark("prepare start");
+    mark("prepare start", prep.started);
     prep.behind = options.behind;
     std::vector<GpuVertex>& vertices = prep.vertices;
     std::map<MaterialKey, std::vector<std::uint32_t>> by_material;
@@ -661,7 +662,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         log::info("multi-pass lighting: {} lights reach {} zone vertices", zone.lights.size(), lit_vertices);
     if (liquid_triangles) log::info("zone renderer: {} water and lava surface triangles", liquid_triangles);
     if (detail_triangles) log::info("zone renderer: {} detail texture triangles", detail_triangles);
-    mark("mesh loop done");
+    mark("mesh loop done", prep.started);
 
     // A neighbouring zone: moved into the current zone's coordinates, then cut to what lies past the zone line.
     if (options.offset != glm::vec3(0.0f) || !options.keep.empty()) {
@@ -1013,7 +1014,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
                                   grid.width, grid.height, grid.cell);
     }
     prep.indices = std::move(indices);
-    mark("prepared");
+    mark("prepared", prep.started);
     return prepared;
 }
 

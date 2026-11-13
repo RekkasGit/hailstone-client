@@ -760,10 +760,10 @@ std::shared_ptr<const CharacterLibrary> CharacterArchiveCache::library_for_zone(
                                                                                std::string_view zone) {
     auto memory = [](std::string_view group, const auto& archives) {
         if (auto rss = platform::resident_memory())
-            log::info("memory checkpoint: character archives {}: resident {:.2f} MiB", group, double(*rss) / (1024.0 * 1024.0));
+            log::debug("memory checkpoint: character archives {}: resident {:.2f} MiB", group, double(*rss) / (1024.0 * 1024.0));
         if (auto commit = platform::private_commit_memory())
-            log::info("memory checkpoint: character archives {}: private commit {:.2f} MiB", group,
-                      double(*commit) / (1024.0 * 1024.0));
+            log::debug("memory checkpoint: character archives {}: private commit {:.2f} MiB", group,
+                       double(*commit) / (1024.0 * 1024.0));
         std::size_t mapped = 0, owned = 0, parsed = 0;
         constexpr double mib = 1024.0 * 1024.0;
         for (const auto& a : archives) {
@@ -773,8 +773,8 @@ std::shared_ptr<const CharacterLibrary> CharacterArchiveCache::library_for_zone(
             mapped += file;
             owned += heap;
             parsed += wld;
-            log::info("memory archive: {} {}: mapped {:.2f} MiB, heap {:.2f} MiB, parsed WLD estimate {:.2f} MiB",
-                      group, a->archive->label(), double(file) / mib, double(heap) / mib, double(wld) / mib);
+            log::debug("memory archive: {} {}: mapped {:.2f} MiB, heap {:.2f} MiB, parsed WLD estimate {:.2f} MiB",
+                       group, a->archive->label(), double(file) / mib, double(heap) / mib, double(wld) / mib);
         }
         log::info("memory archives: {}: {} archives, mapped {:.2f} MiB, heap {:.2f} MiB, parsed WLD estimate {:.2f} MiB",
                   group, archives.size(), double(mapped) / mib, double(owned) / mib, double(parsed) / mib);

@@ -420,10 +420,13 @@ Measured on a dev server, zone connect to the first frame shown, before and afte
 for up to 3 s in poknowledge, a large EQG object missing for a frame in commonlands and the HUD without the
 character's buffs and stats; after, the first frame shown matches those a few seconds later.
 
-The zone build says what it costs as it goes, so a heavy zone can be read from the log: `zone load: <phase>: <N> MB
-resident` after the zone data, the flora, the zone renderer, the flora renderer, the collision, the navigation and the
-ambient probe, and `zone renderer prepared: N textures (X MB), N vertices (X MB), N indices (X MB)` for what the zone's
-meshes and textures took. The numbers are the log's only; nothing is kept of them.
+The zone build says what it costs as it goes, so a heavy zone can be read from the log. At debug level: `memory
+checkpoint: zone load: <phase>: resident <N> MiB` (and private commit on Windows, and the GPU heaps) after the zone
+data, the flora, the zone renderer, the flora renderer, the collision, the navigation and the ambient probe; and
+`zone build: <phase>: <N> MB resident (+<T>s)` through the zone renderer's own build, the time counted from the start of
+that build. At info level, once per zone: `zone renderer prepared: N textures (X MB), N vertices (X MB), N indices (X
+MB)` for what the zone's meshes and textures took, and the settled zone-in's `memory checkpoint: zone-in: settled
+appearances` lines. The numbers are the log's only; nothing is kept of them.
 
 ## Culling
 
