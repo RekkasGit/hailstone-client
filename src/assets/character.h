@@ -55,12 +55,46 @@ struct BonePose {
     glm::vec3 scale{1.0f}; // uniform for WLD tracks; EQG tracks store three
 };
 
+// Copies share key data. Builders detach on mutation; readers never receive a mutable reference. Constant tracks
+// can store one key while keeping their logical length, so the sampler's interpolation and looping stay unchanged.
+class AnimationTrack {
+public:
+    using StorageSet = std::unordered_set<const void*>;
+    AnimationTrack() = default;
+    AnimationTrack(std::initializer_list<BonePose> keys);
+    AnimationTrack(const AnimationTrack&) = default;
+    AnimationTrack& operator=(const AnimationTrack&) = default;
+    AnimationTrack(AnimationTrack&& other) noexcept;
+    AnimationTrack& operator=(AnimationTrack&& other) noexcept;
+    std::size_t size() const { return count_; }
+    bool empty() const { return count_ == 0; }
+    const BonePose& operator[](std::size_t i) const { return (*keys_)[keys_->size() == 1 ? 0 : i]; }
+    const BonePose& front() const { return (*this)[0]; }
+    const BonePose& back() const { return (*this)[count_ - 1]; }
+    void push_back(const BonePose& key);
+    void reserve(std::size_t count);
+    void resize(std::size_t count);
+    void clear() { keys_.reset(); count_ = 0; }
+    // Physical storage, for diagnostics/tests; sampling always uses size(), the logical frame count.
+    std::size_t stored_keys() const { return keys_ ? keys_->size() : 0; }
+    const void* storage_id() const { return keys_.get(); }
+    std::size_t storage_bytes(StorageSet& seen) const;
+private:
+    friend struct CharacterModel;
+    std::shared_ptr<std::vector<BonePose>> keys_;
+    std::size_t count_ = 0;
+    std::vector<BonePose>& writable();
+    void compact();
+    std::uint64_t hash() const;
+    bool share_if_equal(const AnimationTrack& other);
+};
+
 struct AnimationClip {
     std::uint32_t frame_ms = 100;  // 0x13 frame time; 100 ms when the tracks give none
     std::uint32_t frame_count = 1; // longest track
     // One key list per bone, at least one key each. Bones the clip does not
     // animate hold their rest pose.
-    std::vector<std::vector<BonePose>> tracks;
+    std::vector<AnimationTrack> tracks;
     bool borrowed = false; // taken from the animation donor model
 
     float duration_seconds() const { return static_cast<float>(frame_count * frame_ms) / 1000.0f; }
@@ -134,6 +168,7 @@ struct CharacterMesh {
     // Per material: tint 0xAARRGGBB multiplied into the texture (a zero
     // high byte = none).
     std::vector<std::uint32_t> tints;
+    std::size_t retained_bytes() const; // estimate: object and owned payload sizes, excluding allocator overhead
 };
 
 struct CharacterModel {
@@ -208,12 +243,30 @@ struct CharacterModel {
     int mount_point_bone(std::string_view rider_code) const;
     // The model's default geometry as a mesh.
     CharacterMesh default_mesh() const;
+    struct MemoryBreakdown {
+        std::size_t animation_bytes = 0, geometry_bytes = 0, other_bytes = 0;
+        std::size_t total() const { return animation_bytes + geometry_bytes + other_bytes; }
+    };
+    // Shares identical tracks within this model. Copied clips/models already share keys by copy-on-write.
+    void compact_animations();
+    // Animation includes clips, aliases and skeleton arrays; geometry includes materials. Other includes the
+    // object, identifying strings, points and emitters. Uses owned payload sizes with no allocator overhead.
+    // A shared set counts track payloads once across multiple models in a cache snapshot.
+    MemoryBreakdown memory_breakdown(AnimationTrack::StorageSet* shared_tracks = nullptr) const;
+    std::size_t retained_bytes() const; // estimate: object and owned payload sizes, excluding allocator overhead
 };
 
-// An archive with its WLD files parsed.
+// An archive with validated WLD resource indices; full WLD payloads materialize on first use.
 struct CharacterArchive {
     std::shared_ptr<const PfsArchive> archive;
     std::vector<wld::WldFile> wlds;
+
+    // Storage accounting. archive_bytes() is the archive file's size: file-backed bytes live in the page cache and
+    // are shared, owned_bytes() of it is in private heap. parsed_bytes() estimates the WLD data itself, which is
+    // private; scoped model construction releases decoded payloads, keeping the resource index.
+    std::size_t archive_bytes() const;
+    std::size_t owned_bytes() const;
+    std::size_t parsed_bytes() const;
 };
 
 // Opens and parses a character archive; nullptr when the file does not exist.
@@ -283,18 +336,22 @@ std::shared_ptr<const game::AppearanceData> load_appearance_data(const GameDir& 
 namespace detail {
 struct TrackLoc {
     const wld::WldFile* wld = nullptr;
-    const wld::TrackRef* ref = nullptr;
+    wld::TrackRef ref{};
 };
-using FragmentLoc = std::pair<const wld::WldFile*, const wld::Fragment*>;
+struct FragmentLoc {
+    const wld::WldFile* first = nullptr;
+    wld::Ref ref = 0;
+    const wld::Fragment* fragment() const { return first ? first->at(ref) : nullptr; }
+};
 
 // CharacterLibrary's name tables over a list of archives, built archive by archive in load order (see
 // kZoneResourceLevel for how a name's definitions resolve).
 struct CharacterTables {
-    // "HUM" -> the actor fragment.
+    // "HUM" -> the WLD and positive actor reference; no decoded fragment is pinned by indexing.
     std::unordered_map<std::string, FragmentLoc> actors;
     std::unordered_map<std::string, TrackLoc> tracks;
     // Every actor definition by WLD and code, not only the one found ("WOL" in wol_v2_chr.wld -> its actor).
-    std::map<std::pair<const wld::WldFile*, std::string>, const wld::Fragment*> actor_wlds;
+    std::map<std::pair<const wld::WldFile*, std::string>, FragmentLoc> actor_wlds;
     // Bone track name -> clip codes that animate it ("HUMPE_TRACK" -> L01, P01 ...).
     std::unordered_map<std::string, std::vector<std::string>> clips_by_bone;
     std::unordered_map<std::string, std::size_t> files; // lower-case name -> archive index
@@ -404,6 +461,16 @@ public:
     const std::vector<std::shared_ptr<const CharacterArchive>>& archives() const { return archives_; }
     // The shared index of the global archives this library was made on, or null.
     const CharacterArchiveIndex* global_index() const { return globals_.get(); }
+    struct CacheMemory {
+        std::size_t models = 0, model_bytes = 0;
+        std::size_t model_animation_bytes = 0, model_geometry_bytes = 0, model_other_bytes = 0;
+        std::size_t appearances = 0, appearance_bytes = 0;
+        std::size_t items = 0, item_bytes = 0;
+    };
+    // Unique model/appearance objects reachable from this library, its shared cache, EQG model cache and opened
+    // standalone libraries. Item cache entries own copies and count separately. Excludes maps, lookup records,
+    // parsed EQG source meshes/parts, renderer-owned copies and allocator overhead; safe during dressing.
+    CacheMemory cache_memory() const;
     bool has_model(std::string_view code) const;
     std::vector<std::string> model_codes() const;
 
@@ -596,6 +663,7 @@ public:
     bool has_file(std::string_view name) const;
 
 private:
+    friend class CharacterLibrary; // cache diagnostics traverse the persistent standalone libraries
     GameDir game_;
     std::unordered_map<std::string, std::shared_ptr<const CharacterLibrary>> libraries_; // "PBR" -> library or null
 };

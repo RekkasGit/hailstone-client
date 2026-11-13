@@ -25,6 +25,9 @@ namespace hailstone::render {
 // Optional device capabilities the renderers adapt to.
 struct DeviceCaps {
     bool bc_textures = false;  // BC1-3 sampled images (absent on some arm64 GPUs)
+    // R8G8B8A8_SRGB images can be blitted with linear filtering: UploadBatch::texture builds an opaque texture's mips
+    // on the GPU in linear light only then (render::gpu_builds_mips), and on the CPU otherwise.
+    bool srgb_mip_blit = false;
     float max_anisotropy = 0.0f; // 0 when sampler anisotropy is unsupported
     // The textures one bindless array may hold (render/descriptor_limits.h), under the update-after-bind limits when
     // update_after_bind is set.
@@ -213,6 +216,12 @@ public:
     // the one being recorded included. Returns the upload's serial, for retire_after_upload; `staging_bytes` is what
     // the upload keeps alive until it is done (past kMaxStagingInFlight in flight, the oldest uploads are waited for).
     std::uint64_t submit_upload(const std::function<void(VkCommandBuffer)>& record, VkDeviceSize staging_bytes);
+    // The staging the uploads in flight hold (host memory the GPU has not read yet).
+    std::uint64_t upload_staging_in_flight() const { return uploads_.bytes_in_flight(); }
+    // Frees the staging of the uploads the GPU is done with, waiting for the oldest when more than `budget_bytes`
+    // is in flight (0: never wait). The frame loop releases what is done each frame; a long build (the zone's)
+    // calls this too, so the staging of what it has already sent does not pile up until the first frame.
+    void release_finished_uploads(std::uint64_t budget_bytes = 0);
     // Runs `release` (destroying Vulkan objects) once the GPU is done with everything submitted so far and the frame
     // being recorded: for what a frame in flight, or an upload, may still use. `frames_ahead`: frames not begun yet
     // that may use it too (1 for the UI's textures: ImGui's draw lists are built before their frame begins). Main

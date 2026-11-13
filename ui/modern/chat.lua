@@ -7,6 +7,8 @@
 -- name in a line is a link: a click opens a tell to them (their tell window with Use Tell Windows, else
 -- "/tell <name> " in the input). Right-click: the chat menu (windows, tabs, Always Chat Here, filters, default channel,
 -- font, tell windows, timestamps, clear).
+-- A button at the strip's right end folds the window into the strip (the output and the input go, the tabs stay), as
+-- the combat ability window folds into its title bar; the frame's menu has the same (Roll up).
 -- Unlocked (any frame's menu), a chat window is moved by dragging and resized from its corner.
 local hud = dofile("lib/hud.lua")
 local stml = dofile("lib/stml.lua")
@@ -16,7 +18,7 @@ stml.LINK = C.chatLink -- (this copy of stml: chat links in the colour made for 
 
 local chats = {} -- by slot: { version, lines, input, focus, follow, links, tab, rename, renameOpen }
 
--- Item links in the input: the game puts a link in as its tag; the input shows the name and the tags go back in when
+-- Item and achievement links: the input shows labels; exact tags go back in when
 -- the line is sent (lib/chatlinks.lua).
 local chatlinks = dofile("lib/chatlinks.lua")
 local function collapseLinks(c, text, offset) return chatlinks.Collapse(c.links, text, offset) end
@@ -24,6 +26,7 @@ local function expandLinks(c, text) return chatlinks.Expand(c.links, text) end
 
 local SIZE = function() return 470, 250 end
 local RESIZABLE = { 240, 120 }
+local HEADER, INPUT = 26, 26 -- (the tab strip's and the input's heights, design pixels)
 
 local function state(slot)
   local c = chats[slot]
@@ -47,7 +50,8 @@ local function state(slot)
     }
     c.panelOpts = { alpha = 0.7 }
     c.closeWindow = function() eq.ChatCloseWindow(slot) end
-    c.winOpts = { size = SIZE, resizable = RESIZABLE, fit = slot == 1, panelOpts = c.panelOpts, closable = false }
+    c.winOpts = { size = SIZE, resizable = RESIZABLE, fit = slot == 1, panelOpts = c.panelOpts, closable = false,
+      rollup = true, titleHeight = HEADER }
     chats[slot] = c
   end
   return c
@@ -64,27 +68,43 @@ local function update(slot, c)
 end
 
 -- ---------------------------------------------------------------- the chat menu (as classic's)
--- Filters: the chat window manager's channels by its menus (Filters, Chat Channel, Melee, Spells): each goes to one
--- window; a ticked one comes to this tab, unticking sends it back to the main window. Show All is the menu's ALL.
+-- Filters: the chat window manager's channels by its menus (Filters, Chat Channel, Melee, Spells, and Hailstone's
+-- Extended (server) with its submenus; eq.ChatFilterGroups): each goes to one window; a ticked one comes to this tab,
+-- unticking sends it back to the main window. Show All is the menu's ALL (its own items only). A menu with no items
+-- (Chat Channel before joining one) is left out.
 local function filtersMenu(slot)
   local filters = eq.ChatFilters(slot)
   if #filters == 0 then return end
   if not ui.BeginMenu("Filters") then return end
-  local groups, seen = {}, {}
+  local groups = eq.ChatFilterGroups()
+  local rootName = "Filters"
   for _, f in ipairs(filters) do
-    if not seen[f.group] then seen[f.group] = true; groups[#groups + 1] = f.group end
+    if f.menu == 0 then rootName = f.group; break end
   end
-  for gi, group in ipairs(groups) do
-    if ui.BeginMenu(group .. "##group" .. gi) then
-      if ui.MenuItem("Show All##" .. group) then eq.ChatSetFilter(slot, group, true) end
-      if ui.MenuItem("Hide All##" .. group) then eq.ChatSetFilter(slot, group, false) end
-      ui.Separator()
-      for _, f in ipairs(filters) do
-        if f.group == group and ui.MenuItem(f.name .. "##filter" .. f.id, f.on) then eq.ChatSetFilter(slot, f.id, not f.on) end
+  local function hasRows(id)
+    for _, f in ipairs(filters) do if f.menu == id then return true end end
+    for _, group in ipairs(groups) do
+      if group.parent == id and hasRows(group.id) then return true end
+    end
+    return false
+  end
+  local function drawGroup(id, name)
+    if ui.MenuItem("Show All##group" .. id) then eq.ChatSetFilter(slot, name, true) end
+    if ui.MenuItem("Hide All##group" .. id) then eq.ChatSetFilter(slot, name, false) end
+    ui.Separator()
+    for _, f in ipairs(filters) do
+      if f.menu == id and ui.MenuItem(f.name .. "##filter" .. f.id, f.on) then
+        eq.ChatSetFilter(slot, f.id, not f.on)
       end
-      ui.EndMenu()
+    end
+    for _, group in ipairs(groups) do
+      if group.parent == id and hasRows(group.id) and ui.BeginMenu(group.name .. "##group" .. group.id) then
+        drawGroup(group.id, group.name)
+        ui.EndMenu()
+      end
     end
   end
+  drawGroup(0, rootName)
   if ui.BeginMenu("Hit Modes") then
     for i, h in ipairs(eq.ChatHitModes()) do
       if ui.BeginMenu(h.name .. "##hit" .. i) then
@@ -156,7 +176,6 @@ local function menu(slot, c, w)
 end
 
 -- ---------------------------------------------------------------- drawing
-local HEADER, INPUT = 26, 26
 local FLASH = 1.0 -- seconds a tell window's flash takes to fade
 
 -- The tabs: text along the top, the one up underlined in the accent colour, one with unseen lines marked with a
@@ -186,11 +205,36 @@ local function tabs(slot, w, x, y, width, s, title, right)
   end
 end
 
+-- The roll-up button at the right end of the tab strip: the window folds into the strip (the tabs stay, the output and
+-- the input go), as the combat ability window folds into its title bar. `x`: the button's left edge.
+local function collapseButton(slot, x, y, s, rolled)
+  local size = 16 * s
+  local bx, by = x, y + (HEADER * s - size) / 2
+  local clicked = T.Hit("##chatcollapse" .. slot, bx, by, bx + size, by + size)
+  local hovered = ui.IsItemHovered()
+  local c = hovered and C.accent or C.muted
+  local cx, cy = bx + size / 2, by + size / 2
+  local d = 4 * s
+  if rolled then
+    ui.DrawTriangleFilled(cx - d, cy - d / 2, cx + d, cy - d / 2, cx, cy + d / 2, c[1], c[2], c[3], 1)
+  else
+    ui.DrawTriangleFilled(cx - d, cy + d / 2, cx + d, cy + d / 2, cx, cy - d / 2, c[1], c[2], c[3], 1)
+  end
+  if hovered then ui.SetTooltip(rolled and "Expand" or "Collapse") end
+  if clicked then hud.SetRolled("Chat" .. slot, not rolled) end
+end
+
 local function body(slot, c, w, title, x, y, width, height, s)
   local font, active, channel = eq.ChatInfo(slot)
   font = math.max(0, math.min(10, font or 3)) -- the chat font list (/chatfontsize 0..10)
   local pad = 8 * s
-  tabs(slot, w, x, y, width, s, title, w.tells and 26 * s or nil)
+  -- rolled up: the tab strip is the title bar the window folds into, and all that is left of it (the frame's own:
+  -- this frame's, as the frame is drawn, so a click does not fold it before the frame is smaller)
+  local rolled = c.winOpts.rolled
+  local right = (w.tells and 26 * s or 0) + 22 * s -- (the room kept free at the end: the tell window's close box, the button)
+  tabs(slot, w, x, y, width, s, title, right)
+  collapseButton(slot, x + width - right, y, s, rolled)
+  if rolled then return false end
   ui.DrawLine(x + pad, y + HEADER * s, x + width - pad, y + HEADER * s, C.ink[1], C.ink[2], C.ink[3], 0.06, 1)
 
   -- the output
@@ -247,6 +291,7 @@ local function body(slot, c, w, title, x, y, width, height, s)
     if replace then c.input, c.links = "", {} end
     local offset = #c.input
     c.input = c.input .. collapseLinks(c, taken, offset)
+    c.inputError = nil
     c.focus = 3
     c.grab = 30 -- (asked for until the input has the keys: a name link's click holds the mouse on the output)
   end
@@ -274,14 +319,18 @@ local function body(slot, c, w, title, x, y, width, height, s)
     ui.DrawRect(ix0, iy, ix1, iy + INPUT * s, C.accent[1], C.accent[2], C.accent[3], 0.6, 6 * s, 1)
   end
   if c.focus > 0 then c.focus = c.focus - 1 end
+  if text ~= c.input then c.inputError = nil end
   c.input = text
   if text == "" and next(c.links) then c.links = {} end
   if enter then
-    if text ~= "" then eq.ChatSubmit(slot, expandLinks(c, text)) end
-    c.input = ""
-    c.links = {}
-    c.follow = true
+    local expanded, reason = chatlinks.ForSubmit(c.links, text)
+    if expanded then
+      if expanded ~= "" then eq.ChatSubmit(slot, expanded) end
+      c.input, c.links, c.inputError = "", {}, nil
+      c.follow = true
+    else c.inputError = reason end
   end
+  if c.inputError then ui.SetTooltip(c.inputError) end
 
   if ui.IsWindowHovered(ui.HoveredFlags.ChildWindows) then
     if ui.IsMouseClicked(ui.Mouse.Left) and not active then eq.ChatActivate(slot) end

@@ -1,0 +1,95 @@
+# Containers that build, test and install the client (docs/ci.md "Builds in containers"). Start them through
+# tools/docker/build.sh, which sets the variables below and makes the .docker/ folders first so they belong to you:
+#   tools/docker/build.sh linux-x64 | linux-arm64 | windows-x64 | all [--no-test]
+# The images are tagged hailstone-compose-*, apart from the hailstone-linux-build / hailstone-msvc-build images that
+# docs/ci.md builds by hand. macOS is not built here (docs/ci.md "macOS arm64").
+
+x-build: &build
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  # The checkout at its own path, as docs/ci.md "MSVC under Wine" mounts it, and git's folder (outside the checkout
+  # in a worktree) read-only for the version line (cmake/BuildInfo.cmake).
+  working_dir: "${SRC_DIR:?start the containers with tools/docker/build.sh}"
+  volumes:
+    - "${SRC_DIR}:${SRC_DIR}"
+    - "${GIT_COMMON_DIR}:${GIT_COMMON_DIR}:ro"
+  # A hard limit: ninja's -j (JOBS) follows it, since a container still sees all of the host's cores.
+  cpus: "${CPUS:-8}"
+
+# Chromium's sandbox (the browser tests) makes user namespaces, which Docker's default seccomp and AppArmor profiles
+# refuse ("No usable sandbox!"). Only the Linux test runs are unconfined; the builds and the Windows tests (which
+# leave the browser tests out) keep the defaults.
+x-browser-tests: &browser-tests
+  security_opt:
+    - seccomp=unconfined
+    - apparmor=unconfined
+
+x-linux-x64: &linux-x64
+  <<: *build
+  image: hailstone-compose-linux:24.04
+  platform: linux/amd64
+  build:
+    context: tools/docker
+    dockerfile: linux.Dockerfile
+  environment:
+    HOME: /tmp
+    CCACHE_DIR: "${SRC_DIR}/.docker/ccache/linux-x64"
+    JOBS: "${JOBS:-8}"
+
+x-linux-arm64: &linux-arm64
+  <<: *build
+  image: hailstone-compose-linux:24.04-arm64
+  platform: linux/arm64
+  build:
+    context: tools/docker
+    dockerfile: linux.Dockerfile
+  environment:
+    HOME: /tmp
+    CCACHE_DIR: "${SRC_DIR}/.docker/ccache/linux-arm64"
+    JOBS: "${JOBS:-8}"
+
+x-msvc: &msvc
+  <<: *build
+  image: hailstone-compose-msvc:24.04
+  platform: linux/amd64
+  build:
+    context: tools/docker
+    dockerfile: msvc.Dockerfile
+    args:
+      BASE: hailstone-compose-linux:24.04
+  environment:
+    # Wine refuses a home folder it does not own: one per checkout, under .docker/.
+    HOME: "${SRC_DIR}/.docker/wine-home"
+    MSVC_DIR: "${MSVC_DIR}"
+    WINEDEBUG: -all
+    # Wine turns Windows file names into Linux ones through the locale: in the image's C locale a name such as
+    # "Журнал 日記" (conversation_journal_test) cannot be made at all.
+    LANG: C.UTF-8
+    JOBS: "${JOBS:-8}"
+
+services:
+  linux-x64:
+    <<: *linux-x64
+  linux-x64-test:
+    <<: [*linux-x64, *browser-tests]
+  linux-arm64:
+    <<: *linux-arm64
+  linux-arm64-test:
+    <<: [*linux-arm64, *browser-tests]
+
+  # Only with MSVC_ACCEPT_LICENSE=1 and no install yet: about 3.3 GB, MSVC 2022 and the Windows SDK into
+  # .docker/msvc, then msvc-wine's wrappers.
+  msvc-setup:
+    <<: *msvc
+    volumes:
+      - "${SRC_DIR}:${SRC_DIR}"
+      - "${MSVC_DIR}:${MSVC_DIR}"
+    profiles: [setup]
+    command: tools/docker/msvc_setup.sh
+
+  # An install made by hand (MSVC_DIR, default ~/opt/msvc: docs/ci.md "MSVC under Wine") is only read.
+  windows-x64:
+    <<: *msvc
+    volumes:
+      - "${SRC_DIR}:${SRC_DIR}"
+      - "${GIT_COMMON_DIR}:${GIT_COMMON_DIR}:ro"
+      - "${MSVC_DIR}:${MSVC_DIR}:ro"

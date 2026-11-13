@@ -8,6 +8,8 @@
 #include <format>
 
 #include "core/float_chars.h"
+#include "game/item_links.h"
+#include "mq/calc.h"
 
 namespace hailstone::mq {
 
@@ -25,6 +27,27 @@ std::string lower(std::string_view s) {
     std::string out(s);
     for (char& c : out) c = low(c);
     return out;
+}
+
+// MQ's IsNumberToComma: digits and dots up to a comma (not first) or the end; empty is not.
+bool number_to_comma(std::string_view s) {
+    if (s.empty()) return false;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i];
+        if ((c >= '0' && c <= '9') || c == '.') continue;
+        return c == ',' && i != 0;
+    }
+    return true;
+}
+
+// MQ's PrettifyNumber (GetNumberFormat, invariant locale): the whole part of "-1234567.50" grouped by thousands
+// with ',' ("-1,234,567.50").
+std::string prettify(std::string text) {
+    const std::size_t digits = !text.empty() && text[0] == '-' ? 1 : 0;
+    std::size_t end = text.find('.');
+    if (end == std::string::npos) end = text.size();
+    for (std::size_t at = end; at > digits + 3; at -= 3) text.insert(at - 3, 1, ',');
+    return text;
 }
 
 } // namespace
@@ -86,13 +109,37 @@ Registry::Registry() {
     float_ = &t_float;
     string_ = &t_string;
     bool_ = &t_bool;
-    t_int.members["Float"] = [](const Context&, const Value& v, std::string_view) { return Value::number(double(v.i)); };
-    t_int.members["Hex"] = [](const Context&, const Value& v, std::string_view) {
-        return Value::string(std::format("0x{:x}", v.i));
+    // MQ's int and int64 are one type here (Value holds 64 bits): a value that fits 32 bits has int's members
+    // (Hex as "0x%X", LowPart and HighPart its 16-bit halves), a larger one int64's (Hex as "0x%llX", the 32-bit
+    // halves). MQ2BasicTypes.cpp is the specification.
+    const auto fits32 = [](std::int64_t i) { return i >= INT32_MIN && i <= INT32_MAX; };
+    t_int.members["Float"] = [](const Context&, const Value& v, std::string_view) {
+        return Value::number(static_cast<double>(static_cast<float>(v.i)));
+    };
+    t_int.members["Double"] = [](const Context&, const Value& v, std::string_view) {
+        return Value::number(static_cast<double>(v.i));
+    };
+    t_int.members["Hex"] = [fits32](const Context&, const Value& v, std::string_view) {
+        if (fits32(v.i)) return Value::string(std::format("0x{:X}", static_cast<std::uint32_t>(v.i)));
+        return Value::string(std::format("0x{:X}", static_cast<std::uint64_t>(v.i)));
     };
     t_int.members["Reverse"] = [](const Context&, const Value& v, std::string_view) {
         auto u = static_cast<std::uint32_t>(v.i);
         return Value::integer((u >> 24) | ((u >> 8) & 0xff00) | ((u << 8) & 0xff0000) | (u << 24));
+    };
+    t_int.members["LowPart"] = [fits32](const Context&, const Value& v, std::string_view) {
+        const auto u = static_cast<std::uint64_t>(v.i);
+        return Value::integer(static_cast<std::int64_t>(fits32(v.i) ? (u & 0xffffu) : (u & 0xffffffffu)));
+    };
+    t_int.members["HighPart"] = [fits32](const Context&, const Value& v, std::string_view) {
+        const auto u = static_cast<std::uint64_t>(v.i);
+        return Value::integer(static_cast<std::int64_t>(fits32(v.i) ? ((u >> 16) & 0xffffu) : (u >> 32)));
+    };
+    t_int.members["Prettify"] = [](const Context&, const Value& v, std::string_view index) {
+        const int decimals = std::clamp(int_from_text(index, 0), 0, 9);
+        std::string text = std::to_string(v.i);
+        if (decimals) text += "." + std::string(static_cast<std::size_t>(decimals), '0');
+        return Value::string(prettify(std::move(text)));
     };
     t_float.members["Int"] = [](const Context&, const Value& v, std::string_view) {
         const auto n = whole_number(v.f);
@@ -108,8 +155,8 @@ Registry::Registry() {
         return Value::string(std::format("{:.3f}", v.f));
     };
     t_float.members["Precision"] = [](const Context&, const Value& v, std::string_view index) {
-        std::int64_t n = 2;
-        parse_int(index, n);
+        std::int64_t n = 0;
+        if (!parse_int(index, n)) return Value::nil(); // MQ: NULL unless the index is a number
         return Value::string(std::format("{:.{}f}", v.f, static_cast<int>(std::clamp<std::int64_t>(n, 0, 12))));
     };
     t_float.members["Raw"] = [](const Context&, const Value& v, std::string_view) {
@@ -118,6 +165,15 @@ Registry::Registry() {
         std::memcpy(&bits, &f, 4);
         return Value::integer(bits);
     };
+    // MQ's float and double Prettify print the value's bits as an int64 (VarPtr.Int64) before grouping them: a
+    // deliberate difference, here the number itself is grouped, with 2 decimals unless the index says.
+    t_float.members["Prettify"] = [](const Context&, const Value& v, std::string_view index) {
+        const int decimals = std::clamp(int_from_text(index, 2), 0, 9);
+        if (!std::isfinite(v.f)) return Value::string(std::format("{:.{}f}", v.f, decimals));
+        return Value::string(prettify(std::format("{:.{}f}", v.f, decimals)));
+    };
+
+    // MQ's string members (MQ2StringType::GetMember). A member that needs an index is NULL without one.
     t_string.members["Length"] = [](const Context&, const Value& v, std::string_view) {
         return Value::integer(static_cast<std::int64_t>(v.s.size()));
     };
@@ -127,75 +183,106 @@ Registry::Registry() {
         return Value::string(s);
     };
     t_string.members["Lower"] = [](const Context&, const Value& v, std::string_view) { return Value::string(lower(v.s)); };
+    // Left[n]: the first n characters; Left[-n] all but the last n. 0 (or no number) is NULL.
     t_string.members["Left"] = [](const Context&, const Value& v, std::string_view index) {
-        std::int64_t n = 0;
-        if (!parse_int(index, n)) return Value::nil();
-        auto len = static_cast<std::int64_t>(v.s.size());
-        n = n < 0 ? std::max<std::int64_t>(0, len + n) : std::min(n, len);
-        return Value::string(v.s.substr(0, static_cast<std::size_t>(n)));
+        const std::int64_t n = int_from_text(index, 0);
+        if (n == 0) return Value::nil();
+        const auto len = static_cast<std::int64_t>(v.s.size());
+        const std::int64_t keep = n > 0 ? std::min(n, len) : std::max<std::int64_t>(0, len + n);
+        return Value::string(v.s.substr(0, static_cast<std::size_t>(keep)));
     };
+    // Right[n]: the last n characters; Right[-n] all but the first n.
     t_string.members["Right"] = [](const Context&, const Value& v, std::string_view index) {
-        std::int64_t n = 0;
-        if (!parse_int(index, n)) return Value::nil();
-        auto len = static_cast<std::int64_t>(v.s.size());
-        n = n < 0 ? std::max<std::int64_t>(0, len + n) : std::min(n, len);
-        return Value::string(v.s.substr(static_cast<std::size_t>(len - n)));
+        const std::int64_t n = int_from_text(index, 0);
+        if (n == 0) return Value::nil();
+        const auto len = static_cast<std::int64_t>(v.s.size());
+        const std::int64_t keep = n > 0 ? std::min(n, len) : std::max<std::int64_t>(0, len + n);
+        return Value::string(v.s.substr(static_cast<std::size_t>(len - keep)));
     };
+    // Mid[start,length]: from the 1-based start (below 1 is 1); a length missing, negative or past the end is all.
     t_string.members["Mid"] = [](const Context&, const Value& v, std::string_view index) {
-        auto a = split_index(index);
-        std::int64_t start = 0, n = 0;
-        if (a.size() != 2 || !parse_int(a[0], start) || !parse_int(a[1], n) || start < 1) return Value::nil();
-        if (static_cast<std::size_t>(start - 1) >= v.s.size()) return Value::string("");
-        return Value::string(v.s.substr(static_cast<std::size_t>(start - 1), static_cast<std::size_t>(std::max<std::int64_t>(0, n))));
+        const auto comma = index.find(',');
+        if (comma == std::string_view::npos) return Value::nil();
+        const auto len = static_cast<std::int64_t>(v.s.size());
+        const std::int64_t start = std::max<std::int64_t>(0, std::int64_t{int_from_text(index.substr(0, comma), 0)} - 1);
+        std::int64_t n = int64_from_text(index.substr(comma + 1), len);
+        if (start >= len) return Value::string("");
+        if (n < 0 || n > len) n = len;
+        return Value::string(v.s.substr(static_cast<std::size_t>(start), static_cast<std::size_t>(n)));
     };
     t_string.members["Find"] = [](const Context&, const Value& v, std::string_view index) {
+        if (index.empty()) return Value::nil();
         std::string hay = lower(v.s), needle = lower(index);
         auto at = hay.find(needle);
         return at == std::string::npos ? Value::nil() : Value::integer(static_cast<std::int64_t>(at) + 1);
     };
+    // Compare / CompareCS: below, at or above 0 as the string sorts before, with or after the index (MQ's _stricmp /
+    // strcmp). Only the sign is MQ's; the size is 1 here.
+    t_string.members["Compare"] = [](const Context&, const Value& v, std::string_view index) {
+        if (index.empty()) return Value::nil();
+        const int r = lower(v.s).compare(lower(index));
+        return Value::integer(r < 0 ? -1 : r > 0 ? 1 : 0);
+    };
+    t_string.members["CompareCS"] = [](const Context&, const Value& v, std::string_view index) {
+        if (index.empty()) return Value::nil();
+        const int r = std::string_view(v.s).compare(index);
+        return Value::integer(r < 0 ? -1 : r > 0 ? 1 : 0);
+    };
     t_string.members["Equal"] = [](const Context&, const Value& v, std::string_view index) {
-        return Value::boolean(iequals(v.s, index));
+        return index.empty() ? Value::nil() : Value::boolean(iequals(v.s, index));
     };
     t_string.members["NotEqual"] = [](const Context&, const Value& v, std::string_view index) {
-        return Value::boolean(!iequals(v.s, index));
+        return index.empty() ? Value::nil() : Value::boolean(!iequals(v.s, index));
     };
     t_string.members["EqualCS"] = [](const Context&, const Value& v, std::string_view index) {
-        return Value::boolean(v.s == index);
+        return index.empty() ? Value::nil() : Value::boolean(v.s == index);
     };
+    t_string.members["NotEqualCS"] = [](const Context&, const Value& v, std::string_view index) {
+        return index.empty() ? Value::nil() : Value::boolean(v.s != index);
+    };
+    // Arg[n] / Arg[n,c]: MQ's GetArg, by spaces and tabs or by the character after the comma; empty is NULL.
     t_string.members["Arg"] = [](const Context&, const Value& v, std::string_view index) {
-        auto a = split_index(index);
-        std::int64_t n = 0;
-        if (a.empty() || !parse_int(a[0], n) || n < 1) return Value::nil();
-        char sep = a.size() > 1 && !a[1].empty() ? a[1][0] : ' ';
-        std::vector<std::string> words;
-        std::string cur;
-        for (char c : v.s) {
-            if (c == sep) {
-                if (!cur.empty() || sep != ' ') words.push_back(cur);
-                cur.clear();
-            } else {
-                cur += c;
-            }
-        }
-        if (!cur.empty()) words.push_back(cur);
-        return n <= static_cast<std::int64_t>(words.size()) ? Value::string(words[static_cast<std::size_t>(n - 1)])
-                                                           : Value::nil();
+        if (!number_to_comma(index)) return Value::nil();
+        const auto comma = index.find(',');
+        const char sep = comma != std::string_view::npos && comma + 1 < index.size() ? index[comma + 1] : '\0';
+        std::string arg = get_arg(v.s, int_from_text(index.substr(0, comma), 0), false, sep);
+        return arg.empty() ? Value::nil() : Value::string(std::move(arg));
     };
     t_string.members["Count"] = [](const Context&, const Value& v, std::string_view index) {
-        if (index.empty()) return Value::integer(0);
+        if (index.empty()) return Value::nil();
         return Value::integer(std::count(v.s.begin(), v.s.end(), index[0]));
     };
+    // Token[n,c]: the n-th field between the characters c. MQ looks for each next c from one past the last one,
+    // so in a string that starts with c field 2 is the text after its second c (",a,b": Token[2,,] is "b").
     t_string.members["Token"] = [](const Context&, const Value& v, std::string_view index) {
-        auto a = split_index(index);
-        std::int64_t n = 0;
-        if (a.size() < 2 || !parse_int(a[0], n) || n < 1 || a[1].empty()) return Value::nil();
-        std::size_t start = 0;
-        for (std::int64_t k = 1; k < n; ++k) {
-            start = v.s.find(a[1][0], start);
-            if (start == std::string::npos) return Value::nil();
-            ++start;
+        if (!number_to_comma(index)) return Value::nil();
+        const auto comma = index.find(',');
+        if (comma == std::string_view::npos || comma + 1 >= index.size()) return Value::nil();
+        const char sep = index[comma + 1];
+        const int n = int_from_text(index.substr(0, comma), 0);
+        if (n < 1) return Value::nil();
+        std::size_t pos = 0;
+        for (int k = 1; k < n; ++k) {
+            pos = v.s.find(sep, pos + 1);
+            if (pos == std::string::npos) return Value::nil();
         }
-        return Value::string(v.s.substr(start, v.s.find(a[1][0], start) - start));
+        if (pos != 0) ++pos;
+        const auto end = v.s.find(sep, pos);
+        return Value::string(v.s.substr(pos, end == std::string::npos ? std::string::npos : end - pos));
+    };
+    // Replace[search,replacement]: every search (case-sensitive) replaced, left to right.
+    t_string.members["Replace"] = [](const Context&, const Value& v, std::string_view index) {
+        const auto comma = index.find(',');
+        if (comma == std::string_view::npos) return Value::nil();
+        const std::string_view search = index.substr(0, comma), with = index.substr(comma + 1);
+        if (v.s.empty() || search.empty()) return Value::nil();
+        std::string out = v.s;
+        for (std::size_t at = out.find(search); at != std::string::npos; at = out.find(search, at + with.size()))
+            out.replace(at, search.size(), with);
+        return Value::string(std::move(out));
+    };
+    t_string.members["StripLinks"] = [](const Context&, const Value& v, std::string_view) {
+        return Value::string(game::strip_links(v.s));
     };
 }
 

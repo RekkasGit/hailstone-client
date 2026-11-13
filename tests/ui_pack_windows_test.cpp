@@ -1095,6 +1095,64 @@ return table.concat(out, ';'))lua") == LUA_OK);
     ImGui::DestroyContext(ctx);
 }
 
+// Once the selected rank is bought, the AA window selects the ability's next rank (the one its list now shows), so
+// that Train is ready for it without a click on the row again.
+TEST_CASE("UI packs (modern): the AA window's selection follows its ability to the next rank once bought") {
+    hailstone::test::ScratchDir dir_scratch("ui_pack_aa_follow_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern", dir / "modern",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        Session s(dir, "modern");
+        net::PlayerProfile pp;
+        pp.class_ = 2;
+        pp.level = 60;
+        s.conn.set_profile_for_test(pp);
+        for (auto [id, r, prev, next] : {std::tuple{100u, 1, -1, 101}, std::tuple{101u, 2, 100, 102},
+                                         std::tuple{102u, 3, 101, -1}}) {
+            game::AltAbility a;
+            a.id = id;
+            a.group = 10;
+            a.rank = r;
+            a.prev_id = prev;
+            a.next_id = next;
+            a.max_rank = 3;
+            a.cost = 1;
+            a.classes = 1u << 2;
+            a.type = 1;
+            a.prereq_groups = {0};
+            a.prereq_ranks = {0};
+            s.conn.receive_zone_packet_for_test(net::encode_send_aa_table(a));
+        }
+        lua_State* L = s.lua.state();
+        auto selected = [&] {
+            REQUIRE(luaL_dostring(L, "eq.WindowList('AAWindow', 'ModernList') "
+                                     "return (eq.WindowText('AAWindow', 'ModernSelected'))") == LUA_OK);
+            std::string out = lua_tostring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return out.substr(0, out.find('\t'));
+        };
+        REQUIRE(luaL_dostring(L, "eq.WindowList('AAWindow', 'ModernList') "
+                                 "eq.ListClick('AAWindow', 'ModernList', 0, 'left')") == LUA_OK);
+        lua_settop(L, 0);
+        CHECK(selected() == "100");
+        auto own = [&](std::uint32_t id) {
+            net::RespondAA r;
+            r.owned = {{id, 1, 0}};
+            s.conn.receive_zone_packet_for_test(net::encode(r));
+        };
+        own(100);
+        CHECK(selected() == "101");
+        own(101);
+        CHECK(selected() == "102");
+        own(102); // the last rank bought: it stays selected
+        CHECK(selected() == "102");
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The modern AA window's list starts sorted by name, A to Z (not the game's order); a click on a column's head sorts
 // by that column and a second click the other way; dragging a head moves the column. Both are kept as settings.
 TEST_CASE("UI packs (modern): the AA list sorts by name, by a clicked head, and a head drags to move its column") {
@@ -1604,6 +1662,34 @@ TEST_CASE("UI packs (modern): an invitation to a group pops up with who sent it"
 
 // A server's compiled plugins ask before they load (docs/plugins.md): each pack draws the question in the client's
 // place (eq.PluginConsent; "PluginConsent" replaced), and nothing while there is none.
+// A window key reaches a pack's window only while the pack claims it (eq.ReplaceWindow, each frame): the achievement
+// and reward keys must work while their windows are hidden.
+TEST_CASE("UI packs: each claims the achievement and reward windows while they are hidden, so their keys open them") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_progress_keys_") + pack);
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            s.frames(2);
+            CHECK_FALSE(s.api.shown("AchievementsWnd"));
+            CHECK_FALSE(s.api.shown("RewardSelectionWnd"));
+            CHECK(s.api.replaces("AchievementsWnd"));
+            CHECK(s.api.replaces("RewardSelectionWnd"));
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
 TEST_CASE("UI packs: the server plugins' question draws in each pack in the client's place") {
     for (const char* pack : {"modern", "gamepad"}) {
         CAPTURE(pack);

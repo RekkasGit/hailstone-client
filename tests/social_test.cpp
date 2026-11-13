@@ -97,11 +97,12 @@ game::EqStrings test_strings() {
 
 TEST_CASE("slash commands: the original's table and prefix matching") {
     auto table = game::slash_commands();
-    CHECK(table.size() == 383); // the original's 391 without the four voice macro commands, three of Daybreak's and /mp3
-    // Daybreak's services are left out too: achievements, the card game. The Marketplace and real estate stay (a
+    CHECK(table.size() == 384); // the original's 391 without four voice macro commands, two card-game names and /mp3
+    // The card game is left out. Achievements, the Marketplace and real estate stay (a
     // server that runs them answers their packets).
     CHECK(command_name("/marketplace") == "/marketplace");
-    for (const char* c : {"/achievements", "/legendsofnorrath", "/tcg"})
+    CHECK(command_name("/achievements") == "/achievements");
+    for (const char* c : {"/legendsofnorrath", "/tcg"})
         CHECK(command_name(c) == "-");
     CHECK(command_name("/realestate") == "/realestate");
     CHECK(command_name("/leaverealestate") == "/leaverealestate");
@@ -310,8 +311,12 @@ TEST_CASE("played and time texts") {
     CHECK(game::format_duration(s, 7200) == "2 hours");
     CHECK(game::long_date(2026, 10, 20) == "Tuesday, October 20, 2026");
     CHECK(game::long_date_time(2026, 10, 20, 9, 5, 0) == "Tuesday, October 20, 2026 09:05:00");
-    CHECK(game::format_game_time(s, 3176, 3, 14, 1) == "Game Time: " + game::long_date(3176, 3, 14) + " - 12 AM");
-    CHECK(game::format_game_time(s, 3176, 3, 14, 14) == "Game Time: " + game::long_date(3176, 3, 14) + " - 1 PM");
+    // The weekday is the game's, (day - 1) % 7 from Sunday (EQWorldData::CurrentGameTime), not the calendar's.
+    CHECK(game::format_game_time(s, 3176, 3, 14, 1) == "Game Time: Saturday, March 14, 3176 - 12 AM");
+    CHECK(game::format_game_time(s, 3176, 3, 14, 14) == "Game Time: Saturday, March 14, 3176 - 1 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 1, 13) == "Game Time: Sunday, March 1, 3176 - 12 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 28, 13) == "Game Time: Saturday, March 28, 3176 - 12 PM");
+    CHECK(game::format_game_time(s, 3176, 3, 9, 13) == "Game Time: Monday, March 9, 3176 - 12 PM");
 }
 
 TEST_CASE("chat templates per channel (msg_new_text)") {

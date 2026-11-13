@@ -66,6 +66,7 @@ void GameConnection::handle_progress(Op op, const AppPacket& p) {
             pstatus_.aa_exp = u->exp;
             // PcBase_SetAAPoints writes the profile's unspent count (+0x8900), which the AA labels read.
             if (profile_) profile_->aa_points = u->points;
+            continue_aa_buy_all();
         }
         break;
     case Op::AAAction:
@@ -279,6 +280,7 @@ void GameConnection::reset_progress_for_zone() {
     combine_pending_ = false;
     tasks_.offers.reset();
     aa_requested_ = false;
+    aa_buy_all_ = 0;
 }
 
 void GameConnection::request_aa_data() {
@@ -408,9 +410,25 @@ bool GameConnection::aa_train(std::uint32_t rank_id, bool train_all) {
     }
     // A server's client may buy all ranks (the NMS patch's SendMessage detour: with a Train All box checked,
     // OP_AAAction 3 (buy) becomes 4 (buy all)).
-    const std::uint32_t action = train_all && server_ext().aa_train_all(*this) ? kAATrainAll : kAATrain;
-    send_zone(encode(AAAction{action, rank_id, 0, 0}));
+    const bool server_all = train_all && server_ext().aa_train_all(*this);
+    // Deliberate difference: without such a server the box still buys every rank, one OP_AAAction 3 at a time
+    // (continue_aa_buy_all), the stock purchase repeated; a plain train ends that.
+    aa_buy_all_ = train_all && !server_all ? rank_id : 0;
+    send_zone(encode(AAAction{server_all ? kAATrainAll : kAATrain, rank_id, 0, 0}));
     return true;
+}
+
+void GameConnection::continue_aa_buy_all() {
+    // EQEmu's FinishAlternateAdvancementPurchase answers a purchase with the next rank (OP_SendAATable), the owned
+    // list (OP_RespondAA) and then the points (OP_AAExpUpdate), so this runs on the last. An update with the rank
+    // not owned yet (experience from a kill, the AA share changed, a refused purchase, which EQEmu does not answer)
+    // leaves the chain waiting: every other way to buy a rank is a plain aa_train, which ends it, as zoning does.
+    if (!aa_buy_all_ || !alt_adv_.has(aa_buy_all_)) return;
+    const game::AltAbility* a = alt_adv_.get(aa_buy_all_);
+    aa_buy_all_ = 0;
+    if (!a || a->next_id <= 0) return;
+    auto next = static_cast<std::uint32_t>(a->next_id);
+    if (aa_can_train(next)) aa_train(next, true);
 }
 
 void GameConnection::aa_train_button(std::uint32_t rank_id, bool train_all) {

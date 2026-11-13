@@ -14,6 +14,7 @@
 // The id is the folder name, made once from the server's name; renaming the server keeps the folder.
 // No password is ever written here: a saved one is in the system's keyring (platform/credentials.h).
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -104,6 +105,15 @@ std::optional<ServerProfile> load_profile(std::string_view id,
 // Writes servers/<id>/server.ini (keeping keys it does not know) and creates the assets/ folder. An empty id is an
 // error (false); use make_profile_id() for a new profile first.
 bool save_profile(const ServerProfile& profile, const std::filesystem::path& servers = platform::servers_dir());
+// The login server an EverQuest install's eqhost.txt names, as a new profile named after the host, with no id yet:
+// [LoginServer]'s first Host line (Host1, Host2 and other keys are not read), "name:port", "name", "[v6]:port" or a
+// bare IPv6 address. A missing port keeps ServerProfile's default (what the original does then is not confirmed:
+// docs/unknowns.md). A UTF-8 byte order mark is skipped. Nullopt when the text names none. A server's patcher ships
+// this file, so it is the first server's default (ui::load_login_settings).
+std::optional<ServerProfile> profile_from_eqhost(std::string_view text);
+// The same from a file, of which at most kMaxEqhostBytes are read; nullopt when it cannot be read.
+inline constexpr std::size_t kMaxEqhostBytes = 64 * 1024;
+std::optional<ServerProfile> profile_from_eqhost_file(const std::filesystem::path& path);
 // Takes the whole servers/<id>/ folder, with its assets, maps and characters' files, out of the list: it is renamed
 // to servers/.deleted/<id>-<date>-<time>/ in one step, so it can be brought back by hand and a file held open never
 // leaves half a profile. False when it fails (nothing changed then).

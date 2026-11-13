@@ -771,7 +771,8 @@ std::optional<ItemSlot> GameConnection::find_item_for_bandolier(std::uint32_t it
 bool GameConnection::return_item_to_inventory(Item item) {
     // Client::MoveItemToInventory: a stackable item first tops up matching
     // stacks (general slots, then inside each bag), then the first free
-    // general slot, or the first free slot of a bag that fits it.
+    // general slot, or the first free slot of a bag that fits it by the
+    // server's test (game::server_bag_accepts).
     if (item.stackable()) {
         for (std::int16_t s = kSlotGeneral1; s <= kSlotCursor && item.stack_count > 0; ++s) {
             Item* there = inventory_.at(ItemSlot::possessions(s));
@@ -800,7 +801,7 @@ bool GameConnection::return_item_to_inventory(Item item) {
             inventory_.put(ItemSlot::possessions(s), std::move(item));
             return true;
         }
-        if (there->is_bag() && game::bag_fit(*there, item) == 0) {
+        if (game::server_bag_accepts(*there, item)) {
             for (std::int16_t sub = 0; sub < static_cast<std::int16_t>(there->bag_slots); ++sub) {
                 if (inventory_.at(ItemSlot::possessions(s, sub))) continue;
                 item.slot = ItemSlot::possessions(s, sub);

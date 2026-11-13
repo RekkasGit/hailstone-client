@@ -17,7 +17,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -302,14 +304,57 @@ struct Fragment {
 
 class WldFile {
 public:
+    struct Deferred; // a deferred WLD's shared state (wld.cpp only)
     // Throws std::runtime_error when the header or the fragment framing is
     // malformed. A fragment whose payload does not fit its declared size is
     // kept as an empty entry and listed in errors().
     static WldFile parse(std::span<const std::byte> data, std::string label = "<memory>");
 
+    // Validate once and keep only the named character-resource index. The loader must return the same immutable
+    // bytes on every call. Full fragments decode on first use; ReadScope can reclaim them. Zone WLDs use parse().
+    static WldFile deferred(std::function<std::vector<std::byte>()> loader, std::string label);
+    using IndexVisitor = std::function<void(Ref, std::uint32_t, const std::string&, const TrackRef*)>;
+    // Only successfully decoded named character resource types (0x13, 0x14, 0x30, 0x36), in fragment order.
+    void visit_character_index(const IndexVisitor& visitor) const;
+    bool materialized() const;
+    struct DecodeStats {
+        std::size_t decodes = 0, releases = 0;
+        std::uint64_t released_bytes = 0;
+    };
+    DecodeStats decode_stats() const;
+
+    // Raw fragment pointers obtained inside a scope live until its outermost scope ends on this thread. Each
+    // touched deferred WLD is leased once; when the last concurrent lease ends, its decoded payload goes to the
+    // retained set below (or is released at once when that is off or the payload is larger than it). Nested builds
+    // share the outer lease. Unscoped reads pin their payload for the WLD's life, preserving the raw-pointer API.
+    // Models returned by CharacterLibrary copy the source data and do not carry these pointers out of the scope.
+    class ReadScope {
+    public:
+        ReadScope();
+        ~ReadScope();
+        ReadScope(const ReadScope&) = delete;
+        ReadScope& operator=(const ReadScope&) = delete;
+    private:
+        friend class WldFile;
+        static thread_local ReadScope* current_;
+        ReadScope* parent_ = nullptr;
+        std::vector<std::shared_ptr<Deferred>> held_;
+    };
+
+    // Retained decoded payloads: a deferred WLD whose last lease ended keeps its decoded data while the estimated
+    // bytes (retained_bytes()) of all such WLDs, process-wide, stay within the budget; past it the least recently
+    // released are released. The next lease of a retained WLD takes it back without decoding again: a cache miss in
+    // CharacterLibrary (a model, a dressing) does not inflate and parse global_chr.wld once more for each model. A
+    // WLD that is destroyed leaves the set. 0 turns retention off (released as the last lease ends).
+    static constexpr std::size_t kDefaultRetainBudget = std::size_t{128} << 20;
+    static void set_retain_budget(std::size_t bytes); // releases at once what no longer fits
+    static std::size_t retain_budget();
+    static std::size_t retained_total(); // the estimated bytes held by the retained set now
+    static void release_retained();      // releases the whole set (it fills again with the next leases)
+
     const std::string& label() const { return label_; }
     bool new_format() const { return new_format_; }
-    const std::vector<Fragment>& fragments() const { return fragments_; }
+    const std::vector<Fragment>& fragments() const { return decoded().fragments_; }
 
     // A positive reference; nullptr when out of range or not positive.
     const Fragment* at(Ref ref) const;
@@ -335,8 +380,15 @@ public:
     const std::vector<Error>& errors() const { return errors_; }
     // Fragment types this parser does not decode, with counts.
     const std::map<std::uint32_t, std::size_t>& unknown_types() const { return unknown_; }
+    // An estimate of the private memory this file retains: the decoded string table, the fragment objects and the
+    // vectors and strings inside their payloads (skeleton nodes and their child lists, meshes, track frames).
+    // Indices, diagnostics, capacities, allocator overhead and page-cache pages are not counted, so it compares categories, not exact
+    // residency.
+    std::size_t retained_bytes() const;
 
 private:
+    std::shared_ptr<Deferred> deferred_;
+    const WldFile& decoded() const;
     std::string label_;
     bool new_format_ = false;
     std::vector<std::uint8_t> strings_; // decoded string table

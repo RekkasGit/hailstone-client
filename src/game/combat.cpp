@@ -466,6 +466,22 @@ bool name_sprite_shows_guild(const Spawn& s, int show_names) {
     return s.anon == 0 || ((s.anon >> 1) & 1) != 0;
 }
 
+NameSpriteMarketWords name_sprite_market_words(const Spawn& s, const EqStrings& strings) {
+    NameSpriteMarketWords out;
+    if (s.is_npc || s.is_corpse) return out;
+    // The string table's word; a plain one where the player's eqstr_us.txt lacks it (the original would show its
+    // table's own, which is always there).
+    auto word = [&](std::uint32_t id, const char* fallback) {
+        out.prefix += strings.has(id) ? strings.format(id, {}) : std::string(fallback);
+        out.prefix += ' ';
+    };
+    if (s.offline) word(766, "Offline");
+    if (s.trader) word(5503, "Trader");
+    else if (s.buyer) word(6055, "Buyer");
+    out.replaces_title = s.trader || s.buyer;
+    return out;
+}
+
 bool name_sprite_switched_on(const Spawn& s, bool local_player, bool model_hidden, const NameSpriteSwitches& on) {
     if (s.is_npc || s.is_corpse) return on.npc_names;
     if (local_player) return on.pc_names && on.own_name && !model_hidden;

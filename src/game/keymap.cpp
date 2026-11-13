@@ -130,11 +130,9 @@ bool key_command_dropped(int command) {
     case C::CMD_TOGGLEVOICEWIN:
     case C::CMD_TOGGLE_AUDIO_TRIGGER_WINDOW:
     case C::OPEN_ETN_HELP:
-    case C::CMD_TOGGLE_REWARD_SELECTION_WIN:
     case C::CMD_TOGGLE_CLAIM_WIN:
     case C::CMD_MARKETPLACE_SILVER:
     case C::CMD_MARKETPLACE_GOLD:
-    case C::CMD_ACHIEVEMENT_WINDOW:
     case C::CMD_VOTE_RESULTS:
     case C::CMD_TOGGLE_TCG:
     case C::CMD_HISTORIC_ALERTS:

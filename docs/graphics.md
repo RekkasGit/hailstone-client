@@ -52,7 +52,12 @@ of their own and submits it on the frame's queue with a fence of its own (`VkCon
 it ends with (copy writes to vertex input, index, vertex and fragment shader reads; images to shader-read layout) make
 the results visible to every later submission on the queue, so a model, texture or icon sheet put up while a frame is
 recorded is drawn by that frame. Its staging buffers go once its fence signals, checked at each frame's start and each
-upload; past 256 MB of staging in flight the oldest uploads are waited for. `VkContext::immediate_submit` stays
+upload; past 256 MB of staging in flight the oldest uploads are waited for. A zone's own uploads are staged in pieces
+rather than in one lot: its vertex and index buffers are as big as the zone's geometry, and staging one of them whole
+doubled it in host memory while the copy was made. `UploadBatch::buffer_pieces` makes the target once and stages and
+copies each piece on its own, and `VkContext::release_finished_uploads` frees the staging of what the GPU has already
+read, so a long build (the zone's) holds at most a budget of it (32 MB) rather than all of it until the first frame.
+`VkContext::immediate_submit` stays
 synchronous, for the context's own one-off work. What a frame in flight (or an upload) may still use is handed to
 `VkContext::retire` instead of destroyed after `vkDeviceWaitIdle`: it goes once the frame being recorded, every
 upload submitted before and any `frames_ahead` more are done (`render/retire_queue.h`; the UI's textures take one
@@ -91,6 +96,21 @@ chains are built on the CPU by `assets::build_color_mips`. Each level is filtere
 by alpha. Transparent texels take their opaque neighbours' colour, so palette index 0 (often magenta or black) no
 longer fringes leaves. Cut-outs keep level 0's coverage on every level, so trees stay full at a distance. DDS files
 shipped without mips get a chain too.
+
+A fully opaque image whose sides are powers of two needs none of that: its chain is a plain average, which the GPU
+builds as the CPU would, so it goes up as it is and the GPU builds the levels (`render::gpu_builds_mips`,
+`render::prepare_texture_image`, `UploadBatch::texture`). The image is created `R8G8B8A8_SRGB` with
+`VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT` and blitted level by level, so each blit decodes to linear light, filters and
+encodes back, as `assets::build_color_mips` does; the view the shaders sample is `R8G8B8A8_UNORM`, so they read the
+same values as from a CPU chain. The two agree within a rounding step per level (the GPU stores each level in 8 bits
+before making the next; tests/texture_test.cpp checks this against the CPU chain). A device that cannot blit that
+format with linear filtering (`DeviceCaps::srgb_mip_blit`) gets the CPU chain. An image of another size keeps the CPU
+chain, since a 2:1 linear blit of an odd level reads other texels than the CPU's 2x2 box; so does an image with a cut-out,
+as the GPU's own levels would blend the colour key into the edges and bring back the cyan fringe
+`assets::remove_color_key` takes out. What this saves is host memory: the chain and its staging copy are never held for
+those images (the baked terrain tiles, uncompressed A8R8G8B8 DDS, are opaque where they are a zone's base layer). A
+neighbour zone's textures, held to `ZoneRenderer::Options::max_texture_size` (`render::prepare_capped_texture`), always
+get the CPU chain, as only a chain has levels to drop.
 
 A material that never reads its texture's alpha (opaque, no alpha test: EQG `Opaque_*` classes and the classic opaque
 methods, `MaterialState::alpha_unused`) uploads it as `TextureUse::OpaqueColor` in the actor and object renderers: made
@@ -399,6 +419,14 @@ Measured on a dev server, zone connect to the first frame shown, before and afte
 → 3.0-3.3 s, qeynos2 1.6 → 2.0 s, commonlands (EQG) 4.6 → 4.9 s. Before, the first frames showed spawns undressed
 for up to 3 s in poknowledge, a large EQG object missing for a frame in commonlands and the HUD without the
 character's buffs and stats; after, the first frame shown matches those a few seconds later.
+
+The zone build says what it costs as it goes, so a heavy zone can be read from the log. At debug level: `memory
+checkpoint: zone load: <phase>: resident <N> MiB` (and private commit on Windows, and the GPU heaps) after the zone
+data, the flora, the zone renderer, the flora renderer, the collision, the navigation and the ambient probe; and
+`zone build: <phase>: <N> MB resident (+<T>s)` through the zone renderer's own build, the time counted from the start of
+that build. At info level, once per zone: `zone renderer prepared: N textures (X MB), N vertices (X MB), N indices (X
+MB)` for what the zone's meshes and textures took, and the settled zone-in's `memory checkpoint: zone-in: settled
+appearances` lines. The numbers are the log's only; nothing is kept of them.
 
 ## Culling
 

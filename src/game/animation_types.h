@@ -2,16 +2,15 @@
 
 // The action numbers of OP_Animation and PlayerClient::PlayAnimation (spells' casting_anim and TargetAnim, the
 // missile launch animations): the old-style numbering, whose clips are game::mechanics::old_anim_clip's. The
-// locomotion numbers are game/mechanics/anim_select.h's OldStyleAnim and are taken from there; the other names
-// describe what a classic model plays.
+// locomotion numbers (Walk..Idle, Stand..Sit, StandAfter..SitIdle) are also the ones the classic model's movement
+// selection (game/mechanics/anim_select.h) starts; the other names describe what a classic model plays.
 
 #include <cstdint>
-
-#include "game/mechanics/anim_select.h"
 
 namespace hailstone {
 
 enum class AnimationType : std::uint8_t {
+    None = 0,
     Kick = 1,
     Piercing = 2,
     TwoHandSlash = 3,
@@ -28,28 +27,28 @@ enum class AnimationType : std::uint8_t {
     Embarrassed_14 = 14,
     FallingBackwards = 15,
     Death = 16,
-    Walk = game::mechanics::kOldWalk,
-    Run = game::mechanics::kOldRun,
-    JumpRun = game::mechanics::kOldJumpRun,
-    JumpStand = game::mechanics::kOldJumpStand,
-    Fall = game::mechanics::kOldFall,
-    DuckWalk = game::mechanics::kOldDuckWalk,
-    Climb = game::mechanics::kOldClimb,
-    Duck = game::mechanics::kOldDuck,
-    Tread = game::mechanics::kOldTread,
-    Idle = game::mechanics::kOldIdle,
+    Walk = 17,
+    Run = 18,
+    JumpRun = 19,
+    JumpStand = 20,
+    Fall = 21,
+    DuckWalk = 22,
+    Climb = 23,
+    Duck = 24,
+    Tread = 25,
+    Idle = 26,
     Cheer = 27,
     Disgusted = 28,
     Wave = 29,
     Rude = 30,
     Yawn = 31,
-    Stand = game::mechanics::kOldStand,
-    SitStand = game::mechanics::kOldSitStand,
-    Turn = game::mechanics::kOldTurn,
+    Stand = 32,
+    SitStand = 33,
+    Turn = 34,
     NoEmote_35 = 35,
-    Kneel = game::mechanics::kOldKneel,
-    Swimming = game::mechanics::kOldSwim,
-    Sit = game::mechanics::kOldSit,
+    Kneel = 36,
+    Swimming = 37,
+    Sit = 38,
     NoEmote_39 = 39,
     NoEmote_40 = 40,
     NoEmote_41 = 41,
@@ -82,9 +81,15 @@ enum class AnimationType : std::uint8_t {
     Shiver = 68,
     TapFoot = 69,
     Bow_70 = 70,
-    StandAfter = game::mechanics::kOldStandAfter,
-    IdleAfter = game::mechanics::kOldIdleAfter,
-    SitIdle = game::mechanics::kOldSitIdle,
+    StandAfter = 71,
+    IdleAfter = 72,
+    SitIdle = 73,
+    Rider_74 = 74, // P09; 0x4a..0x4c and 0x4e are the rider animations (game/anim_layers.h)
+    Rider_75 = 75, // L11
+    Rider_76 = 76, // L12
+    S29_77 = 77,
+    Rider_78 = 78, // L10
+    End = 79,      // 0x4f: one past the last old-style number (old_anim_clip is empty from it)
 };
 
 // The animation a spell landing without an OP_BeginCast plays on its source (GameConnection's added proc cast

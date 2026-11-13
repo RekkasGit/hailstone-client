@@ -24,6 +24,7 @@
 #include <iterator>
 
 #include "net/aa_packets.h"
+#include "net/achievement_packets.h"
 #include "net/ability_packets.h"
 #include "net/adventure_packets.h"
 #include "net/aggro_packets.h"
@@ -44,6 +45,7 @@
 #include "net/zone_link_packets.h"
 #include "net/pet_packets.h"
 #include "net/real_estate_packets.h"
+#include "net/reward_packets.h"
 #include "net/player_packets.h"
 #include "net/social_packets.h"
 #include "net/spell_packets.h"
@@ -60,6 +62,7 @@
 #include "triune_windows.h"
 #endif
 #include "fuzz_game_decoders.h"
+#include "fuzz_achievements.h"
 #endif
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
@@ -69,7 +72,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         auto a = hailstone::assets::PfsArchive::from_memory(std::vector<std::byte>(in.begin(), in.end()));
         for (const auto& n : a.names()) (void)a.read(n);
 #elif defined(HAILSTONE_FUZZ_WLD)
-        auto w = hailstone::assets::wld::WldFile::parse(in);
+        hailstone::assets::wld::WldFile::ReadScope reads;
+        auto w = hailstone::assets::wld::WldFile::deferred(
+            [in] { return std::vector<std::byte>(in.begin(), in.end()); }, "fuzz");
         for (const auto& f : w.fragments())
             if (const auto* m = std::get_if<hailstone::assets::wld::MeshDef>(&f.data)) (void)hailstone::assets::wld::build_mesh(w, *m, f.name);
 #elif defined(HAILSTONE_FUZZ_TEXTURE)
@@ -113,6 +118,10 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         if (size >= 3) {
             hailstone::net::AppPacket p(static_cast<std::uint16_t>(data[1] | data[2] << 8), std::vector<std::byte>(in.begin() + 3, in.end()));
             kDecoders[data[0] % std::size(kDecoders)](p);
+            // Additional context-backed coverage; public default calls intentionally reject
+            // state layouts without a received catalog and cannot fuzz their inner fields.
+            // Alternate format: byte0 chooses an achievement parser, remainder is its body.
+            hailstone::fuzz_achievements::feed(in);
         }
 #elif defined(HAILSTONE_FUZZ_ZIP)
         // The updater's inputs (docs/updater.md): a package zip read whole, and the same bytes as a manifest.

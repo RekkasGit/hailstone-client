@@ -54,8 +54,8 @@ const std::vector<int>& listed_commands();
 // services EQEmu has no part of: the Marketplace's silver / gold membership keys (CMD_MARKETPLACE_SILVER / _GOLD:
 // __ExecuteCmd cases 166 / 167 jump the window to entries 0x42f / 0x427, the publisher's upgrades; CMD_MARKETPLACE
 // itself stays, the window speaks the original's opcodes), the veteran reward
-// claim window's key (CMD_TOGGLE_CLAIM_WIN; /claim still opens it), polls (CMD_VOTE_RESULTS), the reward selection
-// window, achievements, alerts (CMD_HISTORIC_ALERTS), real estate's trophies and help windows and
+// claim window's key (CMD_TOGGLE_CLAIM_WIN; /claim still opens it), polls (CMD_VOTE_RESULTS),
+// alerts (CMD_HISTORIC_ALERTS), real estate's trophies and help windows and
 // leave key (CMD_REAL_ESTATE_TROPHIES_WINDOW, CMD_REAL_ESTATE_HELP_WINDOW, CMD_REAL_ESTATE_LEAVE; its windows and
 // item placement keys stay), the "Upgrade EverQuest" help (OPEN_ETN_HELP), the
 // trading card game (CMD_TOGGLE_TCG) and social sharing (CMD_SOCIAL_SHARE); and the fellowship window

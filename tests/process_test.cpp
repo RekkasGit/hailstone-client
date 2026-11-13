@@ -40,3 +40,13 @@ TEST_CASE("process: a C file opened by a path with any characters in it") {
     std::fclose(f);
     CHECK(std::filesystem::file_size(path) == 1);
 }
+
+TEST_CASE("process: private commit is a Windows measurement, unavailable elsewhere") {
+    const auto commit = platform::private_commit_memory();
+#if defined(_WIN32)
+    // Windows gives a running process's private commit; Wine reports 0, taken as not measured.
+    if (commit) CHECK(*commit > 0);
+#else
+    CHECK_FALSE(commit);
+#endif
+}

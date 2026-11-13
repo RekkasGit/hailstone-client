@@ -51,6 +51,7 @@
 #include "game/item_moves.h"
 #include "game/item_sort.h"
 #include "game/kept_items.h"
+#include "game/bank_snapshot.h"
 #include "game/inventory.h"
 #include "game/item_links.h"
 #include "game/mail.h"
@@ -67,6 +68,8 @@
 #include "game/marketplace.h"
 #include "game/spell_sets.h"
 #include "game/tasks.h"
+#include "game/reward_selection.h"
+#include "game/achievements.h"
 #include "game/task_window.h"
 #include "game/text_overlay.h"
 #include "game/tracking.h"
@@ -315,6 +318,9 @@ struct ConnectionOptions {
     std::filesystem::path server_files_dir;
     // How much those files may come to (hailstone.ini's assets.server_files_max_*_mb).
     ServerFileSync::Limits server_files_limits;
+    // Hailstone: the bank as last seen is read from and saved to the character's bank.dat (game/bank_snapshot.h).
+    // Off: kept for the session only (tests, which share character names).
+    bool bank_snapshot_file = false;
 };
 
 // The modifier keys of a click on an item slot (CXWndManager::GetKeyboardFlags: Shift, Ctrl, Alt).
@@ -1796,6 +1802,14 @@ public:
     bool activate_bank(std::uint32_t banker_id);
     void close_bank();
     const std::optional<BankSession>& bank() const { return bank_; }
+    // Hailstone: the bank as last seen (game/bank_snapshot.h). bank_live(): the inventory holds the bank as the server
+    // has it in this zone (it came with OP_CharInventory or in item packets, or the bank window opened); until then
+    // the bank's slots are empty in inventory() and bank_seen() is the copy to list in their place (seen 0: never
+    // seen). The copy is never in inventory(), so nothing can move, use or count what it holds.
+    bool bank_live() const { return bank_live_; }
+    const game::BankSnapshot& bank_seen() const { return bank_seen_; }
+    // Changes when bank_live() or bank_seen() does (a window's cache).
+    std::uint64_t bank_view_revision() const { return bank_view_revision_; }
     const game::BankCoins& bank_coins() const { return bank_coins_; }
     // Coin on the cursor by wire type (0 copper .. 3 platinum).
     const std::array<std::uint32_t, 4>& cursor_coins() const { return cursor_coins_; }
@@ -2050,7 +2064,8 @@ public:
     // LaunchSpellData_GetCastItem @0x59fcf0: the item at the cast's location when it is an item cast, else null.
     Item* cast_item();
     // The AA window's train button / /alternateadv buy: OP_AAAction 3 when trainable, else eqstr 13277.
-    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks).
+    // `train_all`: the AA window's "Train All" box (NMS UI); the NMS patch then sends action 4 (buy all ranks). On a
+    // server without action 4 the client buys the ranks one at a time itself (continue_aa_buy_all).
     bool aa_train(std::uint32_t rank_id, bool train_all = false);
     // The AA window's Train button (CAAWnd::WndNotification @0x60aa80): with AANoConfirm it trains at once, else it
     // asks first (4041 / 4042 with the cost and the name, 20 s).
@@ -2117,6 +2132,31 @@ public:
 
     // Tasks and quests (game/tasks.h).
     const game::TaskState& tasks() const { return tasks_; }
+    // Stock Select Reward: received data, separate pending and preview managers. Confirmations
+    // carry the collection revision, local tab token and exact received wire option ID.
+    const game::RewardSelection& rewards() const { return rewards_; }
+    const game::Achievements& achievements() const { return achievements_; }
+    bool achievement_refresh_pending() const { return achievement_refresh_token_.has_value(); }
+    const std::string& achievement_message() const { return achievement_message_; }
+    void show_achievements(bool show);
+    void close_achievement_detail();
+    void reopen_achievement_detail();
+    bool open_achievement(std::uint64_t catalog_token, std::uint32_t definition_index);
+    bool request_achievements();
+    bool compare_achievements();
+    void clear_achievement_comparison();
+    bool inspect_achievement_link(std::string_view metadata);
+    bool achievement_reward(std::uint64_t catalog_token, std::uint32_t definition_index);
+    std::optional<std::string> achievement_chat_link(std::uint64_t catalog_token, std::uint32_t definition_index) const;
+    void show_reward_selection(bool show);
+    void close_reward_selection(game::RewardLane lane);
+    bool request_pending_rewards();
+    bool preview_task_reward(std::uint32_t task_id);
+    bool reward_claim(std::uint64_t revision, std::uint64_t tab_token, std::uint32_t wire_option_id,
+                      std::string* why = nullptr);
+    bool reward_inspect(game::RewardLane lane, std::uint64_t revision, std::uint64_t tab_token,
+                        std::uint32_t wire_option_id, std::uint32_t entry_id, std::uint32_t item_id,
+                        std::string* why = nullptr);
     // The large centre-screen text (CTextOverlay: OP_TaskActivityComplete's lines); the app draws its frame().
     game::TextOverlay& text_overlay() { return text_overlay_; }
     // The task select window's Accept for one offered task (OP_AcceptNewTask, or
@@ -2615,7 +2655,7 @@ private:
     void handle_zone(const AppPacket& p);
     // Through the plugins' outgoing packet hooks (ConnectionOptions::hooks).
     void send_world(const AppPacket& p);
-    void send_zone(const AppPacket& p, bool reliable = true);
+    bool send_zone(const AppPacket& p, bool reliable = true, const std::function<bool()>& still_current = {});
     // The hook bus's game state, zoning and spawn events, from the state changes since the last update.
     void raise_hook_events();
     void send_checksums();
@@ -2640,11 +2680,22 @@ private:
     void handle_ability(Op op, const AppPacket& p);
     void handle_door(Op op, const AppPacket& p);
     void handle_progress(Op op, const AppPacket& p);
+    bool handle_rewards(const AppPacket& p);
+    bool handle_achievements(const AppPacket& p);
+    void reset_achievements();
+    void update_achievements();
+    std::pair<std::uint32_t, std::uint64_t> achievement_target() const;
+    bool reward_request_ready(std::string* why = nullptr) const;
+    void reset_rewards();
+    std::int64_t reward_now_ms() const;
     bool progress_command(std::string_view handler, const std::string& args);
     void handle_skill_update(const AppPacket& p);
     void handle_level_update(std::uint32_t new_level);
     void reset_progress_for_zone();
     void request_aa_data();
+    // A client-side "buy all ranks" (aa_train with train_all on a server without action 4): once the rank last
+    // bought is owned and the points are updated, the next rank is bought while it can be trained.
+    void continue_aa_buy_all();
     bool combine_checks(std::uint32_t container_type, const std::vector<const Item*>& contents);
     bool combine_gates(std::uint32_t container_type); // the race and class containers' refusals
     void send_combine(const ItemSlot& container_slot, std::uint32_t container_type);
@@ -3144,6 +3195,13 @@ private:
     std::int64_t merchant_check_ms_ = 0; // CMerchantWnd::NextRefreshTime: the range check every 500 ms
     std::optional<TradeSession> trade_;
     std::optional<BankSession> bank_;
+    game::BankSnapshot bank_seen_;     // Hailstone: the bank as last seen (bank.dat)
+    bool bank_live_ = false;
+    std::uint64_t bank_view_revision_ = 0;
+    void set_bank_live(bool live);
+    // While bank_live(): bank_seen() becomes the inventory's bank now, saved to bank.dat (bank_snapshot_file).
+    void capture_bank();
+    void load_bank_snapshot();
     std::int64_t bank_check_ms_ = 0; // CBankWnd::NextRefreshTime
     game::BankCoins bank_coins_;
     std::array<std::uint32_t, 4> cursor_coins_{};
@@ -3243,6 +3301,16 @@ private:
     // The cursor item into game::put_away_slot's place; false when there is none.
     bool put_away_cursor();
     game::TaskState tasks_;
+    game::RewardSelection rewards_;
+    game::Achievements achievements_;
+    std::uint64_t achievement_view_intent_ = 0;
+    std::optional<std::uint64_t> achievement_refresh_token_;
+    std::optional<std::int64_t> achievement_refresh_requested_ms_;
+    std::int64_t achievement_refresh_sent_ms_ = 0;
+    std::string achievement_message_;
+    std::optional<std::pair<std::uint32_t, std::uint64_t>> achievement_compare_target_, achievement_link_target_;
+    std::optional<std::uint64_t> achievement_link_request_token_;
+    std::array<std::optional<std::int64_t>, 2> reward_view_requested_ms_, reward_inspect_requested_ms_;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> task_selection_; // the task window's selected (type, slot)
     bool task_abandon_sent_ = false;
     bool task_compass_dirty_ = true;                     // CTaskWnd +0x1594
@@ -3252,6 +3320,7 @@ private:
     void update_task_compass();
     game::TextOverlay text_overlay_;
     bool aa_requested_ = false;
+    std::uint32_t aa_buy_all_ = 0; // the rank a client-side "buy all ranks" is waiting on (0: none)
     mutable std::unique_ptr<game::mechanics::GameTables> tables_; // SkillCaps / BaseData, loaded when first needed
     std::int64_t sat_down_ms_ = 0;  // the spawn's +0x374: when the player sat down (0 standing)
     bool was_sitting_ = false;

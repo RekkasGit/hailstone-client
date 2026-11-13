@@ -263,6 +263,7 @@ public:
     AAWindow() : StockWindow("AAWindow", false) {}
 
     const ListData* list(EqHost& host, std::string_view id) override {
+        if (host.conn) follow_selection(host.conn->alt_adv());
         if (id == "ModernList") return host.conn ? &modern_list(host) : nullptr;
         int tab = index_of(id);
         if (tab < 0 || !host.conn) return nullptr;
@@ -357,6 +358,7 @@ public:
         if (!host.conn) return;
         const auto& c = *host.conn;
         const auto& aa = c.alt_adv();
+        follow_selection(aa);
         if (id == "CurrentCount") out.text = std::to_string(aa.points);
         else if (id == "TotalCount") out.text = std::to_string(aa.spent);
         else if (id == "AssignedCount") out.text = std::to_string(aa.assigned[0]);
@@ -380,7 +382,7 @@ public:
             else out.text = std::format("{:02d}:{:02d}:{:02d}", left / 3600, left / 60 % 60, left % 60);
         }
         else if (id == "CanPurchaseFilter") out.checked = filter_.trainable_only;
-        else if (id == "TrainAllButton") out.checked = train_all_; // the NMS UI's box (the patch reads it)
+        else if (id == "TrainAllButton") out.checked = train_all_; // buy every rank (GameConnection::aa_train)
         else if (id == "LessExpButton") out.enabled = aa.percent > 0;
         else if (id == "MoreExpButton") out.enabled = aa.percent < 100;
         else if (id.starts_with("Modern")) modern_info(host, id, out);
@@ -433,6 +435,7 @@ public:
         if (!host.conn || button != "left") return false;
         auto& c = *host.conn;
         std::uint32_t pct = c.alt_adv().percent;
+        follow_selection(c.alt_adv());
         if (id == "CanPurchaseFilter") {
             // CAAWnd's filter (+0x22c): the check box sets "trainable only"; the kind, expansion and category
             // combos stay at "any" (their contents are not traced).
@@ -477,6 +480,16 @@ public:
     }
 
 private:
+    // The selection follows its ability: once the selected rank is bought (owned, with a next rank the table
+    // knows), the next rank is selected, the one the list now shows, so that Train buys it without a click on the
+    // row again. Deliberate difference: not traced in CAAWnd, whose list refill after a purchase is not settled.
+    void follow_selection(const game::AltAdvState& aa) {
+        for (int hops = 0; hops < 64 && selected_ && aa.has(selected_); ++hops) {
+            const game::AltAbility* a = aa.get(selected_);
+            if (!a || a->next_id <= 0 || !aa.get(static_cast<std::uint32_t>(a->next_id))) break;
+            selected_ = static_cast<std::uint32_t>(a->next_id);
+        }
+    }
     static int index_of(std::string_view id) {
         if (id.size() == 5 && id.starts_with("List") && id[4] >= '1' && id[4] <= '4') return id[4] - '1';
         return -1;
@@ -488,7 +501,7 @@ private:
     std::uint32_t selected_ = 0;
     int page_ = 0;
     game::AAFilter filter_;
-    bool train_all_ = false; // TrainAllButton (NMS UI): the patch turns the train into "buy all"
+    bool train_all_ = false; // TrainAllButton: "buy all" (the server's action 4, else the client's one rank at a time)
 };
 
 // A zone's full name (GetFullZoneNameById; "" when unknown).
@@ -710,7 +723,8 @@ public:
         } else if (id == "TASK_MonsterButton") {
             out.enabled = false; // the entry's monster mission templates (+0x3be8): EQEmu sends none
         } else if (id == "TASK_PreviewRewardButton") {
-            out.enabled = preview_enabled_ && selected_task(c) != nullptr;
+            const game::Task* t = selected_task(c);
+            out.enabled = preview_enabled_ && t && t->reward_set;
         } else if (id.starts_with("STASK_") && id.ends_with("Button")) {
             // CTaskWnd_FillMemberList: the five buttons are enabled for the task's leader.
             out.enabled = host.conn->shared_task_is_leader();
@@ -742,9 +756,14 @@ public:
             if (const game::Task* t = selected_task(c)) c.ask_abandon_task(t->type, t->sequence);
             return true;
         }
-        if (id == "TASK_MonsterButton" || id == "TASK_PreviewRewardButton") {
-            // Monster Select toggles CTaskTemplateSelectWnd; Preview Reward asks PendingRewardMgr for the reward set
-            // (opcode 0x6411 subtype 4): neither is served by EQEmu.
+        if (id == "TASK_PreviewRewardButton") {
+            // The row stores a task ID as well as its slot: a replacement must not inherit the previous task's click.
+            if (const game::Task* t = selected_task(c); preview_enabled_ && t && t->reward_set)
+                c.preview_task_reward(t->task_id);
+            return true;
+        }
+        if (id == "TASK_MonsterButton") {
+            // Monster Select needs the entry's monster mission templates, which EQEmu does not send here.
             return true;
         }
         // The shared task page (CTaskWnd::WndNotification @0x7716b0).
@@ -771,7 +790,7 @@ private:
         const auto& r = rows_[static_cast<std::size_t>(selected_)];
         if (r.separator) return nullptr;
         const game::Task* t = c.tasks().find(r.type, r.index);
-        return t && t->task_id ? t : nullptr;
+        return t && t->task_id && t->task_id == r.task_id ? t : nullptr;
     }
 
     // CTaskWnd_RebuildTaskLists @0x7720e0: the four types' rows collected again, then sorted and listed.

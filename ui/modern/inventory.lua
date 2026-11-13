@@ -46,6 +46,15 @@ local showMissing = false
 
 local function label(t) local text, r, g, b = eq.Label(t) return text or "", r and { r, g, b, 1 } or nil end
 
+-- A label type the stock client has none of (eq.Label gives "Unknown\tLabel<n>" for it) is filled in only by a
+-- server's own client (the NMS plugin's mitigation 6668 and avoidance 6667), so its row is drawn only when that
+-- server's client gives a value; nil otherwise.
+local function serverLabel(t)
+  local v, col = label(t)
+  if v == "" or v:find("^Unknown") then return nil end
+  return v, col
+end
+
 -- A "name   value" row; value from EQType t (its colour if the game gives one).
 local function statRow(x, y, w, name, t, s, font)
   font = font or T.font.small
@@ -109,8 +118,8 @@ local function characterPage(x, y, s)
   yy = yy + statRow(sx, yy, half, "ATK", 23, s)
   yy = yy + statRow(sx, yy, half, "Haste", 211, s)
   local y2 = y0
-  y2 = y2 + statRow(col2, y2, half, "Mitigation", 6668, s)
-  y2 = y2 + statRow(col2, y2, half, "Avoidance", 6667, s)
+  if serverLabel(6668) then y2 = y2 + statRow(col2, y2, half, "Mitigation", 6668, s) end
+  if serverLabel(6667) then y2 = y2 + statRow(col2, y2, half, "Avoidance", 6667, s) end
   yy = math.max(yy, y2) + 6 * s
   ui.DrawLine(sx, yy - 3 * s, sx + sw, yy - 3 * s, C.ink[1], C.ink[2], C.ink[3], 0.06, 1)
   local attrs = { { "STR", 5 }, { "STA", 6 }, { "AGI", 8 }, { "DEX", 7 }, { "WIS", 9 }, { "INT", 10 }, { "CHA", 11 } }
@@ -320,15 +329,15 @@ local function statsPage(x, y, s)
   yl = section(lx, yl, colW, "Defense and offense", s)
   local ac, acc = label(22)
   local haste = tonumber((label(211))) or 100
-  local fight = {
-    { "Armor class", ac, acc },
-    { "Mitigation", label(6668) },
-    { "Avoidance", label(6667) },
-    { "Defense", n(st.defense), nil, "ComputeDefense: the skill and agility part of AC" },
-    { "Haste", (haste - 100) .. "%", haste > 100 and C.good or nil },
-  }
+  local fight = { { "Armor class", ac, acc } }
+  for _, m in ipairs({ { "Mitigation", 6668 }, { "Avoidance", 6667 } }) do
+    local v, col = serverLabel(m[2])
+    if v then fight[#fight + 1] = { m[1], v, col } end
+  end
+  fight[#fight + 1] = { "Defense", n(st.defense), nil, "ComputeDefense: the skill and agility part of AC" }
+  fight[#fight + 1] = { "Haste", (haste - 100) .. "%", haste > 100 and C.good or nil }
   local atk = label(23)
-  if atk ~= "" then table.insert(fight, 4, { "Attack", atk }) end
+  if atk ~= "" then table.insert(fight, #fight - 1, { "Attack", atk }) end
   yl = kv(lx, yl, colW, fight, s) + 6 * s
   yl = section(lx, yl, colW, "Progress", s)
   local xp, aa = eq.Gauge(4) or 0, eq.Gauge(5) or 0

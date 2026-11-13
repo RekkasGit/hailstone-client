@@ -628,3 +628,117 @@ TEST_CASE("/camera goes to the client's camera handler (docs/isometric.md)") {
     CHECK(calls[1] == std::pair<std::string, std::string>{"Hailstone_camera", "reveal 25"});
     CHECK(calls[2] == std::pair<std::string, std::string>{"Hailstone_camera", "iso"});
 }
+
+TEST_CASE("Advanced Inventory: the bank as last seen is listed, marked stale, and out of reach") {
+    fs::path src = ui_dir() / "modern";
+    ScratchDir scratch("inventory_manager_bank_seen");
+    fs::path dir = scratch.path();
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        MockConfig config = MockConfig::standard();
+        net::Item bag = bag_item(17005, "Large Sack", 0);
+        bag.slot = net::ItemSlot{net::kInvBank, 3, -1, -1, 0, 0};
+        net::Item ring = make_item(9990, "Fine Steel Ring", 0);
+        ring.slot = net::ItemSlot{net::kInvBank, 3, 1, -1, 0, 0};
+        bag.contents.push_back({1, ring});
+        config.characters[0].inventory.push_back(bag);
+        net::ConnectionOptions options = quick_options();
+        options.servers_dir = dir / "servers";
+        Rig rig(std::move(config), options);
+        REQUIRE(rig.to_zone());
+        auto& conn = rig.conn;
+        put_coin_away(conn);
+        // the next zone-in leaves the bank out (EQEmu's Inventory:LazyLoadBank)
+        rig.server.config.characters[0].inventory.pop_back();
+        const int entries = rig.server.zone_entries;
+        rig.server.request_zone_change(1, 20.0f, 10.0f, 3.0f);
+        REQUIRE(rig.until([&] { return rig.server.zone_entries == entries + 1 && conn.state() == net::ConnectionState::InZone; }));
+        REQUIRE(rig.until([&] { return conn.player_status().max_hp != 0; }));
+        REQUIRE_FALSE(conn.bank_live());
+
+        app::EqHost host;
+        host.in_game = host.ui_ready = true;
+        host.game = &rig.game;
+        host.conn = &conn;
+        app::EqApi api(host);
+        api.load_layout(dir / "defaults.ini", dir / "UI_Test_Server.ini", {});
+        ui::lua::LuaUi lua(dir / "modern", dir / "modern.txt");
+        lua.add_eq_api([&](lua_State* L) {
+            api.register_functions(L);
+            lua_pushcfunction(L, [](lua_State* S) { lua_pushboolean(S, 1); return 1; });
+            lua_setfield(L, -2, "InGame");
+        });
+        lua_State* L = lua.state();
+        auto frames = [&] {
+            for (int i = 0; i < 3; ++i) {
+                api.begin_frame();
+                frame(lua);
+                rig.step();
+            }
+        };
+
+        REQUIRE(luaL_dostring(L, R"lua(
+local rows, bank, ring = eq.AllItems(), nil, nil
+for _, r in ipairs(rows) do
+  if r.place == "b:3" then bank = r end
+  if r.place == "b:3:1" then ring = r end
+end
+local live, age = eq.BankSeen()
+local n, _, found = eq.FindItems("bank", "steel ring")
+local carried = eq.AllItems()[2]
+return bank and bank.stale, ring and ring.stale, ring and ring.bag, live, age, n, found[1] and found[1].stale,
+  carried.stale == nil
+)lua") == LUA_OK);
+        CHECK(lua_toboolean(L, 1));
+        CHECK(lua_toboolean(L, 2));
+        CHECK(std::string(lua_tostring(L, 3)) == "Large Sack");
+        CHECK_FALSE(lua_toboolean(L, 4));
+        CHECK(lua_isinteger(L, 5));
+        CHECK(lua_tointeger(L, 6) == 1);
+        CHECK(lua_toboolean(L, 7));
+        CHECK(lua_toboolean(L, 8)); // only banked rows are ever stale
+        lua_settop(L, 0);
+
+        // Nothing reaches the copy: a bank click, a withdraw, a destroy.
+        const int moves = MockEqServer::count(rig.server.zone_log, net::Op::MoveItem);
+        REQUIRE(luaL_dostring(L, R"lua(
+eq.BankSlotClick(3, nil, "left", false)
+eq.BankSlotClick(3, 1, "left", false)
+local w = eq.BulkItems("withdraw", { "b:3:1" }, true)
+local d = eq.BulkItems("destroy", { "b:3" }, true)
+return w, d
+)lua") == LUA_OK);
+        CHECK(lua_tointeger(L, 1) == 0);
+        CHECK(lua_tointeger(L, 2) == 0);
+        lua_settop(L, 0);
+        CHECK(conn.inventory().cursor() == nullptr);
+
+        // The window draws the stale rows in both views.
+        api.show("InventoryManagerWnd", true);
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.view', 'list') ui.SetSetting('advinv.place', 'bank')") == LUA_OK);
+        frames();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('advinv.view', 'grid')") == LUA_OK);
+        frames();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        CHECK(MockEqServer::count(rig.server.zone_log, net::Op::MoveItem) == moves);
+
+        // Opened at a banker, the bank is what the server has: no longer stale (here, empty, as nothing came).
+        REQUIRE(conn.activate_bank(rig.server.config.own_spawn_id));
+        REQUIRE(luaL_dostring(L, R"lua(
+local stale = 0
+for _, r in ipairs(eq.AllItems()) do if r.stale then stale = stale + 1 end end
+return stale, (eq.BankSeen())
+)lua") == LUA_OK);
+        CHECK(lua_tointeger(L, 1) == 0);
+        CHECK(lua_toboolean(L, 2));
+        lua_settop(L, 0);
+    }
+    ImGui::DestroyContext(ctx);
+}

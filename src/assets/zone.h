@@ -83,10 +83,18 @@ Zone load_eqg_zone(const GameDir& game, std::string_view name, const ZoneLoadCan
 // is one, since a live asset folder's .eqg of that name is a revamped zone.
 bool is_eqg_zone(const GameDir& game, std::string_view name);
 // arena, bazaar, highpasshold, lavastorm, nektulos: zones the live client revamped under the RoF2 name. With a live
-// asset folder and no .s3d of theirs, load_zone refuses the live .eqg (unless the server's own files have it).
+// asset folder and no .s3d of theirs, load_zone refuses the live .eqg unless the server's own files have it or the
+// RevampedZoneTest passes.
 bool is_revamped_zone_name(std::string_view name);
 
-// The zone as the original picks it: EQG when <name>.eqg exists, else classic.
-Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel& cancel = {});
+// Asked with a live folder's revamped .eqg zone, loaded, when load_zone would otherwise refuse it: true when it is
+// the zone the server runs (game/revamped_zone.h tests the server's safe point against its floor), and load_zone
+// returns it. Empty: refused, as with no word from the server (a neighbour zone loaded ahead, the viewers).
+using RevampedZoneTest = std::function<bool(const Zone&)>;
+
+// The zone as the original picks it: EQG when <name>.eqg exists, else classic (with is_eqg_zone's and
+// is_revamped_zone_name's changes).
+Zone load_zone(const GameDir& game, std::string_view name, const ZoneLoadCancel& cancel = {},
+               const RevampedZoneTest& revamped_test = {});
 
 } // namespace hailstone::assets

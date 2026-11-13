@@ -814,7 +814,7 @@ rectangle (`u0, v0, u1, v1`).
 
 ### `eq`
 
-`eq` has 283 functions (with `eq.gamepad.*`). The **Cap** column is what a plugin's code needs to call it; `—` means
+The tables below include `eq.gamepad.*`. The **Cap** column is what a plugin's code needs to call it; `—` means
 nothing beyond `ui`. A UI pack's own code may call everything. A refused call does nothing and gives `nil`, with one
 line in the log. The list is `src/app/lua_eq_caps.cpp`; a function missing from it is taken to act and needs
 `actions`. `self` means the function checks the caller itself, as each group's note says.
@@ -842,6 +842,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | Gauge | (eqType) → fraction\|nil, text, value [, r, g, b] | EQType gauge: fraction 0..1, raw value (0..1000 or special negatives), tint for special values | — |
 | AltCurrencies | ([showMissing]) → {{name, count, icon, maxStack}} | Alternate currencies in the InventoryWindow list's order | — |
 | UiTexture | (file) → tex, w, h \| nil | Texture from uifiles/default | — |
+| UiAnimation | (name) → tex, u0, v0, u1, v1, w, h \| nil | First frame of a named installed XML animation, with its authored dimensions | — |
 | Option | (name) → int\|nil | Client option value (ui/<pack>/options.lua) | — |
 | SetOption | (name, int) → — | Change, apply and save a client option | commands |
 | OptionChoices | (name) → {string} | Choices the client lists for an option (e.g. "resolution") | — |
@@ -991,8 +992,9 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| AllItems | () → {{item, place, where, slot, sub, bag, kept}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats) | — |
+| AllItems | () → {{item, place, where, slot, sub, bag, kept, stale}} | Everything worn, carried, banked and shared. item has extra fields (value, noTrade, temporary, attuned, reqLevel, recLevel, equipSlots, tradeskill, augment, usable, tribute, noDestroy, stats). stale: a banked row from the bank as last seen (eq.BankSeen), not in reach | — |
 | ItemsRevision | () → inv, keep | Change counters | — |
+| BankSeen | () → live, age | live: the bank's rows are the bank as the server has it now; else they are the copy as last seen at a bank, age seconds ago (nil: never seen) | — |
 | ItemKept | (id) → bool | Item is marked Keep | — |
 | SetItemKept | (id, name, on) → — | Mark or unmark every copy as Keep | actions |
 | SetItemsKept | ({{id, name}…}, on) → — | SetItemKept for many items at once, with one write (up to 4096) | actions |
@@ -1020,6 +1022,30 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | AbilityBookAutoskillMove | (key, delta) → — | Move in the list (-1 / +1) | commands |
 | AbilityBookAutoskillRule | (key, endurance, mana, targetHp, targetHpAbove, selfHp, when, keepBuff) → — | Set an entry's rule | commands |
 | AbilityBookAutoskillEnable | (on) → — | Autoskill master switch | actions |
+
+#### Achievements and rewards (lua_eq_achievements.cpp, lua_eq_rewards.cpp)
+
+| Function | Args → returns | What | Cap |
+|---|---|---|---|
+| Achievements | ([catalogToken, stateRevision]) → table\|nil | Received catalog, own state, totals and comparison status; matching tokens omit unchanged tables | — |
+| Achievement | () → table\|nil | Current own or linked detail, including its revision | — |
+| AchievementOpen | (catalogToken, definitionIndex) → accepted, reason | Select one of your achievements by its received zero-based index | commands |
+| AchievementRefresh | () → accepted, reason | Explicitly request a fresh catalog and state | actions |
+| AchievementCompare | () → accepted, reason | Compare the nearby targeted player | actions |
+| AchievementClearCompare | () → accepted, reason | Clear the comparison; retire a reply still in flight | commands |
+| AchievementReward | (catalogToken, definitionIndex) → accepted, reason | Open the selected achievement's server-provided rewards | actions |
+| AchievementLink | (catalogToken, definitionIndex) → accepted, reason | Insert the selected achievement link into chat composition | chat |
+| RewardSelection | ([pendingRevision, previewRevision]) → table\|nil | Separate pending and preview lanes; matching revisions omit unchanged tabs | — |
+| RewardSelectionClaim | (revision, tabToken, wireOption) → accepted, reason | Confirm a received pending choice; previews cannot claim | actions |
+| RewardSelectionInspect | (lane, revision, tabToken, wireOption, entryId, itemId) → accepted, reason | Explicitly request a received reward item's details | actions |
+| RestorePendingRewards | () → accepted, reason | Request pending rewards without retrying a claim | actions |
+| RewardSelectionClose | (lane) → accepted, reason | Close the pending or preview lane | commands |
+
+Catalog, state, detail, lane-revision and tab tokens are opaque decimal strings: pass them back unchanged, never
+through `tonumber`. Definition indices and wire ids are unsigned 32-bit integers. `lane` is `"pending"` or
+`"preview"`. Getters and drawing are passive; an accepted action means it was admitted to transport, not that the
+server granted a reward. The full table shapes and cache rules are in [docs/dev-ui.md](dev-ui.md), under the
+achievement and reward-selection APIs.
 
 #### Spell book and spell sets (lua_eq_spellbook.cpp)
 
@@ -1072,7 +1098,8 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ChatCloseTab | (slot, tab) → — | Close a tab | commands |
 | ChatSelectTab | (slot, tab) → — | Bring a tab up | commands |
 | ChatSetTitle | (slot, title) → — | Rename the tab | commands |
-| ChatFilters | (slot) → {{id, group, name, on}} | Filters menu for the tab | — |
+| ChatFilters | (slot) → {{id, group, name, on, menu, parent}} | Route rows for the tab; menu and parent are stable group IDs | — |
+| ChatFilterGroups | () → {{id, parent, name}} | Filter menu hierarchy; parent 0 is the root | — |
 | ChatSetFilter | (slot, id\|groupName, on) → — | Route a channel here or back to main | commands |
 | ChatSetFont | (slot, font) → — | Tab font index | commands |
 | ChatDefaultChannels | () → {names} | Channel menu items (0-based order) | — |
@@ -1341,7 +1368,7 @@ or -1 and say so in the chat window. Only call these on the client's thread, fro
 | `close_spell_book`, `clear_spell_recovery`, `set_window_pet(id)`, `inspect_item(id, augments)` | `actions` | |
 | `max_camera_distance`, `set_max_camera_distance(d)` | `actions` | |
 | `open_bank(banker)` | `actions` | the bank window at a spawn (0 the player), without a banker's checks. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, open_bank)` first |
-| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)` | `read` | every buff slot of the player, or of its pet, as fixed little-endian records (layout in docs/plugins.md "Buff records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, get_buff_data_bulk)` first |
+| `get_buff_data_bulk(out, size)`, `get_pet_buff_data_bulk(out, size)`, `get_spawns_data_bulk(out, size)` | `read` | every buff slot of the player (`size` at least 1798, or 0 comes back), the pet window's buffs, or every spawn in the zone (`size` at least 4096, or 0 comes back; 4112 for any record), as packed records in the machine's byte order (layout in docs/plugins.md "Buff and spawn records"); returns the bytes written. Added later in ABI 3: test `HAILSTONE_HOST_HAS(host, <field>)` first |
 | `add_ui_function(name, fn, user)`, `remove_ui_function` | `ui` | a function the plugin's windows call as `eq.Plugin("<name>").<name>(...)` |
 | `arg_count`, `arg(i, out)`, `arg_field(i, key, out)` | | a UI function's arguments |
 | `out_value`, `out_begin_array`, `out_begin_table`, `out_key`, `out_end` | | a UI function's result |

@@ -11,17 +11,22 @@
 #include <SDL3/SDL_video.h>
 
 #include "assets/zone_flora.h"
+#include "core/ascii_case.h"
 #include "core/ini_file.h"
 #include "core/server_profile.h"
 #include "mq/lua_mq.h"
 #include "game/mechanics/abilities.h"
 #include "game/option_commands.h"
 #include "game/particles.h"
+#include "game/revamped_zone.h"
 #include "nav/zone_nav.h"
+#include "platform/process.h"
+#include <unordered_set>
 
 namespace hailstone::app::client_internal {
 
 void ClientApp::load_zone(const std::string& short_name) {
+    log_memory("zone load: before unload");
     unload_zone();
     if (audio_) {
         audio_->set_zone(short_name);
@@ -29,8 +34,21 @@ void ClientApp::load_zone(const std::string& short_name) {
     }
     loading_view_.detail = "Loading " + short_name;
     auto t0 = Clock::now();
+    // What each step of the load leaves in memory, so a load that holds much more than its geometry can be read.
+    auto mark = [&](const char* phase) { log_memory(std::string("zone load: ") + phase); };
+    mark("start");
     try {
-        zone_ = assets::load_zone(game_, short_name);
+        // A live folder's revamped .eqg loads when the server's safe point (OP_NewZone, already here: it asked for
+        // this load) stands on its floor (game/revamped_zone.h). The test's collision mesh is kept below: nothing
+        // added to the zone after the load (flora, emitters) is collision geometry.
+        std::optional<game::CollisionMesh> tested_collision;
+        assets::RevampedZoneTest revamped_test;
+        if (conn_)
+            if (const auto& z = conn_->zone_info(); z && iequals(z->zone_short_name, short_name))
+                revamped_test = game::safe_point_test(game::server_to_world({z->safe_x, z->safe_y, z->safe_z}),
+                                                      tested_collision);
+        zone_ = assets::load_zone(game_, short_name, {}, revamped_test);
+        mark("zone data");
         // Hailstone's own flora for a zone without any (assets/zone_flora.h, display.zone_flora).
         if (config_.get_bool("display.zone_flora", true)) {
             // flora/default.txt only where the server calls the zone outdoor (OP_NewZone's time type 1, 2 or 5), so
@@ -40,6 +58,7 @@ void ClientApp::load_zone(const std::string& short_name) {
                 if (const auto& z = conn_->zone_info()) outdoor = z->time_type == 1 || z->time_type == 2 || z->time_type == 5;
             assets::add_zone_flora(game_, *zone_, platform::flora_dir(), outdoor);
         }
+        mark("flora");
         zone_particles_ = std::make_unique<ZoneParticles>(vk_, game_, shader_dir_, *zone_);
         zone_particles_->set_density(environment_particle_density_);
         // PlayerClient::PostBuildInit makes the spawns' lights only with ShowDynamicLights (/dynamiclights: "takes
@@ -60,13 +79,16 @@ void ClientApp::load_zone(const std::string& short_name) {
             if (!fire_renderer_) fire_renderer_ = std::make_unique<render::FireRenderer>(vk_, shader_dir_);
         }
         zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, render::zone_render_options(game_));
+        mark("zone renderer");
         flora_renderer_.reset();
         if (!zone_->flora.empty()) flora_renderer_ = std::make_unique<render::FloraRenderer>(vk_, *zone_, shader_dir_);
+        mark("flora renderer");
         point_shadows_.reset();
         if (spell_particles_) spell_particles_->clear();
         if (spell_bolts_) spell_bolts_->clear();
         if (actor_emitters_) actor_emitters_->clear();
-        collision_ = game::CollisionMesh::build(*zone_);
+        collision_ = tested_collision ? std::move(*tested_collision) : game::CollisionMesh::build(*zone_);
+        mark("collision");
         if (conn_) conn_->reground(); // ground_npcs measured the spawns against no floor, or the last zone's
         zone_ladders_ = game::zone_ladders(*zone_);
         if (nav_)
@@ -74,7 +96,9 @@ void ClientApp::load_zone(const std::string& short_name) {
                               platform::cache_dir() / "navmesh" /
                                   (server_profile_.id.empty() ? std::string("default") : server_profile_.id) /
                                   nav::ZoneNav::cache_name(short_name));
+        mark("navigation");
         ambient_probe_ = render::AmbientProbe(*zone_);
+        mark("ambient probe");
         probe_blend_.reset();
         // Zone-line boxes under the terrain (a client addition, game/zone_lines.h): walking over them fires them.
         zone_line_.set_buried(game::find_buried_zone_lines(zone_->regions, *collision_));
@@ -189,6 +213,38 @@ void ClientApp::update_zone_settle() {
               total, zone_loaded_ms_, zone_in_ms_, zone_settle_.frames(),
               zone_in_ms_ >= 0 && total >= 0 ? total - zone_in_ms_ : -1, zone_settle_.most_waiting(),
               zone_settle_.timed_out() ? "; timed out: " + zone_settle_.detail() : std::string());
+    log_memory("zone-in: settled appearances", true);
+    if (actor_library_) {
+        std::size_t loaded = 0, count = 0, bytes = 0, decodes = 0, releases = 0;
+        std::unordered_set<const assets::CharacterArchive*> seen;
+        for (const auto& archive : actor_library_->archives()) {
+            if (!seen.insert(archive.get()).second) continue;
+            bytes += archive->parsed_bytes();
+            for (const auto& w : archive->wlds) {
+                ++count;
+                if (w.materialized()) ++loaded;
+                const auto stats = w.decode_stats();
+                decodes += stats.decodes;
+                releases += stats.releases;
+            }
+        }
+        log::info("memory character WLDs: {} / {} materialized, index and decoded estimate {:.2f} MiB "
+                  "(retained after use: {:.2f} of {:.0f} MiB)",
+                  loaded, count, double(bytes) / (1024.0 * 1024.0),
+                  double(assets::wld::WldFile::retained_total()) / (1024.0 * 1024.0),
+                  double(assets::wld::WldFile::retain_budget()) / (1024.0 * 1024.0));
+        log::info("memory character WLD activity: {} decodes, {} releases (current archives, cumulative)",
+                  decodes, releases);
+        const auto caches = actor_library_->cache_memory();
+        constexpr double mib = 1024.0 * 1024.0;
+        log::info("memory character caches: {} models {:.2f} MiB, {} appearances {:.2f} MiB, "
+                  "{} item copies {:.2f} MiB (payload estimates)",
+                  caches.models, double(caches.model_bytes) / mib, caches.appearances,
+                  double(caches.appearance_bytes) / mib, caches.items, double(caches.item_bytes) / mib);
+        log::info("memory model breakdown: animation/skeleton {:.2f} MiB, geometry/materials {:.2f} MiB, other {:.2f} MiB",
+                  double(caches.model_animation_bytes) / mib, double(caches.model_geometry_bytes) / mib,
+                  double(caches.model_other_bytes) / mib);
+    }
     loading_since_.reset();
     // The zone-in clocks (the input script's, the test drivers') start as the world shows.
     zone_entered_ = now;

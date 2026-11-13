@@ -23,6 +23,7 @@
 #include <functional>
 #include <string_view>
 
+#include "game/animation_types.h"
 #include "game/mechanics/fpu.h"
 
 namespace hailstone::game::mechanics {
@@ -183,13 +184,6 @@ float new_style_blend_ms(std::uint8_t from, std::uint8_t to);
 
 // ---- old-style (classic) models
 
-// Old-style animation numbers and their classic clip codes.
-enum OldStyleAnim : std::uint8_t {
-    kOldWalk = 0x11, kOldRun = 0x12, kOldJumpRun = 0x13, kOldJumpStand = 0x14, kOldFall = 0x15,
-    kOldDuckWalk = 0x16, kOldClimb = 0x17, kOldDuck = 0x18, kOldTread = 0x19, kOldIdle = 0x1a,
-    kOldStand = 0x20, kOldSitStand = 0x21, kOldTurn = 0x22, kOldKneel = 0x24, kOldSwim = 0x25, kOldSit = 0x26,
-    kOldStandAfter = 0x47, kOldIdleAfter = 0x48, kOldSitIdle = 0x49, // P08, O02, O03
-};
 // The animation object's vf24 on +0x10c0: a jump. Old-style objects (PlayerAnimationBase @0x4afd90) L03 / L04
 // (0x13 / 0x14), new-style ones (@0x588cf0) JMPA / JMPU (0x7b / 0x7c).
 bool is_jump_animation(std::uint8_t anim, bool new_style);

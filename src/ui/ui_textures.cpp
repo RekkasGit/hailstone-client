@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -81,6 +82,27 @@ int to_int(const std::optional<std::string>& v) {
     }
 }
 
+bool valid_animation_reference(const UiTextures::AnimationFrame& frame) {
+    const auto& name = frame.file;
+    if (name.empty() || name == "." || name == ".." || name.find_first_of("/\\:") != std::string::npos ||
+        std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 32 || c == 127; })) return false;
+    return frame.valid_metadata && frame.x >= 0 && frame.y >= 0 && frame.w > 0 && frame.h > 0;
+}
+
+bool frame_integer(const std::optional<std::string>& value) {
+    if (!value || value->empty()) return false;
+    const char* first = value->data();
+    const char* last = first + value->size();
+    if (*first == '+') {
+        ++first;
+        if (first != last && (*first == '-' || *first == '+')) return false;
+    }
+    if (first == last) return false;
+    int number = 0;
+    const auto parsed = std::from_chars(first, last, number);
+    return parsed.ec == std::errc{} && parsed.ptr == last;
+}
+
 } // namespace
 
 // Every <Ui2DAnimation item="..."> of one XML file: its first <Frames> block's texture, location and size.
@@ -109,12 +131,39 @@ template <typename Map> void scan_animations(const std::string& text, Map& out) 
                     f.y = to_int(tag_text(*loc, "Y", 0, loc->size()));
                     f.w = to_int(tag_text(*size, "CX", 0, size->size()));
                     f.h = to_int(tag_text(*size, "CY", 0, size->size()));
+                    f.valid_metadata = frame_integer(tag_text(*loc, "X", 0, loc->size())) &&
+                        frame_integer(tag_text(*loc, "Y", 0, loc->size())) &&
+                        frame_integer(tag_text(*size, "CX", 0, size->size())) &&
+                        frame_integer(tag_text(*size, "CY", 0, size->size()));
                     out.try_emplace(name, std::move(f));
                 }
             }
         }
         at = end;
     }
+}
+
+std::optional<UiTextures::AnimationFrame> find_ui_animation_frame(const std::string& xml, std::string_view name) {
+    std::map<std::string, UiTextures::AnimationFrame> frames;
+    scan_animations(xml, frames);
+    const auto found = frames.find(std::string(name));
+    if (found == frames.end() || !valid_animation_reference(found->second)) return std::nullopt;
+    return found->second;
+}
+
+std::optional<UiTextures::AnimationImage> ui_animation_crop(const UiTextures::Texture& texture,
+                                                          const UiTextures::AnimationFrame& frame) {
+    if (!texture.id || texture.width <= 0 || texture.height <= 0 || !valid_animation_reference(frame)) return std::nullopt;
+    const auto right = static_cast<std::int64_t>(frame.x) + frame.w;
+    const auto bottom = static_cast<std::int64_t>(frame.y) + frame.h;
+    if (right > texture.width || bottom > texture.height) return std::nullopt;
+    UiTextures::AnimationImage image;
+    image.width = frame.w; image.height = frame.h; image.cell.id = texture.id;
+    image.cell.u0 = static_cast<float>(frame.x) / static_cast<float>(texture.width);
+    image.cell.v0 = static_cast<float>(frame.y) / static_cast<float>(texture.height);
+    image.cell.u1 = static_cast<float>(right) / static_cast<float>(texture.width);
+    image.cell.v1 = static_cast<float>(bottom) / static_cast<float>(texture.height);
+    return image;
 }
 
 // Every grid <Ui2DAnimation> (<Grid>true</Grid>) of one XML file: its cell size, direction and every frame.
@@ -390,6 +439,14 @@ std::optional<UiTextures::Cell> UiTextures::animation(std::string_view name) {
     c.u1 = static_cast<float>(f.x + f.w) / static_cast<float>(t->width);
     c.v1 = static_cast<float>(f.y + f.h) / static_cast<float>(t->height);
     return c;
+}
+
+std::optional<UiTextures::AnimationImage> UiTextures::animation_image(std::string_view name) {
+    if (!animations_loaded_) load_skin();
+    const auto found = animations_.find(std::string(name));
+    if (found == animations_.end() || !valid_animation_reference(found->second)) return std::nullopt;
+    const Texture* texture = game_file("uifiles/default/" + found->second.file);
+    return texture ? ui_animation_crop(*texture, found->second) : std::nullopt;
 }
 
 std::optional<int> UiTextures::grid_cells(std::string_view name) {

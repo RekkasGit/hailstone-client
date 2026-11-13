@@ -557,6 +557,41 @@ TEST_CASE("name_sprite_shows_guild: SetNameSpriteState's guild line (bGuildShowA
     CHECK_FALSE(game::name_sprite_shows_guild(npc, 3));
 }
 
+TEST_CASE("name_sprite_market_words: SetNameSpriteState's Offline, Trader and Buyer before a player's name") {
+    game::EqStrings strings;
+    strings.set(766, "OFF");
+    strings.set(5503, "TRD");
+    strings.set(6055, "BUY");
+    game::Spawn p;
+    CHECK(game::name_sprite_market_words(p, strings).prefix.empty());
+    CHECK_FALSE(game::name_sprite_market_words(p, strings).replaces_title);
+    p.trader = true;
+    CHECK(game::name_sprite_market_words(p, strings).prefix == "TRD ");
+    CHECK(game::name_sprite_market_words(p, strings).replaces_title);
+    p.offline = true; // an offline trader: both words, offline first
+    CHECK(game::name_sprite_market_words(p, strings).prefix == "OFF TRD ");
+    p.buyer = true;   // the trader wins over the buyer
+    CHECK(game::name_sprite_market_words(p, strings).prefix == "OFF TRD ");
+    p.trader = false;
+    CHECK(game::name_sprite_market_words(p, strings).prefix == "OFF BUY ");
+    p.buyer = false;  // offline alone keeps the title
+    CHECK(game::name_sprite_market_words(p, strings).prefix == "OFF ");
+    CHECK_FALSE(game::name_sprite_market_words(p, strings).replaces_title);
+    // No string table entry: the plain word, never "[5503]".
+    game::Spawn t;
+    t.trader = true;
+    CHECK(game::name_sprite_market_words(t, game::EqStrings{}).prefix == "Trader ");
+    // Only a player's: an NPC or a corpse the server marks as a trader keeps its plain name.
+    game::Spawn npc = t;
+    npc.is_npc = true;
+    npc.offline = true;
+    CHECK(game::name_sprite_market_words(npc, strings).prefix.empty());
+    CHECK_FALSE(game::name_sprite_market_words(npc, strings).replaces_title);
+    game::Spawn corpse = t;
+    corpse.is_corpse = true;
+    CHECK(game::name_sprite_market_words(corpse, strings).prefix.empty());
+}
+
 TEST_CASE("ReportSuccessfulHit's animation on the target") {
     using hailstone::game::HitAnimInput;
     using hailstone::game::hit_animation;

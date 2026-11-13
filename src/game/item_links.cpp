@@ -1,6 +1,7 @@
 #include "game/item_links.h"
 
 #include "game/mechanics/item_stats.h"
+#include "net/achievement_packets.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -73,6 +74,20 @@ std::optional<ItemLink> parse_item_link(std::string_view tag) {
     return std::nullopt;
 }
 
+std::optional<AchievementChatLink> parse_achievement_chat_link(std::string_view tag) {
+    if (tag.empty() || tag.front() != '3' || tag.size() > net::kMaxAchievementLinkBytes + 4098)
+        return std::nullopt;
+    const auto separator = tag.find('\'', 1);
+    if (separator == std::string_view::npos || separator < 2 || tag[separator - 1] != '^' ||
+        separator - 1 > net::kMaxAchievementLinkBytes || tag.size() - separator - 1 > 4096)
+        return std::nullopt;
+    // __CleanItemTags' achievement case selects the suffix after the apostrophe.
+    // Control characters cannot become hidden tag delimiters or extra chat lines.
+    for (const unsigned char ch : tag)
+        if (ch < 0x20 || ch == 0x7f) return std::nullopt;
+    return AchievementChatLink{std::string(tag.substr(1, separator - 1)), std::string(tag.substr(separator + 1))};
+}
+
 std::vector<ChatSegment> split_links(std::string_view text) {
     std::vector<ChatSegment> out;
     std::string plain;
@@ -91,6 +106,13 @@ std::vector<ChatSegment> split_links(std::string_view text) {
             plain.clear();
             std::string shown = link->text;
             out.push_back({std::move(shown), std::move(link)});
+        } else if (auto achievement = parse_achievement_chat_link(tag)) {
+            if (!plain.empty()) out.push_back({std::move(plain), std::nullopt});
+            plain.clear();
+            std::string shown = achievement->text;
+            out.push_back({std::move(shown), std::nullopt, std::move(achievement)});
+        } else if (!tag.empty() && tag.front() == '3') {
+            plain.append("Achievement"); // malformed metadata is not visible chat text
         } else if (!tag.empty()) {
             plain.append(tag.substr(1)); // other tag codes: their text
         }
@@ -286,7 +308,7 @@ LinkAllChat link_all_into_chat(const std::string& typed, const std::vector<std::
     auto tag_count = [&] {
         int n = 0;
         for (const auto& seg : split_links(r.text))
-            if (seg.link) ++n;
+            if (seg.link || seg.achievement) ++n;
         return n;
     };
     auto add_tag = [&](const std::string& tag) { // CEditWnd::AddItemTag: refused at 10 tags, then ReplaceSelection

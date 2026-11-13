@@ -147,8 +147,11 @@ void ClientApp::draw_nameplates(const render::FrameInfo& frame, const glm::mat4&
         const int level = show_names_;
         if (!s.last_name.empty() && !npc && (!player || level == 2 || level == 3 || level == 4 || level == 6))
             label += " " + s.last_name;
-        if (!s.title.empty() && (!player || level > 3)) label = s.title + " " + label;
+        // A player's "Offline " and "Trader " / "Buyer " before the name, the last two in the title's place.
+        const game::NameSpriteMarketWords market = game::name_sprite_market_words(s, conn_->strings());
+        if (!s.title.empty() && (!player || level > 3) && !market.replaces_title) label = s.title + " " + label;
         if (!s.suffix.empty() && (!player || level > 3)) label += " " + s.suffix;
+        if (!market.prefix.empty()) label.insert(0, market.prefix);
         if (!player) label = game::name_sprite_with_marks(s, label, marks);
         conn_->server_ext().nameplate_text(*conn_, s, label);
         plate.pos = glm::vec2(px, py);
@@ -313,6 +316,10 @@ void ClientApp::update_eq_host() {
         if (const game::Spawn* me = conn_->world().player()) h.player_model = actor_renderer_->model_for(*me);
     h.hot_buttons = actions_ui_ ? &actions_ui_->hot_buttons() : nullptr;
     h.actions = actions_ui_.get();
+    h.layout_setting = [this](std::string_view key) { return lua_ui_ ? lua_ui_->setting(key) : std::string(); };
+    h.set_layout_setting = [this](std::string_view key, std::string_view value) {
+        if (lua_ui_) lua_ui_->set_setting(key, value);
+    };
     h.heading = game::yaw_to_heading(yaw_);
     // CCompassWnd::OnProcessFrame's heading error (game/compass.h), over the base Sense Heading skill.
     if (actions_ui_) {

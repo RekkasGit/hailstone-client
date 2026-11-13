@@ -584,6 +584,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
             any = true;
             auto& keys = a.tracks[it->second];
             keys.clear();
+            keys.reserve(a.frame_count);
             for (std::uint32_t fr = 0; fr < a.frame_count; ++fr) {
                 std::uint32_t ms = fr * step;
                 auto up = std::upper_bound(t.times_ms.begin(), t.times_ms.end(), ms);
@@ -611,6 +612,7 @@ CharacterModel build_model(const MeshFile& mesh, std::string_view code_view,
     }
     m.bounds_min = lo;
     m.bounds_max = hi;
+    m.compact_animations();
     return m;
 }
 
@@ -653,7 +655,7 @@ std::shared_ptr<const PfsArchive> EqgCharacterStore::archive(const std::string& 
     std::shared_ptr<const PfsArchive> a;
     if (auto path = game_.find(name)) {
         try {
-            a = std::make_shared<const PfsArchive>(PfsArchive::open(*path));
+            a = std::make_shared<const PfsArchive>(PfsArchive::open(*path, PfsArchive::storage_for(game_, *path)));
             // A model's own textures ("c_pma_bd_s02_c.dds") are its archive's (pma.eqg): another archive's copies
             // of them (mpu.eqg's, an older puma's left in the puma mount's) do not take their place.
             for (const auto& member : a->names())
