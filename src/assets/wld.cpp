@@ -1,6 +1,7 @@
 #include "assets/wld.h"
 
 #include <algorithm>
+#include <list>
 #include <mutex>
 #include <stdexcept>
 #include <type_traits>
@@ -486,6 +487,7 @@ WldFile WldFile::parse(std::span<const std::byte> data, std::string label) {
 
 // The compact index never stores pointers into the temporary validation parse. Copies share the immutable
 // source and payload state. Scoped readers keep pointers alive through nested and concurrent builds.
+struct RetainedNode;
 struct WldFile::Deferred {
     struct Entry {
         Ref ref;
@@ -500,7 +502,118 @@ struct WldFile::Deferred {
     std::size_t readers = 0, parsed_bytes = 0;
     bool unscoped = false;
     DecodeStats stats;
+    // Bumped (under `mutex`) by every lease and every move into the retained set: an eviction that finds it changed
+    // since it picked this WLD leaves it alone.
+    std::uint64_t lease_gen = 0;
+    // The retained set's own (under its mutex): whether this WLD is in it, and where.
+    bool retained = false;
+    std::list<RetainedNode>::iterator retained_at;
+    ~Deferred();
 };
+
+// One retained payload, most recently released at the front.
+struct RetainedNode {
+    std::weak_ptr<WldFile::Deferred> state;
+    WldFile::Deferred* raw = nullptr; // for the flag; alive while `retained` is set (~Deferred takes it out first)
+    std::uint64_t gen = 0;
+    std::size_t bytes = 0;
+};
+
+namespace {
+// Lock order: a WLD's mutex, then this one; never this one and then a WLD's (trim collects first, then locks each).
+struct RetainedSet {
+    std::mutex mutex;
+    std::list<RetainedNode> nodes;
+    std::size_t total = 0;
+    std::size_t budget = WldFile::kDefaultRetainBudget;
+};
+RetainedSet& retained_set() {
+    static auto* set = new RetainedSet; // never destroyed: WLDs in static storage may outlive any static set
+    return *set;
+}
+} // namespace
+
+WldFile::Deferred::~Deferred() {
+    auto& set = retained_set();
+    std::lock_guard lock(set.mutex);
+    if (retained) {
+        set.total -= retained_at->bytes;
+        set.nodes.erase(retained_at);
+        retained = false;
+    }
+}
+
+namespace {
+// Takes `state` out of the retained set (a new lease). Called with state.mutex held.
+void unretain(WldFile::Deferred& state) {
+    auto& set = retained_set();
+    std::lock_guard lock(set.mutex);
+    if (!state.retained) return;
+    set.total -= state.retained_at->bytes;
+    set.nodes.erase(state.retained_at);
+    state.retained = false;
+}
+
+// Releases the least recently released payloads until the set is within its budget.
+void trim_retained() {
+    auto& set = retained_set();
+    std::vector<std::pair<std::shared_ptr<WldFile::Deferred>, std::uint64_t>> victims;
+    {
+        std::lock_guard lock(set.mutex);
+        while (set.total > set.budget && !set.nodes.empty()) {
+            RetainedNode& n = set.nodes.back();
+            n.raw->retained = false;
+            set.total -= n.bytes;
+            if (auto s = n.state.lock()) victims.emplace_back(std::move(s), n.gen);
+            set.nodes.pop_back();
+        }
+    }
+    for (auto& [state, gen] : victims) {
+        std::unique_ptr<WldFile> drop; // freed outside the lock
+        std::lock_guard lock(state->mutex);
+        if (state->readers != 0 || !state->parsed || state->lease_gen != gen) continue;
+        state->stats.released_bytes += state->parsed_bytes;
+        ++state->stats.releases;
+        drop = std::move(state->parsed);
+        state->parsed_bytes = 0;
+    }
+}
+} // namespace
+
+void WldFile::set_retain_budget(std::size_t bytes) {
+    {
+        auto& set = retained_set();
+        std::lock_guard lock(set.mutex);
+        set.budget = bytes;
+    }
+    trim_retained();
+}
+
+std::size_t WldFile::retain_budget() {
+    auto& set = retained_set();
+    std::lock_guard lock(set.mutex);
+    return set.budget;
+}
+
+std::size_t WldFile::retained_total() {
+    auto& set = retained_set();
+    std::lock_guard lock(set.mutex);
+    return set.total;
+}
+
+void WldFile::release_retained() {
+    std::size_t budget = 0;
+    {
+        auto& set = retained_set();
+        std::lock_guard lock(set.mutex);
+        budget = set.budget;
+        set.budget = 0;
+    }
+    trim_retained();
+    auto& set = retained_set();
+    std::lock_guard lock(set.mutex);
+    set.budget = budget;
+}
 
 thread_local WldFile::ReadScope* WldFile::ReadScope::current_ = nullptr;
 
@@ -509,16 +622,31 @@ WldFile::ReadScope::ReadScope() : parent_(current_) { current_ = this; }
 WldFile::ReadScope::~ReadScope() {
     current_ = parent_;
     // Nested scopes put their leases in the root, so a nested return cannot invalidate its caller's pointers.
+    bool added = false;
     for (const auto& state : held_) {
+        std::unique_ptr<WldFile> drop; // freed outside the lock
         std::lock_guard lock(state->mutex);
         --state->readers;
-        if (state->readers == 0 && !state->unscoped && state->parsed) {
-            state->stats.released_bytes += state->parsed_bytes;
-            ++state->stats.releases;
-            state->parsed.reset();
-            state->parsed_bytes = 0;
+        if (state->readers != 0 || state->unscoped || !state->parsed) continue;
+        ++state->lease_gen;
+        {
+            auto& set = retained_set();
+            std::lock_guard set_lock(set.mutex);
+            if (state->parsed_bytes <= set.budget) {
+                set.nodes.push_front({state, state.get(), state->lease_gen, state->parsed_bytes});
+                state->retained_at = set.nodes.begin();
+                state->retained = true;
+                set.total += state->parsed_bytes;
+                added = true;
+                continue;
+            }
         }
+        state->stats.released_bytes += state->parsed_bytes;
+        ++state->stats.releases;
+        drop = std::move(state->parsed);
+        state->parsed_bytes = 0;
     }
+    if (added) trim_retained();
 }
 
 WldFile::DecodeStats WldFile::decode_stats() const {
@@ -571,9 +699,13 @@ const WldFile& WldFile::decoded() const {
         if (std::find(scope->held_.begin(), scope->held_.end(), deferred_) == scope->held_.end()) {
             scope->held_.push_back(deferred_); // register before incrementing: allocation failure adds no reader
             ++deferred_->readers;
+            ++deferred_->lease_gen;
+            unretain(*deferred_);
         }
-    } else {
+    } else if (!deferred_->unscoped) {
         deferred_->unscoped = true;
+        ++deferred_->lease_gen;
+        unretain(*deferred_);
     }
     if (!deferred_->parsed) {
         auto parsed = std::make_unique<WldFile>(parse(deferred_->loader(), label_));

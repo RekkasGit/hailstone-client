@@ -303,8 +303,8 @@ struct Fragment {
 };
 
 class WldFile {
-    struct Deferred;
 public:
+    struct Deferred; // a deferred WLD's shared state (wld.cpp only)
     // Throws std::runtime_error when the header or the fragment framing is
     // malformed. A fragment whose payload does not fit its declared size is
     // kept as an empty entry and listed in errors().
@@ -324,7 +324,8 @@ public:
     DecodeStats decode_stats() const;
 
     // Raw fragment pointers obtained inside a scope live until its outermost scope ends on this thread. Each
-    // touched deferred WLD is leased once; the last concurrent lease releases its decoded payload. Nested builds
+    // touched deferred WLD is leased once; when the last concurrent lease ends, its decoded payload goes to the
+    // retained set below (or is released at once when that is off or the payload is larger than it). Nested builds
     // share the outer lease. Unscoped reads pin their payload for the WLD's life, preserving the raw-pointer API.
     // Models returned by CharacterLibrary copy the source data and do not carry these pointers out of the scope.
     class ReadScope {
@@ -339,6 +340,17 @@ public:
         ReadScope* parent_ = nullptr;
         std::vector<std::shared_ptr<Deferred>> held_;
     };
+
+    // Retained decoded payloads: a deferred WLD whose last lease ended keeps its decoded data while the estimated
+    // bytes (retained_bytes()) of all such WLDs, process-wide, stay within the budget; past it the least recently
+    // released are released. The next lease of a retained WLD takes it back without decoding again: a cache miss in
+    // CharacterLibrary (a model, a dressing) does not inflate and parse global_chr.wld once more for each model. A
+    // WLD that is destroyed leaves the set. 0 turns retention off (released as the last lease ends).
+    static constexpr std::size_t kDefaultRetainBudget = std::size_t{256} << 20;
+    static void set_retain_budget(std::size_t bytes); // releases at once what no longer fits
+    static std::size_t retain_budget();
+    static std::size_t retained_total(); // the estimated bytes held by the retained set now
+    static void release_retained();      // releases the whole set (it fills again with the next leases)
 
     const std::string& label() const { return label_; }
     bool new_format() const { return new_format_; }

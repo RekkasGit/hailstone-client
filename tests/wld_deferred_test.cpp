@@ -11,6 +11,20 @@
 using namespace hailstone;
 using namespace hailstone::assets;
 
+namespace {
+// Sets WldFile's retain budget for one test and puts the old one back (0: payloads go as the last lease ends).
+struct RetainBudget {
+    std::size_t saved = wld::WldFile::retain_budget();
+    explicit RetainBudget(std::size_t bytes) {
+        wld::WldFile::release_retained();
+        wld::WldFile::set_retain_budget(bytes);
+    }
+    ~RetainBudget() { wld::WldFile::set_retain_budget(saved); }
+    RetainBudget(const RetainBudget&) = delete;
+    RetainBudget& operator=(const RetainBudget&) = delete;
+};
+} // namespace
+
 TEST_CASE("deferred WLD validates once and materializes only on payload access") {
     const auto bytes = test::wld_fixtures::mesh_wld(false);
     auto eager = wld::WldFile::parse(bytes);
@@ -139,6 +153,7 @@ TEST_CASE("deferred WLD index preserves track references and timing without load
 }
 
 TEST_CASE("scoped WLD reads reclaim decoded data after the outermost build") {
+    RetainBudget off{0}; // the lease rules alone, without the retained set
     const auto bytes = test::wld_fixtures::mesh_wld(false);
     auto lazy = wld::WldFile::deferred([bytes] { return bytes; }, "scoped");
     const auto index_bytes = lazy.retained_bytes();
@@ -172,6 +187,7 @@ TEST_CASE("scoped WLD reads reclaim decoded data after the outermost build") {
 }
 
 TEST_CASE("scoped WLD reads reclaim on exceptions and preserve unscoped callers") {
+    RetainBudget off{0}; // the lease rules alone, without the retained set
     const auto bytes = test::wld_fixtures::mesh_wld(false);
     auto lazy = wld::WldFile::deferred([bytes] { return bytes; }, "unwind");
     CHECK_THROWS([&] {
@@ -192,6 +208,7 @@ TEST_CASE("scoped WLD reads reclaim on exceptions and preserve unscoped callers"
 }
 
 TEST_CASE("scoped WLD reads release only after the last concurrent reader") {
+    RetainBudget off{0}; // the lease rules alone, without the retained set
     const auto bytes = test::wld_fixtures::mesh_wld(false);
     auto lazy = wld::WldFile::deferred([bytes] { return bytes; }, "concurrent-lease");
     std::latch acquired{1}, finish{1};
@@ -222,6 +239,7 @@ TEST_CASE("scoped WLD reads release only after the last concurrent reader") {
 }
 
 TEST_CASE("failed scoped WLD reload leaves no lease behind") {
+    RetainBudget off{0}; // the lease rules alone, without the retained set
     const auto bytes = test::wld_fixtures::mesh_wld(false);
     int calls = 0;
     auto lazy = wld::WldFile::deferred([&] {
@@ -256,4 +274,107 @@ TEST_CASE("unscoped reader during an active WLD lease keeps its escaped pointer 
     CHECK(lazy.materialized());
     CHECK(escaped->type == 0x03);
     CHECK(lazy.decode_stats().releases == 0);
+}
+
+TEST_CASE("released WLD payloads are retained within the budget, least recently released going first") {
+    const auto bytes = test::wld_fixtures::mesh_wld(false);
+    int reads_a = 0, reads_b = 0;
+    auto a = wld::WldFile::deferred([&] { ++reads_a; return bytes; }, "retain-a");
+    auto b = wld::WldFile::deferred([&] { ++reads_b; return bytes; }, "retain-b");
+    // One payload's estimate: what a decoded copy adds over the index.
+    std::size_t one = 0;
+    {
+        RetainBudget off{0};
+        const auto index = a.retained_bytes();
+        wld::WldFile::ReadScope scope;
+        REQUIRE(a.at(1));
+        one = a.retained_bytes() - index;
+    }
+    REQUIRE(one > 0);
+    CHECK(a.decode_stats().decodes == 1);
+
+    SUBCASE("within the budget: each model built from the WLD decodes it once") {
+        RetainBudget big{one * 4};
+        for (int model = 0; model < 5; ++model) {
+            wld::WldFile::ReadScope scope; // one CharacterLibrary::model() call
+            REQUIRE(a.at(1 + model % 2));
+        }
+        CHECK(a.decode_stats().decodes == 2); // the one above, then one for all five
+        CHECK(a.materialized());
+        CHECK(wld::WldFile::retained_total() == one);
+        CHECK(reads_a == 3); // validation, then the two decodes
+    }
+    SUBCASE("over the budget: the least recently released goes") {
+        RetainBudget room_for_one{one + one / 2};
+        {
+            wld::WldFile::ReadScope scope;
+            REQUIRE(a.at(1));
+        }
+        CHECK(a.materialized());
+        {
+            wld::WldFile::ReadScope scope;
+            REQUIRE(b.at(1));
+        }
+        CHECK(b.materialized());
+        CHECK_FALSE(a.materialized()); // released for b
+        CHECK(a.decode_stats().releases == 2);
+        CHECK(wld::WldFile::retained_total() == one);
+        {
+            wld::WldFile::ReadScope scope;
+            REQUIRE(b.at(1));
+        }
+        CHECK(b.decode_stats().decodes == 1); // taken back from the set
+        // A lease takes the payload out of the set while it is held: nothing to release for a.
+        {
+            wld::WldFile::ReadScope scope;
+            REQUIRE(b.at(1));
+            CHECK(wld::WldFile::retained_total() == 0);
+            REQUIRE(a.at(1));
+        }
+        // Both released together, b first: the set keeps the last one released (a) and drops b.
+        CHECK(wld::WldFile::retained_total() == one);
+        CHECK(a.materialized() != b.materialized());
+        // A smaller budget releases at once what no longer fits.
+        wld::WldFile::set_retain_budget(one / 2);
+        CHECK_FALSE(a.materialized());
+        CHECK_FALSE(b.materialized());
+        CHECK(wld::WldFile::retained_total() == 0);
+    }
+    SUBCASE("a destroyed WLD leaves the set") {
+        RetainBudget big{one * 4};
+        {
+            auto c = wld::WldFile::deferred([bytes] { return bytes; }, "retain-c");
+            wld::WldFile::ReadScope scope;
+            REQUIRE(c.at(1));
+        }
+        CHECK(wld::WldFile::retained_total() == 0);
+    }
+}
+
+TEST_CASE("retained WLD payloads stay correct under concurrent leases and releases") {
+    const auto bytes = test::wld_fixtures::mesh_wld(false);
+    std::vector<wld::WldFile> files;
+    for (int i = 0; i < 4; ++i) files.push_back(wld::WldFile::deferred([bytes] { return bytes; }, "retain-mt"));
+    std::size_t one = 0;
+    {
+        RetainBudget off{0};
+        const auto index = files[0].retained_bytes();
+        wld::WldFile::ReadScope scope;
+        REQUIRE(files[0].at(1));
+        one = files[0].retained_bytes() - index;
+    }
+    RetainBudget two{one * 2 + one / 2}; // room for two of the four: releases keep happening
+    std::atomic<bool> ok{true};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 4; ++t)
+        threads.emplace_back([&, t] {
+            for (int i = 0; i < 200; ++i) {
+                wld::WldFile::ReadScope scope;
+                const auto* f = files[std::size_t(i + t) % files.size()].at(1);
+                if (!f || f->type != 0x03) ok = false;
+            }
+        });
+    for (auto& th : threads) th.join();
+    CHECK(ok.load());
+    CHECK(wld::WldFile::retained_total() <= one * 2);
 }

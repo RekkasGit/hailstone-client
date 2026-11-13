@@ -217,8 +217,11 @@ void ClientApp::update_zone_settle() {
                 releases += stats.releases;
             }
         }
-        log::info("memory character WLDs: {} / {} materialized, index and decoded estimate {:.2f} MiB",
-                  loaded, count, double(bytes) / (1024.0 * 1024.0));
+        log::info("memory character WLDs: {} / {} materialized, index and decoded estimate {:.2f} MiB "
+                  "(retained after use: {:.2f} of {:.0f} MiB)",
+                  loaded, count, double(bytes) / (1024.0 * 1024.0),
+                  double(assets::wld::WldFile::retained_total()) / (1024.0 * 1024.0),
+                  double(assets::wld::WldFile::retain_budget()) / (1024.0 * 1024.0));
         log::info("memory character WLD activity: {} decodes, {} releases (current archives, cumulative)",
                   decodes, releases);
         const auto caches = actor_library_->cache_memory();
