@@ -7,6 +7,7 @@
 //                    first row the checks allow) and closes the window
 //   --aa 1           prints the AA table, points and visible / trainable ranks, sets the AA
 //                    experience to 50 %, then back to 0, and with --aa-buy ID trains a rank
+//                    (--aa-buy-all 1: as the AA window's "buy every rank" box, then waits 10 s)
 //   --task TEXT      walks to the NPC whose name contains TEXT, hails it, accepts the first
 //                    task it offers and prints the task journal; --task-history 1 asks for the
 //                    first completed task's elements
@@ -44,6 +45,7 @@ public:
         else if (!std::strcmp(name, "--train-skill")) train_skill_ = std::atoi(value);
         else if (!std::strcmp(name, "--aa")) aa_ = std::atoi(value) != 0;
         else if (!std::strcmp(name, "--aa-buy")) aa_buy_ = static_cast<std::uint32_t>(std::atoi(value));
+        else if (!std::strcmp(name, "--aa-buy-all")) aa_buy_all_ = std::atoi(value) != 0;
         else if (!std::strcmp(name, "--task")) task_ = value;
         else if (!std::strcmp(name, "--task-say")) task_say_ = value;
         else if (!std::strcmp(name, "--aa-use")) aa_use_ = value;
@@ -248,13 +250,20 @@ public:
         case Phase::AAHalf:
             if (now < wait_until_) return;
             std::printf("  PROGRESS: AA percent %u\n", conn.alt_adv().percent);
-            if (aa_buy_) std::printf("  PROGRESS: aa_train(%u) -> %d\n", aa_buy_, conn.aa_train(aa_buy_));
+            if (aa_buy_)
+                std::printf("  PROGRESS: aa_train(%u%s) -> %d\n", aa_buy_, aa_buy_all_ ? ", all" : "",
+                            conn.aa_train(aa_buy_, aa_buy_all_));
             conn.set_aa_percent(0);
-            wait(Phase::AAOff, now, 3);
+            wait(Phase::AAOff, now, aa_buy_all_ ? 10 : 3);
             return;
         case Phase::AAOff:
             if (now < wait_until_) return;
             print_aa(conn);
+            if (const game::AltAbility* b = aa_buy_ ? conn.alt_adv().get(aa_buy_) : nullptr) {
+                const game::AltAbility* o = conn.alt_adv().owned_rank(b->group);
+                std::printf("  PROGRESS: '%s' now owned at rank %d of %d (rank id %u)\n", conn.aa_name(*b).c_str(),
+                            o ? o->rank : 0, b->max_rank, o ? o->id : 0);
+            }
             phase_ = Phase::Done;
             return;
         case Phase::TaskOffered: {
@@ -443,6 +452,7 @@ private:
     int train_skill_ = -1;
     bool aa_ = false, task_history_ = false, object_ = false;
     std::uint32_t aa_buy_ = 0;
+    bool aa_buy_all_ = false;
     int combine_ = -1;
     int aa_ranks_seen_ = 0;
     Phase phase_ = Phase::Idle;
