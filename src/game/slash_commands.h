@@ -5,7 +5,7 @@
 // @0x51fce0 matches the first word against the 391 commands of
 // __CommandList @0x00acd5a8 (384 here: the voice macro commands /vplay
 // /vtell /vgroup /vraid are left out, as this client has no voice macros,
-// and so are Daybreak's services /achievements /legendsofnorrath /tcg;
+// and so are Daybreak's services /legendsofnorrath /tcg;
 // they answer as unknown commands)
 // in table order, first by the localised name
 // (the eqstr text of the entry's string id), then by the built-in name. A

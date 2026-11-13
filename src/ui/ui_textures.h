@@ -35,6 +35,15 @@ public:
         void* id = nullptr;
         float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
     };
+    struct AnimationFrame {
+        std::string file;
+        int x = 0, y = 0, w = 0, h = 0;
+        bool valid_metadata = true; // malformed/overflowed XML integers never become a zero-origin crop
+    };
+    struct AnimationImage {
+        Cell cell;
+        int width = 0, height = 0; // original XML frame pixels, not atlas size
+    };
 
     // The files (and game_file pictures) held at most, loaded or not found: well past the stock UI's art and icon
     // sheets, so a UI does not load the same file again and again.
@@ -63,6 +72,10 @@ public:
     // The first frame of a stock animation (<Ui2DAnimation item="name"> in any uifiles/default XML file, as
     // CSidlManagerBase::FindAnimation finds it).
     std::optional<Cell> animation(std::string_view name);
+    // An explicit request for named XML art, independent of game_art=icons.
+    // Only a relative atlas filename and a positive, wholly contained frame
+    // are admitted. Missing/invalid art leaves the caller its text fallback.
+    std::optional<AnimationImage> animation_image(std::string_view name);
     // A grid animation (<Grid>true</Grid>: A_DragItem, A_SpellGems, A_MenuIcons ...): its cell count (0x87a820:
     // the first frame's columns x rows x the frames; nullopt: no such grid animation) and cell `index` (frame by
     // frame; down each column first when <Vertical>, else across each row), as IconCache::GetIcon draws it.
@@ -95,10 +108,7 @@ private:
     std::uint64_t lookups_ = 0;
     std::map<std::string, std::unique_ptr<Entry>> pictures_; // by path
     std::vector<std::string> picture_order_;                 // the oldest first
-    struct Frame {
-        std::string file;
-        int x = 0, y = 0, w = 0, h = 0;
-    };
+    using Frame = AnimationFrame;
     std::map<std::string, Frame> animations_; // by item name
     struct Grid {
         int cell_w = 0, cell_h = 0;
@@ -111,6 +121,12 @@ private:
     std::map<std::string, Rect> screens_;
     void load_skin(); // animations_ and screens_, once
 };
+
+// Pure metadata/crop helpers shared by explicit animation drawing and tests.
+// No asset bytes or GPU handles are owned by the returned descriptors.
+std::optional<UiTextures::AnimationFrame> find_ui_animation_frame(const std::string& xml, std::string_view name);
+std::optional<UiTextures::AnimationImage> ui_animation_crop(const UiTextures::Texture& texture,
+                                                          const UiTextures::AnimationFrame& frame);
 
 // Grid arithmetic (tested): the sheet (1-based) and the top-left pixel of an icon's cell.
 struct GridCell {

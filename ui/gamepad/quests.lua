@@ -2,7 +2,7 @@
 --   Quest Journal  three pages, LB / RB to switch:
 --                  Tasks    the active tasks (title, time left); focusing one selects it, as a click on the stock
 --                           list does: its objectives (instructions, progress, zones; done ones dimmed) and its
---                           description. X abandons it (the stock Remove: the game asks first).
+--                           description. Preview asks for the selected task's rewards; X abandons it (asked first).
 --                  Shared   the shared task's members.
 --                  History  the completed tasks; A asks for one's objectives (the stock list's click).
 --   Task Offers    the offers (title, duration) and the focused one's description and objectives; A accepts the
@@ -196,7 +196,13 @@ ui.window("Quest Journal", function()
         local descY = y1 - (y1 - top) * 0.40
         ui.SetCursorPos(rx0 - wx, oy - wy)
         objectives(TW, "TASK_TaskElementList", elemList, fits(descY - oy - T.px(20), 72), x1 - rx0)
-        P.draw("##taskdesc", desc, eq.WindowText(TW, "TASK_Description") or "", rx0, descY, x1, y1, { empty = "No description." })
+        local previewH = T.px(60)
+        P.draw("##taskdesc", desc, eq.WindowText(TW, "TASK_Description") or "", rx0, descY, x1, y1 - previewH - T.px(8), { empty = "No description." })
+        ui.SetCursorPos(rx0 - wx, y1 - previewH - wy)
+        local previewEnabled = eq.ChildEnabled(TW, "TASK_PreviewRewardButton") == true
+        if T.button("##taskpreview", "Preview Reward", x1 - rx0, previewH, { disabled = not previewEnabled }, pad) then
+          eq.ClickChild(TW, "TASK_PreviewRewardButton", "left")
+        end
         -- X abandons the focused task (the list's row, which is the selected one) through the stock Remove, which
         -- asks first
         if focusedTask and pressed("Quest Journal", "x") then eq.ClickChild(TW, "TASK_AbandonButton", "left") end

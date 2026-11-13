@@ -355,6 +355,8 @@ void add_real_estate_windows(std::vector<std::unique_ptr<StockWindow>>& out);  /
 // The real estate items window's context menu rows for a 0x21ec answer (app/lua_eq_realestate.cpp).
 std::vector<EqHost::MenuRow> real_estate_menu_rows(EqHost& host, const net::ReMenu& menu);
 void add_progress_windows(std::vector<std::unique_ptr<StockWindow>>& out);     // app/lua_eq_progress.cpp
+void add_reward_selection_window(std::vector<std::unique_ptr<StockWindow>>& out); // app/lua_eq_rewards.cpp
+void add_achievement_windows(std::vector<std::unique_ptr<StockWindow>>& out); // app/lua_eq_achievements.cpp
 void add_map_windows(std::vector<std::unique_ptr<StockWindow>>& out);          // app/lua_eq_map.cpp
 // eq.DrawMap, eq.MapZoom, ... over the map window among `windows` (app/lua_eq_map.cpp).
 void register_map_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<StockWindow>>& windows);

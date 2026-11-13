@@ -67,6 +67,8 @@
 #include "game/marketplace.h"
 #include "game/spell_sets.h"
 #include "game/tasks.h"
+#include "game/reward_selection.h"
+#include "game/achievements.h"
 #include "game/task_window.h"
 #include "game/text_overlay.h"
 #include "game/tracking.h"
@@ -2117,6 +2119,32 @@ public:
 
     // Tasks and quests (game/tasks.h).
     const game::TaskState& tasks() const { return tasks_; }
+    // Stock Select Reward: received data, separate pending and preview managers. Confirmations
+    // carry the collection revision, local tab token and exact received wire option ID.
+    const game::RewardSelection& rewards() const { return rewards_; }
+    const game::Achievements& achievements() const { return achievements_; }
+    bool achievement_refresh_pending() const { return achievement_refresh_token_.has_value(); }
+    const std::string& achievement_message() const { return achievement_message_; }
+    void show_achievements(bool show);
+    void close_achievement_detail();
+    void reopen_achievement_detail();
+    bool open_achievement(std::uint64_t catalog_token, std::uint32_t definition_index);
+    bool request_achievements();
+    bool compare_achievements();
+    void clear_achievement_comparison();
+    bool inspect_achievement_link(std::string_view metadata);
+    bool achievement_reward(std::uint64_t catalog_token, std::uint32_t definition_index);
+    std::optional<std::string> achievement_chat_link(std::uint64_t catalog_token, std::uint32_t definition_index) const;
+    void show_reward_selection(bool show);
+    void close_reward_selection(game::RewardLane lane);
+    bool request_pending_rewards();
+    bool preview_task_reward(std::uint32_t task_id);
+    bool view_achievement_reward(std::uint32_t definition_index);
+    bool reward_claim(std::uint64_t revision, std::uint64_t tab_token, std::uint32_t wire_option_id,
+                      std::string* why = nullptr);
+    bool reward_inspect(game::RewardLane lane, std::uint64_t revision, std::uint64_t tab_token,
+                        std::uint32_t wire_option_id, std::uint32_t entry_id, std::uint32_t item_id,
+                        std::string* why = nullptr);
     // The large centre-screen text (CTextOverlay: OP_TaskActivityComplete's lines); the app draws its frame().
     game::TextOverlay& text_overlay() { return text_overlay_; }
     // The task select window's Accept for one offered task (OP_AcceptNewTask, or
@@ -2615,7 +2643,7 @@ private:
     void handle_zone(const AppPacket& p);
     // Through the plugins' outgoing packet hooks (ConnectionOptions::hooks).
     void send_world(const AppPacket& p);
-    void send_zone(const AppPacket& p, bool reliable = true);
+    bool send_zone(const AppPacket& p, bool reliable = true, const std::function<bool()>& still_current = {});
     // The hook bus's game state, zoning and spawn events, from the state changes since the last update.
     void raise_hook_events();
     void send_checksums();
@@ -2640,6 +2668,14 @@ private:
     void handle_ability(Op op, const AppPacket& p);
     void handle_door(Op op, const AppPacket& p);
     void handle_progress(Op op, const AppPacket& p);
+    bool handle_rewards(const AppPacket& p);
+    bool handle_achievements(const AppPacket& p);
+    void reset_achievements();
+    void update_achievements();
+    std::pair<std::uint32_t, std::uint64_t> achievement_target() const;
+    bool reward_request_ready(std::string* why = nullptr) const;
+    void reset_rewards();
+    std::int64_t reward_now_ms() const;
     bool progress_command(std::string_view handler, const std::string& args);
     void handle_skill_update(const AppPacket& p);
     void handle_level_update(std::uint32_t new_level);
@@ -3243,6 +3279,16 @@ private:
     // The cursor item into game::put_away_slot's place; false when there is none.
     bool put_away_cursor();
     game::TaskState tasks_;
+    game::RewardSelection rewards_;
+    game::Achievements achievements_;
+    std::uint64_t achievement_view_intent_ = 0;
+    std::optional<std::uint64_t> achievement_refresh_token_;
+    std::optional<std::int64_t> achievement_refresh_requested_ms_;
+    std::int64_t achievement_refresh_sent_ms_ = 0;
+    std::string achievement_message_;
+    std::optional<std::pair<std::uint32_t, std::uint64_t>> achievement_compare_target_, achievement_link_target_;
+    std::optional<std::uint64_t> achievement_link_request_token_;
+    std::array<std::optional<std::int64_t>, 2> reward_view_requested_ms_, reward_inspect_requested_ms_;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> task_selection_; // the task window's selected (type, slot)
     bool task_abandon_sent_ = false;
     bool task_compass_dirty_ = true;                     // CTaskWnd +0x1594

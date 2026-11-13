@@ -710,7 +710,8 @@ public:
         } else if (id == "TASK_MonsterButton") {
             out.enabled = false; // the entry's monster mission templates (+0x3be8): EQEmu sends none
         } else if (id == "TASK_PreviewRewardButton") {
-            out.enabled = preview_enabled_ && selected_task(c) != nullptr;
+            const game::Task* t = selected_task(c);
+            out.enabled = preview_enabled_ && t && t->reward_set;
         } else if (id.starts_with("STASK_") && id.ends_with("Button")) {
             // CTaskWnd_FillMemberList: the five buttons are enabled for the task's leader.
             out.enabled = host.conn->shared_task_is_leader();
@@ -742,9 +743,14 @@ public:
             if (const game::Task* t = selected_task(c)) c.ask_abandon_task(t->type, t->sequence);
             return true;
         }
-        if (id == "TASK_MonsterButton" || id == "TASK_PreviewRewardButton") {
-            // Monster Select toggles CTaskTemplateSelectWnd; Preview Reward asks PendingRewardMgr for the reward set
-            // (opcode 0x6411 subtype 4): neither is served by EQEmu.
+        if (id == "TASK_PreviewRewardButton") {
+            // The row stores a task ID as well as its slot: a replacement must not inherit the previous task's click.
+            if (const game::Task* t = selected_task(c); preview_enabled_ && t && t->reward_set)
+                c.preview_task_reward(t->task_id);
+            return true;
+        }
+        if (id == "TASK_MonsterButton") {
+            // Monster Select needs the entry's monster mission templates, which EQEmu does not send here.
             return true;
         }
         // The shared task page (CTaskWnd::WndNotification @0x7716b0).
@@ -771,7 +777,7 @@ private:
         const auto& r = rows_[static_cast<std::size_t>(selected_)];
         if (r.separator) return nullptr;
         const game::Task* t = c.tasks().find(r.type, r.index);
-        return t && t->task_id ? t : nullptr;
+        return t && t->task_id && t->task_id == r.task_id ? t : nullptr;
     }
 
     // CTaskWnd_RebuildTaskLists @0x7720e0: the four types' rows collected again, then sorted and listed.

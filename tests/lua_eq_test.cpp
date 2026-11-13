@@ -16,6 +16,7 @@
 #include <lua.hpp>
 
 #include "app/lua_eq.h"
+#include "app/lua_eq_caps.h"
 #include "app/lua_eq_menu.h"
 #include "app/lua_eq_values.h"
 #include "core/game_dir.h"
@@ -149,12 +150,18 @@ TEST_CASE("EQ menu: only the rows this client runs") {
 
     using C = game::KeyCommand;
     for (C c : {C::CMD_MARKETPLACE_SILVER, C::CMD_MARKETPLACE_GOLD, C::CMD_TOGGLE_CLAIM_WIN,
-                C::CMD_VOTE_RESULTS, C::CMD_HISTORIC_ALERTS, C::CMD_TOGGLE_REWARD_SELECTION_WIN,
-                C::CMD_ACHIEVEMENT_WINDOW, C::CMD_REAL_ESTATE_TROPHIES_WINDOW, C::CMD_REAL_ESTATE_LEAVE, C::OPEN_ETN_HELP,
+                C::CMD_VOTE_RESULTS, C::CMD_HISTORIC_ALERTS,
+                C::CMD_REAL_ESTATE_TROPHIES_WINDOW, C::CMD_REAL_ESTATE_LEAVE, C::OPEN_ETN_HELP,
                 C::CMD_TOGGLE_TCG, C::CMD_SOCIAL_SHARE, C::TOGGLE_FELLOWSHIPWIN})
         CHECK_FALSE(app::menu_command_offered(static_cast<int>(c), [](std::string_view) { return true; }));
     CHECK(std::string(app::toggle_command_window(static_cast<int>(C::CMD_TOGGLE_AURAWND))) == "AuraWindow");
     CHECK(app::toggle_command_window(static_cast<int>(C::CMD_HISTORIC_ALERTS)) == nullptr);
+    const int reward = static_cast<int>(C::CMD_TOGGLE_REWARD_SELECTION_WIN);
+    CHECK(std::string(app::toggle_command_window(static_cast<int>(C::CMD_ACHIEVEMENT_WINDOW))) == "AchievementsWnd");
+    CHECK(app::menu_command_offered(static_cast<int>(C::CMD_ACHIEVEMENT_WINDOW), [](std::string_view screen) { return screen == "AchievementsWnd"; }));
+    CHECK(std::string(app::toggle_command_window(reward)) == "RewardSelectionWnd");
+    CHECK(app::menu_command_offered(reward, [](std::string_view screen) { return screen == "RewardSelectionWnd"; }));
+    CHECK_FALSE(app::menu_command_offered(reward, [](std::string_view) { return false; }));
     // The Marketplace row is offered where the pack draws the window.
     CHECK(std::string(app::toggle_command_window(static_cast<int>(C::CMD_MARKETPLACE))) == "MarketplaceWnd");
     CHECK(app::menu_command_offered(static_cast<int>(C::CMD_MARKETPLACE), [](std::string_view s) { return s == "MarketplaceWnd"; }));
@@ -294,6 +301,20 @@ ui::ServerEntry world(const char* name) {
 }
 
 } // namespace
+
+TEST_CASE("eq UI animation: registered read-only binding returns nil without an artwork provider") {
+    ImGuiContext* context = ImGui::CreateContext();
+    {
+        app::EqHost host;
+        EqTable eq(host);
+        CHECK(eq.run("return type(eq.UiAnimation)") == "function");
+        CHECK(eq.run("return eq.UiAnimation('A_EQ')") == "nil");
+        CHECK(eq.run("return eq.UiAnimation('../outside.tga')") == "nil");
+        CHECK(eq.run("return select('#',eq.UiAnimation('MissingBadge'))") == "1");
+        CHECK(app::eq_call_caps("UiAnimation") == std::optional<std::uint32_t>{0});
+    }
+    ImGui::DestroyContext(context);
+}
 
 TEST_CASE("eq lists: built once a frame, again after a call that can change them") {
     ImGuiContext* ctx = ImGui::CreateContext();

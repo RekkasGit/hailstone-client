@@ -1,15 +1,90 @@
 #include <doctest/doctest.h>
 
 #include <array>
+#include <limits>
 #include <string>
 
 #include "assets/pfs.h"
 #include "assets/texture.h"
 #include "core/byte_io.h"
 #include "game_files.h"
+#include "ui/ui_textures.h"
 
 using namespace hailstone::assets;
 using hailstone::ByteWriter;
+
+TEST_CASE("UI animation art: XML frame crops retain original dimensions and aspect") {
+    const std::string xml = R"xml(<XML><Ui2DAnimation item="FixtureBadge"><Frames>
+      <Texture>fixture-atlas.tga</Texture><Location><X>64</X><Y>32</Y></Location>
+      <Size><CX>128</CX><CY>30</CY></Size></Frames><Frames>
+      <Texture>not-the-first-frame.tga</Texture><Location><X>0</X><Y>0</Y></Location>
+      <Size><CX>4</CX><CY>4</CY></Size></Frames></Ui2DAnimation></XML>)xml";
+    const auto frame = hailstone::ui::find_ui_animation_frame(xml, "FixtureBadge");
+    REQUIRE(frame); CHECK(frame->file == "fixture-atlas.tga");
+    CHECK_FALSE(hailstone::ui::find_ui_animation_frame(xml, "MissingBadge"));
+    const hailstone::ui::UiTextures::Texture atlas{reinterpret_cast<void*>(std::uintptr_t{1}), 256, 256};
+    const auto image = hailstone::ui::ui_animation_crop(atlas, *frame);
+    REQUIRE(image); CHECK(image->width == 128); CHECK(image->height == 30);
+    CHECK(image->cell.id == atlas.id); CHECK(image->cell.u0 == doctest::Approx(0.25));
+    CHECK(image->cell.v0 == doctest::Approx(0.125)); CHECK(image->cell.u1 == doctest::Approx(0.75));
+    CHECK(image->cell.v1 == doctest::Approx(62.0 / 256.0));
+}
+
+TEST_CASE("UI animation art: malformed atlas paths and crops never become fallback origin images") {
+    using Textures = hailstone::ui::UiTextures;
+    const Textures::Texture atlas{reinterpret_cast<void*>(std::uintptr_t{1}), 256, 256};
+    const Textures::AnimationFrame valid{"badge.tga", 0, 0, 128, 32};
+    for (const auto& name : std::vector<std::string>{"", ".", "..", "../badge.tga", "dir/badge.tga", "dir\\badge.tga",
+             "/badge.tga", "C:badge.tga", "https:badge.tga", std::string("x\0.tga", 6), "bad\n.tga"}) {
+        INFO(name);
+        auto frame = valid; frame.file = name;
+        CHECK_FALSE(hailstone::ui::ui_animation_crop(atlas, frame));
+    }
+    for (const auto& frame : std::vector<Textures::AnimationFrame>{
+             {"badge.tga", -1, 0, 128, 32}, {"badge.tga", 0, -1, 128, 32},
+             {"badge.tga", 0, 0, 0, 32}, {"badge.tga", 0, 0, 128, -1},
+             {"badge.tga", 200, 0, 128, 32}, {"badge.tga", 0, 240, 128, 32},
+             {"badge.tga", std::numeric_limits<int>::max(), 0, std::numeric_limits<int>::max(), 32}})
+        CHECK_FALSE(hailstone::ui::ui_animation_crop(atlas, frame));
+    CHECK_FALSE(hailstone::ui::ui_animation_crop({nullptr, 256, 256}, valid));
+    CHECK_FALSE(hailstone::ui::ui_animation_crop({atlas.id, 0, 256}, valid));
+    for (const auto& x : {"2147483648", "1garbage", "+-1", ""}) {
+        const std::string xml = "<Ui2DAnimation item=\"Bad\"><Frames><Texture>badge.tga</Texture><Location><X>" +
+            std::string(x) + "</X><Y>0</Y></Location><Size><CX>128</CX><CY>32</CY></Size></Frames></Ui2DAnimation>";
+        CHECK_FALSE(hailstone::ui::find_ui_animation_frame(xml, "Bad"));
+    }
+}
+
+TEST_CASE("UI animation art: installed stock badges resolve XML rectangles against actual atlases" *
+          doctest::skip(!hailstone::test::game_dir())) {
+    const auto* game = hailstone::test::game_dir();
+    REQUIRE(game);
+    const auto data = game->read("uifiles/default/EQUI_Animations.xml");
+    REQUIRE(data);
+    const std::string xml(reinterpret_cast<const char*>(data->data()), data->size());
+    struct Badge { const char* name; const char* file; int x, y, width, height; };
+    for (const auto& badge : std::array<Badge, 3>{{
+             {"A_EQ", "EQ_expansion_logos.tga", 0, 0, 128, 32},
+             {"A_ROK", "EQ_expansion_logos.tga", 0, 96, 128, 32},
+             {"A_General", "Achievement_subcat_base.tga", 0, 0, 128, 30}}}) {
+        INFO(badge.name);
+        const auto frame = hailstone::ui::find_ui_animation_frame(xml, badge.name);
+        REQUIRE(frame); CHECK(frame->file == badge.file); CHECK(frame->x == badge.x); CHECK(frame->y == badge.y);
+        CHECK(frame->w == badge.width); CHECK(frame->h == badge.height);
+        const auto bytes = game->read("uifiles/default/" + frame->file); REQUIRE(bytes);
+        const auto decoded = decode_texture(*bytes); REQUIRE(decoded);
+        REQUIRE(decoded->width <= static_cast<std::uint32_t>(std::numeric_limits<int>::max()));
+        REQUIRE(decoded->height <= static_cast<std::uint32_t>(std::numeric_limits<int>::max()));
+        const hailstone::ui::UiTextures::Texture atlas{reinterpret_cast<void*>(std::uintptr_t{1}),
+            static_cast<int>(decoded->width), static_cast<int>(decoded->height)};
+        const auto crop = hailstone::ui::ui_animation_crop(atlas, *frame); REQUIRE(crop);
+        CHECK(crop->width == badge.width); CHECK(crop->height == badge.height);
+        CHECK(crop->cell.u0 == doctest::Approx(static_cast<double>(badge.x) / decoded->width));
+        CHECK(crop->cell.v0 == doctest::Approx(static_cast<double>(badge.y) / decoded->height));
+        CHECK(crop->cell.u1 == doctest::Approx(static_cast<double>(badge.x + badge.width) / decoded->width));
+        CHECK(crop->cell.v1 == doctest::Approx(static_cast<double>(badge.y + badge.height) / decoded->height));
+    }
+}
 
 namespace {
 
