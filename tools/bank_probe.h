@@ -14,11 +14,16 @@
 //                    closed itself.
 //   --bank-stay 1    only walks to the banker and opens the bank (camps there)
 //   --bank-keep 1    leaves the coin and the item in the bank and the stack split (to check them after relogging)
+//   --bank none      walks nowhere: only reports the bank at zone-in and at the end
+//   --bank-file 1    reads and saves the bank as last seen in the character's bank.dat (game/bank_snapshot.h), as
+//                    the client does; every report says whether the bank is known and what the copy holds
 
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <format>
 #include <optional>
 #include <string>
 
@@ -39,6 +44,7 @@ public:
         if (!std::strcmp(name, "--bank")) want_ = value;
         else if (!std::strcmp(name, "--bank-keep")) keep_ = std::atoi(value) != 0;
         else if (!std::strcmp(name, "--bank-stay")) stay_ = std::atoi(value) != 0;
+        else if (!std::strcmp(name, "--bank-file")) file_ = std::atoi(value) != 0;
         else return false;
         return true;
     }
@@ -57,10 +63,12 @@ public:
         }
     }
 
+    void configure(net::ConnectionOptions& o) const { o.bank_snapshot_file = file_; }
+
     void zone_in(net::GameConnection& conn) {
         if (want_.empty()) return;
         if (const auto* me = conn.world().player()) pos_ = me->position;
-        phase_ = 1;
+        phase_ = want_ == "none" ? 99 : 1;
         since_ = Clock::now();
         dump(conn, "at zone-in");
     }
@@ -305,6 +313,16 @@ private:
         std::printf("  BANK [%s]: carried %up %ug %us %uc, cursor %u/%u/%u/%u, bank %up %ug %us %uc, shared %up\n", when,
                     c.platinum, c.gold, c.silver, c.copper, k[3], k[2], k[1], k[0], b.platinum, b.gold, b.silver, b.copper,
                     b.shared_platinum);
+        // the bank as last seen (game/bank_snapshot.h): listed in the bank's place while the bank is not known
+        const auto& seen = conn.bank_seen();
+        std::printf("    bank known: %s; as last seen: %zu top-level items, %s\n", conn.bank_live() ? "yes" : "no",
+                    seen.items.size(),
+                    seen.seen ? std::format("{} s ago", std::time(nullptr) - seen.seen).c_str() : "never seen");
+        for (const auto& it : seen.items) {
+            std::printf("      seen %d/%d: %s x%u%s\n", it.slot.type, it.slot.slot, it.name.c_str(), it.stack_count,
+                        it.is_bag() ? " (bag)" : "");
+            for (const auto& bi : it.contents) std::printf("        [%u] %s x%u\n", bi.index, bi.item.name.c_str(), bi.item.stack_count);
+        }
         for (const auto& [key, it] : conn.inventory().items()) {
             if (key.first != net::kInvBank && key.first != net::kInvSharedBank &&
                 !(key.first == net::kInvPossessions && key.second >= net::kSlotGeneral1))
@@ -318,6 +336,7 @@ private:
     std::string want_;
     bool keep_ = false;
     bool stay_ = false;
+    bool file_ = false;
     int phase_ = 0;
     std::uint32_t banker_ = 0;
     int coin_type_ = -1;
