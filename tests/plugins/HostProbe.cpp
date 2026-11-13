@@ -14,7 +14,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
-#include <string>
 #include <thread>
 
 #include "hailstone_byte_io.h"
