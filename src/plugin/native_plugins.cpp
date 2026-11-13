@@ -1140,7 +1140,7 @@ inline void write_str16(unsigned char*& dst, std::string_view sv) {
         dst += len;
     }
 }
-//These are used by the h_get_spawns_bulk method
+//These are used by the h_get_spawns_data_bulk method
 //needs to be packed so that there is no padding
 #pragma pack(push, 1)
 struct BulkSpawnHeader {
@@ -1206,7 +1206,7 @@ struct FixedSpawnRecord {
     float y;
     float z;
     int32_t deity;
-    // Immediately followed on the wire by 7c length-prefixed strings:
+    // Immediately followed on the wire by 7 length-prefixed strings:
     // 1. BodyDesc, 2. CleanName, 3. DisplayName, 4. Name, 5. RaceName, 6. Suffix, 7. TypeDesc
 };
 #pragma pack(pop)
@@ -1214,10 +1214,11 @@ struct FixedSpawnRecord {
 //for 5,000 spawns, assume 10 megs. now 5k is wayyy higher than it should ever be
 //so can get away with less, but you never know. 
 //there is a safety check that if we get down to our last 4,096 bytes, kick out and just return with what we have.
-int h_get_spawns_bulk(void* h, unsigned char* data, int32_t datamax)
+int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
 {
-    const net::GameConnection* c = readable(Loaded::of(h), "get_spawns_bulk");
+    const net::GameConnection* c = readable(Loaded::of(h), "get_spawns_data_bulk");
     if (!c) return 0;
+    if (!data || datamax < 4096) return 0;
     const auto& world = c->world();
     const auto& spawns = world.spawns;
     const auto* player = world.player();
@@ -2130,7 +2131,7 @@ bool NativePlugins::load_file(std::string_view name_in, std::string* why, Asker 
     p.table.open_bank = main_only<h_open_bank>;
     p.table.get_buff_data_bulk = main_only<h_get_buff_data_bulk>;
     p.table.get_pet_buff_data_bulk = main_only<h_get_pet_buff_data_bulk>;
-    p.table.get_spawns_data_bulk = main_only<h_get_spawns_bulk>;
+    p.table.get_spawns_data_bulk = main_only<h_get_spawns_data_bulk>;
     p.owner = m.env.hooks->new_guest("plugin:" + name);
 
     Hooks& hooks = *m.env.hooks;

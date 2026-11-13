@@ -590,8 +590,8 @@ typedef struct PluginHostApi {
     int32_t (*get_pet_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_spawns_data_bulk)(void* host, unsigned char* out, int32_t out_size);
 } PluginHostApi;
-#define HAILSTONE_BUFF_RECORD_SIZE 33
-#define HAILSTONE_PET_BUFF_RECORD_SIZE 16
+#define HAILSTONE_BUFF_RECORD_SIZE 29
+#define HAILSTONE_PET_BUFF_RECORD_SIZE 12
 /* Whether this client's host table has `field` (one added after the plugin's ABI) and it is set. */
 #define HAILSTONE_HOST_HAS(h, field)                                                                                   \
     ((h) && (h)->size >= offsetof(PluginHostApi, field) + sizeof((h)->field) && (h)->field)

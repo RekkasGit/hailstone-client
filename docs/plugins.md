@@ -555,11 +555,11 @@ call, since a client older than the call has a shorter table. The structs a plug
 (as ABI 3 shipped it), the others' a `uint32_t`.
 
 Buff and spawn records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)` and
-`get_spawns_data_bulk(host, out, out_size)` (added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
+`get_spawns_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The client copies its own packed structs into the buffer, so the fields are in the machine's byte order
 (little-endian on every platform Hailstone runs on) and unaligned: read them with `ByteReader` or `memcpy`, never by
-casting a struct onto the buffer. These three do not check the `read` permission at present.
+casting a struct onto the buffer. Without `read` they return 0 and say so in the chat window.
 
 - `get_buff_data_bulk`: needs `out_size` of at least 1798 bytes (62 x `HAILSTONE_BUFF_RECORD_SIZE`) and returns 0
   below that, so a plugin gets all the slots or nothing. One record of
@@ -584,8 +584,8 @@ casting a struct onto the buffer. These three do not check the `read` permission
   spell's type (as above). An entry with spell id 0 is all zeros. The pet window's slot number is not included.
 
 - `get_spawns_data_bulk`: every spawn in the zone, as a 16-byte header followed by one record per spawn. Records are
-  added until fewer than 4096 bytes are left in `out`, so give it at least 4112 bytes (a smaller buffer is not
-  checked) and a few hundred bytes per spawn on top; the header's count says how many records follow.
+  added until fewer than 4096 bytes are left in `out`: below 4096 bytes it returns 0, and it needs at least 4112
+  bytes to write any record and a few hundred bytes per spawn on top; the header's count says how many records follow.
 
   Header:
 
