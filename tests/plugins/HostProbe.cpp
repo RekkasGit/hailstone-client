@@ -88,7 +88,7 @@ void probe_buffs(void*, const char* args) {
             hits = rd.le<std::int32_t>(), type = rd.le<std::int32_t>(), counter = rd.le<std::int32_t>(),
             base = rd.le<std::int32_t>();
         const auto song = rd.le<std::uint8_t>();
-        if (spell == 0 || spell == -1) { // an empty slot: the client's empty spell id goes out as it is (-1)
+        if (spell == 0) { // an empty slot: every field 0, including the counter type
             ++empty;
             continue;
         }
