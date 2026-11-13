@@ -74,7 +74,8 @@ std::optional<std::uint64_t> private_commit_memory() {
     PROCESS_MEMORY_COUNTERS_EX counters{};
     counters.cb = static_cast<DWORD>(sizeof counters);
     if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
-                             static_cast<DWORD>(sizeof counters)))
+                             static_cast<DWORD>(sizeof counters)) &&
+        counters.PrivateUsage > 0) // Wine reports 0: not measured there
         return static_cast<std::uint64_t>(counters.PrivateUsage);
 #endif
     return std::nullopt;
