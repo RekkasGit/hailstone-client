@@ -25,6 +25,9 @@ namespace hailstone::render {
 // Optional device capabilities the renderers adapt to.
 struct DeviceCaps {
     bool bc_textures = false;  // BC1-3 sampled images (absent on some arm64 GPUs)
+    // R8G8B8A8_SRGB images can be blitted with linear filtering: UploadBatch::texture builds an opaque texture's mips
+    // on the GPU in linear light only then (render::gpu_builds_mips), and on the CPU otherwise.
+    bool srgb_mip_blit = false;
     float max_anisotropy = 0.0f; // 0 when sampler anisotropy is unsupported
     // The textures one bindless array may hold (render/descriptor_limits.h), under the update-after-bind limits when
     // update_after_bind is set.

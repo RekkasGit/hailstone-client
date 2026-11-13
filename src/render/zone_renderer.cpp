@@ -752,13 +752,7 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
     }
     // A neighbour's textures (options.max_texture_size): their chains built here, the large levels dropped.
     auto keep_image = [&](assets::Image image, TextureUse use) {
-        if (options.max_texture_size > 0) {
-            if (auto built = prepare_texture_image(image, use)) {
-                image = std::move(*built);
-                use = TextureUse::Data;
-            }
-            drop_large_mips(image, options.max_texture_size);
-        }
+        prepare_capped_texture(image, use, options.max_texture_size);
         prep.images.push_back({std::move(image), use});
     };
     std::unordered_map<std::string, std::uint32_t> slots; // name + masked, data and reads-alpha flags -> slot

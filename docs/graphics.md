@@ -97,13 +97,20 @@ by alpha. Transparent texels take their opaque neighbours' colour, so palette in
 longer fringes leaves. Cut-outs keep level 0's coverage on every level, so trees stay full at a distance. DDS files
 shipped without mips get a chain too.
 
-A fully opaque image needs none of that: its chain would be a plain average, so it goes up as it is and the GPU builds
-the levels itself (`assets::is_opaque`, `render::prepare_texture_image`). The GPU filters in the stored (sRGB) space,
-where the original's Direct3D 9 hardware mip generation filtered too; the CPU chain above filters in linear light. A
-deliberate difference (docs/plan.md: faithful mechanics, modern graphics), and it saves the host memory the chain and
-its copy would have held: the baked terrain tiles (uncompressed A8R8G8B8 DDS) are opaque where they are a zone's base
-layer. An image with a cut-out keeps the CPU's chain, as the GPU's own levels would blend the colour key into the edges
-and bring back the cyan fringe `assets::remove_color_key` takes out.
+A fully opaque image whose sides are powers of two needs none of that: its chain is a plain average, which the GPU
+builds as the CPU would, so it goes up as it is and the GPU builds the levels (`render::gpu_builds_mips`,
+`render::prepare_texture_image`, `UploadBatch::texture`). The image is created `R8G8B8A8_SRGB` with
+`VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT` and blitted level by level, so each blit decodes to linear light, filters and
+encodes back, as `assets::build_color_mips` does; the view the shaders sample is `R8G8B8A8_UNORM`, so they read the
+same values as from a CPU chain. The two agree within a rounding step per level (the GPU stores each level in 8 bits
+before making the next; tests/texture_test.cpp checks this against the CPU chain). A device that cannot blit that
+format with linear filtering (`DeviceCaps::srgb_mip_blit`) gets the CPU chain. An image of another size keeps the CPU
+chain, since a 2:1 linear blit of an odd level reads other texels than the CPU's 2x2 box; so does an image with a cut-out,
+as the GPU's own levels would blend the colour key into the edges and bring back the cyan fringe
+`assets::remove_color_key` takes out. What this saves is host memory: the chain and its staging copy are never held for
+those images (the baked terrain tiles, uncompressed A8R8G8B8 DDS, are opaque where they are a zone's base layer). A
+neighbour zone's textures, held to `ZoneRenderer::Options::max_texture_size` (`render::prepare_capped_texture`), always
+get the CPU chain, as only a chain has levels to drop.
 
 A material that never reads its texture's alpha (opaque, no alpha test: EQG `Opaque_*` classes and the classic opaque
 methods, `MaterialState::alpha_unused`) uploads it as `TextureUse::OpaqueColor` in the actor and object renderers: made

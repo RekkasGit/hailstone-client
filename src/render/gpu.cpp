@@ -1,6 +1,7 @@
 #include "render/gpu.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstring>
 
@@ -108,14 +109,19 @@ std::size_t UploadBatch::staging_bytes() const {
     return n;
 }
 
-std::optional<assets::Image> prepare_texture_image(const assets::Image& source, TextureUse use) {
+bool gpu_builds_mips(const assets::Image& image, TextureUse use) {
+    auto pow2 = [](std::uint32_t v) { return v != 0 && (v & (v - 1)) == 0; };
+    return use != TextureUse::Data && image.format == assets::PixelFormat::RGBA8 && image.mips.size() == 1 &&
+           (image.width > 1 || image.height > 1) && pow2(image.width) && pow2(image.height) && assets::is_opaque(image);
+}
+
+std::optional<assets::Image> prepare_texture_image(const assets::Image& source, TextureUse use, bool gpu_mips) {
     if (use != TextureUse::Data && source.mips.size() == 1 && (source.width > 1 || source.height > 1)) {
-        // A fully opaque image needs no coverage-aware chain: build_color_mips would average it like any other, so
-        // the GPU may build the chain itself (UploadBatch::texture generates the levels when the image goes up with
-        // one). It filters in the stored (sRGB) space, where the original's Direct3D 9 hardware mip generation
-        // filtered too; the CPU chain filters in linear light. A deliberate difference (docs/graphics.md).
-        if (source.format == assets::PixelFormat::RGBA8 && assets::is_opaque(source)) return std::nullopt;
-        assets::Image converted = assets::to_rgba8(source);
+        // A fully opaque power-of-two image: its chain is a plain average, which the GPU builds as the CPU would
+        // (blitted on an sRGB view, in linear light), so it goes up as it is and the chain is never held in host
+        // memory. Anything else (a colour key, coverage to keep, an odd size) gets the CPU's chain.
+        if (gpu_mips && gpu_builds_mips(source, use)) return std::nullopt;
+            assets::Image converted = assets::to_rgba8(source);
         if (use == TextureUse::OpaqueColor) assets::make_opaque(converted);
         else assets::remove_color_key(converted);
         assets::build_color_mips(converted);
@@ -146,6 +152,16 @@ void drop_large_mips(assets::Image& image, std::uint32_t max_size) {
     }
 }
 
+void prepare_capped_texture(assets::Image& image, TextureUse& use, std::uint32_t max_size) {
+    if (max_size == 0) return;
+    // The chain is built here even for an image the GPU could build it for: only a chain has levels to drop.
+    if (auto built = prepare_texture_image(image, use, false)) {
+        image = std::move(*built);
+        use = TextureUse::Data;
+    }
+    drop_large_mips(image, max_size);
+}
+
 Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     const assets::Image* image = &source;
     assets::Image converted;
@@ -156,6 +172,14 @@ Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     if (image == &source && source.format != assets::PixelFormat::RGBA8 && !vk_.caps().bc_textures) {
         converted = assets::to_rgba8(source);
         image = &converted;
+    }
+    // The GPU builds the chain of what prepare_texture_image left to it (gpu_builds_mips), on an sRGB view; a device
+    // that cannot blit that format gets the CPU's chain instead.
+    bool srgb_mips = image == &source && gpu_builds_mips(source, use);
+    if (srgb_mips && !vk_.caps().srgb_mip_blit) {
+        converted = *prepare_texture_image(source, use, false);
+        image = &converted;
+        srgb_mips = false;
     }
 
     const bool generate = image->format == assets::PixelFormat::RGBA8 && image->mips.size() == 1;
@@ -182,6 +206,18 @@ Texture UploadBatch::texture(const assets::Image& source, TextureUse use) {
     VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = format;
+    // An image whose chain the GPU builds is sRGB-typed, so vkCmdBlitImage decodes to linear, filters and encodes
+    // back (as assets::build_color_mips filters in linear light); its view stays UNORM, so the shaders read the same
+    // values as from a CPU-built chain (they decode sRGB themselves).
+    const std::array<VkFormat, 2> view_formats{VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB};
+    VkImageFormatListCreateInfo format_list{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO};
+    if (srgb_mips) {
+        info.format = VK_FORMAT_R8G8B8A8_SRGB;
+        info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+        format_list.viewFormatCount = static_cast<std::uint32_t>(view_formats.size());
+        format_list.pViewFormats = view_formats.data();
+        info.pNext = &format_list;
+    }
     info.extent = {image->width, image->height, 1};
     info.mipLevels = levels;
     info.arrayLayers = 1;
