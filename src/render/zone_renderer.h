@@ -127,9 +127,9 @@ float effect_scroll_seconds(std::uint64_t scene_ms);
 
 // How much a placed plant of `height` units bends in the wind at its top (world units at full strength; lighting.glsl
 // wind_offset) and how much its leaves flutter. A replacement with levels of detail (a generated tree,
-// docs/graphics.md "Generated trees") bends a third as far and does not flutter: its crown is many small crisp sprays
-// layered over each other, and a flutter that moves each vertex on its own slid them across one another, a texture
-// flipping back and forth up close; the game's few big soft cards hide the same motion.
+// docs/graphics.md "Generated trees") stands still: its crown is many small crisp sprays layered over each other at
+// different heights, and any sway (which grows with the height) slid them across one another, leaves flipping back
+// and forth up close; the game's few big soft cards hide the same motion.
 struct PlantSway {
     float bend = 0.0f, flutter = 0.0f;
 };

@@ -1437,10 +1437,9 @@ zone loads (`Zone::draw_objects`).
 - **Light:** a placement's baked light is one colour per vertex of the game's mesh; the replacement takes their
   average as its instance's tint, which multiplies its own vertex colours (a generated tree's shade inside its crown).
 - **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter. One
-  with levels of detail (a generated tree) bends a third as far and does not flutter (`render::plant_sway`): its
-  crown is many small crisp sprays layered over each other, and the flutter, which moves each vertex on its own, slid
-  them across one another, so up close its leaves seemed to flip back and forth. Close to a pine in Lake Rathetear,
-  sampled every half second, 3.5 % of the pixels changed much, against 11 % before and 2 % with the game's tree.
+  with levels of detail (a generated tree) stands still (`render::plant_sway`): its crown is many small crisp sprays
+  layered over each other at different heights, and any sway, which grows with the height, slid them across one
+  another, so up close its leaves seemed to flip back and forth (a third of the bend without the flutter still did).
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so
@@ -1469,8 +1468,9 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
 - **Leaves:** points spread over the cards and kept where their texture is opaque give the crown's shape; turned round
   the trunk, they fill it. The leaves are drawn in colours picked from the game texture's opaque texels, then scaled
   to its mean, so an autumn tree keeps its yellows among its greens.
-  The gaps narrower than a few texels inside a spray or a cluster are filled with a shadowed base (a closing of the
-  cut-out): pinholes of sky between needles flickered as the tree swayed a fraction of a pixel. A needle spray's two
+  The gaps up to a few dozen texels across inside a spray or a cluster (3.5 % of the picture's side for needles, 3 %
+  for leaves) are filled with a shadowed base (a closing of the cut-out), so a spray is cut out along its outer edge
+  only: thin holes showing the dark or the sky behind it shimmered as the camera moved. A needle spray's two
   layers are close in shade and its twigs a darker shade of the needles, not brown: stark stripes and bright twig
   lines shimmered as the camera moved and read as streaks from afar.
 - **Styles:** a pine (a single upright trunk up into leaves widest low down) grows whorls of drooping branches with

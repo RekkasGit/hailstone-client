@@ -2349,7 +2349,7 @@ float effect_scroll_seconds(std::uint64_t scene_ms) {
 PlantSway plant_sway(const assets::Mesh& mesh, float height) {
     PlantSway s{std::clamp(0.04f * height, 0.08f, 3.0f), std::clamp(0.012f * height, 0.04f, 0.35f)};
     const bool generated = std::any_of(mesh.parts.begin(), mesh.parts.end(), [](const assets::MeshPart& p) { return p.lod_far > 0.0f; });
-    if (generated) s = {s.bend * 0.35f, 0.0f};
+    if (generated) s = {0.0f, 0.0f};
     return s;
 }
 
