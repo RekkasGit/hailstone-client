@@ -499,14 +499,22 @@ vec3 modern_lava(vec3 texel, float molten, vec2 p) {
 // normals are a crown's or a card's, mostly facing up: no puddles or snow and a lighter soak, or a generated tree's
 // crown takes the sky's colour or turns white.
 vec3 weathered(vec3 color, vec3 n, bool cutout) {
-    float footprint = length(fwidth(v_world));
+    vec3 dpx = dFdx(v_world), dpy = dFdy(v_world);
+    float footprint = length(abs(dpx) + abs(dpy));
     float open = sky_open(shadow_map, scene.cover, scene.cover_params, scene.shadow_params.y, v_world + n * 0.5);
     if (open <= 0.0) return color;
     vec3 horizon = scene.haze.z > 0.5 ? scene.haze_color.rgb : to_linear(scene.fog_color.rgb);
+    vec3 view = normalize(scene.camera_pos.xyz - v_world);
     vec4 weather = scene.weather;
     if (cutout) weather.y = 0.0;
-    return weather_surface(color, lit(vec3(0.88, 0.9, 0.94)), v_world, n, normalize(scene.camera_pos.xyz - v_world),
-                           weather, open, horizon, scene.sky.rgb, scene.time.x, footprint, !cutout, cutout ? 0.3 : 1.0);
+    color = weather_surface(color, lit(vec3(0.88, 0.9, 0.94)), v_world, n, view, weather, open, horizon, scene.sky.rgb,
+                            cutout ? 0.3 : 1.0);
+    if (cutout || weather.w <= 0.0) return color;
+    vec3 face = cross(dpx, dpy);
+    float face_len = length(face);
+    face = face_len > 1e-12 ? face / face_len : n;
+    return puddle_surface(color, v_world, n, face, view, weather, open, horizon, scene.sky.rgb, scene.time.x,
+                          footprint, scene.to_light.xyz, scene.light.rgb * g_shadow);
 }
 
 vec3 mapped_normal(vec3 n, uint slot) {

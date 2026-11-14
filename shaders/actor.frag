@@ -151,8 +151,7 @@ void main() {
             if (open > 0.0) {
                 vec3 horizon = lighting.haze.z > 0.5 ? lighting.haze_color.rgb : to_linear(pc.fog_color.rgb);
                 shaded = weather_surface(shaded, shaded, v_world, sn, normalize(lighting.camera.xyz - v_world),
-                                          vec4(lighting.weather.x, 0.0, 0.0, 0.0), open, horizon, lighting.sky.rgb,
-                                          lighting.time.x, 0.0, false, 0.6);
+                                          vec4(lighting.weather.x, 0.0, 0.0, 0.0), open, horizon, lighting.sky.rgb, 0.6);
             }
         }
         color = apply_haze(shaded, v_world, lighting.camera, lighting.haze, lighting.haze_color,

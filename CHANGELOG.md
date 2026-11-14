@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Modern lighting: rain puddles now form only on flat ground, never on hillsides or slopes. They look more like water: ragged edges, shallow at the rim where the ground shows through and deeper in the middle, a damp ring round them, dark from above and mirroring the sky at a low angle, with a glint of the sun or moon once the sky clears
 - Texture packs with generated trees: tall trees whose trunk starts with a short piece, such as Greater Faydark's giant pines, no longer float above the ground. Rebuild a pack's trees in the Texture Studio to get them
 - Texture packs with generated trees: up close, the trees' needles and leaves no longer seem to flip back and forth in the wind. Generated trees sway more gently than the game's and their leaves no longer flutter
 - Texture packs with generated trees: the pines are less dense, with gaps in their crowns, and their needles no longer show bright twig streaks. Trees no longer visibly change their leaves as you move towards or away from them, and forests such as Greater Faydark draw faster (about 15 % in a dense view). Rebuild a pack's trees in the Texture Studio to get them
