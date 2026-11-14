@@ -463,6 +463,10 @@ Callbacks:
   client's own, not those a script or plugin writes (`print`, `/echo`, `WriteChatf`, a reply to its command), as MQ
   hands its own lines to `OnWriteChatColor` and not here: a plugin that answers "Bob tells you, ..." would otherwise
   answer whatever another add-on printed
+  Combat hit lines (melee and spell damage, heals) reach these hooks as the full sentence whatever the player's Hit
+  Modes: unlike MQ, whose hook sees the line as RoF2 displays it, an abbreviated or number-only line is never what a
+  hook gets, so a parser matches one form. A hook that rewrites such a line shows its rewrite in full, the hit mode
+  set aside for that line
 - `OnUpdateImGui`, `OnPacket(stream, direction, packet)` (nonzero drops it)
 
 Host functions: `WriteChatf`, `DoCommand(f)`, `AddCommand` (needs `commands`; 0 for one of the client's own commands, as `mq.bind`), `RemoveCommand`, `ParseMacroData` (`${...}`, so the

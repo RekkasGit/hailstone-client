@@ -169,6 +169,8 @@ void GameConnection::fail(std::string message) {
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
                           std::string peer, std::optional<std::string> display_text) {
     if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
+        // A deliberate difference from MQ, whose hook hangs off dsp_chat and sees a hit line as displayed: hooks get
+        // the full sentence whatever the hit mode (docs/plugins.md), so a parser matches one form.
         plugin::ChatLine line{text, rgb, static_cast<int>(kind)};
         line.from_code = !plugin::caller_name().empty();
         line.origin_caps = plugin::caller_caps();

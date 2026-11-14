@@ -1662,7 +1662,7 @@ OP_FormattedMessage's string id and validated numeric substitutions (`game::spel
 scan of the rendered sentence. Direct damage uses ids 9073, 434 and 12481, critical blasts 428/1040; DoTs
 9072/12954/13327; heals 9068/419, critical heals 427/1039; HoTs 12976/12997/12998. The legacy non-melee messages
 434/12481 also include damage shields when the server sends them that way. Critical healing has no direct/tick
-discriminator in these messages, so both use **Healing**. Incoming/observer DoTs omit ambiguous caster/spell
+discriminator in these messages, so both use **Healing**. A critical sends its own notice (428/1040, 427/1039) beside the hit line, so **Number Only** shows two bare numbers for one crit: the crit's amount and the hit's. Chat hooks (`OnIncomingChat`, `OnFilterChat`, `mq.event`) get the full sentence whatever the mode, unlike MQ's hook on `dsp_chat`, which sees the line as displayed (docs/plugins.md). Incoming/observer DoTs omit ambiguous caster/spell
 substitutions from the abbreviation rather than assigning the names incorrectly.
 
 An OP_Damage spell landing on the player with nonzero signed damage also follows Direct Spell Damage or Healing.
