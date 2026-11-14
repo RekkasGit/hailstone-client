@@ -656,7 +656,9 @@ assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const st
         }
     // The twigs a darker shade of the needles: a brown line across a lit spray reads as a streak from afar.
     for (const auto& tw : twigs) cv.line(tw.a, tw.b, twig_w, colour * 0.55f + glm::vec3(0.04f, 0.02f, 0.0f));
-    cv.fill_gaps(std::max(2, int(s * 0.014f)), colour * 0.6f);
+    // The gaps between needles filled up to a few dozen texels across: a spray is cut out along its outer edge only.
+    // Thin holes showing the dark behind the spray shimmered as the camera moved.
+    cv.fill_gaps(std::max(2, int(s * 0.035f)), colour * 0.7f);
     return cv.image(colour);
 }
 
@@ -701,7 +703,7 @@ assets::Image draw_leaves(std::uint32_t size, const glm::vec3& colour, const std
                 cv.put(x, y, base * shade);
             }
     }
-    cv.fill_gaps(std::max(2, int(s * 0.012f)), colour * 0.6f);
+    cv.fill_gaps(std::max(2, int(s * 0.03f)), colour * 0.7f);
     return cv.image(colour);
 }
 
