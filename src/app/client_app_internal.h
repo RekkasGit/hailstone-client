@@ -869,6 +869,9 @@ private:
         if (!upscaler_at_start_)
             upscaler_at_start_ = render::parse_upscaler(config_.get_string("display.upscaler", "fsr1"));
         scene.upscaler = *upscaler_at_start_;
+        // Frame generation (render/frame_gen.h): applied at once (the swapchain is made again); only with a temporal
+        // upscaler, which VkContext checks.
+        scene.frame_gen = config_.get_bool("display.frame_gen", false);
         std::string tonemap = config_.get_string("display.tonemap", "auto");
         scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
                         : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX

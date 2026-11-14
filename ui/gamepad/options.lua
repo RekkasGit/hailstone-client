@@ -261,6 +261,7 @@ local PAGES = {
       upscaleQualityRow(),
       optionRow("Render scale", "render_scale", { 33, 100, 1, " %" }),
       optionRow("Upscaler (next start)", "upscaler", { "FSR 1", "Temporal", "FSR 3.1" }),
+      optionRow("Frame generation", "frame_gen", "bool"),
       optionRow("Ambient occlusion", "ao", "bool"),
       optionRow("Grass", "grass", "bool"),
       optionRow("Grass distance", "flora_distance", { 400, 1200, 100, " units" }),

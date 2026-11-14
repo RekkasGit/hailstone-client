@@ -178,6 +178,45 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
   `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
   without `independentBlend`).
 
+### Frame generation
+
+`display.frame_gen = true` (Options > Frame Generation, shown with a temporal upscaler; the viewer's `--frame-gen`)
+presents a frame made between each two real ones. It needs `taa` or `fsr3`: their motion (`motion_`, the draws' own
+and the camera's) and depth are what it follows; under `fsr1` it stays off with a log line. It is Hailstone's own,
+fed by the engine, not a layer guessing motion from finished images; the choices of what to show where the two frames
+disagree follow kettle-framegen (the same author's BSD-3 Vulkan layer; no code taken). `render/frame_gen_logic.h`
+holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp`) the GPU side.
+
+1. **Pictures without the UI.** The post pass draws into one of two pictures (`pictures_`, `kUpscaleFormat`, the
+   view's size; written in turn) instead of the swapchain, and the UI draws into an image of its own (`overlay_`,
+   the swapchain's format, cleared transparent, premultiplied). The in-between frame is made from pictures alone, so
+   text and windows never warp; each presented image is the picture with the UI laid over it (`fg_composite.frag`,
+   which also encodes sRGB for an sRGB swapchain).
+2. **Motion at the in-between time** (`fg_scatter.comp`, two runs): each pixel of this frame is moved back along its
+   motion to where it stood at t = 0.5 (`kFrameGenTime`); the nearest depth that lands on each place wins (reverse
+   Z, atomic max on the depth's bits), and the winner's motion is written there. What moves in front covers what is
+   behind, as in the frame.
+3. **Holes** (`fg_fill.comp`): a place nothing landed on shows something this frame does not, because it is being
+   covered between the two frames. It takes the motion of the farthest mark within 3 pixels (the background's) and is
+   flagged, so the synthesis takes it from the last frame alone; with no mark near, it is flagged with no motion.
+4. **The in-between frame** (`fg_synth.frag`, the view's size): each pixel samples this frame (back along the motion)
+   and the last one (forward). Where they agree it blends them by the time; a flagged pixel takes the last frame;
+   anything else that disagrees was uncovered and takes this frame; a sample off the screen takes the other frame.
+   Where the reactive mask is set (particles, spells, rain: no motion of their own) it takes this frame along the
+   motion, sharp, rather than two copies a little apart.
+5. **Presenting**: a second swapchain image is acquired (`Frame::generated_available`) and both are submitted
+   together, the in-between frame presented first. FIFO is forced whatever `display.vsync` says, and the swapchain
+   gets one image more (`swapchain_image_count`, min + 2): waiting for the second image is what holds the game to
+   half the refresh, so the two presents alternate evenly. With fewer images (a surface's maximum) the second is
+   taken only when one is free. No frame is made across a cut, a reset, a resize or the first frame after any of them
+   (`frame_gen_ready`): the real frame is presented alone.
+
+Cost and limits: two small compute passes at the scene's size and two full-screen draws at the view's per real frame,
+plus one composite more. The game reacts up to one real frame later. A moving thing the depth does not hold (glass,
+water's surface) follows what is behind it; thin edges can leave a pixel-wide trace where they were about to cover the
+background. The viewer's `--screenshot-generated` saves the last in-between frame with the real ones round it
+(`FILE_prev`, `FILE_real`) for a side-by-side look; its `--frames` log counts the in-between frames presented.
+
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
 invalid copy. The swapchain is made again when the window's framebuffer size changes from the size it was made for,
@@ -1671,13 +1710,14 @@ The target's highlight (the dark plate, the edge in its colour and the bobbing m
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
 Graphics tabs; the client's options by name in `app/client_app_options.cpp`, the graphics ones `display_option`); the
 viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale`, `--sharpness` and
-`--upscaler`.
+`--upscaler`, `--frame-gen` and `--screenshot-generated`.
 
 | Key | Values | Default | |
 |---|---|---|---|
 | `display.msaa` | 1, 2, 4 | 4 | samples per pixel, at most 4 (`render::kMaxMsaa`; 8 and up are drawn at 4), cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
 | `display.render_scale` | 33 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 the upscaler (`display.upscaler`) brings it up (The frame); the UI stays sharp. Options > Upscale Quality's presets set it (`render::UpscaleQuality`): Native AA 100, Quality 67, Balanced 59, Performance 50, Ultra Performance 33 (FSR's ratios, 1.5x .. 3x); any other value shows as Custom |
 | `display.upscaler` | fsr1, taa, fsr3 | fsr1 | fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
+| `display.frame_gen` | true, false | false | present a frame made between each two real ones (Frame generation); only with `display.upscaler` taa or fsr3; forces vertical sync and holds the game to half the refresh; applied at once |
 | `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |
 | `display.exposure` | EV | 0 | the scene is scaled by 2^EV before the tonemap |
@@ -1744,5 +1784,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
    (done) motion written by the scene pipelines (last frame's bones, wind time and object matrices) and a reactive
    mask; (done) FSR 3.1 (MIT) as a second temporal upscaler (`display.upscaler = fsr3`, AMD FSR 3.1); next a negative
    texture LOD bias. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
-   particles, spells, water and lava need a reactive mask rather than motion vectors. DLSS, XeSS and frame
-   generation are not planned.
+   particles, spells, water and lava need a reactive mask rather than motion vectors; (done) frame generation of our
+   own on the engine's motion and depth (`display.frame_gen`, Frame generation); next maybe a choice of more than one
+   in-between frame for very high refresh rates, or AMD FSR 3.1's frame generation should ours fall short. DLSS and
+   XeSS are not planned.
