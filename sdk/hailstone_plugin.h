@@ -144,29 +144,21 @@ typedef struct HS_Bulk_SpawnHeader {
 typedef struct HS_Bulk_SpawnFixedRecord {
     int32_t id;
     uint32_t flags;
-    int32_t isBlind;
     int32_t bodyTypeID;
     int32_t classID;
     int32_t conColorID;
-    int32_t currentEndurance;
     int64_t currentHps;
-    int32_t currentMana;
     int32_t genderId;
     int64_t guildID;
     float heading;
     float height;
     int32_t level;
-    float look;
     int32_t master;
-    int32_t maxEndurance;
     float maxRange;
     float maxRangeTo;
-    int64_t pctHPs;
-    int32_t pctMana;
-    int32_t petID;
+    int32_t pctHPs;
     int32_t playerState;
     int32_t raceID;
-    int32_t targetOfTargetID;
     float x;
     float y;
     float z;
@@ -174,6 +166,9 @@ typedef struct HS_Bulk_SpawnFixedRecord {
     /* Immediately followed on the wire by 7 length - prefixed strings :*/
     /* 1. BodyDesc, 2. CleanName, 3. DisplayName, 4. Name, 5. RaceName, 6. Suffix, 7. TypeDesc*/
 } HS_BulkSpawnFixedRecord;
+/* get_spawns_data_bulk: the header's size, and each record's fixed part before its seven strings. */
+#define HS_BULK_SPAWN_HEADER_SIZE 16
+#define HS_BULK_SPAWN_RECORD_SIZE 92
 typedef struct HS_Bulk_BuffData {
     int32_t ID;
     int32_t casterID;
