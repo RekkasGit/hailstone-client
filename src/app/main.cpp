@@ -253,7 +253,7 @@ void usage() {
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (50..100) and upscale it with FSR 1\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
-        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100) or taa (temporal, MSAA off)\n"
+        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"

@@ -14,9 +14,11 @@ namespace hailstone::render {
 // How the 3D view is brought up to its size (display.upscaler). Fsr1: spatial (FSR 1's EASU + RCAS) below a render
 // scale of 100, nothing at 100, MSAA as display.msaa says. Taa: temporal, the scene jittered each frame and
 // accumulated into a history at the view's size (shaders/taa_resolve.frag), at every render scale; MSAA is off.
-enum class Upscaler : std::uint8_t { Fsr1, Taa };
+// Fsr3: the same jittered frames and motion, resolved by AMD FSR 3.1's upscaler (render/fsr3_upscaler.h); Taa where
+// the device lacks what it needs.
+enum class Upscaler : std::uint8_t { Fsr1, Taa, Fsr3 };
 
-// display.upscaler's values: "fsr1", "taa"; anything else is Fsr1.
+// display.upscaler's values: "fsr1", "taa", "fsr3"; anything else is Fsr1.
 Upscaler parse_upscaler(std::string_view name);
 std::string_view upscaler_name(Upscaler u);
 

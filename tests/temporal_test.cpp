@@ -33,6 +33,13 @@ FlyCamera camera_at(glm::vec3 pos, float yaw, float pitch) {
 
 TEST_CASE("temporal: upscaler names") {
     CHECK(parse_upscaler("taa") == Upscaler::Taa);
+    CHECK(parse_upscaler("fsr3") == Upscaler::Fsr3);
+    CHECK(parse_upscaler(upscaler_name(Upscaler::Fsr3)) == Upscaler::Fsr3);
+    CHECK(upscaler_name(Upscaler::Fsr3) == "fsr3");
+    // The Options window's choices are the enum's values (client_app_zone.cpp display_option "upscaler").
+    CHECK(static_cast<int>(Upscaler::Fsr1) == 0);
+    CHECK(static_cast<int>(Upscaler::Taa) == 1);
+    CHECK(static_cast<int>(Upscaler::Fsr3) == 2);
     CHECK(parse_upscaler("fsr1") == Upscaler::Fsr1);
     CHECK(parse_upscaler("") == Upscaler::Fsr1);
     CHECK(parse_upscaler("dlss") == Upscaler::Fsr1); // unknown: the spatial default

@@ -9,11 +9,12 @@ namespace hailstone::render {
 
 Upscaler parse_upscaler(std::string_view name) {
     if (name == "taa") return Upscaler::Taa;
+    if (name == "fsr3") return Upscaler::Fsr3;
     return Upscaler::Fsr1;
 }
 
 std::string_view upscaler_name(Upscaler u) {
-    return u == Upscaler::Taa ? "taa" : "fsr1";
+    return u == Upscaler::Fsr3 ? "fsr3" : u == Upscaler::Taa ? "taa" : "fsr1";
 }
 
 float halton(std::uint32_t index, std::uint32_t base) {

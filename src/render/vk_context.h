@@ -17,6 +17,7 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
+#include "render/fsr3_upscaler.h"
 #include "render/pipeline_cache.h"
 #include "render/point_shadows.h"
 #include "render/retire_queue.h"
@@ -43,6 +44,9 @@ struct DeviceCaps {
     // far higher on some drivers (Intel on Windows: 64 samplers per stage without, 1048576 with).
     bool update_after_bind = false;
     VkSampleCountFlags msaa_counts = VK_SAMPLE_COUNT_1_BIT; // colour and depth framebuffer sample counts
+    // AMD FSR 3.1's upscaler can run (render/fsr3_upscaler.h supported): FSR's storage formats and quad subgroup
+    // operations in compute. Without it display.upscaler fsr3 falls back to taa.
+    bool fsr3 = false;
 };
 
 // How the scene is drawn and shown. The scene renders in linear colour into a floating-point target (multisampled
@@ -86,7 +90,8 @@ struct SceneOptions {
     float sharpness = 0.5f;
     // How the view is brought up to its size (render/temporal.h, display.upscaler). Taa draws with one sample
     // whatever msaa says, jitters the scene's projection each frame (projection_jitter) and resolves it into a
-    // history at the view's size; `sharpness` then sharpens that with RCAS (0 none).
+    // history at the view's size; `sharpness` then sharpens that with RCAS (0 none). Fsr3 does the same with AMD
+    // FSR 3.1's upscaler in place of the resolve, its own RCAS at `sharpness`; Taa where DeviceCaps::fsr3 is false.
     Upscaler upscaler = Upscaler::Fsr1;
 };
 
@@ -190,7 +195,7 @@ public:
     void set_temporal_view(const glm::mat4& view, const glm::mat4& proj) { temporal_view_ = TemporalView{view, proj}; }
     // Drops the history at the next frame: what it holds is no longer on the screen (a new zone).
     void reset_history() { history_valid_ = false; }
-    // The temporal upscaler runs (SceneOptions::upscaler Taa, its targets made).
+    // The temporal upscaler runs (SceneOptions::upscaler Taa or Fsr3, its targets made).
     bool temporal() const { return lit_.image != VK_NULL_HANDLE; }
     std::uint32_t shadow_size() const { return shadow_size_; }
     // Counts the shadow maps made: a new one holds nothing (the cover and water maps are drawn again).
@@ -452,6 +457,12 @@ private:
     Image lit_;
     Image motion_;
     std::array<Image, 2> history_{};
+    // Under FSR 3.1 (SceneOptions::upscaler Fsr3): its output at the view's size (RGBA16F, storage), which the post
+    // pass reads (post_fsr3_set_), and the upscaler itself (made when the option first asks for it).
+    Image fsr3_output_;
+    std::unique_ptr<Fsr3Upscaler> fsr3_;
+    std::chrono::steady_clock::time_point fsr3_last_{}; // the last FSR 3.1 frame's time (its frame time)
+    bool fsr3_fallback_logged_ = false;
     struct TemporalView {
         glm::mat4 view{1.0f};
         glm::mat4 proj{1.0f};
@@ -502,6 +513,7 @@ private:
     VkPipelineLayout resolve_layout_ = VK_NULL_HANDLE;
     std::array<VkDescriptorSet, 2> resolve_sets_{};
     std::array<VkDescriptorSet, 2> post_taa_sets_{};
+    VkDescriptorSet post_fsr3_set_ = VK_NULL_HANDLE; // post.frag with fsr3_output_ in the scene's place
 
     VkFormat shadow_format_ = VK_FORMAT_UNDEFINED;
     std::uint32_t shadow_size_ = 0;
