@@ -374,9 +374,14 @@ exactly one ground triangle, so the patches meet without gaps or overlaps. A pat
 texel at its centre; its height wanders slowly over the zone between `lawn_height`'s two values (smooth value noise
 on a 48-unit lattice, `assets::lawn_height_noise`), not patch by patch. Where the lawn meets bare ground (a path, a
 road, a texture `+green` turns down) it tapers over three squares (`lawn_edge_factor`: 0.55 of the height beside it),
-so it does not end in a wall along a texture's straight border, and a patch with fewer than three of its eight
+so it does not end in a wall along a texture's straight border, and it frays: a patch there keeps only a share of its
+blades, a draw of its own between a quarter and 85% beside bare ground, all of them three squares in
+(`lawn_edge_cover`, carried to `lawn.vert` in the instance's flags). A patch with fewer than three of its eight
 neighbours grown is dropped (a lone tuft); a tile grows its neighbours' squares within three of its edge to see them,
-then drops them.
+then drops them. Under cover (a platform, a bridge, a roof) a square asks whether it is covered not at its centre but
+at a spot moved off it by smooth noise of two scales, up to three squares either way (`lawn_cover_offset`), on the
+ground's plane there and a little over it, so the bare ground under a straight platform wobbles in and out rather
+than tracing its outline.
 
 The blades are built in `shaders/lawn.vert`, without a texture (`render::FloraRenderer`'s second pipeline): a
 patch's square holds a grid of blades, one jittered in each cell, so the cover is even. A blade is a tapered strip

@@ -549,9 +549,10 @@ bool green_enough(const ZoneFloraRules::Ground& ground, const std::optional<std:
     return ground.greenish ? is_greenish_texel(r, g, b) : is_green_texel(r, g, b);
 }
 
-// `green` false: the caller has made +green's test (the lawn's, by a square's majority).
+// `green` false: the caller has made +green's test (the lawn's, by a square's majority); `cover` false, the cover's
+// (the lawn's, off the square's centre).
 bool may_grow(const ZoneFloraGrower::Data& d, const ZoneFloraRules::Ground& ground, const std::optional<std::uint32_t>& under,
-              const glm::vec3& p, bool green = true) {
+              const glm::vec3& p, bool green = true, bool cover = true) {
     if (green && ground.green_only && !green_enough(ground, under)) return false;
     if (!d.regions.empty()) {
         // In the water or lava, or standing on its surface (the region just under the foot), or in a zone line.
@@ -560,7 +561,7 @@ bool may_grow(const ZoneFloraGrower::Data& d, const ZoneFloraRules::Ground& grou
         const RegionInfo below = d.regions.lookup(p - glm::vec3(0.0f, 0.0f, 1.0f));
         if (below.is_water() || below.is_lava()) return false;
     }
-    return !(d.cover && d.cover->covered(p));
+    return !(cover && d.cover && d.cover->covered(p));
 }
 
 // Whether `q` lies in the triangle a b c seen from above, a point on an edge going to exactly one of the two
@@ -624,7 +625,15 @@ void grow_lawn(const ZoneFloraGrower::Data& d, const ZoneFloraGrower::Piece& t, 
                 }
                 if (green < 3) continue;
             }
-            if (!may_grow(d, ground, under, p, false)) continue;
+            if (!may_grow(d, ground, under, p, false, false)) continue;
+            if (d.cover) {
+                // Under cover by a spot off the centre (lawn_cover_offset), on the piece's plane there and a little
+                // over it (half the offset: the ground may rise beyond the piece), so the bare ground under a
+                // platform does not trace its outline.
+                const glm::vec2 off = lawn_cover_offset(q);
+                const glm::vec3 at(glm::vec2(p) + off, p.z + glm::dot(off, slope) + 0.5f * glm::length(off));
+                if (d.cover->covered(at)) continue;
+            }
             FloraInstance patch;
             patch.position = p;
             patch.width = kLawnCell;
@@ -644,15 +653,18 @@ float lawn_edge_factor(float squares) {
     return 0.55f + 0.45f * t * t * (3.0f - 2.0f * t);
 }
 
-float lawn_height_noise(glm::vec2 p) {
-    auto lattice = [](std::int32_t x, std::int32_t y) {
-        std::uint32_t h = static_cast<std::uint32_t>(x) * 73856093u ^ static_cast<std::uint32_t>(y) * 19349663u;
+namespace {
+
+// Smooth value noise over the world, 0..1, on a lattice of `cell` units; `salt` makes another field.
+float value_noise(glm::vec2 p, float cell, std::uint32_t salt) {
+    auto lattice = [salt](std::int32_t x, std::int32_t y) {
+        std::uint32_t h = static_cast<std::uint32_t>(x) * 73856093u ^ static_cast<std::uint32_t>(y) * 19349663u ^ salt;
         h ^= h >> 13;
         h *= 0x5bd1e995u;
         h ^= h >> 15;
         return static_cast<float>(h & 0xffffu) / 65535.0f;
     };
-    const glm::vec2 g = p / kLawnNoiseCell;
+    const glm::vec2 g = p / cell;
     const glm::vec2 f = glm::floor(g);
     glm::vec2 t = g - f;
     t = t * t * (3.0f - 2.0f * t);
@@ -660,6 +672,33 @@ float lawn_height_noise(glm::vec2 p) {
     const float bottom = lattice(x, y) + (lattice(x + 1, y) - lattice(x, y)) * t.x;
     const float top = lattice(x, y + 1) + (lattice(x + 1, y + 1) - lattice(x, y + 1)) * t.x;
     return std::clamp(bottom + (top - bottom) * t.y, 0.0f, 1.0f);
+}
+
+} // namespace
+
+float lawn_height_noise(glm::vec2 p) { return value_noise(p, kLawnNoiseCell, 0u); }
+
+glm::vec2 lawn_cover_offset(glm::vec2 p) {
+    // Two scales: a slow wander (bays and capes a few squares deep) and a quicker one (the fray along them).
+    auto field = [&](std::uint32_t salt) {
+        const float slow = value_noise(p, 14.0f, salt) * 2.0f - 1.0f;
+        const float quick = value_noise(p, 5.0f, salt ^ 0x68e31da4u) * 2.0f - 1.0f;
+        return std::clamp(slow * 1.3f + quick * 0.5f, -1.0f, 1.0f);
+    };
+    return glm::vec2(field(0x1b873593u), field(0xcc9e2d51u)) * kLawnCoverJitter;
+}
+
+float lawn_edge_cover(float squares, glm::vec2 p) {
+    const float t = std::clamp((squares - 1.0f) / (static_cast<float>(kLawnEdgeCells) - 0.5f), 0.0f, 1.0f);
+    const auto cx = static_cast<std::int32_t>(std::floor(p.x / kLawnCell)),
+               cy = static_cast<std::int32_t>(std::floor(p.y / kLawnCell));
+    std::uint32_t h = static_cast<std::uint32_t>(cx) * 2654435761u ^ static_cast<std::uint32_t>(cy) * 40503u;
+    h ^= h >> 15;
+    h *= 0x2c1b3c6du;
+    h ^= h >> 12;
+    const float draw = static_cast<float>(h & 0xffffu) / 65535.0f;
+    const float beside = 0.25f + 0.6f * draw;
+    return beside + (1.0f - beside) * t * t * (3.0f - 2.0f * t);
 }
 
 namespace {
@@ -729,7 +768,8 @@ void grow_tile(const ZoneFloraGrower::Data& d, std::size_t tile, std::vector<Flo
 
 // The lawn's edge where it meets bare ground (a path, a road, a texture +green turns down) tapers: a patch is the
 // shorter the nearer the nearest bare square within kLawnEdgeCells (lawn_edge_factor), so the carpet does not end in
-// a wall along a texture's straight border. `plants` holds the tile's and its margin's patches
+// a wall along a texture's straight border; and fewer of its blades stand, as many as a draw of its own says
+// (lawn_edge_cover), so the edge frays. `plants` holds the tile's and its margin's patches
 // (grow_lawn); the margin's are dropped after.
 void soften_lawn_edges(std::vector<FloraInstance>& out, std::size_t first, glm::vec2 lo, glm::vec2 hi) {
     std::span<FloraInstance> plants = std::span<FloraInstance>(out).subspan(first);
@@ -768,7 +808,9 @@ void soften_lawn_edges(std::vector<FloraInstance>& out, std::size_t first, glm::
                 if (d2 == 0 || d2 >= nearest2) continue;
                 if (!grown.contains(key(cx + dx, cy + dy))) nearest2 = d2;
             }
-        p.height *= lawn_edge_factor(std::sqrt(static_cast<float>(nearest2)));
+        const float squares = std::sqrt(static_cast<float>(nearest2));
+        p.height *= lawn_edge_factor(squares);
+        p.cover = lawn_edge_cover(squares, glm::vec2(p.position));
     }
     out.erase(std::remove_if(out.begin() + static_cast<std::ptrdiff_t>(first), out.end(),
                              [&](const FloraInstance& p) {
