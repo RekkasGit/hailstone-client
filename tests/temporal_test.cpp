@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "render/camera.h"
+#include "render/object_renderer.h"
 #include "render/temporal.h"
 
 using namespace hailstone::render;
@@ -134,4 +135,48 @@ TEST_CASE("temporal: camera cuts drop the history") {
     glm::mat4 bad = a.view();
     bad[3][0] = std::nanf("");
     CHECK(camera_cut(a.view(), bad));
+}
+
+TEST_CASE("temporal: scene pipelines' blend states for the motion and reactive attachments") {
+    VkPipelineColorBlendAttachmentState color{};
+    color.colorWriteMask = 0xf;
+    color.blendEnable = VK_TRUE;
+    // Without a temporal upscaler: the colour alone, as it was.
+    const SceneBlends plain = make_scene_blends(color, SceneOutput::Motion, false);
+    CHECK(plain.count == 1);
+    CHECK(plain.info().attachmentCount == 1);
+    CHECK(plain.states[0].blendEnable == VK_TRUE);
+    // An opaque draw writes its motion (red and green) as it is, and nothing of the reactive mask.
+    const SceneBlends motion = make_scene_blends(color, SceneOutput::Motion, true);
+    CHECK(motion.count == 3);
+    CHECK(motion.info().pAttachments == motion.states.data());
+    CHECK(motion.states[0].colorWriteMask == 0xfu);
+    CHECK(motion.states[1].colorWriteMask == (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT));
+    CHECK(motion.states[1].blendEnable == VK_FALSE);
+    CHECK(motion.states[2].colorWriteMask == 0u);
+    // A blended draw keeps the motion under it and raises the reactive mask to the largest drawn.
+    const SceneBlends reactive = make_scene_blends(color, SceneOutput::Reactive, true);
+    CHECK(reactive.states[1].colorWriteMask == 0u);
+    CHECK(reactive.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
+    CHECK(reactive.states[2].blendEnable == VK_TRUE);
+    CHECK(reactive.states[2].colorBlendOp == VK_BLEND_OP_MAX);
+    // The sky, the spawns' boxes: neither.
+    const SceneBlends nothing = make_scene_blends(color, SceneOutput::Nothing, true);
+    CHECK(nothing.count == 3);
+    CHECK(nothing.states[1].colorWriteMask == 0u);
+    CHECK(nothing.states[2].colorWriteMask == 0u);
+}
+
+TEST_CASE("temporal: object motion keys tell things apart") {
+    using hailstone::render::ObjectRenderer;
+    // A door, an object and a placed item with the same id are different things; none is "no key".
+    const std::uint64_t door = ObjectRenderer::make_motion_key(1, 7);
+    const std::uint64_t object = ObjectRenderer::make_motion_key(2, 7);
+    const std::uint64_t placed = ObjectRenderer::make_motion_key(3, 7);
+    CHECK(door != object);
+    CHECK(object != placed);
+    CHECK(door != placed);
+    CHECK(door != 0);
+    CHECK(ObjectRenderer::make_motion_key(1, 0) != 0);
+    CHECK(ObjectRenderer::make_motion_key(1, 8) != door);
 }

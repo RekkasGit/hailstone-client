@@ -35,6 +35,9 @@ struct DeviceCaps {
     // R8G8B8A8_SRGB images can be blitted with linear filtering: UploadBatch::texture builds an opaque texture's mips
     // on the GPU in linear light only then (render::gpu_builds_mips), and on the CPU otherwise.
     bool srgb_mip_blit = false;
+    // Colour attachments may blend differently (independentBlend): the scene's motion and reactive mask beside its
+    // colour need it (VkContext::scene_motion).
+    bool independent_blend = false;
     float max_anisotropy = 0.0f; // 0 when sampler anisotropy is unsupported
     // The textures one bindless array may hold (render/descriptor_limits.h), under the update-after-bind limits when
     // update_after_bind is set.
@@ -123,6 +126,33 @@ struct AoView {
 Tonemap parse_tonemap(std::string_view name);
 
 // One frame being recorded. Rendering into the scene target (colour + depth) is already begun.
+// What a scene pipeline's fragment shader writes besides the colour, under the temporal upscaler
+// (VkContext::scene_blends; docs/graphics.md "Temporal upscaling"): its own motion (`o_motion`, location 1: geometry
+// that moves by itself or sways) or how much the history should give way to it (`o_reactive`, location 2: blended and
+// additive draws, which have no motion of their own). The other attachments are masked off.
+enum class SceneOutput : std::uint8_t { Nothing, Motion, Reactive };
+
+// A scene pipeline's colour blend states, one per colour attachment of the scene (VkContext::scene_blends). info()
+// points into `states`: keep this object alive while the pipeline is made.
+struct SceneBlends {
+    std::array<VkPipelineColorBlendAttachmentState, 3> states{};
+    std::uint32_t count = 1;
+    VkPipelineColorBlendStateCreateInfo info() const {
+        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+        cb.attachmentCount = count;
+        cb.pAttachments = states.data();
+        return cb;
+    }
+};
+
+// A scene pipeline's blend states for colour blend `color` and `output` (VkContext::scene_blends): the colour alone
+// without `motion`, else the colour, the object motion and the reactive mask.
+SceneBlends make_scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output, bool motion);
+
+// The value the object-motion attachment is cleared to: no draw gave this pixel a motion of its own, and
+// shaders/temporal_prep.frag takes the camera's.
+inline constexpr float kMotionUnset = 30000.0f;
+
 struct FrameInfo {
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     // The scene target's size, in pixels: the 3D view's (VkContext::set_scene_rect) times SceneOptions::render_scale.
@@ -192,6 +222,15 @@ public:
     void reset_history() { history_valid_ = false; }
     // The temporal upscaler runs (SceneOptions::upscaler Taa, its targets made).
     bool temporal() const { return lit_.image != VK_NULL_HANDLE; }
+    // Scene pipelines are made for the scene's colour attachments: the colour alone, or under a temporal upscaler
+    // (scene_motion()) the colour, the object motion (kMotionFormat) and the reactive mask (kReactiveFormat), as
+    // begin_scene renders into. A renderer drawing into targets of its own (the item previews) passes `scene` false
+    // for the colour alone. Decided by set_scene_options, before the renderers are made, as the sample count.
+    // Without independentBlend (DeviceCaps) the temporal upscaler runs on the camera's motion alone.
+    bool scene_motion() const { return scene_options_.upscaler != Upscaler::Fsr1 && caps_.independent_blend; }
+    VkPipelineRenderingCreateInfo scene_rendering(bool scene = true) const;
+    SceneBlends scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output,
+                             bool scene = true) const;
     std::uint32_t shadow_size() const { return shadow_size_; }
     // Counts the shadow maps made: a new one holds nothing (the cover and water maps are drawn again).
     std::uint32_t shadow_generation() const { return shadow_generation_; }
@@ -336,6 +375,18 @@ private:
     static constexpr VkFormat kUpscaleFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
     // The temporal upscaler's motion vectors: UV to last frame's place (shaders/temporal_prep.frag).
     static constexpr VkFormat kMotionFormat = VK_FORMAT_R16G16_SFLOAT;
+    static constexpr VkFormat kReactiveFormat = VK_FORMAT_R8_UNORM;
+    std::array<VkFormat, 3> scene_color_formats_{kSceneFormat, kMotionFormat, kReactiveFormat};
+    // The temporal block the scene shaders read (shadow_set() binding 5, shaders/motion.glsl), written into the
+    // frame's commands by begin_scene.
+    struct TemporalBlock {
+        glm::mat4 view_proj{1.0f};      // this frame's, unjittered
+        glm::mat4 prev_view_proj{1.0f}; // the last frame's, unjittered (this frame's when there is no history)
+        glm::vec4 info{0.0f};           // x: 1 when the motion attachments are drawn
+    };
+    VkBuffer temporal_buffer_ = VK_NULL_HANDLE;
+    VmaAllocation temporal_alloc_ = VK_NULL_HANDLE;
+    void write_temporal_block(VkCommandBuffer cmd);
     static constexpr std::uint32_t kBloomLevels = 6; // 1/2 .. 1/64 of the screen
 
     struct Frame {
@@ -451,6 +502,10 @@ private:
     // writes history_[history_index_] and reads the other). upscaled_ is made too, for RCAS.
     Image lit_;
     Image motion_;
+    // Under scene_motion(), the scene's second and third colour attachments: what the draws wrote of their own motion
+    // (kMotionUnset elsewhere) and the reactive mask (0 .. 1: how much a pixel is made of draws without motion).
+    Image object_motion_;
+    Image reactive_;
     std::array<Image, 2> history_{};
     struct TemporalView {
         glm::mat4 view{1.0f};

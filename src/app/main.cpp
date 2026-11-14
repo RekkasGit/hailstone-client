@@ -1349,6 +1349,8 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // The plain camera first: begin_scene hands it to the scene's shaders for their own motion.
+            if (zone_renderer) vk.set_temporal_view(camera.view(), camera.projection(width, height, draw_view.far_plane));
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
             if (zone_renderer && opts.modern) {
                 vk.set_ao_view(camera.ao_view(width, height, draw_view.far_plane));
@@ -1367,7 +1369,6 @@ int main(int argc, char** argv) {
             if (zone_renderer) {
                 // Drawn through the temporal upscaler's jitter (none without it), which follows the plain view.
                 const glm::mat4 plain_proj = camera.projection(width, height, draw_view.far_plane);
-                vk.set_temporal_view(camera.view(), plain_proj);
                 glm::mat4 proj = hailstone::render::jittered(plain_proj, vk.projection_jitter());
                 glm::mat4 vp = proj * camera.view();
                 render::SkyFrame sky_frame{sky_hour, t, horizon_haze};

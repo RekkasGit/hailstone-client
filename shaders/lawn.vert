@@ -15,7 +15,7 @@
 
 layout(push_constant) uniform Push {
     mat4 view_proj;
-    vec4 time; // x seconds
+    vec4 time; // x seconds, y the last frame's (the motion's)
     vec4 lod;    // x this draw's blades, y segments, z kLawnCell, w kLawnBladeWidth
     vec4 curve;  // x kLawnFull, y kLawnNear, z kLawnMid
     vec4 counts; // xyz kLawnLods' blades
@@ -44,6 +44,11 @@ layout(location = 2) out vec3 v_normal; // the blade's face, towards the camera
 layout(location = 3) flat out vec3 v_ground; // the ground's colour (display values)
 layout(location = 4) out float v_up;    // 0 at the root, 1 at the tip
 layout(location = 5) flat out float v_shade; // the blade's own shade, about 1
+layout(location = 6) out vec4 v_now;    // the motion (shaders/motion.glsl): this frame's place, unjittered
+layout(location = 7) out vec4 v_then;   // and the last frame's
+
+#define MOTION_SET 1
+#include "motion.glsl"
 
 uint hash(uint x) {
     x ^= x >> 16;
@@ -65,6 +70,47 @@ float lawn_blades(float d) {
     if (d <= pc.curve.y) return mix(pc.counts.x, pc.counts.y, smoothstep(pc.curve.x, pc.curve.y, d));
     if (d <= pc.curve.z) return mix(pc.counts.y, pc.counts.z, smoothstep(pc.curve.y, pc.curve.z, d));
     return pc.counts.z;
+}
+
+// Where a point of a blade is at `sec` seconds (the wind moves it): also its bend, rise and the way across it, for
+// its face. Run again at the last frame's time for its motion (shaders/motion.glsl).
+vec3 blade_at(float sec, vec3 root, float height, float lean_turn, float lean, float phase, float facing, float t,
+              float edge, float width, out vec2 bend, out float rise, out vec3 across) {
+    // Where the tip goes: its own lean, the wind (a steady push, gusts rolling across the zone in the wind's direction
+    // and a flutter of its own), and away from a pusher's feet.
+    bend = vec2(cos(lean_turn), sin(lean_turn)) * lean;
+    vec4 wind = lighting.wind;
+    float roll = dot(root.xy, wind.xy) * 0.02;
+    float gust = 0.5 + 0.5 * sin(sec * 1.1 - roll) * sin(sec * 0.43 - roll * 0.7 + 1.3);
+    float flutter = sin(sec * 2.7 + phase) * 0.5 + sin(sec * 4.1 + phase * 1.7) * 0.25;
+    float strength = wind.z * (0.35 + wind.w * gust);
+    bend += wind.xy * (strength * height * 0.6) + vec2(cos(phase), sin(phase)) * (flutter * height * (0.04 + 0.08 * wind.z));
+    int n = int(frame.params.x + 0.5);
+    float press = 0.0;
+    for (int k = 0; k < n; ++k) {
+        vec4 q = frame.pushers[k];
+        vec2 d = root.xy - q.xy;
+        float dist = length(d);
+        if (dist >= q.w || abs(root.z - q.z) > 10.0) continue;
+        float b = 1.0 - dist / q.w;
+        b = b * b * (3.0 - 2.0 * b);
+        vec2 away = dist > 1e-3 ? d / dist : vec2(cos(facing), sin(facing));
+        bend += away * (b * height * 0.8);
+        press = max(press, b);
+    }
+    // Curving over: the tip's offset grows with the square of the way up. Bent, it dips so the blade keeps its length.
+    float reach = length(bend);
+    float limit = height * 0.9;
+    if (reach > limit) {
+        bend *= limit / reach;
+        reach = limit;
+    }
+    rise = height * (1.0 - 0.5 * (reach * reach) / (height * height)) * (1.0 - 0.25 * press);
+    across = vec3(cos(facing), sin(facing), 0.0);
+    // Narrow at the root, widest a third of the way up, to a point.
+    float profile = (1.0 - t) * (0.55 + 1.35 * t);
+    return root + vec3(bend * t * t, rise * t) + across * (edge * width * 0.5 * profile);
+
 }
 
 void main() {
@@ -116,41 +162,20 @@ void main() {
     v_shade = 0.94 + 0.12 * next(s);
     float phase = next(s) * 6.2831853;
 
-    // Where the tip goes: its own lean, the wind (a steady push, gusts rolling across the zone in the wind's direction
-    // and a flutter of its own), and away from a pusher's feet.
-    vec2 bend = vec2(cos(lean_turn), sin(lean_turn)) * lean;
-    float sec = pc.time.x;
-    vec4 wind = lighting.wind;
-    float roll = dot(root.xy, wind.xy) * 0.02;
-    float gust = 0.5 + 0.5 * sin(sec * 1.1 - roll) * sin(sec * 0.43 - roll * 0.7 + 1.3);
-    float flutter = sin(sec * 2.7 + phase) * 0.5 + sin(sec * 4.1 + phase * 1.7) * 0.25;
-    float strength = wind.z * (0.35 + wind.w * gust);
-    bend += wind.xy * (strength * height * 0.6) + vec2(cos(phase), sin(phase)) * (flutter * height * (0.04 + 0.08 * wind.z));
-    int n = int(frame.params.x + 0.5);
-    float press = 0.0;
-    for (int k = 0; k < n; ++k) {
-        vec4 q = frame.pushers[k];
-        vec2 d = root.xy - q.xy;
-        float dist = length(d);
-        if (dist >= q.w || abs(root.z - q.z) > 10.0) continue;
-        float b = 1.0 - dist / q.w;
-        b = b * b * (3.0 - 2.0 * b);
-        vec2 away = dist > 1e-3 ? d / dist : vec2(cos(facing), sin(facing));
-        bend += away * (b * height * 0.8);
-        press = max(press, b);
+    vec2 bend;
+    float rise;
+    vec3 across;
+    vec3 p = blade_at(pc.time.x, root, height, lean_turn, lean, phase, facing, t, edge, width, bend, rise, across);
+    if (temporal.info.x > 0.0) {
+        vec2 then_bend;
+        float then_rise;
+        vec3 then_across;
+        vec3 then_p = blade_at(pc.time.y, root, height, lean_turn, lean, phase, facing, t, edge, width, then_bend,
+                               then_rise, then_across);
+        motion_clips(p, then_p, v_now, v_then);
+    } else {
+        v_now = v_then = vec4(0.0, 0.0, 0.0, 1.0);
     }
-    // Curving over: the tip's offset grows with the square of the way up. Bent, it dips so the blade keeps its length.
-    float reach = length(bend);
-    float limit = height * 0.9;
-    if (reach > limit) {
-        bend *= limit / reach;
-        reach = limit;
-    }
-    float rise = height * (1.0 - 0.5 * (reach * reach) / (height * height)) * (1.0 - 0.25 * press);
-    vec3 across = vec3(cos(facing), sin(facing), 0.0);
-    // Narrow at the root, widest a third of the way up, to a point.
-    float profile = (1.0 - t) * (0.55 + 1.35 * t);
-    vec3 p = root + vec3(bend * t * t, rise * t) + across * (edge * width * 0.5 * profile);
 
     // The face: across the blade and along it (the curve's slope there).
     vec3 along = normalize(vec3(bend * 2.0 * t, max(rise, 0.01)));

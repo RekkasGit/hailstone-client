@@ -32,7 +32,15 @@ layout(location = 1) in vec3 v_world;
 layout(location = 2) in float v_fog; // oFog (object.vert)
 layout(location = 3) in vec3 v_normal;
 
+layout(location = 4) in vec4 v_now;
+layout(location = 5) in vec4 v_then;
+
 layout(location = 0) out vec4 o_color;
+layout(location = 1) out vec2 o_motion;   // the opaque pass's (render/vk_context.h SceneOutput)
+layout(location = 2) out float o_reactive; // the blended and additive passes'
+
+#define MOTION_SET 1
+#include "motion.glsl"
 
 void main() {
     // The isometric camera's cut (game/iso_occlusion.h).
@@ -93,4 +101,6 @@ void main() {
         color = to_linear(mix(pc.fog_color.rgb, tex.rgb * pc.camera_pos.w, v_fog));
     }
     o_color = vec4(color, out_alpha);
+    o_motion = motion_uv(v_now, v_then);
+    o_reactive = reactive_of(o_color);
 }

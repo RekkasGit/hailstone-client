@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Temporal upscaler: it now follows characters, opening doors and plants swaying in the wind as they move, not only the camera, so they smear less; particles, spells, rain and water give way to each new frame faster, leaving less of a trail
 - Anti-aliasing goes up to 4x MSAA. The 8x choice is gone from both interfaces' Options; a saved 8x (or higher) is drawn at 4x, and the Ultra preset now uses 4x
 - Options > Upscaler > **Temporal (TAA)** (and the gamepad pack's Display page; `display.upscaler = taa` in `hailstone.ini`): a temporal upscaler of Hailstone's own, the first step towards AMD FSR 3.1. It smooths edges, shimmering fences and foliage over several frames at every render scale, and below a Render Scale of 100 upscales with the detail gathered over those frames instead of FSR 1. It replaces MSAA while on and takes effect at the next start. Characters, doors and swaying plants can still look a little soft while they move; FSR 1 stays the default
 - Barbarians, Trolls and Ogres have Slam in their combat skills, and Bash without a shield slams. Slam now follows your current form: an illusion into a large race gives it, an illusion into a small race takes it away until the illusion ends
