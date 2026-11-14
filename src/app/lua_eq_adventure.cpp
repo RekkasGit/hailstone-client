@@ -273,8 +273,11 @@ public:
         if (id == "AdvRqst_RiskCombobox") {
             risk_.choices = {"Normal", "High"};
             if (risk_.selected < 0) risk_.selected = 0;
+            // Stock EQEmu fills OP_AdventureData's risk with is_hard ? 1 : 0 (world/adventure_manager.cpp), unlike
+            // the request's 1 / 2. RoF2 shows that field as choice risk - 1 (0x618790, as for its own request),
+            // which would show EQEmu's high risk as normal; this client follows the stock server.
             if (host.conn && host.conn->adventure().data.assigned)
-                risk_.selected = host.conn->adventure().data.risk == 2 ? 1 : 0;
+                risk_.selected = host.conn->adventure().data.risk != 0 ? 1 : 0;
             return &risk_;
         }
         return nullptr;

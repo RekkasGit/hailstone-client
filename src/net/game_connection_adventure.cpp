@@ -49,11 +49,17 @@ bool GameConnection::open_adventure_recruiter(std::uint32_t npc) {
 
 void GameConnection::set_adventure_window_open(bool open) {
     adventure_.window_open = open;
-    if (!open) recruiter_state_ = 0;
-    if (!open && !adventure_.data.assigned) {
-        // CAdventureRequestWnd::Deactivate @0x618420 cancels the pending offer and recruiter interaction.
-        adventure_answer(false);
+    if (open) return;
+    // CAdventureRequestWnd::AboutToHide @0x618420 runs Send_OP_LDoNButton_0041fe10: an offer up (state 2) is
+    // declined, the recruiter's words (state 1) dismissed, and either resets the state, which forgets the recruiter.
+    // In state 0 (a request awaiting its answer, an introduction not yet come, or an adventure) nothing changes, so a
+    // later OP_AdventureInfo or OP_AdventureDetails shows the window again (0x420130, 0x4201b0).
+    const std::uint8_t state = recruiter_state_;
+    if (state == 2) adventure_answer(false);
+    if (state == 1 || state == 2) {
+        recruiter_state_ = 0;
         adventure_.recruiter = 0;
+        adventure_.offer.clear();
         adventure_.npc_text.clear();
     }
 }
@@ -75,6 +81,8 @@ void GameConnection::adventure_request(std::uint32_t risk, std::uint32_t type) {
     }
     adventure_.request_next_ms = session_now_ms() + 5000; // EQEmu's pTimerStartAdventureTimer
     adventure_.npc_text.clear();
+    // Send_OP_AdventureRequest @0x4209f0: AdventureMgr_SetState(0), the recruiter kept for the answer.
+    recruiter_state_ = 0;
     send_zone(encode_adventure_request(risk, adventure_.recruiter, type));
 }
 
@@ -87,6 +95,10 @@ void GameConnection::adventure_answer(bool accept) {
 }
 
 void GameConnection::adventure_leave() {
+    // Stock EQEmu answers a granted leave with nothing for the client (zone/worldserver.cpp
+    // ServerOP_AdventureLeaveReply clears only the zone's copy), so the window shows the adventure until the next
+    // OP_AdventureData, usually on zoning. What RoF2 shows then is not traced; its dispatcher resets the state on an
+    // opcode 0x0dcb that no stock server sends (docs/unknowns.md).
     if (state_ == ConnectionState::InZone && adventure_.data.assigned) send_zone(make_empty(Op::LeaveAdventure));
 }
 
@@ -185,18 +197,27 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
         if (auto v = decode_adventure_text(p)) {
             a.npc_text = std::move(*v);
             if (!a.recruiter) ui_message(a.npc_text); // a notice with no window open
-            // AdventureMgr_HandleAdventureInfo @0x420130: state 1, its range-check clock started.
-            else set_recruiter_state(1);
+            else {
+                // AdventureMgr_HandleAdventureInfo @0x420130: state 1, its range-check clock started, and the window
+                // shown, also when it was closed while the request or introduction was on its way.
+                a.window_open = true;
+                set_recruiter_state(1);
+            }
         }
         break;
     case Op::AdventureDetails:
         if (auto v = decode_adventure_text(p)) {
             if (a.recruiter && !a.data.assigned) {
+                // AdventureMgr_HandleAdventureDetails @0x4201b0: state 2, its range-check clock started, and the
+                // window shown, also when it was closed while the request was answered (closing it keeps the
+                // recruiter in state 0); the player accepts or declines, and closing it again declines.
                 a.offer = std::move(*v);
                 a.window_open = true;
-                set_recruiter_state(2); // AdventureMgr_HandleAdventureDetails @0x4201b0 starts the range clock.
+                set_recruiter_state(2);
             } else {
-                // The window closed or the player zoned while the request was being answered.
+                // No recruiter (the player zoned, or the recruiter's words were dismissed) or already on an
+                // adventure. RoF2 shows this offer too, and its range check (AdventureMgr_Process @0x41fa80) then
+                // hides the window with no recruiter in reach, declining it; this client declines at once.
                 send_zone(encode_ldon_button(false));
                 recruiter_state_ = 0;
             }
@@ -212,7 +233,9 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
         }
         break;
     case Op::AdventureUpdate:
-        if (auto v = decode_adventure_count(p); v && a.data.assigned && !a.data.time_to_enter) a.count = *v;
+        // AdventureMgr_HandleAdventureUpdate @0x4204e0 stores the count whatever the state and shows it only in
+        // state 4 (the completion timer); the window's progress label keeps that rule.
+        if (auto v = decode_adventure_count(p)) a.count = *v;
         break;
     case Op::AdventureFinish:
         if (auto v = decode_adventure_finish(p)) {
@@ -234,8 +257,9 @@ void GameConnection::handle_adventure(Op op, const AppPacket& p) {
     case Op::AdventurePointsUpdate:
         if (auto v = decode_adventure_points(p)) {
             a.points = *v;
-            // RoF2's points handler @0x4208f5 refreshes the stats as well. Preserve this refresh when an update
-            // lands during the ten-second request guard, so completion results do not stay stale.
+            // RoF2's points handler @0x4208f5 also sends OP_AdventureStatsRequest whenever the stats window exists
+            // (CDisplay::InitGameUI creates it, so open or not). This client queues it behind the ten-second
+            // request guard instead, as EQEmu drops a request inside its own eight seconds.
             a.stats_queued = true;
         }
         break;

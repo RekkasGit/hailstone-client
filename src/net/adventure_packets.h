@@ -21,7 +21,8 @@ inline constexpr int kAdventureLeaderboardRows = 100;
 
 // OP_AdventureInfoRequest (C→Z, u32 the recruiter's spawn id): the server answers OP_AdventureInfo, the recruiter's
 // text; OP_AdventureInfo also carries the server's refusals and OP_AdventureDetails the adventure offered (each a
-// NUL-terminated string).
+// NUL-terminated string, which RoF2's handlers 0x420130 / 0x4201b0 copy up to its NUL; this client stops at the NUL
+// or the packet's end, so an unterminated or empty one still decodes).
 AppPacket encode_adventure_info_request(std::uint32_t npc);
 std::optional<std::string> decode_adventure_text(const AppPacket& p);
 

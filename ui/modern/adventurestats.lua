@@ -1,7 +1,8 @@
 -- Adventure record: replaces the game's AdventureStatsWnd. Your totals as tiles (points to spend, wins, losses,
 -- the win rate, points: the theme list's final totals row), then each theme as a sortable table (wins,
 -- losses, win rank, win rate, rate rank, points), and Refresh / Leaderboard. The numbers are the original's
--- (AdvStats_ThemeList, AdvStats_AvailableValue) and the buttons its own; "-" until the server has sent them.
+-- (AdvStats_ThemeList, AdvStats_AvailableValue) and the buttons its own. Until the server has sent the record the
+-- rows read 0, "---" for a rank and 0.0%; "-" only stands in for a totals row the list does not have.
 local hud = dofile("lib/hud.lua")
 local W = dofile("lib/widgets.lua")
 local K = dofile("lib/quests_kit.lua")

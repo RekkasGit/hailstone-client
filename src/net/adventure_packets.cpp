@@ -22,7 +22,7 @@ AppPacket encode_adventure_info_request(std::uint32_t npc) {
 }
 
 std::optional<std::string> decode_adventure_text(const AppPacket& p) {
-    return decode_with(p, [](ByteReader& r) { return r.cstring(); });
+    return decode_with(p, [](ByteReader& r) { return r.fixed_string(r.remaining()); });
 }
 
 AppPacket encode_adventure_request(std::uint32_t risk, std::uint32_t npc, std::uint32_t type) {

@@ -132,14 +132,14 @@ TEST_CASE("adventure windows: recruiter offers and active adventures expose sepa
     AdventureData active;
     active.assigned = true;
     active.text = "Current briefing.";
-    active.risk = 2;
+    active.risk = 1; // stock EQEmu: is_hard ? 1 : 0
     active.time_to_enter = 120;
     active.time_left = 1800;
     ui.receive(encode(active));
     ByteWriter count;
     count.le<std::uint32_t>(3);
     count.le<std::uint32_t>(10);
-    ui.receive(make_packet(Op::AdventureUpdate, std::move(count)));
+    ui.receive(make_packet(Op::AdventureUpdate, std::move(count))); // kept, shown once inside
     ui.clock.advance(31s);
     CHECK(ui("return eq.WindowText('AdventureRequestWnd', 'AdvRqst_NPCText')") == "Current briefing.");
     CHECK(ui("return eq.WindowText('AdventureRequestWnd', 'AdvRqst_EnterTimeLeftLabel')") == "2 minutes");
@@ -155,11 +155,9 @@ TEST_CASE("adventure windows: recruiter offers and active adventures expose sepa
 
     active.time_to_enter = 0;
     active.time_left = 90;
+    active.risk = 0;
     ui.receive(encode(active));
-    ByteWriter active_count;
-    active_count.le<std::uint32_t>(3);
-    active_count.le<std::uint32_t>(10);
-    ui.receive(make_packet(Op::AdventureUpdate, std::move(active_count)));
+    CHECK(ui("return select(2, eq.ComboInfo('AdventureRequestWnd', 'AdvRqst_RiskCombobox'))") == "0");
     ui.clock.advance(1s);
     CHECK(ui("return eq.WindowText('AdventureRequestWnd', 'AdvRqst_EnterTimeLeftLabel')") == "");
     CHECK(ui("return eq.WindowText('AdventureRequestWnd', 'AdvRqst_CompleteTimeLeftLabel')") == "2 minutes");

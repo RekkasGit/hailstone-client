@@ -9,6 +9,7 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 ### Adventures (LDoN)
 - [x] Alt+V and recruiter request/offer windows in both UI packs, entry/completion timers and progress, profile point balances, seven-column theme stats and native leaderboard categories, risk choices and tied ranks; native protocol investigation, unit and mock-server coverage.
 - [ ] Complete an adventure live: request, accept/decline, zone in, objective updates, finish, leave and cross-zone refresh; confirm stats, leaderboard standings and physical controller operation. Remaining protocol ambiguity is in unknowns.md.
+- [ ] Leaving an adventure: stock EQEmu sends nothing after a granted leave, so the window stays on the adventure until zoning. Settle what RoF2 shows (unknowns.md) and clear the window to match.
 
 ### Fellowships
 

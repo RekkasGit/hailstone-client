@@ -73,8 +73,10 @@ TEST_CASE("adventure: status can open without a recruiter and a departed recruit
     CHECK_FALSE(c.adventure_request_ready());
     solo_at_recruiter(w);
     CHECK(c.adventure_recruiter_available());
-    c.close_adventure_recruiter();
+    c.receive_zone_packet_for_test(adventure_text(net::Op::AdventureInfo, "Greetings."));
+    c.close_adventure_recruiter(); // the recruiter's words dismissed: the recruiter is forgotten
     CHECK_FALSE(c.adventure().window_open);
+    CHECK(c.adventure().recruiter == 0);
     c.set_adventure_window_open(true);
     CHECK_FALSE(c.adventure_recruiter_available());
     REQUIRE(c.open_adventure_recruiter(20));
@@ -189,6 +191,64 @@ TEST_CASE("adventure: mock server receives requests and one-byte accept and decl
     rig.server.zone.send_reliable(net::encode(net::AdventureData{}));
     REQUIRE(rig.until([&] { return !rig.conn.adventure().data.assigned; }));
     CHECK(rig.conn.adventure().count.total == 0);
+}
+
+TEST_CASE("adventure: an answer to a request whose window was closed shows the window again") {
+    // CAdventureRequestWnd::AboutToHide @0x618420 -> Send_OP_LDoNButton_0041fe10 does nothing in state 0, which
+    // Send_OP_AdventureRequest @0x4209f0 sets; AdventureMgr_HandleAdventureDetails @0x4201b0 and
+    // AdventureMgr_HandleAdventureInfo @0x420130 show the window.
+    using namespace std::chrono_literals;
+    test::ScratchDir files("adventure_late_offer");
+    test::ManualClock clock;
+    auto ext = std::make_shared<Solo>();
+    ext->on = true;
+    auto options = test::quick_options();
+    options.plugins = ext;
+    options.session.clock = clock.source();
+    options.servers_dir = files.path() / "servers";
+    test::Rig rig(test::MockConfig::standard(), options);
+    REQUIRE(rig.to_zone());
+    mock_recruiter(rig);
+    clock.hold();
+    rig.server.zone.send_reliable(adventure_text(net::Op::AdventureInfo, "Greetings."));
+    REQUIRE(rig.until([&] { return !rig.conn.adventure().npc_text.empty(); }));
+    rig.conn.adventure_request(1, 0);
+    REQUIRE(rig.until([&] { return requests(rig, net::Op::AdventureRequest).size() == 1; }));
+    rig.conn.set_adventure_window_open(false);
+    CHECK_FALSE(rig.conn.adventure().window_open);
+    CHECK(rig.conn.adventure().recruiter == 77); // kept for the answer
+
+    rig.server.zone.send_reliable(adventure_text(net::Op::AdventureDetails, "A late offer."));
+    REQUIRE(rig.until([&] { return !rig.conn.adventure().offer.empty(); }));
+    CHECK(rig.conn.adventure().window_open);
+    rig.step();
+    CHECK(requests(rig, net::Op::LDoNButton).empty()); // not declined behind the player's back
+    rig.conn.adventure_answer(true);
+    REQUIRE(rig.until([&] { return requests(rig, net::Op::LDoNButton).size() == 1; }));
+    CHECK(requests(rig, net::Op::LDoNButton).back().data == std::vector<std::byte>{std::byte{1}});
+
+    // A refusal (OP_AdventureInfo) to a request whose window was closed shows it too.
+    clock.advance(5s);
+    rig.conn.adventure_request(2, 1);
+    REQUIRE(rig.until([&] { return requests(rig, net::Op::AdventureRequest).size() == 2; }));
+    rig.conn.set_adventure_window_open(false);
+    rig.server.zone.send_reliable(adventure_text(net::Op::AdventureInfo, "Your group is too small."));
+    REQUIRE(rig.until([&] { return rig.conn.adventure().window_open; }));
+    CHECK(rig.conn.adventure().npc_text == "Your group is too small.");
+
+    // Closed again with a later offer up, the offer is declined and the recruiter forgotten.
+    clock.advance(5s);
+    rig.conn.adventure_request(1, 0);
+    REQUIRE(rig.until([&] { return requests(rig, net::Op::AdventureRequest).size() == 3; }));
+    rig.conn.set_adventure_window_open(false);
+    rig.server.zone.send_reliable(adventure_text(net::Op::AdventureDetails, "Another offer."));
+    REQUIRE(rig.until([&] { return !rig.conn.adventure().offer.empty(); }));
+    CHECK(rig.conn.adventure().window_open);
+    rig.conn.set_adventure_window_open(false);
+    REQUIRE(rig.until([&] { return requests(rig, net::Op::LDoNButton).size() == 2; }));
+    CHECK(requests(rig, net::Op::LDoNButton).back().data == std::vector<std::byte>{std::byte{0}});
+    CHECK(rig.conn.adventure().recruiter == 0);
+    CHECK(rig.conn.adventure().offer.empty());
 }
 
 TEST_CASE("adventure: stats and leaderboard use native cooldowns and retain the latest queued category") {
@@ -327,10 +387,9 @@ TEST_CASE("adventure: win and failure finish packets clear the mission without a
         count.le<std::uint32_t>(5);
         const auto update = net::make_packet(net::Op::AdventureUpdate, std::move(count));
         c.receive_zone_packet_for_test(update);
-        CHECK(c.adventure().count.total == 0); // no objective progress before entering
+        CHECK(c.adventure().count.total == 5); // kept before entering (0x4204e0), shown only once inside
         active.time_to_enter = 0;
         c.receive_zone_packet_for_test(net::encode(active));
-        c.receive_zone_packet_for_test(update);
         CHECK(c.adventure().count.total == 5);
         REQUIRE(c.adventure().data.assigned);
         ByteWriter finish;
@@ -342,6 +401,8 @@ TEST_CASE("adventure: win and failure finish packets clear the mission without a
         CHECK_FALSE(c.adventure().window_open);
         CHECK(c.adventure().count.total == 0);
         c.receive_zone_packet_for_test(update); // a late progress packet cannot revive the completed mission
+        CHECK_FALSE(c.adventure().data.assigned);
+        c.receive_zone_packet_for_test(net::encode(active)); // the next adventure starts with no count of its own
         CHECK(c.adventure().count.total == 0);
         CHECK(c.adventure().recruiter == 0);
         CHECK(c.adventure().points.available == 100);

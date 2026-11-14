@@ -7,8 +7,9 @@
 --                                            an offer, Leave the current adventure (asked first), View Stats
 --   Adventure Stats (AdventureStatsWnd)      the points to spend, each theme's wins, losses, ranks and points;
 --                                            Refresh, Leaderboard, Done
---   Adventure Leaderboard                    the theme and the order (A opens their choices: a pick asks the server
---   (AdventureLeaderboardWnd)                for that board), your own standing, the board; Refresh, Done
+--   Adventure Leaderboard                    the category (a theme by wins or by win rate) and the risk (A opens
+--   (AdventureLeaderboardWnd)                their choices: a pick asks the server for that board), your own
+--                                            standing, the board; Refresh, Done
 --   PvP Stats (PvPStatsWnd)                  points, kills, deaths, infamy, vitality, the streaks, the last kill and
 --                                            death, the kills of the last day; Refresh, Leaderboard, Done
 --   PvP Leaderboard (PvpLeaderboardWnd)      what to rank by, your standing, the board; Refresh, Done
@@ -30,6 +31,7 @@ end
 -- ---------------------------------------------------------------- the recruiter (AdventureRequestWnd)
 local AR = "AdventureRequestWnd"
 local arPick, arText, arState = {}, { scroll = 0 }, {}
+local arWasShown = false
 
 -- "3 / 10" -> 3, 10
 local function progress(text)
@@ -40,9 +42,12 @@ end
 ui.window("Adventure", function()
   M.testShow()
   if not W.shown(AR) then
-    arPick, arText, arState = {}, { scroll = 0 }, {}
+    -- forget the pick, the scroll and a pending confirmation once, when the window goes away
+    if arWasShown then arPick, arText, arState = {}, { scroll = 0 }, {} end
+    arWasShown = false
     return
   end
+  arWasShown = true
   T.frame()
   if not M.shown(AR, "AdvRqst_LeaveButton") then arState.confirm = nil end
   local npc = M.text(AR, "AdvRqst_NPCLabel")

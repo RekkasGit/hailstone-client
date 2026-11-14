@@ -1137,7 +1137,8 @@ public:
     const Adventure& adventure() const { return adventure_; }
     bool open_adventure_recruiter(std::uint32_t npc);
     void set_adventure_window_open(bool open);
-    // CAdventureRequestWnd::AboutToHide @0x618420 cancels an offer and resets the recruiter interaction.
+    // CAdventureRequestWnd::AboutToHide @0x618420: declines an offer up and forgets the recruiter after its words or
+    // an offer; a request still awaiting its answer keeps the recruiter, and the answer shows the window again.
     void close_adventure_recruiter();
     bool adventure_recruiter_available() const;
     bool adventure_request_ready() const;
@@ -3296,7 +3297,8 @@ private:
     };
     NpcRangeChecks npc_checks_;
     // AdventureMgr +4 as far as the recruiter's range check needs it: 1 the recruiter's words shown
-    // (OP_AdventureInfo), 2 an offer up (OP_AdventureDetails), 0 otherwise (none, answered, or on an adventure).
+    // (OP_AdventureInfo), 2 an offer up (OP_AdventureDetails), 0 otherwise (none, a request sent, answered, or on
+    // an adventure).
     std::uint8_t recruiter_state_ = 0;
     void set_recruiter_state(std::uint8_t state) {
         recruiter_state_ = state;

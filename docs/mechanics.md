@@ -1866,20 +1866,27 @@ does not mutate membership or grant permission to place a camp before the server
 Alt+V (`TOGGLE_ADVREQUESTWIN`, index 351) toggles the adventure window independently of a recruiter. A right click
 on a class-60 recruiter within 20 units in XYZ (inclusive) requests its introduction. Risk 1/2 and objective 0..4
 are sent unchanged apart from the risk selector's one-based conversion. Introductions and offers use the shared
-native 500 ms recruiter range check; assigned adventure status stays open beyond recruiter range. Closing an
-unaccepted offer declines it;
-closing the status window preserves the assigned mission. Leaving uses a separate confirmed control in both UI
+native 500 ms recruiter range check; assigned adventure status stays open beyond recruiter range. Closing the
+window runs RoF2's `Send_OP_LDoNButton_0041fe10`: an unaccepted offer is declined and the recruiter's words
+dismissed, both forgetting the recruiter; closed while a request awaits its answer it keeps the recruiter, and the
+answer (refusal or offer) shows the window again (`0x420130`, `0x4201b0`), where an offer can be accepted or
+declined. An offer with no recruiter (after zoning) is declined at once.
+Closing the status window preserves the assigned mission. Leaving uses a separate confirmed control in both UI
 packs. The server selects the mission and decides group eligibility, acceptance and departure.
 
 AdventureData selects the entry timer when nonzero, otherwise the completion timer. Displays round remaining
-seconds up to whole minutes and clamp at zero (`0x618a00`, `0x618ae0`); progress is shown only during completion.
+seconds up to whole minutes and clamp at zero (`0x618a00`, `0x618ae0`); progress counts are kept whenever they come
+and shown only during completion (`0x4204e0`). The risk selector shows the adventure's risk from AdventureData,
+where stock EQEmu sends 0 normal / 1 high (not the request's 1 / 2, which RoF2's `0x618790` assumes): nonzero is
+high.
 The compass uses the server's zone-local XYZ/flag. AdventureFinish clears assignment, timers, compass and progress
 and closes the window (`0x4206eb`); points remain server-authoritative. Zone changes clear the old recruiter and
 zone-local mission data until the new server supplies them. Selecting another character clears cached adventure state.
 
 Stats show themes 1..5 then Totals: win rank, successes, failures, win percentage, percentage rank and current theme
-point balances. Profile data supplies initial points; point updates replace balances and request fresh stats when
-the ten-second guard permits. Rank zero displays a placeholder. Percentage totals and point sums use wide
+point balances. Profile data supplies initial points; point updates replace balances and request fresh stats, open
+window or not, as RoF2 does (`0x4208f5`), once the ten-second guard permits. After a granted leave stock EQEmu
+sends nothing, so the window shows the adventure until the next AdventureData (docs/unknowns.md). Rank zero displays a placeholder. Percentage totals and point sums use wide
 arithmetic so large server values do not wrap. Row percentages round to binary32 before one-decimal formatting.
 
 Leaderboard categories interleave wins and percentage within each theme; risk is All/Normal/High. Stock EQEmu

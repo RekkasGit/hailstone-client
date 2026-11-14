@@ -50,7 +50,7 @@ TEST_CASE("adventure: the client's requests") {
     CHECK(encode_adventure_stats_request().data == std::vector<std::byte>{std::byte{0}});
 }
 
-TEST_CASE("adventure: the recruiter's text is a NUL-terminated string") {
+TEST_CASE("adventure: the recruiter's text ends at its NUL or the packet's end") {
     // SendAdventureError: size strlen + 2, strn0cpy.
     std::string t = "You are not currently assigned to an adventure.";
     AppPacket p(to_wire(Op::AdventureInfo), {});
@@ -60,10 +60,14 @@ TEST_CASE("adventure: the recruiter's text is a NUL-terminated string") {
     auto d = decode_adventure_text(p);
     REQUIRE(d);
     CHECK(*d == t);
-    p.data.resize(t.size());
-    CHECK_FALSE(decode_adventure_text(p));
-    p.data.clear();
-    CHECK_FALSE(decode_adventure_text(p));
+    p.data.resize(t.size()); // unterminated: the text up to the packet's end
+    d = decode_adventure_text(p);
+    REQUIRE(d);
+    CHECK(*d == t);
+    p.data.clear(); // empty: an empty text
+    d = decode_adventure_text(p);
+    REQUIRE(d);
+    CHECK(d->empty());
 }
 
 TEST_CASE("adventure: the current adventure is 2084 bytes; a zeroed one is none") {
