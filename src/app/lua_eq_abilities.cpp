@@ -22,6 +22,7 @@
 #include "app/lua_eq_values.h"
 #include "app/lua_eq_windows.h"
 #include "app/spell_ui.h"
+#include "app/skill_race.h"
 #include "game/combat_ability_menu.h"
 #include "game/mechanics/character.h"
 #include "game/hotbuttons.h"
@@ -117,11 +118,12 @@ int UsableSkills(lua_State* L) {
     if (!h.conn || !h.character) return 1;
     const auto now = static_cast<std::uint32_t>(net::GameConnection::now_ms());
     int out = 0;
+    const auto race = skill_race(*h.conn, *h.character);
     for (bool combat : {true, false})
-        for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat)) {
+        for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat, race)) {
             lua_createtable(L, 0, 4);
             set_int(L, "id", s);
-            set_str(L, "name", h.conn->skill_name(s));
+            set_str(L, "name", s == game::mechanics::skill::kSlam ? "Slam" : h.conn->skill_name(s));
             lua_pushboolean(L, combat);
             lua_setfield(L, -2, "combat");
             std::uint32_t left = h.actions ? h.actions->skill_state().timers.remaining(*h.character, s, now) : 0;
@@ -135,15 +137,18 @@ int UseSkill(lua_State* L) {
     auto& h = host(L);
     lua_Integer id = luaL_checkinteger(L, 1);
     bool ok = false;
-    if (h.conn && h.character && h.in_game && h.run_button && id >= 0 && id < 100) {
+    if (h.conn && h.character && h.in_game && h.run_button && id >= 0 &&
+        (id < 100 || id == game::mechanics::skill::kSlam)) {
         const auto skill = static_cast<std::uint32_t>(id);
+        const auto race = skill_race(*h.conn, *h.character);
         for (bool combat : {true, false})
-            for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat)) ok = ok || s == skill;
+            for (std::uint32_t s : game::mechanics::usable_skills(*h.character, combat, race))
+                ok = ok || s == skill;
         if (ok) {
             game::HotButton b;
             b.type = game::HotButtonType::Skill;
             b.slot = static_cast<std::int32_t>(skill);
-            b.label = h.conn->skill_name(skill).substr(0, 63);
+            b.label = skill == game::mechanics::skill::kSlam ? "Slam" : h.conn->skill_name(skill).substr(0, 63);
             h.run_button(b);
         }
     }
