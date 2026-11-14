@@ -131,8 +131,19 @@ void sway_plant(const assets::Mesh& mesh, const glm::mat4& transform, std::span<
     }
     glm::vec2 foot(transform[3]);
     const auto [bend, flutter] = plant_sway(mesh, height);
+    // A mesh's own sway heights (assets::Mesh::sway_heights) are in its own frame: measured against its own lowest
+    // and highest vertex, as a share of its height.
+    const bool own = mesh.sway_heights && mesh.vertices.size() == out.size();
+    float model_low = 0.0f, model_height = 1.0f;
+    if (own) {
+        float hi = mesh.vertices[0].position.z;
+        model_low = hi;
+        for (const auto& v : mesh.vertices) model_low = std::min(model_low, v.position.z), hi = std::max(hi, v.position.z);
+        model_height = std::max(hi - model_low, 1e-3f);
+    }
     for (std::size_t i = 0; i < out.size(); ++i) {
-        float h = (out[i].position.z - low) / height;
+        float h = own ? std::clamp((mesh.vertices[i].uv2.x - model_low) / model_height, 0.0f, 1.0f)
+                      : (out[i].position.z - low) / height;
         out[i].sway = glm::vec4(foot, bend * h * h, leaf[i] ? flutter * std::min(h * 2.0f, 1.0f) : 0.0f);
     }
 }
@@ -2349,7 +2360,9 @@ float effect_scroll_seconds(std::uint64_t scene_ms) {
 PlantSway plant_sway(const assets::Mesh& mesh, float height) {
     PlantSway s{std::clamp(0.04f * height, 0.08f, 3.0f), std::clamp(0.012f * height, 0.04f, 0.35f)};
     const bool generated = std::any_of(mesh.parts.begin(), mesh.parts.end(), [](const assets::MeshPart& p) { return p.lod_far > 0.0f; });
-    if (generated) s = {0.0f, 0.0f};
+    // Its branches sway whole when it says how (assets::Mesh::sway_heights): no flutter, which moves each vertex on its
+    // own. Without them (a pack built before), it stands still.
+    if (generated) s = mesh.sway_heights ? PlantSway{s.bend, 0.0f} : PlantSway{0.0f, 0.0f};
     return s;
 }
 
