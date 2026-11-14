@@ -49,8 +49,11 @@ struct DeviceCaps {
 // when msaa > 1), which a full-screen pass tonemaps into the swapchain before the UI is drawn on top.
 enum class Tonemap : std::uint8_t { None, AgX, Aces };
 
+// The most MSAA samples the scene is drawn with: a request for more (display.msaa 8, --msaa 8) is drawn at this.
+inline constexpr std::uint32_t kMaxMsaa = 4;
+
 struct SceneOptions {
-    std::uint32_t msaa = 4;         // samples per pixel; cut to what the device supports
+    std::uint32_t msaa = 4;         // samples per pixel; cut to kMaxMsaa and to what the device supports
     Tonemap tonemap = Tonemap::None;
     float exposure = 0.0f;          // EV: the scene is scaled by 2^exposure before the tonemap
     bool dither = true;             // break up banding in fog and sky gradients

@@ -577,7 +577,7 @@ local PRESETS = {
   { name = "Low", shadows = 0, msaa = 0, ao = 0, distance_blur = 0, view_distance = 2 },
   { name = "Medium", shadows = 1, msaa = 1, ao = 0, distance_blur = 1, view_distance = 4 },
   { name = "High", shadows = 2, msaa = 2, ao = 1, distance_blur = 1, view_distance = 6 },
-  { name = "Ultra", shadows = 3, msaa = 3, ao = 1, distance_blur = 1, view_distance = 12 },
+  { name = "Ultra", shadows = 3, msaa = 2, ao = 1, distance_blur = 1, view_distance = 12 },
 }
 local PRESET_KEYS = { "shadows", "msaa", "ao", "distance_blur", "view_distance" }
 
@@ -615,7 +615,7 @@ local function graphicsTab()
     slider("shadow_clip_plane", "Shadow Clip Plane", 0, 100,
       function(v) return string.format("%d (%d units)", v, v * 5 + 10) end,
       "How far from the camera characters cast shadows (the original's advanced display setting; /shadows on <n>).")
-    combo("msaa", "Anti-aliasing", { "Off", "2x MSAA", "4x MSAA", "8x MSAA" },
+    combo("msaa", "Anti-aliasing", { "Off", "2x MSAA", "4x MSAA" },
       "Smooths edges. Takes effect the next time the game starts.")
     local msaa = eq.Option("msaa")
     if msaa ~= nil and msaaAtStart ~= nil and msaa ~= msaaAtStart then

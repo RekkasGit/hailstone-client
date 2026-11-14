@@ -761,7 +761,7 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
     // The largest supported count not above the request; one under the temporal upscaler, which resolves the edges
     // itself (and whose motion and depth are taken per pixel).
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-    for (std::uint32_t n = 2; n <= 16 && n <= options.msaa && options.upscaler != Upscaler::Taa; n *= 2)
+    for (std::uint32_t n = 2; n <= kMaxMsaa && n <= options.msaa && options.upscaler != Upscaler::Taa; n *= 2)
         if (caps_.msaa_counts & n) samples = static_cast<VkSampleCountFlagBits>(n);
     if (!post_pipeline_) create_post_pipeline(shader_dir);
     std::uint32_t shadow = options.shadow_size > 0 ? std::clamp(options.shadow_size, 256u, 8192u) : 1u;

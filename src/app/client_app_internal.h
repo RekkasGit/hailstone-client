@@ -863,7 +863,7 @@ private:
         // targets of another count under them lose the device on some drivers (Intel on Windows). A change in the
         // Options window is saved and shows at the next start, as the window says.
         if (msaa_at_start_ == 0)
-            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, 16));
+            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, static_cast<int>(render::kMaxMsaa)));
         scene.msaa = msaa_at_start_;
         // Taken at start-up too: the temporal upscaler draws with one sample, so it changes the pipelines' count.
         if (!upscaler_at_start_)

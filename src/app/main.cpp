@@ -418,7 +418,7 @@ Options parse_args(int argc, char** argv) {
             o.modern = m == "modern";
         } else if (arg("--msaa")) {
             need(1);
-            o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, 16));
+            o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, static_cast<int>(hailstone::render::kMaxMsaa)));
         } else if (arg("--tonemap")) {
             need(1);
             o.scene.tonemap = hailstone::render::parse_tonemap(argv[++i]);

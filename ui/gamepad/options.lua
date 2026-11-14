@@ -237,7 +237,7 @@ local PAGES = {
       optionRow("Display mode", "window_mode", { "Windowed", "Borderless", "Fullscreen" }),
       optionRow("Vertical sync", "vsync", { "Off", "On", "Adaptive" }),
       optionRow("Shadows", "shadows", { "Off", "Low", "Medium", "High" }),
-      optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x", "8x" }),
+      optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x" }),
       optionRow("Render scale", "render_scale", { 50, 100, 5, " %" }),
       optionRow("Upscaler (next start)", "upscaler", { "FSR 1", "Temporal" }),
       optionRow("Ambient occlusion", "ao", "bool"),
