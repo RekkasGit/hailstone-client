@@ -106,6 +106,86 @@ typedef struct HailstoneValue {
     const char* s; /* HAILSTONE_STRING (copied when the function returns) */
 } HailstoneValue;
 
+/*These are used by the h_get_spawns_data_bulk method*/
+/*needs to be packed so that there is no padding*/
+enum HS_BulkSpawnFlags {
+    HS_BULK_SPAWN_NONE = 0,
+    HS_BULK_SPAWN_AFK = 1 << 0,
+    HS_BULK_SPAWN_AGGRESSIVE = 1 << 1,
+    HS_BULK_SPAWN_ANON = 1 << 2,
+    HS_BULK_SPAWN_BUYER = 1 << 3,
+    HS_BULK_SPAWN_DEAD = 1 << 4,
+    HS_BULK_SPAWN_DUCKING = 1 << 5,
+    HS_BULK_SPAWN_FEIGNING = 1 << 6,
+    HS_BULK_SPAWN_GM = 1 << 7,
+    HS_BULK_SPAWN_INVIS = 1 << 8,
+    HS_BULK_SPAWN_SUMMONED = 1 << 9,
+    HS_BULK_SPAWN_LEVITATION = 1 << 10,
+    HS_BULK_SPAWN_LINKDEAD = 1 << 11,
+    HS_BULK_SPAWN_MOUNT = 1 << 12,
+    HS_BULK_SPAWN_MOVING = 1 << 13,
+    HS_BULK_SPAWN_NAMED = 1 << 14,
+    HS_BULK_SPAWN_ROLEPLAYING = 1 << 15,
+    HS_BULK_SPAWN_SITTING = 1 << 16,
+    HS_BULK_SPAWN_SNEAKING = 1 << 17,
+    HS_BULK_SPAWN_STANDING = 1 << 18,
+    HS_BULK_SPAWN_STUNNED = 1 << 19,
+    HS_BULK_SPAWN_TARGETABLE = 1 << 20,
+    HS_BULK_SPAWN_TRADER = 1 << 21,
+    HS_BULK_SPAWN_UNDERWATER = 1 << 22,
+};
+#pragma pack(push, 1)
+typedef struct HS_Bulk_SpawnHeader {
+    uint32_t spawnCount;
+    float playerX;
+    float playerY;
+    float playerZ;
+} HS_BulkSpawnHeader;
+typedef struct HS_Bulk_SpawnFixedRecord {
+    int32_t id;
+    uint32_t flags;
+    int32_t bodyTypeID;
+    int32_t classID;
+    int32_t conColorID;
+    int64_t currentHps;
+    int32_t genderId;
+    int64_t guildID;
+    float heading;
+    float height;
+    int32_t level;
+    int32_t master;
+    float maxRange;
+    float maxRangeTo;
+    int32_t pctHPs;
+    int32_t playerState;
+    int32_t raceID;
+    float x;
+    float y;
+    float z;
+    int32_t deity;
+    /* Immediately followed on the wire by 7 length - prefixed strings :*/
+    /* 1. BodyDesc, 2. CleanName, 3. DisplayName, 4. Name, 5. RaceName, 6. Suffix, 7. TypeDesc*/
+} HS_BulkSpawnFixedRecord;
+/* get_spawns_data_bulk: the header's size, and each record's fixed part before its seven strings. */
+#define HS_BULK_SPAWN_HEADER_SIZE 16
+#define HS_BULK_SPAWN_RECORD_SIZE 92
+typedef struct HS_Bulk_BuffData {
+    int32_t ID;
+    int32_t casterID;
+    int32_t duration;
+    int32_t hitcount;
+    int32_t spelltype;
+    int32_t counterType;
+    int32_t counterTotal;
+    uint8_t slotType; /* HAILSTONE_BUFF_SLOT_BUFF / _SONG / _DISC*/
+} HS_BulkBuffData;
+typedef struct HS_Bulk_PetBuffData {
+    int32_t id;
+    int32_t duration;
+    int32_t spellType;
+} HS_BulkPetBuffData;
+#pragma pack(pop)
+
 /* A TLO the plugin adds (AddTopLevelObject): asked for ${Name[index]} (member NULL: the TLO's own value) and for
  * ${Name[index].Member[member_index]}. Return nonzero when `out` was set; zero is NULL. */
 typedef int (*HailstoneTloFn)(void* user, const char* index, const char* member, const char* member_index,
@@ -623,6 +703,7 @@ typedef struct PluginHostApi {
  * them exports nmsc_plugin_hooks too (returning the same table).
  */
 
+
 #ifndef HAILSTONE_HOST /* the rest is for plugins; the client defines HAILSTONE_HOST */
 
 extern const PluginHostApi* host;
@@ -673,6 +754,7 @@ static inline int AddTopLevelObject(const char* name, HailstoneTloFn fn, void* u
 static inline void RemoveTopLevelObject(const char* name) {
     if (host) host->remove_tlo(host->host, name);
 }
+
 
 #endif /* HAILSTONE_HOST */
 

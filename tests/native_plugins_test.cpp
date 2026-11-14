@@ -751,20 +751,22 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll);
     REQUIRE(h.plugins->load("HostProbe"));
-    // The test world's five spawns (mq_test_world.h), in no set order; the player (1) at the origin.
+    // The test world's five spawns (mq_test_world.h), in no set order; the player (1, level 50) at the origin. The
+    // con colours are RoF2's table for a level 50: itself white (10), the level 48 blue (4), the low ones grey (6).
     h.run("/probespawns");
-    CHECK(h.printed_line("[Probe] spawn 1: 50 2 1 100 Tester"));
-    CHECK(h.printed_line("[Probe] spawn 10: 2 1 1 80 a_rat01"));
-    CHECK(h.printed_line("[Probe] spawn 11: 8 1 1 80 Fippy_Darkpaw000"));
-    CHECK(h.printed_line("[Probe] spawn 12: 48 2 1 100 Groupie"));
-    CHECK(h.printed_line("[Probe] spawn 13: 3 1 1 80 a_rat02"));
-    CHECK(h.printed_line("[Probe] spawns 5, player 0 0 0, 0 bytes left")); // every record's strings framed right
+    CHECK(h.printed_line("[Probe] spawn 1: 50 2 1 100 10 Tester"));
+    CHECK(h.printed_line("[Probe] spawn 10: 2 1 1 80 6 a_rat01"));
+    CHECK(h.printed_line("[Probe] spawn 11: 8 1 1 80 6 Fippy_Darkpaw000"));
+    CHECK(h.printed_line("[Probe] spawn 12: 48 2 1 100 4 Groupie"));
+    CHECK(h.printed_line("[Probe] spawn 13: 3 1 1 80 6 a_rat02"));
+    // Every record's strings framed right: nothing left over.
+    CHECK(h.printed_line("[Probe] spawns 5, player 0.00 0.00 0.00, 0 bytes left"));
     // Below 4096 bytes nothing; at 4112 (the header and the 4096 kept free) one record, then it stops.
     h.printed.clear();
     h.run("/probespawns 4095");
     CHECK(h.printed_line("[Probe] spawns 0 bytes"));
     h.run("/probespawns 4112");
-    CHECK(h.printed_line("[Probe] spawns 1, player 0 0 0, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
 }
 TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
