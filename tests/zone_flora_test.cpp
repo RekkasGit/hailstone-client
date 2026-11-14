@@ -585,6 +585,65 @@ TEST_CASE("zone flora: the lawn tapers where it meets bare ground") {
     CHECK(edge == 6400 - 74 * 74);
 }
 
+TEST_CASE("zone flora: the lawn's edge under a platform wobbles, and its edges fray") {
+    // Ground of 256 units, a platform 20 units over its left half (x < 0): no straight line of bare ground under the
+    // platform's straight edge, but one that wanders either side of it by up to kLawnCoverJitter.
+    Zone zone;
+    zone.terrain.push_back(square("grass.bmp", 256.0f));
+    for (auto& v : zone.terrain[0].vertices) v.position -= glm::vec3(128.0f, 128.0f, 0.0f);
+    Mesh platform = square("roof.bmp", 128.0f);
+    for (auto& v : platform.vertices) {
+        v.position.x -= 128.0f;
+        v.position.y = v.position.y * 2.0f - 128.0f;
+        v.position.z = 20.0f;
+    }
+    zone.terrain.push_back(platform);
+    auto rules = parse_zone_flora_rules("ground grass* 0 lawn\nground roof* 0\n");
+    ZoneFlora flora;
+    place_zone_flora(zone, rules, {}, flora);
+    std::map<int, float> first; // a row of squares (y): the least x grown
+    for (const auto& p : flora.instances) {
+        // Away from the ground's and the platform's own edges.
+        if (std::abs(p.position.y) > 100.0f || p.position.x < -100.0f) continue;
+        CHECK(p.position.x > -kLawnCoverJitter - kLawnCell);
+        const int row = static_cast<int>(std::floor(p.position.y / kLawnCell));
+        auto [it, fresh] = first.try_emplace(row, p.position.x);
+        if (!fresh) it->second = std::min(it->second, p.position.x);
+    }
+    REQUIRE(first.size() > 50);
+    float lo = 1e9f, hi = -1e9f;
+    for (const auto& [row, x] : first) {
+        lo = std::min(lo, x);
+        hi = std::max(hi, x);
+    }
+    CHECK(lo < -kLawnCell);         // in under the platform somewhere
+    CHECK(hi > 2.0f * kLawnCell);   // short of it elsewhere
+    CHECK(hi < kLawnCoverJitter + 2.0f * kLawnCell);
+
+    // The offset stays within its bound and wanders smoothly.
+    for (float x = -300.0f; x < 300.0f; x += 3.7f) {
+        const glm::vec2 o = lawn_cover_offset({x, 0.5f * x + 11.0f});
+        CHECK(std::abs(o.x) <= kLawnCoverJitter);
+        CHECK(std::abs(o.y) <= kLawnCoverJitter);
+        CHECK(glm::length(lawn_cover_offset({x + kLawnCell, 0.5f * x + 11.0f}) - o) < 1.25f * kLawnCoverJitter);
+    }
+    // An edge patch keeps a share of its blades of its own, all of them inside.
+    float least = 1.0f, most = 0.0f;
+    for (int k = 0; k < 200; ++k) {
+        const float c = lawn_edge_cover(1.0f, {static_cast<float>(k) * kLawnCell + 1.0f, 7.0f});
+        CHECK(c >= 0.25f);
+        CHECK(c <= 0.85f);
+        least = std::min(least, c);
+        most = std::max(most, c);
+    }
+    CHECK(most - least > 0.4f);
+    CHECK(lawn_edge_cover(static_cast<float>(kLawnEdgeCells) + 0.5f, {3.0f, 5.0f}) == doctest::Approx(1.0f));
+    std::size_t frayed = 0;
+    for (const auto& p : flora.instances)
+        if (p.cover < 1.0f) ++frayed;
+    CHECK(frayed > 0);
+}
+
 TEST_CASE("zone flora: the lawn grows no lone tufts") {
     auto rules = parse_zone_flora_rules("ground grass* 0 +green lawn\n");
     // Ground a little over one square: its patch has no neighbours and goes.

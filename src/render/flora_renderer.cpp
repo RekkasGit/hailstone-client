@@ -35,7 +35,8 @@ static_assert(sizeof(Push) <= 128);
 } // namespace
 
 // One plant as the vertex shader takes it, per instance (40 bytes: the light and haze are the shaders'). A lawn
-// patch: size x its square's side, y the blades' height, zw the ground's slope (dz/dx, dz/dy); color the ground's.
+// patch: size x its square's side, y the blades' height, zw the ground's slope (dz/dx, dz/dy); color the ground's;
+// flags bits 0..7 the share of its blades that stand (FloraInstance::cover, of 255).
 struct FloraRenderer::GpuPlant {
     glm::vec4 position_turn; // xyz the foot, w its turn (radians)
     glm::vec4 size;          // x width, y height, z the sway's reach (fraction of the height), w its period (s; 0 none)
@@ -366,6 +367,7 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
                 g.position_turn = glm::vec4(p.position, 0.0f);
                 g.size = glm::vec4(side, p.height * fade * thin, p.slope.x, p.slope.y);
                 g.color = p.color;
+                g.flags = static_cast<std::uint32_t>(std::lround(std::clamp(p.cover, 0.0f, 1.0f) * 255.0f));
                 lawn_[lawn_lod(dist)].push_back(g);
                 ++lawn_count;
                 continue;

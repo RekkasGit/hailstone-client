@@ -36,7 +36,7 @@ layout(std430, set = 0, binding = 1) readonly buffer Frame {
 layout(location = 0) in vec4 i_position_turn; // xyz the patch's centre on the ground
 layout(location = 1) in vec4 i_size;          // x the square's side, y the blades' height, zw the slope (dz/dx, dz/dy)
 layout(location = 2) in uint i_color;         // the ground's colour (RGBA8)
-layout(location = 3) in uint i_flags;         // unused
+layout(location = 3) in uint i_flags;         // bits 0..7 the share of the blades that stand (of 255; an edge's fray)
 
 layout(location = 0) out vec3 v_light; // modern: the shadowless light; classic: the light
 layout(location = 1) out vec3 v_world;
@@ -100,6 +100,8 @@ void main() {
     // How much of it stands: the blades past lawn_blades(distance) shrink away over three places in the order.
     float shown = lawn_blades(distance(root, lighting.camera.xyz));
     float grown = clamp((shown - float(blade)) / 3.0, 0.0, 1.0);
+    // At the lawn's edge only a share of them, by a draw of their own (the same blades in every draw).
+    if (float(hash(s ^ 0x5bd1e995u) & 0xffffu) / 65535.0 >= float(i_flags & 0xffu) / 255.0) grown = 0.0;
     float height = i_size.y * (0.85 + 0.25 * next(s)) * grown;
     // Combed: the blades lean the way a slowly turning field over the zone points (broad swathes of grass lying
     // together), each a little off it, and turn their flat side to the way they lean.
