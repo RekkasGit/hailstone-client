@@ -27,6 +27,8 @@ struct GameConnectionTestAccess {
     static game::GroupState& group(GameConnection& c) { return c.group_; }
     static std::vector<std::pair<std::uint32_t, game::BuffSlot>>& pet_buffs(GameConnection& c) { return c.pet_buffs_; }
     static game::Inventory& inventory(GameConnection& c) { return c.inventory_; }
+    static game::XTargetState& xtargets(GameConnection& c) { return c.xtargets_; }
+    static GameConnection::Aggro& aggro(GameConnection& c) { return c.aggro_; }
     static Coins& coins(GameConnection& c) { return c.coins_; }
     static std::optional<PlayerProfile>& profile(GameConnection& c) { return c.profile_; }
     static std::string& character(GameConnection& c) { return c.character_; }

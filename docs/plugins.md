@@ -584,8 +584,9 @@ call, since a client older than the call has a shorter table. The structs a plug
 ..., `HailstoneWebState`) carry their size too and the client fills what both know; `HailstoneWebState`'s `size` is a `size_t`
 (as ABI 3 shipped it), the others' a `uint32_t`.
 
-Buff and spawn records: `get_buff_data_bulk(host, out, out_size)`, `get_pet_buff_data_bulk(host, out, out_size)` and
-`get_spawns_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
+Buff, spawn and extended target records: `get_buff_data_bulk(host, out, out_size)`,
+`get_pet_buff_data_bulk(host, out, out_size)`, `get_spawns_data_bulk(host, out, out_size)` and
+`get_xtarget_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
 The client copies its own packed structs into the buffer, so the fields are in the machine's byte order
 (little-endian on every platform Hailstone runs on) and unaligned: read them with `ByteReader` or `memcpy`, never by
@@ -672,6 +673,18 @@ casting a struct onto the buffer. Without `read` they return 0 and say so in the
   other than 0), 14 named, 15 roleplaying, 16 sitting, 17 sneaking, 18 standing, 19 stunned (player state 0x20),
   20 targetable, 21 trader, 22 underwater. Bits 8, 17 and 22 are never set at present.
 
+- `get_xtarget_data_bulk`: one record of `HS_XTARGET_RECORD_SIZE` (16) bytes per extended target slot, slot 0
+  first, as many as fit in `out_size` (only whole records; 0 bytes before the server sent the list). The slots are
+  the same ones `get_xtarget` reads by index, a slot the server's extension hides from the window included. RoF2 has
+  at most 20 slots (EQEmu: 5 plus the AA's), so 512 bytes is plenty.
+
+  | Offset | Type | Field |
+  |---|---|---|
+  | 0 | i32 | the slot's type, as `HailstoneXTarget.type`: an `HS_XTARGET_*` value (`enum HS_XTargetType`, the protocol's 0 to 26: 0 empty, 1 auto hater, 2 / 3 a specific PC / NPC, ... 25 / 26 the mercenary and its target) |
+  | 4 | i32 | the slot's spawn id, 0 for none |
+  | 8 | i32 | the aggro meter's percent for the slot's spawn, as the server sent it (entries 7 to 26 of the meter, the extended target window's aggro labels; on EQEmu an NPC's is our hate against its current target's, a player's is its hate against our target's top). 0 with no spawn in the zone, without the meter (EQEmu's `Character:EnableAggroMeter`), or for a slot past the 20th |
+  | 12 | i32 | the spawn's HP percent, as the extended target window draws it: the player's own from its points (items' HP included), anyone else's as the server last sent it (EQEmu sends it to everyone with the spawn on their list when the percent changes); 0 with no spawn in the zone or for a corpse |
+
 ### Connections (ABI 2)
 
 Some servers run a service of their own on a TCP port next to the game. A plugin with the `net` permission reaches it through the client's sockets, so it needs no socket code of its
@@ -733,7 +746,9 @@ The Modern pack's extended target window does too (`ui/modern/lib/xtarget.lua`):
 {width = n, draw = fn(r, x0, y0, x1, y1, s), style = fn(r)}}` keeps `row.width` pixels at the right of each filled row
 for the plugin's part (its buttons take their own clicks; a click on the rest still targets), and `style` can fade a
 row, outline it, strike its name through or put a small label after it. `r.n` is the slot (0-based:
-`hailstone.xtarget(r.n + 1)` in a script). A window named "Extended Target" that calls it covers the pack's:
+`hailstone.xtarget(r.n + 1)` in a script). Every slot has a row, an empty one too, but `draw` and `style` are called
+for filled rows only. The rows sit in a scrolling child window of the frame, which clips them (`width` is the frame's
+width until the player resizes it); the screen coordinates `draw` is given already follow the scroll. A window named "Extended Target" that calls it covers the pack's:
 
 ```lua
 local ok, xtarget = pcall(dofile, "lib/xtarget.lua")   -- an older client has no lib/xtarget.lua

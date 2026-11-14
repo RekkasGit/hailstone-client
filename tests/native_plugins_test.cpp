@@ -766,6 +766,42 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     h.run("/probespawns 4112");
     CHECK(h.printed_line("[Probe] spawns 1, player 0 0 0, 0 bytes left"));
 }
+TEST_CASE("native plugins: get_xtarget_data_bulk, laid out as docs/plugins.md says") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    using A = net::GameConnectionTestAccess;
+    // No list yet: nothing.
+    h.run("/probextargets");
+    CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
+    auto& xs = A::xtargets(*h.world.conn).slots;
+    xs.resize(5);
+    xs[0] = {1, 2, 10, "a_rat01"};          // an auto hater, a_rat01 at 80%
+    xs[1] = {1, 2, 11, "Fippy_Darkpaw000"}; // Fippy, set to 55% below
+    xs[2] = {1, 2, 13, "a_rat02"};          // the test world's corpse: no HP
+    xs[3] = {3, 1, 0, "Somebody"};          // a named slot without a spawn in the zone
+    // slot 4 empty
+    auto& aggro = A::aggro(*h.world.conn).pct;
+    aggro[net::kAggroXTarget1] = 100;
+    aggro[net::kAggroXTarget1 + 1] = 42;
+    aggro[net::kAggroPlayer] = 77;         // the player's own entry, not an extended target's
+    aggro[net::kAggroXTarget1 + 2] = 60;   // the corpse still shows its percent, as the window does
+    aggro[net::kAggroXTarget1 + 4] = 33;   // left from a mob the slot held before: not sent for an empty slot
+    A::world(*h.world.conn).spawns.at(11).hp_percent = 55;
+    h.run("/probextargets");
+    CHECK(h.printed_line("[Probe] xtarget 0: 1 10 100 80"));
+    CHECK(h.printed_line("[Probe] xtarget 1: 1 11 42 55"));
+    CHECK(h.printed_line("[Probe] xtarget 2: 1 13 60 0"));
+    CHECK(h.printed_line("[Probe] xtarget 3: 3 0 0 0"));
+    CHECK(h.printed_line("[Probe] xtarget 4: 1 0 0 0"));
+    CHECK(h.printed_line("[Probe] xtargets 80 bytes")); // 5 records of 16 bytes
+    // Only whole records go into a buffer too small for all.
+    h.printed.clear();
+    h.run("/probextargets 47");
+    CHECK(h.printed_line("[Probe] xtarget 1: 1 11 42 55"));
+    CHECK_FALSE(h.printed_line("[Probe] xtarget 2: 1 13 60 0"));
+    CHECK(h.printed_line("[Probe] xtargets 32 bytes"));
+}
 TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll & ~plugin::kCapRead);
@@ -777,4 +813,6 @@ TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     CHECK(h.printed_line("[Probe] pet buffs 0 bytes"));
     h.run("/probespawns 16384");
     CHECK(h.printed_line("[Probe] spawns 0 bytes")); // the denial is said once per plugin, above
+    h.run("/probextargets 512");
+    CHECK(h.printed_line("[Probe] xtargets 0 bytes"));
 }

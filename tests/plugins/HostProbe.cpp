@@ -7,6 +7,7 @@
 //   /probetcp port    tcp_open("127.0.0.1", port); /probetcpsend h  tcp_send(h, "hello") and tcp_state(h)
 //   /probebuffs [n], /probepetbuffs [n], /probespawns [n]  get_buff_data_bulk / get_pet_buff_data_bulk /
 //   get_spawns_data_bulk into n bytes (the whole buffer without n), read with ByteReader
+//   /probextargets [n]  get_xtarget_data_bulk the same way
 // Built again with HAILSTONE_PROBE_THROW_INIT (HostProbeThrow): InitializePlugin registers a command and a TLO, then
 // throws.
 #include <cstddef>
@@ -71,9 +72,13 @@ void probe_tcp_send(void*, const char* args) {
     WriteChatf("[Probe] tcp send %lld state %d", sent, static_cast<int>(host->tcp_state(host->host, handle)));
 }
 
-// A bulk read's buffer size: the command's number, at most `whole`; `whole` without one.
+// A bulk read's buffer size: the command's number, at most `whole`; `whole` without one (no argument, only spaces,
+// or no number at its start).
 std::int32_t size_arg(const char* args, std::size_t whole) {
-    const std::size_t n = args && *args ? std::strtoul(args, nullptr, 10) : whole;
+    if (!args) return static_cast<std::int32_t>(whole);
+    char* end = nullptr;
+    const std::size_t n = std::strtoul(args, &end, 10);
+    if (end == args) return static_cast<std::int32_t>(whole); // nothing read as a number
     return static_cast<std::int32_t>(n < whole ? n : whole);
 }
 
@@ -148,6 +153,20 @@ void probe_spawns(void*, const char* args) {
                static_cast<int>(py), static_cast<int>(pz), static_cast<int>(rd.remaining()));
 }
 
+// Each extended target slot one line: slot, type, spawn id, aggro percent, HP percent.
+void probe_xtargets(void*, const char* args) {
+    unsigned char buf[512];
+    const std::int32_t r = host->get_xtarget_data_bulk(host->host, buf, size_arg(args, sizeof buf));
+    hailstone::ByteReader rd(buf, r > 0 ? static_cast<std::size_t>(r) : 0);
+    for (int slot = 0; rd.remaining() >= HS_XTARGET_RECORD_SIZE; ++slot) {
+        const auto type = rd.le<std::int32_t>(), id = rd.le<std::int32_t>(), aggro = rd.le<std::int32_t>(),
+            hp = rd.le<std::int32_t>();
+        WriteChatf("[Probe] xtarget %d: %d %d %d %d", slot, static_cast<int>(type), static_cast<int>(id),
+            static_cast<int>(aggro), static_cast<int>(hp));
+    }
+    WriteChatf("[Probe] xtargets %d bytes", static_cast<int>(r));
+}
+
 int probe_tlo(void*, const char*, const char* member, const char*, HailstoneValue* out) {
     if (member && std::strcmp(member, "Throw") == 0) throw std::runtime_error("the TLO threw");
     out->kind = HAILSTONE_STRING;
@@ -167,6 +186,7 @@ HAILSTONE_API void InitializePlugin(void) {
     AddCommand("/probebuffs", probe_buffs, nullptr);
     AddCommand("/probepetbuffs", probe_pet_buffs, nullptr);
     AddCommand("/probespawns", probe_spawns, nullptr);
+    AddCommand("/probextargets", probe_xtargets, nullptr);
     AddTopLevelObject("Probe", probe_tlo, nullptr);
 #ifdef HAILSTONE_PROBE_THROW_INIT
     throw std::runtime_error("InitializePlugin threw");
@@ -182,6 +202,7 @@ HAILSTONE_API void ShutdownPlugin(void) {
     RemoveCommand("/probebuffs");
     RemoveCommand("/probepetbuffs");
     RemoveCommand("/probespawns");
+    RemoveCommand("/probextargets");
     RemoveTopLevelObject("Probe");
 }
 HAILSTONE_API void OnUpdateImGui(void) { throw std::runtime_error("OnUpdateImGui threw"); }

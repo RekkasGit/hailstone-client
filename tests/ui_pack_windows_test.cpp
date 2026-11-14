@@ -990,6 +990,62 @@ end)
     ImGui::DestroyContext(ctx);
 }
 
+// The modern extended target window: a row for every slot the server gives, an empty one too (its right click is how
+// an empty slot gets a type, Current Target among them), sized to its rows until the player sizes the frame; a frame
+// shorter than its rows scrolls them.
+TEST_CASE("UI packs (modern): the extended target window shows empty slots and scrolls when sized short") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern";
+    hailstone::test::ScratchDir dir_scratch("ui_pack_xtarget_rows_test");
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "modern", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        // Five slots, the first holding a gnoll; the other four empty.
+        ByteWriter b;
+        b.le<std::uint32_t>(5);
+        b.le<std::uint32_t>(1);
+        b.le<std::uint32_t>(0);
+        b.le<std::uint8_t>(1);
+        b.le<std::uint32_t>(101);
+        b.fixed_string("a gnoll", 8);
+        s.conn.receive_zone_packet_for_test(net::AppPacket(net::to_wire(net::Op::XTargetResponse), b.take()));
+        game::Spawn& m = s.conn.world_for_test().spawns[101];
+        m.id = 101;
+        m.name = "a gnoll";
+        m.is_npc = true;
+        m.hp_percent = 80;
+        lua_State* L = s.lua.state();
+        REQUIRE(luaL_dostring(L, "eq.ShowWindow('ExtendedTargetWnd', true)") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        auto rows = []() -> ImGuiWindow* {
+            for (ImGuiWindow* win : GImGui->Windows)
+                if (std::string_view(win->Name).find("/##xtrows") != std::string_view::npos) return win;
+            return nullptr;
+        };
+        ImGuiWindow* area = rows();
+        REQUIRE(area != nullptr);
+        // Five rows of 30 + 3 pixels at scale 1: the four empty slots are drawn too, and the frame fits them.
+        CHECK(area->ContentSize.y >= 5 * 33 - 4);
+        CHECK(area->ScrollMax.y == doctest::Approx(0.0f));
+        // A frame the player made short: the same rows, scrolling.
+        REQUIRE(luaL_dostring(L, "ui.SetSetting('hud.size.ExtendedTargetWnd', '210,90')") == LUA_OK);
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        area = rows();
+        REQUIRE(area != nullptr);
+        CHECK(area->ContentSize.y >= 5 * 33 - 4);
+        CHECK(area->ScrollMax.y > 0.0f);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The modern AA window as a library (ui/modern/lib/aa.lua): a window of the same name that calls it with a row part,
 // a details part and a banner gets each called, the row's with the ability's name, ranks and cost, and draws cleanly.
 // Its one list (AAWindow's ModernList) holds every tab's abilities, with the tab, era and activated columns.
