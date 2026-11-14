@@ -167,18 +167,23 @@ void GameConnection::fail(std::string message) {
 }
 
 void GameConnection::chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb, std::uint32_t color,
-                          std::string peer) {
+                          std::string peer, std::optional<std::string> display_text) {
     if (options_.hooks) { // OnIncomingChat, OnFilterChat (a server's client may drop lines in dsp_chat)
-        plugin::ChatLine line{std::move(text), rgb, static_cast<int>(kind)};
+        // A deliberate difference from MQ, whose hook hangs off dsp_chat and sees a hit line as displayed: hooks get
+        // the full sentence whatever the hit mode (docs/plugins.md), so a parser matches one form.
+        plugin::ChatLine line{text, rgb, static_cast<int>(kind)};
         line.from_code = !plugin::caller_name().empty();
         line.origin_caps = plugin::caller_caps();
         if (options_.hooks->chat(line) == plugin::Flow::Drop) return;
+        // A hook's replacement is authoritative; a precomputed abbreviation no longer describes it.
+        if (line.text != text) display_text.reset();
         text = std::move(line.text);
         rgb = line.color;
     }
+    // Hit modes change presentation only: logs and incoming-chat parsers retain the complete sentence.
     log::info("chat: {}", text);
     if (chat_logging()) write_chat_log(text); // dsp_chat's OutputTextToLog (Log on)
-    chat_.push_back({kind, std::move(text), rgb, color, std::move(peer)});
+    chat_.push_back({kind, display_text ? std::move(*display_text) : std::move(text), rgb, color, std::move(peer)});
     if (chat_.size() > 500) chat_.pop_front();
 }
 
@@ -335,6 +340,7 @@ void GameConnection::update() {
     fellowship_invite_tick();
     guild_bank_tick();
     real_estate_tick();
+    adventure_frame();
     if (alarm_due_ms_ && now_ms() >= alarm_due_ms_) {
         alarm_due_ms_ = 0;
         ui_message("Your alarm has gone off."); // this client's line (the original's is not decoded)
@@ -723,9 +729,7 @@ void GameConnection::handle_world(const AppPacket& p) {
         guild_bank_.banker = 0;
         guild_bank_.pending = 0;
         guild_bank_.selected = -1;
-        adventure_.recruiter = 0;
-        adventure_.offer.clear();
-        recruiter_state_ = 0;
+        reset_adventure_for_zone();
         guild_tribute_.master_id = 0;
         state_ = ConnectionState::ZoneConnecting;
         status_ = "Connecting to the zone server";
@@ -820,6 +824,8 @@ std::optional<ServerProfile> GameConnection::saved_server() const {
 
 void GameConnection::enter_world(const std::string& name, bool return_home) {
     if (state_ != ConnectionState::CharacterSelect) return;
+    adventure_ = {};
+    recruiter_state_ = 0;
     character_ = name;
     {
         // The files an earlier build kept in characters/<name>/ of the profile, copied once to the world's folder.
@@ -1305,6 +1311,8 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 leadership_.ranks[i] = profile_->leadership_ranks[i];
             tribute_.points = static_cast<std::int32_t>(profile_->tribute_points);
             tribute_.career = static_cast<std::int32_t>(profile_->career_tribute_points);
+            adventure_.points.available = profile_->adventure_points_available;
+            adventure_.points.theme = profile_->adventure_points;
             for (std::size_t i = 0; i < tribute_.settings.tributes.size() && i < profile_->tributes.size(); ++i) {
                 tribute_.settings.tributes[i] = profile_->tributes[i].first;
                 tribute_.settings.tiers[i] = profile_->tributes[i].second;
@@ -1927,7 +1935,13 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::FormattedMessage:
         if (auto m = decode_formatted_message(p)) {
             if (m->string_id == 1383) duel_decline_message(m->args); // EQEmu's DUEL_DECLINE
-            chat(ChatEvent::Kind::System, strings_.format(m->string_id, m->args), 0, m->type);
+            auto full = strings_.format(m->string_id, m->args);
+            std::optional<std::string> display;
+            if (auto line = game::spell_message_hit_report(m->string_id, m->args)) {
+                auto mode = spell_hit_modes_[static_cast<std::size_t>(line->kind)];
+                display = game::report_spell_hit_line(*line, full, mode);
+            }
+            chat(ChatEvent::Kind::System, std::move(full), 0, m->type, {}, std::move(display));
             if (m->string_id > 0x1d4 && m->string_id < 0x1d9) context_tip(0x1e); // msgTokenText: the faction tip
         }
         break;
@@ -2040,8 +2054,14 @@ void GameConnection::report_successful_hit(const CombatDamage& d, bool reported)
     if (d.type == 231) {
         // A spell hit: ReportSuccessfulHit's spell branch.
         if (const auto* sp = spell_table_->get(d.spell_id))
-            if (auto line = game::spell_hit_message(strings_, world_, *sp, d.target, d.damage))
-                chat(ChatEvent::Kind::Spell, *line);
+            if (auto full = game::spell_hit_message(strings_, world_, *sp, d.target, d.damage)) {
+                std::optional<std::string> display;
+                if (auto line = game::spell_damage_hit_report(world_, *sp, d.target, d.damage)) {
+                    auto mode = spell_hit_modes_[static_cast<std::size_t>(line->kind)];
+                    display = game::report_spell_hit_line(*line, *full, mode);
+                }
+                chat(ChatEvent::Kind::Spell, std::move(*full), 0, 0, {}, std::move(display));
+            }
     } else if (game::is_environment_hit(d.type)) {
         // The environmental branch (game/combat.h environment_hit): its line, fall_hit, and the victim's Hit1..4
         // when there is damage (the shared tail @0x5311ee; no FlshHit for these types).
@@ -2566,14 +2586,14 @@ void GameConnection::report_hit(const game::HitLine& line, std::uint32_t source,
     // ReportSuccessfulHit's pet flag: the attacker is the player's pet (PetID).
     const bool by_my_pet = source != 0 && source == pets_.focused;
     if (!game::hit_line_shown(line, by_my_pet, chat_filters_, report)) return;
-    // ReportHit_*: the category's display mode picks the full, short or number-only line.
+    // ReportHit_* @0x4f7d70..0x4f8270: choose the display form but log the original full input independently.
     auto mode = hit_modes_[static_cast<std::size_t>(line.kind)];
     // their user colours: 265 your hits, 267 your misses, 266 / 268 you hit / missed, 279 / 280 others, 328 the pet's
     static constexpr std::uint32_t kColors[] = {265, 267, 266, 268, 279, 280};
     const bool others = line.kind == game::HitReport::OthersHits || line.kind == game::HitReport::OthersMisses;
     if (auto text = game::report_hit_line(strings_, line, mode))
-        chat(ChatEvent::Kind::Combat, *text, 0,
-             others && by_my_pet ? 0x148u : kColors[static_cast<std::size_t>(line.kind)]);
+        chat(ChatEvent::Kind::Combat, line.text, 0,
+             others && by_my_pet ? 0x148u : kColors[static_cast<std::size_t>(line.kind)], {}, std::move(*text));
 }
 
 bool GameConnection::set_stand_state(std::uint32_t state, bool room_to_stand) {

@@ -1645,6 +1645,34 @@ boat/rider steps publish StepClock time + 1. The app explicitly bridges that rel
 32-bit steady clock. Empty step batches and stale spawns do not advance it. Fixtures cover the clock and actual
 packet-to-emitter flow; recorded native vectors and live acceptance remain pending.
 
+### Spell hit modes
+
+Hailstone extends the melee Hit Modes menu with **Direct Spell Damage**, **Damage Over Time**, **Healing** and
+**Healing Over Time**. Each defaults to **Normal** (the original sentence), with **Abbreviated** (a concise amount,
+effect kind and available actor/spell names) and **Number Only** (the amount). The modern chat's right-click menu
+offers **Hit Modes** alongside **Filters**, and the gamepad offers them in Options > Interface. **ALL** changes
+the melee and spell categories together. Settings
+are per character in UI.ini's `[ChatManager] SpellHitMode0..3`; the original `HitMode0..7` settings keep their meaning.
+
+This is a deliberate display addition; it changes no spell rules, filters or chat colours. REA checks of the
+original's six melee report helpers (`0x4f7d70..0x4f8270`) confirm modes 0/1/2 select the display while a separate
+`OutputTextToLog` call receives the original full input. The spell branch of `ReportSuccessfulHit` (`0x52ee40`)
+bypasses those mode helpers. Recognition of the new spell display forms uses
+OP_FormattedMessage's string id and validated numeric substitutions (`game::spell_message_hit_report`), never a
+scan of the rendered sentence. Direct damage uses ids 9073, 434 and 12481, critical blasts 428/1040; DoTs
+9072/12954/13327; heals 9068/419, critical heals 427/1039; HoTs 12976/12997/12998. The legacy non-melee messages
+434/12481 also include damage shields when the server sends them that way. Critical healing has no direct/tick
+discriminator in these messages, so both use **Healing**. A critical sends its own notice (428/1040, 427/1039) beside the hit line, so **Number Only** shows two bare numbers for one crit: the crit's amount and the hit's. Chat hooks (`OnIncomingChat`, `OnFilterChat`, `mq.event`) get the full sentence whatever the mode, unlike MQ's hook on `dsp_chat`, which sees the line as displayed (docs/plugins.md). Incoming/observer DoTs omit ambiguous caster/spell
+substitutions from the abbreviation rather than assigning the names incorrectly.
+
+An OP_Damage spell landing on the player with nonzero signed damage also follows Direct Spell Damage or Healing.
+Another target's landing text contains no amount, and zero-damage landings, casts, buffs, resists, unknown ids,
+malformed numeric arguments and raw text messages retain their full sentence. No extra damage or heal is inferred.
+Both `/log` and the diagnostic log receive the full line, once, before its display form is queued, including for
+the existing melee hit and miss modes. Incoming-chat hooks also receive full text so parsers keep working; a hook
+that rewrites a line supplies its replacement for the display and log as before. Unit tests cover decoded packets,
+all modes and categories, full logging, hooks, settings and menu actions. Live server acceptance remains open.
+
 Environmental hits (types 0xf3..0xfd: mind burns, rotting, chilled, freezing, tormented, burned, thorns, burning,
 drowning, falling, a trap; `game::environment_hit`): the player's own fall, drowning or lava damage goes through
 ApplyDamage's hit report: OP_EnvDamage, then OP_Damage {the player, no attacker, the type, spell -1, the damage}
@@ -1859,3 +1887,41 @@ names are loaded from the player's layered `Resources/campsitecategories.txt`; s
 bit to the server. Kit descriptions use DBString type 0, as the original selection handler does. Missing resources
 keep an all-category filter and the server-supplied kit name. The camp countdown is presentation only: expiration
 does not mutate membership or grant permission to place a camp before the server updates it.
+
+
+## Adventures (LDoN)
+
+Alt+V (`TOGGLE_ADVREQUESTWIN`, index 351) toggles the adventure window independently of a recruiter. A right click
+on a class-60 recruiter within 20 units in XYZ (inclusive) requests its introduction. Risk 1/2 and objective 0..4
+are sent unchanged apart from the risk selector's one-based conversion. Introductions and offers use the shared
+native 500 ms recruiter range check; assigned adventure status stays open beyond recruiter range. Closing the
+window runs RoF2's `Send_OP_LDoNButton_0041fe10`: an unaccepted offer is declined and the recruiter's words
+dismissed, both forgetting the recruiter; closed while a request awaits its answer it keeps the recruiter, and the
+answer (refusal or offer) shows the window again (`0x420130`, `0x4201b0`), where an offer can be accepted or
+declined. An offer with no recruiter (after zoning) is declined at once.
+Closing the status window preserves the assigned mission. Leaving uses a separate confirmed control in both UI
+packs. The server selects the mission and decides group eligibility, acceptance and departure.
+
+AdventureData selects the entry timer when nonzero, otherwise the completion timer. Displays round remaining
+seconds up to whole minutes and clamp at zero (`0x618a00`, `0x618ae0`); progress counts are kept whenever they come
+and shown only during completion (`0x4204e0`). The risk selector shows the adventure's risk from AdventureData,
+where stock EQEmu sends 0 normal / 1 high (not the request's 1 / 2, which RoF2's `0x618790` assumes): nonzero is
+high.
+The compass uses the server's zone-local XYZ/flag. AdventureFinish clears assignment, timers, compass and progress
+and closes the window (`0x4206eb`); points remain server-authoritative. Zone changes clear the old recruiter and
+zone-local mission data until the new server supplies them. Selecting another character clears cached adventure state.
+
+Stats show themes 1..5 then Totals: win rank, successes, failures, win percentage, percentage rank and current theme
+point balances. Profile data supplies initial points; point updates replace balances and request fresh stats, open
+window or not, as RoF2 does (`0x4208f5`), once the ten-second guard permits. After a granted leave stock EQEmu
+sends nothing, so the window shows the adventure until the next AdventureData (docs/unknowns.md). Rank zero displays a placeholder. Percentage totals and point sums use wide
+arithmetic so large server values do not wrap. Row percentages round to binary32 before one-decimal formatting.
+
+Leaderboard categories interleave wins and percentage within each theme; risk is All/Normal/High. Stock EQEmu
+combines risks. Row ranks are competition ranks (1, 1, 3), counting empty wire slots: wins ties require equal wins
+and failures; percentage ties require equal binary32 percentage and wins (`0x6175c0`). The personal rank uses the
+header value unless the player appears in the rows, in which case the computed row rank replaces it. This also
+matches RoF2 when EQEmu's header carries a zero-based found-player rank. Both selectors and refresh preserve their
+current selection across window closes. Hailstone queues the latest changed category during a request rather than
+disabling selectors as RoF2 does; ten-second refresh guards and bounded missing-reply recovery are described in
+`docs/protocol/rof2-packets.md`.

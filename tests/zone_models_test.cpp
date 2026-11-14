@@ -78,12 +78,17 @@ TEST_CASE("zone models: a neighbour zone keeps the placements on its side of the
     CHECK(n.triangles == 4);
 }
 
-TEST_CASE("zone models: a generated tree stands still in the wind") {
+TEST_CASE("zone models: a generated tree sways by its branches' heights, or stands still, and never flutters") {
     // The game's tree: one level. A generated one: levels of detail. Both 100 units high.
     const render::PlantSway game = render::plant_sway(quad_model(1), 100.0f);
     CHECK(game.bend == doctest::Approx(3.0f));
     CHECK(game.flutter == doctest::Approx(0.35f));
-    const render::PlantSway generated = render::plant_sway(quad_model(3), 100.0f);
-    CHECK(generated.bend == 0.0f);
-    CHECK(generated.flutter == 0.0f);
+    const render::PlantSway still = render::plant_sway(quad_model(3), 100.0f);
+    CHECK(still.bend == 0.0f);
+    CHECK(still.flutter == 0.0f);
+    assets::Mesh swaying = quad_model(3);
+    swaying.sway_heights = true;
+    const render::PlantSway branches = render::plant_sway(swaying, 100.0f);
+    CHECK(branches.bend == doctest::Approx(3.0f));
+    CHECK(branches.flutter == 0.0f);
 }

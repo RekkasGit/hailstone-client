@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "render/camera.h"
+#include "render/object_renderer.h"
 #include "render/temporal.h"
 
 using namespace hailstone::render;
@@ -33,6 +34,13 @@ FlyCamera camera_at(glm::vec3 pos, float yaw, float pitch) {
 
 TEST_CASE("temporal: upscaler names") {
     CHECK(parse_upscaler("taa") == Upscaler::Taa);
+    CHECK(parse_upscaler("fsr3") == Upscaler::Fsr3);
+    CHECK(parse_upscaler(upscaler_name(Upscaler::Fsr3)) == Upscaler::Fsr3);
+    CHECK(upscaler_name(Upscaler::Fsr3) == "fsr3");
+    // The Options window's choices are the enum's values (client_app_zone.cpp display_option "upscaler").
+    CHECK(static_cast<int>(Upscaler::Fsr1) == 0);
+    CHECK(static_cast<int>(Upscaler::Taa) == 1);
+    CHECK(static_cast<int>(Upscaler::Fsr3) == 2);
     CHECK(parse_upscaler("fsr1") == Upscaler::Fsr1);
     CHECK(parse_upscaler("") == Upscaler::Fsr1);
     CHECK(parse_upscaler("dlss") == Upscaler::Fsr1); // unknown: the spatial default
@@ -54,7 +62,8 @@ TEST_CASE("temporal: jitter phases grow with the upscale") {
     CHECK(jitter_phases(1.0f) == 8);
     CHECK(jitter_phases(0.5f) == 32);
     CHECK(jitter_phases(0.75f) == 15); // 8 x 1.78, rounded up
-    CHECK(jitter_phases(0.1f) == 32);  // kept to the render scale's range
+    CHECK(jitter_phases(0.33f) == 74); // Ultra Performance: 8 x 9.18
+    CHECK(jitter_phases(0.1f) == 74);  // kept to the render scale's range
     CHECK(jitter_phases(2.0f) == 8);
 }
 
@@ -134,4 +143,65 @@ TEST_CASE("temporal: camera cuts drop the history") {
     glm::mat4 bad = a.view();
     bad[3][0] = std::nanf("");
     CHECK(camera_cut(a.view(), bad));
+}
+
+TEST_CASE("temporal: scene pipelines' blend states for the motion and reactive attachments") {
+    VkPipelineColorBlendAttachmentState color{};
+    color.colorWriteMask = 0xf;
+    color.blendEnable = VK_TRUE;
+    // Without a temporal upscaler: the colour alone, as it was.
+    const SceneBlends plain = make_scene_blends(color, SceneOutput::Motion, false);
+    CHECK(plain.count == 1);
+    CHECK(plain.info().attachmentCount == 1);
+    CHECK(plain.states[0].blendEnable == VK_TRUE);
+    // An opaque draw writes its motion (red and green) as it is, and nothing of the reactive mask.
+    const SceneBlends motion = make_scene_blends(color, SceneOutput::Motion, true);
+    CHECK(motion.count == 3);
+    CHECK(motion.info().pAttachments == motion.states.data());
+    CHECK(motion.states[0].colorWriteMask == 0xfu);
+    CHECK(motion.states[1].colorWriteMask == (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT));
+    CHECK(motion.states[1].blendEnable == VK_FALSE);
+    CHECK(motion.states[2].colorWriteMask == 0u);
+    // A blended draw keeps the motion under it and raises the reactive mask to the largest drawn.
+    const SceneBlends reactive = make_scene_blends(color, SceneOutput::Reactive, true);
+    CHECK(reactive.states[1].colorWriteMask == 0u);
+    CHECK(reactive.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
+    CHECK(reactive.states[2].blendEnable == VK_TRUE);
+    CHECK(reactive.states[2].colorBlendOp == VK_BLEND_OP_MAX);
+    // The sky, the spawns' boxes: neither.
+    const SceneBlends nothing = make_scene_blends(color, SceneOutput::Nothing, true);
+    CHECK(nothing.count == 3);
+    CHECK(nothing.states[1].colorWriteMask == 0u);
+    CHECK(nothing.states[2].colorWriteMask == 0u);
+}
+
+TEST_CASE("temporal: object motion keys tell things apart") {
+    using hailstone::render::ObjectRenderer;
+    // A door, an object and a placed item with the same id are different things; none is "no key".
+    const std::uint64_t door = ObjectRenderer::make_motion_key(1, 7);
+    const std::uint64_t object = ObjectRenderer::make_motion_key(2, 7);
+    const std::uint64_t placed = ObjectRenderer::make_motion_key(3, 7);
+    CHECK(door != object);
+    CHECK(object != placed);
+    CHECK(door != placed);
+    CHECK(door != 0);
+    CHECK(ObjectRenderer::make_motion_key(1, 0) != 0);
+    CHECK(ObjectRenderer::make_motion_key(1, 8) != door);
+}
+
+TEST_CASE("temporal: upscale quality presets are render scales") {
+    CHECK(upscale_quality_percent(UpscaleQuality::NativeAa) == 100);
+    CHECK(upscale_quality_percent(UpscaleQuality::Quality) == 67);           // 1.5x
+    CHECK(upscale_quality_percent(UpscaleQuality::Balanced) == 59);          // 1.7x
+    CHECK(upscale_quality_percent(UpscaleQuality::Performance) == 50);       // 2x
+    CHECK(upscale_quality_percent(UpscaleQuality::UltraPerformance) == 33);  // 3x
+    CHECK(upscale_quality_percent(UpscaleQuality::Custom) == 0);             // the slider's own
+    for (int i = 0; i < 5; ++i) {
+        const auto q = static_cast<UpscaleQuality>(i);
+        CHECK(upscale_quality_for(upscale_quality_percent(q)) == q);
+        CHECK(upscale_quality_percent(q) >= kMinRenderScalePercent);
+    }
+    CHECK(upscale_quality_for(75) == UpscaleQuality::Custom);
+    CHECK(upscale_quality_for(66) == UpscaleQuality::Custom);
+    CHECK(static_cast<float>(kMinRenderScalePercent) / 100.0f == doctest::Approx(kMinRenderScale));
 }

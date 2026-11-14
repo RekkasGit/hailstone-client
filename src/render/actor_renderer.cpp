@@ -77,8 +77,8 @@ VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
 } // namespace
 
 ActorRenderer::ActorRenderer(VkContext& vk, std::shared_ptr<const assets::CharacterLibrary> library,
-                             const std::filesystem::path& shader_dir, std::unique_ptr<Kept> kept)
-    : vk_(vk), library_(std::move(library)) {
+                             const std::filesystem::path& shader_dir, std::unique_ptr<Kept> kept, bool scene)
+    : vk_(vk), library_(std::move(library)), scene_(scene) {
     VkDevice d = vk_.device();
     // A texture pack gives a material up to three slots (its colour, normal and roughness maps), and a busy zone (the
     // bazaar) has well over a thousand character materials; the slots go to the shaders in 16 bits (0xffff: none).
@@ -86,7 +86,7 @@ ActorRenderer::ActorRenderer(VkContext& vk, std::shared_ptr<const assets::Charac
 
     for (std::size_t i = 0; i < bones_.size(); ++i) {
         VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        bi.size = sizeof(glm::mat4) * kMaxBones;
+        bi.size = sizeof(glm::mat4) * kMaxBones * 2;
         bi.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         VmaAllocationCreateInfo ai{};
         ai.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1004,6 +1004,15 @@ bool ActorRenderer::spawn_local_triangles(std::uint32_t id, std::vector<glm::vec
     return true;
 }
 
+ActorPassRange actor_phase_passes(ActorPhase phase) {
+    switch (phase) {
+    case ActorPhase::Opaque: return {0, 1};
+    case ActorPhase::Translucent: return {1, 3};
+    case ActorPhase::All: break;
+    }
+    return {0, 3};
+}
+
 bool actor_needs_pose(const Frustum* view, const glm::vec3& center, float radius, bool shadows,
                       const glm::vec3& shadow_from, float shadow_reach) {
     if (!view || box_in_frustum(*view, sphere_box(center, radius))) return true;
@@ -1044,6 +1053,13 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
 
     auto* bones = static_cast<glm::mat4*>(bones_mapped_[frame.frame_slot]);
     std::uint32_t used = 0;
+    // The temporal upscaler's motion: a new frame makes this frame's bones the last frame's.
+    const bool motion = scene_ && vk_.scene_motion();
+    if (motion && frame_bones_ != vk_.frames_begun()) {
+        frame_bones_ = vk_.frames_begun();
+        std::swap(bones_now_, bones_before_);
+        bones_now_.clear();
+    }
     std::vector<assets::BonePose> local, previous;
     std::vector<glm::mat4> world;
     for (std::size_t i = 0; i < actors.size(); ++i) {
@@ -1073,11 +1089,31 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
             continue;
         }
         glm::mat4 instance = instance_matrix(a);
+        const std::uint32_t first = used;
         prepared_[i].bone_offset = used;
         for (const auto& w : world) bones[used++] = instance * w;
+        // A frame ago, beside them (the same bones, or this frame's for an instance new or changed since).
+        const std::uint32_t count = used - first;
+        const std::vector<glm::mat4>* before = nullptr;
+        if (motion && a.motion_key) {
+            auto it = bones_before_.find(a.motion_key);
+            if (it != bones_before_.end() && it->second.size() == count) before = &it->second;
+            bones_now_[a.motion_key].assign(bones + first, bones + used);
+        }
+        if (motion) {
+            if (before)
+                std::copy(before->begin(), before->end(), bones + kMaxBones + first);
+            else
+                std::copy(bones + first, bones + used, bones + kMaxBones + first);
+        }
         ++stats_.instances;
     }
-    if (used) vmaFlushAllocation(vk_.allocator(), bones_[frame.frame_slot].allocation, 0, sizeof(glm::mat4) * used);
+    if (used) {
+        vmaFlushAllocation(vk_.allocator(), bones_[frame.frame_slot].allocation, 0, sizeof(glm::mat4) * used);
+        if (motion)
+            vmaFlushAllocation(vk_.allocator(), bones_[frame.frame_slot].allocation, sizeof(glm::mat4) * kMaxBones,
+                               sizeof(glm::mat4) * used);
+    }
     // One table per unique visible mesh, shared by its instances. Slot zero keeps every pre-existing material path
     // unchanged. The table is in the existing lighting SSBO; no new sampled-image or buffer descriptors are needed.
     lighting_data_.resize(sizeof(SceneLighting) + sizeof(ActorSurface));
@@ -1197,7 +1233,10 @@ void ActorRenderer::draw_point_shadow(const FrameInfo& frame, const glm::vec3& l
 }
 
 void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, const glm::vec3& camera_pos,
-                           const game::ViewDistance& view) {
+                           const game::ViewDistance& view, int first_pass, int end_pass) {
+    static_assert(static_cast<int>(Pass::Opaque) == 0 && static_cast<int>(Pass::Blended) == 1 &&
+                      static_cast<int>(Pass::Additive) == 2,
+                  "actor_phase_passes counts the passes in this order");
     VkCommandBuffer cmd = frame.cmd;
     PushConstants pc{};
     pc.view_proj = view_proj;
@@ -1205,14 +1244,14 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
     pc.camera_pos = glm::vec4(camera_pos, 0.0f);
     bool bound_set = false;
     int bound_pipeline = -1;
-    // Only what can show in this view (posed for a shadow is not seen), tested once for the three passes.
+    // Only what can show in this view (posed for a shadow is not seen), tested once for the passes.
     const Frustum frustum = frustum_from(view_proj);
     seen_.assign(prepared_.size(), 0);
     for (std::size_t i = 0; i < prepared_.size(); ++i)
         seen_[i] = prepared_[i].gpu && box_in_frustum(frustum, sphere_box(prepared_[i].center, prepared_[i].radius));
     // The dynamic states set only when they change (unknown on entry: another renderer set them last).
     int cull = -1, front = -1;
-    for (int pass = 0; pass < 3; ++pass) {
+    for (int pass = first_pass; pass < end_pass; ++pass) {
         for (std::size_t i = 0; i < prepared_.size(); ++i) {
             if (!seen_[i]) continue;
             const Prepared& p = prepared_[i];
@@ -1314,8 +1353,10 @@ const std::unordered_set<std::uint32_t>& ActorRenderer::draw_spawns(const FrameI
 const std::unordered_set<std::uint32_t>& ActorRenderer::draw_prepared(const FrameInfo& frame,
                                                                       const glm::mat4& view_proj,
                                                                       const glm::vec3& camera_pos,
-                                                                      const game::ViewDistance& view) {
-    record(frame, view_proj, camera_pos, view);
+                                                                      const game::ViewDistance& view, ActorPhase phase) {
+    const ActorPassRange passes = actor_phase_passes(phase);
+    record(frame, view_proj, camera_pos, view, passes.first, passes.end);
+    if (phase == ActorPhase::Translucent) return drawn_;
     drawn_.clear();
     for (auto id : prepared_ids_) drawn_.insert(id);
     for (auto id : empty_ids_) drawn_.insert(id);
@@ -1611,6 +1652,7 @@ void ActorRenderer::prepare_spawns(const FrameInfo& frame, const glm::vec3& came
             auto md = last_draws_.find(s.mount_id);
             if (md != last_draws_.end()) seat_rider(md->second, a, world.height_tables.get());
         }
+        a.motion_key = std::uint64_t{id} + 1;
         draws.push_back(a);
         ids.push_back(id);
         last_draws_[id] = a;
@@ -1706,11 +1748,7 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 4;
     ds.pDynamicStates = dyn;
-    VkFormat color_format = vk_.scene_format();
-    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &color_format;
-    ri.depthAttachmentFormat = vk_.depth_format();
+    VkPipelineRenderingCreateInfo ri = vk_.scene_rendering(scene_);
 
     // Multisampled, the opaque pass turns the alpha test into coverage: alpha-to-coverage, and the fragment
     // shader's constant_id 0 makes its alpha the coverage (shaders/zone.frag, actor.frag, object.frag).
@@ -1746,9 +1784,10 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
             ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
             ba.alphaBlendOp = VK_BLEND_OP_ADD;
         }
-        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-        cb.attachmentCount = 1;
-        cb.pAttachments = &ba;
+        // The opaque pass draws the characters' own motion; the blended and additive ones the reactive mask.
+        const SceneBlends blends =
+            vk_.scene_blends(ba, pass == 0 ? SceneOutput::Motion : SceneOutput::Reactive, scene_);
+        const VkPipelineColorBlendStateCreateInfo cb = blends.info();
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
         info.pNext = &ri;
         info.stageCount = 2;
@@ -1791,9 +1830,8 @@ void ActorRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
         xba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         xba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         xba.alphaBlendOp = VK_BLEND_OP_ADD;
-        VkPipelineColorBlendStateCreateInfo xcb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-        xcb.attachmentCount = 1;
-        xcb.pAttachments = &xba;
+        const SceneBlends xblends = vk_.scene_blends(xba, SceneOutput::Reactive, scene_);
+        const VkPipelineColorBlendStateCreateInfo xcb = xblends.info();
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
         info.pNext = &ri;
         info.stageCount = 2;

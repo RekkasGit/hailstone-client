@@ -592,6 +592,9 @@ int ClientApp::run() {
             if (slot.view) slot.view->record(*f, dt); // the item previews' own passes (their images)
         if (web_textures_ && browser_) web_textures_->record(*f, *browser_); // the browser tabs' changes
         lap.mark("item preview record");
+        // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
+        // shaders for their own motion, so it is given first.
+        if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
                                                        : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
@@ -616,7 +619,6 @@ int ClientApp::run() {
             // the temporal upscaler's jitter (none without it), which follows the plain one (render/temporal.h).
             const glm::mat4 plain_proj = camera_.projection(width, height, lit.far_plane);
             const glm::mat4 plain_vp = plain_proj * camera_.view();
-            vk_.set_temporal_view(camera_.view(), plain_proj);
             glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
             // The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava and with
@@ -701,7 +703,11 @@ int ClientApp::run() {
                                                      std::span<const std::uint32_t>(ids, me->mount_id ? 2u : 1u),
                                                      glm::vec4(0.55f, 0.75f, 1.0f, 0.55f));
                 }
-            if (actor_renderer_) modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit);
+            // The characters' blended and additive parts wait for the grass (below): they write no depth, so grass
+            // drawn after them would cover them.
+            if (actor_renderer_)
+                modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit,
+                                                           render::ActorPhase::Opaque);
             lap.mark("actors draw");
             if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
             lap.mark("spawns draw");
@@ -712,6 +718,8 @@ int ClientApp::run() {
                 vk_.begin_translucent(*f);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
+            if (actor_renderer_)
+                actor_renderer_->draw_prepared(*f, vp, camera_.position, lit, render::ActorPhase::Translucent);
             if (modern) {
                 if (zone_renderer_)
                     zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);

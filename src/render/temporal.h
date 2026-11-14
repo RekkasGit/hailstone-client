@@ -14,16 +14,33 @@ namespace hailstone::render {
 // How the 3D view is brought up to its size (display.upscaler). Fsr1: spatial (FSR 1's EASU + RCAS) below a render
 // scale of 100, nothing at 100, MSAA as display.msaa says. Taa: temporal, the scene jittered each frame and
 // accumulated into a history at the view's size (shaders/taa_resolve.frag), at every render scale; MSAA is off.
-enum class Upscaler : std::uint8_t { Fsr1, Taa };
+// Fsr3: the same jittered frames and motion, resolved by AMD FSR 3.1's upscaler (render/fsr3_upscaler.h); Taa where
+// the device lacks what it needs.
+enum class Upscaler : std::uint8_t { Fsr1, Taa, Fsr3 };
 
-// display.upscaler's values: "fsr1", "taa"; anything else is Fsr1.
+// The render scale's range (display.render_scale, percent): down to a third of the view on each side (Ultra
+// Performance, 3x).
+inline constexpr int kMinRenderScalePercent = 33;
+inline constexpr float kMinRenderScale = 0.33f;
+
+// The upscale quality presets most games offer (display_option "upscale_quality"), each a render scale: Native AA
+// draws at the view's size (the temporal upscalers then only anti-alias), the others at AMD's ratios for FSR's modes
+// (1.5x, 1.7x, 2x, 3x on each side). Custom is any other render scale (the slider's).
+enum class UpscaleQuality : std::uint8_t { NativeAa, Quality, Balanced, Performance, UltraPerformance, Custom };
+inline constexpr int kUpscaleQualityPercent[] = {100, 67, 59, 50, 33};
+// The preset a render scale (percent) is, Custom when it is none of theirs.
+UpscaleQuality upscale_quality_for(int percent);
+// A preset's render scale in percent; Custom has none (nullopt-like: 0).
+int upscale_quality_percent(UpscaleQuality q);
+
+// display.upscaler's values: "fsr1", "taa", "fsr3"; anything else is Fsr1.
 Upscaler parse_upscaler(std::string_view name);
 std::string_view upscaler_name(Upscaler u);
 
 // The radical inverse of `index` in `base` (the Halton sequence): 1 -> 1/2, 2 -> 1/4, 3 -> 3/4 in base 2.
 float halton(std::uint32_t index, std::uint32_t base);
 
-// How many jitter positions a cycle holds at render scale `scale` (0.5..1 of the view on each side): 8 at 1, more as
+// How many jitter positions a cycle holds at render scale `scale` (kMinRenderScale..1 of the view on each side): 8 at 1, more as
 // each scene pixel covers more of the view's, so every view pixel still sees a sample near it (FSR 2's
 // ffxFsr2GetJitterPhaseCount, 8 x the area ratio, rounded up).
 std::uint32_t jitter_phases(float scale);

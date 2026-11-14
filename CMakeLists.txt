@@ -388,6 +388,7 @@ add_library(hailstone_engine STATIC
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
   src/render/temporal.cpp
+  src/render/fsr3_upscaler.cpp
   src/render/particle_renderer.cpp
   src/render/fire_renderer.cpp
   src/render/flora_renderer.cpp
@@ -788,6 +789,8 @@ hailstone_add_shaders(hailstone_shaders
   shaders/taa_resolve.frag
 )
 add_dependencies(hailstone_engine hailstone_shaders)
+hailstone_add_fsr3_shaders(hailstone_fsr3_shaders)
+add_dependencies(hailstone_engine hailstone_fsr3_shaders)
 
 # The client's folder (docs/layout.md): the build makes it in build/hailstone/, as an install does. The binary,
 # shaders/, ui/ and the runtime DLLs; the data Hailstone writes (hailstone.ini, servers/, logs/ ...) lands beside them,
@@ -1184,6 +1187,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lua_scripts_test.cpp
     tests/adventure_packets_test.cpp
     tests/adventure_request_test.cpp
+    tests/adventure_windows_test.cpp
     tests/dz_packets_test.cpp
     tests/guild_bank_packets_test.cpp
     tests/notice_packets_test.cpp
@@ -1205,6 +1209,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/nameplate_overlap_test.cpp
     tests/nameplate_style_test.cpp
     tests/spells_test.cpp
+    tests/spell_hit_modes_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
     tests/eye_control_test.cpp

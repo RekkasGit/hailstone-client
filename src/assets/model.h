@@ -149,6 +149,9 @@ struct Mesh {
     // Heightmap terrain: drawn with heights truncated to 1/8 unit, as the
     // DLL packs them (z = trunc(height * 8) as a short, TerrainTileChunk_BuildVertices).
     bool heightmap_terrain = false;
+    // Each vertex's uv2.x is the height (model z) it sways in the wind as, not its own (render/zone_renderer.cpp
+    // sway_plant): a generated tree's branch, its needle sprays and its clump move as one piece (texpack/trees.h).
+    bool sway_heights = false;
 };
 
 // A placed static object (ActorInstance) in a zone.

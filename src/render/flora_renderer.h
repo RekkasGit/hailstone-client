@@ -117,6 +117,10 @@ private:
     static constexpr std::chrono::microseconds kGrowBudget{3000};
 
     VkContext& vk_;
+    // The clock a frame ago (the plants' motion under the temporal upscaler): `seconds_` is this frame's, for the
+    // frame `seconds_frame_` (VkContext::frames_begun).
+    double seconds_ = 0.0, seconds_before_ = 0.0;
+    std::uint64_t seconds_frame_ = 0;
     float reach_ = kFloraReach;
     // A grown tile's plants: the lawn first, the patches that stride 4 keeps, then those stride 2 keeps, then the rest
     // (lawn_end: where each part ends), then the other plants.

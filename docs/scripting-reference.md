@@ -1126,8 +1126,8 @@ achievement and reward-selection APIs.
 | ChatClear | (slot) → — | Empty the tab | commands |
 | ChatTellWindows | () → bool | Tells open a window per player | — |
 | ChatSetTellWindows | (on) → — | Set that | commands |
-| ChatHitModes | () → {{name, mode, modes={names}}} | Melee report categories | — |
-| ChatSetHitMode | (index, mode) → — | 1-based index (7 = ALL) | commands |
+| ChatHitModes | () → {{id, name, mode, modes={names}}} | 1..6 melee, 7 ALL, 8 direct spell damage, 9 DoT damage, 10 healing, 11 HoT healing; ALL mode is -1 when mixed | — |
+| ChatSetHitMode | (index, mode) → — | Indices above; 0 Normal, 1 Abbreviated, 2 Number Only (Miss Only for melee misses); 7 sets all categories | commands |
 
 #### Hot bars and icon selection (lua_eq_hotbar.cpp)
 

@@ -131,8 +131,19 @@ void sway_plant(const assets::Mesh& mesh, const glm::mat4& transform, std::span<
     }
     glm::vec2 foot(transform[3]);
     const auto [bend, flutter] = plant_sway(mesh, height);
+    // A mesh's own sway heights (assets::Mesh::sway_heights) are in its own frame: measured against its own lowest
+    // and highest vertex, as a share of its height.
+    const bool own = mesh.sway_heights && mesh.vertices.size() == out.size();
+    float model_low = 0.0f, model_height = 1.0f;
+    if (own) {
+        float hi = mesh.vertices[0].position.z;
+        model_low = hi;
+        for (const auto& v : mesh.vertices) model_low = std::min(model_low, v.position.z), hi = std::max(hi, v.position.z);
+        model_height = std::max(hi - model_low, 1e-3f);
+    }
     for (std::size_t i = 0; i < out.size(); ++i) {
-        float h = (out[i].position.z - low) / height;
+        float h = own ? std::clamp((mesh.vertices[i].uv2.x - model_low) / model_height, 0.0f, 1.0f)
+                      : (out[i].position.z - low) / height;
         out[i].sway = glm::vec4(foot, bend * h * h, leaf[i] ? flutter * std::min(h * 2.0f, 1.0f) : 0.0f);
     }
 }
@@ -1731,11 +1742,7 @@ void ZoneRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 4;
     ds.pDynamicStates = dyn;
-    VkFormat color_format = vk_.scene_format();
-    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &color_format;
-    ri.depthAttachmentFormat = vk_.depth_format();
+    VkPipelineRenderingCreateInfo ri = vk_.scene_rendering();
 
     // Multisampled, the opaque pass turns the alpha test into coverage: alpha-to-coverage, and the fragment
     // shader's constant_id 0 makes its alpha the coverage (shaders/zone.frag, actor.frag, object.frag).
@@ -1790,9 +1797,10 @@ void ZoneRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
             ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
             ba.alphaBlendOp = VK_BLEND_OP_ADD;
         }
-        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-        cb.attachmentCount = 1;
-        cb.pAttachments = &ba;
+        // The opaque pass draws the zone's own motion (swaying plants, and the camera's exactly); the blended and
+        // additive ones (water, glass, glows) the reactive mask.
+        const SceneBlends blends = vk_.scene_blends(ba, pass == 0 ? SceneOutput::Motion : SceneOutput::Reactive);
+        const VkPipelineColorBlendStateCreateInfo cb = blends.info();
 
         info.pDepthStencilState = &dss;
         info.pColorBlendState = &cb;
@@ -1814,9 +1822,9 @@ void ZoneRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
         spec_value.coverage = coverage;
         ms.alphaToCoverageEnable = coverage;
         VkPipelineColorBlendAttachmentState ba{};
-        VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-        cb.attachmentCount = 1;
-        cb.pAttachments = &ba;
+        // The depth-only pass writes nothing; the colour pass over it writes the opaque pass's motion.
+        SceneBlends blends = vk_.scene_blends(ba, SceneOutput::Nothing);
+        VkPipelineColorBlendStateCreateInfo cb = blends.info();
         VkPipelineDepthStencilStateCreateInfo dss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
         dss.depthTestEnable = VK_TRUE;
         info.pDepthStencilState = &dss;
@@ -1834,6 +1842,8 @@ void ZoneRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
         // The colour pass over it: the depth is already the nearest, so test equal and write none.
         stages[1].module = fs;
         ba.colorWriteMask = kAllChannels;
+        blends = vk_.scene_blends(ba, SceneOutput::Motion);
+        cb = blends.info();
         dss.depthWriteEnable = VK_FALSE;
         dss.depthCompareOp = VK_COMPARE_OP_EQUAL;
         vk_check(vkCreateGraphicsPipelines(d, vk_.pipeline_cache(), 1, &info, nullptr, &opaque_equal_pipeline_),
@@ -1915,6 +1925,14 @@ std::uint64_t ZoneRenderer::begin_draw(const FrameInfo& frame, const glm::mat4& 
     scene_.camera_pos = glm::vec4(camera_pos, 1.0f);
     lod_eye_ = camera_pos;
     scene_.fog = glm::vec4(view.fog_start, view.fog_end, effect_scroll_seconds(time_ms), view.fog_density);
+    if (wind_frame_ != vk_.frames_begun()) {
+        // The last frame's wind clock if this zone was drawn then, else this frame's (and across the clock's wrap).
+        const float now = scene_.lighting.time.x;
+        wind_time_before_ = wind_frame_ + 1 == vk_.frames_begun() && wind_time_ <= now ? wind_time_ : now;
+        wind_time_ = now;
+        wind_frame_ = vk_.frames_begun();
+    }
+    scene_.lighting.time.y = wind_time_before_;
     upload_scene(frame.frame_slot);
     const VkDescriptorSet sets[] = {set_, scene_sets_[frame.frame_slot], vk_.shadow_set()};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, static_cast<std::uint32_t>(std::size(sets)),
@@ -2076,18 +2094,14 @@ void ZoneRenderer::create_underwater_pipeline(const std::filesystem::path& shade
     VkPipelineColorBlendAttachmentState ba{};
     ba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
                         VK_COLOR_COMPONENT_A_BIT;
-    VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
-    cb.pAttachments = &ba;
+    // The water's colour behind everything: the camera's motion (nothing of its own).
+    const SceneBlends blends = vk_.scene_blends(ba, SceneOutput::Nothing);
+    const VkPipelineColorBlendStateCreateInfo cb = blends.info();
     VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
-    VkFormat color_format = vk_.scene_format();
-    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &color_format;
-    ri.depthAttachmentFormat = vk_.depth_format();
+    VkPipelineRenderingCreateInfo ri = vk_.scene_rendering();
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &ri;
     info.stageCount = 2;
@@ -2349,7 +2363,9 @@ float effect_scroll_seconds(std::uint64_t scene_ms) {
 PlantSway plant_sway(const assets::Mesh& mesh, float height) {
     PlantSway s{std::clamp(0.04f * height, 0.08f, 3.0f), std::clamp(0.012f * height, 0.04f, 0.35f)};
     const bool generated = std::any_of(mesh.parts.begin(), mesh.parts.end(), [](const assets::MeshPart& p) { return p.lod_far > 0.0f; });
-    if (generated) s = {0.0f, 0.0f};
+    // Its branches sway whole when it says how (assets::Mesh::sway_heights): no flutter, which moves each vertex on its
+    // own. Without them (a pack built before), it stands still.
+    if (generated) s = mesh.sway_heights ? PlantSway{s.bend, 0.0f} : PlantSway{0.0f, 0.0f};
     return s;
 }
 

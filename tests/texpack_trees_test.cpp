@@ -7,6 +7,8 @@
 
 #include <doctest/doctest.h>
 
+#include <set>
+
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
 #include "core/game_dir.h"
@@ -270,6 +272,20 @@ TEST_CASE("trees: a grown tree stands on the game trunk, inside its leaves, the 
                 CHECK(a.mesh.materials[m].two_sided);
             }
             CHECK(a.mesh.front_ccw);
+            // Sway heights: the trunk's own, the leaves' their branch's, so each branch's cards move as one piece.
+            CHECK(a.mesh.sway_heights);
+            std::set<float> leaf_heights;
+            std::size_t leaf_vertices = 0;
+            for (std::uint32_t i = a.mesh.parts[1].first_index; i < a.mesh.parts[1].first_index + a.mesh.parts[1].index_count; ++i) {
+                leaf_heights.insert(a.mesh.vertices[a.mesh.indices[i]].uv2.x);
+                ++leaf_vertices;
+            }
+            CHECK(leaf_heights.size() * 8 < leaf_vertices);
+            bool trunk_own = false;
+            for (std::uint32_t i = a.mesh.parts[0].first_index; i < a.mesh.parts[0].first_index + a.mesh.parts[0].index_count; ++i)
+                trunk_own |= a.mesh.vertices[a.mesh.indices[i]].uv2.x == a.mesh.vertices[a.mesh.indices[i]].position.z &&
+                             a.mesh.vertices[a.mesh.indices[i]].position.z > 5.0f;
+            CHECK(trunk_own);
             // A budget a zone of a few hundred trees can draw; the middle level under the near one (the same cards,
             // straight, and thinner bark); the far eight triangles (three crossed cards and a level one).
             CHECK(tris[0] < 20000);
@@ -322,6 +338,39 @@ TEST_CASE("trees: a grown tree stands on the game trunk, inside its leaves, the 
     CHECK(tree_style_from_name("dead") == TreeStyle::Dead);
     CHECK(tree_style_from_name("palm") == TreeStyle::Palm);
     CHECK_FALSE(tree_style_from_name("oak"));
+}
+
+TEST_CASE("trees: a pine's needles keep close in shade when the game's leaves are stark") {
+    // The game's leaves in stripes of a dark and a near-white green: the palette the needles pick from spans both.
+    Textures tex(true);
+    for (std::size_t i = 0; i < tex.leaf.mips[0].size(); i += 4) {
+        const bool light = (i / 4) % 2 == 0;
+        const glm::vec3 c = light ? glm::vec3(0.55f, 0.85f, 0.45f) : glm::vec3(0.1f, 0.25f, 0.05f);
+        for (int k = 0; k < 3; ++k) tex.leaf.mips[0][i + std::size_t(k)] = std::byte(static_cast<std::uint8_t>(c[k] * 255.0f));
+    }
+    auto shape = measure_tree(game_tree(), tex.lookup());
+    REQUIRE(shape);
+    TreeOptions opt;
+    opt.seed = 7;
+    opt.style = TreeStyle::Pine;
+    opt.leaf_size = opt.bark_size = 128;
+    opt.bark_name = "b.dds";
+    opt.leaf_name = "l.dds";
+    opt.far_name = "f.dds";
+    opt.far_width = opt.far_height = 64;
+    const GeneratedTree tree = generate_tree(*shape, opt);
+    // The spread of the opaque texels' green about their mean: stark needles turned over every pixel they cover as
+    // the tree swayed or the camera moved (a flicker standing still, a shimmer walking through a forest).
+    double sum = 0.0, sq = 0.0, n = 0.0;
+    const auto& px = tree.leaf.mips[0];
+    for (std::size_t i = 0; i < px.size(); i += 4)
+        if (std::to_integer<int>(px[i + 3]) == 255) {
+            const double g = std::to_integer<int>(px[i + 1]) / 255.0;
+            sum += g, sq += g * g, n += 1.0;
+        }
+    REQUIRE(n > 0.0);
+    const double mean = sum / n, spread = std::sqrt(std::max(0.0, sq / n - mean * mean)) / mean;
+    CHECK(spread < 0.35); // 0.55 with each needle the palette's own shade
 }
 
 TEST_CASE("trees: a written tree is a pack's replacement model for that game mesh") {
