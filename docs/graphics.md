@@ -1578,7 +1578,13 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
   for leaves) are filled with a shadowed base (a closing of the cut-out), so a spray is cut out along its outer edge
   only: thin holes showing the dark or the sky behind it shimmered as the camera moved. A needle spray's two
   layers are close in shade and its twigs a darker shade of the needles, not brown: stark stripes and bright twig
-  lines shimmered as the camera moved and read as streaks from afar.
+  lines shimmered as the camera moved and read as streaks from afar. Each needle's shade goes only 0.4 of the way
+  from the spray's mean towards the palette colour it picked (the game textures' palettes reach near white), and
+  the gaps are filled at 0.8 of the mean: needles a few texels wide in stark light and dark changed every pixel
+  they covered as a spray swayed or the camera moved, a flicker standing by a tree and a shimmer walking through a
+  forest. In the zone viewer (frames 4 ms apart, pixels changing by more than 12) that took a flight over Greater
+  Faydark from 11 % to 5 % (the game's own trees 3.5 %) and standing by Lake Rathe's pines in the wind from 0.67 %
+  to 0.14 %; the shadows, MSAA, anisotropic filtering and the levels of detail made little difference.
 - **Styles:** a pine (a single upright trunk up into leaves widest low down) grows whorls of drooping branches with
   two crossed needle sprays and a clump at each end up a leader, the whorls three units apart or more (9 to 18) with
   four to six branches each, so the crown shows gaps; a broadleaf tree grows branches into the crown by space
