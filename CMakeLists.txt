@@ -1208,6 +1208,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/nameplate_overlap_test.cpp
     tests/nameplate_style_test.cpp
     tests/spells_test.cpp
+    tests/spell_hit_modes_test.cpp
     tests/proc_cast_stage_test.cpp
     tests/passage_of_time_test.cpp
     tests/eye_control_test.cpp

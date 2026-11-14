@@ -1645,6 +1645,34 @@ boat/rider steps publish StepClock time + 1. The app explicitly bridges that rel
 32-bit steady clock. Empty step batches and stale spawns do not advance it. Fixtures cover the clock and actual
 packet-to-emitter flow; recorded native vectors and live acceptance remain pending.
 
+### Spell hit modes
+
+Hailstone extends the melee Hit Modes menu with **Direct Spell Damage**, **Damage Over Time**, **Healing** and
+**Healing Over Time**. Each defaults to **Normal** (the original sentence), with **Abbreviated** (a concise amount,
+effect kind and available actor/spell names) and **Number Only** (the amount). The modern chat's right-click menu
+offers **Hit Modes** alongside **Filters**, and the gamepad offers them in Options > Interface. **ALL** changes
+the melee and spell categories together. Settings
+are per character in UI.ini's `[ChatManager] SpellHitMode0..3`; the original `HitMode0..7` settings keep their meaning.
+
+This is a deliberate display addition; it changes no spell rules, filters or chat colours. REA checks of the
+original's six melee report helpers (`0x4f7d70..0x4f8270`) confirm modes 0/1/2 select the display while a separate
+`OutputTextToLog` call receives the original full input. The spell branch of `ReportSuccessfulHit` (`0x52ee40`)
+bypasses those mode helpers. Recognition of the new spell display forms uses
+OP_FormattedMessage's string id and validated numeric substitutions (`game::spell_message_hit_report`), never a
+scan of the rendered sentence. Direct damage uses ids 9073, 434 and 12481, critical blasts 428/1040; DoTs
+9072/12954/13327; heals 9068/419, critical heals 427/1039; HoTs 12976/12997/12998. The legacy non-melee messages
+434/12481 also include damage shields when the server sends them that way. Critical healing has no direct/tick
+discriminator in these messages, so both use **Healing**. A critical sends its own notice (428/1040, 427/1039) beside the hit line, so **Number Only** shows two bare numbers for one crit: the crit's amount and the hit's. Chat hooks (`OnIncomingChat`, `OnFilterChat`, `mq.event`) get the full sentence whatever the mode, unlike MQ's hook on `dsp_chat`, which sees the line as displayed (docs/plugins.md). Incoming/observer DoTs omit ambiguous caster/spell
+substitutions from the abbreviation rather than assigning the names incorrectly.
+
+An OP_Damage spell landing on the player with nonzero signed damage also follows Direct Spell Damage or Healing.
+Another target's landing text contains no amount, and zero-damage landings, casts, buffs, resists, unknown ids,
+malformed numeric arguments and raw text messages retain their full sentence. No extra damage or heal is inferred.
+Both `/log` and the diagnostic log receive the full line, once, before its display form is queued, including for
+the existing melee hit and miss modes. Incoming-chat hooks also receive full text so parsers keep working; a hook
+that rewrites a line supplies its replacement for the display and log as before. Unit tests cover decoded packets,
+all modes and categories, full logging, hooks, settings and menu actions. Live server acceptance remains open.
+
 Environmental hits (types 0xf3..0xfd: mind burns, rotting, chilled, freezing, tormented, burned, thorns, burning,
 drowning, falling, a trap; `game::environment_hit`): the player's own fall, drowning or lava damage goes through
 ApplyDamage's hit report: OP_EnvDamage, then OP_Damage {the player, no attacker, the type, spell -1, the damage}
