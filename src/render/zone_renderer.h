@@ -349,6 +349,10 @@ private:
         SceneLighting lighting{}; // render/scene_lighting.h; the classic fields from set_scene_light
     };
     SceneUniforms scene_{};
+    // The wind's clock a frame ago (lighting.time.y, zone.vert's motion under the temporal upscaler): `wind_time_` is
+    // this frame's, for the frame `wind_frame_` (VkContext::frames_begun).
+    float wind_time_ = 0.0f, wind_time_before_ = 0.0f;
+    std::uint64_t wind_frame_ = 0;
     std::array<Buffer, VkContext::kFramesInFlight> scene_buffers_{};
     std::array<void*, VkContext::kFramesInFlight> scene_mapped_{};
     VkDescriptorSetLayout scene_layout_ = VK_NULL_HANDLE;

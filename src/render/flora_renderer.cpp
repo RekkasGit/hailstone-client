@@ -304,6 +304,12 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
                                   double seconds, const SceneLighting& lighting, bool modern) {
     const auto& flora = zone_.flora;
     if (flora.empty() || !pipeline_) return 0;
+    if (seconds_frame_ != vk_.frames_begun()) {
+        // The last frame's clock, if this was drawn then; this frame's otherwise (no motion of its own).
+        seconds_before_ = seconds_frame_ + 1 == vk_.frames_begun() ? seconds_ : seconds;
+        seconds_ = seconds;
+        seconds_frame_ = vk_.frames_begun();
+    }
     for (auto& level : lawn_) level.clear();
     std::size_t lawn_count = 0;
     static_assert(sizeof(GpuPlant) == 40);
@@ -417,7 +423,10 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
     std::copy(pushers_.begin(), pushers_.end(), ff.pushers.begin());
     frame_buffers_->write(frame.frame_slot, &ff, sizeof(ff));
     VkCommandBuffer cmd = frame.cmd;
-    Push pc{view_proj, glm::vec4(static_cast<float>(std::fmod(seconds, 4096.0)), 0.0f, 0.0f, 0.0f), glm::vec4(0.0f),
+    // The clock wraps: across the wrap the last frame's time is taken as this frame's (no motion for that frame).
+    const double wrapped = std::fmod(seconds, 4096.0);
+    const double wrapped_before = std::fmod(seconds_before_, 4096.0) <= wrapped ? std::fmod(seconds_before_, 4096.0) : wrapped;
+    Push pc{view_proj, glm::vec4(static_cast<float>(wrapped), static_cast<float>(wrapped_before), 0.0f, 0.0f), glm::vec4(0.0f),
             glm::vec4(kLawnFull, kLawnNear, kLawnMid, 0.0f),
             glm::vec4(static_cast<float>(kLawnLods[0].blades), static_cast<float>(kLawnLods[1].blades),
                       static_cast<float>(kLawnLods[2].blades), 0.0f)};
@@ -508,18 +517,14 @@ VkPipeline FloraRenderer::create_pipeline(const std::filesystem::path& vert, con
     dss.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // reverse Z
     VkPipelineColorBlendAttachmentState ba{};
     ba.colorWriteMask = 0xf;
-    VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
-    cb.pAttachments = &ba;
+    // The plants' own motion in the wind (shaders/motion.glsl).
+    const SceneBlends blends = vk_.scene_blends(ba, SceneOutput::Motion);
+    const VkPipelineColorBlendStateCreateInfo cb = blends.info();
     VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
-    VkFormat color_format = vk_.scene_format();
-    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &color_format;
-    ri.depthAttachmentFormat = vk_.depth_format();
+    VkPipelineRenderingCreateInfo ri = vk_.scene_rendering();
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &ri;
     info.stageCount = 2;

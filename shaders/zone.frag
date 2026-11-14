@@ -61,7 +61,15 @@ layout(location = 8) in vec3 v_point;
 layout(location = 9) in vec3 v_rest; // the plants at rest, as the lights' shadow cubes hold them (point_shadow)
 layout(location = 10) flat in float v_lod_distance; // zone.vert: a level of detail's fades
 
+layout(location = 11) in vec4 v_now;
+layout(location = 12) in vec4 v_then;
+
 layout(location = 0) out vec4 o_color;
+layout(location = 1) out vec2 o_motion;   // the opaque pass's (render/vk_context.h SceneOutput)
+layout(location = 2) out float o_reactive; // the blended and additive passes' (water, glass, glows)
+
+#define MOTION_SET 2
+#include "motion.glsl"
 
 const uint kUnlit = 1u;
 const uint kNoFog = 2u;
@@ -732,4 +740,9 @@ void main() {
         color = to_linear(color);
     }
     o_color = vec4(color, out_alpha);
+    o_motion = motion_uv(v_now, v_then);
+    // Water is drawn blended but covers what is under it: a full reactive value would leave its waves without any
+    // history (shimmering); it takes a little.
+    bool watery = mode == 5u || (flags & kWaterSurface) != 0u;
+    o_reactive = reactive_of(o_color) * (watery ? 0.35 : 1.0);
 }

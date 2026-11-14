@@ -592,6 +592,9 @@ int ClientApp::run() {
             if (slot.view) slot.view->record(*f, dt); // the item previews' own passes (their images)
         if (web_textures_ && browser_) web_textures_->record(*f, *browser_); // the browser tabs' changes
         lap.mark("item preview record");
+        // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
+        // shaders for their own motion, so it is given first.
+        if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
                                                        : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
@@ -616,7 +619,6 @@ int ClientApp::run() {
             // the temporal upscaler's jitter (none without it), which follows the plain one (render/temporal.h).
             const glm::mat4 plain_proj = camera_.projection(width, height, lit.far_plane);
             const glm::mat4 plain_vp = plain_proj * camera_.view();
-            vk_.set_temporal_view(camera_.view(), plain_proj);
             glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
             // The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava and with
