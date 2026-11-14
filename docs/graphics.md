@@ -1429,7 +1429,11 @@ zone loads (`Zone::draw_objects`).
   and kept whole or left out by where they stand, not cut at the zone line.
 - **Light:** a placement's baked light is one colour per vertex of the game's mesh; the replacement takes their
   average as its instance's tint, which multiplies its own vertex colours (a generated tree's shade inside its crown).
-- **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter.
+- **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter. One
+  with levels of detail (a generated tree) bends a third as far and does not flutter (`render::plant_sway`): its
+  crown is many small crisp sprays layered over each other, and the flutter, which moves each vertex on its own, slid
+  them across one another, so up close its leaves seemed to flip back and forth. Close to a pine in Lake Rathetear,
+  sampled every half second, 3.5 % of the pixels changed much, against 11 % before and 2 % with the game's tree.
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so

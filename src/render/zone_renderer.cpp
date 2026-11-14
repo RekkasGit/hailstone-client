@@ -109,8 +109,8 @@ GpuInstance make_instance(const glm::mat4& m, const glm::vec4& tint) {
 }
 
 // A placed plant's sway (zone.vert, lighting.glsl wind_offset): the higher a vertex stands above the plant's foot, the
-// further it bends, as the square of its height (a stiff trunk, supple tips), up to 4 % of the plant's height at full
-// wind; the vertices of its leaves (the masked parts) also flutter.
+// further it bends, as the square of its height (a stiff trunk, supple tips), up to plant_sway's bend at full wind;
+// the vertices of its leaves (the masked parts) also flutter.
 void sway_plant(const assets::Mesh& mesh, const glm::mat4& transform, std::span<GpuVertex> out) {
     if (out.empty()) return;
     float low = out[0].position.z, high = low;
@@ -130,8 +130,7 @@ void sway_plant(const assets::Mesh& mesh, const glm::mat4& transform, std::span<
         }
     }
     glm::vec2 foot(transform[3]);
-    float bend = std::clamp(0.04f * height, 0.08f, 3.0f);
-    float flutter = std::clamp(0.012f * height, 0.04f, 0.35f);
+    const auto [bend, flutter] = plant_sway(mesh, height);
     for (std::size_t i = 0; i < out.size(); ++i) {
         float h = (out[i].position.z - low) / height;
         out[i].sway = glm::vec4(foot, bend * h * h, leaf[i] ? flutter * std::min(h * 2.0f, 1.0f) : 0.0f);
@@ -2345,6 +2344,13 @@ float effect_scroll_seconds(std::uint64_t scene_ms) {
     // x 0.001 s; the effects' preshader takes k = fmod(a_fTime, 100).
     float a_ftime = static_cast<float>(scene_ms % 100000u) * 0.001f;
     return std::fmod(a_ftime, 100.0f);
+}
+
+PlantSway plant_sway(const assets::Mesh& mesh, float height) {
+    PlantSway s{std::clamp(0.04f * height, 0.08f, 3.0f), std::clamp(0.012f * height, 0.04f, 0.35f)};
+    const bool generated = std::any_of(mesh.parts.begin(), mesh.parts.end(), [](const assets::MeshPart& p) { return p.lod_far > 0.0f; });
+    if (generated) s = {s.bend * 0.35f, 0.0f};
+    return s;
 }
 
 } // namespace hailstone::render
