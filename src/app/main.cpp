@@ -253,7 +253,7 @@ void usage() {
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (50..100) and upscale it with FSR 1\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
-        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100) or taa (temporal, MSAA off)\n"
+        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
@@ -1349,6 +1349,8 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // The plain camera first: begin_scene hands it to the scene's shaders for their own motion.
+            if (zone_renderer) vk.set_temporal_view(camera.view(), camera.projection(width, height, draw_view.far_plane));
             vk.begin_scene(*f, glm::vec4(water_color ? *water_color : view.fog_color, 1.0f));
             if (zone_renderer && opts.modern) {
                 vk.set_ao_view(camera.ao_view(width, height, draw_view.far_plane));
@@ -1367,7 +1369,6 @@ int main(int argc, char** argv) {
             if (zone_renderer) {
                 // Drawn through the temporal upscaler's jitter (none without it), which follows the plain view.
                 const glm::mat4 plain_proj = camera.projection(width, height, draw_view.far_plane);
-                vk.set_temporal_view(camera.view(), plain_proj);
                 glm::mat4 proj = hailstone::render::jittered(plain_proj, vk.projection_jitter());
                 glm::mat4 vp = proj * camera.view();
                 render::SkyFrame sky_frame{sky_hour, t, horizon_haze};

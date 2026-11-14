@@ -239,7 +239,7 @@ local PAGES = {
       optionRow("Shadows", "shadows", { "Off", "Low", "Medium", "High" }),
       optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x" }),
       optionRow("Render scale", "render_scale", { 50, 100, 5, " %" }),
-      optionRow("Upscaler (next start)", "upscaler", { "FSR 1", "Temporal" }),
+      optionRow("Upscaler (next start)", "upscaler", { "FSR 1", "Temporal", "FSR 3.1" }),
       optionRow("Ambient occlusion", "ao", "bool"),
       optionRow("Grass", "grass", "bool"),
       optionRow("Grass distance", "flora_distance", { 400, 1200, 100, " units" }),

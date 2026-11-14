@@ -39,7 +39,15 @@ layout(location = 2) in float v_light;
 layout(location = 3) in float v_fog; // oFog (actor.vert)
 layout(location = 4) in vec3 v_normal;
 
+layout(location = 5) in vec4 v_now;
+layout(location = 6) in vec4 v_then;
+
 layout(location = 0) out vec4 o_color;
+layout(location = 1) out vec2 o_motion;   // the opaque pass's (render/vk_context.h SceneOutput)
+layout(location = 2) out float o_reactive; // the blended and additive passes'
+
+#define MOTION_SET 1
+#include "motion.glsl"
 
 // Native EQG normal maps store a full RGB vector; a texture pack's BC5 maps store RG and reconstruct Z instead.
 vec3 armor_normal(vec3 n, uint slot) {
@@ -180,4 +188,6 @@ void main() {
         color = to_linear(mix(pc.fog_color.rgb, color, v_fog));
     }
     o_color = vec4(color, out_alpha);
+    o_motion = motion_uv(v_now, v_then);
+    o_reactive = reactive_of(o_color);
 }

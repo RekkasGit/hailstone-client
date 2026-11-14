@@ -10,7 +10,7 @@
 // cannot leave a trail. The history's alpha counts the weight it holds: a new or rejected history takes the frame
 // as it is, and an old one takes a little of each frame, never less than 1 / kMaxWeight of it.
 
-layout(set = 0, binding = 0) uniform sampler2D lit;        // temporal_prep.frag's colour, scene size (linear filter)
+layout(set = 0, binding = 0) uniform sampler2D lit;        // temporal_prep.frag's colour (a: reactive), scene size
 layout(set = 0, binding = 1) uniform sampler2D motion_map; // its motion, UV to last frame (nearest)
 layout(set = 0, binding = 2) uniform sampler2D depth_map;  // the scene's depth (nearest)
 layout(set = 0, binding = 3) uniform sampler2D history;    // last frame's result, view size (linear filter)
@@ -105,6 +105,8 @@ void main() {
             }
         }
     vec3 current = sum / max(weight, 1e-6);
+    // Particles, spells and other draws without motion of their own: the history gives way to this frame there.
+    float reactive = texelFetch(lit, clamp(centre, ivec2(0), last), 0).a;
     vec2 motion = texelFetch(motion_map, front_at, 0).xy;
     vec2 prev_uv = uv + motion;
 
@@ -122,7 +124,7 @@ void main() {
         vec3 clipped = clip_to_box(h, box_lo, box_hi);
         // A history pulled far keeps less of its weight; so does one carried far (resampling softens it).
         float pulled = length(clipped - h) / (length(box_hi - box_lo) + 1e-4);
-        kept *= clamp(1.0 - pulled, 0.0, 1.0);
+        kept *= clamp(1.0 - pulled, 0.0, 1.0) * (1.0 - reactive);
         float speed = length(motion * view_size);
         kept = min(kept, mix(pc.params.x, 4.0, clamp(speed / 32.0, 0.0, 1.0)));
         blended = (clipped * kept + current * nearest) / (kept + nearest);

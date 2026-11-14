@@ -99,10 +99,9 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
    lighting, so it goes in before the resolve, which then smooths its pattern too; the post pass does not apply it
    again), and each pixel's motion in UV to where it was a frame ago (RG16F). The motion is rebuilt from the depth
    with `render::reprojection`, last frame's view-projection times this frame's inverse, worked in double through
-   the cameras' relative motion so that zone coordinates in the tens of thousands keep sub-pixel precision. It is
-   the camera's motion alone: what moves on its own (characters, doors, swaying plants, particles) is followed only
-   as far as the camera moved, and the resolve's clip keeps it from trailing (open: motion written by the scene
-   pipelines themselves).
+   the cameras' relative motion so that zone coordinates in the tens of thousands keep sub-pixel precision, wherever
+   no draw wrote a motion of its own (step 6); where one did, that is taken. The reactive mask (step 6) goes on in
+   the colour's alpha.
 4. **Resolve** (`shaders/taa_resolve.frag`, at the view's size): each view pixel gathers the 3 x 3 scene samples round
    it, weighted by a Gaussian fit of Blackman-Harris by their jittered distance; takes the nearest surface's motion
    among them (edges move with what is in front); reads last frame's history there through a 5-tap Catmull-Rom;
@@ -117,14 +116,67 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
    scene at its own size. With `display.sharpness` above 0, the post pass draws into a 10-bit image and RCAS
    sharpens it into the swapchain, as under FSR 1; at 0 it draws straight into the swapchain.
 
+6. **The draws' own motion and the reactive mask.** Under a temporal upscaler (and with `independentBlend`, which
+   every desktop driver has; without it the camera's motion is all there is) the scene has three colour
+   attachments: the colour, the object motion (RG16F, cleared to `kMotionUnset`) and the reactive mask (R8, cleared
+   to 0). Every scene pipeline is made for them through `VkContext::scene_rendering` and `scene_blends`, which mask
+   off what its shader does not write (`SceneOutput`); the item previews, drawn into targets of their own, keep the
+   colour alone. The scene shaders read the temporal block (the shared scene set's binding 5,
+   `shaders/motion.glsl`: this frame's and last frame's plain view-projection), which `begin_scene` writes into the
+   frame's commands, and write each vertex's place now and a frame ago as `o_motion`:
+   - the zone: its plants' wind sway at last frame's wind clock (`SceneLighting::time.y`, kept per zone renderer);
+     the rest of it stands still, so its motion is the camera's, drawn exactly;
+   - characters: their bones a frame ago, kept per spawn (`ActorDraw::motion_key`) and written after this frame's at
+     `kMaxBones` in the same buffer; a spawn new this frame, or with another number of bones, moves with the camera;
+   - doors, objects, placed items, the placement ghost and missiles: their transforms a frame ago, kept per thing
+     (`ObjectRenderer::Instance::motion_key`), written after this frame's at `kMaxInstances`;
+   - flora and the lawn: their sway and the wind at last frame's clock (`Push::time.y`); the pushing spawns' bend
+     is taken as it is now.
+   The opaque passes write the motion; the blended and additive draws (the zone's water, glass and glows, the
+   characters' and objects' blended parts, particles, fire, spell bolts, rain and snow, the target ring, the
+   isometric silhouette) write the reactive mask instead, `shaders/reactive.glsl`: the larger of their alpha and
+   brightness, at most 0.9, blended to the largest over the pixel (water a third of that, or its waves would keep no
+   history). The resolve keeps that much less of the history. The sky and the spawns' stand-in boxes write neither.
+   Under FSR 1 the same shaders run with the colour alone; the validation layer then warns once that locations 1 and
+   2 are not drawn into, which is harmless.
+
 The history is dropped when the scene targets are made again (a resize, a new render scale), on zone-in
 (`VkContext::reset_history`), on a frame without the temporal path, and when the camera jumps between two frames
 (`render::camera_cut`: more than 25 units, or a turn of more than 0.5 radians: a teleport, a camera switch).
 
-Open (docs/todo.md): motion vectors from the scene pipelines (bones, wind, door matrices, particles) and a reactive
-mask for the translucent and additive draws (particles, spells, water, lava), which have no motion of their own; a
-negative texture LOD bias below a render scale of 100; the bloom from the resolved picture; FSR 3.1 behind the same
-inputs.
+Open (docs/todo.md): a negative texture LOD bias below a render scale of 100; the bloom from the resolved picture;
+the held items and other attachments drawn as characters without a motion key.
+
+### AMD FSR 3.1
+
+`display.upscaler = fsr3` (the viewer's `--upscaler fsr3`) runs AMD FidelityFX FSR 3.1's upscaler in the resolve's
+place, on the same groundwork: one sample, the jitter, `temporal_prep.frag`'s colour (with the AO) and motion, the
+history dropped as above. The post pass then reads its output at the view's size (`post_fsr3_set_`, as it reads
+the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FSR's own RCAS (0 skips it) and our RCAS pass does not run.
+
+- **What is vendored**: only the upscaler's GLSL (`third_party/fidelityfx`, FidelityFX SDK tag v1.1.4, the upscaler
+  3.1.4, MIT; its README lists the source paths and two local changes). SDK 2.x ships the Vulkan upscaler only as
+  signed prebuilt DLLs under a binary-only licence, so it is not used. Nor are the SDK's runtime and Vulkan backend:
+  `render::Fsr3Upscaler` (`src/render/fsr3_upscaler.cpp`) is Hailstone's own host side, following the SDK's
+  `ffx_fsr3upscaler.cpp`: the internal images (the pairs that alternate by frame, the luminance pyramid, the
+  reactive and lock masks), the constants, the clears and the dispatch order (prepare inputs, luma pyramid, shading
+  change pyramid, shading change, prepare reactivity, luma instability, accumulate, RCAS). The binding tables are the
+  passes' own `FSR3UPSCALER_BIND_*` numbers; descriptor sets are written each frame, one set per pass per frame in
+  flight.
+- **Shaders**: `cmake/Shaders.cmake` (`hailstone_add_fsr3_shaders`) compiles each pass once as compute with glslc or
+  glslangValidator, no AMD tool: HDR colour, reverse depth, motion vectors at the render size without jitter, the
+  reference Lanczos, 32-bit maths; accumulate twice, with and without sharpening (`fsr3_*.spv`).
+- **Inputs as FSR wants them**: our jitter (`jitter_px_`) is FSR's `jitterOffset` as it is (a texel's unjittered
+  place is `t + 0.5 - jitter` in both), and its cycle length is ours (FSR's count rounded up: 15 against its 14 at a
+  render scale of 75, the same at 50 and 100); our motion (UV to last frame's place) goes in with a scale of 1; near,
+  far and the vertical field of view are read back from the plain projection. Exposure is FSR's automatic one (its
+  frame info), so nothing else is passed; the frame time is measured between FSR frames.
+- **Device**: storage images in FSR's formats (R8, R16F, RG16F: `shaderStorageImageExtendedFormats`, enabled when
+  present) and quad subgroup operations in compute (`render::Fsr3Upscaler::supported`, `DeviceCaps::fsr3`). Without
+  them `fsr3` falls back to `taa` with a log line.
+- **Motion and reactive mask**: the same as the resolve's (Temporal upscaling 6): the draws' own motion in
+  `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
+  without `independentBlend`).
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
@@ -1616,8 +1668,8 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 |---|---|---|---|
 | `display.msaa` | 1, 2, 4 | 4 | samples per pixel, at most 4 (`render::kMaxMsaa`; 8 and up are drawn at 4), cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
 | `display.render_scale` | 50 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 FSR 1 upscales it (The frame); the UI stays sharp |
-| `display.upscaler` | fsr1, taa | fsr1 | fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); read at start-up |
-| `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's at every scale; 0 none |
+| `display.upscaler` | fsr1, taa, fsr3 | fsr1 | fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); fsr3: the same with AMD FSR 3.1's upscaler (AMD FSR 3.1; taa where the GPU lacks what it needs); read at start-up |
+| `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's or FSR 3.1's own at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |
 | `display.exposure` | EV | 0 | the scene is scaled by 2^EV before the tonemap |
 | `display.shadows` | 0, 256 .. 8192 | 2048 | texels per side of each shadow cascade; 0 off; modern only |
@@ -1679,8 +1731,9 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
    (done) colour grading; optional TAA.
 6. **Upscaling**: (done) a render scale with FSR 1 (EASU + RCAS); (done) the temporal groundwork: sub-pixel jitter
    on the projection, kept off picking and the nameplates; camera motion vectors from the depth; history reset on
-   zone-in, camera cuts and resize; a TAA/TAAU of our own on it (`display.upscaler = taa`, Temporal upscaling); next
-   motion written by every scene pipeline (last frame's bones, wind time and object matrices), a negative texture LOD
-   bias, then FSR 3.1 (MIT) as the temporal upscaler. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
+   zone-in, camera cuts and resize; a TAA/TAAU of our own on it (`display.upscaler = taa`, Temporal upscaling);
+   (done) motion written by the scene pipelines (last frame's bones, wind time and object matrices) and a reactive
+   mask; (done) FSR 3.1 (MIT) as a second temporal upscaler (`display.upscaler = fsr3`, AMD FSR 3.1); next a negative
+   texture LOD bias. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
    particles, spells, water and lava need a reactive mask rather than motion vectors. DLSS, XeSS and frame
    generation are not planned.

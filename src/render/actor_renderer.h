@@ -73,6 +73,9 @@ struct ActorDraw {
     bool attached = false;
     glm::mat4 parent{1.0f};
     float alpha = 1.0f; // actor visibility supplied by its owner, independent of material opacity
+    // Who this is from frame to frame (a spawn's id + 1), for its motion under the temporal upscaler: its bones a frame
+    // ago are drawn beside this frame's (ActorRenderer::prepare). 0: none kept, it moves with the camera only.
+    std::uint64_t motion_key = 0;
 };
 
 struct ActorRenderStats {
@@ -105,8 +108,10 @@ public:
     struct Kept;
     // `kept`: the last zone's (release_kept). What of it the new library would not hand out the same (a mesh it does
     // not share, a texture its zone archives may change) is freed; the rest is drawn as it was.
+    // `scene` false: drawn into targets of the caller's own with the colour alone (the item previews), not the
+    // scene's (VkContext::scene_rendering).
     ActorRenderer(VkContext& vk, std::shared_ptr<const assets::CharacterLibrary> library,
-                  const std::filesystem::path& shader_dir, std::unique_ptr<Kept> kept = nullptr);
+                  const std::filesystem::path& shader_dir, std::unique_ptr<Kept> kept = nullptr, bool scene = true);
     ~ActorRenderer();
     ActorRenderer(const ActorRenderer&) = delete;
     ActorRenderer& operator=(const ActorRenderer&) = delete;
@@ -484,8 +489,14 @@ private:
     std::uint32_t max_textures_ = 0;
     std::array<std::uint32_t, VkContext::kFramesInFlight> descriptor_textures_{}; // textures written into each set
 
+    // Each frame's bones, then from kMaxBones on each instance's bones a frame ago at the same place (actor.vert's
+    // motion; this frame's where none were kept).
     static constexpr std::uint32_t kMaxBones = 65536;
     std::array<Buffer, VkContext::kFramesInFlight> bones_{};
+    // The bones drawn per motion_key: this frame's so far, and the last frame's (frame_bones_ is which frame).
+    std::unordered_map<std::uint64_t, std::vector<glm::mat4>> bones_now_, bones_before_;
+    std::uint64_t frame_bones_ = 0;
+    bool scene_ = true;
     std::array<void*, VkContext::kFramesInFlight> bones_mapped_{};
 
     VkSampler sampler_ = VK_NULL_HANDLE;
