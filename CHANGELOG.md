@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Texture packs with generated trees: tall trees whose trunk starts with a short piece, such as Greater Faydark's giant pines, no longer float above the ground. Rebuild a pack's trees in the Texture Studio to get them
 - Texture packs with generated trees: up close, the trees' needles and leaves no longer seem to flip back and forth in the wind. Generated trees sway more gently than the game's and their leaves no longer flutter
 - Texture packs with generated trees: the pines are less dense, with gaps in their crowns, and their needles no longer show bright twig streaks. Trees no longer visibly change their leaves as you move towards or away from them, and forests such as Greater Faydark draw faster (about 15 % in a dense view). Rebuild a pack's trees in the Texture Studio to get them
 - Your own character now keeps the ornaments on what you wear when you equip, swap or unequip gear: a weapon ornament's model and an armour ornament's Hero's Forge model. Before, your own model went back to the plain item's look on every gear change until you zoned, though other players still saw the ornament
