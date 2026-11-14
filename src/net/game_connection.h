@@ -1645,6 +1645,9 @@ public:
 
     // ---- items (game/inventory.h; net/game_connection_items.cpp) ----
     const game::Inventory& inventory() const { return inventory_; }
+    // Last cursor arrival: unknown values must not be used for automated destruction.
+    // The numeric values match HAILSTONE_CURSOR_ORIGIN_* in the plugin SDK.
+    std::uint32_t cursor_origin() const { return inventory_.cursor() ? static_cast<std::uint32_t>(cursor_origin_) : 0; }
     const net::Coins& coins() const { return coins_; }
     // A left click on an inventory, bank or shared bank slot
     // (CInvSlot::HandleLButtonUp): with an empty cursor picks the item up
@@ -3212,6 +3215,8 @@ private:
     game::SpellState spells_;
 
     // Items.
+    enum class CursorOrigin : std::uint8_t { Unknown = 0, Inventory = 1, Server = 2 };
+    CursorOrigin cursor_origin_ = CursorOrigin::Unknown;
     game::Inventory inventory_;
     game::KeptItems kept_items_;  // Hailstone: the Keep marks (kept_items.txt)
     std::uint64_t kept_revision_ = 0;

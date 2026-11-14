@@ -127,7 +127,16 @@ std::uint32_t command_caps(std::string_view line, const game::EqStrings* strings
     case game::CommandLine::Kind::Empty: return 0;
     case game::CommandLine::Kind::ChatServer:
     case game::CommandLine::Kind::Text: return kCapChat;
-    case game::CommandLine::Kind::Invalid: return kCapCommands;
+    case game::CommandLine::Kind::Invalid: {
+        // Client-local inventory commands are not in EQ's slash table. They still
+        // manipulate items and must not inherit the weaker generic command capability.
+        std::string word = cl.word;
+        std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (word == "/destroycursor" || word == "/stowcursor") return kCapActions;
+        return kCapCommands;
+    }
     case game::CommandLine::Kind::Command: break;
     }
     std::string_view h = game::slash_commands()[cl.index].handler;

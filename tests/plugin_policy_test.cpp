@@ -193,6 +193,9 @@ TEST_CASE("command_caps: EQ commands by their handler, abbreviations too; text i
     CHECK(command_caps("/disc Fortitude") == kCapActions);
     CHECK(command_caps("/useitem 22") == kCapActions);
     CHECK(command_caps("/attack on") == kCapActions);
+    CHECK(command_caps("/destroycursor 123") == kCapActions);
+    CHECK(command_caps("/STOWCURSOR 123") == kCapActions);
+    CHECK(command_caps("/stowcursorx 123") == kCapCommands);
     CHECK(command_caps("/sit") == kCapMove);
     CHECK(command_caps("/follow") == kCapMove);
     CHECK(command_caps("/g hello") == kCapChat);

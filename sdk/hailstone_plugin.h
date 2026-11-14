@@ -589,7 +589,15 @@ typedef struct PluginHostApi {
     int32_t (*get_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_pet_buff_data_bulk)(void* host, unsigned char* out, int32_t out_size);
     int32_t (*get_spawns_data_bulk)(void* host, unsigned char* out, int32_t out_size);
+    /* Cursor provenance for automation (HAILSTONE_CAP_READ). Unknown is intentionally unsafe to automate:
+     * the item may have existed when the character loaded or been moved by an unsupported path.
+     * Query after get_item(cursor); 0 empty/unknown, 1 picked up locally, 2 newly supplied by the server.
+     * Only 2 is eligible for unattended cursor-item processing. */
+    uint32_t (*cursor_origin)(void* host);
 } PluginHostApi;
+#define HAILSTONE_CURSOR_ORIGIN_UNKNOWN 0
+#define HAILSTONE_CURSOR_ORIGIN_INVENTORY 1
+#define HAILSTONE_CURSOR_ORIGIN_SERVER 2
 #define HAILSTONE_BUFF_RECORD_SIZE 29
 /* get_buff_data_bulk's last byte: the window the slot belongs to (0 also for an empty slot). */
 /* The records run long buffs, then songs, then the one discipline slot (RoF2: 0-41, 42-61, 62); the counts are the
