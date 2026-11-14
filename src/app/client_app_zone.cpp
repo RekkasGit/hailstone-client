@@ -758,7 +758,12 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
         return std::clamp(static_cast<int>(std::lround((config_float(r->key, r->fallback) - r->at_zero) / r->per_tick)), 0, 20);
     if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
-    if (name == "render_scale") return std::clamp(config_.get_int("display.render_scale", 100), 50, 100);
+    if (name == "render_scale")
+        return std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100);
+    // The upscale quality presets (render/temporal.h UpscaleQuality): 0 Native AA .. 4 Ultra Performance, 5 Custom.
+    if (name == "upscale_quality")
+        return static_cast<int>(render::upscale_quality_for(
+            std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100)));
     // 0 FSR 1 (spatial), 1 temporal, 2 FSR 3.1 (render/temporal.h); as saved, which shows at the next start.
     if (name == "upscaler")
         return static_cast<int>(render::parse_upscaler(config_.get_string("display.upscaler", "fsr1")));
@@ -886,7 +891,12 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
     } else if (name == "ao" || name == "distance_blur" || name == "color_grade") {
         config_.set_bool("display." + std::string(name), value != 0);
     } else if (name == "render_scale") {
-        config_.set_int("display.render_scale", std::clamp(value, 50, 100));
+        config_.set_int("display.render_scale", std::clamp(value, render::kMinRenderScalePercent, 100));
+    } else if (name == "upscale_quality") {
+        // A preset sets the render scale; Custom (or anything else) leaves it to the slider.
+        const int percent = render::upscale_quality_percent(static_cast<render::UpscaleQuality>(std::clamp(value, 0, 5)));
+        if (percent == 0) return true;
+        config_.set_int("display.render_scale", percent);
     } else if (name == "upscaler") {
         // Taken at start-up, as display.msaa: the temporal upscaler draws with one sample.
         const auto chosen = value == 2 ? render::Upscaler::Fsr3 : value == 1 ? render::Upscaler::Taa : render::Upscaler::Fsr1;

@@ -86,7 +86,7 @@ struct SceneOptions {
     // The modern look's colour grade (set_color_grade; display.color_grade): by the time of day, the weather and the
     // zone's mood.
     bool color_grade = true;
-    // The 3D view drawn at this share of its size on each side (display.render_scale, 0.5..1) and brought up to it by
+    // The 3D view drawn at this share of its size on each side (display.render_scale, kMinRenderScale..1) and brought up to it by
     // FSR 1 (shaders/fsr_easu.frag, sharpened by fsr_rcas.frag at `sharpness`, 0 none .. 1 the most); 1 draws it
     // at its own size, without them.
     float render_scale = 1.0f;
@@ -98,7 +98,8 @@ struct SceneOptions {
     Upscaler upscaler = Upscaler::Fsr1;
 };
 
-// The scene targets' size for a 3D view of `view` pixels at `scale` (SceneOptions::render_scale, kept in 0.5..1):
+// The scene targets' size for a 3D view of `view` pixels at `scale` (SceneOptions::render_scale, kept in
+// kMinRenderScale..1):
 // each side rounded, at least one pixel.
 VkExtent2D scaled_extent(VkExtent2D view, float scale);
 

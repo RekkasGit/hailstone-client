@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -17,6 +18,17 @@ std::string_view upscaler_name(Upscaler u) {
     return u == Upscaler::Fsr3 ? "fsr3" : u == Upscaler::Taa ? "taa" : "fsr1";
 }
 
+UpscaleQuality upscale_quality_for(int percent) {
+    for (std::size_t i = 0; i < std::size(kUpscaleQualityPercent); ++i)
+        if (kUpscaleQualityPercent[i] == percent) return static_cast<UpscaleQuality>(i);
+    return UpscaleQuality::Custom;
+}
+
+int upscale_quality_percent(UpscaleQuality q) {
+    const auto i = static_cast<std::size_t>(q);
+    return i < std::size(kUpscaleQualityPercent) ? kUpscaleQualityPercent[i] : 0;
+}
+
 float halton(std::uint32_t index, std::uint32_t base) {
     float f = 1.0f, r = 0.0f;
     while (index > 0) {
@@ -28,7 +40,7 @@ float halton(std::uint32_t index, std::uint32_t base) {
 }
 
 std::uint32_t jitter_phases(float scale) {
-    scale = std::clamp(scale, 0.5f, 1.0f);
+    scale = std::clamp(scale, kMinRenderScale, 1.0f);
     const float ratio = 1.0f / scale;
     return static_cast<std::uint32_t>(std::ceil(8.0f * ratio * ratio - 1e-4f));
 }

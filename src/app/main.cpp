@@ -251,7 +251,7 @@ void usage() {
         "  --no-ao            no screen-space ambient occlusion (--lighting modern)\n"
         "  --depth-prepass    draw the opaque geometry depth-only first, then colour it (--lighting modern)\n"
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
-        "  --render-scale P   draw the 3D view at P percent of its size (50..100) and upscale it with FSR 1\n"
+        "  --render-scale P   draw the 3D view at P percent of its size (33..100) and upscale it (--upscaler)\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
         "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
@@ -492,7 +492,8 @@ Options parse_args(int argc, char** argv) {
             o.scene.bloom = std::clamp(std::strtof(argv[++i], nullptr), 0.0f, 1.0f);
         } else if (arg("--render-scale")) {
             need(1);
-            o.scene.render_scale = static_cast<float>(std::clamp(std::atoi(argv[++i]), 50, 100)) / 100.0f;
+            o.scene.render_scale =
+                static_cast<float>(std::clamp(std::atoi(argv[++i]), hailstone::render::kMinRenderScalePercent, 100)) / 100.0f;
         } else if (arg("--upscaler")) {
             need(1);
             o.scene.upscaler = hailstone::render::parse_upscaler(argv[++i]);
