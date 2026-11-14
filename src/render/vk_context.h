@@ -17,6 +17,7 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
+#include "render/frame_gen.h"
 #include "render/fsr3_upscaler.h"
 #include "render/pipeline_cache.h"
 #include "render/point_shadows.h"
@@ -96,6 +97,10 @@ struct SceneOptions {
     // history at the view's size; `sharpness` then sharpens that with RCAS (0 none). Fsr3 does the same with AMD
     // FSR 3.1's upscaler in place of the resolve, its own RCAS at `sharpness`; Taa where DeviceCaps::fsr3 is false.
     Upscaler upscaler = Upscaler::Fsr1;
+    // Frame generation (render/frame_gen.h, display.frame_gen): a frame made between each two real ones from the
+    // temporal upscaler's motion and depth, presented before the real one, the UI drawn sharp over both. Only with a
+    // temporal upscaler; the swapchain then keeps vertical sync (FIFO paces the two frames) and one more image.
+    bool frame_gen = false;
 };
 
 // The scene targets' size for a 3D view of `view` pixels at `scale` (SceneOptions::render_scale, kept in
@@ -228,6 +233,10 @@ public:
     void reset_history() { history_valid_ = false; }
     // The temporal upscaler runs (SceneOptions::upscaler Taa or Fsr3, its targets made).
     bool temporal() const { return lit_.image != VK_NULL_HANDLE; }
+    // Frame generation runs (SceneOptions::frame_gen under a temporal upscaler, its images made).
+    bool frame_gen_active() const { return frame_gen_ && overlay_.image != VK_NULL_HANDLE; }
+    // Presented frames per real frame over the last frame: 2 when it generated one, else 1 (the performance window).
+    std::uint32_t frames_presented() const { return presented_last_; }
     // Scene pipelines are made for the scene's colour attachments: the colour alone, or under a temporal upscaler
     // (scene_motion()) the colour, the object motion (kMotionFormat) and the reactive mask (kReactiveFormat), as
     // begin_scene renders into. A renderer drawing into targets of its own (the item previews) passes `scene` false
@@ -316,6 +325,9 @@ public:
     // than that is shrunk by a whole factor (averaged) until it fits. False (and nothing is saved) when the swapchain's
     // images cannot be copied from (the surface does not offer TRANSFER_SRC).
     bool request_screenshot(std::filesystem::path path, std::uint32_t max_width = 0);
+    // With frame generation, the screenshot saves the frame's in-between frame instead of the real one (the viewer's
+    // --screenshot-generated; the real one when the frame made none).
+    void screenshot_generated(bool on) { screenshot_generated_ = on; }
     // The swapchain's images can be read back (screenshots).
     bool can_screenshot() const { return screenshots_supported_; }
     // The GPU and its driver, for bug reports: "AMD Radeon RX 7900 XTX (radv, Mesa 25.2.1), Vulkan 1.4.321".
@@ -401,6 +413,7 @@ private:
         VkCommandBuffer shared_acquire = VK_NULL_HANDLE;
         VkCommandBuffer shared_release = VK_NULL_HANDLE;
         VkSemaphore image_available = VK_NULL_HANDLE;
+        VkSemaphore generated_available = VK_NULL_HANDLE; // frame generation's second image
         VkFence in_flight = VK_NULL_HANDLE;
     };
 
@@ -517,6 +530,30 @@ private:
     // pass reads (post_fsr3_set_), and the upscaler itself (made when the option first asks for it).
     Image fsr3_output_;
     std::unique_ptr<Fsr3Upscaler> fsr3_;
+    // Frame generation (frame_gen_active()): the two pictures without the UI (this frame's is pictures_[picture_index_],
+    // the last one's the other), the in-between frame, and the UI's image (the window's size, the swapchain's format)
+    // that the overlay pass draws into instead of the swapchain; end_frame composites them (finish_frame_gen).
+    std::array<Image, 2> pictures_{};
+    Image generated_;
+    Image overlay_;
+    std::unique_ptr<FrameGen> frame_gen_;
+    std::uint32_t picture_index_ = 0;
+    bool picture_ready_ = false;   // the last frame left its picture, at this size
+    bool overlay_open_ = false;    // begin_overlay rendered into overlay_ this frame
+    bool fg_temporal_ = false;     // this frame ran the temporal upscaler
+    bool fg_history_kept_ = false; // and its history went on from the last frame's
+    std::uint32_t presented_last_ = 1;
+    bool frame_gen_fallback_logged_ = false;
+    VkPipeline fg_synth_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline fg_composite_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline rcas_picture_pipeline_ = VK_NULL_HANDLE; // RCAS into a picture (kUpscaleFormat), not the swapchain
+    void create_frame_gen(const std::filesystem::path& shader_dir);
+    void destroy_frame_gen();
+    void bind_frame_gen();
+    // Ends a frame-generation frame: the real frame composited into its image and, when one can be made, the
+    // in-between frame into a second image acquired here. Returns that image's index, or nullopt.
+    std::optional<std::uint32_t> finish_frame_gen(const FrameInfo& frame);
+    void composite_into(VkCommandBuffer cmd, std::uint32_t image_index, VkDescriptorSet set);
     std::chrono::steady_clock::time_point fsr3_last_{}; // the last FSR 3.1 frame's time (its frame time)
     bool fsr3_fallback_logged_ = false;
     struct TemporalView {
@@ -619,6 +656,7 @@ private:
     bool screenshots_supported_ = false; // the swapchain was made with TRANSFER_SRC
     std::filesystem::path screenshot_path_;
     std::uint32_t screenshot_max_width_ = 0;
+    bool screenshot_generated_ = false;
     std::string gpu_description_;
     std::string gpu_name_;
 };

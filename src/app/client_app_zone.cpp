@@ -760,6 +760,8 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
     if (name == "render_scale")
         return std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100);
+    // Frame generation (render/frame_gen.h): a frame made between each two real ones, with a temporal upscaler.
+    if (name == "frame_gen") return config_.get_bool("display.frame_gen", false) ? 1 : 0;
     // The upscale quality presets (render/temporal.h UpscaleQuality): 0 Native AA .. 4 Ultra Performance, 5 Custom.
     if (name == "upscale_quality")
         return static_cast<int>(render::upscale_quality_for(
@@ -892,6 +894,8 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.set_bool("display." + std::string(name), value != 0);
     } else if (name == "render_scale") {
         config_.set_int("display.render_scale", std::clamp(value, render::kMinRenderScalePercent, 100));
+    } else if (name == "frame_gen") {
+        config_.set_bool("display.frame_gen", value != 0);
     } else if (name == "upscale_quality") {
         // A preset sets the render scale; Custom (or anything else) leaves it to the slider.
         const int percent = render::upscale_quality_percent(static_cast<render::UpscaleQuality>(std::clamp(value, 0, 5)));

@@ -84,6 +84,7 @@ struct Options {
     std::optional<float> yaw_deg;
     std::optional<float> pitch_deg;
     std::string screenshot; // save this frame's image and exit (with --frames)
+    bool screenshot_generated = false; // viewer: the screenshot is frame generation's in-between frame
     // --neighbours "N:zone:x:y:z,...": the zone points OP_SendZonepoints would send (server coordinates, 999999
     // keeps), so the viewer draws the neighbour zones past the zone lines (app/neighbour_zones.h).
     std::optional<std::vector<hailstone::game::ZonePointTarget>> neighbours;
@@ -254,6 +255,9 @@ void usage() {
         "  --render-scale P   draw the 3D view at P percent of its size (33..100) and upscale it (--upscaler)\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
         "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
+        "  --frame-gen        generate a frame between each two (needs --upscaler taa or fsr3; vsync on)\n"
+        "  --screenshot-generated  viewer, with --frame-gen: --screenshot FILE saves the last in-between frame,\n"
+        "                     and the real frames around it as FILE_prev and FILE_real\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
@@ -494,6 +498,10 @@ Options parse_args(int argc, char** argv) {
             need(1);
             o.scene.render_scale =
                 static_cast<float>(std::clamp(std::atoi(argv[++i]), hailstone::render::kMinRenderScalePercent, 100)) / 100.0f;
+        } else if (arg("--frame-gen")) {
+            o.scene.frame_gen = true;
+        } else if (arg("--screenshot-generated")) {
+            o.screenshot_generated = true;
         } else if (arg("--upscaler")) {
             need(1);
             o.scene.upscaler = hailstone::render::parse_upscaler(argv[++i]);
@@ -1095,6 +1103,7 @@ int main(int argc, char** argv) {
         const int timed_from = opts.frames / 4;
         auto timed_start = start;
         render::ZoneDrawn drawn; // the last frame's
+        int generated_frames = 0; // frame generation's in-between frames presented in the timed frames
         for (int frame = 0; window.poll_events(); ++frame) {
             if (opts.frames && frame == timed_from) timed_start = std::chrono::steady_clock::now();
             if (opts.frames && frame >= opts.frames) {
@@ -1104,6 +1113,9 @@ int main(int argc, char** argv) {
                               "triangles in {} calls, {} into shadows in {} calls",
                               ms / (frame - timed_from), timed_from, frame - 1, 1000.0 * (frame - timed_from) / ms,
                               drawn.triangles, drawn.calls, drawn.shadow_triangles, drawn.shadow_calls);
+                if (vk.frame_gen_active())
+                    log::info("frame generation: {} in-between frames presented in frames {}..{}", generated_frames,
+                              timed_from, frame - 1);
                 if (flora_renderer) log::info("flora: the last frame drew {} plants", flora_drawn);
                 if (neighbours)
                     log::info("neighbour zones: {} loaded, the last frame drew {} triangles in {} calls, {:.3f} ms of CPU",
@@ -1111,7 +1123,16 @@ int main(int argc, char** argv) {
                               neighbours->draw_ms());
                 break;
             }
-            if (!opts.screenshot.empty() && opts.frames && frame == opts.frames - 1) vk.request_screenshot(opts.screenshot);
+            if (opts.screenshot_generated && !opts.screenshot.empty() && opts.frames && frame == opts.frames - 2) {
+                // The real frame before the in-between one (FILE_prev; the last frame saves FILE and FILE_real).
+                std::filesystem::path prev = opts.screenshot;
+                prev.replace_filename(prev.stem().string() + "_prev" + prev.extension().string());
+                vk.request_screenshot(prev);
+            }
+            if (!opts.screenshot.empty() && opts.frames && frame == opts.frames - 1) {
+                vk.screenshot_generated(opts.screenshot_generated);
+                vk.request_screenshot(opts.screenshot);
+            }
             bool ui_keys = ui_layer && ui_layer->wants_keyboard();
             bool ui_mouse = ui_layer && ui_layer->wants_mouse();
             if (window.input().was_pressed(platform::Key::Escape) && !ui_keys) break;
@@ -1461,6 +1482,7 @@ int main(int argc, char** argv) {
             }
             if (ui_layer) ui_layer->render(*f);
             vk.end_frame(*f);
+            if (opts.frames && frame >= timed_from && vk.frames_presented() == 2) ++generated_frames;
             if (zone_renderer) drawn = zone_renderer->take_drawn();
         }
         return 0;
