@@ -189,7 +189,9 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
         const glm::vec3 base = pts[std::size_t(low)];
         const float length = glm::distance(pts[std::size_t(far)], base);
         const glm::vec3 along = length > 1e-3f ? (pts[std::size_t(far)] - base) / length : glm::vec3(0, 0, 1);
-        const float first_ring = std::max(0.6f, 0.15f * length);
+        // At most a few units: a tall trunk's bottom prism can be short (NEKPINE1's rings at -7.8, 15 and 215), and a
+        // share of the length took two rings as one, its foot halfway up the first prism, the tree standing in the air.
+        const float first_ring = std::clamp(0.15f * length, 0.6f, 3.0f);
         std::vector<int> queue;
         for (int v : vs)
             if (glm::dot(pts[std::size_t(v)] - base, along) <= first_ring) hop[std::size_t(v)] = 0, queue.push_back(v);
