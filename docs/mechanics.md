@@ -1401,6 +1401,13 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   nothing is disabled there.
 - The Actions window's pages: the same skill and social rules on the window's buttons; Melee and Range Attack both
   checked while the primary swing is not ready or auto fire is on.
+- Slam (skill 111, `slam_innate`): a deliberate change from the original, which fills its innate slots from the
+  profile race (EQ_Character::InitInnates) and so keeps a Barbarian's Slam under an illusion and never gives one to
+  a Dark Elf in Barbarian form. Hailstone takes the innate Slam from the player spawn's current race
+  (`app::skill_race`), as EQEmu does (Client::OPCombatAbility bypasses the Bash skill check by `GetRace()`): the
+  combat lists gain or lose Slam as an illusion starts or ends, and Bash without a shield goes through the Slam path
+  while the current form has it. Both send the same Bash attack (`DoAttack(100, 10)`), so a large race with a shield
+  loses nothing.
 - Focus reuse mod (`Character::focus_reuse_mod`): SPA 310 from the best item focus (its spell's first base), buff and
   AA, each times its percent / 100, at most the recast time; the gems, hot buttons and combat ability window take it
   off the recast they show.
