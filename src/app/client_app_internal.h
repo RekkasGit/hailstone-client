@@ -854,16 +854,21 @@ private:
     // 0 off; the modern lighting only), display.ao (screen-space ambient occlusion, the modern lighting only),
     // display.distance_blur, display.depth_prepass (the zone's depth pre-pass, the modern lighting only),
     // display.bloom (0 off .. 1), display.brightness / contrast / gamma (the grade after the
-    // tonemap), display.render_scale (percent, 50..100: below 100 FSR 1 upscales) and display.sharpness (0..1). The
-    // Options window's Display page sets them (display_option / set_display_option).
+    // tonemap), display.render_scale (percent, 50..100: below 100 FSR 1 upscales), display.sharpness (0..1) and
+    // display.upscaler (fsr1 | taa, read at start-up: render/temporal.h). The Options window's Display page sets them
+    // (display_option / set_display_option).
     void apply_scene_options() {
         render::SceneOptions scene;
         // The sample count stays the one of the first call: the renderers' pipelines are built for it, and scene
         // targets of another count under them lose the device on some drivers (Intel on Windows). A change in the
         // Options window is saved and shows at the next start, as the window says.
         if (msaa_at_start_ == 0)
-            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, 16));
+            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, static_cast<int>(render::kMaxMsaa)));
         scene.msaa = msaa_at_start_;
+        // Taken at start-up too: the temporal upscaler draws with one sample, so it changes the pipelines' count.
+        if (!upscaler_at_start_)
+            upscaler_at_start_ = render::parse_upscaler(config_.get_string("display.upscaler", "fsr1"));
+        scene.upscaler = *upscaler_at_start_;
         std::string tonemap = config_.get_string("display.tonemap", "auto");
         scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
                         : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX
@@ -887,6 +892,7 @@ private:
         vk_.set_scene_options(scene, shader_dir_);
     }
     std::uint32_t msaa_at_start_ = 0; // apply_scene_options: display.msaa as the client started, 0 before
+    std::optional<render::Upscaler> upscaler_at_start_; // and display.upscaler
     // /face: MQ's heading, degrees clockwise from north.
     void face_degrees(double degrees);
     // /keypress: a key command by name, tapped (0), held (1) or let go (2); false for an unknown name.

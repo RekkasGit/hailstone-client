@@ -577,7 +577,7 @@ local PRESETS = {
   { name = "Low", shadows = 0, msaa = 0, ao = 0, distance_blur = 0, view_distance = 2 },
   { name = "Medium", shadows = 1, msaa = 1, ao = 0, distance_blur = 1, view_distance = 4 },
   { name = "High", shadows = 2, msaa = 2, ao = 1, distance_blur = 1, view_distance = 6 },
-  { name = "Ultra", shadows = 3, msaa = 3, ao = 1, distance_blur = 1, view_distance = 12 },
+  { name = "Ultra", shadows = 3, msaa = 2, ao = 1, distance_blur = 1, view_distance = 12 },
 }
 local PRESET_KEYS = { "shadows", "msaa", "ao", "distance_blur", "view_distance" }
 
@@ -592,10 +592,12 @@ local function currentPreset()
 end
 
 local msaaAtStart -- anti-aliasing changes at the next start: the setting the client started with
+local upscalerAtStart -- so does the upscaler
 local packAtStart -- so does the texture pack
 
 local function graphicsTab()
   msaaAtStart = msaaAtStart or eq.Option("msaa")
+  upscalerAtStart = upscalerAtStart or eq.Option("upscaler")
   section("Quality", function()
     row("Preset", "Sets shadows, anti-aliasing, ambient occlusion, distance blur and view distance together.", function()
       local p = currentPreset()
@@ -613,17 +615,24 @@ local function graphicsTab()
     slider("shadow_clip_plane", "Shadow Clip Plane", 0, 100,
       function(v) return string.format("%d (%d units)", v, v * 5 + 10) end,
       "How far from the camera characters cast shadows (the original's advanced display setting; /shadows on <n>).")
-    combo("msaa", "Anti-aliasing", { "Off", "2x MSAA", "4x MSAA", "8x MSAA" },
+    combo("msaa", "Anti-aliasing", { "Off", "2x MSAA", "4x MSAA" },
       "Smooths edges. Takes effect the next time the game starts.")
     local msaa = eq.Option("msaa")
     if msaa ~= nil and msaaAtStart ~= nil and msaa ~= msaaAtStart then
       note("Restart the game to change anti-aliasing.")
     end
+    if upscalerAtStart == 1 then note("The temporal upscaler smooths edges itself: MSAA is off while it is on.") end
     slider("render_scale", "Render Scale", 50, 100, pct,
-      "Draws the 3D world at this share of its size and upscales it with AMD FSR 1. Lower is faster and softer; the interface stays sharp.")
-    if (eq.Option("render_scale") or 100) < 100 then
+      "Draws the 3D world at this share of its size and upscales it. Lower is faster and softer; the interface stays sharp.")
+    combo("upscaler", "Upscaler", { "AMD FSR 1", "Temporal (TAA)" },
+      "FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal builds a smooth picture over several frames at every render scale and replaces MSAA. Takes effect the next time the game starts.")
+    local upscaler = eq.Option("upscaler")
+    if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart then
+      note("Restart the game to change the upscaler.")
+    end
+    if (eq.Option("render_scale") or 100) < 100 or upscalerAtStart == 1 then
       ticks("sharpness", "Upscale Sharpening", function(t) return pct(t * 5) end,
-        "How much FSR 1 sharpens the upscaled picture.")
+        "How much the upscaled picture is sharpened.")
     end
     check("grass", "Radial Flora",
       "Grass, flowers and ferns on the newer zones' open ground, and Hailstone's grass on classic zones such as East Commonlands (/showgrass).")

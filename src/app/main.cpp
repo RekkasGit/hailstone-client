@@ -253,6 +253,7 @@ void usage() {
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (50..100) and upscale it with FSR 1\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
+        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100) or taa (temporal, MSAA off)\n"
         "  --fire X Y Z H W   viewer: a flame H high and W wide standing at X Y Z (modern; repeatable)\n"
         "  --no-fire          viewer: no flames at all in the modern lighting (to time them)\n"
         "  --no-grass         viewer: no flora (radial flora, and Hailstone's zone flora: flora/<zone>.txt); the\n"
@@ -417,7 +418,7 @@ Options parse_args(int argc, char** argv) {
             o.modern = m == "modern";
         } else if (arg("--msaa")) {
             need(1);
-            o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, 16));
+            o.scene.msaa = static_cast<std::uint32_t>(std::clamp(std::atoi(argv[++i]), 1, static_cast<int>(hailstone::render::kMaxMsaa)));
         } else if (arg("--tonemap")) {
             need(1);
             o.scene.tonemap = hailstone::render::parse_tonemap(argv[++i]);
@@ -492,6 +493,9 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--render-scale")) {
             need(1);
             o.scene.render_scale = static_cast<float>(std::clamp(std::atoi(argv[++i]), 50, 100)) / 100.0f;
+        } else if (arg("--upscaler")) {
+            need(1);
+            o.scene.upscaler = hailstone::render::parse_upscaler(argv[++i]);
         } else if (arg("--sharpness")) {
             need(1);
             o.scene.sharpness = std::clamp(std::strtof(argv[++i], nullptr), 0.0f, 1.0f);
@@ -1361,7 +1365,10 @@ int main(int argc, char** argv) {
                 }
             }
             if (zone_renderer) {
-                glm::mat4 proj = camera.projection(width, height, draw_view.far_plane);
+                // Drawn through the temporal upscaler's jitter (none without it), which follows the plain view.
+                const glm::mat4 plain_proj = camera.projection(width, height, draw_view.far_plane);
+                vk.set_temporal_view(camera.view(), plain_proj);
+                glm::mat4 proj = hailstone::render::jittered(plain_proj, vk.projection_jitter());
                 glm::mat4 vp = proj * camera.view();
                 render::SkyFrame sky_frame{sky_hour, t, horizon_haze};
                 render::Daylight day = render::daylight(sky_hour, true, moon_phase, blood_moon);
