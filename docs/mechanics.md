@@ -50,6 +50,23 @@ Outside this directory, with vectors: `net/reliable_channel.*` (the session laye
 ack-all: the resend timeout min(1.25 rtt + 300, 8000) ms), and the UI rules the windows call (`game/spell_book.h`,
 `group_rules.h`, `quantity_dialog.h`, `trade_rules.h`, `cursor_drop.h`; `tests/ui_rules_vectors_test.cpp`).
 
+## Tribute bonus items
+
+The server supplies personal tribute bonus items in inventory type 6, slots 0..4, and guild tribute bonus items
+in type 8, slots 0..1. `sheet_builder.cpp` puts them in the character's existing extra item lookups (0..4 and
+15..16), so their normal item stats, worn effects and focus effects take the same paths as the other item
+bonuses. Their stack count does not multiply those bonuses. Trophy containers still have no source on stock EQEmu.
+The bulk possessions/bank inventory can follow personal tribute item packets at login; it preserves those
+separately received bonus containers instead of erasing them.
+
+Stock EQEmu removes these items without item-deletion packets when tribute is disabled or a member opts out.
+The connection therefore retires the cached items on received deactivation, changed selections, self opt-out,
+guild changes and session transitions. A toggle request alone grants or removes no bonus. Repeated unchanged
+active-state messages preserve the current items; new item packets replace them normally.
+
+Packet, mechanics and mock-connection regressions cover item replacement and retirement, along with the benefit
+windows' guild permissions and platinum-donation replies. Full tribute workflows still need live acceptance.
+
 ## Exactness
 
 - Integer math wraps (explicit unsigned adds and multiplies).
@@ -564,6 +581,21 @@ lookup 1500, follow AI 3000):
   its address, so a server patch's detour runs for each (NMS: the timer ids from 20 up in the patch's own map,
   stamped now + RecastTime / 1000 on use and set by OP_DisciplineTimer; the map lives for the session and nothing
   fills it at zone-in, as the profile has 20 timers).
+- Ability reuse is shared by timer id, including id 0. A profile timer or OP_DisciplineTimer marks every ability
+  using that id, independently of which ability started it or whether a discipline is currently active. The combat
+  ability tiles and discipline hot buttons derive their cooldown state from that shared deadline. A shorter
+  ability's reuse can be less than the shared wait; as a presentation fix, its overlay stays full until the wait
+  fits its own reuse, instead of a future inferred start making it look ready. Both UIs show a faded red reuse
+  fill and seconds countdown on combat ability entries. The regular use, assignment and drag handlers still run.
+- The active discipline's duration is separate from its reuse timer: gauge 26's helper @0x761600 gives, while a
+  discipline is active (PcZoneClient_IsDisciplineActive @0x5802c0, its effect from @0x5802a0), the effect's
+  remaining ticks * 1000 / `CharacterZoneClient::SpellDuration` @0x434420 (spell, the local player's level, false),
+  0 when that duration is not positive; the gauge function then caps the value at 1000. RoF2 gives this gauge no
+  text: the seconds shown above the bar, the interpolation between ticks, "Permanent" with a full bar for a
+  permanent effect, and a still bar while buff timers are suspended are Hailstone additions. Clicking the active
+  icon (LB in the gamepad UI, whose navigation leaves the icon out so that A on opening the window cannot end the
+  discipline) follows `/stopdisc`, requesting removal of the discipline slot and waiting for the server's fade;
+  ordinary buff slots and ability reuse timers are unchanged.
 - The rank swap (CastSpell and doCombatAbility): a player who is not a GM (PcClient's CharacterBase vtable +0x90,
   @0x580300: the spawn's vtable +0xdc) casting a spell of a SpellGroup from a gem takes, when the membership's
   spell tier limit (vtable +0 = PcClient::GetGameFeature_ @0x5784e0, feature 3) is not -1 and below the spell's
@@ -1063,7 +1095,12 @@ teleport index request and wait 300, do-teleport-B 2000, zone player to bind 120
   PrepareForRepop (buffs, vitals to max, drunkenness 0), vitals from the packet, air to max, gems refreshed; the
   same zone (the whole dword with the instance): death music off, rewind reset, the position list sent, no move;
   another zone: MoveToZone(zone, save 1, reason 10, x, y, z, (int)heading, -1, -1, 0).
-- The respawn window's Select waits for the packet's +8 delay and is disabled once chosen; it sends {u32 option}.
+  A deliberate difference after a same-zone hover respawn: PrepareForRepop's mana and endurance to max are skipped,
+  and the packet's mana or endurance is taken only when it is not 0, so the current values stay. EQEmu's RoF2
+  encoder writes 0 placeholders there, and the server's resource updates can arrive before the packet (or, for
+  mana still at 0 after a resurrection, not at all); the original takes the packet's values as they are.
+- The respawn window's Select waits for the packet's +8 delay and an available selected destination, then sends {u32 option} once. The option's final byte is availability, not a resurrection kind; both UI packs identify unavailable choices. The server controls timeout resolution.
+- Same-zone hover completion waits for the living own spawn with its new ID before releasing movement. The old corpse stays in the world; the new spawn's position, heading and fresh physics body replace the old movement state. Pending isometric click-to-move interactions and their marker are cancelled at placement. Current mana/endurance survive the RoF2 bind packet's zero placeholders, and the server's following buff/HP updates apply to the new player. Resurrection confirmations take input priority while the original respawn window stays drawn in both UI packs. Yes to an offer for the current zone (the zone dword with the instance, ConfirmationDialog_HandleResponse @0x52d540 case 0x67) sends no OP_RezzAnswer and locally enables the reserved final resurrection row alongside bind (0x74e9e0 enables the disabled lines and recolours them green); the countdown continues and no resurrection is committed until Select sends the chosen destination. Yes to an offer naming another zone or instance sends OP_RezzAnswer at once, as outside hover. Yes does not move the selection, and the row keeps its "r" marker; a committed highlight stays fixed until completion. The original also requires the offer's corpse name to match the local player's; that is not compared (docs/unknowns.md). Resurrection text is red while unavailable and green while available in both UI packs. Highlighting does not change the server's timeout default. No sends the decline immediately and leaves bind usable. The server's final-row ordering identifies resurrection, independently of names and availability flags. A replaced offer or changed destination invalidates local consent. Pending resurrection dialogs are dropped when respawn completes, zoning starts or the connection ends. Packet-sequence and movement coverage: `tests/hover_respawn_test.cpp`, `tests/player_placement_test.cpp`; protocol details in `docs/protocol/rof2-packets.md`.
 - Camp: sits, OP_Camp, 12293; 12684 every 5 s; a second /camp or a position change (the Stand button, the sit key,
   moving forward while sitting) cancels it (12290), any other
   stand 12683; it never looks at an open trade. At the end the position history goes (when not riding), then
@@ -1291,6 +1328,59 @@ icons and menu checks, and scripts' `Group.MainTank`, `Group.MainAssist`, `Group
 that same state. Assigning a role clears its previous holder when the server confirms it. A group disband or
 zone transition clears the old state, and the server's roster and role updates restore it.
 
+## Group and raid leadership
+
+Both UI packs expose raid Main Assist and Mark NPC delegation, Find PC, and the Leadership window's three
+Create Hotkey buttons. A hotkey is placed on the cursor for a hot bar; the gamepad pack opens its slot picker to
+assign it with the controller. Passive abilities have none. The purchased
+rank list is separate from the active group and raid leaders' ranks. Nontrainable waypoint records are not shown
+as purchasable assist or marker abilities. The records the RoF2 table marks untrainable (2, 3, 5, 18, 21) are not
+listed at all, although stock EQEmu still sells 2, 3 and 18: ranks bought through another client do not show, and
+an old hot button for one of them does nothing.
+
+The raid member menu is a Hailstone UI extension in both packs: right-click a member, or select one and use
+Member actions. The gamepad pack also opens it with Y on the focused row. Main Assist and Mark NPC delegate
+those roles to that member; they do not mark the member as an NPC target. The menu also offers Find PC,
+leadership and looter changes, and group removal. It captures the member's name and checks current membership
+and permissions again when an action is chosen, so a changed selection or roster cannot redirect the action.
+The original button APIs remain available to scripts. Raid-wide invitations, options, lock and leave controls
+stay outside the member menu; dragging and the gamepad's group picker still move members between groups.
+When Context Menus is switched off, both packs show the direct member buttons instead.
+
+Raid marks use `/rmarknpc 1`, `/rmarknpc 2` and `/rmarknpc 3`, or leadership hotkeys. Marking the same target again
+sends the same numbered request; the server owns the result. Two deliberate changes from the original
+(Leadership_ActivateAbility @0x55f0f0): it sent mark 0 to unmark a target that already held that mark, which EQEmu
+refuses (MarkNPC and RaidMarkNPC reject 0), so the client no longer sends it; and it marked any target, where the
+client now marks only a living NPC (a player or a corpse gets the no-target line), although EQEmu's raid marks
+would take a player. `/clearmarks` clears all raid marks for the leader or
+a delegated marker. Delegation and marks change locally only when the server confirms them. Delegate identities
+are reconciled by member name, including servers that send zero-numbered roster snapshots. Departures, disbanding
+and zoning clear transient marks and delegate spawn IDs so another spawn cannot inherit them. Zoning keeps the
+delegates' names and the members' Main Assist and Mark NPC flags: EQEmu announces a delegate again only when they
+are already in the new zone, and its delegate request toggles, so a forgotten Main Assist chosen again from the
+menu would be cleared instead of set.
+
+Purchase in the Leadership window is offered whenever the next rank exists and the player has a point of that
+kind. A deliberate change: the original disables it below its own cost table (Mark NPC 3 / 4 / 5, Delegate Mark NPC
+6 / 7 / 8), but the costs are the server's (stock EQEmu charges 1 / 2 / 3 and 6 / 6 / 6) and the server checks every
+purchase. The cost column still shows the RoF2 table.
+
+The original expansion and population checks remain: Gates of Discord, at least three group members or eighteen
+raid members, and the active leader's appropriate rank. HP, mana, HP regeneration and offense enhancements use
+those active ranks, stack group and raid effects when both apply, and feed the live character sheet and ATK label.
+The server remains authoritative for combat and received vitals.
+
+Spell Awareness adds the spell name to another caster's normal casting message when the active group or raid
+leader grants it and the caster is no more than five levels above the player. GM spell identification is
+independent of leadership. The spell still has to be present in the player's spell data.
+
+Invite Expedition and Invite Task in the raid window invite missing members of the player's expedition or shared
+task **into the raid**. They send ordinary named raid invitations, skip the player and existing raid members, and
+recheck raid leadership, lock and capacity when clicked. They do not require expedition/task leadership and do not
+predict acceptance. These are distinct from the expedition and task windows' invitations into those activities.
+
+Covered by packet, mock-server and both-pack UI tests; live multiplayer acceptance remains to be checked.
+
 ## Hot buttons, socials and tracking
 
 Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-button right click 1500, social stop
@@ -1364,6 +1454,13 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   nothing is disabled there.
 - The Actions window's pages: the same skill and social rules on the window's buttons; Melee and Range Attack both
   checked while the primary swing is not ready or auto fire is on.
+- Slam (skill 111, `slam_innate`): a deliberate change from the original, which fills its innate slots from the
+  profile race (EQ_Character::InitInnates) and so keeps a Barbarian's Slam under an illusion and never gives one to
+  a Dark Elf in Barbarian form. Hailstone takes the innate Slam from the player spawn's current race
+  (`app::skill_race`), as EQEmu does (Client::OPCombatAbility bypasses the Bash skill check by `GetRace()`): the
+  combat lists gain or lose Slam as an illusion starts or ends, and Bash without a shield goes through the Slam path
+  while the current form has it. Both send the same Bash attack (`DoAttack(100, 10)`), so a large race with a shield
+  loses nothing.
 - Focus reuse mod (`Character::focus_reuse_mod`): SPA 310 from the best item focus (its spell's first base), buff and
   AA, each times its percent / 100, at most the recast time; the gems, hot buttons and combat ability window take it
   off the recast they show.
@@ -1707,7 +1804,7 @@ Vectors in `tests/merc_vectors_test.cpp` (25 files, every handler and sender of 
   (100%). A deliberate difference there: the original's `current * 100 / max` is an int32 product that wraps past
   21.4 million; with the maximum standing in for the current power the wrap would only make the 100% meaningless, so
   the client multiplies in 64 bits.
-- Leadership bonuses, the server's PvP ruleset, the server's regen rule for `IsRestingForFastRegen`, the 21 extra
+- The server's PvP ruleset, the server's regen rule for `IsRestingForFastRegen`, the 21 extra
   item lookups (tribute-like containers), the caster level of buffs that arrived without one (OP_BuffCreate; the
   player's level is used).
 

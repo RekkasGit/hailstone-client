@@ -123,6 +123,7 @@ add_library(hailstone_engine STATIC
   src/core/binary_header.cpp
   src/core/sha1.cpp
   src/core/sha256.cpp
+  src/core/shared_file_cache.cpp
   src/plugin/hooks.cpp
   src/plugin/consent.cpp
   src/plugin/policy.cpp
@@ -296,6 +297,9 @@ add_library(hailstone_engine STATIC
   src/platform/local_time.cpp
   src/platform/private_file.cpp
   src/platform/durable_file.cpp
+  src/platform/shared_file.cpp
+  src/platform/gpu_ipc.cpp
+  src/platform/gpu_external_memory.cpp
   src/platform/process.cpp
   src/game/eq_names.cpp
   src/ui/font_faces.cpp
@@ -345,6 +349,7 @@ add_library(hailstone_engine STATIC
   src/assets/animation_track.cpp
   src/assets/character_memory.cpp
   src/assets/character.cpp
+  src/assets/animation_frames.cpp
   src/assets/character_dress.cpp
   src/assets/character_parts.cpp
   src/assets/eqg_character.cpp
@@ -355,6 +360,7 @@ add_library(hailstone_engine STATIC
   src/assets/jpeg_read.cpp
   src/assets/texture_overrides.cpp
   src/assets/gltf_mesh.cpp
+  src/assets/ground_refine.cpp
   src/assets/model_overrides.cpp
   src/assets/sky.cpp
   src/assets/sky_weather.cpp
@@ -374,10 +380,15 @@ add_library(hailstone_engine STATIC
   src/app/plate_test.cpp
   src/app/nameplate_layer.cpp
   src/render/gpu_requirements.cpp
+  src/render/gpu_cache_protocol.cpp
+  src/render/gpu_share_link.cpp
+  src/render/gpu_shared_cache.cpp
   src/render/pipeline_cache.cpp
   src/render/gpu.cpp
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
+  src/render/temporal.cpp
+  src/render/fsr3_upscaler.cpp
   src/render/particle_renderer.cpp
   src/render/fire_renderer.cpp
   src/render/flora_renderer.cpp
@@ -491,6 +502,7 @@ add_library(hailstone_engine STATIC
   src/game/trade_rules.cpp
   src/game/tradeskill.cpp
   src/game/leadership.cpp
+  src/game/leadership_bonuses.cpp
   src/game/chat_input.cpp
   src/game/hot_button_press.cpp
   src/game/hot_button_menu.cpp
@@ -773,8 +785,12 @@ hailstone_add_shaders(hailstone_shaders
   shaders/bloom_up.frag
   shaders/fsr_easu.frag
   shaders/fsr_rcas.frag
+  shaders/temporal_prep.frag
+  shaders/taa_resolve.frag
 )
 add_dependencies(hailstone_engine hailstone_shaders)
+hailstone_add_fsr3_shaders(hailstone_fsr3_shaders)
+add_dependencies(hailstone_engine hailstone_fsr3_shaders)
 
 # The client's folder (docs/layout.md): the build makes it in build/hailstone/, as an install does. The binary,
 # shaders/, ui/ and the runtime DLLs; the data Hailstone writes (hailstone.ini, servers/, logs/ ...) lands beside them,
@@ -903,6 +919,52 @@ foreach(tool ${HAILSTONE_TOOLS})
   endif()
   target_link_libraries(${tool} PRIVATE hailstone_engine)
 endforeach()
+# The shared GPU texture experiment's broker, its server transport and its probes (docs/graphics.md "Shared GPU
+# textures"): linked by the tools below and the tests, never by the client, which has only the importing side.
+add_library(hailstone_gpu_lab STATIC
+  tools/gpu_lab/gpu_cache_broker_core.cpp
+  tools/gpu_lab/gpu_cache_broker.cpp
+  tools/gpu_lab/gpu_share_capabilities.cpp
+  tools/gpu_lab/gpu_asset_view_probe.cpp
+  tools/gpu_lab/gpu_probe_scene.cpp
+  src/platform/gpu_ipc_server.cpp
+  src/platform/gpu_external_memory_export.cpp)
+target_include_directories(hailstone_gpu_lab PUBLIC tools)
+target_compile_options(hailstone_gpu_lab PRIVATE ${HAILSTONE_WARNINGS})
+target_link_libraries(hailstone_gpu_lab PUBLIC hailstone_engine)
+if(WIN32)
+  target_link_libraries(hailstone_gpu_lab PUBLIC bcrypt)
+endif()
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone_gpu_lab PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
+endif()
+# Headless capability queries and same-device GPU alias/readback checks; no game assets required.
+add_executable(hailstone_gpu_share_probe tools/gpu_share_probe.cpp ${HAILSTONE_WIN_MANIFEST})
+target_compile_options(hailstone_gpu_share_probe PRIVATE ${HAILSTONE_WARNINGS})
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone_gpu_share_probe PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
+endif()
+target_link_libraries(hailstone_gpu_share_probe PRIVATE hailstone_gpu_lab)
+list(APPEND HAILSTONE_TOOLS hailstone_gpu_share_probe)
+# Offscreen real-zone sharing experiment; the playable client keeps its own renderer.
+hailstone_add_shaders(hailstone_gpu_asset_probe_shaders shaders/gpu_asset_probe.vert shaders/gpu_asset_probe.frag)
+add_executable(hailstone_gpu_asset_probe tools/gpu_asset_probe.cpp ${HAILSTONE_WIN_MANIFEST})
+target_compile_options(hailstone_gpu_asset_probe PRIVATE ${HAILSTONE_WARNINGS})
+target_compile_definitions(hailstone_gpu_asset_probe PRIVATE HAILSTONE_GPU_ASSET_SHADER_DIR="${HAILSTONE_SHADER_OUT}")
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone_gpu_asset_probe PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
+endif()
+target_link_libraries(hailstone_gpu_asset_probe PRIVATE hailstone_gpu_lab)
+add_dependencies(hailstone_gpu_asset_probe hailstone_gpu_asset_probe_shaders)
+list(APPEND HAILSTONE_TOOLS hailstone_gpu_asset_probe)
+# The broker clients share textures through.
+add_executable(hailstone_gpu_cache_broker tools/gpu_cache_broker.cpp ${HAILSTONE_WIN_MANIFEST})
+target_compile_options(hailstone_gpu_cache_broker PRIVATE ${HAILSTONE_WARNINGS})
+target_link_libraries(hailstone_gpu_cache_broker PRIVATE hailstone_gpu_lab)
+if(HAILSTONE_CLANG_TIDY)
+  set_target_properties(hailstone_gpu_cache_broker PROPERTIES CXX_CLANG_TIDY "${HAILSTONE_TIDY_COMMAND}")
+endif()
+list(APPEND HAILSTONE_TOOLS hailstone_gpu_cache_broker)
 # Texture packs built from the player's archives (src/texpack, docs/graphics.md "Built packs"): shared by texpack, the
 # tests and Hailstone Texture Studio (projecthailstone/hailstone-texstudio, which builds against this tree). The models
 # run behind texpack::Model; the studio's ncnn backend is in its own repository.
@@ -919,7 +981,18 @@ target_link_libraries(texpack PRIVATE hailstone_texpack)
 
 if(HAILSTONE_BUILD_TESTS)
   enable_testing()
+  add_executable(hailstone_shared_cache_probe tools/shared_cache_probe.cpp ${HAILSTONE_WIN_MANIFEST})
+  target_compile_options(hailstone_shared_cache_probe PRIVATE ${HAILSTONE_WARNINGS})
+  target_link_libraries(hailstone_shared_cache_probe PRIVATE hailstone_engine)
+  list(APPEND HAILSTONE_TOOLS hailstone_shared_cache_probe)
   add_executable(hailstone_tests ${HAILSTONE_WIN_MANIFEST}
+    tests/gpu_share_capabilities_test.cpp
+    tests/gpu_probe_scene_test.cpp
+    tests/gpu_asset_view_probe_test.cpp
+    tests/shared_file_test.cpp
+    tests/shared_cache_test.cpp
+    tests/shared_cache_store_test.cpp
+    tests/shared_character_models_test.cpp
     tests/test_main.cpp
     tests/bag_move_test.cpp
     tests/byte_io_test.cpp
@@ -945,6 +1018,13 @@ if(HAILSTONE_BUILD_TESTS)
     tests/bug_report_test.cpp
     tests/bug_report_window_test.cpp
     tests/startup_error_test.cpp
+    tests/gpu_requirements_test.cpp
+    tests/gpu_ipc_test.cpp
+    tests/gpu_cache_protocol_test.cpp
+    tests/gpu_shared_texture_owner_test.cpp
+    tests/gpu_share_link_test.cpp
+    tests/gpu_cache_broker_core_test.cpp
+    tests/frame_sync_test.cpp
     tests/look_eviction_test.cpp
     tests/appearance_systems_test.cpp
     tests/plugin_hooks_test.cpp
@@ -1000,6 +1080,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/font_faces_test.cpp
     tests/process_test.cpp
     tests/flora_test.cpp
+    tests/ground_refine_test.cpp
     tests/zone_flora_test.cpp
     tests/client_info_commands_test.cpp
     tests/gameplay_commands_test.cpp
@@ -1038,6 +1119,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/pfs_mapped_test.cpp
     tests/wld_deferred_test.cpp
     tests/wld_test.cpp
+    tests/wld_shared_frames_test.cpp
+    tests/wld_storage_test.cpp
+    tests/animation_frames_test.cpp
     tests/eqg_test.cpp
     tests/regions_test.cpp
     tests/view_distance_test.cpp
@@ -1092,6 +1176,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/spell_sets_test.cpp
     tests/hot_button_sets_test.cpp
     tests/group_commands_test.cpp
+    tests/leadership_bonuses_test.cpp
+    tests/leadership_spell_awareness_test.cpp
+    tests/raid_invites_test.cpp
     tests/group_search_test.cpp
     tests/chat_ui_test.cpp
     tests/inventory_bandolier_ui_test.cpp
@@ -1197,6 +1284,9 @@ if(HAILSTONE_BUILD_TESTS)
     tests/char_select_scene_test.cpp
     tests/lua_eq_args_test.cpp
     tests/lua_eq_test.cpp
+    tests/lua_eq_tasks_test.cpp
+    tests/lua_task_journal_test.cpp
+    tests/quest_journal_ui_test.cpp
     tests/ui_ini_test.cpp
     tests/ui_packs_test.cpp
     tests/item_compare_test.cpp
@@ -1206,6 +1296,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
     tests/iso_camera_test.cpp
+    tests/temporal_test.cpp
     tests/click_intent_test.cpp
     tests/iso_occlusion_test.cpp
     tests/gamepad_bindings_test.cpp
@@ -1233,6 +1324,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/inventory_manager_ui_test.cpp
     tests/commerce_edges_test.cpp
     tests/tribute_donation_test.cpp
+    tests/tribute_bonus_test.cpp
     tests/audio_vectors_test.cpp
     tests/melee_vectors_test.cpp
     tests/spawn_heights_vectors_test.cpp
@@ -1263,6 +1355,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mock_session_test.cpp
     tests/mock_login_test.cpp
     tests/mock_game_test.cpp
+    tests/hover_respawn_test.cpp
     tests/mock_eqemu_compat_test.cpp
     tests/item_use_test.cpp
     tests/spell_book_swap_test.cpp
@@ -1279,8 +1372,10 @@ if(HAILSTONE_BUILD_TESTS)
     tests/addon_tool_test.cpp
   )
   target_include_directories(hailstone_tests PRIVATE tests sdk)
+  add_dependencies(hailstone_tests hailstone_shared_cache_probe)
+  target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_SHARED_CACHE_PROBE="$<TARGET_FILE:hailstone_shared_cache_probe>")
   target_compile_options(hailstone_tests PRIVATE ${HAILSTONE_WARNINGS})
-  target_link_libraries(hailstone_tests PRIVATE hailstone_engine hailstone_texpack doctest::doctest)
+  target_link_libraries(hailstone_tests PRIVATE hailstone_engine hailstone_gpu_lab hailstone_texpack doctest::doctest)
   # The server extension test plugin (tests/plugins/ExtendTest.c), the same as an ABI 1 plugin, and the same with its
   # hook table under the export name after 0.6.
   add_library(ExtendTest MODULE tests/plugins/ExtendTest.c)
@@ -1343,7 +1438,7 @@ if(HAILSTONE_LIBFUZZER)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "HAILSTONE_LIBFUZZER needs Clang")
   endif()
-  foreach(target pfs wld texture soe packets decoders zip)
+  foreach(target pfs wld texture soe packets decoders zip gpucache)
     string(TOUPPER ${target} upper)
     add_executable(fuzz_${target} tests/fuzz_libfuzzer.cpp)
     target_compile_definitions(fuzz_${target} PRIVATE HAILSTONE_FUZZ_${upper})
@@ -1374,4 +1469,11 @@ if(WIN32)
       COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${exe}> $<TARGET_FILE_DIR:${exe}>
       COMMAND_EXPAND_LISTS)
   endforeach()
+endif()
+
+# MSVC under Wine (docs/ci.md): the engine library's archive command is longer than the 32,767 characters a Windows
+# command line holds, and CMake writes response files on its own only when the host is Windows. Set last, so it holds
+# for this directory's targets only: the dependencies' subdirectories (SDL's precompiled header) keep plain commands.
+if(WIN32 AND NOT CMAKE_HOST_WIN32)
+  set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
 endif()

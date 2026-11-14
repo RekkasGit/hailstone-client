@@ -70,6 +70,10 @@ Material read_material(const cgltf_material* m, std::size_t index) {
     return out;
 }
 
+bool parse_sway_heights(const cgltf_data* data) {
+    return data->asset.extras.data && std::string_view(data->asset.extras.data).find("\"hailstone_sway\"") != std::string_view::npos;
+}
+
 std::uint64_t parse_source_hash(const cgltf_data* data) {
     if (!data->asset.extras.data) return 0;
     std::string_view json(data->asset.extras.data);
@@ -152,13 +156,14 @@ std::optional<GltfMesh> read_glb(std::span<const std::byte> bytes, std::string* 
     out.source_hash = parse_source_hash(data.get());
     Mesh& mesh = out.mesh;
     mesh.front_ccw = true;
+    mesh.sway_heights = parse_sway_heights(data.get());
     for (cgltf_size i = 0; i < data->materials_count; ++i) mesh.materials.push_back(read_material(&data->materials[i], i));
     std::size_t default_material = std::numeric_limits<std::size_t>::max();
 
     const cgltf_scene* scene = data->scene ? data->scene : data->scenes_count ? &data->scenes[0] : nullptr;
     std::vector<const cgltf_node*> nodes;
     struct ReadVertices {
-        std::array<const void*, 4> key;
+        std::array<const void*, 5> key;
         glm::mat4 world;
         std::size_t base;
     };
@@ -185,18 +190,19 @@ std::optional<GltfMesh> read_glb(std::span<const std::byte> bytes, std::string* 
         for (cgltf_size pi = 0; pi < node->mesh->primitives_count; ++pi) {
             const cgltf_primitive& prim = node->mesh->primitives[pi];
             if (prim.type != cgltf_primitive_type_triangles) continue;
-            const cgltf_accessor *pos = nullptr, *nrm = nullptr, *uv = nullptr, *col = nullptr;
+            const cgltf_accessor *pos = nullptr, *nrm = nullptr, *uv = nullptr, *uv2 = nullptr, *col = nullptr;
             for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
                 const cgltf_attribute& at = prim.attributes[a];
                 if (at.type == cgltf_attribute_type_position) pos = at.data;
                 else if (at.type == cgltf_attribute_type_normal) nrm = at.data;
                 else if (at.type == cgltf_attribute_type_texcoord && at.index == 0) uv = at.data;
+                else if (at.type == cgltf_attribute_type_texcoord && at.index == 1) uv2 = at.data;
                 else if (at.type == cgltf_attribute_type_color && at.index == 0) col = at.data;
             }
             if (!pos || pos->count == 0) continue;
             // Primitives that share their vertex data under the same transform (one part per material, one node per
             // level of detail) share the vertices.
-            const std::array<const void*, 4> key{pos, nrm, uv, col};
+            const std::array<const void*, 5> key{pos, nrm, uv, uv2, col};
             std::size_t base = mesh.vertices.size();
             bool shared = false;
             for (const auto& r : read_vertices)
@@ -221,6 +227,7 @@ std::optional<GltfMesh> read_glb(std::span<const std::byte> bytes, std::string* 
                     vx.normal = glm::dot(n, n) > 0.0f ? from_gltf(glm::normalize(n)) : glm::vec3(0, 0, 1);
                 }
                 if (uv && cgltf_accessor_read_float(uv, v, f, 2)) vx.uv = {f[0], f[1]};
+                if (uv2 && cgltf_accessor_read_float(uv2, v, f, 2)) vx.uv2 = {f[0], f[1]};
                 if (col) {
                     float c[4] = {1, 1, 1, 1};
                     cgltf_accessor_read_float(col, v, c, cgltf_num_components(col->type) >= 4 ? 4 : 3);
@@ -326,6 +333,9 @@ std::vector<std::byte> write_glb(const Mesh& mesh, std::uint64_t source_hash) {
     for (const auto& v : mesh.vertices) bin.f32(v.uv.x), bin.f32(v.uv.y);
     const std::size_t colors_at = bin.size();
     for (const auto& v : mesh.vertices) bin.le(v.color);
+    const std::size_t uv2s_at = bin.size();
+    if (mesh.sway_heights)
+        for (const auto& v : mesh.vertices) bin.f32(v.uv2.x), bin.f32(v.uv2.y);
     const std::size_t vertex_bytes = bin.size();
 
     std::string views, accessors;
@@ -337,14 +347,19 @@ std::vector<std::byte> write_glb(const Mesh& mesh, std::uint64_t source_hash) {
     view(0, normals_at, 34962);
     view(normals_at, uvs_at - normals_at, 34962);
     view(uvs_at, colors_at - uvs_at, 34962);
-    view(colors_at, vertex_bytes - colors_at, 34962);
+    view(colors_at, uv2s_at - colors_at, 34962);
+    if (mesh.sway_heights) view(uv2s_at, vertex_bytes - uv2s_at, 34962);
     const std::string count = std::to_string(n);
     accessors = "{\"bufferView\":0,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC3\",\"min\":[" + num(lo.x) +
                 "," + num(lo.y) + "," + num(lo.z) + "],\"max\":[" + num(hi.x) + "," + num(hi.y) + "," + num(hi.z) + "]}";
     accessors += ",{\"bufferView\":1,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC3\"}";
     accessors += ",{\"bufferView\":2,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC2\"}";
     accessors += ",{\"bufferView\":3,\"componentType\":5121,\"normalized\":true,\"count\":" + count + ",\"type\":\"VEC4\"}";
-    int next_view = 4, next_accessor = 4;
+    if (mesh.sway_heights) accessors += ",{\"bufferView\":4,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC2\"}";
+    int next_view = mesh.sway_heights ? 5 : 4, next_accessor = next_view;
+    const std::string attributes = mesh.sway_heights
+        ? "{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2,\"COLOR_0\":3,\"TEXCOORD_1\":4}"
+        : "{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2,\"COLOR_0\":3}";
     // One glTF mesh and node a level-of-detail band, its parts' primitives in it.
     std::vector<std::pair<float, float>> bands;
     for (const auto& part : mesh.parts)
@@ -364,7 +379,7 @@ std::vector<std::byte> write_glb(const Mesh& mesh, std::uint64_t source_hash) {
         accessors += ",{\"bufferView\":" + std::to_string(next_view++) + ",\"componentType\":5125,\"count\":" +
                      std::to_string(part.index_count / 3 * 3) + ",\"type\":\"SCALAR\"}";
         if (!prims.empty()) prims += ',';
-        prims += "{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2,\"COLOR_0\":3},\"indices\":" +
+        prims += "{\"attributes\":" + attributes + ",\"indices\":" +
                  std::to_string(next_accessor++) + ",\"material\":" + std::to_string(part.material) + "}";
     }
 
@@ -389,7 +404,12 @@ std::vector<std::byte> write_glb(const Mesh& mesh, std::uint64_t source_hash) {
     char hash[17];
     std::snprintf(hash, sizeof hash, "%016llx", static_cast<unsigned long long>(source_hash));
     std::string json = "{\"asset\":{\"version\":\"2.0\",\"generator\":\"Hailstone\"";
-    if (source_hash) json += ",\"extras\":{\"hailstone_source\":\"" + std::string(hash) + "\"}";
+    if (source_hash || mesh.sway_heights) {
+        json += ",\"extras\":{";
+        if (source_hash) json += "\"hailstone_source\":\"" + std::string(hash) + "\"";
+        if (mesh.sway_heights) json += std::string(source_hash ? "," : "") + "\"hailstone_sway\":1";
+        json += "}";
+    }
     json += "},\"scene\":0,\"scenes\":[{\"nodes\":[";
     for (std::size_t b = 0; b < bands.size(); ++b) json += (b ? "," : "") + std::to_string(b);
     json += "]}],\"nodes\":[";

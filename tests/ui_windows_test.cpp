@@ -3,6 +3,7 @@
 // page, the extended target window's context menu, and the pet window's gauges for several pets.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -15,7 +16,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <thread>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -24,6 +24,7 @@
 #include "app/lua_eq.h"
 #include "app/lua_eq_hotbar.h"
 #include "app/lua_eq_windows.h"
+#include "core/byte_io.h"
 #include "core/ini_file.h"
 #include "game/bazaar.h"
 #include "game/hot_button_menu.h"
@@ -36,6 +37,9 @@
 #include "net/notice_packets.h"
 #include "net/opcodes.h"
 #include "net/pet_packets.h"
+#include "net/social_packets.h"
+#include "net/zone_packets.h"
+#include "manual_clock.h"
 #include "scratch_dir.h"
 #include "ui/lua/lua_host.h"
 
@@ -54,23 +58,40 @@ void put_f32(std::vector<std::byte>& b, float f) {
 }
 
 // OP_RespawnWindow as EQEmu's SendRespawnBinds writes it.
-net::AppPacket respawn_packet() {
+net::AppPacket respawn_packet(std::uint8_t validity = 1) {
     std::vector<std::byte> b;
     put_u32(b, 0);     // the default option
     put_u32(b, 60000); // time remaining
     put_u32(b, 0);     // delay
     put_u32(b, 2);
-    auto option = [&](std::uint32_t id, std::uint32_t zone, const char* name, std::uint8_t type) {
+    auto option = [&](std::uint32_t id, std::uint32_t zone, const char* name, std::uint8_t availability) {
         put_u32(b, id);
         put_u32(b, zone);
         for (int i = 0; i < 4; ++i) put_f32(b, 0.0f);
         for (const char* c = name; *c; ++c) b.push_back(static_cast<std::byte>(*c));
         b.push_back(std::byte{0});
-        b.push_back(static_cast<std::byte>(type));
+        b.push_back(static_cast<std::byte>(availability));
     };
     option(0, 2, "Bind Location", 0);
-    option(1, 2, "Resurrect", 1);
+    option(1, 2, "Resurrect", validity);
     return net::AppPacket(net::to_wire(net::Op::RespawnWindow), std::move(b));
+}
+
+net::AppPacket respawn_rez_offer(std::uint32_t spell = 100) {
+    ByteWriter w;
+    w.le<std::uint32_t>(0);
+    w.le<std::uint16_t>(2);
+    w.le<std::uint16_t>(0);
+    for (int i = 0; i < 3; ++i) w.f32(0);
+    w.le<std::uint32_t>(0);
+    w.fixed_string("Gennro", 64);
+    w.le<std::uint32_t>(0);
+    w.fixed_string("Healer", 64);
+    w.le(spell);
+    w.fixed_string("Gennro's corpse", 64);
+    w.le<std::uint32_t>(0);
+    w.zeros(8);
+    return net::AppPacket(net::to_wire(net::Op::RezzRequest), w.take());
 }
 
 struct Harness {
@@ -196,6 +217,204 @@ TEST_CASE("Group role menus: self, member rows, permissions and confirmed role c
     CHECK(t.host.menus.empty());
     CHECK(t.api->click_child("PlayerWindow", "PlayerHP", "right"));
     CHECK(t.host.menus.empty());
+}
+
+TEST_CASE("Raid member menus: clicked identities, grouped and ungrouped rows, and stale authority") {
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    {
+        test::Rig rig;
+        REQUIRE(rig.to_zone());
+        auto& conn = rig.conn;
+        app::EqHost host;
+        host.conn = &conn;
+        host.in_game = host.ui_ready = true;
+        app::EqApi api(host);
+        std::unique_ptr<lua_State, decltype(&lua_close)> lua(luaL_newstate(), lua_close);
+        luaL_openlibs(lua.get());
+        lua_newtable(lua.get());
+        api.register_functions(lua.get());
+        lua_setglobal(lua.get(), "eq");
+        auto run = [&](const std::string& code) {
+            INFO(code);
+            REQUIRE(luaL_dostring(lua.get(), code.c_str()) == LUA_OK);
+            lua_settop(lua.get(), 0);
+        };
+        auto member = [&](const std::string& name, std::uint32_t group, bool add = true) {
+            net::RaidUpdate update;
+            update.general.action = add ? net::kRaidAddMember : net::kRaidRemoveMember;
+            update.general.player_name = name;
+            update.general.parameter = group;
+            conn.receive_zone_packet_for_test(net::encode_raid_update(update));
+        };
+        member("Gennro", 0);
+        for (int i = 1; i <= 17; ++i) member("Member" + std::to_string(i), static_cast<std::uint32_t>(i / 6));
+        member("Ungrouped", 0xffffffffu);
+        auto authority = [&](const std::string& leader, std::uint32_t marker_rank = 1) {
+            net::RaidUpdate update;
+            update.general.action = net::kRaidSetLeader;
+            update.general.leader_name = leader;
+            update.leadership[19] = 1;
+            update.leadership[20] = marker_rank;
+            update.leadership[28] = 1;
+            conn.receive_zone_packet_for_test(net::encode_raid_update(update));
+        };
+        authority("Gennro");
+        auto open = [&](const std::string& list, const std::string& name) {
+            const auto rows = api.list_rows("RaidWindow", list);
+            auto found = std::find_if(rows.begin(), rows.end(), [&](const auto& row) {
+                return row.size() > 1 && row[1] == name;
+            });
+            REQUIRE(found != rows.end());
+            run("eq.ListClick('RaidWindow', '" + list + "', " + std::to_string(found - rows.begin()) + ", 'right')");
+        };
+        auto action = [&](const std::string& label) -> app::EqHost::MenuRow {
+            REQUIRE(host.menus.size() == 1);
+            const auto& rows = host.menus[0].rows;
+            auto found = std::find_if(rows.begin(), rows.end(), [&](const auto& row) { return row.text == label; });
+            REQUIRE(found != rows.end());
+            return *found; // menus may be replaced while the captured callback remains open
+        };
+        auto delegates = [&] {
+            std::vector<net::DelegateAbility> result;
+            for (const auto& packet : rig.server.zone_log)
+                if (packet.opcode == net::to_wire(net::Op::RaidDelegateAbility))
+                    if (auto decoded = net::decode_delegate_ability(packet)) result.push_back(*decoded);
+            return result;
+        };
+        conn.set_raid_target("Member1");
+        open("RAID_PlayerList", "Member2");
+        REQUIRE(host.menus.size() == 1);
+        CHECK(host.menus[0].rows.front().text == "Member2");
+        auto assist = action("Main Assist");
+        REQUIRE(assist.enabled);
+        CHECK_FALSE(assist.check);
+        conn.set_raid_target("Member1");
+        assist.act();
+        REQUIRE(rig.until([&] { return delegates().size() == 1; }));
+        CHECK(delegates()[0].ability == 3);
+        CHECK(delegates()[0].name == "Member2");
+
+        open("RAID_NotInGroupPlayerList", "Ungrouped");
+        CHECK(host.menus[0].rows.front().text == "Ungrouped");
+        auto mark = action("Mark NPC");
+        REQUIRE(mark.enabled);
+        conn.set_raid_target("Member1");
+        mark.act();
+        REQUIRE(rig.until([&] { return delegates().size() == 2; }));
+        CHECK(delegates()[1].ability == 4);
+        CHECK(delegates()[1].name == "Ungrouped");
+
+        // A server update that already achieved a checkbox's captured intent must not toggle it back off.
+        open("RAID_PlayerList", "Member2");
+        auto pending_assist = action("Main Assist").act;
+        conn.receive_zone_packet_for_test(net::encode(net::DelegateAbility{3, 1, 0, 0, "Member2"}, net::Op::RaidDelegateAbility));
+        pending_assist();
+        open("RAID_PlayerList", "Member2");
+        CHECK(action("Main Assist").check);
+
+        auto handoffs = [&] {
+            const auto expected = net::encode(net::RaidGeneral{net::kRaidCmdMakeLeader, "Gennro", "Member2"});
+            return std::count_if(rig.server.zone_log.begin(), rig.server.zone_log.end(), [&](const auto& packet) {
+                return packet.opcode == expected.opcode && packet.data == expected.data;
+            });
+        };
+        action("Make Raid Leader").act();
+        REQUIRE(host.confirm);
+        CHECK(host.confirm->text == "Make Member2 the raid leader?");
+        CHECK(handoffs() == 0);
+        auto confirm_departed = host.confirm->done;
+        member("Member2", 0, false);
+        confirm_departed(true);
+        member("Member2", 0);
+        open("RAID_PlayerList", "Member2");
+        action("Make Raid Leader").act();
+        REQUIRE(host.confirm);
+        auto confirm_selected = host.confirm->done;
+        conn.set_raid_target("Member1");
+        confirm_selected(true);
+        REQUIRE(rig.until([&] { return handoffs() == 1; }));
+
+        // The selected-member control is the keyboard/controller entry to the same captured-name menu.
+        conn.set_raid_target("Member2");
+        REQUIRE(api.click_child("RaidWindow", "RAID_MemberActionsButton"));
+        REQUIRE(host.menus.size() == 1);
+        CHECK(host.menus[0].rows.front().text == "Member2");
+        auto removed = action("Mark NPC").act;
+        member("Member2", 0, false);
+        conn.set_raid_target("Member1");
+        removed(); // a departed member must never redirect an old action to the current selection
+        member("Member2", 0);
+
+        open("RAID_PlayerList", "Member2");
+        auto lost_leader = action("Main Assist").act;
+        authority("Member1");
+        lost_leader();
+        open("RAID_PlayerList", "Member2");
+        CHECK_FALSE(action("Main Assist").enabled);
+        authority("Gennro");
+
+        open("RAID_PlayerList", "Member2");
+        auto lost_rank = action("Mark NPC").act;
+        authority("Gennro", 0);
+        lost_rank();
+        open("RAID_PlayerList", "Member2");
+        CHECK_FALSE(action("Mark NPC").enabled);
+        authority("Gennro");
+
+        // Raid IDs may be zero on both sides of a disband/reform. Old callbacks must still expire.
+        conn.receive_zone_packet_for_test(net::encode(net::DelegateAbility{3, 1, 1, 0, "Member2"}, net::Op::RaidDelegateAbility));
+        open("RAID_PlayerList", "Member2");
+        auto before_reform = action("Main Assist");
+        REQUIRE(before_reform.enabled);
+        CHECK_FALSE(before_reform.check);
+        action("Make Raid Leader").act();
+        REQUIRE(host.confirm);
+        auto confirm_before_reform = host.confirm->done;
+        REQUIRE(conn.raid().id == 0);
+        net::RaidUpdate lifecycle;
+        lifecycle.general.action = net::kRaidDisband;
+        conn.receive_zone_packet_for_test(net::encode_raid_update(lifecycle));
+        lifecycle.general.action = net::kRaidCreate;
+        lifecycle.general.leader_name = "Gennro";
+        conn.receive_zone_packet_for_test(net::encode_raid_update(lifecycle));
+        member("Gennro", 0);
+        for (int i = 1; i <= 17; ++i) member("Member" + std::to_string(i), static_cast<std::uint32_t>(i / 6));
+        member("Ungrouped", 0xffffffffu);
+        authority("Gennro");
+        REQUIRE(conn.raid().id == 0);
+        before_reform.act();
+        confirm_before_reform(true);
+        rig.run_for(std::chrono::milliseconds(30));
+        CHECK(delegates().size() == 2);
+        CHECK(handoffs() == 1);
+        open("RAID_PlayerList", "Member2");
+        action("Main Assist").act();
+        REQUIRE(rig.until([&] { return delegates().size() == 3; }));
+        CHECK(delegates().back().ability == 3);
+        CHECK(delegates().back().name == "Member2");
+
+        open("RAID_PlayerList", "Member2");
+        auto context_disabled = action("Mark NPC").act;
+        host.menus.clear();
+        conn.set_client_option_for_session(game::ClientOption::ContextMenus, 0);
+        context_disabled();
+        open("RAID_PlayerList", "Member2");
+        CHECK(host.menus.empty());
+        CHECK_FALSE(api.child_state("RaidWindow", "RAID_MemberActionsButton").value_or(true));
+        CHECK_FALSE(api.click_child("RaidWindow", "RAID_MemberActionsButton"));
+        CHECK(host.menus.empty());
+        conn.set_client_option_for_session(game::ClientOption::ContextMenus, 1);
+
+        open("RAID_PlayerList", "Member2");
+        auto locked = action("Mark NPC").act;
+        conn.send_command("/safelock test");
+        REQUIRE(conn.interface_locked());
+        locked();
+        rig.run_for(std::chrono::milliseconds(30));
+        CHECK(delegates().size() == 3);
+    }
+    ImGui::DestroyContext(ctx);
 }
 
 TEST_CASE("Group role icons: player and member flags follow confirmed assignments and disband") {
@@ -729,22 +948,177 @@ TEST_CASE("OP_Bandolier: the right button held on a set's slot") {
 }
 
 TEST_CASE("Respawn window: the options, the default row and Select") {
-    const GameDir* game = test::game_dir();
-    if (!game) return;
-    Harness t(*game);
+    test::ManualClock clock;
+    auto options = test::quick_options();
+    options.session.clock = clock.source();
+    test::Rig rig(test::MockConfig::standard(), std::move(options));
+    REQUIRE(rig.to_zone());
+    clock.hold();
+    Harness t(rig.game);
+    t.host.conn = &rig.conn;
+    auto& c = rig.conn;
     CHECK_FALSE(t.api->shown("RespawnWnd"));
-    t.conn.receive_zone_packet_for_test(respawn_packet());
+    c.receive_zone_packet_for_test(respawn_packet());
     REQUIRE(t.api->shown("RespawnWnd"));
-    CHECK(t.conn.respawn_window()->options.size() == 2);
+    CHECK(c.respawn_window()->options.size() == 2);
     auto markers = t.api->list_texts("RespawnWnd", "OptionsList");
     REQUIRE(markers.size() == 2);
     CHECK(markers[0] == "*"); // the default option
-    CHECK(markers[1] == "r"); // a resurrection
-    std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Select: older than the delay (0)
-    CHECK(t.conn.respawn_ready());
+    CHECK(markers[1] == "r"); // the final byte set (Handle_OP_RespawnWindow's marker); on EQEmu: unavailable
+    clock.advance(std::chrono::milliseconds(1)); // Select: older than the delay (0)
+    CHECK(c.respawn_ready());
     CHECK(t.api->click_list("RespawnWnd", "OptionsList", 1, 0));
+    CHECK(t.api->child_state("RespawnWnd", "SelectButton") == false);
     CHECK(t.api->click_child("RespawnWnd", "SelectButton"));
-    CHECK(t.conn.respawn_chosen());
+    CHECK_FALSE(c.respawn_chosen());
+    // A server refresh makes the same row available without inventing a kind from the validity flag.
+    c.receive_zone_packet_for_test(respawn_packet(0));
+    markers = t.api->list_texts("RespawnWnd", "OptionsList");
+    REQUIRE(markers.size() == 2);
+    CHECK(markers[1].empty());
+    clock.advance(std::chrono::milliseconds(1));
+    CHECK(t.api->child_state("RespawnWnd", "SelectButton") == true);
+    CHECK(t.api->click_child("RespawnWnd", "SelectButton"));
+    CHECK(c.respawn_chosen());
+    CHECK(t.api->child_state("RespawnWnd", "SelectButton") == false);
+    CHECK(t.api->child_state("RespawnWnd", "OptionsList") == false);
+}
+
+TEST_CASE("Respawn window: a new session restores the server default without an intervening UI frame") {
+    test::ManualClock clock;
+    auto options = test::quick_options();
+    options.session.clock = clock.source();
+    test::Rig rig(test::MockConfig::standard(), std::move(options));
+    REQUIRE(rig.to_zone());
+    clock.hold();
+    Harness t(rig.game);
+    t.host.conn = &rig.conn;
+    auto& c = rig.conn;
+    c.receive_zone_packet_for_test(respawn_packet());
+    REQUIRE(c.respawn_window());
+    const auto first_session = c.respawn_session();
+    CHECK(t.api->click_list("RespawnWnd", "OptionsList", 1, 0));
+    clock.advance(std::chrono::milliseconds(1));
+    CHECK(t.api->child_state("RespawnWnd", "SelectButton") == false); // unavailable choice inspected
+
+    net::ZonePlayerToBind bind;
+    bind.zone_id = 2;
+    bind.zone_name = "Bind destination";
+    c.receive_zone_packet_for_test(net::encode(bind));
+    REQUIRE_FALSE(c.respawn_window());
+    c.receive_zone_packet_for_test(net::encode(test::make_spawn("Gennro", 60, 0, 1, 0, 0, 0)));
+    net::Death death;
+    death.spawn_id = death.corpse_id = 60;
+    death.damage = 5000;
+    c.receive_zone_packet_for_test(net::encode(death));
+    // Both packets arrive before the UI can observe the closed window and run its per-frame cleanup.
+    c.receive_zone_packet_for_test(respawn_packet());
+    REQUIRE(c.respawn_window());
+    CHECK(c.respawn_session() != first_session);
+    clock.advance(std::chrono::milliseconds(1));
+    CHECK(t.api->child_state("RespawnWnd", "SelectButton") == true); // new default is the available bind
+    CHECK(t.api->click_child("RespawnWnd", "SelectButton"));
+    CHECK(c.respawn_chosen());
+}
+
+TEST_CASE("Respawn window: an accepted resurrection enables its line and leaves the selection") {
+    test::ManualClock clock;
+    auto options = test::quick_options();
+    options.session.clock = clock.source();
+    test::Rig rig(test::MockConfig::standard(), std::move(options));
+    REQUIRE(rig.to_zone());
+    clock.hold();
+    Harness t(rig.game);
+    t.host.conn = &rig.conn; // the live mock connection outlives this UI harness
+    auto& c = rig.conn;
+    std::unique_ptr<lua_State, decltype(&lua_close)> L(luaL_newstate(), &lua_close);
+    REQUIRE(L);
+    luaL_openlibs(L.get());
+    lua_newtable(L.get());
+    t.api->register_functions(L.get());
+    lua_setglobal(L.get(), "eq");
+    auto selected = [&] {
+        t.api->begin_frame();
+        lua_settop(L.get(), 0);
+        const int status = luaL_dostring(L.get(), "return (select(3, eq.ListInfo('RespawnWnd', 'OptionsList')))");
+        CHECK(status == LUA_OK);
+        if (status != LUA_OK || !lua_isinteger(L.get(), -1)) return -2;
+        return static_cast<int>(lua_tointeger(L.get(), -1));
+    };
+    // The row's marker cell and its texts.disabled, as a pack reads them.
+    auto row = [&](int r) {
+        t.api->begin_frame();
+        lua_settop(L.get(), 0);
+        const std::string code = "local t = eq.ListRow('RespawnWnd', 'OptionsList', " + std::to_string(r) +
+                                 ") return t[1] .. (t.disabled and ':disabled' or '')";
+        const int status = luaL_dostring(L.get(), code.c_str());
+        CHECK(status == LUA_OK);
+        return status == LUA_OK && lua_isstring(L.get(), -1) ? std::string(lua_tostring(L.get(), -1)) : std::string("?");
+    };
+    auto die = [&](std::uint32_t id) {
+        net::Death death;
+        death.spawn_id = death.corpse_id = id;
+        death.killer_id = 101;
+        death.damage = 5000;
+        c.receive_zone_packet_for_test(net::encode(death));
+        c.receive_zone_packet_for_test(respawn_packet());
+    };
+    auto approve = [&] {
+        c.receive_zone_packet_for_test(respawn_rez_offer());
+        REQUIRE(c.confirmation());
+        c.answer_confirmation(true);
+        CHECK_FALSE(c.respawn_chosen());
+        CHECK(c.respawn_option_available(1));
+    };
+    die(c.world().player_id);
+    CHECK(selected() == 0);
+    CHECK(row(0) == "*");
+    CHECK(row(1) == "r:disabled");
+
+    SUBCASE("Yes enables the line, keeps its marker and leaves the server's selection") {
+        approve();
+        CHECK(selected() == 0); // 0x74e9e0 only enables and recolours lines
+        CHECK(row(1) == "r");   // the marker stays; the line is enabled
+        clock.advance(std::chrono::milliseconds(10));
+        rig.run_for(std::chrono::milliseconds(10));
+        CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::RespawnWindow) == 0);
+        CHECK(test::MockEqServer::count(rig.server.zone_log, net::Op::RezzAnswer) == 0);
+        c.receive_zone_packet_for_test(respawn_rez_offer(101));
+        CHECK(row(1) == "r:disabled"); // a replacement offer needs its own consent
+        c.answer_confirmation(true);
+        CHECK(selected() == 0);
+        CHECK(t.api->click_list("RespawnWnd", "OptionsList", 1, 0));
+        CHECK(selected() == 1);
+        CHECK(t.api->click_child("RespawnWnd", "SelectButton"));
+        CHECK(c.respawn_chosen());
+        CHECK_FALSE(c.accepted_hover_rez_option());
+        CHECK(selected() == 1); // clearing consent after commit must not move the highlight to bind
+        CHECK(t.api->child_state("RespawnWnd", "SelectButton") == false);
+        CHECK(t.api->child_state("RespawnWnd", "OptionsList") == false);
+
+        net::ZonePlayerToBind bind;
+        bind.zone_id = 2;
+        bind.zone_name = "Bind destination";
+        c.receive_zone_packet_for_test(net::encode(bind));
+        c.receive_zone_packet_for_test(net::encode(test::make_spawn("Gennro", 60, 0, 1, 0, 0, 0)));
+        die(60);
+        CHECK(selected() == 0); // a new window starts from the server's selection
+    }
+    SUBCASE("an explicit bind click before Yes keeps bind selected") {
+        CHECK(t.api->click_list("RespawnWnd", "OptionsList", 0, 0));
+        approve();
+        CHECK(selected() == 0);
+    }
+    SUBCASE("an explicit resurrection click survives replacement but cannot commit without new consent") {
+        approve();
+        CHECK(t.api->click_list("RespawnWnd", "OptionsList", 1, 0));
+        CHECK(selected() == 1);
+        c.receive_zone_packet_for_test(respawn_rez_offer(101));
+        CHECK(selected() == 1);
+        CHECK(t.api->child_state("RespawnWnd", "SelectButton") == false);
+        CHECK_FALSE(c.respawn_option_available(1));
+        CHECK_FALSE(c.respawn_chosen());
+    }
 }
 
 TEST_CASE("Tip window: the duel tip, its history and the show options") {

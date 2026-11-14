@@ -7,6 +7,8 @@
 
 #include <doctest/doctest.h>
 
+#include <set>
+
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
 #include "core/game_dir.h"
@@ -155,6 +157,47 @@ TEST_CASE("trees: a game tree's trunk, leaves and colours measured") {
     CHECK_FALSE(measure_tree(mesh, [](const assets::Material&) { return nullptr; }, &why));
 }
 
+TEST_CASE("trees: a tall trunk's short bottom prism is its own ring, so the tree stands on its foot") {
+    // As Greater Faydark's NEKPINE1: rings at -8, 15 and 215 under leaves from 60 to 260. A first ring taken as a share
+    // of the trunk's length swallowed the second ring, and the bark began halfway up the first prism, in the air.
+    assets::Mesh mesh = game_tree();
+    mesh.indices.resize(mesh.parts[0].first_index);
+    mesh.parts.clear();
+    add_trunk(mesh, {0, 0, 0}, {0, 0, 0}, {{-8.0f, 17.0f}, {15.0f, 13.0f}, {215.0f, 2.0f}, {225.0f, 0.0f}});
+    assets::MeshPart cards;
+    cards.first_index = static_cast<std::uint32_t>(mesh.indices.size());
+    cards.material = 1;
+    cards.solid = false;
+    for (glm::vec3 across : {glm::vec3(1, 0, 0), glm::vec3(0, 1, 0)}) {
+        const auto base = static_cast<std::uint32_t>(mesh.vertices.size());
+        mesh.vertices.push_back(vtx(-across * 100.0f + glm::vec3(0, 0, 60), {0, 0}));
+        mesh.vertices.push_back(vtx(across * 100.0f + glm::vec3(0, 0, 60), {1, 0}));
+        mesh.vertices.push_back(vtx(across * 100.0f + glm::vec3(0, 0, 260), {1, 1}));
+        mesh.vertices.push_back(vtx(-across * 100.0f + glm::vec3(0, 0, 260), {0, 1}));
+        for (std::uint32_t k : {0u, 1u, 2u, 0u, 2u, 3u}) mesh.indices.push_back(base + k);
+    }
+    cards.index_count = static_cast<std::uint32_t>(mesh.indices.size()) - cards.first_index;
+    mesh.parts.push_back(cards);
+    const Textures pine(true);
+    std::string why;
+    auto shape = measure_tree(mesh, pine.lookup(), &why);
+    REQUIRE_MESSAGE(shape, why);
+    REQUIRE(shape->trunk.size() == 4);
+    CHECK(shape->trunk[0].centre.z == doctest::Approx(-8.0f));
+    CHECK(shape->trunk[1].centre.z == doctest::Approx(15.0f));
+    TreeOptions opt;
+    opt.style = TreeStyle::Pine;
+    const GeneratedTree tree = generate_tree(*shape, opt);
+    // Every level's bark reaches down to the prism's foot.
+    for (const auto& part : tree.mesh.parts) {
+        if (part.material != 0) continue;
+        float low = 1e9f;
+        for (std::uint32_t i = part.first_index; i < part.first_index + part.index_count; ++i)
+            low = std::min(low, tree.mesh.vertices[tree.mesh.indices[i]].position.z);
+        CHECK(low <= -7.0f);
+    }
+}
+
 TEST_CASE("trees: a limb that is a prism of its own hangs from the ring nearest its root, and is no pine") {
     assets::Mesh mesh = game_tree();
     // A leaning limb from beside the second ring, its rings at right angles to it.
@@ -229,10 +272,24 @@ TEST_CASE("trees: a grown tree stands on the game trunk, inside its leaves, the 
                 CHECK(a.mesh.materials[m].two_sided);
             }
             CHECK(a.mesh.front_ccw);
-            // A budget a zone of a few hundred trees can draw; the middle level well under the near one; the far six
-            // triangles (three crossed cards and a level one).
+            // Sway heights: the trunk's own, the leaves' their branch's, so each branch's cards move as one piece.
+            CHECK(a.mesh.sway_heights);
+            std::set<float> leaf_heights;
+            std::size_t leaf_vertices = 0;
+            for (std::uint32_t i = a.mesh.parts[1].first_index; i < a.mesh.parts[1].first_index + a.mesh.parts[1].index_count; ++i) {
+                leaf_heights.insert(a.mesh.vertices[a.mesh.indices[i]].uv2.x);
+                ++leaf_vertices;
+            }
+            CHECK(leaf_heights.size() * 8 < leaf_vertices);
+            bool trunk_own = false;
+            for (std::uint32_t i = a.mesh.parts[0].first_index; i < a.mesh.parts[0].first_index + a.mesh.parts[0].index_count; ++i)
+                trunk_own |= a.mesh.vertices[a.mesh.indices[i]].uv2.x == a.mesh.vertices[a.mesh.indices[i]].position.z &&
+                             a.mesh.vertices[a.mesh.indices[i]].position.z > 5.0f;
+            CHECK(trunk_own);
+            // A budget a zone of a few hundred trees can draw; the middle level under the near one (the same cards,
+            // straight, and thinner bark); the far eight triangles (three crossed cards and a level one).
             CHECK(tris[0] < 20000);
-            CHECK(tris[1] * 10 < tris[0] * 7);
+            CHECK(tris[1] * 10 < tris[0] * 8);
             CHECK(tris[2] == 8);
             // The far picture: the tree's shape cut out, its leaves and bark in it.
             REQUIRE(a.far.width == 64);

@@ -9,13 +9,17 @@
 #include <format>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "core/env.h"
 #include "core/log.h"
 #include "core/png_write.h"
 #include "platform/paths.h"
 #include "platform/window.h"
 #include "render/descriptor_limits.h"
+#include "render/frame_sync.h"
 #include "render/gpu_requirements.h"
+#include "render/gpu_shared_cache.h"
 #include "render/swapchain_size.h"
 #include "render/vk_util.h"
 
@@ -78,16 +82,33 @@ struct UpscalePush {
     std::uint32_t pad = 0;
 };
 
+// shaders/temporal_prep.frag's push constants.
+struct PrepPush {
+    glm::mat4 reproject{1.0f}; // this frame's clip space (unjittered) to the last frame's (render/temporal.h)
+    glm::vec4 depth{0.0f};     // view depth terms x, y (as PostPush::depth); z: the AO's strength; w: 1 to apply it
+    glm::vec4 jitter{0.0f};    // xy: this frame's jitter in NDC
+};
+static_assert(sizeof(PrepPush) <= 128);
+
+// shaders/taa_resolve.frag's push constants.
+struct ResolvePush {
+    glm::vec4 sizes{0.0f};  // the scene's width and height, the view's
+    glm::vec4 jitter{0.0f}; // xy: the jitter in scene pixels; z: the exposure (linear); w: 1 to drop the history
+    glm::vec4 params{0.0f}; // x: the most weight the history keeps
+};
+// The history keeps at most this many frames' worth of weight: each new frame is at least 1/12 of the result.
+constexpr float kHistoryMaxWeight = 12.0f;
+
 // shaders/ao.frag's push constants.
 struct AoPush {
     glm::vec4 projection{0.0f}; // tan_half_x, tan_half_y, depth terms x, y (as PostPush::depth)
     glm::vec4 params{0.0f};     // radius (world units), intensity, max radius in pixels, frame
 };
 
-// A full-screen triangle into one colour attachment of `format` (shaders/post.vert with `fragment`), added onto
-// what is there when `additive`.
+// A full-screen triangle into colour attachments of `formats` (shaders/post.vert with `fragment`), added onto what
+// is there when `additive`.
 VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, VkShaderModule vertex,
-                               VkShaderModule fragment, VkFormat format, bool additive = false) {
+                               VkShaderModule fragment, std::span<const VkFormat> formats, bool additive = false) {
     VkPipelineShaderStageCreateInfo stages[2] = {
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vertex, "main", nullptr},
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fragment, "main", nullptr},
@@ -113,16 +134,17 @@ VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelin
         ba.srcAlphaBlendFactor = ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         ba.colorBlendOp = ba.alphaBlendOp = VK_BLEND_OP_ADD;
     }
+    const std::vector<VkPipelineColorBlendAttachmentState> blends(formats.size(), ba);
     VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
-    cb.pAttachments = &ba;
+    cb.attachmentCount = static_cast<std::uint32_t>(blends.size());
+    cb.pAttachments = blends.data();
     VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
     VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &format;
+    ri.colorAttachmentCount = static_cast<std::uint32_t>(formats.size());
+    ri.pColorAttachmentFormats = formats.data();
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &ri;
     info.stageCount = 2;
@@ -140,6 +162,10 @@ VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelin
     vk_check(vkCreateGraphicsPipelines(device, cache, 1, &info, nullptr, &pipeline),
              "vkCreateGraphicsPipelines (full screen)");
     return pipeline;
+}
+VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, VkShaderModule vertex,
+                               VkShaderModule fragment, VkFormat format, bool additive = false) {
+    return fullscreen_pipeline(device, cache, layout, vertex, fragment, std::span<const VkFormat>(&format, 1), additive);
 }
 constexpr std::uint32_t kPostEncodeOutput = 2; // the swapchain is UNORM: encode sRGB in the shader
 constexpr std::uint32_t kPostDither = 4;
@@ -172,6 +198,41 @@ VkExtent2D scaled_extent(VkExtent2D view, float scale) {
     return {side(view.width), side(view.height)};
 }
 
+VkPipelineRenderingCreateInfo VkContext::scene_rendering(bool scene) const {
+    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    ri.colorAttachmentCount = scene && scene_motion() ? 3u : 1u;
+    ri.pColorAttachmentFormats = scene_color_formats_.data();
+    ri.depthAttachmentFormat = depth_format_;
+    return ri;
+}
+
+SceneBlends VkContext::scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output,
+                                    bool scene) const {
+    return make_scene_blends(color, output, scene && scene_motion());
+}
+
+SceneBlends make_scene_blends(const VkPipelineColorBlendAttachmentState& color, SceneOutput output, bool motion_on) {
+    SceneBlends out;
+    out.states[0] = color;
+    if (!motion_on) return out;
+    out.count = 3;
+    // The motion is written as it is (the last draw over a pixel is the one in front, as the depth test keeps it);
+    // the reactive mask keeps the largest of what was drawn over the pixel.
+    VkPipelineColorBlendAttachmentState motion{};
+    motion.colorWriteMask = output == SceneOutput::Motion ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT : 0u;
+    VkPipelineColorBlendAttachmentState reactive{};
+    if (output == SceneOutput::Reactive) {
+        reactive.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+        reactive.blendEnable = VK_TRUE;
+        reactive.srcColorBlendFactor = reactive.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        reactive.srcAlphaBlendFactor = reactive.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        reactive.colorBlendOp = reactive.alphaBlendOp = VK_BLEND_OP_MAX;
+    }
+    out.states[1] = motion;
+    out.states[2] = reactive;
+    return out;
+}
+
 Tonemap parse_tonemap(std::string_view name) {
     if (name == "agx") return Tonemap::AgX;
     if (name == "aces") return Tonemap::Aces;
@@ -179,6 +240,8 @@ Tonemap parse_tonemap(std::string_view name) {
 }
 
 VkContext::VkContext(platform::Window& window, bool validation) : window_(window) {
+    const char* benchmark = core::env("GPU_BENCHMARK");
+    gpu_benchmark_ = benchmark && std::strcmp(benchmark, "1") == 0;
     if (auto loader = window_.bundled_vulkan_loader())
         volkInitializeCustom(loader); // the MoltenVK a macOS release ships, as the window loaded it
     else
@@ -197,6 +260,15 @@ VkContext::~VkContext() {
     // Every upload is done and every retired object can go (before the allocator does).
     uploads_.all_done([this](const Upload& u) { recycle_upload(u); });
     retired_.flush();
+    if (gpu_shared_requested_) {
+        const auto stats = gpu_shared_cache_ ? gpu_shared_cache_->stats() : GpuSharedCache::Stats{};
+        log::info("GPU asset sharing totals: shared bindings {}, unique imports {}, local hits {}, broker hits {}, "
+                  "private fallbacks {}, shared frames {}, imported allocation bytes {}",
+                  gpu_shared_bindings_, stats.imports, stats.local_hits, stats.broker_hits, gpu_shared_fallbacks_,
+                  gpu_shared_frames_, stats.imported_allocation_bytes);
+    }
+    // Imported owners retired by the renderers are released before the importing device.
+    gpu_shared_cache_.reset();
     for (VkFence f : free_fences_) vkDestroyFence(device_, f, nullptr);
     free_fences_.clear();
     if (upload_pool_) vkDestroyCommandPool(device_, upload_pool_, nullptr);
@@ -206,6 +278,7 @@ VkContext::~VkContext() {
         if (f.pool) vkDestroyCommandPool(device_, f.pool, nullptr);
     }
     destroy_swapchain();
+    fsr3_.reset();
     destroy_post_pipeline();
     destroy_shadow_map();
     destroy_point_shadow_map();
@@ -214,6 +287,7 @@ VkContext::~VkContext() {
     if (shadow_sampler_) vkDestroySampler(device_, shadow_sampler_, nullptr);
     if (water_sampler_) vkDestroySampler(device_, water_sampler_, nullptr);
     if (water_depth_sampler_) vkDestroySampler(device_, water_depth_sampler_, nullptr);
+    if (temporal_buffer_) vmaDestroyBuffer(allocator_, temporal_buffer_, temporal_alloc_);
     save_pipeline_cache_file();
     if (pipeline_cache_) vkDestroyPipelineCache(device_, pipeline_cache_, nullptr);
     if (allocator_) vmaDestroyAllocator(allocator_);
@@ -304,12 +378,15 @@ void VkContext::pick_physical_device() {
     // Each GPU's support is kept so that, when none qualifies, the error names what each one lacks
     // (render/gpu_requirements.h); app/startup_error.h turns it into the player's dialog.
     std::vector<GpuSupport> seen;
-    int best_score = -1;
-    for (VkPhysicalDevice pd : devices) {
+    std::vector<std::uint32_t> queue_families(devices.size(), UINT32_MAX);
+    for (std::size_t device_index = 0; device_index < devices.size(); ++device_index) {
+        VkPhysicalDevice pd = devices[device_index];
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(pd, &props);
         GpuSupport& gpu = seen.emplace_back();
         gpu.name = props.deviceName;
+        gpu.kind = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? GpuKind::Discrete
+                   : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? GpuKind::Integrated : GpuKind::Other;
         gpu.api_major = VK_API_VERSION_MAJOR(props.apiVersion);
         gpu.api_minor = VK_API_VERSION_MINOR(props.apiVersion);
         // The 1.2 and 1.3 feature structs are only valid to query on a 1.3 device.
@@ -341,23 +418,20 @@ void VkContext::pick_physical_device() {
             if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present) { family = i; break; }
         }
         gpu.presents = family != UINT32_MAX;
-        if (!gpu_missing(gpu).empty()) continue;
-
-        int score = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 2
-                  : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 1 : 0;
-        if (score > best_score) {
-            best_score = score;
-            physical_ = pd;
-            queue_family_ = family;
-        }
+        queue_families[device_index] = family;
     }
-    if (!physical_) throw std::runtime_error(no_usable_gpu_text(seen));
+    const char* requested_name = core::env("GPU_NAME");
+    const GpuSelection selected = choose_gpu(seen, requested_name ? requested_name : "");
+    if (!selected.index) throw std::runtime_error(selected.error);
+    physical_ = devices[*selected.index];
+    queue_family_ = queue_families[*selected.index];
 
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(physical_, &props);
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(physical_, &features);
     caps_.bc_textures = features.textureCompressionBC == VK_TRUE;
+    caps_.independent_blend = features.independentBlend == VK_TRUE;
     {
         VkFormatProperties fp{};
         vkGetPhysicalDeviceFormatProperties(physical_, VK_FORMAT_R8G8B8A8_SRGB, &fp);
@@ -367,6 +441,7 @@ void VkContext::pick_physical_device() {
     }
     caps_.max_anisotropy = features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 0.0f;
     caps_.msaa_counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
+    caps_.fsr3 = Fsr3Upscaler::supported(physical_);
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
     VkPhysicalDeviceVulkan12Properties p12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES};
     p12.pNext = &driver;
@@ -409,6 +484,16 @@ void VkContext::create_device() {
     for (const auto& e : available)
         if (std::strcmp(e.extensionName, "VK_KHR_portability_subset") == 0) extensions.push_back("VK_KHR_portability_subset");
 
+    gpu_shared_requested_ = GpuSharedCache::requested();
+    const char* shared_extension = gpu_shared_requested_ ? GpuSharedCache::device_extension() : nullptr;
+    const bool shared_supported = shared_extension &&
+        std::any_of(available.begin(), available.end(), [shared_extension](const VkExtensionProperties& e) {
+            return std::strcmp(e.extensionName, shared_extension) == 0;
+        });
+    if (shared_supported) extensions.push_back(shared_extension);
+    else if (gpu_shared_requested_)
+        log::warn("GPU asset sharing: external-memory transport unavailable; immutable assets remain private");
+
     float priority = 1.0f;
     VkDeviceQueueCreateInfo queue{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
     queue.queueFamilyIndex = queue_family_;
@@ -433,6 +518,9 @@ void VkContext::create_device() {
     f2.pNext = &f12;
     f2.features.textureCompressionBC = caps_.bc_textures ? VK_TRUE : VK_FALSE;
     f2.features.samplerAnisotropy = caps_.max_anisotropy > 0.0f ? VK_TRUE : VK_FALSE;
+    f2.features.independentBlend = caps_.independent_blend ? VK_TRUE : VK_FALSE;
+    // FSR 3.1's storage images in R8, R16F, RG16F ... (Fsr3Upscaler::supported requires it for DeviceCaps::fsr3).
+    f2.features.shaderStorageImageExtendedFormats = caps_.fsr3 ? VK_TRUE : VK_FALSE;
 
     VkDeviceCreateInfo info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     info.pNext = &f2;
@@ -463,6 +551,29 @@ void VkContext::create_device() {
     }
     if (depth_format_ == VK_FORMAT_UNDEFINED) throw std::runtime_error("no usable depth format");
     create_pipeline_cache();
+    if (shared_supported) {
+        try {
+            gpu_shared_cache_ = std::make_unique<GpuSharedCache>(physical_, device_, queue_family_, gpu_name_, instance_);
+            log::info("GPU asset sharing: connected to the texture broker");
+        } catch (const std::exception& e) {
+            // Sharing is an extra: without it every texture is the client's own, as with sharing off.
+            log::warn("GPU asset sharing: not started ({}); textures stay private", e.what());
+            gpu_shared_cache_.reset();
+        }
+    }
+}
+
+void VkContext::note_shared_gpu_texture(bool imported) {
+    if (!gpu_shared_requested_) return;
+    std::uint64_t& count = imported ? gpu_shared_bindings_ : gpu_shared_fallbacks_;
+    ++count;
+    // Sparse coverage logs let native test automation distinguish actual imports from private fallback.
+    if (count == 1 || (count & (count - 1)) == 0) {
+        const auto stats = gpu_shared_cache_ ? gpu_shared_cache_->stats() : GpuSharedCache::Stats{};
+        log::info("GPU asset sharing coverage: shared bindings {}, unique imports {}, local hits {}, broker hits {}, "
+                  "private fallbacks {}", gpu_shared_bindings_, stats.imports, stats.local_hits, stats.broker_hits,
+                  gpu_shared_fallbacks_);
+    }
 }
 
 void VkContext::create_pipeline_cache() {
@@ -652,11 +763,30 @@ void VkContext::create_scene_targets() {
         bloom_[i] = create_target(kSceneFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                   VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, bloom_extent_[i]);
     }
-    if (upscaling()) {
-        constexpr VkImageUsageFlags kUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    constexpr VkImageUsageFlags kUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    const bool taa = scene_options_.upscaler == Upscaler::Taa;
+    const bool fsr3 = scene_options_.upscaler == Upscaler::Fsr3 && fsr3_;
+    if (upscaling())
         upscale_source_ = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    if (upscaling() || taa)
         upscaled_ = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+    if (scene_motion()) {
+        object_motion_ = create_target(kMotionFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        reactive_ = create_target(kReactiveFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
+    if (taa || fsr3) { // the temporal inputs (temporal_prep.frag), for either resolve
+        lit_ = create_target(kSceneFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        motion_ = create_target(kMotionFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    }
+    if (taa)
+        for (Image& h : history_)
+            h = create_target(kSceneFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+    if (fsr3) {
+        fsr3_output_ = create_target(kSceneFormat, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                     VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+        fsr3_->resize(scene_extent_, view_extent_); // every caller has the device idle
+    }
+    history_valid_ = false; // new targets hold nothing
     write_post_descriptors();
 }
 
@@ -671,17 +801,37 @@ void VkContext::destroy_scene_targets() {
     destroy_target(water_depth_);
     destroy_target(upscale_source_);
     destroy_target(upscaled_);
+    destroy_target(lit_);
+    destroy_target(motion_);
+    destroy_target(object_motion_);
+    destroy_target(reactive_);
+    for (Image& h : history_) destroy_target(h);
+    destroy_target(fsr3_output_);
 }
 
 void VkContext::set_scene_options(const SceneOptions& options, const std::filesystem::path& shader_dir) {
     const VkExtent2D scaled = scaled_extent(view_extent_, options.render_scale);
     const bool rescaled = scaled.width != scene_extent_.width || scaled.height != scene_extent_.height;
-    scene_options_ = options;
-    // The largest supported count not above the request.
+    SceneOptions chosen = options;
+    if (chosen.upscaler == Upscaler::Fsr3 && !caps_.fsr3) {
+        if (!fsr3_fallback_logged_)
+            log::warn("upscaler: AMD FSR 3.1 needs storage images in its formats and quad subgroup operations, which "
+                      "this GPU lacks; the temporal upscaler (taa) is used");
+        fsr3_fallback_logged_ = true;
+        chosen.upscaler = Upscaler::Taa;
+    }
+    const bool upscaler_changed = chosen.upscaler != scene_options_.upscaler;
+    scene_options_ = chosen;
+    // The largest supported count not above the request; one under the temporal upscaler, which resolves the edges
+    // itself (and whose motion and depth are taken per pixel).
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-    for (std::uint32_t n = 2; n <= 16 && n <= options.msaa; n *= 2)
+    for (std::uint32_t n = 2; n <= kMaxMsaa && n <= options.msaa && scene_options_.upscaler == Upscaler::Fsr1; n *= 2)
         if (caps_.msaa_counts & n) samples = static_cast<VkSampleCountFlagBits>(n);
     if (!post_pipeline_) create_post_pipeline(shader_dir);
+    if (scene_options_.upscaler == Upscaler::Fsr3 && !fsr3_) {
+        vkDeviceWaitIdle(device_);
+        fsr3_ = std::make_unique<Fsr3Upscaler>(device_, allocator_, pipeline_cache_, shader_dir);
+    }
     std::uint32_t shadow = options.shadow_size > 0 ? std::clamp(options.shadow_size, 256u, 8192u) : 1u;
     if (shadow != shadow_size_) {
         vkDeviceWaitIdle(device_);
@@ -693,15 +843,16 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
         vkDeviceWaitIdle(device_);
         create_point_shadow_map(point_size, point_slots);
     }
-    if (samples != scene_samples_ || rescaled) {
+    if (samples != scene_samples_ || rescaled || upscaler_changed) {
         vkDeviceWaitIdle(device_);
         destroy_scene_targets();
         scene_samples_ = samples;
         create_scene_targets();
     }
-    log::info("scene: {}x MSAA, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, light "
-              "shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
-              static_cast<int>(scene_samples_), std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
+    log::info("scene: {}x MSAA, upscaler {}, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, "
+              "light shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
+              static_cast<int>(scene_samples_), upscaler_name(scene_options_.upscaler),
+              std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
               scene_extent_.height, static_cast<int>(options.tonemap), options.exposure,
               options.shadow_size ? shadow_size_ : 0u, point_slots_, point_slots_ ? point_size_ : 0u,
               options.brightness, options.contrast, options.gamma);
@@ -717,19 +868,22 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     si.minFilter = VK_FILTER_LINEAR;
     vk_check(vkCreateSampler(device_, &si, nullptr, &post_linear_sampler_), "vkCreateSampler (post, linear)");
 
-    // The post set: 0 the scene, 1 the AO, 2 the depth, 3 the bloom; the AO set: 0 the depth; the bloom sets (the
-    // AO's layout): 0 the level read; then FSR 1's two (the AO's layout): EASU's source, RCAS's.
-    VkDescriptorSetLayoutBinding b[4];
-    for (std::uint32_t i = 0; i < 4; ++i)
+    // The post set: 0 the scene, 1 the AO, 2 the depth, 3 the bloom, 4 the object motion and 5 the reactive mask
+    // (temporal_prep.frag's; the AO image where they are not made); the AO set: 0 the depth; the bloom sets (the AO's
+    // layout): 0 the level read; then FSR 1's two (the AO's layout): EASU's source, RCAS's; then the temporal
+    // upscaler's four (the post set's layout): the two resolve sets, the two post sets; then FSR 3.1's post set.
+    constexpr std::uint32_t kPostBindings = 6;
+    VkDescriptorSetLayoutBinding b[kPostBindings];
+    for (std::uint32_t i = 0; i < kPostBindings; ++i)
         b[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
     VkDescriptorSetLayoutCreateInfo li{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    li.bindingCount = 4;
+    li.bindingCount = kPostBindings;
     li.pBindings = b;
     vk_check(vkCreateDescriptorSetLayout(device_, &li, nullptr, &post_set_layout_), "vkCreateDescriptorSetLayout (post)");
     li.bindingCount = 1;
     vk_check(vkCreateDescriptorSetLayout(device_, &li, nullptr, &ao_set_layout_), "vkCreateDescriptorSetLayout (AO)");
-    constexpr std::uint32_t kSets = 2 + kBloomLevels + 1 + 2;
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 + kBloomLevels + 1 + 2};
+    constexpr std::uint32_t kSets = 2 + kBloomLevels + 1 + 2 + 4 + 1;
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 * kPostBindings + 1 + kBloomLevels + 1 + 2};
     VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pi.maxSets = kSets;
     pi.poolSizeCount = 1;
@@ -738,6 +892,7 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     std::array<VkDescriptorSetLayout, kSets> layouts;
     layouts.fill(ao_set_layout_);
     layouts[0] = post_set_layout_;
+    for (std::uint32_t i = kSets - 5; i < kSets; ++i) layouts[i] = post_set_layout_;
     std::array<VkDescriptorSet, kSets> sets;
     VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     ai.descriptorPool = post_pool_;
@@ -747,8 +902,11 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     post_set_ = sets[0];
     ao_set_ = sets[1];
     std::copy(sets.begin() + 2, sets.begin() + 2 + bloom_sets_.size(), bloom_sets_.begin());
-    easu_set_ = sets[kSets - 2];
-    rcas_set_ = sets[kSets - 1];
+    easu_set_ = sets[kSets - 7];
+    rcas_set_ = sets[kSets - 6];
+    resolve_sets_ = {sets[kSets - 5], sets[kSets - 4]};
+    post_taa_sets_ = {sets[kSets - 3], sets[kSets - 2]};
+    post_fsr3_set_ = sets[kSets - 1];
     write_post_descriptors();
 
     VkPushConstantRange pc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostPush)};
@@ -768,6 +926,13 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     VkPushConstantRange upc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UpscalePush)};
     pli.pPushConstantRanges = &upc;
     vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &upscale_layout_), "vkCreatePipelineLayout (FSR)");
+    pli.pSetLayouts = &post_set_layout_;
+    VkPushConstantRange ppc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrepPush)};
+    pli.pPushConstantRanges = &ppc;
+    vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &prep_layout_), "vkCreatePipelineLayout (TAA prep)");
+    VkPushConstantRange rpc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePush)};
+    pli.pPushConstantRanges = &rpc;
+    vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &resolve_layout_), "vkCreatePipelineLayout (TAA resolve)");
 
     VkShaderModule vs = load_module(device_, shader_dir / "post.vert.spv");
     VkShaderModule fs = load_module(device_, shader_dir / "post.frag.spv");
@@ -783,36 +948,67 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     VkShaderModule rcas = load_module(device_, shader_dir / "fsr_rcas.frag.spv");
     easu_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, easu, kUpscaleFormat);
     rcas_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, rcas, swapchain_format_);
-    for (VkShaderModule m : {vs, fs, ao, down, up, easu, rcas}) vkDestroyShaderModule(device_, m, nullptr);
+    VkShaderModule prep = load_module(device_, shader_dir / "temporal_prep.frag.spv");
+    VkShaderModule resolve = load_module(device_, shader_dir / "taa_resolve.frag.spv");
+    const VkFormat prep_formats[2] = {kSceneFormat, kMotionFormat};
+    prep_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, prep_layout_, vs, prep, prep_formats);
+    resolve_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, resolve_layout_, vs, resolve, kSceneFormat);
+    for (VkShaderModule m : {vs, fs, ao, down, up, easu, rcas, prep, resolve}) vkDestroyShaderModule(device_, m, nullptr);
 }
 
 void VkContext::write_post_descriptors() {
     if (!post_set_) return;
     const Image& depth = depth_resolved_.image ? depth_resolved_ : depth_;
     constexpr VkImageLayout kRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    std::vector<VkDescriptorImageInfo> ii = {
-        {post_linear_sampler_, scene_resolved_.view, kRead},
-        {post_sampler_, ao_.view, kRead},
-        {post_sampler_, depth.view, kRead},
-        {post_linear_sampler_, bloom_[0].view, kRead},
-        {post_sampler_, depth.view, kRead},
-        {post_linear_sampler_, scene_resolved_.view, kRead},
+    struct Write { VkDescriptorSet set; std::uint32_t binding; VkDescriptorImageInfo image; };
+    std::vector<Write> writes = {
+        {post_set_, 0, {post_linear_sampler_, scene_resolved_.view, kRead}},
+        {post_set_, 1, {post_sampler_, ao_.view, kRead}},
+        {post_set_, 2, {post_sampler_, depth.view, kRead}},
+        {post_set_, 3, {post_linear_sampler_, bloom_[0].view, kRead}},
+        {ao_set_, 0, {post_sampler_, depth.view, kRead}},
+        {bloom_sets_[0], 0, {post_linear_sampler_, scene_resolved_.view, kRead}},
     };
-    for (const Image& level : bloom_) ii.push_back({post_linear_sampler_, level.view, kRead});
-    // FSR 1's, while upscaling (their images exist only then).
-    const std::size_t fsr = ii.size();
-    if (upscale_source_.view) {
-        ii.push_back({post_linear_sampler_, upscale_source_.view, kRead});
-        ii.push_back({post_sampler_, upscaled_.view, kRead});
+    for (std::uint32_t i = 0; i < kBloomLevels; ++i)
+        writes.push_back({bloom_sets_[i + 1], 0, {post_linear_sampler_, bloom_[i].view, kRead}});
+    // Every set of the post set's layout: the object motion and the reactive mask (the AO image without them).
+    const VkImageView object_motion = object_motion_.view ? object_motion_.view : ao_.view;
+    const VkImageView reactive = reactive_.view ? reactive_.view : ao_.view;
+    for (VkDescriptorSet set :
+         {post_set_, resolve_sets_[0], resolve_sets_[1], post_taa_sets_[0], post_taa_sets_[1], post_fsr3_set_}) {
+        writes.push_back({set, 4, {post_sampler_, object_motion, kRead}});
+        writes.push_back({set, 5, {post_sampler_, reactive, kRead}});
     }
-    std::vector<VkWriteDescriptorSet> w(ii.size());
-    for (std::uint32_t i = 0; i < w.size(); ++i) {
+    // FSR 1's and the sharpening's, while their images exist.
+    if (upscale_source_.view) writes.push_back({easu_set_, 0, {post_linear_sampler_, upscale_source_.view, kRead}});
+    if (upscaled_.view) writes.push_back({rcas_set_, 0, {post_sampler_, upscaled_.view, kRead}});
+    // The temporal upscaler's, under it: resolve set i writes history i and reads the other.
+    if (lit_.view && history_[0].view)
+        for (std::uint32_t i = 0; i < 2; ++i) {
+            writes.push_back({resolve_sets_[i], 0, {post_linear_sampler_, lit_.view, kRead}});
+            writes.push_back({resolve_sets_[i], 1, {post_sampler_, motion_.view, kRead}});
+            writes.push_back({resolve_sets_[i], 2, {post_sampler_, depth.view, kRead}});
+            writes.push_back({resolve_sets_[i], 3, {post_linear_sampler_, history_[i ^ 1].view, kRead}});
+            writes.push_back({post_taa_sets_[i], 0, {post_linear_sampler_, history_[i].view, kRead}});
+            writes.push_back({post_taa_sets_[i], 1, {post_sampler_, ao_.view, kRead}});
+            writes.push_back({post_taa_sets_[i], 2, {post_sampler_, depth.view, kRead}});
+            writes.push_back({post_taa_sets_[i], 3, {post_linear_sampler_, bloom_[0].view, kRead}});
+        }
+    // FSR 3.1's output in the scene's place, under it.
+    if (fsr3_output_.view) {
+        writes.push_back({post_fsr3_set_, 0, {post_linear_sampler_, fsr3_output_.view, kRead}});
+        writes.push_back({post_fsr3_set_, 1, {post_sampler_, ao_.view, kRead}});
+        writes.push_back({post_fsr3_set_, 2, {post_sampler_, depth.view, kRead}});
+        writes.push_back({post_fsr3_set_, 3, {post_linear_sampler_, bloom_[0].view, kRead}});
+    }
+    std::vector<VkWriteDescriptorSet> w(writes.size());
+    for (std::size_t i = 0; i < w.size(); ++i) {
         w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        w[i].dstSet = i < 4 ? post_set_ : i == 4 ? ao_set_ : i < fsr ? bloom_sets_[i - 5] : i == fsr ? easu_set_ : rcas_set_;
-        w[i].dstBinding = i < 4 ? i : 0;
+        w[i].dstSet = writes[i].set;
+        w[i].dstBinding = writes[i].binding;
         w[i].descriptorCount = 1;
         w[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        w[i].pImageInfo = &ii[i];
+        w[i].pImageInfo = &writes[i].image;
     }
     vkUpdateDescriptorSets(device_, static_cast<std::uint32_t>(w.size()), w.data(), 0, nullptr);
 }
@@ -833,6 +1029,15 @@ void VkContext::destroy_post_pipeline() {
     if (upscale_layout_) vkDestroyPipelineLayout(device_, upscale_layout_, nullptr);
     upscale_layout_ = VK_NULL_HANDLE;
     easu_set_ = rcas_set_ = VK_NULL_HANDLE;
+    if (prep_pipeline_) vkDestroyPipeline(device_, prep_pipeline_, nullptr);
+    if (resolve_pipeline_) vkDestroyPipeline(device_, resolve_pipeline_, nullptr);
+    if (prep_layout_) vkDestroyPipelineLayout(device_, prep_layout_, nullptr);
+    if (resolve_layout_) vkDestroyPipelineLayout(device_, resolve_layout_, nullptr);
+    prep_pipeline_ = resolve_pipeline_ = VK_NULL_HANDLE;
+    prep_layout_ = resolve_layout_ = VK_NULL_HANDLE;
+    resolve_sets_ = {};
+    post_taa_sets_ = {};
+    post_fsr3_set_ = VK_NULL_HANDLE;
     bloom_layout_ = VK_NULL_HANDLE;
     bloom_sets_ = {};
     if (ao_set_layout_) vkDestroyDescriptorSetLayout(device_, ao_set_layout_, nullptr);
@@ -907,6 +1112,28 @@ void VkContext::create_frames() {
     p.queueFamilyIndex = queue_family_;
     vk_check(vkCreateCommandPool(device_, &p, nullptr, &upload_pool_), "vkCreateCommandPool");
 }
+
+void VkContext::localize_shared_textures() {
+    // Sharing has stopped: the imports become the client's own textures, then whoever holds a copy of their
+    // image or view takes the new ones. Between frames, with the device idle: no set in use is rewritten.
+    if (!shared_detach_logged_) {
+        shared_detach_logged_ = true;
+        log::warn("GPU asset sharing stopped ({}); this client goes on with its own textures",
+                  gpu_shared_cache_->detach_reason());
+    }
+    wait_idle();
+    const std::size_t moved = gpu_shared_cache_->localize(queue_, allocator_);
+    log::info("GPU asset sharing: {} shared textures copied into this client's own memory", moved);
+    for (const auto& [id, refresh] : shared_texture_listeners_) refresh();
+}
+
+std::uint64_t VkContext::on_shared_textures_moved(std::function<void()> refresh) {
+    const std::uint64_t id = ++shared_texture_listener_ids_;
+    shared_texture_listeners_.emplace(id, std::move(refresh));
+    return id;
+}
+
+void VkContext::remove_shared_textures_listener(std::uint64_t id) { shared_texture_listeners_.erase(id); }
 
 void VkContext::wait_idle() {
     vkDeviceWaitIdle(device_);
@@ -1051,6 +1278,10 @@ bool VkContext::request_screenshot(std::filesystem::path path, std::uint32_t max
 }
 
 std::optional<FrameInfo> VkContext::begin_frame_commands() {
+    if (gpu_shared_cache_) {
+        gpu_shared_cache_->keep_alive();
+        if (gpu_shared_cache_->needs_localize()) localize_shared_textures();
+    }
     if (window_.minimized()) return std::nullopt;
 
     std::uint32_t w = 0, h = 0;
@@ -1098,6 +1329,15 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
 
     ++frames_begun_;
     recording_ = true;
+    // The temporal upscaler's jitter for this frame: a cycle as long as the upscale asks (render/temporal.h).
+    if (temporal()) {
+        const float scale = static_cast<float>(scene_extent_.width) / static_cast<float>(std::max(view_extent_.width, 1u));
+        jitter_px_ = jitter_offset(frames_begun_, jitter_phases(scale));
+    } else {
+        jitter_px_ = glm::vec2(0.0f);
+    }
+    jitter_ndc_ = jitter_ndc(jitter_px_, scene_extent_.width, scene_extent_.height);
+    temporal_view_.reset();
     return FrameInfo{f.cmd, scene_extent_, scene_area_.offset, image_index, frame_index_};
 }
 
@@ -1121,16 +1361,14 @@ void VkContext::begin_scene(const FrameInfo& frame, const glm::vec4& clear_color
                       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     // The depth targets: the previous frame's AO and post passes read them.
-    constexpr VkPipelineStageFlags2 kDepthTests =
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    for (VkImage depth : {depth_.image, depth_resolved_.image})
-        if (depth)
-            image_barrier(cmd, depth, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                          kDepthTests | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
-                              VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthTests | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    const auto depth_sync = depth_frame_sync(scene_samples_);
+    auto prepare_depth = [&](VkImage image, AttachmentSync sync) {
+        image_barrier(cmd, image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                      sync.stages | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, sync.access, sync.stages, sync.access);
+    };
+    prepare_depth(depth_.image, depth_sync.attachment);
+    if (depth_resolved_.image) prepare_depth(depth_resolved_.image, depth_sync.sampled);
 
     // begin_translucent's copies are read only after it writes them; until then their contents do not matter.
     for (VkImage copy : {water_color_.image, water_depth_.image})
@@ -1138,8 +1376,49 @@ void VkContext::begin_scene(const FrameInfo& frame, const glm::vec4& clear_color
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                       VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    // The object motion and the reactive mask (under scene_motion()): the previous frame's prep pass read them.
+    for (const Image* extra : {&object_motion_, &reactive_})
+        if (extra->image)
+            image_barrier(cmd, extra->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, kColorStages, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    write_temporal_block(cmd);
     begin_scene_rendering(cmd, false, clear_color);
     scene_open_ = true;
+}
+
+void VkContext::write_temporal_block(VkCommandBuffer cmd) {
+    // This frame's camera and the last one's (set_temporal_view; the same without a history, so only what moves on
+    // its own has a motion), for the scene shaders' motion (shaders/motion.glsl).
+    TemporalBlock block;
+    if (temporal_view_) {
+        block.view_proj = temporal_view_->proj * temporal_view_->view;
+        block.prev_view_proj = history_valid_ && !camera_cut(prev_view_.view, temporal_view_->view)
+            ? prev_view_.proj * prev_view_.view : block.view_proj;
+    }
+    block.info.x = object_motion_.image ? 1.0f : 0.0f;
+    // After the last frame's scene read it; before this frame's does.
+    constexpr VkPipelineStageFlags2 kReaders = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    VkBufferMemoryBarrier2 bb{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2};
+    // vkCmdUpdateBuffer is a transfer command of its own stage (not a copy): ALL_TRANSFER covers it.
+    bb.srcStageMask = kReaders | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT; // the last frame's reads, and its own update
+    bb.srcAccessMask = VK_ACCESS_2_UNIFORM_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    bb.dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+    bb.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    bb.srcQueueFamilyIndex = bb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bb.buffer = temporal_buffer_;
+    bb.size = VK_WHOLE_SIZE;
+    VkDependencyInfo dep{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dep.bufferMemoryBarrierCount = 1;
+    dep.pBufferMemoryBarriers = &bb;
+    vkCmdPipelineBarrier2(cmd, &dep);
+    vkCmdUpdateBuffer(cmd, temporal_buffer_, 0, sizeof(block), &block);
+    bb.srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+    bb.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    bb.dstStageMask = kReaders;
+    bb.dstAccessMask = VK_ACCESS_2_UNIFORM_READ_BIT;
+    vkCmdPipelineBarrier2(cmd, &dep);
 }
 
 void VkContext::begin_scene_rendering(VkCommandBuffer cmd, bool load, const glm::vec4& clear_color) {
@@ -1172,11 +1451,24 @@ void VkContext::begin_scene_rendering(VkCommandBuffer cmd, bool load, const glm:
         depth.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     }
 
+    // Under scene_motion(): the object motion (cleared to kMotionUnset) and the reactive mask (cleared to 0).
+    VkRenderingAttachmentInfo colors[3] = {color, color, color};
+    std::uint32_t count = 1;
+    if (object_motion_.image) {
+        for (std::uint32_t i = 1; i < 3; ++i) {
+            colors[i].imageView = i == 1 ? object_motion_.view : reactive_.view;
+            colors[i].resolveMode = VK_RESOLVE_MODE_NONE;
+            colors[i].resolveImageView = VK_NULL_HANDLE;
+        }
+        colors[1].clearValue.color = {{kMotionUnset, kMotionUnset, 0.0f, 0.0f}};
+        colors[2].clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+        count = 3;
+    }
     VkRenderingInfo rendering{VK_STRUCTURE_TYPE_RENDERING_INFO};
     rendering.renderArea = {{0, 0}, scene_extent_};
     rendering.layerCount = 1;
-    rendering.colorAttachmentCount = 1;
-    rendering.pColorAttachments = &color;
+    rendering.colorAttachmentCount = count;
+    rendering.pColorAttachments = colors;
     rendering.pDepthAttachment = &depth;
     vkCmdBeginRendering(cmd, &rendering);
 
@@ -1194,14 +1486,15 @@ void VkContext::begin_translucent(const FrameInfo& frame) {
     vkCmdEndRendering(cmd);
     // The resolved colour and depth (sample 0) into the copies the water samples.
     const Image& depth = depth_resolved_.image ? depth_resolved_ : depth_;
+    const auto depth_sync = depth_frame_sync(scene_samples_);
     struct Copy { VkImage from, to; VkImageAspectFlags aspect; VkImageLayout layout; VkPipelineStageFlags2 stages;
                   VkAccessFlags2 access; };
     const Copy copies[2] = {
         {scene_resolved_.image, water_color_.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT},
+         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+         VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT},
         {depth.image, water_depth_.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-         VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT},
+         depth_sync.sampled.stages, depth_sync.sampled.access},
     };
     for (const Copy& c : copies) {
         image_barrier(cmd, c.from, c.aspect, c.layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, c.stages, c.access,
@@ -1220,11 +1513,16 @@ void VkContext::begin_translucent(const FrameInfo& frame) {
                       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
         // Back to an attachment: the next rendering loads (the single-sampled targets) or resolves into it again.
         image_barrier(cmd, c.from, c.aspect, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, c.layout,
-                      VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, c.stages,
-                      c.access | (c.aspect == VK_IMAGE_ASPECT_DEPTH_BIT ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
-                                                                        : VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT));
+                      VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, c.stages, c.access);
     }
-    // The multisampled targets were stored by the first rendering and are loaded as they are.
+    // The object motion and the reactive mask go on as they are, as do the multisampled targets (stored by the first
+    // rendering, loaded by the next).
+    for (const Image* extra : {&object_motion_, &reactive_})
+        if (extra->image)
+            image_barrier(cmd, extra->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     if (scene_msaa_.image)
         image_barrier(cmd, scene_msaa_.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1232,10 +1530,8 @@ void VkContext::begin_translucent(const FrameInfo& frame) {
                       VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     if (depth_resolved_.image)
         image_barrier(cmd, depth_.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, depth_sync.attachment.stages,
+                      depth_sync.attachment.access, depth_sync.attachment.stages, depth_sync.attachment.access);
     begin_scene_rendering(cmd, true, glm::vec4(0.0f));
 }
 
@@ -1249,15 +1545,19 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     shafts_.reset();
     const std::optional<glm::vec4> mood = mood_;
     mood_.reset();
+    // The temporal upscaler runs in frames that gave their camera (set_temporal_view); any other drops the history.
+    const std::optional<TemporalView> view = temporal_view_;
+    temporal_view_.reset();
+    const bool taa = view && temporal() && prep_pipeline_;
+    if (!taa) history_valid_ = false;
     VkCommandBuffer cmd = frame.cmd;
     vkCmdEndRendering(cmd);
 
     // The depth for the AO and the post pass (a depth resolve runs in the colour output stage).
     const Image& depth = depth_resolved_.image ? depth_resolved_ : depth_;
+    const auto depth_sync = depth_frame_sync(scene_samples_).sampled;
     image_barrier(cmd, depth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                  VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, depth_sync.stages, depth_sync.access,
                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     // The ambient occlusion (shaders/ao.frag), when this frame's view was given.
     const bool ao = taken && scene_options_.ambient_occlusion && ao_pipeline_;
@@ -1306,6 +1606,12 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    for (const Image* extra : {&object_motion_, &reactive_})
+        if (extra->image)
+            image_barrier(cmd, extra->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                          VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     // The bloom, with the AO's frames; otherwise its first level is only made readable (the post set holds it).
     const bool bloom = taken && scene_options_.bloom > 0.0f && bloom_down_pipeline_;
     if (bloom) {
@@ -1322,7 +1628,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     push.tonemap = static_cast<std::uint32_t>(scene_options_.tonemap);
     push.flags = (swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB || swapchain_format_ == VK_FORMAT_R8G8B8A8_SRGB
                       ? 0u : kPostEncodeOutput) |
-                 (scene_options_.dither ? kPostDither : 0u) | (ao ? kPostAo : 0u) |
+                 (scene_options_.dither ? kPostDither : 0u) | (ao && !taa ? kPostAo : 0u) |
                  (taken && scene_options_.distance_blur ? kPostBlur : 0u);
     push.frame = post_frame_++;
     push.depth = glm::vec4(depth_x, depth_y, scene_options_.ao_strength, taken ? taken->far_plane : 0.0f);
@@ -1335,11 +1641,91 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         push.sun = glm::vec4(shafts->uv, shafts->strength, 0.0f);
         push.sun_color = glm::vec4(shafts->color, 0.0f);
     }
-    // Below a render scale of 1, FSR 1: the post pass's picture at the scene's size (encoded, as EASU wants it; the
-    // dither waits for the last pass, or EASU would enlarge it), EASU's upscale of it to the view's size, then RCAS
-    // sharpens that into the swapchain below.
-    const bool fsr = upscaling() && post_pipeline_;
+    // The temporal upscaler: temporal_prep.frag applies the AO and writes the motion at the scene's size,
+    // taa_resolve.frag accumulates that into this frame's history at the view's, and the post pass below reads the
+    // history in the scene's place (post_taa_sets_), at the view's size.
+    VkDescriptorSet post_set = post_set_;
+    // Under FSR 3.1 its upscaler takes the resolve's place (render/fsr3_upscaler.h), on the same inputs.
+    const bool fsr3 = taa && fsr3_ && fsr3_output_.image;
+    if (taa) {
+        const bool keep = history_valid_ && !camera_cut(prev_view_.view, view->view);
+        PrepPush prep;
+        if (history_valid_) prep.reproject = reprojection(prev_view_.view, prev_view_.proj, view->view, view->proj);
+        prep.depth = glm::vec4(depth_x, depth_y, scene_options_.ao_strength, ao ? 1.0f : 0.0f);
+        // z: the draws' own motion and the reactive mask were drawn (scene_motion()); else those bindings hold the AO.
+        prep.jitter = glm::vec4(jitter_ndc_, object_motion_.image ? 1.0f : 0.0f, 0.0f);
+        const Image* prep_targets[2] = {&lit_, &motion_};
+        draw_into(cmd, prep_targets, scene_extent_, prep_pipeline_, prep_layout_, post_set_, &prep, sizeof(prep));
+        if (fsr3) {
+            Fsr3Upscaler::Inputs in;
+            in.color = lit_.view;
+            in.depth = depth.view;
+            in.motion = motion_.view;
+            // The reactive mask (R8 at the scene's size, 0..1, SHADER_READ_ONLY_OPTIMAL): the blended and additive
+            // draws' (scene_motion()); none without independentBlend, FSR's default 0.
+            in.reactive = reactive_.view;
+            in.output = fsr3_output_.image;
+            in.output_view = fsr3_output_.view;
+            Fsr3Upscaler::Params fp;
+            fp.frame_slot = frame.frame_slot;
+            fp.jitter = jitter_px_;
+            const float scale = static_cast<float>(scene_extent_.width) / static_cast<float>(std::max(view_extent_.width, 1u));
+            fp.jitter_phases = jitter_phases(scale);
+            // The camera's planes and vertical field of view, from the plain projection (FlyCamera::projection:
+            // reverse Z, p[2][2] = n / (f - n), p[3][2] = f n / (f - n)).
+            const glm::mat4& pr = view->proj;
+            if (pr[2][2] > 0.0f && pr[1][1] > 0.0f) {
+                fp.far_plane = pr[3][2] / pr[2][2];
+                fp.near_plane = pr[2][2] * fp.far_plane / (1.0f + pr[2][2]);
+                fp.fov_y = 2.0f * std::atan(1.0f / pr[1][1]);
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (fsr3_last_.time_since_epoch().count() != 0)
+                fp.frame_seconds = std::chrono::duration<float>(now - fsr3_last_).count();
+            fsr3_last_ = now;
+            fp.reset = !keep;
+            fp.sharpness = std::clamp(scene_options_.sharpness, 0.0f, 1.0f);
+            fsr3_->dispatch(cmd, in, fp);
+            post_set = post_fsr3_set_;
+        } else {
+            // The history read: one never written (or dropped) is only made readable; the resolve does not look at it.
+            const Image& prev = history_[history_index_ ^ 1];
+            if (!keep)
+                image_barrier(cmd, prev.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                              VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+            ResolvePush resolve;
+            resolve.sizes = glm::vec4(static_cast<float>(scene_extent_.width), static_cast<float>(scene_extent_.height),
+                                      static_cast<float>(view_extent_.width), static_cast<float>(view_extent_.height));
+            resolve.jitter = glm::vec4(jitter_px_, push.exposure, keep ? 0.0f : 1.0f);
+            resolve.params = glm::vec4(kHistoryMaxWeight, 0.0f, 0.0f, 0.0f);
+            draw_into(cmd, history_[history_index_], view_extent_, resolve_pipeline_, resolve_layout_,
+                      resolve_sets_[history_index_], &resolve, sizeof(resolve));
+            post_set = post_taa_sets_[history_index_];
+            history_index_ ^= 1;
+        }
+        prev_view_ = *view;
+        history_valid_ = true;
+    }
+    // Below a render scale of 1 without it, FSR 1: the post pass's picture at the scene's size (encoded, as EASU wants
+    // it; the dither waits for the last pass, or EASU would enlarge it), EASU's upscale of it to the view's size, then
+    // RCAS sharpens that into the swapchain below. Under the temporal upscaler RCAS alone sharpens the post pass's
+    // picture at the view's size, when sharpness is above 0; under FSR 3.1 its own RCAS has done it.
+    const bool fsr = !taa && upscaling() && post_pipeline_;
+    const bool sharpen = fsr || (taa && !fsr3 && scene_options_.sharpness > 0.0f && upscaled_.image);
     UpscalePush up;
+    if (taa && sharpen) {
+        PostPush source = push;
+        source.flags = (push.flags & ~kPostDither) | kPostEncodeOutput;
+        source.offset = glm::vec4(0.0f);
+        draw_into(cmd, upscaled_, view_extent_, post_upscale_pipeline_, post_layout_, post_set, &source, sizeof(source));
+    }
+    if (sharpen) {
+        up.offset = push.offset;
+        up.sharpness = std::clamp(scene_options_.sharpness, 0.0f, 1.0f);
+        up.flags = push.flags & (kPostEncodeOutput | kPostDither);
+        up.frame = push.frame;
+    }
     if (fsr) {
         PostPush source = push;
         source.flags = (push.flags & ~kPostDither) | kPostEncodeOutput;
@@ -1349,10 +1735,6 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         up.sizes = glm::vec4(static_cast<float>(scene_extent_.width), static_cast<float>(scene_extent_.height),
                              static_cast<float>(view_extent_.width), static_cast<float>(view_extent_.height));
         draw_into(cmd, upscaled_, view_extent_, easu_pipeline_, upscale_layout_, easu_set_, &up, sizeof(up));
-        up.offset = push.offset;
-        up.sharpness = std::clamp(scene_options_.sharpness, 0.0f, 1.0f);
-        up.flags = push.flags & (kPostEncodeOutput | kPostDither);
-        up.frame = push.frame;
     }
 
     image_barrier(cmd, images_[frame.image_index], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1376,14 +1758,14 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
                   static_cast<float>(area.extent.width), -static_cast<float>(area.extent.height), 0.0f, 1.0f};
     vkCmdSetViewport(cmd, 0, 1, &vp);
     vkCmdSetScissor(cmd, 0, 1, &area);
-    if (fsr) {
+    if (sharpen) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, rcas_pipeline_);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, upscale_layout_, 0, 1, &rcas_set_, 0, nullptr);
         vkCmdPushConstants(cmd, upscale_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(up), &up);
         vkCmdDraw(cmd, 3, 1, 0, 0);
     } else if (post_pipeline_) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_pipeline_);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_layout_, 0, 1, &post_set_, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_layout_, 0, 1, &post_set, 0, nullptr);
         vkCmdPushConstants(cmd, post_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDraw(cmd, 3, 1, 0, 0);
     }
@@ -1391,20 +1773,31 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
 
 void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
                           VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size) {
-    // The previous frame read it.
-    image_barrier(cmd, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
-                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-    VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-    att.imageView = target.view;
-    att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    const Image* targets[1] = {&target};
+    draw_into(cmd, targets, extent, pipeline, layout, set, push, push_size);
+}
+
+void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent,
+                          VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, const void* push,
+                          std::uint32_t push_size) {
+    std::vector<VkRenderingAttachmentInfo> atts;
+    for (const Image* target : targets) {
+        // The previous frame read it.
+        image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+        att.imageView = target->view;
+        att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        atts.push_back(att);
+    }
     VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
     r.renderArea = {{0, 0}, extent};
     r.layerCount = 1;
-    r.colorAttachmentCount = 1;
-    r.pColorAttachments = &att;
+    r.colorAttachmentCount = static_cast<std::uint32_t>(atts.size());
+    r.pColorAttachments = atts.data();
     vkCmdBeginRendering(cmd, &r);
     VkViewport vp{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
     VkRect2D scissor{{0, 0}, extent};
@@ -1415,10 +1808,11 @@ void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D e
     vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, push_size, push);
     vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRendering(cmd);
-    image_barrier(cmd, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    for (const Image* target : targets)
+        image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 void VkContext::draw_bloom(VkCommandBuffer cmd) {
@@ -1539,6 +1933,36 @@ void VkContext::end_frame(const FrameInfo& frame) {
                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, 0);
     }
+    // Neighbour zones and dressed actors may add imports while the frame is recorded. Snapshot only now, so
+    // their acquire runs before every recorded draw, and keep owners alive until the release has completed. The
+    // barriers cover every live import, not only those this frame samples: which ones a frame samples is not
+    // tracked (the renderers bind whole texture arrays), and an ownership barrier on an image in a read-only layout
+    // costs little.
+    const GpuSharedCache::Snapshot shared = gpu_shared_cache_ ? gpu_shared_cache_->snapshot() : GpuSharedCache::Snapshot{};
+    const bool shared_frame = !shared.empty();
+    if (shared_frame) {
+        if (!f.shared_acquire) {
+            // Only a client that imports textures needs these two.
+            VkCommandBufferAllocateInfo a{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+            a.commandPool = f.pool;
+            a.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            a.commandBufferCount = 2;
+            std::array<VkCommandBuffer, 2> commands{};
+            vk_check(vkAllocateCommandBuffers(device_, &a, commands.data()), "allocate shared-image commands");
+            f.shared_acquire = commands[0];
+            f.shared_release = commands[1];
+        }
+        VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vk_check(vkResetCommandBuffer(f.shared_acquire, 0), "reset shared-image acquire commands");
+        vk_check(vkBeginCommandBuffer(f.shared_acquire, &begin), "begin shared-image acquire commands");
+        gpu_shared_cache_->record_acquire(f.shared_acquire, shared);
+        vk_check(vkEndCommandBuffer(f.shared_acquire), "end shared-image acquire commands");
+        vk_check(vkResetCommandBuffer(f.shared_release, 0), "reset shared-image release commands");
+        vk_check(vkBeginCommandBuffer(f.shared_release, &begin), "begin shared-image release commands");
+        gpu_shared_cache_->record_release(f.shared_release, shared);
+        vk_check(vkEndCommandBuffer(f.shared_release), "end shared-image release commands");
+    }
     vk_check(vkEndCommandBuffer(frame.cmd), "vkEndCommandBuffer");
 
     VkSemaphoreSubmitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
@@ -1546,18 +1970,57 @@ void VkContext::end_frame(const FrameInfo& frame) {
     wait.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSemaphoreSubmitInfo signal{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
     signal.semaphore = render_finished_[frame.image_index];
-    signal.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
-    VkCommandBufferSubmitInfo cmd_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
-    cmd_info.commandBuffer = frame.cmd;
+    signal.stageMask = kPresentSignalStage;
+    std::array<VkCommandBufferSubmitInfo, 3> commands{};
+    for (auto& command : commands) command.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    commands[0].commandBuffer = shared_frame ? f.shared_acquire : frame.cmd;
+    commands[1].commandBuffer = frame.cmd;
+    commands[2].commandBuffer = f.shared_release;
     VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
     submit.waitSemaphoreInfoCount = 1;
     submit.pWaitSemaphoreInfos = &wait;
-    submit.commandBufferInfoCount = 1;
-    submit.pCommandBufferInfos = &cmd_info;
+    submit.commandBufferInfoCount = shared_frame ? 3u : 1u;
+    submit.pCommandBufferInfos = commands.data();
     submit.signalSemaphoreInfoCount = 1;
     submit.pSignalSemaphoreInfos = &signal;
-    vk_check(vkQueueSubmit2(queue_, 1, &submit, f.in_flight), "vkQueueSubmit2");
-    recording_ = false;
+    if (shared_frame) {
+        // Only the GPU's use of the imports is serialized across clients: the frame takes the lease, submits, waits
+        // for its own fence (bounded) and gives the lease back. Whatever goes wrong detaches sharing for this client
+        // alone (a lease not granted in time, the broker gone, a fence that does not pass in time: the dropped lease
+        // closes the connection and the broker releases it), and the frame is still submitted: its fence was reset
+        // and its image acquired. Before the next frame records, the imports are copied into private images
+        // (begin_frame_commands) and the game goes on without sharing.
+        const auto lease_started = gpu_benchmark_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+        auto lease = gpu_shared_cache_->acquire_frame();
+        if (gpu_benchmark_)
+            benchmark_lease_wait_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lease_started).count();
+        vk_check(vkQueueSubmit2(queue_, 1, &submit, f.in_flight), "submit frame with external images");
+        recording_ = false;
+        if (lease) {
+            constexpr std::uint64_t kSharedFrameTimeout = 2'000'000'000; // ns
+            const auto fence_started = gpu_benchmark_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+            const VkResult done = vkWaitForFences(device_, 1, &f.in_flight, VK_TRUE, kSharedFrameTimeout);
+            if (gpu_benchmark_)
+                benchmark_shared_fence_wait_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - fence_started).count();
+            if (done == VK_SUCCESS) {
+                if (lease.finish()) ++gpu_shared_frames_;
+            } else if (done != VK_TIMEOUT) {
+                vk_check(done, "complete external-image frame");
+            } // VK_TIMEOUT: the lease is dropped below, which detaches
+        }
+        if (gpu_shared_frames_ == 1 && !shared_first_logged_) {
+            shared_first_logged_ = true;
+            log::info("GPU asset sharing: first frame completed with {} imported images", shared.size());
+        }
+        if (!gpu_shared_cache_->active() && !shared_detach_logged_) {
+            shared_detach_logged_ = true;
+            log::warn("GPU asset sharing stopped ({}); this client goes on with its own textures",
+                      gpu_shared_cache_->detach_reason());
+        }
+    } else {
+        vk_check(vkQueueSubmit2(queue_, 1, &submit, f.in_flight), "vkQueueSubmit2");
+        recording_ = false;
+    }
 
     VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present.waitSemaphoreCount = 1;
@@ -1570,6 +2033,18 @@ void VkContext::end_frame(const FrameInfo& frame) {
         resize_pending_ = true;
     else
         vk_check(r, "vkQueuePresentKHR");
+
+    if (gpu_benchmark_ && (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR)) {
+        const auto at = std::chrono::steady_clock::now();
+        if (++benchmark_present_submissions_ == 1) gpu_benchmark_start_ = at;
+        if (benchmark_present_submissions_ == 1 || benchmark_present_submissions_ % 120 == 0)
+            log::info("GPU benchmark progress: gpu=\"{}\" presents={} shared_frames={} elapsed_seconds={:.3f} "
+                      "shared_images_this_frame={} "
+                      "lease_wait_ms={:.3f} shared_fence_wait_ms={:.3f}", gpu_name_, benchmark_present_submissions_,
+                      gpu_shared_frames_, std::chrono::duration<double>(at - gpu_benchmark_start_).count(),
+                      shared.size(),
+                      benchmark_lease_wait_ms_, benchmark_shared_fence_wait_ms_);
+    }
 
     if (readback) {
         vk_check(vkWaitForFences(device_, 1, &f.in_flight, VK_TRUE, UINT64_MAX), "vkWaitForFences");
@@ -1668,25 +2143,46 @@ void VkContext::create_shadow_resources() {
     vk_check(vkCreateSampler(device_, &wi, nullptr, &water_depth_sampler_), "vkCreateSampler (water depth)");
 
     // 0 the shadow map, 1 and 2 begin_translucent's colour and depth, 3 the shadow map's depths as they are (the
-    // water map's), 4 the point shadow map.
-    VkDescriptorSetLayoutBinding b[5];
+    // water map's), 4 the point shadow map, 5 the temporal block (TemporalBlock, shaders/motion.glsl).
+    VkDescriptorSetLayoutBinding b[6];
     for (std::uint32_t i = 0; i < 5; ++i)
         b[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+    b[5] = {5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
     VkDescriptorSetLayoutCreateInfo li{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    li.bindingCount = 5;
+    li.bindingCount = 6;
     li.pBindings = b;
     vk_check(vkCreateDescriptorSetLayout(device_, &li, nullptr, &shadow_set_layout_), "vkCreateDescriptorSetLayout (shadow)");
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5};
+    VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5}, {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
     VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pi.maxSets = 1;
-    pi.poolSizeCount = 1;
-    pi.pPoolSizes = &size;
+    pi.poolSizeCount = 2;
+    pi.pPoolSizes = sizes;
     vk_check(vkCreateDescriptorPool(device_, &pi, nullptr, &shadow_pool_), "vkCreateDescriptorPool (shadow)");
     VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     ai.descriptorPool = shadow_pool_;
     ai.descriptorSetCount = 1;
     ai.pSetLayouts = &shadow_set_layout_;
     vk_check(vkAllocateDescriptorSets(device_, &ai, &shadow_set_), "vkAllocateDescriptorSets (shadow)");
+    // The temporal block: one buffer, written by each frame's commands (begin_scene) after the last frame's reads.
+    VkBufferCreateInfo tbi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    tbi.size = sizeof(TemporalBlock);
+    tbi.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VmaAllocationCreateInfo tai{};
+    tai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vk_check(vmaCreateBuffer(allocator_, &tbi, &tai, &temporal_buffer_, &temporal_alloc_, nullptr),
+             "vmaCreateBuffer (temporal block)");
+    VkDescriptorBufferInfo tinfo{temporal_buffer_, 0, sizeof(TemporalBlock)};
+    VkWriteDescriptorSet tw{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    tw.dstSet = shadow_set_;
+    tw.dstBinding = 5;
+    tw.descriptorCount = 1;
+    tw.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    tw.pBufferInfo = &tinfo;
+    vkUpdateDescriptorSets(device_, 1, &tw, 0, nullptr);
+    immediate_submit([&](VkCommandBuffer cmd) {
+        const TemporalBlock block;
+        vkCmdUpdateBuffer(cmd, temporal_buffer_, 0, sizeof(block), &block);
+    });
     create_shadow_map(1); // placeholders until set_scene_options gives the sizes
     create_point_shadow_map(1, 0);
     write_water_descriptors();

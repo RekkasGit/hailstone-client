@@ -1,6 +1,7 @@
 // ClientApp: Zone load and unload, scene fog, listener and music, entering the zone.
 
 #include "app/client_app_internal.h"
+#include "app/neighbour_zones.h"
 
 #include <array>
 #include <algorithm>
@@ -10,6 +11,7 @@
 
 #include <SDL3/SDL_video.h>
 
+#include "assets/ground_refine.h"
 #include "assets/zone_flora.h"
 #include "core/ascii_case.h"
 #include "core/ini_file.h"
@@ -49,6 +51,13 @@ void ClientApp::load_zone(const std::string& short_name) {
                                                       tested_collision);
         zone_ = assets::load_zone(game_, short_name, {}, revamped_test);
         mark("zone data");
+        // The classic ground smoothed for drawing (assets/ground_refine.h, display.smooth_ground); before the flora,
+        // which stands on it.
+        if (config_.get_bool("display.smooth_ground", true)) {
+            const auto r = assets::refine_ground(*zone_);
+            log::info("smoothed ground: {} triangles drawn as {}, {} curved edges, at most {:.2f} units off",
+                      r.ground_triangles, r.triangles, r.curved_edges, r.max_offset);
+        }
         // Hailstone's own flora for a zone without any (assets/zone_flora.h, display.zone_flora).
         if (config_.get_bool("display.zone_flora", true)) {
             // flora/default.txt only where the server calls the zone outdoor (OP_NewZone's time type 1, 2 or 5), so
@@ -78,8 +87,15 @@ void ClientApp::load_zone(const std::string& short_name) {
             log::info("zone fires: {} flames, {} lights added for them", zone_fires_.size(), lights);
             if (!fire_renderer_) fire_renderer_ = std::make_unique<render::FireRenderer>(vk_, shader_dir_);
         }
-        zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, render::zone_render_options(game_));
+        {
+            // The neighbours' ground measured on earlier visits shapes the land round the zone (app/neighbour_zones.h).
+            auto options = render::zone_render_options(game_);
+            options.horizon_sources =
+                cached_horizon_sources(game_, horizon_cache_dir(server_profile_.id, zone_->name), zone_->name);
+            zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
+        }
         distant_hidden_key_ = 0;
+        vk_.reset_history(); // the temporal upscaler's history shows the last zone
         mark("zone renderer");
         flora_renderer_.reset();
         if (!zone_->flora.empty()) flora_renderer_ = std::make_unique<render::FloraRenderer>(vk_, *zone_, shader_dir_);
@@ -655,7 +671,7 @@ const SliderRange* slider_range(std::string_view name) {
 }
 
 constexpr std::uint32_t kShadowSizes[] = {0, 1024, 2048, 4096}; // Off, Low, Medium, High
-constexpr int kMsaaSamples[] = {1, 2, 4, 8};
+constexpr int kMsaaSamples[] = {1, 2, 4}; // at most render::kMaxMsaa
 constexpr const char* kTonemaps[] = {"auto", "none", "agx", "aces"};
 // The per-source spell particle options, in game::SpellFxSource's order (config display.<name>).
 constexpr std::array<std::string_view, game::kSpellFxSourceCount> kSpellFxSourceOptions = {
@@ -743,6 +759,9 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
     if (name == "render_scale") return std::clamp(config_.get_int("display.render_scale", 100), 50, 100);
+    // 0 FSR 1 (spatial), 1 temporal, 2 FSR 3.1 (render/temporal.h); as saved, which shows at the next start.
+    if (name == "upscaler")
+        return static_cast<int>(render::parse_upscaler(config_.get_string("display.upscaler", "fsr1")));
     if (name == "distance_blur") return config_.get_bool("display.distance_blur", true) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
@@ -768,7 +787,7 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "msaa") {
         int samples = config_.get_int("display.msaa", 4);
         int best = 0;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < static_cast<int>(std::size(kMsaaSamples)); ++i)
             if (kMsaaSamples[i] <= samples) best = i;
         return best;
     }
@@ -868,11 +887,16 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.set_bool("display." + std::string(name), value != 0);
     } else if (name == "render_scale") {
         config_.set_int("display.render_scale", std::clamp(value, 50, 100));
+    } else if (name == "upscaler") {
+        // Taken at start-up, as display.msaa: the temporal upscaler draws with one sample.
+        const auto chosen = value == 2 ? render::Upscaler::Fsr3 : value == 1 ? render::Upscaler::Taa : render::Upscaler::Fsr1;
+        config_.set("display.upscaler", std::string(render::upscaler_name(chosen)));
     } else if (name == "shadows") {
         config_.set("display.shadows", std::to_string(kShadowSizes[std::clamp(value, 0, 3)]));
     } else if (name == "msaa") {
         // Taken at start-up: the renderers' pipelines are built for the sample count.
-        config_.set("display.msaa", std::to_string(kMsaaSamples[std::clamp(value, 0, 3)]));
+        config_.set("display.msaa",
+                    std::to_string(kMsaaSamples[std::clamp(value, 0, static_cast<int>(std::size(kMsaaSamples)) - 1)]));
     } else if (name == "tonemap") {
         config_.set("display.tonemap", kTonemaps[std::clamp(value, 0, 3)]);
     } else {

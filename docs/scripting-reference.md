@@ -894,9 +894,28 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | ComboInfo | (name, child) → {choices}, selected \| nil | Combo choices and the chosen one (0-based) | — |
 | ComboSelect | (name, child, index) → ok | Pick a combo choice (0-based) | actions |
 | ListInfo | (name, child) → rows, columns, selected, labels, widths \| nil | List shape | — |
-| ListRow | (name, child, row) → texts, r, g, b [, tex,u0,v0,u1,v1] | Row (0-based). texts.altRight / .comboColumn / .iconColumn / .colors | — |
+| ListRow | (name, child, row) → texts, r, g, b [, tex,u0,v0,u1,v1] | Row (0-based). texts.altRight / .comboColumn / .iconColumn / .colors / .disabled (a line the window left disabled) | — |
 | ListClick | (name, child, row [, "left"\|"right"\|"double" [, column [, mods]]]) → ok | Click a list row. mods: 1 shift, 2 ctrl | actions |
 | ListHeaderClick | (name, child, column) → ok | Click a column header (0-based) | actions |
+
+#### Active tasks and quest journal (lua_eq_progress.cpp)
+
+| Function | Args → returns | What | Cap |
+|---|---|---|---|
+| Tasks | () → tasks | all authoritative active tasks, independent of journal visibility or selection | — |
+| OpenTask | (taskId) → bool | selects and opens an existing active task in the journal; false for an unknown ID | `commands` |
+
+`Tasks` returns an array in native task/shared/quest and slot order, plus `selectedId` (0 if none), `revision`
+and `requestTimerLeft` (seconds). Each task has `id`, `type` (0 task, 1 shared, 2 quest), `sequence`, `title`,
+`duration`, `left` (seconds; 0 when untimed), `description`, `rewards`, `details` (the combined native STML),
+`hasRewards`, `rewardSet`, `done`, `total` and `objectives`. It is empty outside the world.
+
+Objectives preserve native group/slot order. A separator is `{separator=true, group}`. A normal entry has
+`activityId`, `group`, `separator=false`, `hidden`, `optional`, `done`, `currentZone`, `text`, `status`, `zone`,
+`count` and `goal`. Hidden entries have no `count` or `goal`; their undisclosed names and locations are not
+available. `currentZone` is false for hidden objectives and those that count anywhere. `group` is the server's
+list-group value, not a parent-objective ID or an invented numbered stage. Reading tasks does not select one or
+send a request. `OpenTask` changes the journal selection and visibility, not task or tracking state.
 
 #### Spell gems, buffs, cool-downs (lua_eq.cpp)
 
@@ -905,7 +924,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 | GemTint | (name, child) → r, g, b, a | Spell gem tint by category | — |
 | GemOverlay | (name, child, y0, y1) → top, r, g, b, a \| nil | Gem cool-down rectangle | — |
 | GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top} | — |
-| ButtonCoolDown | (name, child, y0, y1) → top, r, g, b, a \| nil | A button's cool-down rectangle | — |
+| ButtonCoolDown | (name, child, y0, y1) → top, r, g, b, a, remainingMs, reuseMs | A button's cool-down rectangle; first five answers unchanged (nil when idle), with remaining/focus-adjusted reuse milliseconds for combat ability buttons (both 0 while idle or without timing detail). Shared remaining time can exceed this ability's reuse | — |
 | BuffSlot | (name, child [, overlays]) → spellId, msLeft, name, beneficial, fade [, counter,cr,cg,cb, limit,lr,lg,lb] \| nil | Buff on a buff button. msLeft < 0 = permanent | — |
 | BuffOverlay | (name, child, "timer"\|"counter"\|"limit") → text, r, g, b \| nil | Overlay text on a buff button | — |
 | SpellGemClick | (child [, "left"\|"right"]) → ok | Cast, or forget (right) | actions |

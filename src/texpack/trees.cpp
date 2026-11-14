@@ -189,7 +189,9 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
         const glm::vec3 base = pts[std::size_t(low)];
         const float length = glm::distance(pts[std::size_t(far)], base);
         const glm::vec3 along = length > 1e-3f ? (pts[std::size_t(far)] - base) / length : glm::vec3(0, 0, 1);
-        const float first_ring = std::max(0.6f, 0.15f * length);
+        // At most a few units: a tall trunk's bottom prism can be short (NEKPINE1's rings at -7.8, 15 and 215), and a
+        // share of the length took two rings as one, its foot halfway up the first prism, the tree standing in the air.
+        const float first_ring = std::clamp(0.15f * length, 0.6f, 3.0f);
         std::vector<int> queue;
         for (int v : vs)
             if (glm::dot(pts[std::size_t(v)] - base, along) <= first_ring) hop[std::size_t(v)] = 0, queue.push_back(v);
@@ -299,7 +301,7 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
 namespace {
 
 // The levels of detail a tree is drawn at (assets::MeshPart::lod_near, lod_far): the near one, a middle one with
-// half the leaf cards (each grown to keep the cover), fewer sides and no thin branches, and a far one of three crossed
+// its leaf cards straight (Builder::strip), fewer sides and no thin branches, and a far one of three crossed
 // cards with a picture of the near one (make_far).
 constexpr int kLevels = 3;
 constexpr float kFarthest = 1.0e6f; // the far level's end: everywhere past the middle one
@@ -312,13 +314,17 @@ struct Builder {
     // The shade baked into the vertices (assets::Vertex::color, which multiplies a placement's light): set by the
     // generator per part of the tree.
     float shade = 1.0f;
-    std::uint32_t strips = 0; // strips made, for the middle level's choice
+    // The height the vertices made now sway as (assets::Mesh::sway_heights), NaN: each its own. A branch, its needle
+    // sprays and its clump get the height of its root on the trunk, so they move as one piece and crossing cards stay
+    // crossed where they were made.
+    float sway_z = std::numeric_limits<float>::quiet_NaN();
 
     std::uint32_t vert(const glm::vec3& p, const glm::vec3& n, const glm::vec2& uv) {
         assets::Vertex v;
         v.position = p;
         v.normal = glm::dot(n, n) > 0.0f ? glm::normalize(n) : glm::vec3(0, 0, 1);
         v.uv = uv;
+        v.uv2 = {std::isnan(sway_z) ? p.z : sway_z, 0.0f};
         const auto g = static_cast<std::uint32_t>(std::lround(std::clamp(shade, 0.0f, 1.0f) * 255.0f));
         v.color = 0xff000000u | g << 16 | g << 8 | g;
         mesh.vertices.push_back(v);
@@ -373,17 +379,13 @@ struct Builder {
     }
 
     // A two-sided card strip: `centre` points, `side` the half-width vectors there; u across, v from v0 to v1. The
-    // middle level keeps two strips in three (by a hash of its number, so not in a pattern), each as one quad grown
-    // about its middle to cover for the ones dropped.
+    // middle level keeps every strip, each as one straight quad from its first point to its last: the same cards, so a
+    // tree does not change its leaves where its levels meet (fewer cards, grown to cover, showed as a flicker over a
+    // forest while flying or walking through it).
     void strip(const std::vector<glm::vec3>& centre, const std::vector<glm::vec3>& side, const std::vector<glm::vec3>& normal,
                float v0, float v1) {
         emit_strip(0, centre, side, normal, v0, v1);
-        if (((strips++ * 2654435761u) >> 16) % 3u == 0u) return;
-        glm::vec3 mid(0.0f);
-        for (const auto& c : centre) mid += c;
-        mid /= float(centre.size());
-        emit_strip(1, {mid + (centre.front() - mid) * 1.1f, mid + (centre.back() - mid) * 1.1f},
-                   {side.front() * 1.25f, side.back() * 1.25f}, {normal.front(), normal.back()}, v0, v1);
+        emit_strip(1, {centre.front(), centre.back()}, {side.front(), side.back()}, {normal.front(), normal.back()}, v0, v1);
     }
     void emit_strip(int level, const std::vector<glm::vec3>& centre, const std::vector<glm::vec3>& side,
                     const std::vector<glm::vec3>& normal, float v0, float v1) {
@@ -651,13 +653,17 @@ assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const st
                     const float angle = strands ? rng.range(0.2f, 0.45f) : rng.range(0.55f, 1.05f);
                     const glm::vec2 nd = glm::normalize(perp * side * std::sin(angle) + dir * std::cos(angle));
                     const float nl = s * tw.reach * (layer ? 0.33f : 0.36f) * (strands ? 1.6f : 1.0f) * taper * rng.range(0.75f, 1.1f);
-                    const glm::vec3 c = pick(palette, colour, rng, 0.1f) * (layer ? (side > 0 ? 1.06f : 0.97f) : 0.72f);
+                    // The layers close in shade: stark stripes shimmer as the tree sways or the camera moves.
+                    const glm::vec3 c = pick(palette, colour, rng, 0.08f) * (layer ? (side > 0 ? 1.04f : 0.98f) : 0.84f);
                     cv.line(p, p + nd * nl, std::max(2.0f, s * (layer ? 0.007f : 0.011f) * (strands ? 1.8f : 1.0f)), c);
                 }
             }
         }
-    for (const auto& tw : twigs) cv.line(tw.a, tw.b, twig_w, glm::vec3(0.32f, 0.24f, 0.17f));
-    cv.fill_gaps(std::max(2, int(s * 0.014f)), colour * 0.6f);
+    // The twigs a darker shade of the needles: a brown line across a lit spray reads as a streak from afar.
+    for (const auto& tw : twigs) cv.line(tw.a, tw.b, twig_w, colour * 0.55f + glm::vec3(0.04f, 0.02f, 0.0f));
+    // The gaps between needles filled up to a few dozen texels across: a spray is cut out along its outer edge only.
+    // Thin holes showing the dark behind the spray shimmered as the camera moved.
+    cv.fill_gaps(std::max(2, int(s * 0.035f)), colour * 0.7f);
     return cv.image(colour);
 }
 
@@ -702,7 +708,7 @@ assets::Image draw_leaves(std::uint32_t size, const glm::vec3& colour, const std
                 cv.put(x, y, base * shade);
             }
     }
-    cv.fill_gaps(std::max(2, int(s * 0.012f)), colour * 0.6f);
+    cv.fill_gaps(std::max(2, int(s * 0.03f)), colour * 0.7f);
     return cv.image(colour);
 }
 
@@ -1054,6 +1060,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
             const glm::vec3 dir = glm::normalize(flat_dir + up * rise);
             const glm::vec3 p1 = p0 + dir * len * 0.55f, p2 = p0 + glm::normalize(dir + up * 0.25f) * len;
             const float r0 = std::max(0.05f * len, 0.12f);
+            b.sway_z = p0.z;
             b.tube({p0, p1, p2}, {r0, r0 * 0.6f, std::max(r0 * 0.15f, 0.05f)}, 5, 1.0f, bark_units);
             // The fork from the middle, turned aside.
             const glm::vec3 side_dir = glm::normalize(glm::normalize(glm::cross(up, flat_dir)) * (k % 2 ? 0.8f : -0.8f) + dir);
@@ -1069,6 +1076,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                             {glm::normalize(up + across * 0.2f), glm::normalize(up + across * 0.2f)}, 0.0f, 1.0f);
             }
         }
+        b.sway_z = std::numeric_limits<float>::quiet_NaN();
         Rng tex(options.seed * 31u + 7u);
         // The twigs in the game's branch colour (its cards are bare branches).
         out.leaf = draw_twigs(options.leaf_size, shape.leaf_colour, tex);
@@ -1114,9 +1122,11 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                 nrm.push_back(glm::normalize(up + dir * 0.2f));
             }
             b.shade = j % 2 ? 1.0f : 0.8f;
+            b.sway_z = crown.z;
             b.strip(c, side, nrm, 0.0f, 1.0f);
         }
         b.shade = 1.0f;
+        b.sway_z = std::numeric_limits<float>::quiet_NaN();
         Rng tex(options.seed * 31u + 7u);
         out.leaf = draw_frond(options.leaf_size, shape.leaf_colour, shape.leaf_palette, tex);
     } else if (pine) {
@@ -1134,11 +1144,13 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
             const int i = std::min(int(f), kBands - 2);
             return glm::mix(reach[std::size_t(i)], reach[std::size_t(i + 1)], f - float(i));
         };
-        const int whorls = std::clamp(int(fh / 2.0f), 12, 26);
+        // Whorls far enough apart, and few enough branches in each, that the crown shows gaps and stays cheap in a
+        // forest of them (Greater Faydark's).
+        const int whorls = std::clamp(int(fh / 3.0f), 9, 18);
         for (int k = 0; k < whorls; ++k) {
             const float t = (float(k) + 0.5f + rng.range(-0.3f, 0.3f)) / float(whorls);
             const float z = fmin.z + fh * (0.03f + 0.9f * t);
-            const int count = 5 + int(rng.next() % 4);
+            const int count = 4 + int(rng.next() % 3);
             for (int j = 0; j < count; ++j) {
                 const float az = float(k) * 2.4f + 2.0f * kPi * float(j) / float(count) + rng.range(-0.4f, 0.4f);
                 // Branches start above where their needles reach to (they droop into the measured shape).
@@ -1151,14 +1163,15 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                 std::vector<glm::vec3> path{p0, p0 + dir * len * 0.5f - up * droop * 0.45f, p0 + dir * len - up * droop * 0.8f};
                 // Shade: the sprays deep in the crown and low down darker.
                 b.shade = 0.55f + 0.45f * std::min(1.0f, 0.4f + 0.6f * t);
+                b.sway_z = p0.z;
                 // Only the branch's first part is a tube: further out the spray's drawn twig stands for it, and a thin
                 // dark tube showing through the needles aliases.
                 const float r0 = std::max(0.04f * len, 0.08f);
                 b.tube({path[0], glm::mix(path[0], path[1], 0.5f)}, {r0, r0 * 0.7f}, 3, 1.0f, bark_units);
                 // Two crossed needle sprays along the branch.
                 const glm::vec3 flat = glm::normalize(glm::cross(up, dir));
-                const float twist = rng.range(0.85f, 1.15f);
-                for (float tilt : {rng.range(-0.15f, 0.15f), twist, -twist}) {
+                const float twist = rng.range(0.6f, 0.8f);
+                for (float tilt : {twist, -twist}) {
                     std::vector<glm::vec3> c, side, nrm;
                     for (int s = 0; s <= 3; ++s) {
                         const float u = 0.06f + 0.94f * float(s) / 3.0f;
@@ -1187,6 +1200,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
         b.shade = 1.0f;
         // The crown: sprays round the top of the leader.
         const glm::vec3 top = leader.empty() ? glm::vec3(centre.x, centre.y, fmax.z) : leader.back();
+        b.sway_z = top.z - fh * 0.12f;
         for (int j = 0; j < 4; ++j) {
             const float az = kPi * float(j) / 4.0f;
             const glm::vec3 sd(std::cos(az), std::sin(az), 0.0f);
@@ -1196,6 +1210,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
             std::vector<glm::vec3> nrm{sd + up, sd + up, up};
             b.strip(c, side, nrm, 0.0f, 1.0f);
         }
+        b.sway_z = std::numeric_limits<float>::quiet_NaN();
         Rng tex(options.seed * 31u + 7u);
         out.leaf = draw_needles(options.leaf_size, shape.leaf_colour, shape.leaf_palette, tex);
     } else {
@@ -1318,6 +1333,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                 outward.z = 0.0f;
                 outward = glm::dot(outward, outward) > 1e-4f ? glm::normalize(outward) : glm::vec3(1, 0, 0);
                 b.shade = std::clamp(0.55f + 0.45f * (top.z - fmin.z) / fh, 0.5f, 1.0f);
+                b.sway_z = top.z;
                 for (float turn : {0.0f, kPi * 0.5f}) {
                     const glm::vec3 sd(std::cos(az + turn), std::sin(az + turn), 0.0f);
                     // A slight outward sway, as the strands hang off the crown's edge.
@@ -1326,6 +1342,7 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
                     b.strip(c, {sd * half, sd * half, sd * half * 0.7f}, {nrm, nrm, nrm}, 0.0f, 1.0f);
                 }
             }
+            b.sway_z = std::numeric_limits<float>::quiet_NaN();
             Rng tex(options.seed * 31u + 7u);
             out.leaf = draw_needles(options.leaf_size, shape.leaf_colour, shape.leaf_palette, tex, true);
         }
@@ -1346,8 +1363,10 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
             // Shade: darker towards the crown's middle and its underside.
             const glm::vec3 rel = (mid - centre) / glm::max((fmax - fmin) * 0.5f, glm::vec3(0.01f));
             b.shade = std::clamp(0.5f + 0.35f * std::min(glm::length(rel), 1.0f) + 0.15f * std::clamp(rel.z, -1.0f, 1.0f), 0.4f, 1.0f);
+            b.sway_z = nodes[i].pos.z;
             b.strip({mid - c * s, mid + c * s}, {a * s, a * s}, {nrm, nrm}, 1.0f, 0.0f);
         }
+        b.sway_z = std::numeric_limits<float>::quiet_NaN();
         if (!willow) {
             Rng tex(options.seed * 31u + 7u);
             out.leaf = draw_leaves(options.leaf_size, shape.leaf_colour, shape.leaf_palette, tex);
@@ -1402,12 +1421,15 @@ GeneratedTree generate_tree(const TreeShape& shape, const TreeOptions& options) 
         b.vert({lo.x, lo.y, crown}, up, {0.5f, 0.5f});
         b.tri(2, 2, q, q + 2, q + 1);
         b.tri(2, 2, q, q + 3, q + 2);
-        // A tree's levels change at distances by its height: a tall pine stays detailed further out.
+        // A tree's levels change at distances by its height: a tall pine stays detailed further out. A tree twice its
+        // height away fills about a third of the view's height, eight times, a thirteenth: the far cards' picture
+        // differs most from the tree, so they come in only where it is small.
         const float tall = hi.z - lo.z;
-        ends[0] = std::max(200.0f, 3.0f * tall) * options.lod_scale;
+        ends[0] = std::max(200.0f, 2.0f * tall) * options.lod_scale;
         ends[1] = std::max(600.0f, 8.0f * tall) * options.lod_scale;
     }
     b.finish(ends);
+    b.mesh.sway_heights = true;
     b.mesh.materials[0].frames = {options.bark_name};
     b.mesh.materials[1].frames = {options.leaf_name};
     b.mesh.materials[2].frames = {options.far_name};

@@ -26,14 +26,17 @@ constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADE
 struct Push {
     glm::mat4 view_proj;
     glm::vec4 time; // x seconds (wrapped)
-    glm::vec4 lod;  // the lawn's level (LawnLod): x blades a side, y segments, z blade width
+    glm::vec4 lod;    // the lawn's draw: x its blades (LawnLod), y segments, z kLawnCell, w kLawnBladeWidth
+    glm::vec4 curve;  // lawn_blades: x kLawnFull, y kLawnNear, z kLawnMid
+    glm::vec4 counts; // lawn_blades: xyz kLawnLods' blades
 };
 static_assert(sizeof(Push) <= 128);
 
 } // namespace
 
 // One plant as the vertex shader takes it, per instance (40 bytes: the light and haze are the shaders'). A lawn
-// patch: size x its square's side, y the blades' height, zw the ground's slope (dz/dx, dz/dy); color the ground's.
+// patch: size x its square's side, y the blades' height, zw the ground's slope (dz/dx, dz/dy); color the ground's;
+// flags bits 0..7 the share of its blades that stand (FloraInstance::cover, of 255).
 struct FloraRenderer::GpuPlant {
     glm::vec4 position_turn; // xyz the foot, w its turn (radians)
     glm::vec4 size;          // x width, y height, z the sway's reach (fraction of the height), w its period (s; 0 none)
@@ -72,7 +75,41 @@ float flora_keep(float d) {
     return r * r;
 }
 
+namespace {
+float smooth(float a, float b, float x) {
+    const float t = std::clamp((x - a) / (b - a), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+} // namespace
+
+// lawn.vert's lawn_blades, line for line.
+float lawn_blades(float d) {
+    const auto n0 = static_cast<float>(kLawnLods[0].blades), n1 = static_cast<float>(kLawnLods[1].blades),
+               n2 = static_cast<float>(kLawnLods[2].blades);
+    if (!(d > kLawnFull)) return n0;
+    if (d <= kLawnNear) return n0 + (n1 - n0) * smooth(kLawnFull, kLawnNear, d);
+    if (d <= kLawnMid) return n1 + (n2 - n1) * smooth(kLawnNear, kLawnMid, d);
+    return n2;
+}
+
+float lawn_blade_width(float d) {
+    return kLawnBladeWidth * std::sqrt(static_cast<float>(kLawnLods[0].blades) / lawn_blades(d));
+}
+
 std::size_t lawn_lod(float d) { return d < kLawnNear ? 0 : d < kLawnMid ? 1 : 2; }
+
+float lawn_patch_fade(std::uint32_t patch_stride, float d) {
+    const float gone = patch_stride >= 4 ? -1.0f : patch_stride >= 2 ? kFloraReach * 2.0f : kFloraReach;
+    if (gone < 0.0f) return 1.0f;
+    return 1.0f - smooth(gone - kLawnStrideBand, gone, d);
+}
+
+float lawn_patch_side(std::uint32_t patch_stride, float d) {
+    float side = 1.0f;
+    if (patch_stride >= 2) side += smooth(kFloraReach - kLawnStrideBand, kFloraReach, d);
+    if (patch_stride >= 4) side += 2.0f * smooth(kFloraReach * 2.0f - kLawnStrideBand, kFloraReach * 2.0f, d);
+    return side * assets::kLawnCell;
+}
 
 std::uint32_t lawn_stride(float d) {
     if (!(d > kFloraReach)) return 1;
@@ -267,6 +304,12 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
                                   double seconds, const SceneLighting& lighting, bool modern) {
     const auto& flora = zone_.flora;
     if (flora.empty() || !pipeline_) return 0;
+    if (seconds_frame_ != vk_.frames_begun()) {
+        // The last frame's clock, if this was drawn then; this frame's otherwise (no motion of its own).
+        seconds_before_ = seconds_frame_ + 1 == vk_.frames_begun() ? seconds_ : seconds;
+        seconds_ = seconds;
+        seconds_frame_ = vk_.frames_begun();
+    }
     for (auto& level : lawn_) level.clear();
     std::size_t lawn_count = 0;
     static_assert(sizeof(GpuPlant) == 40);
@@ -317,18 +360,20 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
             if (p.definition == assets::kLawnDefinition) {
                 if (!lawn_pipeline_) continue;
                 const float dist = std::sqrt(dist2);
-                // Past kFloraReach every stride-th patch each way, stride times as wide: the same cover, fewer patches.
-                const std::uint32_t stride = lawn_stride(dist);
-                if (stride > 1 && lawn_patch_stride(glm::vec2(p.position)) < stride) continue;
-                const float side = p.width * static_cast<float>(stride);
+                // Further out fewer patches, the ones kept wider: the same cover (lawn_patch_fade, lawn_patch_side).
+                const std::uint32_t own = lawn_patch_stride(glm::vec2(p.position));
+                const float thin = lawn_patch_fade(own, dist);
+                if (thin <= 0.0f) continue;
+                const float side = lawn_patch_side(own, dist) * (p.width / assets::kLawnCell);
                 glm::vec4 clip = view_proj * glm::vec4(p.position + glm::vec3(0.0f, 0.0f, p.height * 0.5f), 1.0f);
                 if (clip.w < -side) continue;
                 float fade = std::clamp((reach - dist) / (reach * 0.2f), 0.0f, 1.0f);
                 if (fade <= 0.0f) continue;
                 GpuPlant g;
                 g.position_turn = glm::vec4(p.position, 0.0f);
-                g.size = glm::vec4(side, p.height * fade, p.slope.x, p.slope.y);
+                g.size = glm::vec4(side, p.height * fade * thin, p.slope.x, p.slope.y);
                 g.color = p.color;
+                g.flags = static_cast<std::uint32_t>(std::lround(std::clamp(p.cover, 0.0f, 1.0f) * 255.0f));
                 lawn_[lawn_lod(dist)].push_back(g);
                 ++lawn_count;
                 continue;
@@ -378,7 +423,13 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
     std::copy(pushers_.begin(), pushers_.end(), ff.pushers.begin());
     frame_buffers_->write(frame.frame_slot, &ff, sizeof(ff));
     VkCommandBuffer cmd = frame.cmd;
-    Push pc{view_proj, glm::vec4(static_cast<float>(std::fmod(seconds, 4096.0)), 0.0f, 0.0f, 0.0f), glm::vec4(0.0f)};
+    // The clock wraps: across the wrap the last frame's time is taken as this frame's (no motion for that frame).
+    const double wrapped = std::fmod(seconds, 4096.0);
+    const double wrapped_before = std::fmod(seconds_before_, 4096.0) <= wrapped ? std::fmod(seconds_before_, 4096.0) : wrapped;
+    Push pc{view_proj, glm::vec4(static_cast<float>(wrapped), static_cast<float>(wrapped_before), 0.0f, 0.0f), glm::vec4(0.0f),
+            glm::vec4(kLawnFull, kLawnNear, kLawnMid, 0.0f),
+            glm::vec4(static_cast<float>(kLawnLods[0].blades), static_cast<float>(kLawnLods[1].blades),
+                      static_cast<float>(kLawnLods[2].blades), 0.0f)};
     VkDeviceSize offset = 0;
     VkDescriptorSet sets[2] = {sets_[frame.frame_slot], vk_.shadow_set()};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
@@ -393,7 +444,8 @@ std::uint32_t FloraRenderer::draw(const FrameInfo& frame, const glm::mat4& view_
         for (std::size_t k = 0; k < kLawnLods.size(); ++k) {
             if (lawn_[k].empty()) continue;
             const LawnLod& lod = kLawnLods[k];
-            pc.lod = glm::vec4(static_cast<float>(lod.side), static_cast<float>(lod.segments), lod.blade_width, 0.0f);
+            pc.lod = glm::vec4(static_cast<float>(lod.blades), static_cast<float>(lod.segments), assets::kLawnCell,
+                               kLawnBladeWidth);
             vkCmdPushConstants(cmd, layout_, kPushStages, 0, sizeof(pc), &pc);
             vkCmdDraw(cmd, lod.vertices(), static_cast<std::uint32_t>(lawn_[k].size()), 0, lawn_first[k]);
         }
@@ -465,18 +517,14 @@ VkPipeline FloraRenderer::create_pipeline(const std::filesystem::path& vert, con
     dss.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // reverse Z
     VkPipelineColorBlendAttachmentState ba{};
     ba.colorWriteMask = 0xf;
-    VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
-    cb.pAttachments = &ba;
+    // The plants' own motion in the wind (shaders/motion.glsl).
+    const SceneBlends blends = vk_.scene_blends(ba, SceneOutput::Motion);
+    const VkPipelineColorBlendStateCreateInfo cb = blends.info();
     VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
-    VkFormat color_format = vk_.scene_format();
-    VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &color_format;
-    ri.depthAttachmentFormat = vk_.depth_format();
+    VkPipelineRenderingCreateInfo ri = vk_.scene_rendering();
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &ri;
     info.stageCount = 2;

@@ -46,6 +46,7 @@
 #include "core/character_files.h"
 #include "core/config.h"
 #include "core/game_dir.h"
+#include "core/shared_file_cache.h"
 #include "core/ini_file.h"
 #include "core/log.h"
 #include "core/wipe.h"
@@ -259,6 +260,12 @@ public:
             return;
         }
         apply_classic_folder();
+        if (auto shared = SharedFileCache::configured(config_.get_string("assets.shared_memory", "off"),
+                                                      config_.get_int("assets.shared_memory_cache_mb", 1024),
+                                                      platform::cache_dir() / "assets" / "v1" / "pfs")) {
+            log::info("shared asset cache: on, {} MiB disk budget", shared->budget_bytes >> 20);
+            game_.set_shared_file_cache(std::make_shared<SharedFileCache>(std::move(*shared)));
+        }
         // The settings (hailstone.ini's until a character enters, then the character's: apply_settings), before the
         // renderers: their pipelines take the sample count.
         apply_settings();
@@ -847,16 +854,21 @@ private:
     // 0 off; the modern lighting only), display.ao (screen-space ambient occlusion, the modern lighting only),
     // display.distance_blur, display.depth_prepass (the zone's depth pre-pass, the modern lighting only),
     // display.bloom (0 off .. 1), display.brightness / contrast / gamma (the grade after the
-    // tonemap), display.render_scale (percent, 50..100: below 100 FSR 1 upscales) and display.sharpness (0..1). The
-    // Options window's Display page sets them (display_option / set_display_option).
+    // tonemap), display.render_scale (percent, 50..100: below 100 FSR 1 upscales), display.sharpness (0..1) and
+    // display.upscaler (fsr1 | taa, read at start-up: render/temporal.h). The Options window's Display page sets them
+    // (display_option / set_display_option).
     void apply_scene_options() {
         render::SceneOptions scene;
         // The sample count stays the one of the first call: the renderers' pipelines are built for it, and scene
         // targets of another count under them lose the device on some drivers (Intel on Windows). A change in the
         // Options window is saved and shows at the next start, as the window says.
         if (msaa_at_start_ == 0)
-            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, 16));
+            msaa_at_start_ = static_cast<std::uint32_t>(std::clamp(config_.get_int("display.msaa", 4), 1, static_cast<int>(render::kMaxMsaa)));
         scene.msaa = msaa_at_start_;
+        // Taken at start-up too: the temporal upscaler draws with one sample, so it changes the pipelines' count.
+        if (!upscaler_at_start_)
+            upscaler_at_start_ = render::parse_upscaler(config_.get_string("display.upscaler", "fsr1"));
+        scene.upscaler = *upscaler_at_start_;
         std::string tonemap = config_.get_string("display.tonemap", "auto");
         scene.tonemap = tonemap != "auto" ? render::parse_tonemap(tonemap)
                         : lighting_mode_ == render::LightingMode::Modern ? render::Tonemap::AgX
@@ -880,6 +892,7 @@ private:
         vk_.set_scene_options(scene, shader_dir_);
     }
     std::uint32_t msaa_at_start_ = 0; // apply_scene_options: display.msaa as the client started, 0 before
+    std::optional<render::Upscaler> upscaler_at_start_; // and display.upscaler
     // /face: MQ's heading, degrees clockwise from north.
     void face_degrees(double degrees);
     // /keypress: a key command by name, tapped (0), held (1) or let go (2); false for an unknown name.
@@ -1182,6 +1195,8 @@ private:
     // neighbours (NeighbourZones::drawn_key) it was last hidden for.
     bool horizon_hills_ = true;
     std::uint64_t distant_hidden_key_ = 0;
+    // display.neighbour_tint: the neighbour zones' debugging view (render::ZoneRenderer::set_debug_tint).
+    bool neighbour_tint_ = false;
     // How far the replacement models' (a texture pack's generated trees') levels of detail reach, in percent of their
     // own distances (render::ZoneRenderer::set_lod_scale); display.tree_detail, 50 to 200.
     int tree_detail_ = 100;
@@ -1425,6 +1440,11 @@ private:
     float iso_saved_fov_ = game::kStockFovUnits;
     float iso_focus_distance_ = 0.0f;
     bool iso() const { return camera_type_ == game::kCameraIsometric; }
+    // Click to move (Hailstone's own; docs/isometric.md "Click to move in every camera"): always in the isometric
+    // camera, and in the others when mouse.click_move is set (Options, the click_move option). Off by default, so
+    // the other cameras click as the original does.
+    bool click_move_ = false;
+    bool click_moves() const { return iso() || click_move_; }
     // Places camera_ for the isometric camera this frame, looking at the player drawn at `feet`.
     void update_iso_camera(const glm::vec3& feet, float dt);
     // The isometric camera's click to move and movement relative to the camera (app/client_app_iso.cpp): WASD
@@ -1505,7 +1525,7 @@ private:
     IsoMarker iso_marker_;
     std::unique_ptr<render::TargetRingRenderer> iso_marker_renderer_;
     void set_iso_marker(const glm::vec3& point, bool click);
-    bool iso_marker_shown() const { return iso() && iso_marker_.active; }
+    bool iso_marker_shown() const { return click_moves() && iso_marker_.active; }
     void draw_iso_marker(const render::FrameInfo& frame, const glm::mat4& view_proj, float far_plane, bool modern,
                          double seconds);
     Clock::time_point last_mouse_look_{}; // the last mouse look's time (the chase camera's height rate)

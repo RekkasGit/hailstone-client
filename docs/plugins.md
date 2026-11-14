@@ -588,9 +588,13 @@ Buff, spawn and extended target records: `get_buff_data_bulk(host, out, out_size
 `get_pet_buff_data_bulk(host, out, out_size)`, `get_spawns_data_bulk(host, out, out_size)` and
 `get_xtarget_data_bulk(host, out, out_size)` (with `read`; added later in ABI 3, so test `HAILSTONE_HOST_HAS(host, <field>)` first;
 `out` is an `unsigned char*` and `out_size` an `int32_t`) write records into `out` and return the bytes written.
-The client copies its own packed structs into the buffer, so the fields are in the machine's byte order
-(little-endian on every platform Hailstone runs on) and unaligned: read them with `ByteReader` or `memcpy`, never by
-casting a struct onto the buffer. Without `read` they return 0 and say so in the chat window.
+The records are the SDK's packed structs (`HS_Bulk_BuffData`, `HS_Bulk_PetBuffData`, `HS_Bulk_SpawnHeader`,
+`HS_Bulk_SpawnFixedRecord`, all in `#pragma pack(push, 1)`), in the machine's byte order (little-endian on every
+platform Hailstone runs on) and unaligned. For speed, the bulk reads are the one place where a struct may be cast
+onto the buffer, by the client writing it and by a plugin reading it: read each field through the packed struct
+(`rec->level`), which the compiler reads unaligned, and never keep a plain pointer or reference to a field (`&rec->x`),
+which may fault on a processor that needs aligned reads. `ByteReader` or `memcpy` work too. Without `read` they return 0
+and say so in the chat window.
 
 - `get_buff_data_bulk`: one record of `HAILSTONE_BUFF_RECORD_SIZE` (29) bytes per buff slot, slot 0 first, in the
   client's order: the long buff slots, then the song slots, then the one discipline slot, always last. RoF2 has 42
@@ -621,7 +625,7 @@ casting a struct onto the buffer. Without `read` they return 0 and say so in the
   added until fewer than 4096 bytes are left in `out`: below 4096 bytes it returns 0, and it needs at least 4112
   bytes to write any record and a few hundred bytes per spawn on top; the header's count says how many records follow.
 
-  Header:
+  Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
 
   | Offset | Type | Field |
   |---|---|---|
@@ -630,42 +634,35 @@ casting a struct onto the buffer. Without `read` they return 0 and say so in the
   | 8 | f32 | the player's y |
   | 12 | f32 | the player's z |
 
-  Each record is 128 fixed bytes:
+  Each record (`HS_Bulk_SpawnFixedRecord`) is `HS_BULK_SPAWN_RECORD_SIZE` = 92 fixed bytes:
 
   | Offset | Type | Field |
   |---|---|---|
   | 0 | i32 | spawn id |
   | 4 | u32 | flags (below) |
-  | 8 | i32 | blind: always 0 |
-  | 12 | i32 | body type id |
-  | 16 | i32 | class id |
-  | 20 | i32 | con colour against the player's level, as a chat colour (`CONCOLOR_*`: 6 grey, 2 green, 18 light blue, 4 blue, 10 white, 15 yellow, 13 red) |
-  | 24 | i32 | current endurance: always 0 |
-  | 28 | i64 | current HP: the HP percent, as the server sends it |
-  | 36 | i32 | current mana: always 0 |
-  | 40 | i32 | gender |
-  | 44 | i64 | guild id |
-  | 52 | f32 | heading in degrees (the server's heading x 0.703125) |
-  | 56 | f32 | height (the model's avatar height) |
-  | 60 | i32 | level |
-  | 64 | f32 | look: always 0 |
-  | 68 | i32 | master: the pet owner's spawn id, 0 for none |
-  | 72 | i32 | max endurance: always 0 |
-  | 76 | f32 | max range: 14.5, or 0 for a ground item |
-  | 80 | f32 | max range to: 14.5, or 0 for a ground item |
-  | 84 | i64 | HP percent |
-  | 92 | i32 | mana percent: always 0 |
-  | 96 | i32 | pet id: always 0 |
-  | 100 | i32 | player state, as the server sends it |
-  | 104 | i32 | race id |
-  | 108 | i32 | target of target id: always 0 |
-  | 112 | f32 | x |
-  | 116 | f32 | y |
-  | 120 | f32 | z |
-  | 124 | i32 | deity (tells a player's corpse from an NPC's) |
+  | 8 | i32 | body type id |
+  | 12 | i32 | class id |
+  | 16 | i32 | consider colour, the one `/consider` and the target window show (the original's con level, with the server's PvP rules), as a chat colour (`CONCOLOR_*`: 6 grey, 2 green, 18 light blue, 4 blue, 10 white, 15 yellow, 13 red); 6 also for a corpse |
+  | 20 | i64 | current HP: the HP percent, as the server sends it |
+  | 28 | i32 | gender |
+  | 32 | i64 | guild id |
+  | 40 | f32 | heading in degrees (the server's heading x 0.703125) |
+  | 44 | f32 | height (the model's avatar height) |
+  | 48 | i32 | level |
+  | 52 | i32 | master: the pet owner's spawn id, 0 for none |
+  | 56 | f32 | max range: 14.5, or 0 for a ground item |
+  | 60 | f32 | max range to: 14.5, or 0 for a ground item |
+  | 64 | i32 | HP percent |
+  | 68 | i32 | player state, as the server sends it |
+  | 72 | i32 | race id |
+  | 76 | f32 | x |
+  | 80 | f32 | y |
+  | 84 | f32 | z |
+  | 88 | i32 | deity (tells a player's corpse from an NPC's) |
 
   Then seven strings, each a u16 length followed by that many bytes with no terminating NUL: the body type's
-  description, the clean name, the display name, the name, the race's name, the suffix, and the spawn type's
+  description, the clean name, the display name (the same text as the clean name, as `${Spawn.CleanName}` and
+  `${Spawn.DisplayName}` give them), the name, the race's name, the suffix, and the spawn type's
   description.
 
   Flags (bit: meaning): 0 AFK, 1 aggressive (player state 0x04 or 0x08), 2 anonymous, 3 buyer, 4 dead, 5 ducking,

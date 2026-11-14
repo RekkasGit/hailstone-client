@@ -39,6 +39,7 @@ struct FloraInstance {
     std::uint32_t color = 0xffffffffu;
     std::uint32_t definition = 0;
     glm::vec2 slope{0.0f};
+    float cover = 1.0f; // a lawn patch (kLawnDefinition): the share of its blades that stand (assets::lawn_edge_cover)
 };
 
 // A zone's flora, by tile (the instances of tile t are instances[first, first + count)).

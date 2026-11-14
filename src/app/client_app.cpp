@@ -209,6 +209,7 @@ int ClientApp::run() {
             if (actor_renderer_) perf.actors = &actor_renderer_->stats();
             perf.conn = conn_.get();
             perf.gpu = &vk_;
+            perf.shared_files = game_.shared_file_cache().get();
             if (conn_) {
                 const auto& w = conn_->world();
                 perf.zone_name = w.zone_long_name.empty() ? w.zone_short_name : w.zone_long_name;
@@ -520,6 +521,8 @@ int ClientApp::run() {
                         in.zone_id = static_cast<std::uint32_t>(conn_->zone_id());
                         const auto& z = conn_->zone_info();
                         in.outdoor = z && z->sky != 0 && outdoor;
+                        if (zone_renderer_) in.horizon = zone_renderer_->horizon_build();
+                        in.cache_dir = horizon_cache_dir(server_profile_.id, zone_->name);
                         neighbours_->enter(in);
                     }
                     neighbours_->update(camera_.position, lit.far_plane, modern && neighbour_zones_ && in_game);
@@ -527,6 +530,7 @@ int ClientApp::run() {
                     neighbours_->set_scene_light(scene_light);
                     neighbours_->set_lighting(lighting);
                     neighbours_->set_lod_scale(static_cast<float>(tree_detail_) / 100.0f);
+                    neighbours_->set_debug_tint(neighbour_tint_);
                 }
                 frame_lighting_ = lighting;
                 if (actor_renderer_) actor_renderer_->set_lighting(lighting);
@@ -588,6 +592,9 @@ int ClientApp::run() {
             if (slot.view) slot.view->record(*f, dt); // the item previews' own passes (their images)
         if (web_textures_ && browser_) web_textures_->record(*f, *browser_); // the browser tabs' changes
         lap.mark("item preview record");
+        // The temporal upscaler follows the plain camera (render/temporal.h); begin_scene hands it to the scene's
+        // shaders for their own motion, so it is given first.
+        if (scene) vk_.set_temporal_view(camera_.view(), camera_.projection(width, height, lit.far_plane));
         // The loading screen's backdrop is black (ui::loading_overlay's too, while the zone settles behind it).
         vk_.begin_scene(*f, screen_ == Screen::Loading ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
                                                        : glm::vec4(under_water ? water_color : lit.fog_color, 1.0f));
@@ -608,7 +615,11 @@ int ClientApp::run() {
             vk_.set_sun_shafts(shafts);
         }
         if (scene) {
-            glm::mat4 proj = camera_.projection(width, height, lit.far_plane);
+            // The view as picking, the name plates and the map overlay take it; the scene is drawn through it moved by
+            // the temporal upscaler's jitter (none without it), which follows the plain one (render/temporal.h).
+            const glm::mat4 plain_proj = camera_.projection(width, height, lit.far_plane);
+            const glm::mat4 plain_vp = plain_proj * camera_.view();
+            glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
             // The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava and with
             // fog ending before 101).
@@ -739,9 +750,9 @@ int ClientApp::run() {
             lap.mark("translucent, weather, particles");
             if (in_game) { // character select draws no target, names or picking
                 if (nav_ && nav_->overlay())
-                    nav_->draw_overlay(ImGui::GetBackgroundDrawList(), vp,
+                    nav_->draw_overlay(ImGui::GetBackgroundDrawList(), plain_vp,
                                        glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h));
-                draw_nameplates(*f, vp, f->extent, lit.far_plane);
+                draw_nameplates(*f, plain_vp, f->extent, lit.far_plane);
                 lap.mark("nameplates");
                 draw_text_overlay();
                 lap.mark("text overlay");
