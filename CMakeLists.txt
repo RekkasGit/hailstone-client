@@ -1113,6 +1113,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/touching_switch_test.cpp
     tests/position_tracker_test.cpp
     tests/perf_ui_test.cpp
+    tests/spell_ui_test.cpp
     tests/lua_gc_test.cpp
     tests/lua_ui_api_test.cpp
     tests/tradeskill_batch_test.cpp

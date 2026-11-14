@@ -42,6 +42,36 @@ bool is_hitch(float frame_ms, float typical_ms);
 std::string hitch_text(float frame_ms, float typical_ms, const PhaseTimes& phases,
                        std::vector<std::pair<const char*, float>> sections = {});
 
+// The frame sections (core/frame_sections.h) of the last `frames` frames: each one's average per frame and its
+// slowest frame, longest average first, with the bytes each allocated a frame on average (frame_sections::add_bytes;
+// a section with bytes and no time is listed too). A section missing from a frame counts 0 there. Names are compared
+// by address, as frame_sections::add does (literals and frame_sections::intern).
+class SectionAverages {
+public:
+    using Sections = std::vector<std::pair<const char*, float>>;
+    using Allocations = std::vector<std::pair<const char*, std::size_t>>;
+    struct Row {
+        const char* name;
+        float avg_ms;
+        float max_ms;
+        float avg_bytes = 0.0f;
+        bool has_bytes = false; // bytes were counted for it (the Lua windows), so 0 means none allocated
+    };
+    explicit SectionAverages(std::size_t frames = 60) : frames_(frames == 0 ? 1 : frames) {}
+    void add(Sections sections, Allocations bytes = {});
+    std::vector<Row> rows() const;
+    std::size_t frames() const { return history_.size(); }
+
+private:
+    struct Frame {
+        Sections sections;
+        Allocations bytes;
+    };
+    std::size_t frames_;
+    std::vector<Frame> history_; // a ring of up to frames_ frames
+    std::size_t head_ = 0;       // next slot to write once full
+};
+
 struct PerfInputs {
     const render::ZoneRenderStats* zone = nullptr;
     const render::ActorRenderStats* actors = nullptr;
@@ -89,6 +119,7 @@ private:
     std::array<float, kFrames> frame_ms_{};
     std::array<PhaseTimes, kFrames> phase_ms_{};
     PhaseTimes current_{};
+    SectionAverages sections_;
     std::size_t head_ = 0;  // next slot to write
     std::size_t count_ = 0; // filled slots
     NetRate world_rate_, zone_rate_;

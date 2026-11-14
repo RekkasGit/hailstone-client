@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Faster frames in game: the client no longer rebuilds the spell book's list (up to 720 spells, each with its full description) on every frame when nothing shows it. It is built only while the built-in spell book is open, and not at all when the interface's own spell book replaces it, as the modern and gamepad interfaces' do. The same goes for the spell gems' descriptions and the buff texts of windows the interface replaces
+- Performance window (Ctrl+Shift+P): a new "Frame sections" table shows where the time inside each phase goes, averaged over the last 60 frames with the slowest frame beside it: each Lua UI window, the Lua garbage collector, the name plates and the rest, and for the Lua UI how many KB each window allocates a frame (the garbage the Lua collector has to clean up). Before, these were only written to the log for a hitch
 - Extended target window (modern interface): empty slots now have a row too, so a right click on one gives it a type, Current Target included. Before, an empty slot showed no row unless the HUD was unlocked, and Current Target from a right click elsewhere in the window did nothing. Drag the window's right or bottom edge to make it smaller; the rows then scroll
 - Money picked up onto the cursor (from the inventory, the bank or a trade) now follows the mouse as a coin of its kind with the amount beside it, in both interfaces, as an item on the cursor does. Before, nothing showed that coin was held
 - Merchant, Parcels page (modern interface): clicking a parcel now picks it, and Retrieve takes that parcel. Before, the pick was dropped at once, so Retrieve stayed greyed out. With no parcel picked, Retrieve takes the first one in the list

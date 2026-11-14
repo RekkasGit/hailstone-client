@@ -92,6 +92,9 @@ public:
     void frame();
 
     lua_State* state() const;
+    // Every byte the state has allocated since it was made, freed since or not (it wraps: take differences). Each
+    // window's share of a frame goes to core::frame_sections::add_bytes under its section ("Lua window <name>").
+    std::size_t allocated_bytes() const;
     // Tests: each frame's collector slice is `steps` LUA_GCSTEPs instead of its time (0: the time), so a cycle spreads
     // over frames the same way on every machine.
     void set_gc_steps_for_test(int steps);

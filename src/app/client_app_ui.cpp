@@ -273,8 +273,9 @@ void ClientApp::draw_ui(float fps) {
         hud.connected = conn_->state() == net::ConnectionState::InZone || conn_->state() == net::ConnectionState::Camping;
         hud.connection = conn_->state() == net::ConnectionState::Camping ? "Camping" : "Connected";
         // Only spawn_list_window reads it: not built (a name string per spawn) while that window is closed.
-        game_view_.spawns.spawns.clear();
+        
         if (game_view_.dev_windows && game_view_.show_spawns) {
+            game_view_.spawns.spawns.clear();
             for (const auto& [id, s] : world.spawns) {
                 if (id == world.player_id) continue;
                 game_view_.spawns.spawns.push_back(

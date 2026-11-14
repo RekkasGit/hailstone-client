@@ -174,8 +174,16 @@ The windows are Lua scripts drawn with ImGui, grouped into user interfaces: ever
   (`core/frame_sections.h`): the Update, UI and Record phases' main calls (Update's: the connection, where a zone
   loads; automation; the world objects; the player; the spawns' smoothing, where a new race's model is built), the
   Record phase's cover and water maps apart from the lights' cubes, each Lua window and the map views' lines, labels
-  and spawn marks inside it, the script scan and the Lua garbage collection. The Actors row counts the instances not
-  posed this frame (in neither the view nor a shadow's reach).
+  and spawn marks inside it, the script scan and the Lua garbage collection. The window's "Frame sections" table
+  shows the same sections at all times, each one's average over the last 60 frames (0 ms in a frame it was not
+  marked in) and its slowest frame, longest first, with a filter (`app::SectionAverages`). Sections nest: "Lua UI
+  frame" holds every "Lua window ..." row. Its "KB/frame" column is what the Lua state allocated in "Lua UI frame" and
+  in each Lua window, averaged the same way (the state's allocator counts every byte it hands out,
+  `LuaUi::allocated_bytes`; `core::frame_sections::add_bytes`): with the collector stopped between its slices, nearly
+  all of it is garbage the slices take later, so it shows which windows make the collector's work. Short strings
+  (40 bytes or less) are interned by Lua and cost nothing when the same text comes again; tables, closures and long
+  strings made in a draw function each frame are what it counts. The Actors row counts the instances not posed this frame (in neither the
+  view nor a shadow's reach).
 - The Lua UI's garbage collector does not run on its own (`LUA_GCSTOP`): `LuaUi::frame` gives it a 1 ms slice at its
   end while a cycle is due (the heap twice what was live after the last cycle) or under way, and finishes a cycle in
   one go only if the heap reaches four times that. Lua's own pacing put a cycle's sweep into one or two frames, a

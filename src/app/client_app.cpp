@@ -183,9 +183,12 @@ int ClientApp::run() {
             lap.mark("eq host update");
             eq_api_->begin_frame();
             lap.mark("eq api begin_frame");
+            const std::size_t lua_bytes = lua_ui_->allocated_bytes();
             lua_ui_->frame();
             eq_host_.close_top_window = false; // (a press no window took this frame)
-            lap.mark("Lua UI frame");
+            static constexpr const char* kLuaFrame = "Lua UI frame"; // one address for both (names match by it)
+            lap.mark(kLuaFrame);
+            core::frame_sections::add_bytes(kLuaFrame, lua_ui_->allocated_bytes() - lua_bytes);
         }
         window_.set_text_input(std::exchange(web_text_input_, false)); // a page that has the keys (app/lua_eq_web.cpp)
         settle_frame_.ui = true; // the UI pack's in-game frame ran (or there is none)

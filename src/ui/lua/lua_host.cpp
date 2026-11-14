@@ -105,6 +105,7 @@ struct LuaUi::Impl {
     bool character_dirty = false;
     Clock::time_point last_scan{};
     std::size_t memory = 0; // what the state holds now (alloc)
+    std::size_t allocated = 0; // every byte the state has allocated (alloc: what grew), freed or not; it wraps
     std::size_t memory_limit = kMemoryLimit;
     int limited = 0; // >0: Lua code of ours runs (Budget), so an allocation past the limit fails
     Clock::time_point deadline = Clock::time_point::max(); // the running code's end (Budget; budget_hook)
@@ -152,7 +153,10 @@ struct LuaUi::Impl {
         }
         if (m->limited > 0 && new_size > old && m->memory + (new_size - old) > m->memory_limit) return nullptr;
         void* p = std::realloc(ptr, new_size);
-        if (p) m->memory = m->memory - old + new_size;
+        if (p) {
+            m->memory = m->memory - old + new_size;
+            if (new_size > old) m->allocated += new_size - old;
+        }
         return p;
     }
 
@@ -1332,6 +1336,8 @@ void LuaUi::copy_character_layout(const fs::path& from) {
 
 lua_State* LuaUi::state() const { return impl_->L; }
 
+std::size_t LuaUi::allocated_bytes() const { return impl_->allocated; }
+
 void LuaUi::set_gc_steps_for_test(int steps) { impl_->gc_steps = steps; }
 
 void LuaUi::set_limits_for_test(std::size_t memory, std::chrono::milliseconds pack, std::chrono::milliseconds plugin) {
@@ -1435,6 +1441,7 @@ void LuaUi::frame() {
         m.running_file = w.file;
         const std::string file = w.file; // (w may move: a draw function can add windows)
         int status = LUA_OK;
+        const std::size_t allocated_before = m.allocated;
         {
             Impl::Budget budget(m, m.budget_for(w.tag));
             Impl::Acting acting(m, w.tag);
@@ -1454,6 +1461,7 @@ void LuaUi::frame() {
         Window& drawn = m.windows[i]; // (w may have moved: a draw function can add windows)
         if (!drawn.section) drawn.section = core::frame_sections::intern("Lua window " + drawn.name);
         lap.mark(drawn.section);
+        core::frame_sections::add_bytes(drawn.section, m.allocated - allocated_before);
     }
     m.draw_errors();
     m.save_settings_if_due();
