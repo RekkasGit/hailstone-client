@@ -189,7 +189,9 @@ std::optional<TreeShape> measure_tree(const assets::Mesh& mesh, const TreeTextur
         const glm::vec3 base = pts[std::size_t(low)];
         const float length = glm::distance(pts[std::size_t(far)], base);
         const glm::vec3 along = length > 1e-3f ? (pts[std::size_t(far)] - base) / length : glm::vec3(0, 0, 1);
-        const float first_ring = std::max(0.6f, 0.15f * length);
+        // At most a few units: a tall trunk's bottom prism can be short (NEKPINE1's rings at -7.8, 15 and 215), and a
+        // share of the length took two rings as one, its foot halfway up the first prism, the tree standing in the air.
+        const float first_ring = std::clamp(0.15f * length, 0.6f, 3.0f);
         std::vector<int> queue;
         for (int v : vs)
             if (glm::dot(pts[std::size_t(v)] - base, along) <= first_ring) hop[std::size_t(v)] = 0, queue.push_back(v);
@@ -654,7 +656,9 @@ assets::Image draw_needles(std::uint32_t size, const glm::vec3& colour, const st
         }
     // The twigs a darker shade of the needles: a brown line across a lit spray reads as a streak from afar.
     for (const auto& tw : twigs) cv.line(tw.a, tw.b, twig_w, colour * 0.55f + glm::vec3(0.04f, 0.02f, 0.0f));
-    cv.fill_gaps(std::max(2, int(s * 0.014f)), colour * 0.6f);
+    // The gaps between needles filled up to a few dozen texels across: a spray is cut out along its outer edge only.
+    // Thin holes showing the dark behind the spray shimmered as the camera moved.
+    cv.fill_gaps(std::max(2, int(s * 0.035f)), colour * 0.7f);
     return cv.image(colour);
 }
 
@@ -699,7 +703,7 @@ assets::Image draw_leaves(std::uint32_t size, const glm::vec3& colour, const std
                 cv.put(x, y, base * shade);
             }
     }
-    cv.fill_gaps(std::max(2, int(s * 0.012f)), colour * 0.6f);
+    cv.fill_gaps(std::max(2, int(s * 0.03f)), colour * 0.7f);
     return cv.image(colour);
 }
 

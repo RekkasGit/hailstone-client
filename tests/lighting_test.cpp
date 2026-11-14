@@ -87,6 +87,20 @@ using glm::inversesqrt;
 #include "../shaders/ao_kernel.glsl"
 }
 
+// The puddles' noise and cover, compiled as C++ the same way (shaders/puddle_cover.glsl).
+namespace puddle_cover_test {
+using glm::vec2;
+using glm::vec3;
+using glm::abs;
+using glm::dot;
+using glm::floor;
+using glm::fract;
+using glm::min;
+using glm::mix;
+using glm::smoothstep;
+#include "../shaders/puddle_cover.glsl"
+}
+
 TEST_CASE("select_lights: dynamic lights first, then the zone's nearest, within range and the cap") {
     std::vector<assets::PointLight> zone{
         {{100, 0, 0}, {1, 0, 0}, 20.0f},  // its sphere is 80 away
@@ -512,6 +526,35 @@ TEST_CASE("weather look: a new zone starts it over; the snow lying in one does n
     }
     CHECK(look.snow == 0.0f);
     CHECK(look.storm == 0.0f);
+}
+
+TEST_CASE("puddles stand only on flat ground, and spread as they fill") {
+    using puddle_cover_test::puddle_cover;
+    // The share of a 400 x 400 unit patch under water (puddle_cover's x) for a surface whose smoothed normal tilts
+    // `smooth_deg` and whose triangle tilts `face_deg`.
+    auto share = [](float puddles, float smooth_deg, float face_deg) {
+        const glm::vec3 n{std::sin(glm::radians(smooth_deg)), 0.0f, std::cos(glm::radians(smooth_deg))};
+        const glm::vec3 face{0.0f, std::sin(glm::radians(face_deg)), std::cos(glm::radians(face_deg))};
+        double water = 0.0;
+        int count = 0;
+        for (float y = 0.0f; y < 400.0f; y += 2.0f)
+            for (float x = 0.0f; x < 400.0f; x += 2.0f, ++count)
+                water += static_cast<double>(puddle_cover(puddles, {x, y, 0.0f}, n, face, 1.0f).x);
+        return water / count;
+    };
+    const double flat = share(1.0f, 0.0f, 0.0f);
+    CHECK(flat > 0.1);  // a long storm covers a good part of level ground...
+    CHECK(flat < 0.45); // ...not all of it
+    CHECK(share(0.3f, 0.0f, 0.0f) < flat * 0.6); // the low spots first
+    CHECK(share(1.0f, 3.0f, 3.0f) > flat * 0.8); // ground a few degrees off level still holds water
+    CHECK(share(1.0f, 8.0f, 8.0f) < flat * 0.7); // less as it nears the limit
+    CHECK(share(1.0f, 12.0f, 0.0f) == 0.0);      // a slope keeps none
+    CHECK(share(1.0f, 30.0f, 30.0f) == 0.0);
+    // The smoothed normal can read level where the triangle is a slope's (its foot, a rounded crest): still none.
+    CHECK(share(1.0f, 0.0f, 15.0f) == 0.0);
+    CHECK(share(1.0f, 0.0f, 180.0f) == flat); // a floor wound the other way round is still level
+    CHECK(share(0.0f, 0.0f, 0.0f) == 0.0);
+    CHECK(puddle_cover(1.0f, {10.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.0f).x == 0.0f); // under cover
 }
 
 TEST_CASE("weather look: rain soaks, then puddles fill and dry slower; the rings only while it falls") {
