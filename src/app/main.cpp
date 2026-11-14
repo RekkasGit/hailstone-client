@@ -151,6 +151,7 @@ struct Options {
     bool no_audio = false;
     bool no_vsync = false; // present as fast as the GPU draws (frame-time measurements)
     float frame_dt = 0.0f; // > 0: the clock moves this many seconds a frame, not with the wall clock
+    glm::vec3 fly{0.0f};   // viewer: the camera moves this many units a second (--fly)
     hailstone::app::ModelViewerOptions model; // --model viewer; active when model.codes is not empty
 };
 
@@ -300,6 +301,8 @@ void usage() {
         "  --no-vsync         present without waiting for the display (measuring frame times)\n"
         "  --frame-dt S       the viewer's clock moves S seconds each frame, not with the wall clock (screenshots\n"
         "                     that match from run to run: the wind, water and sky at the same moment)\n"
+        "  --fly X Y Z        viewer: the camera flies X Y Z units a second (with --frame-dt, frame N of one run\n"
+        "                     and N+1 of another are two frames of the flight: flicker in motion)\n"
         "  --verbose          debug logging\n"
         "viewer controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift faster, Esc quit\n");
 }
@@ -574,6 +577,11 @@ Options parse_args(int argc, char** argv) {
         } else if (arg("--frame-dt")) {
             need(1);
             o.frame_dt = std::strtof(argv[++i], nullptr);
+        } else if (arg("--fly")) {
+            need(3);
+            const float x = std::strtof(argv[++i], nullptr);
+            const float y = std::strtof(argv[++i], nullptr);
+            o.fly = glm::vec3(x, y, std::strtof(argv[++i], nullptr));
         } else if (arg("--auto-accept")) {
             o.auto_accept_invite = true;
         } else if (arg("--max-fps")) {
@@ -1113,6 +1121,7 @@ int main(int argc, char** argv) {
             }
             // While the camera is being dragged the UI must not take the mouse.
             update_camera(camera, window, dt, !ui_mouse || window.input().right_button, !ui_keys);
+            camera.position += opts.fly * dt;
 
             if (ui_layer) {
                 ui_layer->new_frame();
