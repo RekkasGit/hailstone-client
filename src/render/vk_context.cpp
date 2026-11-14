@@ -9,6 +9,7 @@
 #include <format>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "core/env.h"
 #include "core/log.h"
@@ -81,16 +82,33 @@ struct UpscalePush {
     std::uint32_t pad = 0;
 };
 
+// shaders/temporal_prep.frag's push constants.
+struct PrepPush {
+    glm::mat4 reproject{1.0f}; // this frame's clip space (unjittered) to the last frame's (render/temporal.h)
+    glm::vec4 depth{0.0f};     // view depth terms x, y (as PostPush::depth); z: the AO's strength; w: 1 to apply it
+    glm::vec4 jitter{0.0f};    // xy: this frame's jitter in NDC
+};
+static_assert(sizeof(PrepPush) <= 128);
+
+// shaders/taa_resolve.frag's push constants.
+struct ResolvePush {
+    glm::vec4 sizes{0.0f};  // the scene's width and height, the view's
+    glm::vec4 jitter{0.0f}; // xy: the jitter in scene pixels; z: the exposure (linear); w: 1 to drop the history
+    glm::vec4 params{0.0f}; // x: the most weight the history keeps
+};
+// The history keeps at most this many frames' worth of weight: each new frame is at least 1/12 of the result.
+constexpr float kHistoryMaxWeight = 12.0f;
+
 // shaders/ao.frag's push constants.
 struct AoPush {
     glm::vec4 projection{0.0f}; // tan_half_x, tan_half_y, depth terms x, y (as PostPush::depth)
     glm::vec4 params{0.0f};     // radius (world units), intensity, max radius in pixels, frame
 };
 
-// A full-screen triangle into one colour attachment of `format` (shaders/post.vert with `fragment`), added onto
-// what is there when `additive`.
+// A full-screen triangle into colour attachments of `formats` (shaders/post.vert with `fragment`), added onto what
+// is there when `additive`.
 VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, VkShaderModule vertex,
-                               VkShaderModule fragment, VkFormat format, bool additive = false) {
+                               VkShaderModule fragment, std::span<const VkFormat> formats, bool additive = false) {
     VkPipelineShaderStageCreateInfo stages[2] = {
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vertex, "main", nullptr},
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fragment, "main", nullptr},
@@ -116,16 +134,17 @@ VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelin
         ba.srcAlphaBlendFactor = ba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         ba.colorBlendOp = ba.alphaBlendOp = VK_BLEND_OP_ADD;
     }
+    const std::vector<VkPipelineColorBlendAttachmentState> blends(formats.size(), ba);
     VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    cb.attachmentCount = 1;
-    cb.pAttachments = &ba;
+    cb.attachmentCount = static_cast<std::uint32_t>(blends.size());
+    cb.pAttachments = blends.data();
     VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
     VkPipelineRenderingCreateInfo ri{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    ri.colorAttachmentCount = 1;
-    ri.pColorAttachmentFormats = &format;
+    ri.colorAttachmentCount = static_cast<std::uint32_t>(formats.size());
+    ri.pColorAttachmentFormats = formats.data();
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &ri;
     info.stageCount = 2;
@@ -143,6 +162,10 @@ VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelin
     vk_check(vkCreateGraphicsPipelines(device, cache, 1, &info, nullptr, &pipeline),
              "vkCreateGraphicsPipelines (full screen)");
     return pipeline;
+}
+VkPipeline fullscreen_pipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, VkShaderModule vertex,
+                               VkShaderModule fragment, VkFormat format, bool additive = false) {
+    return fullscreen_pipeline(device, cache, layout, vertex, fragment, std::span<const VkFormat>(&format, 1), additive);
 }
 constexpr std::uint32_t kPostEncodeOutput = 2; // the swapchain is UNORM: encode sRGB in the shader
 constexpr std::uint32_t kPostDither = 4;
@@ -698,11 +721,19 @@ void VkContext::create_scene_targets() {
         bloom_[i] = create_target(kSceneFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                   VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, bloom_extent_[i]);
     }
-    if (upscaling()) {
-        constexpr VkImageUsageFlags kUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    constexpr VkImageUsageFlags kUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    const bool taa = scene_options_.upscaler == Upscaler::Taa;
+    if (upscaling())
         upscale_source_ = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    if (upscaling() || taa)
         upscaled_ = create_target(kUpscaleFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
+    if (taa) {
+        lit_ = create_target(kSceneFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        motion_ = create_target(kMotionFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        for (Image& h : history_)
+            h = create_target(kSceneFormat, kUsage, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_ASPECT_COLOR_BIT, view_extent_);
     }
+    history_valid_ = false; // new targets hold nothing
     write_post_descriptors();
 }
 
@@ -717,15 +748,20 @@ void VkContext::destroy_scene_targets() {
     destroy_target(water_depth_);
     destroy_target(upscale_source_);
     destroy_target(upscaled_);
+    destroy_target(lit_);
+    destroy_target(motion_);
+    for (Image& h : history_) destroy_target(h);
 }
 
 void VkContext::set_scene_options(const SceneOptions& options, const std::filesystem::path& shader_dir) {
     const VkExtent2D scaled = scaled_extent(view_extent_, options.render_scale);
     const bool rescaled = scaled.width != scene_extent_.width || scaled.height != scene_extent_.height;
+    const bool upscaler_changed = options.upscaler != scene_options_.upscaler;
     scene_options_ = options;
-    // The largest supported count not above the request.
+    // The largest supported count not above the request; one under the temporal upscaler, which resolves the edges
+    // itself (and whose motion and depth are taken per pixel).
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-    for (std::uint32_t n = 2; n <= 16 && n <= options.msaa; n *= 2)
+    for (std::uint32_t n = 2; n <= 16 && n <= options.msaa && options.upscaler != Upscaler::Taa; n *= 2)
         if (caps_.msaa_counts & n) samples = static_cast<VkSampleCountFlagBits>(n);
     if (!post_pipeline_) create_post_pipeline(shader_dir);
     std::uint32_t shadow = options.shadow_size > 0 ? std::clamp(options.shadow_size, 256u, 8192u) : 1u;
@@ -739,15 +775,16 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
         vkDeviceWaitIdle(device_);
         create_point_shadow_map(point_size, point_slots);
     }
-    if (samples != scene_samples_ || rescaled) {
+    if (samples != scene_samples_ || rescaled || upscaler_changed) {
         vkDeviceWaitIdle(device_);
         destroy_scene_targets();
         scene_samples_ = samples;
         create_scene_targets();
     }
-    log::info("scene: {}x MSAA, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, light "
-              "shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
-              static_cast<int>(scene_samples_), std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
+    log::info("scene: {}x MSAA, upscaler {}, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, "
+              "light shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
+              static_cast<int>(scene_samples_), upscaler_name(options.upscaler),
+              std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
               scene_extent_.height, static_cast<int>(options.tonemap), options.exposure,
               options.shadow_size ? shadow_size_ : 0u, point_slots_, point_slots_ ? point_size_ : 0u,
               options.brightness, options.contrast, options.gamma);
@@ -764,7 +801,8 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     vk_check(vkCreateSampler(device_, &si, nullptr, &post_linear_sampler_), "vkCreateSampler (post, linear)");
 
     // The post set: 0 the scene, 1 the AO, 2 the depth, 3 the bloom; the AO set: 0 the depth; the bloom sets (the
-    // AO's layout): 0 the level read; then FSR 1's two (the AO's layout): EASU's source, RCAS's.
+    // AO's layout): 0 the level read; then FSR 1's two (the AO's layout): EASU's source, RCAS's; then the temporal
+    // upscaler's four (the post set's layout): the two resolve sets, the two post sets.
     VkDescriptorSetLayoutBinding b[4];
     for (std::uint32_t i = 0; i < 4; ++i)
         b[i] = {i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
@@ -774,8 +812,8 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     vk_check(vkCreateDescriptorSetLayout(device_, &li, nullptr, &post_set_layout_), "vkCreateDescriptorSetLayout (post)");
     li.bindingCount = 1;
     vk_check(vkCreateDescriptorSetLayout(device_, &li, nullptr, &ao_set_layout_), "vkCreateDescriptorSetLayout (AO)");
-    constexpr std::uint32_t kSets = 2 + kBloomLevels + 1 + 2;
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 + kBloomLevels + 1 + 2};
+    constexpr std::uint32_t kSets = 2 + kBloomLevels + 1 + 2 + 4;
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 + kBloomLevels + 1 + 2 + 4 * 4};
     VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     pi.maxSets = kSets;
     pi.poolSizeCount = 1;
@@ -784,6 +822,7 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     std::array<VkDescriptorSetLayout, kSets> layouts;
     layouts.fill(ao_set_layout_);
     layouts[0] = post_set_layout_;
+    for (std::uint32_t i = kSets - 4; i < kSets; ++i) layouts[i] = post_set_layout_;
     std::array<VkDescriptorSet, kSets> sets;
     VkDescriptorSetAllocateInfo ai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     ai.descriptorPool = post_pool_;
@@ -793,8 +832,10 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     post_set_ = sets[0];
     ao_set_ = sets[1];
     std::copy(sets.begin() + 2, sets.begin() + 2 + bloom_sets_.size(), bloom_sets_.begin());
-    easu_set_ = sets[kSets - 2];
-    rcas_set_ = sets[kSets - 1];
+    easu_set_ = sets[kSets - 6];
+    rcas_set_ = sets[kSets - 5];
+    resolve_sets_ = {sets[kSets - 4], sets[kSets - 3]};
+    post_taa_sets_ = {sets[kSets - 2], sets[kSets - 1]};
     write_post_descriptors();
 
     VkPushConstantRange pc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostPush)};
@@ -814,6 +855,13 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     VkPushConstantRange upc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UpscalePush)};
     pli.pPushConstantRanges = &upc;
     vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &upscale_layout_), "vkCreatePipelineLayout (FSR)");
+    pli.pSetLayouts = &post_set_layout_;
+    VkPushConstantRange ppc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrepPush)};
+    pli.pPushConstantRanges = &ppc;
+    vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &prep_layout_), "vkCreatePipelineLayout (TAA prep)");
+    VkPushConstantRange rpc{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePush)};
+    pli.pPushConstantRanges = &rpc;
+    vk_check(vkCreatePipelineLayout(device_, &pli, nullptr, &resolve_layout_), "vkCreatePipelineLayout (TAA resolve)");
 
     VkShaderModule vs = load_module(device_, shader_dir / "post.vert.spv");
     VkShaderModule fs = load_module(device_, shader_dir / "post.frag.spv");
@@ -829,36 +877,52 @@ void VkContext::create_post_pipeline(const std::filesystem::path& shader_dir) {
     VkShaderModule rcas = load_module(device_, shader_dir / "fsr_rcas.frag.spv");
     easu_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, easu, kUpscaleFormat);
     rcas_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, upscale_layout_, vs, rcas, swapchain_format_);
-    for (VkShaderModule m : {vs, fs, ao, down, up, easu, rcas}) vkDestroyShaderModule(device_, m, nullptr);
+    VkShaderModule prep = load_module(device_, shader_dir / "temporal_prep.frag.spv");
+    VkShaderModule resolve = load_module(device_, shader_dir / "taa_resolve.frag.spv");
+    const VkFormat prep_formats[2] = {kSceneFormat, kMotionFormat};
+    prep_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, prep_layout_, vs, prep, prep_formats);
+    resolve_pipeline_ = fullscreen_pipeline(device_, pipeline_cache_, resolve_layout_, vs, resolve, kSceneFormat);
+    for (VkShaderModule m : {vs, fs, ao, down, up, easu, rcas, prep, resolve}) vkDestroyShaderModule(device_, m, nullptr);
 }
 
 void VkContext::write_post_descriptors() {
     if (!post_set_) return;
     const Image& depth = depth_resolved_.image ? depth_resolved_ : depth_;
     constexpr VkImageLayout kRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    std::vector<VkDescriptorImageInfo> ii = {
-        {post_linear_sampler_, scene_resolved_.view, kRead},
-        {post_sampler_, ao_.view, kRead},
-        {post_sampler_, depth.view, kRead},
-        {post_linear_sampler_, bloom_[0].view, kRead},
-        {post_sampler_, depth.view, kRead},
-        {post_linear_sampler_, scene_resolved_.view, kRead},
+    struct Write { VkDescriptorSet set; std::uint32_t binding; VkDescriptorImageInfo image; };
+    std::vector<Write> writes = {
+        {post_set_, 0, {post_linear_sampler_, scene_resolved_.view, kRead}},
+        {post_set_, 1, {post_sampler_, ao_.view, kRead}},
+        {post_set_, 2, {post_sampler_, depth.view, kRead}},
+        {post_set_, 3, {post_linear_sampler_, bloom_[0].view, kRead}},
+        {ao_set_, 0, {post_sampler_, depth.view, kRead}},
+        {bloom_sets_[0], 0, {post_linear_sampler_, scene_resolved_.view, kRead}},
     };
-    for (const Image& level : bloom_) ii.push_back({post_linear_sampler_, level.view, kRead});
-    // FSR 1's, while upscaling (their images exist only then).
-    const std::size_t fsr = ii.size();
-    if (upscale_source_.view) {
-        ii.push_back({post_linear_sampler_, upscale_source_.view, kRead});
-        ii.push_back({post_sampler_, upscaled_.view, kRead});
-    }
-    std::vector<VkWriteDescriptorSet> w(ii.size());
-    for (std::uint32_t i = 0; i < w.size(); ++i) {
+    for (std::uint32_t i = 0; i < kBloomLevels; ++i)
+        writes.push_back({bloom_sets_[i + 1], 0, {post_linear_sampler_, bloom_[i].view, kRead}});
+    // FSR 1's and the sharpening's, while their images exist.
+    if (upscale_source_.view) writes.push_back({easu_set_, 0, {post_linear_sampler_, upscale_source_.view, kRead}});
+    if (upscaled_.view) writes.push_back({rcas_set_, 0, {post_sampler_, upscaled_.view, kRead}});
+    // The temporal upscaler's, under it: resolve set i writes history i and reads the other.
+    if (lit_.view)
+        for (std::uint32_t i = 0; i < 2; ++i) {
+            writes.push_back({resolve_sets_[i], 0, {post_linear_sampler_, lit_.view, kRead}});
+            writes.push_back({resolve_sets_[i], 1, {post_sampler_, motion_.view, kRead}});
+            writes.push_back({resolve_sets_[i], 2, {post_sampler_, depth.view, kRead}});
+            writes.push_back({resolve_sets_[i], 3, {post_linear_sampler_, history_[i ^ 1].view, kRead}});
+            writes.push_back({post_taa_sets_[i], 0, {post_linear_sampler_, history_[i].view, kRead}});
+            writes.push_back({post_taa_sets_[i], 1, {post_sampler_, ao_.view, kRead}});
+            writes.push_back({post_taa_sets_[i], 2, {post_sampler_, depth.view, kRead}});
+            writes.push_back({post_taa_sets_[i], 3, {post_linear_sampler_, bloom_[0].view, kRead}});
+        }
+    std::vector<VkWriteDescriptorSet> w(writes.size());
+    for (std::size_t i = 0; i < w.size(); ++i) {
         w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        w[i].dstSet = i < 4 ? post_set_ : i == 4 ? ao_set_ : i < fsr ? bloom_sets_[i - 5] : i == fsr ? easu_set_ : rcas_set_;
-        w[i].dstBinding = i < 4 ? i : 0;
+        w[i].dstSet = writes[i].set;
+        w[i].dstBinding = writes[i].binding;
         w[i].descriptorCount = 1;
         w[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        w[i].pImageInfo = &ii[i];
+        w[i].pImageInfo = &writes[i].image;
     }
     vkUpdateDescriptorSets(device_, static_cast<std::uint32_t>(w.size()), w.data(), 0, nullptr);
 }
@@ -879,6 +943,14 @@ void VkContext::destroy_post_pipeline() {
     if (upscale_layout_) vkDestroyPipelineLayout(device_, upscale_layout_, nullptr);
     upscale_layout_ = VK_NULL_HANDLE;
     easu_set_ = rcas_set_ = VK_NULL_HANDLE;
+    if (prep_pipeline_) vkDestroyPipeline(device_, prep_pipeline_, nullptr);
+    if (resolve_pipeline_) vkDestroyPipeline(device_, resolve_pipeline_, nullptr);
+    if (prep_layout_) vkDestroyPipelineLayout(device_, prep_layout_, nullptr);
+    if (resolve_layout_) vkDestroyPipelineLayout(device_, resolve_layout_, nullptr);
+    prep_pipeline_ = resolve_pipeline_ = VK_NULL_HANDLE;
+    prep_layout_ = resolve_layout_ = VK_NULL_HANDLE;
+    resolve_sets_ = {};
+    post_taa_sets_ = {};
     bloom_layout_ = VK_NULL_HANDLE;
     bloom_sets_ = {};
     if (ao_set_layout_) vkDestroyDescriptorSetLayout(device_, ao_set_layout_, nullptr);
@@ -1170,6 +1242,15 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
 
     ++frames_begun_;
     recording_ = true;
+    // The temporal upscaler's jitter for this frame: a cycle as long as the upscale asks (render/temporal.h).
+    if (temporal()) {
+        const float scale = static_cast<float>(scene_extent_.width) / static_cast<float>(std::max(view_extent_.width, 1u));
+        jitter_px_ = jitter_offset(frames_begun_, jitter_phases(scale));
+    } else {
+        jitter_px_ = glm::vec2(0.0f);
+    }
+    jitter_ndc_ = jitter_ndc(jitter_px_, scene_extent_.width, scene_extent_.height);
+    temporal_view_.reset();
     return FrameInfo{f.cmd, scene_extent_, scene_area_.offset, image_index, frame_index_};
 }
 
@@ -1316,6 +1397,11 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     shafts_.reset();
     const std::optional<glm::vec4> mood = mood_;
     mood_.reset();
+    // The temporal upscaler runs in frames that gave their camera (set_temporal_view); any other drops the history.
+    const std::optional<TemporalView> view = temporal_view_;
+    temporal_view_.reset();
+    const bool taa = view && temporal() && prep_pipeline_;
+    if (!taa) history_valid_ = false;
     VkCommandBuffer cmd = frame.cmd;
     vkCmdEndRendering(cmd);
 
@@ -1388,7 +1474,7 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
     push.tonemap = static_cast<std::uint32_t>(scene_options_.tonemap);
     push.flags = (swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB || swapchain_format_ == VK_FORMAT_R8G8B8A8_SRGB
                       ? 0u : kPostEncodeOutput) |
-                 (scene_options_.dither ? kPostDither : 0u) | (ao ? kPostAo : 0u) |
+                 (scene_options_.dither ? kPostDither : 0u) | (ao && !taa ? kPostAo : 0u) |
                  (taken && scene_options_.distance_blur ? kPostBlur : 0u);
     push.frame = post_frame_++;
     push.depth = glm::vec4(depth_x, depth_y, scene_options_.ao_strength, taken ? taken->far_plane : 0.0f);
@@ -1401,11 +1487,55 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         push.sun = glm::vec4(shafts->uv, shafts->strength, 0.0f);
         push.sun_color = glm::vec4(shafts->color, 0.0f);
     }
-    // Below a render scale of 1, FSR 1: the post pass's picture at the scene's size (encoded, as EASU wants it; the
-    // dither waits for the last pass, or EASU would enlarge it), EASU's upscale of it to the view's size, then RCAS
-    // sharpens that into the swapchain below.
-    const bool fsr = upscaling() && post_pipeline_;
+    // The temporal upscaler: temporal_prep.frag applies the AO and writes the motion at the scene's size,
+    // taa_resolve.frag accumulates that into this frame's history at the view's, and the post pass below reads the
+    // history in the scene's place (post_taa_sets_), at the view's size.
+    VkDescriptorSet post_set = post_set_;
+    if (taa) {
+        const bool keep = history_valid_ && !camera_cut(prev_view_.view, view->view);
+        PrepPush prep;
+        if (history_valid_) prep.reproject = reprojection(prev_view_.view, prev_view_.proj, view->view, view->proj);
+        prep.depth = glm::vec4(depth_x, depth_y, scene_options_.ao_strength, ao ? 1.0f : 0.0f);
+        prep.jitter = glm::vec4(jitter_ndc_, 0.0f, 0.0f);
+        const Image* prep_targets[2] = {&lit_, &motion_};
+        draw_into(cmd, prep_targets, scene_extent_, prep_pipeline_, prep_layout_, post_set_, &prep, sizeof(prep));
+        // The history read: one never written (or dropped) is only made readable; the resolve does not look at it.
+        const Image& prev = history_[history_index_ ^ 1];
+        if (!keep)
+            image_barrier(cmd, prev.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                          VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+        ResolvePush resolve;
+        resolve.sizes = glm::vec4(static_cast<float>(scene_extent_.width), static_cast<float>(scene_extent_.height),
+                                  static_cast<float>(view_extent_.width), static_cast<float>(view_extent_.height));
+        resolve.jitter = glm::vec4(jitter_px_, push.exposure, keep ? 0.0f : 1.0f);
+        resolve.params = glm::vec4(kHistoryMaxWeight, 0.0f, 0.0f, 0.0f);
+        draw_into(cmd, history_[history_index_], view_extent_, resolve_pipeline_, resolve_layout_,
+                  resolve_sets_[history_index_], &resolve, sizeof(resolve));
+        post_set = post_taa_sets_[history_index_];
+        prev_view_ = *view;
+        history_valid_ = true;
+        history_index_ ^= 1;
+    }
+    // Below a render scale of 1 without it, FSR 1: the post pass's picture at the scene's size (encoded, as EASU wants
+    // it; the dither waits for the last pass, or EASU would enlarge it), EASU's upscale of it to the view's size, then
+    // RCAS sharpens that into the swapchain below. Under the temporal upscaler RCAS alone sharpens the post pass's
+    // picture at the view's size, when sharpness is above 0.
+    const bool fsr = !taa && upscaling() && post_pipeline_;
+    const bool sharpen = fsr || (taa && scene_options_.sharpness > 0.0f && upscaled_.image);
     UpscalePush up;
+    if (taa && sharpen) {
+        PostPush source = push;
+        source.flags = (push.flags & ~kPostDither) | kPostEncodeOutput;
+        source.offset = glm::vec4(0.0f);
+        draw_into(cmd, upscaled_, view_extent_, post_upscale_pipeline_, post_layout_, post_set, &source, sizeof(source));
+    }
+    if (sharpen) {
+        up.offset = push.offset;
+        up.sharpness = std::clamp(scene_options_.sharpness, 0.0f, 1.0f);
+        up.flags = push.flags & (kPostEncodeOutput | kPostDither);
+        up.frame = push.frame;
+    }
     if (fsr) {
         PostPush source = push;
         source.flags = (push.flags & ~kPostDither) | kPostEncodeOutput;
@@ -1415,10 +1545,6 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
         up.sizes = glm::vec4(static_cast<float>(scene_extent_.width), static_cast<float>(scene_extent_.height),
                              static_cast<float>(view_extent_.width), static_cast<float>(view_extent_.height));
         draw_into(cmd, upscaled_, view_extent_, easu_pipeline_, upscale_layout_, easu_set_, &up, sizeof(up));
-        up.offset = push.offset;
-        up.sharpness = std::clamp(scene_options_.sharpness, 0.0f, 1.0f);
-        up.flags = push.flags & (kPostEncodeOutput | kPostDither);
-        up.frame = push.frame;
     }
 
     image_barrier(cmd, images_[frame.image_index], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1442,14 +1568,14 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
                   static_cast<float>(area.extent.width), -static_cast<float>(area.extent.height), 0.0f, 1.0f};
     vkCmdSetViewport(cmd, 0, 1, &vp);
     vkCmdSetScissor(cmd, 0, 1, &area);
-    if (fsr) {
+    if (sharpen) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, rcas_pipeline_);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, upscale_layout_, 0, 1, &rcas_set_, 0, nullptr);
         vkCmdPushConstants(cmd, upscale_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(up), &up);
         vkCmdDraw(cmd, 3, 1, 0, 0);
     } else if (post_pipeline_) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_pipeline_);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_layout_, 0, 1, &post_set_, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_layout_, 0, 1, &post_set, 0, nullptr);
         vkCmdPushConstants(cmd, post_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDraw(cmd, 3, 1, 0, 0);
     }
@@ -1457,20 +1583,31 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
 
 void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
                           VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size) {
-    // The previous frame read it.
-    image_barrier(cmd, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
-                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-    VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-    att.imageView = target.view;
-    att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    const Image* targets[1] = {&target};
+    draw_into(cmd, targets, extent, pipeline, layout, set, push, push_size);
+}
+
+void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent,
+                          VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, const void* push,
+                          std::uint32_t push_size) {
+    std::vector<VkRenderingAttachmentInfo> atts;
+    for (const Image* target : targets) {
+        // The previous frame read it.
+        image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        VkRenderingAttachmentInfo att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+        att.imageView = target->view;
+        att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        atts.push_back(att);
+    }
     VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
     r.renderArea = {{0, 0}, extent};
     r.layerCount = 1;
-    r.colorAttachmentCount = 1;
-    r.pColorAttachments = &att;
+    r.colorAttachmentCount = static_cast<std::uint32_t>(atts.size());
+    r.pColorAttachments = atts.data();
     vkCmdBeginRendering(cmd, &r);
     VkViewport vp{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
     VkRect2D scissor{{0, 0}, extent};
@@ -1481,10 +1618,11 @@ void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D e
     vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, push_size, push);
     vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRendering(cmd);
-    image_barrier(cmd, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    for (const Image* target : targets)
+        image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 void VkContext::draw_bloom(VkCommandBuffer cmd) {

@@ -78,7 +78,53 @@ rectangle in the window (picking, nameplates) is unchanged. Below 100 % `begin_o
 tonemapped and sRGB-encoded as FSR 1 wants it and without the dither; `shaders/fsr_easu.frag` (EASU, edge-adaptive)
 brings it up to the view's size; `shaders/fsr_rcas.frag` (RCAS) sharpens that by `display.sharpness` into the
 swapchain and adds the dither. The UI is drawn after, at the window's own size. Textures keep their LOD bias (none
-yet). A temporal upscaler (FSR 2/3.1, which needs motion vectors and jitter) is the next step (Roadmap).
+yet). With `display.upscaler = taa` the temporal upscaler takes FSR 1's place (Temporal upscaling, below).
+
+### Temporal upscaling
+
+`display.upscaler = taa` (read at start-up, as `display.msaa`; the viewer's `--upscaler taa`) draws the scene jittered
+and resolves it over the frames into a picture at the view's size: anti-aliasing at a render scale of 100 and
+upscaling below it. It is the groundwork a temporal upscaler from outside (FSR 3.1) needs too, run through one of our
+own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_overlay` the passes:
+
+1. **One sample.** The scene targets are single-sampled whatever `display.msaa` says: the resolve smooths the edges,
+   and the motion and depth it reads are taken per pixel. Alpha-tested cut-outs lose MSAA's alpha-to-coverage.
+2. **Jitter.** Each frame the scene's projection is moved by a sub-pixel offset (`VkContext::projection_jitter`,
+   `render::jittered`): Halton (2, 3) from its second point, in a cycle of 8 x (view / scene)^2 frames (8 at a
+   render scale of 100, 32 at 50; FSR 2's count), so every view pixel sees samples near it. Only the scene's draws
+   take it: picking, the name plates, the map overlay, the sun's place for the shafts and the culling of spawns to
+   pose keep the plain projection. The app gives that plain camera to `VkContext::set_temporal_view`; a frame that
+   does not (no 3D scene) is drawn without the temporal path and drops the history.
+3. **Prep** (`shaders/temporal_prep.frag`, at the scene's size, two targets): the scene with its AO applied (the AO is
+   lighting, so it goes in before the resolve, which then smooths its pattern too; the post pass does not apply it
+   again), and each pixel's motion in UV to where it was a frame ago (RG16F). The motion is rebuilt from the depth
+   with `render::reprojection`, last frame's view-projection times this frame's inverse, worked in double through
+   the cameras' relative motion so that zone coordinates in the tens of thousands keep sub-pixel precision. It is
+   the camera's motion alone: what moves on its own (characters, doors, swaying plants, particles) is followed only
+   as far as the camera moved, and the resolve's clip keeps it from trailing (open: motion written by the scene
+   pipelines themselves).
+4. **Resolve** (`shaders/taa_resolve.frag`, at the view's size): each view pixel gathers the 3 x 3 scene samples round
+   it, weighted by a Gaussian fit of Blackman-Harris by their jittered distance; takes the nearest surface's motion
+   among them (edges move with what is in front); reads last frame's history there through a 5-tap Catmull-Rom;
+   clips it in YCoCg to the samples' mean +- 1.25 standard deviations (inside their extremes); and blends. Colours are
+   compressed by their exposed luma while mixed, so one bright pixel cannot dominate. The history's alpha holds the
+   weight it has gathered: this frame adds how near a sample fell to the pixel's centre in view pixels (0 .. 1), the
+   history keeps at most 12 (`kHistoryMaxWeight`; each frame is then at least 1/12 of the result), less the further
+   the clip pulled it, and at most 4 once the motion passes 32 view pixels a frame (resampling softens it). A new,
+   dropped or off-screen history takes the frame as it is. Two histories (RGBA16F) are written in turn.
+5. **Post** at the view's size: `post.frag` reads the history in the scene's place (`post_taa_sets_`); the distance
+   blur and the shafts read the scene-sized depth through `depth_texel` and UVs. The bloom is still made from the
+   scene at its own size. With `display.sharpness` above 0, the post pass draws into a 10-bit image and RCAS
+   sharpens it into the swapchain, as under FSR 1; at 0 it draws straight into the swapchain.
+
+The history is dropped when the scene targets are made again (a resize, a new render scale), on zone-in
+(`VkContext::reset_history`), on a frame without the temporal path, and when the camera jumps between two frames
+(`render::camera_cut`: more than 25 units, or a turn of more than 0.5 radians: a teleport, a camera switch).
+
+Open (docs/todo.md): motion vectors from the scene pipelines (bones, wind, door matrices, particles) and a reactive
+mask for the translucent and additive draws (particles, spells, water, lava), which have no motion of their own; a
+negative texture LOD bias below a render scale of 100; the bloom from the resolved picture; FSR 3.1 behind the same
+inputs.
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
@@ -1555,13 +1601,15 @@ The target's highlight (the dark plate, the edge in its colour and the bobbing m
 
 In `hailstone.ini`, and in the Options window (`ui/modern/options.lua`, this client's own window: its Display and
 Graphics tabs; the client's options by name in `app/client_app_options.cpp`, the graphics ones `display_option`); the
-viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale` and `--sharpness`.
+viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--render-scale`, `--sharpness` and
+`--upscaler`.
 
 | Key | Values | Default | |
 |---|---|---|---|
-| `display.msaa` | 1, 2, 4, 8 | 4 | samples per pixel, cut to what the GPU supports; read at start-up |
+| `display.msaa` | 1, 2, 4, 8 | 4 | samples per pixel, cut to what the GPU supports; off under `display.upscaler = taa`; read at start-up |
 | `display.render_scale` | 50 .. 100 | 100 | percent of the 3D view's size the scene is drawn at; below 100 FSR 1 upscales it (The frame); the UI stays sharp |
-| `display.sharpness` | 0 .. 1 | 0.5 | FSR 1's sharpening (RCAS) below a render scale of 100; 0 none |
+| `display.upscaler` | fsr1, taa | fsr1 | fsr1: FSR 1 below a render scale of 100; taa: temporal anti-aliasing and upscaling at every render scale, MSAA off (Temporal upscaling); read at start-up |
+| `display.sharpness` | 0 .. 1 | 0.5 | RCAS sharpening: FSR 1's below a render scale of 100, the temporal upscaler's at every scale; 0 none |
 | `display.tonemap` | auto, none, agx, aces | auto | auto: AgX (with a little extra saturation) for modern, none for classic |
 | `display.exposure` | EV | 0 | the scene is scaled by 2^EV before the tonemap |
 | `display.shadows` | 0, 256 .. 8192 | 2048 | texels per side of each shadow cascade; 0 off; modern only |
@@ -1621,10 +1669,10 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 5. **Post and content**: (done) bloom; (done) foliage wind; (done) a texture override folder for upscaled packs;
    (done) built HD packs with normal and roughness maps (tools/texpack);
    (done) colour grading; optional TAA.
-6. **Upscaling**: (done) a render scale with FSR 1 (EASU + RCAS); next the temporal groundwork every temporal
-   upscaler needs (sub-pixel jitter on the projection, kept off picking and the nameplates; a motion-vector target
-   written by every scene pipeline, with last frame's camera, bones, wind time and object matrices; history reset on
-   zone-in, teleport and resize; a negative texture LOD bias), then a TAA/TAAU of our own on it, then FSR 2/3.1
-   (MIT) as the temporal upscaler. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
+6. **Upscaling**: (done) a render scale with FSR 1 (EASU + RCAS); (done) the temporal groundwork: sub-pixel jitter
+   on the projection, kept off picking and the nameplates; camera motion vectors from the depth; history reset on
+   zone-in, camera cuts and resize; a TAA/TAAU of our own on it (`display.upscaler = taa`, Temporal upscaling); next
+   motion written by every scene pipeline (last frame's bones, wind time and object matrices), a negative texture LOD
+   bias, then FSR 3.1 (MIT) as the temporal upscaler. MSAA is off while a temporal upscaler runs, so cut-outs lose alpha-to-coverage;
    particles, spells, water and lava need a reactive mask rather than motion vectors. DLSS, XeSS and frame
    generation are not planned.

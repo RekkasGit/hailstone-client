@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "render/point_shadows.h"
 #include "render/retire_queue.h"
 #include "render/shadows.h"
+#include "render/temporal.h"
 
 namespace hailstone::platform { class Window; }
 
@@ -79,6 +81,10 @@ struct SceneOptions {
     // at its own size, without them.
     float render_scale = 1.0f;
     float sharpness = 0.5f;
+    // How the view is brought up to its size (render/temporal.h, display.upscaler). Taa draws with one sample
+    // whatever msaa says, jitters the scene's projection each frame (projection_jitter) and resolves it into a
+    // history at the view's size; `sharpness` then sharpens that with RCAS (0 none).
+    Upscaler upscaler = Upscaler::Fsr1;
 };
 
 // The scene targets' size for a 3D view of `view` pixels at `scale` (SceneOptions::render_scale, kept in 0.5..1):
@@ -171,6 +177,18 @@ public:
     // This frame's colour grade (render/atmosphere.h ColorGrade: rgb a tint of the linear scene before the tonemap,
     // w the saturation after it); none, or with SceneOptions::color_grade off, leaves the picture as it is.
     void set_color_grade(const glm::vec4& mood) { mood_ = mood; }
+    // The temporal upscaler (SceneOptions::upscaler Taa): the NDC offset to put on this frame's scene projection
+    // (render/temporal.h jittered), zero without it. Valid from begin_frame_commands. Picking, the name plates and the
+    // sun's place on the screen take the projection without it.
+    glm::vec2 projection_jitter() const { return jitter_ndc_; }
+    // This frame's camera without the jitter: the motion vectors and the history follow it. A frame that does not give
+    // it is drawn without the temporal upscaler (FSR 1 below a render scale of 1) and the history is dropped. Call
+    // before begin_overlay.
+    void set_temporal_view(const glm::mat4& view, const glm::mat4& proj) { temporal_view_ = TemporalView{view, proj}; }
+    // Drops the history at the next frame: what it holds is no longer on the screen (a new zone).
+    void reset_history() { history_valid_ = false; }
+    // The temporal upscaler runs (SceneOptions::upscaler Taa, its targets made).
+    bool temporal() const { return lit_.image != VK_NULL_HANDLE; }
     std::uint32_t shadow_size() const { return shadow_size_; }
     // Counts the shadow maps made: a new one holds nothing (the cover and water maps are drawn again).
     std::uint32_t shadow_generation() const { return shadow_generation_; }
@@ -313,6 +331,8 @@ private:
     static constexpr VkFormat kAoFormat = VK_FORMAT_R8_UNORM;
     // FSR 1's pictures: tonemapped and sRGB-encoded, in 10 bits so the steps do not band before the dither.
     static constexpr VkFormat kUpscaleFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    // The temporal upscaler's motion vectors: UV to last frame's place (shaders/temporal_prep.frag).
+    static constexpr VkFormat kMotionFormat = VK_FORMAT_R16G16_SFLOAT;
     static constexpr std::uint32_t kBloomLevels = 6; // 1/2 .. 1/64 of the screen
 
     struct Frame {
@@ -404,6 +424,9 @@ private:
     // shaders; `push` is the pipeline's push constants.
     void draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
                    VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
+    // The same into several targets of one size at once (the pipeline's colour attachments, in order).
+    void draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent, VkPipeline pipeline,
+                   VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
 
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     SceneOptions scene_options_;
@@ -420,6 +443,22 @@ private:
     // at the view's, which fsr_rcas.frag sharpens into the swapchain.
     Image upscale_source_;
     Image upscaled_;
+    // The temporal upscaler (SceneOptions::upscaler Taa): temporal_prep.frag's colour (the scene with its AO) and
+    // motion at the scene's size, and taa_resolve.frag's two histories at the view's (written in turn: the frame
+    // writes history_[history_index_] and reads the other). upscaled_ is made too, for RCAS.
+    Image lit_;
+    Image motion_;
+    std::array<Image, 2> history_{};
+    struct TemporalView {
+        glm::mat4 view{1.0f};
+        glm::mat4 proj{1.0f};
+    };
+    std::optional<TemporalView> temporal_view_; // set_temporal_view's, this frame's
+    TemporalView prev_view_;                    // the last temporal frame's
+    bool history_valid_ = false;
+    std::uint32_t history_index_ = 0;
+    glm::vec2 jitter_px_{0.0f};  // this frame's jitter, scene pixels
+    glm::vec2 jitter_ndc_{0.0f}; // the same in NDC (projection_jitter)
     Image water_color_; // begin_translucent's copies: the scene's colour,
     Image water_depth_; // and its depth (sample 0)
     std::array<Image, kBloomLevels> bloom_{};
@@ -451,6 +490,15 @@ private:
     VkPipeline rcas_pipeline_ = VK_NULL_HANDLE;
     VkDescriptorSet easu_set_ = VK_NULL_HANDLE;
     VkDescriptorSet rcas_set_ = VK_NULL_HANDLE;
+    // The temporal upscaler: temporal_prep.frag reads the post set (the scene, the AO, the depth) into lit_ and
+    // motion_; taa_resolve.frag reads resolve_sets_[i] (lit_, motion_, the depth, the history not written, through the
+    // post set's layout) into history_[i]; post.frag then reads post_taa_sets_[i] (history_[i] in the scene's place).
+    VkPipeline prep_pipeline_ = VK_NULL_HANDLE;
+    VkPipelineLayout prep_layout_ = VK_NULL_HANDLE;
+    VkPipeline resolve_pipeline_ = VK_NULL_HANDLE;
+    VkPipelineLayout resolve_layout_ = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, 2> resolve_sets_{};
+    std::array<VkDescriptorSet, 2> post_taa_sets_{};
 
     VkFormat shadow_format_ = VK_FORMAT_UNDEFINED;
     std::uint32_t shadow_size_ = 0;

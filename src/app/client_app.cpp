@@ -612,7 +612,12 @@ int ClientApp::run() {
             vk_.set_sun_shafts(shafts);
         }
         if (scene) {
-            glm::mat4 proj = camera_.projection(width, height, lit.far_plane);
+            // The view as picking, the name plates and the map overlay take it; the scene is drawn through it moved by
+            // the temporal upscaler's jitter (none without it), which follows the plain one (render/temporal.h).
+            const glm::mat4 plain_proj = camera_.projection(width, height, lit.far_plane);
+            const glm::mat4 plain_vp = plain_proj * camera_.view();
+            vk_.set_temporal_view(camera_.view(), plain_proj);
+            glm::mat4 proj = render::jittered(plain_proj, vk_.projection_jitter());
             glm::mat4 vp = proj * camera_.view();
             // The sky is drawn while SetFog leaves CDisplay +0x2d38 set (cleared under water, in lava and with
             // fog ending before 101).
@@ -743,9 +748,9 @@ int ClientApp::run() {
             lap.mark("translucent, weather, particles");
             if (in_game) { // character select draws no target, names or picking
                 if (nav_ && nav_->overlay())
-                    nav_->draw_overlay(ImGui::GetBackgroundDrawList(), vp,
+                    nav_->draw_overlay(ImGui::GetBackgroundDrawList(), plain_vp,
                                        glm::vec4(view_area_.x, view_area_.y, view_area_.w, view_area_.h));
-                draw_nameplates(*f, vp, f->extent, lit.far_plane);
+                draw_nameplates(*f, plain_vp, f->extent, lit.far_plane);
                 lap.mark("nameplates");
                 draw_text_overlay();
                 lap.mark("text overlay");

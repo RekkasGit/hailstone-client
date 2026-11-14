@@ -95,6 +95,7 @@ void ClientApp::load_zone(const std::string& short_name) {
             zone_renderer_ = std::make_unique<render::ZoneRenderer>(vk_, *zone_, shader_dir_, options);
         }
         distant_hidden_key_ = 0;
+        vk_.reset_history(); // the temporal upscaler's history shows the last zone
         mark("zone renderer");
         flora_renderer_.reset();
         if (!zone_->flora.empty()) flora_renderer_ = std::make_unique<render::FloraRenderer>(vk_, *zone_, shader_dir_);
@@ -758,6 +759,9 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "lighting") return lighting_mode_ == render::LightingMode::Modern ? 0 : 1;
     if (name == "ao") return config_.get_bool("display.ao", true) ? 1 : 0;
     if (name == "render_scale") return std::clamp(config_.get_int("display.render_scale", 100), 50, 100);
+    // 0 FSR 1 (spatial), 1 temporal (render/temporal.h); as saved, which shows at the next start.
+    if (name == "upscaler")
+        return render::parse_upscaler(config_.get_string("display.upscaler", "fsr1")) == render::Upscaler::Taa ? 1 : 0;
     if (name == "distance_blur") return config_.get_bool("display.distance_blur", true) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
@@ -883,6 +887,10 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         config_.set_bool("display." + std::string(name), value != 0);
     } else if (name == "render_scale") {
         config_.set_int("display.render_scale", std::clamp(value, 50, 100));
+    } else if (name == "upscaler") {
+        // Taken at start-up, as display.msaa: the temporal upscaler draws with one sample.
+        config_.set("display.upscaler", std::string(render::upscaler_name(value == 1 ? render::Upscaler::Taa
+                                                                                     : render::Upscaler::Fsr1)));
     } else if (name == "shadows") {
         config_.set("display.shadows", std::to_string(kShadowSizes[std::clamp(value, 0, 3)]));
     } else if (name == "msaa") {

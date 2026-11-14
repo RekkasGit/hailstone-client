@@ -387,6 +387,7 @@ add_library(hailstone_engine STATIC
   src/render/gpu.cpp
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
+  src/render/temporal.cpp
   src/render/particle_renderer.cpp
   src/render/fire_renderer.cpp
   src/render/flora_renderer.cpp
@@ -782,6 +783,8 @@ hailstone_add_shaders(hailstone_shaders
   shaders/bloom_up.frag
   shaders/fsr_easu.frag
   shaders/fsr_rcas.frag
+  shaders/temporal_prep.frag
+  shaders/taa_resolve.frag
 )
 add_dependencies(hailstone_engine hailstone_shaders)
 
@@ -1283,6 +1286,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/mouse_buttons_test.cpp
     tests/cameras_test.cpp
     tests/iso_camera_test.cpp
+    tests/temporal_test.cpp
     tests/click_intent_test.cpp
     tests/iso_occlusion_test.cpp
     tests/gamepad_bindings_test.cpp
