@@ -712,16 +712,23 @@ intensity; updated every frame, in every zone type, with or without a sky):
   - The ground gets wet over 30 s of rain and dries over 2 minutes: darker, with a Fresnel reflection of the sky,
     most on level surfaces. The doors and ground objects get wet the same way (`shaders/object.frag`); the
     characters get a lighter sheen (`shaders/actor.frag`).
-  - Puddles fill the level ground's low spots over 90 s of rain (slow noise picks them; up to about a quarter of the
-    ground in a long storm) and dry over 4 minutes: the ground under them darker, the sky in them nearly a mirror's.
-    While it rains, drops ring them (`rain_ripples`: jittered cells about a unit across, more drops the harder it
-    rains), the rings fading out where a pixel spans more than a tenth of a unit.
+  - Puddles fill the flat ground's low spots over 90 s of rain (warped noise picks them, a finer one frays their
+    shores; up to about a quarter of the flat ground in a long storm) and dry over 4 minutes. Only flat ground holds
+    water: both the smoothed normal and the triangle's own normal (screen derivatives of the position; the smoothed
+    one reads level at a slope's foot or on a rounded crest) must be within about 11 degrees of level, full puddles
+    within about 6, and ground nearer that limit needs a deeper spot to hold water. At the shore the water is
+    shallow and shows the soaked ground through it; further in, its reflection of the sky takes over by Schlick's
+    Fresnel term (water's 2 %), so it reads dark from above and a mirror at a low angle; a damp, darker rim rings
+    it, and the sun or moon glints in it, shadowed (`puddle_surface`; the cover is `shaders/puddle_cover.glsl`, which
+    `tests/lighting_test.cpp` also compiles as C++). While it rains, drops ring them
+    (`rain_ripples`: jittered cells about a unit across, more drops the harder it rains), the rings fading out where
+    a pixel spans more than a tenth of a unit.
   - Snow lies on level surfaces in noisy drifts, covering over 2 minutes and melting over 5: on the ground and on the
     doors' and objects' roofs and ledges, not on the characters (drifts fixed in the world would slide over them).
   - A cut-out surface of the zone (alpha-tested: leaves, fronds, grates) gets neither puddles nor snow, and a third
     of the wet look: its normals are a crown's or a card's, mostly facing up, and would paint a generated tree's
     crown with the sky's reflection or turn it white.
-  - All of it is in `shaders/weather.glsl` (`weather_surface`), fed `SceneLighting::weather` (`render::set_weather`:
+  - All of it is in `shaders/weather.glsl` (`weather_surface`, and `puddle_surface` on the zone's ground), fed `SceneLighting::weather` (`render::set_weather`:
     wet, snow, the rain falling, the puddles).
   - The look belongs to the zone: entering another zone starts it over, dry and with a clear sky
     (`WeatherLook::update`'s zone id), so a storm's snow, wet ground and sky do not follow the player in.

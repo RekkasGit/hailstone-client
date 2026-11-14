@@ -15,6 +15,7 @@ set(HAILSTONE_SHADER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lighting.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/ao_kernel.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/coverage.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/shaders/weather.glsl
+                          ${CMAKE_CURRENT_SOURCE_DIR}/shaders/puddle_cover.glsl
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_a.h
                           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fsr1/ffx_fsr1.h)
 # AMD's FSR 1 headers (fsr_easu.frag, fsr_rcas.frag).
