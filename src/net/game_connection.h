@@ -668,6 +668,10 @@ public:
     // game::report_hit_line): 0 full sentence (the default), 1 short, 2 number.
     const game::HitModes& hit_modes() const { return hit_modes_; }
     void set_hit_modes(const game::HitModes& modes) { hit_modes_ = modes; }
+    // Hailstone's spell display modes: direct damage, DoTs, heals and HoTs.
+    // Logging and incoming-chat hooks always receive the full sentence.
+    const game::SpellHitModes& spell_hit_modes() const { return spell_hit_modes_; }
+    void set_spell_hit_modes(const game::SpellHitModes& modes) { spell_hit_modes_ = modes; }
     // OP_Consider for the current target; the answer prints the con line.
     void consider();
     // unk_SetStandState @0x5a0bc0 (PlayerZoneClient::ChangePosition)
@@ -2726,7 +2730,7 @@ private:
     void set_spawn_motion(game::Spawn& s, const Motion& m);
     void connect_world(bool zoning);
     void chat(ChatEvent::Kind kind, std::string text, std::uint32_t rgb = 0, std::uint32_t color = 0,
-              std::string peer = {});
+              std::string peer = {}, std::optional<std::string> display_text = std::nullopt);
     // ReportSuccessfulHit's melee line for an attack by `source`, through the chat filters (`report`: its argument).
     void report_hit(const game::HitLine& line, std::uint32_t source, bool report = true);
     void handle_combat(Op op, const AppPacket& p);
@@ -3209,6 +3213,7 @@ private:
     // Spells.
     std::shared_ptr<const game::SpellTable> spell_table_;
     game::HitModes hit_modes_{};
+    game::SpellHitModes spell_hit_modes_{};
     game::SpellState spells_;
 
     // Items.

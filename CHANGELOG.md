@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Chat: Hit Modes now includes direct spell damage, damage over time, healing and healing over time, with Normal, Abbreviated and Number Only display. Spell and melee hit modes always keep the full line in logs and incoming-chat hooks. The gamepad UI offers the modes under Options > Interface
 - Anti-aliasing goes up to 4x MSAA. The 8x choice is gone from both interfaces' Options; a saved 8x (or higher) is drawn at 4x, and the Ultra preset now uses 4x
 - Options > Upscaler > **Temporal (TAA)** (and the gamepad pack's Display page; `display.upscaler = taa` in `hailstone.ini`): a temporal upscaler of Hailstone's own, the first step towards AMD FSR 3.1. It smooths edges, shimmering fences and foliage over several frames at every render scale, and below a Render Scale of 100 upscales with the detail gathered over those frames instead of FSR 1. It replaces MSAA while on and takes effect at the next start. Characters, doors and swaying plants can still look a little soft while they move; FSR 1 stays the default
 - Barbarians, Trolls and Ogres have Slam in their combat skills, and Bash without a shield slams. Slam now follows your current form: an illusion into a large race gives it, an illusion into a small race takes it away until the illusion ends
