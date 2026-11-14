@@ -51,7 +51,7 @@ struct PushConstants {
     glm::mat4 view_proj;
     glm::vec4 fog_color;
     glm::vec4 fog; // start, end, alpha_ref, opacity
-    glm::vec4 camera_pos;
+    glm::vec4 camera_pos; // w: this part's index in the frame's native armor surface table
     std::uint32_t texture;
     std::uint32_t bone_offset;
     std::uint32_t tint; // 0xAARRGGBB; high byte 0 = none
@@ -61,6 +61,7 @@ struct PushConstants {
     std::uint32_t texture2;
 };
 static_assert(sizeof(PushConstants) <= 128);
+static_assert(sizeof(SceneLighting) % 16 == 0);
 
 VkShaderModule load_shader(VkDevice device, const std::filesystem::path& path) {
     return create_shader_module(device, path);
@@ -160,7 +161,8 @@ ActorRenderer::ActorRenderer(VkContext& vk, std::shared_ptr<const assets::Charac
         ai.pSetLayouts = &set_layout_;
         vk_check(vkAllocateDescriptorSets(d, &ai, &set), "vkAllocateDescriptorSets");
     }
-    lighting_buffers_ = std::make_unique<FrameBuffers>(vk_, sizeof(SceneLighting), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    lighting_buffers_ = std::make_unique<FrameBuffers>(vk_, sizeof(SceneLighting) + sizeof(ActorSurface) * kMaxActorSurfaces,
+                                                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     for (std::size_t i = 0; i < sets_.size(); ++i) {
         VkDescriptorBufferInfo infos[2] = {{bones_[i].buffer, 0, VK_WHOLE_SIZE},
                                            {lighting_buffers_->buffer(i), 0, VK_WHOLE_SIZE}};
@@ -183,14 +185,22 @@ ActorRenderer::ActorRenderer(VkContext& vk, std::shared_ptr<const assets::Charac
         assets::Image white;
         white.width = white.height = 1;
         white.mips.push_back(std::vector<std::byte>(4, std::byte{0xff}));
-        textures_.push_back(upload.texture(white));
+        textures_.push_back(upload.immutable_texture(white));
         upload.submit();
     }
     for (std::uint32_t slot = 0; slot < VkContext::kFramesInFlight; ++slot) rebuild_descriptors(slot); // none in flight yet
+    // Shared textures moved into this client's own images when sharing stopped: each set is rewritten when its
+    // frame comes round (rebuild_descriptors).
+    shared_listener_ = vk_.on_shared_textures_moved([this] {
+        for (auto& t : textures_)
+            if (refresh_shared_texture(t))
+                for (auto& written : descriptor_textures_) written = 0;
+    });
     create_pipelines(shader_dir);
 }
 
 ActorRenderer::~ActorRenderer() {
+    vk_.remove_shared_textures_listener(shared_listener_);
     stop_dresser();
     VkDevice d = vk_.device();
     vk_.wait_idle();
@@ -238,8 +248,7 @@ namespace {
 template <class Parts, class Fn>
 void for_each_slot(const Parts& parts, Fn&& fn) {
     for (const auto& part : parts)
-        for (std::uint32_t t : {part.texture, part.texture2, part.normal_map, part.rough_map})
-            if (t != 0xffffffffu) fn(t);
+        for_each_part_texture_slot(part, fn);
 }
 
 } // namespace
@@ -300,6 +309,8 @@ std::unique_ptr<ActorRenderer::Kept> ActorRenderer::release_kept() {
 
 void ActorRenderer::adopt(Kept& kept) {
     textures_ = std::move(kept.textures);
+    // Kept across a zone change, while shared textures may have moved into private images.
+    for (auto& t : textures_) refresh_shared_texture(t);
     texture_slots_ = std::move(kept.texture_slots);
     models_ = std::move(kept.models);
     mesh_refs_ = std::move(kept.mesh_refs);
@@ -389,18 +400,20 @@ std::optional<std::uint32_t> ActorRenderer::add_texture(UploadBatch& upload, con
     if (!free_textures_.empty()) {
         const std::uint32_t slot = free_textures_.back();
         free_textures_.pop_back();
-        textures_[slot] = upload.texture(image, use);
+        textures_[slot] = upload.immutable_texture(image, use);
         // Each set takes it when its own frame comes round (rebuild_descriptors).
         for (auto& written : descriptor_textures_) written = std::min(written, slot);
         return slot;
     }
     if (textures_.size() >= max_textures_) return std::nullopt;
-    textures_.push_back(upload.texture(image, use));
+    textures_.push_back(upload.immutable_texture(image, use));
     return static_cast<std::uint32_t>(textures_.size() - 1);
 }
 
 std::string ActorRenderer::TextureRef::key() const {
     if (map) return name + (*map == assets::TextureMap::Normal ? "#n" : "#r");
+    if (environment) return name + "#env";
+    if (use == TextureUse::Data) return name + "#data";
     return name + (masked ? "#m" : "") + (use == TextureUse::OpaqueColor ? "#o" : "");
 }
 
@@ -408,7 +421,12 @@ ActorRenderer::ReadTexture ActorRenderer::read_texture(const assets::CharacterLi
     ReadTexture t;
     {
         assets::CharacterLookups rec; // what the image depends on, for the next zone (adopt)
-        t.image = ref.map ? library.texture_map(ref.name, *ref.map) : library.texture(ref.name, ref.masked, &t.error);
+        if (ref.environment) {
+            if (auto data = library.read_file(ref.name)) t.image = assets::decode_cube_as_octahedral(*data);
+            if (!t.image) t.error = "missing or invalid environment cube";
+        } else {
+            t.image = ref.map ? library.texture_map(ref.name, *ref.map) : library.texture(ref.name, ref.masked, &t.error);
+        }
         t.lookups = rec.names();
     }
     t.use = ref.map ? TextureUse::Data : ref.use;
@@ -493,6 +511,14 @@ ActorRenderer::MeshPlan ActorRenderer::plan_mesh(const assets::CharacterMesh& mo
         if (!m.tint_layer.empty()) pp.texture2 = TextureRef{m.tint_layer, false, TextureUse::Color, std::nullopt};
         pp.normal = {m.frames.front(), false, TextureUse::Data, assets::TextureMap::Normal};
         pp.rough = {m.frames.front(), false, TextureUse::Data, assets::TextureMap::Roughness};
+        part.native_surface = has_actor_surface(m.effect);
+        if (part.native_surface) {
+            part.surface = actor_surface(m.effect, 0, 0);
+            if (!m.effect.normal_map.empty())
+                pp.native_normal = TextureRef{m.effect.normal_map, false, TextureUse::Data, std::nullopt};
+            if (m.effect.reflective && !m.effect.textures.empty() && !m.effect.textures[0].empty())
+                pp.environment = TextureRef{m.effect.textures[0], false, TextureUse::Color, std::nullopt, true};
+        }
         part.pass = static_cast<Pass>(st.pass);
         part.alpha_ref = st.alpha_ref;
         part.opacity = st.opacity;
@@ -533,6 +559,11 @@ const ActorRenderer::GpuModel* ActorRenderer::install(const assets::CharacterMes
         if (pp.texture2) part.texture2 = resolve(*pp.texture2);
         part.normal_map = resolve(pp.normal);
         part.rough_map = resolve(pp.rough);
+        if (pp.native_normal) part.surface.slots.x = resolve(*pp.native_normal);
+        if (pp.environment) part.surface.slots.y = resolve(*pp.environment);
+        // A missing optional map keeps the pack normal / unreflected surface; slot zero is the white placeholder.
+        if (part.surface.slots.y != 0 && part.surface.params.z > 0.0f)
+            part.surface.slots.z |= kActorSurfaceReflective;
         g.parts.push_back(part);
     }
     std::stable_sort(g.parts.begin(), g.parts.end(), [](const Part& a, const Part& b) { return a.pass < b.pass; });
@@ -552,7 +583,8 @@ bool ActorRenderer::waits_for_claimed(const MeshPlan& plan) const {
         return !texture_slots_.contains(key) && !plan.textures.contains(key) && claims_->pending(key);
     };
     for (const auto& pp : plan.parts)
-        if (waits(pp.texture) || (pp.texture2 && waits(*pp.texture2)) || waits(pp.normal) || waits(pp.rough))
+        if (waits(pp.texture) || (pp.texture2 && waits(*pp.texture2)) || waits(pp.normal) || waits(pp.rough) ||
+            (pp.native_normal && waits(*pp.native_normal)) || (pp.environment && waits(*pp.environment)))
             return true;
     return false;
 }
@@ -577,6 +609,8 @@ ActorRenderer::Dressing ActorRenderer::dress_off_thread(const assets::CharacterL
         if (pp.texture2) read(*pp.texture2);
         read(pp.normal);
         read(pp.rough);
+        if (pp.native_normal) read(*pp.native_normal);
+        if (pp.environment) read(*pp.environment);
     }
     return d;
 }
@@ -1007,7 +1041,6 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
     upload.submit();
     stats_.upload_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - u0).count();
     rebuild_descriptors(frame.frame_slot);
-    lighting_buffers_->write(frame.frame_slot, &lighting_, sizeof(lighting_));
 
     auto* bones = static_cast<glm::mat4*>(bones_mapped_[frame.frame_slot]);
     std::uint32_t used = 0;
@@ -1045,6 +1078,37 @@ void ActorRenderer::prepare(const FrameInfo& frame, std::span<const ActorDraw> a
         ++stats_.instances;
     }
     if (used) vmaFlushAllocation(vk_.allocator(), bones_[frame.frame_slot].allocation, 0, sizeof(glm::mat4) * used);
+    // One table per unique visible mesh, shared by its instances. Slot zero keeps every pre-existing material path
+    // unchanged. The table is in the existing lighting SSBO; no new sampled-image or buffer descriptors are needed.
+    lighting_data_.resize(sizeof(SceneLighting) + sizeof(ActorSurface));
+    std::memcpy(lighting_data_.data(), &lighting_, sizeof(lighting_));
+    const ActorSurface plain;
+    std::memcpy(lighting_data_.data() + sizeof(SceneLighting), &plain, sizeof(plain));
+    std::unordered_map<const GpuModel*, std::uint32_t> surface_offsets;
+    std::size_t surfaces_used = 1;
+    for (auto& prepared : prepared_) {
+        if (!prepared.gpu) continue;
+        auto [entry, fresh] = surface_offsets.try_emplace(prepared.gpu, 0u);
+        if (fresh && std::any_of(prepared.gpu->parts.begin(), prepared.gpu->parts.end(),
+                                 [](const Part& part) { return part.native_surface; })) {
+            if (auto offset = actor_surface_range(surfaces_used, prepared.gpu->parts.size())) {
+                entry->second = *offset;
+                surfaces_used += prepared.gpu->parts.size();
+                const std::size_t start = lighting_data_.size();
+                lighting_data_.resize(sizeof(SceneLighting) + surfaces_used * sizeof(ActorSurface));
+                std::size_t at = start;
+                for (const auto& part : prepared.gpu->parts) {
+                    std::memcpy(lighting_data_.data() + at, &part.surface, sizeof(ActorSurface));
+                    at += sizeof(ActorSurface);
+                }
+            } else if (!surface_capacity_reported_) {
+                log::warn("actor armor surface table full; further meshes use their base material lighting");
+                surface_capacity_reported_ = true;
+            }
+        }
+        prepared.surface_offset = entry->second;
+    }
+    lighting_buffers_->write(frame.frame_slot, lighting_data_.data(), lighting_data_.size());
     stats_.cpu_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     if (stats_.cpu_ms > 8.0)
         log::debug("actor draw took {:.1f} ms ({} meshes, {} textures uploaded so far)", stats_.cpu_ms, models_.size(),
@@ -1153,7 +1217,8 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
             if (!seen_[i]) continue;
             const Prepared& p = prepared_[i];
             bool any = false;
-            for (const auto& part : p.gpu->parts) {
+            for (std::size_t part_index = 0; part_index < p.gpu->parts.size(); ++part_index) {
+                const auto& part = p.gpu->parts[part_index];
                 const Pass draw_pass = p.alpha < 1.0f && part.pass == Pass::Opaque ? Pass::Blended : part.pass;
                 if (static_cast<int>(draw_pass) != pass) continue;
                 if (!bound_set) {
@@ -1184,6 +1249,7 @@ void ActorRenderer::record(const FrameInfo& frame, const glm::mat4& view_proj, c
                 pc.texture = part.texture | part.rough_map << 16;
                 pc.tint = part.tint;
                 pc.texture2 = (part.texture2 == 0xffffffffu ? 0xffffu : part.texture2) | part.normal_map << 16;
+                pc.camera_pos.w = p.surface_offset != 0 ? static_cast<float>(p.surface_offset + part_index) : 0.0f;
                 pc.bone_offset = p.bone_offset;
                 pc.fog = part.fog ? glm::vec4(view.fog_start, view.fog_end, part.alpha_ref, part.opacity * p.alpha)
                                   : glm::vec4(kNoFogStart, kNoFogEnd, part.alpha_ref, part.opacity * p.alpha);

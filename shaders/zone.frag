@@ -75,6 +75,8 @@ const uint kMolten = 512u;     // RegionLava whose texture's name says lava or m
 const uint kEnergy = 1024u;    // RegionLavaH (harbingers' towers): drawn as lava (modern)
 const uint kEnvMap = 2048u;    // water: slot 2 is its own environment, an octahedral map (a "noswap" cube)
 const uint kFlagLodFade = 4096u; // a level of detail: extra3 its band (coverage.glsl lod_fade_samples)
+const uint kTintNeighbour = 32768u; // render/zone_renderer.h set_debug_tint: a neighbour's own geometry
+const uint kTintLand = 65536u;      // its own ground in its part of the land
 
 vec4 tex(uint i, vec2 uv) { return texture(textures[nonuniformEXT(i)], uv); }
 
@@ -493,14 +495,18 @@ vec3 modern_lava(vec3 texel, float molten, vec2 p) {
 }
 
 // The weather on the ground (shaders/weather.glsl): snow on the level surfaces, the rain's soak, and water standing
-// in the low spots.
-vec3 weathered(vec3 color, vec3 n) {
+// in the low spots. A cut-out surface (`cutout`: leaves, fronds, grates) has no surface for water to stand on, and its
+// normals are a crown's or a card's, mostly facing up: no puddles or snow and a lighter soak, or a generated tree's
+// crown takes the sky's colour or turns white.
+vec3 weathered(vec3 color, vec3 n, bool cutout) {
     float footprint = length(fwidth(v_world));
     float open = sky_open(shadow_map, scene.cover, scene.cover_params, scene.shadow_params.y, v_world + n * 0.5);
     if (open <= 0.0) return color;
     vec3 horizon = scene.haze.z > 0.5 ? scene.haze_color.rgb : to_linear(scene.fog_color.rgb);
+    vec4 weather = scene.weather;
+    if (cutout) weather.y = 0.0;
     return weather_surface(color, lit(vec3(0.88, 0.9, 0.94)), v_world, n, normalize(scene.camera_pos.xyz - v_world),
-                           scene.weather, open, horizon, scene.sky.rgb, scene.time.x, footprint, true, 1.0);
+                           weather, open, horizon, scene.sky.rgb, scene.time.x, footprint, !cutout, cutout ? 0.3 : 1.0);
 }
 
 vec3 mapped_normal(vec3 n, uint slot) {
@@ -549,6 +555,8 @@ void main() {
     int lod_samples = lod_fade_samples((pc.tex2.z & kFlagLodFade) != 0u, v_lod_distance, pc.extra3, gl_FragCoord.xy);
     if (lod_samples == 0) discard;
     gl_SampleMask[0] = lod_samples;
+    // A neighbour's part of the land: this draw's ground or the other's (coverage.glsl land_blend_discard).
+    if (land_blend_discard(pc.tex2.z, v_color2.a, v_world)) discard;
     uint mode = pc.tex2.y;
     uint flags = pc.tex2.z;
     bool unlit = (flags & kUnlit) != 0u;
@@ -697,12 +705,15 @@ void main() {
     if (g_modern && !unlit && mode == 0u && (flags & (kSpecular | kReflective)) != 0u) color += surface_shine(n, flags);
     if (g_modern && !unlit && (flags & (kWaterSurface | kLavaSurface)) == 0u && mode != 2u && mode != 3u &&
         (scene.weather.x > 0.0 || scene.weather.y > 0.0 || scene.weather.w > 0.0))
-        color = weathered(color, n);
+        color = weathered(color, n, pc.params.x > 0.0);
     // Alpha test, GREATEREQUAL against the reference (0 = off), or coverage when multisampled.
     float out_alpha;
     if (!alpha_test(alpha, pc.params.x, pc.params.y, out_alpha)) discard;
     // The modern water over the copies is the whole result (it blends the floor itself).
     if (g_modern && (flags & kWaterCopies) != 0u) out_alpha = 1.0;
+    // The neighbour zones' debugging view: what comes from where.
+    if ((flags & kTintNeighbour) != 0u) color = mix(color, vec3(dot(color, vec3(0.3, 0.6, 0.1))) * vec3(1.6, 0.2, 1.4), 0.75);
+    if ((flags & kTintLand) != 0u) color = mix(color, vec3(dot(color, vec3(0.3, 0.6, 0.1))) * vec3(0.2, 1.6, 0.3), 0.6);
     if (g_modern) {
         if ((flags & kNoFog) == 0u)
             color = apply_haze(color, v_world, scene.camera, scene.haze, scene.haze_color, scene.to_light, scene.light);
