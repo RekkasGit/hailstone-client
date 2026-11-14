@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Characters' see-through parts, such as a glass or ice shield, a translucent weapon or a glow, are no longer hidden by the grass behind them
 - Options > **Upscale Quality** (and the gamepad pack's Display page): the usual presets, Native AA, Quality, Balanced, Performance and Ultra Performance, which draw the 3D world at 100, 67, 59, 50 and 33 % of the screen and upscale it. Native AA with Temporal or AMD FSR 3.1 is anti-aliasing alone at full resolution. Render Scale now goes down to 33 %, and any other value shows as Custom
 - Gamepad interface: the Display page shows all of its settings again; the last ones on the list (Max camera zoom, Ground floating NPCs, Texture pack) could be left off
 - Options > Upscaler > **AMD FSR 3.1** (and the gamepad pack's Display page; `display.upscaler = fsr3` in `hailstone.ini`): AMD's temporal upscaler, alongside FSR 1 and Hailstone's own Temporal. Like Temporal it smooths edges over several frames at every Render Scale and replaces MSAA; Upscale Sharpening sets its sharpening. It takes effect at the next start, and on a graphics card that cannot run it the Temporal upscaler is used instead

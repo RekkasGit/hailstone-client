@@ -206,11 +206,14 @@ client's own, a new one made when they fill, with a set layout defined as the ba
 most 1024 files (`kMaxFiles`); past that the one asked for least recently is retired.
 
 In the modern lighting the scene is split for the water. The zone's opaque draws (`render::ZonePhase::Opaque`, with
-the water held back), the placed objects and the characters go first. `begin_translucent` then ends rendering and
+the water held back), the placed objects and the characters' opaque and alpha-tested parts (`render::ActorPhase::Opaque`)
+go first. `begin_translucent` then ends rendering and
 copies the resolved colour and depth (sample 0) into images that `shadow_set()` binds as 1 and 2. Drawing then goes
 on into the same targets (stored and loaded, the multisampled ones too): the grass (opaque, but left out of the copies
-so the target ring lies on the ground under it), then `ZonePhase::Translucent`: the water first, then the blended and
-additive draws.
+so the target ring lies on the ground under it), then the characters' blended and additive parts
+(`ActorPhase::Translucent`: they write no depth, so grass drawn after them would cover a glass shield or a glow; in
+every lighting), then `ZonePhase::Translucent`: the water first, then the blended and additive draws. Being after the
+copies, a character's blended parts are missing from what the water shows through it.
 
 With `display.depth_prepass` (off by default; the viewer's `--depth-prepass`) the zone's opaque and alpha-tested
 geometry is drawn depth-only first (`ZoneRenderer::draw_depth`, `shaders/zone_depth.frag`), then coloured with the

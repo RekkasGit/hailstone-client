@@ -703,7 +703,11 @@ int ClientApp::run() {
                                                      std::span<const std::uint32_t>(ids, me->mount_id ? 2u : 1u),
                                                      glm::vec4(0.55f, 0.75f, 1.0f, 0.55f));
                 }
-            if (actor_renderer_) modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit);
+            // The characters' blended and additive parts wait for the grass (below): they write no depth, so grass
+            // drawn after them would cover them.
+            if (actor_renderer_)
+                modelled = &actor_renderer_->draw_prepared(*f, vp, camera_.position, lit,
+                                                           render::ActorPhase::Opaque);
             lap.mark("actors draw");
             if (in_game) spawn_renderer_->draw(*f, vp, camera_.position, lit, conn_->world(), hidden_spawn(), modelled);
             lap.mark("spawns draw");
@@ -714,6 +718,8 @@ int ClientApp::run() {
                 vk_.begin_translucent(*f);
             if (flora_renderer_ && grass_) flora_renderer_->draw(*f, vp, camera_.position, t, frame_lighting_, modern);
             lap.mark("flora draw");
+            if (actor_renderer_)
+                actor_renderer_->draw_prepared(*f, vp, camera_.position, lit, render::ActorPhase::Translucent);
             if (modern) {
                 if (zone_renderer_)
                     zone_renderer_->draw(*f, vp, camera_.position, lit, t, render::ZonePhase::Translucent);
