@@ -191,7 +191,7 @@ SunShafts sun_shafts_for(const glm::mat4& view_proj, const glm::vec3& to_sun, co
 }
 
 VkExtent2D scaled_extent(VkExtent2D view, float scale) {
-    scale = std::clamp(scale, 0.5f, 1.0f);
+    scale = std::clamp(scale, kMinRenderScale, 1.0f);
     auto side = [scale](std::uint32_t n) {
         return static_cast<std::uint32_t>(std::max(1L, std::lround(static_cast<double>(n) * scale)));
     };
@@ -852,7 +852,7 @@ void VkContext::set_scene_options(const SceneOptions& options, const std::filesy
     log::info("scene: {}x MSAA, upscaler {}, render scale {:.2f} ({}x{}), tonemap {}, exposure {:+.2f} EV, shadows {}, "
               "light shadows {} x {}, grade {:+.2f} / {:.2f} / {:.2f}",
               static_cast<int>(scene_samples_), upscaler_name(scene_options_.upscaler),
-              std::clamp(options.render_scale, 0.5f, 1.0f), scene_extent_.width,
+              std::clamp(options.render_scale, kMinRenderScale, 1.0f), scene_extent_.width,
               scene_extent_.height, static_cast<int>(options.tonemap), options.exposure,
               options.shadow_size ? shadow_size_ : 0u, point_slots_, point_slots_ ? point_size_ : 0u,
               options.brightness, options.contrast, options.gamma);

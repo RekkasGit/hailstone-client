@@ -493,7 +493,8 @@ TEST_CASE("render scale: the scene targets' size for the 3D view, kept in 50..10
     CHECK(same(render::scaled_extent({1920, 1080}, 1.0f), 1920, 1080));
     CHECK(same(render::scaled_extent({1920, 1080}, 0.5f), 960, 540));
     CHECK(same(render::scaled_extent({2560, 1440}, 0.67f), 1715, 965)); // each side rounded
-    CHECK(same(render::scaled_extent({1920, 1080}, 0.1f), 960, 540));   // no lower than half
+    CHECK(same(render::scaled_extent({1920, 1080}, 0.1f), 634, 356));   // no lower than a third (kMinRenderScale)
+    CHECK(same(render::scaled_extent({1920, 1080}, 0.33f), 634, 356));  // Ultra Performance
     CHECK(same(render::scaled_extent({1920, 1080}, 2.0f), 1920, 1080)); // never above the view
     CHECK(same(render::scaled_extent({1, 1}, 0.5f), 1, 1));             // at least a pixel
 }
