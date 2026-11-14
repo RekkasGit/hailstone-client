@@ -1165,13 +1165,13 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
     const auto& spawns = world.spawns;
     const auto* player = world.player();
     const int playerLevel = player ? player->level : 0;
-    HS_BulkSpawnHeader* header = reinterpret_cast<HS_BulkSpawnHeader*>(data);
+    HS_BulkSpawnHeader* header = reinterpret_cast<HS_Bulk_SpawnHeader*>(data);
     header->spawnCount = 0;
     header->playerX = player ? player->position.x : 0.0f;
     header->playerY = player ? player->position.y : 0.0f;
     header->playerZ = player ? player->position.z : 0.0f;
 
-    unsigned char* pBuffer = data + sizeof(HS_BulkSpawnHeader);
+    unsigned char* pBuffer = data + sizeof(HS_Bulk_SpawnHeader);
     const unsigned char* pSafeLimit = data + (datamax - 4096);
     char tempBuffer[2048];
     uint32_t count = 0;
@@ -1207,29 +1207,28 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
         if (spawn.trader)                               flags |= HS_BULK_SPAWN_TRADER;
       
 
-        HS_BulkSpawnFixedRecord rec{};
-        rec.id = spawn.id;
-        rec.flags = flags;
-        rec.bodyTypeID = spawn.body_type;
-        rec.classID = spawn.class_id;
-        rec.conColorID = ConColor(playerLevel, spawn.level);
-        rec.currentHps = spawn.hp_percent;
-        rec.genderId = spawn.gender;
-        rec.guildID = spawn.guild_id;
-        rec.heading = spawn.heading * 0.703125f;
-        rec.height = spawn.heights.avatar_height;
-        rec.level = spawn.level;
-        rec.master = spawn.pet_owner_id;
-        rec.maxRange = maxRange;
-        rec.maxRangeTo = maxRangeTo;
-        rec.pctHPs = spawn.hp_percent;
-        rec.playerState = spawn.player_state;
-        rec.raceID = spawn.race;
-        rec.x = spawn.position.x;
-        rec.y = spawn.position.y;
-        rec.z = spawn.position.z;
-        rec.deity = spawn.deity;
-        std::memcpy(pBuffer, &rec, sizeof(rec));
+        HS_Bulk_SpawnFixedRecord* rec = reinterpret_cast<HS_Bulk_SpawnFixedRecord*>(pBuffer);
+        rec->id = spawn.id;
+        rec->flags = flags;
+        rec->bodyTypeID = spawn.body_type;
+        rec->classID = spawn.class_id;
+        rec->conColorID = ConColor(playerLevel, spawn.level);
+        rec->currentHps = spawn.hp_percent;
+        rec->genderId = spawn.gender;
+        rec->guildID = spawn.guild_id;
+        rec->heading = spawn.heading * 0.703125f;
+        rec->height = spawn.heights.avatar_height;
+        rec->level = spawn.level;
+        rec->master = spawn.pet_owner_id;
+        rec->maxRange = maxRange;
+        rec->maxRangeTo = maxRangeTo;
+        rec->pctHPs = spawn.hp_percent;
+        rec->playerState = spawn.player_state;
+        rec->raceID = spawn.race;
+        rec->x = spawn.position.x;
+        rec->y = spawn.position.y;
+        rec->z = spawn.position.z;
+        rec->deity = spawn.deity;
         pBuffer += sizeof(rec);
 
         std::string_view bodyDesc = "";
@@ -1354,14 +1353,14 @@ int h_get_buff_data_bulk(void* h, unsigned char* data, int32_t datamax)
     static_assert(sizeof(HS_BulkBuffData) == HAILSTONE_BUFF_RECORD_SIZE);
     //needs to be able to fit the data, or return nothing
     constexpr int kNormalBuffSlots = game::kLongBuffSlots + game::kShortBuffSlots; // the disc slot is the one after
-    constexpr int32_t kMinBuffBytes = kNormalBuffSlots * static_cast<int32_t>(sizeof(HS_BulkBuffData));
+    constexpr int32_t kMinBuffBytes = kNormalBuffSlots * static_cast<int32_t>(sizeof(HS_Bulk_BuffData));
     if (datamax < kMinBuffBytes) return 0;
 
     const hailstone::game::SpellTable& st = c->spell_table();
 
     for (int slot = 0; slot < game::kBuffSlots; ++slot) {
         // SAFETY CHECK: Ensure writing this next packet won't exceed datamax
-        if (bufferSize + sizeof(HS_BulkBuffData) > static_cast<std::size_t>(datamax)) {
+        if (bufferSize + sizeof(HS_Bulk_BuffData) > static_cast<std::size_t>(datamax)) {
             // Buffer is full (a 1798-byte buffer stops here before the disc slot). Break out to prevent an overflow.
             break;
         }

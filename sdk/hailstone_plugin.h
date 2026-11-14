@@ -106,15 +106,8 @@ typedef struct HailstoneValue {
     const char* s; /* HAILSTONE_STRING (copied when the function returns) */
 } HailstoneValue;
 
-//These are used by the h_get_spawns_data_bulk method
-//needs to be packed so that there is no padding
-#pragma pack(push, 1)
-struct HS_BulkSpawnHeader {
-    uint32_t spawnCount;
-    float playerX;
-    float playerY;
-    float playerZ;
-};
+/*These are used by the h_get_spawns_data_bulk method*/
+/*needs to be packed so that there is no padding*/
 enum HS_BulkSpawnFlags {
     HS_BULK_SPAWN_NONE = 0,
     HS_BULK_SPAWN_AFK = 1 << 0,
@@ -141,8 +134,14 @@ enum HS_BulkSpawnFlags {
     HS_BULK_SPAWN_TRADER = 1 << 21,
     HS_BULK_SPAWN_UNDERWATER = 1 << 22,
 };
-
-struct HS_BulkSpawnFixedRecord {
+#pragma pack(push, 1)
+typedef struct HS_Bulk_SpawnHeader {
+    uint32_t spawnCount;
+    float playerX;
+    float playerY;
+    float playerZ;
+} HS_BulkSpawnHeader;
+typedef struct HS_Bulk_SpawnFixedRecord {
     int32_t id;
     uint32_t flags;
     int32_t isBlind;
@@ -172,27 +171,26 @@ struct HS_BulkSpawnFixedRecord {
     float y;
     float z;
     int32_t deity;
-    // Immediately followed on the wire by 7 length-prefixed strings:
-    // 1. BodyDesc, 2. CleanName, 3. DisplayName, 4. Name, 5. RaceName, 6. Suffix, 7. TypeDesc
-};
+    /* Immediately followed on the wire by 7 length - prefixed strings :*/
+    /* 1. BodyDesc, 2. CleanName, 3. DisplayName, 4. Name, 5. RaceName, 6. Suffix, 7. TypeDesc*/
+} HS_BulkSpawnFixedRecord;
+typedef struct HS_Bulk_BuffData {
+    int32_t ID;
+    int32_t casterID;
+    int32_t duration;
+    int32_t hitcount;
+    int32_t spelltype;
+    int32_t counterType;
+    int32_t counterTotal;
+    uint8_t slotType; /* HAILSTONE_BUFF_SLOT_BUFF / _SONG / _DISC*/
+} HS_BulkBuffData;
+typedef struct HS_Bulk_PetBuffData {
+    int32_t id;
+    int32_t duration;
+    int32_t spellType;
+} HS_BulkPetBuffData;
 #pragma pack(pop)
-#pragma pack(push, 1)
-struct HS_BulkBuffData {
-    int ID;
-    int casterID;
-    int duration;
-    int hitcount;
-    int spelltype;
-    int counterType;
-    int counterTotal;
-    unsigned char slotType; // HAILSTONE_BUFF_SLOT_BUFF / _SONG / _DISC
-};
-#pragma pack(pop)
-struct HS_BulkPetBuffData {
-    int id;
-    int duration;
-    int spellType;
-};
+
 /* A TLO the plugin adds (AddTopLevelObject): asked for ${Name[index]} (member NULL: the TLO's own value) and for
  * ${Name[index].Member[member_index]}. Return nonzero when `out` was set; zero is NULL. */
 typedef int (*HailstoneTloFn)(void* user, const char* index, const char* member, const char* member_index,
