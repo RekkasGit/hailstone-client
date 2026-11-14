@@ -1259,7 +1259,10 @@ public:
         else if (id == "LEW_PurchaseButton") {
             std::uint32_t cost = selected_ >= 0 ? game::leadership_next_cost(selected_, l.ranks[static_cast<std::size_t>(selected_)]) : 0;
             std::uint32_t points = selected_ >= game::kFirstRaidAbility ? l.raid_points : l.group_points;
-            out.enabled = cost > 0 && cost <= points;
+            // A deliberate change: the original disables Purchase below its own cost table, but the costs are the
+            // server's (stock EQEmu charges Mark NPC 1 / 2 / 3 and Delegate Mark NPC 6 / 6 / 6 where RoF2 shows
+            // 3 / 4 / 5 and 6 / 7 / 8), and the server checks every purchase. Any point lets the request go.
+            out.enabled = cost > 0 && points > 0;
         } else if (id == "LEW_Description") {
             out.text = selected_ >= 0 ? description(l, selected_) : std::string();
         } else if (id == "LEW_GroupMentoring") {

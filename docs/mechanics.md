@@ -1334,7 +1334,9 @@ Both UI packs expose raid Main Assist and Mark NPC delegation, Find PC, and the 
 Create Hotkey buttons. A hotkey is placed on the cursor for a hot bar; the gamepad pack opens its slot picker to
 assign it with the controller. Passive abilities have none. The purchased
 rank list is separate from the active group and raid leaders' ranks. Nontrainable waypoint records are not shown
-as purchasable assist or marker abilities.
+as purchasable assist or marker abilities. The records the RoF2 table marks untrainable (2, 3, 5, 18, 21) are not
+listed at all, although stock EQEmu still sells 2, 3 and 18: ranks bought through another client do not show, and
+an old hot button for one of them does nothing.
 
 The raid member menu is a Hailstone UI extension in both packs: right-click a member, or select one and use
 Member actions. The gamepad pack also opens it with Y on the focused row. Main Assist and Mark NPC delegate
@@ -1346,10 +1348,22 @@ stay outside the member menu; dragging and the gamepad's group picker still move
 When Context Menus is switched off, both packs show the direct member buttons instead.
 
 Raid marks use `/rmarknpc 1`, `/rmarknpc 2` and `/rmarknpc 3`, or leadership hotkeys. Marking the same target again
-sends the same numbered request; the server owns the result. `/clearmarks` clears all raid marks for the leader or
+sends the same numbered request; the server owns the result. Two deliberate changes from the original
+(Leadership_ActivateAbility @0x55f0f0): it sent mark 0 to unmark a target that already held that mark, which EQEmu
+refuses (MarkNPC and RaidMarkNPC reject 0), so the client no longer sends it; and it marked any target, where the
+client now marks only a living NPC (a player or a corpse gets the no-target line), although EQEmu's raid marks
+would take a player. `/clearmarks` clears all raid marks for the leader or
 a delegated marker. Delegation and marks change locally only when the server confirms them. Delegate identities
 are reconciled by member name, including servers that send zero-numbered roster snapshots. Departures, disbanding
-and zoning clear transient marks and delegate spawn IDs so another spawn cannot inherit them.
+and zoning clear transient marks and delegate spawn IDs so another spawn cannot inherit them. Zoning keeps the
+delegates' names and the members' Main Assist and Mark NPC flags: EQEmu announces a delegate again only when they
+are already in the new zone, and its delegate request toggles, so a forgotten Main Assist chosen again from the
+menu would be cleared instead of set.
+
+Purchase in the Leadership window is offered whenever the next rank exists and the player has a point of that
+kind. A deliberate change: the original disables it below its own cost table (Mark NPC 3 / 4 / 5, Delegate Mark NPC
+6 / 7 / 8), but the costs are the server's (stock EQEmu charges 1 / 2 / 3 and 6 / 6 / 6) and the server checks every
+purchase. The cost column still shows the RoF2 table.
 
 The original expansion and population checks remain: Gates of Discord, at least three group members or eighteen
 raid members, and the active leader's appropriate rank. HP, mana, HP regeneration and offense enhancements use

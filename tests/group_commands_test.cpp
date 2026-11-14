@@ -703,6 +703,14 @@ TEST_CASE("mock server: raid delegates use EQEmu identities and one-based assist
     marked_deleted.le<std::uint32_t>(101);
     server.zone.send_reliable(make_packet(Op::DeleteSpawn, std::move(marked_deleted)));
     REQUIRE(rig.until([&] { return conn.leadership().raid_marks[0] == 0; }));
+    // Zoning keeps who the delegates are (EQEmu re-announces only those already in the new zone, and its request
+    // toggles), and drops the spawn ids and ranks.
+    conn.reset_raid_leadership_for_zone(); // what reset_group_for_zone runs
+    CHECK(conn.leadership().active_ranks[16] == 0);
+    CHECK(conn.leadership().raid_marker_names[2] == "Member2");
+    CHECK(member("Member2").marker);
+    CHECK(conn.leadership().raid_markers == std::array<std::uint32_t, 3>{});
+    CHECK(conn.leadership().assist_targets[2] == 0);
     conn.reset_raid_leadership();
     CHECK(conn.leadership().active_ranks[16] == 0);
     CHECK(conn.leadership().active_ranks[11] == 2);

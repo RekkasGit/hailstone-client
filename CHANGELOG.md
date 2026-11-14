@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Leadership window: Purchase is offered whenever you have a point to spend, and the server decides whether the rank is affordable. Before, the window used the original client's prices and blocked ranks a stock server sells for less (Mark NPC rank 1 costs 1 point there, not 3)
 - Modern lighting: rain puddles now form only on flat ground, never on hillsides or slopes. They look more like water: ragged edges, shallow at the rim where the ground shows through and deeper in the middle, a damp ring round them, dark from above and mirroring the sky at a low angle, with a glint of the sun or moon once the sky clears
 - Texture packs with generated trees: tall trees whose trunk starts with a short piece, such as Greater Faydark's giant pines, no longer float above the ground. Rebuild a pack's trees in the Texture Studio to get them
 - Texture packs with generated trees: up close, the trees' needles and leaves no longer seem to flip back and forth in the wind, and no longer shimmer through thin gaps as you move. Generated trees stand still in the wind; their needle and leaf sprays are cut out along their outer edge only. Rebuild a pack's trees in the Texture Studio to get the new sprays

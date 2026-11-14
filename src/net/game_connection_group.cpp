@@ -293,7 +293,7 @@ void GameConnection::reset_group_for_zone() {
     // the pets (OP_PetList, the pet's spawn); an open invitation lapses.
     group_.clear();
     reset_group_leadership();
-    reset_raid_leadership();
+    reset_raid_leadership_for_zone();
     group_.inviter.clear();
     pets_.clear();
     pet_buffs_.clear();
@@ -1065,6 +1065,20 @@ void GameConnection::reset_raid_leadership() {
     leadership_.raid_marks = {};
     std::fill(leadership_.assist_targets.begin() + 1, leadership_.assist_targets.end(), 0u);
     for (auto& member : raid_.members) member.main_assist = member.marker = member.waypointer = false;
+}
+
+void GameConnection::reset_raid_leadership_for_zone() {
+    // A zone change ends every spawn id (marks, delegates' spawns, assist targets) and the server sends the raid
+    // ability ranks again, but the delegates stay the same people. EQEmu re-announces a delegate only when they are
+    // already in the new zone (SendRaidAssisterTo needs entity_list.GetMob), and its delegate request is a toggle:
+    // with the names forgotten, the member menu would show a later-arriving Main Assist unset and its click would
+    // clear them. So the names and the members' flags are kept; the roster's resend links them again.
+    std::fill(leadership_.active_ranks.begin() + game::kFirstRaidAbility, leadership_.active_ranks.end(), 0u);
+    leadership_.raid_assists = {};
+    leadership_.raid_markers = {};
+    leadership_.raid_waypointers = {};
+    leadership_.raid_marks = {};
+    std::fill(leadership_.assist_targets.begin() + 1, leadership_.assist_targets.end(), 0u);
 }
 
 void GameConnection::forget_leadership_spawn(std::uint32_t id) {

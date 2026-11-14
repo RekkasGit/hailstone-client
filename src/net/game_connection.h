@@ -2331,6 +2331,8 @@ public:
     // The raid window's Find PC (Leadership_FindPathToPlayer on the raid target).
     void raid_find_path_to_target();
     void reset_raid_leadership();
+    // The zone-change part of it: spawn ids and ranks go, the delegates' names and members' flags stay.
+    void reset_raid_leadership_for_zone();
     void reset_group_leadership();
     void forget_leadership_spawn(std::uint32_t id);
     // RaidOptionsWindow's open flag.

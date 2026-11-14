@@ -3446,6 +3446,16 @@ TEST_CASE("UI packs: raid member context menus and leadership hotkeys are reacha
             run("eq.ShowWindow('RaidWindow', false) eq.ShowWindow('LeadershipWindow', true)"
                 " eq.ListInfo('LeadershipWindow', 'LEList2') eq.ListClick('LeadershipWindow', 'LEList2', 0, 'left')");
             s.frames(20); // let the gamepad window's focus-settling interval finish before pressing its actions
+            {
+                // Purchase is offered with any point, below the RoF2 cost too: the server's costs decide.
+                net::LeadershipExp points;
+                points.raid_points = 1;
+                conn.receive_zone_packet_for_test(net::encode(points));
+                run("assert(eq.ChildState('LeadershipWindow', 'LEW_PurchaseButton') == true)");
+                points.raid_points = 0;
+                conn.receive_zone_packet_for_test(net::encode(points));
+                run("assert(eq.ChildState('LeadershipWindow', 'LEW_PurchaseButton') == false)");
+            }
             for (int n = 1; n <= 3; ++n) {
                 CAPTURE(n);
                 const std::string id = modern ? "Create Hotkey " + std::to_string(n) + "##LEW_HotkeyButton" + std::to_string(n)
