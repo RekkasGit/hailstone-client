@@ -93,6 +93,25 @@ TEST_CASE("glTF: a written mesh reads back in the zone's frame, wound counter-cl
     CHECK(again->mesh.indices == m.indices);
 }
 
+TEST_CASE("glTF: a mesh's sway heights travel in its second UV set") {
+    Mesh m = sample_mesh();
+    // Without them, no second UV set is written, and none comes back.
+    auto plain = read_glb(write_glb(m));
+    REQUIRE(plain);
+    CHECK_FALSE(plain->mesh.sway_heights);
+    for (const auto& v : plain->mesh.vertices) CHECK(v.uv2 == glm::vec2(0.0f));
+    m.sway_heights = true;
+    for (std::size_t i = 0; i < m.vertices.size(); ++i) m.vertices[i].uv2 = {float(i) * 2.5f, 0.0f};
+    for (std::uint64_t hash : {0ull, 0x42ull}) {
+        auto read = read_glb(write_glb(m, hash));
+        REQUIRE(read);
+        CHECK(read->source_hash == hash);
+        CHECK(read->mesh.sway_heights);
+        REQUIRE(read->mesh.vertices.size() == m.vertices.size());
+        for (std::size_t i = 0; i < m.vertices.size(); ++i) CHECK(read->mesh.vertices[i].uv2 == m.vertices[i].uv2);
+    }
+}
+
 TEST_CASE("glTF: what is not a usable binary glTF is refused") {
     std::string error;
     CHECK_FALSE(read_glb({}, &error));

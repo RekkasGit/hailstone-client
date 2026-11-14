@@ -7,6 +7,8 @@
 
 #include <doctest/doctest.h>
 
+#include <set>
+
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
 #include "core/game_dir.h"
@@ -270,6 +272,20 @@ TEST_CASE("trees: a grown tree stands on the game trunk, inside its leaves, the 
                 CHECK(a.mesh.materials[m].two_sided);
             }
             CHECK(a.mesh.front_ccw);
+            // Sway heights: the trunk's own, the leaves' their branch's, so each branch's cards move as one piece.
+            CHECK(a.mesh.sway_heights);
+            std::set<float> leaf_heights;
+            std::size_t leaf_vertices = 0;
+            for (std::uint32_t i = a.mesh.parts[1].first_index; i < a.mesh.parts[1].first_index + a.mesh.parts[1].index_count; ++i) {
+                leaf_heights.insert(a.mesh.vertices[a.mesh.indices[i]].uv2.x);
+                ++leaf_vertices;
+            }
+            CHECK(leaf_heights.size() * 8 < leaf_vertices);
+            bool trunk_own = false;
+            for (std::uint32_t i = a.mesh.parts[0].first_index; i < a.mesh.parts[0].first_index + a.mesh.parts[0].index_count; ++i)
+                trunk_own |= a.mesh.vertices[a.mesh.indices[i]].uv2.x == a.mesh.vertices[a.mesh.indices[i]].position.z &&
+                             a.mesh.vertices[a.mesh.indices[i]].position.z > 5.0f;
+            CHECK(trunk_own);
             // A budget a zone of a few hundred trees can draw; the middle level under the near one (the same cards,
             // straight, and thinner bark); the far eight triangles (three crossed cards and a level one).
             CHECK(tris[0] < 20000);

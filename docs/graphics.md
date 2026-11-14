@@ -1488,9 +1488,12 @@ zone loads (`Zone::draw_objects`).
 - **Light:** a placement's baked light is one colour per vertex of the game's mesh; the replacement takes their
   average as its instance's tint, which multiplies its own vertex colours (a generated tree's shade inside its crown).
 - **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter. One
-  with levels of detail (a generated tree) stands still (`render::plant_sway`): its crown is many small crisp sprays
-  layered over each other at different heights, and any sway, which grows with the height, slid them across one
-  another, so up close its leaves seemed to flip back and forth (a third of the bend without the flutter still did).
+  with levels of detail (a generated tree) does not flutter, and its branches sway whole (`render::plant_sway`,
+  `assets::Mesh::sway_heights`): the generator gives each vertex the height it sways as, in the second UV set
+  (glTF TEXCOORD_1, asset extras `hailstone_sway`), a branch with its needle sprays and its clump the height of its
+  root on the trunk, the trunk and the far cards their own. A sway by each vertex's own height, or a flutter, moved
+  a branch's crossing cards apart, so up close its leaves seemed to flip back and forth (a third of the bend without
+  the flutter still did). A generated tree from a pack built before stands still.
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so
