@@ -75,7 +75,7 @@ void GameConnection::process_cursor_queue() {
         std::optional<Item> item = inventory_.take(from);
         ItemSlot origin = item->slot; // the item's own global index (+0x38..+0x40)
         inventory_.put(cursor_slot(), std::move(*item));
-        cursor_origin_ = CursorOrigin::Server; // server cursor queue, not an inventory click
+        mark_cursor_origin(CursorOrigin::Server); // the server's cursor queue, not an inventory click
         MoveItem m;
         m.from = origin;
         m.to = cursor_slot();
@@ -117,7 +117,7 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             retain_tributes(kInvTribute, kTributeSlots);
             retain_tributes(kInvGuildTribute, kGuildTributeSlots);
             inventory_.load(std::move(*items));
-            cursor_origin_ = CursorOrigin::Unknown; // zone-in contents are not new arrivals
+            mark_cursor_origin(CursorOrigin::Unknown); // zone-in contents are not new arrivals
             set_bank_live(with_bank);
         } else {
             log::warn("could not decode OP_CharInventory ({} bytes)", p.data.size());
@@ -163,8 +163,12 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
         case kItemPacketLimbo: {
             // ItemPacket_PlaceItemIfSlotEmpty @0x4b9b90: the server's cursor queue sends the next item when the
             // cursor is free; one for an occupied slot is dropped without a word.
+            // Hailstone: an item it places on the cursor came from the server (EQEmu's PushItemOnCursor: summoned items,
+            // tradeskill results, quest rewards).
             ItemSlot at = item.slot;
-            if (!inventory_.at(at)) inventory_.put(at, std::move(item));
+            const bool to_cursor = at.type == kInvPossessions && at.slot == kSlotCursor && at.sub < 0;
+            if (!inventory_.at(at) && inventory_.put(at, std::move(item)) && to_cursor)
+                mark_cursor_origin(CursorOrigin::Server);
             break;
         }
         default: {
@@ -181,7 +185,9 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
             const bool to_cursor = at.type == kInvPossessions && at.slot == kSlotCursor && at.sub < 0;
             const bool cursor_was_empty = inventory_.cursor() == nullptr;
             if (!inventory_.put(at, std::move(item))) log::debug("item packet for unusable slot {}/{}", at.type, at.slot);
-            else if (to_cursor) cursor_origin_ = cursor_was_empty ? CursorOrigin::Server : CursorOrigin::Unknown;
+            // Hailstone: an item for the empty cursor came from the server (EQEmu sends a ground item picked up and an
+            // item looted onto the cursor this way, as type 0x67); one replacing a cursor item is not known.
+            else if (to_cursor) mark_cursor_origin(cursor_was_empty ? CursorOrigin::Server : CursorOrigin::Unknown);
             // Hailstone: an item for a bank slot is the server's bank now (EQEmu's lazy load sends the bank this
             // way, then the shared bank, all in one pass): the copy as last seen is no longer listed.
             else if (banked) set_bank_live(true);
@@ -335,9 +341,9 @@ void GameConnection::refresh_worn_slot(int slot) {
 void GameConnection::move_item(const ItemSlot& from, const ItemSlot& to, std::uint32_t count) {
     // CInvSlotMgr::MoveItem @00698d80: swap locally, then tell the server.
     if (!inventory_.swap(from, to)) return;
-    // Any locally initiated swap/pickup that leaves an item on the cursor is a manual arrival.
+    // Hailstone: an item this swap leaves on the cursor is the player's own pickup.
     if ((from.same(cursor_slot()) || to.same(cursor_slot())) && inventory_.cursor())
-        cursor_origin_ = CursorOrigin::Inventory;
+        mark_cursor_origin(CursorOrigin::Inventory);
     log::debug("move item {}/{}/{} -> {}/{}/{} count {}", from.type, from.slot, from.sub, to.type, to.slot, to.sub, count);
     MoveItem m;
     m.from = from;
@@ -510,7 +516,7 @@ void GameConnection::finish_quantity(std::uint32_t quantity) {
         part.stack_count = quantity;
         item->stack_count -= quantity;
         inventory_.put(cursor, std::move(part));
-        cursor_origin_ = CursorOrigin::Inventory; // quantity slider split from an inventory stack
+        mark_cursor_origin(CursorOrigin::Inventory); // Hailstone: part of a stack the player picked up
         MoveItem m;
         m.from = q.slot;
         m.to = cursor;
@@ -824,9 +830,9 @@ void GameConnection::apply_server_move(const MoveItem& m) {
         break;
     }
     if (ok && m.to.same(cursor_slot()) && inventory_.cursor()) {
-        // A server limbo-queue advance is an acquisition; other server moves (including
-        // echoes of inventory manipulation) are ambiguous and therefore left alone.
-        cursor_origin_ = m.from.type == kInvLimbo ? CursorOrigin::Server : CursorOrigin::Unknown;
+        // Hailstone: the server's cursor queue moving its next item up is the server's; any other server move onto
+        // the cursor (a merge, a swap) is not known.
+        mark_cursor_origin(m.from.type == kInvLimbo ? CursorOrigin::Server : CursorOrigin::Unknown);
     }
     if (!ok) chat(ChatEvent::Kind::System, strings_.format(game::kEqstrMoveItemFailed, std::vector<std::string>{}));
     if (from.location == kInvPossessions && is_worn(m.from)) refresh_worn_slot(m.from.slot);
@@ -1062,12 +1068,12 @@ bool GameConnection::item_command(const std::string& command, const std::string&
         return true;
     }
     if (command == "/destroycursor") {
-        // For unattended item handling, never apply an unqualified /destroy to an unknown cursor item.
-        // Require the item's current ID to match the one the plugin just observed; never destroy coins,
-        // containers (including ones holding other items), or a real-estate item.
+        // Hailstone: /destroy without its question, for a plugin: only when the item on the cursor has the id the
+        // plugin read, never coin, never a bag (it may hold other items). Real-estate items are not refused here
+        // (docs/unknowns.md: RoF2's item data as EQEmu sends it does not say which they are).
         auto id = game::destroy_cursor_item_id(args);
         const Item* held = inventory_.cursor();
-        if (!id || !held || held->id != *id || held->is_bag() || held->unknowna4 != -1) return true;
+        if (!id || !held || held->id != *id || held->is_bag()) return true;
         destroy_cursor(); // also checks InZone and the user's kept-item protection
         return true;
     }

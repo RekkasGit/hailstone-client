@@ -1165,6 +1165,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/guild_tribute_page_test.cpp
     tests/guild_window_test.cpp
     tests/auto_inventory_ui_test.cpp
+    tests/cursor_origin_test.cpp
     tests/inventory_bags_key_test.cpp
     tests/parcel_money_ui_test.cpp
     tests/parcel_retrieve_ui_test.cpp

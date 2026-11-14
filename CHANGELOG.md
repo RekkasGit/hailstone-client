@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- For plugin authors: a new host function, `cursor_origin`, says whether the item on the cursor came from the server (summoned, a tradeskill result, a quest reward, but also a ground item picked up or an item looted onto the cursor), from the player's own inventory, or is not known; and two new commands, `/destroycursor <id>` and `/stowcursor <id>`, destroy the cursor item or put it in your packs only while it is still the item the plugin read. A plugin or script now needs the `actions` permission for these and for `/destroy`, which before needed only `commands` (docs/plugins.md "The cursor item's origin")
 - Texture packs with generated trees: the needles of pines and other evergreens no longer flicker as the trees sway in the wind, and shimmer much less as you walk or fly through a forest. Rebuild a pack's trees in the Texture Studio to get them
 - Characters' see-through parts, such as a glass or ice shield, a translucent weapon or a glow, are no longer hidden by the grass behind them
 - Options > **Upscale Quality** (and the gamepad pack's Display page): the usual presets, Native AA, Quality, Balanced, Performance and Ultra Performance, which draw the 3D world at 100, 67, 59, 50 and 33 % of the screen and upscale it. Native AA with Temporal or AMD FSR 3.1 is anti-aliasing alone at full resolution. Render Scale now goes down to 33 %, and any other value shows as Custom
