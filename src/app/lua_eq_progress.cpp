@@ -912,6 +912,16 @@ bool task_element_in_zone(const game::TaskElement& e, std::uint32_t zone) {
     return false;
 }
 
+// eq.TasksRevision() -> revision, selectedId: what eq.Tasks() would change by, without building it (its text and
+// objectives cost too much to rebuild every frame). Both 0 out of game.
+int TasksRevision(lua_State* L) {
+    auto& host = task_host(L);
+    const bool live = host.in_game && host.conn;
+    lua_pushinteger(L, live ? static_cast<lua_Integer>(host.conn->tasks().revision) : 0);
+    lua_pushinteger(L, live ? static_cast<lua_Integer>(task_window(L).selected_id(*host.conn)) : 0);
+    return 2;
+}
+
 // A UI-owned quest tracker must not scrape TaskWnd's selected row: that window intentionally stops rebuilding
 // while hidden. This read-only view uses the same row/text builders over every authoritative active task.
 int Tasks(lua_State* L) {
@@ -939,7 +949,6 @@ int Tasks(lua_State* L) {
             task_integer(L, "left", t->duration ? game::task_seconds_left(*t, now) : 0);
             task_string(L, "title", t->title);
             task_string(L, "description", game::task_description_text(*t, element_text));
-            task_string(L, "details", game::task_details_stml(*t, c.strings(), element_text));
             // Keep the native reward formatting separate from the description. Reward-set previews use
             // TaskWnd's existing Preview Reward action and the reward-selection window.
             game::Task rewards;
@@ -1015,7 +1024,7 @@ void register_task_api(lua_State* L, EqHost& host, std::vector<std::unique_ptr<S
     for (const auto& window : windows) {
         auto* tasks = dynamic_cast<TaskWindow*>(window.get());
         if (!tasks) continue;
-        static const luaL_Reg functions[] = {{"Tasks", Tasks}, {"OpenTask", OpenTask}, {nullptr, nullptr}};
+        static const luaL_Reg functions[] = {{"Tasks", Tasks}, {"TasksRevision", TasksRevision}, {"OpenTask", OpenTask}, {nullptr, nullptr}};
         lua_pushlightuserdata(L, &host);
         lua_pushlightuserdata(L, tasks);
         luaL_setfuncs(L, functions, 2);

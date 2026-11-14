@@ -3,14 +3,46 @@
 local Q = {}
 modern_task_journal_cache = modern_task_journal_cache or { frame = -1 }
 local cache = modern_task_journal_cache
+-- eq.Tasks() builds every quest's text and objectives, too much to redo every frame: it is read again when the
+-- task list or the selection changes (eq.TasksRevision, cheap), after invalidate(), and every REFRESH seconds for
+-- the countdowns it carries.
+local REFRESH = 0.5
 
 function Q.invalidate() cache.frame = -1 end
 
+-- A quest's per-character keys at their defaults; the host drops a key set to its default from the file.
+local function forget(id)
+  ui.SetSetting("tasks.tracked." .. id, "0")
+  ui.SetSetting("tasks.tracker.collapsed." .. id, "0")
+  ui.SetSetting("tasks.section." .. id, "objectives")
+end
+
+-- A quest that leaves the list while in game (completed, abandoned, failed) forgets its flags, so taking it again
+-- does not bring back its old tracking. The list is kept across zoning; a new connection starts it afresh (its
+-- revision restarts, and out of game the list is empty), so only a later revision of the same session prunes.
+local function prune(old, new)
+  if not (old.revision and new.revision) or new.revision <= old.revision then return end
+  local present = {}
+  for _, t in ipairs(new) do present[t.id] = true end
+  for _, t in ipairs(old) do
+    if t.id and not present[t.id] then forget(tostring(t.id)) end
+  end
+end
+
 function Q.tasks()
   local frame = ui.GetFrameCount()
-  if cache.frame ~= frame then
+  if cache.frame == frame then return cache.value end
+  local revision, selected
+  if eq.TasksRevision then revision, selected = eq.TasksRevision() end
+  local now = ui.GetTime and ui.GetTime() or 0
+  local fresh = cache.frame == -1 or not eq.TasksRevision or revision ~= cache.revision or
+    selected ~= cache.selected or now - (cache.time or 0) >= REFRESH or now < (cache.time or 0)
+  cache.frame = frame
+  if fresh then
+    local old = cache.value
     cache.value = eq.Tasks() or {}
-    cache.frame = frame
+    cache.time, cache.revision, cache.selected = now, revision, selected
+    if old and old.revision and old.revision > 0 then prune(old, cache.value) end
   end
   return cache.value
 end

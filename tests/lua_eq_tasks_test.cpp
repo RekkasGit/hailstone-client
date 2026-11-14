@@ -128,7 +128,11 @@ TEST_CASE("eq Tasks: all active tasks and individual hidden objectives while the
     CHECK_FALSE(t.api->shown("TaskWnd"));
 
     // Changing progress while hidden is visible immediately, with no cached TaskWnd rebuild or selected row.
+    const std::string before = t.run("local r, s = eq.TasksRevision(); return r .. ':' .. s");
+    CHECK(before == std::to_string(t.conn->tasks().revision) + ":0");
     t.element(101, game::kTaskTypeQuest, 4, 2, 0, false, 5);
+    CHECK(t.run("local r, s = eq.TasksRevision(); return r .. ':' .. s") != before); // the journal's cache key
+    CHECK(t.run("return eq.TasksRevision() == eq.Tasks().revision") == "true");
     CHECK(t.run("return eq.Tasks()[3].done") == "2");
     CHECK(t.run("return eq.Tasks().selectedId") == "0");
     CHECK_FALSE(t.api->shown("TaskWnd"));
@@ -162,6 +166,8 @@ TEST_CASE("eq OpenTask: selects the requested native entry and leaves invalid re
     CHECK(t.run("return eq.Tasks().selectedId") == "201");
     CHECK(t.run("return (eq.WindowText('TaskWnd', 'TASK_Description'))").find("Description 201") != std::string::npos);
     CHECK(app::eq_call_caps("Tasks") == 0);
+    CHECK(app::eq_call_caps("TasksRevision") == 0);
+    CHECK(t.run("local _, s = eq.TasksRevision(); return s") == "201");
     CHECK(app::eq_call_caps("OpenTask") == plugin::kCapCommands);
 }
 
@@ -173,7 +179,7 @@ TEST_CASE("eq Tasks: real reward and timer fields, and no active view outside th
     CHECK(t.run("local s=eq.Tasks(); return s[1].left>3500 and s[1].left<=3600") == "true");
     CHECK(t.run("return eq.Tasks()[3].description") == "Description 101: Objective 2");
     CHECK(t.run("return eq.Tasks()[3].rewards") == "Rewards:<BR>Experience<BR>3 points");
-    CHECK(t.run("return eq.Tasks()[3].details").find("Description 101: Objective 2<BR><BR>Rewards:") == 0);
+    CHECK(t.run("return eq.Tasks()[3].details == nil") == "true"); // description and rewards only
     ByteWriter timer;
     timer.le(std::uint32_t{60000});
     t.conn->receive_zone_packet_for_test(net::AppPacket(net::to_wire(net::Op::TaskRequestTimer), timer.take()));
@@ -181,6 +187,7 @@ TEST_CASE("eq Tasks: real reward and timer fields, and no active view outside th
     t.host.in_game = false;
     CHECK(t.run("return #eq.Tasks()") == "0");
     CHECK(t.run("return eq.Tasks().selectedId") == "0");
+    CHECK(t.run("local r, s = eq.TasksRevision(); return r .. ':' .. s") == "0:0");
     CHECK(t.run("return eq.OpenTask(101)") == "false");
 }
 

@@ -87,7 +87,11 @@ alone, and the journal's Show tracker control brings it back. With no tracked qu
 the player explicitly shows it. It is a Hailstone presentation feature, with no extra server requests or rules.
 
 Both windows share `lib/task_journal.lua` and `eq.Tasks()`, which reads all active task state independently of
-journal visibility and selection. `eq.OpenTask(id)` opens and selects an existing active task. Tracked IDs
+journal visibility and selection. Building it is not cheap (every quest's text and objectives), so the shared
+module reads it again only when `eq.TasksRevision()` (the task list's revision and the selected task, cheap)
+changes, after a pick, and twice a second for the countdowns; a hidden tracker reads nothing. A quest that
+leaves the list (completed, abandoned) forgets its tracking, collapsed state and section, and a key set back to
+its default is dropped from the character's file. `eq.OpenTask(id)` opens and selects an existing active task. Tracked IDs
 (`tasks.tracked.*`), tracker visibility/collapsed quests (`tasks.tracker.*`), category (`tasks.category`) and
 selected section (`tasks.section.*`) are character settings. The frame's geometry and lock remain ordinary
 `hud.*` character layout settings. Copy layout copies frame placement, not the tracked quest IDs or sections.

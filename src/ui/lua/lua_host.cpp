@@ -232,6 +232,10 @@ struct LuaUi::Impl {
         auto it = settings.find(key);
         return it == settings.end() ? nullptr : &it->second;
     }
+    static bool task_default(std::string_view key, std::string_view value) {
+        return ((key.starts_with("tasks.tracked.") || key.starts_with("tasks.tracker.collapsed.")) && value == "0") ||
+               (key.starts_with("tasks.section.") && value == "objectives");
+    }
     // The file is one key=value a line: a key with '=' or a line break, or a value with a line break, would be read
     // back as other keys (a plugin's value as the pack's test hooks), so it is refused.
     static bool storable(std::string_view key, std::string_view value) {
@@ -243,8 +247,15 @@ struct LuaUi::Impl {
         const std::string* now = get_setting(key);
         if (now && *now == value) return true;
         if (per_character(key)) {
-            character_settings[key] = value;
-            character_dirty = true;
+            // A quest's flag at its default (not tracked, expanded, on Objectives) is dropped, not written: these
+            // keys never fall back to the shared file, so a missing one reads as the default, and the file does
+            // not gain a line for every quest ever opened.
+            if (task_default(plugin_key_rest(key), value)) {
+                if (character_settings.erase(key) > 0) character_dirty = true;
+            } else {
+                character_settings[key] = value;
+                character_dirty = true;
+            }
         } else {
             settings[key] = value;
             settings_dirty = true;

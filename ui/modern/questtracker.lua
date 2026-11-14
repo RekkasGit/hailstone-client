@@ -181,6 +181,7 @@ end
 
 ui.window("Quest Tracker", function()
   if not eq.InGame() then return end
-  watched = Q.getTracked(Q.tasks())
+  -- A hidden tracker reads no quests at all.
+  watched = Q.trackerVisible() and Q.getTracked(Q.tasks()) or {}
   hud.Window(nil, KEY, OPTS, draw)
 end)

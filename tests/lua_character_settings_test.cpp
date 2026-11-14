@@ -154,6 +154,18 @@ TEST_CASE("Lua UI: tracked quests and journal sections are per character and not
         CHECK(run(L, "return ui.GetSetting('tasks.tracker.collapsed.101')") == "1");
         CHECK(run(L, "return ui.GetSetting('tasks.section.101')") == "rewards");
         CHECK(run(L, "return ui.GetSetting('tasks.category')") == "shared");
+        // Back at their defaults, a quest's keys leave the file rather than stay as one more line per quest.
+        run(L, "ui.SetSetting('tasks.tracked.101','0'); ui.SetSetting('tasks.tracker.collapsed.101','0'); ui.SetSetting('tasks.section.101','objectives'); ui.SetSetting('tasks.tracker.visible','0')");
+        CHECK(run(L, "return ui.GetSetting('tasks.tracked.101')") == "nil");
+        CHECK(run(L, "return ui.GetSetting('tasks.section.101')") == "nil");
+        lua.set_character_settings(second);
     }
     ImGui::DestroyContext(context);
+    std::ifstream in(first);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(text.find("tasks.tracked.101") == std::string::npos);
+    CHECK(text.find("tasks.tracker.collapsed.101") == std::string::npos);
+    CHECK(text.find("tasks.section.101") == std::string::npos);
+    CHECK(text.find("tasks.tracker.visible=0") != std::string::npos);
+    CHECK(text.find("tasks.category=shared") != std::string::npos);
 }

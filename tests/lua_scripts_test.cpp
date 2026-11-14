@@ -1061,6 +1061,7 @@ local snapshot = {
 }
 eq.InGame = function() return inGame end
 eq.Tasks = function() calls = calls + 1 return snapshot end
+eq.TasksRevision = function() return frame, 0 end -- a new revision every frame: read once a frame
 eq.WindowShown = function() error("the tracker must not inspect TaskWnd") end
 eq.ReplaceWindow = eq.WindowShown
 eq.OpenTask = function(id) opened = id return openAllowed end
@@ -1184,11 +1185,18 @@ local Q = dofile("lib/task_journal.lua")
 local other = dofile("lib/task_journal.lua")
 local calls = 0
 local snapshot = { { id = 10 }, { id = 20 }, { id = 30 } }
+local revision = 1
 eq.Tasks = function() calls = calls + 1 return snapshot end
+eq.TasksRevision = function() return revision, 0 end
 assert(Q.tasks() == other.tasks() and calls == 1, "both windows share one snapshot per frame")
 frame = frame + 1
+assert(Q.tasks() == other.tasks() and calls == 1, "an unchanged task list is not rebuilt in a new frame")
+frame = frame + 1
 snapshot = { { id = 10 }, { id = 30 } }
-assert(Q.tasks() == snapshot and calls == 2, "a new frame reads current tasks")
+revision = 2
+assert(Q.tasks() == snapshot and calls == 2, "a new revision reads current tasks")
+Q.invalidate()
+assert(Q.tasks() == snapshot and calls == 3, "invalidate reads again at once")
 Q.setTracked(20, true)
 Q.setTracked(10, true)
 local tracked = other.getTracked(Q.tasks())
