@@ -77,3 +77,13 @@ TEST_CASE("zone models: a neighbour zone keeps the placements on its side of the
     CHECK(n.vertices == 4); // not cut: the mesh is in its own space
     CHECK(n.triangles == 4);
 }
+
+TEST_CASE("zone models: a generated tree sways less than the game's and does not flutter") {
+    // The game's tree: one level. A generated one: levels of detail. Both 100 units high.
+    const render::PlantSway game = render::plant_sway(quad_model(1), 100.0f);
+    CHECK(game.bend == doctest::Approx(3.0f));
+    CHECK(game.flutter == doctest::Approx(0.35f));
+    const render::PlantSway generated = render::plant_sway(quad_model(3), 100.0f);
+    CHECK(generated.bend == doctest::Approx(3.0f * 0.35f));
+    CHECK(generated.flutter == 0.0f);
+}
