@@ -712,16 +712,23 @@ intensity; updated every frame, in every zone type, with or without a sky):
   - The ground gets wet over 30 s of rain and dries over 2 minutes: darker, with a Fresnel reflection of the sky,
     most on level surfaces. The doors and ground objects get wet the same way (`shaders/object.frag`); the
     characters get a lighter sheen (`shaders/actor.frag`).
-  - Puddles fill the level ground's low spots over 90 s of rain (slow noise picks them; up to about a quarter of the
-    ground in a long storm) and dry over 4 minutes: the ground under them darker, the sky in them nearly a mirror's.
-    While it rains, drops ring them (`rain_ripples`: jittered cells about a unit across, more drops the harder it
-    rains), the rings fading out where a pixel spans more than a tenth of a unit.
+  - Puddles fill the flat ground's low spots over 90 s of rain (warped noise picks them, a finer one frays their
+    shores; up to about a quarter of the flat ground in a long storm) and dry over 4 minutes. Only flat ground holds
+    water: both the smoothed normal and the triangle's own normal (screen derivatives of the position; the smoothed
+    one reads level at a slope's foot or on a rounded crest) must be within about 11 degrees of level, full puddles
+    within about 6, and ground nearer that limit needs a deeper spot to hold water. At the shore the water is
+    shallow and shows the soaked ground through it; further in, its reflection of the sky takes over by Schlick's
+    Fresnel term (water's 2 %), so it reads dark from above and a mirror at a low angle; a damp, darker rim rings
+    it, and the sun or moon glints in it, shadowed (`puddle_surface`; the cover is `shaders/puddle_cover.glsl`, which
+    `tests/lighting_test.cpp` also compiles as C++). While it rains, drops ring them
+    (`rain_ripples`: jittered cells about a unit across, more drops the harder it rains), the rings fading out where
+    a pixel spans more than a tenth of a unit.
   - Snow lies on level surfaces in noisy drifts, covering over 2 minutes and melting over 5: on the ground and on the
     doors' and objects' roofs and ledges, not on the characters (drifts fixed in the world would slide over them).
   - A cut-out surface of the zone (alpha-tested: leaves, fronds, grates) gets neither puddles nor snow, and a third
     of the wet look: its normals are a crown's or a card's, mostly facing up, and would paint a generated tree's
     crown with the sky's reflection or turn it white.
-  - All of it is in `shaders/weather.glsl` (`weather_surface`), fed `SceneLighting::weather` (`render::set_weather`:
+  - All of it is in `shaders/weather.glsl` (`weather_surface`, and `puddle_surface` on the zone's ground), fed `SceneLighting::weather` (`render::set_weather`:
     wet, snow, the rain falling, the puddles).
   - The look belongs to the zone: entering another zone starts it over, dry and with a clear sky
     (`WeatherLook::update`'s zone id), so a storm's snow, wet ground and sky do not follow the player in.
@@ -1429,7 +1436,10 @@ zone loads (`Zone::draw_objects`).
   and kept whole or left out by where they stand, not cut at the zone line.
 - **Light:** a placement's baked light is one colour per vertex of the game's mesh; the replacement takes their
   average as its instance's tint, which multiplies its own vertex colours (a generated tree's shade inside its crown).
-- **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter.
+- **Plants:** a replacement sways in the wind as the game's object would (`is_plant`): its cut-out parts flutter. One
+  with levels of detail (a generated tree) stands still (`render::plant_sway`): its crown is many small crisp sprays
+  layered over each other at different heights, and any sway, which grows with the height, slid them across one
+  another, so up close its leaves seemed to flip back and forth (a third of the bend without the flutter still did).
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so
@@ -1458,8 +1468,9 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
 - **Leaves:** points spread over the cards and kept where their texture is opaque give the crown's shape; turned round
   the trunk, they fill it. The leaves are drawn in colours picked from the game texture's opaque texels, then scaled
   to its mean, so an autumn tree keeps its yellows among its greens.
-  The gaps narrower than a few texels inside a spray or a cluster are filled with a shadowed base (a closing of the
-  cut-out): pinholes of sky between needles flickered as the tree swayed a fraction of a pixel. A needle spray's two
+  The gaps up to a few dozen texels across inside a spray or a cluster (3.5 % of the picture's side for needles, 3 %
+  for leaves) are filled with a shadowed base (a closing of the cut-out), so a spray is cut out along its outer edge
+  only: thin holes showing the dark or the sky behind it shimmered as the camera moved. A needle spray's two
   layers are close in shade and its twigs a darker shade of the needles, not brown: stark stripes and bright twig
   lines shimmered as the camera moved and read as streaks from afar.
 - **Styles:** a pine (a single upright trunk up into leaves widest low down) grows whorls of drooping branches with
