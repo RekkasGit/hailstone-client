@@ -166,6 +166,9 @@ enum class ZonePhase : std::uint8_t { All, Opaque, Translucent };
 // boxes, the cover and water maps' square, the lights' reach.
 class ZoneRenderer {
 public:
+    // WLD details blend in the opaque group, including over bases that may leave depth clear.
+    // Those zones still need their sky/background before the group.
+    bool opaque_blends_background() const { return opaque_blends_background_; }
     // The CPU half of the build (geometry, chunks, decoded textures with their mip chains): ZoneRenderer::prepare,
     // on any thread; the constructor taking it uploads it.
     struct Prepared;
@@ -181,6 +184,7 @@ public:
         std::size_t vertices = 0, indices = 0, instances = 0, triangles = 0, chunks = 0;
     };
     static PreparedCounts prepared_counts(const Prepared& prepared);
+    static bool prepared_blends_background(const Prepared& prepared);
     // What a prepare built of the land (render/horizon.h): the build it keeps for the neighbours, a neighbour's
     // footprint, and the land's triangles by Draw::land_fade (0 plain, 1 a neighbour's own ground, 2 the current
     // zone's in a neighbour's part).
@@ -324,6 +328,7 @@ private:
     static bool in_depth_prepass(const Draw& d) { return d.pass == Pass::Opaque && d.liquid != Liquid::Water; }
     // The modern lighting (set_lighting), not the classic.
     bool modern_lighting() const;
+    static bool blends_background(const Draw& draw);
 
     void upload(Prepared& prepared);
     void create_descriptors();
@@ -364,6 +369,7 @@ private:
     VkDescriptorSetLayout scene_layout_ = VK_NULL_HANDLE;
     std::array<VkDescriptorSet, VkContext::kFramesInFlight> scene_sets_{};
     std::vector<Draw> draws_;
+    bool opaque_blends_background_ = false; // opaque_blends_background, worked out once draws_ is set
     // Each draw's triangles in pieces of the zone with their bounding box (build), in draw order and, within a draw,
     // in index order: the culling's unit. The opaque draws' are by 128-unit cell; the blended and additive draws keep
     // their triangles' order, cut into runs that stay within a cell's size. The boxes take in how far the plants

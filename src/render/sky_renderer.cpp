@@ -348,8 +348,12 @@ void SkyRenderer::create_pipelines(const std::filesystem::path& shader_dir) {
     ds.dynamicStateCount = 2;
     ds.pDynamicStates = dyn;
     VkPipelineRenderingCreateInfo ri = vk_.scene_rendering();
-    // No depth test or write: the sky is drawn first and everything else covers it.
+    // Reverse Z: every sky vertex is pinned to the clear depth (0). Test each sample,
+    // without writing it, so the whole sky stack can follow opaque geometry.
     VkPipelineDepthStencilStateCreateInfo dss{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    dss.depthTestEnable = VK_TRUE;
+    dss.depthWriteEnable = VK_FALSE;
+    dss.depthCompareOp = VK_COMPARE_OP_EQUAL;
 
     for (int pass = 0; pass < 4; ++pass) {
         if (pass == 3) {

@@ -804,6 +804,19 @@ how many zone triangles and draw calls the last frame made.
 
 ## Sky
 
+The sky stack (including its blended clouds and additive bodies) and the underwater/haze backdrop test
+equal against the scene's reverse-Z clear depth, 0, without writing depth. This tests the original
+multisampled depth attachment, so a cut-out or geometry edge keeps the sky in every uncovered sample.
+The modern zone viewer draws the stack after the opaque zone, neighbours and flora, before
+the water colour/depth copy and all translucent draws. The client moves it after the opaque zone
+(including the distant land) and neighbours, but still before the objects: their single call includes
+blended parts. Its object/actor/silhouette order and the grass-after-copy rule stay unchanged, so those
+later opaque draws do not yet save sky shading. Classic lighting keeps the background first because
+the zone draws its opaque and blended parts together. A zone or active neighbour with WLD detail
+layers also keeps the background first: these blend in the opaque group, potentially over a base
+that leaves depth clear. Painted skies keep their internal layer order;
+the model viewer has no sky/backdrop call and is unchanged.
+
 In the modern lighting the plain skies (sky 1 normal, 2 desert, 4 cottony; `SkyRenderer::has_atmosphere`) draw an
 atmosphere instead of their painted dome. `shaders/atmosphere.frag` draws a full-screen triangle at the far plane:
 single Rayleigh and Mie scattering, 16 steps along the view ray and 6 towards the sun, the sun along the lighting's

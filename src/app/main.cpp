@@ -1468,9 +1468,16 @@ int main(int argc, char** argv) {
                     sky_frame.storm = weather_look.storm;
                 }
                 const bool sky_drawn = sky_renderer && fog_frame.sky;
-                if (sky_drawn) sky_renderer->draw(*f, proj, camera.view(), sky_frame);
-                // As the client: the modern haze behind everything where no sky is drawn; under water, the water.
-                if (water_color || (opts.modern && !sky_drawn)) zone_renderer->draw_backdrop(*f, vp);
+                const bool backdrop_drawn = water_color || (opts.modern && !sky_drawn);
+                const auto draw_background = [&] {
+                    if (sky_drawn) sky_renderer->draw(*f, proj, camera.view(), sky_frame);
+                    // As the client: the modern haze where no sky is drawn; under water, the water.
+                    if (backdrop_drawn) zone_renderer->draw_backdrop(*f, vp);
+                };
+                // Classic draws all zone parts together; WLD details can blend over uncovered samples.
+                const bool background_first = !opts.modern || zone_renderer->opaque_blends_background() ||
+                    (neighbours && neighbours->opaque_blends_background());
+                if (background_first) draw_background();
                 // The land round an outdoor zone, under an open sky or none (not the planes' painted skies).
                 zone_renderer->set_distant(opts.modern && outdoor && !opts.no_horizon &&
                                            (!sky_renderer || sky_renderer->has_atmosphere()));
@@ -1480,6 +1487,8 @@ int main(int argc, char** argv) {
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Opaque);
                     if (flora_renderer) flora_drawn = flora_renderer->draw(*f, vp, camera.position, t, frame_lighting, true);
+                    // Before the colour copy (water reflects the sky) and every translucent draw.
+                    if (!background_first) draw_background();
                     vk.begin_translucent(*f);
                     zone_renderer->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
                     if (neighbours) neighbours->draw(*f, vp, camera.position, draw_view, t, render::ZonePhase::Translucent);
