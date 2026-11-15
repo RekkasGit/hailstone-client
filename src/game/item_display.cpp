@@ -143,11 +143,12 @@ bool is_weapon(const net::Item& item) {
     return item.damage > 0 && item.item_type != 27 && item.item_type != 28 && item.item_type != 43 && item.item_type != 44;
 }
 
-// CItemDisplayWnd_CreateItemFlagsString @0x69e280: the flags, ", " between them.
+// CItemDisplayWnd_CreateItemFlagsString @0x69e280: the flags, ", " between them. Each has a plain label for a live
+// game folder's eqstr_us.txt, which dropped some of them (3094 Magic, 3098 Summoned).
 std::string item_flags(const net::Item& item, const ItemDisplayContext& ctx) {
     std::string s;
-    auto add = [&](bool on, std::uint32_t id) {
-        if (on) s += str(ctx, id) + ", ";
+    auto add = [&](bool on, std::uint32_t id, const char* fallback) {
+        if (on) s += str_or(ctx, id, fallback) + ", ";
     };
     auto any_child = [&](auto&& self, const net::Item& it, auto pred) -> bool {
         if (pred(it)) return true;
@@ -155,26 +156,26 @@ std::string item_flags(const net::Item& item, const ItemDisplayContext& ctx) {
             if (self(self, c.item, pred)) return true;
         return false;
     };
-    add(any_child(any_child, item, [](const net::Item& i) { return i.magic != 0; }), 0xc16);       // Magic
-    add(item.is_lore(), 0xc17);                                                                       // Lore
-    add(item.artifact != 0, 0xc19);                                                                   // Artifact
-    add(item.summoned != 0, 0xc1a);                                                                   // Summoned
-    add(any_child(any_child, item, [](const net::Item& i) { return i.no_trade(); }), 0xc1b);         // No Trade
-    add(any_child(any_child, item, [](const net::Item& i) { return i.no_transfer != 0; }), 0x180b);  // No Storage
-    add(item.attuneable != 0, 0x1717);                                                                // Attunable
-    add(any_child(any_child, item, [](const net::Item& i) { return i.no_rent == 0; }), 0xc1c);       // Temporary
-    add(item.no_pet != 0, 0x22ac);                                                                    // No Pet
-    add(item.item_type == 54, 0xd1c);                                                                 // Augmentation
-    add(item.quest_item != 0, 0x11d1);                                                                // Quest
-    if (item.purity > 0) add(true, item.power > 0 ? 0x23de : 0x23dd);                                // Infused / Infusible
-    add(any_child(any_child, item, [](const net::Item& i) { return i.heirloom != 0; }), 0x1d54);     // Heirloom
-    add(m::item_prestige(item) > 0, 0x1552);                                                          // Glamour
-    add(item.placeable_flags() != 0, 0x190d);                                                         // Placeable
-    add(item.copied != 0, 0x1d9d);                                                                    // Copied
-    add(item.collectible(), 0x1e08);                                                                  // Collectible
-    add(item.no_destroy(), 0x1e0d);                                                                   // No Destroy
-    add(any_child(any_child, item, [](const net::Item& i) { return i.no_zone != 0; }), 0x1e0f);      // No Zone
-    add(any_child(any_child, item, [](const net::Item& i) { return i.no_ground != 0; }), 0x1e10);    // No Ground
+    add(any_child(any_child, item, [](const net::Item& i) { return i.magic != 0; }), 0xc16, "Magic");
+    add(item.is_lore(), 0xc17, "Lore");
+    add(item.artifact != 0, 0xc19, "Artifact");
+    add(item.summoned != 0, 0xc1a, "Summoned");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.no_trade(); }), 0xc1b, "No Trade");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.no_transfer != 0; }), 0x180b, "No Storage");
+    add(item.attuneable != 0, 0x1717, "Attunable");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.no_rent == 0; }), 0xc1c, "Temporary");
+    add(item.no_pet != 0, 0x22ac, "No Pet");
+    add(item.item_type == 54, 0xd1c, "Augmentation");
+    add(item.quest_item != 0, 0x11d1, "Quest");
+    if (item.purity > 0) add(true, item.power > 0 ? 0x23de : 0x23dd, item.power > 0 ? "Infused" : "Infusible");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.heirloom != 0; }), 0x1d54, "Heirloom");
+    add(m::item_prestige(item) > 0, 0x1552, "Prestige");
+    add(item.placeable_flags() != 0, 0x190d, "Placeable");
+    add(item.copied != 0, 0x1d9d, "Copied");
+    add(item.collectible(), 0x1e08, "Collectible");
+    add(item.no_destroy(), 0x1e0d, "No Destroy");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.no_zone != 0; }), 0x1e0f, "No Zone");
+    add(any_child(any_child, item, [](const net::Item& i) { return i.no_ground != 0; }), 0x1e10, "No Ground");
     // CXStr::StripTrailing(' '), then (',').
     while (!s.empty() && s.back() == ' ') s.pop_back();
     while (!s.empty() && s.back() == ',') s.pop_back();
