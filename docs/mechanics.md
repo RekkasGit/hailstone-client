@@ -1394,6 +1394,8 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   a line one step waits; /pause N waits N, /timer N starts the display cooldown), 120 + n runs /alternateadv act n.
   Only the comma after a prefix is skipped, so a second prefix follows it with no space (`/timer 600,/pause 10, /cast
   1`); after `, ` the rest is the command (`game::split_social_line`, which the social editor reads lines with too).
+  The queued social stops when another character enters the world (its index would run that character's lines);
+  the developer Actions window's Socials tab queues a social the same way.
 - The hotbutton's mouse and menu (`game/hot_button_menu.*`): a left or quick right click on an empty button opens
   the menu unless the cursor holds something; a quick right click (on release) of a filled one activates it except on
   items; the right button held 500 ms opens it on any button. Its rows are shown or hidden by the button (not
