@@ -4187,3 +4187,134 @@ TEST_CASE("UI packs (modern): a resized bag window lays its slots out to its wid
     }
     ImGui::DestroyContext(ctx);
 }
+
+// The buff menu (ui/modern/lib/buffmenu.lua): a right click on a target's or the pet's buff opens that buff's menu,
+// and its rows act on the buff that was clicked: Spell Info on the target's, Add to Blocked Pet Spells on the pet's.
+// The frame's own menu stays shut (the buff took the click); Alt with a right click still opens it.
+TEST_CASE("UI packs (modern): a right click on a target's or the pet's buff opens the buff menu") {
+    test::ScratchDir scratch("ui_pack_buff_menu_test");
+    const auto dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(fs::path(__FILE__).parent_path().parent_path() / "ui" / "modern", dir / "modern",
+             fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        Session s(dir, "modern");
+        auto* L = s.lua.state();
+        auto run = [&](const char* code) {
+            const int rc = luaL_dostring(L, code);
+            INFO((rc == LUA_OK ? "" : lua_tostring(L, -1)));
+            REQUIRE(rc == LUA_OK);
+            const std::string result = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+            lua_settop(L, 0);
+            return result;
+        };
+        // A target and a pet with one buff each, and the menu's rows recorded: the pick is the row that acts.
+        run(R"lua(
+targetShown, petShown = true, true
+targetIcon, petIcon = nil, nil
+menuLabels, menuPick, shownSpell, blocked = {}, nil, nil, {}
+local buffSlot, label, shown, gauge, menuItem, showSpell, setText, clickChild =
+  eq.BuffSlot, eq.Label, eq.WindowShown, eq.Gauge, ui.MenuItem, eq.ShowSpell, eq.SetWindowText, eq.ClickChild
+eq.BuffSlot = function(win, id, overlays)
+  if win == "TargetWindow" and id == "Buff0" then return 11, 60000, "Holy Armor", true end
+  if win == "PetInfoWindow" and id == "PetBuff0" then return 11, 60000, "Holy Armor", true end
+  return buffSlot(win, id, overlays)
+end
+eq.Label = function(n) if n == 28 then return "a rat" end return label(n) end
+eq.WindowShown = function(win)
+  if win == "TargetWindow" then return targetShown end
+  if win == "PetInfoWindow" then return petShown end
+  return shown(win)
+end
+eq.Gauge = function(k)
+  if k == 6 then return 1, 0, 100 end
+  if k == 16 then return 1, "Pet", 100 end
+  if k == 27 or k == 41 or k == 149 then return 0, "", -1 end
+  return gauge(k)
+end
+eq.ShowSpell = function(id) shownSpell = id end
+eq.SetWindowText = function(win, id, text)
+  if win == "BlockedPetBuffWnd" then blocked.edit = id .. "=" .. text end
+  return setText(win, id, text)
+end
+eq.ClickChild = function(win, id, button)
+  if win == "BlockedPetBuffWnd" then blocked.add = id .. ":" .. tostring(button); return true end
+  return clickChild(win, id, button)
+end
+ui.MenuItem = function(text, ...)
+  menuLabels[#menuLabels + 1] = text
+  if text == menuPick then return true end
+  return menuItem(text, ...)
+end
+local button = ui.InvisibleButton
+ui.InvisibleButton = function(id, ...)
+  local hit = button(id, ...)
+  if id == "##tbBuff0" then targetIcon = { ui.GetItemRect() } end
+  if id == "##PetBuff0" then petIcon = { ui.GetItemRect() } end
+  return hit
+end
+)lua");
+        s.frames(3);
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        REQUIRE(run("return tostring(targetIcon ~= nil and petIcon ~= nil)") == "true");
+        auto centre = [&](const char* name) {
+            lua_getglobal(L, name);
+            float r[4]{};
+            for (int i = 0; i < 4; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                r[i] = static_cast<float>(lua_tonumber(L, -1));
+                lua_pop(L, 1);
+            }
+            lua_settop(L, 0);
+            return ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
+        };
+        // The mouse moves onto the icon and the button goes down in the same frame: the frame before hovered
+        // something else, so an icon that lets a later item lie over it would lose the click to the frame.
+        auto press = [&](ImVec2 at) {
+            auto& io = ImGui::GetIO();
+            io.AddMousePosEvent(at.x, at.y);
+            io.AddMouseButtonEvent(1, true);
+            s.frames(1);
+        };
+        auto release = [&] {
+            ImGui::GetIO().AddMouseButtonEvent(1, false);
+            s.frames(1);
+        };
+        auto closeMenu = [&] {
+            ImGui::ClosePopupsExceptModals();
+            s.frames(1);
+            run("menuPick, menuLabels = nil, {}");
+        };
+        // the target's buff: Spell Info, and the frame's menu stays shut
+        run("menuPick = 'Spell Info'");
+        press(centre("targetIcon"));
+        CHECK(run("return tostring(shownSpell)") == "11");
+        CHECK(run("return table.concat(menuLabels, '|')") == "Spell Info");
+        run("menuPick = nil");
+        release();
+        closeMenu();
+        // Alt with a right click still opens the frame's own menu
+        ImGui::GetIO().AddKeyEvent(ImGuiMod_Alt, true);
+        press(centre("targetIcon"));
+        CHECK(run("return menuLabels[1]") == "Lock this frame");
+        ImGui::GetIO().AddKeyEvent(ImGuiMod_Alt, false);
+        release();
+        closeMenu();
+        // the pet's buff: Add to Blocked Pet Spells, on the pet's own list
+        run("menuPick = 'Add to Blocked Pet Spells'");
+        press(centre("petIcon"));
+        CHECK(run("return blocked.edit") == "BW_EditSpellToBlockFromPet=11");
+        CHECK(run("return blocked.add") == "BW_AddSpellToBlockFromPet:left");
+        CHECK(run("return table.concat(menuLabels, '|')") == "Spell Info|Add to Blocked Pet Spells");
+        run("menuPick = nil");
+        release();
+        closeMenu();
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
