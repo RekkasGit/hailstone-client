@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Linux: the release now runs natively on Wayland; before, its SDL was built with X11 only and ran through XWayland. SDL chooses Wayland when the compositor offers the `fifo-v1` protocol (recent KDE, GNOME and wlroots); `SDL_VIDEO_DRIVER=wayland` or `x11` overrides it
 - Item display: the Magic and Summoned tags show their names instead of a number ([3094]) with a live game folder, whose string table lacks them
 - Security: a script can no longer crash the client by nesting `/docommand`, `/noparse` or `/squelch` without end; they nest at most 16 deep, and an `mq.cmd` line is at most 2047 bytes
 - Security: a script or plugin window that catches its own time-limit stop with `pcall`, `xpcall` or a coroutine is stopped all the same, and a long string match (a pattern that backtracks) is now stopped at the time limit instead of freezing the client
