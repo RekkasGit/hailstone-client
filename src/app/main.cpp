@@ -1499,7 +1499,7 @@ int main(int argc, char** argv) {
             }
             if (ui_layer) ui_layer->render(*f);
             vk.end_frame(*f);
-            if (opts.frames && frame >= timed_from && vk.frames_presented() == 2) ++generated_frames;
+            if (opts.frames && frame >= timed_from && vk.frame_generated()) ++generated_frames;
             if (zone_renderer) drawn = zone_renderer->take_drawn();
         }
         return 0;
