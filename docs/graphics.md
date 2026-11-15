@@ -68,7 +68,10 @@ The 3D view can take a rectangle of the window (/viewport, `VkContext::set_scene
 its size (`FrameInfo::extent`, with its place in `FrameInfo::offset`), the post pass draws into that rectangle (its
 push constant's offset gives the scene texel under each pixel) and clears the rest of the image to black; the UI still
 covers the whole window, and the app maps the nameplates and mouse picking onto the rectangle
-(`ClientApp::view_area_`).
+(`ClientApp::view_area_`). A move of the rectangle is taken at once; a new size makes the scene targets again (a
+device wait and every target rebuilt), so it waits until the size has held for 4 frames, or at most 30 frames after
+it first changed (`render::SceneResizeDebounce`, render/swapchain_size.h): dragging an edge does not stall every
+frame, and the old rectangle is drawn meanwhile.
 
 The scene can be drawn below the view's size and upscaled (`display.render_scale`, `SceneOptions::render_scale`,
 33 .. 100 %, `render::kMinRenderScalePercent`): the scene targets are made at the view's size times the scale (`render::scaled_extent`, each side

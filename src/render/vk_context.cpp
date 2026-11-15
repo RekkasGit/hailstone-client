@@ -1357,12 +1357,16 @@ std::optional<FrameInfo> VkContext::begin_frame_commands() {
     if (swapchain_outdated({w, h}, {made_for_.width, made_for_.height}, surface, {extent_.width, extent_.height}))
         resize_pending_ = true;
     if (resize_pending_) recreate_swapchain();
-    // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again.
-    if (VkRect2D area = scene_area(); area.extent.width != view_extent_.width || area.extent.height != view_extent_.height) {
+    // The 3D view's rectangle (set_scene_rect): a new size makes the scene targets again, once it has settled
+    // (render/swapchain_size.h SceneResizeDebounce): dragging a /viewport edge would otherwise wait for the device
+    // and rebuild every target every frame. Until then the old rectangle is drawn whole; a move alone is taken at
+    // once.
+    if (VkRect2D area = scene_area(); scene_resize_.update(Extent{area.extent.width, area.extent.height},
+                                                           Extent{view_extent_.width, view_extent_.height})) {
         wait_idle();
         destroy_scene_targets();
         create_scene_targets();
-    } else {
+    } else if (area.extent.width == view_extent_.width && area.extent.height == view_extent_.height) {
         scene_area_ = area;
     }
 
