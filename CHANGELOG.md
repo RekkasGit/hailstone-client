@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Auras window: no longer opens by itself on a character that has never opened it; the EQ menu's Auras opens it
+- Chat: on a new character the game's "Other Chat" is a tab of the main chat window instead of a window of its own, and a chat window or tab you close stays closed after a restart
+- Extended Target window (modern interface): it starts six rows tall, and with more slots the rest scroll; drag its edge or corner to resize it. Its right-click menu has Auto expand, which grows the window to show every slot down to the last one with a target, and shrinks it back as they clear
+
 ## 0.7.1-beta (2026-11-15)
 
 - Login screen: More options (both interfaces) has a Texture pack choice, the same as Options > Graphics > Textures, so an HD pack built with Texture Studio can be picked before logging in. As in Options, the new pack is used from the next start
