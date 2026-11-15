@@ -34,6 +34,26 @@ local shared = modern
 
 local Setting = T.Setting -- (ui.GetSetting, read once a frame: lib/theme.lua)
 
+-- A saved "a,b" setting's two parts (a size, a place), kept by the raw text so a window's frame does not take the
+-- string apart again each frame. (Emptied when it grows: a drag makes a new place a frame.)
+local SIZE, POS = "([%d.]+),([%d.]+)", "(-?[%d.]+),(-?[%d.]+)"
+local pairCache, pairCount = { [SIZE] = {}, [POS] = {} }, 0
+local function settingPair(raw, pattern)
+  local byRaw = pairCache[pattern]
+  local m = byRaw[raw]
+  if not m then
+    if pairCount >= 512 then
+      for _, t in pairs(pairCache) do for r in pairs(t) do t[r] = nil end end
+      pairCount = 0
+    end
+    local a, b = raw:match(pattern)
+    m = { a or false, b or false }
+    byRaw[raw] = m
+    pairCount = pairCount + 1
+  end
+  return m[1] or nil, m[2] or nil
+end
+
 local function num(key, default)
   local v = tonumber(Setting(key))
   if v == nil then return default end
@@ -419,7 +439,7 @@ function hud.Window(screen, title, opts, body)
   local fit = false
   if opts.resizable and not opts.onResize then
     local sz = Setting(k.size)
-    local sw, sh = (sz or ""):match("([%d.]+),([%d.]+)")
+    local sw, sh = settingPair(sz or "", SIZE)
     if sw then
       dw, dh = math.max(tonumber(sw), opts.resizable[1]), math.max(tonumber(sh), opts.resizable[2])
     elseif opts.fit then
@@ -446,7 +466,7 @@ function hud.Window(screen, title, opts, body)
   pending[key] = nil
   local x, y
   if saved and saved ~= "" then
-    local sx, sy = saved:match("(-?[%d.]+),(-?[%d.]+)")
+    local sx, sy = settingPair(saved, POS)
     x, y = tonumber(sx), tonumber(sy)
   end
   if not x then x, y = defaults.Place(hud.Layout(), key, w, h, (io.uiScale or 1) * hudScale) end
@@ -640,7 +660,7 @@ function hud.Dialog(screen, title, opts, body)
   pending[key] = nil
   local x, y
   if saved and saved ~= "" then
-    local px, py = saved:match("(-?[%d.]+),(-?[%d.]+)")
+    local px, py = settingPair(saved, POS)
     x, y = tonumber(px), tonumber(py)
   end
   if not x then
@@ -650,7 +670,7 @@ function hud.Dialog(screen, title, opts, body)
   -- on screen as a whole where it fits (its title bar's close box too), else its top left corner
   local outerW, outerH = w + 20 * s, h + 40 * s -- (the padding and title bar)
   if opts.resizable then
-    local a, b = (Setting(k.size) or ""):match("([%d.]+),([%d.]+)")
+    local a, b = settingPair(Setting(k.size) or "", SIZE)
     outerW, outerH = (tonumber(a) or dw) * s, (tonumber(b) or dh) * s
   end
   x = math.max(0, math.min(x, io.width - math.min(outerW, io.width)))
@@ -681,7 +701,7 @@ function hud.Dialog(screen, title, opts, body)
   local savedW, savedH
   if opts.resizable then
     local sz = Setting(k.size) or ""
-    local a, b = sz:match("([%d.]+),([%d.]+)")
+    local a, b = settingPair(sz, SIZE)
     savedW, savedH = tonumber(a), tonumber(b)
     savedW = savedW and math.max(savedW, opts.resizable[1])
     savedH = savedH and math.max(savedH, opts.resizable[2])
