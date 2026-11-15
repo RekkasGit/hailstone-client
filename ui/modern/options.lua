@@ -32,17 +32,37 @@ local LABEL_W = 170 -- the label column, in unscaled pixels
 local U = 1         -- the UI scale, this frame
 local fuzzy = dofile("lib/fuzzy.lua")
 local search = "" -- the search field's text; a row that does not match it is left out
-local lastRowShown = true
+local lastRowShown = true -- the last row() drew its row, so a note() under it goes too
+-- The section being drawn: its title counts in every row's search ("target ring" finds the Target Ring section's
+-- rows; a plugin's section is its name). While a search is typed its heading and table wait for the first row that
+-- matches (open: nil outside a section, "pending", "open", or "failed" when BeginTable said no).
+local cur = { title = nil, open = nil }
 
-local function matches(label, tooltip) return fuzzy.match(search, label, tooltip) end
+local function matches(label, tooltip)
+  if cur.title then tooltip = (tooltip or "") .. " " .. cur.title end
+  return fuzzy.match(search, label, tooltip)
+end
 
 local function tip(text)
   if text and ui.IsItemHovered(ui.HoveredFlags.DelayShort) then ui.SetTooltip(text) end
 end
 
+local function beginSection(title)
+  heading(title)
+  if not ui.BeginTable("##" .. title, 2, ui.TableFlags.SizingFixedFit) then return false end
+  ui.TableSetupColumn("label", ui.TableColumnFlags.WidthFixed, LABEL_W * U)
+  ui.TableSetupColumn("value", ui.TableColumnFlags.WidthStretch, 0)
+  return true
+end
+
 local function row(label, tooltip, draw)
   lastRowShown = matches(label, tooltip)
   if not lastRowShown then return end
+  if cur.open == "pending" then cur.open = beginSection(cur.title) and "open" or "failed" end
+  if cur.open == "failed" then
+    lastRowShown = false
+    return
+  end
   ui.TableNextRow()
   ui.TableNextColumn()
   ui.Text(label)
@@ -53,7 +73,7 @@ local function row(label, tooltip, draw)
   tip(tooltip)
 end
 
--- A note under the row above, in the value column.
+-- A note under the row above, in the value column; it goes with its row.
 local function note(text)
   if not lastRowShown then return end
   ui.TableNextRow()
@@ -62,21 +82,34 @@ local function note(text)
   ui.TextDisabled(text)
 end
 
+-- A heading and a table of rows. While a search is typed, a section none of whose rows match is left out whole; the
+-- section bodies draw outside row() and note() only when the search is empty.
 local function section(title, body)
-  heading(title)
-  if ui.BeginTable("##" .. title, 2, ui.TableFlags.SizingFixedFit) then
-    ui.TableSetupColumn("label", ui.TableColumnFlags.WidthFixed, LABEL_W * U)
-    ui.TableSetupColumn("value", ui.TableColumnFlags.WidthStretch, 0)
+  cur.title = title
+  if search == "" then
+    cur.open = nil
+    if beginSection(title) then
+      body()
+      ui.EndTable()
+    end
+    ui.Spacing()
+  else
+    cur.open = "pending"
     body()
-    ui.EndTable()
+    if cur.open == "open" then ui.EndTable() end
+    if cur.open ~= "pending" then ui.Spacing() end
   end
-  ui.Spacing()
+  cur.title, cur.open = nil, nil
+  lastRowShown = true
 end
 
 -- A combo box over choices (1-based here, the option's values 0-based); `values` maps a choice to the option's value.
 local function combo(name, label, choices, tooltip, values)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local current = v
     if values then
@@ -97,7 +130,10 @@ end
 
 local function check(name, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name, v ~= 0)
     if changed then eq.SetOption(name, on and 1 or 0) end
@@ -107,7 +143,10 @@ end
 -- A check box shown inverted: checked while the option is 0 (SyncGeneralPage's TradeskillWnd CtrlBypass box).
 local function invcheck(name, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name, v == 0)
     if changed then eq.SetOption(name, on and 0 or 1) end
@@ -117,7 +156,10 @@ end
 -- A slider over the option's own values (min..max); text(v) is what it shows.
 local function slider(name, label, min, max, text, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local nv, changed = ui.SliderInt("##" .. name, v, min, max, text and text(v) or nil)
     if changed then eq.SetOption(name, nv) end
@@ -135,7 +177,10 @@ local function pct(v) return string.format("%d %%", v) end
 -- One bit of an option (the click-through mask).
 local function bit(name, mask, label, tooltip)
   local v = eq.Option(name)
-  if v == nil then return end
+  if v == nil then
+    lastRowShown = false -- no row: a note() meant for it is left out too
+    return
+  end
   row(label, tooltip, function()
     local on, changed = ui.Checkbox("##" .. name .. mask, v & mask ~= 0)
     if changed then eq.SetOption(name, on and (v | mask) or (v & ~mask)) end
