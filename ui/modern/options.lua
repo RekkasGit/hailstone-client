@@ -667,6 +667,15 @@ local function graphicsTab()
         ui.EndCombo()
       end
     end)
+    -- 0 Low, 1 Medium, 2 High (render/graphics_tier.h): what the first start picked for this computer.
+    local tier = eq.Option("gpu_tier")
+    if tier ~= nil then
+      local tierName = ({ [0] = "Low", [1] = "Medium", [2] = "High" })[tier] or "High"
+      row("Detect", "Sets the graphics this computer's graphics card and processor suit, as the first start did: "
+          .. tierName .. " here (Low also uses the classic lighting and AMD FSR 1). Anti-aliasing and the upscaler change the next time the game starts.", function()
+        if ui.Button("Use " .. tierName .. " for This Computer", 0, 0) then eq.SetOption("detect_graphics", 1) end
+      end)
+    end
     combo("shadows", "Shadows", { "Off", "Low", "Medium", "High" },
       "Sun and moon shadows (modern lighting). Higher is sharper and slower.")
     slider("shadow_clip_plane", "Shadow Clip Plane", 0, 100,
@@ -687,6 +696,10 @@ local function graphicsTab()
     if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart
         and (upscaler >= 2 or upscalerAtStart >= 2) then
       note("Restart the game to change the upscaler.")
+    end
+    -- A Low computer (render/graphics_tier.h): FSR 3.1 and frame generation cost more than they give back there.
+    if tier == 0 and (upscaler == 3 or eq.Option("frame_gen") == 1) then
+      note("AMD FSR 3.1 and Frame Generation are slow on this computer's graphics: AMD FSR 1 is faster here.")
     end
     -- Off draws at full size without frame generation: the settings below would do nothing.
     local off = upscaler == 0

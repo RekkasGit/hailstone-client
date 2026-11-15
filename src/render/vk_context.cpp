@@ -484,6 +484,17 @@ void VkContext::pick_physical_device() {
                                    l.maxPerStageResources, l.maxDescriptorSetSamplers,
                                    l.maxDescriptorSetSampledImages});
     gpu_name_ = props.deviceName;
+    gpu_profile_.name = props.deviceName;
+    gpu_profile_.kind = seen[*selected.index].kind;
+    gpu_profile_.vendor_id = props.vendorID;
+    {
+        VkPhysicalDeviceMemoryProperties memory{};
+        vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+        for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i)
+            if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+                gpu_profile_.device_local_bytes = std::max<std::uint64_t>(gpu_profile_.device_local_bytes,
+                                                                          memory.memoryHeaps[i].size);
+    }
     gpu_description_ = std::format("{} ({}, {}), Vulkan {}.{}.{}", props.deviceName, driver.driverName, driver.driverInfo,
                                    VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
                                    VK_API_VERSION_PATCH(props.apiVersion));

@@ -271,6 +271,8 @@ public:
             log::info("shared asset cache: on, {} MiB disk budget", shared->budget_bytes >> 20);
             game_.set_shared_file_cache(std::make_shared<SharedFileCache>(std::move(*shared)));
         }
+        // A new install's graphics settings for this computer (render/graphics_tier.h), before they are first read.
+        detect_graphics_at_first_start();
         // The settings (hailstone.ini's until a character enters, then the character's: apply_settings), before the
         // renderers: their pipelines take the sample count.
         apply_settings();
@@ -830,6 +832,10 @@ private:
     // Sets game_'s base folder (core/asset_folder_choice.h), running the asset-folder picker when nothing usable is
     // known; false when the player quit it (app/client_app_options.cpp).
     bool choose_asset_folder();
+    // The GPU in use and the CPU's threads (render/graphics_tier.h GpuProfile).
+    render::GpuProfile graphics_profile() const;
+    // render::first_start_graphics on hailstone.ini, saved and logged.
+    void detect_graphics_at_first_start();
     // The Options window's "Change Asset Folder" (assets.pick) once the login screen is idle: the picker again, its
     // folder made game_'s base and the game files read again (reload_server_files); Cancel keeps the folder. Not
     // with --game-dir or EQ_GAME_DIR, which the picker does not change.

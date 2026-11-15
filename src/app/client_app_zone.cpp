@@ -755,6 +755,9 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     // Hailstone: how far the flora is drawn, in units (render::FloraRenderer::set_reach).
     if (name == "flora_distance") return static_cast<int>(std::lround(flora_reach_));
     if (name == "grass_density") return grass_density_;
+    // Hailstone: the tier this computer is (render/graphics_tier.h): 0 Low, 1 Medium, 2 High; Options > Graphics'
+    // Detect applies it (set_display_option "detect_graphics").
+    if (name == "gpu_tier") return static_cast<int>(render::detect_graphics_tier(graphics_profile()));
     // The Options window's particle density combos (SyncDisplayPage's DensityChoice).
     for (std::string_view kind : {"spell", "environment", "actor"})
         if (name.starts_with(kind) && name.substr(kind.size()) == "_particle_density")
@@ -816,6 +819,16 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
 }
 
 bool ClientApp::set_display_option(std::string_view name, int value) {
+    if (name == "detect_graphics") {
+        // The first start's settings for this computer again (render/graphics_tier.h), over the ones there; the
+        // sample count shows at the next start, as the Options window says.
+        const render::GraphicsTier tier = render::detect_graphics_tier(graphics_profile());
+        config_.set(render::kGraphicsTierKey, render::graphics_tier_name(tier));
+        render::apply_graphics_tier(config_, tier);
+        config_.save(config_path_);
+        apply_settings();
+        return true;
+    }
     if (name == "find_trail_style") {
         config_.set_int("display.find_trail_style", static_cast<int>(game::normalize_find_trail_style(value)));
         config_.save(config_path_);
