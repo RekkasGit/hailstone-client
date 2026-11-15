@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <new>
 #include <optional>
 #include <span>
 #include <string>
@@ -50,6 +51,35 @@ constexpr int kSocials = game::kSocialPages * game::kSocialButtons;
 constexpr int kEditorState = 1000; // the Lua state an editor's dry run uses (mq::ButtonPress::state)
 
 EqHost& host_of(lua_State* L) { return *static_cast<EqHost*>(lua_touserdata(L, lua_upvalueindex(1))); }
+
+// eq.LuaSocial's hash of each social's code (an editor reads it every frame), made again when the code differs from
+// what it was made from: whatever changed it (SetLuaSocial, an import, the file) is seen. eq.LuaSocial's second
+// upvalue, owned by the state.
+struct HashCache {
+    struct Entry {
+        bool made = false;
+        std::string press, face, hex;
+    };
+    std::array<Entry, kSocials> entries;
+};
+
+int gc_hash_cache(lua_State* L) {
+    static_cast<HashCache*>(lua_touserdata(L, 1))->~HashCache();
+    return 0;
+}
+
+// The hex hash of social n's code, from the cache while its code is the same.
+const std::string& social_hash(HashCache& cache, int n, const game::LuaSocial& lua) {
+    HashCache::Entry& e = cache.entries[static_cast<std::size_t>(n)];
+    if (!e.made || e.press != lua.press || e.face != lua.face) {
+        e.made = false; // until all three are set again (an exception may come between)
+        e.hex = to_hex(game::lua_social_hash(lua));
+        e.press = lua.press;
+        e.face = lua.face;
+        e.made = true;
+    }
+    return e.hex;
+}
 
 // The social number argument, or -1 when it is out of range or there are no socials.
 int social_arg(lua_State* L, int i) {
@@ -127,6 +157,9 @@ int LuaSocial(lua_State* L) {
         return 1;
     }
     const game::Social& s = h.hot_buttons->social(n);
+    auto& cache = *static_cast<HashCache*>(lua_touserdata(L, lua_upvalueindex(2)));
+    const std::string* hash = nullptr;
+    plugin::cxx_guard(L, [&] { hash = &social_hash(cache, n, s.lua); });
     lua_createtable(L, 0, 10);
     set_str(L, "name", s.name);
     set_int(L, "color", s.color);
@@ -141,7 +174,7 @@ int LuaSocial(lua_State* L) {
     set_str(L, "press", s.lua.press);
     set_str(L, "face", s.lua.face);
     set_bool(L, "running", h.scripts && h.scripts->button_running(n));
-    set_str(L, "hash", to_hex(game::lua_social_hash(s.lua)));
+    set_str(L, "hash", *hash);
     push_rules(L, h.scripts ? h.scripts->button_rules(s.lua) : plugin::ButtonRules{});
     lua_setfield(L, -2, "rules");
     return 1;
@@ -484,6 +517,15 @@ void register_luasocial_api(lua_State* L, EqHost& h) {
                                    {nullptr, nullptr}};
     lua_pushlightuserdata(L, &h);
     luaL_setfuncs(L, fns, 1);
+    // eq.LuaSocial again, with its hash cache.
+    lua_pushlightuserdata(L, &h);
+    new (lua_newuserdatauv(L, sizeof(HashCache), 0)) HashCache();
+    lua_createtable(L, 0, 1);
+    lua_pushcfunction(L, gc_hash_cache);
+    lua_setfield(L, -2, "__gc");
+    lua_setmetatable(L, -2);
+    lua_pushcclosure(L, LuaSocial, 2);
+    lua_setfield(L, -2, "LuaSocial");
 }
 
 } // namespace hailstone::app
