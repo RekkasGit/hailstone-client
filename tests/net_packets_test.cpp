@@ -4,6 +4,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -88,6 +89,13 @@ TEST_CASE("opcode table: stock achievement managers retain their native wire ide
         CHECK(to_wire(opcode) == wire);
         CHECK(from_wire(static_cast<std::uint16_t>(wire)) == opcode);
     }
+}
+
+TEST_CASE("decode_with: a read past the end and an allocation failure both give nullopt") {
+    AppPacket p(0x1234);
+    CHECK_FALSE(detail::decode_with(p, [](ByteReader& r) { return r.le<std::uint32_t>(); }));
+    CHECK_FALSE(detail::decode_with(p, [](ByteReader&) -> int { throw std::bad_alloc(); }));
+    CHECK(detail::decode_with(p, [](ByteReader&) { return 7; }) == 7);
 }
 
 TEST_CASE("eq_crc32 is the client's __MemChecker0 (CRC32 without final inversion)") {
