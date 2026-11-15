@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Graphics: the upscaler is off by default on every computer, so the 3D world is drawn at full size. A player who never chose an upscaler, and was on AMD FSR 1, is now at Off; Options > Graphics > Upscaler turns FSR 1, Temporal or FSR 3.1 back on
+- AMD FSR 3.1: about 30 % faster on integrated graphics (on an Intel Iris Xe, 5.6 ms a frame down to 3.9 ms at 1280x720), by reprojecting the history with FSR's Lanczos table, as AMD's own runtime does on its graphics cards
+- Graphics: the first start fits the graphics settings to the computer. A laptop or tablet with integrated graphics, a graphics card with under 3 GiB of memory, or a processor with fewer than 4 threads starts at Low (which also uses the classic lighting, without radial flora), and a card with 3 to 6 GiB starts at Medium; other computers keep today's settings. Existing installs keep their settings. Options > Graphics > Detect (gamepad: Display) applies the settings for this computer at any time
 - Modern lighting: the sky and the haze behind it are drawn only where the zone leaves the background open, which saves GPU time outdoors
 - Auras window: no longer opens by itself on a character that has never opened it; the EQ menu's Auras opens it
 - Chat: on a new character the game's "Other Chat" is a tab of the main chat window instead of a window of its own, and a chat window or tab you close stays closed after a restart

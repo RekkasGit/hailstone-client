@@ -19,6 +19,7 @@
 
 #include "render/frame_gen.h"
 #include "render/frame_gen_logic.h"
+#include "render/graphics_tier.h"
 #include "render/fsr3_upscaler.h"
 #include "render/pipeline_cache.h"
 #include "render/point_shadows.h"
@@ -345,6 +346,10 @@ public:
     const std::string& gpu_description() const { return gpu_description_; }
     // The GPU's name alone ("AMD Radeon RX 7900 XTX").
     const std::string& gpu_name() const { return gpu_name_; }
+    // The GPU in use, for the first start's graphics settings (render/graphics_tier.h); cpu_threads left 0.
+    const GpuProfile& gpu_profile() const { return gpu_profile_; }
+    // FSR 3.1's passes' mean GPU times (HAILSTONE_FSR3_TIMING); empty without them.
+    std::string fsr3_timing() const;
     // Each memory heap's use and budget as the allocator sees them (VMA's heap budgets), for the performance window.
     struct HeapUse {
         bool device_local = false; // VRAM, else system memory
@@ -684,6 +689,7 @@ private:
     bool screenshot_generated_ = false;
     std::string gpu_description_;
     std::string gpu_name_;
+    GpuProfile gpu_profile_;
 };
 
 } // namespace hailstone::render

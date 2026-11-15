@@ -677,6 +677,22 @@ void ClientApp::set_option_value(std::string_view o, int v) {
     config_.save(config_path_);
 }
 
+render::GpuProfile ClientApp::graphics_profile() const {
+    render::GpuProfile gpu = vk_.gpu_profile();
+    gpu.cpu_threads = std::thread::hardware_concurrency();
+    return gpu;
+}
+
+void ClientApp::detect_graphics_at_first_start() {
+    if (config_.get(render::kGraphicsTierKey)) return;
+    const render::GpuProfile gpu = graphics_profile();
+    const std::optional<render::GraphicsTier> applied = render::first_start_graphics(config_, gpu);
+    log::info("graphics: {} ({} MiB of its own memory, {} CPU threads) is {}{}", gpu.name, gpu.device_local_bytes >> 20,
+              gpu.cpu_threads, render::graphics_tier_name(render::detect_graphics_tier(gpu)),
+              applied ? ": its settings applied (a new install)" : "; the settings already there are kept");
+    config_.save(config_path_);
+}
+
 void ClientApp::apply_settings() {
     // display.lighting = modern (docs/graphics.md) | classic (the original's look); /lighting switches.
     lighting_mode_ = render::parse_lighting_mode(config_.get_string("display.lighting", "modern"))
