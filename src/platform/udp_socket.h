@@ -72,7 +72,10 @@ public:
 
     // Returns the datagram size, or nullopt when nothing is waiting or on
     // an error (see last_error()). A datagram larger than buffer is dropped
-    // on every platform, not returned cut short.
+    // on every platform, not returned cut short. A call skips at most
+    // kMaxSkippedPerRecv such drops and transient errors, then returns nullopt
+    // with no error.
+    static constexpr int kMaxSkippedPerRecv = 64;
     std::optional<std::size_t> recv_from(std::span<std::byte> buffer, Endpoint& from);
 
     // Waits until a datagram is readable or the timeout passes.

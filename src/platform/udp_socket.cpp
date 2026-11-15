@@ -18,6 +18,10 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+// mstcpip.h's; some SDKs lack it.
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
 #else
 #include <arpa/inet.h>
 #include <cerrno>
@@ -344,6 +348,13 @@ bool UdpSocket::open(Endpoint::Family family, std::string& error, const Endpoint
         close_native(s);
         return false;
     }
+#ifdef _WIN32
+    // No WSAECONNRESET for an ICMP port-unreachable on the next recvfrom: there is nothing to reset on UDP, and a
+    // flood of them would only cost recv_from passes (it still skips one if this fails).
+    BOOL report_resets = FALSE;
+    DWORD returned = 0;
+    WSAIoctl(s, SIO_UDP_CONNRESET, &report_resets, sizeof report_resets, nullptr, 0, &returned, nullptr, nullptr);
+#endif
     // The original client asks for 128 KiB socket buffers. The receive buffer is 2 MiB: the
     // server's files come in bursts of up to net::ServerFileSync::kWindow pieces (net/server_files.h), which overflow
     // 128 KiB between two service passes, and EQEmu's resends of what was dropped back off for seconds.
@@ -396,7 +407,10 @@ bool UdpSocket::send_to(const Endpoint& to, std::span<const std::byte> data) {
 std::optional<std::size_t> UdpSocket::recv_from(std::span<std::byte> buffer, Endpoint& from) {
     if (!is_open()) return std::nullopt;
     error_.clear();
-    for (;;) {
+    // What is skipped (a transient error, a truncated datagram, an unknown address family) is bounded per call, so a
+    // flood of them cannot keep the caller (which holds the session's lock) here: past the bound the call returns
+    // nothing, as if nothing were waiting, and the next pass reads on.
+    for (int skipped = 0; skipped < kMaxSkippedPerRecv; ++skipped) {
         sockaddr_storage ss{};
         SockLen len = sizeof ss;
 #ifdef _WIN32
@@ -429,6 +443,7 @@ std::optional<std::size_t> UdpSocket::recv_from(std::span<std::byte> buffer, End
         from = *ep;
         return static_cast<std::size_t>(n);
     }
+    return std::nullopt;
 }
 
 bool UdpSocket::wait_readable(std::chrono::milliseconds timeout) const {
