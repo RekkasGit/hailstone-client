@@ -1586,6 +1586,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
     case Op::CharInventory:
     case Op::ItemPacket:
     case Op::ItemLinkResponse:
+    case Op::EvolveItem:
     case Op::MoveItem:
     case Op::DeleteItem:
     case Op::DeleteCharge:

@@ -74,6 +74,19 @@ ui.window("Item Details", function()
   local title = eq.WindowTitle(IDW) or ""
   if W.begin("Item Details", { w = 1000, h = 860, title = title ~= "" and title or "Item", hints = HINTS }) then
     local x0, y0, x1, y1, w = W.area()
+    -- The description below is plain text in this pack; keep its evolution link reachable as a pad button.
+    local final = "Hailstone_EvolvingFinalResult"
+    if eq.ChildShown(IDW, final) == true then
+      local bh = T.px(56)
+      ui.SetCursorScreenPos(x0, y1 - bh)
+      T.font(20)
+      if T.button("##evolvingfinal", textOf(final), w, bh,
+          { disabled = eq.ChildState(IDW, final) == false }, pad) then
+        eq.ClickChild(IDW, final, "left")
+      end
+      T.unfont()
+      y1 = y1 - bh - T.px(12)
+    end
     ui.PushClipRect(x0, y0, x1, y1, true)
     local y = y0
     -- the icon (the stock window's icon button)

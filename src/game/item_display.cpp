@@ -331,13 +331,9 @@ std::string spell_description(const SpellData& s, const ItemDisplayContext& ctx)
 std::string evolving_text(const net::Item& item, const ItemDisplayContext& ctx) {
     const net::EvolvingInfo& e = item.evolving;
     std::string link;
-    if (e.evolve_level < e.evolve_max_level) {
-        net::Item bare = item;
-        bare.contents.erase(std::remove_if(bare.contents.begin(), bare.contents.end(),
-                                           [](const net::BagItem& b) { return b.index < 6; }),
-                            bare.contents.end());
-        std::uint32_t hash = item_link_hash(item_link_hash_input(bare));
-        link = std::format("<a WndNotify=\"27,1^{}^{}^{}^{}\">{}</a>", item.id, e.final_item_id, e.evolve_level, hash,
+    if (const auto request = evolving_final_result(item)) {
+        link = std::format("<a WndNotify=\"27,1^{}^{}^{}^{}\">{}</a>", request->item_id, request->final_item_id,
+                           request->level, request->hash,
                            str(ctx, 6194));
     }
     return str_args(ctx, 6146, {std::to_string(e.evolve_level), std::to_string(e.evolve_max_level),
@@ -523,6 +519,18 @@ std::int32_t weapon_damage_bonus(std::int32_t level, std::uint8_t player_class, 
         bonus += s;
     }
     return bonus;
+}
+
+std::optional<net::EvolvingFinalResult> evolving_final_result(const net::Item& item) {
+    const auto& e = item.evolving;
+    if (!item.is_evolving || item.id == 0 || e.evolve_level < 0 || e.evolve_level >= e.evolve_max_level)
+        return std::nullopt;
+    net::Item bare = item;
+    bare.contents.erase(std::remove_if(bare.contents.begin(), bare.contents.end(),
+                                       [](const net::BagItem& b) { return b.index < 6; }),
+                        bare.contents.end());
+    return net::EvolvingFinalResult{item.id, e.final_item_id, static_cast<std::uint32_t>(e.evolve_level),
+                                   item_link_hash(item_link_hash_input(bare))};
 }
 
 ItemDisplay build_item_display(const net::Item& item, const ItemDisplayContext& ctx) {

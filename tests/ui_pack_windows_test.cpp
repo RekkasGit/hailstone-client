@@ -3209,6 +3209,94 @@ TEST_CASE("UI packs (gamepad): cached window contents follow a change") {
     ImGui::DestroyContext(ctx);
 }
 
+TEST_CASE("UI packs (gamepad): Final Result stays reachable and dispatches only an enabled explicit click") {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
+    hailstone::test::ScratchDir scratch("ui_pack_evolving_final_test");
+    fs::path dir = scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* pixels = nullptr;
+    int width = 0, height = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    {
+        Session s(dir, "gamepad");
+        s.frames(2);
+        lua_State* L = s.lua.state();
+        auto run = [&](const char* code) {
+            INFO(code);
+            const int result = luaL_dostring(L, code);
+            INFO((lua_tostring(L, -1) ? lua_tostring(L, -1) : ""));
+            REQUIRE(result == LUA_OK);
+            lua_settop(L, 0);
+        };
+        run(R"lua(
+            finalTest = { shown = true, enabled = true, click = false, calls = 0, drawn = 0 }
+            local WindowShown, ChildShown = eq.WindowShown, eq.ChildShown
+            local WindowText, ChildState, ClickChild = eq.WindowText, eq.ChildState, eq.ClickChild
+            eq.WindowShown = function(win, ...)
+              if win == "ItemDisplayWindow" then return true end
+              return WindowShown(win, ...)
+            end
+            eq.ChildShown = function(win, child, ...)
+              if win == "ItemDisplayWindow" and child == "Hailstone_EvolvingFinalResult" then
+                return finalTest.shown
+              end
+              return ChildShown(win, child, ...)
+            end
+            eq.ChildState = function(win, child, ...)
+              if win == "ItemDisplayWindow" and child == "Hailstone_EvolvingFinalResult" then
+                return finalTest.enabled
+              end
+              return ChildState(win, child, ...)
+            end
+            eq.WindowText = function(win, child, ...)
+              if win == "ItemDisplayWindow" then
+                if child == "Hailstone_EvolvingFinalResult" then return "Final Result" end
+                if child == "ItemDescription" then return ("A very long item description. "):rep(500) end
+              end
+              return WindowText(win, child, ...)
+            end
+            eq.ClickChild = function(win, child, button, ...)
+              if win == "ItemDisplayWindow" and child == "Hailstone_EvolvingFinalResult" then
+                assert(button == "left")
+                finalTest.calls = finalTest.calls + 1
+                return true
+              end
+              return ClickChild(win, child, button, ...)
+            end
+            local InvisibleButton = ui.InvisibleButton
+            ui.InvisibleButton = function(id, w, h, flags, ...)
+              if id == "##evolvingfinal" then
+                finalTest.drawn = finalTest.drawn + 1
+                assert((flags & ui.ButtonFlags.EnableNav) ~= 0, "Final Result must allow pad focus")
+                local x, y = ui.GetCursorScreenPos()
+                local wx, wy = ui.GetWindowPos()
+                local ww, wh = ui.GetWindowSize()
+                assert(x >= wx and y >= wy and x + w <= wx + ww and y + h <= wy + wh,
+                  "Final Result must remain inside the item window")
+                InvisibleButton(id, w, h, flags, ...)
+                return finalTest.click
+              end
+              return InvisibleButton(id, w, h, flags, ...)
+            end
+        )lua");
+        s.frames(2);
+        run("assert(finalTest.drawn == 2 and finalTest.calls == 0)");
+        run("finalTest.click = true");
+        s.frames(1);
+        run("assert(finalTest.calls == 1)");
+        run("finalTest.enabled = false");
+        s.frames(1);
+        run("assert(finalTest.calls == 1) finalTest.shown = false finalTest.drawn = 0");
+        s.frames(1);
+        run("assert(finalTest.calls == 1 and finalTest.drawn == 0)");
+        CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
 // The modern item display reads the window's info lines and stat grid again only when the item changes (or every
 // quarter second): another item shows at once, and what it draws is what the window holds.
 TEST_CASE("UI packs (modern): an item display draws the shown item's stats, and another item at once") {

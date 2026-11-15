@@ -1454,6 +1454,16 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   such slot (a primary or secondary held, the other hand keeping its item unless a two-hander is involved, the range
   item in the left hand, armour by its material and tint), else alone when its IDFile is not IT63 / IT64, else "No
   item preview available.". Hailstone draws the view with its own orbit camera.
+- An incomplete evolving item's Final Result link asks the server for inspection with OP_EvolveItem action 4
+  (`CItemDisplayWnd::WndNotification @0x6ae870` → `0x69ef60`). The request preserves the source/final template ids,
+  current level, unaugmented link hash and native !Shift flag. The modern pack follows the description link;
+  the gamepad pack also provides a focusable Final Result button. A missing final-id hint is sent as received:
+  a server that resolves the family from the source can answer it, while stock servers may need a nonzero hint.
+  The reply uses the ordinary item display and changes no inventory. Received action-0 updates match both halves
+  of the persistent instance id, refresh progress and received activation state, and refresh an open display at
+  once. Progress above 100% is retained (a large XP reward can overshoot before replacement). Neither reaching
+  nor exceeding 100% advances a level locally: the server must send the evolved replacement item.
+  Packet, mock-server, bridge and gamepad UI tests cover this path; live evolution and controller acceptance remain open.
 - The stats-disabled flags on items (`game::update_stats_disabled`): set from the UseItem (0x13) and Ornament (0x15)
   game features and the OP_SendMembership entries, on the worn items before the stat sums and on a shown item; a
   disabled child adds nothing to SumStat unless its owner is disabled too. EQEmu sends UseItem -1 and Ornament 1, so

@@ -15,6 +15,7 @@
 #include "game/bag_move.h"
 #include "game/distance.h"
 #include "game/inventory.h"
+#include "game/item_display.h"
 #include "game/item_options.h"
 #include "game/merchant.h"
 #include "game/quantity_dialog.h"
@@ -92,6 +93,47 @@ void GameConnection::handle_item(Op op, const AppPacket& p) {
         chat(ChatEvent::Kind::System, strings_.format(id, args));
     };
     switch (op) {
+    case Op::EvolveItem: {
+        // Native receive @0x461120: action 0 changes the received instance's progress/activation only. Crossing
+        // 100% never grants a level or replaces a template locally: the server sends it through OP_ItemPacket.
+        const auto update = decode_evolving_item_update(p);
+        if (!update) break;
+        const auto matches = [&](const Item& it) {
+            const auto unique_id = static_cast<std::uint64_t>(it.instance_id) |
+                                   (static_cast<std::uint64_t>(it.parcel_item_id) << 32);
+            return it.is_evolving && unique_id == update->unique_id &&
+                   (it.evolving.progress != update->percentage || it.evolving.activated != update->activated);
+        };
+        const auto contains = [&](auto&& self, const Item& it) -> bool {
+            if (matches(it)) return true;
+            return std::any_of(it.contents.begin(), it.contents.end(),
+                               [&](const BagItem& child) { return self(self, child.item); });
+        };
+        std::vector<Item> changed;
+        for (const auto& [key, stored] : inventory_.items()) {
+            (void)key;
+            if (!contains(contains, stored)) continue;
+            Item copy = stored;
+            auto apply = [&](auto&& self, Item& it) -> bool {
+                bool touched = false;
+                if (matches(it)) {
+                    it.evolving.progress = update->percentage;
+                    it.evolving.activated = static_cast<std::uint8_t>(update->activated);
+                    item_refreshes_.push_back(it);
+                    if (item_refreshes_.size() > 16) item_refreshes_.pop_front();
+                    touched = true;
+                }
+                for (auto& child : it.contents) touched = self(self, child.item) || touched;
+                return touched;
+            };
+            if (apply(apply, copy)) changed.push_back(std::move(copy));
+        }
+        for (auto& it : changed) {
+            const auto at = it.slot;
+            inventory_.put(at, std::move(it));
+        }
+        break;
+    }
     case Op::CharInventory:
         if (auto items = decode_char_inventory(p)) {
             log::info("inventory: {} items ({} bytes)", items->size(), p.data.size());
@@ -1032,6 +1074,13 @@ void GameConnection::end_loot() {
 }
 
 // ---------------------------------------------------------------- links
+
+bool GameConnection::request_evolving_final_result(const Item& item, bool shift) {
+    if (state_ != ConnectionState::InZone) return false;
+    auto request = game::evolving_final_result(item);
+    if (request) request->display_flags = shift ? 0u : 1u;
+    return request && send_zone(encode(*request));
+}
 
 void GameConnection::request_item(const game::ItemLink& link) {
     if (state_ != ConnectionState::InZone) return;

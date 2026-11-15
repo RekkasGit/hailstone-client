@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <charconv>
 #include <cmath>
+#include <format>
 #include <string>
 
 #include <imgui.h>
@@ -101,16 +102,26 @@ public:
     }
 
     bool stml_link(EqHost& host, std::string_view id, int message, std::string_view data) override {
-        // XWM_LINK (27) from the window's STML boxes (the socket rows' augment names): "a^b"; a = 0 shows child
-        // b's display (b < 6). (a = 1, Send_OP_EvolveItem, is for evolving items, not kept here.)
-        (void)id;
+        // XWM_LINK (27): action 0 inspects an augment, action 1 requests the evolving item's Final Result.
         if (message != 27) return false;
+        if (data.starts_with("1^")) {
+            const auto* it = item(host);
+            const auto request = it ? game::evolving_final_result(*it) : std::nullopt;
+            if (id != "ItemDescription" || !request || !host.conn ||
+                data != std::format("1^{}^{}^{}^{}", request->item_id, request->final_item_id,
+                                    request->level, request->hash))
+                return false;
+            return host.conn->request_evolving_final_result(*it, ImGui::GetIO().KeyShift);
+        }
         auto caret = data.find('^');
         if (caret == std::string_view::npos) return false;
         int a = -1, b = -1;
-        std::from_chars(data.data(), data.data() + caret, a);
-        std::from_chars(data.data() + caret + 1, data.data() + data.size(), b);
-        if (a == 0 && b >= 0 && b < game::kAugSockets) show_augment(host, b, false);
+        const auto action = std::from_chars(data.data(), data.data() + caret, a);
+        const auto socket = std::from_chars(data.data() + caret + 1, data.data() + data.size(), b);
+        if (action.ec != std::errc() || action.ptr != data.data() + caret || socket.ec != std::errc() ||
+            socket.ptr != data.data() + data.size() || a != 0 || b < 0 || b >= game::kAugSockets)
+            return false;
+        show_augment(host, b, false);
         return true;
     }
 
@@ -157,6 +168,13 @@ public:
             std::string solvent = host.conn ? host.conn->augment_solvent_text(static_cast<std::uint32_t>(window_key(host)))
                                             : std::string();
             if (!solvent.empty()) *out.text += solvent + "<BR>";
+            return;
+        }
+        if (id == "Hailstone_EvolvingFinalResult") {
+            const auto* it = item(host);
+            out.shown = it && game::evolving_final_result(*it).has_value();
+            out.enabled = host.conn && host.conn->state() == net::ConnectionState::InZone && *out.shown;
+            out.text = host.conn->strings().format(6194, {});
             return;
         }
         if (int n = socket_of(id); n >= 0) {
@@ -243,6 +261,10 @@ public:
     }
 
     bool click(EqHost& host, std::string_view id, std::string_view button, bool outside) override {
+        if (id == "Hailstone_EvolvingFinalResult" && button == "left") {
+            const auto* it = item(host);
+            return it && host.conn && host.conn->request_evolving_final_result(*it, ImGui::GetIO().KeyShift);
+        }
         if (id == "IDW_ModButton" && button == "left") {
             // WndNotification @006ae945: the Modified view, then BuildItemInfo(item, 0) @006ae95b.
             modified_ = !modified_;
@@ -389,6 +411,9 @@ private:
         // The augments are part of the key: a refreshed item (same serial) with a new augment builds again at once.
         std::string sig = it->serial;
         for (const auto& c : it->contents) sig += "/" + std::to_string(c.index) + ":" + std::to_string(c.item.id);
+        if (it->is_evolving)
+            sig += std::format("/e:{}:{}:{}:{}:{}", it->evolving.final_item_id, it->evolving.evolve_level,
+                               it->evolving.evolve_max_level, it->evolving.progress, it->evolving.activated);
         if (cached_ && cached_id_ == it->id && cached_serial_ == sig && now - built_ms_ < 1000) return &*cached_;
         const net::GameConnection& c = *host.conn;
         // BuildItemInfo's 0x7b28a0 on the shown item (the stats-disabled bytes: game/augments.h), with

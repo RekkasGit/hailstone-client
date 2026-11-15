@@ -2,6 +2,14 @@
 
 What the client does not implement yet, or implements with an approximation it cannot confirm. Entries are removed once settled.
 
+## Evolving-item inspection
+
+- Final Result's native action-4 layout and action-0 instance progress updates were checked against RoF2. Packet,
+  mock-server, bridge and Lua-pack tests cover read-only inspection, identity matching and server-supplied
+  replacement levels. Live acceptance still needs owned/linked item inspection, progress through an actual
+  evolution and physical controller input. A zero final-id hint is preserved; a stock server that uses only
+  that hint may not answer, while servers that resolve the family from the source can return the final form.
+
 ## Adventures (LDoN)
 
 - Request, stats and leaderboard opcodes/offsets, native ten-second refresh guards, twenty-unit inclusive recruiter range, minute-ceiling timers and tied ranking were checked against the stock RoF2 executable; stock EQEmu provides the fixed incoming layouts. Live request/offer/entry/completion/leave, cross-zone synchronization, actual server standings and physical controller acceptance remain untested.
@@ -244,6 +252,12 @@ The experimental texture broker (docs/graphics.md "Shared GPU textures", docs/re
 - Decoded waves not asked for over two zone changes are freed (`SoundLibrary::drop_idle_waves`; the global waves stay), so a freed wave's next play is skipped while it decodes again, as any wave's first play is. The original's wave cache policy is not traced.
 
 ## UI
+
+- With ImGui debug assertions enabled, the all-pack smoke test (`ui_pack_windows_test.cpp`, "every script of the
+  shipped UIs loads") aborts in the gamepad pass on `ErrorCheckUsingSetCursorPosToExtendParentBoundaries`.
+  It also reproduces with the unchanged upstream gamepad UI; the item display is not open in that fixture.
+  The offending window's cursor layout still needs tracing. Release-mode Windows tests pass; retain assertions
+  when reproducing this gap rather than treating the aborted full Debug sanitizer run as a pass.
 
 - The modern Quest Journal and independent Quest Tracker are covered by packet-driven and headless UI tests, but quest updates across live zoning, timed quest expiry, shared roster updates and membership actions, and mouse move/resize have not been checked in a live session. The journal preserves the server's objective group boundaries as separators; the meaning of a particular quest's groups is not inferred or labelled as numbered stages. A live quest session with a packet capture would settle those acceptance cases.
 

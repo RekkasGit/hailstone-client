@@ -76,6 +76,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [ ] Arena and Nektulos with a live folder: its arena.s3d and nektulos.s3d win over the revamped .eqg, but PEQ's Arena (its only row) and Nektulos version 1 (expansion 10 on) run the revamp: their spawns stand on the live .eqg, not the .s3d (unknowns.md, Movement and collision).
 
 ### Items and commerce
+- [x] Evolving-item Final Result inspection: native action-4 request, ordinary read-only item reply, received instance progress updates and a focusable gamepad action; packet, bridge, mock-server and Lua-pack coverage.
+- [ ] Evolving-item live acceptance: inspect Final Result from owned and linked items, receive progress through 100%, confirm the server's replacement level/template and use the gamepad action with a physical controller.
 - [x] Stock achievements: bounded compressed catalog, primary state and counters, categories/search/status filters, linked details, nearby-player comparisons, explicit reward views and refresh, both UI packs; codec/model/bridge/mock-server and actual Lua-pack fixtures. Live use reported generally working (2026-11-12); targeted acceptance remains below.
 - [x] Achievement browser usability: collapsible categories with deduplicated completion totals, compact status/points rows, inline selected objectives and reward actions, readable dates, exact full-width count text, and responsive layouts in both packs. Linked details stay independent; no request runs from filtering or drawing.
 - [x] Catalog reloads retain the decoding schema of in-flight comparison/link requests: valid retired replies drain without updating newer views, even after definition/component changes; malformed replies and timeouts retain their guards.
@@ -257,6 +259,8 @@ Fog, weather, sky, EQG surfaces, lighting and spell particles are a look-and-fee
 - [ ] A Hailstone release whose `core` package ships a plugin folder an add-on already installed would write over it: the core install does not yet skip add-ons' folders (only the optional `plugin-<name>` packages are skipped).
 
 ## 3. UI
+
+- [ ] Trace and fix the upstream gamepad all-pack smoke test's cursor-extent assertion with ImGui debug checks enabled (docs/unknowns.md "UI").
 
 - [x] Group role controls in both packs: right-click member names or the player's own name (Y on a gamepad Group window row), with server-confirmed role icons beside names in the Group and Player windows; leader-only Main Tank / Main Assist / Puller changes, with mercenaries restricted to tank. Unit and mock-server coverage; live gameplay remains unverified.
 - [x] Modern AA window: aligned headers and rows at the dialog's scale, current-frame column bounds, saved column resizing, clipped cells and Reset columns (UI input tests; live acceptance pending).
