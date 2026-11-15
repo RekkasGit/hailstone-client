@@ -240,6 +240,8 @@ public:
     bool frame_gen_active() const { return frame_gen_ && overlay_.image != VK_NULL_HANDLE; }
     // Presented frames per real frame over the last frame: 2 when it generated one, else 1 (the performance window).
     std::uint32_t frames_presented() const { return presented_last_; }
+    // Whether the last frame's second image was an in-between frame (else, with two, the real frame again).
+    bool frame_generated() const { return fg_generated_last_; }
     // Frame generation's counters, pacing and GPU time (the performance window).
     FrameGenStats frame_gen_stats() const;
     // Scene pipelines are made for the scene's colour attachments: the colour alone, or under a temporal upscaler
@@ -549,7 +551,9 @@ private:
     bool overlay_open_ = false;    // begin_overlay rendered into overlay_ this frame
     bool fg_temporal_ = false;     // this frame ran the temporal upscaler
     bool fg_history_kept_ = false; // and its history went on from the last frame's
+    bool fg_camera_steady_ = true; // and the camera moved less than kFrameGenMaxStep since the last frame
     std::uint32_t presented_last_ = 1;
+    bool fg_generated_last_ = false;
     bool frame_gen_fallback_logged_ = false;
     bool frame_gen_requested_ = false; // SceneOptions::frame_gen as asked (scene_options_ drops it under FSR 1)
     FrameGenStats fg_stats_;           // counters and the last measurements (frame_gen_stats fills in the rest)

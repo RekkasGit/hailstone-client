@@ -136,7 +136,9 @@ TEST_CASE("temporal: camera cuts drop the history") {
     // A frame's running or turning keeps it.
     CHECK_FALSE(camera_cut(a.view(), camera_at({1003.0f, 2001.0f, 50.0f}, 0.35f, 0.02f).view()));
     // A teleport, a snap round.
-    CHECK(camera_cut(a.view(), camera_at({1100.0f, 2000.0f, 50.0f}, 0.3f, 0.0f).view()));
+    // The chase camera pushed in by a tree (tens of units in a frame) is followed; a teleport is not.
+    CHECK_FALSE(camera_cut(a.view(), camera_at({1060.0f, 2000.0f, 50.0f}, 0.3f, 0.0f).view()));
+    CHECK(camera_cut(a.view(), camera_at({1300.0f, 2000.0f, 50.0f}, 0.3f, 0.0f).view()));
     CHECK(camera_cut(a.view(), camera_at({1000.0f, 2000.0f, 50.0f}, 1.3f, 0.0f).view()));
     CHECK(camera_cut(a.view(), camera_at({1000.0f, 2000.0f, 50.0f}, 0.3f, 0.9f).view()));
     // A broken matrix is a cut, not a kept history.

@@ -782,7 +782,7 @@ int ClientApp::run() {
         lap.mark("ImGui render");
         perf_ui_.mark(FramePhase::Record);
         vk_.end_frame(*f);
-        perf_ui_.set_presented(vk_.frames_presented());
+        perf_ui_.set_presented(vk_.frames_presented(), vk_.frame_generated());
         perf_ui_.mark(FramePhase::Present);
         settle_frame_.scene = in_game;
         update_zone_settle();

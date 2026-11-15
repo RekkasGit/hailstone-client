@@ -145,7 +145,8 @@ own first (Roadmap 6). `render/temporal.h` holds the maths, `VkContext::begin_ov
 
 The history is dropped when the scene targets are made again (a resize, a new render scale), on zone-in
 (`VkContext::reset_history`), on a frame without the temporal path, and when the camera jumps between two frames
-(`render::camera_cut`: more than 25 units, or a turn of more than 0.5 radians: a teleport, a camera switch).
+(`render::camera_cut`: more than 200 units, or a turn of more than 0.5 radians: a teleport, a camera switch; not the
+chase camera pushed in by a tree and out again, tens of units in a frame, which the motion follows exactly).
 
 Open (docs/todo.md): a negative texture LOD bias below a render scale of 100; the bloom from the resolved picture;
 the held items and other attachments drawn as characters without a motion key.
@@ -225,8 +226,11 @@ holds the decisions (unit tested), `render::FrameGen` (`src/render/frame_gen.cpp
    together, the in-between frame presented first. FIFO is forced whatever `display.vsync` says, and the swapchain
    gets one image more (`swapchain_image_count`, min + 2): waiting for the second image is what holds the game to
    half the refresh, so the two presents alternate evenly. With fewer images (a surface's maximum) the second is
-   taken only when one is free. No frame is made across a cut, a reset, a resize or the first frame after any of them
-   (`frame_gen_ready`): the real frame is presented alone.
+   taken only when one is free. No frame is made across a cut, a reset, a resize or the first frame after any of them,
+   nor across a camera snap of more than 8 units (`kFrameGenMaxStep`: the chase camera pushed in by a tree, or
+   zoomed; running moves it a unit or two a frame, and a frame half way through a snap uncovers half the scene at
+   once): `frame_gen_ready`. The real frame is then shown twice (`frame_gen_repeat`, as kettle-framegen shows the
+   nearer real frame), keeping the pace of two images a frame; alone, it was a hitch on top of the cut.
 
 Cost and limits: two small compute passes at the scene's size and two full-screen draws at the view's per real frame,
 plus one composite more. The game reacts up to one real frame later. A moving thing the depth does not hold (glass,
