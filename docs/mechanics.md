@@ -820,15 +820,18 @@ work the same in both UI packs:
 | Trainer | CTrainWnd::OnProcessFrame @0x7812a0 | 500 ms | |
 | Adventure recruiter | AdventureMgr_Process @0x41fa80 | more than 500 ms since the state was set or last checked | only in states 1 and 2: the recruiter's words (OP_AdventureInfo) or an offer (OP_AdventureDetails) up; on an adventure the window stays |
 | Mercenary liaison | the window's observer 0x6eb560 | every update (see docs/unknowns.md) | only with a liaison id set |
-| NPC hand-in | CTradeWnd::OnProcessFrame @0x780b50 | 500 ms | the reach is the NPC's avatar height plus 20 |
+| NPC hand-in or player trade | CTradeWnd::OnProcessFrame @0x780b50 | 500 ms | the reach is the partner's avatar height plus 20; exactly that distance stays open |
 | World tradeskill station | CContainerMgr::Process @0x65d740 (0x4dc160) | more than 500 ms since the last check | the ground item's 3D distance, at most 20; a missing item closes it too |
 
 Closing goes through each window's normal close: the merchant's OP_ShopEnd, the buyer's end of inspection, the
 trainer's OP_GMEndTraining, the trade's OP_CancelTrade (the server returns what was offered), the station's empty
 OP_ClickObjectAction (the server returns what is left in it). Hiding the adventure recruiter's window declines an
 offer that is up (CAdventureRequestWnd::AboutToHide @0x618420, 0x41fe10: OP_LDoNButton 0). Closing a tribute master
-leaves active benefits, favour and outstanding donation replies alone. The trainer and the hand-in also close when
-the NPC dies (Handle_OP_Death @0x532b50 closes the training window and cancels a trade with the dying spawn).
+leaves active benefits, favour and outstanding donation replies alone. The trainer and trades also close when
+their partner dies (Handle_OP_Death @0x532b50 closes the training window and cancels a trade with the dying spawn).
+Player trades use the same 3D distance check as hand-ins, whether the local player or partner moves. Only an open
+trade is checked; a request still waiting for its answer is not. Cancellation clears the offer without crediting
+items or coin locally; the server's item packets and OP_MoneyUpdate return them.
 
 A late open reply cannot show a window out of reach: the tribute master's (CTributeMasterWnd::AboutToShow @0x7878b0)
 and the trainer's (Handle_OP_GMTraining @0x4b49c0) apply the same 20-unit check to the answer. A training request or
@@ -849,8 +852,8 @@ Hailstone's model of IsItemPending (GameConnection::transact_state) counts the r
 casts, memorizing, augments, the guild bank's). A tribute donation is not one of them in the original either: its
 senders (Send_OP_TributeItem @0x484190, Send_OP_GuildTributeDonateItem @0x484870) do not raise it.
 
-Not done yet: CTradeWnd checks player trades the same way (and skips the check while the merchant window shows its
-page handler 2); Hailstone checks hand-ins only.
+Not done yet: CTradeWnd skips the trade-distance check while the merchant window shows its page handler 2;
+Hailstone does not apply that exception.
 
 ## The merchant's "Show only items I can use"
 

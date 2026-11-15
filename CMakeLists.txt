@@ -1105,6 +1105,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/plugin_tcp_test.cpp
     tests/merchant_buy_test.cpp
     tests/npc_interaction_distance_test.cpp
+    tests/player_trade_distance_test.cpp
     tests/world_container_distance_test.cpp
     tests/merchant_usable_test.cpp
     tests/ascii_case_test.cpp

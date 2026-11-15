@@ -86,7 +86,8 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] NPC service distance closure and dependent quantity/confirmation cleanup in both UI packs; every container closes with the bank (unit, UI and mock-server coverage; docs/mechanics.md "Leaving an NPC interaction").
 - [x] World tradeskill station distance closure in recipe, Experiment and hidden modes, out-of-reach open replies and busy replies, and world-only quantity/mold/batch cleanup; carried tradeskill bags stay when only the station closes.
 - [x] The service windows' ranges and timers checked against the original (docs/mechanics.md "Leaving an NPC interaction"); still open: the mercenary liaison's check cadence (docs/unknowns.md) and walking away from each service live.
-- [ ] Trades with players: CTradeWnd::OnProcessFrame @0x780b50 cancels them beyond the partner's avatar height + 20 too (hand-ins only so far).
+- [x] Trades with players: CTradeWnd::OnProcessFrame @0x780b50 cancels them beyond the partner's avatar height + 20 on the same 500 ms check as hand-ins; outstanding items and coin return through the server (unit and mock-server coverage).
+- [ ] Trades with players: live separation with outstanding items and coin; the merchant page-handler-2 exception (docs/mechanics.md "Leaving an NPC interaction").
 - [x] Partial-stack looting asks the quantity (EQEmu ignores it); Link All; the loot music (entry 5 has no asset).
 - [x] Ctrl + right-click bag swapping; Ctrl+click bag contents' slot order and refusal text (game/bag_move).
 - [x] The tradeskill window: favourites, request waits, combine checks, trivial colours (experiment and auto-combine were already in).
