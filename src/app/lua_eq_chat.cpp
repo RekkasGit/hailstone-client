@@ -26,6 +26,7 @@
 #include "core/game_dir.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/path_utf8.h"
 #include "game/chat_windows.h"
 #include "game/combat.h"
 #include "game/eq_names.h"
@@ -366,7 +367,7 @@ void set_user_color(EqHost& host, int index, std::uint32_t rgb) {
     if (!save_chat_settings(chat_ini, "TextColors",
                             {{red, std::to_string((rgb >> 16) & 0xff)},
                              {green, std::to_string((rgb >> 8) & 0xff)},
-                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", chat_ini.string());
+                             {blue, std::to_string(rgb & 0xff)}})) log::warn("cannot write {}", path_utf8(chat_ini));
 }
 
 // CChatWindowManager::GetRGBAFromIndex @0x6508a0: the basic colours below 256, the eqclient.ini user colours from 256

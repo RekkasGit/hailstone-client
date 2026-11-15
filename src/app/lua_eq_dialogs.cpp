@@ -16,6 +16,7 @@
 #include <imgui.h>
 
 #include "app/actions_ui.h"
+#include "core/path_utf8.h"
 #include "game/coords.h"
 #include "game/chat_windows.h"
 #include "game/eq_names.h"
@@ -581,8 +582,8 @@ private:
 // What a saved report's windows show (BugReportWindow after Send, CrashReportWindow): its file, size and what did
 // not fit, and the buttons that open its folder and copy its forum post.
 void saved_report_child(const SavedBugReport& saved, std::string_view id, Child& out) {
-    if (id == "SavedName") out.text = saved.zip.filename().string();
-    else if (id == "SavedFolder") out.text = saved.zip.parent_path().string();
+    if (id == "SavedName") out.text = path_utf8(saved.zip.filename());
+    else if (id == "SavedFolder") out.text = path_utf8(saved.zip.parent_path());
     else if (id == "SavedInfo")
         out.text = saved.size < 1024 * 1024 ? std::format("{} KB", (saved.size + 1023) / 1024)
                                             : std::format("{:.1f} MB", static_cast<double>(saved.size) / (1024.0 * 1024.0));
