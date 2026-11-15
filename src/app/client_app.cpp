@@ -286,22 +286,31 @@ int ClientApp::run() {
                     return std::nullopt;
                 });
         }
-        if (actor_emitters_ && in_world && conn_ && actor_renderer_) {
+        if (actor_emitters_ && actor_renderer_ && ((in_world && conn_) || pre_game)) {
             // The drawn spawns' own emitters, on the pose drawn last frame.
+            auto library = actor_library_;
+            actor_emitters_->set_texture_reader([library](const std::string& name) {
+                return library ? library->read_file(name) : std::nullopt;
+            });
             actor_emitter_list_.clear();
-            for (const auto& [id, spawn] : conn_->world().spawns)
+            const auto& world = pre_game ? *pre_game_world_ : conn_->world();
+            for (const auto& [id, spawn] : world.spawns)
                 if (const auto* mesh = actor_renderer_->drawn_mesh(id); mesh && !mesh->emitters.empty())
                     actor_emitter_list_.push_back({id, mesh, actor_renderer_->drawn_standing(id),
                                                    actor_renderer_->drawn_alpha(id)});
             // The missiles' (a spell bolt's flames: its model's own emitters, app/world_objects.h).
-            const WorldObjects* objects = world_objects_.get();
-            if (objects)
+            const WorldObjects* objects = in_world ? world_objects_.get() : nullptr;
+            if (objects) {
                 for (const auto& m : objects->missile_actors()) actor_emitter_list_.push_back({m.id, m.emitters});
+                for (const auto& o : objects->object_actors()) actor_emitter_list_.push_back({o.id, o.emitters});
+            }
             const render::ActorRenderer* actors = actor_renderer_.get();
             actor_emitters_->update(dt, actor_emitter_list_,
                                     [actors, objects](std::uint32_t id, int bone, glm::mat4& w) {
                                         if (id & WorldObjects::kMissileActorBit)
                                             return objects && bone == 0 && objects->missile_transform(id, w);
+                                        if (id & WorldObjects::kObjectActorBit)
+                                            return objects && bone == 0 && objects->object_transform(id, w);
                                         return actors->drawn_bone(id, bone, w);
                                     },
                                     camera_.position,
@@ -339,6 +348,8 @@ int ClientApp::run() {
         glm::vec4 horizon_haze(0.0f); // the sky's blend into the haze (render::SkyFrame)
         perf_ui_.mark(FramePhase::Prepare);
         update_view_area();
+        for (auto& slot : previews_)
+            if (slot.view) slot.view->prepare(dt);
         // A frame not drawn (the background frame rate, or a minimised window) runs as one the GPU had no image for.
         const bool screenshot_frame = !opts_.screenshot.empty() && opts_.frames && frame == opts_.frames - 1;
         auto f = pace.draw || screenshot_frame ? vk_.begin_frame_commands() : std::nullopt;
@@ -540,7 +551,10 @@ int ClientApp::run() {
                     neighbours_->set_debug_tint(neighbour_tint_);
                 }
                 frame_lighting_ = lighting;
-                if (actor_renderer_) actor_renderer_->set_lighting(lighting);
+                if (actor_renderer_) {
+                    actor_renderer_->set_lighting(lighting);
+                    actor_renderer_->set_time(t);
+                }
                 if (world_objects_) {
                     world_objects_->set_lighting(lighting);
                     world_objects_->set_time(t); // the zone renderer's clock: flames on doors flicker in step
@@ -596,7 +610,7 @@ int ClientApp::run() {
             }
         }
         for (auto& slot : previews_)
-            if (slot.view) slot.view->record(*f, dt); // the item previews' own passes (their images)
+            if (slot.view) slot.view->record(*f); // the item previews' own passes (their images)
         if (web_textures_) { // the browser tabs' changes; without a browser, only the retired textures reaped
             if (browser_) web_textures_->record(*f, *browser_);
             else web_textures_->collect();
@@ -769,7 +783,7 @@ int ClientApp::run() {
                                      std::min(lit.far_plane, 1500.0f), render::kParticleGlow);
             if (modern && spell_bolts_ && in_game)
                 spell_bolts_->draw(*f, vp, camera_.position, t, frame_lighting_, render::kParticleGlow);
-            if (actor_emitters_ && in_game)
+            if (actor_emitters_ && scene)
                 actor_emitters_->draw(*f, vp, camera_.view(), modern ? render::kParticleGlow : 1.0f, particle_lighting);
             if (spell_particles_ && in_game)
                 spell_particles_->draw(*f, vp, camera_.view(), lighting_mode_ == render::LightingMode::Modern ? render::kParticleGlow : 1.0f,

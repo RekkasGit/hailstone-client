@@ -395,10 +395,11 @@ again. The game's file drawn by an opaque material keeps its colour.
 Animated textures (a classic SIMPLESPRITEDEF with more than one frame and a delay, `docs/formats/wld.md` 0x04) show
 frame `(t / delay) mod count`, `render::texture_frame`, on the one clock the zone renderer's effects use (seconds since
 the client started). Every frame is uploaded, in the zone (`ZoneRenderer`) and on the doors and ground objects
-(`ObjectRenderer::set_time`, from `WorldObjects`). The classic flames are this: `FIRE1_SPRITE` is fire1..fire4 at
+(`ObjectRenderer::set_time`, from `WorldObjects`) and on characters and their equipment (`ActorRenderer::set_time`).
+Every frame remains referenced through texture eviction and zone handoff, and shadow alpha tests select the same
+frame as the colour pass. The classic flames are this: `FIRE1_SPRITE` is fire1..fire4 at
 200 ms in every campfire, torch and brazier, whether the zone places it (ecommons' CAMPFIRE) or the server does as a
-door (ecommons' GRATE beside Gaddius, the bazaar's IT78 campfire from gequip.s3d). The characters' items (a torch in
-a hand) still draw their first frame.
+door (ecommons' GRATE beside Gaddius, the bazaar's IT78 campfire from gequip.s3d).
 
 ## Fire
 
@@ -444,8 +445,9 @@ of its own, in its hue (EQG zones such as argath and commonlands have flames and
 place or size, or one more than 1000 units wide or tall (a placement scaled absurdly in a broken zone file), is dropped
 before the merge: its neighbour search would walk billions of grid cells.
 
-Not yet: a torch held in a hand (its flame is a gequip particle cloud, which is not loaded) and particle clouds on
-server doors (never spawned) still show no flame.
+Held torches and equipment-backed server objects keep their authored animated materials or WLD particle clouds.
+These moving clouds are drawn by `ActorEmitters`, rather than replaced by the zone's procedural flame geometry.
+Server doors resolved only from the zone's flattened object meshes still lack per-actor cloud metadata.
 
 ## Particles
 
@@ -1158,6 +1160,11 @@ hole there.
 
 ## EQG surface maps
 
+Held EQG equipment retains its authored normal, specular and environment maps in modern lighting, through the same
+actor surface path as armour. For example, the cleric epic shield's pearl environment map and strength travel with
+its mesh instead of being discarded when the item is loaded. `AddAlpha` actor and object materials retain their
+authored unlit, unfogged state in both lighting modes.
+
 EQG zone materials of the opaque, Alpha and Chroma classes name a tangent-space normal map (`e_TextureNormal0`,
 uncompressed A8R8G8B8 `_n.dds` files) and, by their shader, a specular or reflective term. The classic renderer binds the
 normal map only with bump mapping on, and its multi-pass lights are what it bumps; the
@@ -1173,20 +1180,30 @@ modern lighting always uses them (`shaders/zone.frag` `mapped_normal`, `surface_
 - **Reflection** (`CE1`, `CBSGE1` with `e_fEnvMapStrength0` > 0, read doubled): the sky
   (`sky_reflection`) in place of the material's environment map, weighted by Fresnel.
 
-The `CBGG1` / `CBSG1` classes use a packed surface map. That both names select one class is confirmed:
-`CMaterial::InitFromShaderName` (`EQGraphicsDX9.dll` 0x10014660) gives both class 0xc, render class 0xd (eqlib's
-`RenderMaterial_OpaqueCBSG1`). The channel layout is not confirmed against the original's shader (the author read it
-from `SPL/SModelCBSG1`; [unknowns](unknowns.md#world-rendering), EQG): the client takes RG as the tangent normal's
-direction with a Z of 0.9 before normalization (its own choice, which keeps a dark glow mask from turning the normal
-inward), B as self-illumination and A as gloss. The glow mask is multiplied by the diffuse colour and added after the
-weather (snow or rain does not put a glowing crystal out), independent of baked light, sky share and shadows. The
-modern zone renderer gives it HDR headroom, the additive particles' `render::kParticleGlow` (2.5); the classic
-lighting adds it at intensity 1 (not confirmed). The modern highlight's strength is the map's alpha in place of
-`e_fGloss0` (a white alpha gives 1.0 against the ordinary classes' 0.2); whether the original replaces `e_fGloss0`
-by the alpha or scales it is not confirmed. A packed material whose map does not load is drawn as a plain one: no
-packed normal, glow or highlight from the packing, and a texture pack's maps may still apply. Other classes keep
-their RGB normal path. Treating packed B as normal Z had turned dark regions' normals inward and lost the luminous
-parts entirely.
+The `CBGG1` / `CBSG1` classes use a packed surface map, with environment reflection added by `CBSGE1`.
+The player's compiled `SkinMeshCBSG1` and `SkinMeshCBSGE1` shaders confirm RG as the tangent normal's direction,
+with Z fixed at 0.9 before normalization, B added to ambient illumination, and A replacing `e_fGloss0` for the
+specular term. The actor and zone renderers use those channels separately. The diffuse colour times the glow mask
+is added after the weather, independent of baked light, sky share and shadows; modern lighting gives it the same
+HDR headroom as additive particles (`render::kParticleGlow`, 2.5), while classic uses intensity 1. A missing surface
+map supplies no packed normal, glow or gloss. The native `CB1` and `CBS1` shaders retain full RGB normals, even when
+an item shares one map across packed and ordinary materials.
+
+The legacy `CBGGE1`, `CBE1` and `CBSE1` names select the same native render class as `CBSGE1`, so they retain the
+same packed illumination and environment path. The original name is preserved in the material metadata.
+
+Equipment environment maps may be cubemaps or ordinary 2D sphere maps. Both become octahedral textures for the
+actor renderer. Sphere-map coordinates follow the native `SkinMeshCBSGE1` vertex shader: reflect the surface-to-eye
+direction, project its X/Z axes around the +Y pole, then scale into texture coordinates. The cleric epic shield's
+pearl map is a 2D sphere map. A malformed cubemap is rejected without treating its first face as a sphere map.
+
+Held MPL materials retain their separately scaled coverage texture and modulate diffuse RGB component by component
+(`saturate(2 * diffuse * coverage)`), while their material's alpha remains separate. WaterFall materials scroll
+colour and alpha independently. Lava materials retain both scrolling diffuse layers and the shared normal map
+sampled at both coordinates; the primary alpha blends its lit colour against the bump-lit secondary. These actor
+effects use the display clock, wrapped at 100 seconds as the native preshader does. Hailstone's world light,
+shadows and colour space still determine the final lighting. A missing optional coverage texture keeps the
+material's diffuse colour.
 
 The crystal's beam and radial rays in Forgotten Halls are additive model triangles. In modern lighting every EQG
 `AddAlpha` zone surface, in every EQG zone, is multiplied by the same 2.5 for bloom; classic keeps their texture-direct
@@ -1197,14 +1214,15 @@ not the rays.
 
 Apart from that packed glow mask, classic lighting keeps its diffuse-by-lit-colour surface path.
 
-Hero's Forge attachments carry their own EQG surface properties into the actor renderer, including supplied layer
-overrides. Their native normal maps use the full RGB tangent vector and the same +v convention as EQG zones;
+Hero's Forge and held attachments carry their own EQG surface properties into the actor renderer, including supplied layer
+overrides. Native maps use the RGB or packed tangent interpretation selected by their material class, with the same +v convention as EQG zones;
 texture-pack normals keep their separate BC5 RG interpretation and remain the fallback when a native map is absent.
-Armor reflection uses the material's environment DDS cube, converted with the existing cube-to-octahedral loader;
-an absent or invalid cube supplies no reflection. The base shader's known specular/reflective classes select the
+Reflection uses the material's environment DDS, converted from its cube or sphere representation;
+an absent or invalid map supplies no reflection. The base shader's known specular/reflective classes select the
 effect, and a layer's parameters do not invent a new shader class. Native surface records share the actor's lighting
 buffer, with one bounded table per frame shared by instances of a mesh. Push constants remain 128 bytes and no
-descriptor bindings are added. Ordinary WLD, Luclin, held-item and EQG NPC materials retain their existing path.
+descriptor bindings are added. Ordinary WLD and Luclin surfaces keep their diffuse path, animated texture frames
+and attached WLD clouds.
 
 Alpha-tested materials (trees, grass, fences, Chroma/Masked) draw in the opaque pass with alpha-to-coverage when the
 scene is multisampled: the pipelines set `shaders/coverage.glsl`'s `kAlphaToCoverage`, and the alpha test becomes a
@@ -1215,7 +1233,9 @@ The zone colour and depth shaders turn that ramp into a sample mask and intersec
 Their pipelines leave fixed-function alpha-to-coverage off: combining it with shader sample-mask output and
 fragment discard made terrain and buildings disappear on Radeon RX 9070 XT. Both passes use the same pixel noise
 and coverage helper, so cut-out edges keep the same samples when the depth pre-pass is enabled. Actor and object
-pipelines continue to use hardware alpha-to-coverage.
+world pipelines continue to use hardware alpha-to-coverage. Item previews compile a separate actor shader using
+the shared explicit coverage mask and alpha 1 on accepted samples; this avoids squaring coverage when the
+transparent preview is resolved and unpremultiplied for ImGui. The world shader contains no sample-mask output.
 
 ## Modern lighting
 
@@ -1285,6 +1305,8 @@ pipelines continue to use hardware alpha-to-coverage.
   and size, so sparks under 3 units count less than a sheet of flame. Its colour is their tint times its texture's
   average colour (`ParticleRenderer::texture_color`). Its strength follows how much of the effect is alive, and it
   reaches 40 to 100 units as the particles spread. Emitters within 12 units merge.
+  Actor effects use the same modern light calculation, with up to four EDD lights and four WLD cloud lights before
+  the shared scene budget is selected. These lights follow the posed model or item and obey `/dynamiclights`.
 
 - **Shadows** (`render/shadows.h`, `render/vk_context.h`): four cascades out to 1200 units (mostly logarithmic
   splits), each an orthographic view of its slice's bounding sphere snapped to whole texels; a depth array image

@@ -589,6 +589,7 @@ void ClientApp::enter_zone() {
 namespace {
 constexpr std::size_t kSpellLights = 8; // of render::kMaxSceneLights
 constexpr std::size_t kBoltLights = 6;
+constexpr std::size_t kActorLights = 4; // each of the EDD and WLD actor effects
 } // namespace
 
 render::SceneLighting ClientApp::scene_lighting(const game::SceneLight& scene, float hour,
@@ -643,6 +644,20 @@ render::SceneLighting ClientApp::scene_lighting(const game::SceneLight& scene, f
                 dynamic.push_back(l);
                 if (moving) moving->spells.push_back(l);
             }
+        if (actor_emitters_ && dynamic_lights_) {
+            // The same modern glow as spell particles, following the model's posed effect nodes.
+            auto add_actor_lights = [&](const game::ParticleSystem& particles, bool cloud) {
+                for (const auto& l : game::particle_lights(
+                         particles, [this, cloud](const std::string& texture) {
+                             return actor_emitters_->texture_color(texture, cloud);
+                         }, kActorLights)) {
+                    dynamic.push_back(l);
+                    if (moving) moving->spells.push_back(l);
+                }
+            };
+            add_actor_lights(actor_emitters_->simulation(), false);
+            add_actor_lights(actor_emitters_->cloud_simulation(), true);
+        }
         std::span<const assets::PointLight> zone_lights;
         if (zone_) zone_lights = zone_->lights;
         lights = game::select_lights(zone_lights, dynamic, camera_.position, 600.0f, render::kMaxSceneLights);

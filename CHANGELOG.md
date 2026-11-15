@@ -10,6 +10,8 @@
 - Auras window: no longer opens by itself on a character that has never opened it; the EQ menu's Auras opens it
 - Chat: on a new character the game's "Other Chat" is a tab of the main chat window instead of a window of its own, and a chat window or tab you close stays closed after a restart
 - Extended Target window (modern interface): it starts six rows tall, and with more slots the rest scroll; drag its edge or corner to resize it. Its right-click menu has Auto expand, which grows the window to show every slot down to the last one with a target, and shrinks it back as they clear
+- Held items: restore WLD weapon and shield particle clouds, including animated bitmap sequences and moving effect nodes. EQG equipment retains normal, illumination and reflection maps, including 2D sphere maps such as the cleric epic shield's pearl effect. Animated textures, authored unlit additive materials, character selection and item previews use the same effects; glowing actor particles also illuminate their surroundings in modern lighting.
+- Held MPL coverage textures and scrolling WaterFall/Lava materials retain their authored maps and coordinates; legacy epic-weapon shader aliases use the same packed illumination and reflection path as their native render class.
 
 ## 0.7.1-beta (2026-11-15)
 

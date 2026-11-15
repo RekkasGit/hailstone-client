@@ -617,6 +617,8 @@ TEST_CASE("fuzz: textures (DDS, BMP, TGA, PNG)") {
     cube[113] = std::byte{0xfe};
     sweep("decode_cube_as_octahedral", {cube}, 24, 400,
           [](std::span<const std::byte> d) { (void)decode_cube_as_octahedral(d, 16); });
+    sweep("decode_environment_as_octahedral", {cube, dds(4, 4, 1, nullptr, 32, 64), dds(4, 4, 1, "DXT1", 0, 8)},
+          24, 400, [](std::span<const std::byte> d) { (void)decode_environment_as_octahedral(d, 16); });
     sweep("decode_palette_map", {bmp(8, 8, 8, 0, 64), bmp(5, 3, 8, 0, 24)}, 2, 400,
           [](std::span<const std::byte> d) { (void)wld::decode_palette_map(d); });
     Rng rng(0x1be9);
