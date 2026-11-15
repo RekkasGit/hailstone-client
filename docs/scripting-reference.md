@@ -518,7 +518,7 @@ code. A script that registers any of these stays loaded after its main chunk ret
 | `chat(text [, color])` | | a chat line in one of the game's chat colours (15 yellow, 2 green, 6 grey, ...) |
 | `on_packet(stream, direction, opcode, fn)` | `packets` | `fn(opcode, data)` for each matching packet; `stream` is `'world'` or `'zone'`, `direction` `'in'` or `'out'`, and opcode 0 matches every packet. Return `true` to drop the packet, or a string to replace its data. Use `string.pack` / `string.unpack` for the layout |
 | `send_packet(stream, opcode, data)` | `packets` | sends a packet to the server |
-| `ui_function(name, fn)` | `ui` | a function the script's windows call as `eq.Plugin("<script>").<name>(...)` |
+| `ui_function(name, fn)` | `ui` | a function the script's windows call as `eq.Plugin("<script>").<name>(...)`. Not from a Lua social, nor `option` or `menu` |
 | `option{name, label, min, max, get, set}` | `ui` | an option in the Options window's Plugins section; `max = 1` makes a switch, otherwise a slider |
 | `menu(label, command)` | `ui` | an entry in the EQ menu's Plugins submenu that runs `command` |
 

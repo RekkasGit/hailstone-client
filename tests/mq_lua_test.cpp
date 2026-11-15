@@ -1792,3 +1792,14 @@ while true do pcall(function() while true do end end) end
     REQUIRE(h.sent.size() == 1);
     CHECK(h.sent.back() == "/sit");
 }
+
+TEST_CASE("Lua socials: hailstone.ui_function, option and menu are refused") {
+    Host h;
+    allow_buttons(h, plugin::ButtonMode::Full, plugin::kCapAll); // (full mode: a social may have 'ui')
+    h.scripts->press_button(press("hailstone.ui_function('f', function() end)"));
+    CHECK(printed_part(h, "hailstone.ui_function: a Lua social cannot add to the UI"));
+    h.scripts->press_button(press("hailstone.option{name = 'o', get = function() return 0 end, set = function(v) end}"));
+    CHECK(printed_part(h, "hailstone.option: a Lua social cannot add to the UI"));
+    h.scripts->press_button(press("hailstone.menu('M', '/sit')"));
+    CHECK(printed_part(h, "hailstone.menu: a Lua social cannot add to the UI"));
+}

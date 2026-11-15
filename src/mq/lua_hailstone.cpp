@@ -739,10 +739,17 @@ int l_send_packet(lua_State* L) {
 
 // ---------------------------------------------------------------- ui
 
+// A Lua social cannot add to the client's UI: what it adds would call into its state by a name it does not own (its
+// title, which two socials may share and an edit changes), and the state goes when the social is edited or forgotten.
+void no_social(lua_State* L, const char* what) {
+    if (Script::of(L).social >= 0) luaL_error(L, "%s: a Lua social cannot add to the UI (a script can)", what);
+}
+
 // hailstone.ui_function(name, fn): eq.Plugin("<script>").<name>(...) in the Lua UI calls fn(...); its result goes
 // back (plain values and tables).
 int l_ui_function(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.ui_function");
+    no_social(L, "hailstone.ui_function");
     const char* given = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     Script& s = Script::of(L);
@@ -772,6 +779,7 @@ int l_ui_function(lua_State* L) {
 // hailstone.option{name =, label =, min = 0, max = 1, get = function() return v end, set = function(v) end}
 int l_option(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.option");
+    no_social(L, "hailstone.option");
     luaL_checktype(L, 1, LUA_TTABLE);
     Script& s = Script::of(L);
     if (!s.host->env.ui) return 0;
@@ -822,6 +830,7 @@ int l_option(lua_State* L) {
 // hailstone.menu(label, command)
 int l_menu(lua_State* L) {
     need_cap(L, plugin::kCapUi, "hailstone.menu");
+    no_social(L, "hailstone.menu");
     Script& s = Script::of(L);
     const char* label = luaL_checkstring(L, 1);
     const char* command = luaL_checkstring(L, 2);
