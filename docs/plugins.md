@@ -238,7 +238,8 @@ The data types use MQ's member names and inheritance:
   `Lower`, `Left`, `Right`, `Mid`, `Find`, `Compare`, `CompareCS`, `Equal`, `NotEqual`, `EqualCS`, `NotEqualCS`, `Arg`,
   `Count`, `Token`, `Replace`, `StripLinks`), `bool`. They follow MQ2BasicTypes.cpp, edge cases included: a member
   that needs an index is NULL without one (`Left[0]` too), `Arg` splits as MQ's GetArg (a run of separators is one, a
-  "quoted run" is one argument), `Token` looks for each next separator from one past the last. MQ's int and int64 are
+  "quoted run" is one argument), `Token` looks for each next separator from one past the last. `Replace`'s result is
+  cut to 2047 bytes (an MQ string's room), so a `Replace` nested in itself cannot grow without end. MQ's int and int64 are
   one type here: a value that fits 32 bits has int's `Hex` ("0xFFFFFFFF" for -1) and 16-bit `LowPart`/`HighPart`, a
   larger one int64's. Two deliberate differences: `float.Prettify` groups the number (MQ's prints the float's bits as
   an integer), and `Compare` gives -1, 0 or 1 (MQ's only promises the sign). `Int[...]` and `float.Int` cut toward
