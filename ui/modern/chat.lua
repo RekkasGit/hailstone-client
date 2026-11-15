@@ -363,9 +363,28 @@ local function chatWindow(slot)
   return bySlot[slot]
 end
 
+-- What is kept by slot (a half-typed line, its links) belongs to the character: it is dropped when the character
+-- select (or creation) screen opens, or another character is seen in game. (Checked once a frame, before the
+-- windows' own check: zoning shows no character for a while, and keeps it all.)
+local checkedFrame, lastName, lastAtSelect = -1, nil, false
+local function forgetOnCharacterChange()
+  local frame = ui.GetFrameCount()
+  if frame == checkedFrame then return end
+  checkedFrame = frame
+  local gs = eq.GameState and eq.GameState()
+  local atSelect = gs == 1 or gs == 2
+  local name = eq.Name and eq.Name()
+  if (atSelect and not lastAtSelect) or (name and lastName and name ~= lastName) then
+    for k in pairs(chats) do chats[k] = nil end
+  end
+  lastAtSelect = atSelect
+  if atSelect then lastName = nil elseif name then lastName = name end
+end
+
 for slot = 1, 32 do
   local window = "Chat" .. slot
   ui.window("Chat " .. slot, function()
+    forgetOnCharacterChange()
     if not (eq.UiReady or eq.InGame)() then return end
     local win = chatWindow(slot)
     if not win then chats[slot] = nil; return end
