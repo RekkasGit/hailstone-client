@@ -64,10 +64,14 @@ void GameConnection::open_evolving_transfer() {
 }
 
 bool GameConnection::select_evolving_transfer(bool source, std::uint64_t id) {
-    if (state_ != ConnectionState::InZone || !evolving_transfer_.shown || evolving_transfer_.submitted) return false;
+    if (state_ != ConnectionState::InZone || !evolving_transfer_.shown) return false;
     const auto items = evolving_transfer_items();
     if (id && !by_id(items, id)) return false;
     if (id && id == (source ? evolving_transfer_.destination_id : evolving_transfer_.source_id)) return false;
+    // A refused transfer changes no items: EQEmu only prints "Transfer Failed" in chat (DoEvolveTransferXP), so the
+    // window would wait for ever. RoF2 clears both selections once it has sent the transfer
+    // (Send_OP_EvolveItem_006b00b0), leaving its buttons free; here a new selection ends the wait and starts over.
+    evolving_transfer_.submitted = false;
     (source ? evolving_transfer_.source_id : evolving_transfer_.destination_id) = id;
     request_evolving_details();
     return true;
@@ -119,7 +123,8 @@ bool GameConnection::request_evolving_transfer(std::uint64_t expected_revision) 
     view.details.reset();
     ++view.revision;
     const auto revision = view.revision;
-    view.status = "Transfer sent. Check your inventory and server messages.";
+    view.status = "Transfer sent. The server replaces both items when it accepts; if it refuses, chat says so. "
+                  "Select an item to start again.";
     if (!send_zone(encode(EvolvingRequest{EvolvingAction::Transfer, source, destination}), true,
                    [this, source, destination, revision] {
                        return state_ == ConnectionState::InZone && evolving_transfer_.shown &&

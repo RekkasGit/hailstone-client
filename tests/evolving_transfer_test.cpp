@@ -257,3 +257,30 @@ TEST_CASE("mock evolving transfer: bank and socketed items are excluded while ba
     CHECK_FALSE(conn.select_evolving_transfer(false, 400));
     CHECK_FALSE(conn.select_evolving_transfer(false, 600));
 }
+
+// EQEmu refuses a transfer with a red chat line only and changes no items (DoEvolveTransferXP), so the wait has to end
+// on the player's next selection.
+TEST_CASE("mock evolving transfer: after a refused transfer a new selection starts over") {
+    Rig rig(evolving_config());
+    REQUIRE(rig.to_zone());
+    auto& conn = rig.conn;
+    select_pair(conn);
+    conn.receive_zone_packet_for_test(encode(preview()));
+    REQUIRE(conn.request_evolving_transfer(conn.evolving_transfer().revision));
+    REQUIRE(rig.until([&] { return requests(rig).size() == 2; }));
+    CHECK(conn.evolving_transfer().status.find("Select an item to start again") != std::string::npos);
+    rig.step();
+    rig.step();
+    CHECK(conn.evolving_transfer().submitted); // no items changed: still waiting
+    CHECK(conn.select_evolving_transfer(true, source_id));
+    CHECK_FALSE(conn.evolving_transfer().submitted);
+    CHECK(conn.evolving_transfer().pending);
+    CHECK(conn.evolving_transfer().destination_id == destination_id);
+    REQUIRE(rig.until([&] { return requests(rig).size() == 3; }));
+    CHECK(requests(rig)[2].action == EvolvingAction::Details);
+    conn.receive_zone_packet_for_test(encode(preview()));
+    CHECK(conn.can_transfer_evolving());
+    CHECK(conn.request_evolving_transfer(conn.evolving_transfer().revision));
+    REQUIRE(rig.until([&] { return requests(rig).size() == 4; }));
+    CHECK(requests(rig)[3].action == EvolvingAction::Transfer);
+}
