@@ -74,6 +74,7 @@ signature <128 hex digits>
 ```
 
 - **Package file names** are taken relative to the manifest's address, so they name assets of the same release.
+- **Sizes** are a limit as well as a check: a download stops as soon as it passes the manifest's size.
 - **Packages:** a release has one package for each platform, `core`: the whole folder, `browser/` included. The
   server plugins are not in it: they are add-ons (docs/addons.md). The releases that still shipped them (0.1.0-alpha's
   NMS download, 0.2.0-alpha) left their libraries and windows in `plugins/nms/` and `plugins/projecttriune/`, and the

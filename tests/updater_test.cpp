@@ -351,11 +351,19 @@ TEST_CASE("updater: up to date, older, skipped, refused and missing") {
         CHECK(!fs::exists(inst / "update/download/core.zip"));
     }
 
-    // A package that does not match its manifest is not kept.
+    // A package that does not match its manifest is not kept. One larger than the manifest says is stopped as its
+    // bytes come (the sink, not the progress callback): nothing of it is written.
     feed.files[kBase + std::string("core.zip")] = core + "x";
     auto bad = status_for("0.1.0");
     CHECK(bad.state == UpdateState::Failed);
+    CHECK(bad.error.find("larger than the manifest says") != std::string::npos);
     CHECK(!fs::exists(inst / "update/ready.txt"));
+    CHECK(!fs::exists(inst / "update/download/core.zip.part"));
+    // One of the right size whose bytes differ.
+    feed.files[kBase + std::string("core.zip")] = std::string(core.size(), 'x');
+    auto changed = status_for("0.1.0");
+    CHECK(changed.state == UpdateState::Failed);
+    CHECK(changed.error.find("did not match") != std::string::npos);
 
     // No package for this platform: only the notes.
     feed.files[kFeed] = sign(k, "hailstone-update 1\nversion 0.2.0\nnotes https://example.invalid/r\n");
