@@ -236,7 +236,7 @@ local CW = "BazaarConfirmationWnd"
 
 ui.window("Bazaar Confirmation", function()
   if not M.visible(CW) then
-    GPSTATE.bzcFocused = nil -- (the next time it opens, the focus goes to To Me again)
+    GPSTATE.bzcFocused = nil -- (the next time it opens, the focus goes to Cancel again)
     return
   end
   M.frame()
@@ -273,10 +273,6 @@ ui.window("Bazaar Confirmation", function()
     local vouchers = tonumber(((eq.WindowText(CW, "BZC_TokenLabel") or ""):match("%d+"))) or 0
     local fee = M.parse(eq.WindowText(CW, "BZC_PlatLabel") or "")
     ui.SetCursorPos(x0 - wx, cy + T.px(30) - wy)
-    if not GPSTATE.bzcFocused then
-      ui.SetKeyboardFocusHere()
-      GPSTATE.bzcFocused = true
-    end
     M.button(CW, "BZC_UseTokenButton", "To Me", cw, ch, { primary = true, align = 0,
       sub = "Into your inventory: " .. (vouchers == 1 and "1 voucher" or (vouchers .. " vouchers")) })
     ui.SameLine(0, gap)
@@ -288,6 +284,11 @@ ui.window("Bazaar Confirmation", function()
     end)() or (eq.WindowText(CW, "BZC_PlatLabel") or "")
     M.button(CW, "BZC_UsePlatButton", "To Parcels", cw, ch, { align = 0, sub = "Collect at a parcel merchant: fee " .. feeText })
     ui.SetCursorPos(x0 - wx, y1 - T.px(64) - wy)
+    -- the focus starts on Cancel: an A carried over from the bazaar's Buy must not spend the money (as W.confirm)
+    if not GPSTATE.bzcFocused then
+      ui.SetKeyboardFocusHere()
+      GPSTATE.bzcFocused = true
+    end
     M.button(CW, "BZC_CancelButton", "Cancel", x1 - x0, T.px(64))
   end
   if W.finish() then eq.ClickChild(CW, "BZC_CancelButton", "left") end

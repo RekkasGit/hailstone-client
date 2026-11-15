@@ -221,7 +221,7 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   does; B closes), merchant, the chat log (read only, with a quick-chat list and an on-screen
   keyboard: digits, letters, `' , . ?` and a row of `/ # @ % : - ! ( ) +` for slash commands, #commands, %t and the
   like; shift gives capitals and the keys' second characters, `! @ # $ % ^ & * ( )` over the digits; the windows'
-  smaller keyboards, lib/keyboard.lua, have the same keys), confirmation dialogs (A / B), and Options > Gamepad (the bindings, dead zone, camera speed and
+  smaller keyboards, lib/keyboard.lua, have the same keys), confirmation dialogs (A / B; the focus starts on No), and Options > Gamepad (the bindings, dead zone, camera speed and
   inversion).
 - **Raid** (raid.lua): right-click a member or press Y on the focused row for the shared member menu, including
   Main Assist, Mark NPC delegation, Find PC, leadership and looter actions. The selected member's Member actions
@@ -294,7 +294,7 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
 - **Markets and services** (bazaar.lua, barter.lua, pointmerchant.lua, mercenary.lua, guildbank.lua, train.lua,
   tracking.lua; shared pieces in `lib/markets.lua`): the bazaar trader (wares as slots, the price as coin buttons,
   begin / end trading, add / remove, the activity text), the bazaar search (filters as keyboard fields and pickers,
-  results where A buys and Y inspects) and its purchase confirmation; the barter buyer (item, offer and buy-line
+  results where A buys and Y inspects) and its purchase confirmation (the focus starts on Cancel); the barter buyer (item, offer and buy-line
   pages), a buyer's window and the barter search; the point and adventure merchants (buy, Y inspects a good, and a sell
   page with your bags); the mercenary merchant, manager and info; the guild bank (bank and deposits pages, with your bags to
   deposit from); a guildmaster's training (X trains, Y changes the order); and tracking (con filters, options, A
