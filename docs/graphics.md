@@ -455,7 +455,11 @@ by 0.7 of its size, 3 to 12 units; a spawn more than 10 units above or below a p
 The reach is Hailstone's Flora Distance (`display.flora_distance`, the Options window's slider, the gamepad pack's
 Grass distance): 400 to 1,200 units, 400 by default. Past 400 units a share of the plants is kept by the square of
 the distance (`render::flora_keep`: a quarter at 800, a ninth at 1,200), the same ones from frame to frame, so the
-far ring costs about what the near circle does. The tiles are filled nearest first, so when a frame reaches
+far ring costs about what the near circle does. How thick the lawn grows is Hailstone's Grass Density
+(`display.grass_density`, the Options window's slider, the gamepad pack's Grass density): 25 to 200 %, 100 by
+default. It scales the blades each of the lawn's three draws gives a patch (`render::lawn_lod_blades`: 49, 16 and 9
+at 100 %, at least one), the blades keeping their width, so less is sparser and cheaper and more thicker and dearer;
+the other plants are not thinned. The tiles are filled nearest first, so when a frame reaches
 `FloraRenderer::kMaxPlants` (262,144) it is far plants that are left out. A plant is 40 bytes to the GPU a frame.
 
 ## Zone flora
@@ -528,7 +532,8 @@ The blades are built in `shaders/lawn.vert`, without a texture (`render::FloraRe
 patch's square holds a grid of blades, one jittered in each cell, so the cover is even. A blade is a tapered strip
 of a few pieces ending in a point, standing on the ground across the patch (its slope), curving over as it rises, a
 little taller or shorter, combed: it leans 0.4 to 0.65 of its height the way a slowly turning field over the zone
-points (broad swathes lying together), a little off it, its flat side to the way it leans; leaning
+points (broad swathes lying together), a little off it, its flat side turned a way of its own (so the wide faces do
+not all line up); leaning
 with the scene's wind as gusts roll across the zone (the zone's plants' wind, `SceneLighting::wind`: gentle in fair
 weather, hard in a storm) and fluttering a little, and bent away from the spawns walking through it like the other
 plants. `shaders/lawn.frag` gives it the ground's hue with its brightness held within a band (a pale or dark texel
@@ -1588,7 +1593,10 @@ zone loads (`Zone::draw_objects`).
   (glTF TEXCOORD_1, asset extras `hailstone_sway`), a branch with its needle sprays and its clump the height of its
   root on the trunk, the trunk and the far cards their own. A sway by each vertex's own height, or a flutter, moved
   a branch's crossing cards apart, so up close its leaves seemed to flip back and forth (a third of the bend without
-  the flutter still did). A generated tree from a pack built before stands still.
+  the flutter still did). A generated tree now stands still in any case: even with each branch swaying whole, its
+  stark needle sprays slid over each other and across the pixels, a flicker in the modern lighting standing by a
+  tree that turning shadows off did not stop (0.67 % of the pixels changing by more than 12 a frame by Lake Rathe's
+  pines in the zone viewer, 0.01 % still). The generator still writes the sway heights; nothing reads them now.
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so
@@ -1752,6 +1760,7 @@ viewer (`--zone`, `--model`) takes `--msaa`, `--tonemap`, `--exposure`, `--rende
 | `display.max_fps` | 0, 10 .. 1000 | 0 | frame cap (0 none); `--max-fps` takes precedence |
 | `display.background_fps` | -1, 0, 1 .. 1000 | 0 | frame cap while another window has the focus (0: as `display.max_fps`; -1: nothing drawn, the Options window's "0"). Below 10 the loop runs on at 10 a second (the game clock catches up at most 250 ms a frame) and draws only that many frames, or none (`app/frame_pace.h`); a frame not drawn is run as a minimised window's is |
 | `display.flora_distance` | units, 400 .. 1200 | 400 | how far the flora is drawn (Radial flora) |
+| `display.grass_density` | percent, 25 .. 200 | 100 | how thick Hailstone's lawn grows (`render::lawn_lod_blades`) |
 | `display.zone_flora` | on, off | on | Hailstone's flora for zones with a rules file (Zone flora), read as each zone loads |
 | `display.extra_shields` | on, off | on | a deliberate difference: shields RoF2 does not list (`game::is_shield_model`, docs/formats/characters.md "Held items") go on the shield point, not in the hand; read at start-up |
 | `display.texture_folder` | pack name, absolute folder, off | `textures/default` | replacement textures (Texture overrides): the folder indexed at start, its files read as each zone loads; the Options window's Textures section (from the next start) and Hailstone Texture Studio set it |
