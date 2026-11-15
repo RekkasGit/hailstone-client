@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Security: a script can no longer crash the client by nesting `/docommand`, `/noparse` or `/squelch` without end; they nest at most 16 deep, and an `mq.cmd` line is at most 2047 bytes
+- Security: a script or plugin window that catches its own time-limit stop with `pcall`, `xpcall` or a coroutine is stopped all the same, and a long string match (a pattern that backtracks) is now stopped at the time limit instead of freezing the client
+- Security: Lua socials can no longer use `hailstone.ui_function`, `option` and `menu`; a social that used them could crash the client once edited. No script may be named like a Lua social (`social '...'`)
+- Scripts: an event handler whose own line raises its event again no longer freezes the client; `${String[...].Replace[...]}` results are cut to 2047 bytes
+- Security: plugin windows get the UI pack's tables and the values its functions return only as read-only views, keep at most 1024 settings and 128 windows, and leave the pack a quarter of the UI's memory; the `ui.GetIO()` table is read-only
+- Security: plugin consent: Allow and Don't allow wait a second after a question appears (both packs), and an answer applies only to the question it was given for
+- Security: plugin windows can no longer take the chat keys, the loot window's Link All or the social editor's request, see other plugins' menus or other scripts' folders, nor replace the confirmation, trade, give, quantity, bazaar confirmation, group invite, respawn, large dialog or task select windows. Editing the autoskill list needs `actions` as well as `commands`
+- Lua UI: a window that fails after being registered from another script's code is now reported in UI errors with a retry, instead of staying off silently; a script's unbalanced ImGui pops and drag-and-drop ends no longer affect other windows
+- `eq.*`: numbers past a slot's, row's or choice's range are refused instead of wrapping onto another slot or row; combo choices sent to the server (real estate member groups, guild finder time zone and class) are held to the list
+- Map window: fixed a possible crash when another zone's map was opened while a label was under the mouse; changing zone no longer leaves a marker of the old zone selected or being renamed
+- Merchant: sending money by parcel now asks first, showing the amount and the recipient
+- Spell book: dropping a spell where the spell bar overlaps the book's gems memorizes it once, into the gem under the mouse
+- Quantity: the dialog shows the right minimum when the game asks again while it is still open
+- Lua Scripts window: the search finds scripts whose names have capitals
+- Chat: a line typed but not sent no longer carries over to the next character after a trip to character select
+- Compass: the heading tooltip shows 0° instead of 360° just west of north
+- STML text (both packs): a "<" that opens no tag (such as "<3") keeps the text after it
+- Gamepad: confirmation dialogs start with the focus on No (Cancel in the bazaar purchase), so the press that opened one can no longer answer Yes; dialogs' own A presses wait out the settling time; with Fast Item Destroy on, LB in the inventory asks before destroying the held item
+- Gamepad: Delete and text length limits no longer cut an accented character in half; a deferred click no longer fires in a window other than the one it was made in
+- Performance: the group window's member lookups, two item displays' comparisons, the Lua social editor, the map and minimap's Find marks, the tradeskill, tracking, title, trainer and skill lists, the achievement browser, the spell book, raid, merchant, Advanced Inventory and key-binding lists, script events and the gamepad merchant, bazaar trader and chat do less work each frame
 - Security: a plugin's bulk spawn read can no longer write past the plugin's buffer when a spawn has a very long name or suffix
 - Security: plugin windows and scripts can no longer draw into, or close, the plugin consent question; a script window left open no longer swallows the windows drawn after it
 - Security: a player's item link can no longer add colours or fake text to other players' chat
