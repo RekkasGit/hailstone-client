@@ -79,7 +79,7 @@ constexpr Entry kCalls[] = {
     {"gamepad.connected", 0}, {"gamepad.type", 0}, {"gamepad.down", 0}, {"gamepad.pressed", 0},
     {"gamepad.released", 0}, {"gamepad.axis", 0}, {"gamepad.mode", 0}, {"gamepad.cross_set", 0},
     {"gamepad.cross_slot", 0}, {"gamepad.glyph", 0}, {"gamepad.binding", 0}, {"gamepad.setting", 0},
-    {"gamepad.rumble", 0}, {"gamepad.request_focus", 0}, {"gamepad.takes_b", 0},
+    {"gamepad.rumble", 0}, {"gamepad.takes_b", 0},
     // These check a plugin's code themselves (the file's head)
     {"Plugin", 0}, {"PluginOptions", 0}, {"SetPluginOption", 0}, {"PluginMenu", 0}, {"PluginMenuClick", 0},
     {"PluginConsent", 0}, {"AnswerPluginConsent", 0}, {"Scripts", 0}, {"ScriptRun", 0}, {"ScriptStop", 0},
@@ -106,7 +106,8 @@ constexpr Entry kCalls[] = {
     {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands}, {"ZoneExitWalk", kCapMove},
     {"FindNpcTarget", kCapTarget}, {"FindNpcPath", kCapCommands}, {"FindOpen", kCapCommands}, {"FindNpcWalk", kCapMove},
     {"StopLuaSocial", kCapCommands}, {"OpenLuaSocialEditor", kCapCommands}, {"OpenSocialEditor", kCapCommands},
-    {"gamepad.set_mode", kCapCommands}, {"gamepad.set_binding", kCapCommands},
+    // request_focus puts the pad in menu mode, as set_mode("menu") does.
+    {"gamepad.set_mode", kCapCommands}, {"gamepad.request_focus", kCapCommands}, {"gamepad.set_binding", kCapCommands},
     {"gamepad.set_cross_slot", kCapCommands}, {"gamepad.set_setting", kCapCommands},
     {"RewardSelectionClose", kCapCommands},
     // Acting in the game

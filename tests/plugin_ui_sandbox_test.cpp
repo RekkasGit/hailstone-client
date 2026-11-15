@@ -230,6 +230,10 @@ TEST_CASE("Plugin UI: eq functions that act need the plugin's capability") {
     // Walks: a /nav walk is movement, the Find window's and the zone finder's alike.
     CHECK(app::eq_call_caps("ZoneExitWalk") == plugin::kCapMove);
     CHECK(app::eq_call_caps("FindNpcWalk") == plugin::kCapMove);
+    // Menu mode, as set_mode("menu"): the pad's buttons stop driving the character.
+    CHECK(app::eq_call_caps("gamepad.request_focus") == plugin::kCapCommands);
+    CHECK(app::eq_call_caps("gamepad.set_mode") == plugin::kCapCommands);
+    CHECK(app::eq_call_caps("gamepad.rumble") == 0u);
     // A dry run runs the code it is given with the server's Lua social capabilities: as SetLuaSocial.
     CHECK(app::eq_call_caps("LuaSocialDryRun") == (plugin::kCapCommands | plugin::kCapActions));
     CHECK_FALSE(app::eq_call_caps("NoSuchFunction"));
