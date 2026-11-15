@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Options > Upscaler: the choice now takes effect. It was saved with the character but read at start-up from the shared settings, so Temporal and AMD FSR 3.1 never started (and Frame Generation stayed off); it is now one setting for every character, like Anti-aliasing. A choice saved with a character before is brought over when that character enters, and takes effect at the next start
 - Performance window (Ctrl+Shift+P): with Frame Generation on, it shows the rendered and the displayed frame rate, how many frames got an in-between frame and why any were skipped, the vsync pacing and what frame generation costs the GPU
 - Options > Display > **Grass Density** (and the gamepad pack's Grass density) sets how thick Hailstone's grass on the classic zones grows, from 25 % to 200 %: lower is sparser and faster, higher is thicker.
 - Options > **Frame Generation** (with the Temporal or AMD FSR 3.1 upscaler; also on the gamepad pack's Display page; `display.frame_gen` in `hailstone.ini`): shows a frame made between each two the game draws, from the game's own motion and depth, for smoother movement on a high refresh rate screen. The interface is laid over both and never warps. While it is on, vertical sync stays on, the game draws at half the refresh rate and reacts a little later. It applies at once while one of those upscalers is running; after switching to Temporal or AMD FSR 3.1 it starts with the game's next start, as the upscaler does
