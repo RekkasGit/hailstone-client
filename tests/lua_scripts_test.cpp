@@ -1285,3 +1285,37 @@ return table.concat(results, "|")
     CHECK(std::string(lua_tostring(L, -1)) == "ok|ok|ok|ok|ok|ok|Rusty Sword and Rusty Sword|ok|ok|ok|ok|ok|ok|ok");
     lua_close(L);
 }
+
+// The Options window's search (ui/modern/lib/fuzzy.lua): every word of the query must be in the label or tooltip,
+// as typed, as letters in order from a word's first letter, or a word one letter off (four letters or more).
+TEST_CASE("UI modern fuzzy: the Options search finds loose matches and nothing for a short unrelated query") {
+    fs::path file = ui_dir() / "modern" / "lib" / "fuzzy.lua";
+    if (!fs::exists(file)) return;
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    int rc = luaL_dofile(L, file.string().c_str());
+    REQUIRE_MESSAGE(rc == LUA_OK, (rc == LUA_OK ? "" : lua_tostring(L, -1)));
+    REQUIRE(lua_istable(L, -1));
+    lua_setglobal(L, "fuzzy");
+    static const char* const check = R"lua(
+local m = fuzzy.match
+local r = {}
+local function add(ok) r[#r + 1] = ok and "ok" or "bad" end
+add(m("", "Master Volume"))                      -- an empty or blank query keeps everything
+add(m("   ", "Master Volume"))
+add(m("volum", "Master Volume"))                 -- as typed, any case
+add(m("VOLUME", "Master Volume"))
+add(m("vlm", "Master Volume"))                   -- letters in order from the first letter
+add(m("volime", "Master Volume"))                -- one letter off
+add(m("mastr volum", "Master Volume"))           -- every word, in any order
+add(m("echo", "Reverb", "The room's echo on sounds."))   -- the tooltip counts
+add(not m("shadows", "Master Volume"))
+add(not m("ab", "Master Volume"))                -- a short query is not loose
+add(not m("volume shadows", "Master Volume"))    -- one word missing fails the row
+add(m("olume", "Master Volume"))                 -- a plain part of a word is found as typed
+return table.concat(r, "|")
+)lua";
+    REQUIRE(luaL_dostring(L, check) == LUA_OK);
+    CHECK(std::string(lua_tostring(L, -1)) == "ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok");
+    lua_close(L);
+}
