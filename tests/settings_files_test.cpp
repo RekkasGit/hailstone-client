@@ -39,6 +39,20 @@ int entries(const fs::path& dir) {
 }
 } // namespace
 
+TEST_CASE("Settings files: a number setting that is NaN or an infinity reads as its default") {
+    Config c;
+    c.parse("a = 1.5\nb = 2x\nc = nan\nd = inf\ne = -INFINITY\nf =\ng = word\nh = 1e39\n");
+    CHECK(c.get_float("a", 9.0f) == 1.5f);
+    CHECK(c.get_float("b", 9.0f) == 2.0f); // the number the value starts with
+    CHECK(c.get_float("c", 9.0f) == 9.0f);
+    CHECK(c.get_float("d", 9.0f) == 9.0f);
+    CHECK(c.get_float("e", 9.0f) == 9.0f);
+    CHECK(c.get_float("f", 9.0f) == 9.0f);
+    CHECK(c.get_float("g", 9.0f) == 9.0f);
+    CHECK(c.get_float("h", 9.0f) == 9.0f); // past float's range: strtof's HUGE_VALF
+    CHECK(c.get_float("missing", 9.0f) == 9.0f);
+}
+
 TEST_CASE("Settings files: written whole, through a temporary file") {
     TempDir tmp("atomic");
     const fs::path file = tmp.path / "sub" / "a.ini";

@@ -805,13 +805,9 @@ private:
                                          render::DynamicShadowLights* moving = nullptr) const;
     void lighting_command(std::string_view args);
     void lua_social_command(std::string_view args); // /luasocial (app/client_app_draw.cpp)
-    float config_float(std::string_view key, float fallback) const {
-        auto v = config_.get(key);
-        if (!v || v->empty()) return fallback;
-        char* end = nullptr;
-        float f = std::strtof(v->c_str(), &end);
-        return end != v->c_str() ? f : fallback;
-    }
+    // Config::get_float: NaN and the infinities are the fallback, so a bad hailstone.ini value never reaches a
+    // matrix or a clamp that lets NaN through.
+    float config_float(std::string_view key, float fallback) const { return config_.get_float(key, fallback); }
     // The Options window's Display page (app/lua_eq_dialogs.cpp OptionsWindow): its controls as whole steps (combo box
     // choices, slider ticks 0..20); nullopt for a name that is not a display setting.
     std::optional<int> display_option(std::string_view name) const;

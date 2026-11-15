@@ -153,6 +153,9 @@ ring lies on the floor under it.
 | `/camera reveal <units>` | the cut round the player: its radius at the starting distance, 0..60 (0 off) |
 | `/camera roof`, `silhouette`, `marker`, `hover`, `always` + `on` or `off` | the roof cut, the silhouette, the click marker, the hover ring, the circle even when nothing is in the way |
 
+A number past a range is held to it; `nan` and `inf` are no number (the usage line), and a `hailstone.ini` value that
+is one reads as the default.
+
 There is no key command of its own: the key table is the original's (`game/keymap_tables.inc`). A hot button or a
 social with `/camera toggle` gives the camera a key. The gamepad has a pad action of its own, `camera_iso`
 (`docs/gamepad.md`).
