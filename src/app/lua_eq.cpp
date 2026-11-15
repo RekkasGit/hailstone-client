@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <cfloat>
+#include <cmath>
 #include <cctype>
 #include <cstdlib>
 #include <map>
@@ -1204,12 +1205,14 @@ int ItemPreviewImage(lua_State* L) {
 
 // eq.ItemPreviewControl(what [, x [, y [, view]]])   -- moves the preview's camera: "rotate" (radians across, up),
 // "pan" (fractions of the view across, up), "zoom" (a distance factor), "reset" (fitted again); view as
-// eq.ItemPreviewImage's
+// eq.ItemPreviewImage's. NaN, an infinity or a number past float's range moves nothing (any code may call it, and
+// the camera's matrices would carry it).
 int ItemPreviewControl(lua_State* L) {
     auto& h = Impl::of(L).host;
-    if (h.item_preview_control)
-        h.item_preview_control(luaL_checkstring(L, 1), static_cast<float>(luaL_optnumber(L, 2, 0.0)),
-                               static_cast<float>(luaL_optnumber(L, 3, 0.0)), preview_view(L, 4));
+    const char* what = luaL_checkstring(L, 1);
+    const float x = static_cast<float>(luaL_optnumber(L, 2, 0.0)), y = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    const int view = preview_view(L, 4);
+    if (h.item_preview_control && std::isfinite(x) && std::isfinite(y)) h.item_preview_control(what, x, y, view);
     return 0;
 }
 

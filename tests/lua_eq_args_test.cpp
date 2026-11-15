@@ -57,6 +57,8 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
             preview_h = h;
             return nullptr;
         };
+        int controls = 0;
+        host.item_preview_control = [&](std::string_view, float, float, int) { ++controls; };
         app::EqApi api(host);
         api.load_layout(dir.path() / "defaults.ini", dir.path() / "UI_Test_Server.ini", {});
         lua_State* L = luaL_newstate();
@@ -96,6 +98,12 @@ TEST_CASE("eq API: bad arguments are Lua errors before anything is made; odd num
         CHECK(run(L, "return eq.ItemPreviewImage(0/0, 1e300)") == "nil");
         CHECK(preview_w == 0);
         CHECK(preview_h == std::numeric_limits<int>::max());
+        // The preview's camera takes no NaN, infinity or number past float's range.
+        CHECK(run(L, "eq.ItemPreviewControl('rotate', 0.5, 0.1) return 'ok'") == "ok");
+        CHECK(controls == 1);
+        CHECK(run(L, "eq.ItemPreviewControl('zoom', 0/0) eq.ItemPreviewControl('pan', 0, math.huge) "
+                     "eq.ItemPreviewControl('rotate', 1e300, 0) return 'ok'") == "ok");
+        CHECK(controls == 1);
         CHECK(run(L, "return (pcall(eq.GemOverlay, 'CastSpellWnd', 'CSPW_Spell0', 0/0, -math.huge))") == "true");
         lua_close(L);
     }
