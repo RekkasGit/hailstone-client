@@ -1287,7 +1287,8 @@ return table.concat(results, "|")
 }
 
 // The Options window's search (ui/modern/lib/fuzzy.lua): every word of the query must be in the label or tooltip,
-// as typed, as letters in order from a word's first letter, or a word one letter off (four letters or more).
+// as typed, as the initials of words that follow each other, as letters in order from a word's first letter (four
+// letters or more), or a word one letter off (five letters or more).
 TEST_CASE("UI modern fuzzy: the Options search finds loose matches and nothing for a short unrelated query") {
     fs::path file = ui_dir() / "modern" / "lib" / "fuzzy.lua";
     if (!fs::exists(file)) return;
@@ -1305,7 +1306,7 @@ add(m("", "Master Volume"))                      -- an empty or blank query keep
 add(m("   ", "Master Volume"))
 add(m("volum", "Master Volume"))                 -- as typed, any case
 add(m("VOLUME", "Master Volume"))
-add(m("vlm", "Master Volume"))                   -- letters in order from the first letter
+add(m("vlme", "Master Volume"))                  -- letters in order from the first letter
 add(m("volime", "Master Volume"))                -- one letter off
 add(m("mastr volum", "Master Volume"))           -- every word, in any order
 add(m("echo", "Reverb", "The room's echo on sounds."))   -- the tooltip counts
@@ -1313,9 +1314,16 @@ add(not m("shadows", "Master Volume"))
 add(not m("ab", "Master Volume"))                -- a short query is not loose
 add(not m("volume shadows", "Master Volume"))    -- one word missing fails the row
 add(m("olume", "Master Volume"))                 -- a plain part of a word is found as typed
+add(m("fov", "Field of View"))                   -- the initials of words that follow each other
+add(m("ao", "Ambient Occlusion"))
+add(not m("fv", "Field of View"))                -- (not with a word between them)
+add(not m("vlm", "Master Volume"))               -- letters in order need four letters
+add(not m("mus", "Mouse Look"))
+add(not m("rate", "Race"))                       -- one letter off needs five letters
+add(m("ring size", "Size", "How big the ring is.")) -- (the Options window adds the section's title to the tooltip)
 return table.concat(r, "|")
 )lua";
     REQUIRE(luaL_dostring(L, check) == LUA_OK);
-    CHECK(std::string(lua_tostring(L, -1)) == "ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok");
+    CHECK(std::string(lua_tostring(L, -1)) == "ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok|ok");
     lua_close(L);
 }

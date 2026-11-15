@@ -1,9 +1,12 @@
 -- Loose text matching for the search fields (the Options window's). Pure Lua, no ui.* calls: tests/lua_scripts_test.cpp
 -- loads this file. A query is split into words and every word must be found in the text (a label and its tooltip):
 --   - as it stands (case does not matter), or
---   - as letters of one word in order, from its first letter ("vlm" finds "volume"), or
+--   - as the first letters of words that follow each other ("fov" finds "Field of View"), two letters or more, or
+--   - as letters of one word in order, from its first letter ("vlme" finds "volume"), four letters or more, or
 --   - in a word of the same length give or take one letter that differs by one letter ("volime" finds "volume"),
---     for words of four letters or more, so a short query does not match nearly everything.
+--     five letters or more.
+-- The loose rules wait for longer words so that a short query does not match nearly everything: with three letters
+-- in order "mus" found "Mouse", and one letter off "rate" found "Race".
 local fuzzy = {}
 
 -- True when `word` is `candidate` with one letter changed, added or left out.
@@ -35,12 +38,24 @@ local function inOrder(word, candidate)
   return at > #word
 end
 
-local function wordFound(word, text)
+-- True when the letters of `word` are the first letters of words of `text` that follow each other.
+local function initials(word, words)
+  for start = 1, #words - #word + 1 do
+    local k = 1
+    while k <= #word and words[start + k - 1]:byte(1) == word:byte(k) do k = k + 1 end
+    if k > #word then return true end
+  end
+  return false
+end
+
+local function wordFound(word, text, words)
   if text:find(word, 1, true) then return true end
-  if #word < 3 then return false end
-  for candidate in text:gmatch("%w+") do
+  if #word < 2 then return false end
+  if initials(word, words) then return true end
+  if #word < 4 then return false end
+  for _, candidate in ipairs(words) do
     if inOrder(word, candidate) then return true end
-    if #word >= 4 and oneEdit(word, candidate) then return true end
+    if #word >= 5 and oneEdit(word, candidate) then return true end
   end
   return false
 end
@@ -50,8 +65,10 @@ function fuzzy.match(query, label, tooltip)
   query = (query or ""):lower()
   if not query:find("%S") then return true end
   local text = ((label or "") .. " " .. (tooltip or "")):lower()
+  local words = {}
+  for w in text:gmatch("%w+") do words[#words + 1] = w end
   for word in query:gmatch("%S+") do
-    if not wordFound(word, text) then return false end
+    if not wordFound(word, text, words) then return false end
   end
   return true
 end
