@@ -1462,6 +1462,11 @@ bool write_tree(const std::filesystem::path& pack_dir, const std::string& zone, 
     };
     std::string stem = tree_texture_name(actor, "");
     stem = stem.substr(7, stem.size() - 7 - 5); // the actor's short name
+    // A bare file name, whoever made the rule (materials.cpp refuses others): nothing is written outside `dir`.
+    if (stem.empty() || stem.find_first_of("/\\:") != std::string::npos || stem.find("..") != std::string::npos) {
+        if (error) *error = "not a file name: " + actor;
+        return false;
+    }
     if (!put(dir / (stem + ".glb"), assets::write_glb(tree.mesh, source_hash))) return false;
     init_encoders();
     auto texture = [&](const assets::Image& img, FileKind kind, const char* what, const char* suffix) {

@@ -1715,7 +1715,8 @@ trees are a trunk of a few solid prisms under crossed cut-out cards. Each new tr
   in a view full of trees (3.29 ms from 3.47; zone viewer, offscreen). Each kind of tree is stored once (instanced),
   so the triangles cost no memory per tree.
 
-The rules are lines of the studio's zone files (`tree <object> = <style> [<bark material>]`); the 34 zones with
+The rules are lines of the studio's zone files (`tree <object> = <style> [<bark material>]`; the object a name of
+letters, digits, `_` and `-`, since it names the tree's files); the 34 zones with
 ground rules have them (129 trees in the 30 that have trees). A tree comes out the same on every build (its seed is its zone and name). Seen in the zone viewer, not
 in a live session. Open: leaves thin out in the smaller mips of a cut-out.
 

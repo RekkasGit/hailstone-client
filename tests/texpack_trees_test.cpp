@@ -470,6 +470,11 @@ TEST_CASE("trees: the rules' tree lines") {
     CHECK(error == "z.txt:1: expected tree <actor> = auto|pine|broadleaf|willow|dead|palm [bark material]");
     CHECK_FALSE(parse_material_rules(materials, {{"z", "\ntree x = pine birch"}}, &error));
     CHECK(error == "z.txt:2: no material [birch] in materials.txt");
+    // The actor names the tree's files: a path is refused.
+    for (const char* line : {"tree ../../evil = pine", "tree a/b = pine", "tree c:\\x = pine", "tree .. = pine"}) {
+        CHECK_FALSE(parse_material_rules(materials, {{"z", line}}, &error));
+        CHECK(error == "z.txt:1: a tree's actor is a name of letters, digits, '_' and '-'");
+    }
 }
 
 TEST_CASE("trees: Qeynos Hills' trees measured from the game files") {

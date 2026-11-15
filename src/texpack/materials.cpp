@@ -1,6 +1,7 @@
 #include "texpack/materials.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -159,6 +160,15 @@ std::optional<MaterialRules> parse_material_rules(std::string_view materials_txt
                 auto w = words(std::string_view(line).substr(eq + 1));
                 for (std::string& x : w) x = lower(x);
                 static constexpr std::string_view kStyles[] = {"auto", "pine", "broadleaf", "willow", "dead", "palm"};
+                // The actor names the tree's files (trees.cpp write_tree: models/<zone>/<actor>.glb): a game actor's
+                // letters, digits, '_' and '-' only, so a rule cannot name a path out of the pack.
+                const bool bare = std::all_of(t.actor.begin(), t.actor.end(), [](char ch) {
+                    return std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-';
+                });
+                if (!bare) {
+                    fail(error, where + "a tree's actor is a name of letters, digits, '_' and '-'");
+                    return std::nullopt;
+                }
                 if (t.actor.empty() || w.empty() || w.size() > 2 ||
                     std::find(std::begin(kStyles), std::end(kStyles), w[0]) == std::end(kStyles)) {
                     fail(error, where + "expected tree <actor> = auto|pine|broadleaf|willow|dead|palm [bark material]");
