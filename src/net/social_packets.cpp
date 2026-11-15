@@ -1,5 +1,6 @@
 #include "net/social_packets.h"
 
+#include "core/ascii_case.h"
 #include "core/byte_io.h"
 #include "net/packet_io.h"
 
@@ -61,7 +62,8 @@ AppPacket encode_friends_who(const std::vector<std::string>& friends, bool all, 
     w.le<std::uint8_t>(all ? '1' : '0');
     for (const auto& name : friends) {
         std::string_view text = name;
-        if (!server_short_name.empty() && text.starts_with(server_short_name) &&
+        // CChatService::GetFriendName @0x7efa90 compares with __strnicmp: the prefix is matched case-insensitively.
+        if (!server_short_name.empty() && istarts_with(text, server_short_name) &&
             text.size() > server_short_name.size() && text[server_short_name.size()] == '.')
             text.remove_prefix(server_short_name.size() + 1);
         w.le<std::uint8_t>(',');

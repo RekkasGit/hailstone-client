@@ -723,9 +723,16 @@ void GameConnection::who_command(const std::string& args) {
     auto w = game::parse_who_args(args, ctx, strings_);
     if (w.error) return system(*w.error);
     if (w.friends) {
-        if (social_.friends.empty()) return system(12308);
-        send_zone(encode_friends_who(social_.friends, w.type == 3,
-                                    chat_server_ ? chat_server_->server_short_name() : std::string_view{}));
+        // Who_BuildAndSendRequest runs the friends branch only while the chat service exists ([ebp+0x2a4] != 0
+        // at 0x524a75) and otherwise shows nothing. The friend list lives in that service; here it is the chat
+        // server session, which friends_command (Cmd_friends) takes as missing when it is absent or failed.
+        if (!chat_server_ || chat_server_->failed()) return;
+        if (social_.friends.empty()) return system(12308, {}, 0x119); // 0x524c94
+        send_zone(encode_friends_who(social_.friends, w.type == 3, chat_server_->server_short_name()));
+        // After the send (0x524c1a), whether or not it went out: 12307 then a line of dashes, both colour 0x119
+        // (0x524c61-0x524c92). The server's who response follows.
+        system(12307, {}, 0x119);
+        chat(ChatEvent::Kind::System, "---------------------------------", 0, 0x119);
         return;
     }
     WhoRequest r;

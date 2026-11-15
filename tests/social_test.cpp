@@ -246,10 +246,11 @@ TEST_CASE("who: OP_FriendsWho carries the RoF2 scope and comma-separated saved l
     bytes = bytes_of(p);
     CHECK(bytes == std::vector<std::uint8_t>{'1', ',', 'S', 'o', 'l', 'o', 0});
 
+    // CChatService::GetFriendName @0x7efa90 strips the current world's "World." with __strnicmp (any case).
     p = encode_friends_who({"World.Bob", "Other.Alice", "world.Case", "Worldly.Name", "Bare"}, true, "World");
     bytes = bytes_of(p);
-    CHECK(str_at(bytes, 0) == "1,Bob,Other.Alice,world.Case,Worldly.Name,Bare");
-    CHECK(bytes.size() == std::strlen("1,Bob,Other.Alice,world.Case,Worldly.Name,Bare") + 1);
+    CHECK(str_at(bytes, 0) == "1,Bob,Other.Alice,Case,Worldly.Name,Bare");
+    CHECK(bytes.size() == std::strlen("1,Bob,Other.Alice,Case,Worldly.Name,Bare") + 1);
 }
 
 TEST_CASE("who: OP_WhoAllResponse decodes and formats like HandleWhoAllResponse") {

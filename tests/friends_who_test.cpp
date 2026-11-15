@@ -3,7 +3,9 @@
 #include <doctest/doctest.h>
 
 #include <fstream>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "core/byte_io.h"
 #include "mock_server/harness.h"
@@ -60,16 +62,37 @@ MockConfig with_ucs() {
     return config;
 }
 
-void enter_with_friends(Rig& rig) {
+void enter_with_ucs(Rig& rig, const std::vector<std::string>& friends) {
     fixture_strings(rig);
     REQUIRE(rig.to_zone());
     REQUIRE(rig.until([&] { return !rig.server.ucs_log.empty(); }));
     // As with stock UCS, buddy rows may precede the login's mailbox response.
-    for (std::string_view name : {"Online", "Anonymous", "Roleplayer", "Offline"})
-        rig.server.ucs.send_reliable(buddy(name));
+    for (const auto& name : friends) rig.server.ucs.send_reliable(buddy(name));
     rig.server.ucs.send_reliable(mailbox());
-    REQUIRE(rig.until([&] { return rig.conn.chat_server_connected() && rig.conn.social().friends.size() == 4; }));
+    REQUIRE(rig.until([&] { return rig.conn.chat_server_connected() && rig.conn.social().friends.size() == friends.size(); }));
     rig.chat();
+}
+
+void enter_with_friends(Rig& rig) { enter_with_ucs(rig, {"Online", "Anonymous", "Roleplayer", "Offline"}); }
+
+// Who_BuildAndSendRequest prints 12307 and a dash line after sending OP_FriendsWho (0x524c61-0x524c92).
+void check_sent_banner(const std::vector<ChatEvent>& lines) {
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0].text == "SAVED FRIENDS");
+    CHECK(lines[1].text == "---------------------------------");
+    for (const auto& line : lines) {
+        CHECK(line.kind == ChatEvent::Kind::System);
+        CHECK(line.color == 0x119);
+    }
+}
+
+// A reliable marker behind a command makes absence assertions independent of a sleep.
+void check_no_lookup(Rig& rig) {
+    const int before = MockEqServer::count(rig.server.zone_log, Op::RandomReq);
+    rig.conn.send_zone_packet(encode_random_request(0, 100));
+    REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, Op::RandomReq) == before + 1; }));
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::FriendsWho) == 0);
+    CHECK(MockEqServer::count(rig.server.zone_log, Op::WhoAllRequest) == 0);
 }
 
 const AppPacket* last_packet(const MockEqServer& server, Op op) {
@@ -81,20 +104,30 @@ const AppPacket* last_packet(const MockEqServer& server, Op op) {
 } // namespace
 
 TEST_CASE("mock server: who friends aliases with no friends send no lookup") {
+    Rig rig(with_ucs());
+    enter_with_ucs(rig, {});
+    for (const char* command : {"/who friends", "/who friend", "/who all friends", "/who all friend"}) {
+        CAPTURE(command);
+        rig.conn.send_command(command);
+        const auto lines = rig.chat();
+        REQUIRE(lines.size() == 1);
+        CHECK(lines[0].text == "NO FRIENDS");
+        CHECK(lines[0].color == 0x119);
+        check_no_lookup(rig);
+    }
+}
+
+TEST_CASE("mock server: who friends without a chat server shows and sends nothing") {
+    // Who_BuildAndSendRequest skips the whole friends branch when there is no chat service (0x524a75).
     Rig rig;
     fixture_strings(rig);
     REQUIRE(rig.to_zone());
     rig.chat();
-    for (const char* command : {"/who friends", "/who friend", "/who all friends", "/who all friend"}) {
+    for (const char* command : {"/who friends", "/who all friends"}) {
         CAPTURE(command);
         rig.conn.send_command(command);
-        CHECK(has_line(rig.chat(), "NO FRIENDS"));
-        // A reliable marker behind the command makes the absence assertions independent of a sleep.
-        const int before = MockEqServer::count(rig.server.zone_log, Op::RandomReq);
-        rig.conn.send_zone_packet(encode_random_request(0, 100));
-        REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, Op::RandomReq) == before + 1; }));
-        CHECK(MockEqServer::count(rig.server.zone_log, Op::FriendsWho) == 0);
-        CHECK(MockEqServer::count(rig.server.zone_log, Op::WhoAllRequest) == 0);
+        check_no_lookup(rig);
+        CHECK(rig.chat().empty());
     }
 }
 
@@ -114,7 +147,7 @@ TEST_CASE("mock server: who friends sends the UCS friend roster instead of saved
         CHECK(reader.cstring() == scope + ",Online,Anonymous,Roleplayer,Offline");
         CHECK(reader.remaining() == 0);
         CHECK(MockEqServer::count(rig.server.zone_log, Op::WhoAllRequest) == 0);
-        CHECK(rig.chat().empty());
+        check_sent_banner(rig.chat());
     }
     // The ordinary world who path keeps its existing filter request.
     rig.conn.send_command("/who all");
@@ -132,7 +165,7 @@ TEST_CASE("mock server: friends who replies retain online rows and server anonym
     enter_with_friends(rig);
     rig.conn.send_command("/who friends");
     REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, Op::FriendsWho) == 1; }));
-    CHECK(rig.chat().empty());
+    check_sent_banner(rig.chat());
 
     // EQEmu's friends lookup omits offline friends and returns normal who rows for the rest. Its anonymous
     // formats conceal class, level, race and zone, with the roleplayer's guild still visible.
@@ -178,6 +211,7 @@ TEST_CASE("mock server: friends who replies retain online rows and server anonym
 
     rig.conn.send_command("/who all friends");
     REQUIRE(rig.until([&] { return MockEqServer::count(rig.server.zone_log, Op::FriendsWho) == 2; }));
+    check_sent_banner(rig.chat());
     // A reply with all friends offline still completes and replaces the last populated result.
     response.entries.clear();
     response.footer_count = 0;
@@ -192,16 +226,10 @@ TEST_CASE("mock server: friends who replies retain online rows and server anonym
     CHECK(empty[0].color == 281);
 }
 
-TEST_CASE("mock server: friends who strips only the exact current-world qualifier") {
+TEST_CASE("mock server: friends who strips only the current-world qualifier, in any case") {
     Rig rig(with_ucs());
-    fixture_strings(rig);
-    REQUIRE(rig.to_zone());
-    REQUIRE(rig.until([&] { return !rig.server.ucs_log.empty(); }));
     const std::vector<std::string> saved = {"mock.Online", "Other.Alice", "Mock.Case"};
-    for (const auto& name : saved) rig.server.ucs.send_reliable(buddy(name));
-    rig.server.ucs.send_reliable(mailbox());
-    REQUIRE(rig.until([&] { return rig.conn.chat_server_connected() && rig.conn.social().friends.size() == 3; }));
-    rig.chat();
+    enter_with_ucs(rig, saved);
 
     int sent = 0;
     for (const char* command : {"/who friends", "/who all friends"}) {
@@ -212,10 +240,11 @@ TEST_CASE("mock server: friends who strips only the exact current-world qualifie
         const auto* packet = last_packet(rig.server, Op::FriendsWho);
         REQUIRE(packet);
         ByteReader reader(packet->data);
-        CHECK(reader.cstring() == (sent == 1 ? "0,Online,Other.Alice,Mock.Case" : "1,Online,Other.Alice,Mock.Case"));
+        // GetFriendName @0x7efa90 matches the prefix with __strnicmp, so "Mock." goes too.
+        CHECK(reader.cstring() == (sent == 1 ? "0,Online,Other.Alice,Case" : "1,Online,Other.Alice,Case"));
         CHECK(reader.remaining() == 0);
         CHECK(rig.conn.social().friends == saved);
         CHECK(MockEqServer::count(rig.server.zone_log, Op::WhoAllRequest) == 0);
-        CHECK(rig.chat().empty());
+        check_sent_banner(rig.chat());
     }
 }

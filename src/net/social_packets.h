@@ -42,8 +42,9 @@ std::optional<WhoRequest> decode_who_request(const AppPacket& p);
 
 // OP_FriendsWho (0x3956), client → zone (Who_BuildAndSendRequest @0x524a8a):
 // ASCII '0' (zone) or '1' (all), then each saved friend name prefixed by a comma,
-// then NUL; no trailing comma. UniversalChatProxy's friend getter @0x7efa90
-// strips the exact current world's prefix ("World.") and keeps other worlds.
+// then NUL; no trailing comma. CChatService::GetFriendName @0x7efa90 strips
+// the current world's prefix ("World.", matched case-insensitively with
+// __strnicmp) and keeps other worlds.
 // Replies use OP_WhoAllResponse.
 AppPacket encode_friends_who(const std::vector<std::string>& friends, bool all,
                             std::string_view server_short_name = {});

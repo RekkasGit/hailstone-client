@@ -26,7 +26,7 @@ What the client does not implement yet, or implements with an approximation it c
 
 ## Social and friends
 
-- `/who friends` now sends OP_FriendsWho and uses the ordinary who response. Native scope/name serialization and the empty-list guard are confirmed; packet and loopback mock-server tests cover online, anonymous/roleplaying and omitted offline friends against stock EQEmu's response contract. A live comparison with RoF2, including cross-zone friends and online/offline transitions, remains untested.
+- `/who friends` sends OP_FriendsWho built as Who_BuildAndSendRequest builds it (confirmed) and shows the server's ordinary who response, which mock-server tests check only against stock EQEmu's response as read from its source: online, anonymous and roleplaying friends shown, offline friends left out. A live session against a stock server with friends in other zones, some going online and offline, would settle whether the reply matches.
 
 ## Shared archive memory
 
