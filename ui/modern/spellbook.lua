@@ -34,6 +34,7 @@ local filterCat, filterSub = nil, nil
 local search = ""
 local targetGem = nil     -- the gem picked in the strip (0-based)
 local drag = nil          -- the entry being dragged
+local dropTaken = false   -- the book's own gem strip memorized the drag this frame: the spell bar is not offered it
 local details = { id = nil }
 local tab = "details"
 local confirmDelete = nil
@@ -979,9 +980,14 @@ local function gemStrip(x, y, w, s, st)
     local hit = T.Hit("##gem" .. g, gx, y, gx + size, y + size)
     local hovered = ui.IsItemHovered() or (drag and ui.IsMouseHoveringRect(gx, y, gx + size, y + size))
     if usable and hovered then T.HoverFx(gx, y, gx + size, y + size, s, 8) end
-    if drag and usable and ui.IsMouseHoveringRect(gx, y, gx + size, y + size) then
+    -- (only while the book is the window under the mouse: the spell bar over it takes the drop instead)
+    if drag and usable and ui.IsMouseHoveringRect(gx, y, gx + size, y + size)
+        and ui.IsWindowHovered(ui.HoveredFlags.ChildWindows | ui.HoveredFlags.AllowWhenBlockedByActiveItem) then
       ui.DrawRect(gx - 2 * s, y - 2 * s, gx + size + 2 * s, y + size + 2 * s, C.accent[1], C.accent[2], C.accent[3], 1, 9 * s, 2 * s)
-      if ui.IsMouseReleased(ui.Mouse.Left) then memorize(drag, g, st) end
+      if ui.IsMouseReleased(ui.Mouse.Left) then
+        memorize(drag, g, st)
+        dropTaken = true
+      end
     end
     if hit and usable then
       if st.cursorSpell then
@@ -1110,7 +1116,12 @@ local function body(x, y, w, h, s)
     ui.Foreground(false)
     -- shared with the spell bar (spellgems.lua, drawn after this), which takes the drop on the release frame: only
     -- this frame's (modern_spell_drag_frame), so a book closed mid-drag leaves nothing to memorize
-    modern_spell_drag, modern_spell_drag_frame = drag, ui.GetFrameCount()
+    -- (a drop the book's own gems took is not offered to it as well: one release memorizes once)
+    if dropTaken then
+      modern_spell_drag, dropTaken = nil, false
+    else
+      modern_spell_drag, modern_spell_drag_frame = drag, ui.GetFrameCount()
+    end
     if not ui.IsMouseDown(ui.Mouse.Left) then drag = nil end
   elseif modern_spell_drag and not ui.IsMouseReleased(ui.Mouse.Left) then
     modern_spell_drag = nil
