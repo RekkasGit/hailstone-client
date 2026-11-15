@@ -45,11 +45,13 @@ Written 2026-10-28 from `docs/unknowns.md` and `docs/plan.md`.
 - [x] DoPassageOfTime's 6 s tick runs whole in the client (ProcessAffects' buff HP, mana and endurance, local expiry at 0, the mesmerize break; HP, endurance and mana regen) and its 1 s endurance upkeep; unit and connection tests, not tried live.
 - [x] Passage-of-time owner status/bleeding, live running endurance penalty, flag-1 cast interruption, drunkenness decay/sway/camera and Eye summon control are implemented with regression coverage. Live acceptance remains open.
 - [x] Combat line filters 13 to 16.
+- [x] Temporary-pet combat lines preserve the spawn flag and use native focused-pet or temporary-pet-plus-owner classification (packet-driven regression tests).
+- [ ] Check owned-pet line filters and colour live with a permanent pet and multiple temporary pets on a server that supplies the temporary flag and owner; stock EQEmu's RoF2 swarm records omit that information (unknowns.md).
 - [x] Hand-to-hand delay and fist damage from the profile (EQEmu sends 0); the player's own BodyWet in the attack checks.
 - [x] `AltAttack` and the attack lock match the original; the rank swap's limit and GM check ported (never swaps on EQEmu's gold membership).
 - [x] Ranged attacks do not turn the player in the original either.
 - [x] Held buffs seen live (a SPA 436 buff freezes Courage's countdown). Melee checked by hand.
-- [ ] Distance-scaled spell effects live (needs a spell with a distance modifier cast at range). Buff caster ids and temporary pets in the line filters are in unknowns.md.
+- [ ] Distance-scaled spell effects live (needs a spell with a distance modifier cast at range). Buff caster ids are in unknowns.md.
 - [x] Commands: `/discipline`, `/doability`, `/stopdisc`, `/memspellset`, `/spellscribe`, `/targetgroupbuff` / `/tgb`, `/autofire`, `/melody`, `/dismount`, `/aggrometer`, `/buyer`, `/claim` (f3c5c5d).
 - [ ] `/gems`: the Gems mini-game (CGemsGameWnd, 0x6705f0 to 0x6734e0), a port of its own.
 - [x] (358bf04, checked live: /discipline now runs the NMS reuse timers; the empty list after login matches the original) A second `/discipline` right after `/stopdisc` is not refused by the client (NMS disc timer map or a missing server timer packet); the reuse list is empty after zone-in until the server sends timers.
