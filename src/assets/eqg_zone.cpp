@@ -159,8 +159,11 @@ EffectParams effect_params(const MaterialDef& def, EqgShader cls) {
         std::string_view suffix = sh;
         if (ends_with(suffix, ".fx")) suffix.remove_suffix(3);
         if (ends_with(suffix, "Max")) suffix.remove_suffix(3);
-        // CBGG1 and CBSG1 select the same native material class (0x0d), whose static-model effect binds
-        // SModelCBSG1.fxo: the surface map packs its normal in RG, self-illumination in B and gloss in A.
+        // CBGG1 and CBSG1 select the same native material class: CMaterial::InitFromShaderName (EQGraphicsDX9.dll
+        // 0x10014660) gives both class 0xc, render class 0xd (eqlib's RenderMaterial_OpaqueCBSG1). That their
+        // static-model effect is SModelCBSG1.fxo, and that its map packs the normal in RG, self-illumination in B
+        // and gloss in A, is not confirmed (docs/unknowns.md "EQG"). Matched at the end of the name only; the
+        // original matches the text anywhere.
         e.packed_normal = ends_with(suffix, "CBGG1") || ends_with(suffix, "CBSG1");
         e.glow = e.packed_normal;
         e.specular = contains(sh, "CBS") || contains(sh, "SB") || contains(sh, "GB") || contains(sh, "Full");
@@ -383,8 +386,11 @@ void load_binary(Zone& zone, const Source& src, std::span<const std::byte> zon_d
             // placement is not applied (OpenEQ docs/EQGZ_NATIVE_REGIONS.md,
             // EQGraphicsDX9.dll 0x10020970).
             if (terrain) {
-                // Terrain's optional baked light is named by the TER file, independently of its ZON placement
-                // (EQGraphicsDX9.dll 0x10063f10). Its alpha weighs sky light; opaque white admits full sunlight.
+                // Terrain's optional baked light is named by the TER file, independently of its ZON placement:
+                // the EQGT loader (EQGraphicsDX9.dll 0x10063f10, called from 0x10065c00 with the file name less
+                // its 4-character extension) reads <name>.LIT, magic EQGP, and ignores it when its count is not
+                // the mesh's vertex count. Its alpha weighs sky light as objects' does (docs/graphics.md); opaque
+                // white admits full sunlight.
                 if (auto lit_data = src.archive->read(file.substr(0, file.size() - 4) + ".lit")) {
                     auto colors = lighting_colors(parse_lit(*lit_data), mesh);
                     for (std::size_t v = 0; v < colors.size(); ++v) mesh.vertices[v].color = colors[v];

@@ -727,14 +727,16 @@ void main() {
     }
     if (g_modern && !unlit && mode == 0u && (flags & (kSpecular | kReflective)) != 0u)
         color += surface_shine(n, flags, zone_surface_gloss(surface, packed_surface, pc.extra.y));
+    if (g_modern && !unlit && (flags & (kWaterSurface | kLavaSurface)) == 0u && mode != 2u && mode != 3u &&
+        (scene.weather.x > 0.0 || scene.weather.y > 0.0 || scene.weather.w > 0.0))
+        color = weathered(color, n, pc.params.x > 0.0);
+    // The packed map's glow, after the weather: snow or rain on a glowing crystal does not put it out.
     if (!unlit && mode == 0u && (flags & kGlow) != 0u) {
         vec3 albedo = tex(pc.tex.x, v_uv).rgb;
         color += zone_surface_glow(g_modern ? to_linear(albedo) : albedo, surface.b, g_modern);
     }
+    // AddAlpha surfaces (render/zone_surface.h kAdditiveGlow; never set in a full-bright view).
     if (g_modern && (flags & kAdditiveGlow) != 0u) color *= zone_emission_gain(true);
-    if (g_modern && !unlit && (flags & (kWaterSurface | kLavaSurface)) == 0u && mode != 2u && mode != 3u &&
-        (scene.weather.x > 0.0 || scene.weather.y > 0.0 || scene.weather.w > 0.0))
-        color = weathered(color, n, pc.params.x > 0.0);
     // Alpha test, GREATEREQUAL against the reference (0 = off), or coverage when multisampled.
     float out_alpha;
     if (!alpha_test(alpha, pc.params.x, pc.params.y, out_alpha)) discard;

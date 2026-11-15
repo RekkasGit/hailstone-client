@@ -1124,23 +1124,33 @@ modern lighting always uses them (`shaders/zone.frag` `mapped_normal`, `surface_
   comes from the screen derivatives of the position and the texture coordinates; the map's green runs along +v, as in
   Direct3D's (and 3ds Max's) maps. The bumped normal feeds the whole modern light: the sun and its shadow, the sky
   hemisphere, the zone's and the dynamic lights.
-- **Specular** (shaders whose name holds `CBS`, `SB`, `GB` or `Full`, and the packed `CBGG1` class): a Blinn-Phong highlight of the sun at
-  `e_fShininess0` (40 when unset), as strong as `e_fGloss0` (0.2), in the vertex's share of the open sky.
+- **Specular** (shaders whose name holds `CBS`, `SB`, `GB` or `Full`, and the packed `CBGG1` class when its map
+  loads): a Blinn-Phong highlight of the sun at `e_fShininess0` (40 when unset), as strong as `e_fGloss0` (0.2), in
+  the vertex's share of the open sky.
 - **Reflection** (`CE1`, `CBSGE1` with `e_fEnvMapStrength0` > 0, read doubled): the sky
   (`sky_reflection`) in place of the material's environment map, weighted by Fresnel.
 
-The `CBGG1` / `CBSG1` static-model classes use a packed surface map: RG is tangent normal direction with a positive
-Z of 0.9 before normalization, B is self-illumination, and A is gloss. This follows their material type 0x0d,
-static effect 0x2f and `SPL/SModelCBSG1` high-quality shader. The glow mask is multiplied by diffuse colour, independent
-of baked light, sky share and shadows. The modern zone renderer gives it HDR headroom, as it does additive particles;
-the classic lighting adds it at the authored intensity. A missing map supplies no glow. The modern highlight uses
-the map's gloss directly instead of the ordinary class's scalar gloss. Other classes keep their existing RGB-normal
-path. Treating packed B as normal Z had turned dark regions' normals inward and lost the luminous parts entirely.
+The `CBGG1` / `CBSG1` classes use a packed surface map. That both names select one class is confirmed:
+`CMaterial::InitFromShaderName` (`EQGraphicsDX9.dll` 0x10014660) gives both class 0xc, render class 0xd (eqlib's
+`RenderMaterial_OpaqueCBSG1`). The channel layout is not confirmed against the original's shader (the author read it
+from `SPL/SModelCBSG1`; [unknowns](unknowns.md#world-rendering), EQG): the client takes RG as the tangent normal's
+direction with a Z of 0.9 before normalization (its own choice, which keeps a dark glow mask from turning the normal
+inward), B as self-illumination and A as gloss. The glow mask is multiplied by the diffuse colour and added after the
+weather (snow or rain does not put a glowing crystal out), independent of baked light, sky share and shadows. The
+modern zone renderer gives it HDR headroom, the additive particles' `render::kParticleGlow` (2.5); the classic
+lighting adds it at intensity 1 (not confirmed). The modern highlight's strength is `e_fGloss0` times the map's
+alpha: whether the original replaces `e_fGloss0` by the alpha instead is not confirmed, and the product never makes
+a highlight stronger than the material asks. A packed material whose map does not load is drawn as a plain one: no
+packed normal, glow or highlight from the packing, and a texture pack's maps may still apply. Other classes keep
+their RGB normal path. Treating packed B as normal Z had turned dark regions' normals inward and lost the luminous
+parts entirely.
 
-The crystal's beam and radial rays in Forgotten Halls are additive model triangles. In modern lighting `AddAlpha`
-zone surfaces also get HDR headroom for bloom; classic retains their texture-direct additive intensity. Full-bright
-views and ordinary opaque or WLD additive materials are not brightened by this rule. The zone's geode particle
-fixtures supply the floating motes, not the rays.
+The crystal's beam and radial rays in Forgotten Halls are additive model triangles. In modern lighting every EQG
+`AddAlpha` zone surface, in every EQG zone, is multiplied by the same 2.5 for bloom; classic keeps their texture-direct
+additive intensity. The full-bright view (`--lighting none`, `VertexLighting::None`) skips the gain: the zone renderer clears its bit there,
+since the shader sees every surface unlit in that view and `AddAlpha` surfaces always are. Opaque EQG materials and
+WLD additive materials are not brightened by this rule. The zone's geode particle fixtures supply the floating motes,
+not the rays.
 
 Apart from that packed glow mask, classic lighting keeps its diffuse-by-lit-colour surface path.
 

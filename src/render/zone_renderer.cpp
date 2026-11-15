@@ -1,4 +1,5 @@
 #include "render/zone_renderer.h"
+#include "render/zone_surface.h"
 
 #include <algorithm>
 #include <atomic>
@@ -198,9 +199,9 @@ constexpr std::uint32_t kMultiPass = 4; // add the point lights
 constexpr std::uint32_t kWaterSurface = 8; // a water surface (the modern lighting's water)
 constexpr std::uint32_t kLavaSurface = 16;  // a lava surface
 constexpr std::uint32_t kWaterCopies = 32;  // VkContext::begin_translucent's copies are readable
-constexpr std::uint32_t kNormalMap = 64;    // modern: slot 1 is a tangent-space normal map
-constexpr std::uint32_t kSpecular = 128;    // modern: a sun highlight (extra.x shininess, extra.y gloss)
-constexpr std::uint32_t kReflective = 256;  // modern: the sky reflected (extra.z strength)
+using zone_surface::kNormalMap;  // render/zone_surface.h, with the other EQG surface bits
+using zone_surface::kSpecular;
+using zone_surface::kReflective;
 constexpr std::uint32_t kMolten = 512;      // modern: RegionLava drawn as lava (its texture's name says so)
 constexpr std::uint32_t kEnergy = 1024;     // modern: RegionLavaH drawn as a glowing field
 constexpr std::uint32_t kEnvMap = 2048;     // modern: slot 2 is the water's own environment (an octahedral map)
@@ -212,9 +213,7 @@ constexpr std::uint32_t kLandZone = 16384;
 // ZoneRenderer::set_debug_tint: a neighbour's own geometry, and its own ground in its part of the land.
 constexpr std::uint32_t kTintNeighbour = 32768;
 constexpr std::uint32_t kTintLand = 65536;
-constexpr std::uint32_t kPackedNormal = 131072; // CBGG1/CBSG1: RG normal, B glow, A gloss
-constexpr std::uint32_t kGlow = 262144;         // slot 1's blue channel is self-illumination
-constexpr std::uint32_t kAdditiveGlow = 524288; // AddAlpha light surfaces, HDR in modern lighting
+using zone_surface::kAdditiveGlow; // render/zone_surface.h
 // The depth pre-pass's flags: none of the shading's (bind_draw adds kLodFading, which decides discards, to both).
 constexpr std::uint32_t kDepthOnlyFlags = 0;
 constexpr VkColorComponentFlags kAllChannels =
@@ -1294,14 +1293,9 @@ ZoneRenderer::PreparedPtr ZoneRenderer::prepare(const assets::Zone& zone, const 
         if (d.mode == kClassic) {
             // The surface maps of the opaque, Alpha and Chroma classes (the modern lighting's): the normal map in
             // slot 1, filtered as data.
-            if (!e.normal_map.empty()) {
-                d.extra_slots[0] = slot_for(e.normal_map, false, TextureUse::Data);
-                d.surface |= d.extra_slots[0] != 0 ? kNormalMap : 0u;
-                if (d.extra_slots[0] != 0)
-                    d.surface |= (e.packed_normal ? kPackedNormal : 0u) | (e.glow ? kGlow : 0u);
-            }
-            d.surface |= (e.specular || e.packed_normal ? kSpecular : 0u) |
-                         (e.reflective && e.env_strength > 0.0f ? kReflective : 0u);
+            const bool normal_map = !e.normal_map.empty();
+            if (normal_map) d.extra_slots[0] = slot_for(e.normal_map, false, TextureUse::Data);
+            d.surface |= zone_surface::eqg_surface_flags(e, normal_map && d.extra_slots[0] != 0);
             d.extra = {e.shininess, e.gloss, e.env_strength, 0.0f};
             // A material's own normal map and highlight win over a texture pack's.
             if ((d.surface & (kNormalMap | kSpecular)) != 0u) d.maps = 0;
@@ -2029,7 +2023,8 @@ void ZoneRenderer::draw(const FrameInfo& frame, const glm::mat4& view_proj, cons
                                   (d.fog ? 0u : kNoFog) |
                                   (d.multipass && lighting_ != VertexLighting::None ? kMultiPass : 0u) |
                                   (d.liquid == Liquid::Water ? kWaterSurface | copies : 0u) |
-                                  (d.liquid == Liquid::Lava ? kLavaSurface : 0u) | d.surface;
+                                  (d.liquid == Liquid::Lava ? kLavaSurface : 0u) |
+                                  zone_surface::view_surface_flags(d.surface, lighting_ == VertexLighting::None);
             bind_draw(cmd, d, flags, time_ms);
         }, kSceneLod);
     }

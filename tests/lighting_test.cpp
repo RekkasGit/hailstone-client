@@ -3,7 +3,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <limits>
+#include <string>
 
 #include <glm/common.hpp>
 #include <glm/trigonometric.hpp>
@@ -22,9 +25,11 @@
 #include "render/ambient_probe.h"
 #include "render/actor_surface.h"
 #include "render/atmosphere.h"
+#include "render/particle_renderer.h"
 #include "render/scene_lighting.h"
 #include "render/vk_context.h"
 #include "render/weather_renderer.h"
+#include "render/zone_surface.h"
 
 using namespace hailstone;
 
@@ -108,8 +113,10 @@ TEST_CASE("EQG packed surfaces: glow and gloss channels never reverse the tangen
     // Ordinary RGB normal maps retain their full three-channel interpretation.
     CHECK(zone_surface_normal(glm::vec4(0.5f, 0.5f, 1, 0), false) == glm::vec3(0, 0, 1));
     CHECK(zone_surface_normal(dark, false).z < 0.0f);
-    CHECK(zone_surface_gloss(dark, true, 0.2f) == dark.a);
-    CHECK(zone_surface_gloss(bright, true, 0.2f) == 1.0f);
+    // The map's alpha scales the material's gloss; it never raises it (docs/unknowns.md "EQG").
+    CHECK(zone_surface_gloss(dark, true, 0.2f) == doctest::Approx(dark.a * 0.2f));
+    CHECK(zone_surface_gloss(bright, true, 0.2f) == doctest::Approx(0.2f));
+    CHECK(zone_surface_gloss(glm::vec4(0.5f, 0.5f, 0.0f, 2.0f), true, 0.2f) == doctest::Approx(0.2f));
     CHECK(zone_surface_gloss(bright, false, 0.2f) == 0.2f);
 }
 
@@ -125,6 +132,58 @@ TEST_CASE("EQG glow: an authored mask emits in darkness, with HDR headroom only 
     CHECK(modern.b > 1.0f); // enough range for bloom without raising ordinary surfaces
     CHECK(zone_surface_glow(albedo, 2.0f, true) == modern);
     CHECK(zone_emission_gain(false) == 1.0f); // the classic additive ray pass keeps its source intensity
+    // The zone's glow takes the additive particles' headroom, the one constant (render/particle_renderer.h).
+    CHECK(zone_emission_gain(true) == render::kParticleGlow);
+}
+
+TEST_CASE("EQG surface flags: a packed map that did not load gives no packed normal, glow or highlight") {
+    namespace zs = render::zone_surface;
+    assets::EffectParams packed;
+    packed.normal_map = "crystal_n.dds";
+    packed.packed_normal = true;
+    packed.glow = true;
+    const std::uint32_t loaded = zs::eqg_surface_flags(packed, true);
+    CHECK((loaded & zs::kNormalMap) != 0u);
+    CHECK((loaded & zs::kPackedNormal) != 0u);
+    CHECK((loaded & zs::kGlow) != 0u);
+    CHECK((loaded & zs::kSpecular) != 0u); // the map's alpha is its gloss
+    // CBGG1's name asks for no highlight: with its map missing it is a plain material, and the texture pack's maps
+    // (zone_renderer.cpp: cleared by kNormalMap or kSpecular) may still apply.
+    CHECK(zs::eqg_surface_flags(packed, false) == 0u);
+    // CBSG1's name asks for one whatever its map.
+    packed.specular = true;
+    CHECK(zs::eqg_surface_flags(packed, false) == zs::kSpecular);
+    // An ordinary normal map: no packed channels.
+    assets::EffectParams plain;
+    plain.normal_map = "wall_n.dds";
+    CHECK(zs::eqg_surface_flags(plain, true) == zs::kNormalMap);
+    plain.reflective = true;
+    CHECK((zs::eqg_surface_flags(plain, true) & zs::kReflective) == 0u); // no strength, no reflection
+    plain.env_strength = 1.0f;
+    CHECK((zs::eqg_surface_flags(plain, true) & zs::kReflective) != 0u);
+}
+
+// Weather covers what is lit, not what glows (shaders/zone.frag): the packed glow and the AddAlpha gain come after
+// weathered().
+TEST_CASE("EQG glow: zone.frag adds the glow after the weather") {
+    std::ifstream in(HAILSTONE_SOURCE_DIR "/shaders/zone.frag", std::ios::binary);
+    REQUIRE(in);
+    const std::string code{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    const auto weather = code.find("color = weathered(");
+    const auto glow = code.find("color += zone_surface_glow(");
+    const auto gain = code.find("color *= zone_emission_gain(");
+    REQUIRE(weather != std::string::npos);
+    REQUIRE(glow != std::string::npos);
+    REQUIRE(gain != std::string::npos);
+    CHECK(weather < glow);
+    CHECK(weather < gain);
+}
+
+TEST_CASE("EQG surface flags: the full-bright view draws AddAlpha surfaces without HDR gain") {
+    namespace zs = render::zone_surface;
+    const std::uint32_t surface = zs::kAdditiveGlow | zs::kNormalMap;
+    CHECK(zs::view_surface_flags(surface, false) == surface);
+    CHECK(zs::view_surface_flags(surface, true) == zs::kNormalMap);
 }
 
 // The puddles' noise and cover, compiled as C++ the same way (shaders/puddle_cover.glsl).
