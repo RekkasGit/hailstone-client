@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <limits>
 #include <map>
@@ -367,8 +368,14 @@ GroundSampler::GroundSampler(const glm::vec2& lo, const glm::vec2& hi, float cel
     GroundGrid& g = grid_;
     g.origin = lo;
     g.cell = cell;
-    g.width = std::max(0, static_cast<int>(std::ceil((hi.x - lo.x) / cell)));
-    g.height = std::max(0, static_cast<int>(std::ceil((hi.y - lo.y) / cell)));
+    // Counted in double and bounded before the cast: a NaN, an infinite or a huge span (or a zero cell) would make
+    // the conversion to int undefined. Past the 4,000,000-cell bound below the exact count does not matter.
+    auto cells = [&](float span) {
+        const double n = std::ceil(static_cast<double>(span) / static_cast<double>(cell));
+        return n > 0.0 ? static_cast<int>(std::min(n, 4'000'001.0)) : 0; // false for NaN
+    };
+    g.width = cells(hi.x - lo.x);
+    g.height = cells(hi.y - lo.y);
     if (g.width == 0 || g.height == 0 || static_cast<std::size_t>(g.width) * static_cast<std::size_t>(g.height) > 4'000'000) {
         g.width = g.height = 0;
         return;
@@ -429,12 +436,17 @@ std::optional<std::vector<BaryPolygon>> split_cells(glm::vec2 origin, float cell
     const float gx1 = origin.x + static_cast<float>(width) * cell;
     const float gy1 = origin.y + static_cast<float>(height) * cell;
     if (hi.x <= origin.x || hi.y <= origin.y || lo.x >= gx1 || lo.y >= gy1) return std::nullopt;
-    const int i0 = static_cast<int>(std::floor((lo.x - origin.x) / cell));
-    const int i1 = static_cast<int>(std::floor((hi.x - origin.x) / cell));
-    const int j0 = static_cast<int>(std::floor((lo.y - origin.y) / cell));
-    const int j1 = static_cast<int>(std::floor((hi.y - origin.y) / cell));
+    // Bounded in double before the cast (a NaN is cell 0, so a broken triangle is decided whole); the span product in
+    // 64 bits (long is 32 on Windows).
+    auto index = [&](float v, float o) {
+        const double f = std::floor((static_cast<double>(v) - static_cast<double>(o)) / static_cast<double>(cell));
+        return std::isnan(f) ? 0 : static_cast<int>(std::clamp(f, -1.0e9, 1.0e9));
+    };
+    const int i0 = index(lo.x, origin.x), i1 = index(hi.x, origin.x);
+    const int j0 = index(lo.y, origin.y), j1 = index(hi.y, origin.y);
     const BaryPolygon whole{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
-    if ((i0 == i1 && j0 == j1) || static_cast<long>(i1 - i0 + 1) * static_cast<long>(j1 - j0 + 1) > 4096) {
+    if ((i0 == i1 && j0 == j1) ||
+        (static_cast<std::int64_t>(i1) - i0 + 1) * (static_cast<std::int64_t>(j1) - j0 + 1) > 4096) {
         if (!drops(whole)) return std::nullopt;
         return std::vector<BaryPolygon>{};
     }
