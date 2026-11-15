@@ -334,6 +334,11 @@ function T.settle(clicked, pad)
   end
   return clicked
 end
+-- A pad button a window reads itself (a dialog's A to accept, not an ImGui item's), dropped in the same settling time
+-- whether or not the navigation cursor shows (a window without ImGui navigation never shows it).
+function T.settledPress(pad, b)
+  return pad.menuPressed(b) and (GPSTATE and GPSTATE.padSettleUntil or 0) <= ui.GetTime()
+end
 
 -- A button w x h: returns clicked, focused, x0, y0, x1, y1. opts: primary (accent face), disabled, glyph (a pad
 -- button drawn on its left), sub (a second, dimmer line), align (0 left, 0.5 centre). off: disabled as well (a wrapper

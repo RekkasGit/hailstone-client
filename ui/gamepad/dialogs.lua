@@ -110,7 +110,7 @@ ui.window("Quantity", function()
       if pad.menuPressed("rb") then set(value + 10) end
       if pad.menuPressed("x") then set(0) end
       if pad.menuPressed("y") then set(maxv) end
-      if pad.menuPressed("a") then accept = true end
+      if T.settledPress(pad, "a") then accept = true end
     end
     -- buttons (the mouse; the pad's buttons are drawn on them)
     local wx, wy = ui.GetWindowPos()

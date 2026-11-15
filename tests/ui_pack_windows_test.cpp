@@ -2925,6 +2925,28 @@ return "ok"
     CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_deferred_test") == "ok");
 }
 
+// A pad button a window reads itself (T.settledPress: the Quantity, colour, appearance and icon dialogs' A) is
+// dropped while the pack's settling time after a window gains the focus runs, as T.settle drops a button's press.
+TEST_CASE("UI packs (gamepad): a dialog's own A waits out the settling time") {
+    constexpr const char* kScript = R"lua(
+local T = dofile("lib/theme.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+local down = true
+local fake = { menuPressed = function(b) return b == "a" and down end }
+GPSTATE.padSettleUntil = ui.GetTime() + 1
+check(not T.settledPress(fake, "a"), "pressed while settling")
+GPSTATE.padSettleUntil = ui.GetTime() - 1
+check(T.settledPress(fake, "a"), "not pressed once settled")
+down = false
+check(not T.settledPress(fake, "a"), "pressed without a press")
+GPSTATE.padSettleUntil = nil
+down = true
+check(T.settledPress(fake, "a"), "no settling time yet")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_settle_test") == "ok");
+}
+
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of
 // the day, the /who answer, an item's wrapped description) between frames: a change still shows. The stock windows'
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.
