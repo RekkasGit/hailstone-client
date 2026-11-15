@@ -32,6 +32,7 @@
 #include "game/item_links.h"
 #include "game/spells.h"
 #include "net/game_connection.h"
+#include "plugin/lua_keep.h"
 #include "platform/local_time.h"
 #include "ui/dev_screens.h"
 #include "ui/ui_ini.h"
@@ -1402,8 +1403,7 @@ int ChatText(lua_State* L) {
     for (std::size_t k = from; k < h.chat->lines.size(); ++k) {
         const auto& l = h.chat->lines[k];
         if (line_seq(*h.chat, k) <= c.cleared || window_of_line(l) != w) continue;
-        std::string s = line_stml(l, names, stamps);
-        lua_pushlstring(L, s.data(), s.size());
+        plugin::push_made(L, line_stml(l, names, stamps)); // (out of this frame before the push: plugin/lua_keep.h)
         lua_rawseti(L, -2, ++i);
     }
     if (!since) return 2;
@@ -1528,12 +1528,16 @@ std::string slash_word(std::uint32_t id, const char* fallback) {
 // `text` (game::cycle_reply): its new text, nil when it stays
 int ChatCycleReply(lua_State* L) {
     EqHost& h = host(L);
-    std::string text = luaL_checkstring(L, 1);
+    const char* text = luaL_checkstring(L, 1);
+    const bool back = lua_toboolean(L, 2) != 0;
     if (!h.conn) return 0;
-    game::CycleReply r = game::cycle_reply(text, h.conn->social().last_tells, h.conn->last_tell_index(),
-                                           lua_toboolean(L, 2) != 0, slash_word(13974, "/tell"),
-                                           slash_word(14202, "/rtarget"));
-    for (std::uint32_t id : r.messages) h.conn->system_message(id);
+    // The reply in a box the state owns across its push (plugin/lua_keep.h).
+    game::CycleReply& r = plugin::lua_keep<game::CycleReply>(L);
+    plugin::cxx_guard(L, [&] {
+        r = game::cycle_reply(text, h.conn->social().last_tells, h.conn->last_tell_index(), back,
+                              slash_word(13974, "/tell"), slash_word(14202, "/rtarget"));
+        for (std::uint32_t id : r.messages) h.conn->system_message(id);
+    });
     if (r.text.empty()) return 0;
     lua_pushlstring(L, r.text.data(), r.text.size());
     return 1;

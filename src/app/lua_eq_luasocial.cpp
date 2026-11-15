@@ -40,6 +40,7 @@
 #include "game/lua_social.h"
 #include "mq/lua_mq.h"
 #include "mq/tlo.h"
+#include "plugin/lua_keep.h"
 
 namespace hailstone::app {
 
@@ -284,29 +285,39 @@ int LuaSocialExport(lua_State* L) {
     const game::Social& s = h.hot_buttons->social(n);
     if (lua_istable(L, 2)) {
         // The editor's unsaved social: every field onto the stack before any std::string exists.
+        // The lines too (raw reads), then the text made into a box the state owns across its push
+        // (plugin/lua_keep.h).
         const int base = lua_gettop(L);
         for (const char* k : {"name", "color", "press", "face", "lines"}) lua_getfield(L, 2, k);
-        game::LuaSocialFile f{string_at(L, base + 1), static_cast<int>(lua_tointeger(L, base + 2)),
-                              {string_at(L, base + 3), string_at(L, base + 4)}, {}};
-        if (lua_istable(L, base + 5))
-            for (int i = 0; i < game::kSocialLines; ++i) {
-                lua_rawgeti(L, base + 5, i + 1);
-                f.lines.push_back(string_at(L, -1));
-                lua_pop(L, 1);
-            }
-        lua_settop(L, base);
-        std::string text = game::export_lua_social(f);
+        const bool has_lines = lua_istable(L, base + 5);
+        luaL_checkstack(L, game::kSocialLines + 1, nullptr);
+        for (int i = 0; i < game::kSocialLines; ++i)
+            if (has_lines) lua_rawgeti(L, base + 5, i + 1);
+            else lua_pushnil(L);
+        std::string& text = plugin::lua_keep<std::string>(L);
+        plugin::cxx_guard(L, [&] {
+            game::LuaSocialFile f{string_at(L, base + 1), static_cast<int>(lua_tointeger(L, base + 2)),
+                                  {string_at(L, base + 3), string_at(L, base + 4)}, {}};
+            if (has_lines)
+                for (int i = 0; i < game::kSocialLines; ++i) f.lines.push_back(string_at(L, base + 6 + i));
+            text = game::export_lua_social(f);
+        });
         lua_pushlstring(L, text.data(), text.size());
         return 1;
     }
-    std::string text = game::export_lua_social(
-        {s.name, s.color, s.lua, std::vector<std::string>(s.lines.begin(), s.lines.end())});
+    std::string& text = plugin::lua_keep<std::string>(L);
+    plugin::cxx_guard(L, [&] {
+        text = game::export_lua_social(
+            {s.name, s.color, s.lua, std::vector<std::string>(s.lines.begin(), s.lines.end())});
+    });
     lua_pushlstring(L, text.data(), text.size());
     return 1;
 }
 
 int LuaSocialImport(lua_State* L) {
-    auto f = game::import_lua_social(luaL_checkstring(L, 1));
+    const char* text = luaL_checkstring(L, 1);
+    auto& f = plugin::lua_keep<std::optional<game::LuaSocialFile>>(L); // across push_file (plugin/lua_keep.h)
+    plugin::cxx_guard(L, [&] { f = game::import_lua_social(text); });
     if (!f) {
         lua_pushnil(L);
         lua_pushstring(L, "not a Hailstone social (it starts with hailstone-social:1:)");
@@ -366,7 +377,7 @@ int LuaComplete(lua_State* L) {
     std::size_t word = before.size();
     while (word > 0 && is_ident(before[word - 1])) --word;
     std::string_view prefix = before.substr(word);
-    std::vector<std::string> items;
+    auto& items = plugin::lua_keep<std::vector<std::string>>(L); // across the pushes (plugin/lua_keep.h)
     auto take = [&](std::span<const char* const> names) {
         for (const char* n : names)
             if (starts_nocase(n, prefix)) items.emplace_back(n);
@@ -376,14 +387,16 @@ int LuaComplete(lua_State* L) {
         std::size_t start = word - 1 - object.size();
         return before.substr(start, object.size()) == object && (start == 0 || !is_ident(before[start - 1]));
     };
-    if (auto path = lua_tlo_path(before); path && h.registry && h.tlo_context) {
-        items = h.registry->complete(h.tlo_context(), *path);
-    } else if (ends_with_object("mq")) {
-        take(kMqNames);
-    } else if (ends_with_object("button")) {
-        take(kButtonNames);
-    }
-    if (items.size() > 50) items.resize(50);
+    plugin::cxx_guard(L, [&] {
+        if (auto path = lua_tlo_path(before); path && h.registry && h.tlo_context) {
+            items = h.registry->complete(h.tlo_context(), *path);
+        } else if (ends_with_object("mq")) {
+            take(kMqNames);
+        } else if (ends_with_object("button")) {
+            take(kButtonNames);
+        }
+        if (items.size() > 50) items.resize(50);
+    });
     lua_pushinteger(L, static_cast<lua_Integer>(word + 1));
     lua_createtable(L, static_cast<int>(items.size()), 0);
     for (std::size_t i = 0; i < items.size(); ++i) {
