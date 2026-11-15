@@ -17,7 +17,7 @@ local problem = nil
 
 local function title(s)
   local t = s.title ~= "" and s.title or s.url
-  if #t > 60 then t = t:sub(1, 59) .. "…" end
+  if #t > 60 then t = T.cutBytes(t, 59) .. "…" end
   return t
 end
 

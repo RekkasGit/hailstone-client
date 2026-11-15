@@ -92,14 +92,14 @@ function K.draw(kb, pad, x0, y0, w)
   ui.SameLine(0, T.px(8))
   if T.button("##kbspace", "Space", bw, T.px(60), { glyph = "y" }, pad) and #kb.text < kb.max then kb.text = kb.text .. " " end
   ui.SameLine(0, T.px(8))
-  if T.button("##kbdel", "Delete", bw, T.px(60), { glyph = "x" }, pad) then kb.text = kb.text:sub(1, -2) end
+  if T.button("##kbdel", "Delete", bw, T.px(60), { glyph = "x" }, pad) then kb.text = T.dropChar(kb.text) end
   ui.SameLine(0, T.px(8))
   if T.button("##kbcancel", "Cancel", bw, T.px(60), {}, pad) then result = "cancel" end
   ui.SameLine(0, T.px(8))
   if T.button("##kbok", "Done", bw, T.px(60), { primary = true }, pad) then result = "ok" end
   -- the pad's shortcuts while the window has the focus
   if ui.IsWindowFocused(3) then
-    if pad.menuPressed("x") then kb.text = kb.text:sub(1, -2) end
+    if pad.menuPressed("x") then kb.text = T.dropChar(kb.text) end
     if pad.menuPressed("y") and #kb.text < kb.max then kb.text = kb.text .. " " end
     if pad.menuPressed("lb") then kb.shift = not kb.shift end
   end

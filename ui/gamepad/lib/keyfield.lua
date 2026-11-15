@@ -51,12 +51,12 @@ function K.draw(kb, get, set, x0, x1, opts)
     if T.button("##knl", "New Line", ew, kh, {}, pad) then put("\n") end
     ui.SameLine(0, gap)
   end
-  if T.button("##kdel", "Delete", ew, kh, {}, pad) then set((get() or ""):sub(1, -2)) end
+  if T.button("##kdel", "Delete", ew, kh, {}, pad) then set(T.dropChar(get() or "")) end
   ui.SameLine(0, gap)
   if T.button("##kdone", "Done", ew, kh, { primary = true }, pad) then result = "done" end
   -- the pad's shortcuts while the window has the focus
   if ui.IsWindowFocused(3) then
-    if pad.menuPressed("x") then set((get() or ""):sub(1, -2)) end
+    if pad.menuPressed("x") then set(T.dropChar(get() or "")) end
     if pad.menuPressed("y") then put(" ") end
     if pad.menuPressed("lb") then kb.shift = not kb.shift end
   end

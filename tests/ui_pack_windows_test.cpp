@@ -2808,6 +2808,79 @@ return "ok"
     ImGui::DestroyContext(ctx);
 }
 
+namespace {
+// Runs `script` in the gamepad pack (its lib/ files reachable with dofile) inside a window; it returns "ok".
+std::string run_gamepad_lib_script(const char* script, const char* scratch_name) {
+    fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / "gamepad";
+    hailstone::test::ScratchDir dir_scratch(scratch_name);
+    fs::path dir = dir_scratch.path();
+    fs::create_directories(dir / "game");
+    fs::copy(src, dir / "gamepad", fs::copy_options::recursive);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    std::string out;
+    {
+        Session s(dir, "gamepad");
+        s.frames(1);
+        ImGui::GetIO().DisplaySize = ImVec2(1600, 900);
+        s.api.begin_frame();
+        ImGui::NewFrame();
+        lua_State* L = s.lua.state();
+        const int rc = luaL_dostring(L, script);
+        out = lua_tostring(L, -1) ? lua_tostring(L, -1) : "";
+        if (rc != LUA_OK) out = "error: " + out;
+        lua_settop(L, 0);
+        ImGui::Render();
+    }
+    ImGui::DestroyContext(ctx);
+    return out;
+}
+} // namespace
+
+// The gamepad pack's text edits (lib/theme.lua): Delete takes the last character, a length limit and a shortened
+// title cut, and a text shortened from its start begins, only between UTF-8 characters; a byte that is not UTF-8
+// (Latin-1) counts as one.
+TEST_CASE("UI packs (gamepad): text edits never split a UTF-8 character") {
+    constexpr const char* kScript = R"lua(
+local T = dofile("lib/theme.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+-- Delete
+check(T.dropChar("") == "", "empty")
+check(T.dropChar("ab") == "a", "ascii")
+check(T.dropChar("a\u{E9}") == "a", "two bytes")
+check(T.dropChar("a\u{20AC}") == "a", "three bytes")
+check(T.dropChar("a\u{1F600}") == "a", "four bytes")
+check(T.dropChar("\u{E9}") == "", "only one")
+check(T.dropChar("a\xA9") == "a", "latin-1 byte")
+check(T.dropChar("\xA9\xA9") == "\xA9", "stray continuation bytes, one at a time")
+-- a limit in bytes, cut between characters
+check(T.cutBytes("abc", 5) == "abc" and T.cutBytes("abc", 2) == "ab" and T.cutBytes("abc", 0) == "", "ascii cut")
+check(T.cutBytes("a\u{20AC}b", 1) == "a", "before")
+check(T.cutBytes("a\u{20AC}b", 2) == "a", "inside (1)")
+check(T.cutBytes("a\u{20AC}b", 3) == "a", "inside (2)")
+check(T.cutBytes("a\u{20AC}b", 4) == "a\u{20AC}", "after")
+check(T.cutBytes("\u{E9}\u{E9}", 3) == "\u{E9}", "two-byte")
+check(T.cutBytes("ab\xA9\xA9\xA9\xA9c", 4) == "ab\xA9\xA9", "not UTF-8: by bytes")
+-- every cut of a mixed text is a whole-character start of it
+local text = "\u{C9}l\u{E9}onore \u{1F600} d\u{2019}Ambr\u{E9}e"
+for n = 0, #text + 1 do
+  local c = T.cutBytes(text, n)
+  check(#c <= n and text:sub(1, #c) == c and utf8.len(c) ~= nil, "cut " .. n)
+  check(n > #text or #c > n - 4, "cut too short " .. n)
+end
+-- a start moved on to a character
+check(T.charStart("a\u{20AC}b", 1) == 1 and T.charStart("a\u{20AC}b", 2) == 2, "on a start")
+check(T.charStart("a\u{20AC}b", 3) == 5 and T.charStart("a\u{20AC}b", 4) == 5, "inside")
+check(T.charStart("a\u{E9}", 3) == 4, "to the end")
+check(T.charStart("a\xA9\xA9\xA9\xA9", 2) == 2, "not UTF-8: as it is")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_utf8_test") == "ok");
+}
+
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of
 // the day, the /who answer, an item's wrapped description) between frames: a change still shows. The stock windows'
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.

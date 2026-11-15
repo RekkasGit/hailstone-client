@@ -313,7 +313,7 @@ ui.window("Chat Log", function()
       ui.SameLine(0, T.px(8))
       if T.button("##space", "Space", third, T.px(60), {}, pad) then input = input .. " " end
       ui.SameLine(0, T.px(8))
-      if T.button("##back", "Delete", third, T.px(60), {}, pad) then input = input:sub(1, -2) end
+      if T.button("##back", "Delete", third, T.px(60), {}, pad) then input = T.dropChar(input) end
       ui.SameLine(0, T.px(8))
       if T.button("##send", "Send", third, T.px(60), { primary = true }, pad) then
         if send(input, true) then input, inputLinks = "", {} end
