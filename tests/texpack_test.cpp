@@ -170,6 +170,10 @@ TEST_CASE("texpack: hash names and manifest lines round-trip") {
     CHECK(old->names.contains("knlamp04.bmp"));
     CHECK_FALSE(parse_manifest_line("{\"hash\":\"x\"}"));
     CHECK_FALSE(parse_manifest_line("not json"));
+    // No name, or an empty one: refused (pack_job names a texture by its first).
+    CHECK_FALSE(parse_manifest_line(R"({"hash":"0000626c3529d7e8","w":256,"h":256,"names":[]})"));
+    CHECK_FALSE(parse_manifest_line(R"({"hash":"0000626c3529d7e8","w":256,"h":256})"));
+    CHECK_FALSE(parse_manifest_line(R"({"hash":"0000626c3529d7e8","w":256,"h":256,"names":[""]})"));
 }
 
 TEST_CASE("texpack: what the models run on, and the files a texture gets") {
