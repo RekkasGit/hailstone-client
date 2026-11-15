@@ -659,8 +659,9 @@ and say so in the chat window.
   spell's type (as above). An entry with spell id 0 is all zeros. The pet window's slot number is not included.
 
 - `get_spawns_data_bulk`: every spawn in the zone, as a 16-byte header followed by one record per spawn. Records are
-  added until fewer than 4096 bytes are left in `out`: below 4096 bytes it returns 0, and it needs at least 4112
-  bytes to write any record and a few hundred bytes per spawn on top; the header's count says how many records follow.
+  added until fewer than 4096 bytes are left in `out`, or until the next record (its fixed part and seven strings)
+  would not fit in what is left: below 4096 bytes it returns 0, and it needs at least 4112 bytes to write any record
+  and a few hundred bytes per spawn on top. Only whole records are written; the header's count says how many follow.
 
   Header (`HS_Bulk_SpawnHeader`, `HS_BULK_SPAWN_HEADER_SIZE` = 16 bytes):
 

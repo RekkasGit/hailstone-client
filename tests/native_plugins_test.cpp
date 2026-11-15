@@ -767,6 +767,31 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     CHECK(h.printed_line("[Probe] spawns 0 bytes"));
     h.run("/probespawns 4112");
     CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spawns past the end 0"));
+}
+TEST_CASE("native plugins: get_spawns_data_bulk stops before a record that would not fit") {
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll);
+    REQUIRE(h.plugins->load("HostProbe"));
+    // Names and suffixes come from the server uncapped: give every spawn 20,000-byte ones, so one record is more
+    // than 80,000 bytes, far past the 4096 kept free.
+    for (auto& [id, s] : net::GameConnectionTestAccess::world(*h.world.conn).spawns) {
+        s.name = std::string(20000, 'n');
+        s.suffix = std::string(20000, 's');
+    }
+    // Room for the header and the 4096 only: no record, and nothing written past the end.
+    h.run("/probespawns 8192");
+    CHECK(h.printed_line("[Probe] spawns 0, player 0.00 0.00 0.00, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spawns past the end 0"));
+    // Room for one record but not two: one, whole.
+    h.printed.clear();
+    h.run("/probespawns 150000");
+    CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
+    CHECK(h.printed_line("[Probe] spawns past the end 0"));
+    // The whole buffer: all five.
+    h.printed.clear();
+    h.run("/probespawns");
+    CHECK(h.printed_line("[Probe] spawns 5, player 0.00 0.00 0.00, 0 bytes left"));
 }
 TEST_CASE("native plugins: get_xtarget_data_bulk, laid out as docs/plugins.md says") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);

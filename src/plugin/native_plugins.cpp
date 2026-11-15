@@ -1038,6 +1038,11 @@ int h_server_info(void* h, HailstoneServer* out) {
     return give(out, v);
 }
 
+// The bytes write_str16 writes for sv: its u16 length and that many bytes (a longer string is cut to the length).
+inline std::size_t str16_size(std::string_view sv) {
+    return sizeof(uint16_t) + static_cast<uint16_t>(sv.size());
+}
+
 inline void write_str16(unsigned char*& dst, std::string_view sv) {
     uint16_t len = static_cast<uint16_t>(sv.size());
     std::memcpy(dst, &len, sizeof(len));
@@ -1059,7 +1064,9 @@ static_assert(sizeof(HS_Bulk_SpawnFixedRecord) == HS_BULK_SPAWN_RECORD_SIZE);
 /// for 5,000 spawns, assume 2 megs. now 5k is wayyy higher than it should ever be
 /// so can get away with less, but you never know. 
 /// there is a safety check that if we get down to our last 4,096 bytes, kick out and just return with what we have.
-/// this is done due to the nature of dynamic string sizes, and 4,096 is our safety buffer for a single record.
+/// on top of that, each record's whole size (fixed part and its seven strings) is measured before it is written,
+/// and a record that would not fit before data + datamax ends the list there: names and suffixes come from the
+/// server uncapped, so 4,096 bytes alone do not bound a record. No partial record is written.
 /// </summary>
 /// <param name="h">host</param>
 /// <param name="data">buffer to put data in</param>
@@ -1085,6 +1092,7 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
 
     unsigned char* pBuffer = data + sizeof(HS_Bulk_SpawnHeader);
     const unsigned char* pSafeLimit = data + (datamax - 4096);
+    const unsigned char* pEnd = data + datamax;
     uint32_t count = 0;
 
     for (const auto& [id, spawn] : spawns) {
@@ -1118,6 +1126,19 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
         if (spawn.trader)                               flags |= HS_BULK_SPAWN_TRADER;
       
 
+        std::string_view bodyDesc = "";
+        if (static_cast<std::size_t>(spawn.body_type) < std::size(game::szBodyType)) { // body_type is unsigned
+            bodyDesc = game::szBodyType[spawn.body_type];
+        }
+        // CleanName and DisplayName are the same text, as ${Spawn.CleanName} and ${Spawn.DisplayName} give them.
+        const std::string displayName = game::display_name(spawn.name);
+        const std::string_view raceName = hailstone::game::Spawn::GetRaceIDName(spawn.race);
+        const std::string_view typeDesc = game::Spawn::GetTypeDesc(spawnType);
+        const std::size_t recordSize = sizeof(HS_Bulk_SpawnFixedRecord) + str16_size(bodyDesc)
+            + 2 * str16_size(displayName) + str16_size(spawn.name) + str16_size(raceName)
+            + str16_size(spawn.suffix) + str16_size(typeDesc);
+        if (recordSize > static_cast<std::size_t>(pEnd - pBuffer)) break;
+
         HS_Bulk_SpawnFixedRecord* rec = reinterpret_cast<HS_Bulk_SpawnFixedRecord*>(pBuffer);
         rec->id = spawn.id;
         rec->flags = flags;
@@ -1142,19 +1163,13 @@ int h_get_spawns_data_bulk(void* h, unsigned char* data, int32_t datamax)
         rec->deity = spawn.deity;
         pBuffer += sizeof(HS_Bulk_SpawnFixedRecord);
 
-        std::string_view bodyDesc = "";
-        if (static_cast<std::size_t>(spawn.body_type) < std::size(game::szBodyType)) { // body_type is unsigned
-            bodyDesc = game::szBodyType[spawn.body_type];
-        }
         write_str16(pBuffer, bodyDesc);
-        // CleanName and DisplayName are the same text, as ${Spawn.CleanName} and ${Spawn.DisplayName} give them.
-        const std::string displayName = game::display_name(spawn.name);
         write_str16(pBuffer, displayName); // CleanName
         write_str16(pBuffer, displayName); // DisplayName
         write_str16(pBuffer, spawn.name);
-        write_str16(pBuffer, hailstone::game::Spawn::GetRaceIDName(spawn.race));
+        write_str16(pBuffer, raceName);
         write_str16(pBuffer, spawn.suffix);
-        write_str16(pBuffer, game::Spawn::GetTypeDesc(spawnType));
+        write_str16(pBuffer, typeDesc);
         count++;
     }
     header->spawnCount = count;
