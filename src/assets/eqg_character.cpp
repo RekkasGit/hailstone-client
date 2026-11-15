@@ -736,8 +736,7 @@ std::shared_ptr<const PfsArchive> EqgCharacterStore::archive(const std::string& 
 
 void EqgCharacterStore::load_layers(const Source& lay) {
     std::string key = lay.archive + "/" + lay.member;
-    if (std::find(loaded_lays_.begin(), loaded_lays_.end(), key) != loaded_lays_.end()) return;
-    loaded_lays_.push_back(key);
+    if (!loaded_lays_.insert(key).second) return;
     auto a = archive(lay.archive);
     auto data = a ? a->read(lay.member) : std::nullopt;
     if (!data) return;
