@@ -17,7 +17,6 @@ layout(set = 0, binding = 6) uniform sampler2D cur_img;      // this frame witho
 layout(set = 0, binding = 7) uniform sampler2D reactive_map; // the scene's reactive mask (scene size)
 layout(set = 0, binding = 0) uniform sampler2D depth_map;               // this frame's depth (scene size; nearest)
 layout(set = 0, binding = 1) uniform sampler2D motion_raw; // its motion; blue a see-through part's depth (0 none)
-layout(set = 0, binding = 2, r32ui) uniform readonly uimage2D key_img;      // fg_scatter.comp's: the key at each place
 layout(set = 0, binding = 9, r32ui) uniform readonly uimage2D prev_key_img; // and at each place a frame ago
 
 layout(push_constant) uniform Push {
@@ -45,20 +44,27 @@ uint prev_key_round(vec2 up, ivec2 size) {
     return k;
 }
 
-// This frame's sample at `uc` holds some of something nearer than the point (`at`'s key): an edge's pixels at the
+// This frame's nearest depth at a texel: what it drew there, or a see-through part with motion of its own in front.
+float depth_now(ivec2 q, ivec2 size) {
+    q = clamp(q, ivec2(0), size - 1);
+    return max(texelFetch(depth_map, q, 0).r, texelFetch(motion_raw, q, 0).z);
+}
+
+// This frame's sample at `uc` holds some of something nearer than the point (at `depth`): an edge's pixels at the
 // view's size are partly what the scene's texel beside them shows (a character's outline, carried along the
 // background's motion, would trace the character beside it).
-bool edge_now(ivec2 at, vec2 uc, ivec2 size) {
-    uint k = imageLoad(key_img, at).r;
-    if (k == 0u) return false;
-    float d = key_depth(k) * 1.05 + 1e-6;
+bool edge_now(float depth, vec2 uc, ivec2 size) {
+    float d = depth * 1.05 + 1e-6;
     ivec2 q = ivec2(uc * vec2(size));
     for (int y = -1; y <= 1; ++y)
         for (int x = -1; x <= 1; ++x)
-            if (max(texelFetch(depth_map, clamp(q + ivec2(x, y), ivec2(0), size - 1), 0).r,
-                    texelFetch(motion_raw, clamp(q + ivec2(x, y), ivec2(0), size - 1), 0).z) > d)
-                return true;
+            if (depth_now(q + ivec2(x, y), size) > d) return true;
     return false;
+}
+
+// This frame's sample at `uc` shows what is at `depth` or beyond: nothing nearer covers it, opaque or see-through.
+bool clear_now(vec2 uc, float depth, ivec2 size) {
+    return depth_now(ivec2(uc * vec2(size)), size) <= depth * 1.05 + 1e-6;
 }
 
 // The last frame's sample at `up` is of something nearer than `depth` (reverse Z; 0 unknown: no).
@@ -68,22 +74,24 @@ bool hidden_from(vec2 up, float depth, ivec2 size) {
     return k0 != 0u && key_depth(k0) > depth * 1.05 + 1e-6;
 }
 
-// The last frame's sample along the motion is of something else when, where the point was then, something nearer
-// was (a still character the world turns behind): however alike their colours, they must not be blended.
-bool hidden_then(ivec2 at, vec2 up, ivec2 size) {
-    uint k = imageLoad(key_img, at).r;
+// The last frame's sample along the motion is of something else when, where the point (at `depth`) was then,
+// something nearer was (a still character the world turns behind): however alike their colours, they must not be
+// blended.
+bool hidden_then(float depth, vec2 up, ivec2 size) {
     uint k0 = prev_key_round(up, size);
-    if (k == 0u || k0 == 0u) return false;
-    return key_depth(k0) > key_depth(k) * 1.05 + 1e-6;
+    return k0 != 0u && key_depth(k0) > depth * 1.05 + 1e-6;
 }
 
 void main() {
     vec2 uv = gl_FragCoord.xy / pc.view;
     vec4 f = textureLod(motion_t, uv, 0.0);
     ivec2 size = textureSize(motion_t, 0);
-    ivec2 at = clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1); // the motion texel chosen (its key is the point's)
     // At time t the point is (1 - t) of the way from this frame back to the last.
     vec2 uc = uv - (1.0 - pc.t) * f.xy;
+    // A crack (fg_fill.comp) shows the surface round it unless this frame has something nearer along its motion: then
+    // it is being covered after all (the background behind a thin figure).
+    if (f.z > 0.1 && f.z < 0.5)
+        f.z = depth_now(ivec2(uc * vec2(size)), size) > f.w * 1.05 + 1e-6 ? 1.0 : 0.0;
     vec2 up = uv + pc.t * f.xy;
     vec3 c = textureLod(cur_img, uc, 0.0).rgb;
     vec3 p = textureLod(prev_img, up, 0.0).rgb;
@@ -98,8 +106,7 @@ void main() {
     if (f.z < 0.5 && in_c && in_p) {
         vec2 texel = 1.0 / vec2(textureSize(motion_t, 0));
         float best = max3(abs(c - p));
-        uint k_centre = imageLoad(key_img, at).r;
-        ivec2 at_centre = at;
+        float d_centre = f.w;
         for (int y = -1; y <= 1; ++y)
             for (int x = -1; x <= 1; ++x) {
                 if (x == 0 && y == 0) continue;
@@ -109,15 +116,11 @@ void main() {
                 if (!inside(gc) || !inside(gp)) continue;
                 vec3 cc = textureLod(cur_img, gc, 0.0).rgb, pp = textureLod(prev_img, gp, 0.0).rgb;
                 float cost = max3(abs(cc - pp)) + 0.02;
-                uint k = imageLoad(key_img, clamp(at_centre + ivec2(x, y), ivec2(0), size - 1)).r;
-                if (k != 0u && k_centre != 0u) {
-                    if (key_depth(k) > key_depth(k_centre) * 1.05 + 1e-6) cost -= 0.04; // nearer: a figure's edge
-                    else if (key_depth(k) * 1.05 + 1e-6 < key_depth(k_centre)) cost += 0.15; // farther
-                }
+                if (g.w > d_centre * 1.05 + 1e-6) cost -= 0.04;              // nearer: a figure's edge
+                else if (g.w * 1.05 + 1e-6 < d_centre) cost += 0.15;          // farther
                 if (cost < best) {
                     best = cost;
                     f = g;
-                    at = clamp(at_centre + ivec2(x, y), ivec2(0), size - 1);
                     uc = gc;
                     up = gp;
                     c = cc;
@@ -131,26 +134,38 @@ void main() {
     } else if (!in_c) {
         result = p;
     } else if (f.z > 0.5) {
-        // Being covered: only the last frame shows it. Where the last frame had something nearer at that place (a
-        // sword the background passes behind, thinner than what this frame leaves of it), the background is in
-        // neither frame there: the nearest sample of the last frame round it that shows background stands in.
+        // Being covered: only the last frame shows it. Where the last frame had something nearer at that place (the
+        // background between a character's legs, which the other leg covered then), this frame may show it still,
+        // along the motion. Where neither frame shows it, the nearest sample of either that shows background stands
+        // in (each frame looked at round its own place, out to beyond a limb's width). What is seen through a glass
+        // shield counts as covered: its colour is the shield's too, and taking it would lay a second shield beside
+        // the first.
         result = p;
         if (hidden_from(up, f.w, size)) {
-            vec2 texel = 1.0 / vec2(size);
-            const vec2 kDirs[4] = vec2[](vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0));
-            bool found = false;
-            for (int r = 1; r <= 16 && !found; r *= 2)
-                for (int d = 0; d < 4 && !found; ++d) {
-                    vec2 q = up + kDirs[d] * float(r) * texel;
-                    if (inside(q) && !hidden_from(q, f.w, size)) {
-                        result = textureLod(prev_img, q, 0.0).rgb;
-                        found = true;
+            if (clear_now(uc, f.w, size)) {
+                result = c;
+            } else {
+                vec2 texel = 1.0 / vec2(size);
+                const vec2 kDirs[8] = vec2[](vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0),
+                                             vec2(0.7071, 0.7071), vec2(-0.7071, 0.7071), vec2(0.7071, -0.7071),
+                                             vec2(-0.7071, -0.7071));
+                bool found = false;
+                for (int r = 1; r <= 64 && !found; r *= 2)
+                    for (int d = 0; d < 8 && !found; ++d) {
+                        vec2 o = kDirs[d] * float(r) * texel;
+                        if (inside(up + o) && !hidden_from(up + o, f.w, size)) {
+                            result = textureLod(prev_img, up + o, 0.0).rgb;
+                            found = true;
+                        } else if (inside(uc + o) && clear_now(uc + o, f.w, size)) {
+                            result = textureLod(cur_img, uc + o, 0.0).rgb;
+                            found = true;
+                        }
                     }
-                }
+            }
         }
-    } else if (hidden_then(at, up, size)) {
+    } else if (hidden_then(f.w, up, size)) {
         result = c; // the last frame had something nearer there (the point came out from behind it): this frame's
-    } else if (edge_now(at, uc, size)) {
+    } else if (edge_now(f.w, uc, size)) {
         result = p; // this frame's sample is at a nearer thing's edge, the last frame's is clear: the last frame's
     } else {
         vec3 d = abs(c - p);
