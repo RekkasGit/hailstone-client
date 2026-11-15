@@ -192,8 +192,11 @@ template <class MakeKey> int compare(lua_State* L, const MakeKey& make_key, cons
 
 int CompareItem(lua_State* L) {
     EqHost& h = host_up(L);
-    const auto slot = static_cast<std::int16_t>(luaL_checkinteger(L, 1));
-    const auto bag = static_cast<std::int16_t>(lua_isnoneornil(L, 2) ? -1 : luaL_checkinteger(L, 2));
+    std::int16_t slot = 0, bag = -1;
+    if (!slot_args(L, 1, slot, bag)) {
+        lua_pushnil(L);
+        return 1;
+    }
     // What is worn is what the comparison compares against.
     if (bag < 0 && slot >= 0 && slot < 23) {
         lua_pushnil(L);
@@ -213,7 +216,7 @@ int CompareSlotItem(lua_State* L) {
 
 int CompareBagSlotItem(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
-    const int index = static_cast<int>(luaL_checkinteger(L, 2));
+    const int index = held_int(luaL_checkinteger(L, 2));
     StockWindow* w = find_window(cache_up(L), name);
     const net::Item* item = w ? w->bag_item(host_up(L), index) : nullptr;
     return compare(L, [&] { return std::string("bag:") + name + ":" + std::to_string(index); }, item);

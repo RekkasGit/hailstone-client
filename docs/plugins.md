@@ -111,8 +111,11 @@ one window settles the same question in the others within a second.
 
 The packs draw the question (`ui/modern/pluginconsent.lua`, the Gamepad UI's `dialogs.lua`) with
 `eq.PluginConsent()` (nil, or `{server, serial, warning, plugins = {{name, file, size, sha256, short}}}`) and
-`eq.AnswerPluginConsent(true | false | nil)`. A plugin's own code in the UI gets nil and cannot answer. Without a
-pack window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its own.
+`eq.AnswerPluginConsent(true | false | nil, serial)`, where `serial` is the question's: an answer to a question that has
+since been replaced by another (another server's, or other bytes) is refused (false) and nothing is kept. Both packs
+leave Allow and Don't allow off for a second after a question shows or a new one takes its place, so a click or press
+meant for something else cannot answer it. A plugin's own code in the UI gets nil and cannot answer. Without a pack
+window for it (`eq.ReplaceWindow("PluginConsent")`) the client draws its own.
 
 ## For players
 
@@ -860,8 +863,9 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
   `dofile` sets;
 - sees `eq`, `ui` and the standard libraries read-only, so it cannot change what the pack's windows call;
 - reaches only its own owner's exported functions, options and menu entries: `eq.Plugin` gives nil for another
-  plugin (and an object for another that it finds elsewhere does nothing), `eq.PluginOptions` lists only its own,
-  and `eq.SetPluginOption` and `eq.PluginMenuClick` leave another's alone, since those run the other plugin's code
+  plugin (and an object for another that it finds elsewhere does nothing), `eq.PluginOptions` and `eq.PluginMenu`
+  list only its own (`eq.PluginMenuClick(i)` numbers its entries as that list does), and `eq.SetPluginOption` and
+  `eq.PluginMenuClick` leave another's alone, since those run the other plugin's code
   with the other's capabilities. The pack's own windows reach every plugin's;
 - keeps settings of its own: `ui.SetSetting(key, v)` writes `plugin.<owner>.<key>` in the pack's settings file (a
   window's place under `hud.` is the character's, as the pack's are), `ui.GetSetting(key)` reads that, else the
@@ -888,12 +892,13 @@ a line in the log once.
 
 | Needs | `eq` functions |
 |---|---|
+| never | the player's one-shot keys and requests, which the pack's windows take once: the chat input's (`eq.ChatTakeFocus`, with a pending Link All; `eq.ChatPage`, `eq.ChatHistory`) and the Lua social editor's (`eq.LuaSocialEditRequest`); nil to a plugin's code. `eq.ReplaceWindow` and `eq.WindowShown` do not put away the client's consent prompt nor its dialogs that act when answered (a confirmation, among them a destroy's; a trade, give, quantity, bazaar purchase, group invitation, respawn, large dialog or task offer) for a plugin |
 | nothing | everything that reads or draws (`eq.Item`, `eq.AllItems`, `eq.ItemStats`, `eq.ItemKept`, `eq.ItemJob`, `eq.ChildState`, `eq.ListRow`, `eq.SpellBook`, `eq.DrawMap`, ...), a window's place and size (`eq.ReplaceWindow`, `eq.WindowPlaced`, `eq.SizeWindow`), the map's zoom and pan, opening a menu (`eq.WindowContextMenu`, `eq.ChatMenu`, `eq.HotBarMenu`; choosing a row is below), the close-top-window key's press (`eq.TakeCloseTopWindow`) |
 | `commands` | `eq.ShowWindow`, `eq.SetOption`, `eq.SetUiIni`, `eq.ShowSpell`, the chat windows' setup (`eq.ChatNewWindow`, `eq.ChatSetFilter`, ...), the spell sets' and the autoskill list's editing, the map's find path, the Find window (`eq.FindOpen`) and its guide path (`eq.FindNpcPath`), the social editors, `eq.gamepad.set_*` and `eq.gamepad.request_focus` (menu mode, as `set_mode`) |
 | `target` | `eq.FindNpcTarget` (the Find window's row) |
 | `move` | `eq.FindNpcWalk` (the Find window's Walk there) and `eq.ZoneExitWalk` (the zone finder's), both `/nav` walks. (`/nav` itself needs `move`, and the doors a walk opens on its way come with it; `/nav door ... click`, which clicks the door on arrival, needs `actions` too) |
-| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute, destroy or withdraw chosen items), `eq.StopItemJob`, `eq.SetItemKept` / `eq.SetItemsKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
-| checked by the function | the plugins' (above), the scripts' (refused), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
+| `actions` | a stock window's controls (`eq.ClickChild`, `eq.ClickChildAt`, `eq.WindowButton`, `eq.StmlLink`, `eq.SetWindowText`, `eq.ListClick`, `eq.ListHeaderClick`, `eq.ComboSelect`, `eq.SetSlider`, `eq.SetTabPage`), the menus' rows (`eq.CascadeClick`, `eq.GameMenuClick`), items and the cursor (`eq.ClickSlot`, `eq.BagSlotClick`, `eq.BankSlotClick`, `eq.PlaceClick`, `eq.PickUp`, `eq.SortItems`, `eq.SellJunk`, `eq.BulkItems` (sell, tribute, destroy or withdraw chosen items), `eq.StopItemJob`, `eq.SetItemKept` / `eq.SetItemsKept` (a Keep mark taken off lets the item be destroyed), the parcels, `eq.gamepad.drop_cursor`), hot buttons and gems (`eq.ClickHotButton`, `eq.PressButtonFrom`, `eq.ClearCursorButton`, `eq.SpellGemClick`), spells and abilities (`eq.SpellBookClick`, `eq.SpellBookMemorize`, `eq.SpellBookSwap`, `eq.MemorizeSpellSet`, `eq.UseSkill`, `eq.AbilityBookUse`, `eq.AbilityBookAutoskillEnable`; `eq.AbilityBookAutoskill` and `eq.AbilityBookAutoskillRule`, which choose what the autoskill list uses later, need `commands` too), socials (`eq.PressLuaSocial`, `eq.PressSocial`, `eq.StopSocial`, `eq.SocialToCursor`; `eq.SetLuaSocial` and `eq.LuaSocialDryRun`, which runs the code it is given with the server's Lua social capabilities, need `commands` too) |
+| checked by the function | the plugins' (above), the scripts' (refused; `eq.Scripts` lists only a script of the plugin's own name, with no folders), the pre-game screens' (nil), the web's (`web`); `eq.ChatSubmit`'s line goes through the command filter, which holds it to the plugin's capabilities as any command it sends (plain text needs `chat`, `/cast` needs `actions`) |
 
 What stays shared: a plugin can still write into the tables the pack keeps in its globals (that is how its windows
 take part in the pack's focus and palette), so a plugin can upset how the pack's windows look or behave. It sees

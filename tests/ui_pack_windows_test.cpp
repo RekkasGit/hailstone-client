@@ -2104,6 +2104,17 @@ TEST_CASE("UI packs: the Lua Scripts window and eq.Scripts*: list, run, pause, s
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             policy.set(plugin::Rules{}); // no hailstone.cfg: the player's scripts run
             run("local l = eq.Scripts(true); assert(l[1].allowed and l[1].caps ~= '')");
+            // A plugin's code: a script of its own name alone, and no folders.
+            fs::create_directories(dir / "pf" / "a");
+            fs::create_directories(dir / "pf" / "b");
+            std::ofstream(dir / "pf" / "a" / "w.lua") << "x = 1\n";
+            std::ofstream(dir / "pf" / "b" / "w.lua") << "x = 1\n";
+            s.lua.set_folders({{"loop", dir / "pf" / "a"}, {"plugin:x", dir / "pf" / "b"}});
+            CHECK(s.lua.run_for_test("loop", "local l, info = eq.Scripts() return #l .. ' ' .. l[1].name .. ' ' .. "
+                                             "#info.folders") == "1 loop 0");
+            CHECK(s.lua.run_for_test("plugin:x", "local l, info = eq.Scripts() return #l .. ' ' .. #info.folders") ==
+                  "0 0");
+            run("local l, info = eq.Scripts(); assert(#l == 2 and #info.folders >= 1)"); // the pack: all, as before
             run("assert(eq.ScriptRun('loop', 'a \\\"b c\\\"'))");
             CHECK(scripts.running("loop"));
             run("local l = eq.Scripts(); assert(l[1].status == 'running' and not l[1].kept)");
@@ -2462,6 +2473,81 @@ TEST_CASE("UI packs: the server plugins' question draws in each pack in the clie
             prompt.reset();
             s.frames(2);
             CHECK_FALSE(drawn());
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+        }
+        ImGui::DestroyContext(ctx);
+    }
+}
+
+// A click meant for something else the instant the question pops up must not answer it: each pack's Allow waits a
+// second after the question shows (or a new one takes its place), and answers with the question's serial.
+TEST_CASE("UI packs: the server plugins' question takes no answer in its first second") {
+    for (const char* pack : {"modern", "gamepad"}) {
+        CAPTURE(pack);
+        fs::path src = fs::path(__FILE__).parent_path().parent_path() / "ui" / pack;
+        hailstone::test::ScratchDir dir_scratch(std::string("ui_pack_consent_arm_") + pack);
+        fs::path dir = dir_scratch.path();
+        fs::create_directories(dir / "game");
+        fs::copy(src, dir / pack, fs::copy_options::recursive);
+        ImGuiContext* ctx = ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char* px = nullptr;
+        int w = 0, h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+        {
+            Session s(dir, pack);
+            std::optional<plugin::ConsentPrompt> prompt;
+            std::vector<std::optional<bool>> answers;
+            s.host.plugin_consent = [&] { return prompt; };
+            s.host.answer_plugin_consent = [&](std::optional<bool> a) {
+                answers.push_back(a);
+                prompt.reset();
+            };
+            lua_State* L = s.lua.state();
+            REQUIRE(luaL_dostring(L, R"lua(
+local button, invisible = ui.Button, ui.InvisibleButton
+ui.Button = function(label, ...)
+  local hit = button(label, ...)
+  if label == "Allow##consent" then allowRect = { ui.GetItemRect() } end
+  return hit
+end
+ui.InvisibleButton = function(id, ...)
+  local hit = invisible(id, ...)
+  if id == "##consentallow" then allowRect = { ui.GetItemRect() } end
+  return hit
+end
+)lua") == LUA_OK);
+            auto click_allow = [&] {
+                lua_getglobal(L, "allowRect");
+                REQUIRE(lua_istable(L, -1));
+                float rect[4]{};
+                for (int i = 0; i < 4; ++i) {
+                    lua_rawgeti(L, -1, i + 1);
+                    rect[i] = static_cast<float>(lua_tonumber(L, -1));
+                    lua_pop(L, 1);
+                }
+                lua_settop(L, 0);
+                auto& io = ImGui::GetIO();
+                io.AddMousePosEvent((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, true);
+                s.frames(1);
+                io.AddMouseButtonEvent(0, false);
+                s.frames(1);
+            };
+            plugin::ConsentPrompt p;
+            p.server = "Alpha";
+            p.serial = 4;
+            p.files.push_back({"MQ2Thing", "MQ2Thing.so", 4096, {}});
+            prompt = p;
+            s.frames(3);
+            click_allow(); // within its first second: nothing
+            CHECK(answers.empty());
+            CHECK(prompt.has_value());
+            s.frames(65);
+            click_allow();
+            REQUIRE(answers.size() == 1);
+            CHECK(answers[0] == std::optional<bool>(true));
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
         }
         ImGui::DestroyContext(ctx);

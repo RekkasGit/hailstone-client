@@ -1,6 +1,6 @@
 // The Lua scripts' part of the `eq` table (app/lua_eq_plugins.h): the Scripts window's list, run, stop, pause and the
 // character's autorun list, over the script host (mq/lua_mq.h). Running, stopping and the autorun list are the
-// player's: a plugin's code in the UI (LuaUi::caller_tag) is refused them.
+// player's: a plugin's code in the UI (LuaUi::caller_tag) is refused them, and its list holds only its own row.
 #include "app/lua_eq_plugins.h"
 
 #include <algorithm>
@@ -108,6 +108,13 @@ int Scripts(lua_State* L) {
             if (i.caps) it->caps = plugin::caps_text(i.caps);
         }
         std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.name < b.name; });
+        // A plugin's code sees its own row alone (a script of its tag's name), and no folders: the others' errors,
+        // permissions and where the player keeps them are not its business.
+        if (plugin_code()) {
+            const std::string_view tag = ui::lua::LuaUi::caller_tag();
+            std::erase_if(rows, [&](const Row& r) { return r.name != tag; });
+            c.folders.clear();
+        }
     });
     lua_newtable(L);
     lua_Integer k = 0;

@@ -157,7 +157,7 @@ EqHost* host_of(lua_State* L) { return static_cast<EqHost*>(lua_touserdata(L, lu
 // eq.OpenSocialEditor(index): the social editor on social 0..119 (0x758bb0).
 int OpenSocialEditor(lua_State* L) {
     EqHost& h = *host_of(L);
-    auto social = static_cast<std::int32_t>(luaL_checkinteger(L, 1));
+    auto social = held_int(luaL_checkinteger(L, 1));
     if (h.open_social_editor) h.open_social_editor(social);
     return 0;
 }
@@ -245,7 +245,7 @@ int SlashCommands(lua_State* L) {
 
 int PressSocial(lua_State* L) {
     EqHost& h = *host_of(L);
-    auto social = static_cast<std::int32_t>(luaL_checkinteger(L, 1));
+    auto social = held_int(luaL_checkinteger(L, 1));
     if (!h.actions || !h.in_game || social < 0 || social >= game::kSocialPages * game::kSocialButtons) return 0;
     h.actions->press_social(social);
     lua_pushboolean(L, 1);

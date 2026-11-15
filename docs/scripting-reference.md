@@ -857,7 +857,7 @@ plus `cooldown` (0..1 of the recast left) on the slot readers while a recast run
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|
-| ReplaceWindow | (name [, sizable]) → shown, x, y, w, h, sized, place | Call every frame from a replacing window. Marks the stock window replaced and gives its INI place. A plugin cannot replace "PluginConsent" | — |
+| ReplaceWindow | (name [, sizable]) → shown, x, y, w, h, sized, place | Call every frame from a replacing window. Marks the stock window replaced and gives its INI place. A plugin cannot replace "PluginConsent" nor the dialogs that act when answered (ConfirmationDialogBox, TradeWnd, GiveWnd, QuantityWnd, BazaarConfirmationWnd, GroupInvite, RespawnWnd, LargeDialogWindow, TaskSelectWnd) | — |
 | WindowShown | (name) → bool | ReplaceWindow's `shown` alone (also counts as replaced), with no place worked out | — |
 | WindowPlaced | (name, x, y, w, h [, sizable]) → — | Report where the window is this frame, stored in the UI ini | — |
 | ShowWindow | (name, show) → — | Show or hide a game window | commands |
@@ -923,7 +923,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 |---|---|---|---|
 | GemTint | (name, child) → r, g, b, a | Spell gem tint by category | — |
 | GemOverlay | (name, child, y0, y1) → top, r, g, b, a \| nil | Gem cool-down rectangle | — |
-| GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top} | — |
+| GemInfo | (name, child [, into [, y0, y1]]) → t | All gem looks in one call: {shown, tooltip, tex,u0,v0,u1,v1, tintR..tintA, overlay, coolR..coolA, top}. `into` is filled only when it has no metatable (else a new table) | — |
 | ButtonCoolDown | (name, child, y0, y1) → top, r, g, b, a, remainingMs, reuseMs | A button's cool-down rectangle; first five answers unchanged (nil when idle), with remaining/focus-adjusted reuse milliseconds for combat ability buttons (both 0 while idle or without timing detail). Shared remaining time can exceed this ability's reuse | — |
 | BuffSlot | (name, child [, overlays]) → spellId, msLeft, name, beneficial, fade [, counter,cr,cg,cb, limit,lr,lg,lb] \| nil | Buff on a buff button. msLeft < 0 = permanent | — |
 | BuffOverlay | (name, child, "timer"\|"counter"\|"limit") → text, r, g, b \| nil | Overlay text on a buff button | — |
@@ -937,7 +937,7 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | HotButtonFace | (name, child) → {color={r,g,b}, lua, running, enabled, cooldown, overlay, tooltip} \| nil | A social's face extras | — |
 | HotButtonChecked | (name, child) → bool | Drawn pressed (a pet command that is on) | — |
 | HotButtonState | (name, child [, y0, y1]) → {checked, left, cooldown, top, color, tint} \| nil | Check and cool-down state | — |
-| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha) | — |
+| HotButtonInfo | (name, child [, into [, y0, y1]]) → t | HotButton + Face + State in one table (kind, label, tex…, social, color, lua, running, enabled, faceCooldown, overlay, tooltip, state, checked, left, cooldown, top, tint, iconAlpha). `into` as GemInfo's | — |
 | ClickHotButton | (name, child [, "left"\|"right"\|"rightheld" [, x, y]]) → ok | Use the button, or open its menu (at x, y) | actions |
 | PickUp | (window, child [, row]) → ok | Drag from a child: its hotbutton goes on the cursor | actions |
 | PressButtonFrom | (window, child [, row]) → ok | Run the hotbutton a drag would make (a pad's "use"). Not for hot bars | actions |
@@ -1037,9 +1037,9 @@ send a request. `OpenTask` changes the journal selection and visibility, not tas
 | AbilityBookState | () → {classes={{id,name}}, autoskill={on, allowed, held, list={{key, endurance, mana, targetHp, targetHpAbove, selfHp, when, keepBuff}}}} | Book and autoskill state | — |
 | AbilityBookUse | (key) → ok | Use the ability | actions |
 | AbilityBookFavorite | (key, on) → — | Toggle favourite | commands |
-| AbilityBookAutoskill | (key, on) → — | Add to or remove from the autoskill list | commands |
+| AbilityBookAutoskill | (key, on) → — | Add to or remove from the autoskill list | commands, actions |
 | AbilityBookAutoskillMove | (key, delta) → — | Move in the list (-1 / +1) | commands |
-| AbilityBookAutoskillRule | (key, endurance, mana, targetHp, targetHpAbove, selfHp, when, keepBuff) → — | Set an entry's rule | commands |
+| AbilityBookAutoskillRule | (key, endurance, mana, targetHp, targetHpAbove, selfHp, when, keepBuff) → — | Set an entry's rule | commands, actions |
 | AbilityBookAutoskillEnable | (on) → — | Autoskill master switch | actions |
 
 #### Achievements and rewards (lua_eq_achievements.cpp, lua_eq_rewards.cpp)
@@ -1103,10 +1103,10 @@ achievement and reward-selection APIs.
 | ChatText | (slot [, version [, names [, stamps [, incremental]]]]) → version [, lines [, reset, count]] | STML lines of the tab that is up. The incremental form gives only the new lines | — |
 | ChatInfo | (slot) → font, active, default, scrollbar, here | Tab font, active, default channel, scrollbar, Always Chat Here | — |
 | ChatSubmit | (slot, text) → — | Send a typed line (goes through the command filter, so the caller's caps apply) | — |
-| ChatTakeFocus | (slot [, typed]) → text, replace \| nil | Text for the input when a chat key fires (Link All too) | — |
-| ChatHistory | (slot, older) → text\|nil | Step through lines sent before | — |
+| ChatTakeFocus | (slot [, typed]) → text, replace \| nil | Text for the input when a chat key fires (Link All too). Nil to plugin code | — |
+| ChatHistory | (slot, older) → text\|nil | Step through lines sent before. Nil to plugin code | — |
 | ChatCycleReply | (text, back) → text\|nil | Tab / Shift+Tab reply cycling | — |
-| ChatPage | (slot) → -1\|1\|nil | PageUp / PageDown for this window, once | — |
+| ChatPage | (slot) → -1\|1\|nil | PageUp / PageDown for this window, once. Nil to plugin code | — |
 | ChatLink | (slot, message, data) → — | A link clicked in the output (27 item, 1001 name, 1002 achievement). An item link's data in ChatText's STML is `x` and the tag as hex, so the sender's text cannot add markup; a raw tag is taken too | commands |
 | ChatActivate | (slot) → — | Make it the active window | commands |
 | ChatMenu | (slot) → — | The window's context menu at the mouse | — |
@@ -1164,7 +1164,7 @@ achievement and reward-selection APIs.
 | LuaSocialExport | (n [, t]) → text | Share text | — |
 | LuaSocialImport | (text) → t \| nil, why | Parse share text | — |
 | LuaComplete | (before) → start, {names} | Editor completion | — |
-| LuaSocialEditRequest | () → n\|nil | A social the editor was asked to open | — |
+| LuaSocialEditRequest | () → n\|nil | A social the editor was asked to open (taken once). Nil to plugin code | — |
 | OpenLuaSocialEditor | (n) → — | Open the Lua social editor | commands |
 | FreeSocial | () → n\|nil | First empty social | — |
 | SocialToCursor | (n) → ok | Social as a hot button on the cursor | actions |
@@ -1255,14 +1255,15 @@ refused to plugin code (nil / false).
 | Plugin | (name) → p\|nil | Plugin object: p.name, p.owner, p.f() calls, p.call('f') | self |
 | PluginOptions | () → {{plugin, owner, name, label, min, max, value}} | Plugin options | self |
 | SetPluginOption | (plugin, name, value) → — | Set a plugin option | self |
-| PluginMenu | () → {{plugin, owner, label, command}} | Plugin menu entries | self |
-| PluginMenuClick | (i) → — | Run entry i's command as its owner | self |
+| PluginMenu | () → {{plugin, owner, label, command}} | Plugin menu entries (a plugin's own alone) | self |
+| PluginMenuClick | (i) → — | Run entry i of PluginMenu's list as its owner | self |
 | PluginConsent | () → {server, serial, warning, plugins={{name, file, size, sha256, short}}} \| nil | Pending consent question for the server's compiled plugins | self |
-| AnswerPluginConsent | (true\|false\|nil) → ok | Answer it (nil = ask later) | self |
+| AnswerPluginConsent | (true\|false\|nil, serial) → ok | Answer the question with that serial (nil = ask later); false when it is not the one pending | self |
 
 #### Scripts (lua_eq_scripts.cpp)
 
-`self`: Run, Stop, Pause and Autorun are refused to plugin code.
+`self`: Run, Stop, Pause and Autorun are refused to plugin code. Scripts gives plugin code only the row of a script
+named as its tag, and no folders.
 
 | Function | Args → returns | What | Cap |
 |---|---|---|---|

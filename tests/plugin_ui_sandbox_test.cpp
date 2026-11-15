@@ -181,10 +181,72 @@ TEST_CASE("Plugin UI: a plugin cannot drive another's functions, options or menu
     CHECK(b_value == 4);
     CHECK(a_value == 3);
     CHECK(s.run("plugin:A", "local o = eq.PluginOptions() return #o .. o[1].owner") == "1plugin:A");
-    CHECK(s.run("plugin:A", "eq.PluginMenuClick(1) return #eq.PluginMenu()") == "1");
+    CHECK(s.run("plugin:A", "eq.PluginMenuClick(1) return #eq.PluginMenu()") == "0"); // B's entry: not listed
     CHECK(sent.empty());
     CHECK(s.run("", "eq.PluginMenuClick(1) return 1") == "1");
     CHECK(sent == std::vector<std::string>{"/b"});
+}
+
+// A plugin's eq.PluginMenu lists its own entries alone, and eq.PluginMenuClick numbers them as that list does; the
+// pack's lists and numbers every entry.
+TEST_CASE("Plugin UI: a plugin's menu list and clicks are its own entries") {
+    SandboxUi s;
+    std::vector<std::string> sent;
+    s.host.submit_chat = [&](const std::string& line) { sent.push_back(line); };
+    s.host.plugin_caps = [](std::string_view) { return plugin::kCapAll; };
+    s.bridge.add_menu({"B", "B's", "/b"});
+    s.bridge.add_menu({"A", "A's", "/a"});
+    s.add_folder("plugin:A");
+    s.frame();
+    CHECK(s.run("plugin:A", "local m = eq.PluginMenu() return #m .. m[1].label .. m[1].owner") == "1A'splugin:A");
+    CHECK(s.run("plugin:A", "eq.PluginMenuClick(2) return 1") == "1"); // past its own list: nothing
+    CHECK(sent.empty());
+    CHECK(s.run("plugin:A", "eq.PluginMenuClick(1) return 1") == "1");
+    CHECK(sent == std::vector<std::string>{"/a"});
+    CHECK(s.run("", "return #eq.PluginMenu()") == "2");
+    CHECK(s.run("", "eq.PluginMenuClick(1) return 1") == "1");
+    CHECK(sent == std::vector<std::string>{"/a", "/b"});
+}
+
+// The player's one-shot keys and requests are the pack's windows' to take: a plugin's code that asks gets nil and
+// leaves them (a pending Link All is not sent from its call). Nor can it put away the client's dialogs that act when
+// answered, to draw a question of its own in their place.
+TEST_CASE("Plugin UI: a plugin cannot take the player's keys and requests, nor replace an acting dialog") {
+    SandboxUi s;
+    std::vector<std::string> sent;
+    s.host.submit_chat = [&](const std::string& line) { sent.push_back(line); };
+    s.caps["plugin:A"] = plugin::kCapAll;
+    s.add_folder("plugin:A");
+    s.frame();
+
+    s.host.lua_social_edit = 3;
+    CHECK(s.run("plugin:A", "return eq.LuaSocialEditRequest()") == "nil");
+    CHECK(s.host.lua_social_edit == 3);
+    CHECK(s.run("", "return eq.LuaSocialEditRequest()") == "3");
+    CHECK(s.host.lua_social_edit == -1);
+
+    app::chat_page_key(-1);
+    CHECK(s.run("plugin:A", "return eq.ChatPage(1)") == "nil");
+    app::chat_history_key(true);
+    CHECK(s.run("plugin:A", "return eq.ChatHistory(1, true)") == "nil");
+    app::request_chat_link_all({"tag"});
+    CHECK(s.run("plugin:A", "return eq.ChatTakeFocus(1, '')") == "nil");
+    CHECK(sent.empty());
+    app::tell_key();
+    CHECK(s.run("plugin:A", "return eq.ChatTakeFocus(1)") == "nil");
+    // (whatever the pack's chat windows here make of them, the pending keys are taken by the pack)
+    s.run("", "eq.ChatTakeFocus(1, '') eq.ChatTakeFocus(1) eq.ChatPage(1) return 1");
+
+    for (const char* dialog : {"ConfirmationDialogBox", "TradeWnd", "GiveWnd", "QuantityWnd", "GroupInvite",
+                               "RespawnWnd", "PluginConsent"}) {
+        CAPTURE(dialog);
+        s.run("plugin:A", std::string("eq.ReplaceWindow('") + dialog + "') eq.WindowShown('" + dialog + "') return 1");
+        CHECK_FALSE(s.api->replaces(dialog));
+        s.run("", std::string("eq.WindowShown('") + dialog + "') return 1");
+        CHECK(s.api->replaces(dialog));
+    }
+    s.run("plugin:A", "eq.WindowShown('InventoryWindow') return 1"); // a window that does not act: as before
+    CHECK(s.api->replaces("InventoryWindow"));
 }
 
 // Every eq function says what a plugin's code needs to call it (app/lua_eq_caps.h): a new one must be put in a group.
@@ -236,6 +298,9 @@ TEST_CASE("Plugin UI: eq functions that act need the plugin's capability") {
     CHECK(app::eq_call_caps("gamepad.rumble") == 0u);
     // A dry run runs the code it is given with the server's Lua social capabilities: as SetLuaSocial.
     CHECK(app::eq_call_caps("LuaSocialDryRun") == (plugin::kCapCommands | plugin::kCapActions));
+    // The autoskill list's entries and rules choose what it uses later, on its own: actions as well.
+    CHECK(app::eq_call_caps("AbilityBookAutoskill") == (plugin::kCapCommands | plugin::kCapActions));
+    CHECK(app::eq_call_caps("AbilityBookAutoskillRule") == (plugin::kCapCommands | plugin::kCapActions));
     CHECK_FALSE(app::eq_call_caps("NoSuchFunction"));
     // (no such window: the real functions give false; a refused call gives nil)
     const std::string calls = "return tostring(eq.ClickChild('NoWnd', 'X')) .. ' ' .. tostring(eq.WindowButton('NoWnd', "

@@ -36,6 +36,7 @@
 #include "plugin/lua_keep.h"
 #include "platform/local_time.h"
 #include "ui/dev_screens.h"
+#include "ui/lua/lua_host.h"
 #include "ui/ui_ini.h"
 
 namespace hailstone::app {
@@ -1467,6 +1468,11 @@ int ChatSubmit(lua_State* L) {
     return 0;
 }
 
+// The one-shot key and focus state below (the chat keys' text, a pending Link All, the page keys, the input's history
+// step) is the pack's chat input's alone: a plugin's code in the UI that took it would swallow the player's key, or
+// send the loot window's links from its own call. It gets nil and changes nothing.
+bool plugin_code() { return !ui::lua::LuaUi::caller_tag().empty(); }
+
 // text, replace = eq.ChatTakeFocus(slot [, typed])   -- when the keyboard goes to the chat input (the chat keys: Enter, ';',
 // '/', '['; game/chat_input.h; a tell menu's name): what goes into the active window's input (replace: instead of
 // what is typed); nil otherwise and for other windows
@@ -1477,6 +1483,7 @@ int ChatSubmit(lua_State* L) {
 int ChatTakeFocus(lua_State* L) {
     ChatState& s = state();
     int w = window_of(L, 1);
+    if (plugin_code()) return 0;
     int to = used(s.focus_window) ? s.focus_window : active_window();
     if (s.link_all && w >= 0 && host_of(active_window()) == w) {
         bool have_typed = lua_type(L, 2) == LUA_TSTRING;
@@ -1511,6 +1518,7 @@ std::optional<std::string> step_history(bool older) {
 
 // text = eq.ChatHistory(slot, older)   -- steps through the lines sent before (older: one further back)
 int ChatHistory(lua_State* L) {
+    if (plugin_code()) return 0;
     auto line = step_history(lua_toboolean(L, 2) != 0);
     if (!line) return 0;
     lua_pushlstring(L, line->data(), line->size());
@@ -1546,6 +1554,7 @@ int ChatCycleReply(lua_State* L) {
 int ChatPage(lua_State* L) {
     ChatState& s = state();
     int w = window_of(L, 1);
+    if (plugin_code()) return 0;
     if (s.page == 0 || w < 0 || host_of(s.page_window) != w) return 0;
     lua_pushinteger(L, s.page);
     s.page = 0;
@@ -1644,7 +1653,8 @@ int ChatNewTab(lua_State* L) {
 // window stays)
 int ChatCloseTab(lua_State* L) {
     int w = window_of(L, 1);
-    lua_Integer t = luaL_checkinteger(L, 2) - 1;
+    const lua_Integer tab = luaL_checkinteger(L, 2);
+    const lua_Integer t = tab < 1 ? -1 : tab - 1; // (math.mininteger - 1 would overflow)
     if (w < 0) return 0;
     auto tabs = tabs_of(host_of(w));
     if (t < 0 || t >= static_cast<lua_Integer>(tabs.size())) return 0;
@@ -1655,7 +1665,8 @@ int ChatCloseTab(lua_State* L) {
 // eq.ChatSelectTab(slot, tab)   -- the tab that is up (a click on it)
 int ChatSelectTab(lua_State* L) {
     int w = window_of(L, 1);
-    lua_Integer t = luaL_checkinteger(L, 2) - 1;
+    const lua_Integer tab = luaL_checkinteger(L, 2);
+    const lua_Integer t = tab < 1 ? -1 : tab - 1; // (math.mininteger - 1 would overflow)
     if (w < 0) return 0;
     int host = host_of(w);
     auto tabs = tabs_of(host);

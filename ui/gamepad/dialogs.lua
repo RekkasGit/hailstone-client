@@ -321,6 +321,7 @@ end)
 -- first"): the server, each plugin's name, file, size and the start of its SHA-256, the warning, Allow and Don't
 -- allow (kept for those bytes on this server). It stands in for the client's own prompt ("PluginConsent").
 local consentShown = nil -- the question's serial the pad's focus was put on Don't allow for
+local consentAt = 0 -- when that question showed: Allow and Don't allow wait a second (a press meant for something else)
 ui.window("Server Plugins", function()
   eq.WindowShown("PluginConsent")
   local q = eq.PluginConsent()
@@ -350,14 +351,16 @@ ui.window("Server Plugins", function()
     local bw, bh = T.px(260), T.px(64)
     local wx, wy = ui.GetWindowPos()
     ui.SetCursorPos(x1 - wx - 2 * bw - T.px(16), y1 - wy - bh)
-    if T.button("##consentallow", "Allow", bw, bh, {}, pad) then eq.AnswerPluginConsent(true) end
+    if consentShown ~= q.serial then consentAt = ui.GetTime() end
+    local off = { disabled = ui.GetTime() - consentAt < 1.0 }
+    if T.button("##consentallow", "Allow", bw, bh, off, pad) then eq.AnswerPluginConsent(true, q.serial) end
     ui.SameLine(0, T.px(16))
     if consentShown ~= q.serial then
       ui.SetKeyboardFocusHere()
       consentShown = q.serial
     end
-    if T.button("##consentdeny", "Don't allow", bw, bh, {}, pad) then eq.AnswerPluginConsent(false) end
+    if T.button("##consentdeny", "Don't allow", bw, bh, off, pad) then eq.AnswerPluginConsent(false, q.serial) end
   end
   -- B / the close button: not now (asked again at the next zone-in)
-  if W.finish() then eq.AnswerPluginConsent(nil) end
+  if W.finish() then eq.AnswerPluginConsent(nil, q.serial) end
 end)
