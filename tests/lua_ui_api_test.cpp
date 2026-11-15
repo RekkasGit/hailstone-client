@@ -337,6 +337,18 @@ end)
         REQUIRE(luaL_dostring(L, "LIST = { { 'b' }, { '10' }, { 'A' }, { '9' } }") == LUA_OK);
         frames(2);
         CHECK(last("table.concat(f.drawn, ',')") == "9,10,A,b");
+        // numbers before texts, in one order: '10' < '5x' < '9' as texts and 9 < 10 as numbers made a cycle, which
+        // table.sort may refuse ("invalid order function for sorting")
+        REQUIRE(luaL_dostring(L, "LIST = {}; for i = 1, 60 do LIST[i] = { i % 3 == 0 and (i .. 'x') or tostring(100 - i) } end")
+                == LUA_OK);
+        frames(2);
+        REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+        CHECK(last("f.drawn[1] .. ',' .. f.drawn[2]") == "41,42");
+        REQUIRE(luaL_dostring(L, "LIST = { { '10' }, { '5x' }, { '9' } }") == LUA_OK);
+        frames(2);
+        CHECK(last("table.concat(f.drawn, ',')") == "9,10,5x");
+        REQUIRE(luaL_dostring(L, "LIST = { { 'b' }, { '10' }, { 'A' }, { '9' } }") == LUA_OK);
+        frames(2);
         // the filter, kept by its key
         REQUIRE(luaL_dostring(L, "FILTER = function(_, t) return t[1]:find('1') ~= nil or t[1] == 'b' end; "
                                  "FILTER_KEY = '1'") == LUA_OK);
