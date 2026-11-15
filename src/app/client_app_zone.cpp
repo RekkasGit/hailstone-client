@@ -105,6 +105,12 @@ void ClientApp::load_zone(const std::string& short_name) {
         if (spell_bolts_) spell_bolts_->clear();
         if (actor_emitters_) actor_emitters_->clear();
         collision_ = tested_collision ? std::move(*tested_collision) : game::CollisionMesh::build(*zone_);
+        animated_objects_ = game::AnimatedObjects::build(*zone_);
+        zone_animation_origin_ms_ = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time_).count());
+        if (!animated_objects_->empty())
+            log::info("zone objects: {} animated, {} moving parts", animated_objects_->definition_count(),
+                      animated_objects_->part_count());
         mark("collision");
         if (conn_) conn_->reground(); // ground_npcs measured the spawns against no floor, or the last zone's
         zone_ladders_ = game::zone_ladders(*zone_);
@@ -300,6 +306,7 @@ void ClientApp::unload_zone() {
     actor_library_.reset();
     if (nav_) nav_->zone_unloaded();
     collision_.reset();
+    animated_objects_.reset();
     zone_ladders_.clear();
     zone_line_.set_buried({});
     weather_.clear_particles(); // they land on the old zone's ground

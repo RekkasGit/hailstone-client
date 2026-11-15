@@ -366,6 +366,7 @@ add_library(hailstone_engine STATIC
   src/assets/gltf_mesh.cpp
   src/assets/ground_refine.cpp
   src/assets/model_overrides.cpp
+  src/assets/object_animation.cpp
   src/assets/sky.cpp
   src/assets/sky_weather.cpp
   src/assets/spell_effects.cpp
@@ -458,6 +459,7 @@ add_library(hailstone_engine STATIC
   src/game/hotbuttons.cpp
   src/game/lua_social.cpp
   src/game/doors.cpp
+  src/game/animated_objects.cpp
   src/game/object_collision.cpp
   src/game/zone_ladders.cpp
   src/game/swept_sphere.cpp
@@ -1366,6 +1368,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/stop_moving_test.cpp
     tests/fly_mode_test.cpp
     tests/zone_ladders_test.cpp
+    tests/object_animation_test.cpp
     tests/chat_trade_vectors_test.cpp
     tests/hotbutton_tracking_vectors_test.cpp
     tests/compass_test.cpp
