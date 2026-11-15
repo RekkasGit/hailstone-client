@@ -2130,7 +2130,9 @@ std::optional<std::uint32_t> VkContext::finish_frame_gen(const FrameInfo& frame)
     composite_into(cmd, frame.image_index, frame_gen_->composite_set(slot, false));
     if (fg_queries_) {
         vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, fg_queries_, 2 * frame.frame_slot + 1);
-        fg_query_state_[frame.frame_slot] = generated ? 2 : 1;
+        // A shown-twice frame (frame_gen_repeat) also sets `generated` but synthesises nothing: only a synthesised
+        // in-between frame's GPU time is the generated one.
+        fg_query_state_[frame.frame_slot] = fg_generated_last_ ? 2 : 1;
     }
     picture_ready_ = true;
     picture_index_ ^= 1u;

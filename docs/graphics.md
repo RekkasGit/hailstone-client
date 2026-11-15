@@ -249,7 +249,8 @@ same frame: 0.98), from 1.74 to 1.02 at 180 (0.84), and at a 30 fps base from 2.
 saves the in-between frame with the real one after it (`FILE_real`) for a side-by-side look: the viewer's last frame
 (with the one before as `FILE_prev`), and in the client every screenshot, the input script's `shot` too; the
 viewer's `--frames` log counts the in-between frames presented. The
-performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md).
+performance window shows its rates, skips, pacing and GPU time (`VkContext::frame_gen_stats`, docs/dev-ui.md); the
+generated GPU time is only a frame's that synthesised an in-between frame, not one that showed the real frame twice.
 
 Screenshots copy the presented swapchain image, so the swapchain asks for `TRANSFER_SRC` when the surface offers it;
 where it does not, a screenshot is refused with a log line (and a chat line for the screenshot key) instead of an
