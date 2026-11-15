@@ -319,7 +319,13 @@ bool ClientApp::client_command(std::string_view h, const std::string& args) {
                 from.label = s.label;
                 break;
             }
-        if (from.file.empty()) from.file = ini.empty() ? eq_api_->layout_file() : std::filesystem::path(ini);
+        // An ini no source names is looked for beside the current layout file, by its bare name only: a path (a
+        // folder, "..", a drive) is no layout, and copy_layout gives 6338 for the empty file as for a missing one.
+        if (from.file.empty()) {
+            if (ini.empty()) from.file = eq_api_->layout_file();
+            else if (game::bare_file_name(ini) && !eq_api_->layout_file().empty())
+                from.file = eq_api_->layout_file().parent_path() / ini;
+        }
         c.show_eqstr(6336, {from.label, resolution});
         if (eq_host_.copy_layout)
             if (auto refused = eq_host_.copy_layout(from, {})) c.show_eqstr(refused->first, refused->second);

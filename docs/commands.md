@@ -184,7 +184,7 @@ follow the RoF2 client; the ones Hailstone adds are marked as Hailstone's. For t
 | `/filter` | Chat filters. |
 | `/hotbutton <name> [colour] <text>` | Make a hot button from a line and put it on the cursor. |
 | `/loadskin <name> [keep]` | Load a UI skin. |
-| `/copylayout` | Copy another character's layout. |
+| `/copylayout` | Copy another character's layout. An ini no character or defaults file names is looked for beside the current layout file by its bare name; a path is not found. |
 | `/fontface <name>` | The UI font. |
 | `/viewport reset`, `/viewport <x> <y> <w> <h> [scale]` | The 3D view's area on screen. |
 | `/fullscreen [on \| off \| toggle]` | Full screen or windowed. |
