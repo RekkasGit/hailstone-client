@@ -209,7 +209,8 @@ of at least 20 px at 1080p, targets of at least 48 px, and every action reachabl
   button does (`eq.UseSkill(53)`: the skill opens the tracking window)), Hot Bars and Camp. Each tile opens the gamepad window, or, where there is none
   yet, the C++ window in cursor mode.
 - **Gamepad windows**: inventory and equipment (a slot grid, A picks up and moves an item, Y shows its details;
-  holding an item, X puts it away, LB destroys it and RB drops it on the ground; with nothing held LB puts the focused
+  holding an item, X puts it away, LB destroys it (the game's confirmation; with Fast Item Destroy on, a Yes / No of
+  the window's own first, since LB pages elsewhere) and RB drops it on the ground; with nothing held LB puts the focused
   item on a hot button through the slot picker, a link that follows the item wherever it is moved; under the coins the alternate
   currencies: A claims one onto the cursor as items, and A holding its item reclaims it, every currency listed
   while something is held),
