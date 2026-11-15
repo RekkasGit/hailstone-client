@@ -1884,7 +1884,11 @@ void VkContext::draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D e
 void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent,
                           VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, const void* push,
                           std::uint32_t push_size) {
-    std::vector<VkRenderingAttachmentInfo> atts;
+    // At most kMaxDrawTargets attachments (the temporal prep writes two): a fixed array, as this runs several
+    // times a frame.
+    std::array<VkRenderingAttachmentInfo, kMaxDrawTargets> atts{};
+    std::uint32_t att_count = 0;
+    if (targets.size() > kMaxDrawTargets) throw std::logic_error("draw_into: too many targets");
     for (const Image* target : targets) {
         // The previous frame read it.
         image_barrier(cmd, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1895,12 +1899,12 @@ void VkContext::draw_into(VkCommandBuffer cmd, std::span<const Image* const> tar
         att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        atts.push_back(att);
+        atts[att_count++] = att;
     }
     VkRenderingInfo r{VK_STRUCTURE_TYPE_RENDERING_INFO};
     r.renderArea = {{0, 0}, extent};
     r.layerCount = 1;
-    r.colorAttachmentCount = static_cast<std::uint32_t>(atts.size());
+    r.colorAttachmentCount = att_count;
     r.pColorAttachments = atts.data();
     vkCmdBeginRendering(cmd, &r);
     VkViewport vp{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};

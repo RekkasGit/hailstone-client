@@ -507,6 +507,7 @@ private:
     void draw_into(VkCommandBuffer cmd, const Image& target, VkExtent2D extent, VkPipeline pipeline,
                    VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
     // The same into several targets of one size at once (the pipeline's colour attachments, in order).
+    static constexpr std::size_t kMaxDrawTargets = 4;
     void draw_into(VkCommandBuffer cmd, std::span<const Image* const> targets, VkExtent2D extent, VkPipeline pipeline,
                    VkPipelineLayout layout, VkDescriptorSet set, const void* push, std::uint32_t push_size);
 
