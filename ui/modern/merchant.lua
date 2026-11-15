@@ -289,6 +289,15 @@ end
 -- (a stack asks how many); money goes by eq.SendParcelMoney. The server's answer comes in the chat.
 local sendMoney, coins, sendNote, moneySerial = false, { "", "", "", "" }, nil, nil
 local COIN_NAMES = { "pp", "gp", "sp", "cp" }
+local COIN_LONG = { "platinum", "gold", "silver", "copper" }
+-- Send money asks first (Hailstone): the amount and the recipient as they were when Send money was clicked, sent
+-- only by the popup's Send. { to, note, coins = { pp, gp, sp, cp } }
+local moneyAsk = nil
+local function amountText(n)
+  local parts = {}
+  for i = 1, 4 do if n[i] > 0 then parts[#parts + 1] = T.Thousands(n[i]) .. " " .. COIN_LONG[i] end end
+  return table.concat(parts, ", ")
+end
 local function sendParcel(s, btnH)
   local _, _, _, sending, picked, money = eq.Parcels()
   -- a pick with the inventory's coin buttons: that coin for sending, the Money side shown
@@ -341,8 +350,29 @@ local function sendParcel(s, btnH)
     local any = n[1] + n[2] + n[3] + n[4] > 0
     if T.Button("##sendmoneybtn", bx, by, bx + bw, by + btnH, s, sending and "Sending..." or "Send money",
         { primary = true, enabled = any and to ~= "" and not sending, tooltip = "Send this money to " .. (to ~= "" and to or "...") }) then
-      sendNote = eq.SendParcelMoney(to, note, n[1], n[2], n[3], n[4])
-      if not sendNote then coins = { "", "", "", "" } end
+      moneyAsk = { to = to, note = note, coins = n }
+      ui.OpenPopup("##confirmparcelmoney")
+    end
+    if ui.BeginPopup("##confirmparcelmoney") then
+      local ask = moneyAsk
+      if ask then
+        ui.Text("Send " .. amountText(ask.coins) .. " to " .. ask.to .. "?")
+        if ask.note ~= "" then ui.TextColored(C.muted[1], C.muted[2], C.muted[3], 1, "Note: " .. ask.note) end
+        ui.Dummy(0, 4 * s)
+        if ui.Button("Send") then
+          local m = ask.coins
+          sendNote = eq.SendParcelMoney(ask.to, ask.note, m[1], m[2], m[3], m[4])
+          if not sendNote then coins = { "", "", "", "" } end
+          moneyAsk = nil
+          ui.CloseCurrentPopup()
+        end
+        ui.SameLine()
+      end
+      if ui.Button("Cancel") or ui.IsKeyPressed(ui.Key.Escape) or not ask then
+        moneyAsk = nil
+        ui.CloseCurrentPopup()
+      end
+      ui.EndPopup()
     end
   else
     ui.SetCursorScreenPos(bx, by)
