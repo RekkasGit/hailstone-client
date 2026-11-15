@@ -558,6 +558,21 @@ print(load, io, os.execute)
     CHECK(h.printed_line("nil nil nil"));
 }
 
+TEST_CASE("MQ Lua: require of a huge name that is not there is a plain error, and the script goes on") {
+    Host h;
+    h.write("huge_require.lua", R"(
+for i = 1, 3 do
+    local ok, why = pcall(require, string.rep('a', 4 * 1024 * 1024))
+    print('try', i, ok, #why > 4 * 1024 * 1024, why:sub(1, 8))
+end
+print('parse', mq == nil, require('mq').parse('${Me.PctHPs}'))
+)");
+    REQUIRE(h.scripts->run("huge_require", {}));
+    h.pulses(1);
+    for (int i = 1; i <= 3; ++i) CHECK(h.printed_line("try " + std::to_string(i) + " false true module '"));
+    CHECK(h.printed_line("parse false 75"));
+}
+
 TEST_CASE("MQ commands: /target, ${} for typed lines, /noparse, /squelch") {
     Host h;
     h.run("/target fippy");

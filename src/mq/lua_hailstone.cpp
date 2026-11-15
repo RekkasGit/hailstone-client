@@ -33,6 +33,7 @@
 #include "mq/lua_script.h"
 #include "net/game_connection.h"
 #include "net/social_packets.h"
+#include "plugin/lua_keep.h"
 #include "plugin/lua_value.h"
 #include "plugin/policy.h"
 #include "plugin/ui_bridge.h"
@@ -1233,19 +1234,23 @@ int l_train_aa(lua_State* L) {
 int l_server_rule(lua_State* L) {
     const char* section_arg = luaL_checkstring(L, 1);
     const char* key_arg = luaL_checkstring(L, 2); // both checked before a std::string exists to be skipped
-    std::string section(section_arg), key(key_arg);
-    for (std::string* t : {&section, &key})
-        for (char& ch : *t) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-    const plugin::Policy* policy = Script::of(L).host->env.policy;
-    const auto& rules = policy ? policy->current() : std::nullopt;
-    if (rules && rules->configured)
-        if (auto sec = rules->script_sections.find(section); sec != rules->script_sections.end())
-            if (auto v = sec->second.find(key); v != sec->second.end()) {
-                lua_pushlstring(L, v->second.data(), v->second.size());
-                return 1;
-            }
-    lua_pushnil(L);
-    return 1;
+    Script& s = Script::of(L);
+    bool found = false;
+    // The names and the lookup in this scope, the value into the Script's scratch: the push below may raise.
+    plugin::cxx_guard(L, [&] {
+        std::string section(section_arg), key(key_arg);
+        for (std::string* t : {&section, &key})
+            for (char& ch : *t) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        const plugin::Policy* policy = s.host->env.policy;
+        const auto& rules = policy ? policy->current() : std::nullopt;
+        if (rules && rules->configured)
+            if (auto sec = rules->script_sections.find(section); sec != rules->script_sections.end())
+                if (auto v = sec->second.find(key); v != sec->second.end()) {
+                    s.scratch = v->second;
+                    found = true;
+                }
+    });
+    return push_scratch(L, found);
 }
 
 // hailstone.character_dir(): the character's files' plugin-config/<script>/; nil before a character is chosen.
