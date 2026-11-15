@@ -768,6 +768,36 @@ TEST_CASE("native plugins: get_spawns_data_bulk, laid out as docs/plugins.md say
     h.run("/probespawns 4112");
     CHECK(h.printed_line("[Probe] spawns 1, player 0.00 0.00 0.00, 0 bytes left"));
 }
+TEST_CASE("native plugins: cursor_origin gives the cursor item's origin, and needs 'read'") {
+    using A = net::GameConnectionTestAccess;
+    auto server_item = [](std::uint32_t id) {
+        net::ItemPacket ip;
+        ip.type = net::kItemPacketTrade;
+        ip.item.id = id;
+        ip.item.name = "Found";
+        ip.item.slot = net::ItemSlot::possessions(net::kSlotCursor);
+        return net::encode_item_packet(false, ip);
+    };
+    {
+        Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+        h.approve(plugin::kCapAll);
+        REQUIRE(h.plugins->load("HostProbe"));
+        h.run("/probecursor");
+        CHECK(h.printed_line("[Probe] cursor origin 0")); // nothing held
+        A::handle_zone(*h.world.conn, server_item(2001));
+        REQUIRE(h.world.conn->inventory().cursor());
+        h.run("/probecursor");
+        CHECK(h.printed_line("[Probe] cursor origin 2")); // HAILSTONE_CURSOR_ORIGIN_SERVER
+    }
+    Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
+    h.approve(plugin::kCapAll & ~plugin::kCapRead);
+    REQUIRE(h.plugins->load("HostProbe"));
+    A::handle_zone(*h.world.conn, server_item(2001));
+    REQUIRE(h.world.conn->inventory().cursor());
+    h.run("/probecursor");
+    CHECK(h.printed_line("[Probe] cursor origin 0"));
+    CHECK(h.printed_line("[Plugin] HostProbe: cursor_origin needs the server's 'read' permission"));
+}
 TEST_CASE("native plugins: the buff bulk reads need 'read'") {
     Host h(false, nullptr, HAILSTONE_PROBE_PLUGIN);
     h.approve(plugin::kCapAll & ~plugin::kCapRead);

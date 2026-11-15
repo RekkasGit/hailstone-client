@@ -1662,6 +1662,14 @@ public:
 
     // ---- items (game/inventory.h; net/game_connection_items.cpp) ----
     const game::Inventory& inventory() const { return inventory_; }
+    // Hailstone: how the item now on the cursor got there (the plugin host's cursor_origin, docs/plugins.md), as
+    // HAILSTONE_CURSOR_ORIGIN_*: 0 unknown or empty, 1 the player's own pickup, 2 the server put it there. The note
+    // is kept with the cursor placement it describes (Inventory::cursor_placement), so any change to the cursor
+    // that no path marked reads as unknown; unknown must never be used for automated destruction.
+    std::uint32_t cursor_origin() const {
+        if (!inventory_.cursor() || cursor_origin_placement_ != inventory_.cursor_placement()) return 0;
+        return static_cast<std::uint32_t>(cursor_origin_);
+    }
     const net::Coins& coins() const { return coins_; }
     // A left click on an inventory, bank or shared bank slot
     // (CInvSlot::HandleLButtonUp): with an empty cursor picks the item up
@@ -3230,6 +3238,14 @@ private:
     game::SpellState spells_;
 
     // Items.
+    enum class CursorOrigin : std::uint8_t { Unknown = 0, Inventory = 1, Server = 2 };
+    // Notes the origin of the item on the cursor now; call it after the inventory change that put it there.
+    void mark_cursor_origin(CursorOrigin origin) {
+        cursor_origin_ = origin;
+        cursor_origin_placement_ = inventory_.cursor_placement();
+    }
+    CursorOrigin cursor_origin_ = CursorOrigin::Unknown;
+    std::uint64_t cursor_origin_placement_ = 0;
     game::Inventory inventory_;
     game::KeptItems kept_items_;  // Hailstone: the Keep marks (kept_items.txt)
     std::uint64_t kept_revision_ = 0;
