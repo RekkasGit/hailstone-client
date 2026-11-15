@@ -45,6 +45,14 @@ local function optionRow(label, name, choices, values)
   end
 end
 
+-- The Upscaler row's choices: the client's four, then the upscaler add-ons installed (render/temporal.h
+-- upscaler_choice: 4 on).
+local function upscalerChoices()
+  local choices = { "Off", "FSR 1", "Temporal", "FSR 3.1" }
+  for _, name in ipairs(eq.OptionChoices("upscaler_providers") or {}) do choices[#choices + 1] = name end
+  return choices
+end
+
 -- The upscale quality presets (render/temporal.h UpscaleQuality: 0 Native AA .. 4 Ultra Performance), each a render
 -- scale; 5 Custom (another render scale) shows but is stepped past.
 local function upscaleQualityRow()
@@ -270,7 +278,7 @@ local PAGES = {
       optionRow("Anti-aliasing", "msaa", { "Off", "2x", "4x" }),
       upscaleQualityRow(),
       optionRow("Render scale", "render_scale", { 33, 100, 1, " %" }),
-      optionRow("Upscaler (next start)", "upscaler", { "Off", "FSR 1", "Temporal", "FSR 3.1" }),
+      optionRow("Upscaler (next start)", "upscaler", upscalerChoices()),
       optionRow("Frame generation (Temporal, FSR 3.1)", "frame_gen", "bool"),
       optionRow("Ambient occlusion", "ao", "bool"),
       optionRow("Grass", "grass", "bool"),

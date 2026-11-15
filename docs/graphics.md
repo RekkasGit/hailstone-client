@@ -201,6 +201,38 @@ the history through `post_taa_sets_` under `taa`); `display.sharpness` drives FS
   `motion_`, and the scene's reactive mask as FSR's (`Fsr3Upscaler::Inputs::reactive`; none, FSR's default of 0,
   without `independentBlend`).
 
+### Upscaler providers
+
+`display.upscaler = <name>` (the viewer's `--upscaler <name>`), where `<name>` is an upscaler add-on in
+`upscalers/<name>/` (docs/addons.md "Upscalers"), runs that add-on's temporal upscaler in FSR 3.1's place
+(`render::Upscaler::External`). This is how upscalers the client cannot ship come in: Intel XeSS, AMD FSR 4 and NVIDIA
+DLSS are closed binaries, so each is an add-on of its own repository, built against `sdk/hailstone_upscaler.h` (MIT;
+docs/plugins.md "Upscaler providers" has the interface) and NOTICE.md's add-on exception. The client never names,
+links or ships any of them.
+
+- **Loading** (`render/upscaler_provider.*`): at the start, before the Vulkan instance, from a copy of its folder in
+  `cache/upscalers/<name>-<key>/` (the key from its files' names, sizes and times; a box set's windows share one), so
+  the add-on manager can replace the folder while the copy is loaded. No server sends one or decides about one.
+- **The device**: the provider names the instance and device extensions and the Vulkan 1.0 to 1.3 features it needs,
+  and may chain feature structs of extensions of its own (`gather_extra_features`); `VkContext` turns them on beside
+  its own when the loader and the GPU have the extensions and the core features (`missing_names`,
+  `missing_features`, `add_features`), and otherwise goes on without the provider. The provider checks its extension
+  structs' features itself, and says no for another vendor's GPU.
+- **The frame**: the same inputs as FSR 3.1 (`temporal_prep.frag`'s colour with the AO, the depth, the motion and the
+  reactive mask, at the scene's size, `SHADER_READ_ONLY_OPTIMAL`), the jitter in FSR's convention, the camera's planes
+  and field of view, the exposure, the frame time and a reset on a cut; it writes `fsr3_output_` (RGBA16F at the
+  view's size, in `GENERAL`), which the post pass reads as under FSR 3.1. A memory barrier before the call makes the
+  inputs readable by any stage, and one after makes the output readable by the post pass. The colour carries
+  `TRANSFER_SRC` and the output `TRANSFER_DST` as well, for a provider that copies. Frame generation follows the same
+  motion as under the other temporal upscalers. A provider that sharpens (`HAILSTONE_UPSCALER_SHARPENS`) gets
+  `display.sharpness`; for any other the client's RCAS runs after it, as under `taa`.
+- **Falling back**: a provider that is not installed, does not load, says no at any step, or lacks something on this
+  GPU is dropped with a line in the log; the client then runs FSR 3.1, or `taa` where the GPU cannot run FSR 3.1. One
+  that fails a frame is dropped at the next frame (the scene targets are made again, the device idle), and `taa` runs
+  from then on.
+- **The example** (`plugins/example/upscaler/example.c`, built into `build/hailstone/upscalers/example/`) stretches the
+  colour with a linear blit: no accumulation, only the plumbing. `--upscaler example` runs it.
+
 ### Frame generation
 
 `display.frame_gen = true` (Options > Frame Generation, shown with a temporal upscaler; the viewer's `--frame-gen`)

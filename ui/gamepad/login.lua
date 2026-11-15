@@ -774,7 +774,7 @@ local function addonsPage(v, x0, y, x1, w)
     y = lines("A " .. o.kind .. (o.author ~= "" and (" by " .. o.author) or "") .. ", from " .. o.source
       .. (o.installedVersion ~= "" and ("  ·  installed now: " .. o.installedVersion) or ""), x0, y, x1)
     y = lines(o.description, x0, y, x1)
-    if o.kind ~= "tool" then y = lines("It asks to: " .. table.concat(o.caps, "; ") .. ".", x0, y, x1, false, 4) end
+    if o.kind ~= "tool" and o.kind ~= "upscaler" then y = lines("It asks to: " .. table.concat(o.caps, "; ") .. ".", x0, y, x1, false, 4) end
     y = lines(o.key ~= "" and ("Signed with key " .. o.key .. ": later versions must carry it.")
       or "Not signed: later versions come from whoever controls the repository.", x0, y, x1)
     if o.kind == "plugin" then
@@ -783,6 +783,10 @@ local function addonsPage(v, x0, y, x1, w)
     elseif o.kind == "tool" then
       y = lines("A tool is a program of its own: it runs on your computer with your rights, outside Hailstone, which "
         .. "starts it when you ask. Install only tools you trust.", x0, y, x1, true)
+    elseif o.kind == "upscaler" then
+      y = lines("An upscaler runs inside Hailstone with your rights: it sees only the frames it upscales through "
+        .. "Hailstone, but it is a program and can do anything on your computer. Install only upscalers you trust. "
+        .. "Pick it under Options, Graphics, Upscaler; it starts the next time the game does.", x0, y, x1, true)
     end
     if o.older then
       y = lines("This is an older version than the one installed (" .. o.installedVersion .. "): installing it goes "
