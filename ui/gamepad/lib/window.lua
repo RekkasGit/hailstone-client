@@ -217,7 +217,13 @@ function W.pressed(b) return ui.IsWindowFocused(3) and pad.menuPressed(b) end
 -- 1..count, drawRow(i, x0, y0, x1, y1, focused) draws one and returns nothing; onClick(i) on A / a click.
 -- state = { offset = 0 } kept by the caller. D-pad down on the last shown row (or up on the first) scrolls it, as
 -- does the mouse wheel over it. Returns the focused row (or nil).
+local listRowIds = {} -- by list id: its rows' ImGui ids ("<id>:<v>"), made once
 function W.list(id, state, count, visible, rowH, width, drawRow, onClick)
+  local rowIds = listRowIds[id]
+  if not rowIds then
+    rowIds = {}
+    listRowIds[id] = rowIds
+  end
   state.offset = state.offset or 0
   local maxOff = math.max(0, count - visible)
   if state.offset > maxOff then state.offset = maxOff end
@@ -229,7 +235,12 @@ function W.list(id, state, count, visible, rowH, width, drawRow, onClick)
   local scrolled = false
   for v = 1, math.min(visible, count) do
     local i = state.offset + v
-    ui.PushID(id .. ":" .. v)
+    local rowId = rowIds[v]
+    if not rowId then
+      rowId = id .. ":" .. v
+      rowIds[v] = rowId
+    end
+    ui.PushID(rowId)
     if state.focusNext == v then
       ui.SetKeyboardFocusHere()
       pad.showCursor()

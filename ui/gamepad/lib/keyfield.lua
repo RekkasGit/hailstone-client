@@ -10,6 +10,13 @@ local pad = dofile("lib/pad.lua")
 local KB = dofile("lib/keyboard.lua") -- (its keys and what shift makes of them)
 local K = {}
 
+-- The keys' button ids, made once (not each frame).
+local KEY_IDS = {}
+for r, row in ipairs(KB.KEYS) do
+  KEY_IDS[r] = {}
+  for k in ipairs(row) do KEY_IDS[r][k] = "##key" .. r .. "_" .. k end
+end
+
 function K.new() return { shift = false, focus = false } end
 function K.focus(kb) kb.focus = true end
 
@@ -34,7 +41,7 @@ function K.draw(kb, get, set, x0, x1, opts)
         kb.focus = false
       end
       local label = KB.label(key, kb.shift)
-      if T.button("##key" .. r .. "_" .. k, label, kw, kh, {}, pad) then
+      if T.button(KEY_IDS[r][k], label, kw, kh, {}, pad) then
         put(label)
         kb.shift = false
       end

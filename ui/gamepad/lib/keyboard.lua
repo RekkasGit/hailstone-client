@@ -38,6 +38,13 @@ function K.label(key, shift)
   return SHIFTED[key] or key:upper()
 end
 
+-- The keys' button ids, made once (not each frame).
+local KEY_IDS = {}
+for r, row in ipairs(KEYS) do
+  KEY_IDS[r] = {}
+  for k in ipairs(row) do KEY_IDS[r][k] = "##kb" .. r .. "_" .. k end
+end
+
 -- The window's hints while the keyboard is up.
 K.HINTS = { { "a", "Type" }, { "x", "Delete" }, { "y", "Space" }, { "lb", "Shift" }, { "b", "Cancel" } }
 
@@ -79,7 +86,7 @@ function K.draw(kb, pad, x0, y0, w)
         kb.focusFirst = false
       end
       local label = K.label(key, kb.shift)
-      if T.button("##kb" .. r .. "_" .. k, label, kw, T.px(60), {}, pad) and #kb.text < kb.max then
+      if T.button(KEY_IDS[r][k], label, kw, T.px(60), {}, pad) and #kb.text < kb.max then
         kb.text = kb.text .. label
         kb.shift = false
       end
