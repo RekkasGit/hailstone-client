@@ -778,7 +778,7 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     // upscaler_choice, option_choices "upscaler_providers"); as saved, which shows at the next start.
     if (name == "upscaler")
         return render::upscaler_choice(config_.get_string("display.upscaler", "fsr1"),
-                                       render::installed_upscaler_providers(platform::upscalers_dir()));
+                                       upscaler_providers());
     if (name == "distance_blur") return config_.get_bool("display.distance_blur", true) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
@@ -921,7 +921,7 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
         // Taken at start-up, as display.msaa: the temporal upscaler draws with one sample. Off's full size and no
         // frame generation apply at once (apply_scene_options).
         config_.set("display.upscaler",
-                    render::upscaler_choice_name(value, render::installed_upscaler_providers(platform::upscalers_dir())));
+                    render::upscaler_choice_name(value, upscaler_providers()));
     } else if (name == "shadows") {
         config_.set("display.shadows", std::to_string(kShadowSizes[std::clamp(value, 0, 3)]));
     } else if (name == "msaa") {

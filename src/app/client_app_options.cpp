@@ -338,8 +338,7 @@ std::vector<std::string> ClientApp::option_choices(std::string_view name) const 
     // (display_option "upscaler" 4 on), each by its own name once it runs, else by its folder's.
     if (name == "upscaler_providers") {
         const render::UpscalerProvider* running = vk_.upscaler_provider();
-        for (auto& p : render::installed_upscaler_providers(platform::upscalers_dir()))
-            out.push_back(running && running->name() == p ? running->label() : std::move(p));
+        for (const auto& p : upscaler_providers()) out.push_back(running && running->name() == p ? running->label() : p);
     }
     // The asset folder the game runs with (one entry; "asset_folder_pick" changes it on the login screen).
     if (name == "asset_folder") out.push_back(game_.root().string());

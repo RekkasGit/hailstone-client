@@ -948,6 +948,14 @@ private:
     }
     std::uint32_t msaa_at_start_ = 0; // apply_scene_options: display.msaa as the client started, 0 before
     std::optional<render::Upscaler> upscaler_at_start_; // and display.upscaler
+    // The upscaler providers installed (render/upscaler_provider.h installed_upscaler_providers): the Options window
+    // asks every frame it is open, so the folder is listed once and again only after the add-on manager changed
+    // something (update_addons).
+    const std::vector<std::string>& upscaler_providers() const {
+        if (!upscaler_providers_) upscaler_providers_ = render::installed_upscaler_providers(platform::upscalers_dir());
+        return *upscaler_providers_;
+    }
+    mutable std::optional<std::vector<std::string>> upscaler_providers_;
     // /face: MQ's heading, degrees clockwise from north.
     void face_degrees(double degrees);
     // /keypress: a key command by name, tapped (0), held (1) or let go (2); false for an unknown name.

@@ -161,6 +161,7 @@ void ClientApp::update_addons() {
     const std::uint32_t serial = addons_ ? addons_->serial() : 0;
     if (serial != addons_serial_ || addons_dirty_) {
         addons_serial_ = serial;
+        upscaler_providers_.reset(); // an upscaler may have come or gone
         addons_dirty_ = false;
         if (automation_) automation_->set_addon_ceilings(addon_ceilings(data));
         addons_listed_ = {};
