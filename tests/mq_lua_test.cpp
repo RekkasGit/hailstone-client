@@ -767,6 +767,18 @@ end
     CHECK(why.find("social 'Test' (press)") != std::string::npos);
 }
 
+// A string match runs no Lua instructions, so the count hook never stopped one: the vendored Lua's long-match check
+// (ui::lua::kMatchCheckKey, the script state's match_check) holds it to the same limit.
+TEST_CASE("Lua socials: a runaway string match is stopped at the press's limit") {
+    Host h(0);
+    allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapRead, 2);
+    const auto start = std::chrono::steady_clock::now();
+    CHECK_FALSE(h.scripts->press_button(press("string.find(('a'):rep(1e5), ('a-'):rep(20) .. 'b')")));
+    CHECK(printed_part(h, "ran longer than 50 ms"));
+    CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(5));
+    CHECK(h.scripts->press_button(press("assert(string.find(('a'):rep(100) .. 'b', 'a-b') == 1)")));
+}
+
 TEST_CASE("Lua socials: editing the code starts a new state; forget_button drops it") {
     Host h(0);
     allow_buttons(h, plugin::ButtonMode::Press, plugin::kCapAll);

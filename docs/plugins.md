@@ -185,7 +185,7 @@ A script is `lua/<name>.lua` or `lua/<name>/init.lua`, the same layout MacroQues
 5.4 state and runs as a coroutine that the client resumes once a frame. `mq.delay` yields to the next frame. A
 script that runs more than 3 ms without yielding is paused until the next frame, like MQ's turbo, so a busy loop
 cannot freeze the client. One that cannot pause for 5 s is stopped; an `mq.imgui` window's function, which cannot
-pause, is stopped the same way. Only the script's own run and its binds are paused: a coroutine the script made itself
+pause, is stopped the same way, and so is a long string match (a pattern that backtracks), which cannot pause either. Only the script's own run and its binds are paused: a coroutine the script made itself
 (`coroutine.create`, `coroutine.wrap`) is never yielded by the pause, which would hand its `coroutine.resume` an
 early yield with no values, so long work inside one counts towards the 5 s and is not spread over frames. A bind
 whose function runs commands that start binds of the same script again (`mq.bind('/x', function() mq.cmd('/x')
@@ -872,12 +872,17 @@ declared (docs/addons.md). Whatever its capabilities, a plugin's code:
   pack's own key of that name (the palette, the place of a window it took over), and neither reaches the pack's test
   hooks (`test.*`, which click windows' children), the windows' switches (`enabled.*`) or another plugin's keys
   (`ui.SetSetting` refuses, and returns false for, a key with `=` or a line break or a value with a line break, since
-  the file is one `key=value` a line and such text would be read back as other keys);
-  `ui.DisableWindow(name)` turns off only its own window of that name;
+  the file is one `key=value` a line and such text would be read back as other keys); a plugin keeps at most 1024
+  keys, each at most 256 bytes with a value of at most 16 KiB (past that `ui.SetSetting` returns false, and a key it
+  has can still change); `ui.DisableWindow(name)` turns off only its own window of that name; it has at most 128
+  windows (`ui.window` raises past that);
 - runs for at most a second at a time (a window's draw, its file's load, a function of its that the pack calls) and
   the pack's own code for five: code that runs longer is stopped with an error, which a `pcall` of its own cannot
-  catch, and its window is turned off until its file changes; the UI's Lua state as a whole holds at most 1 GiB, and
-  an allocation past that fails in the code that asked for it. `collectgarbage` takes only `"count"` and `"step"`;
+  catch, and its window is turned off until its file changes. A long string match (`string.find`, `match`,
+  `gmatch`, `gsub` with a pattern that backtracks) counts too, and is stopped the same way. The UI's Lua state as a
+  whole holds at most 1 GiB, and an allocation past that fails in the code that asked for it; a plugin's code gets
+  three quarters of it, so what plugins hold leaves the pack's windows room. `collectgarbage` takes only `"count"`
+  and `"step"`;
 - uses the player's clipboard (`ui.GetClipboardText`, `ui.SetClipboardText`) only when its owner has every
   capability, as for a script: it holds whatever the player copied, a password too;
 - gets nil from the pre-game screens (`eq.LoginScreen` and the others hold the typed or saved password) and cannot
@@ -906,9 +911,13 @@ each of those tables through a view: reads and writes go through to the table, b
 (or into a table of its own that it puts there) runs as the plugin whenever the pack calls it, does nothing once the
 plugin unloads, and cannot be called by another plugin's code; the view's metatable cannot be read or changed,
 `rawset` refuses it, and a plugin's tables cannot have a `__gc` finalizer. `next` and `rawget` see nothing through a
-view (`pairs`, `ipairs`, `#` and `table.*` work). It cannot get the pack's own `eq` or `ui` functions to do
-something under the player's authority. What is not covered: a function or table the plugin hands a pack function
-as an argument, which that function may keep as it is (docs/todo.md). A player who copies the same files into a UI
+view (`pairs`, `ipairs`, `#` and `table.*` work). The pack's tables reach the plugin only as views, whatever the way:
+a pack function it calls (one of the pack's globals, one in a shared table, one the pack put in `ui`) returns views,
+and raises them; the tables the pack passes the plugin's functions as arguments are views (its own tables handed back
+are its own); and `getmetatable` gives a metatable the plugin did not set itself (a pack table's, a userdata's) as a
+view. It cannot get the pack's own `eq` or `ui` functions to do something under the player's authority. What is not
+covered: a function or table the plugin hands a pack function as an argument, or returns to the pack from a
+function the pack calls, which the pack may keep as it is (docs/todo.md). A player who copies the same files into a UI
 pack makes them the pack's own, with the player's authority.
 
 How plugins load:

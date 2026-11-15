@@ -468,7 +468,8 @@ whoever ran the command, both together.
 `os.date` and `os.difftime`. Tables cannot have a `__gc` finalizer.
 
 **Limits:** each script has its own Lua 5.4 state. It is paused after 3 ms without yielding and stopped if it cannot
-pause for 5 s. Its memory is capped at 256 MB.
+pause for 5 s; a long string match (a pattern that backtracks) cannot pause, and is stopped at that limit too. Its
+memory is capped at 256 MB.
 
 ## The `hailstone` module (Lua plugins)
 
@@ -761,7 +762,7 @@ rectangle (`u0, v0, u1, v1`).
 | IsKeyDown | (key) → bool | ui.Key value, or Ctrl/Shift/Alt/Super modifiers |
 | IsKeyPressed | (key) → bool | Went down this frame (no repeat) |
 | CaptureKeyboard | () → — | Keyboard goes to the UI next frame |
-| GetIO | () → {width, height, fps, ctrl, shift, alt, wheel, mouseDX, mouseDY, uiScale, nav_active, nav_visible, typing} | One shared table per frame. Read-only |
+| GetIO | () → {width, height, fps, ctrl, shift, alt, wheel, mouseDX, mouseDY, uiScale, nav_active, nav_visible, typing} | One shared table, its values the frame's. Read-only: a write raises an error |
 | GetTime | () → seconds | |
 | GetFrameCount | () → int | |
 
@@ -771,7 +772,7 @@ rectangle (`u0, v0, u1, v1`).
 |---|---|---|
 | BeginDragDropSource | ([flags]) → bool | |
 | SetDragDropPayload | (type, data) → bool | |
-| EndDragDropSource | () → — | |
+| EndDragDropSource | () → — | Only after a BeginDragDropSource that returned true; otherwise nothing |
 | BeginDragDropTarget | () → bool | |
 | AcceptDragDropPayload | (type) → string\|nil | |
 | EndDragDropTarget | () → — | |
@@ -781,14 +782,14 @@ rectangle (`u0, v0, u1, v1`).
 | Function | Args → returns | What |
 |---|---|---|
 | PushStyleColor | (idx, r, g, b, a) → — | idx from ui.Col |
-| PopStyleColor | ([n=1]) → — | |
+| PopStyleColor | ([n=1]) → — | Pops no more than the window's code pushed |
 | PushStyleColors | ({idx,r,g,b,a, …}) → n | Many at once |
 | PushStyleVar | (idx, x [, y]) → — | idx from ui.StyleVar |
-| PopStyleVar | ([n=1]) → — | |
+| PopStyleVar | ([n=1]) → — | Pops no more than the window's code pushed |
 | PushStyleVars | ({idx,x,y\|false, …}) → n | |
 | PushFont | ([eqFont=3]) → — | EQ UI font 1..6 |
 | PushChatFont | ([index=2]) → — | Chat font 0..10. Pop with PopFont |
-| PopFont | () → — | |
+| PopFont | () → — | Pops no more than the window's code pushed |
 | ChatFontSize | ([index=2]) → px | |
 
 #### Drawing (window draw list, or foreground)

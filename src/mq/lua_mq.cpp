@@ -102,6 +102,15 @@ void preempt_hook(lua_State* L, lua_Debug*) {
 
 void watch(lua_State* thread) { lua_sethook(thread, preempt_hook, LUA_MASKCOUNT, 1000); }
 
+// A long string match (the vendored Lua's check, ui::lua::kMatchCheckKey) is held to runaway_ms as Lua code is; it
+// cannot pause mid-match.
+int match_check(lua_State* L) {
+    const Script& s = Script::of(L);
+    auto ran = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.slice_start).count();
+    if (ran >= s.runaway_ms) luaL_error(L, "ran longer than %d ms", static_cast<int>(s.runaway_ms));
+    return 0;
+}
+
 // setmetatable without __gc (upvalue 1: Lua's own). A finalizer runs whenever the collector likes, with no hook
 // (Lua turns hooks off in it, so a loop there is never stopped), and at close, after the script's hooks are gone.
 int l_setmetatable(lua_State* L) {
@@ -1308,6 +1317,8 @@ bool ScriptHost::Impl::open_state(Script& sc, std::string& why) {
     // The main state's own calls (its windows, hooks, a social's press) are held to runaway_ms too; its threads
     // (lua_newthread copies the hook) also pause after kSliceMs.
     watch(L);
+    lua_pushcfunction(L, match_check);
+    lua_setfield(L, LUA_REGISTRYINDEX, ui::lua::kMatchCheckKey);
     sc.slice_start = Clock::now(); // the prelude below
     luaL_requiref(L, "_G", luaopen_base, 1);
     luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
