@@ -379,6 +379,9 @@ struct CharacterModel {
 struct CharacterArchive {
     std::shared_ptr<const PfsArchive> archive;
     std::vector<wld::WldFile> wlds;
+    // Opened as the original opens the Luclin player models and GlobalLoad.txt lines whose fourth FLAGS letter is
+    // 'T' (long_track_archives): a track of more than 15 keys plays at half its interval (EQGraphicsDX9 0x1001b26e).
+    bool halves_long_tracks = false;
 
     // Storage accounting. archive_bytes() is the archive file's size: file-backed bytes live in the page cache and
     // are shared, owned_bytes() of it is in private heap. parsed_bytes() estimates the WLD data itself, which is
@@ -390,7 +393,8 @@ struct CharacterArchive {
 
 // Opens and parses a character archive; nullptr when the file does not exist.
 // Throws std::runtime_error when it is malformed.
-std::shared_ptr<const CharacterArchive> load_character_archive(const GameDir& game, std::string_view file);
+std::shared_ptr<const CharacterArchive> load_character_archive(const GameDir& game, std::string_view file,
+                                                               bool halves_long_tracks = false);
 
 // The classic character archives the original client loads at start-up, in
 // load order: GlobalLoad.txt's _chr entries (phases 1-4), global5/7_chr,
@@ -404,6 +408,12 @@ std::vector<std::string> global_character_archives(const GameDir& game, bool luc
 // with 'T' loads at 0, otherwise at 2 (CDisplay::InitWorld @0x492093); every
 // other global archive (Luclin, global5/7, _amr, GlobalLoad_chr.txt) at 0.
 std::unordered_map<std::string, int> global_archive_levels(const GameDir& game);
+// The global archives whose long tracks play at half their interval (CharacterArchive::halves_long_tracks), by file
+// name as global_character_archives lists them: the load request's byte +0xe, which reaches the archive's loader
+// byte +0x30 (CS3DFile::Open 0x100c0470). CDisplay::InitWorld sets it for a GlobalLoad.txt line whose fourth FLAGS
+// letter is 'T' (@0x492063) and for the Luclin player models' global<code>_chr2 and _chr (@0x492507, @0x492597:
+// 0x1010000); the classic global_chr, the armor, Global NPC Models (global5/7_chr) and zone _chr loads leave it 0.
+std::unordered_set<std::string> long_track_archives(const GameDir& game, bool luclin = false);
 // The Luclin player-model archives eqclient.ini enables
 // (global<code>_chr2.s3d, global<code>_chr.s3d), in the client's race order.
 std::vector<std::string> luclin_character_archives(const GameDir& game);
@@ -456,6 +466,7 @@ namespace detail {
 struct TrackLoc {
     const wld::WldFile* wld = nullptr;
     wld::TrackRef ref{};
+    bool halves_long = false; // its archive's CharacterArchive::halves_long_tracks
 };
 struct FragmentLoc {
     const wld::WldFile* first = nullptr;
@@ -583,9 +594,10 @@ public:
     // Loads the global archives and the zone's (zone may be empty); with
     // `luclin`, the Luclin player models eqclient.ini enables.
     static CharacterLibrary load(const GameDir& game, std::string_view zone, bool luclin = false);
-    // Opens archives by file name; missing ones are skipped, broken ones logged.
-    static std::vector<std::shared_ptr<const CharacterArchive>> open_archives(const GameDir& game,
-                                                                             const std::vector<std::string>& names);
+    // Opens archives by file name; missing ones are skipped, broken ones logged. Those `halving` names
+    // (long_track_archives) halve their long tracks.
+    static std::vector<std::shared_ptr<const CharacterArchive>> open_archives(
+        const GameDir& game, const std::vector<std::string>& names, const std::unordered_set<std::string>& halving = {});
 
     const std::vector<std::shared_ptr<const CharacterArchive>>& archives() const { return archives_; }
     // The shared index of the global archives this library was made on, or null.
