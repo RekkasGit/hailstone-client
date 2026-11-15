@@ -249,6 +249,11 @@ int try_update(const std::string& key_arg, const std::string& feed, const fs::pa
     app::Updater updater(env);
     updater.check();
     updater.wait();
+    // As the login screen's Download: the client downloads only when the player asks (update.download is off).
+    if (updater.status().state == app::UpdateState::Available) {
+        updater.download();
+        updater.wait();
+    }
     const app::UpdateStatus s = updater.status();
     if (s.state != app::UpdateState::Ready) {
         std::fprintf(stderr, "not ready (state %d): %s\n", static_cast<int>(s.state), s.error.c_str());
