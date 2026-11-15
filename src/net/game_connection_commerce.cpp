@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 
 #include "core/log.h"
+#include "core/saturate.h"
 #include "game/item_options.h"
 #include "game/merchant.h"
 #include "game/world_state.h"
@@ -716,7 +717,8 @@ void GameConnection::handle_commerce(Op op, const AppPacket& p) {
     case Op::TradeCoins:
         // Handle_OP_TradeCoins @0x4b76d0: the partner added coin (a delta).
         if (auto c = decode_trade_coins(p); c && trade_ && c->type < 4) {
-            trade_->their_coins[c->type] += c->amount;
+            // Held at the maximum rather than wrapping: a flood of deltas cannot turn into a small offer.
+            trade_->their_coins[c->type] = saturating_add(trade_->their_coins[c->type], c->amount);
             trade_->my_ready = trade_->their_ready = false;
         }
         break;
