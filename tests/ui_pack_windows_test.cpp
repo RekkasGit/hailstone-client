@@ -2947,6 +2947,25 @@ return "ok"
     CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_settle_test") == "ok");
 }
 
+// The gamepad STML parser (lib/stml.lua): a "<" that opens no tag is text, shown with what follows it, in the colour
+// it is in; a closed tag is still dropped.
+TEST_CASE("UI packs (gamepad): STML keeps the text after an unmatched <") {
+    constexpr const char* kScript = R"lua(
+local S = dofile("lib/stml.lua")
+local function check(ok, what) if not ok then error(what, 2) end end
+check(S.plain(S.parse("a < b")) == "a < b", "a < b: " .. S.plain(S.parse("a < b")))
+check(S.plain(S.parse("<3")) == "<3", "<3")
+check(S.plain(S.parse("x <")) == "x <", "a < at the end")
+local segs = S.parse('<c "#ff0000">love &amp; <3', { 0, 0, 0, 1 })
+check(S.plain(segs) == "love & <3", "entities and the rest: " .. S.plain(segs))
+local last = segs[#segs]
+check(last[1] == "<3" and last[2][1] == 1 and last[2][2] == 0, "the rest takes the colour it is in")
+check(S.plain(S.parse("one <b>two</b> three")) == "one two three", "closed tags dropped")
+return "ok"
+)lua";
+    CHECK(run_gamepad_lib_script(kScript, "ui_pack_gamepad_stml_lt_test") == "ok");
+}
+
 // The gamepad windows keep what is costly to read or lay out (a raid's members, the raid's and the guild's message of
 // the day, the /who answer, an item's wrapped description) between frames: a change still shows. The stock windows'
 // texts and lists are stood in for from Lua, and every text the theme draws is recorded.
