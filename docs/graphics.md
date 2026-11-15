@@ -532,7 +532,8 @@ The blades are built in `shaders/lawn.vert`, without a texture (`render::FloraRe
 patch's square holds a grid of blades, one jittered in each cell, so the cover is even. A blade is a tapered strip
 of a few pieces ending in a point, standing on the ground across the patch (its slope), curving over as it rises, a
 little taller or shorter, combed: it leans 0.4 to 0.65 of its height the way a slowly turning field over the zone
-points (broad swathes lying together), a little off it, its flat side to the way it leans; leaning
+points (broad swathes lying together), a little off it, its flat side turned a way of its own (so the wide faces do
+not all line up); leaning
 with the scene's wind as gusts roll across the zone (the zone's plants' wind, `SceneLighting::wind`: gentle in fair
 weather, hard in a storm) and fluttering a little, and bent away from the spawns walking through it like the other
 plants. `shaders/lawn.frag` gives it the ground's hue with its brightness held within a band (a pale or dark texel
