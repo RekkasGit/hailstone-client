@@ -109,7 +109,11 @@ bool private_handle(HANDLE file, PSID user) {
         if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) { ok = false; break; }
         const auto* allow = static_cast<const ACCESS_ALLOWED_ACE*>(entry);
         // The new protected DACL grants only this user. Accept equivalent inherited DACLs only when equally private.
-        if (allow->Mask != 0 && !::EqualSid(const_cast<DWORD*>(&allow->SidStart), user)) ok = false;
+        // LocalSystem passes file ACLs anyway, so an entry for it shares nothing; Wine adds one to every DACL it
+        // reports, the protected one created here included, which otherwise turned the cache off there.
+        auto* ace_sid = const_cast<DWORD*>(&allow->SidStart);
+        if (allow->Mask != 0 && !::EqualSid(ace_sid, user) && !::IsWellKnownSid(ace_sid, WinLocalSystemSid))
+            ok = false;
     }
     if (descriptor) ::LocalFree(descriptor);
     return ok;
