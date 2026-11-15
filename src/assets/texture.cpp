@@ -784,6 +784,9 @@ Image decode_tga(std::span<const std::byte> data, const TgaHeader& h) {
     std::size_t count = std::size_t(h.width) * h.height;
     // An RLE packet of 1 + pixel_bytes bytes yields at most 128 pixels.
     if (count > (r.remaining() / (1 + pixel_bytes) + 1) * 128) fail("TGA pixel data truncated");
+    // Uncompressed: the exact size, before anything is reserved (the RLE bound above lets a short file ask for 128
+    // times its size).
+    if (h.image_type < 9 && r.remaining() / pixel_bytes < count) fail("TGA pixel data truncated");
     std::vector<Rgba> stream;
     stream.reserve(count);
     if (h.image_type >= 9) {
@@ -798,7 +801,6 @@ Image decode_tga(std::span<const std::byte> data, const TgaHeader& h) {
             }
         }
     } else {
-        if (r.remaining() < count * pixel_bytes) fail("TGA pixel data truncated");
         for (std::size_t i = 0; i < count; ++i) stream.push_back(to_rgba(read_value()));
     }
 
