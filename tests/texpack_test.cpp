@@ -335,6 +335,13 @@ TEST_CASE("texpack: a texture's pack images") {
         REQUIRE(o.masked);
         for (std::size_t i = 0; i < o.masked->mips[0].size(); i += 4) CHECK(std::to_integer<int>(o.masked->mips[0][i + 1]) < 8);
     }
+    SUBCASE("an output past kMaxUpscaleTexels is refused before anything is made") {
+        TextureInfo t = picture(8192, 8192);
+        assets::Image big; // only its size is read before the refusal
+        big.width = big.height = 8192;
+        CHECK_THROWS_AS(upscale_texture(t, {big}, models, {8, false}, {FileKind::Color}), std::runtime_error);
+        CHECK(set.color.calls == 0);
+    }
 }
 
 TEST_CASE("texpack: pack files are DX10 DDS with their mips, in the WLD meshes' rows") {

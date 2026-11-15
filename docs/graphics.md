@@ -1528,6 +1528,9 @@ three-stage build and the pack's files).
      Lanczos and thresholded.
    - Textures of 16 texels or less, the game's own normal maps and EQG data maps (coverage, palettes, masks) are
      only Lanczos-scaled and get no maps.
+   - The built-in upscaler (`texpack::upscale_texture`) refuses a texture whose output, or its colour model's padded
+     output, would pass 8192 x 8192 texels (`kMaxUpscaleTexels`): its float planes take 16 bytes a texel. The job
+     notes the error and goes on.
    - A stopped run resumes.
    - `--redo-alpha STAMP` makes the textures with an alpha channel again where their outputs are older than the file
      STAMP: for a work folder upscaled while a DDS's colour under alpha 0 was still overwritten (packs built before
