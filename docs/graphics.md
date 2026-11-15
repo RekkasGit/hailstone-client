@@ -608,7 +608,9 @@ Karana would hold some 6.5 million plants at once). Setting a zone up takes some
 mesh is bounded: a triangle with a non-finite vertex or one over 100,000 units out (the zones lie within some 20,000)
 neither grows plants nor covers any, the ground is cut into at most 2 million pieces, and the cover test holds at most
 16 million cell references, a triangle over more than 1,024 of its 64-unit cells (at most 256 such) being tested at
-every point instead. A triangle past those bounds is no cover.
+every point instead. A triangle past those bounds is no cover. The split bounds a piece's area, not its length, so the
+tiles are bounded as well: a piece whose bounds touch more than 1,024 tiles (only a damaged mesh's sliver) grows
+nothing, and the tiles hold at most 16 million piece references in all.
 
 They are looks only: collision, line of sight, the navigation mesh and picking do not see them.
 `tools/florascan GAME_DIR flora ZONE...` lists, per zone, the rules it takes and the plants on each ground texture
