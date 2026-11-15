@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Texture packs with generated trees: the trees stand still in the wind again, so their needles and leaves no longer shimmer when you stand near them in the modern lighting. No rebuild needed
 - Performance window (Ctrl+Shift+P): with Frame Generation on, it shows the rendered and the displayed frame rate, how many frames got an in-between frame and why any were skipped, the vsync pacing and what frame generation costs the GPU
 - Options > **Frame Generation** (with the Temporal or AMD FSR 3.1 upscaler; also on the gamepad pack's Display page; `display.frame_gen` in `hailstone.ini`): shows a frame made between each two the game draws, from the game's own motion and depth, for smoother movement on a high refresh rate screen. The interface is laid over both and never warps. While it is on, vertical sync stays on, the game draws at half the refresh rate and reacts a little later; it takes effect at once
 - For plugin authors: a new host function, `cursor_origin`, says whether the item on the cursor came from the server (summoned, a tradeskill result, a quest reward, but also a ground item picked up or an item looted onto the cursor), from the player's own inventory, or is not known; and two new commands, `/destroycursor <id>` and `/stowcursor <id>`, destroy the cursor item or put it in your packs only while it is still the item the plugin read. A plugin or script now needs the `actions` permission for these and for `/destroy`, which before needed only `commands` (docs/plugins.md "The cursor item's origin")
