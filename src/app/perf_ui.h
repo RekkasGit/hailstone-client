@@ -43,6 +43,36 @@ bool is_hitch(float frame_ms, float typical_ms);
 std::string hitch_text(float frame_ms, float typical_ms, const PhaseTimes& phases,
                        std::vector<std::pair<const char*, float>> sections = {});
 
+// The frame sections (core/frame_sections.h) of the last `frames` frames: each one's average per frame and its
+// slowest frame, longest average first, with the bytes each allocated a frame on average (frame_sections::add_bytes;
+// a section with bytes and no time is listed too). A section missing from a frame counts 0 there. Names are compared
+// by address, as frame_sections::add does (literals and frame_sections::intern).
+class SectionAverages {
+public:
+    using Sections = std::vector<std::pair<const char*, float>>;
+    using Allocations = std::vector<std::pair<const char*, std::size_t>>;
+    struct Row {
+        const char* name;
+        float avg_ms;
+        float max_ms;
+        float avg_bytes = 0.0f;
+        bool has_bytes = false; // bytes were counted for it (the Lua windows), so 0 means none allocated
+    };
+    explicit SectionAverages(std::size_t frames = 60) : frames_(frames == 0 ? 1 : frames) {}
+    void add(Sections sections, Allocations bytes = {});
+    std::vector<Row> rows() const;
+    std::size_t frames() const { return history_.size(); }
+
+private:
+    struct Frame {
+        Sections sections;
+        Allocations bytes;
+    };
+    std::size_t frames_;
+    std::vector<Frame> history_; // a ring of up to frames_ frames
+    std::size_t head_ = 0;       // next slot to write once full
+};
+
 // The frame rates over a history of frames: `ms` each real frame's time, `presented` how many images it put on the
 // screen (2 with an in-between frame from frame generation, else 1; same length). Rendered counts real frames,
 // displayed every image; `generated_share` is the share of real frames that had an in-between frame.
@@ -111,6 +141,7 @@ private:
     std::array<std::uint8_t, kFrames> presented_{};
     std::array<std::uint8_t, kFrames> generated_{};
     PhaseTimes current_{};
+    SectionAverages sections_;
     std::uint8_t current_presented_ = 1;
     std::uint8_t current_generated_ = 0;
     std::size_t head_ = 0;  // next slot to write

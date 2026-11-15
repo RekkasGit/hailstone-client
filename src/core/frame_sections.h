@@ -45,6 +45,30 @@ inline std::vector<Entry> take() {
     return out;
 }
 
+// Bytes a section allocated this frame (the Lua UI's windows: what their draw functions made, most of it garbage
+// the collector takes later), kept beside the times under the same names.
+using Bytes = std::pair<const char*, std::size_t>;
+
+inline std::vector<Bytes>& current_bytes() {
+    static std::vector<Bytes> entries;
+    return entries;
+}
+
+inline void add_bytes(const char* name, std::size_t bytes) {
+    for (auto& e : current_bytes())
+        if (e.first == name) {
+            e.second += bytes;
+            return;
+        }
+    current_bytes().emplace_back(name, bytes);
+}
+
+inline std::vector<Bytes> take_bytes() {
+    std::vector<Bytes> out;
+    out.swap(current_bytes());
+    return out;
+}
+
 // Times a run of code in laps: mark(name) charges the time since the last mark (or the Lap's start) to `name`.
 class Lap {
 public:
