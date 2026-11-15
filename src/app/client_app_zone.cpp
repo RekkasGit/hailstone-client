@@ -774,9 +774,11 @@ std::optional<int> ClientApp::display_option(std::string_view name) const {
     if (name == "upscale_quality")
         return static_cast<int>(render::upscale_quality_for(
             std::clamp(config_.get_int("display.render_scale", 100), render::kMinRenderScalePercent, 100)));
-    // 0 Off, 1 FSR 1 (spatial), 2 temporal, 3 FSR 3.1 (render/temporal.h upscaler_choice); as saved, which shows at
-    // the next start.
-    if (name == "upscaler") return render::upscaler_choice(config_.get_string("display.upscaler", "fsr1"));
+    // 0 Off, 1 FSR 1 (spatial), 2 temporal, 3 FSR 3.1, 4 on the installed upscaler providers (render/temporal.h
+    // upscaler_choice, option_choices "upscaler_providers"); as saved, which shows at the next start.
+    if (name == "upscaler")
+        return render::upscaler_choice(config_.get_string("display.upscaler", "fsr1"),
+                                       render::installed_upscaler_providers(platform::upscalers_dir()));
     if (name == "distance_blur") return config_.get_bool("display.distance_blur", true) ? 1 : 0;
     if (name == "color_grade") return config_.get_bool("display.color_grade", true) ? 1 : 0;
     if (name == "neighbour_zones") return neighbour_zones_ ? 1 : 0;
@@ -918,7 +920,8 @@ bool ClientApp::set_display_option(std::string_view name, int value) {
     } else if (name == "upscaler") {
         // Taken at start-up, as display.msaa: the temporal upscaler draws with one sample. Off's full size and no
         // frame generation apply at once (apply_scene_options).
-        config_.set("display.upscaler", std::string(render::upscaler_choice_name(value)));
+        config_.set("display.upscaler",
+                    render::upscaler_choice_name(value, render::installed_upscaler_providers(platform::upscalers_dir())));
     } else if (name == "shadows") {
         config_.set("display.shadows", std::to_string(kShadowSizes[std::clamp(value, 0, 3)]));
     } else if (name == "msaa") {

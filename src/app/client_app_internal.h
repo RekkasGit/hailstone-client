@@ -196,6 +196,16 @@ inline float ui_scale_setting(const ClientOptions& o) {
     return percent > 0 ? static_cast<float>(std::clamp(percent, 50, 300)) / 100.0f : 0.0f;
 }
 
+// The upscaler provider hailstone.ini's display.upscaler names (render/upscaler_provider.h), loaded before the
+// Vulkan instance is made, which takes its requirements; nullptr for the client's own upscalers. Read at the start
+// only, as display.upscaler always is.
+inline std::unique_ptr<render::UpscalerProvider> start_upscaler_provider() {
+    Config c;
+    if (!c.load(default_config_path())) return nullptr;
+    return render::load_upscaler_setting(c.get_string("display.upscaler", "fsr1"), platform::upscalers_dir(),
+                                         platform::cache_dir() / "upscalers");
+}
+
 inline ui::ChatChannel chat_channel(net::ChatEvent::Kind k) {
     using K = net::ChatEvent::Kind;
     using C = ui::ChatChannel;
@@ -246,7 +256,8 @@ public:
     ClientApp(const ClientApp&) = delete;
     ClientApp& operator=(const ClientApp&) = delete;
     explicit ClientApp(ClientOptions& options)
-        : opts_(options), window_(window_desc(options)), vk_(window_, options.validation),
+        : opts_(options), window_(window_desc(options)),
+          vk_(window_, options.validation, start_upscaler_provider()),
           ui_(window_, vk_,
               ui::ImGuiLayerDesc{.scale_override = ui_scale_setting(options),
                                  .ini_path = platform::imgui_ini()}) {
@@ -902,7 +913,7 @@ private:
         scene.msaa = msaa_at_start_;
         // Taken at start-up too: the temporal upscaler draws with one sample, so it changes the pipelines' count.
         if (!upscaler_at_start_)
-            upscaler_at_start_ = render::parse_upscaler(config_.get_string("display.upscaler", "fsr1"));
+            upscaler_at_start_ = render::upscaler_from_setting(config_.get_string("display.upscaler", "fsr1"));
         scene.upscaler = *upscaler_at_start_;
         // Frame generation (render/frame_gen.h): applied at once (the swapchain is made again); only with a temporal
         // upscaler, which VkContext checks.

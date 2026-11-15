@@ -40,6 +40,9 @@ local PLUGIN_WARNING = "A plugin is a program: these permissions limit what it d
   .. "can do on your computer. Install only plugins you trust."
 local TOOL_WARNING = "A tool is a program of its own: it runs on your computer with your rights, outside Hailstone, "
   .. "which starts it when you ask. Install only tools you trust."
+local UPSCALER_WARNING = "An upscaler runs inside Hailstone with your rights: it sees only the frames it upscales "
+  .. "through Hailstone, but it is a program and can do anything on your computer. Install only upscalers you trust. "
+  .. "Pick it under Options, Graphics, Upscaler; it starts the next time the game does."
 local UI_TIP_SAVED = "The look and layout of the game's windows on this server, kept with it. The screen changes to it now."
 local UI_TIP_NEW = "The look and layout of the game's windows on this server, kept with it once it is saved. The "
   .. "screen changes to it now."
@@ -453,14 +456,15 @@ local function offerCard(o, s, bh)
   ui.PushTextWrapPos(0)
   if o.description ~= "" then ui.TextWrapped(o.description) end
   if o.installedVersion ~= "" then P.Faint("Installed now: " .. o.installedVersion) end
-  if o.kind ~= "tool" then
+  if o.kind ~= "tool" and o.kind ~= "upscaler" then
     ui.Text("It asks to:")
     bullets(o.caps, s)
   end
   P.Faint(o.key ~= "" and ("Signed with key " .. o.key .. ": later versions must carry the same key.")
     or "Not signed: later versions come from whoever controls the repository.")
-  if o.kind == "plugin" or o.kind == "tool" then
-    ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, o.kind == "tool" and TOOL_WARNING or PLUGIN_WARNING)
+  if o.kind == "plugin" or o.kind == "tool" or o.kind == "upscaler" then
+    ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, o.kind == "tool" and TOOL_WARNING
+      or o.kind == "upscaler" and UPSCALER_WARNING or PLUGIN_WARNING)
   end
   if o.older then
     ui.TextColored(C.gold[1], C.gold[2], C.gold[3], 1, string.format(
@@ -582,7 +586,8 @@ local function storeItem(a, it, s, lh)
   ui.PushFont(T.font.large)
   ui.TextColored(C.text[1], C.text[2], C.text[3], 1, it.name)
   ui.PopFont()
-  local kind = (it.kind == "plugin" or it.kind == "script" or it.kind == "tool") and it.kind or nil
+  local kind = (it.kind == "plugin" or it.kind == "script" or it.kind == "tool" or it.kind == "upscaler") and it.kind
+    or nil
   if kind or it.worlds ~= "" then
     ui.SameLine()
     local px, py = ui.GetCursorScreenPos()

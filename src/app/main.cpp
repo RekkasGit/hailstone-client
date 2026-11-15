@@ -122,6 +122,7 @@ struct Options {
     int vision = 0;               // --vision: 1 infravision, 2 ultravision (the race's innate)
     hailstone::render::VertexLighting lighting = hailstone::render::VertexLighting::Classic;
     hailstone::render::SceneOptions scene; // --msaa, --tonemap, --exposure
+    std::string upscaler_name;             // --upscaler as given: an upscaler provider's name loads it
     bool modern = false;              // --lighting modern (render/scene_lighting.h)
     bool tonemap_given = false;
     float view_distance = 2.5f;       // --view-distance (render::modern_view)
@@ -265,7 +266,8 @@ void usage() {
         "  --bloom N          bloom strength 0..1 (--lighting modern; default 0.5)\n"
         "  --render-scale P   draw the 3D view at P percent of its size (33..100) and upscale it (--upscaler)\n"
         "  --sharpness N      FSR 1's sharpening below a render scale of 100, 0..1 (default 0.5)\n"
-        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off) or fsr3 (AMD FSR 3.1)\n"
+        "  --upscaler NAME    fsr1 (spatial, below a render scale of 100), taa (temporal, MSAA off), fsr3 (AMD FSR 3.1)\n"
+        "                     or an upscaler provider's name (an add-on in upscalers/<name>/)\n"
         "  --frame-gen        generate a frame between each two (needs --upscaler taa or fsr3; vsync on)\n"
         "  --screenshot-generated  with frame generation: --screenshot FILE saves the last in-between frame,\n"
         "                     and the real frame after it as FILE_real (the viewer: the one before as FILE_prev;\n"
@@ -532,7 +534,8 @@ Options parse_args(int argc, char** argv) {
             o.screenshot_generated = true;
         } else if (arg("--upscaler")) {
             need(1);
-            o.scene.upscaler = hailstone::render::parse_upscaler(argv[++i]);
+            o.upscaler_name = argv[++i];
+            o.scene.upscaler = hailstone::render::upscaler_from_setting(o.upscaler_name);
         } else if (arg("--sharpness")) {
             need(1);
             o.scene.sharpness = std::clamp(std::strtof(argv[++i], nullptr), 0.0f, 1.0f);
@@ -900,7 +903,8 @@ int main(int argc, char** argv) {
 
         platform::Window window({});
         app::apply_window_icon(window);
-        render::VkContext vk(window, opts.validation);
+        render::VkContext vk(window, opts.validation, render::load_upscaler_setting(opts.upscaler_name, platform::upscalers_dir(),
+                                                                                 platform::cache_dir() / "upscalers"));
         std::filesystem::path shader_dir = platform::shaders_dir();
         if (opts.modern && !opts.tonemap_given) opts.scene.tonemap = render::Tonemap::AgX;
         vk.set_scene_options(opts.scene, shader_dir);

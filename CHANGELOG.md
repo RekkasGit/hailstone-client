@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Graphics: upscalers can now come as add-ons (Intel XeSS, AMD FSR 4 and others, as each becomes available): install one from Add-ons on the login screen and pick it under Options > Graphics > Upscaler; it starts with the next game start and works as AMD FSR 3.1 does, Frame Generation included. If the graphics card cannot run it, the game uses AMD FSR 3.1 instead (or the Temporal upscaler where FSR 3.1 cannot run). For developers: `sdk/hailstone_upscaler.h` and docs/plugins.md "Upscaler providers"
+
 - Modern lighting: the sky and the haze behind it are drawn only where the zone leaves the background open, which saves GPU time outdoors
 - Auras window: no longer opens by itself on a character that has never opened it; the EQ menu's Auras opens it
 - Chat: on a new character the game's "Other Chat" is a tab of the main chat window instead of a window of its own, and a chat window or tab you close stays closed after a restart

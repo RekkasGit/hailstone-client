@@ -33,6 +33,10 @@ hailstone/
                              pack.ini (what it was built with)
   tools/<name>/              tool add-ons, each a program of its own with its files (docs/addons.md "Tools"): the
                              add-on manager's alone, as nothing else is put there
+  upscalers/<name>/          upscaler add-ons, each a temporal upscaler (docs/addons.md "Upscalers"): <name>.so (.dll,
+                             .dylib) and the runtime it loads; display.upscaler = <name> loads it at the start, from
+                             a copy in cache/upscalers/. A build from source puts the example provider in
+                             upscalers/example/
   maps/                      the player's in-game maps for every server, maps/<dir>/ a maps directory (below)
   servers/<profile>/         one folder per saved server (core/server_profile.h); servers/.deleted/ the deleted ones
     server.ini               [Server] name, host, port, username, remember
@@ -84,7 +88,8 @@ hailstone/
                              scripts/<name>/ and plugins/<name>/
   update/                    the updater's downloads, the installed components' file lists, the files the last
                              update replaced (until the new version has started) and its journal (docs/updater.md)
-  cache/                     safe to delete while no client runs: cache/plugins/ holds the loaded plugins' copies, cache/pipelines.bin
+  cache/                     safe to delete while no client runs: cache/plugins/ holds the loaded plugins' copies,
+                             cache/upscalers/<name>-<key>/ the loaded upscaler's copy of its folder, cache/pipelines.bin
                              the compiled Vulkan pipelines, cache/navmesh/<server>/<zone>.navmesh the zones'
                              navigation meshes (docs/navigation.md), cache/horizon/<server>/<zone>/<neighbour>.bin
                              the neighbour zones' ground the land round a zone takes the shape of (docs/graphics.md

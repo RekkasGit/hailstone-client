@@ -1305,6 +1305,14 @@ end
             tool.can_remove = tool.can_start = true;
             tool.folder = "/x/tools/texstudio";
             login.addons.rows.push_back(tool);
+            // An installed upscaler (docs/addons.md "Upscalers").
+            ui::AddonRowView upscaler = tool;
+            upscaler.name = "xess";
+            upscaler.kind = "upscaler";
+            upscaler.source = "owner/xess";
+            upscaler.can_start = false;
+            upscaler.folder = "/x/upscalers/xess";
+            login.addons.rows.push_back(upscaler);
             // The store (docs/addons.md "Finding add-ons"): an item in each state, then the list being fetched, then
             // an empty one.
             for (const char* state : {"install", "update", "installed", "manual", "unavailable"}) {
@@ -1328,6 +1336,10 @@ end
             // A tool's install card: no permissions, the program's warning.
             login.addons.offer->kind = "tool";
             login.addons.offer->caps.clear();
+            s.frames(2);
+            CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
+            // An upscaler's: no permissions, its own warning.
+            login.addons.offer->kind = "upscaler";
             s.frames(2);
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             login.addons.offer->kind = "plugin";
@@ -4695,9 +4707,13 @@ TEST_CASE("UI packs (modern): the Options window's Textures section picks the te
             asked.insert(std::string(o));
             if (o == "texture_pack") return 2;
             if (o == "texture_studio") return 1;
+            if (o == "upscaler") return 4; // the first upscaler add-on (render/temporal.h kFirstProviderChoice)
             return std::nullopt;
         };
-        s.host.option_choices = [](std::string_view o) {
+        std::set<std::string> listed;
+        s.host.option_choices = [&listed](std::string_view o) {
+            listed.insert(std::string(o));
+            if (o == "upscaler_providers") return std::vector<std::string>{"Intel XeSS"};
             return o == "texture_pack" ? std::vector<std::string>{"Off", "default", "hd"} : std::vector<std::string>{};
         };
         lua_State* L = s.lua.state();
@@ -4721,6 +4737,9 @@ TEST_CASE("UI packs (modern): the Options window's Textures section picks the te
         s.frames(3);
         CHECK(asked.contains("texture_pack"));
         CHECK(asked.contains("texture_studio")); // the Texture Studio button is offered
+        // The Upscaler choices go on with the upscaler add-ons installed, one of them chosen.
+        CHECK(asked.contains("upscaler"));
+        CHECK(listed.contains("upscaler_providers"));
         CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
     }
     ImGui::DestroyContext(ctx);

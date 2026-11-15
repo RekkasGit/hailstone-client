@@ -300,6 +300,7 @@ add_library(hailstone_engine STATIC
   src/platform/private_file.cpp
   src/platform/durable_file.cpp
   src/platform/shared_file.cpp
+  src/platform/shared_library.cpp
   src/platform/gpu_ipc.cpp
   src/platform/gpu_external_memory.cpp
   src/platform/process.cpp
@@ -393,6 +394,7 @@ add_library(hailstone_engine STATIC
   src/render/zone_renderer.cpp
   src/render/sky_renderer.cpp
   src/render/temporal.cpp
+  src/render/upscaler_provider.cpp
   src/render/frame_gen.cpp
   src/render/fsr3_upscaler.cpp
   src/render/particle_renderer.cpp
@@ -818,6 +820,15 @@ target_include_directories(MQ2Example PRIVATE sdk)
 set_target_properties(MQ2Example PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>
                                             RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/plugins$<0:>)
 
+# The example upscaler provider (plugins/example/upscaler): plain C against sdk/hailstone_upscaler.h, in
+# build/hailstone/upscalers/example/example.<so|dll|dylib> (render/upscaler_provider.h finds it by its folder's name).
+add_library(ExampleUpscaler MODULE plugins/example/upscaler/example.c)
+target_include_directories(ExampleUpscaler PRIVATE sdk)
+target_link_libraries(ExampleUpscaler PRIVATE Vulkan::Headers)
+set_target_properties(ExampleUpscaler PROPERTIES PREFIX "" OUTPUT_NAME example
+                      LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/upscalers/example$<0:>
+                      RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TREE_DIR}/upscalers/example$<0:>)
+
 # The server plugins are kept in repositories of their own and reach players as add-ons (docs/addons.md): the NMS
 # server's (projecthailstone/hailstone-nms) and the Project Triune server's (projecthailstone/hailstone-projecttriune,
 # private). Cloned into plugins/nms or plugins/projecttriune (both ignored here), each is built from its own
@@ -910,6 +921,7 @@ elseif(TARGET SDL3-shared)
   endif()
 endif()
 install(TARGETS MQ2Example LIBRARY DESTINATION plugins COMPONENT examples EXCLUDE_FROM_ALL) # a MODULE is a LIBRARY
+install(TARGETS ExampleUpscaler LIBRARY DESTINATION upscalers/example COMPONENT examples EXCLUDE_FROM_ALL)
 
 # The browser helper's messages and the address rules, built with the client's flags (exceptions on): the helper
 # (tools/hailstone-web, CEF's flags: no exceptions, no RTTI) links them from here.
@@ -1325,6 +1337,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/cameras_test.cpp
     tests/iso_camera_test.cpp
     tests/temporal_test.cpp
+    tests/upscaler_provider_test.cpp
     tests/frame_gen_test.cpp
     tests/click_intent_test.cpp
     tests/iso_occlusion_test.cpp
@@ -1401,6 +1414,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/lod_bands_test.cpp
     tests/zone_models_test.cpp
     tests/addon_tool_test.cpp
+    tests/addon_upscaler_test.cpp
   )
   target_include_directories(hailstone_tests PRIVATE tests sdk)
   add_dependencies(hailstone_tests hailstone_shared_cache_probe)
@@ -1428,11 +1442,29 @@ if(HAILSTONE_BUILD_TESTS)
   target_compile_options(hailstone_mock_web_helper PRIVATE ${HAILSTONE_WARNINGS})
   target_link_libraries(hailstone_mock_web_helper PRIVATE hailstone_web_protocol)
   set_target_properties(hailstone_mock_web_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:hailstone_tests>)
+  # The example upscaler provider built as the tests' fixtures (tests/upscaler_provider_test.cpp), each in a folder of
+  # its name under test_upscalers/ beside the tests: as it is, one that says no, one for a newer ABI, one that refuses
+  # every GPU, one that fails a frame (the last two for running the client with by hand).
+  set(HAILSTONE_TEST_UPSCALERS_DIR $<TARGET_FILE_DIR:hailstone_tests>/test_upscalers)
+  foreach(u example refuse newer nodevice failing)
+    add_library(TestUpscaler_${u} MODULE plugins/example/upscaler/example.c)
+    target_include_directories(TestUpscaler_${u} PRIVATE sdk)
+    target_link_libraries(TestUpscaler_${u} PRIVATE Vulkan::Headers)
+    set_target_properties(TestUpscaler_${u} PROPERTIES PREFIX "" OUTPUT_NAME ${u}
+                          LIBRARY_OUTPUT_DIRECTORY ${HAILSTONE_TEST_UPSCALERS_DIR}/${u}
+                          RUNTIME_OUTPUT_DIRECTORY ${HAILSTONE_TEST_UPSCALERS_DIR}/${u})
+    add_dependencies(hailstone_tests TestUpscaler_${u})
+  endforeach()
+  target_compile_definitions(TestUpscaler_refuse PRIVATE EXAMPLE_REFUSE)
+  target_compile_definitions(TestUpscaler_newer PRIVATE EXAMPLE_ABI=99)
+  target_compile_definitions(TestUpscaler_nodevice PRIVATE EXAMPLE_REFUSE_DEVICE)
+  target_compile_definitions(TestUpscaler_failing PRIVATE EXAMPLE_FAIL_EVALUATE)
   add_dependencies(hailstone_tests MQ2Example ExtendTest ExtendTestV1 ExtendTestNew HostProbe HostProbeThrow hailstone_mock_web_helper)
   target_compile_definitions(hailstone_tests PRIVATE HAILSTONE_EXAMPLE_PLUGIN="$<TARGET_FILE:MQ2Example>"
     HAILSTONE_PROBE_PLUGIN="$<TARGET_FILE:HostProbe>" HAILSTONE_PROBE_THROW_PLUGIN="$<TARGET_FILE:HostProbeThrow>"
     HAILSTONE_EXTEND_PLUGIN="$<TARGET_FILE:ExtendTest>" HAILSTONE_EXTEND_PLUGIN_V1="$<TARGET_FILE:ExtendTestV1>"
     HAILSTONE_EXTEND_PLUGIN_NEW="$<TARGET_FILE:ExtendTestNew>"
+    HAILSTONE_TEST_UPSCALERS_DIR="${HAILSTONE_TEST_UPSCALERS_DIR}"
     HAILSTONE_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data" HAILSTONE_CLIENT_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/ui"
     # The recorded vectors are looked for beside the source tree (tests/vector_files.h), whatever the run's directory.
     HAILSTONE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

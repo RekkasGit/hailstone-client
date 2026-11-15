@@ -678,10 +678,13 @@ local function graphicsTab()
     if msaa ~= nil and msaaAtStart ~= nil and msaa ~= msaaAtStart then
       note("Restart the game to change anti-aliasing.")
     end
-    -- 0 Off, 1 FSR 1, 2 Temporal, 3 FSR 3.1 (render/temporal.h upscaler_choice)
+    -- 0 Off, 1 FSR 1, 2 Temporal, 3 FSR 3.1, then 4 on the upscaler add-ons installed (render/temporal.h
+    -- upscaler_choice); every one from 2 on is temporal.
     if (upscalerAtStart or 0) >= 2 then note("The temporal upscalers smooth edges themselves: MSAA is off while one is on.") end
-    combo("upscaler", "Upscaler", { "Off", "AMD FSR 1", "Temporal (TAA)", "AMD FSR 3.1" },
-      "Off draws the 3D world at full size with no upscaling and no Frame Generation. FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal and FSR 3.1 build a smooth picture over several frames at every render scale and replace MSAA; FSR 3.1 is AMD's, Temporal is Hailstone's own. Takes effect the next time the game starts.")
+    local upscalers = { "Off", "AMD FSR 1", "Temporal (TAA)", "AMD FSR 3.1" }
+    for _, name in ipairs(eq.OptionChoices("upscaler_providers") or {}) do upscalers[#upscalers + 1] = name end
+    combo("upscaler", "Upscaler", upscalers,
+      "Off draws the 3D world at full size with no upscaling and no Frame Generation. FSR 1 sharpens each frame on its own, below a render scale of 100. Temporal and FSR 3.1 build a smooth picture over several frames at every render scale and replace MSAA; FSR 3.1 is AMD's, Temporal is Hailstone's own. Upscalers installed as add-ons follow them, and work as FSR 3.1 does; one the graphics card cannot run falls back to FSR 3.1. Takes effect the next time the game starts.")
     local upscaler = eq.Option("upscaler")
     -- Off and FSR 1 draw the same way, so a change between them needs no restart.
     if upscaler ~= nil and upscalerAtStart ~= nil and upscaler ~= upscalerAtStart
