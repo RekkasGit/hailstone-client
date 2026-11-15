@@ -623,6 +623,62 @@ void armor_fixture_folder(const std::filesystem::path& dir, bool maps = true, bo
 
 } // namespace
 
+TEST_CASE("a held item with a 0x2d mesh keeps it when its skeleton cannot be built") {
+    using namespace test::wld_fixtures;
+    WldBuilder b;
+    auto bitmap = b.add(0x03, b.str("A_SPRITE"), bitmap_name("fixture.bmp"));
+    ByteWriter info;
+    info.le<std::uint32_t>(0);
+    info.le<std::uint32_t>(1);
+    info.le(bitmap);
+    auto sprite_info = b.add(0x04, 0, info);
+    ByteWriter ref;
+    ref.le(sprite_info);
+    ref.le<std::uint32_t>(0);
+    auto sprite = b.add(0x05, 0, ref);
+    auto mat = b.add(0x30, b.str("A_MDF"), material(0x80000001, sprite));
+    auto materials = b.add(0x31, 0, refs({mat, mat, mat}));
+    auto geometry = b.add(0x36, b.str("IT9_DMSPRITEDEF"), mesh(materials, false));
+    ref = {};
+    ref.le(geometry);
+    ref.le<std::uint32_t>(0);
+    auto mesh_ref = b.add(0x2d, 0, ref);
+    ByteWriter track;
+    track.le<std::int32_t>(0);
+    track.le<std::uint32_t>(0);
+    auto root_track = b.add(0x13, b.str("IT9_ROOT_TRACK"), track);
+    // A skeleton of one node with no mesh and no cloud: building it fails ("no visible mesh").
+    ByteWriter skeleton;
+    skeleton.le<std::uint32_t>(0);
+    skeleton.le<std::uint32_t>(1);
+    skeleton.le<std::int32_t>(0);
+    skeleton.le(b.str("IT9_ROOT_DAG"));
+    skeleton.le<std::uint32_t>(0);
+    skeleton.le(root_track);
+    skeleton.le<std::int32_t>(0);
+    skeleton.le<std::uint32_t>(0);
+    auto skeleton_def = b.add(0x10, b.str("IT9_HS_DEF"), skeleton);
+    ref = {};
+    ref.le(skeleton_def);
+    ref.le<std::uint32_t>(0);
+    auto skeleton_ref = b.add(0x11, 0, ref);
+    ByteWriter actor;
+    for (std::uint32_t v : {0u, 0u, 0u, 2u, 0u}) actor.le(v);
+    actor.le(mesh_ref);
+    actor.le(skeleton_ref);
+    b.add(0x14, b.str("IT9_ACTORDEF"), actor);
+    auto archive = std::make_shared<CharacterArchive>();
+    archive->archive = std::make_shared<PfsArchive>(PfsArchive::from_memory(
+        test::pfs_fixtures::make_pfs({{"fixture.wld", b.build()}}), "held_fixture.s3d"));
+    archive->wlds.push_back(wld::WldFile::parse(*archive->archive->read("fixture.wld"), "fixture.wld"));
+    CharacterLibrary library({archive});
+    CHECK_THROWS(library.build("IT9"));
+    auto item = library.actor_mesh("IT9");
+    REQUIRE(item);
+    CHECK_FALSE(item->mesh.indices.empty());
+    CHECK(item->mesh.emitters.empty());
+}
+
 TEST_CASE("held EQG items keep native surface maps without taking armor aliases") {
     test::ScratchDir dir("held_surface");
     armor_fixture_folder(dir.path());

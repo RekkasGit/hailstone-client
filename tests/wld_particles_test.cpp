@@ -302,7 +302,8 @@ TEST_CASE("WLD cloud sprite frames retain separate files and authored repeats") 
     CHECK(definition.texture_frames == texture->files);
     CHECK(definition.frames == 3);
     CHECK(definition.frames_per_second == doctest::Approx(25));
-    // A missing later bitmap must reject the whole sequence, rather than silently shorten it.
+    // A missing later bitmap does not silently shorten the sequence: the first bitmap is drawn alone, as before the
+    // sequences were read, so the cloud does not vanish.
     info = {};
     info.le<std::uint32_t>(0);
     info.le<std::uint32_t>(2);
@@ -319,7 +320,28 @@ TEST_CASE("WLD cloud sprite frames retain separate files and authored repeats") 
     blit.le<std::uint32_t>(0x80000017);
     auto broken_sprite = b.add(0x26, 0, blit);
     w = wld::WldFile::parse(b.build());
-    CHECK_FALSE(particle_texture(w, broken_sprite));
+    auto still = particle_texture(w, broken_sprite);
+    REQUIRE(still);
+    CHECK(still->frames == 1);
+    CHECK(still->files == std::vector<std::string>{"first.bmp"});
+    // Only a sprite whose first bitmap is missing has no texture.
+    info = {};
+    info.le<std::uint32_t>(0);
+    info.le<std::uint32_t>(2);
+    info.le<std::int32_t>(9999);
+    info.le(first);
+    auto headless = b.add(0x04, b.str("headless"), info);
+    ref = {};
+    ref.le(headless);
+    ref.le<std::uint32_t>(0);
+    auto headless_ref = b.add(0x05, 0, ref);
+    blit = {};
+    blit.le<std::uint32_t>(0);
+    blit.le(headless_ref);
+    blit.le<std::uint32_t>(0x80000017);
+    auto headless_sprite = b.add(0x26, 0, blit);
+    w = wld::WldFile::parse(b.build());
+    CHECK_FALSE(particle_texture(w, headless_sprite));
 }
 
 TEST_CASE("particle_cloud_definition follows the DLL's 0x34 converter") {

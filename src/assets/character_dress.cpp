@@ -122,7 +122,7 @@ std::optional<CharacterLibrary::ItemMesh> CharacterLibrary::actor_mesh(const std
             }
             const bool skeletal = std::any_of(actor.sprites.begin(), actor.sprites.end(),
                 [&](wld::Ref sprite) { return w.get<wld::SkeletonRef>(sprite) != nullptr; });
-            if (skeletal) {
+            if (skeletal) try {
                 // Skeletal items (bows, some shields): bake the rest pose.
                 CharacterModel m = build(code);
                 std::vector<glm::mat4> world;
@@ -155,6 +155,11 @@ std::optional<CharacterLibrary::ItemMesh> CharacterLibrary::actor_mesh(const std
                 }
                 if (mesh.indices.empty()) mesh = std::move(posed);
                 else mesh.emitters = std::move(posed.emitters);
+            } catch (const std::exception& e) {
+                // The skeleton is now read beside a 0x2d mesh too, for its clouds: when it cannot be built, the
+                // static mesh still draws, as it did before (an item with no mesh of its own has nothing to keep).
+                if (mesh.indices.empty()) throw;
+                log::debug("actor model {}: skeleton not used: {}", code, e.what());
             }
             if (!mesh.indices.empty() || !mesh.emitters.empty()) out = ItemMesh{std::move(mesh), false, {}, {}};
         } catch (const std::exception& e) {

@@ -66,7 +66,9 @@ vec3 armor_normal_vector(vec3 n, vec3 m) {
     vec3 t = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 b = dp2perp * duv1.y + dp1perp * duv2.y;
     float scale = max(dot(t, t), dot(b, b));
-    if (!(scale > 1e-20)) return n * m.z;
+    // No tangent frame (collapsed UVs, a helper pixel): the surface's own normal. Not n * m.z, which a map's
+    // negative z (lava's dark blue, an RGB map's low blue) would turn to face away.
+    if (!(scale > 1e-20)) return n;
     float inv = inversesqrt(scale);
     vec3 mapped = t * inv * m.x + b * inv * m.y + n * m.z;
     return mapped;

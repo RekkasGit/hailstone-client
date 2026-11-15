@@ -13,14 +13,20 @@ std::optional<ParticleTexture> particle_texture(const wld::WldFile& wld, wld::Re
     const auto* sprite = blit ? wld.get<wld::BitmapInfoRef>(blit->sprite) : nullptr;
     const auto* info = sprite ? wld.get<wld::BitmapInfo>(sprite->info) : nullptr;
     if (!info || info->frames.empty()) return std::nullopt;
+    const auto* first = wld.get<wld::BitmapName>(info->frames.front());
+    if (!first || first->files.empty() || first->files.front().empty()) return std::nullopt;
     ParticleTexture t;
     for (const auto frame : info->frames) {
         const auto* bmp = wld.get<wld::BitmapName>(frame);
-        if (!bmp || bmp->files.empty()) return std::nullopt;
-        for (const auto& file : bmp->files) {
-            if (file.empty()) return std::nullopt;
-            t.files.push_back(file);
+        const bool whole = bmp && !bmp->files.empty() &&
+                           std::none_of(bmp->files.begin(), bmp->files.end(), [](const std::string& f) { return f.empty(); });
+        if (!whole) {
+            // A damaged later frame: the first bitmap alone, still, as before the sequences were read (a zone's cloud
+            // must not vanish), rather than a sequence silently shortened.
+            t.files.assign(1, first->files.front());
+            break;
         }
+        t.files.insert(t.files.end(), bmp->files.begin(), bmp->files.end());
     }
     t.file = t.files.front();
     t.frames = static_cast<std::uint32_t>(t.files.size());

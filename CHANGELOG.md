@@ -12,6 +12,7 @@
 - Extended Target window (modern interface): it starts six rows tall, and with more slots the rest scroll; drag its edge or corner to resize it. Its right-click menu has Auto expand, which grows the window to show every slot down to the last one with a target, and shrinks it back as they clear
 - Held items: restore WLD weapon and shield particle clouds, including animated bitmap sequences and moving effect nodes. EQG equipment retains normal, illumination and reflection maps, including 2D sphere maps such as the cleric epic shield's pearl effect. Animated textures, authored unlit additive materials, character selection and item previews use the same effects; glowing actor particles also illuminate their surroundings in modern lighting.
 - Held MPL coverage textures and scrolling WaterFall/Lava materials retain their authored maps and coordinates; legacy epic-weapon shader aliases use the same packed illumination and reflection path as their native render class.
+- Zones: the zones' own particle clouds now step through their animated bitmaps; the lava of EQG zones shows its second layer; doors, ground objects and real estate placements play their particle effects (before, only missiles did)
 
 ## 0.7.1-beta (2026-11-15)
 

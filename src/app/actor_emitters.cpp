@@ -48,7 +48,9 @@ ActorEmitters::ActorEmitters(render::VkContext& vk, const GameDir& game, const s
     eqclient_density_ = settings_.density;
     if (auto moddat = game.read("Resources/moddat.ini"))
         heights_ = game::parse_height_tables({}, std::string_view(reinterpret_cast<const char*>(moddat->data()), moddat->size()));
-    if (!particles_.empty()) renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir, scene);
+    // The scene's renderer is made now, so the first emitter in the world costs no hitch; an item preview's only when
+    // its item has an emitter (update): each renderer maps its own vertex ring (about 17 MB), and most items have none.
+    if (!particles_.empty() && scene) renderer_ = std::make_unique<render::ParticleRenderer>(vk, game, shader_dir, scene);
 }
 
 void ActorEmitters::set_texture_reader(render::ParticleRenderer::TextureReader reader) {
@@ -230,6 +232,8 @@ void ActorEmitters::update(float dt, std::span<const Actor> actors, const BoneWo
     };
     particles_.update(dt, attachment);
     clouds_.update(dt, attachment);
+    if (!particles_.emitters().empty() && !renderer_ && vk_ && game_)
+        renderer_ = std::make_unique<render::ParticleRenderer>(*vk_, *game_, shader_dir_, scene_);
     if (renderer_) renderer_->prepare(particles_);
     if (!clouds_.emitters().empty() && !cloud_renderer_ && vk_ && game_) {
         cloud_renderer_ = std::make_unique<render::ParticleRenderer>(*vk_, *game_, shader_dir_, scene_);
