@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -129,14 +130,15 @@ TEST_CASE("Lua UI: the client reads and writes a layout setting") {
 
 // ui.GetIO: one table a frame (the HUD asks for it from every window), with the frame's values; the next frame's is
 // another, with that frame's.
-TEST_CASE("Lua UI: GetIO gives one table a frame") {
+TEST_CASE("Lua UI: GetIO gives one read-only table, its values the frame's") {
     hailstone::test::ScratchDir scratch("lua_ui_api_io_test");
     const fs::path dir = scratch.path() / "pack";
     fs::create_directories(dir);
     std::ofstream(dir / "io.lua") << "frames = {}\n"
                                      "ui.window('IO', function()\n"
                                      "  local a, b = ui.GetIO(), ui.GetIO()\n"
-                                     "  frames[#frames + 1] = { same = rawequal(a, b), ctrl = a.ctrl, width = b.width, t = a }\n"
+                                     "  frames[#frames + 1] = { same = rawequal(a, b), ctrl = a.ctrl, width = b.width, t = a,\n"
+                                     "    write = pcall(function() a.width = 1 end), wrote = a.width ~= 1 }\n"
                                      "end)\n";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
@@ -156,7 +158,9 @@ TEST_CASE("Lua UI: GetIO gives one table a frame") {
             ImGui::Render();
         }
         REQUIRE(luaL_dostring(L, "return frames[1].same and frames[2].same, frames[1].ctrl, frames[2].ctrl, "
-                                 "frames[1].width, frames[2].width, not rawequal(frames[1].t, frames[2].t)") == LUA_OK);
+                                 "frames[1].width, frames[2].width, rawequal(frames[1].t, frames[2].t) and "
+                                 "not frames[1].write and frames[1].wrote and getmetatable(frames[1].t) == false") ==
+                LUA_OK);
         CHECK(lua_toboolean(L, -6));
         CHECK_FALSE(lua_toboolean(L, -5));
         CHECK(lua_toboolean(L, -4));
@@ -1309,6 +1313,166 @@ ui.Button, ui.SmallButton = pressing(button), pressing(small)
         CHECK(eval("B.viewed") == "1");
         CHECK(eval("B.shown") == "too many tabs");
         REQUIRE_FALSE(ImGui::FindWindowByName("UI errors"));
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// A script's PopStyleColor, PopStyleVar and PopFont pop only what it pushed: what the code drawing around it pushed
+// stays (ImGui's recovery after the window can push nothing back).
+TEST_CASE("Lua UI: a script pops only the style it pushed") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_pops_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('P', function()\n"
+                                    "  ui.Begin('P')\n"
+                                    "  ui.PushStyleColor(ui.Col.Text, 1, 0, 0, 1)\n"
+                                    "  ui.PopStyleColor(5) ui.PopStyleVar(5) ui.PopFont() ui.PopFont()\n"
+                                    "  ui.End()\n"
+                                    "  done = true\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        for (int i = 0; i < 2; ++i) {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 1, 0, 1));
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
+            ImGui::PushFont(ImGui::GetFont());
+            const int colors = GImGui->ColorStack.Size, vars = GImGui->StyleVarStack.Size,
+                      fonts = GImGui->FontStack.Size;
+            lua.frame();
+            CHECK(GImGui->ColorStack.Size == colors);
+            CHECK(GImGui->StyleVarStack.Size == vars);
+            CHECK(GImGui->FontStack.Size == fonts);
+            CHECK(ImGui::GetStyleColorVec4(ImGuiCol_Text).y == 1.0f);
+            ImGui::PopFont();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+            ImGui::Render();
+        }
+        lua_getglobal(lua.state(), "done");
+        CHECK(lua_toboolean(lua.state(), -1));
+        lua_pop(lua.state(), 1);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// EndDragDropSource and EndDragDropTarget without their Begin do nothing: ImGui's would end the tooltip it began, and
+// with none, in a release build, the script's own window.
+namespace {
+int current_window_name(lua_State* L) {
+    lua_pushstring(L, GImGui->CurrentWindow ? GImGui->CurrentWindow->Name : "");
+    return 1;
+}
+} // namespace
+
+TEST_CASE("Lua UI: ending a drag and drop never begun leaves the window open") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_dragdrop_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('D', function()\n"
+                                    "  ui.Begin('D')\n"
+                                    "  ui.EndDragDropSource() ui.EndDragDropTarget()\n"
+                                    "  done = current_window_name() == 'D'\n"
+                                    "  ui.End()\n"
+                                    "end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua_register(lua.state(), "current_window_name", &current_window_name);
+        ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+        ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+        ImGui::NewFrame();
+        lua.frame();
+        ImGui::Render();
+        lua_getglobal(lua.state(), "done");
+        CHECK(lua_toboolean(lua.state(), -1));
+        lua_pop(lua.state(), 1);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// InputText's options are read raw (a metamethod there could raise past the buffer's destructor), and the edited
+// text is pushed as before.
+TEST_CASE("Lua UI: InputText reads its options raw") {
+    CHECK(run_pack_frames("lua_ui_api_input_opts_test",
+                          "ui.window('I', function()\n"
+                          "  ui.Begin('I')\n"
+                          "  local proxy = setmetatable({}, { __index = function() touched = true; error('no') end })\n"
+                          "  local a = ui.InputText('a', 'abc', 10, 0, proxy)\n"
+                          "  local b = ui.InputText('b', 'xyz', 10, 0, { moveToEnd = true })\n"
+                          "  local n, changed = ui.SliderInt('s', 3, 0, 10, '%d%%')\n"
+                          "  ui.End()\n"
+                          "  done = a == 'abc' and b == 'xyz' and n == 3 and not touched\n"
+                          "end)\n"));
+}
+
+// A window registered outside its script's loading (by code run later) that fails is reported and logged on its
+// own, with no script to reload, and runs again once registered anew.
+TEST_CASE("Lua UI: a window with no script reports its error and comes back when registered again") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_late_window_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    std::ofstream(dir / "s.lua") << "ui.window('Base', function() end)\n";
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    unsigned char* px = nullptr;
+    int w = 0, h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&px, &w, &h);
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        auto frame = [&] {
+            ImGui::GetIO().DisplaySize = ImVec2(800, 600);
+            ImGui::GetIO().DeltaTime = 1.0f / 60.0f;
+            ImGui::NewFrame();
+            lua.frame();
+            ImGui::Render();
+        };
+        frame();
+        CHECK(lua.run_for_test("", "ui.window('Late', function() LATE = (LATE or 0) + 1 error('late boom') end) "
+                                   "return 1") == "1");
+        frame();
+        frame();
+        CHECK(lua.run_for_test("", "return LATE") == "1"); // failed once, then off
+        ImGuiWindow* errors = ImGui::FindWindowByName("UI errors");
+        REQUIRE(errors != nullptr);
+        CHECK(errors->Active);
+        CHECK(lua.run_for_test("", "ui.window('Late', function() LATE = LATE + 1 end) return 1") == "1");
+        frame();
+        frame();
+        CHECK(lua.run_for_test("", "return LATE") == "3");
+        CHECK_FALSE(ImGui::FindWindowByName("UI errors")->Active);
+    }
+    ImGui::DestroyContext(ctx);
+}
+
+// A pattern match runs no Lua instructions, so the count hook never stopped one: the vendored Lua's match calls the
+// state's check (lua_host.h kMatchCheckKey), which stops it at the code's time limit.
+TEST_CASE("Lua UI: a runaway string match is stopped at the time limit") {
+    hailstone::test::ScratchDir scratch("lua_ui_api_match_test");
+    const fs::path dir = scratch.path() / "pack";
+    fs::create_directories(dir);
+    ImGuiContext* ctx = ImGui::CreateContext();
+    {
+        hailstone::ui::lua::LuaUi lua(dir, scratch.path() / "ui.txt");
+        lua.set_limits_for_test(std::size_t{256} << 20, std::chrono::milliseconds(200), std::chrono::milliseconds(100));
+        const auto start = std::chrono::steady_clock::now();
+        for (const char* code : {"return string.find(('a'):rep(1e5), ('a-'):rep(20) .. 'b')",
+                                 "return (string.gsub(('a'):rep(1e5), ('a-'):rep(20) .. 'b', ''))",
+                                 "for x in string.gmatch(('a'):rep(1e5), ('a*'):rep(20) .. 'b') do end"})
+            CHECK(lua.run_for_test("", code).find("ran too long") != std::string::npos);
+        CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+        CHECK(lua.run_for_test("", "return string.find(('a'):rep(100) .. 'b', 'a-b')") == "1"); // runs as before
     }
     ImGui::DestroyContext(ctx);
 }
