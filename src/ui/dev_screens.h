@@ -189,6 +189,7 @@ struct LoginView {
     std::string game_choice;
     StatusLine status;
     bool busy = false; // request in flight: inputs disabled, spinner shown
+    bool session_ticket_available = false; // the app holds a returned ticket for this login endpoint
     UpdateNotice update; // the updater's news; its buttons return the Update* actions
     AddonsView addons;   // the add-on manager's; its buttons return the Addon* actions
     // This build ("0.2.0-alpha (39b3e9da)", core/build_info.h build_version()), shown small on every login screen
@@ -214,14 +215,14 @@ struct LoginView {
 // actions are for the suggestion whose source is addons.choice: Look opens its install card, Later puts it away for
 // this run, Never for good on this server. AddonBrowse fetches the store's list (again with choice_on);
 // AddonStoreLook opens the install card of the store item whose source is addons.choice; AddonStart starts the
-// installed tool addons.choice.
+// installed tool addons.choice. ResumeToken asks the app to consume its returned ticket for this endpoint.
 enum class LoginAction {
     None, Submit, Quit, Save, Delete, OpenAssets, UseGameFolder, BrowseGameFolder, LoginBox, AccountsChanged,
     ForgetAccount, PlayCharacter, MusicChanged,
     UpdateDownload, UpdateRestart, UpdateSkip, UpdateNotes, OpenProject,
     AddonInspect, AddonInstall, AddonCancel, AddonUpdate, AddonRemove, AddonAuto, AddonFolder, AddonPage, AddonCheck,
     AddonRevoke, AddonAskAgain, AddonSuggestLook, AddonSuggestLater, AddonSuggestNever, AddonBrowse, AddonStoreLook,
-    AddonStart
+    AddonStart, ResumeToken
 };
 
 // A row of the login screen's Characters list: a character one of the server's accounts was seen to have.

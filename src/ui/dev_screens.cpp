@@ -1045,6 +1045,10 @@ LoginAction login_screen(LoginView& view) {
     }
 
     ImGui::Spacing();
+    if (view.session_ticket_available && !view.busy) {
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Button("Sign in with session")) action = LoginAction::ResumeToken;
+    }
     bool ready = !view.username.empty() && !view.password.empty() && !view.host.empty();
     ImGui::BeginDisabled(!ready);
     ImGui::SetCursorPosX(label_w);

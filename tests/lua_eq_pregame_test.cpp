@@ -209,6 +209,34 @@ TEST_CASE("eq.LoginSet and eq.LoginDo: the fields change, and the buttons ask th
     CHECK(ui.host.login_action == static_cast<int>(A::Quit));
 }
 
+TEST_CASE("eq.LoginScreen: a session ticket offers an explicit sign-in without exposing its secret") {
+    Ui ui;
+    ui::LoginView v;
+    v.host = "127.0.0.1";
+    ui.host.login = &v;
+    CHECK(ui("held = eq.LoginScreen() return tostring(held.sessionTicketAvailable)") == "false");
+    CHECK(ui("return eq.LoginDo('resume_token')") == "false");
+    CHECK_FALSE(ui.host.login_action);
+
+    v.session_ticket_available = true;
+    CHECK(ui("held = eq.LoginScreen(held.revision) return tostring(held.sessionTicketAvailable)") == "true");
+    CHECK(ui("return eq.LoginScreen(held.revision)") == "true");
+    CHECK(ui("return tostring(held.ready) .. ' ' .. tostring(held.token) .. ' ' .. tostring(held.sessionTicket)") ==
+          "false nil nil");
+    CHECK(ui("return eq.LoginDo('resume_token')") == "true");
+    CHECK(ui.host.login_action == static_cast<int>(ui::LoginAction::ResumeToken));
+    ui.host.login_action.reset();
+
+    v.busy = true;
+    CHECK(ui("return eq.LoginDo('resume_token')") == "false");
+    CHECK_FALSE(ui.host.login_action);
+    v.busy = false;
+    v.session_ticket_available = false;
+    CHECK(ui("held = eq.LoginScreen(held.revision) return tostring(held.sessionTicketAvailable)") == "false");
+    CHECK(ui("return eq.LoginDo('resume_token')") == "false");
+    CHECK_FALSE(ui.host.login_action);
+}
+
 TEST_CASE("eq.LoginSet ui: a saved server keeps the interface at once, and only it; a new server keeps it once saved") {
     test::ScratchDir dir("lua_eq_pregame_test");
     Ui ui;
