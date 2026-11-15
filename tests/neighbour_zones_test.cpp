@@ -565,3 +565,19 @@ TEST_CASE("neighbour zones: the ground past the seam sampled a row at a time is 
     CHECK(none.step(floor, [] { return true; }));
     CHECK(none.take().empty());
 }
+
+TEST_CASE("Neighbour zones: a NaN, infinite or huge band or cell gives an empty grid; a huge triangle stays whole") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    auto flat = [](float, float) -> std::optional<float> { return 0.0f; };
+    CHECK(GroundSampler({0.0f, 0.0f}, {nan, 100.0f}, 16.0f).take().empty());
+    CHECK(GroundSampler({0.0f, 0.0f}, {inf, 100.0f}, 16.0f).take().empty());
+    CHECK(GroundSampler({0.0f, 0.0f}, {1e30f, 1e30f}, 16.0f).take().empty());
+    CHECK(GroundSampler({0.0f, 0.0f}, {100.0f, 100.0f}, 0.0f).take().empty());
+    CHECK(GroundSampler({0.0f, 0.0f}, {100.0f, 100.0f}, nan).take().empty());
+    GroundGrid g = sample_ground({0.0f, 0.0f}, {480.0f, 240.0f}, 24.0f, flat);
+    REQUIRE(g.width == 20);
+    // Spanning far more cells than int holds: decided whole (it lies 3 above the ground, but not inside it all).
+    CHECK_FALSE(split_off_ground(g, {-3e9f, -3e9f, 3}, {3e9f, -3e9f, 3}, {-3e9f, 3e9f, 3}));
+    CHECK_FALSE(split_off_ground(g, {nan, 50, 3}, {150, 50, 3}, {50, 150, 3}));
+}

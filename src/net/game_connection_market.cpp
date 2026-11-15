@@ -14,6 +14,7 @@
 #include "core/character_files.h"
 #include "core/ini_file.h"
 #include "core/log.h"
+#include "core/saturate.h"
 #include "game/bazaar.h"
 #include "game/distance.h"
 #include "game/feature_restrictions.h"
@@ -793,7 +794,7 @@ void GameConnection::barter_compensation_add(std::uint32_t quantity) {
     const auto& item = w.inventory[static_cast<std::size_t>(w.inventory_sel)];
     for (auto& t : w.editor.trade_items)
         if (t.item_id == item.item_id) {
-            t.quantity += quantity;
+            t.quantity = saturating_add(t.quantity, quantity); // held at the maximum rather than wrapping
             return;
         }
     if (static_cast<int>(w.editor.trade_items.size()) >= game::kMaxCompensation) return;

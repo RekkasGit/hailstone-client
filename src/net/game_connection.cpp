@@ -674,7 +674,8 @@ void GameConnection::handle_world(const AppPacket& p) {
         aggro_.pct = {};
         stun_timer_ms_ = 0;
         stun_state_ = false;
-        controlled_boat_ = standing_on_ = 0;
+        // The helm goes with the zone: the new zone may reuse the boat's id for another vehicle, which must smooth.
+        controlled_boat_ = standing_on_ = world_.driven_id = 0;
         spell_book_open_ = false; // MoveToZone closes the book
         respawn_.reset();
         clear_hover_rez();
@@ -1357,7 +1358,7 @@ void GameConnection::handle_zone(const AppPacket& p) {
                 // same-zone respawn wait, and both network motion and the app's physics must use its placement.
                 respawn_spawn_pending_ = false;
                 world_.controlled_id = 0;
-                standing_on_ = controlled_boat_ = 0;
+                standing_on_ = controlled_boat_ = world_.driven_id = 0;
                 velocity_ = glm::vec3(0.0f);
                 moving_ = false;
                 speed_run_ = 0.0f;

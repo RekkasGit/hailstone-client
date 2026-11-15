@@ -18,7 +18,7 @@ durations and cast time. They run on plain data (`CharacterSheet`) and are cover
 | `ticks.*` | DoPassageOfTime's timed updates: the 6 s buff tick (process-affects) and mana regen tick, the 1 s endurance upkeep |
 | `skills.cpp` | racial skill bonus, skill cap (with effects), adjusted skill, skill with item mods |
 | `spell_math.cpp` | spell duration, casting time modifier, the SPA 127 focus (limit checks, focus percent, the collectors), the cast time |
-| `abilities.*`, `skill_timers.inc` | skills and combat abilities on a `SkillContext` (the app's view of the player): the skill table's reuse / base damage / combat type (`tools/gen_skill_timers.py`), the skill timers and their refresh, skill reuse time (SPA 227), can-use-combat-skill; the adapters that run `use_skill.*` (`ContextQueries`) and `melee.*` (`ContextAttack`: can-I-hit, attack for slots 11 / 13 / 14 / 100, the swing timers; an item reference is its sheet slot, the fist `melee::kFistItem`) on it |
+| `abilities.*`, `skill_timers.inc` | skills and combat abilities on a `SkillContext` (the app's view of the player): the skill table's reuse / base damage / combat type (`tools/gen_skill_timers.py`), the skill timers and their refresh, skill reuse time (SPA 227; a deliberate change from RoF2: a combat skill's reuse below 0 is 0 rather than wrapping its unsigned timer, as the non-combat skills' already is), can-use-combat-skill; the adapters that run `use_skill.*` (`ContextQueries`) and `melee.*` (`ContextAttack`: can-I-hit, attack for slots 11 / 13 / 14 / 100, the swing timers; an item reference is its sheet slot, the fist `melee::kFistItem`) on it |
 | `use_skill.*` | the /doability path over plain structs and a `useskill::Queries` interface (one method per callee), packets built as bytes |
 | `melee.*` | melee range (with the scaled melee radius), attack speed modification (haste and the quiver), hand-to-hand delay, double attack and dual wield checks; the attack for slots 11, 13, 14, 100 and 101; ammo handling and the ranged attack (the range slot's OP_CombatAbility {target, 11, the item's skill}); can-I-hit (3D distance squared, bearing), can-melee-attack-now and the swing timers; through `BagQueries`, `RollQueries`, `HitQueries` and `AttackQueries` |
 | `item_stats.*` | the item getters (recursive sums over augments, charm scaling, masks) |
@@ -44,7 +44,7 @@ durations and cast time. They run on plain data (`CharacterSheet`) and are cover
 | `attack_rules.*` | who may attack whom and the same-deity rule (the PvP rules) through `AttackQueries`; the live spawns in `game/attack_check.*`, used by can-I-hit |
 | `spell_gems.*` | memorising, the memorise packet, the linked timers, the usable-slot rule and the gem readiness tests; see "Spell gems and buff stacking" |
 | `find_affect_slot.*` | buff slot choice and its stacking rules over the hit-by-spell structs and an `AffectQueries` interface; the live callees are `game/hit_landing.*` |
-| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list) |
+| `sheet_builder.*` | the sheet from the live connection; its callers add the owned AA ranks' effects (`AltAdvState::sheet_abilities`: OP_SendAATable's ranks, OP_RespondAA's owned list). A buff's ticks left are the server's count less the 6 s ticks since it arrived, except for a permanent buff (kept at -1 / -2) and while the buff timers are on hold (the count as received) |
 
 Outside this directory, with vectors: `net/reliable_channel.*` (the session layer's reliable channel give-time, ack-one and
 ack-all: the resend timeout min(1.25 rtt + 300, 8000) ms), and the UI rules the windows call (`game/spell_book.h`,
@@ -554,7 +554,8 @@ helm) and `net/game_connection_vehicle.cpp` (the helm's packets); tests in `test
   is refused and stops the boat; the turn alone is still tried, so the bow can swing away, and it can back off. The
   hull is 16 probes (spheres of radius 1 just inside the model's outline, at the outermost point each way) swept from
   the old pose to the new; a probe touching something where it starts is not held by it. Its position goes out as OP_ClientUpdate under the boat's id ten times a second while it moves;
-  EQEmu moves the boat there and passes it on. Leaving the deck lets go.
+  EQEmu moves the boat there and passes it on. Leaving the deck lets go, and so do a zone change and a same-zone
+  respawn (the new zone may give the boat's id to another vehicle, which then smooths as any other).
 - EQEmu's warp detector measures the rider's world position, so a boat faster than the rider's run speed is logged
   as a warp for a player below the exempt status; it only logs.
 
@@ -1393,6 +1394,8 @@ Vectors in `tests/hotbutton_tracking_vectors_test.cpp` (do-hot-button 4000, hot-
   a line one step waits; /pause N waits N, /timer N starts the display cooldown), 120 + n runs /alternateadv act n.
   Only the comma after a prefix is skipped, so a second prefix follows it with no space (`/timer 600,/pause 10, /cast
   1`); after `, ` the rest is the command (`game::split_social_line`, which the social editor reads lines with too).
+  The queued social stops when another character enters the world (its index would run that character's lines);
+  the developer Actions window's Socials tab queues a social the same way.
 - The hotbutton's mouse and menu (`game/hot_button_menu.*`): a left or quick right click on an empty button opens
   the menu unless the cursor holds something; a quick right click (on release) of a filled one activates it except on
   items; the right button held 500 ms opens it on any button. Its rows are shown or hidden by the button (not
