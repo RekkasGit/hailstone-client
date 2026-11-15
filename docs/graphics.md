@@ -1617,10 +1617,9 @@ zone loads (`Zone::draw_objects`).
   (glTF TEXCOORD_1, asset extras `hailstone_sway`), a branch with its needle sprays the height of its
   root on the trunk, the trunk and the far cards their own. A sway by each vertex's own height, or a flutter, moved
   a branch's crossing cards apart, so up close its leaves seemed to flip back and forth (a third of the bend without
-  the flutter still did). A generated tree now stands still in any case: even with each branch swaying whole, its
-  stark needle sprays slid over each other and across the pixels, a flicker in the modern lighting standing by a
-  tree that turning shadows off did not stop (0.67 % of the pixels changing by more than 12 a frame by Lake Rathe's
-  pines in the zone viewer, 0.01 % still). The generator still writes the sway heights; nothing reads them now.
+  the flutter still did). A generated tree from a pack built before stands still. Generated trees stood still for a
+  while because a pine still flickered by its swaying branches; the cause was the upright card of the clump once at
+  each branch's end (Styles, below), and with the clumps gone the branch sway is calm.
 - **Levels of detail:** a node's extras `{"hailstone_lod": [near, far]}` draw its meshes only from `near` to `far` world
   units from the camera (`MeshPart::lod_near`, `lod_far`). The zone renderer keeps each band's draws apart, a chunk
   for each placement, and chooses by the camera's distance to where the placement stands (`render/lod_bands.h`), so
