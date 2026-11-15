@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Luclin player models: combat swings, casting, socials (wave, cheer) and every other animation of more than 15 frames play at the original's speed; before, they ran at about half speed. The classic models are unchanged
 - Login screen: More options (both interfaces) has a Texture pack choice, the same as Options > Textures, so an HD pack built with Texture Studio can be picked before logging in. As in Options, the new pack is used from the next start
 - Options: the Upscaler list has an Off choice that turns upscaling and Frame Generation off completely: the 3D world is drawn at full size, whatever the render scale and Frame Generation settings say, and those settings are hidden until an upscaler is chosen again
 - Zones: placed objects that animate in the original now do here too: Ssraeshza Temple's rings turn, and the branches of the trees in Emerald Jungle, Trakanon's Teeth, the Wakening Land and some 70 other zones sway. They are solid where they are, so in Ssraeshza Temple the turning rings again let a player into the water shaft and out at the top once their gaps come round; before, the rings stood still with their gaps facing away and nobody could get in
