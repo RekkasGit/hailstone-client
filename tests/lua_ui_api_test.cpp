@@ -697,7 +697,7 @@ end)
 
 // The modern pack's STML links (ui/modern/lib/stml.lua): an href's target, also when its quote is never closed (the
 // storyline pages some servers ship: <a href="file:///storyline/Epic/BardEpic.txt>Bard</a>), a WndNotify link's
-// message and data, and an <a> with neither only coloured.
+// message and data, an <a> with neither only coloured, and a "<" that opens no tag kept as text.
 TEST_CASE("Lua UI: STML href links, an unclosed quote ending at the tag's end") {
     hailstone::test::ScratchDir scratch("lua_ui_api_stml_href_test");
     const fs::path dir = scratch.path() / "pack";
@@ -722,6 +722,12 @@ out = {
   notify = link('<a WndNotify="27,x">item</a>'),
   plain = link('<a name="top">here</a>'),
 }
+local function plain(line)
+  local t = {}
+  for _, seg in ipairs(stml.Parse(line)) do t[#t + 1] = seg[1] end
+  return table.concat(t)
+end
+out.lt = plain("a < b") .. "|" .. plain('<c "#ff0000">x &amp; <3') .. "|" .. plain("one <b>two</b> three")
 )lua";
     ImGuiContext* ctx = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
@@ -751,6 +757,7 @@ out = {
         CHECK(get("unclosed") == "Bard=-1,file:///storyline/Epic/BardEpic.txt");
         CHECK(get("notify") == "item=27,x");
         CHECK(get("plain") == "here=plain");
+        CHECK(get("lt") == "a < b|x & <3|one two three"); // a "<" that opens no tag is text
     }
     ImGui::DestroyContext(ctx);
 }
