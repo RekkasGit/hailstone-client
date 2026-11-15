@@ -65,8 +65,10 @@ ui.window("Web Browser", function()
           local ok, why
           if open then ok, why = eq.WebNavigate(current, t)
           else
-            current, why = eq.WebOpen(t)
-            ok = current ~= nil
+            local id
+            id, why = eq.WebOpen(t)
+            ok = id ~= nil
+            if ok then current = id end -- (a failed open keeps the tab that was in front)
           end
           problem = not ok and (why or "That address cannot be opened.") or nil
         end, { max = 1024, from = "addr" })
@@ -88,7 +90,9 @@ ui.window("Web Browser", function()
         end
         if button(7, "close", "Close the tab", { align = 0 }) then eq.WebClose(current) end
       elseif button(2, "new", "New tab", { align = 0 }) then
-        current = eq.WebOpen("about:blank")
+        local id, why = eq.WebOpen("about:blank")
+        if id then current = id end
+        problem = not id and (why or "The browser could not open a page.") or nil
       end
       if W.pressed("rb") or W.pressed("lb") then
         local step = W.pressed("rb") and 1 or -1
