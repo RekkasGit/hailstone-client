@@ -1229,11 +1229,13 @@ pipelines continue to use hardware alpha-to-coverage.
   by it (strength 0.85) before the exposure. It darkens the rendered scene colour, including every lighting term,
   so it is kept to contact shadows.
 
-  With MSAA and AO active, a global dependency from colour-output writes to fragment sampled reads follows the
-  final depth image transition. This compatibility measure stabilizes grass AO on Radeon RX 9070 XT. Grass keeps
-  writing depth; AO, distance blur and shafts use the final depth. Hidden zero-height lawn blades stay collapsed
-  at their root with finite current and previous motion positions (`shaders/lawn.vert`, `blade_at`). See
-  [World rendering qualification](unknowns.md#world-rendering) for validation limits.
+  Hidden zero-height lawn blades stay collapsed at their root with finite current and previous motion positions
+  (`shaders/lawn.vert`, `blade_at`); before, their rise divided 0 by 0 and sent NaN to the depth AO reads. Grass
+  keeps writing depth; AO, distance blur and shafts use the final depth. With MSAA and AO active, a global memory
+  barrier from colour-output writes to fragment sampled reads also follows the final depth image transition
+  (`VkContext::begin_overlay`). It repeats that transition's own scopes, so by the Vulkan spec it does nothing; it
+  is an unconfirmed workaround kept because the grass AO flicker on Radeon RX 9070 XT was reported gone with the
+  change that brought both. See [World rendering](unknowns.md#world-rendering) for what would settle it.
 
 - **View distance and haze** (`render::modern_view`, `set_haze_linear`, `apply_haze` in `shaders/lighting.glsl`): the far
   plane is the classic far plane x `display.view_distance` (not under water, in lava or thick-fog regions, which keep the

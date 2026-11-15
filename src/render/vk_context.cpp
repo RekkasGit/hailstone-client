@@ -1635,8 +1635,12 @@ void VkContext::begin_overlay(const FrameInfo& frame) {
                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, depth_sync.stages, depth_sync.access,
                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     if (ao && depth_resolved_.image) {
-        // Global resolve-to-sampling visibility keeps AO stable over grass on RX 9070, in addition to the
-        // image transition above. Keep the grass depth and synchronize only the resolve writer and AO reader.
+        // An unconfirmed driver workaround: this repeats the scopes of the depth image barrier just above
+        // (frame_sync.h depth_frame_sync(...).sampled: the resolve's colour-output writes before fragment sampled
+        // reads), so by the Vulkan spec it adds nothing. It is kept because the AO flicker over grass on Radeon
+        // RX 9070 XT was reported gone with it, but the same change also stopped faded lawn blades sending NaN
+        // (shaders/lawn.vert blade_at), the more likely cure. docs/unknowns.md "World rendering" says what would
+        // settle it.
         VkMemoryBarrier2 barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
         barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
