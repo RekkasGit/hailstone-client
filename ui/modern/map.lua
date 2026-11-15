@@ -41,11 +41,15 @@ for k, c in ipairs(COLORS) do TEXT_COLORS[k] = { c[1], c[2], c[3], 1 } end
 -- ---------------------------------------------------------------- markers
 local function zoneKey() return select(2, eq.ZoneName()) or "" end
 
--- The markers' setting name for this zone: made again only when the zone changes.
+-- The markers' setting name for this zone: made again only when the zone changes. The selected marker and the one
+-- being renamed are indexes into this zone's list, so a new zone forgets them.
 local keyZone, keyName = nil, nil
 local function markersKey()
   local zone = zoneKey()
-  if zone ~= keyZone then keyZone, keyName = zone, "map.markers." .. zone end
+  if zone ~= keyZone then
+    keyZone, keyName = zone, "map.markers." .. zone
+    M.sel, M.rename, M.renameIndex = nil, nil, nil
+  end
   return keyName
 end
 
