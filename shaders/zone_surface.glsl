@@ -9,11 +9,10 @@ vec3 zone_surface_normal(vec4 texel, bool packed_channels) {
     return packed_channels ? vec3(texel.x * 2.0f - 1.0f, texel.y * 2.0f - 1.0f, 0.9f) : vec3(texel) * 2.0f - 1.0f;
 }
 
-// The highlight's strength: the material's e_fGloss0 (`gloss`), for a packed map scaled by its alpha. Whether the
-// original replaces e_fGloss0 by the map's alpha or scales it is not confirmed; scaling is the safer reading, as it
-// never makes a highlight stronger than the material asks.
-float zone_surface_gloss(vec4 texel, bool packed_channels, float gloss) {
-    return packed_channels ? clamp(texel.w, 0.0f, 1.0f) * gloss : gloss;
+// The highlight's strength: the material's e_fGloss0 (`fallback`), or for a packed map its alpha in place of it.
+// Whether the original replaces e_fGloss0 by the map's alpha or scales it is not confirmed (docs/unknowns.md "EQG").
+float zone_surface_gloss(vec4 texel, bool packed_channels, float fallback) {
+    return packed_channels ? clamp(texel.w, 0.0f, 1.0f) : fallback;
 }
 
 // Modern light sources live above display white, as additive particles do: the gain is render::kParticleGlow's

@@ -113,10 +113,10 @@ TEST_CASE("EQG packed surfaces: glow and gloss channels never reverse the tangen
     // Ordinary RGB normal maps retain their full three-channel interpretation.
     CHECK(zone_surface_normal(glm::vec4(0.5f, 0.5f, 1, 0), false) == glm::vec3(0, 0, 1));
     CHECK(zone_surface_normal(dark, false).z < 0.0f);
-    // The map's alpha scales the material's gloss; it never raises it (docs/unknowns.md "EQG").
-    CHECK(zone_surface_gloss(dark, true, 0.2f) == doctest::Approx(dark.a * 0.2f));
-    CHECK(zone_surface_gloss(bright, true, 0.2f) == doctest::Approx(0.2f));
-    CHECK(zone_surface_gloss(glm::vec4(0.5f, 0.5f, 0.0f, 2.0f), true, 0.2f) == doctest::Approx(0.2f));
+    // The map's alpha replaces the material's gloss (docs/unknowns.md "EQG"), clamped to 1.
+    CHECK(zone_surface_gloss(dark, true, 0.2f) == dark.a);
+    CHECK(zone_surface_gloss(bright, true, 0.2f) == 1.0f);
+    CHECK(zone_surface_gloss(glm::vec4(0.5f, 0.5f, 0.0f, 2.0f), true, 0.2f) == 1.0f);
     CHECK(zone_surface_gloss(bright, false, 0.2f) == 0.2f);
 }
 

@@ -1138,9 +1138,9 @@ direction with a Z of 0.9 before normalization (its own choice, which keeps a da
 inward), B as self-illumination and A as gloss. The glow mask is multiplied by the diffuse colour and added after the
 weather (snow or rain does not put a glowing crystal out), independent of baked light, sky share and shadows. The
 modern zone renderer gives it HDR headroom, the additive particles' `render::kParticleGlow` (2.5); the classic
-lighting adds it at intensity 1 (not confirmed). The modern highlight's strength is `e_fGloss0` times the map's
-alpha: whether the original replaces `e_fGloss0` by the alpha instead is not confirmed, and the product never makes
-a highlight stronger than the material asks. A packed material whose map does not load is drawn as a plain one: no
+lighting adds it at intensity 1 (not confirmed). The modern highlight's strength is the map's alpha in place of
+`e_fGloss0` (a white alpha gives 1.0 against the ordinary classes' 0.2); whether the original replaces `e_fGloss0`
+by the alpha or scales it is not confirmed. A packed material whose map does not load is drawn as a plain one: no
 packed normal, glow or highlight from the packing, and a texture pack's maps may still apply. Other classes keep
 their RGB normal path. Treating packed B as normal Z had turned dark regions' normals inward and lost the luminous
 parts entirely.
