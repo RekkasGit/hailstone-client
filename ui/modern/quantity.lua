@@ -64,8 +64,9 @@ ui.window("Quantity", function()
     openX, openY = sx, sy
     ui.SetSetting("hud.pos." .. WINDOW, "")
   end
-  if shown and not wasShown then
-    -- the box starts at the slider's value plus the minimum
+  if shown and (not wasShown or place) then
+    -- the box starts at the slider's value plus the minimum (read again when the game opens it for another caller
+    -- while it is still up: that one's minimum may differ)
     local _, _, value = eq.ChildState(WINDOW, "QTYW_Slider")
     base = (tonumber(W.Text(WINDOW, "QTYW_SliderInput")) or 0) - (value or 0)
     focusBox, boxActive = true, false
