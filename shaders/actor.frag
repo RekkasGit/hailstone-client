@@ -19,6 +19,10 @@ layout(push_constant) uniform Push {
 
 layout(set = 0, binding = 2) uniform sampler2D textures[];
 
+// The additive pass (render/actor_renderer.cpp): its motion is kept only where it adds something to see
+// (SceneOutput::MotionReactiveWhereSeen blends it by o_motion's alpha).
+layout(constant_id = 2) const bool kAdditive = false;
+
 layout(set = 1, binding = 0) uniform sampler2DArrayShadow shadow_map; // render/vk_context.h shadow_set
 layout(set = 1, binding = 3) uniform sampler2DArray water_map;        // its depths: the water map's
 layout(set = 1, binding = 4) uniform sampler2DArrayShadow point_map;  // the zone lights' cubes (render/point_shadows.h)
@@ -189,6 +193,9 @@ void main() {
         color = to_linear(mix(pc.fog_color.rgb, color, v_fog));
     }
     o_color = vec4(color, out_alpha);
-    o_motion = vec4(motion_uv(v_now, v_then), gl_FragCoord.z, 0.0);
+    // Additive, a fragment adds its colour as it is: one that adds little (a glow's faint spread) leaves the motion of
+    // what is behind it.
+    o_motion = vec4(motion_uv(v_now, v_then), gl_FragCoord.z,
+                    kAdditive ? step(0.02, max(color.r, max(color.g, color.b))) : 1.0);
     o_reactive = reactive_of(o_color);
 }

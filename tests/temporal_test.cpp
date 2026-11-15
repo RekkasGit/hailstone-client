@@ -178,6 +178,15 @@ TEST_CASE("temporal: scene pipelines' blend states for the motion and reactive a
     CHECK(both.states[1].blendEnable == VK_FALSE);
     CHECK(both.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
     CHECK(both.states[2].colorBlendOp == VK_BLEND_OP_MAX);
+    // A character's additive part (an ice shield's rim): the same, its motion and depth blended in by the shader's
+    // alpha (0 or 1: kept where the glow adds something to see).
+    const SceneBlends glow = make_scene_blends(color, SceneOutput::MotionReactiveWhereSeen, true);
+    CHECK(glow.states[1].colorWriteMask == both.states[1].colorWriteMask);
+    CHECK(glow.states[1].blendEnable == VK_TRUE);
+    CHECK(glow.states[1].srcColorBlendFactor == VK_BLEND_FACTOR_SRC_ALPHA);
+    CHECK(glow.states[1].dstColorBlendFactor == VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+    CHECK(glow.states[2].colorWriteMask == VK_COLOR_COMPONENT_R_BIT);
+    CHECK(glow.states[2].colorBlendOp == VK_BLEND_OP_MAX);
     // The sky, the spawns' boxes: neither.
     const SceneBlends nothing = make_scene_blends(color, SceneOutput::Nothing, true);
     CHECK(nothing.count == 3);
