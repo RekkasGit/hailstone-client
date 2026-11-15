@@ -1067,6 +1067,7 @@ if(HAILSTONE_BUILD_TESTS)
     tests/caster_bounds_test.cpp
     tests/descriptor_limits_test.cpp
     tests/swapchain_size_test.cpp
+    tests/input_script_test.cpp
     tests/texture_claims_test.cpp
     tests/zone_settle_test.cpp
     tests/work_budget_test.cpp
