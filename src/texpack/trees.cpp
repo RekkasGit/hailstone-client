@@ -48,6 +48,9 @@ struct Rng {
 };
 
 glm::vec4 texel(const assets::Image& img, glm::vec2 uv) {
+    // A NaN or infinite UV (a damaged mesh's) reads the first texel: its float-to-integer cast would be undefined.
+    if (!std::isfinite(uv.x)) uv.x = 0.0f;
+    if (!std::isfinite(uv.y)) uv.y = 0.0f;
     const float u = uv.x - std::floor(uv.x), v = uv.y - std::floor(uv.y);
     const auto x = std::min(img.width - 1, static_cast<std::uint32_t>(u * float(img.width)));
     const auto y = std::min(img.height - 1, static_cast<std::uint32_t>(v * float(img.height)));

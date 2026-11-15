@@ -3,11 +3,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
+#include <set>
 
 #include <doctest/doctest.h>
-
-#include <set>
 
 #include "assets/gltf_mesh.h"
 #include "assets/zone.h"
@@ -155,6 +155,17 @@ TEST_CASE("trees: a game tree's trunk, leaves and colours measured") {
     CHECK_FALSE(measure_tree(no_leaves, pine.lookup(), &why));
     CHECK(why == "no cut-out leaves");
     CHECK_FALSE(measure_tree(mesh, [](const assets::Material&) { return nullptr; }, &why));
+}
+
+TEST_CASE("trees: NaN and infinite leaf UVs read a texel, not past the image") {
+    assets::Mesh mesh = game_tree();
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    const auto first_leaf = mesh.vertices.size() - 8;
+    mesh.vertices[first_leaf].uv = {nan, 0.5f};
+    mesh.vertices[first_leaf + 1].uv = {inf, -inf};
+    const Textures pine(true);
+    measure_tree(mesh, pine.lookup()); // whatever it makes of them, defined
+    CHECK(true);
 }
 
 TEST_CASE("trees: a tall trunk's short bottom prism is its own ring, so the tree stands on its foot") {

@@ -336,6 +336,7 @@ struct ZoneFloraGrower::Data {
         std::optional<std::uint32_t> at(glm::vec2 uv) const {
             if (rgb.empty()) return std::nullopt;
             auto wrap = [](float f, std::uint32_t n) {
+                if (!std::isfinite(f)) return 0u; // a damaged mesh's UV: the cast below would be undefined
                 const float t = f - std::floor(f);
                 return std::min(static_cast<std::uint32_t>(t * static_cast<float>(n)), n - 1);
             };
