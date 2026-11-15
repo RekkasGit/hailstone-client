@@ -199,6 +199,8 @@ local viewZone -- (the Zone / World section, below)
 -- ---------------------------------------------------------------- Find (eq.FindNpcs; lib/find.lua)
 local FL = dofile("lib/find.lua")
 local F = FL.state
+local NONE = {} -- an empty list, never changed (no table a frame for "no markers" or "no NPCs")
+local questText = nil -- the quest colour as a text colour, made once
 local CATS = FL.CATS
 local findRows = FL.rows
 
@@ -267,8 +269,11 @@ local function findPage(x, y, w, h, s, rows, own)
     ui.DrawCircleFilled(rx + 12 * s, ry + rh / 2, 5 * s, col[1], col[2], col[3], 1)
     -- quests from the server script on an NPC listed for its trade: a "!" beside its dot
     if (r.quests or 0) > 0 and r.category ~= "quest" then
-      local q = FL.COLORS.quest
-      T.Text(rx + 12 * s, ry + 2 * s, "!", { q[1], q[2], q[3], 1 }, T.font.tiny, "center")
+      if not questText then
+        local q = FL.COLORS.quest
+        questText = { q[1], q[2], q[3], 1 }
+      end
+      T.Text(rx + 12 * s, ry + 2 * s, "!", questText, T.font.tiny, "center")
       if ui.IsItemHovered() then ui.SetTooltip("Has quests too") end
     end
     local dist = string.format("%d", math.floor(r.distance))
@@ -397,12 +402,12 @@ local OPTS = {
 local function body(x, y, w, h, s)
   if M.view == "world" then return worldBody(x, y, w, h, s) end
   local _, shownZone, own = eq.MapZoneShown()
-  local list = own and drawnMarkers() or {}
+  local list = own and drawnMarkers() or NONE
   local side = ui.GetSetting("map.sidebar") ~= "0"
   local findTab = ui.GetSetting("map.sideTab") ~= "markers"
   local showNpcs = FL.marks()
   -- Find's NPCs are your own zone's: listed and marked only on its map
-  local npcs = (own and ((side and findTab) or showNpcs)) and findRows() or {}
+  local npcs = (own and ((side and findTab) or showNpcs)) and findRows() or NONE
   -- the toolbar
   local tx = x + viewSwitch(x, y, s)
   local zoomOut = toolButton("##zout", tx, y, 30 * s, s, "-", false, "Zoom out")
@@ -461,7 +466,7 @@ local function body(x, y, w, h, s)
   ui.PopFont()
   local ccx, ccy = (mx0 + mx1) / 2, (my0 + my1) / 2
   local mouseX, mouseY = ui.GetMousePos()
-  local cursorMap = nil
+  local cursorX, cursorY = nil, nil
   if k and k > 0 then
     if M.follow then
       if px and M.zoom > 1.01 then M.cx, M.cy = px, py else M.cx, M.cy = midx, midy end
@@ -483,7 +488,7 @@ local function body(x, y, w, h, s)
     drawNpcMarks(npcs, toScreen, s, showNpcs)
     -- the exits (your own zone's)
     if own and ui.GetSetting("map.exits") ~= "0" then atlas.DrawExits(toScreen, s) end
-    if hovered then cursorMap = { toMap(mouseX, mouseY) } end
+    if hovered then cursorX, cursorY = toMap(mouseX, mouseY) end
     -- panning
     local io = ui.GetIO()
     if active and ui.IsMouseDragging(ui.Mouse.Left) and ((io.mouseDX or 0) ~= 0 or (io.mouseDY or 0) ~= 0) then
@@ -563,9 +568,9 @@ local function body(x, y, w, h, s)
     local ly, lx = locOf(px, py)
     T.Text(mx0 + 4 * s, sy, string.format("You  %d, %d", math.floor(ly), math.floor(lx)), C.muted, T.font.small)
   end
-  if cursorMap then
-    local ly, lx = locOf(cursorMap[1], cursorMap[2])
-    local d = distance(cursorMap[1], cursorMap[2], px, py)
+  if cursorX then
+    local ly, lx = locOf(cursorX, cursorY)
+    local d = distance(cursorX, cursorY, px, py)
     T.Text(mx1 - 4 * s, sy, string.format("Cursor  %d, %d%s", math.floor(ly), math.floor(lx),
       d and string.format("   %d away", math.floor(d)) or ""), C.muted, T.font.small, "right")
   end
