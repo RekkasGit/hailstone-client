@@ -290,6 +290,14 @@ int InputTextCallback(ImGuiInputTextCallbackData *d) {
 	}
 	return 0;
 }
+// The buffer ImGui edits in place: the text, cut to `cap` bytes, and room up to cap with a NUL ending it inside the
+// buf_size ImGui is given (cap + 1), however long the text was.
+std::string TextBuffer(const char *cur, size_t len, int cap) {
+	std::string buf(cur, std::min(len, static_cast<size_t>(cap)));
+	buf.resize(static_cast<size_t>(cap) + 1);
+	buf[static_cast<size_t>(cap)] = '\0';
+	return buf;
+}
 // text, changed = ui.InputTextMultiline(label, text [, capacity [, w, h [, flags]]])
 int InputTextMultiline(lua_State *L) {
 	const char *label = S(L, 1);
@@ -299,8 +307,7 @@ int InputTextMultiline(lua_State *L) {
 	cap = cap < 1 ? 1 : cap > 65535 ? 65535 : cap;
 	float w = to_float(luaL_optnumber(L, 4, 0)), h = to_float(luaL_optnumber(L, 5, 0));
 	ImGuiInputTextFlags flags = I(L, 6, 0) & (ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_AutoSelectAll);
-	std::string buf(cur, len);
-	buf.resize(static_cast<size_t>(cap) + 1);
+	std::string buf = TextBuffer(cur, len, cap);
 	bool changed = ImGui::InputTextMultiline(label, buf.data(), buf.size(), ImVec2(w, h), flags);
 	lua_pushstring(L, buf.c_str());
 	lua_pushboolean(L, changed);
@@ -315,8 +322,7 @@ int InputText(lua_State *L) {
 	cap = cap < 1 ? 1 : cap > 65535 ? 65535 : cap;
 	ImGuiInputTextFlags flags = I(L, 4, 0) & ~(ImGuiInputTextFlags_CallbackResize | ImGuiInputTextFlags_CallbackCharFilter |
 		ImGuiInputTextFlags_CallbackEdit | ImGuiInputTextFlags_CallbackCompletion);
-	std::string buf(cur, len);
-	buf.resize(static_cast<size_t>(cap) + 1);
+	std::string buf = TextBuffer(cur, len, cap);
 	InputTextOptions o{L, 0, 0, false};
 	if (lua_istable(L, 5)) {
 		lua_getfield(L, 5, "moveToEnd");
@@ -367,8 +373,7 @@ int InputTextWithHint(lua_State *L) {
 	cap = cap < 1 ? 1 : cap > 65535 ? 65535 : cap;
 	ImGuiInputTextFlags flags = I(L, 5, 0) & (ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll |
 		ImGuiInputTextFlags_Password | ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_ReadOnly);
-	std::string buf(cur, len);
-	buf.resize(static_cast<size_t>(cap) + 1);
+	std::string buf = TextBuffer(cur, len, cap);
 	bool changed = ImGui::InputTextWithHint(label, hint, buf.data(), buf.size(), flags);
 	lua_pushstring(L, buf.c_str());
 	lua_pushboolean(L, changed);

@@ -863,6 +863,20 @@ TEST_CASE("Lua UI: a script ends only its own windows, and what it leaves open s
     CHECK_FALSE(moved);
 }
 
+// A text longer than the capacity is cut to it, the NUL inside the buffer ImGui is given.
+TEST_CASE("Lua UI: InputText cuts a longer text to its capacity") {
+    CHECK(run_pack_frames("lua_ui_api_inputcap_test",
+                          "ui.window('I', function()\n"
+                          "  ui.Begin('I')\n"
+                          "  local a = ui.InputText('a', string.rep('x', 50), 10)\n"
+                          "  local b = ui.InputTextWithHint('b', 'hint', string.rep('y', 50), 12)\n"
+                          "  local c = ui.InputTextMultiline('c', string.rep('z', 50), 7)\n"
+                          "  local d = ui.InputText('d', 'short', 10)\n"
+                          "  ui.End()\n"
+                          "  done = #a == 10 and #b == 12 and #c == 7 and d == 'short'\n"
+                          "end)\n"));
+}
+
 TEST_CASE("Lua UI: style lists with NaN or huge indices and values push nothing undefined") {
     CHECK(run_pack_frames("lua_ui_api_style_nan_test",
                           "ui.window('S', function()\n"
