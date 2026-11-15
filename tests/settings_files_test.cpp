@@ -233,6 +233,54 @@ TEST_CASE("Settings files: the log keeps the earlier runs' files") {
     CHECK_FALSE(fs::exists(tmp.path / "logs" / "test.4.log"));
 }
 
+TEST_CASE("Settings files: a second client's old logs go, the newest and the recent ones stay") {
+    TempDir tmp("log_pids");
+    const fs::path logs = tmp.path / "logs";
+    fs::create_directories(logs);
+    const auto now = fs::file_time_type::clock::now();
+    // Eight old ones (days ago, the newest first) and one written an hour ago; the earlier runs' files and others
+    // of other names are not second clients' logs.
+    for (int i = 0; i < 8; ++i) {
+        const fs::path f = logs / ("test." + std::to_string(1000 + i) + ".log");
+        std::ofstream(f) << "old";
+        fs::last_write_time(f, now - std::chrono::hours(24 * (2 + i)));
+    }
+    std::ofstream(logs / "test.2000.log") << "recent";
+    fs::last_write_time(logs / "test.2000.log", now - std::chrono::hours(1));
+    for (const char* other : {"test.1.log", "test.2.log", "test.3.log", "viewer.1234.log", "test.x1.log"}) {
+        std::ofstream(logs / other) << "other";
+        fs::last_write_time(logs / other, now - std::chrono::hours(24 * 30));
+    }
+    REQUIRE(log::open_file(logs / "test.log"));
+    log::close_file();
+    // The newest five: the recent one and the four newest old ones.
+    CHECK(fs::exists(logs / "test.2000.log"));
+    for (int i = 0; i < 8; ++i)
+        CHECK_MESSAGE(fs::exists(logs / ("test." + std::to_string(1000 + i) + ".log")) == (i < 4), i);
+    for (const char* other : {"test.2.log", "test.3.log", "viewer.1234.log", "test.x1.log"})
+        CHECK_MESSAGE(fs::exists(logs / other), other);
+}
+
+TEST_CASE("Settings files: the log file stops at its limit with a line saying so") {
+    TempDir tmp("log_limit");
+    const fs::path file = tmp.path / "logs" / "test.log";
+    log::set_file_limit(300);
+    REQUIRE(log::open_file(file));
+    for (int i = 0; i < 100; ++i) log::info("line {} of a run that logs a lot", i);
+    log::close_file();
+    log::set_file_limit(0);
+    const std::string text = read(file);
+    CHECK(text.size() < 500);
+    CHECK(text.find("line 0 ") != std::string::npos);
+    CHECK(text.find("line 99 ") == std::string::npos);
+    CHECK(text.find("reached its limit of 300 bytes") != std::string::npos);
+    // The next open starts a new file with the limit back to the default.
+    REQUIRE(log::open_file(file));
+    for (int i = 0; i < 100; ++i) log::info("line {} again", i);
+    log::close_file();
+    CHECK(read(file).find("line 99 again") != std::string::npos);
+}
+
 TEST_CASE("Settings files: a shared key a character's file still holds moves to hailstone.ini when it has none") {
     test::ScratchDir tmp("shared_key_moves");
     const auto one = tmp.path() / "One" / "hailstone.ini";
