@@ -41,6 +41,7 @@
 #include "mq/lua_mq.h"
 #include "mq/tlo.h"
 #include "plugin/lua_keep.h"
+#include "ui/lua/lua_host.h"
 
 namespace hailstone::app {
 
@@ -408,9 +409,11 @@ int LuaComplete(lua_State* L) {
 
 // ---------------------------------------------------------------- opening, new socials
 
+// The request is the player's (a right click, /luasocial) and is taken once, by the pack's editor: a plugin's code in
+// the UI gets nil and leaves it.
 int LuaSocialEditRequest(lua_State* L) {
     EqHost& h = host_of(L);
-    if (h.lua_social_edit < 0) return 0;
+    if (h.lua_social_edit < 0 || !ui::lua::LuaUi::caller_tag().empty()) return 0;
     lua_pushinteger(L, h.lua_social_edit);
     h.lua_social_edit = -1;
     return 1;

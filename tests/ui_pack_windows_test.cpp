@@ -2104,6 +2104,17 @@ TEST_CASE("UI packs: the Lua Scripts window and eq.Scripts*: list, run, pause, s
             CHECK(ImGui::FindWindowByName("UI errors") == nullptr);
             policy.set(plugin::Rules{}); // no hailstone.cfg: the player's scripts run
             run("local l = eq.Scripts(true); assert(l[1].allowed and l[1].caps ~= '')");
+            // A plugin's code: a script of its own name alone, and no folders.
+            fs::create_directories(dir / "pf" / "a");
+            fs::create_directories(dir / "pf" / "b");
+            std::ofstream(dir / "pf" / "a" / "w.lua") << "x = 1\n";
+            std::ofstream(dir / "pf" / "b" / "w.lua") << "x = 1\n";
+            s.lua.set_folders({{"loop", dir / "pf" / "a"}, {"plugin:x", dir / "pf" / "b"}});
+            CHECK(s.lua.run_for_test("loop", "local l, info = eq.Scripts() return #l .. ' ' .. l[1].name .. ' ' .. "
+                                             "#info.folders") == "1 loop 0");
+            CHECK(s.lua.run_for_test("plugin:x", "local l, info = eq.Scripts() return #l .. ' ' .. #info.folders") ==
+                  "0 0");
+            run("local l, info = eq.Scripts(); assert(#l == 2 and #info.folders >= 1)"); // the pack: all, as before
             run("assert(eq.ScriptRun('loop', 'a \\\"b c\\\"'))");
             CHECK(scripts.running("loop"));
             run("local l = eq.Scripts(); assert(l[1].status == 'running' and not l[1].kept)");

@@ -9,6 +9,8 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <iterator>
+#include <limits>
 #include <cfloat>
 #include <cmath>
 #include <cctype>
@@ -729,9 +731,17 @@ int UiAnimation(lua_State* L) {
 // defaults.ini as CSidlScreenWnd::LoadIniInfo reads them (ui/ui_ini.h; `sizable`: the XML window can be resized, so
 // a stored size counts). sized: w, h come from an ini; place: the window should be put there now (a character's
 // layout was just loaded) rather than only the first time it shows.
-// The client's own prompt for the server's compiled plugins ("PluginConsent") gives way only to the pack's own window:
-// a plugin's code could otherwise put it away and draw a question of its own.
-bool may_replace(std::string_view name) { return name != "PluginConsent" || ui::lua::LuaUi::caller_tag().empty(); }
+// The client's own prompt for the server's compiled plugins ("PluginConsent") and the dialogs that act when answered (a
+// confirmation, among them a destroy's; a trade, a give, a quantity, a bazaar purchase's, a group invitation, a
+// respawn choice, a large dialog, a task offer) give way only to the pack's own windows: a plugin's code could
+// otherwise put the client's away and draw a question of its own in its place.
+bool may_replace(std::string_view name) {
+    static constexpr std::string_view kPackOnly[] = {
+        "PluginConsent", "ConfirmationDialogBox", "TradeWnd",    "GiveWnd",          "QuantityWnd",
+        "BazaarConfirmationWnd", "GroupInvite", "RespawnWnd", "LargeDialogWindow", "TaskSelectWnd"};
+    if (ui::lua::LuaUi::caller_tag().empty()) return true;
+    return std::find(std::begin(kPackOnly), std::end(kPackOnly), name) == std::end(kPackOnly);
+}
 
 int ReplaceWindow(lua_State* L) {
     auto& m = Impl::of(L);

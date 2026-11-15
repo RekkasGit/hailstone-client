@@ -58,7 +58,7 @@ constexpr Entry kCalls[] = {
     {"GameMenuClose", 0}, {"ContextMenus", 0}, {"WindowContextMenu", 0}, {"TakeWindowMenu", 0}, {"TakeCloseTopWindow", 0}, {"CompassStrips", 0},
     {"CompassMarkers", 0}, {"AbilityBook", 0}, {"AbilityBookState", 0}, {"Disciplines", 0}, {"UsableSkills", 0},
     {"BankItem", 0}, {"CursorCoin", 0}, {"TradeState", 0}, {"IconSelectionIcons", 0}, {"IconSelectionIcon", 0},
-    {"HotBarMenu", 0}, {"ChatWindows", 0}, {"ChatText", 0}, {"ChatHistory", 0}, {"ChatInfo", 0}, {"ChatFilters", 0},
+    {"HotBarMenu", 0}, {"ChatWindows", 0}, {"ChatText", 0}, {"ChatInfo", 0}, {"ChatFilters", 0},
     {"ChatFilterGroups", 0},
     {"ChatDefaultChannels", 0}, {"ChatTellWindows", 0}, {"ChatHitModes", 0}, {"ChatMenu", 0}, {"CharacterStats", 0},
     {"WhoResults", 0}, {"SpellBook", 0}, {"SpellBookState", 0}, {"SpellIcon", 0}, {"SpellDetails", 0},
@@ -74,7 +74,7 @@ constexpr Entry kCalls[] = {
     {"FindNpcs", 0}, {"FindCategories", 0}, {"CompareItem", 0}, {"CompareSlotItem", 0}, {"CompareBagSlotItem", 0},
     {"Tasks", 0}, {"TasksRevision", 0},
     {"LuaSocialRules", 0}, {"LuaSocial", 0}, {"LuaSocialFace", 0}, {"LuaSocialExport", 0},
-    {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"LuaSocialEditRequest", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
+    {"LuaSocialImport", 0}, {"LuaComplete", 0}, {"FreeSocial", 0}, {"SocialColors", 0},
     {"SocialEditorSocial", 0}, {"SocialLine", 0}, {"SlashCommands", 0}, {"CurrentSocial", 0},
     {"gamepad.connected", 0}, {"gamepad.type", 0}, {"gamepad.down", 0}, {"gamepad.pressed", 0},
     {"gamepad.released", 0}, {"gamepad.axis", 0}, {"gamepad.mode", 0}, {"gamepad.cross_set", 0},
@@ -89,9 +89,12 @@ constexpr Entry kCalls[] = {
     {"WebTabs", 0}, {"WebState", 0}, {"WebNavigate", 0}, {"WebNav", 0}, {"WebClose", 0}, {"WebView", 0},
     {"WebText", 0}, {"WebEval", 0}, {"WebPost", 0}, {"WebMessages", 0}, {"WebOpenExternal", 0},
     // The line goes through the command filter, which holds it to the caller's capabilities (plain text: chat)
-    {"ChatSubmit", 0}, {"ChatTakeFocus", 0},
-    // The chat input's reply key (the input's new text; the reply index steps) and the page keys' scroll
-    {"ChatCycleReply", 0}, {"ChatPage", 0},
+    {"ChatSubmit", 0},
+    // The chat input's reply key (the input's new text; the reply index steps)
+    {"ChatCycleReply", 0},
+    // The pack's alone: one-shot state of the player's keys and requests (the chat keys' text and a pending Link All,
+    // the page keys, the input's history, the social editor's request); nil to a plugin's code
+    {"ChatTakeFocus", 0}, {"ChatPage", 0}, {"ChatHistory", 0}, {"LuaSocialEditRequest", 0},
     // Windows, options, the chat windows' setup, lists of the player's own (spell sets, the autoskill list)
     {"ShowWindow", kCapCommands}, {"OpenTask", kCapCommands}, {"SetOption", kCapCommands}, {"SetUiIni", kCapCommands},
     {"ChatLink", kCapCommands},
@@ -99,8 +102,8 @@ constexpr Entry kCalls[] = {
     {"ChatCloseWindow", kCapCommands}, {"ChatNewTab", kCapCommands}, {"ChatCloseTab", kCapCommands},
     {"ChatSelectTab", kCapCommands}, {"ChatSetTitle", kCapCommands}, {"ChatSetFilter", kCapCommands},
     {"ChatSetFont", kCapCommands}, {"ChatSetDefault", kCapCommands}, {"ChatSetAlwaysHere", kCapCommands}, {"ChatSetTellWindows", kCapCommands},
-    {"ChatSetHitMode", kCapCommands}, {"AbilityBookFavorite", kCapCommands}, {"AbilityBookAutoskill", kCapCommands},
-    {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands},
+    {"ChatSetHitMode", kCapCommands}, {"AbilityBookFavorite", kCapCommands}, {"AbilityBookAutoskill", kCapCommands | kCapActions},
+    {"AbilityBookAutoskillMove", kCapCommands}, {"AbilityBookAutoskillRule", kCapCommands | kCapActions},
     {"HotBarSetting", kCapCommands}, {"ShowSpell", kCapCommands}, {"SaveSpellSet", kCapCommands},
     {"DeleteSpellSet", kCapCommands}, {"EditSpellSet", kCapCommands}, {"EndFind", kCapCommands},
     {"FindMapLocation", kCapCommands}, {"MapRightClick", kCapCommands}, {"MapAutoZ", kCapCommands}, {"ZoneExitWalk", kCapMove},

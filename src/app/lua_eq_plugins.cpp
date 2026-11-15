@@ -1,6 +1,8 @@
 #include "app/lua_eq_plugins.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <new>
 #include <optional>
 #include <string>
@@ -237,14 +239,27 @@ int SetPluginOption(lua_State* L) {
     return 0;
 }
 
-// eq.PluginMenu(): {plugin, owner, label, command} each
+// The menu entries the caller may reach (a plugin's code: its own; the pack: all), as their places in the bridge's menu.
+std::vector<std::size_t> reachable_menu(const plugin::UiBridge& ui) {
+    std::vector<std::size_t> out;
+    const auto& menu = ui.menu();
+    for (std::size_t i = 0; i < menu.size(); ++i)
+        if (may_reach(menu[i].owner())) out.push_back(i);
+    return out;
+}
+
+// eq.PluginMenu(): {plugin, owner, label, command} each; a plugin's code sees its own entries alone, numbered as
+// eq.PluginMenuClick takes them.
 int PluginMenu(lua_State* L) {
     EqHost& h = host_of(L);
     std::string& owner = plugin::lua_keep<std::string>(L); // each entry's tag, across its push (plugin/lua_keep.h)
+    auto& shown = plugin::lua_keep<std::vector<std::size_t>>(L);
     lua_newtable(L);
     if (!h.plugin_ui) return 1;
+    plugin::cxx_guard(L, [&] { shown = reachable_menu(*h.plugin_ui); });
     lua_Integer i = 0;
-    for (const auto& e : h.plugin_ui->menu()) {
+    for (std::size_t at : shown) {
+        const plugin::UiBridge::MenuEntry& e = h.plugin_ui->menu()[at];
         plugin::cxx_guard(L, [&] { owner = e.owner(); });
         lua_createtable(L, 0, 4);
         lua_pushstring(L, e.plugin.c_str());
@@ -260,13 +275,17 @@ int PluginMenu(lua_State* L) {
     return 1;
 }
 
-// eq.PluginMenuClick(i): runs entry i's command as its owner (run_plugin_menu).
+// eq.PluginMenuClick(i): runs entry i of eq.PluginMenu() (the caller's own list) as its owner (run_plugin_menu).
 int PluginMenuClick(lua_State* L) {
     EqHost& h = host_of(L);
     lua_Integer i = luaL_checkinteger(L, 1);
-    if (i < 1 || !h.plugin_ui || static_cast<std::size_t>(i) > h.plugin_ui->menu().size()) return 0;
-    if (!may_reach(h.plugin_ui->menu()[static_cast<std::size_t>(i - 1)].owner())) return 0; // a plugin: its own
-    run_plugin_menu(h, static_cast<std::size_t>(i - 1));
+    if (i < 1 || !h.plugin_ui) return 0;
+    std::optional<std::size_t> at;
+    plugin::cxx_guard(L, [&] {
+        const auto shown = reachable_menu(*h.plugin_ui);
+        if (static_cast<std::uint64_t>(i) <= shown.size()) at = shown[static_cast<std::size_t>(i - 1)];
+    });
+    if (at) run_plugin_menu(h, *at);
     return 0;
 }
 
