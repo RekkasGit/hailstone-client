@@ -12,6 +12,7 @@
 #include "core/atomic_file.h"
 #include "core/log.h"
 #include "core/zip_read.h"
+#include "platform/durable_file.h"
 
 namespace hailstone::app {
 
@@ -124,11 +125,12 @@ void remove_quietly(const fs::path& path) {
 }
 
 // Moves `from` to `to` (making its folder); on Windows a running program or a loaded library may be moved, not
-// deleted.
+// deleted. The rename is on the disk when it returns (platform/durable_file.h), so a power cut after state.txt says
+// "pending" cannot leave a file the journal says moved where it was.
 bool move_file(const fs::path& from, const fs::path& to, std::string* error) {
     std::error_code ec;
     fs::create_directories(to.parent_path(), ec);
-    fs::rename(from, to, ec);
+    platform::replace_file_synced(from, to, ec);
     if (ec && error) *error = "cannot move " + from.string() + " to " + to.string() + ": " + ec.message();
     return !ec;
 }
@@ -177,6 +179,14 @@ std::vector<std::pair<std::string, std::string>> journal_lines(const std::string
     return out;
 }
 
+bool holds_a_file(const fs::path& folder) {
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
+         it.increment(ec))
+        if (!it->is_directory(ec)) return true;
+    return false;
+}
+
 // Undoes the moves the journal lists, last first, and puts installed.txt back.
 void roll_back(const fs::path& install_dir) {
     const fs::path dir = update_dir(install_dir);
@@ -209,7 +219,24 @@ void roll_back(const fs::path& install_dir) {
         fs::remove(dir / "installed.txt", ec);
     }
     remove_quietly(dir / "journal.txt");
-    remove_quietly(dir / "previous");
+    // After the undo previous/ holds no file: each went back. One still there is a copy the journal does not name (a
+    // journal the disk lost, damaged, or a move back that failed), possibly the only copy of a replaced file, so it
+    // is kept aside, not deleted, for the player or a later look (docs/updater.md).
+    if (holds_a_file(dir / "previous")) {
+        const auto stamp = std::chrono::system_clock::now().time_since_epoch().count();
+        const fs::path kept = dir / ("kept-" + std::to_string(stamp));
+        std::error_code mv;
+        fs::rename(dir / "previous", kept, mv);
+        if (mv)
+            log::warn("Update: rolling back: {} still holds files the journal does not name, and cannot be moved to "
+                      "{}: {}; they stay",
+                      (dir / "previous").string(), kept.string(), mv.message());
+        else
+            log::warn("Update: rolling back: previous/ still held files the journal does not name; they are kept in {}",
+                      kept.string());
+    } else {
+        remove_quietly(dir / "previous");
+    }
     remove_quietly(dir / "new");
     remove_quietly(dir / "state.txt");
 }
@@ -392,14 +419,13 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
         remove_quietly(dir / "new");
         return r;
     }
-    std::ofstream journal(dir / "journal.txt", std::ios::binary | std::ios::trunc);
+    // Write-ahead: each line is on the disk before the move it names is made (platform/durable_file.h), so after a
+    // power cut every file in previous/ has its line, and the roll-back can put it back.
+    const fs::path journal = dir / "journal.txt";
     auto note = [&](std::string_view what, std::string_view name) {
-        journal << what << ' ' << name << '\n';
-        journal.flush();
-        return static_cast<bool>(journal);
+        return platform::append_file_synced(journal, std::string(what) + " " + std::string(name) + "\n");
     };
     auto fail = [&](std::string why) {
-        journal.close();
         roll_back(install_dir);
         r.error = std::move(why);
         log::warn("Update: {}; the folder was put back as it was", r.error);
@@ -434,7 +460,6 @@ InstallResult install_staged_update(const fs::path& install_dir, const std::stri
             if (!move_file(target, dir / "previous" / rel(name), &why)) return fail(why);
         }
     }
-    journal.close();
 
     InstalledUpdate now = old;
     for (const auto& p : staged->packages) {

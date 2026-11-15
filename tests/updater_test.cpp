@@ -464,6 +464,30 @@ TEST_CASE("update install: an optional plugin package is left out when an add-on
     CHECK(now.files.count("plugin-extra") == 0);
 }
 
+namespace {
+UpdatePackage stage_one(const fs::path& inst, const std::string& component, const std::string& zip,
+                        const std::string& version = "0.2.0") {
+    put(inst / "update/download/p.zip", zip);
+    UpdatePackage p;
+    p.component = component;
+    p.file = "p.zip";
+    p.size = zip.size();
+    p.sha256 = sha256(zip);
+    REQUIRE(stage_update(inst, version, {p}, nullptr));
+    return p;
+}
+} // namespace
+
+TEST_CASE("update install: each move is in the journal, written before it") {
+    test::ScratchDir dir("updater_journal");
+    const fs::path inst = dir.path();
+    put(inst / "hailstone", "old");
+    stage_one(inst, "core", zip_of({{"hailstone", "new"}, {"icons/n.png", "n"}}));
+    REQUIRE(install_staged_update(inst, "0.1.0").ok);
+    CHECK(get(inst / "update/journal.txt") == "moved hailstone\nadded icons/n.png\n");
+    CHECK(get(inst / "update/previous/hailstone") == "old");
+}
+
 TEST_CASE("update install: a cut-off install and a version that does not start are rolled back") {
     test::ScratchDir dir("updater_rollback");
     const fs::path inst = dir.path();
@@ -492,6 +516,27 @@ TEST_CASE("update install: a cut-off install and a version that does not start a
         CHECK(get(inst / "shaders/a.spv") == "old a");
         CHECK(!fs::exists(inst / "icons/n.png"));
         CHECK(!fs::exists(inst / "update/installed.txt"));
+        // Every file went back: previous/ goes, and nothing is kept aside.
+        CHECK_FALSE(fs::exists(inst / "update/previous"));
+        for (const auto& e : fs::directory_iterator(inst / "update"))
+            CHECK_FALSE(e.path().filename().string().starts_with("kept-"));
+    }
+    SUBCASE("files in previous/ the journal does not name are kept aside, not deleted") {
+        // As after a power cut that lost the journal's lines but not the moves (or a damaged journal): previous/
+        // may hold the only copy of a replaced file.
+        put(inst / "update/previous/hailstone", "the only copy");
+        put(inst / "update/journal.txt", "");
+        REQUIRE(write_file_atomic(inst / "update/state.txt", "installing 0.2.0 0.1.0\n"));
+        update_at_start(inst, "0.1.0");
+        CHECK_FALSE(fs::exists(inst / "update/previous"));
+        CHECK_FALSE(fs::exists(inst / "update/state.txt"));
+        std::vector<fs::path> kept;
+        for (const auto& e : fs::directory_iterator(inst / "update"))
+            if (e.path().filename().string().starts_with("kept-")) kept.push_back(e.path());
+        REQUIRE(kept.size() == 1);
+        CHECK(get(kept[0] / "hailstone") == "the only copy");
+        update_at_start(inst, "0.1.0"); // a later start leaves it alone
+        CHECK(get(kept[0] / "hailstone") == "the only copy");
     }
     SUBCASE("cut off between a journal line and its move") {
         // The journal names a move to previous/ that never happened: the file in place is the original and stays.

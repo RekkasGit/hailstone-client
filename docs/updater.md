@@ -131,6 +131,7 @@ The install is described in `app/update_install.h`. Everything lives in `<Hailst
 | `failed.txt` | a release that was rolled back, and is not offered again |
 | `note.txt` | a rollback's message for the version it starts |
 | `trash/` | files that were in use when moved, removed at the next start |
+| `kept-<time>/` | what a rollback found in `previous/` that the journal did not name (see below); never removed by the client |
 
 The client installs the update itself once it has quit, at the end of `run_client`, after its window, the browser
 helper and the plugins are gone:
@@ -143,10 +144,13 @@ helper and the plugins are gone:
      `textures/`, `web/` and `addons/` (docs/addons.md);
    - `ui/settings/` and `ui/loadingbackgrounds/`.
 
-   An update never writes or removes any of them.
+   An update never writes or removes any of them. Each unpacked file is flushed to the disk before it is renamed
+   into `new/`.
 2. Each old file is moved into `previous/` and its new one into place. The move is written to the journal before
-   it is made. Both moves are renames on one volume, which Windows allows for a running program and its loaded
-   libraries.
+   it is made, and the journal's line is flushed to the disk first (write-ahead), so after a power cut every file in
+   `previous/` has its line. Both moves are renames on one volume, which Windows allows for a running program and its
+   loaded libraries; each is on the disk before the next begins (the folder synced on Linux and macOS, a write-through
+   move on Windows).
 3. The files a component shipped before and no longer does are moved into `previous/` as well.
 4. `installed.txt` is written, and `state.txt` becomes `pending`.
 
@@ -163,6 +167,9 @@ The install waits while the box set's other windows run (they use the same files
   and may be part of a name (`added ui` of `added ui/x.lua`). A line whose name is not a file's path inside the
   folder (`is_safe_zip_path`) or is one of the player's paths is skipped, and a folder is never moved: an update
   moves files only, so a folder where a line points holds what it did not put there (`ui/settings/` under `ui/`).
+  After the undo `previous/` holds no file. One still there (a journal the disk lost or damaged, a move back that
+  failed) may be the only copy of a replaced file, so `previous/` is renamed `kept-<time>/` and a warning logged,
+  instead of being removed.
 - **`pending`:** each start of the new version is counted, and reaching the login screen ends the count
   (`update_started_fine` removes `previous/`). If two starts never reached it, the third rolls the update back, writes
   `failed.txt`, starts the old version and quits; the old version shows why (`note.txt`).
